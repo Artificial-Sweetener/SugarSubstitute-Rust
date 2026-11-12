@@ -1,20 +1,2 @@
+# Files at the monorepo root keep the line endings each component uses.
 * text=auto eol=lf
-
-*.bat text eol=crlf
-*.cmd text eol=crlf
-*.ps1 text eol=crlf
-
-*.png binary
-*.jpg binary
-*.jpeg binary
-*.gif binary
-*.webp binary
-*.ico binary
-*.pdf binary
-*.zip binary
-*.sugarcanvas binary
-*.dll binary
-*.exe binary
-*.dylib binary
-*.so binary
-*.pdb binary

@@ -1,0 +1,76 @@
+#    SugarCubes - composable workflow units for ComfyUI
+#    Copyright (C) 2026  Artificial Sweetener and contributors
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU Affero General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU Affero General Public License for more details.
+#
+#    You should have received a copy of the GNU Affero General Public License
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""Coordinate workflow classification and exact Cube capture."""
+
+from __future__ import annotations
+
+from collections.abc import Callable, Iterable
+
+from ..workflow import CanonicalWorkflow
+from .classification import classify_workflow
+from .definition_selection import select_saved_definition
+from .models import (
+    CatalogCubeArtifact,
+    CubeLibraryClassReport,
+    CaptureCubeRequest,
+    CaptureCubeResult,
+)
+from .captured_repository import CapturedCubeRepository
+
+
+class CubeLibraryClassService:
+    """Own machine-derived classification without changing embedded definitions."""
+
+    def __init__(
+        self,
+        *,
+        captured: CapturedCubeRepository,
+        catalog_artifacts: Callable[[], Iterable[CatalogCubeArtifact]] = tuple,
+    ) -> None:
+        """Bind captured and installed-catalog ports."""
+
+        self._captured = captured
+        self._catalog_artifacts = catalog_artifacts
+
+    def classify_workflow(self, workflow: CanonicalWorkflow) -> CubeLibraryClassReport:
+        """Classify workflow definitions from current machine state."""
+
+        artifacts = (*self._catalog_artifacts(), *self._captured.list_artifacts())
+        return classify_workflow(workflow, artifacts)
+
+    def capture(
+        self, workflow: CanonicalWorkflow, request: CaptureCubeRequest
+    ) -> CaptureCubeResult:
+        """Capture exact content without forking identity or rebinding instances."""
+
+        definition = select_saved_definition(
+            workflow, request.definition_id, request.expected_semantic_hash
+        )
+        write = self._captured.capture(definition)
+        refreshed = self.classify_workflow(workflow)
+        classification = next(
+            item
+            for item in refreshed.definitions
+            if item.definition_id == definition.definition_id
+        )
+        return CaptureCubeResult(
+            cube_id=definition.cube_id,
+            cube_version=definition.cube_version,
+            semantic_hash=definition.semantic_hash,
+            provenance=definition.provenance,
+            created=write.created,
+            classification=classification,
+        )

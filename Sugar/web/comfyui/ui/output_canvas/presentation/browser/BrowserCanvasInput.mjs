@@ -1,0 +1,211 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Route deliberate, local image gestures without taking host or browser shortcuts. */
+/** Own pointer capture and wheel listeners for one browser image viewport. */
+export class BrowserCanvasInput {
+    element;
+    gestures;
+    #points = new Map();
+    #stops = [];
+    #engaged = false;
+    #tapStart = null;
+    #lastTap = null;
+    #disposed = false;
+    /** Attach local listeners; overlay controls retain their own input and scrolling. */
+    constructor(element, gestures) {
+        this.element = element;
+        this.gestures = gestures;
+        element.dataset.captureWheel = 'true';
+        this.#listen('pointerdown', (event) => this.#down(event));
+        this.#listen('pointermove', (event) => this.#move(event));
+        this.#listen('pointerup', (event) => this.#finish(event, true));
+        this.#listen('pointercancel', (event) => this.#finish(event, false));
+        this.#listen('lostpointercapture', (event) => this.#finish(event, false));
+        this.#listen('dblclick', (event) => {
+            const point = this.#point(event);
+            if (!this.gestures.contains(point))
+                return;
+            event.preventDefault();
+            event.stopPropagation();
+            if (this.gestures.navigable())
+                this.gestures.doubleClick(point);
+        });
+        this.#listen('wheel', (event) => {
+            event.stopPropagation();
+            if ((!this.#engaged &&
+                (this.gestures.navigable() || document.activeElement !== this.element)) ||
+                event.ctrlKey ||
+                event.metaKey ||
+                event.altKey ||
+                event.shiftKey ||
+                !this.gestures.contains(this.#point(event)) ||
+                ![0, 1, 2].includes(event.deltaMode))
+                return;
+            event.preventDefault();
+            if (this.gestures.navigable())
+                this.gestures.wheel(event.deltaY, wheelUnits(event.deltaMode), this.#point(event));
+        }, { passive: false });
+        this.#listen('focus', () => {
+            this.#engaged = true;
+        });
+        this.#listen('blur', () => this.cancel());
+        this.#listen('dragstart', (event) => {
+            if (!this.gestures.navigable() || !this.gestures.outbound?.(event))
+                event.preventDefault();
+        });
+    }
+    /** Release captured pointers and engagement when the attachment hides or input is interrupted. */
+    cancel() {
+        this.#engaged = false;
+        this.#tapStart = null;
+        this.#lastTap = null;
+        const pointers = [...this.#points.keys()];
+        this.#points.clear();
+        for (const id of pointers)
+            if (this.element.hasPointerCapture(id))
+                this.element.releasePointerCapture(id);
+        this.element.classList.remove('sc-output-dragging');
+        this.gestures.interrupt();
+    }
+    /** Remove exactly this viewport's listeners and pointer ownership. */
+    dispose() {
+        if (this.#disposed)
+            return;
+        this.#disposed = true;
+        this.cancel();
+        for (const stop of this.#stops.splice(0))
+            stop();
+    }
+    /** Admit only deliberate primary presses on displayed image pixels. */
+    #down(event) {
+        const point = this.#point(event);
+        if (this.#disposed ||
+            event.button !== 0 ||
+            this.#points.size >= 2 ||
+            !this.gestures.contains(point))
+            return;
+        if (!this.gestures.navigable()) {
+            this.#engaged = true;
+            this.element.focus({ preventScroll: true });
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+        }
+        if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey)
+            return;
+        this.#engaged = true;
+        this.element.focus({ preventScroll: true });
+        this.gestures.interrupt();
+        if (event.pointerType !== 'touch' && this.gestures.outbound?.(event))
+            return;
+        event.preventDefault();
+        event.stopPropagation();
+        this.#points.set(event.pointerId, point);
+        this.element.setPointerCapture(event.pointerId);
+        this.element.classList.add('sc-output-dragging');
+        this.#tapStart =
+            event.pointerType === 'touch' && this.#points.size === 1
+                ? { point, time: event.timeStamp }
+                : null;
+        if (this.#points.size === 2)
+            this.#lastTap = null;
+    }
+    /** Rebase every event from the existing pointers, so adding/removing a finger cannot jump. */
+    #move(event) {
+        const previous = this.#points.get(event.pointerId);
+        if (!previous)
+            return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (!this.gestures.navigable()) {
+            this.cancel();
+            return;
+        }
+        const before = [...this.#points.values()];
+        const point = this.#point(event);
+        this.#points.set(event.pointerId, point);
+        if (this.#tapStart && distance(this.#tapStart.point, point) > 8)
+            this.#tapStart = null;
+        const after = [...this.#points.values()];
+        const first = before[0];
+        const next = after[0];
+        if (!first || !next)
+            return;
+        const second = before[1];
+        const nextSecond = after[1];
+        if (!second || !nextSecond) {
+            this.gestures.pan({ x: point.x - previous.x, y: point.y - previous.y });
+            return;
+        }
+        const anchor = midpoint(first, second);
+        const center = midpoint(next, nextSecond);
+        const span = distance(first, second);
+        this.gestures.pinch(span > 0 ? distance(next, nextSecond) / span : 1, anchor, {
+            x: center.x - anchor.x,
+            y: center.y - anchor.y,
+        });
+    }
+    /** End one pointer while leaving a surviving finger anchored at its last position. */
+    #finish(event, completed) {
+        if (!this.#points.delete(event.pointerId))
+            return;
+        event.stopPropagation();
+        if (this.element.hasPointerCapture(event.pointerId))
+            this.element.releasePointerCapture(event.pointerId);
+        if (!this.#points.size)
+            this.element.classList.remove('sc-output-dragging');
+        const start = this.#tapStart;
+        this.#tapStart = null;
+        if (!this.gestures.navigable() ||
+            !completed ||
+            !start ||
+            event.pointerType !== 'touch' ||
+            event.timeStamp - start.time > 300)
+            return;
+        const point = this.#point(event);
+        if (distance(start.point, point) > 8)
+            return;
+        const last = this.#lastTap;
+        if (last && event.timeStamp - last.time < 350 && distance(last.point, point) < 24) {
+            this.#lastTap = null;
+            this.gestures.doubleClick(point);
+        }
+        else
+            this.#lastTap = { point, time: event.timeStamp };
+    }
+    /** Convert input to viewport CSS coordinates without depending on graph transforms. */
+    #point(event) {
+        const bounds = this.element.getBoundingClientRect();
+        return { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+    }
+    /** Keep event types precise and unregister the exact installed callback. */
+    #listen(type, listener, options) {
+        this.element.addEventListener(type, listener, options);
+        this.#stops.push(() => this.element.removeEventListener(type, listener, options));
+    }
+}
+/** Translate the already validated browser wheel unit discriminator. */
+function wheelUnits(value) {
+    return value === 1 ? 1 : value === 2 ? 2 : 0;
+}
+/** Measure pointer travel and span in the same CSS coordinate space. */
+function distance(first, second) {
+    return Math.hypot(second.x - first.x, second.y - first.y);
+}
+/** Find the centroid used for a two-pointer anchored gesture. */
+function midpoint(first, second) {
+    return { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 };
+}

@@ -1,0 +1,249 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Project workflow-owned media through native Cube boundary and ancestry lookup. */
+import { buildCubeOutputExecutionId } from '../cube/execution/CubeOutputExecutionIdentity.js';
+import { buildLinkIndex } from '../graph/GraphQuery.js';
+import { isRecord } from '../types/common.js';
+import { upstreamPreviewLocatorLayers } from './CubeOutputPreviewAncestry.js';
+import { canvasRevealTarget } from '../output_canvas/domain/CanvasReveal.js';
+/** Own Comfy media lookup while leaving preview composition to the surface. */
+export class ComfyCubePreviewCatalog {
+    #host;
+    /** Bind qualified workflow media and the host file URL adapter. */
+    constructor(host) {
+        this.#host = host;
+    }
+    /** Collect media belonging to the Cube's output boundaries. */
+    snapshot(cube) {
+        const locatedNodes = locateInternalNodes(cube);
+        const locatorByNode = new Map(locatedNodes.map(({ node, locator }) => [node, locator]));
+        const outputs = cube.subgraph.outputs.map((output, index) => {
+            const id = readString(output.name) || String(index);
+            const executionId = buildCubeOutputExecutionId(cube.id, index);
+            const markerItems = this.#readNodeItems(executionId, id);
+            const source = resolveOutputNode(cube, index);
+            const locator = source ? (locatorByNode.get(source) ?? '') : '';
+            const directItems = source && locator ? this.#readLocatedNodeItems({ node: source, locator }, id) : [];
+            const upstreamItems = source && directItems.length === 0
+                ? this.#readNearestUpstreamPreviewItems(cube, source, locatorByNode, id)
+                : [];
+            const items = markerItems.length > 0
+                ? markerItems
+                : directItems.length > 0
+                    ? directItems
+                    : upstreamItems.length > 0
+                        ? upstreamItems
+                        : this.#readDownstreamOutputItems(cube, index, id);
+            return { id, label: id, items };
+        });
+        return { outputs };
+    }
+    /** Resolve final Comfy media from the nearest consumer of one Cube output. */
+    #readDownstreamOutputItems(cube, outputSlot, label) {
+        const graph = this.#host.getRootGraph?.() ?? cube.graph;
+        if (!graph)
+            return [];
+        const links = buildLinkIndex(graph);
+        const effectiveLinks = indexEffectiveLinks(this.#host.getEffectiveLinks?.() ?? []);
+        let frontier = [
+            ...(links.outgoing.get(String(cube.id)) ?? [])
+                .filter((link) => readSlot(link.origin_slot) === outputSlot)
+                .map((link) => readNodeId(link.target_id ?? link.target)),
+            ...(effectiveLinks.get(String(cube.id)) ?? [])
+                .filter((link) => link.originSlot === outputSlot)
+                .map((link) => readNodeId(link.targetId)),
+        ].filter((id) => id !== null);
+        const visited = new Set([String(cube.id)]);
+        while (frontier.length > 0) {
+            const nextFrontier = [];
+            const media = [];
+            for (const nodeId of frontier) {
+                if (visited.has(nodeId))
+                    continue;
+                visited.add(nodeId);
+                media.push(...this.#readNodeItems(nodeId, label));
+                for (const link of links.outgoing.get(nodeId) ?? []) {
+                    const targetId = readNodeId(link.target_id ?? link.target);
+                    if (targetId && !visited.has(targetId))
+                        nextFrontier.push(targetId);
+                }
+                for (const link of effectiveLinks.get(nodeId) ?? []) {
+                    const targetId = readNodeId(link.targetId);
+                    if (targetId && !visited.has(targetId))
+                        nextFrontier.push(targetId);
+                }
+            }
+            if (media.length > 0)
+                return deduplicateItems(media);
+            frontier = nextFrontier;
+        }
+        return [];
+    }
+    /** Prefer composite execution identity before a transient internal-node preview identity. */
+    #readLocatedNodeItems(located, label) {
+        return this.#readNodeItems(located.locator, label);
+    }
+    /** Read the nearest live sampler/detailer preview feeding one Cube output. */
+    #readNearestUpstreamPreviewItems(cube, outputNode, locatorByNode, label) {
+        for (const locators of upstreamPreviewLocatorLayers(cube, outputNode, locatorByNode)) {
+            const items = locators.flatMap((locator) => this.#readLivePreviewItems(locator, label));
+            if (items.length > 0)
+                return deduplicateItems(items);
+        }
+        return [];
+    }
+    /** Read durable execution media before renderer-owned transient previews. */
+    #readNodeItems(locator, label) {
+        const output = this.#host.getOutput(locator);
+        const outputItems = this.#readOutputItems(output, locator, label);
+        if (outputItems.length > 0)
+            return outputItems;
+        return this.#readLivePreviewItems(locator, label);
+    }
+    /** Convert renderer-owned live preview URLs without treating them as finals. */
+    #readLivePreviewItems(locator, label) {
+        const livePreviews = this.#host.getLivePreview(locator);
+        return livePreviews
+            .filter((value) => typeof value === 'string' && value.length > 0)
+            .map((url, index) => ({
+            key: `${locator}:preview:${index}`,
+            url: stabilizeComfyViewUrl(url),
+            label,
+            sourceLocator: locator,
+        }));
+    }
+    /** Convert one durable execution payload into preview items. */
+    #readOutputItems(output, locator, label) {
+        if (output) {
+            const items = output.items
+                .map((item) => {
+                if (item.mediaKind !== 'image')
+                    return null;
+                const builtUrl = this.#host.buildOutputImageUrl(item.file);
+                const url = builtUrl ? stabilizeComfyViewUrl(builtUrl) : null;
+                return url
+                    ? {
+                        key: `${locator}:output:${item.batchIndex}`,
+                        url,
+                        label,
+                        sourceLocator: locator,
+                        revealTarget: canvasRevealTarget(item),
+                    }
+                    : null;
+            })
+                .filter((item) => item !== null);
+            if (items.length > 0)
+                return items;
+        }
+        return [];
+    }
+}
+/** Locate internal nodes by the frontend identities used by Comfy's output store. */
+function locateInternalNodes(cube) {
+    const located = [];
+    appendLocatedNodes(cube.subgraph, [cube.id], located);
+    return located;
+}
+/** Resolve one Cube output through Comfy's native subgraph boundary objects. */
+function resolveOutputNode(cube, slot) {
+    const outputNode = isRecord(cube.subgraph.outputNode) ? cube.subgraph.outputNode : null;
+    const slots = Array.isArray(outputNode?.slots) ? outputNode.slots : [];
+    const outputSlot = isRecord(slots[slot]) ? slots[slot] : null;
+    const getLinks = outputSlot?.getLinks;
+    if (typeof getLinks !== 'function')
+        return undefined;
+    const links = getLinks.call(outputSlot);
+    const link = Array.isArray(links) ? links[0] : undefined;
+    if (!isRecord(link) || typeof link.resolve !== 'function')
+        return undefined;
+    const resolved = link.resolve(cube.subgraph);
+    return isRecord(resolved) && isRecord(resolved.outputNode)
+        ? resolved.outputNode
+        : undefined;
+}
+/**
+ * Traverse nested graphs using Comfy's flattened SubgraphNode instance path.
+ *
+ * Backend execution IDs and frontend output-map keys both retain the complete
+ * root-to-leaf SubgraphNode path.
+ */
+function appendLocatedNodes(graph, executionPath, located) {
+    for (const node of graph._nodes) {
+        const localNodeId = String(node.id ?? '');
+        if (!localNodeId)
+            continue;
+        const nodePath = [...executionPath, localNodeId];
+        const locator = nodePath.map(String).join(':');
+        located.push({ node, locator });
+        const subgraph = isRecord(node.subgraph) ? node.subgraph : null;
+        if (subgraph && Array.isArray(subgraph._nodes)) {
+            appendLocatedNodes(subgraph, nodePath, located);
+        }
+    }
+}
+/** Read one trimmed external string. */
+function readString(value) {
+    return typeof value === 'string' ? value.trim() : '';
+}
+/** Read one exact non-negative slot index. */
+function readSlot(value) {
+    const slot = Number(value);
+    return Number.isInteger(slot) && slot >= 0 ? slot : null;
+}
+/** Read one finite graph-node identity. */
+function readNodeId(value) {
+    if (typeof value === 'string')
+        return value.trim() || null;
+    return typeof value === 'number' && Number.isFinite(value) ? String(value) : null;
+}
+/** Group prompt-effective dotted routes by their real source node. */
+function indexEffectiveLinks(links) {
+    const indexed = new Map();
+    for (const link of links) {
+        const originId = readNodeId(link.originId);
+        const targetId = readNodeId(link.targetId);
+        if (!originId || !targetId || readSlot(link.originSlot) === null)
+            continue;
+        const outgoing = indexed.get(originId) ?? [];
+        outgoing.push(link);
+        indexed.set(originId, outgoing);
+    }
+    return indexed;
+}
+/** Preserve item order while removing duplicate media URLs. */
+function deduplicateItems(items) {
+    const seen = new Set();
+    return items.filter((item) => {
+        if (seen.has(item.url))
+            return false;
+        seen.add(item.url);
+        return true;
+    });
+}
+/** Remove volatile Comfy view tokens while retaining the media's stable identity. */
+function stabilizeComfyViewUrl(value) {
+    const base = 'http://sugarcubes.invalid';
+    try {
+        const url = new URL(value, base);
+        if (url.pathname !== '/view' && url.pathname !== '/api/view')
+            return value;
+        url.searchParams.delete('rand');
+        return url.origin === base ? `${url.pathname}${url.search}${url.hash}` : url.href;
+    }
+    catch {
+        return value;
+    }
+}

@@ -1,0 +1,26 @@
+schema = 1
+
+# Test ownership and subscriptions select areas; checks consume that same selection.
+[[check]]
+name = "comfy"
+script = "check:comfy"
+areas = ["*"]
+exclude_areas = ["editor_integrations", "photoshop", "gimp"]
+
+[[check]]
+name = "integrations"
+script = "check:integrations"
+areas = ["editor_integrations", "photoshop", "gimp"]
+exclude_areas = []
+
+[[check]]
+name = "gimp"
+script = "check:gimp"
+areas = ["gimp", "editor_integrations"]
+exclude_areas = []
+
+[[check]]
+name = "photoshop"
+script = "check:photoshop"
+areas = ["photoshop", "editor_integrations"]
+exclude_areas = []
