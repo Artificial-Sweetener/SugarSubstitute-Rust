@@ -36,7 +36,7 @@ from .responses import BackendError, json_error_from_exception, json_success
 from .route_types import RouteHandler
 from ..nodes import NODE_CLASS_MAPPINGS
 from .self_update import SelfUpdateRejected, snapshot_to_wire
-from .self_update.comfy_start import watch_comfy_start
+from .self_update.comfy_start import comfy_registered_nodes, watch_comfy_start
 from .validation import get_bool, parse_optional_json_body
 
 _VERSION = re.compile(r"^[0-9]{1,9}\.[0-9]{1,9}\.[0-9]{1,9}$")
@@ -103,7 +103,11 @@ def build_self_update_route_handlers(
             return json_error_from_exception(
                 BackendError("Say whether the page loaded.", status=400)
             )
-        await asyncio.to_thread(updater.report_page_load, loaded=loaded)
+        await asyncio.to_thread(
+            updater.report_page_load,
+            loaded=loaded,
+            nodes_registered=comfy_registered_nodes(NODE_CLASS_MAPPINGS),
+        )
         return json_success(snapshot_to_wire(updater.snapshot()))
 
     async def dismiss_self_update_notice(request: Any) -> Any:
@@ -142,13 +146,15 @@ def accept_updates_on_full_start(server: Any, services: BackendServices) -> None
     """Accept a just-installed version only once ComfyUI finishes starting."""
 
     updater = services.self_update
-    watch_comfy_start(
+    observed = watch_comfy_start(
         server,
         expected_nodes=NODE_CLASS_MAPPINGS,
         on_started=lambda registered: updater.accept_backend_start(
             nodes_registered=registered
         ),
     )
+    if not observed:
+        updater.start_unobservable()
 
 
 __all__ = [

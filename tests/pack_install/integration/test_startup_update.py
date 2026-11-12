@@ -27,6 +27,7 @@ from sugarcubes.backend.pack_install.staging import StagedStore
 from sugarcubes.backend.pack_install.startup import (
     StartupOutcomeKind,
     accept_backend_start,
+    mark_start_unobservable,
     read_outcome,
     report_page_load,
     run_startup_update,
@@ -79,7 +80,7 @@ def test_chosen_update_installs_at_start_and_is_confirmed(tmp_path: Path) -> Non
     accepted = accept_backend_start(pack, "1.1.0")
     assert accepted is not None and accepted.reason == ""
     assert (updates_root(pack) / "transaction").exists()
-    assert report_page_load(pack, "1.1.0", loaded=True)
+    assert report_page_load(pack, "1.1.0", loaded=True, nodes_registered=True)
     assert not (updates_root(pack) / "transaction").exists()
     assert run_startup_update(pack) is None
     assert snapshot_folder(pack) == _expected_new(pack)
@@ -109,7 +110,7 @@ def test_confirmation_from_another_version_settles_nothing(tmp_path: Path) -> No
     pack, _store = _prepare(tmp_path)
     run_startup_update(pack)
     assert accept_backend_start(pack, "1.0.0") is None
-    assert not report_page_load(pack, "1.1.0", loaded=True)
+    assert not report_page_load(pack, "1.1.0", loaded=True, nodes_registered=True)
     assert (updates_root(pack) / "transaction").exists()
 
 
@@ -131,8 +132,39 @@ def test_page_that_fails_to_load_restores_the_previous_version(tmp_path: Path) -
     original = snapshot_folder(pack)
     run_startup_update(pack)
     accept_backend_start(pack, "1.1.0")
-    assert report_page_load(pack, "1.1.0", loaded=False)
-    assert not report_page_load(pack, "1.1.0", loaded=True)
+    assert report_page_load(pack, "1.1.0", loaded=False, nodes_registered=True)
+    assert not report_page_load(pack, "1.1.0", loaded=True, nodes_registered=True)
+    outcome = run_startup_update(pack)
+    assert outcome is not None
+    assert (outcome.kind, outcome.reason) == (
+        StartupOutcomeKind.RESTORED,
+        "page-did-not-load",
+    )
+    assert snapshot_folder(pack) == original
+
+
+def test_unobservable_start_never_rolls_back_a_version_that_imported(
+    tmp_path: Path,
+) -> None:
+    """Without a start observation the page decides; a restart alone changes nothing."""
+
+    pack, _store = _prepare(tmp_path)
+    run_startup_update(pack)
+    assert mark_start_unobservable(pack, "1.1.0")
+    assert run_startup_update(pack) is None
+    assert snapshot_folder(pack) == _expected_new(pack)
+    assert report_page_load(pack, "1.1.0", loaded=True, nodes_registered=True)
+    assert not (updates_root(pack) / "transaction").exists()
+
+
+def test_unobserved_start_with_missing_nodes_is_restored(tmp_path: Path) -> None:
+    """A page that loads while SugarCubes' nodes are missing counts as a failed start."""
+
+    pack, _store = _prepare(tmp_path)
+    original = snapshot_folder(pack)
+    run_startup_update(pack)
+    mark_start_unobservable(pack, "1.1.0")
+    report_page_load(pack, "1.1.0", loaded=True, nodes_registered=False)
     outcome = run_startup_update(pack)
     assert outcome is not None
     assert (outcome.kind, outcome.reason) == (

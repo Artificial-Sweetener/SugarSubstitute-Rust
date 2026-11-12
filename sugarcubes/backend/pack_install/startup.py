@@ -129,12 +129,11 @@ def accept_backend_start(
         return outcome
 
 
-def report_page_load(pack_folder: Path, running_version: str, *, loaded: bool) -> bool:
-    """Settle a started version by its first page load; returns whether it applied.
+def mark_start_unobservable(pack_folder: Path, running_version: str) -> bool:
+    """Record that this start of a just-installed version cannot be observed.
 
-    A page that loaded confirms the update and drops the backup. A page that
-    reports a load failure marks the update failed, so the next start restores
-    the previous version.
+    The version imported (this runs from it), so a later start must not take
+    the missing observation for a failed start; its first page load decides.
     """
 
     root = updates_root(pack_folder)
@@ -145,10 +144,43 @@ def report_page_load(pack_folder: Path, running_version: str, *, loaded: bool) -
         pending = replacement.pending()
         if (
             pending is None
-            or pending.phase is not JournalPhase.STARTED
+            or pending.phase is not JournalPhase.APPLIED
             or pending.to_version != running_version
         ):
             return False
+        replacement.advance(JournalPhase.UNOBSERVED)
+        return True
+
+
+def report_page_load(
+    pack_folder: Path,
+    running_version: str,
+    *,
+    loaded: bool,
+    nodes_registered: bool,
+) -> bool:
+    """Settle a just-installed version by its first page load; returns whether it applied.
+
+    A page that loaded confirms the update and drops the backup. A page that
+    reports a load failure marks the update failed, so the next start restores
+    the previous version. When the start itself could not be observed, the
+    page load also requires every SugarCubes node to be registered.
+    """
+
+    root = updates_root(pack_folder)
+    if not root.is_dir():
+        return False
+    with exclusive_update_lock(root):
+        replacement = TrackedReplacement(root / _TRANSACTION)
+        pending = replacement.pending()
+        if (
+            pending is None
+            or pending.phase not in {JournalPhase.STARTED, JournalPhase.UNOBSERVED}
+            or pending.to_version != running_version
+        ):
+            return False
+        if pending.phase is JournalPhase.UNOBSERVED and not nodes_registered:
+            loaded = False
         if loaded:
             replacement.confirm()
             _logger.info(
@@ -208,7 +240,7 @@ def _settle_earlier_replacement(
     if pending.phase is JournalPhase.BACKING_UP:
         replacement.discard_unstarted()
         return None
-    if pending.phase is JournalPhase.STARTED:
+    if pending.phase in {JournalPhase.STARTED, JournalPhase.UNOBSERVED}:
         # The version started; no page has loaded yet. A newer chosen update
         # supersedes the wait, otherwise the backup stays for the first page.
         if StagedStore(updates_root(pack_folder)).has_schedule():
@@ -328,6 +360,7 @@ __all__ = [
     "StartupOutcomeKind",
     "clear_outcome",
     "accept_backend_start",
+    "mark_start_unobservable",
     "read_outcome",
     "report_page_load",
     "run_startup_update",

@@ -451,7 +451,7 @@ def test_pack_installed_by_the_updater_needs_no_network_to_find_edits(
     run_startup_update(pack)
     started = _service(pack, web, version="1.1.0")
     started.accept_backend_start(nodes_registered=True)
-    started.report_page_load(loaded=True)
+    started.report_page_load(loaded=True, nodes_registered=True)
     newer = FakeReleaseWeb()
     newer.publish_registry("1.2.0", pack_files("1.2.0"))
     newer.publish_empty_github()

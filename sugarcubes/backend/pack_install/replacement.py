@@ -21,7 +21,8 @@ half replaced, so recovery restores every backed-up file. `applied`: the new
 version is in place and waits for its first complete start; until that start
 confirms it, recovery treats the update as failed and restores the backup.
 `started`: the backend finished a full start and the backup waits for the page's
-first load; `page-failed`: that page reported a load failure, so the next start
+first load; `unobserved`: the new version imported but its start could not be
+observed, so the page load must also find every node registered; `page-failed`: that page reported a load failure, so the next start
 restores the backup as well.
 A completed replacement records `.tracking-digests.json`, so later local-edit
 checks need no network. Untracked files (user data, caches) are never touched, except that an untracked
@@ -58,6 +59,7 @@ class JournalPhase(str, Enum):
     REPLACING = "replacing"
     APPLIED = "applied"
     STARTED = "started"
+    UNOBSERVED = "unobserved"
     PAGE_FAILED = "page-failed"
 
 
@@ -169,6 +171,7 @@ class TrackedReplacement:
         if pending is None or pending.phase not in {
             JournalPhase.APPLIED,
             JournalPhase.STARTED,
+            JournalPhase.UNOBSERVED,
         }:
             return
         remove_tree(self.transaction_root)
