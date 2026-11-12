@@ -17,11 +17,19 @@
 import type { PanelMessage } from './PanelRuntime.js';
 import type { CanvasMessage, CanvasMaskMessage } from './CanvasRuntime.js';
 import type { MemoryClientMessage } from '../memory/MemoryHostProtocol.js';
+import type { UpdatesClientMessage } from './UpdatesRuntime.js';
 
 /** Keep editor transport mechanics outside the embedded application lifecycle. */
 export interface BrowserPanelTransport {
   readonly session: string;
-  send(message: PanelMessage | CanvasMessage | CanvasMaskMessage | MemoryClientMessage): void;
+  send(
+    message:
+      | PanelMessage
+      | CanvasMessage
+      | CanvasMaskMessage
+      | MemoryClientMessage
+      | UpdatesClientMessage,
+  ): void;
   subscribe(receive: (value: unknown) => void): () => void;
 }
 

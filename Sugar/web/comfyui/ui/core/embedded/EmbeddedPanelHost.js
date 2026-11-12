@@ -19,6 +19,7 @@ import { createUxpPanelTransport } from './UxpPanelTransport.js';
 import { createNativePanelTransport } from './NativePanelTransport.js';
 import { EmbeddedPanelLayout } from './EmbeddedPanelLayout.js';
 import { MemoryHostLink } from '../memory/MemoryHostLink.js';
+import { UpdatesHostLink } from '../updates/UpdatesHostLink.js';
 /** Keep messaging active only while the owning SugarCubes document is alive. */
 export class EmbeddedPanelHost {
     options;
@@ -27,6 +28,7 @@ export class EmbeddedPanelHost {
     #stop = null;
     #stopConnection = null;
     #memory = null;
+    #updates = null;
     #stopHost = null;
     #timer = null;
     /** Receive an identified adapter transport after Comfy and presentation setup have succeeded. */
@@ -85,8 +87,8 @@ export class EmbeddedPanelHost {
                 this.options.report(error);
             }
         };
-        this.#stopHost = this.options.host.subscribe(() => this.#joinMemoryBudget());
-        this.#joinMemoryBudget();
+        this.#stopHost = this.options.host.subscribe(() => this.#joinHostServices());
+        this.#joinHostServices();
         this.#timer = this.options.window.setInterval(ready, 1000);
         this.options.window.addEventListener('pagehide', this.dispose);
         ready();
@@ -116,6 +118,25 @@ export class EmbeddedPanelHost {
         this.options.host.settle(DeclaredHost.undeclared);
         return DeclaredHost.undeclared;
     }
+    /** Join each optional host protocol once the settled description declares it. */
+    #joinHostServices() {
+        this.#joinMemoryBudget();
+        this.#watchHostUpdates();
+    }
+    /** Present the host's updater in the Updates entry once the host declares that it serves it. */
+    #watchHostUpdates() {
+        const host = this.options.host.read();
+        if (this.#updates || !this.options.updates || !host?.serves(HOST_PROTOCOLS.updates))
+            return;
+        try {
+            const link = new UpdatesHostLink(this.transport, this.options.report);
+            this.#updates = { link, detach: this.options.updates.attach(link) };
+            link.start();
+        }
+        catch (error) {
+            this.options.report(error);
+        }
+    }
     /** Join the desktop memory budget once the host declares that it serves it. */
     #joinMemoryBudget() {
         const host = this.options.host.read();
@@ -139,6 +160,9 @@ export class EmbeddedPanelHost {
         this.#stopHost = null;
         this.#memory?.dispose();
         this.#memory = null;
+        this.#updates?.detach();
+        this.#updates?.link.dispose();
+        this.#updates = null;
         if (this.#timer !== null)
             this.options.window.clearInterval(this.#timer);
         this.#timer = null;

@@ -26,6 +26,7 @@ import { SettingsWorkspaceHost } from '../settings/SettingsWorkspaceHost.js';
 import { EmbeddedPresentation } from '../core/embedded/EmbeddedPresentation.js';
 import { HostAccent } from '../core/embedded/HostAccent.js';
 import { HostDescriptionState } from '../core/embedded/HostDescriptionState.js';
+import { UpdateSourceSlot } from '../core/updates/UpdateSource.js';
 import { DeclaredHost } from '../core/embedded/PanelRuntime.js';
 import { startEmbeddedPanel } from '../core/embedded/EmbeddedPanelHost.js';
 import { EmbeddedCanvasConnection } from '../core/embedded/EmbeddedCanvasConnection.js';
@@ -53,12 +54,15 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
   frame: SubstituteFrameHost;
   canvas: EmbeddedCanvasConnection;
   host: HostDescriptionState;
+  /** The page's one update source; SugarCubes' own updater attaches here without a host one. */
+  updates: UpdateSourceSlot;
   settingsRoute: SettingsWorkspaceRoute;
   setupPresentation(): void;
 } {
   const embedded = new EmbeddedPresentation();
   const hostAccent = new HostAccent();
   const host = new HostDescriptionState();
+  const updates = new UpdateSourceSlot();
   const canvas = new EmbeddedCanvasConnection();
   const relations: RelationHostLifecycle = new RelationHostLifecycle({
     ...options,
@@ -100,6 +104,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
     document: options.document,
     mode: frame.mode,
     palette: appearance.palette,
+    updates,
     report: options.reportPresentationError,
   });
   /** Mount field appearance and its frame/navigation presentation after native workspace setup. */
@@ -114,6 +119,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
       startEmbeddedPanel({
         window: windowRef,
         host,
+        updates,
         presentation: embedded,
         hostAccent,
         canvas,
@@ -133,6 +139,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
     frame,
     canvas,
     host,
+    updates,
     settingsRoute: settingsWorkspace.sessionRoute,
     setupPresentation,
   };
