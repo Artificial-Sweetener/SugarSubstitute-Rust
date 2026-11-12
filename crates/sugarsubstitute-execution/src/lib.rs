@@ -119,6 +119,9 @@ mod windows_fixture_forwarding;
 /// Bounded, cancellable whole-file byte-range lock waits for blocking storage jobs.
 #[cfg(windows)]
 pub mod file_lock;
+/// Bounded, cancellable waits for the first of several signalled kernel objects.
+#[cfg(windows)]
+pub mod handle_wait;
 #[cfg(windows)]
 pub mod windows;
 #[cfg(windows)]

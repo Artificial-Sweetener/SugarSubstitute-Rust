@@ -537,6 +537,15 @@ disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Prove real kernel lock waits wake on release, time out and cancel on the job's own clock. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
+path = "crates/sugarsubstitute-execution/src/handle_wait.rs"
+owner = "sugarsubstitute-execution"
+source_sha256 = "sha256:95d9419b6c8c6c1cb590d78dfc4c8b8d832519b10d22b721f76ef2a3f46da2af"
+capabilities = ["export public restricted capability std::os::windows::io::BorrowedHandle"]
+disposition = "boundary"
+rationale = "Execution-owned native object wait: Register one thread-pool wait per object, race the first wake against the job's clock, cancellation and deadline, and retire every registration before returning."
+boundary = "native_custody"
+
+[[records]]
 path = "crates/sugarsubstitute-execution/src/lifecycle_pipe/backend_custody/recovery_retirement_tests.rs"
 owner = "sugarsubstitute-execution"
 source_sha256 = "sha256:51233308e46e7431d4c0d87f4624cb48d593e09bad3d3671b9bc8819141cda62"
