@@ -1,0 +1,268 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Freeze effective return masks and resolve their compiled outputs without native-editor or live-graph dependencies. */
+import type {
+  CanvasDocument,
+  CanvasPixelRaster,
+} from '../../../../../integrations/contracts/CanvasProtocol.generated.js';
+import type {
+  WorkflowCanvasPreparation,
+  WorkflowCanvasReturn,
+} from '../../execution/domain/WorkflowPreparation.js';
+import type { InputAssetPorts } from '../domain/InputLoader.js';
+import { nativeMaskSource } from '../domain/MaskSourcePixels.js';
+import type { InputRasterPort } from '../application/InputRasterPort.js';
+import {
+  preparedSourceFile,
+  type PreparedInputSources,
+} from '../application/InputSourcePreparation.js';
+import type { PreparedInputPixels } from '../application/PreparedInputPixels.js';
+import type { CanvasImageMapping } from '../../../../../integrations/contracts/CanvasImageRegion.js';
+import { hasCompiledVaeCenterCrop } from './ComfyVaeReturnFrame.js';
+import type { InputWorkflowTarget } from './InputWorkflowProjection.js';
+import {
+  compiledInputReturnAssociations,
+  type PreparedInputIdentity,
+} from './ComfyInputReturnGraph.js';
+import {
+  MAX_CANVAS_RASTER_BYTES,
+  sameCanvasSourceDocument,
+} from '../../core/embedded/CanvasRuntime.js';
+
+interface Origin {
+  readonly canvasId: string;
+  readonly document: CanvasDocument;
+}
+interface PreparedReturnInput extends PreparedInputIdentity {
+  readonly origin: Origin | null;
+  readonly masks: readonly CanvasPixelRaster[];
+  readonly unresolvedSettings: readonly string[];
+  readonly mapping: CanvasImageMapping | null;
+  readonly sourceSize: { readonly width: number; readonly height: number } | null;
+}
+
+/** Retain an immutable preparation until the authoritative compiler has supplied its final graph. */
+class PreparedCanvasReturns implements WorkflowCanvasPreparation {
+  /** Bind captured field identities and frozen node asset declarations, never live host handles. */
+  constructor(
+    private readonly inputs: readonly PreparedReturnInput[],
+    private readonly ports: ReadonlyMap<string, InputAssetPorts>,
+    private readonly fallback: Origin | null,
+  ) {}
+
+  /** Attribute only outputs with one compatible captured image and return mask. */
+  resolve(prompt: unknown): readonly WorkflowCanvasReturn[] {
+    const fields = new Map(this.inputs.map((input) => [input.key, input]));
+    return Object.freeze(
+      compiledInputReturnAssociations(prompt, this.inputs, this.ports).map(
+        (association): WorkflowCanvasReturn => {
+          if (association.kind === 'unavailable')
+            return {
+              kind: 'unavailable',
+              executionPath: association.output,
+              message: association.message,
+            };
+          const mask = fields.get(association.mask),
+            image = fields.get(association.image);
+          const origin = image?.origin ?? mask?.origin ?? this.fallback;
+          if (mask?.unresolvedSettings.length)
+            return {
+              kind: 'unavailable',
+              executionPath: association.output,
+              message:
+                'The inpaint mask uses graph-connected settings without a captured interpretation.',
+            };
+          if (!mask || !image || !origin || !mask.masks.length)
+            return {
+              kind: 'unavailable',
+              executionPath: association.output,
+              message: 'The inpaint inputs have no captured canvas placement.',
+            };
+          if (
+            image.origin &&
+            mask.origin &&
+            (image.origin.canvasId !== mask.origin.canvasId ||
+              !sameCanvasSourceDocument(image.origin.document, mask.origin.document))
+          )
+            return {
+              kind: 'unavailable',
+              executionPath: association.output,
+              message: 'The inpaint image and mask belong to different canvas documents.',
+            };
+          const { width, height } = origin.document;
+          if (
+            mask.sourceSize &&
+            (mask.sourceSize.width !== width || mask.sourceSize.height !== height)
+          )
+            return {
+              kind: 'unavailable',
+              executionPath: association.output,
+              message: 'The edited inputs no longer match the captured canvas frame.',
+            };
+          const mapping =
+            mask.mapping ??
+            Object.freeze({
+              imageSize: Object.freeze({ width, height }),
+              imageBounds: Object.freeze({ left: 0, top: 0, width, height }),
+              documentBounds: Object.freeze({ left: 0, top: 0, width, height }),
+            });
+          if (
+            mask.masks.some(
+              (pixels) =>
+                pixels.width !== mapping.imageSize.width ||
+                pixels.height !== mapping.imageSize.height,
+            )
+          )
+            return {
+              kind: 'unavailable',
+              executionPath: association.output,
+              message: 'The inpaint mask has no declared mapping to the captured canvas frame.',
+            };
+          if (image.mapping && JSON.stringify(image.mapping) !== JSON.stringify(mapping))
+            return {
+              kind: 'unavailable',
+              executionPath: association.output,
+              message: 'The edited image and mask have different input mappings.',
+            };
+          const centerCrop = hasCompiledVaeCenterCrop(prompt, association.output, image);
+          return Object.freeze({
+            kind: 'region',
+            executionPath: association.output,
+            canvasId: origin.canvasId,
+            document: origin.document,
+            regions: Object.freeze(
+              mask.masks.map((pixels) => {
+                const region = Object.freeze({
+                  ...(centerCrop ? { outputFrame: 'vae-center-crop' as const } : {}),
+                  mapping,
+                  mask: pixels,
+                  coverage: association.composited ? ('support' as const) : ('mask' as const),
+                });
+                return region;
+              }),
+            ),
+          });
+        },
+      ),
+    );
+  }
+}
+
+/** Decode masks through the same authoritative conventions used by input previews. */
+export class ComfyInputReturnPreparation {
+  /** Inject native source decoding and optional canvas context without identifying Photoshop. */
+  constructor(
+    private readonly rasters: InputRasterPort,
+    private readonly context: () => Promise<Origin | null>,
+  ) {}
+
+  /** Capture a file-only workflow's destination before decoding or uploading can await. */
+  async origin(targets: readonly InputWorkflowTarget[]): Promise<Origin | null> {
+    if (
+      !targets.some((target) => target.loader.kind === 'mask' || target.maskOutput) ||
+      targets.some((target) =>
+        target.binding.entries.some((entry) => entry.source.kind === 'canvas'),
+      )
+    )
+      return null;
+    const context = await this.context();
+    return context
+      ? Object.freeze({
+          canvasId: context.canvasId,
+          document: Object.freeze({ ...context.document }),
+        })
+      : null;
+  }
+
+  /** Freeze all loader settings and effective coverage before accepting a queue request. */
+  async prepare(
+    targets: readonly InputWorkflowTarget[],
+    prepared: PreparedInputSources,
+    ports: ReadonlyMap<string, InputAssetPorts>,
+    fallback: Origin | null,
+    editedInputs: ReadonlyMap<string, PreparedInputPixels>,
+  ): Promise<WorkflowCanvasPreparation | undefined> {
+    if (!targets.some((target) => target.loader.kind === 'mask' || target.maskOutput))
+      return undefined;
+    if (!fallback && !prepared.snapshots.size) return undefined;
+    const inputs: PreparedReturnInput[] = [];
+    let retained = 0;
+    for (const target of targets) {
+      const edited = editedInputs.get(target.key);
+      const files: string[] = [],
+        masks: CanvasPixelRaster[] = [];
+      let origin: Origin | null = null;
+      for (const entry of target.binding.entries) {
+        const key = JSON.stringify([target.key, entry.id]);
+        const snapshot = prepared.snapshots.get(key);
+        const file = edited?.file ?? preparedSourceFile(target.key, entry, prepared);
+        files.push(file);
+        if (snapshot && entry.source.kind === 'canvas') {
+          const current = { canvasId: entry.source.canvasId, document: snapshot.document };
+          if (
+            origin &&
+            (origin.canvasId !== current.canvasId ||
+              !sameCanvasSourceDocument(origin.document, current.document))
+          )
+            throw new Error('One inpaint source collection must belong to one canvas document.');
+          origin = Object.freeze(current);
+        }
+        if (
+          (target.loader.kind === 'mask' || target.maskOutput) &&
+          !target.unresolvedSettings.length
+        ) {
+          const pixels =
+            edited?.pixels ??
+            (snapshot
+              ? nativeMaskSource(snapshot.pixels, target.loader, target.settings, target.maskOutput)
+              : null) ??
+            (await this.rasters.load(file, { ...target.settings, kind: 'mask' }, 0));
+          if (pixels.format !== 'coverage8')
+            throw new Error('The inpaint loader did not return mask coverage.');
+          retained += pixels.width * pixels.height;
+          if (retained > MAX_CANVAS_RASTER_BYTES)
+            throw new Error('The inpaint mask collection exceeds its retained pixel budget.');
+          masks.push(Object.freeze({ ...pixels }));
+        }
+      }
+      const field = Object.freeze({
+        key: target.key,
+        nodePath: target.nodePath,
+        classType: edited?.classType ?? target.loader.classType,
+        field: edited?.field ?? target.loader.field,
+        kind: target.loader.kind,
+        files: Object.freeze(files),
+        masks: Object.freeze(target.loader.kind === 'mask' ? masks : []),
+        unresolvedSettings: target.unresolvedSettings,
+        origin,
+        mapping: edited?.mapping ?? null,
+        sourceSize: edited?.sourceSize ?? null,
+      });
+      inputs.push(field);
+      if (target.maskOutput)
+        inputs.push(
+          Object.freeze({
+            ...field,
+            key: JSON.stringify([target.key, 'mask-output']),
+            kind: 'mask',
+            masks: Object.freeze(masks),
+          }),
+        );
+    }
+    if (!fallback && !inputs.some((input) => input.origin)) return undefined;
+    return new PreparedCanvasReturns(Object.freeze(inputs), ports, fallback);
+  }
+}

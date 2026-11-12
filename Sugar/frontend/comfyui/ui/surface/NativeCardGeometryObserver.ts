@@ -1,0 +1,80 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Observe native card dimensions and coalesce responsive masonry reflows. */
+
+/** Own browser resize observation for one Cube surface. */
+export class NativeCardGeometryObserver {
+  readonly #window: Window;
+  readonly #onGeometryChange: () => void;
+  readonly #observer: ResizeObserver | null;
+  readonly #sizes = new WeakMap<Element, { width: number; height: number }>();
+  #animationFrame: number | null = null;
+  #disposed = false;
+
+  /** Bind native ResizeObserver updates to one coalesced layout callback. */
+  constructor(documentRef: Document, onGeometryChange: () => void) {
+    const windowRef = documentRef.defaultView;
+    if (!windowRef) throw new Error('Cube card geometry requires a browser window.');
+    this.#window = windowRef;
+    this.#onGeometryChange = onGeometryChange;
+    this.#observer =
+      typeof windowRef.ResizeObserver === 'function'
+        ? new windowRef.ResizeObserver((entries) => {
+            let changed = entries.length === 0;
+            for (const entry of entries) {
+              const previous = this.#sizes.get(entry.target);
+              const { width, height } = entry.contentRect;
+              const disclosing = entry.target.querySelector('[data-sc-disclosure-height]') !== null;
+              if (
+                !previous ||
+                Math.abs(previous.width - width) > 0.5 ||
+                (!disclosing && Math.abs(previous.height - height) > 0.5)
+              )
+                changed = true;
+              this.#sizes.set(entry.target, { width, height });
+            }
+            if (changed) this.request();
+          })
+        : null;
+  }
+
+  /** Replace the exact native card cells whose dimensions drive masonry. */
+  observe(cells: readonly HTMLElement[]): void {
+    if (this.#disposed) return;
+    this.#observer?.disconnect();
+    for (const cell of cells) this.#observer?.observe(cell);
+    this.request();
+  }
+
+  /** Disconnect browser resources owned by this Cube surface. */
+  dispose(): void {
+    this.#disposed = true;
+    this.#observer?.disconnect();
+    if (this.#animationFrame !== null) {
+      this.#window.cancelAnimationFrame(this.#animationFrame);
+      this.#animationFrame = null;
+    }
+  }
+
+  /** Schedule one post-render measurement regardless of callback burst size. */
+  request(): void {
+    if (this.#disposed || this.#animationFrame !== null) return;
+    this.#animationFrame = this.#window.requestAnimationFrame(() => {
+      this.#animationFrame = null;
+      this.#onGeometryChange();
+    });
+  }
+}

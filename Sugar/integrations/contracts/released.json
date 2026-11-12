@@ -1,0 +1,53 @@
+{
+  "schemas": [
+    {
+      "file": "canvas.schema.json",
+      "id": "https://artificialsweetener.ai/schemas/sugarcubes/canvas/v3",
+      "sha256": "b72372ee8c7760a767d95e3f16a7415300789511c576d3ecf14442d1959c55e7"
+    },
+    {
+      "file": "host.schema.json",
+      "id": "https://artificialsweetener.ai/schemas/sugarcubes/host/v1",
+      "sha256": "cc01b88599a9684deeeb8a0ff995a829f27e213f7c456f1fdf266cf694b2cb5f"
+    },
+    {
+      "file": "masks.schema.json",
+      "id": "https://artificialsweetener.ai/schemas/sugarcubes/canvas/masks/v2",
+      "sha256": "65a5d25d8cec987179370b9ce0edb5903c4d8251e4029bf02ce72c819c75aef2"
+    },
+    {
+      "file": "memory.schema.json",
+      "id": "https://artificialsweetener.ai/schemas/sugarcubes/memory/v1",
+      "sha256": "c00327b9ffe91da416c8d3c426ee1ee699857204787fef644c387d894bb911fd"
+    },
+    {
+      "file": "panel.schema.json",
+      "id": "https://artificialsweetener.ai/schemas/sugarcubes/embedded-panel/v3",
+      "sha256": "e59c8a19fe212dad3a2a436b770fd9c0ebc59aa2dcb8edf1527afcd984500d2f"
+    },
+    {
+      "file": "session.schema.json",
+      "id": "https://sugarcubes.dev/contracts/desktop-session/v1",
+      "sha256": "4dea675b60fa4a2695f7a870fb8271c8df778dc42eec08cc6e8ae60279eaaf00"
+    },
+    {
+      "file": "updates.schema.json",
+      "id": "https://artificialsweetener.ai/schemas/sugarcubes/updates/v1",
+      "sha256": "ef20c40afebe2ed098bc5ba83461a568dce40b1451d6b3fcbcb38ba28ef9f562"
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "presentation.host-styles",
+      "meaning": "The host's configured presentation replaces the user's saved appearance while embedded."
+    },
+    {
+      "name": "presentation.system-accent",
+      "meaning": "The host's configured accent is the system accent, offered as a choice beside a custom one."
+    },
+    {
+      "name": "output.host-surface",
+      "meaning": "The host presents output images itself; the page never falls back to browser images."
+    }
+  ]
+}

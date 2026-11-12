@@ -1,0 +1,2733 @@
+{
+  "schemaVersion": 1,
+  "revision": "6cfb0e4ab589ecaaa572909eb6ca5d7d2af08ea8",
+  "ecosystems": [
+    {
+      "id": 6,
+      "key": "Flux1",
+      "displayName": "Flux.1",
+      "familyId": 1,
+      "sortOrder": 0
+    },
+    {
+      "id": 7,
+      "key": "FluxKrea",
+      "displayName": "Flux.1 Krea",
+      "familyId": 1,
+      "sortOrder": 1
+    },
+    {
+      "id": 8,
+      "key": "Flux1Kontext",
+      "displayName": "Flux.1 Kontext",
+      "familyId": 1,
+      "sortOrder": 2
+    },
+    {
+      "id": 9,
+      "key": "Flux2",
+      "displayName": "Flux.2",
+      "familyId": 1,
+      "sortOrder": 3
+    },
+    {
+      "id": 54,
+      "key": "Flux2Klein_9B",
+      "displayName": "Flux.2 Klein 9B",
+      "familyId": 1,
+      "sortOrder": 4,
+      "parentEcosystemId": 9
+    },
+    {
+      "id": 55,
+      "key": "Flux2Klein_9B_base",
+      "displayName": "Flux.2 Klein 9B Base",
+      "familyId": 1,
+      "sortOrder": 5,
+      "parentEcosystemId": 9
+    },
+    {
+      "id": 56,
+      "key": "Flux2Klein_4B",
+      "displayName": "Flux.2 Klein 4B",
+      "familyId": 1,
+      "sortOrder": 6,
+      "parentEcosystemId": 9
+    },
+    {
+      "id": 57,
+      "key": "Flux2Klein_4B_base",
+      "displayName": "Flux.2 Klein 4B Base",
+      "familyId": 1,
+      "sortOrder": 7,
+      "parentEcosystemId": 9
+    },
+    {
+      "id": 92,
+      "key": "Flux3",
+      "displayName": "Flux.3",
+      "familyId": 1,
+      "sortOrder": 8
+    },
+    {
+      "id": 79,
+      "key": "Flux3Video",
+      "displayName": "Flux 3 Video",
+      "familyId": 1,
+      "sortOrder": 9
+    },
+    {
+      "id": 1,
+      "key": "SD1",
+      "displayName": "Stable Diffusion 1.x",
+      "familyId": 2,
+      "sortOrder": 10
+    },
+    {
+      "id": 2,
+      "key": "SD2",
+      "displayName": "Stable Diffusion 2.x",
+      "familyId": 2,
+      "sortOrder": 11
+    },
+    {
+      "id": 3,
+      "key": "SD3",
+      "displayName": "Stable Diffusion 3",
+      "familyId": 2,
+      "sortOrder": 12
+    },
+    {
+      "id": 46,
+      "key": "SD3_5M",
+      "displayName": "Stable Diffusion 3.5 Medium",
+      "familyId": 2,
+      "sortOrder": 13
+    },
+    {
+      "id": 4,
+      "key": "SDXL",
+      "displayName": "Stable Diffusion XL",
+      "familyId": 2,
+      "sortOrder": 14
+    },
+    {
+      "id": 5,
+      "key": "SDXLDistilled",
+      "displayName": "SDXL Distilled",
+      "familyId": 2,
+      "sortOrder": 15
+    },
+    {
+      "id": 25,
+      "key": "SCascade",
+      "displayName": "Stable Cascade",
+      "familyId": 2,
+      "sortOrder": 16
+    },
+    {
+      "id": 45,
+      "key": "SVD",
+      "displayName": "Stable Video Diffusion",
+      "familyId": 2,
+      "sortOrder": 17
+    },
+    {
+      "id": 101,
+      "key": "Illustrious",
+      "displayName": "Illustrious",
+      "parentEcosystemId": 4,
+      "familyId": 3,
+      "sortOrder": 20
+    },
+    {
+      "id": 102,
+      "key": "NoobAI",
+      "displayName": "NoobAI",
+      "parentEcosystemId": 4,
+      "familyId": 3,
+      "sortOrder": 21
+    },
+    {
+      "id": 12,
+      "key": "HyDit1",
+      "displayName": "Hunyuan DiT",
+      "familyId": 4,
+      "sortOrder": 40
+    },
+    {
+      "id": 30,
+      "key": "HyV1",
+      "displayName": "Hunyuan Video",
+      "familyId": 4,
+      "sortOrder": 41
+    },
+    {
+      "id": 31,
+      "key": "WanVideo",
+      "displayName": "Wan Video",
+      "familyId": 5,
+      "sortOrder": 50
+    },
+    {
+      "id": 32,
+      "key": "WanVideo1_3B_T2V",
+      "displayName": "Wan Video 1.3B T2V",
+      "familyId": 5,
+      "sortOrder": 51
+    },
+    {
+      "id": 33,
+      "key": "WanVideo14B_T2V",
+      "displayName": "Wan Video 14B T2V",
+      "familyId": 5,
+      "sortOrder": 52
+    },
+    {
+      "id": 34,
+      "key": "WanVideo14B_I2V_480p",
+      "displayName": "Wan Video 14B I2V 480p",
+      "familyId": 5,
+      "sortOrder": 53
+    },
+    {
+      "id": 35,
+      "key": "WanVideo14B_I2V_720p",
+      "displayName": "Wan Video 14B I2V 720p",
+      "familyId": 5,
+      "sortOrder": 54
+    },
+    {
+      "id": 36,
+      "key": "WanVideo-22-TI2V-5B",
+      "displayName": "Wan Video 2.2 TI2V 5B",
+      "familyId": 5,
+      "sortOrder": 55
+    },
+    {
+      "id": 37,
+      "key": "WanVideo-22-I2V-A14B",
+      "displayName": "Wan Video 2.2 I2V A14B",
+      "familyId": 5,
+      "sortOrder": 56
+    },
+    {
+      "id": 38,
+      "key": "WanVideo-22-T2V-A14B",
+      "displayName": "Wan Video 2.2 T2V A14B",
+      "familyId": 5,
+      "sortOrder": 57
+    },
+    {
+      "id": 39,
+      "key": "WanVideo-25-T2V",
+      "displayName": "Wan Video 2.5 T2V",
+      "familyId": 5,
+      "sortOrder": 58
+    },
+    {
+      "id": 40,
+      "key": "WanVideo-25-I2V",
+      "displayName": "Wan Video 2.5 I2V",
+      "familyId": 5,
+      "sortOrder": 59
+    },
+    {
+      "id": 64,
+      "key": "WanImage27",
+      "displayName": "Wan Image 2.7",
+      "familyId": 5,
+      "sortOrder": 60
+    },
+    {
+      "id": 65,
+      "key": "WanVideo27",
+      "displayName": "Wan Video 2.7",
+      "familyId": 5,
+      "sortOrder": 61
+    },
+    {
+      "id": 82,
+      "key": "WanVideo30",
+      "displayName": "Wan Video 3.0",
+      "familyId": 5,
+      "sortOrder": 62
+    },
+    {
+      "id": 18,
+      "key": "PixArtA",
+      "displayName": "PixArt Alpha",
+      "familyId": 6,
+      "sortOrder": 60
+    },
+    {
+      "id": 19,
+      "key": "PixArtE",
+      "displayName": "PixArt Sigma",
+      "familyId": 6,
+      "sortOrder": 61
+    },
+    {
+      "id": 22,
+      "key": "Imagen4",
+      "displayName": "Imagen 4",
+      "familyId": 7,
+      "sortOrder": 70
+    },
+    {
+      "id": 20,
+      "key": "NanoBanana",
+      "displayName": "Nano Banana",
+      "familyId": 7,
+      "sortOrder": 71
+    },
+    {
+      "id": 44,
+      "key": "Veo3",
+      "displayName": "Veo 3",
+      "familyId": 7,
+      "sortOrder": 72
+    },
+    {
+      "id": 21,
+      "key": "OpenAI",
+      "displayName": "OpenAI",
+      "familyId": 8,
+      "sortOrder": 80
+    },
+    {
+      "id": 43,
+      "key": "Sora2",
+      "displayName": "Sora 2",
+      "familyId": 8,
+      "sortOrder": 81
+    },
+    {
+      "id": 100,
+      "key": "Pony",
+      "displayName": "Pony Diffusion",
+      "parentEcosystemId": 4,
+      "familyId": 9,
+      "sortOrder": 30
+    },
+    {
+      "id": 200,
+      "key": "PonyV7",
+      "displayName": "Pony Diffusion V7",
+      "parentEcosystemId": 13,
+      "familyId": 9,
+      "sortOrder": 31
+    },
+    {
+      "id": 10,
+      "key": "Qwen",
+      "displayName": "Qwen",
+      "familyId": 10,
+      "sortOrder": 90
+    },
+    {
+      "id": 62,
+      "key": "Qwen2",
+      "displayName": "Qwen 2",
+      "familyId": 10,
+      "sortOrder": 91
+    },
+    {
+      "id": 88,
+      "key": "Qwen21",
+      "displayName": "Qwen 2.1",
+      "familyId": 10,
+      "sortOrder": 92
+    },
+    {
+      "id": 80,
+      "key": "Qwen3",
+      "displayName": "Qwen 3",
+      "familyId": 10,
+      "sortOrder": 93
+    },
+    {
+      "id": 24,
+      "key": "ZImageTurbo",
+      "displayName": "ZImageTurbo",
+      "familyId": 11,
+      "sortOrder": 100
+    },
+    {
+      "id": 53,
+      "key": "ZImageBase",
+      "displayName": "ZImageBase",
+      "familyId": 11,
+      "sortOrder": 101
+    },
+    {
+      "id": 23,
+      "key": "Seedream",
+      "displayName": "Seedream",
+      "familyId": 12,
+      "sortOrder": 110
+    },
+    {
+      "id": 67,
+      "key": "Ernie",
+      "displayName": "Ernie",
+      "familyId": 17,
+      "sortOrder": 120
+    },
+    {
+      "id": 52,
+      "key": "HappyHorse",
+      "displayName": "HappyHorse",
+      "familyId": 18,
+      "sortOrder": 130
+    },
+    {
+      "id": 70,
+      "key": "Krea2",
+      "displayName": "Krea 2",
+      "familyId": 20,
+      "sortOrder": 150
+    },
+    {
+      "id": 71,
+      "key": "MAI",
+      "displayName": "MAI",
+      "familyId": 21,
+      "sortOrder": 160
+    },
+    {
+      "id": 78,
+      "key": "MageFlow",
+      "displayName": "Mage Flow",
+      "familyId": 21,
+      "sortOrder": 161
+    },
+    {
+      "id": 72,
+      "key": "Ideogram",
+      "displayName": "Ideogram",
+      "familyId": 22,
+      "sortOrder": 170
+    },
+    {
+      "id": 74,
+      "key": "Boogu",
+      "displayName": "Boogu",
+      "familyId": 23,
+      "sortOrder": 180
+    },
+    {
+      "id": 77,
+      "key": "Reve",
+      "displayName": "Reve",
+      "familyId": 24,
+      "sortOrder": 190
+    },
+    {
+      "id": 86,
+      "key": "MuseImage",
+      "displayName": "Muse Image",
+      "familyId": 25,
+      "sortOrder": 195
+    },
+    {
+      "id": 14,
+      "key": "HiDream",
+      "displayName": "HiDream",
+      "familyId": 19,
+      "sortOrder": 140
+    },
+    {
+      "id": 29,
+      "key": "HiDream-O1",
+      "displayName": "HiDream-O1",
+      "familyId": 19,
+      "sortOrder": 141
+    },
+    {
+      "id": 59,
+      "key": "Anima",
+      "displayName": "Anima",
+      "sortOrder": 199
+    },
+    {
+      "id": 13,
+      "key": "AuraFlow",
+      "displayName": "AuraFlow",
+      "sortOrder": 200
+    },
+    {
+      "id": 11,
+      "key": "Chroma",
+      "displayName": "Chroma",
+      "sortOrder": 201
+    },
+    {
+      "id": 41,
+      "key": "CogVideoX",
+      "displayName": "CogVideoX",
+      "sortOrder": 202
+    },
+    {
+      "id": 15,
+      "key": "Kolors",
+      "displayName": "Kolors",
+      "sortOrder": 204
+    },
+    {
+      "id": 42,
+      "key": "LTXV",
+      "displayName": "LTX Video",
+      "familyId": 16,
+      "sortOrder": 205
+    },
+    {
+      "id": 58,
+      "key": "LTXV2",
+      "displayName": "LTX Video 2",
+      "familyId": 16,
+      "sortOrder": 206
+    },
+    {
+      "id": 63,
+      "key": "LTXV23",
+      "displayName": "LTX Video 2.3",
+      "familyId": 16,
+      "sortOrder": 207
+    },
+    {
+      "id": 81,
+      "key": "LTXV25",
+      "displayName": "LTX Video 2.5",
+      "familyId": 16,
+      "sortOrder": 208
+    },
+    {
+      "id": 16,
+      "key": "Lumina",
+      "displayName": "Lumina",
+      "sortOrder": 208
+    },
+    {
+      "id": 17,
+      "key": "Mochi",
+      "displayName": "Mochi",
+      "sortOrder": 209
+    },
+    {
+      "id": 47,
+      "key": "Vidu",
+      "displayName": "Vidu",
+      "familyId": 15,
+      "sortOrder": 210
+    },
+    {
+      "id": 48,
+      "key": "MiniMaxH3",
+      "displayName": "MiniMax H3",
+      "familyId": 26,
+      "sortOrder": 211
+    },
+    {
+      "id": 49,
+      "key": "Kling",
+      "displayName": "Kling",
+      "familyId": 14,
+      "sortOrder": 212
+    },
+    {
+      "id": 61,
+      "key": "Grok",
+      "displayName": "Grok",
+      "familyId": 13,
+      "sortOrder": 216
+    },
+    {
+      "id": 50,
+      "key": "Haiper",
+      "displayName": "Haiper",
+      "sortOrder": 213
+    },
+    {
+      "id": 51,
+      "key": "Lightricks",
+      "displayName": "Lightricks",
+      "familyId": 16,
+      "sortOrder": 214
+    },
+    {
+      "id": 60,
+      "key": "Seedance",
+      "displayName": "Seedance",
+      "familyId": 12,
+      "sortOrder": 215
+    },
+    {
+      "id": 69,
+      "key": "Lens",
+      "displayName": "Lens",
+      "sortOrder": 207
+    },
+    {
+      "id": 27,
+      "key": "ODOR",
+      "displayName": "ODOR",
+      "sortOrder": 208
+    },
+    {
+      "id": 26,
+      "key": "PlaygroundV2",
+      "displayName": "Playground v2",
+      "sortOrder": 209
+    },
+    {
+      "id": 66,
+      "key": "Upscaler",
+      "displayName": "Upscaler",
+      "sortOrder": 998
+    },
+    {
+      "id": 28,
+      "key": "Other",
+      "displayName": "Other",
+      "sortOrder": 999
+    },
+    {
+      "id": 89,
+      "key": "Ming",
+      "displayName": "Ming Image Design",
+      "familyId": 27,
+      "sortOrder": 270
+    },
+    {
+      "id": 90,
+      "key": "MingLayer",
+      "displayName": "Ming Image Design Layer",
+      "familyId": 27,
+      "sortOrder": 271
+    },
+    {
+      "id": 68,
+      "key": "Ace",
+      "displayName": "ACE Audio",
+      "sortOrder": 300
+    },
+    {
+      "id": 85,
+      "key": "MiniMaxMusic3",
+      "displayName": "MiniMax Music 3",
+      "familyId": 26,
+      "sortOrder": 306
+    },
+    {
+      "id": 87,
+      "key": "YuE2",
+      "displayName": "YuE2",
+      "sortOrder": 307
+    },
+    {
+      "id": 91,
+      "key": "Sonilo",
+      "displayName": "Sonilo",
+      "familyId": 28,
+      "sortOrder": 308
+    },
+    {
+      "id": 73,
+      "key": "PolyGen",
+      "displayName": "PolyGen (Meshy)",
+      "sortOrder": 301
+    },
+    {
+      "id": 75,
+      "key": "Tripo",
+      "displayName": "Tripo",
+      "sortOrder": 302
+    },
+    {
+      "id": 76,
+      "key": "Hunyuan3D",
+      "displayName": "Hunyuan3D",
+      "sortOrder": 303
+    },
+    {
+      "id": 83,
+      "key": "Pixal3D",
+      "displayName": "Pixal3D",
+      "sortOrder": 304
+    },
+    {
+      "id": 84,
+      "key": "Trellis2",
+      "displayName": "Trellis.2",
+      "sortOrder": 305
+    }
+  ],
+  "baseModelRecords": [
+    {
+      "id": 77,
+      "name": "Anima",
+      "description": "Image generation model from CircleStone Labs",
+      "type": "image",
+      "ecosystemId": 59,
+      "licenseId": 25
+    },
+    {
+      "id": 1,
+      "name": "AuraFlow",
+      "description": "Open-source text-to-image model from Fal.ai with strong prompt adherence",
+      "type": "image",
+      "ecosystemId": 13,
+      "licenseId": 13
+    },
+    {
+      "id": 2,
+      "name": "Chroma",
+      "description": "Open-source model based on Flux architecture with improved color and composition",
+      "type": "image",
+      "ecosystemId": 11,
+      "licenseId": 13
+    },
+    {
+      "id": 3,
+      "name": "CogVideoX",
+      "description": "Text-to-video diffusion model from Tsinghua University and ZhipuAI",
+      "type": "video",
+      "ecosystemId": 41,
+      "licenseId": 17
+    },
+    {
+      "id": 83,
+      "name": "Ernie",
+      "description": "Baidu's image generation model",
+      "type": "image",
+      "ecosystemId": 67,
+      "licenseId": 13
+    },
+    {
+      "id": 4,
+      "name": "Flux.1 S",
+      "description": "First generation Flux schnell variant",
+      "type": "image",
+      "ecosystemId": 6,
+      "licenseId": 13
+    },
+    {
+      "id": 5,
+      "name": "Flux.1 D",
+      "description": "First generation Flux dev variant",
+      "type": "image",
+      "ecosystemId": 6,
+      "licenseId": 14
+    },
+    {
+      "id": 6,
+      "name": "Flux.1 Krea",
+      "description": "Krea-trained variant of Flux optimized for creative generation",
+      "type": "image",
+      "ecosystemId": 7,
+      "licenseId": 14
+    },
+    {
+      "id": 7,
+      "name": "Flux.1 Kontext",
+      "description": "Flux variant specialized for context-aware image editing and generation",
+      "type": "image",
+      "ecosystemId": 8,
+      "licenseId": 14
+    },
+    {
+      "id": 8,
+      "name": "Flux.2 D",
+      "description": "Next-generation Flux with enhanced capabilities",
+      "type": "image",
+      "ecosystemId": 9,
+      "licenseId": 29
+    },
+    {
+      "id": 73,
+      "name": "Flux.2 Klein 9B",
+      "description": "Flux.2 Klein 9 billion parameter distilled model",
+      "type": "image",
+      "ecosystemId": 54,
+      "licenseId": 30
+    },
+    {
+      "id": 74,
+      "name": "Flux.2 Klein 9B-base",
+      "description": "Flux.2 Klein 9 billion parameter base model",
+      "type": "image",
+      "ecosystemId": 55,
+      "licenseId": 30
+    },
+    {
+      "id": 75,
+      "name": "Flux.2 Klein 4B",
+      "description": "Flux.2 Klein 4 billion parameter distilled model",
+      "type": "image",
+      "ecosystemId": 56,
+      "licenseId": 13
+    },
+    {
+      "id": 76,
+      "name": "Flux.2 Klein 4B-base",
+      "description": "Flux.2 Klein 4 billion parameter base model",
+      "type": "image",
+      "ecosystemId": 57,
+      "licenseId": 13
+    },
+    {
+      "id": 112,
+      "name": "Flux.3",
+      "description": "Black Forest Labs' FLUX 3 image generation and editing model",
+      "type": "image",
+      "ecosystemId": 92,
+      "licenseId": 39
+    },
+    {
+      "id": 98,
+      "name": "Flux 3 Video",
+      "description": "Black Forest Labs' FLUX 3 video generation model with native audio",
+      "type": "video",
+      "ecosystemId": 79,
+      "licenseId": 39
+    },
+    {
+      "id": 78,
+      "name": "Grok",
+      "description": "Image and video generation model from xAI",
+      "type": [
+        "image",
+        "video"
+      ],
+      "ecosystemId": 61,
+      "licenseId": 26
+    },
+    {
+      "id": 85,
+      "name": "HappyHorse",
+      "description": "Alibaba's video generation model with synchronized audio, supporting text-to-video and image-to-video",
+      "type": "video",
+      "ecosystemId": 52,
+      "licenseId": 27
+    },
+    {
+      "id": 9,
+      "name": "HiDream",
+      "description": "High-resolution image generation model optimized for detailed outputs",
+      "type": "image",
+      "ecosystemId": 14,
+      "licenseId": 19
+    },
+    {
+      "id": 87,
+      "name": "HiDream-O1",
+      "description": "HiDream.ai's unified pixel-level transformer for text-to-image generation",
+      "type": "image",
+      "ecosystemId": 29,
+      "licenseId": 19
+    },
+    {
+      "id": 10,
+      "name": "Hunyuan 1",
+      "description": "Diffusion transformer for bilingual Chinese-English image generation",
+      "type": "image",
+      "ecosystemId": 12,
+      "licenseId": 10
+    },
+    {
+      "id": 11,
+      "name": "Hunyuan Video",
+      "description": "Video generation model with strong motion coherence",
+      "type": "video",
+      "ecosystemId": 30,
+      "licenseId": 11
+    },
+    {
+      "id": 91,
+      "name": "Ideogram 4.0",
+      "description": "Ideogram, Inc.'s text-to-image generation model with strong typography",
+      "type": "image",
+      "ecosystemId": 72,
+      "licenseId": 37
+    },
+    {
+      "id": 111,
+      "name": "Ideogram 4.5",
+      "description": "Ideogram, Inc.'s text-to-image and image editing model with strong typography",
+      "type": "image",
+      "ecosystemId": 72,
+      "hidden": true,
+      "licenseId": 47
+    },
+    {
+      "id": 93,
+      "name": "Boogu",
+      "description": "Boogu's unified multimodal image generation and editing model",
+      "type": "image",
+      "ecosystemId": 74,
+      "licenseId": 13
+    },
+    {
+      "id": 12,
+      "name": "Illustrious",
+      "description": "SDXL-based model specialized for anime and illustration styles",
+      "type": "image",
+      "ecosystemId": 101,
+      "licenseId": 15
+    },
+    {
+      "id": 13,
+      "name": "Imagen4",
+      "description": "Text-to-image model with photorealistic capabilities",
+      "type": "image",
+      "ecosystemId": 22,
+      "hidden": true,
+      "licenseId": 21
+    },
+    {
+      "id": 14,
+      "name": "Kolors",
+      "description": "Kuaishou's bilingual image generation model with vibrant color output",
+      "type": "image",
+      "ecosystemId": 15,
+      "licenseId": 12
+    },
+    {
+      "id": 89,
+      "name": "Krea 2",
+      "description": "Krea AI's in-house image generation model",
+      "type": "image",
+      "ecosystemId": 70,
+      "licenseId": 28
+    },
+    {
+      "id": 15,
+      "name": "LTXV",
+      "description": "Lightricks' efficient video generation model for fast rendering",
+      "type": "video",
+      "ecosystemId": 42,
+      "licenseId": 16
+    },
+    {
+      "id": 72,
+      "name": "LTXV2",
+      "description": "Lightricks' next-generation video generation model",
+      "type": "video",
+      "ecosystemId": 58,
+      "licenseId": 35
+    },
+    {
+      "id": 80,
+      "name": "LTXV 2.3",
+      "description": "Lightricks' LTX Video 2.3 generation model",
+      "type": "video",
+      "ecosystemId": 63,
+      "licenseId": 35
+    },
+    {
+      "id": 100,
+      "name": "LTXV 2.5",
+      "description": "Lightricks' LTX Video 2.5 generation model",
+      "type": "video",
+      "ecosystemId": 81,
+      "licenseId": 40
+    },
+    {
+      "id": 88,
+      "name": "Lens",
+      "description": "Civitai's image generation model",
+      "type": "image",
+      "ecosystemId": 69
+    },
+    {
+      "id": 16,
+      "name": "Lumina",
+      "description": "Open-source model with strong foundations",
+      "type": "image",
+      "ecosystemId": 16,
+      "licenseId": 13
+    },
+    {
+      "id": 97,
+      "name": "MageFlow",
+      "description": "Microsoft's native-resolution image generation and editing model",
+      "type": "image",
+      "ecosystemId": 78,
+      "licenseId": 19
+    },
+    {
+      "id": 90,
+      "name": "MAI",
+      "description": "Microsoft's photorealistic text-to-image and image-editing model",
+      "type": "image",
+      "ecosystemId": 71,
+      "licenseId": 36
+    },
+    {
+      "id": 17,
+      "name": "Mochi",
+      "description": "Genmo's video generation model with realistic motion synthesis",
+      "type": "video",
+      "ecosystemId": 17,
+      "licenseId": 13
+    },
+    {
+      "id": 18,
+      "name": "Nano Banana",
+      "description": "Experimental image generation model",
+      "type": "image",
+      "ecosystemId": 20,
+      "hidden": true,
+      "licenseId": 21
+    },
+    {
+      "id": 19,
+      "name": "NoobAI",
+      "description": "SDXL-based model trained for anime and stylized content",
+      "type": "image",
+      "ecosystemId": 102,
+      "licenseId": 18
+    },
+    {
+      "id": 20,
+      "name": "ODOR",
+      "description": "Experimental diffusion model architecture",
+      "type": "image",
+      "ecosystemId": 27,
+      "hidden": true
+    },
+    {
+      "id": 21,
+      "name": "OpenAI",
+      "description": "Image generation models including DALL-E",
+      "type": "image",
+      "ecosystemId": 21,
+      "hidden": true,
+      "licenseId": 20
+    },
+    {
+      "id": 82,
+      "name": "Upscaler",
+      "description": "Image upscaling models for increasing resolution",
+      "type": "image",
+      "ecosystemId": 66
+    },
+    {
+      "id": 22,
+      "name": "Other",
+      "description": "Models that don't fit into standard categories",
+      "type": "image",
+      "ecosystemId": 28
+    },
+    {
+      "id": 23,
+      "name": "PixArt a",
+      "description": "Efficient transformer-based model with fast training and strong quality",
+      "type": "image",
+      "ecosystemId": 18,
+      "licenseId": 3
+    },
+    {
+      "id": 24,
+      "name": "PixArt E",
+      "description": "Enhanced PixArt with 4K resolution support and improved detail",
+      "type": "image",
+      "ecosystemId": 19,
+      "licenseId": 3
+    },
+    {
+      "id": 25,
+      "name": "Playground v2",
+      "description": "Playground AI's model optimized for aesthetic image generation",
+      "type": "image",
+      "ecosystemId": 26,
+      "hidden": true,
+      "licenseId": 6
+    },
+    {
+      "id": 26,
+      "name": "Pony",
+      "description": "SDXL-based model with extensive tag-based prompt support",
+      "type": "image",
+      "ecosystemId": 100,
+      "licenseId": 1
+    },
+    {
+      "id": 27,
+      "name": "Pony V7",
+      "description": "Latest Pony Diffusion built on AuraFlow architecture",
+      "type": "image",
+      "ecosystemId": 200,
+      "licenseId": 24
+    },
+    {
+      "id": 28,
+      "name": "Qwen",
+      "description": "Multimodal model with image generation capabilities",
+      "type": "image",
+      "ecosystemId": 10,
+      "licenseId": 13
+    },
+    {
+      "id": 79,
+      "name": "Qwen 2",
+      "description": "Next-generation Qwen image generation model",
+      "type": "image",
+      "ecosystemId": 62,
+      "licenseId": 13
+    },
+    {
+      "id": 107,
+      "name": "Qwen 2.1",
+      "description": "Qwen's 7B model for text-to-image generation and multi-reference image editing",
+      "type": "image",
+      "ecosystemId": 88,
+      "licenseId": 45
+    },
+    {
+      "id": 99,
+      "name": "Qwen 3",
+      "description": "Alibaba's Qwen 3 image generation model",
+      "type": "image",
+      "ecosystemId": 80,
+      "licenseId": 13
+    },
+    {
+      "id": 29,
+      "name": "Stable Cascade",
+      "description": "Cascaded latent diffusion model for high-resolution output",
+      "type": "image",
+      "ecosystemId": 25,
+      "hidden": true,
+      "licenseId": 8
+    },
+    {
+      "id": 30,
+      "name": "SD 1.4",
+      "description": "The original Stable Diffusion with broad community support",
+      "type": "image",
+      "ecosystemId": 1,
+      "licenseId": 1
+    },
+    {
+      "id": 31,
+      "name": "SD 1.5",
+      "description": "The original Stable Diffusion with broad community support",
+      "type": "image",
+      "ecosystemId": 1,
+      "licenseId": 1
+    },
+    {
+      "id": 32,
+      "name": "SD 1.5 LCM",
+      "description": "SD 1.5 with Latent Consistency Model for faster inference",
+      "type": "image",
+      "ecosystemId": 1,
+      "licenseId": 1
+    },
+    {
+      "id": 33,
+      "name": "SD 1.5 Hyper",
+      "description": "SD 1.5 with Hyper optimization for reduced steps",
+      "type": "image",
+      "ecosystemId": 1,
+      "licenseId": 1
+    },
+    {
+      "id": 34,
+      "name": "SD 2.0",
+      "description": "Second generation SD with improved architecture",
+      "type": "image",
+      "ecosystemId": 2,
+      "licenseId": 3
+    },
+    {
+      "id": 35,
+      "name": "SD 2.0 768",
+      "description": "SD 2.0 with 768px support",
+      "type": "image",
+      "ecosystemId": 2,
+      "hidden": true,
+      "licenseId": 3
+    },
+    {
+      "id": 36,
+      "name": "SD 2.1",
+      "description": "Second generation SD with improved architecture and 768px support",
+      "type": "image",
+      "ecosystemId": 2,
+      "licenseId": 3
+    },
+    {
+      "id": 37,
+      "name": "SD 2.1 768",
+      "description": "SD 2.1 with 768px support",
+      "type": "image",
+      "ecosystemId": 2,
+      "hidden": true,
+      "licenseId": 3
+    },
+    {
+      "id": 38,
+      "name": "SD 2.1 Unclip",
+      "description": "SD 2.1 variant with image-to-image capabilities",
+      "type": "image",
+      "ecosystemId": 2,
+      "hidden": true,
+      "licenseId": 3
+    },
+    {
+      "id": 39,
+      "name": "SD 3",
+      "description": "Multimodal diffusion transformer architecture",
+      "type": "image",
+      "ecosystemId": 3,
+      "hidden": true,
+      "disabled": true,
+      "experimental": true,
+      "licenseId": 9
+    },
+    {
+      "id": 40,
+      "name": "SD 3.5",
+      "description": "Multimodal diffusion transformer architecture",
+      "type": "image",
+      "ecosystemId": 3,
+      "hidden": true,
+      "disabled": true,
+      "experimental": true,
+      "licenseId": 9
+    },
+    {
+      "id": 41,
+      "name": "SD 3.5 Large",
+      "description": "Multimodal diffusion transformer architecture",
+      "type": "image",
+      "ecosystemId": 3,
+      "hidden": true,
+      "disabled": true,
+      "experimental": true,
+      "licenseId": 9
+    },
+    {
+      "id": 42,
+      "name": "SD 3.5 Large Turbo",
+      "description": "Multimodal diffusion transformer architecture with turbo optimization",
+      "type": "image",
+      "ecosystemId": 3,
+      "hidden": true,
+      "disabled": true,
+      "experimental": true,
+      "licenseId": 9
+    },
+    {
+      "id": 43,
+      "name": "SD 3.5 Medium",
+      "description": "Balanced SD3.5 variant optimized for quality and speed",
+      "type": "image",
+      "ecosystemId": 46,
+      "hidden": true,
+      "disabled": true,
+      "experimental": true,
+      "licenseId": 9
+    },
+    {
+      "id": 44,
+      "name": "SDXL 0.9",
+      "description": "High-resolution SD with improved prompt understanding and detail",
+      "type": "image",
+      "ecosystemId": 4,
+      "hidden": true,
+      "licenseId": 2
+    },
+    {
+      "id": 45,
+      "name": "SDXL 1.0",
+      "description": "High-resolution SD with improved prompt understanding and detail",
+      "type": "image",
+      "ecosystemId": 4,
+      "licenseId": 3
+    },
+    {
+      "id": 46,
+      "name": "SDXL 1.0 LCM",
+      "description": "SDXL with Latent Consistency Model for faster inference",
+      "type": "image",
+      "ecosystemId": 4,
+      "hidden": true,
+      "licenseId": 3
+    },
+    {
+      "id": 47,
+      "name": "SDXL Lightning",
+      "description": "SDXL with Lightning optimization for reduced steps",
+      "type": "image",
+      "ecosystemId": 4,
+      "licenseId": 3
+    },
+    {
+      "id": 48,
+      "name": "SDXL Hyper",
+      "description": "SDXL with Hyper optimization for reduced steps",
+      "type": "image",
+      "ecosystemId": 4,
+      "licenseId": 3
+    },
+    {
+      "id": 49,
+      "name": "SDXL Turbo",
+      "description": "SDXL with Turbo optimization for minimal steps",
+      "type": "image",
+      "ecosystemId": 4,
+      "hidden": true,
+      "disabled": true,
+      "licenseId": 4
+    },
+    {
+      "id": 50,
+      "name": "SDXL Distilled",
+      "description": "Faster SDXL variants with reduced inference steps",
+      "type": "image",
+      "ecosystemId": 5,
+      "hidden": true,
+      "licenseId": 3
+    },
+    {
+      "id": 96,
+      "name": "Reve",
+      "description": "Reve AI's controllable 4K text-to-image generation and editing model",
+      "type": "image",
+      "ecosystemId": 77,
+      "licenseId": 38
+    },
+    {
+      "id": 105,
+      "name": "Muse Image",
+      "description": "Meta's agentic image generation and editing model",
+      "type": "image",
+      "ecosystemId": 86,
+      "licenseId": 43
+    },
+    {
+      "id": 51,
+      "name": "Seedream",
+      "description": "ByteDance's image generation model",
+      "type": "image",
+      "ecosystemId": 23,
+      "hidden": true,
+      "licenseId": 23
+    },
+    {
+      "id": 52,
+      "name": "SVD",
+      "description": "Image-to-video diffusion model",
+      "type": "image",
+      "ecosystemId": 45,
+      "hidden": true,
+      "disabled": true,
+      "licenseId": 5
+    },
+    {
+      "id": 53,
+      "name": "SVD XT",
+      "description": "Extended SVD for longer video generation",
+      "type": "image",
+      "ecosystemId": 45,
+      "hidden": true,
+      "disabled": true,
+      "licenseId": 5
+    },
+    {
+      "id": 54,
+      "name": "Sora 2",
+      "description": "Advanced video generation model",
+      "type": "video",
+      "ecosystemId": 43,
+      "hidden": true,
+      "licenseId": 20
+    },
+    {
+      "id": 55,
+      "name": "Veo 3",
+      "description": "Latest video generation model from DeepMind",
+      "type": "video",
+      "ecosystemId": 44,
+      "hidden": true,
+      "licenseId": 22
+    },
+    {
+      "id": 56,
+      "name": "Wan Video",
+      "description": "Base video generation model",
+      "type": "video",
+      "ecosystemId": 31,
+      "hidden": true,
+      "licenseId": 13
+    },
+    {
+      "id": 57,
+      "name": "Wan Video 1.3B t2v",
+      "description": "Lightweight text-to-video model",
+      "type": "video",
+      "ecosystemId": 32,
+      "licenseId": 13
+    },
+    {
+      "id": 58,
+      "name": "Wan Video 14B t2v",
+      "description": "Full-scale text-to-video model",
+      "type": "video",
+      "ecosystemId": 33,
+      "licenseId": 13
+    },
+    {
+      "id": 59,
+      "name": "Wan Video 14B i2v 480p",
+      "description": "Image-to-video at 480p resolution",
+      "type": "video",
+      "ecosystemId": 34,
+      "licenseId": 13
+    },
+    {
+      "id": 60,
+      "name": "Wan Video 14B i2v 720p",
+      "description": "Image-to-video at 720p resolution",
+      "type": "video",
+      "ecosystemId": 35,
+      "licenseId": 13
+    },
+    {
+      "id": 61,
+      "name": "Wan Video 2.2 TI2V-5B",
+      "description": "Text/image-to-video 5B parameter model",
+      "type": "video",
+      "ecosystemId": 36,
+      "licenseId": 13
+    },
+    {
+      "id": 62,
+      "name": "Wan Video 2.2 I2V-A14B",
+      "description": "Image-to-video 14B parameter model",
+      "type": "video",
+      "ecosystemId": 37,
+      "licenseId": 13
+    },
+    {
+      "id": 63,
+      "name": "Wan Video 2.2 T2V-A14B",
+      "description": "Text-to-video 14B parameter model",
+      "type": "video",
+      "ecosystemId": 38,
+      "licenseId": 13
+    },
+    {
+      "id": 64,
+      "name": "Wan Video 2.5 T2V",
+      "description": "Latest text-to-video generation",
+      "type": "video",
+      "ecosystemId": 39,
+      "licenseId": 31
+    },
+    {
+      "id": 65,
+      "name": "Wan Video 2.5 I2V",
+      "description": "Latest image-to-video generation",
+      "type": "video",
+      "ecosystemId": 40,
+      "licenseId": 31
+    },
+    {
+      "id": 86,
+      "name": "Wan Image 2.7",
+      "description": "Image generation model from Alibaba",
+      "type": "image",
+      "ecosystemId": 64,
+      "licenseId": 31
+    },
+    {
+      "id": 81,
+      "name": "Wan Video 2.7",
+      "description": "Video generation model from Alibaba",
+      "type": "video",
+      "ecosystemId": 65,
+      "licenseId": 31
+    },
+    {
+      "id": 101,
+      "name": "Wan Video 3.0",
+      "description": "Video generation model from Alibaba",
+      "type": "video",
+      "ecosystemId": 82,
+      "licenseId": 31
+    },
+    {
+      "id": 66,
+      "name": "ZImageTurbo",
+      "description": "Fast turbo-optimized image generation model",
+      "type": "image",
+      "ecosystemId": 24,
+      "licenseId": 13
+    },
+    {
+      "id": 71,
+      "name": "ZImageBase",
+      "description": "Base image generation model",
+      "type": "image",
+      "ecosystemId": 53,
+      "licenseId": 13
+    },
+    {
+      "id": 108,
+      "name": "Ming Image Design 0.1",
+      "description": "inclusionAI's image generation and editing model for graphic design",
+      "type": "image",
+      "ecosystemId": 89,
+      "licenseId": 19
+    },
+    {
+      "id": 109,
+      "name": "Ming Image Design Layer 0.1",
+      "description": "inclusionAI's model for decomposing designs into transparent RGBA layers",
+      "type": "image",
+      "ecosystemId": 90,
+      "licenseId": 19
+    },
+    {
+      "id": 67,
+      "name": "Vidu Q1",
+      "description": "High-quality video generation model from Vidu",
+      "type": "video",
+      "ecosystemId": 47,
+      "hidden": true,
+      "licenseId": 32
+    },
+    {
+      "id": 68,
+      "name": "MiniMax H3",
+      "description": "MiniMax's video generation model with cinematic quality",
+      "type": "video",
+      "ecosystemId": 48,
+      "licenseId": 41
+    },
+    {
+      "id": 69,
+      "name": "Kling",
+      "description": "Kuaishou's video generation model",
+      "type": "video",
+      "ecosystemId": 49,
+      "hidden": true,
+      "licenseId": 34
+    },
+    {
+      "id": 70,
+      "name": "Seedance",
+      "description": "ByteDance's video generation model",
+      "type": "video",
+      "ecosystemId": 60,
+      "hidden": true,
+      "licenseId": 23
+    },
+    {
+      "id": 84,
+      "name": "ACE Audio",
+      "description": "ACE Audio music generation model",
+      "type": "audio",
+      "ecosystemId": 68,
+      "licenseId": 13
+    },
+    {
+      "id": 104,
+      "name": "MiniMax Music 3",
+      "description": "MiniMax's full-song music generation model",
+      "type": "audio",
+      "ecosystemId": 85,
+      "licenseId": 42
+    },
+    {
+      "id": 106,
+      "name": "YuE2",
+      "description": "Multimodal Art Projection music generation from style and lyrics",
+      "type": "audio",
+      "ecosystemId": 87,
+      "licenseId": 44,
+      "hidden": true
+    },
+    {
+      "id": 110,
+      "name": "Sonilo",
+      "description": "Sonilo's music and sound-effect generation model",
+      "type": "audio",
+      "ecosystemId": 91,
+      "licenseId": 46
+    },
+    {
+      "id": 92,
+      "name": "PolyGen",
+      "description": "Meshy text-to-3D / image-to-3D generation (via Fal)",
+      "type": "image",
+      "ecosystemId": 73,
+      "hidden": true
+    },
+    {
+      "id": 94,
+      "name": "Tripo",
+      "description": "Tripo image-to-3D generation (via Fal)",
+      "type": "image",
+      "ecosystemId": 75,
+      "hidden": true
+    },
+    {
+      "id": 95,
+      "name": "Hunyuan3D",
+      "description": "Hunyuan3D image-to-3D generation (via Comfy)",
+      "type": "image",
+      "ecosystemId": 76,
+      "hidden": true
+    },
+    {
+      "id": 102,
+      "name": "Pixal3D",
+      "description": "Pixal3D image-to-3D generation (via Comfy)",
+      "type": "image",
+      "ecosystemId": 83,
+      "hidden": true
+    },
+    {
+      "id": 103,
+      "name": "Trellis.2",
+      "description": "Trellis.2 image-to-3D generation (via Comfy)",
+      "type": "image",
+      "ecosystemId": 84,
+      "hidden": true
+    }
+  ],
+  "crossEcosystemRules": [
+    {
+      "sourceEcosystemId": 1,
+      "targetEcosystemId": 4,
+      "supportType": "generation",
+      "modelTypes": [
+        "TextualInversion"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 1,
+      "targetEcosystemId": 100,
+      "supportType": "generation",
+      "modelTypes": [
+        "TextualInversion"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 1,
+      "targetEcosystemId": 101,
+      "supportType": "generation",
+      "modelTypes": [
+        "TextualInversion"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 1,
+      "targetEcosystemId": 102,
+      "supportType": "generation",
+      "modelTypes": [
+        "TextualInversion"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 4,
+      "targetEcosystemId": 100,
+      "supportType": "generation",
+      "modelTypes": [
+        "TextualInversion",
+        "LORA",
+        "DoRA",
+        "LoCon",
+        "VAE"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 100,
+      "targetEcosystemId": 4,
+      "supportType": "generation",
+      "modelTypes": [
+        "TextualInversion",
+        "LORA",
+        "DoRA",
+        "LoCon",
+        "VAE"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 4,
+      "targetEcosystemId": 101,
+      "supportType": "generation",
+      "modelTypes": [
+        "TextualInversion",
+        "LORA",
+        "DoRA",
+        "LoCon",
+        "VAE"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 101,
+      "targetEcosystemId": 4,
+      "supportType": "generation",
+      "modelTypes": [
+        "TextualInversion",
+        "LORA",
+        "DoRA",
+        "LoCon",
+        "VAE"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 4,
+      "targetEcosystemId": 102,
+      "supportType": "generation",
+      "modelTypes": [
+        "TextualInversion",
+        "LORA",
+        "DoRA",
+        "LoCon",
+        "VAE"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 102,
+      "targetEcosystemId": 4,
+      "supportType": "generation",
+      "modelTypes": [
+        "TextualInversion",
+        "LORA",
+        "DoRA",
+        "LoCon",
+        "VAE"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 100,
+      "targetEcosystemId": 101,
+      "supportType": "generation",
+      "modelTypes": [
+        "TextualInversion",
+        "LORA",
+        "DoRA",
+        "LoCon"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 101,
+      "targetEcosystemId": 100,
+      "supportType": "generation",
+      "modelTypes": [
+        "TextualInversion",
+        "LORA",
+        "DoRA",
+        "LoCon"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 100,
+      "targetEcosystemId": 102,
+      "supportType": "generation",
+      "modelTypes": [
+        "TextualInversion",
+        "LORA",
+        "DoRA",
+        "LoCon"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 102,
+      "targetEcosystemId": 100,
+      "supportType": "generation",
+      "modelTypes": [
+        "TextualInversion",
+        "LORA",
+        "DoRA",
+        "LoCon"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 101,
+      "targetEcosystemId": 102,
+      "supportType": "generation",
+      "modelTypes": [
+        "TextualInversion",
+        "LORA",
+        "DoRA",
+        "LoCon"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 102,
+      "targetEcosystemId": 101,
+      "supportType": "generation",
+      "modelTypes": [
+        "TextualInversion",
+        "LORA",
+        "DoRA",
+        "LoCon"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 6,
+      "targetEcosystemId": 7,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 7,
+      "targetEcosystemId": 6,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 38,
+      "targetEcosystemId": 33,
+      "supportType": "generation",
+      "modelTypes": [
+        "LORA"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 37,
+      "targetEcosystemId": 33,
+      "supportType": "generation",
+      "modelTypes": [
+        "LORA"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 36,
+      "targetEcosystemId": 33,
+      "supportType": "generation",
+      "modelTypes": [
+        "LORA"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 38,
+      "targetEcosystemId": 34,
+      "supportType": "generation",
+      "modelTypes": [
+        "LORA"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 37,
+      "targetEcosystemId": 34,
+      "supportType": "generation",
+      "modelTypes": [
+        "LORA"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 36,
+      "targetEcosystemId": 34,
+      "supportType": "generation",
+      "modelTypes": [
+        "LORA"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 38,
+      "targetEcosystemId": 35,
+      "supportType": "generation",
+      "modelTypes": [
+        "LORA"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 37,
+      "targetEcosystemId": 35,
+      "supportType": "generation",
+      "modelTypes": [
+        "LORA"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 36,
+      "targetEcosystemId": 35,
+      "supportType": "generation",
+      "modelTypes": [
+        "LORA"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 33,
+      "targetEcosystemId": 38,
+      "supportType": "generation",
+      "modelTypes": [
+        "LORA"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 34,
+      "targetEcosystemId": 38,
+      "supportType": "generation",
+      "modelTypes": [
+        "LORA"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 35,
+      "targetEcosystemId": 38,
+      "supportType": "generation",
+      "modelTypes": [
+        "LORA"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 33,
+      "targetEcosystemId": 37,
+      "supportType": "generation",
+      "modelTypes": [
+        "LORA"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 34,
+      "targetEcosystemId": 37,
+      "supportType": "generation",
+      "modelTypes": [
+        "LORA"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 35,
+      "targetEcosystemId": 37,
+      "supportType": "generation",
+      "modelTypes": [
+        "LORA"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 33,
+      "targetEcosystemId": 36,
+      "supportType": "generation",
+      "modelTypes": [
+        "LORA"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 34,
+      "targetEcosystemId": 36,
+      "supportType": "generation",
+      "modelTypes": [
+        "LORA"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 35,
+      "targetEcosystemId": 36,
+      "supportType": "generation",
+      "modelTypes": [
+        "LORA"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 34,
+      "targetEcosystemId": 35,
+      "supportType": "generation",
+      "modelTypes": [
+        "LORA"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 35,
+      "targetEcosystemId": 34,
+      "supportType": "generation",
+      "modelTypes": [
+        "LORA"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 53,
+      "targetEcosystemId": 24,
+      "supportType": "generation",
+      "modelTypes": [
+        "LORA"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 57,
+      "targetEcosystemId": 56,
+      "supportType": "generation",
+      "modelTypes": [
+        "LORA"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 55,
+      "targetEcosystemId": 54,
+      "supportType": "generation",
+      "modelTypes": [
+        "LORA"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 13,
+      "targetEcosystemId": 200,
+      "supportType": "generation",
+      "modelTypes": [
+        "LORA"
+      ],
+      "support": "partial"
+    },
+    {
+      "sourceEcosystemId": 63,
+      "targetEcosystemId": 81,
+      "supportType": "generation",
+      "modelTypes": [
+        "LORA"
+      ],
+      "support": "partial"
+    }
+  ],
+  "ecosystemSupport": [
+    {
+      "ecosystemId": 1,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA",
+        "DoRA",
+        "LoCon",
+        "VAE",
+        "TextualInversion"
+      ]
+    },
+    {
+      "ecosystemId": 1,
+      "supportType": "training",
+      "modelTypes": [
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 4,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA",
+        "DoRA",
+        "LoCon",
+        "VAE",
+        "TextualInversion"
+      ]
+    },
+    {
+      "ecosystemId": 4,
+      "supportType": "training",
+      "modelTypes": [
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 4,
+      "supportType": "auction",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 6,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 6,
+      "supportType": "training",
+      "modelTypes": [
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 7,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 8,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 9,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 54,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 55,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 56,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 57,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 11,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA",
+        "DoRA",
+        "LoCon",
+        "VAE"
+      ]
+    },
+    {
+      "ecosystemId": 11,
+      "supportType": "training",
+      "modelTypes": [
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 10,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 10,
+      "supportType": "training",
+      "modelTypes": [
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 62,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 88,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 88,
+      "supportType": "training",
+      "modelTypes": [
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 80,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 30,
+      "supportType": "generation",
+      "modelTypes": [
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 33,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 34,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 35,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 36,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 37,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 38,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 39,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 40,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 64,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 65,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 82,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 14,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 14,
+      "supportType": "training",
+      "modelTypes": [
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 29,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 29,
+      "supportType": "training",
+      "modelTypes": [
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 20,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 21,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 22,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 44,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 61,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 23,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 67,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 67,
+      "supportType": "training",
+      "modelTypes": [
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 70,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA",
+        "VAE"
+      ]
+    },
+    {
+      "ecosystemId": 70,
+      "supportType": "training",
+      "modelTypes": [
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 71,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 77,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 86,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 78,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 69,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 43,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 47,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 48,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 48,
+      "supportType": "training",
+      "modelTypes": [
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 49,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 60,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 52,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 92,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 79,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 59,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA",
+        "LoCon",
+        "DoRA",
+        "VAE"
+      ]
+    },
+    {
+      "ecosystemId": 59,
+      "supportType": "training",
+      "modelTypes": [
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 74,
+      "supportType": "training",
+      "modelTypes": [
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 78,
+      "supportType": "training",
+      "modelTypes": [
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 72,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 72,
+      "supportType": "training",
+      "modelTypes": [
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 200,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 24,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 24,
+      "supportType": "training",
+      "modelTypes": [
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 24,
+      "supportType": "auction",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 53,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 53,
+      "supportType": "training",
+      "modelTypes": [
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 53,
+      "supportType": "auction",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 89,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 89,
+      "supportType": "training",
+      "modelTypes": [
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 74,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 42,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 58,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 63,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 81,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint",
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 68,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 85,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 87,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 87,
+      "supportType": "training",
+      "modelTypes": [
+        "LORA"
+      ]
+    },
+    {
+      "ecosystemId": 91,
+      "supportType": "generation",
+      "modelTypes": [
+        "Checkpoint"
+      ]
+    },
+    {
+      "ecosystemId": 73,
+      "supportType": "generation",
+      "modelTypes": []
+    },
+    {
+      "ecosystemId": 75,
+      "supportType": "generation",
+      "modelTypes": []
+    },
+    {
+      "ecosystemId": 76,
+      "supportType": "generation",
+      "modelTypes": []
+    },
+    {
+      "ecosystemId": 83,
+      "supportType": "generation",
+      "modelTypes": []
+    },
+    {
+      "ecosystemId": 84,
+      "supportType": "generation",
+      "modelTypes": []
+    },
+    {
+      "ecosystemId": 66,
+      "supportType": "generation",
+      "modelTypes": [
+        "Upscaler"
+      ]
+    }
+  ]
+}

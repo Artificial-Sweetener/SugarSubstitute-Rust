@@ -1,0 +1,241 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Render Nodes 1.0 Cube header chrome with Comfy-owned icon primitives. */
+
+import {
+  resolveCubeIdentityPresentation,
+  type CubeIdentitySource,
+} from '../cube/CubeIdentityPresentation.js';
+import { requireCubeIdentity, type CubeNode } from '../cube/node/ComfyCubeNodeFactory.js';
+import { drawFallbackInitialsCanvas } from '../core/CubeFallbackIconRenderer.js';
+import { CubeIconResolver, type CubeIconModel } from '../core/CubeIconResolver.js';
+import type { CubeCanvasLayout, CubeCanvasRect } from './CubeCanvasLayout.js';
+import {
+  resolveCubeFaceTitlebarActions,
+  type CubeFaceChromeActions,
+} from './CubeFaceChromeActions.js';
+import { drawComfyPrimeIcon, type ComfyPrimeIconName } from './ComfyPrimeIcons.js';
+import { drawCubeUnsavedIndicator } from './CubeUnsavedIndicator.js';
+import { CubeModelPillCanvasRenderer } from './CubeModelPillCanvasRenderer.js';
+import type { UnknownRecord } from '../types/common.js';
+import { drawCubeAddIcon } from './CubeAddIcon.js';
+import { resolveCubeIconContrastImage } from '../core/CubeIconAssetContrast.js';
+import { parseCssColor } from './CssColor.js';
+import { classifyCubeIconTone } from '../core/CubeIconToneProfile.js';
+
+/** Describe the native LiteGraph button retained from the real SubgraphNode. */
+export interface NativeLiteGraphTitleButton {
+  name?: string;
+  height: number;
+  visible: boolean;
+  xOffset: number;
+  yOffset: number;
+  getWidth(context: CanvasRenderingContext2D): number;
+  draw(context: CanvasRenderingContext2D, x: number, y: number): void;
+}
+
+export interface CubeCanvasChromeRenderItem {
+  node: CubeNode;
+  layout: CubeCanvasLayout;
+  chromeActions: CubeFaceChromeActions | null;
+  editorButton: NativeLiteGraphTitleButton | null;
+  headerColor: string;
+  titleTextColor: string;
+  modelPillColors: { background: string; foreground: string };
+}
+
+/** Own Cube header composition without owning cards, previews, or interaction. */
+export class CubeCanvasChromeRenderer {
+  readonly #icons: CubeIconResolver;
+  readonly #resolveIdentitySource: (metadata: UnknownRecord) => CubeIdentitySource | null;
+  readonly #modelTitles = new CubeModelPillCanvasRenderer();
+
+  /** Bind Cube-definition icon loading to the header renderer. */
+  constructor(
+    icons: CubeIconResolver,
+    resolveIdentitySource: (metadata: UnknownRecord) => CubeIdentitySource | null = () => null,
+  ) {
+    this.#icons = icons;
+    this.#resolveIdentitySource = resolveIdentitySource;
+  }
+
+  /** Draw one Cube header and every currently available action. */
+  draw(context: CanvasRenderingContext2D, item: CubeCanvasChromeRenderItem): void {
+    const { node, layout } = item;
+    const metadata = requireCubeIdentity(node);
+    const identity = resolveCubeIdentityPresentation({
+      metadata,
+      instanceTitle: node.title?.trim() || node.subgraph.name,
+      fallbackDefinitionTitle: node.subgraph.name,
+      fallbackSource: this.#resolveIdentitySource(metadata),
+    });
+    context.fillStyle = item.headerColor;
+    context.fillRect(layout.header.x, layout.header.y, layout.header.width, layout.header.height);
+    const iconSize = 24;
+    const iconX = layout.header.x + 12;
+    const iconY = layout.header.y + (layout.header.height - iconSize) / 2;
+    this.#drawDefinitionIcon(context, identity.icon, iconX, iconY, iconSize, item.titleTextColor);
+    this.#modelTitles.draw(context, identity.instanceModelTitle, {
+      x: iconX + iconSize + 7,
+      y: layout.header.y + layout.header.height / 2,
+      maxWidth: Math.max(1, layout.header.width / 2 - iconSize - 34),
+      font: '600 16px sans-serif',
+      fontFamily: 'sans-serif',
+      fontSize: 16,
+      textColor: item.titleTextColor,
+      pillBackground: item.modelPillColors.background,
+      pillForeground: item.modelPillColors.foreground,
+      align: 'left',
+    });
+    context.save();
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    const definitionCenterX = layout.header.x + layout.header.width / 2;
+    const definitionMaxWidth = Math.max(1, layout.editAction.x - definitionCenterX - 8);
+    this.#modelTitles.draw(context, identity.definitionModelTitle, {
+      x: definitionCenterX,
+      y: layout.header.y + layout.header.height / 2 - 6,
+      maxWidth: definitionMaxWidth,
+      font: '12px sans-serif',
+      fontFamily: 'sans-serif',
+      fontSize: 12,
+      textColor: item.titleTextColor,
+      pillBackground: item.modelPillColors.background,
+      pillForeground: item.modelPillColors.foreground,
+      align: 'center',
+    });
+    context.font = '10px sans-serif';
+    context.fillStyle = item.titleTextColor;
+    context.fillText(
+      identity.sourceLine,
+      definitionCenterX,
+      layout.header.y + layout.header.height / 2 + 7,
+      definitionMaxWidth,
+    );
+    context.restore();
+
+    drawNativeEditorButton(context, layout.editAction, item.editorButton, item.titleTextColor);
+    if (layout.unsavedIndicator) {
+      drawCubeUnsavedIndicator(
+        context,
+        layout.unsavedIndicator.x + layout.unsavedIndicator.width / 2,
+        layout.unsavedIndicator.y + layout.unsavedIndicator.height / 2,
+        item.titleTextColor,
+      );
+    }
+    for (const action of resolveCubeFaceTitlebarActions(
+      requireCubeIdentity(node),
+      item.chromeActions,
+    )) {
+      const target = layout.chromeActions[action.key];
+      if (!target) continue;
+      if (action.icon === 'cube-plus') {
+        context.fillStyle = item.titleTextColor;
+        drawCubeAddIcon(
+          context,
+          target.x + target.width / 2,
+          target.y + target.height / 2,
+          item.headerColor,
+        );
+      } else {
+        drawPrimeIconAction(context, target, action.icon, item.titleTextColor);
+      }
+    }
+  }
+
+  /** Draw one definition asset or its exact initials fallback. */
+  #drawDefinitionIcon(
+    context: CanvasRenderingContext2D,
+    model: CubeIconModel,
+    x: number,
+    y: number,
+    size: number,
+    color: string,
+  ): void {
+    const entry = this.#icons.getImage(model);
+    if (model.kind === 'asset' && entry.status === 'ready' && entry.image) {
+      const variant = resolveCubeIconContrastImage(entry.image);
+      const foreground = parseCssColor(color);
+      const foregroundTone = foreground
+        ? classifyCubeIconTone(
+            new Uint8ClampedArray([
+              foreground.red,
+              foreground.green,
+              foreground.blue,
+              foreground.alpha * 255,
+            ]),
+          )
+        : 'original';
+      const neededTone =
+        foregroundTone === 'dark' ? 'bright' : foregroundTone === 'bright' ? 'dark' : null;
+      if (variant?.canvas && variant.tone === neededTone) {
+        context.drawImage(variant.canvas, x, y, size, size);
+        return;
+      }
+      const width = Math.max(1, entry.image.naturalWidth);
+      const height = Math.max(1, entry.image.naturalHeight);
+      const scale = Math.min(size / width, size / height);
+      const targetWidth = width * scale;
+      const targetHeight = height * scale;
+      context.drawImage(
+        entry.image,
+        x + (size - targetWidth) / 2,
+        y + (size - targetHeight) / 2,
+        targetWidth,
+        targetHeight,
+      );
+      return;
+    }
+    drawFallbackInitialsCanvas(context, model, x, y, size, { color });
+  }
+}
+
+/** Reuse the real SubgraphNode title button, preserving Comfy's exact icon drawing. */
+function drawNativeEditorButton(
+  context: CanvasRenderingContext2D,
+  target: CubeCanvasRect,
+  button: NativeLiteGraphTitleButton | null,
+  color: string,
+): void {
+  if (!button?.visible) {
+    context.fillStyle = color;
+    drawComfyPrimeIcon(
+      context,
+      'window-maximize',
+      target.x + target.width / 2,
+      target.y + target.height / 2,
+    );
+    return;
+  }
+  const width = button.getWidth(context);
+  const x = target.x + (target.width - width) / 2 - button.xOffset;
+  const y = target.y + (target.height - button.height) / 2 - button.yOffset;
+  context.save();
+  context.fillStyle = color;
+  button.draw(context, x, y);
+  context.restore();
+}
+
+/** Draw one icon-only Cube action using Comfy's PrimeIcons font. */
+function drawPrimeIconAction(
+  context: CanvasRenderingContext2D,
+  target: CubeCanvasRect,
+  icon: ComfyPrimeIconName,
+  color: string,
+): void {
+  context.fillStyle = color;
+  drawComfyPrimeIcon(context, icon, target.x + target.width / 2, target.y + target.height / 2);
+}

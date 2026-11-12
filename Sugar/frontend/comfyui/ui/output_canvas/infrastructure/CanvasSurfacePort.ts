@@ -1,0 +1,217 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Qualify overlay commands and revisions against one current canvas attachment. */
+
+import type { CanvasAttachmentAddress } from '../domain/CanvasIdentity.js';
+import type {
+  CanvasCapabilities,
+  CanvasCommand,
+  CanvasCommandOutcome,
+  CanvasCommandRequest,
+  CanvasCommandScope,
+  CanvasSurfaceGeometry,
+  CanvasViewPort,
+  CanvasViewSnapshot,
+} from '../domain/CanvasViewPort.js';
+import { decodeCanvasCommandRequest } from './CanvasCommandDecoder.js';
+import { decodeCanvasSurfaceGeometry } from './CanvasGeometryDecoder.js';
+import { authorizeCanvasMessage } from './CanvasMessageAuthority.js';
+
+export interface CanvasSurfacePortOptions {
+  readonly origin: string;
+  readonly capabilities: CanvasCapabilities;
+  /** Check both the attachment lease and the current workflow generation. */
+  accepts(): boolean;
+  /** Apply a validated intent while retaining its exact command and cancellation scope. */
+  apply(command: CanvasCommand, scope: CanvasCommandScope): boolean | Promise<boolean>;
+  /** Reconcile qualified client geometry through the attachment surface owner. */
+  geometry(geometry: CanvasSurfaceGeometry): void;
+  /** Release this exact surface and its pending work. */
+  release(): void;
+  /** Preserve unexpected command errors with attachment context. */
+  report(error: unknown, request: CanvasCommandRequest): void;
+}
+
+/** Keep surface revisions independent of lightweight selection-state revisions. */
+export class CanvasSurfacePort implements CanvasViewPort {
+  readonly capabilities: CanvasCapabilities;
+  readonly #listeners = new Set<(snapshot: CanvasViewSnapshot) => void>();
+  readonly #address: CanvasAttachmentAddress;
+  #snapshot: CanvasViewSnapshot;
+  #request = 0;
+  #issued = 0;
+  #active: AbortController | null = null;
+  #disposed = false;
+
+  /** Seal the first attachment address and explicit feature capabilities. */
+  constructor(
+    initial: CanvasViewSnapshot,
+    private readonly options: CanvasSurfacePortOptions,
+  ) {
+    if (!Number.isSafeInteger(initial.revision) || initial.revision < 0)
+      throw new Error('Canvas surface revision is invalid.');
+    this.#address = initial.address;
+    this.#snapshot = Object.freeze(initial);
+    this.capabilities = Object.freeze({
+      schema: 1,
+      commands: Object.freeze([...options.capabilities.commands]),
+    });
+  }
+
+  /** Read the latest published surface snapshot without consulting ambient host state. */
+  read(): CanvasViewSnapshot {
+    return this.#snapshot;
+  }
+
+  /** Subscribe only to this attachment, with consumer-owned release. */
+  subscribe(listener: (snapshot: CanvasViewSnapshot) => void): () => void {
+    if (this.#disposed) return () => {};
+    this.#listeners.add(listener);
+    return () => {
+      this.#listeners.delete(listener);
+    };
+  }
+
+  /** Reserve one request number across every control and programmatic entry point. */
+  createRequest(command: CanvasCommand, expectedRevision: number): CanvasCommandRequest {
+    if (this.#disposed || !this.options.accepts())
+      throw new Error('Canvas attachment is unavailable.');
+    if (this.#issued === Number.MAX_SAFE_INTEGER)
+      throw new Error('Canvas request identity exhausted.');
+    return Object.freeze({
+      schema: 1,
+      address: this.#address,
+      requestId: ++this.#issued,
+      expectedRevision,
+      command,
+    });
+  }
+
+  /** Publish an authoritative presentation change with a monotonically increasing local revision. */
+  publish(snapshot: CanvasViewSnapshot): void {
+    if (this.#disposed || !this.options.accepts()) return;
+    if (this.#snapshot.revision === Number.MAX_SAFE_INTEGER)
+      throw new Error('Canvas surface revision exhausted.');
+    this.#snapshot = Object.freeze({
+      ...snapshot,
+      address: this.#address,
+      revision: this.#snapshot.revision + 1,
+    });
+    for (const listener of this.#listeners) listener(this.#snapshot);
+  }
+
+  /** Decode every local intent as an external boundary and reject duplicate/stale deliveries. */
+  async dispatch(value: CanvasCommandRequest): Promise<CanvasCommandOutcome> {
+    const revision = this.#snapshot.revision;
+    if (this.#disposed || !this.options.accepts()) return { status: 'cancelled', revision };
+    const request = decodeCanvasCommandRequest(value, this.options.origin, {
+      origin: this.options.origin,
+      address: this.#address,
+      capabilities: this.capabilities,
+    });
+    if (!request) return { status: 'unsupported', revision };
+    if (request.requestId <= this.#request || request.expectedRevision !== revision)
+      return { status: 'stale', revision };
+    const previous = this.#active;
+    const controller = new AbortController();
+    this.#request = request.requestId;
+    this.#issued = Math.max(this.#issued, request.requestId);
+    this.#active = controller;
+    const scope: CanvasCommandScope = Object.freeze({
+      request,
+      signal: controller.signal,
+      current: () =>
+        !this.#disposed &&
+        !controller.signal.aborted &&
+        this.#active === controller &&
+        this.options.accepts(),
+    });
+    // Install the new identity before notifying older work: abort callbacks can reenter dispatch.
+    previous?.abort();
+    try {
+      if (!scope.current()) return this.#invalidOutcome(request.requestId);
+      const applied = await this.options.apply(request.command, scope);
+      if (!scope.current()) return this.#invalidOutcome(request.requestId);
+      return { status: applied ? 'applied' : 'unsupported', revision: this.#snapshot.revision };
+    } catch (error: unknown) {
+      if (!scope.current()) {
+        if (
+          !(
+            controller.signal.aborted &&
+            error instanceof DOMException &&
+            error.name === 'AbortError'
+          )
+        )
+          this.options.report(error, request);
+        return this.#invalidOutcome(request.requestId);
+      }
+      this.options.report(error, request);
+      return {
+        status: 'error',
+        revision: this.#snapshot.revision,
+        message: 'The canvas action could not be completed.',
+      };
+    } finally {
+      if (this.#active === controller) this.#active = null;
+      controller.abort();
+    }
+  }
+
+  /** Distinguish replacement by a newer command from retirement of this attachment. */
+  #invalidOutcome(requestId: number): CanvasCommandOutcome {
+    return {
+      status:
+        this.#disposed || !this.options.accepts()
+          ? 'cancelled'
+          : requestId !== this.#request
+            ? 'stale'
+            : 'cancelled',
+      revision: this.#snapshot.revision,
+    };
+  }
+
+  /** Validate density, visibility, and coordinates before updating this surface. */
+  updateSurface(address: CanvasAttachmentAddress, geometry: CanvasSurfaceGeometry): void {
+    if (this.#disposed || !this.options.accepts()) return;
+    const decoded = decodeCanvasSurfaceGeometry(
+      { schema: 1, address, geometry },
+      this.options.origin,
+      { origin: this.options.origin, address: this.#address },
+    );
+    if (decoded) this.options.geometry(decoded);
+  }
+
+  /** Release only a matching current attachment, leaving replacement surfaces untouched. */
+  releaseSurface(address: CanvasAttachmentAddress): void {
+    if (this.#disposed || !this.options.accepts()) return;
+    if (
+      authorizeCanvasMessage({ schema: 1, address }, this.options.origin, {
+        origin: this.options.origin,
+        address: this.#address,
+      })
+    )
+      this.options.release();
+  }
+
+  /** End delivery without implicitly retiring a view or another attachment. */
+  dispose(): void {
+    this.#disposed = true;
+    const active = this.#active;
+    this.#active = null;
+    active?.abort();
+    this.#listeners.clear();
+  }
+}
