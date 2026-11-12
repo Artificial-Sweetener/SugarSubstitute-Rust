@@ -36,7 +36,7 @@ pub use image::PreparationImage;
 pub(crate) use launch_pointer::tests as launch_pointer_fixture;
 pub use launch_pointer::{
     EngineTarget, LAUNCH_ENGINE, LAUNCH_POINTER_FILE, LaunchPointer, POINTER_RESERVATION_BYTES,
-    PinnedEngine, PointerFailure, pin_engine, read_launch_pointer,
+    PinnedEngine, PointerFailure, pin_engine, pointed_generations, read_launch_pointer,
 };
 mod running;
 mod runtime_record;

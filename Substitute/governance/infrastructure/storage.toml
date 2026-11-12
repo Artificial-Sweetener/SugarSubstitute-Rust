@@ -1932,7 +1932,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Rej
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/launch_pointer.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:ad68668d4bdc83d8d453654fbf66798b1ab3ea29e8db350693f14b679e91778c"
+source_sha256 = "sha256:05e7918242c9ec9f7780a85b46c8e62d0f97278d715c6079f8676c4868dd2626"
 capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: read the permanent protected launch pointer and pin only engine bytes that match it, denying writes and deletion until the engine exists. Private file values do not grant constructors or detach native ancestry."
@@ -1941,7 +1941,7 @@ boundary = "native_custody"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/launch_pointer/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:87f8cb95ce2f9d935ca1981d7fe832edc5cf8a527f90f922c9856c43effd114b"
+source_sha256 = "sha256:2f47f0a9c8bb9dc1c4b7b0bd71db70e67f4ce57025854eec75da52dc5921b819"
 capabilities = ["assert! restricted capability fragments", "std::fs::OpenOptions::new", "std::fs::remove_file"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: forward-tolerant pointer decoding, typed refusals and exact protected engine pinning. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
