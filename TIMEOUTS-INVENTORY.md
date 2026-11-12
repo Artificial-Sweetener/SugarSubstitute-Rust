@@ -1,0 +1,29 @@
+# Wall-clock pass/fail inventory (agent `timeouts`, read-only; saved by coordinator)
+
+Rule (TEAM-RULES, M-3): no test or gate passes/fails on elapsed seconds. Replace with deterministic clocks, awaiting the observed outcome, or a far no-progress hang guard (class c).
+
+## (a) must change
+
+### Rust (12)
+- sugarsubstitute-supervision `durable_storage/imports/tests/cancellation.rs:45,71` (20 s wait_timeout_while) -> wait on observed condition under shared no-progress guard.
+- sugarsubstitute native qualification campaigns, 60 s deadlines: `process_fixture.rs:79` (`activity.rs:10`), `held_fixture.rs:120` (`activity.rs:18`), `pipe_fixture/parent.rs:51`, `output_fixture/parent.rs:62`, `descendant_fixture/mod.rs:65`, `claim_fixture/parent.rs:186` -> no-progress guard (campaigns track drain progress). Family 10/15 s budgets are product (b), keep.
+- `setup/controller/qualification.rs:97` (300 s), `setup/controller/native/qualification.rs:13` (90 s WATCHDOG) -> no-progress guard + installer's own failure.
+- Rust `tools/` Python: `updater_publication_qualification.py:202` settle(owner, 60) -> no-progress; `updater_feed_fixture.py:50,59` fixed-duration lifetime -> stop only via control file.
+
+### SugarCubes (~120)
+- Architecture tools: `tools/architecture/browser_ui_policy.py:64`, `tools/architecture/integration_policy.py:57` (timeout=60) -> rely on compiler exit. `scripts/gimp/PackageArchive.ts:60` (120 s) -> process exit.
+- prompt_editor: `prompt_browser.test.ts` bodies 30 s (1166,1246,1299,1739), 60 s (1361,1581,1653,1670,1689,1758,1781,1813); Playwright timeouts 213,229,392,510,595; `afterAll(…,30_000)` in all 13 `prompt_*` suites; `PromptBrowserServer.ts:103` (5 s), `DrawnCaret.ts:53` (2 s), `prompt_completion_keys.test.ts:42` (10 s); `adopted_engine.test.ts:46` (120 s execFile); node:test `clipboard-native-abort-reentry.case.ts:222`, `clipboard-native-focus.case.ts:93` (1 s).
+- surface/output_canvas/input_canvas/gimp real-browser suites on Jest 5 s default (bodies and afterAll): desktop_grid_contrast, desktop_comfy_card_material, desktop_material_wash, generation_strip_overlay_states, masonry_scrollbar_viewport, native_advanced_footer_color, photopro_reference_geometry, photopro_workspace_geometry, canvas_comfy_frame_allocation_browser, capture_only_browser, tauri_shell. Literals: `afterAll(…,30_000)` plugin_card_title_geometry:35, plugin_toolbar_geometry:36, compact_presentation_scoping:46, generation_progress_browser:61; `gimp_controls.test.ts:260,273,283,315`; `masonry_scrollbar_viewport.test.ts:202,211,213` (1 s).
+- Other Jest: `ui_save_workflow.test.ts:364`, `host_settings_controls.test.ts:278`, `web_artifact_synchronization.test.ts:163,215`, `browser_fixture_lifetime.test.ts:39`, `panel_package_runtime.test.ts:176` (1 s vm).
+- pytest: `test_switch_request_caching.py:217` asserts elapsed<1 (drop; `not classify.done()` proves it) and :190; `test_spatial_probe_queue.py:166`; `test_native_requests.py:40`; `test_native_streams.py:52,56,84`; `test_automatic_enrichment_schedule.py:63,70,84,86,91`; `test_automatic_model_presentation.py:96`; `test_metadata_publication_barrier.py:64,102`; `test_provider_cache_lifecycle.py:72,119`; `test_provider_preview_cancellation.py:62`; `test_release_preview_maintenance.py:53`; `test_thumbnail_repair_publication.py:74`; `test_model_download_transport.py:254`; `test_release_preview_recovery.py:180,186`; `test_blocking_publication_lifecycle.py:38`; `test_thumbnail_source_ownership.py:225,238,240,242,243`; `test_artifact_workers.py:47`; `test_media_codec_lifecycle.py:78`. Subprocess: git 10 s `test_context_menu_snapshot.py:53`, `test_invalidation_snapshot.py:54`; `test_jest_discovery_scope.py:60` (30 s); `test_root_api.py:94` (10 s); `test_execution_node_resolver_api.py:160` (30 s).
+- `tests/gimp/support/NativeDesktopProof.ts:42,49` (15 s native proof).
+- Playwright implicit 30 s launch and waitFor defaults on ~171 calls: `launchHeadlessBrowser` (`BrowserFixtureLifetime.ts:33`) sets none.
+- The coordinator's own shared budgets `BROWSER_FIXTURE_SETUP_TIMEOUT_MS` / `BUILD_FIXTURE_SETUP_TIMEOUT_MS` (60 s) must become far hang guards, not 60 s cutoffs.
+
+## (c) hang guards (keep, possibly unify)
+Rust `completion_wake.rs:33/36` 10-minute process-wide no-progress guard (shared model); `managed_qualification.rs:30` (7200 s); `updater_qualification.py:151,152,184`; `updater_publication_qualification.py:133,148,213`; `.github/workflows/verify.yml:27` timeout-minutes 20 (raise for cold three-OS verify).
+
+## Gate proposal
+1. Rust: real-time rule in the test-ownership gate (`tools/xtask/src/testing.rs`, `governance/testing/policy.toml`). In test modules, `tests/` and `*_fixture` campaigns, reject `.elapsed()`, `wait_timeout*`, `recv_timeout`, `park_timeout`, `SystemTime::now`, `MonotonicClock::new`, and real `Instant::now()` outside one frozen-anchor helper. Reuse the execution gate's alias and macro-token resolution; admit only registered fingerprinted guards. Fixtures: the cancellation.rs pattern, an aliased Instant, a macro-wrapped recv_timeout, a stale registration, an admitted guard.
+2. SugarCubes Jest/TS: extend `tests/governance/unit/fixture_setup_budget.test.ts` to reject numeric third arguments to test/it/hooks, `{ timeout: <literal> }` in test/Playwright/vm options, `jest.setTimeout`, and a `testTimeout` literal outside shared guard constants; also real-work suites on the 5 s default.
+3. SugarCubes Python: AST rule in `scripts/standards_audit.py` (tested in `tests/governance/contract/test_standards_python.py`) rejecting literal `timeout=` on subprocess/wait/communicate, `Event.wait(n)`, `join(timeout=)`, `asyncio.wait_for(…,n)`, `result(timeout=)`, and `monotonic()` arithmetic inside assert across tests/, tools/ and scripts/; admit `expected_timeout=` and assert_called* keywords.
