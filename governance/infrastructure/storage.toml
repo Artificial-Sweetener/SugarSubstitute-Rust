@@ -4957,6 +4957,14 @@ disposition = "fixture"
 rationale = "Owned temporary profile and workspace roots qualify the actual session store through real admitted execution jobs."
 
 [[records]]
+path = "crates/sugarsubstitute/src/startup/workspace/admission_tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:e13e2258c4c33ac1fed4cb7c78aea9e46101eebe12269cbff33f4baee4b7415d"
+capabilities = ["std::fs::create_dir_all", "std::fs::write"]
+disposition = "fixture"
+rationale = "An owned temporary workspace is seeded with a previous run's checkpoint so a real restore begins, proving inadmissible restore encoding ends instead of waiting."
+
+[[records]]
 path = "crates/sugarsubstitute/src/startup/workspace/close_save_tests.rs"
 owner = "sugarsubstitute"
 source_sha256 = "sha256:2462dade4755e48784f2a7024c9c6707ff7dc2bee16590c602a123c8a4eb6667"
@@ -4991,7 +4999,7 @@ rationale = "Owned temporary checkpoint files qualify atomic publication, exact 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/workspace/closing_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:b6d9ed7fb63378528d2c05bd6d0ff281fc2d2ba859fd84b31feca4da4a3fe3e6"
+source_sha256 = "sha256:c79e6c0d4caa54b19926c01805096288ce9a7c07c982c35b25a79b1583349b5c"
 capabilities = ["tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "An owned temporary workspace drives actual missing-checkpoint load and durable publication through the execution owner, proving ordinary startup polling retains the native peer until final delivery or the unchanged capture cutoff."
