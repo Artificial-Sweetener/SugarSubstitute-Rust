@@ -22,7 +22,7 @@ url = "=2.5.8"
 sha2 = "=0.10.9"
 ring = "=0.17.14"
 tuf = { version = "=0.3.0-beta14", default-features = false }
-chrono = { version = "=0.4.42", default-features = false, features = ["std"] }
+chrono = { version = "=0.4.45", default-features = false, features = ["std"] }
 flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
 syn = { version = "=2.0.114", features = ["full", "visit"] }
 tempfile = "=3.24.0"
