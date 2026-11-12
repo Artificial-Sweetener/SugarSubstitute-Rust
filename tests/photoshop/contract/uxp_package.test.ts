@@ -34,7 +34,6 @@ import {
   validateManifest,
   validatePackage,
 } from '../../../scripts/photoshop/manifest.js';
-import { BUILD_FIXTURE_SETUP_TIMEOUT_MS } from '../../frontend_core/support/BuildFixtureBudget.js';
 
 test('the SugarCubes panel declares room for independent width and height resizing', () => {
   const authored: unknown = JSON.parse(
@@ -179,7 +178,7 @@ beforeAll(async () => {
     'src/index.ts': 'import UPNG from "upng-js"; export const decode=UPNG.decode;',
   });
   builds.imageDecoding = await settle(buildPhotoshop(roots.imageDecoding, false));
-}, BUILD_FIXTURE_SETUP_TIMEOUT_MS);
+});
 
 afterAll(() => {
   for (const root of Object.values(roots)) if (root) rmSync(root, { recursive: true, force: true });

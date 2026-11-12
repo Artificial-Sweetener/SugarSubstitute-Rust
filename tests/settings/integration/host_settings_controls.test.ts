@@ -275,7 +275,7 @@ describe('host settings and public library APIs', () => {
     } finally {
       restore();
     }
-  }, 60000);
+  });
 
   const silenceConsole = () => {
     const spies = [

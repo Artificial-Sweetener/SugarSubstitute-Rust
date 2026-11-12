@@ -18,10 +18,7 @@
 import { chromium, type Browser, type Page } from '@playwright/test';
 import { build } from 'esbuild';
 import UPNG from 'upng-js';
-import {
-  BROWSER_FIXTURE_SETUP_TIMEOUT_MS,
-  launchHeadlessBrowser,
-} from '../../frontend_core/support/BrowserFixtureLifetime.js';
+import { launchHeadlessBrowser } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 
 type Theme = 'dark' | 'light';
 
@@ -98,7 +95,7 @@ describe('Chromium desktop graph grid', () => {
     page = await browser.newPage({ viewport: { width: 220, height: 220 } });
     await page.addScriptTag({ content: install, type: 'module' });
     await page.waitForFunction(() => Reflect.get(globalThis, 'gridInstalled') === true);
-  }, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
+  });
 
   afterAll(async () => {
     await page?.close();

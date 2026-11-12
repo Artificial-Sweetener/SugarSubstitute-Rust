@@ -27,7 +27,6 @@ import {
   type PromptBrowserFixture,
 } from '../support/PromptBrowserServer.js';
 import { drawnCaret } from '../support/DrawnCaret.js';
-import { BROWSER_FIXTURE_SETUP_TIMEOUT_MS } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 
 let fixture: PromptBrowserFixture;
 
@@ -37,11 +36,11 @@ const editorWidth = 320;
 
 beforeAll(async () => {
   fixture = await startPromptBrowser();
-}, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
+});
 
 afterAll(async () => {
   await fixture.close();
-}, 30_000);
+});
 
 /** Wait for queued native measurement, the wrap publication it schedules and the drawn layers to paint. */
 async function settle(page: Page): Promise<void> {
