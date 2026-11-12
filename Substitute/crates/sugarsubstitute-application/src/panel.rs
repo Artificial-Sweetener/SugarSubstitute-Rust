@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Coordinate one SugarCubes panel handshake independently of its native transport.
+//!
+//! The host answers every page `ready` with its description first and its configure second.
 
 use std::{error::Error, fmt, time::Duration};
 use sugarsubstitute_contracts::{
     execution::Moment,
+    host::HostDescription,
     panel::{PanelMessage, PanelPresentation, PanelSession},
 };
 
@@ -31,6 +34,9 @@ pub enum PanelState {
 /// At most one message and one state change from a single synchronous decision.
 #[derive(Debug, Default, PartialEq)]
 pub struct PanelEffects {
+    /// The host description, delivered immediately before `send` on the same ordered channel.
+    /// Every configure carries it, so a configure that supersedes another never loses it.
+    pub description: Option<HostDescription>,
     /// A public message for the exact navigation's existing transport.
     pub send: Option<PanelMessage>,
     /// A state transition to publish once, when present.
@@ -41,6 +47,7 @@ pub struct PanelEffects {
 /// The adapter must verify the actual current navigation and frame before calling `receive`.
 pub struct PanelHostSession {
     session: PanelSession,
+    description: HostDescription,
     presentation: PanelPresentation,
     configured: bool,
     applied: bool,
@@ -53,16 +60,20 @@ pub struct PanelHostSession {
 impl PanelHostSession {
     /// Begin a bounded handshake at an externally supplied monotonic time.
     ///
+    /// `description` is what this host serves and declares for the whole session.
+    ///
     /// # Errors
     /// Rejects a start time that cannot represent the initial timeout.
     pub fn new(
         session: PanelSession,
+        description: HostDescription,
         presentation: PanelPresentation,
         now: Moment,
     ) -> Result<Self, PanelClockError> {
         now.checked_add(STARTUP_TIMEOUT).map_err(|_| PanelClockError::DeadlineOverflow)?;
         Ok(Self {
             session,
+            description,
             presentation,
             configured: false,
             applied: false,
@@ -98,7 +109,7 @@ impl PanelHostSession {
         match message {
             PanelMessage::Ready(_) => {
                 self.configured = true;
-                effects.send = Some(self.configuration());
+                self.configure(&mut effects);
             }
             PanelMessage::Applied(_) if self.configured => {
                 self.applied = true;
@@ -127,7 +138,11 @@ impl PanelHostSession {
             return PanelEffects::default();
         }
         self.presentation = presentation;
-        PanelEffects { send: self.configured.then(|| self.configuration()), state: None }
+        let mut effects = PanelEffects::default();
+        if self.configured {
+            self.configure(&mut effects);
+        }
+        effects
     }
 
     /// Detect startup failure and schedule a bounded heartbeat at the supplied monotonic time.
@@ -180,7 +195,7 @@ impl PanelHostSession {
         {
             return Ok(PanelEffects::default());
         }
-        Ok(PanelEffects { send: Some(self.ping(now)), state: None })
+        Ok(PanelEffects { send: Some(self.ping(now)), ..PanelEffects::default() })
     }
 
     /// Return the earliest original handshake or heartbeat deadline for the native pump.
@@ -231,12 +246,13 @@ impl PanelHostSession {
         Ok(())
     }
 
-    /// Form configuration from the retained current presentation.
-    fn configuration(&self) -> PanelMessage {
-        PanelMessage::Configure {
+    /// Send the description, then configuration from the retained current presentation.
+    fn configure(&self, effects: &mut PanelEffects) {
+        effects.description = Some(self.description.clone());
+        effects.send = Some(PanelMessage::Configure {
             session: self.session.clone(),
             presentation: self.presentation.clone(),
-        }
+        });
     }
 
     /// Record the ping before returning it, including for synchronous delivery.

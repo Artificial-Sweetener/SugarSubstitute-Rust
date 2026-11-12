@@ -31,8 +31,14 @@ fn current_panel_coalesces_pending_messages_and_keeps_memory_until_the_command_r
     let lease = MemoryLease::new(reserved, Box::new(Release(released.clone())));
     let identity = identity()?;
     let session = PanelSession::for_main(identity)?;
-    let mut panel = PanelOwner::new(identity, lease.clone(), Moment::from_nanos(0), None)?
-        .ok_or("Panel owner was not admitted")?;
+    let mut panel = PanelOwner::new(
+        identity,
+        lease.clone(),
+        Moment::from_nanos(0),
+        None,
+        MainHosting::Composition,
+    )?
+    .ok_or("Panel owner was not admitted")?;
     panel.receive(PanelMessage::Ready(session.clone()), Moment::from_nanos(1))?;
     panel.receive(PanelMessage::Ready(session.clone()), Moment::from_nanos(2))?;
     let configuration = panel.take_command().ok_or("Configuration missing")?;
@@ -53,14 +59,42 @@ fn current_panel_coalesces_pending_messages_and_keeps_memory_until_the_command_r
 }
 
 #[test]
+fn ready_is_answered_with_the_description_of_what_this_browser_is_served() -> Result<()> {
+    for hosting in [MainHosting::Composition, MainHosting::Windowed] {
+        let lease = MemoryLease::new(
+            OWNER_BYTES + PanelCommand::STORAGE_BYTES,
+            Box::new(Release(Arc::default())),
+        );
+        let identity = identity()?;
+        let mut panel = PanelOwner::new(identity, lease, Moment::from_nanos(0), None, hosting)?
+            .ok_or("Panel owner was not admitted")?;
+        panel.receive(
+            PanelMessage::Ready(PanelSession::for_main(identity)?),
+            Moment::from_nanos(1),
+        )?;
+        let configuration = panel.take_command().ok_or("Configuration missing")?;
+        let description = configuration.description().ok_or("Description missing")?;
+        for protocol in [HostProtocol::PANEL, HostProtocol::CANVAS, HostProtocol::MEMORY] {
+            assert!(description.serves(protocol), "{protocol:?}");
+        }
+        assert_eq!(
+            description.declares(HostCapability::HOST_OUTPUT_SURFACE),
+            hosting == MainHosting::Composition
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn insufficient_command_admission_does_not_advance_panel_policy() -> Result<()> {
     let lease = MemoryLease::new(
         OWNER_BYTES + PanelCommand::STORAGE_BYTES - 1,
         Box::new(Release(Arc::default())),
     );
     let identity = identity()?;
-    let mut panel = PanelOwner::new(identity, lease, Moment::from_nanos(0), None)?
-        .ok_or("Panel owner was not admitted")?;
+    let mut panel =
+        PanelOwner::new(identity, lease, Moment::from_nanos(0), None, MainHosting::Composition)?
+            .ok_or("Panel owner was not admitted")?;
     panel.receive(PanelMessage::Ready(PanelSession::for_main(identity)?), Moment::from_nanos(1))?;
     assert!(panel.take_command().is_none());
     assert_eq!(panel.deadline(), Some(Moment::from_nanos(30_000_000_000)));
@@ -70,7 +104,10 @@ fn insufficient_command_admission_does_not_advance_panel_policy() -> Result<()> 
 #[test]
 fn unavailable_owner_admission_is_a_recoverable_rejection() -> Result<()> {
     let lease = MemoryLease::new(OWNER_BYTES - 1, Box::new(Release(Arc::default())));
-    assert!(PanelOwner::new(identity()?, lease, Moment::from_nanos(0), None)?.is_none());
+    assert!(
+        PanelOwner::new(identity()?, lease, Moment::from_nanos(0), None, MainHosting::Composition)?
+            .is_none()
+    );
     Ok(())
 }
 
@@ -82,8 +119,9 @@ fn delayed_applied_message_retries_without_requiring_the_page_to_repeat_it() -> 
     );
     let identity = identity()?;
     let session = PanelSession::for_main(identity)?;
-    let mut panel = PanelOwner::new(identity, lease, Moment::from_nanos(0), None)?
-        .ok_or("Panel owner was not admitted")?;
+    let mut panel =
+        PanelOwner::new(identity, lease, Moment::from_nanos(0), None, MainHosting::Composition)?
+            .ok_or("Panel owner was not admitted")?;
     panel.receive(PanelMessage::Ready(session.clone()), Moment::from_nanos(1))?;
     let held = panel.take_command().ok_or("Configuration missing")?;
     panel.receive(PanelMessage::Applied(session.clone()), Moment::from_nanos(2))?;
@@ -104,8 +142,14 @@ fn pong_needs_no_command_capacity_and_overloaded_timers_keep_the_original_cutoff
     let lease = MemoryLease::new(reserved, Box::new(Release(Arc::default())));
     let identity = identity()?;
     let session = PanelSession::for_main(identity)?;
-    let mut panel = PanelOwner::new(identity, lease.clone(), Moment::from_nanos(0), None)?
-        .ok_or("Panel owner was not admitted")?;
+    let mut panel = PanelOwner::new(
+        identity,
+        lease.clone(),
+        Moment::from_nanos(0),
+        None,
+        MainHosting::Composition,
+    )?
+    .ok_or("Panel owner was not admitted")?;
     panel.receive(PanelMessage::Ready(session.clone()), Moment::from_nanos(1))?;
     drop(panel.take_command().ok_or("Configuration missing")?);
     panel.receive(PanelMessage::Applied(session.clone()), Moment::from_nanos(2))?;
@@ -113,8 +157,14 @@ fn pong_needs_no_command_capacity_and_overloaded_timers_keep_the_original_cutoff
     assert_eq!(panel.policy.state(), PanelState::Connected);
     drop(panel);
 
-    let mut waiting = PanelOwner::new(identity, lease.clone(), Moment::from_nanos(0), None)?
-        .ok_or("Panel owner was not admitted")?;
+    let mut waiting = PanelOwner::new(
+        identity,
+        lease.clone(),
+        Moment::from_nanos(0),
+        None,
+        MainHosting::Composition,
+    )?
+    .ok_or("Panel owner was not admitted")?;
     let session = PanelSession::for_main(identity)?;
     waiting.receive(PanelMessage::Ready(session.clone()), Moment::from_nanos(1))?;
     let occupied = waiting.take_command().ok_or("Configuration missing")?;
@@ -136,8 +186,9 @@ fn reply_expiration_is_observed_even_when_heartbeat_admission_remains_full() -> 
     );
     let identity = identity()?;
     let session = PanelSession::for_main(identity)?;
-    let mut panel = PanelOwner::new(identity, lease, Moment::from_nanos(0), None)?
-        .ok_or("Panel owner was not admitted")?;
+    let mut panel =
+        PanelOwner::new(identity, lease, Moment::from_nanos(0), None, MainHosting::Composition)?
+            .ok_or("Panel owner was not admitted")?;
     panel.receive(PanelMessage::Ready(session.clone()), Moment::from_nanos(1))?;
     drop(panel.take_command().ok_or("Configuration missing")?);
     panel.receive(PanelMessage::Applied(session.clone()), Moment::from_nanos(2))?;
@@ -166,8 +217,9 @@ fn handshake_expiration_retires_its_undelivered_configuration() -> Result<()> {
         Box::new(Release(Arc::default())),
     );
     let identity = identity()?;
-    let mut panel = PanelOwner::new(identity, lease, Moment::from_nanos(0), None)?
-        .ok_or("Panel owner was not admitted")?;
+    let mut panel =
+        PanelOwner::new(identity, lease, Moment::from_nanos(0), None, MainHosting::Composition)?
+            .ok_or("Panel owner was not admitted")?;
     panel.receive(PanelMessage::Ready(PanelSession::for_main(identity)?), Moment::from_nanos(1))?;
     assert!(panel.configuration.is_some());
     panel.tick(Moment::from_nanos(30_000_000_000))?;
@@ -194,8 +246,14 @@ fn system_accent_configures_the_page_and_reconfigures_it_on_change() -> Result<(
     let identity = identity()?;
     let session = PanelSession::for_main(identity)?;
     let blue = AccentColor::new(0, 120, 212);
-    let mut panel = PanelOwner::new(identity, lease, Moment::from_nanos(0), Some(blue))?
-        .ok_or("Panel owner was not admitted")?;
+    let mut panel = PanelOwner::new(
+        identity,
+        lease,
+        Moment::from_nanos(0),
+        Some(blue),
+        MainHosting::Composition,
+    )?
+    .ok_or("Panel owner was not admitted")?;
     panel.receive(PanelMessage::Ready(session.clone()), Moment::from_nanos(1))?;
     let first = panel.take_command().ok_or("Configuration missing")?;
     assert_eq!(configured_accent(&first)?.as_deref(), Some("#0078d4"));
@@ -221,8 +279,9 @@ fn system_accent_change_waits_for_command_admission() -> Result<()> {
     );
     let identity = identity()?;
     let session = PanelSession::for_main(identity)?;
-    let mut panel = PanelOwner::new(identity, lease, Moment::from_nanos(0), None)?
-        .ok_or("Panel owner was not admitted")?;
+    let mut panel =
+        PanelOwner::new(identity, lease, Moment::from_nanos(0), None, MainHosting::Composition)?
+            .ok_or("Panel owner was not admitted")?;
     panel.receive(PanelMessage::Ready(session.clone()), Moment::from_nanos(1))?;
     drop(panel.take_command().ok_or("Configuration missing")?);
     panel.receive(PanelMessage::Applied(session), Moment::from_nanos(2))?;

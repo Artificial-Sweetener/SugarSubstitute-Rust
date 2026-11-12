@@ -88,6 +88,24 @@ fn final_parameters_admit_the_exact_byte_boundary_and_refuse_the_next_byte()
 }
 
 #[test]
+fn ordered_delivery_hands_both_messages_over_in_one_evaluation() -> Result<(), Box<dyn Error>> {
+    let first = serde_json::to_vec(&json!({"type":"description","text":"\"),x("}))?;
+    let second = serde_json::to_vec(&json!({"type":"configure"}))?;
+    let parameters: Value = serde_json::from_str(&encode_ordered(17, &first, &second)?)?;
+    assert_eq!(parameters["contextId"], 17);
+    let expression = parameters["expression"].as_str().ok_or("Missing expression")?;
+    let (head, tail) = expression.split_once(&format!("),{PREFIX}")).ok_or("Missing order")?;
+    let head = head.strip_prefix(PREFIX).ok_or("Missing first delivery")?;
+    let tail = tail.strip_suffix(')').ok_or("Missing second delivery")?;
+    assert_eq!(serde_json::from_str::<Value>(head)?, serde_json::from_slice::<Value>(&first)?);
+    assert_eq!(serde_json::from_str::<Value>(tail)?, serde_json::from_slice::<Value>(&second)?);
+    let oversized = serde_json::to_vec(&json!({"text":"x".repeat(MAX_PARAMETERS_BYTES)}))?;
+    assert!(encode_ordered(17, &first, &oversized).is_err());
+    assert!(encode_ordered(17, b"{\"x\":\"\xff\"}", &second).is_err());
+    Ok(())
+}
+
+#[test]
 fn full_presentation_snapshots_fit_the_actual_no_ticket_command_at_shared_field_bounds()
 -> Result<(), Box<dyn Error>> {
     use sugarsubstitute_contracts::{

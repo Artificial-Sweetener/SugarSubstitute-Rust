@@ -9,14 +9,11 @@ const sourcePath = process.argv[2] ?? new URL('../src/main_actor/panel/bridge.js
 const source = readFileSync(sourcePath, 'utf8');
 const policySource = readFileSync(new URL('../src/main_actor/panel/bridge_protocol.js', import.meta.url), 'utf8');
 const bulkSource = readFileSync(new URL('../src/main_actor/panel/bridge_bulk.js', import.meta.url), 'utf8');
-// Match the host's composition: the protocol expression receives the output surface preference.
-const policyFor = preference => `${policySource.trimEnd()}(${preference});\n`;
 // Match the host's composition: the bulk expression receives the absolute reserved path.
 const bulkFor = path => `${bulkSource.trimEnd()}(${JSON.stringify(path)});\n`;
 const pageOrigin = 'http://127.0.0.1:8188';
 const bulkPath = '/__sugarsubstitute/bulk/';
-const sources = [policyFor("'host'"), bulkFor(bulkPath), source];
-const windowedSources = [policyFor('undefined'), bulkFor(bulkPath), source];
+const sources = [policySource, bulkFor(bulkPath), source];
 const binding = '__sugarcubes_substitute_send_v3';
 const host = 'ai.artificialsweetener.sugarsubstitute';
 const session = 'session-12345678';
@@ -79,15 +76,23 @@ function admit(message, lane = 'o') {
 }
 
 test('each bootstrap script fits the unchanged native registration command', () => {
-  for (const source of [...sources, ...windowedSources])
+  for (const source of sources)
     assert.ok(Buffer.byteLength(JSON.stringify({ source })) <= 8192);
 });
-test('only a composition-hosted browser advertises host output presentation', () => {
-  assert.equal(fixture().bridge.outputSurfacePreference, 'host');
-  const windowed = fixture(undefined, windowedSources).bridge;
-  assert.ok(windowed);
-  assert.equal(Object.hasOwn(windowed, 'outputSurfacePreference'), false);
-  assert.equal(windowed.preferencePolicy, 'saved');
+test('the bridge carries only its identity and channel; host facts arrive in the description', () => {
+  assert.deepEqual(Object.keys(fixture().bridge).sort(), ['host', 'send', 'session', 'subscribe']);
+});
+test('the host description is a version-one notification for the current session only', () => {
+  const f = fixture();
+  const description = { protocol: 'sugarcubes.host', version: 1, session, type: 'description',
+    protocols: [{ name: 'sugarcubes.panel', version: 3 }], capabilities: [] };
+  for (const value of [{ ...description, version: 3 }, { ...description, session: 'another-session' },
+    { ...description, type: 'configure' }])
+    assert.equal(f.deliver(value), false);
+  assert.deepEqual(f.received, []);
+  assert.equal(f.deliver(description), true);
+  assert.equal(f.deliver(control('configure')), true);
+  assert.deepEqual(f.received.map(value => value.type), ['description', 'configure']);
 });
 test('escaped selection beyond the native frame uploads before custody and later small requests stay inline', async () => {
   const transfer = bulkFetch(), f = fixture(undefined, sources, transfer.fetch), request = selection('\\'.repeat(3800));
@@ -791,7 +796,7 @@ test('every shared surface and native canvas request type is admitted by the bri
   const schema = JSON.parse(readFileSync(
     new URL('../../../../Sugar/integrations/contracts/canvas.schema.json', import.meta.url), 'utf8'));
   const context = createContext({});
-  new Script(policyFor("'host'")).runInContext(context);
+  new Script(policySource).runInContext(context);
   const policy = context.__sugarcubes_substitute_policy_v3;
   const sharedTypes = Object.entries(schema.definitions ?? schema.$defs ?? {})
     .filter(([name, definition]) => name.endsWith('Request') && definition.properties?.type?.const)
@@ -915,7 +920,7 @@ test('pagehide aborts in-flight transfers and drops pending deliveries', async (
   const reply = canvas(1, 'surface.reply', { address, revision: 1, status: 'applied', message: 'r'.repeat(20000) });
   const text = JSON.stringify(reply);
   const transfer = bulkFetch((url, init) => init.method === 'GET' ? body(text) : { status: 204 });
-  const scripts = [policyFor("'host'"), bulkFor(path), source];
+  const scripts = [policySource, bulkFor(path), source];
   const f = fixture(undefined, scripts, transfer.fetch, remote);
   f.context.location.origin = 'https://elsewhere.example';
   f.receipt('g', 'o', 1, grant);

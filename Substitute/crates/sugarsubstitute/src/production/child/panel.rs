@@ -7,9 +7,10 @@ use std::time::Duration;
 use sugarsubstitute_application::panel::{PanelEffects, PanelHostSession, PanelState};
 use sugarsubstitute_contracts::{
     appearance::AccentColor,
+    host::{HostCapability, HostDescription, HostProtocol},
     panel::{PanelMessage, PanelPalette, PanelPresentation, PanelSession, PanelStyle},
 };
-use sugarsubstitute_desktop::PanelCommand;
+use sugarsubstitute_desktop::{MainHosting, PanelCommand};
 
 #[path = "panel/deliveries.rs"]
 mod deliveries;
@@ -65,19 +66,22 @@ impl PanelOwner {
     }
 
     /// Claim the persistent state before constructing the navigation-bound panel policy.
-    /// The page is configured with the current operating-system `accent`, when reported.
+    /// The page is configured with the current operating-system `accent`, when reported, and
+    /// told what the host serves to a browser in `hosting`.
     fn new(
         identity: MainIdentity,
         lease: MemoryLease,
         now: Moment,
         accent: Option<AccentColor>,
+        hosting: MainHosting,
     ) -> Result<Option<Self>> {
         let claim = match lease.claim(OWNER_BYTES) {
             Ok(claim) => claim,
             Err(_) => return Ok(None),
         };
         let session = PanelSession::for_main(identity)?;
-        let policy = PanelHostSession::new(session, presentation(accent)?, now)?;
+        let policy =
+            PanelHostSession::new(session, description(hosting)?, presentation(accent)?, now)?;
         let deadline = policy.next_deadline()?;
         Ok(Some(Self {
             identity,
@@ -228,6 +232,7 @@ impl PanelOwner {
         let configuration = matches!(message, PanelMessage::Configure { .. });
         let command = PanelCommand::new(
             self.identity,
+            effects.description,
             message,
             claim.ok_or("Panel command was not admitted")?,
         )?;
@@ -266,6 +271,21 @@ impl PanelOwner {
     pub(super) const fn deadline(&self) -> Option<Moment> {
         self.deadline
     }
+}
+
+/// What this host serves and declares to a page in a browser with `hosting`.
+///
+/// The page keeps its saved appearance, so presentation styles are not declared. Only a
+/// composition-hosted browser presents output on the native canvas.
+fn description(hosting: MainHosting) -> Result<HostDescription> {
+    let mut capabilities = Vec::new();
+    if hosting.presents_native_canvas() {
+        capabilities.push(HostCapability::HOST_OUTPUT_SURFACE);
+    }
+    Ok(HostDescription::new(
+        vec![HostProtocol::PANEL, HostProtocol::CANVAS, HostProtocol::MEMORY],
+        capabilities,
+    )?)
 }
 
 /// Host presentation for the SugarCubes page; the accent is the operating-system accent.

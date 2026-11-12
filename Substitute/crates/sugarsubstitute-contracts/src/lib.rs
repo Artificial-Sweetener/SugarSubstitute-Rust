@@ -14,6 +14,7 @@ pub mod crash;
 pub mod desktop_session;
 pub mod diagnostics;
 pub mod execution;
+pub mod host;
 pub mod incident;
 pub mod installation;
 pub mod instance_conflict;

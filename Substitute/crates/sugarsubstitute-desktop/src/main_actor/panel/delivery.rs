@@ -29,6 +29,27 @@ pub(super) fn encode(context: i64, payload: &[u8]) -> Result<String, DesktopErro
     inline(context, payload, None)?.ok_or_else(exceeded)
 }
 
+/// Encode one native command that hands `first` and then `second` to the page, in that order.
+///
+/// One evaluation delivers both, so no other host message can arrive between them.
+/// # Errors
+/// Rejects non-UTF-8 payloads and final parameters exceeding native admission.
+pub(super) fn encode_ordered(
+    context: i64,
+    first: &[u8],
+    second: &[u8],
+) -> Result<String, DesktopError> {
+    let utf8 = |payload| {
+        std::str::from_utf8(payload).map_err(|cause| DesktopError::new("encode_panel_utf8", cause))
+    };
+    let expression = format!("{PREFIX}{}),{PREFIX}{})", utf8(first)?, utf8(second)?);
+    let parameters = encode_parameters(context, &expression)?;
+    if parameters.len() > MAX_PARAMETERS_BYTES {
+        return Err(exceeded());
+    }
+    Ok(parameters)
+}
+
 /// Qualify an ordinary response with the exact private ticket that admitted its request.
 pub(super) fn encode_owned(
     context: i64,
