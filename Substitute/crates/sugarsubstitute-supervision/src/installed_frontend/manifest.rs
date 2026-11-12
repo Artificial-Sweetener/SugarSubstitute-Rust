@@ -40,6 +40,15 @@ fn validate_version(value: &str) -> Result<String, FrontendSourceError> {
 }
 
 pub(crate) fn cube_version(bytes: &[u8]) -> Result<String, FrontendSourceError> {
+    let (name, version) = pack_project(bytes)?;
+    if name != "SugarCubes" {
+        return Err(FrontendSourceError::invalid("cube_project_name"));
+    }
+    validate_version(&version)
+}
+
+/// Return the `[project]` name and version text a node pack's `pyproject.toml` declares.
+pub(crate) fn pack_project(bytes: &[u8]) -> Result<(String, String), FrontendSourceError> {
     let text = std::str::from_utf8(bytes)
         .map_err(|e| FrontendSourceError::new("cube_metadata_utf8", e))?;
     let value = text
@@ -49,15 +58,14 @@ pub(crate) fn cube_version(bytes: &[u8]) -> Result<String, FrontendSourceError> 
         .get("project")
         .and_then(toml::Value::as_table)
         .ok_or_else(|| FrontendSourceError::invalid("cube_project_metadata"))?;
-    if project.get("name").and_then(toml::Value::as_str) != Some("SugarCubes") {
-        return Err(FrontendSourceError::invalid("cube_project_name"));
-    }
-    validate_version(
+    let field = |key: &str, stage: &'static str| {
         project
-            .get("version")
+            .get(key)
             .and_then(toml::Value::as_str)
-            .ok_or_else(|| FrontendSourceError::invalid("cube_project_version"))?,
-    )
+            .map(str::to_owned)
+            .ok_or_else(|| FrontendSourceError::invalid(stage))
+    };
+    Ok((field("name", "cube_project_name")?, field("version", "cube_project_version")?))
 }
 
 /// Accept the supported literal WEB_DIRECTORY declaration without executing Python.

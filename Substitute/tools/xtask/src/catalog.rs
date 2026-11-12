@@ -23,6 +23,14 @@ pub(crate) struct Persistence {
     pub(crate) formats: Vec<Format>,
 }
 impl Persistence {
+    /// Return the current version of a format registered under the given shared component.
+    pub(crate) fn current_version(&self, id: &str, component: &str) -> Option<u32> {
+        self.formats
+            .iter()
+            .find(|format| format.id == id && format.shared_component.as_deref() == Some(component))
+            .map(|format| format.current_version)
+    }
+
     /// Require a preserved protocol's reviewed source before registering an external native boundary.
     pub(crate) fn preserves_source(&self, id: &str, owner: &str, path: &str) -> bool {
         self.schema_version == 1

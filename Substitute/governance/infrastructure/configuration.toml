@@ -107,7 +107,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/installed_frontend/manifest.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:411a0bf729232d3d4c8b037ca768d6ad55d19a0d8a4a645448a9bf76b460f63f"
+source_sha256 = "sha256:d5181853d393de33814b3f1d5488490a7804ab10e87cebeea1c253f689130891"
 capabilities = ["codec"]
 rationale = "SugarCubes owns its package manifest. Read only its supported package identity/version; no host settings persistence."
 
@@ -406,9 +406,16 @@ capabilities = ["arguments"]
 rationale = "Crashpad owns native capture configuration; host startup settings do not enter this API."
 
 [[records]]
+path = "tools/xtask/src/shared_vectors_tests.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:657b4f8c14d936e5b4e0798e0bfe359900ca0be502e2108c5de18468de8018d9"
+capabilities = ["codec"]
+rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
+
+[[records]]
 path = "tools/xtask/src/catalog.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:80ed9ab7261a8b71ab8b433fc2587e6be211ce4488b911daf99f453480d26e84"
+source_sha256 = "sha256:0b4b52685500f9e2309d633b47afd6c6f7601d4284351850fbc9c53c42dac20e"
 capabilities = ["codec"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
 
@@ -450,14 +457,14 @@ rationale = "Tooling build, source inspection or isolated qualification input; n
 [[records]]
 path = "tools/xtask/src/governance.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:79899997dc08a0c38429be84592844ff724ed6c874ae4b3f003b80270705fa4b"
+source_sha256 = "sha256:a905a6d20af18ba89edfedc98c012c100eca88ad63326c4ad5a9a8bfd82a848e"
 capabilities = ["codec"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
 
 [[records]]
 path = "tools/xtask/src/main.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:75136c55921a618aeed0f03e439afd92a83642e156656924590cedc77969d6ef"
+source_sha256 = "sha256:a42ed303a6bb09391bb17e9c4dbd0f46f037186e58931c5486e52cb24a343a20"
 capabilities = ["arguments"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
 

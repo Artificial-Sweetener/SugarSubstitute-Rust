@@ -13,6 +13,8 @@ pub mod installed_frontend;
 #[cfg(windows)]
 pub mod installed_release;
 #[cfg(windows)]
+pub mod pack_install;
+#[cfg(windows)]
 pub mod session_identity;
 #[cfg(windows)]
 pub mod setup_storage;

@@ -71,3 +71,28 @@ consumers = [
   "crates/sugarsubstitute/src/workspace_session/driver/tests.rs",
   "crates/sugarsubstitute/src/workspace_session/tests.rs",
 ]
+
+# SugarCubes owns the Comfy Registry install format of its pack (sugarcubes.backend.pack_install)
+# and the language-neutral vectors that pin it. The host's installer is the second
+# implementation; it reads the vectors in place and both suites must drive every group.
+[[components]]
+id = "sugarcubes-pack-install"
+root = "Sugar/tests/pack_install/support"
+owner = "SugarCubes pack_install: the Comfy Registry install format, its digest record and its update decisions"
+files = ["Sugar/tests/pack_install/support/registry_install_vectors.json"]
+consumers = ["crates/sugarsubstitute-supervision/src/pack_install/vector_tests.rs"]
+
+[[shared_vectors]]
+file = "Sugar/tests/pack_install/support/registry_install_vectors.json"
+component = "sugarcubes-pack-install"
+rust_suites = [
+  "crates/sugarsubstitute-supervision/src/pack_install/vector_tests.rs",
+  "crates/sugarsubstitute-supervision/src/pack_install/vector_tests/layout.rs",
+  "crates/sugarsubstitute-supervision/src/pack_install/vector_tests/decisions.rs",
+]
+python_loader = "Sugar/tests/pack_install/support/install_vectors.py"
+python_suites = [
+  "Sugar/tests/pack_install/contract/test_registry_install_vectors.py",
+  "Sugar/tests/self_update/integration/test_update_decision_vectors.py",
+]
+formats = { tracking = "sugarcubes-pack-tracking-v1", digestRecord = "sugarcubes-pack-digest-record-v1" }

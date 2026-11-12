@@ -17,6 +17,8 @@ pub(crate) mod imports;
 #[cfg(windows)]
 pub(crate) mod input;
 #[cfg(windows)]
+pub(crate) mod pack_tree;
+#[cfg(windows)]
 pub(crate) mod payload;
 #[cfg(windows)]
 #[allow(unsafe_code)]

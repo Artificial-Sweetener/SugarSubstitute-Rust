@@ -1820,3 +1820,45 @@ current_version = 1
 accepted_versions = [1]
 compatibility = "reject"
 migrations = []
+
+# The Comfy Registry install format of the SugarCubes pack, shared with SugarCubes' own
+# installer through its vector file. `.tracking` carries no version of its own; this is the
+# version both implementations and the vectors declare for the layout they write.
+[[formats]]
+id = "sugarcubes-pack-tracking-v1"
+owner = "sugarsubstitute-supervision"
+shared_component = "sugarcubes-pack-install"
+sources = ["crates/sugarsubstitute-supervision/src/pack_install/entry.rs", "crates/sugarsubstitute-supervision/src/pack_install/tracking.rs", "Sugar/tests/pack_install/support/registry_install_vectors.json"]
+source_sha256 = "sha256:ecabeb3a9c259a81d7dd91a6a59c2dcd67b44ef5273bc4f47f5bdcc5e1a3e843"
+classification = "authoritative_state"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "sugarcubes-pack-digest-record-v1"
+owner = "sugarsubstitute-supervision"
+shared_component = "sugarcubes-pack-install"
+sources = ["crates/sugarsubstitute-supervision/src/pack_install/digest_record.rs", "Sugar/tests/pack_install/support/registry_install_vectors.json"]
+source_sha256 = "sha256:858b74e045ab086fbdf7373b3d5e94f15ae8163844930faf0b60f98a3f6a1ce0"
+classification = "authoritative_state"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
+# The host's own SugarCubes update journal, kept in the host's storage beside its backup.
+[[formats]]
+id = "sugarcubes-pack-update-journal-v1"
+owner = "sugarsubstitute-supervision"
+sources = ["crates/sugarsubstitute-supervision/src/pack_install/replacement.rs", "crates/sugarsubstitute-supervision/src/pack_install/trial.rs"]
+source_sha256 = "sha256:88bdfacc074f9e7f1c2d824c5eeca562bc6f9fd3f6213ce5c459a5d9fd539a06"
+classification = "authoritative_state"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
