@@ -137,10 +137,15 @@ class FaultInjector:
             guard("write_tracking")
             base.write_tracking(folder, entries)
 
+        def write_manifest(folder: Path, version: str, files: dict[str, str]) -> None:
+            guard("write_manifest")
+            base.write_manifest(folder, version, files)
+
         return FileOperations(
             copy=wrap2(base.copy, "copy"),
             remove=remove,
             write_tracking=write_tracking,
+            write_manifest=write_manifest,
         )
 
 

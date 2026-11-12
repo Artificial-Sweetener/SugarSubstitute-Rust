@@ -193,6 +193,7 @@ __all__ = [
     "ACTIVE",
     "CONFIG",
     "FLAGGED",
+    "REGISTRY_API",
     "REGISTRY_VERSIONS",
     "FakeReleaseWeb",
     "InlineRunner",
