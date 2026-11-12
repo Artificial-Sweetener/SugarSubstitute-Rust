@@ -4467,7 +4467,7 @@ rationale = "Corrupts unpinned reconstructed source archives inside the fixture'
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/input.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:09ab1f8bf493ae27808c4487363ddca3c41abe2c05f4e325aab1d3d3cd5ea6c7"
+source_sha256 = "sha256:9d03dcbbc43d53e550f4b8eed6504e730755061f01d736ddd4ef554ef23c9800"
 capabilities = ["std::fs::read"]
 disposition = "fixture"
 rationale = "Reads the staged drag-out copies inside the fixture's owned temporary cache to verify their exact bytes, name and bounded retention."
