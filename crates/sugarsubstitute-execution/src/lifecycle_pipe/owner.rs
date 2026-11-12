@@ -4,7 +4,7 @@
 use super::*;
 use crate::task::ErasedJob;
 
-use crate::diagnostic_pipe::DiagnosticPipeReport;
+use crate::purpose_pipe::PurposePipeReport;
 use crate::{backend_custody::BackendCustodyPipeReport, recovery_supervisor::RecoveryPipeReport};
 use sugarsubstitute_contracts::execution::{CancelControl, JobOutcome};
 /// Copy only immutable retirement facts, releasing Shared before actual terminal delivery.
@@ -16,7 +16,7 @@ pub(crate) struct RetiredFacts {
 #[derive(Clone)]
 pub(crate) enum Owner {
     Desktop(Arc<Job<LifecyclePipeReport, LifecyclePipeFailure>>),
-    Diagnostic(Arc<Job<DiagnosticPipeReport, LifecyclePipeFailure>>),
+    Purpose(Arc<Job<PurposePipeReport, LifecyclePipeFailure>>),
     BackendCustody(Arc<Job<BackendCustodyPipeReport, LifecyclePipeFailure>>),
     Recovery(Arc<Job<RecoveryPipeReport, LifecyclePipeFailure>>),
 }
@@ -25,7 +25,7 @@ impl Owner {
     pub(crate) fn matches_record(&self, record: &crate::admission::Record) -> bool {
         let (scope, spec, erased): (_, _, Arc<dyn ErasedJob>) = match self {
             Self::Desktop(job) => (job.scope_id, job.spec, job.clone()),
-            Self::Diagnostic(job) => (job.scope_id, job.spec, job.clone()),
+            Self::Purpose(job) => (job.scope_id, job.spec, job.clone()),
             Self::BackendCustody(job) => (job.scope_id, job.spec, job.clone()),
             Self::Recovery(job) => (job.scope_id, job.spec, job.clone()),
         };
@@ -34,7 +34,7 @@ impl Owner {
     pub(crate) fn cancel(&self) {
         match self {
             Self::Desktop(job) => job.cancel(),
-            Self::Diagnostic(job) => job.cancel(),
+            Self::Purpose(job) => job.cancel(),
             Self::BackendCustody(job) => job.cancel(),
             Self::Recovery(job) => job.cancel(),
         }
@@ -42,7 +42,7 @@ impl Owner {
     pub(crate) fn cancellation_requested(&self) -> bool {
         match self {
             Self::Desktop(job) => job.cancel.is_requested(),
-            Self::Diagnostic(job) => job.cancel.is_requested(),
+            Self::Purpose(job) => job.cancel.is_requested(),
             Self::BackendCustody(job) => job.cancel.is_requested(),
             Self::Recovery(job) => job.cancel.is_requested(),
         }
@@ -69,14 +69,14 @@ impl Owner {
                     },
                 ),
             ),
-            Self::Diagnostic(job) => job.finish_in_custody_at(
+            Self::Purpose(job) => job.finish_in_custody_at(
                 context,
                 Some(started),
                 ended,
                 project(
                     outcome,
-                    DiagnosticPipeReport {
-                        key: facts.binding.and_then(PeerBinding::diagnostic),
+                    PurposePipeReport {
+                        key: facts.binding.and_then(PeerBinding::purpose),
                         received_messages: facts.received,
                         completed_writes: facts.written,
                     },

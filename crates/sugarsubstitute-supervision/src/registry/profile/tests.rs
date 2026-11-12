@@ -96,10 +96,10 @@ impl NativePort for Fake {
     ) -> Result<(), RegistryError> {
         Ok(())
     }
-    fn enroll_diagnostic(
+    fn enroll_purpose(
         &self,
         _: &mut Family,
-        _: sugarsubstitute_contracts::incident::DiagnosticKey,
+        _: sugarsubstitute_execution::purpose_pipe::PurposeKey,
         _: ProcessKey,
     ) -> Result<(), RegistryError> {
         Err(RegistryError::invalid("profile_fixture_diagnostic_role"))

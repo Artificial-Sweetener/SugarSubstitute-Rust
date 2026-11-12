@@ -13,7 +13,7 @@ impl Family {
         if let Some(launch) = &input.backend_custody
             && (self.fixture_events.is_some()
                 || self.lifecycle_bootstrap.is_some()
-                || self.diagnostic_bootstrap.is_some()
+                || self.purpose_bootstrap.is_some()
                 || self.output_pin.is_some()
                 || self.attributes_initialized
                 || self.backend_custody.is_some()

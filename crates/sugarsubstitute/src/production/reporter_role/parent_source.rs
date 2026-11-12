@@ -28,7 +28,7 @@ use std::sync::{Arc, Mutex, TryLockError};
 use sugarsubstitute_contracts::{execution::*, incident::*, lifecycle::ProcessKey};
 use sugarsubstitute_crash::diagnostic_client::*;
 use sugarsubstitute_execution::{
-    ExecutionClient, windows::NativeObservationError, windows_diagnostic_pipe::*,
+    ExecutionClient, windows::NativeObservationError, windows_purpose_pipe::*,
 };
 use sugarsubstitute_supervision::{WindowsLaunchInput, WindowsProcessRegistry};
 pub(in crate::production) use time::ReporterRequestContext;
@@ -205,7 +205,7 @@ impl ReporterSource {
     /// Transfer only the genuine separately funded pipe session into the same retained parent.
     pub(in crate::production) fn install_owner(
         &self,
-        session: &mut Option<DiagnosticPipeSession>,
+        session: &mut Option<PurposePipeSession>,
         key: DiagnosticKey,
     ) -> Result<(), ReporterSourceIssue> {
         let mut loan = self.loan()?;
@@ -222,7 +222,7 @@ impl ReporterSource {
     /// Borrow actual prepared bootstrap only while its owned parent is outside the mutex.
     pub(in crate::production) fn prepare<R>(
         &self,
-        build: impl FnOnce(&DiagnosticPipeBootstrap) -> R,
+        build: impl FnOnce(&PurposePipeBootstrap) -> R,
     ) -> Result<Option<R>, ReporterSourceIssue> {
         let mut loan = self.loan()?;
         let parent = loan.parent()?;

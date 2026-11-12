@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Versioned, bounded wire form of update-attempt messages between the preparation helper and
-//! the process that launched it. The helper only writes; its parent validates every frame.
+//! the process that launched it. The helper writes progress and its result; its parent validates
+//! every frame. The only message the parent may send back is a cancel request.
 use super::{
     AttemptOutcome, AttemptProgress, MAX_CAUSE_BYTES, MAX_CAUSES, MAX_VERSION_BYTES, UpdateReport,
 };
+use crate::lifecycle::CoordinatorKey;
 use serde::{Deserialize, Serialize};
 use std::{fmt, num::NonZeroU64};
 
@@ -17,7 +19,7 @@ pub const MAX_MESSAGE_BYTES: usize = 8 * 1024;
 
 /// Identity of one attempt, chosen by the launching process and passed to its helper. A frame
 /// for any other attempt is rejected, so a stale or foreign writer cannot speak for this one.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct UpdateAttemptKey(NonZeroU64);
 impl UpdateAttemptKey {
@@ -28,6 +30,28 @@ impl UpdateAttemptKey {
     /// The attempt identity.
     pub const fn get(self) -> NonZeroU64 {
         self.0
+    }
+}
+
+/// Transport binding of one attempt's channel: the coordinator that launched the helper and the
+/// attempt it chose. The pipe endpoint and bootstrap are derived from these facts only.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct UpdateAttemptChannel {
+    owner: CoordinatorKey,
+    attempt: UpdateAttemptKey,
+}
+impl UpdateAttemptChannel {
+    /// Combine the launching coordinator and its attempt identity; authentication stays external.
+    pub const fn new(owner: CoordinatorKey, attempt: UpdateAttemptKey) -> Self {
+        Self { owner, attempt }
+    }
+    /// The coordinator that launched the helper.
+    pub const fn owner(self) -> CoordinatorKey {
+        self.owner
+    }
+    /// The attempt this channel reports.
+    pub const fn attempt(self) -> UpdateAttemptKey {
+        self.attempt
     }
 }
 
@@ -53,6 +77,20 @@ struct Frame {
     protocol_version: u32,
     attempt: UpdateAttemptKey,
     body: AttemptMessage,
+}
+
+/// The one parent-to-helper message: stop the attempt at its next safe point.
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct CancelFrame {
+    protocol_version: u32,
+    attempt: UpdateAttemptKey,
+    request: CancelRequest,
+}
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum CancelRequest {
+    Cancel,
 }
 
 /// A frame was malformed, oversized, for another attempt, or outside its bounds.
@@ -121,6 +159,37 @@ pub fn decode(
     }
     validate(&frame.body)?;
     Ok(frame.body)
+}
+
+/// Encode the parent's cancel request for `attempt`; it is the only frame a parent writes.
+/// # Errors
+/// Fails only if serialization itself fails.
+pub fn encode_cancel(attempt: UpdateAttemptKey) -> Result<Vec<u8>, AttemptCodecError> {
+    serde_json::to_vec(&CancelFrame {
+        protocol_version: PROTOCOL_VERSION,
+        attempt,
+        request: CancelRequest::Cancel,
+    })
+    .map_err(|_| AttemptCodecError::Malformed)
+}
+
+/// Accept only a cancel request for `attempt` from the helper's parent.
+/// # Errors
+/// Rejects oversized or malformed bytes, other versions and other attempts.
+pub fn decode_cancel(attempt: UpdateAttemptKey, bytes: &[u8]) -> Result<(), AttemptCodecError> {
+    if bytes.len() > MAX_MESSAGE_BYTES {
+        return Err(AttemptCodecError::Oversized);
+    }
+    let frame: CancelFrame =
+        serde_json::from_slice(bytes).map_err(|_| AttemptCodecError::Malformed)?;
+    if frame.protocol_version != PROTOCOL_VERSION {
+        return Err(AttemptCodecError::Version);
+    }
+    if frame.attempt != attempt {
+        return Err(AttemptCodecError::Attempt);
+    }
+    let CancelRequest::Cancel = frame.request;
+    Ok(())
 }
 
 fn validate(message: &AttemptMessage) -> Result<(), AttemptCodecError> {
@@ -231,6 +300,22 @@ mod tests {
             progress: AttemptProgress { phase: AttemptPhase::Downloading, bytes: Some((5, 4)) },
         };
         assert_eq!(encode(attempt, &backwards), Err(AttemptCodecError::Bounds));
+        Ok(())
+    }
+
+    #[test]
+    fn cancel_is_the_only_parent_frame_and_never_decodes_as_a_helper_message() -> Result {
+        let bytes = encode_cancel(key(5)?)?;
+        assert_eq!(decode_cancel(key(5)?, &bytes), Ok(()));
+        assert_eq!(decode_cancel(key(6)?, &bytes), Err(AttemptCodecError::Attempt));
+        assert_eq!(decode(key(5)?, &bytes), Err(AttemptCodecError::Malformed));
+        let progress = encode(
+            key(5)?,
+            &AttemptMessage::Progress {
+                progress: AttemptProgress { phase: AttemptPhase::Checking, bytes: None },
+            },
+        )?;
+        assert_eq!(decode_cancel(key(5)?, &progress), Err(AttemptCodecError::Malformed));
         Ok(())
     }
 }

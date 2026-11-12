@@ -8,8 +8,8 @@ use std::{
 };
 use sugarsubstitute_contracts::configuration::LocaleId;
 use sugarsubstitute_contracts::incident::DiagnosticRole;
-use sugarsubstitute_execution::windows_diagnostic_pipe::{
-    DiagnosticPipeBootstrap, InheritedLifecycleBootstrap, LifecyclePipeDeadline,
+use sugarsubstitute_execution::windows_purpose_pipe::{
+    InheritedLifecycleBootstrap, LifecyclePipeDeadline, PurposePipeBootstrap,
 };
 
 /// Lexical data is inert until the actual inherited section verifies parent and role.
@@ -61,10 +61,10 @@ fn value(
 /// Encode only the original pinned inherited section and its actual original counter.
 /// The composing owner runs this under its existing bounded launch-input reservation.
 pub(in crate::production) fn arguments(
-    bootstrap: &DiagnosticPipeBootstrap,
+    bootstrap: &PurposePipeBootstrap,
     locale: LocaleId,
 ) -> Result<Vec<Vec<u16>>, Box<dyn Error + Send + Sync>> {
-    if bootstrap.key().role() != DiagnosticRole::Reporter {
+    if bootstrap.key().diagnostic().is_none_or(|key| key.role() != DiagnosticRole::Reporter) {
         return Err("Reporter bootstrap role mismatch".into());
     }
     let original = bootstrap.deadline().ok_or("Reporter bootstrap deadline unavailable")?;

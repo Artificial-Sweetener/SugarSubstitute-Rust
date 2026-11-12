@@ -3,7 +3,7 @@
 //! Retire a real never-launched Parent while preserving an original uninstalled View and failure.
 use super::*;
 use crate::production::reporter_role::{parent::ReporterFunding, parent_source::ReporterSource};
-use sugarsubstitute_execution::windows_diagnostic_pipe::MIN_LIFECYCLE_PIPE_BYTES;
+use sugarsubstitute_execution::windows_purpose_pipe::MIN_LIFECYCLE_PIPE_BYTES;
 use sugarsubstitute_supervision::WindowsProcessRegistry;
 
 #[test]
@@ -84,10 +84,10 @@ fn reporting_uninstalled_view_survives_failure_and_real_never_launched_parent_re
     let mut pipe_spec = spec(4, MIN_LIFECYCLE_PIPE_BYTES)?;
     pipe_spec.class = JobClass::NativeObservation;
     pipe_spec.deadline = None;
-    let mut session = Some(client.reserve_diagnostic_pipe_server(
+    let mut session = Some(client.reserve_purpose_pipe_server(
         &native,
         pipe_spec,
-        key,
+        sugarsubstitute_execution::purpose_pipe::PurposeKey::Diagnostic(key),
         Moment::from_nanos(60_000_000_017),
     )?);
     source.install_owner(&mut session, key)?;

@@ -34,11 +34,8 @@ impl LifecyclePipeRetirement {
     ) -> bool {
         self.shared.same_allocation(&control.inner.shared)
     }
-    /// Match the actual diagnostic session allocation independently of copied peer facts.
-    pub fn matches_diagnostic(
-        &self,
-        control: &crate::diagnostic_pipe::DiagnosticPipeControl,
-    ) -> bool {
+    /// Match the actual purpose session allocation independently of copied peer facts.
+    pub fn matches_purpose(&self, control: &crate::purpose_pipe::PurposePipeControl) -> bool {
         self.shared.same_allocation(&control.inner.shared)
     }
     /// Match the actual retained session allocation, rather than copied matching IDs.
@@ -67,8 +64,8 @@ impl LifecyclePipeRetirement {
     }
 }
 
-impl crate::diagnostic_pipe::DiagnosticPipeControl {
-    /// Transfer the same checked physical settlement once for a diagnostic session.
+impl crate::purpose_pipe::PurposePipeControl {
+    /// Transfer the same checked physical settlement once for a purpose session.
     /// Terminal delivery, close intent and expired budgets cannot manufacture this proof.
     /// All native owners, buffers, returned loans and launch pins must actually retire.
     pub fn take_checked_retirement(&self) -> Option<LifecyclePipeRetirement> {

@@ -3,20 +3,101 @@
 //! Keep kernel-verified helper facts separate from process and storage authority.
 use crate::lifecycle_pipe::LifecyclePipeOperationId;
 use std::fmt;
-use sugarsubstitute_contracts::{incident::DiagnosticKey, lifecycle::ProcessKey};
+use sugarsubstitute_contracts::{
+    incident::{DiagnosticKey, DiagnosticRole},
+    lifecycle::{CoordinatorKey, ProcessKey},
+    update::attempt::codec::UpdateAttemptChannel,
+};
+
+/// What a helper channel is for. The purpose fixes the endpoint, the bootstrap schema the child
+/// accepts and which side may write.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Purpose {
+    /// A diagnostic helper in one fixed role; both sides exchange commands and replies.
+    Diagnostic(DiagnosticRole),
+    /// An update-preparation helper reporting one attempt to the process that launched it.
+    UpdateAttempt,
+}
+impl Purpose {
+    /// The direction rule of this purpose.
+    pub const fn direction(self) -> Direction {
+        match self {
+            Self::Diagnostic(_) => Direction::Both,
+            Self::UpdateAttempt => Direction::HelperReports,
+        }
+    }
+}
+
+/// Which side of a helper channel may write.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Direction {
+    /// Parent and helper both write.
+    Both,
+    /// The helper writes; the parent reads and may send only the purpose's cancel request.
+    HelperReports,
+}
+
+/// Which end of a channel a session owns.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum Side {
+    /// The launching process, which owns the server endpoint.
+    Parent,
+    /// The launched helper, which binds its inherited bootstrap.
+    Helper,
+}
+
+/// The complete binding of one helper channel; facts only, never authority.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PurposeKey {
+    /// One diagnostic helper session.
+    Diagnostic(DiagnosticKey),
+    /// One update attempt.
+    UpdateAttempt(UpdateAttemptChannel),
+}
+impl PurposeKey {
+    /// The purpose this binding serves.
+    pub const fn purpose(self) -> Purpose {
+        match self {
+            Self::Diagnostic(key) => Purpose::Diagnostic(key.role()),
+            Self::UpdateAttempt(_) => Purpose::UpdateAttempt,
+        }
+    }
+    /// The coordinator that owns the channel.
+    pub const fn owner(self) -> CoordinatorKey {
+        match self {
+            Self::Diagnostic(key) => key.owner(),
+            Self::UpdateAttempt(channel) => channel.owner(),
+        }
+    }
+    /// The diagnostic session, when this is a diagnostic channel.
+    pub const fn diagnostic(self) -> Option<DiagnosticKey> {
+        match self {
+            Self::Diagnostic(key) => Some(key),
+            Self::UpdateAttempt(_) => None,
+        }
+    }
+    /// The update attempt, when this is an update-attempt channel.
+    pub const fn update_attempt(self) -> Option<UpdateAttemptChannel> {
+        match self {
+            Self::UpdateAttempt(channel) => Some(channel),
+            Self::Diagnostic(_) => None,
+        }
+    }
+}
+
 /// Kernel-verified connection facts; construction is private to the transport owner.
 /// Facts grant no termination, profile, resource or UI-loop authority.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct VerifiedDiagnosticPeer {
-    pub(crate) key: DiagnosticKey,
+pub struct VerifiedPurposePeer {
+    pub(crate) key: PurposeKey,
     pub(crate) process: Option<ProcessKey>,
     pub(crate) pid: u32,
     pub(crate) birth: u64,
     pub(crate) session: u32,
 }
-impl VerifiedDiagnosticPeer {
-    /// Return the exact admitted helper session whose bootstrap and native peer were verified.
-    pub const fn key(self) -> DiagnosticKey {
+impl VerifiedPurposePeer {
+    /// Return the exact admitted helper binding whose bootstrap and native peer were verified.
+    pub const fn key(self) -> PurposeKey {
         self.key
     }
     /// Return the enrolled owned helper registry key on the server side.
@@ -37,13 +118,13 @@ impl VerifiedDiagnosticPeer {
     }
 }
 /// Transfer one bounded actual transport fact, separately from terminal delivery.
-pub enum DiagnosticPipeObservation {
+pub enum PurposePipeObservation {
     /// Server pipe and immutable bootstrap section actually exist.
     Prepared,
     /// Actual pipe connection exists; application authentication is still pending.
     Connected,
     /// Kernel identity and per-session capability were verified on this connection.
-    Authenticated(VerifiedDiagnosticPeer),
+    Authenticated(VerifiedPurposePeer),
     /// An issued native read remains pending; this is not queue admission proof.
     ReadPending {
         /// Exact read whose retained OVERLAPPED/buffer must settle before terminal.
@@ -81,7 +162,7 @@ pub enum DiagnosticPipeObservation {
         bytes: u32,
     },
 }
-impl fmt::Debug for DiagnosticPipeObservation {
+impl fmt::Debug for PurposePipeObservation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Prepared => f.write_str("Prepared"),
@@ -111,9 +192,9 @@ impl fmt::Debug for DiagnosticPipeObservation {
 }
 /// Report checked transport retirement; this never proves process/family settlement.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct DiagnosticPipeReport {
-    /// The admitted helper session, if a child bootstrap was successfully validated.
-    pub key: Option<DiagnosticKey>,
+pub struct PurposePipeReport {
+    /// The admitted helper binding, if a child bootstrap was successfully validated.
+    pub key: Option<PurposeKey>,
     /// Number of completely observed messages, without claiming semantic effects.
     pub received_messages: u64,
     /// Number of completely observed writes, without claiming peer processing.

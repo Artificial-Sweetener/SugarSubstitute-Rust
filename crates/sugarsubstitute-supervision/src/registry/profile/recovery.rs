@@ -37,7 +37,7 @@ impl WindowsProcessRegistry {
             || spec.deadline != Some(grant.original_budget().until())
             || spec.reservation_bytes < original.required_reservation_bytes()
             || original.managed_custody.is_some() || original.backend_custody.is_some()
-            || original.diagnostic.is_some() || original.lifecycle.is_some() || original.fixture_events.is_some()
+            || original.purpose.is_some() || original.lifecycle.is_some() || original.fixture_events.is_some()
             || original.recovery_carrier.as_ref().is_none_or(|carrier| carrier.grant.key() != grant.key() || carrier.enrollment.as_ref().is_none_or(|enrollment| !carrier.bootstrap.matches_enrollment(enrollment)))
         {
             return Err(RegistryAdmissionError::InvalidSpecification);

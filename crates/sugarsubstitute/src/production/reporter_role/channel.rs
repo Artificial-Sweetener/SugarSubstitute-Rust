@@ -4,13 +4,13 @@
 use std::num::NonZeroUsize;
 use sugarsubstitute_contracts::{execution::*, incident::*, lifecycle::ProcessKey};
 use sugarsubstitute_crash::diagnostic_client::*;
-use sugarsubstitute_execution::diagnostic_pipe::*;
+use sugarsubstitute_execution::purpose_pipe::*;
 /// No matching header, connected observation or queued verification admits a command.
 pub(super) struct Channel {
-    pub(super) session: DiagnosticPipeSession,
+    pub(super) session: PurposePipeSession,
     key: DiagnosticKey,
     process: Option<ProcessKey>,
-    peer: Option<VerifiedDiagnosticPeer>,
+    peer: Option<VerifiedPurposePeer>,
     authentication: Option<ReceivedLifecycleFrame>,
     received: Option<ReceivedLifecycleFrame>,
     rejected: Option<ReceivedDiagnosticRequest>,
@@ -19,7 +19,7 @@ pub(super) struct Channel {
     verification_queued: bool,
     pub(super) first: Option<LifecyclePipeError>,
     pub(super) wire: Option<DiagnosticWireError>,
-    pub(super) terminal: Option<JobCompletion<DiagnosticPipeReport, LifecyclePipeFailure>>,
+    pub(super) terminal: Option<JobCompletion<PurposePipeReport, LifecyclePipeFailure>>,
     pub(super) written: Option<LifecyclePipeOperationId>,
     router: DiagnosticRequestRouter,
 }
@@ -28,7 +28,7 @@ impl Channel {
         self.key
     }
 
-    pub(super) fn new(session: DiagnosticPipeSession, key: DiagnosticKey) -> Self {
+    pub(super) fn new(session: PurposePipeSession, key: DiagnosticKey) -> Self {
         Self {
             session,
             key,
@@ -73,16 +73,16 @@ impl Channel {
             };
             changed = true;
             match observation {
-                DiagnosticPipeObservation::Prepared => {}
-                DiagnosticPipeObservation::Connected => {
+                PurposePipeObservation::Prepared => {}
+                PurposePipeObservation::Connected => {
                     if self.process.is_none() {
                         self.first.get_or_insert(LifecyclePipeError::NotReady);
                         return Err(LifecyclePipeError::NotReady);
                     }
                     self.issue_read(false)?;
                 }
-                DiagnosticPipeObservation::Authenticated(peer) => {
-                    if peer.key() != self.key
+                PurposePipeObservation::Authenticated(peer) => {
+                    if peer.key() != PurposeKey::Diagnostic(self.key)
                         || peer.process() != self.process
                         || self.process.is_none()
                         || !self.verification_queued
@@ -95,7 +95,7 @@ impl Channel {
                     drop(self.authentication.take());
                     self.issue_read(true)?;
                 }
-                DiagnosticPipeObservation::Received { frame, .. } => {
+                PurposePipeObservation::Received { frame, .. } => {
                     self.read_pending = false;
                     if self.peer.is_some() {
                         self.received = Some(frame);
@@ -113,14 +113,12 @@ impl Channel {
                         self.verification_queued = true;
                     }
                 }
-                DiagnosticPipeObservation::ReadPending { .. } => {}
-                DiagnosticPipeObservation::WriteRevoked { buffer, .. } => {
+                PurposePipeObservation::ReadPending { .. } => {}
+                PurposePipeObservation::WriteRevoked { buffer, .. } => {
                     drop(buffer);
                 }
-                DiagnosticPipeObservation::WriteIssued { .. } => {}
-                DiagnosticPipeObservation::Written { operation, .. } => {
-                    self.written = Some(operation)
-                }
+                PurposePipeObservation::WriteIssued { .. } => {}
+                PurposePipeObservation::Written { operation, .. } => self.written = Some(operation),
             }
         }
         if self.terminal.is_none() {

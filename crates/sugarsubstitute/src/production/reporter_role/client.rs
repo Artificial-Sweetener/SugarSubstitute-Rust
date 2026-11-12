@@ -4,28 +4,28 @@
 use std::num::NonZeroUsize;
 use sugarsubstitute_contracts::{execution::*, incident::*};
 use sugarsubstitute_execution::{
-    DiagnosticPipeResources, ExecutionClient, diagnostic_pipe::*, windows_diagnostic_pipe::*,
+    ExecutionClient, PurposePipeResources, purpose_pipe::*, windows_purpose_pipe::*,
 };
 pub(in crate::production) struct ReporterClient {
     input: Option<InheritedLifecycleBootstrap>,
     original: LifecyclePipeDeadline,
-    session: Option<DiagnosticPipeSession>,
-    peer: Option<VerifiedDiagnosticPeer>,
+    session: Option<PurposePipeSession>,
+    peer: Option<VerifiedPurposePeer>,
     key: Option<DiagnosticKey>,
     capability: Option<LifecycleClientCapability>,
-    admission: Option<DiagnosticPipeAdmissionRejection>,
+    admission: Option<PurposePipeAdmissionRejection>,
     first: Option<LifecyclePipeError>,
     next_operation: u64,
     hello_issued: bool,
     hello_written: bool,
     write_buffer: Option<LifecyclePipeWriteBuffer>,
     received: Option<ReceivedLifecycleFrame>,
-    terminal: Option<JobCompletion<DiagnosticPipeReport, LifecyclePipeFailure>>,
+    terminal: Option<JobCompletion<PurposePipeReport, LifecyclePipeFailure>>,
     written: Option<LifecyclePipeOperationId>,
 }
 /// Same-session native facts and complete original input; wire decoding happens on Core.
 pub(super) struct NativeInput {
-    pub(super) peer: VerifiedDiagnosticPeer,
+    pub(super) peer: VerifiedPurposePeer,
     pub(super) key: DiagnosticKey,
     pub(super) frame: ReceivedLifecycleFrame,
 }
@@ -67,12 +67,12 @@ impl ReporterClient {
         let Some(input) = self.input.take() else {
             return Err(LifecyclePipeError::AlreadyTransferred);
         };
-        let permit = match client.reserve_diagnostic_pipe_client(
+        let permit = match client.reserve_purpose_pipe_client(
             scope,
             spec,
-            DiagnosticRole::Reporter,
+            Purpose::Diagnostic(DiagnosticRole::Reporter),
             self.original,
-            DiagnosticPipeResources::Standard,
+            PurposePipeResources::Standard,
         ) {
             Ok(value) => value,
             Err(cause) => {
@@ -104,16 +104,19 @@ impl ReporterClient {
             let Some(fact) = session.drain(NonZeroUsize::MIN).into_iter().next() else { break };
             changed = true;
             match fact {
-                DiagnosticPipeObservation::Prepared => {
-                    let key =
-                        session.control().prepared_key().ok_or(LifecyclePipeError::NotReady)?;
+                PurposePipeObservation::Prepared => {
+                    let key = session
+                        .control()
+                        .prepared_key()
+                        .and_then(PurposeKey::diagnostic)
+                        .ok_or(LifecyclePipeError::NotReady)?;
                     if key.role() != DiagnosticRole::Reporter || self.key.is_some() {
                         return Err(LifecyclePipeError::InvalidMessage);
                     }
                     self.key = Some(key);
                     self.capability = session.control().take_client_capability()?;
                 }
-                DiagnosticPipeObservation::Connected => {
+                PurposePipeObservation::Connected => {
                     let capability =
                         self.capability.as_ref().ok_or(LifecyclePipeError::NotReady)?;
                     session.control().verify_capability(
@@ -121,8 +124,8 @@ impl ReporterClient {
                         session.control().original_deadline(),
                     )?;
                 }
-                DiagnosticPipeObservation::Authenticated(peer) => {
-                    if Some(peer.key()) != self.key
+                PurposePipeObservation::Authenticated(peer) => {
+                    if Some(peer.key()) != self.key.map(PurposeKey::Diagnostic)
                         || peer.process().is_some()
                         || self.peer.is_some()
                     {
@@ -130,26 +133,26 @@ impl ReporterClient {
                     }
                     self.peer = Some(peer);
                 }
-                DiagnosticPipeObservation::Received { frame, .. } => self.received = Some(frame),
-                DiagnosticPipeObservation::Written { operation, .. } => {
+                PurposePipeObservation::Received { frame, .. } => self.received = Some(frame),
+                PurposePipeObservation::Written { operation, .. } => {
                     self.written = Some(operation);
                     if self.hello_issued {
                         self.hello_written = true;
                         self.capability = None;
                     }
                 }
-                DiagnosticPipeObservation::WriteRevoked { buffer, .. } => {
+                PurposePipeObservation::WriteRevoked { buffer, .. } => {
                     self.write_buffer = Some(buffer)
                 }
-                DiagnosticPipeObservation::ReadPending { .. }
-                | DiagnosticPipeObservation::WriteIssued { .. } => {}
+                PurposePipeObservation::ReadPending { .. }
+                | PurposePipeObservation::WriteIssued { .. } => {}
             }
         }
         if self.peer.is_some() && !self.hello_issued {
             self.send_capability()?;
         }
         if self.terminal.is_none() {
-            self.terminal = self.session.as_mut().and_then(DiagnosticPipeSession::take_terminal);
+            self.terminal = self.session.as_mut().and_then(PurposePipeSession::take_terminal);
         }
         Ok(changed)
     }
@@ -212,7 +215,7 @@ impl ReporterClient {
     }
     /// Return actual authenticated session matching facts; no wire/UI datum selects this key.
     pub(super) fn key(&self) -> Option<DiagnosticKey> {
-        self.peer.map(|peer| peer.key())
+        self.peer.and_then(|peer| peer.key().diagnostic())
     }
     /// Submit already encoded complete bytes; every rejection retains the identical original loan.
     pub(super) fn write_encoded(

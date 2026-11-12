@@ -22,6 +22,9 @@ pub(in crate::production::child) fn cause_code(cause: &(dyn Error + 'static)) ->
             LifecyclePipeError::InvalidDeadline => Pipe::InvalidDeadline,
             LifecyclePipeError::InvalidMessage => Pipe::InvalidMessage,
             LifecyclePipeError::AlreadyTransferred => Pipe::AlreadyTransferred,
+            // Only helper purpose channels have a direction rule; a desktop lifecycle channel
+            // never produces this, and an operation the side may not issue is invalid.
+            LifecyclePipeError::Direction => Pipe::InvalidOperation,
         }));
     }
     cause.downcast_ref::<ChallengeError>().map(|challenge| {

@@ -8,7 +8,7 @@ pub(super) mod recycling;
 mod relay;
 use std::error::Error;
 use sugarsubstitute_contracts::{execution::*, incident::*};
-use sugarsubstitute_execution::{ExecutionClient, windows_diagnostic_pipe::*};
+use sugarsubstitute_execution::{ExecutionClient, windows_purpose_pipe::*};
 use sugarsubstitute_supervision::{
     LaunchTicket, RegistryAdmissionError, RegistryInputError, WindowsLaunchInput,
     WindowsProcessRegistry,
@@ -24,15 +24,15 @@ pub(in crate::production) enum ReporterIssue {
 /// Data precedes its original controller claim; no child pipe or family is inferred settled.
 pub(in crate::production) struct ReporterParent {
     channel: Channel,
-    bootstrap: Option<DiagnosticPipeBootstrap>,
+    bootstrap: Option<PurposePipeBootstrap>,
     prepared: bool,
-    enrollment: Option<DiagnosticEnrollment>,
+    enrollment: Option<PurposeEnrollment>,
     input: Option<WindowsLaunchInput>,
     launch: Option<LaunchTicket>,
     input_error: Option<RegistryInputError>,
     launch_error: Option<RegistryAdmissionError>,
     send_error: Option<sugarsubstitute_crash::diagnostic_client::DiagnosticSendError>,
-    rejected_output: Option<sugarsubstitute_execution::diagnostic_pipe::LifecyclePipeWriteBuffer>,
+    rejected_output: Option<sugarsubstitute_execution::purpose_pipe::LifecyclePipeWriteBuffer>,
     checked_retirement:
         Option<sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeRetirement>,
     execution: ExecutionId,
@@ -46,7 +46,7 @@ impl ReporterParent {
     pub(in crate::production) fn install_owner(
         output: &mut Option<Self>,
         funding: &mut Option<ReporterFunding>,
-        session: &mut Option<DiagnosticPipeSession>,
+        session: &mut Option<PurposePipeSession>,
         key: DiagnosticKey,
     ) -> Result<(), ReporterIssue> {
         if output.is_some() || funding.is_none() || session.is_none() {
@@ -55,7 +55,7 @@ impl ReporterParent {
         if session
             .as_ref()
             .and_then(|session| session.control().prepared_key())
-            .is_some_and(|actual| actual != key)
+            .is_some_and(|actual| actual != PurposeKey::Diagnostic(key))
         {
             return Err(ReporterIssue::Role);
         }
@@ -100,15 +100,16 @@ impl ReporterParent {
         {
             self.bootstrap = Some(bootstrap);
             self.enrollment = Some(enrollment);
-            if self.bootstrap.as_ref().is_none_or(|bootstrap| bootstrap.key() != self.channel.key())
-            {
+            if self.bootstrap.as_ref().is_none_or(|bootstrap| {
+                bootstrap.key() != PurposeKey::Diagnostic(self.channel.key())
+            }) {
                 return Err(ReporterIssue::Role);
             }
             self.prepared = true;
         }
         Ok(self.bootstrap.is_some())
     }
-    pub(in crate::production) fn bootstrap(&self) -> Option<&DiagnosticPipeBootstrap> {
+    pub(in crate::production) fn bootstrap(&self) -> Option<&PurposePipeBootstrap> {
         self.bootstrap.as_ref()
     }
     /// Retain all original launch inputs through native admission rejection and real family cleanup.
@@ -120,7 +121,7 @@ impl ReporterParent {
             return Err(ReporterIssue::Busy);
         }
         let value = input.as_mut().ok_or(ReporterIssue::Busy)?;
-        if let Err(cause) = value.with_diagnostic_pipe(&mut self.bootstrap, &mut self.enrollment) {
+        if let Err(cause) = value.with_purpose_pipe(&mut self.bootstrap, &mut self.enrollment) {
             self.input_error.get_or_insert(cause);
             return Err(ReporterIssue::Launch);
         }
@@ -161,8 +162,13 @@ impl ReporterParent {
         }
     }
     fn channel_key(&self) -> Result<DiagnosticKey, ReporterIssue> {
-        let actual =
-            self.channel.session.control().prepared_key().ok_or(ReporterIssue::Transport)?;
+        let actual = self
+            .channel
+            .session
+            .control()
+            .prepared_key()
+            .and_then(PurposeKey::diagnostic)
+            .ok_or(ReporterIssue::Transport)?;
         if actual != self.channel.key() {
             return Err(ReporterIssue::Role);
         }
@@ -290,7 +296,7 @@ impl ReporterParent {
             .map(|terminal| (terminal.scope_id, terminal.spec, terminal.outcome.kind()))
             .or(self.retired_terminal);
         let Some((scope, spec, _kind)) = actual else { return false };
-        proof.matches_diagnostic(self.channel.session.control())
+        proof.matches_purpose(self.channel.session.control())
             && proof.execution_id() == self.execution
             && proof.scope_id() == scope
             && proof.spec() == spec

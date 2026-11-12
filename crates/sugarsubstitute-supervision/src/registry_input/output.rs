@@ -97,7 +97,7 @@ pub(crate) fn association_error(
     control_identity: OutputIdentity,
     same_session: bool,
 ) -> Option<RegistryInputError> {
-    if input.output.is_some() || input.fixture_events.is_some() || input.diagnostic.is_some() {
+    if input.output.is_some() || input.fixture_events.is_some() || input.purpose.is_some() {
         Some(RegistryInputError::OutputConflict)
     } else if !binding_matches(binding, identity)
         || input

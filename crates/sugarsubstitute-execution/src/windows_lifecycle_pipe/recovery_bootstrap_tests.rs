@@ -51,9 +51,9 @@ fn recovery_bootstrap_cannot_cross_any_ordinary_or_captured_purpose() -> Result 
     for kind in [
         Kind::Desktop,
         Kind::BackendCustody,
-        Kind::Diagnostic(DiagnosticRole::Storage),
-        Kind::Diagnostic(DiagnosticRole::Symbolize),
-        Kind::Diagnostic(DiagnosticRole::Reporter),
+        Kind::Purpose(Purpose::Diagnostic(DiagnosticRole::Storage)),
+        Kind::Purpose(Purpose::Diagnostic(DiagnosticRole::Symbolize)),
+        Kind::Purpose(Purpose::Diagnostic(DiagnosticRole::Reporter)),
     ] {
         assert!(decode(&encoded, source.deadline, kind).is_err());
         assert!(decode_captured_base(&encoded, source.deadline, kind).is_err());

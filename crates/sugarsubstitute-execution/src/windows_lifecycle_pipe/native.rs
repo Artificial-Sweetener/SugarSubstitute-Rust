@@ -10,7 +10,6 @@ use std::{os::windows::io::IntoRawHandle, sync::Arc};
 use sugarsubstitute_contracts::execution::{JobContext, Moment};
 use sugarsubstitute_contracts::{
     backend_custody::BackendCustodyKey,
-    incident::{DiagnosticKey, DiagnosticRole},
     lifecycle::{ProcessKey, RunKey},
     recovery_supervisor::RecoveryGrantKey,
 };
@@ -145,20 +144,22 @@ impl Lease {
     pub(super) fn client(original: LifecyclePipeDeadline) -> Self {
         Self::new(false, None, Some(original), bootstrap::Kind::Desktop)
     }
-    pub(crate) fn diagnostic_server(key: DiagnosticKey) -> Self {
+    /// Prepare one purpose-typed server endpoint for its exact binding.
+    pub(crate) fn purpose_server(key: crate::purpose_pipe::PurposeKey) -> Self {
         Self::new(
             true,
-            Some(PeerBinding::Diagnostic(key)),
+            Some(PeerBinding::Purpose(key)),
             None,
-            bootstrap::Kind::Diagnostic(key.role()),
+            bootstrap::Kind::Purpose(key.purpose()),
         )
     }
-    pub(crate) fn diagnostic_client(
-        role: DiagnosticRole,
+    /// Decode only a bootstrap of the expected purpose before adopting any native peer operation.
+    pub(crate) fn purpose_client(
+        purpose: crate::purpose_pipe::Purpose,
         original: LifecyclePipeDeadline,
         symbol: Option<crate::SymbolTransportReservation>,
     ) -> Self {
-        let mut lease = Self::new(false, None, Some(original), bootstrap::Kind::Diagnostic(role));
+        let mut lease = Self::new(false, None, Some(original), bootstrap::Kind::Purpose(purpose));
         lease.symbol = symbol;
         lease.bind_original_context();
         lease

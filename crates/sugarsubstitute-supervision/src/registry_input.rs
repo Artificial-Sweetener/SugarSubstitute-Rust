@@ -5,14 +5,14 @@ use crate::{LaunchEnvironment, RegistryInputError, WindowsLaunchBuffers, Windows
 use std::fmt;
 use sugarsubstitute_execution::windows_fixture::FixtureChildEvents;
 pub(crate) mod backend_custody;
-mod diagnostic;
 mod lifecycle;
 pub(crate) mod output;
 pub(crate) mod preparation;
+mod purpose;
 pub(crate) mod recovery;
-use diagnostic::DiagnosticLaunch;
 use lifecycle::DesktopLaunch;
 pub use output::RejectedOutputLaunch;
+use purpose::PurposeLaunch;
 
 // Fixed family state, 256 retained members, aligned attribute storage and query scratch.
 // This is an admission peak, not an estimate of unobservable kernel allocations.
@@ -28,7 +28,7 @@ pub struct WindowsLaunchInput {
     pub(crate) environment: LaunchEnvironment,
     pub(crate) fixture_events: Option<FixtureChildEvents>,
     pub(crate) lifecycle: Option<DesktopLaunch>,
-    pub(crate) diagnostic: Option<DiagnosticLaunch>,
+    pub(crate) purpose: Option<PurposeLaunch>,
     pub(crate) backend_custody: Option<backend_custody::CustodyLaunch>,
     pub(crate) output: Option<output::OutputLaunch>,
     required: u64,
@@ -68,7 +68,7 @@ impl WindowsLaunchInput {
             environment,
             fixture_events: None,
             lifecycle: None,
-            diagnostic: None,
+            purpose: None,
             backend_custody: None,
             output: None,
             required,

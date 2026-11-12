@@ -167,23 +167,23 @@ impl NativePort for Fake {
         }
         self.enrollment()
     }
-    fn enroll_diagnostic(
+    fn enroll_purpose(
         &self,
         family: &mut Family,
-        binding: sugarsubstitute_contracts::incident::DiagnosticKey,
+        binding: sugarsubstitute_execution::purpose_pipe::PurposeKey,
         key: ProcessKey,
     ) -> Result<(), RegistryError> {
         if key.owner != binding.owner()
-            || family.diagnostic_key != Some(binding)
+            || family.purpose_key != Some(binding)
             || family.resumed
             || *lock(&self.creation_order) != [1, 2, 0, 0]
             || family
-                .diagnostic_bootstrap
+                .purpose_bootstrap
                 .as_ref()
-                .zip(family.diagnostic_enrollment.as_ref())
+                .zip(family.purpose_enrollment.as_ref())
                 .is_none_or(|(bootstrap, enrollment)| !bootstrap.matches_enrollment(enrollment))
         {
-            return Err(RegistryError::invalid("fake_diagnostic_enrollment_order"));
+            return Err(RegistryError::invalid("fake_purpose_enrollment_order"));
         }
         self.enrollment()
     }
@@ -280,7 +280,7 @@ impl NativePort for Fake {
         family.job = None;
         family.thread = None;
         family.watch_duplicate = None;
-        drop(family.diagnostic_enrollment.take());
+        drop(family.purpose_enrollment.take());
         for member in family.members.iter_mut().flatten() {
             member.handle = None;
         }

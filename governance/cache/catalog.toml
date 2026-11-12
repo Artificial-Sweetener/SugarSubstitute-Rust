@@ -173,7 +173,7 @@ sources = [
     "crates/sugarsubstitute-supervision/src/durable_storage/files/observations.rs",
     "crates/sugarsubstitute-supervision/src/setup_storage/cache/tests/readers.rs",
 ]
-source_sha256 = "sha256:0185c0733bb11addeb05084058c8885bc48a24e444aad2e4d48ec0d14ce2dd25"
+source_sha256 = "sha256:1c9a34b595d959f68378ac7f58d62069468ac152479cb19c52a3292d5d69939b"
 namespace = "runtime-cache-v1"
 storage_schema = 1
 compatibility_epoch = 1

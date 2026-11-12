@@ -70,7 +70,7 @@ use sugarsubstitute_contracts::{
     lifecycle::{ProcessKey, ShutdownId},
 };
 use sugarsubstitute_crash::diagnostic_client::*;
-use sugarsubstitute_execution::{ExecutionClient, windows_diagnostic_pipe::*};
+use sugarsubstitute_execution::{ExecutionClient, windows_purpose_pipe::*};
 use sugarsubstitute_supervision::{
     LaunchEnvironment, RegistryAdmissionError, WindowsLaunchCommand, WindowsLaunchInput,
 };
@@ -166,7 +166,7 @@ pub(super) struct IncidentReporting {
     reporter_startup: Option<sugarsubstitute_execution::RegisteredStartupSource>,
     recovery_source: Option<recovery::CurrentReportSource>,
     launch_input: Option<delivery::LaunchDraft>,
-    session: Option<DiagnosticPipeSession>,
+    session: Option<PurposePipeSession>,
     session_installed: bool,
     launched: bool,
     process: Option<ProcessKey>,

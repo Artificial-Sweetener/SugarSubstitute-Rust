@@ -59,7 +59,7 @@ impl WindowsLaunchInput {
         captured: bool,
     ) -> Result<(), RegistryInputError> {
         if self.backend_custody.is_some()
-            || self.diagnostic.is_some()
+            || self.purpose.is_some()
             || self.lifecycle.is_some()
             || self.output.is_some()
             || self.fixture_events.is_some()

@@ -20,8 +20,6 @@ mod backend_custody;
 mod clock_callback;
 #[path = "current_admission_tests.rs"]
 mod current_admission;
-#[path = "diagnostic_tests.rs"]
-mod diagnostic;
 #[path = "dispatch_tests.rs"]
 mod dispatch;
 #[path = "dispatch_clock_tests.rs"]
@@ -36,6 +34,8 @@ mod identity_failures;
 mod late_input;
 #[path = "passive_read_tests.rs"]
 mod passive_read;
+#[path = "purpose_tests.rs"]
+mod purpose;
 #[path = "retirement_proof_tests.rs"]
 mod retirement_proof;
 fn run() -> TestResult<RunKey> {

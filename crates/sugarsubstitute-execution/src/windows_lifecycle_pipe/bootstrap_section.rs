@@ -234,7 +234,7 @@ impl Section {
                 crate::windows_lifecycle_pipe::captured::codec::BASE_BYTES
                     + crate::windows_lifecycle_pipe::captured::codec::PREFIX_BYTES
             }
-            super::Kind::Diagnostic(_) | super::Kind::Recovery => {
+            super::Kind::Purpose(_) | super::Kind::Recovery => {
                 return Err(failure("captured_mapping_purpose"));
             }
         };

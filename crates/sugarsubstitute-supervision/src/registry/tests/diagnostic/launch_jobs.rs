@@ -25,10 +25,10 @@ fn reporter_creation_before_watch_rejects_without_effects_and_same_pins_admit_in
     ));
     let retained = input
         .as_ref()
-        .and_then(|value| value.diagnostic.as_ref())
+        .and_then(|value| value.purpose.as_ref())
         .ok_or("Original diagnostic input lost")?;
     assert_eq!(retained.bootstrap.borrow_inheritance().section.as_raw_handle(), original);
-    assert!(retained.validates(key));
+    assert!(retained.validates(PurposeKey::Diagnostic(key)));
     assert!(h.registry.is_empty());
     assert_eq!(h.fake.creates.load(Ordering::Acquire), 0);
     assert_eq!(h.fake.resumes.load(Ordering::Acquire), 0);

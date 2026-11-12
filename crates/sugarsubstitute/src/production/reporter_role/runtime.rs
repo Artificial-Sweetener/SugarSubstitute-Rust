@@ -38,7 +38,7 @@ pub(super) struct ReporterSession {
     outgoing: [Option<OutputInput>; 8],
     encoding: Option<OwnedJob<EncodedOutput, OutputFailure>>,
     encoded: Option<JobCompletion<EncodedOutput, OutputFailure>>,
-    written: Option<sugarsubstitute_execution::diagnostic_pipe::LifecyclePipeOperationId>,
+    written: Option<sugarsubstitute_execution::purpose_pipe::LifecyclePipeOperationId>,
     next_request: u64,
     pending: Option<(ReportRequestId, ReportCommand, DiagnosticRequestId)>,
     rejected_control: Option<ControlResult>,

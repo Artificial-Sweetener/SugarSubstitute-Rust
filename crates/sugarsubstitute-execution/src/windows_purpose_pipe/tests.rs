@@ -5,18 +5,18 @@ use super::*;
 use crate::runtime_test_support::{Rig, TestResult, spec};
 use sugarsubstitute_contracts::{
     execution::{JobClass, ScopeId, ScopeSpec},
-    incident::DiagnosticSessionId,
+    incident::{DiagnosticKey, DiagnosticRole, DiagnosticSessionId},
     lifecycle::{CoordinatorEpoch, CoordinatorKey, NamespaceId},
 };
-fn key() -> TestResult<DiagnosticKey> {
-    Ok(DiagnosticKey::new(
+fn key() -> TestResult<PurposeKey> {
+    Ok(PurposeKey::Diagnostic(DiagnosticKey::new(
         CoordinatorKey {
             namespace: NamespaceId::new([1; 32]),
             epoch: CoordinatorEpoch::new([2; 16])?,
         },
         DiagnosticRole::Storage,
         DiagnosticSessionId::new(1)?,
-    ))
+    )))
 }
 #[test]
 fn actual_diagnostic_server_and_client_reject_job_deadline_before_any_effect() -> TestResult {
@@ -29,18 +29,18 @@ fn actual_diagnostic_server_and_client_reject_job_deadline_before_any_effect() -
     let mut job = spec(1, JobClass::NativeObservation, MIN_LIFECYCLE_PIPE_BYTES)?;
     job.deadline = Some(Moment::from_nanos(100));
     assert!(matches!(
-        rig.client.reserve_diagnostic_pipe_server(&scope, job, key()?, Moment::from_nanos(1000)),
+        rig.client.reserve_purpose_pipe_server(&scope, job, key()?, Moment::from_nanos(1000)),
         Err(LifecyclePipeAdmissionError::ConflictingDeadline)
     ));
     assert!(matches!(
-        rig.client.reserve_diagnostic_pipe_client(
+        rig.client.reserve_purpose_pipe_client(
             &scope,
             job,
-            DiagnosticRole::Storage,
+            Purpose::Diagnostic(DiagnosticRole::Storage),
             LifecyclePipeDeadline::new(1000, 100)?,
-            crate::DiagnosticPipeResources::Standard
+            crate::PurposePipeResources::Standard
         ),
-        Err(DiagnosticPipeAdmissionRejection {
+        Err(PurposePipeAdmissionRejection {
             error: LifecyclePipeAdmissionError::ConflictingDeadline,
             ..
         })
@@ -64,18 +64,18 @@ fn actual_diagnostic_server_and_client_reject_effective_ancestor_deadline_before
     )?;
     let job = spec(1, JobClass::NativeObservation, MIN_LIFECYCLE_PIPE_BYTES)?;
     assert!(matches!(
-        rig.client.reserve_diagnostic_pipe_server(&scope, job, key()?, Moment::from_nanos(1000)),
+        rig.client.reserve_purpose_pipe_server(&scope, job, key()?, Moment::from_nanos(1000)),
         Err(LifecyclePipeAdmissionError::ConflictingDeadline)
     ));
     assert!(matches!(
-        rig.client.reserve_diagnostic_pipe_client(
+        rig.client.reserve_purpose_pipe_client(
             &scope,
             job,
-            DiagnosticRole::Storage,
+            Purpose::Diagnostic(DiagnosticRole::Storage),
             LifecyclePipeDeadline::new(1000, 100)?,
-            crate::DiagnosticPipeResources::Standard
+            crate::PurposePipeResources::Standard
         ),
-        Err(DiagnosticPipeAdmissionRejection {
+        Err(PurposePipeAdmissionRejection {
             error: LifecyclePipeAdmissionError::ConflictingDeadline,
             ..
         })

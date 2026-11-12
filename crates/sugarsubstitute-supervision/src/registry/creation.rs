@@ -59,7 +59,7 @@ fn create_owned(
     }
     family.adopt_fixture_events(input)?;
     family.adopt_lifecycle(input)?;
-    family.adopt_diagnostic(input)?;
+    family.adopt_purpose(input)?;
     family.adopt_backend_custody(input)?;
     family.adopt_output(input, ticket.binding)?;
     family.prepare_inheritance()?;
@@ -73,7 +73,7 @@ fn create_owned(
     match ticket.binding {
         FamilyBinding::Desktop(run) => shared.port.enroll_desktop(family, run, ticket.process)?,
         FamilyBinding::Diagnostic(key) => {
-            shared.port.enroll_diagnostic(family, key, ticket.process)?
+            shared.port.enroll_purpose(family, PurposeKey::Diagnostic(key), ticket.process)?
         }
         FamilyBinding::BackendCustody(key) => {
             shared.port.enroll_backend_custody(family, key, ticket.process)?

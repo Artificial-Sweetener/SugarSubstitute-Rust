@@ -725,7 +725,7 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute-execution/src/symbol_admission.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:53cb626fdfa91e01af5fa01bd5fab94cdd8aea60b02739647432dad008e85f49"
+source_sha256 = "sha256:4bdd2c30a605526ad2916f9a1080f89239428f126eb2aea4c27f79a434e89727"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Execution clock, admitted memory or retained task metadata for: Admit fixed symbol work and transfer original output accounting through the sole execution owner. This receiver does not inspect filesystem state."
@@ -821,12 +821,12 @@ disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Characterize unread-response discard and genuine retained peer verification before checked EOF. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
-path = "crates/sugarsubstitute-execution/src/windows_diagnostic_pipe.rs"
+path = "crates/sugarsubstitute-execution/src/windows_purpose_pipe.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:654f90e6db6583cd6e08545f2a885661ba984297d53646b08fbafc454e496538"
+source_sha256 = "sha256:ddef1ccd7b1e0851ca38e5b7423adbad83ef70070055293076ab1a8fef203d39"
 capabilities = ["export public restricted capability std::os::windows::io::OwnedHandle"]
 disposition = "boundary"
-rationale = "Execution-owned native pipe, shared section, process or handle lifetime: Admit isolated diagnostic helper transport before native adoption or launch. Native object custody and original queue, memory and shutdown limits remain with the execution owner."
+rationale = "Execution-owned native pipe, shared section, process or handle lifetime: Admit isolated purpose-typed helper transport before native adoption or launch. Native object custody and original queue, memory and shutdown limits remain with the execution owner."
 boundary = "native_ipc"
 
 [[records]]
@@ -850,7 +850,7 @@ boundary = "native_ipc"
 [[records]]
 path = "crates/sugarsubstitute-execution/src/windows_lifecycle_pipe/bootstrap_section.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:23069116569f81c443b3fb0e463deb7ad4ac970c777a7b23d262960952aeb4b4"
+source_sha256 = "sha256:d88b82acea0c60b22fc869e67521663e8acd6643dec6e1505f1d0f0e041560e2"
 capabilities = ["CreateFileMappingW"]
 disposition = "boundary"
 rationale = "Execution-owned native pipe, shared section, process or handle lifetime: Retain mapped-view and fixed output accounting through checked section retirement. Native object custody and original queue, memory and shutdown limits remain with the execution owner."
@@ -867,7 +867,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Pro
 [[records]]
 path = "crates/sugarsubstitute-execution/src/windows_lifecycle_pipe/native.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:6891d41e0a0823bad9390380b294d6a88689dc9073e5047539b8a53cb6cb79ec"
+source_sha256 = "sha256:012b74f30c2fa7a4a7bb8119a24061d8bba3a2cffc9a1179b9cc454dba1503fb"
 capabilities = ["ReadFile", "WriteFile", "windows::Win32::Storage::FileSystem::*"]
 disposition = "boundary"
 rationale = "Execution-owned native pipe, shared section, process or handle lifetime: Confine overlapped pipes, bootstrap sections and credential inspection to native ownership. Native object custody and original queue, memory and shutdown limits remain with the execution owner."

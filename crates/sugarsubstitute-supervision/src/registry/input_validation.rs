@@ -21,7 +21,7 @@ impl WindowsProcessRegistry {
                 || original.profile_custody.is_some()
                 || original.managed_custody.is_some()
                 || original.backend_custody.is_some()
-                || original.diagnostic.is_some()
+                || original.purpose.is_some()
                 || original.lifecycle.is_some()
                 || original.output.is_some()
                 || original.fixture_events.is_some()
@@ -42,7 +42,7 @@ impl WindowsProcessRegistry {
         if let Some(profile) = &original.profile_custody
             && (binding!=FamilyBinding::Desktop(profile.value.key.run()) || !profile.value.identity.same_as(&self.identity)
                 || original.managed_custody.is_some() || original.backend_custody.is_some()
-                || original.diagnostic.is_some() || profile.value.published_ack.as_ref().is_none_or(|ack|
+                || original.purpose.is_some() || profile.value.published_ack.as_ref().is_none_or(|ack|
                     ack.receipt()!=sugarsubstitute_contracts::backend_custody::BackendCustodyReceipt::ProfilePublished(profile.value.key))) {
                 return Err(RegistryAdmissionError::InvalidSpecification);
         }
@@ -53,7 +53,7 @@ impl WindowsProcessRegistry {
         }
         if let FamilyBinding::BackendCustody(key) = binding {
             if original.backend_custody.as_ref().is_none_or(|launch| !launch.validates(key))
-                || original.diagnostic.is_some()
+                || original.purpose.is_some()
                 || original.lifecycle.is_some()
                 || original.output.is_some()
                 || original.fixture_events.is_some()
@@ -64,14 +64,17 @@ impl WindowsProcessRegistry {
             return Err(RegistryAdmissionError::InvalidSpecification);
         }
         if let FamilyBinding::Diagnostic(key) = binding {
-            if original.diagnostic.as_ref().is_none_or(|launch| !launch.validates(key))
+            if original
+                .purpose
+                .as_ref()
+                .is_none_or(|launch| !launch.validates(PurposeKey::Diagnostic(key)))
                 || original.lifecycle.is_some()
                 || original.output.is_some()
                 || original.fixture_events.is_some()
             {
                 return Err(RegistryAdmissionError::InvalidSpecification);
             }
-        } else if original.diagnostic.is_some() {
+        } else if original.purpose.is_some() {
             return Err(RegistryAdmissionError::InvalidSpecification);
         }
         if binding.owner() != self.owner {
