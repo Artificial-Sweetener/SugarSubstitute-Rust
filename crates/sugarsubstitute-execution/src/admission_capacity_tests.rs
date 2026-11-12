@@ -221,7 +221,8 @@ fn impossible_request_and_post_shutdown_guards_do_not_wake() -> TestResult {
         rig.client.submit_async(&rig.scope, spec(2, JobClass::IoLifecycle, LIMIT + 1)?, |_| {
             async { Ok::<_, ()>(()) }
         }),
-        Err(AdmissionError::MemorySaturated { .. })
+        Err(AdmissionError::ExceedsCapacity { requested_bytes, limit_bytes: LIMIT })
+            if requested_bytes == LIMIT + 1
     ));
     let before = rig.wake.count();
     drop(original);
@@ -349,3 +350,27 @@ mod credits;
 
 #[path = "admission_capacity_race_tests.rs"]
 mod races;
+
+/// A reservation above the whole budget is permanent even on an idle executor, while one
+/// that only exceeds what is free stays transient.
+#[test]
+fn a_reservation_above_the_whole_budget_is_permanent_and_one_above_the_free_part_is_not()
+-> TestResult {
+    let rig = Rig::new()?;
+    assert!(matches!(
+        rig.client.submit_async(&rig.scope, spec(1, JobClass::IoLifecycle, LIMIT + 1)?, |_| {
+            async { Ok::<_, ()>(()) }
+        }),
+        Err(AdmissionError::ExceedsCapacity { limit_bytes: LIMIT, .. })
+    ));
+    let held = retained_context(&rig, 2, 8)?;
+    drain(&rig)?;
+    assert!(matches!(
+        rig.client.submit_async(&rig.scope, spec(3, JobClass::IoLifecycle, LIMIT)?, |_| {
+            async { Ok::<_, ()>(()) }
+        }),
+        Err(AdmissionError::MemorySaturated { requested_bytes: LIMIT, .. })
+    ));
+    drop(held);
+    Ok(())
+}

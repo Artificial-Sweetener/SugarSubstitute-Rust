@@ -1569,7 +1569,7 @@ migrations = []
 id = "input-document-store-v1"
 owner = "sugarsubstitute"
 sources = ["crates/sugarsubstitute/src/input_documents.rs", "crates/sugarsubstitute/src/input_documents/files.rs"]
-source_sha256 = "sha256:2054d16e91a1142b933c9703c6a9b78a349bb95e43f0a30e57f20827b0e99446"
+source_sha256 = "sha256:b8e96e8f369349ab934f2bb5df35e228716f29424c596c9ca46f33358c631514"
 classification = "authored_document"
 preservation = "must_preserve"
 current_version = 1
@@ -1791,8 +1791,23 @@ source_sha256 = "sha256:e23df21e8b1d9eccb71acb6352115303f3755a2b92e7d322f314846c
 id = "close-save-record-v1"
 owner = "sugarsubstitute"
 sources = ["crates/sugarsubstitute/src/workspace_session/close_record.rs"]
-source_sha256 = "sha256:270b9733198fa2f2d837b77195a1ddaf800e976346cbda95f95d9853208e12ed"
+source_sha256 = "sha256:e1e157e6e98efdc74ae6926d500b373344d252b1ccf9de0ac14c2a7e65bc0b7c"
 classification = "authoritative_state"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
+# Originals of input documents' ComfyUI temporary or output files: content-addressed
+# `<sha256>.image` written once and shared, and `<sha256 of reference>.reference` naming the
+# digest each reference last acquired, in the input-canvas folder's bases directory.
+[[formats]]
+id = "input-document-retained-bases-v1"
+owner = "sugarsubstitute"
+sources = ["crates/sugarsubstitute/src/input_documents/bases.rs"]
+source_sha256 = "sha256:650746cea1f713c96c95b111dbef07e21a31870232162375105e495fd3f879fd"
+classification = "authored_document"
 preservation = "must_preserve"
 current_version = 1
 accepted_versions = [1]

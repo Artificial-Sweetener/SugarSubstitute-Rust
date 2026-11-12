@@ -10,12 +10,15 @@
 //!   recovery copy. Loading falls back to it when the current archive is rejected.
 //! - `input-documents.rejected-<sha256>.ssdoc`: a byte-exact copy of a current or recovery file
 //!   that failed validation, made before that file is ever replaced and named by its digest.
+//! - `bases\`: originals of documents' ComfyUI temporary files; see [`bases`].
 //!
 //! A rejected archive is an observable miss: loading reports it and returns no documents, and
 //! the host rebuilds from the workflow. Unrecognized files, including staging files left by an
 //! interrupted write, are never removed. All file work runs as owned jobs on the execution
 //! owner's blocking workers; [`Autosave`] coalesces bursts of document changes into one save.
 mod autosave;
+#[cfg(feature = "native-composition")]
+pub(crate) mod bases;
 mod files;
 #[cfg(all(windows, feature = "native-composition"))]
 pub(crate) mod legacy;

@@ -53,7 +53,16 @@ pub enum AdmissionError {
     },
     /// No terminal-delivery credit remains for another admitted job.
     CompletionSaturated,
-    /// The bounded retained-memory budget cannot admit this reservation.
+    /// The reservation exceeds the executor's whole retained-memory budget, so no release can
+    /// ever admit it. Callers treat this as permanent and never retry it.
+    ExceedsCapacity {
+        /// Requested retained-byte charge.
+        requested_bytes: u64,
+        /// The executor's whole retained-byte budget.
+        limit_bytes: u64,
+    },
+    /// The bounded retained-memory budget cannot admit this reservation now; an actual release
+    /// wakes the owner for a feasible retry.
     MemorySaturated {
         /// Requested retained-byte charge.
         requested_bytes: u64,
@@ -173,6 +182,11 @@ impl fmt::Debug for AdmissionError {
                 formatter.debug_struct("QueueSaturated").field("class", class).finish()
             }
             Self::CompletionSaturated => formatter.write_str("CompletionSaturated"),
+            Self::ExceedsCapacity { requested_bytes, limit_bytes } => formatter
+                .debug_struct("ExceedsCapacity")
+                .field("requested_bytes", requested_bytes)
+                .field("limit_bytes", limit_bytes)
+                .finish(),
             Self::MemorySaturated { requested_bytes, available_bytes } => formatter
                 .debug_struct("MemorySaturated")
                 .field("requested_bytes", requested_bytes)
@@ -248,6 +262,10 @@ impl fmt::Display for AdmissionError {
             Self::DeadlineRequired => {
                 formatter.write_str("Execution operation requires an original job deadline")
             }
+            Self::ExceedsCapacity { requested_bytes, limit_bytes } => write!(
+                formatter,
+                "Execution reservation requires {requested_bytes} bytes, more than the whole {limit_bytes}-byte budget"
+            ),
             Self::MemorySaturated { requested_bytes, available_bytes } => write!(
                 formatter,
                 "Execution reservation requires {requested_bytes} bytes with {available_bytes} available"

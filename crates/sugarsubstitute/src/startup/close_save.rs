@@ -76,7 +76,7 @@ impl<B: StartupBackend> StartupHost<B> {
             self.close_save = Some(CloseSave::begin(self.close_reason, now, budget.graceful_until));
             tracing::info!(
                 operation = "close_save",
-                reason = self.close_reason.as_str(),
+                reason = ?self.close_reason,
                 "Saving the workspace before closing"
             );
             #[cfg(all(windows, feature = "native-composition"))]
