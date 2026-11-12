@@ -14,8 +14,8 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Bound every setup hook that bundles source before its tests run, such as the Photoshop
- * contract suites' esbuild of native modules.
+ * Bound every setup hook that bundles or packages source before its tests run, such as the
+ * Photoshop contract suites' esbuild of native modules and builds of the UXP package.
  *
  * Bundling is CPU-bound and stretches with machine-wide load in a way the tests' observations
  * do not, so build setup shares this budget, as browser setup shares its own, while test bodies
