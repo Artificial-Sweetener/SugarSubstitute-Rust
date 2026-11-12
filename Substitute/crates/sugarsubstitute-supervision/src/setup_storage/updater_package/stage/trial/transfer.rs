@@ -66,7 +66,11 @@ impl UnstartedUpdaterTrial {
     ) -> Result<UpdaterProbeTransfer, RejectedUpdaterProbe> {
         let prepared = (|| -> Result<File, TrustFailure> {
             self.publish(now, context)?;
-            let exclusion = duplicate_inheritable(&self.prepared._preparation)?;
+            let exclusion = {
+                // The child adopts while this creator still holds its slot and handoff byte.
+                self.prepared._preparation.hold_handoff()?;
+                duplicate_inheritable(self.prepared._preparation.witness())?
+            };
             check(context)?;
             Ok(exclusion)
         })();
@@ -148,7 +152,10 @@ impl UpdaterProbeTransfer {
         let trial = self.trial.snapshot.begin_trial().map_err(io::Error::other)?;
         let next = match disposition {
             UpdaterProbeDisposition::Accepted => trial.accept(&self.trial.attempt),
-            UpdaterProbeDisposition::Rejected => trial.reject(&self.trial.attempt),
+            UpdaterProbeDisposition::Rejected => trial.reject(
+                &self.trial.attempt,
+                crate::setup_storage::selection::unix_now().map_err(io::Error::other)?,
+            ),
             UpdaterProbeDisposition::Unstarted => trial.cancel_unstarted_trial(&self.trial.attempt),
         }
         .map_err(io::Error::other)?;

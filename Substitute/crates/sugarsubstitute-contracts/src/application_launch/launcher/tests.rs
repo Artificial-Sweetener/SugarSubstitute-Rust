@@ -21,18 +21,18 @@ fn reader_and_entry_compatibility_are_independent() -> Result<(), Rejection> {
     let current = LauncherContract::decode(CURRENT_LAUNCHER_CONTRACT)?;
     let next_app =
         ApplicationContract::decode(br#"{"schema_version":1,"installed_launch_protocols":[5]}"#)?;
-    assert_eq!(current.require_application(&next_app, 2), Err(Rejection::Unsupported));
+    assert_eq!(current.require_application(&next_app, 3), Err(Rejection::Unsupported));
     let transition_app =
         ApplicationContract::decode(br#"{"schema_version":1,"installed_launch_protocols":[3,4]}"#)?;
-    current.require_application(&transition_app, 2)?;
-    assert_eq!(current.require_application(&transition_app, 3), Err(Rejection::InstallationSchema),);
+    current.require_application(&transition_app, 3)?;
+    assert_eq!(current.require_application(&transition_app, 4), Err(Rejection::InstallationSchema),);
     let next = LauncherContract::decode(
-        br#"{"schema_version":1,"installation_schemas":[2,3],"installed_launch_protocol":5}"#,
+        br#"{"schema_version":1,"installation_schemas":[3,4],"installed_launch_protocol":5}"#,
     )?;
-    next.require_application(&next_app, 2)?;
     next.require_application(&next_app, 3)?;
+    next.require_application(&next_app, 4)?;
     assert_eq!(
-        next.require_application(&ApplicationContract::decode(CURRENT_CONTRACT)?, 2),
+        next.require_application(&ApplicationContract::decode(CURRENT_CONTRACT)?, 3),
         Err(Rejection::Unsupported),
     );
     Ok(())
@@ -43,9 +43,9 @@ fn trial_entry_cannot_be_used_as_the_stable_launchers_accepted_entry() -> Result
     let application = ApplicationContract::decode(CURRENT_CONTRACT)?;
     application.require_installed_launch(crate::application_launch::TRIAL_LAUNCH_PROTOCOL)?;
     let launcher = LauncherContract::decode(
-        br#"{"schema_version":1,"installation_schemas":[2],"installed_launch_protocol":4}"#,
+        br#"{"schema_version":1,"installation_schemas":[3],"installed_launch_protocol":4}"#,
     )?;
-    assert_eq!(launcher.require_application(&application, 2), Err(Rejection::Unsupported));
+    assert_eq!(launcher.require_application(&application, 3), Err(Rejection::Unsupported));
     Ok(())
 }
 
@@ -78,22 +78,34 @@ fn malformed_launcher_declarations_cannot_claim_capabilities() {
 }
 
 #[test]
-fn launcher_replacement_preserves_reader_and_produced_entry() -> Result<(), Rejection> {
-    let previous = LauncherContract::decode(CURRENT_LAUNCHER_CONTRACT)?;
-    previous.require_replacement_of(&previous, 2)?;
-    for (schemas, protocol, expected) in
-        [(json!([3]), 3, Rejection::InstallationSchema), (json!([2]), 1, Rejection::Unsupported)]
-    {
-        let declaration = json!({"schema_version":1,"installation_schemas":schemas,"installed_launch_protocol":protocol}).to_string();
-        let next = LauncherContract::decode(declaration.as_bytes())?;
-        assert_eq!(next.require_replacement_of(&previous, 2), Err(expected));
+fn only_launchers_that_read_the_launch_pointer_become_the_stable_entry() -> Result<(), Rejection> {
+    LauncherContract::decode(CURRENT_LAUNCHER_CONTRACT)?.require_stable_entry()?;
+    // Any selection reader or produced protocol qualifies: the stable entry uses neither.
+    let other = LauncherContract::decode(
+        br#"{"schema_version":1,"installation_schemas":[9],"installed_launch_protocol":7,"launch_pointer_schemas":[1,2]}"#,
+    )?;
+    other.require_stable_entry()?;
+    for declaration in [
+        br#"{"schema_version":1,"installation_schemas":[3],"installed_launch_protocol":3}"#.as_slice(),
+        br#"{"schema_version":1,"installation_schemas":[3],"installed_launch_protocol":3,"launch_pointer_schemas":[2]}"#,
+    ] {
+        assert_eq!(
+            LauncherContract::decode(declaration)?.require_stable_entry(),
+            Err(Rejection::Unsupported)
+        );
+    }
+    for invalid in [
+        br#"{"schema_version":1,"installation_schemas":[3],"installed_launch_protocol":3,"launch_pointer_schemas":[0]}"#.as_slice(),
+        br#"{"schema_version":1,"installation_schemas":[3],"installed_launch_protocol":3,"launch_pointer_schemas":[2,1]}"#,
+    ] {
+        assert_eq!(LauncherContract::decode(invalid).err(), Some(Rejection::Format));
     }
     Ok(())
 }
 
 /// Launch protocols 1 (accepted) and 2 (trial) transferred schema 1 selections. A launcher and
 /// an application on opposite sides of that change refuse each other before any process is
-/// created, and the stable entry is never replaced by a launcher the accepted release cannot use.
+/// created.
 #[test]
 fn launchers_and_applications_from_before_selection_schema_two_refuse_each_other()
 -> Result<(), Rejection> {
@@ -120,13 +132,7 @@ fn launchers_and_applications_from_before_selection_schema_two_refuse_each_other
         current_launcher.require_application(&previous_app, schema),
         Err(Rejection::Unsupported)
     );
-    assert_eq!(
-        current_launcher.require_replacement_of(&previous_launcher, schema),
-        Err(Rejection::Unsupported)
-    );
-    assert_eq!(
-        previous_launcher.require_replacement_of(&current_launcher, schema),
-        Err(Rejection::InstallationSchema)
-    );
+    // A launcher from before the thin stable entry never becomes the stable entry.
+    assert_eq!(previous_launcher.require_stable_entry(), Err(Rejection::Unsupported));
     Ok(())
 }

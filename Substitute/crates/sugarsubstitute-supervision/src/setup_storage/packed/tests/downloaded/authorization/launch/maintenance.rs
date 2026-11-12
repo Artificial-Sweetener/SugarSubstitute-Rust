@@ -249,7 +249,11 @@ fn configuration_captured_before_a_new_acceptance_cannot_populate_another_genera
                 1,
             )?,
         };
-        let staging = before.prepare(generation.clone(), PreparationIntent::Automatic)?;
+        let staging = before.prepare(
+            generation.clone(),
+            PreparationIntent::Automatic,
+            crate::setup_storage::selection::unix_now()?,
+        )?;
         store.compare_exchange(&before, &staging, context)?;
         let prepared = staging.prepared(&generation)?;
         store.compare_exchange(&staging, &prepared, context)?;

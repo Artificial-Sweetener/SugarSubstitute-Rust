@@ -82,7 +82,7 @@ fn obsolete_staging_and_completed_releases_are_superseded_without_changing_healt
             assert_eq!(reserved.revision(), before.revision() + 1);
             assert_eq!(reserved.accepted(), before.accepted());
             assert_eq!(reserved.retained(), before.retained());
-            assert_eq!(reserved.rejected(), before.rejected());
+            assert_eq!(reserved.strikes(), before.strikes());
             let replacement = reserved.candidate().ok_or("Replacement absent")?.generation();
             assert_ne!(replacement.id, previous.id);
             let runtime = prepared.maintenance_runtime().ok_or("Runtime absent")?.clone();

@@ -25,6 +25,7 @@ pub static ZH_HANS: ReportMessages = ReportMessages {
     unexplained: "原因不明的终止",
     host_failed: "应用程序报告了错误",
     startup_failed: "启动失败",
+    reinstall_needed: "需要重新安装 SugarSubstitute。您的文件和设置都会保留。",
     panic: "Rust 恐慌",
     abort: "中止",
     native_fault: "原生异常",

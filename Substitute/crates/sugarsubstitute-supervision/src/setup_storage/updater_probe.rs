@@ -16,10 +16,13 @@ use sugarsubstitute_contracts::{
 /// Child-owned updater exclusion; capture alone grants no repository or health authority.
 /// Keep this owner through probe execution and execution-owner retirement. Its inheritance bit
 /// is cleared at capture, preventing unrelated descendants from retaining updater exclusion.
+/// The first verification adopts the creator's exclusion into this process, so it survives
+/// the creator's exit until this owner is dropped.
 pub struct InheritedUpdaterProbe {
     pub(super) installation: PathBuf,
     pub(super) request: ProbeRequest,
     pub(super) exclusion: File,
+    pub(super) adopted: std::sync::Mutex<Option<crate::durable_storage::protection::SlotExclusion>>,
 }
 
 impl InheritedUpdaterProbe {
@@ -42,7 +45,12 @@ pub unsafe fn capture_updater_probe(
     let Some((installation, request, raw)) = parse(arguments)? else { return Ok(None) };
     // SAFETY: the initial-entry caller supplies the unique ownership and no-reuse contract.
     let exclusion = unsafe { capture_disk(raw) }?;
-    Ok(Some(InheritedUpdaterProbe { installation, request, exclusion }))
+    Ok(Some(InheritedUpdaterProbe {
+        installation,
+        request,
+        exclusion,
+        adopted: std::sync::Mutex::new(None),
+    }))
 }
 
 /// Bound every untrusted argument before interpreting a numeric handle as ownership.

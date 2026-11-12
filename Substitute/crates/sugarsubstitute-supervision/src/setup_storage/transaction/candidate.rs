@@ -37,14 +37,6 @@ pub struct PreparedCandidate {
     evidence: Evidence,
 }
 impl PreparedCandidate {
-    /// Native launch transfer retains the actual candidate files and all pinned ancestors.
-    pub(super) fn launch_pins(&self) -> impl Iterator<Item = &File> {
-        self.directory
-            .native_pins()
-            .chain(self.installation.native_pins())
-            .chain(self._payload.launch_pins())
-    }
-
     /// Exact generation recorded as prepared, with its verified manifest digest.
     pub fn generation(&self) -> &Generation {
         &self.generation
@@ -153,8 +145,9 @@ impl PreparedInstallation {
                 };
                 let staging = match original.candidate() {
                     None => {
+                        let now = super::super::selection::unix_now().map_err(io::Error::other)?;
                         let staging = original
-                            .prepare(generation.clone(), authorization.request.intent)
+                            .prepare(generation.clone(), authorization.request.intent, now)
                             .map_err(io::Error::other)?;
                         store
                             .compare_exchange(&original, &staging, context)

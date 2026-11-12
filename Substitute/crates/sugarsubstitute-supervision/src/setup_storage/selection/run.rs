@@ -2,10 +2,12 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Bind activation to live OS custody and a non-serializable current-attempt token.
 use super::{SelectionFailure, SelectionStore};
+mod fallback;
 mod launch;
 mod recovery;
 mod settlement;
 mod unstarted;
+pub(in crate::setup_storage) use settlement::unix_now;
 pub(crate) use unstarted::UnstartedTrial;
 #[allow(unsafe_code)]
 mod transfer;
@@ -70,7 +72,7 @@ impl InstallationRun {
     ) -> Result<Self, SelectionFailure> {
         let lock = store.protected(context, |protection| {
             let lock = protection
-                .exclusive_rendezvous(&store.root.path().join(LOCK), context)
+                .transferable_rendezvous(&store.root.path().join(LOCK), context)
                 .map_err(classify_run_open)?;
             let _reader = super::reader(&store.root, protection, context)?;
             store.read(protection)?.ok_or(SelectionFailure::Missing)?;
@@ -114,7 +116,9 @@ impl InstallationRun {
     }
 
     /// Commit the owned attempt after authenticated native readiness confirms application health.
-    /// The caller supplies that observation; a token alone is not health evidence.
+    /// The caller supplies that observation; a token alone is not health evidence. Contention
+    /// from another process reading or writing the record is waited out until `context` is
+    /// cancelled or expires, so a second launch never costs a healthy trial its acceptance.
     /// # Errors
     /// Rejects another run's token, stale or duplicate completion and native publication failure.
     pub fn accept(
@@ -124,22 +128,9 @@ impl InstallationRun {
     ) -> Result<InstallationRecord, SelectionFailure> {
         self.check_trial(trial)?;
         let next = trial.snapshot.accept(&trial.attempt)?;
-        self.custody.store.replace(&trial.snapshot, &next, context)?;
-        Ok(next)
-    }
-
-    /// Reject the owned attempt after actual native custody confirms its family has settled.
-    /// The accepted generation remains selected and this package is quarantined from auto retry.
-    /// # Errors
-    /// Rejects another run's token, stale or duplicate completion and native publication failure.
-    pub fn reject(
-        &self,
-        trial: &OwnedTrial,
-        context: &JobContext,
-    ) -> Result<InstallationRecord, SelectionFailure> {
-        self.check_trial(trial)?;
-        let next = trial.snapshot.reject(&trial.attempt)?;
-        self.custody.store.replace(&trial.snapshot, &next, context)?;
+        settlement::through_contention(context, || {
+            self.custody.store.replace(&trial.snapshot, &next, context)
+        })?;
         Ok(next)
     }
 

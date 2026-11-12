@@ -14,14 +14,14 @@ fn main() -> std::process::ExitCode {
             )
         };
         #[allow(unsafe_code)]
-        // SAFETY: the mutually exclusive probe parser captures nothing for activation entry;
-        // diagnostics and workers have not started, so the inherited channel has no local owner.
-        let activation = unsafe {
-            sugarsubstitute_supervision::application_launch::broker::capture_activation(
+        // SAFETY: the mutually exclusive probe parser captures nothing for the engine entry;
+        // diagnostics and workers have not started, so the inherited event has no local owner.
+        let engine = unsafe {
+            sugarsubstitute_supervision::application_launch::capture_engine_launch(
                 std::env::args_os().skip(1),
             )
         };
-        sugarsubstitute::updates::entry(probe, activation)
+        sugarsubstitute::updates::entry(probe, engine)
     }
     #[cfg(not(all(windows, feature = "windows-native-host")))]
     {

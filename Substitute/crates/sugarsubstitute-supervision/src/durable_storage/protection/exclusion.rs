@@ -5,27 +5,35 @@ use super::*;
 use windows::Win32::Foundation::ERROR_SHARING_VIOLATION;
 
 impl Protection {
-    /// Verify actual file identity, protection, empty contents and all three sharing exclusions.
-    /// The caller pins the canonical parent and retains the supplied inherited file throughout.
-    /// Metadata-only access is permitted by Windows even when data/delete sharing is denied.
+    /// Verify a transferred witness: actual identity, protection and empty contents of the
+    /// canonical rendezvous, and that some live owner holds an exclusion slot on it right now.
+    /// The caller pins the canonical parent and retains the supplied witness throughout.
+    /// # Errors
+    /// Rejects foreign, unprotected, nonempty or link objects and a released exclusion.
     pub(crate) fn verify_exclusive_rendezvous(
         &self,
         file: &File,
         path: &Path,
         context: &JobContext,
     ) -> io::Result<()> {
-        check(context)?;
-        self.verify_file(file)?;
-        let metadata = file.metadata()?;
-        if !metadata.is_file() || metadata.file_attributes() & 0x400 != 0 || metadata.len() != 0 {
-            return Err(super::super::invalid("Inherited run rendezvous is not an empty file"));
+        self.verify_rendezvous_identity(file, path, context)?;
+        let probe = open_existing(path, FILE_GENERIC_READ.0).map_err(io::Error::other)?;
+        if !super::slots::slots_held(&probe)? {
+            return Err(super::super::invalid("Inherited exclusion is no longer held"));
         }
-        let named = open_existing(path, 0).map_err(io::Error::other)?;
-        if crate::durable_storage::files::file_identity(file)?
-            != crate::durable_storage::files::file_identity(&named)?
-        {
-            return Err(super::super::invalid("Inherited run belongs to another native object"));
-        }
+        check(context)
+    }
+
+    /// Verify actual file identity, protection, empty contents and all three sharing exclusions.
+    /// The caller pins the canonical parent and retains the supplied inherited file throughout.
+    /// Metadata-only access is permitted by Windows even when data/delete sharing is denied.
+    pub(crate) fn verify_transferable_rendezvous(
+        &self,
+        file: &File,
+        path: &Path,
+        context: &JobContext,
+    ) -> io::Result<()> {
+        self.verify_rendezvous_identity(file, path, context)?;
         for access in [FILE_READ_DATA.0, FILE_WRITE_DATA.0, DELETE.0] {
             match open_existing(path, access) {
                 Err(cause)
@@ -40,6 +48,30 @@ impl Protection {
             }
         }
         check(context)
+    }
+
+    /// The witness is this protection's empty regular file at the canonical rendezvous path.
+    fn verify_rendezvous_identity(
+        &self,
+        file: &File,
+        path: &Path,
+        context: &JobContext,
+    ) -> io::Result<()> {
+        check(context)?;
+        self.verify_file(file)?;
+        let metadata = file.metadata()?;
+        if !metadata.is_file() || metadata.file_attributes() & 0x400 != 0 || metadata.len() != 0 {
+            return Err(super::super::invalid("Inherited rendezvous is not an empty file"));
+        }
+        let named = open_existing(path, 0).map_err(io::Error::other)?;
+        if crate::durable_storage::files::file_identity(file)?
+            != crate::durable_storage::files::file_identity(&named)?
+        {
+            return Err(super::super::invalid(
+                "Inherited rendezvous belongs to another native object",
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -83,10 +115,12 @@ mod tests {
                 ] {
                     let file = protection.open_file(&path, OPEN_ALWAYS, sharing, context)?;
                     file.try_lock().map_err(io::Error::from)?;
-                    assert!(protection.verify_exclusive_rendezvous(&file, &path, context).is_err());
+                    assert!(
+                        protection.verify_transferable_rendezvous(&file, &path, context).is_err()
+                    );
                 }
-                let exclusive = protection.exclusive_rendezvous(&path, context)?;
-                protection.verify_exclusive_rendezvous(&exclusive, &path, context)?;
+                let exclusive = protection.transferable_rendezvous(&path, context)?;
+                protection.verify_transferable_rendezvous(&exclusive, &path, context)?;
                 Ok(())
             })?;
             Ok(())
@@ -100,19 +134,21 @@ mod tests {
             let parent = Directory::open(temporary.path(), false)?;
             let path = parent.path().join("run");
             with(context, |protection| {
-                let original = protection.exclusive_rendezvous(&path, context)?;
+                let original = protection.transferable_rendezvous(&path, context)?;
                 let duplicate = original.try_clone()?;
                 drop(original);
-                protection.verify_exclusive_rendezvous(&duplicate, &path, context)?;
+                protection.verify_transferable_rendezvous(&duplicate, &path, context)?;
                 let foreign_path = parent.path().join("foreign");
-                let foreign = protection.exclusive_rendezvous(&foreign_path, context)?;
-                assert!(protection.verify_exclusive_rendezvous(&foreign, &path, context).is_err());
+                let foreign = protection.transferable_rendezvous(&foreign_path, context)?;
+                assert!(
+                    protection.verify_transferable_rendezvous(&foreign, &path, context).is_err()
+                );
                 drop(duplicate);
                 let mut nonempty = protection.file(&parent.path().join("nonempty"), context)?;
                 nonempty.write_all(b"unknown")?;
                 assert!(
                     protection
-                        .verify_exclusive_rendezvous(
+                        .verify_transferable_rendezvous(
                             &nonempty,
                             &parent.path().join("nonempty"),
                             context

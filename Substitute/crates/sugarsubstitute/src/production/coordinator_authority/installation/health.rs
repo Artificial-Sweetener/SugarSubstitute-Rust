@@ -15,7 +15,9 @@ const fn health_publication_deadline() -> Moment {
 
 impl CoordinatorAuthority {
     /// Called only after current native main/browser/backend authorization accepted its reveal.
-    /// The publication begins here, after readiness, and never bounds provisioning.
+    /// The publication begins here, after readiness, and never bounds provisioning. Nothing about
+    /// publishing acceptance can close a healthy app: a publication that cannot start or finish
+    /// leaves the app open and the trial ends without a verdict.
     pub(crate) fn accept_installation(
         &mut self,
         client: &ExecutionClient,
@@ -30,6 +32,29 @@ impl CoordinatorAuthority {
             self.installation.publish_shell(client, scope, jobs);
             return Ok(());
         }
+        self.start_health(client, scope, jobs)
+    }
+
+    /// Retry a health publication whose admission found execution capacity full, once a
+    /// completion batch has released some.
+    pub(in super::super) fn retry_health(
+        &mut self,
+        client: &ExecutionClient,
+        scope: &Scope,
+        jobs: &JobSequence,
+    ) -> Result<(), AuthorityIssue> {
+        if self.serving() && self.installation.health_waiting() {
+            return self.start_health(client, scope, jobs);
+        }
+        Ok(())
+    }
+
+    fn start_health(
+        &mut self,
+        client: &ExecutionClient,
+        scope: &Scope,
+        jobs: &JobSequence,
+    ) -> Result<(), AuthorityIssue> {
         let spec = self.spec(
             client,
             scope,
@@ -37,10 +62,8 @@ impl CoordinatorAuthority {
             setup_storage::SELECTION_PUBLICATION_RESERVATION_BYTES,
             health_publication_deadline(),
         )?;
-        self.installation.accept_ready(client, scope, spec).map_err(|cause| {
-            self.fail(Failure::InstallationAdmission(cause));
-            AuthorityIssue::Adapter
-        })
+        self.installation.accept_ready(client, scope, spec);
+        Ok(())
     }
 }
 

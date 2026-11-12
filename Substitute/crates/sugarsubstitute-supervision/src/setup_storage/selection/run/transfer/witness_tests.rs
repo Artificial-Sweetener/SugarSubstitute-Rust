@@ -8,6 +8,12 @@ use crate::setup_storage::{
 };
 use std::io::Write;
 
+/// The custody witness saw the coordinator crash before it settled the trial.
+const CRASHED: sugarsubstitute_contracts::installation::TrialVerdict =
+    sugarsubstitute_contracts::installation::TrialVerdict::Bad(
+        sugarsubstitute_contracts::installation::BadTrial::Crashed,
+    );
+
 /// Duplicate actual native transfer handles; no persisted record substitutes for custody.
 fn inherited(transfer: &TrialWitnessTransfer) -> io::Result<InheritedTrial> {
     Ok(InheritedTrial {
@@ -34,13 +40,81 @@ fn witness_retains_native_exclusion_after_all_sender_custody_is_dropped() -> Tes
         assert_eq!(witness.attempt(), &attempt);
         assert_eq!(store.load(context)?, Some(original.clone()));
         assert!(std::fs::rename(&generation, generation.with_extension("moved")).is_err());
-        let rejected = witness.finish_settled(context)?;
-        assert_eq!(rejected, original.reject(&attempt)?);
-        assert_eq!(witness.finish_settled(context)?, rejected);
+        let rejected = witness.finish_settled(CRASHED, context)?;
+        assert_eq!(
+            rejected,
+            original.reject(&attempt, rejected.strikes().first().ok_or("Strike absent")?.at)?
+        );
+        assert_eq!(witness.finish_settled(CRASHED, context)?, rejected);
         assert!(InstallationRun::acquire(store.clone(), context).is_err());
         drop(witness);
         let _successor = InstallationRun::acquire(store.clone(), context)?;
         assert_eq!(store.load(context)?, Some(rejected));
+        Ok(())
+    })
+}
+
+/// Task Manager or a forced shutdown ending the coordinator is not the release's fault: the
+/// witness returns the candidate to prepared, so the next launch tries it again.
+#[test]
+fn witness_returns_a_trial_whose_coordinator_was_ended_from_outside_to_prepared() -> TestResult {
+    worker::run_reserved(SIGNED_INSTALLER_RESERVATION_BYTES, |context, _| {
+        let root = tempfile::tempdir()?;
+        let application = shell_tests::trial(root.path(), context)?;
+        let store = Arc::new(SelectionStore::open(root.path(), context)?);
+        let transfer = application.prepare_witness(context)?;
+        let witness = TrialWitness::receive(
+            store.clone(),
+            inherited(&transfer)?,
+            application.directory(),
+            context,
+        )?;
+        let attempt = application.attempt().clone();
+        drop(application);
+        drop(transfer);
+        let ended = sugarsubstitute_contracts::installation::HostExit::Ended(1).verdict();
+        let released = witness.finish_settled(ended, context)?;
+        assert_eq!(
+            released.candidate(),
+            Some(&Candidate::Prepared { generation: attempt.generation.clone() })
+        );
+        assert!(released.strikes().is_empty());
+        assert!(released.rollback().is_none());
+        assert_eq!(witness.finish_settled(CRASHED, context)?, released);
+        assert_eq!(store.load(context)?, Some(released));
+        Ok(())
+    })
+}
+
+/// At a session end the coordinator settles its unaccepted trial at once. When Windows then
+/// ends the coordinator, whatever exit status the witness sees, the no verdict stands.
+#[test]
+fn a_session_end_settlement_survives_the_forced_end_that_follows() -> TestResult {
+    use sugarsubstitute_contracts::installation::{HostExit, TrialVerdict, Undecided};
+    worker::run_reserved(SIGNED_INSTALLER_RESERVATION_BYTES, |context, _| {
+        let root = tempfile::tempdir()?;
+        let application = shell_tests::trial(root.path(), context)?;
+        let store = Arc::new(SelectionStore::open(root.path(), context)?);
+        let transfer = application.prepare_witness(context)?;
+        let witness = TrialWitness::receive(
+            store.clone(),
+            inherited(&transfer)?,
+            application.directory(),
+            context,
+        )?;
+        let session_end = TrialVerdict::NoVerdict(Undecided::SessionEnd);
+        let released = application.finish_settled(session_end, context)?;
+        assert!(matches!(released.candidate(), Some(Candidate::Prepared { .. })));
+        drop(application);
+        drop(transfer);
+        for status in [1, 0xC000_013A, 0xC000_0005] {
+            assert_eq!(
+                witness.finish_settled(HostExit::Ended(status).verdict(), context)?,
+                released
+            );
+        }
+        assert!(released.strikes().is_empty());
+        assert_eq!(store.load(context)?, Some(released));
         Ok(())
     })
 }
@@ -61,8 +135,8 @@ fn witness_preserves_coordinator_acceptance_after_sender_retirement() -> TestRes
         let accepted = application.accept(context)?;
         drop(application);
         drop(transfer);
-        assert_eq!(witness.finish_settled(context)?, accepted);
-        assert_eq!(witness.finish_settled(context)?, accepted);
+        assert_eq!(witness.finish_settled(CRASHED, context)?, accepted);
+        assert_eq!(witness.finish_settled(CRASHED, context)?, accepted);
         assert_eq!(store.load(context)?, Some(accepted));
         assert!(InstallationRun::acquire(store, context).is_err());
         Ok(())
@@ -152,7 +226,7 @@ fn lost_witness_finalization_result_replays_without_reacquiring_run_ownership() 
         )?;
         drop(application);
         drop(transfer);
-        let finalized = witness.finish_settled(context)?;
+        let finalized = witness.finish_settled(CRASHED, context)?;
         *output.lock().map_err(|_| "Retention poisoned")? = Some((root, store, witness, finalized));
         clock.expire();
         Ok(())
@@ -161,7 +235,7 @@ fn lost_witness_finalization_result_replays_without_reacquiring_run_ownership() 
         let state = retained.lock().map_err(|_| "Retention poisoned")?;
         let (_root, store, witness, finalized) = state.as_ref().ok_or("Witness custody lost")?;
         assert!(InstallationRun::acquire(store.clone(), context).is_err());
-        assert_eq!(&witness.finish_settled(context)?, finalized);
+        assert_eq!(&witness.finish_settled(CRASHED, context)?, finalized);
         assert_eq!(store.load(context)?.as_ref(), Some(finalized));
         Ok(())
     })

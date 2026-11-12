@@ -22,6 +22,11 @@ pub struct UpdateSelection {
     /// stayed accepted in its place; a trial that ends without a verdict never sets it.
     /// `None` again once a newer release is accepted.
     pub rollback: Option<Rollback>,
+    /// The newer release whose files were found damaged, so the running generation started in
+    /// its place while an update check downloads it again. This is not a bad verdict. Shown as
+    /// "SugarSubstitute is running the previous version while it repairs the update."
+    /// `None` again once that release is accepted.
+    pub repairing: Option<InstalledRelease>,
 }
 
 /// An installed generation and the signed offer label it was prepared from.
@@ -104,6 +109,11 @@ impl UpdateSelection {
                 rejected_generation: rejected.id.clone(),
                 rejected_version: rejected.release.version().to_owned(),
                 rejected_release_sequence: rejected.release.sequence(),
+            }),
+            repairing: record.repair().map(|damaged| InstalledRelease {
+                generation: damaged.id.clone(),
+                version: damaged.release.version().to_owned(),
+                release_sequence: damaged.release.sequence(),
             }),
         })
     }

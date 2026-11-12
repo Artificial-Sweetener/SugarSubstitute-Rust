@@ -10,6 +10,7 @@ use std::{
     num::NonZeroUsize,
     sync::{Condvar, Mutex},
 };
+use sugarsubstitute_contracts::installation::HostExit;
 use sugarsubstitute_execution::ExecutionOwner;
 type TestResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
@@ -117,17 +118,17 @@ fn readiness_and_settlement_require_consumed_completions_and_original_cutoff() -
     assert!(crate::registry::lock(&rig.control.0.data).witness.is_some());
     rig.service.observe(&batch)?;
     assert!(rig.control.ready()?);
-    assert!(!rig.control.settle(Moment::from_nanos(3_000_000_000), false)?);
+    assert!(!rig.control.settle(Moment::from_nanos(3_000_000_000), None)?);
     assert!(rig.control.ready()?);
     let cutoff = Moment::from_nanos(4_000_000_000);
-    assert!(!rig.control.settle(cutoff, true)?);
-    assert!(!rig.control.settle(Moment::from_nanos(9_000_000_000), true)?);
+    assert!(!rig.control.settle(cutoff, Some(HostExit::Finished))?);
+    assert!(!rig.control.settle(Moment::from_nanos(9_000_000_000), Some(HostExit::Finished))?);
     assert_eq!(crate::registry::lock(&rig.control.0.data).until, Some(cutoff));
     rig.advance()?;
     let batch = rig.completion()?;
-    assert!(!rig.control.settle(cutoff, true)?);
+    assert!(!rig.control.settle(cutoff, Some(HostExit::Finished))?);
     rig.service.observe(&batch)?;
-    assert!(rig.control.settle(cutoff, true)?);
+    assert!(rig.control.settle(cutoff, Some(HostExit::Finished))?);
     assert!(crate::registry::lock(&rig.control.0.data).witness.is_some());
     Ok(())
 }
@@ -166,18 +167,18 @@ fn closing_during_admission_keeps_first_cutoff_and_survives_native_scope_cancell
     let native =
         rig.client.create_native_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?;
     let cutoff = Moment::from_nanos(4_000_000_000);
-    assert!(!rig.control.settle(cutoff, true)?);
+    assert!(!rig.control.settle(cutoff, Some(HostExit::Finished))?);
     native.cancel();
     rig.advance()?;
     let batch = rig.completion()?;
     rig.service.observe(&batch)?;
     assert!(rig.control.ready()?);
-    assert!(!rig.control.settle(Moment::from_nanos(9_000_000_000), true)?);
+    assert!(!rig.control.settle(Moment::from_nanos(9_000_000_000), Some(HostExit::Finished))?);
     assert_eq!(crate::registry::lock(&rig.control.0.data).until, Some(cutoff));
     rig.advance()?;
     let batch = rig.completion()?;
     rig.service.observe(&batch)?;
-    assert!(rig.control.settle(cutoff, true)?);
+    assert!(rig.control.settle(cutoff, Some(HostExit::Finished))?);
     assert!(native.snapshot().cancellation_requested);
     Ok(())
 }

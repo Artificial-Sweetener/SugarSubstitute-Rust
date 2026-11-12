@@ -48,6 +48,11 @@ pub trait HeadlessLifetime {
     /// # Errors
     /// Preserve the original cause; subsequent polling must still observe actual settlement.
     fn request_shutdown(&mut self) -> Result<(), Box<dyn Error>>;
+    /// Windows is ending the session; it may end this process soon without a close. A role
+    /// with a decision that must be durable before then publishes it here, on the main thread
+    /// and without waiting. The session end itself arrives through the role's ordinary close.
+    /// Roles with nothing to publish keep this default.
+    fn session_ending(&mut self) {}
     /// Report true only after actual jobs, terminal disposal, notifications and workers settle.
     /// A deadline/cancellation/kill request cannot count as joined or native settlement.
     /// # Errors

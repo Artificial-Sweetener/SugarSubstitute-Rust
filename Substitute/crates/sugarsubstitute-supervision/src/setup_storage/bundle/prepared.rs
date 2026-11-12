@@ -18,14 +18,6 @@ pub(in crate::setup_storage) struct VerifiedRuntime {
 }
 
 impl VerifiedRuntime {
-    /// Borrow every verified payload file and its resolved ancestry for native custody transfer.
-    /// The receiver duplicates these exact objects; reopening their paths would lose the pins.
-    pub(in crate::setup_storage) fn launch_pins(&self) -> impl Iterator<Item = &std::fs::File> {
-        self._inputs
-            .iter()
-            .flat_map(|input| std::iter::once(&input.file).chain(input._parent.native_pins()))
-    }
-
     /// Admit runtime files from an already prepared, authenticated generation.
     /// Known diagnostic files do not participate in launch admission, even when absent or damaged.
     pub(in crate::setup_storage) fn open(

@@ -7,7 +7,8 @@ use std::ffi::OsStr;
 use sugarsubstitute_contracts::installation::Trial;
 
 impl InheritedUpdaterProbe {
-    /// Verify exclusive native custody and the actual running image's complete trial identity.
+    /// Adopt the creator's updater exclusion on first use, then verify it and the actual running
+    /// image's complete trial identity.
     /// The caller supplies its own current executable and repository trust from producing policy.
     /// Run on an admitted storage worker with the ordinary probe verification reservation.
     /// This is read-only verification; the creator must observe process settlement separately.
@@ -21,7 +22,7 @@ impl InheritedUpdaterProbe {
     ) -> Result<(), TrustFailure> {
         trust.verify_installation(&self.installation, context)?;
         trust.protected(context, |protection| {
-            trust.verify_updater_preparation(&self.exclusion, protection, context)
+            trust.adopt_updater_preparation(&self.exclusion, &self.adopted, protection, context)
         })?;
         trust.verify_updater_probe(executable, self.request.attempt(), context)?;
         check(context)?;

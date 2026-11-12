@@ -47,7 +47,7 @@ fn interrupted_supersession_reopens_its_reserved_generation_and_preserves_the_pr
         assert_eq!(reserved.revision(), before.revision() + 1);
         assert_eq!(reserved.accepted(), before.accepted());
         assert_eq!(reserved.retained(), before.retained());
-        assert_eq!(reserved.rejected(), before.rejected());
+        assert_eq!(reserved.strikes(), before.strikes());
         let replacement = reserved.candidate().ok_or("Candidate absent")?.generation();
         assert_ne!(replacement.id, previous.id);
         let path = fixture.installation.path().join("releases").join(replacement.id.as_str());
