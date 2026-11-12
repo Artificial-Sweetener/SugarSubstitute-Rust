@@ -10,7 +10,7 @@
 //!   recovery copy. Loading falls back to it when the current archive is rejected.
 //! - `input-documents.rejected-<sha256>.ssdoc`: a byte-exact copy of a current or recovery file
 //!   that failed validation, made before that file is ever replaced and named by its digest.
-//! - `bases\`: originals of documents' ComfyUI temporary files; see [`bases`].
+//! - `bases\`: originals of documents' ComfyUI temporary files; see `bases`.
 //!
 //! A rejected archive is an observable miss: loading reports it and returns no documents, and
 //! the host rebuilds from the workflow. Unrecognized files, including staging files left by an
