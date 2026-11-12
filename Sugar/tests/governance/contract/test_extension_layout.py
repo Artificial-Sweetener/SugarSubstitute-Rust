@@ -45,7 +45,6 @@ def _directory_link(link: Path, target: Path) -> Iterator[None]:
             ["cmd.exe", "/d", "/c", "mklink", "/J", str(link), str(target)],
             check=True,
             capture_output=True,
-            timeout=30,
         )
     else:
         link.symlink_to(target, target_is_directory=True)

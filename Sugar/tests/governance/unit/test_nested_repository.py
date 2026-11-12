@@ -42,7 +42,6 @@ def _git(root: Path, *args: str) -> None:
         cwd=root,
         check=True,
         capture_output=True,
-        timeout=30,
     )
 
 
