@@ -54,7 +54,6 @@ from .comfy_node_registry import resolve_active_comfy_node_class_mappings
 from .self_update import (
     SelfUpdateService,
     build_self_update_service,
-    installed_pack_folder,
 )
 from .services import (
     CubeArtifactRepository,
@@ -119,12 +118,12 @@ def build_backend_services(
     *,
     custom_nodes_root: Path | None = None,
     execution_port: ComfyExecutionPort | None = None,
-    pack_folder: Path | None = None,
 ) -> BackendServices:
     """Build the repository-standard backend service graph.
 
-    `pack_folder` is the folder the self-updater manages; it defaults to the
-    folder ComfyUI loaded this pack from, kept unresolved so links stay visible.
+    `extension_root` is also the folder the self-updater manages. ComfyUI's
+    entry passes the link-safe root, so a pack folder that is a link stays
+    visible as one and is never updated in place.
     """
 
     identity = IdentityPolicyService(extension_root)
@@ -269,7 +268,7 @@ def build_backend_services(
         sugarscript_authoring=sugarscript_authoring,
         legacy_workflow_authoring=legacy_workflow_authoring,
         self_update=build_self_update_service(
-            pack_folder=pack_folder or installed_pack_folder(),
+            pack_folder=extension_root,
             running_version=runtime_version(),
         ),
         execution=CubeExecutionCoordinator(
