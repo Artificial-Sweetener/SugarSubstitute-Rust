@@ -162,6 +162,7 @@ test('schema validation rejects unsupported presentation and oversized session v
     ),
     { ...presentation, pluginMode: 'true' },
     { ...presentation, photoProPalette: 'unknown', accentColor: null },
+    { ...presentation, photoProPalette: null },
     { ...presentation, path: 'file:/secret' },
   ])
     expect(
@@ -181,6 +182,19 @@ test('schema validation rejects unsupported presentation and oversized session v
       type: 'ready',
     }),
   ).toBe(false);
+});
+
+test('admits a presentation without a PhotoPro palette, which only PhotoPro hosts declare', () => {
+  const { photoProPalette: _omitted, ...withoutPalette } = presentation;
+  expect(
+    isPanelMessage({
+      protocol: 'sugarcubes.panel',
+      version: 3,
+      session,
+      type: 'configure',
+      presentation: withoutPalette,
+    }),
+  ).toBe(true);
 });
 
 test('reports presentation failure and returns an explicit rejection to every host', () => {

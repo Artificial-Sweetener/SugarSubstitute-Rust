@@ -1,7 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 // Generated from panel.schema.json by scripts/integrations/generate-panel-contract.ts.
-// Schema SHA-256 (LF): 166ad0c95a5dda530f712ce520d4bd52823a07a2555d3006a922a8444cebb16e
+// Schema SHA-256 (LF): 096791cb0666a00631268226ef0a5d48e0b63f6f145b804e1472882eb7d50aad
+
+/// Schema-defined untrusted PanelPhotoProPalette token; decoding admits only the listed values.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub(super) enum PanelPhotoProPalette {
+    Black,
+    DarkGray,
+    MediumGray,
+    LightGray,
+}
 
 /// Schema-defined untrusted PanelPresentation data; validation grants no host authority.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -9,7 +19,12 @@
 pub(super) struct PanelPresentation {
     pub(super) plugin_mode: bool,
     pub(super) visual_style: String,
-    pub(super) photo_pro_palette: String,
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub(super) photo_pro_palette: Option<PanelPhotoProPalette>,
     #[serde(deserialize_with = "deserialize_required_option")]
     pub(super) accent_color: Option<String>,
     pub(super) resize_corner_size: u64,
@@ -18,7 +33,6 @@ impl PanelPresentation {
     /// Reject values outside the exact schema-defined bounds.
     pub(super) fn valid(&self) -> bool {
         valid_panel_presentation_visual_style(&self.visual_style)
-            && valid_panel_presentation_photo_pro_palette(&self.photo_pro_palette)
             && valid_optional_color(self.accent_color.as_deref())
             && (0..=64).contains(&self.resize_corner_size)
     }
@@ -147,10 +161,6 @@ fn valid_panel_presentation_visual_style(value: &str) -> bool {
     matches!(value, "comfy" | "fluent" | "spectrum" | "photopro" | "gimp")
 }
 
-fn valid_panel_presentation_photo_pro_palette(value: &str) -> bool {
-    matches!(value, "black" | "dark-gray" | "medium-gray" | "light-gray")
-}
-
 pub(super) fn valid_optional_color(value: Option<&str>) -> bool {
     value.is_none_or(|value| {
         value.len() == 7
@@ -173,4 +183,11 @@ fn deserialize_required_option<'de, D: serde::Deserializer<'de>, T: serde::Deser
     deserializer: D,
 ) -> Result<Option<T>, D::Error> {
     serde::Deserialize::deserialize(deserializer)
+}
+
+/// Decode an optional member only when present, rejecting an explicit null.
+fn deserialize_present_option<'de, D: serde::Deserializer<'de>, T: serde::Deserialize<'de>>(
+    deserializer: D,
+) -> Result<Option<T>, D::Error> {
+    T::deserialize(deserializer).map(Some)
 }

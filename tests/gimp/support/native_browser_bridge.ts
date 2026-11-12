@@ -58,7 +58,6 @@ export async function connectNativeBrowserProof(
     {
       pluginMode: true,
       visualStyle: 'gimp',
-      photoProPalette: 'dark-gray',
       accentColor: null,
       resizeCornerSize: 0,
     },
