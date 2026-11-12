@@ -26,7 +26,6 @@ import { gimpIconCss } from '../../../frontend/comfyui/ui/surface/appearance/Gim
 import {
   closeBrowserFixture,
   launchHeadlessBrowser,
-  BROWSER_FIXTURE_SETUP_TIMEOUT_MS,
 } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 
 let source: string;
@@ -257,9 +256,9 @@ beforeAll(async () => {
   });
   source = output.outputFiles[0]!.text;
   for (const engine of [chromium, firefox]) {
-    browsers.push(await launchHeadlessBrowser(engine, { timeout: 20_000 }));
+    browsers.push(await launchHeadlessBrowser(engine));
   }
-}, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
+});
 
 // Release both engines after every isolated page context has retired.
 afterAll(async () => {
@@ -270,18 +269,14 @@ afterAll(async () => {
     result.status === 'rejected' ? [result.reason] : [],
   );
   if (failures.length) throw new AggregateError(failures, 'GIMP browser fixture cleanup failed');
-}, 60_000);
+});
 
-/** Dispose mounted product controls within the existing ten-second browser operation budget. */
+/** Dispose mounted product controls before the next case opens its page. */
 async function disposePage(page: Page): Promise<void> {
-  const disposed = await page.waitForFunction(
-    () => {
-      window.gimpFixture?.dispose();
-      return true;
-    },
-    undefined,
-    { timeout: 10_000 },
-  );
+  const disposed = await page.waitForFunction(() => {
+    window.gimpFixture?.dispose();
+    return true;
+  }, undefined);
   await disposed.dispose();
 }
 
@@ -299,9 +294,8 @@ function testInBrowsers(name: string, run: (page: Page) => Promise<void>): void 
         const browser = browsers[index];
         if (!browser) throw new Error('The private browser fixture did not start.');
         page = await lifetime.openPage(browser);
-        page.setDefaultTimeout(10_000);
         await page.goto(address);
-      }, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
+      });
       afterEach(async () => {
         const diagnostics = lifetime.diagnostics();
         if (failed || diagnostics.phase !== 'ready' || diagnostics.pending.length) {
@@ -312,20 +306,16 @@ function testInBrowsers(name: string, run: (page: Page) => Promise<void>): void 
           });
         }
         await lifetime.retire(disposePage);
-      }, 60_000);
-      test(
-        name.replace('%s', String(index)),
-        async () => {
-          try {
-            if (!page) throw new Error('The private browser fixture did not start.');
-            await run(page);
-          } catch (error) {
-            failed = true;
-            throw error;
-          }
-        },
-        30_000,
-      );
+      });
+      test(name.replace('%s', String(index)), async () => {
+        try {
+          if (!page) throw new Error('The private browser fixture did not start.');
+          await run(page);
+        } catch (error) {
+          failed = true;
+          throw error;
+        }
+      });
     });
   }
 }

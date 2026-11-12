@@ -18,10 +18,7 @@
 import { chromium, type Browser, type Page } from '@playwright/test';
 import { build } from 'esbuild';
 import UPNG from 'upng-js';
-import {
-  BROWSER_FIXTURE_SETUP_TIMEOUT_MS,
-  launchHeadlessBrowser,
-} from '../../frontend_core/support/BrowserFixtureLifetime.js';
+import { launchHeadlessBrowser } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 
 let browserReady: Promise<Browser>;
 let pageReady: Promise<Page> | undefined;
@@ -41,14 +38,14 @@ beforeAll(async () => {
     format: 'iife',
   });
   allocationScript = output.outputFiles[0]!.text;
-}, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
+});
 
 /** Keep browser page acquisition under its own bounded hook, separate from layout observation. */
 beforeEach(async () => {
   const browser = await browserReady;
   pageReady = browser.newPage({ viewport: { width: 1600, height: 1000 } });
   await pageReady;
-}, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
+});
 
 /** Observe even a late page creation before releasing its native browser resources. */
 afterEach(async () => {

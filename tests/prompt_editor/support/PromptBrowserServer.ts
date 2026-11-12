@@ -100,7 +100,6 @@ export async function expectSource(page: Page, expected: string): Promise<void> 
     await page.waitForFunction(
       (value) => window.promptBrowserProof.read().source === value,
       expected,
-      { timeout: 5_000 },
     );
   } catch (cause) {
     const actual = await page.evaluate(() => window.promptBrowserProof.read().source);

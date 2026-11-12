@@ -17,6 +17,7 @@
 import { spawnSync } from 'node:child_process';
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
+import { OPERATION_HANG_GUARD_MS } from '../../frontend_core/support/HangGuard.js';
 
 /** Inventory only the reviewed engine cases within the owning behavioral area. */
 function cases(directory: string): string[] {
@@ -43,7 +44,12 @@ test.each(['core/unit', 'services/unit', 'editor/transaction', 'editor/unit'])(
           '--test-concurrency=4',
           ...files.slice(start, start + 48),
         ],
-        { cwd: process.cwd(), encoding: 'utf8', timeout: 120_000, maxBuffer: 4 * 1024 * 1024 },
+        {
+          cwd: process.cwd(),
+          encoding: 'utf8',
+          timeout: OPERATION_HANG_GUARD_MS,
+          maxBuffer: 4 * 1024 * 1024,
+        },
       );
       if (result.status !== 0)
         throw new Error(
@@ -51,5 +57,4 @@ test.each(['core/unit', 'services/unit', 'editor/transaction', 'editor/unit'])(
         );
     }
   },
-  600_000,
 );
