@@ -7,6 +7,7 @@ use std::error::Error;
 use sugarsubstitute_contracts::installation::{
     Generation, GenerationId, InstallationId, PackageDigest, PreparationIntent, Rejection,
 };
+mod locks;
 pub(super) type TestResult = Result<(), Box<dyn Error + Send + Sync>>;
 
 pub(super) fn root() -> Result<tempfile::TempDir, Box<dyn Error + Send + Sync>> {
@@ -25,6 +26,10 @@ pub(super) fn generation(number: u64) -> Result<Generation, Rejection> {
     Ok(Generation {
         id: GenerationId::new(format!("{number:032x}"))?,
         package: PackageDigest::new(format!("{number:064x}"))?,
+        release: sugarsubstitute_contracts::installation::SignedRelease::new(
+            format!("1.0.{number}"),
+            number + 1,
+        )?,
     })
 }
 
@@ -94,22 +99,16 @@ fn failed_replacement_keeps_original_selection_and_can_be_retried() -> TestResul
     })
 }
 
+/// The lock file persists between owners; only a live holder ever makes a waiter wait.
 #[test]
-fn writer_exclusion_is_os_backed_and_a_leftover_lock_file_is_not_a_lockout() -> TestResult {
+fn a_leftover_lock_file_is_not_a_lockout() -> TestResult {
     worker::run(|context, _| {
         let root = root()?;
         let first = SelectionStore::initialize(root.path(), &initial()?, context)?;
-        let second = SelectionStore::open(root.path(), context)?;
-        let held = first.protected(context, |p| writer(&first.root, p, context))?;
-        assert!(matches!(
-            second.protected(context, |p| writer(&second.root, p, context)),
-            Err(SelectionFailure::WriterBusy)
-        ));
-        assert!(matches!(second.load(context), Err(SelectionFailure::WriterBusy)));
-        drop(held);
-        assert_eq!(second.load(context)?, Some(initial()?));
+        drop(first);
         assert!(root.path().join("state").join(DIRECTORY).join(LOCK).exists());
-        assert_eq!(first.load(context)?, Some(initial()?));
+        let second = SelectionStore::open(root.path(), context)?;
+        assert_eq!(second.load(context)?, Some(initial()?));
         Ok(())
     })
 }
@@ -248,6 +247,161 @@ fn inherited_permissions_do_not_replace_explicit_record_protection() -> TestResu
         assert!(store.load(context).is_err());
         assert!(SelectionStore::initialize(root.path(), &initial()?, context).is_err());
         assert_eq!(std::fs::read(&record)?, initial()?.encode()?);
+        Ok(())
+    })
+}
+
+/// Publish each record in order through the real replacement path, returning the last one.
+fn advance(
+    store: &SelectionStore,
+    from: &InstallationRecord,
+    steps: impl IntoIterator<Item = InstallationRecord>,
+    context: &JobContext,
+) -> Result<InstallationRecord, Box<dyn Error + Send + Sync>> {
+    let mut current = from.clone();
+    for next in steps {
+        store.replace(&current, &next, context)?;
+        current = next;
+    }
+    Ok(current)
+}
+
+/// Prepare, start and accept `generation` on top of `from`.
+fn accept(
+    store: &SelectionStore,
+    from: &InstallationRecord,
+    generation: &Generation,
+    context: &JobContext,
+) -> Result<InstallationRecord, Box<dyn Error + Send + Sync>> {
+    let staged = from.prepare(generation.clone(), PreparationIntent::Automatic)?;
+    let prepared = staged.prepared(generation)?;
+    let trial = prepared.begin_trial()?;
+    let Some(sugarsubstitute_contracts::installation::Candidate::Trial { attempt }) =
+        trial.candidate()
+    else {
+        return Err("Trial absent".into());
+    };
+    let accepted = trial.accept(attempt)?;
+    advance(store, from, [staged, prepared, trial, accepted], context)
+}
+
+/// A launch snapshot is a value: a candidate-only replacement after the reservation still
+/// selects the same application, a changed accepted generation supersedes it, and a forwarding
+/// snapshot never stands in for a launch reservation.
+#[test]
+fn a_replacement_between_reservation_and_use_is_detected_by_record_value() -> TestResult {
+    worker::run(|context, _| {
+        let root = root()?;
+        let initial = initial()?;
+        let store =
+            std::sync::Arc::new(SelectionStore::initialize(root.path(), &initial, context)?);
+        let reserved = accept(&store, &initial, &generation(1)?, context)?;
+        let snapshot_for = |purpose| {
+            store.protected(context, |protection| {
+                Ok(snapshot::create(&store, protection, &reserved, purpose, context)?)
+            })
+        };
+        let launch = snapshot_for(snapshot::Purpose::Launch)?;
+        let forward = snapshot_for(snapshot::Purpose::Forward)?;
+        let inherited = |file: &File| -> Result<InheritedSelection, io::Error> {
+            Ok(InheritedSelection { file: file.try_clone()? })
+        };
+        let candidate = advance(
+            &store,
+            &reserved,
+            [reserved.prepare(generation(2)?, PreparationIntent::Automatic)?],
+            context,
+        )?;
+        // Same startup selection: the reservation re-resolves and proceeds to verify the
+        // accepted payload, which this record-only fixture does not have.
+        let resolved = store.reserve_inherited(Some(inherited(&launch)?), context);
+        assert!(matches!(resolved, Err(SelectionFailure::Storage(_))), "{:?}", resolved.err());
+        assert!(matches!(
+            store.reserve_inherited(Some(inherited(&forward)?), context),
+            Err(SelectionFailure::Changed)
+        ));
+        let cleared = advance(&store, &candidate, [candidate.prepared(&generation(2)?)?], context)?;
+        let trial = cleared.begin_trial()?;
+        let Some(sugarsubstitute_contracts::installation::Candidate::Trial { attempt }) =
+            trial.candidate()
+        else {
+            return Err("Trial absent".into());
+        };
+        let accepted = trial.accept(attempt)?;
+        advance(&store, &cleared, [trial.clone(), accepted], context)?;
+        assert!(matches!(
+            store.reserve_inherited(Some(inherited(&launch)?), context),
+            Err(SelectionFailure::Superseded)
+        ));
+        Ok(())
+    })
+}
+
+/// The update view follows the record: only a complete candidate is prepared, a trial without
+/// a verdict returns to prepared, a bad verdict sets rollback, and a later acceptance clears it.
+#[test]
+fn update_selection_shows_prepared_candidates_and_rollback_only_after_a_bad_verdict() -> TestResult
+{
+    worker::run(|context, _| {
+        let root = root()?;
+        let initial = initial()?;
+        let store = SelectionStore::initialize(root.path(), &initial, context)?;
+        let view = || read_update_selection(root.path(), context);
+        assert!(matches!(view(), Err(SelectionFailure::Missing)));
+        let running = accept(&store, &initial, &generation(1)?, context)?;
+        let shown = view()?;
+        assert_eq!(shown.running.generation, generation(1)?.id);
+        assert_eq!((shown.running.version.as_str(), shown.running.release_sequence), ("1.0.1", 2));
+        assert_eq!((shown.prepared, shown.rollback), (None, None));
+
+        let candidate = generation(2)?;
+        let staged = running.prepare(candidate.clone(), PreparationIntent::Automatic)?;
+        let staged = advance(&store, &running, [staged], context)?;
+        assert_eq!(view()?.prepared, None);
+        let prepared = advance(&store, &staged, [staged.prepared(&candidate)?], context)?;
+        let expected = Some(PreparedUpdate {
+            generation: candidate.id.clone(),
+            version: "1.0.2".to_owned(),
+            release_sequence: 3,
+            package_digest: {
+                let mut digest = [0; 32];
+                digest[31] = 2;
+                digest
+            },
+        });
+        assert_eq!(view()?.prepared, expected);
+
+        let trial = prepared.begin_trial()?;
+        let Some(Candidate::Trial { attempt }) = trial.candidate().cloned() else {
+            return Err("Trial absent".into());
+        };
+        let trial = advance(&store, &prepared, [trial], context)?;
+        assert_eq!(view()?.prepared, None);
+        let no_verdict =
+            advance(&store, &trial, [trial.cancel_unstarted_trial(&attempt)?], context)?;
+        assert_eq!((view()?.prepared, view()?.rollback), (expected, None));
+
+        let trial = advance(&store, &no_verdict, [no_verdict.begin_trial()?], context)?;
+        let Some(Candidate::Trial { attempt }) = trial.candidate().cloned() else {
+            return Err("Trial absent".into());
+        };
+        let rejected = advance(&store, &trial, [trial.reject(&attempt)?], context)?;
+        let shown = view()?;
+        assert_eq!(shown.running.generation, generation(1)?.id);
+        assert_eq!(shown.prepared, None);
+        assert_eq!(
+            shown.rollback,
+            Some(Rollback {
+                rejected_generation: candidate.id,
+                rejected_version: "1.0.2".to_owned(),
+                rejected_release_sequence: 3,
+            })
+        );
+
+        accept(&store, &rejected, &generation(3)?, context)?;
+        let shown = view()?;
+        assert_eq!(shown.running.generation, generation(3)?.id);
+        assert_eq!(shown.rollback, None);
         Ok(())
     })
 }

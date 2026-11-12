@@ -8,12 +8,16 @@ fn next_generation() -> Result<Generation, Box<dyn std::error::Error + Send + Sy
     Ok(Generation {
         id: GenerationId::new("2".repeat(32))?,
         package: PackageDigest::new("c".repeat(64))?,
+        release: sugarsubstitute_contracts::installation::SignedRelease::new(
+            "1.0.0".to_owned(),
+            1,
+        )?,
     })
 }
 
 #[test]
-fn launch_reservation_coexists_with_a_running_app_and_only_briefly_excludes_selection_writes()
--> TestResult {
+fn launch_reservation_coexists_with_a_running_app_and_never_blocks_selection_writes() -> TestResult
+{
     worker::run_reserved(TRUST_RESERVATION_BYTES + 96 * 1024 * 1024, |context, _| {
         let temporary = tempfile::tempdir()?;
         let directory = Directory::open(temporary.path(), false)?;
@@ -33,11 +37,10 @@ fn launch_reservation_coexists_with_a_running_app_and_only_briefly_excludes_sele
         assert_eq!(reserved.directory(), running.directory());
         assert!(InstallationRun::acquire(store.clone(), context).is_err());
         let next = before.prepare(next_generation()?, PreparationIntent::Automatic)?;
-        assert!(store.compare_exchange(&before, &next, context).is_err());
-        assert_eq!(store.load(context)?, Some(before.clone()));
-        drop(reserved);
+        // The reservation is a value, never a held record handle, so writes proceed.
         store.compare_exchange(&before, &next, context)?;
         assert_eq!(store.load(context)?, Some(next));
+        drop(reserved);
         drop(run);
         assert!(InstallationRun::acquire(store.clone(), context).is_err());
         drop(running);
@@ -47,8 +50,8 @@ fn launch_reservation_coexists_with_a_running_app_and_only_briefly_excludes_sele
 }
 
 #[test]
-fn coordinator_can_acquire_its_run_while_every_concurrent_launch_still_pins_selection() -> TestResult
-{
+fn coordinator_can_acquire_its_run_and_publish_while_concurrent_launches_hold_reservations()
+-> TestResult {
     worker::run_reserved(TRUST_RESERVATION_BYTES + 112 * 1024 * 1024, |context, _| {
         let temporary = tempfile::tempdir()?;
         let directory = Directory::open(temporary.path(), false)?;
@@ -64,9 +67,8 @@ fn coordinator_can_acquire_its_run_while_every_concurrent_launch_still_pins_sele
         let mut run = InstallationRun::acquire(store.clone(), context)?;
         let running = run.adopt_reserved(first, context)?;
         let next = before.prepare(next_generation()?, PreparationIntent::Automatic)?;
-        assert!(store.compare_exchange(&before, &next, context).is_err());
-        drop(second);
         store.compare_exchange(&before, &next, context)?;
+        drop(second);
         assert_eq!(running.generation(), before.accepted().ok_or("Accepted generation absent")?);
         Ok(())
     })
@@ -209,7 +211,7 @@ fn repeated_adoption_is_rejected_without_leaking_selection_custody() -> TestResu
 }
 
 #[test]
-fn expired_adoption_releases_selection_pin_without_rewriting_state() -> TestResult {
+fn expired_adoption_never_holds_or_rewrites_the_selection_record() -> TestResult {
     worker::run_reserved_expiring(TRUST_RESERVATION_BYTES + 64 * 1024 * 1024, |context, clock| {
         let temporary = tempfile::tempdir()?;
         let directory = Directory::open(temporary.path(), false)?;
@@ -221,7 +223,7 @@ fn expired_adoption_releases_selection_pin_without_rewriting_state() -> TestResu
             return Err("Reservation absent".into());
         };
         let mut run = InstallationRun::acquire(store, context)?;
-        assert!(std::fs::OpenOptions::new().write(true).open(&path).is_err());
+        drop(std::fs::OpenOptions::new().write(true).open(&path)?);
         clock.expire();
         assert!(run.adopt_reserved(reserved, context).is_err());
         let _unblocked = std::fs::OpenOptions::new().write(true).open(&path)?;

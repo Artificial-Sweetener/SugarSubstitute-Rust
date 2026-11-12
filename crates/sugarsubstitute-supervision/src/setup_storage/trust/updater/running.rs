@@ -22,7 +22,7 @@ impl TrustStore {
     ) -> Result<PreparationImage, TrustFailure> {
         check(context)?;
         self.protected(context, |protection| {
-            let _writer = self.writer(protection)?;
+            let _writer = self.writer(protection, context)?;
             let selection = self.updater_locked(protection, SelectionRead::Existing, context)?;
             let generation = selection
                 .accepted()

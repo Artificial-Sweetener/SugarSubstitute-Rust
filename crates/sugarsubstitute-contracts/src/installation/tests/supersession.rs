@@ -44,7 +44,11 @@ fn supersession_rejects_live_trials_stale_generations_and_reused_directories() -
             .supersede_preparation(&next, generation(3)?, PreparationIntent::Automatic)
             .is_err()
     );
-    let reused = Generation { id: old.id.clone(), package: next.package.clone() };
+    let reused = Generation {
+        id: old.id.clone(),
+        package: next.package.clone(),
+        release: next.release.clone(),
+    };
     assert!(prepared.supersede_preparation(&old, reused, PreparationIntent::Automatic).is_err());
     let replacement =
         prepared.supersede_preparation(&old, next.clone(), PreparationIntent::Automatic)?;
@@ -63,7 +67,8 @@ fn replacement_cannot_bypass_failed_package_suppression() -> Result {
     let rejected = trial.reject(&attempt(&trial)?)?;
     let old = generation(2)?;
     let pending = rejected.prepare(old.clone(), PreparationIntent::Automatic)?;
-    let retry = Generation { id: generation(3)?.id, package: failed.package };
+    let retry =
+        Generation { id: generation(3)?.id, package: failed.package, release: failed.release };
     assert_eq!(
         pending.supersede_preparation(&old, retry.clone(), PreparationIntent::Automatic),
         Err(Rejection::Quarantined)

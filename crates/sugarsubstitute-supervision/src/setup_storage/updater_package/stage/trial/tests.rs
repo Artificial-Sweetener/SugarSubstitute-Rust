@@ -43,7 +43,7 @@ fn engine_speaking_only_the_previous_preparation_protocol_is_refused_before_stag
         let root = worker::installation(128, context)?;
         let workspace = tempfile::tempdir()?;
         let previous =
-            br#"{"schema_version":1,"preparation_protocols":[1],"installation_schemas":[1]}"#;
+            br#"{"schema_version":1,"preparation_protocols":[1],"installation_schemas":[2]}"#;
         let (bytes, _) = archive(previous)?;
         let (trust, offer, download) = evidence(root.path(), &bytes, Component::Updater, context)?;
         // The engine is refused as soon as its declaration is read, before anything is staged.
@@ -80,7 +80,7 @@ fn historical_preparation_only_engine_remains_staged_without_a_probe_trial() -> 
         let workspace = tempfile::tempdir()?;
         // Historical here means without a probe role; it speaks the current preparation entry.
         let historical =
-            br#"{"schema_version":1,"preparation_protocols":[2],"installation_schemas":[1]}"#;
+            br#"{"schema_version":1,"preparation_protocols":[2],"installation_schemas":[2]}"#;
         let (bytes, _) = archive(historical)?;
         let (trust, offer, download) = evidence(root.path(), &bytes, Component::Updater, context)?;
         let prepared = UpdaterPackage::import(

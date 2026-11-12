@@ -96,6 +96,61 @@ impl Presenter {
         })
     }
 
+    /// Center the window on the work area under the cursor again, after a size change made
+    /// before the window was first shown.
+    pub(crate) fn recenter(&self) -> Result<(), DesktopError> {
+        center_on_cursor_work_area(&self.window)
+    }
+
+    /// Centre the window over `owner`, kept inside the work area of the owner's monitor.
+    pub(crate) fn center_over(&self, owner: HWND) -> Result<(), DesktopError> {
+        use windows::Win32::{
+            Graphics::Gdi::{MONITOR_DEFAULTTONEAREST, MonitorFromWindow},
+            UI::WindowsAndMessaging::GetWindowRect,
+        };
+        let mut bounds = RECT::default();
+        let mut info =
+            MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+        // SAFETY: The owner is a live window of this thread; both outputs have their documented
+        // ABI and live through the synchronous queries.
+        unsafe {
+            GetWindowRect(owner, &raw mut bounds)
+                .map_err(|error| DesktopError::new("query_owner_bounds", error))?;
+            GetMonitorInfoW(MonitorFromWindow(owner, MONITOR_DEFAULTTONEAREST), &raw mut info)
+                .ok()
+                .map_err(|error| DesktopError::new("query_owner_work_area", error))?;
+        }
+        let size = self.window.outer_size();
+        let centered = centered_origin(bounds, size.width, size.height)?;
+        let work = info.rcWork;
+        let clamp = |value: i32, low: i32, high: i32, extent: u32| {
+            let extent = i32::try_from(extent).unwrap_or(i32::MAX);
+            value.min(high.saturating_sub(extent)).max(low)
+        };
+        self.window.set_outer_position(PhysicalPosition::new(
+            clamp(centered.x, work.left, work.right, size.width),
+            clamp(centered.y, work.top, work.bottom, size.height),
+        ));
+        Ok(())
+    }
+
+    /// Logical height of the work area of the monitor holding the window.
+    pub(crate) fn work_area_height(&self) -> Result<f64, DesktopError> {
+        use windows::Win32::Graphics::Gdi::{MONITOR_DEFAULTTONEAREST, MonitorFromWindow};
+        let hwnd = HWND(self.window.hwnd() as *mut c_void);
+        let mut info =
+            MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+        // SAFETY: The retained HWND is live on this thread; the output structure has its
+        // documented ABI and lives through the synchronous query.
+        unsafe {
+            let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+            GetMonitorInfoW(monitor, &raw mut info)
+                .ok()
+                .map_err(|error| DesktopError::new("query_window_work_area", error))?;
+        }
+        Ok(f64::from(info.rcWork.bottom - info.rcWork.top) / self.window.scale_factor())
+    }
+
     /// Update this retained window's normal material mode before preparing its next frame.
     /// Fallback pixels use the same resolved mode when DWM material is unavailable.
     pub(crate) fn set_theme(&mut self, dark: bool) -> Result<(), DesktopError> {

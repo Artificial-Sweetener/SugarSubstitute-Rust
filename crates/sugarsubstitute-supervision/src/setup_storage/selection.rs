@@ -17,11 +17,17 @@ mod launcher;
 pub(in crate::setup_storage) use completion::InstallationAuthorization;
 pub use inheritance::{InheritedSelection, LaunchInheritance, capture_launch_selection};
 mod namespace;
+mod presentation;
+pub use presentation::{
+    InstalledRelease, PreparedUpdate, Rollback, UpdateSelection, read_update_selection,
+};
 pub(super) mod publication;
 mod reservation;
+mod snapshot;
 pub use reservation::{ReservedApplication, ReservedLaunch, reserve_installed_launch};
 mod run;
 use super::check;
+use super::short_lock::{self, LockKind};
 use crate::durable_storage::{
     files::{self, Directory},
     protected::directories::Mode,
@@ -125,30 +131,20 @@ impl SelectionStore {
         Ok((installation, ownership, memory))
     }
 
-    /// Load a complete record; absence after opening is damaged state, never bootstrap authority.
+    /// Load a complete record under a shared lock; concurrent readers proceed together.
+    /// Absence after opening is damaged state, never bootstrap authority.
     /// # Errors
-    /// Returns busy without waiting on a writer and preserves invalid record bytes.
+    /// Waits out an in-flight publication, then returns `LockTimeout` or `LockCancelled`;
+    /// preserves invalid record bytes.
     pub fn load(
         &self,
         context: &JobContext,
     ) -> Result<Option<InstallationRecord>, SelectionFailure> {
         self.protected(context, |protection| {
-            let _writer = writer(&self.root, protection, context)?;
+            let _reader = reader(&self.root, protection, context)?;
             let record = self.read(protection)?;
             check(context)?;
             Ok(record)
-        })
-    }
-
-    /// Pin the complete protected snapshot while a finite data settlement observes generations.
-    /// This grants correlation/data-preservation authority only, never application-run ownership.
-    pub(in crate::setup_storage) fn pinned_snapshot(
-        &self,
-        context: &JobContext,
-    ) -> Result<(InstallationRecord, File), SelectionFailure> {
-        self.protected(context, |owner| {
-            let _writer = writer(&self.root, owner, context)?;
-            self.read_pinned(owner)?.ok_or(SelectionFailure::Missing)
         })
     }
 
@@ -209,18 +205,12 @@ impl SelectionStore {
         .map_err(SelectionFailure::from)
     }
 
+    /// Validate and decode the protected record. The caller holds the shared or exclusive lock,
+    /// so no publication replaces it during the read; the handle closes before returning.
     fn read(
         &self,
         protection: &Protection,
     ) -> Result<Option<InstallationRecord>, SelectionFailure> {
-        Ok(self.read_pinned(protection)?.map(|(record, _pin)| record))
-    }
-
-    /// Validate and retain the same protected record; its sharing mode excludes atomic replacement.
-    fn read_pinned(
-        &self,
-        protection: &Protection,
-    ) -> Result<Option<(InstallationRecord, File)>, SelectionFailure> {
         let mut file = match self.root.read(RECORD) {
             Ok(file) => file,
             Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(None),
@@ -228,7 +218,7 @@ impl SelectionStore {
         };
         protection.verify_file(&file)?;
         let bytes = files::read_bounded(&mut file, MAX_RECORD_BYTES)?;
-        Ok(Some((InstallationRecord::decode(&bytes)?, file)))
+        Ok(Some(InstallationRecord::decode(&bytes)?))
     }
 
     /// Keep revision-zero selection stable while its trust store is initialized.
@@ -265,16 +255,33 @@ impl SelectionStore {
 }
 
 /// Serialize selection publication and its one-time continuity marker with the same OS lock.
+/// The exclusive lock waits for in-flight readers and other writers within the bounded wait.
 fn writer(
     root: &Directory,
     protection: &Protection,
     context: &JobContext,
 ) -> Result<File, SelectionFailure> {
-    let lock = protection.rendezvous(&root.path().join(LOCK), context)?;
-    lock.try_lock().map_err(|cause| match cause {
-        std::fs::TryLockError::WouldBlock => SelectionFailure::WriterBusy,
-        std::fs::TryLockError::Error(cause) => SelectionFailure::Storage(cause),
-    })?;
+    locked(root, protection, LockKind::Exclusive, context)
+}
+
+/// Hold the shared lock for one consistent read of the record and any files written with it.
+/// Readers run together and wait only for an in-flight publication.
+fn reader(
+    root: &Directory,
+    protection: &Protection,
+    context: &JobContext,
+) -> Result<File, SelectionFailure> {
+    locked(root, protection, LockKind::Shared, context)
+}
+
+fn locked(
+    root: &Directory,
+    protection: &Protection,
+    kind: LockKind,
+    context: &JobContext,
+) -> Result<File, SelectionFailure> {
+    let lock = protection.waitable_rendezvous(&root.path().join(LOCK), context)?;
+    short_lock::acquire(&lock, kind, context)?;
     Ok(lock)
 }
 

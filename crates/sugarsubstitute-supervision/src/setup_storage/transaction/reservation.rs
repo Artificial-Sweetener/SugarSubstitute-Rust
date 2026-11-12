@@ -54,6 +54,7 @@ impl InstallationSession {
                             id: crate::setup_storage::identity::generation()?,
                             package: PackageDigest::new(bundle.digest().to_owned())
                                 .map_err(io::Error::other)?,
+                            release: crate::setup_storage::signed_release(offer)?,
                         };
                         let reserved = match before.candidate() {
                             None => {

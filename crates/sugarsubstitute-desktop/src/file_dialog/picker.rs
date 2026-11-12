@@ -162,6 +162,23 @@ impl Picker {
     pub(crate) fn check(&self) -> Result<(), DesktopError> {
         self.0.failure.borrow_mut().take().map_or(Ok(()), Err)
     }
+    /// Detach from a window that is about to be destroyed while the event loop lives on, so a
+    /// later window on the same loop can bind. Dispatch for the old window ends here.
+    /// # Errors
+    /// Rejects release while native selection still owns a request.
+    pub(crate) fn release(&self) -> Result<(), DesktopError> {
+        if self.busy() {
+            return Err(DesktopError::message(
+                "release_native_picker",
+                "Native selection has not returned",
+            ));
+        }
+        if matches!(self.0.peer.get(), Peer::Bound(_)) {
+            self.0.peer.set(Peer::Unbound);
+        }
+        self.0.signal.borrow_mut().take();
+        self.check()
+    }
     /// Seal dispatch and release the wake before destroying the original peer/event loop.
     /// # Errors
     /// Rejects retirement while native selection still owns a request.

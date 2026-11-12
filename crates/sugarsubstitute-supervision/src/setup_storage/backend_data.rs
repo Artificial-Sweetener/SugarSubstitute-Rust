@@ -56,7 +56,8 @@ impl BackendDataAuthority {
     ) -> io::Result<Self> {
         let memory = context.memory().claim(2 * 1024 * 1024).map_err(io::Error::other)?;
         let marker = super::ownership::read(root)?;
-        let (record, file) = runtime_record::read(root, generation, Some(expected), context)?;
+        let (record, file) =
+            runtime_record::read(root, generation, Some(&expected.package), context)?;
         let owned = match record.selection.mode.as_str() {
             "attached" => None,
             "managed" => {

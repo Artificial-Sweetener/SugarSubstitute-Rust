@@ -7,6 +7,8 @@
 //! supplies installation/profile ownership and a fresh independently admitted backend binding.
 mod assets;
 mod baseline;
+#[cfg(windows)]
+pub mod close_record;
 mod driver;
 mod files;
 mod identity;

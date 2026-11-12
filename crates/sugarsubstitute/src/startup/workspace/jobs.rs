@@ -39,6 +39,7 @@ impl WorkspaceWork {
                     self.delivery = Some(loaded.delivery_memory);
                     self.input_plan = loaded.input_plan;
                     self.input_association = None;
+                    self.notice = loaded.notice;
                     self.bootstrap = Some(loaded.bootstrap);
                     self.ready = true;
                 }
@@ -312,6 +313,21 @@ impl WorkspaceWork {
             Err(OwnedInputError::Admission(
                 AdmissionError::MemorySaturated { .. } | AdmissionError::QueueSaturated { .. },
             )) => {}
+            // Work no release can ever admit ends now as the failure its request reports.
+            Err(OwnedInputError::Admission(cause @ AdmissionError::ExceedsCapacity { .. })) => {
+                tracing::warn!(operation="workspace_worker",cause=%cause,"Workspace work can never be admitted; durable checkpoint retained");
+                let driver = self.driver.as_mut().ok_or("Workspace driver absent")?;
+                match self.pending.take() {
+                    Some(DriverEvent::EncodeRestore { request_id, transfer_id, .. }) => {
+                        driver.encoding_stopped(&request_id, &transfer_id)?;
+                        driver.restore_failed(&request_id, &RestoreFailure::Encoding)?;
+                    }
+                    Some(DriverEvent::DecodeCapture { ticket, .. }) => {
+                        driver.publication_failed(&ticket, now)?;
+                    }
+                    None => {}
+                }
+            }
             Err(cause) => return Err(cause.into()),
         }
         Ok(())

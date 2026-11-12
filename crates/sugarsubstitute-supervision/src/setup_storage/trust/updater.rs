@@ -42,7 +42,7 @@ impl TrustStore {
         context: &JobContext,
     ) -> Result<InstallationRecord, TrustFailure> {
         self.protected(context, |protection| {
-            let _writer = self.writer(protection)?;
+            let _writer = self.writer(protection, context)?;
             self.updater_locked(protection, SelectionRead::Initialize, context)
         })
     }
@@ -126,6 +126,7 @@ impl TrustStore {
             let generation = Generation {
                 id: crate::setup_storage::identity::generation()?,
                 package: PackageDigest::new(digest.to_owned()).map_err(io::Error::other)?,
+                release: crate::setup_storage::signed_release(offer)?,
             };
             let next = match state.candidate() {
                 Some(candidate) => state.supersede_preparation(

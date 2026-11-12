@@ -3,7 +3,7 @@
 //! Publish complete initial generation custody before exposing its canonical directory.
 use super::*;
 use crate::durable_storage::{protected::directories::Mode, protection, staging};
-use sugarsubstitute_contracts::installation::{Generation, GenerationId, PackageDigest};
+use sugarsubstitute_contracts::installation::{GenerationId, PackageDigest};
 
 pub(in crate::setup_storage) const INITIAL_PREFIX: &str = ".generation-init-";
 
@@ -25,19 +25,19 @@ pub(super) fn open(
     Ok((directory, marker))
 }
 
-/// Pin protected generation identity for saved-data recovery without admitting executable bytes.
-/// The completed configuration must independently match this package before being preserved.
+/// Pin a protected generation's package identity for saved-data recovery without admitting
+/// executable bytes. The completed configuration must independently match this package before
+/// being preserved.
 pub(in crate::setup_storage) fn configuration(
     path: &Path,
     context: &JobContext,
-) -> io::Result<(Directory, File, Generation)> {
+) -> io::Result<(Directory, File, PackageDigest)> {
     let id = path
         .file_name()
         .and_then(|name| name.to_str())
         .ok_or_else(|| invalid("Configuration generation identity is absent"))?;
-    let id = GenerationId::new(id.to_owned()).map_err(io::Error::other)?;
-    let (directory, marker, package) = inspect(path, None, context)?;
-    Ok((directory, marker, Generation { id, package }))
+    GenerationId::validate(id).map_err(io::Error::other)?;
+    inspect(path, None, context)
 }
 
 /// Inspect a protected generation without granting publication, execution or cleanup authority.

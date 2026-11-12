@@ -50,11 +50,12 @@ impl InstallationRun {
     /// Uses only protected installation state and retained inventory: network reachability,
     /// repository expiry and download-cache retention do not gate an already accepted release.
     /// One run admits either this application or one trial, never both.
-    /// An inherited launcher pin must identify this installation's current protected record.
+    /// An inherited launch snapshot must still select this executable's accepted generation.
     /// # Errors
-    /// Rejects corrupt/missing inventory, altered payloads, links, unknown protection or changed
-    /// accepted selection. Interrupted trials are quarantined under this fresh run's custody;
-    /// recovery never accepts the candidate or grants process-settlement or cleanup authority.
+    /// Rejects corrupt/missing inventory, altered payloads, links and unknown protection; a changed
+    /// accepted generation is `Superseded`. Interrupted trials are quarantined under this fresh
+    /// run's custody; recovery never accepts the candidate or grants process-settlement or
+    /// cleanup authority.
     /// Execute on a finite admitted native worker with `LAUNCH_RESERVATION_BYTES` available.
     pub fn select_launch(
         &mut self,
@@ -80,7 +81,7 @@ impl InstallationRun {
     }
 
     /// Transfer a verified launch reservation into this elected coordinator's live run custody.
-    /// The original selection pin remains held until the returned owner retains the run lock.
+    /// The accepted generation is rechecked against the current record before admission.
     /// Payloads are moved, not reopened or rehashed. This admits an already accepted application;
     /// it neither accepts a trial nor proves that a previous process family has finished.
     /// # Errors
@@ -99,7 +100,7 @@ impl InstallationRun {
         let current = self.custody.store.load(context)?.ok_or(SelectionFailure::Missing)?;
         if !matches!(current.startup_selection(), StartupSelection::Accepted(generation) if generation == reservation.generation())
         {
-            return Err(SelectionFailure::Changed);
+            return Err(SelectionFailure::Superseded);
         }
         check(context)?;
         self.issued = true;

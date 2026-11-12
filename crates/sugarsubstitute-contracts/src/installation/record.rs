@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Strict version-one selection records preserve the last accepted generation during trials.
+//! Strict schema-two selection records preserve the last accepted generation during trials.
 use super::*;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -13,6 +13,57 @@ pub struct Generation {
     pub id: GenerationId,
     /// Package identity used for integrity binding and failed-candidate suppression.
     pub package: PackageDigest,
+    /// Signed offer label this generation was prepared from; presentation only, never ordering
+    /// or trust authority.
+    pub release: SignedRelease,
+}
+
+/// Version label and release sequence copied from the authenticated offer at preparation.
+/// Decoding validates the same bounds the signed descriptor admits.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(try_from = "SignedReleaseWire")]
+pub struct SignedRelease {
+    version: String,
+    sequence: u64,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SignedReleaseWire {
+    version: String,
+    sequence: u64,
+}
+impl SignedRelease {
+    /// Longest version label a signed descriptor admits, in bytes.
+    pub const MAX_VERSION_BYTES: usize = 64;
+
+    /// Copy a signed offer's `version()` and `sequence()`.
+    /// # Errors
+    /// Returns `Rejection::Identity` for an empty, oversized or noncanonical label or a zero
+    /// sequence, which no authenticated offer carries.
+    pub fn new(version: String, sequence: u64) -> Result<Self, Rejection> {
+        if sequence == 0
+            || version.is_empty()
+            || version.len() > Self::MAX_VERSION_BYTES
+            || !version.bytes().all(|b| b.is_ascii_alphanumeric() || b".-+".contains(&b))
+        {
+            return Err(Rejection::Identity);
+        }
+        Ok(Self { version, sequence })
+    }
+    /// User-facing version label of the signed offer.
+    pub fn version(&self) -> &str {
+        &self.version
+    }
+    /// Signed release sequence; the only ordering between releases.
+    pub const fn sequence(&self) -> u64 {
+        self.sequence
+    }
+}
+impl TryFrom<SignedReleaseWire> for SignedRelease {
+    type Error = Rejection;
+    fn try_from(wire: SignedReleaseWire) -> Result<Self, Self::Error> {
+        Self::new(wire.version, wire.sequence)
+    }
 }
 
 /// Correlate readiness or rejection to an exact persisted launch attempt.
@@ -68,6 +119,7 @@ pub struct InstallationRecord {
     pub(super) retained: Option<Generation>,
     pub(super) candidate: Option<Candidate>,
     pub(super) rejected: Vec<PackageDigest>,
+    pub(super) rollback: Option<Generation>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -82,6 +134,14 @@ struct Wire {
     #[serde(deserialize_with = "required_option")]
     candidate: Option<Candidate>,
     rejected: Vec<PackageDigest>,
+    #[serde(deserialize_with = "required_option")]
+    rollback: Option<Generation>,
+}
+/// Read only the schema number first, so a record from another release is reported as an
+/// unsupported schema rather than as damaged bytes, whatever its other fields look like.
+#[derive(Deserialize)]
+struct SchemaProbe {
+    schema_version: u32,
 }
 fn required_option<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(
     input: D,
@@ -99,14 +159,21 @@ impl InstallationRecord {
             retained: None,
             candidate: None,
             rejected: Vec::new(),
+            rollback: None,
         }
     }
     /// Decode bounded JSON and validate all references; never modifies the source bytes.
     /// # Errors
-    /// Rejects unknown schemas/fields, invalid identities and contradictory selection state.
+    /// Returns `Schema` for any other schema number, checked before the other fields are read.
+    /// Rejects unknown fields, invalid identities and contradictory selection state.
     pub fn decode(bytes: &[u8]) -> Result<Self, Rejection> {
         if bytes.len() > MAX_RECORD_BYTES {
             return Err(Rejection::Capacity);
+        }
+        let version: SchemaProbe =
+            serde_json::from_slice(bytes).map_err(|_| Rejection::Encoding)?;
+        if version.schema_version != SCHEMA_VERSION {
+            return Err(Rejection::Schema);
         }
         let wire: Wire = serde_json::from_slice(bytes).map_err(|_| Rejection::Encoding)?;
         let record = Self {
@@ -117,6 +184,7 @@ impl InstallationRecord {
             retained: wire.retained,
             candidate: wire.candidate,
             rejected: wire.rejected,
+            rollback: wire.rollback,
         };
         record.validate()?;
         Ok(record)
@@ -156,6 +224,13 @@ impl InstallationRecord {
     pub fn rejected(&self) -> &[PackageDigest] {
         &self.rejected
     }
+    /// Newer generation whose trial was judged bad, leaving `accepted` running in its place.
+    ///
+    /// Only a rejected trial sets this; a trial that ends without a verdict returns to
+    /// `Candidate::Prepared` instead. Accepting any later trial clears it.
+    pub fn rollback(&self) -> Option<&Generation> {
+        self.rollback.as_ref()
+    }
     /// Determine startup work without guessing whether a recorded process is alive.
     pub fn startup_selection(&self) -> StartupSelection<'_> {
         if let Some(Candidate::Trial { attempt }) = &self.candidate {
@@ -178,7 +253,8 @@ impl InstallationRecord {
             || (self.revision == 0
                 && (self.accepted.is_some()
                     || self.candidate.is_some()
-                    || !self.rejected.is_empty()))
+                    || !self.rejected.is_empty()
+                    || self.rollback.is_some()))
         {
             return Err(Rejection::Invariant);
         }

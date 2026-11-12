@@ -4,6 +4,8 @@
 use super::*;
 use crate::{completion_wake::Wake, paused_clock::PausedClock};
 use std::sync::Mutex;
+use sugarsubstitute_contracts::instance_conflict::ConflictPhase;
+use sugarsubstitute_execution::clock_fixture::ManualClock;
 
 #[derive(Clone, Default)]
 struct Boundary(Arc<Mutex<Vec<&'static str>>>);
@@ -48,10 +50,10 @@ impl ConflictBackend for Boundary {
     }
 }
 /// Drive the service on each execution wake until `reached`; real work only makes this slower.
-fn advance(
-    service: &mut Service<Boundary>,
+fn advance<B: ConflictBackend>(
+    service: &mut Service<B>,
     wake: &Wake,
-    reached: impl Fn(&Service<Boundary>) -> bool,
+    reached: impl Fn(&Service<B>) -> bool,
 ) -> Result<()> {
     wake.until(|| match service.drive() {
         Err(cause) => Some(Err(cause)),
@@ -75,6 +77,53 @@ fn portable_backend_close_retires_before_relaunch_and_rejoins_execution() -> Res
     assert_eq!(
         *boundary.0.lock().map_err(|_| "boundary poisoned")?,
         ["discover", "close", "retire", "relaunch"]
+    );
+    Ok(())
+}
+/// A previous copy that keeps running after an ordinary close request until it is ended.
+#[derive(Clone, Default)]
+struct StalledClose(Boundary);
+impl ConflictBackend for StalledClose {
+    type Error = std::io::Error;
+    fn execute(&self, operation: Op, context: &JobContext) -> std::io::Result<Observation> {
+        let observation = self.0.execute(operation, context)?;
+        Ok(if operation == Op::Close { Observation::Waiting } else { observation })
+    }
+    fn relaunch(&self, context: &JobContext) -> std::io::Result<()> {
+        self.0.relaunch(context)
+    }
+    fn retire_relaunch(&self) -> std::io::Result<()> {
+        self.0.retire_relaunch()
+    }
+}
+#[test]
+fn force_is_offered_after_fifteen_seconds_on_the_execution_clock_alone() -> Result<()> {
+    let boundary = StalledClose::default();
+    let mut service = Service::new(boundary.clone());
+    let clock = ManualClock::new();
+    service.clock = clock.clone();
+    let wake = Arc::new(Wake::default());
+    service.initialize(wake.clone())?;
+    advance(&mut service, &wake, |service| service.phase == Phase::Ready)?;
+    assert_eq!(service.poll().phase, ConflictPhase::AwaitingDecision);
+    service.choose(ConflictAction::Close);
+    advance(&mut service, &wake, |service| {
+        service.pending.is_none() && matches!(service.phase, Phase::Closing(_))
+    })?;
+    assert_eq!(service.poll().phase, ConflictPhase::Closing);
+    clock.advance(Duration::from_secs(14))?;
+    assert_eq!(service.poll().phase, ConflictPhase::Closing);
+    service.choose(ConflictAction::Force);
+    assert!(matches!(service.phase, Phase::Closing(_)));
+    clock.advance(Duration::from_secs(1))?;
+    assert_eq!(service.poll().phase, ConflictPhase::ForceOffered);
+    service.choose(ConflictAction::Force);
+    assert_eq!(service.poll().phase, ConflictPhase::Forcing);
+    advance(&mut service, &wake, Service::finished)?;
+    assert!(service.continued());
+    assert_eq!(
+        *boundary.0.0.lock().map_err(|_| "boundary poisoned")?,
+        ["discover", "close", "force", "retire", "relaunch"]
     );
     Ok(())
 }

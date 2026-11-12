@@ -276,8 +276,7 @@ impl ReportSessionPreparation for ReporterSession {
                 .ok_or_else(|| Self::rejected("reporter_ui_funding"))?
                 .ui
                 .clone();
-            let options =
-                ReportSurfaceOptions::new(view, self.locale.as_str(), true, 1000, 720, lease)?;
+            let options = ReportSurfaceOptions::new(view, self.locale.as_str(), lease)?;
             self.awaiting_surface = true;
             self.deadline = None;
             Ok(Some(options))

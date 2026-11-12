@@ -19,6 +19,10 @@ fn rejected(
             "{:x}",
             Sha256::digest(test_package::distribution()?.0)
         ))?,
+        release: sugarsubstitute_contracts::installation::SignedRelease::new(
+            "1.0.0".to_owned(),
+            1,
+        )?,
     };
     let staging = empty.prepare(generation.clone(), PreparationIntent::Automatic)?;
     store.compare_exchange(&empty, &staging, case.context)?;

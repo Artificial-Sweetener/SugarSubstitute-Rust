@@ -37,6 +37,9 @@ mod main_backend;
 mod main_bulk;
 mod main_canvas_native;
 #[cfg(any(target_os = "windows", test))]
+mod main_caption;
+mod main_caption_contract;
+#[cfg(any(target_os = "windows", test))]
 mod main_downloads;
 mod main_environment;
 mod main_hosting;
@@ -62,6 +65,8 @@ mod main_session_contract;
 mod main_session_ingress;
 mod main_session_media;
 mod main_surface_contract;
+#[cfg(any(target_os = "windows", test))]
+mod main_updates;
 /// Bounded observational development trace records; feature-off builds expose none.
 #[cfg(feature = "k1-native-qualification")]
 pub mod qualification_trace;
@@ -108,8 +113,7 @@ mod windows_main_receivers;
 #[cfg(target_os = "windows")]
 pub use startup_runtime::run_startup;
 mod startup_consume_failure;
-#[cfg(any(target_os = "windows", test))]
-#[allow(unsafe_code)]
+#[cfg(target_os = "windows")]
 mod startup_error_dialog;
 mod startup_failure;
 pub use startup_consume_failure::{
@@ -149,6 +153,9 @@ mod windows_alpha;
 mod windows_callbacks;
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
+mod windows_clipboard;
+#[cfg(target_os = "windows")]
+#[allow(unsafe_code)]
 mod windows_controls;
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
@@ -159,6 +166,9 @@ mod windows_move_state;
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
 mod windows_scroll;
+#[cfg(target_os = "windows")]
+#[allow(unsafe_code)]
+mod windows_session_end;
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
 mod windows_subclass;
@@ -179,10 +189,12 @@ pub use runtime::run;
 pub mod pixel_capture;
 
 pub use host_contract::{
-    DesktopStartupCommand, DesktopStartupObservation, MainBackendState, MainCaptionLabels,
-    MainIdentity, MainRecoveryLabels, MainReloadReason, MainRequestError, MainRetirementReason,
-    MainWindowRequest, MainWindowSettings, ServedFrontendVersions, StartupDesktopReceipt,
-    StartupPreparationStep, StartupWindowContent,
+    DesktopStartupCommand, DesktopStartupObservation, MainIdentity, MainReloadReason,
+    MainRequestError, MainRetirementReason, MainWindowRequest, MainWindowSettings,
+    ServedFrontendVersions, StartupDesktopReceipt, StartupPreparationStep, StartupWindowContent,
+};
+pub use main_caption_contract::{
+    MainBackendState, MainCaptionLabels, MainRecoveryLabels, WorkflowActivity,
 };
 
 pub use main_canvas_native::{
@@ -204,7 +216,6 @@ pub use main_surface_contract::{
 };
 
 #[cfg(target_os = "windows")]
-#[allow(unsafe_code)]
 mod startup_conflict;
 #[cfg(target_os = "windows")]
 pub use startup_conflict::show_startup_conflict;

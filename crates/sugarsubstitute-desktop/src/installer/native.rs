@@ -19,6 +19,25 @@ pub struct Window {
     pub visible: bool,
     /// Stable close button in the application's retained native inventory.
     pub close: ControlId,
+    /// Initial logical client size; a lifetime with a preferred size replaces it before reveal.
+    pub size: [f64; 2],
+    /// Smallest logical client size the user may resize to.
+    pub min_size: Option<[f64; 2]>,
+    /// Whether the user may resize the window.
+    pub resizable: bool,
+}
+impl Window {
+    /// The installer's window: 1180 by 760, resizable down to 720 by 560.
+    pub fn installer(title: String, visible: bool, close: ControlId) -> Self {
+        Self {
+            title,
+            visible,
+            close,
+            size: [1180.0, 760.0],
+            min_size: Some([720.0, 560.0]),
+            resizable: true,
+        }
+    }
 }
 /// One immutable prepared page, including the original native text revisions.
 pub struct Page<'a> {
@@ -101,6 +120,34 @@ pub trait Lifetime {
     /// # Errors
     /// Preserves acknowledgement failures without granting process/storage authority.
     fn presented(&mut self) -> Result<(), Box<dyn Error>>;
+    /// Receive the logical height of the work area the window opened on, before start.
+    fn work_area(&mut self, height: f64) {
+        let _ = height;
+    }
+    /// Physical client size the window should adopt. The adapter applies a change before
+    /// presenting the next page, so a page prepared at this size appears at once.
+    fn preferred_size(&self) -> Option<[u32; 2]> {
+        None
+    }
+    /// Take text the user asked to copy; the adapter owns the clipboard transfer.
+    fn clipboard(&mut self) -> Option<ClipboardTransfer> {
+        None
+    }
+    /// Observe the outcome of the last clipboard transfer.
+    /// # Errors
+    /// Preserves application failures; a failed transfer itself is a value, not an error.
+    fn copied(&mut self, result: Result<(), CopyFailure>) -> Result<(), Box<dyn Error>> {
+        let _ = result;
+        Ok(())
+    }
+    /// The user asked to close the window with Escape or the operating system's close command.
+    /// Return true to close at once, or false when the lifetime decides and later reports
+    /// [`Lifetime::close_requested`].
+    /// # Errors
+    /// Preserves application failures; the window then closes.
+    fn close_request(&mut self) -> Result<bool, Box<dyn Error>> {
+        Ok(true)
+    }
     /// Lend an optional offscreen observer after actual native presentation has completed.
     #[cfg(any(test, feature = "boundary-fixtures"))]
     fn pixel_capture(&mut self) -> Option<&mut dyn crate::pixel_capture::PixelCapture> {
@@ -113,10 +160,31 @@ pub trait Lifetime {
     /// Retains partial ownership so subsequent advancement can settle it.
     fn close(&mut self) -> Result<(), Box<dyn Error>>;
     /// Actual worker/job settlement; cancellation alone is insufficient.
+    ///
+    /// Before the window retires an error is retained and settlement is asked again. After
+    /// [`Lifetime::window_retired`] an error ends settlement, and [`Lifetime::finish`] then
+    /// retains whatever has not retired.
     /// # Errors
     /// Preserves unresolved cleanup causes.
     fn settled(&mut self) -> Result<bool, Box<dyn Error>>;
-    /// Release final ownership after all native resources have retired on their creating thread.
+    /// Whether the closing window may retire now. By default the window stays until
+    /// [`Lifetime::settled`]; a lifetime whose work must observe the window's actual retirement
+    /// releases it earlier and settles afterwards.
+    /// # Errors
+    /// Preserves unresolved cleanup causes.
+    fn window_releasable(&mut self) -> Result<bool, Box<dyn Error>> {
+        self.settled()
+    }
+    /// The native window, its peers and its presentation buffers have actually been destroyed.
+    /// The event loop and the completion wake stay live until [`Lifetime::settled`] is true:
+    /// [`Lifetime::advance`] keeps being called, and no page, input or picker is consumed.
+    /// # Errors
+    /// Preserves application failures; settlement still continues.
+    fn window_retired(&mut self) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+    /// Release final ownership after all native resources have retired on their creating thread
+    /// and the completion wake has disconnected.
     /// # Errors
     /// Preserves original final cleanup failures.
     fn finish(&mut self) -> Result<(), Box<dyn Error>>;
@@ -125,6 +193,12 @@ pub trait Lifetime {
 #[cfg(windows)]
 #[allow(unsafe_code)]
 mod windows;
+#[cfg(windows)]
+pub(crate) use windows::{FormInput, FormOwner, FormTurn, FormWindow};
+#[cfg(windows)]
+mod hosted;
+#[cfg(windows)]
+pub(crate) use hosted::HostedForm;
 
 /// Reserve the native backing image, bounded field documents/providers, and copied peer values.
 /// Raster preparation and application metadata require their own original reservations.
@@ -160,6 +234,23 @@ pub fn run(options: Window, lifetime: &mut impl Lifetime) -> Result<(), Box<dyn 
     }
 }
 
+/// Text to place on the clipboard, optionally only before an original performance-counter
+/// deadline that the adapter checks immediately before native clipboard entry.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClipboardTransfer {
+    /// Complete text; text containing NUL is rejected by the transfer.
+    pub text: String,
+    /// Absolute counter cutoff on the window's thread; `None` copies unconditionally.
+    pub before: Option<sugarsubstitute_contracts::execution::CounterDeadline>,
+}
+/// Why a clipboard transfer did not happen.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CopyFailure {
+    /// The transfer's counter deadline had passed when the clipboard would have been entered.
+    Expired,
+    /// The native transfer failed; the description is for diagnostics only.
+    Transfer(String),
+}
 /// Original modal picker request, independent of display strings and filesystem authority.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Picker {

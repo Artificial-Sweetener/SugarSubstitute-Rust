@@ -10,8 +10,8 @@ fn direct_launch_engines_do_not_gain_brokered_activation_capability() -> Result<
     old.require_activation(1, 1)?;
     assert_eq!(old.require_activation(ACTIVATION_PROTOCOL, 1), Err(Rejection::Unsupported));
     let current = UpdaterContract::decode(CURRENT_UPDATER_CONTRACT)?;
-    current.require_activation(ACTIVATION_PROTOCOL, 1)?;
-    assert_eq!(current.require_activation(1, 1), Err(Rejection::Unsupported));
+    current.require_activation(ACTIVATION_PROTOCOL, 2)?;
+    assert_eq!(current.require_activation(1, 2), Err(Rejection::Unsupported));
     Ok(())
 }
 
@@ -44,9 +44,9 @@ fn historical_preparation_declarations_do_not_gain_probe_capability() -> Result<
         Err(Rejection::Unsupported)
     );
     let current = UpdaterContract::decode(CURRENT_UPDATER_CONTRACT)?;
-    assert_eq!(current.require_probe(1, 1), Err(Rejection::Unsupported));
-    assert_eq!(current.require_probe(3, 1), Err(Rejection::Unsupported));
-    assert_eq!(current.require_probe(1, 2), Err(Rejection::InstallationSchema));
+    assert_eq!(current.require_probe(1, 2), Err(Rejection::Unsupported));
+    assert_eq!(current.require_probe(4, 2), Err(Rejection::Unsupported));
+    assert_eq!(current.require_probe(1, 3), Err(Rejection::InstallationSchema));
     Ok(())
 }
 
@@ -58,9 +58,9 @@ fn future_entry_names_remain_readable_without_granting_known_operations() -> Res
     assert_eq!(contract.require_probe(2, 1), Err(Rejection::Unsupported));
     assert_eq!(contract.require_activation(1, 1), Err(Rejection::Unsupported));
     let contract = UpdaterContract::decode(CURRENT_UPDATER_CONTRACT)?;
-    assert_eq!(contract.require_activation(3, 1), Err(Rejection::Unsupported));
+    assert_eq!(contract.require_activation(3, 2), Err(Rejection::Unsupported));
     assert_eq!(
-        contract.require_activation(ACTIVATION_PROTOCOL, 2),
+        contract.require_activation(ACTIVATION_PROTOCOL, 3),
         Err(Rejection::InstallationSchema)
     );
     Ok(())
@@ -130,8 +130,8 @@ fn probe_declarations_require_the_exact_schema_and_nonempty_ordered_versions() {
 #[test]
 fn future_entries_and_installation_readers_require_explicit_support() -> Result<(), Rejection> {
     let contract = UpdaterContract::decode(CURRENT_UPDATER_CONTRACT)?;
-    assert_eq!(contract.require_preparation(3, 1), Err(Rejection::Unsupported));
-    assert_eq!(contract.require_preparation(2, 2), Err(Rejection::InstallationSchema));
+    assert_eq!(contract.require_preparation(3, 2), Err(Rejection::Unsupported));
+    assert_eq!(contract.require_preparation(2, 3), Err(Rejection::InstallationSchema));
     let transition = UpdaterContract::decode(
         br#"{"schema_version":1,"preparation_protocols":[1,2],"installation_schemas":[1,2]}"#,
     )?;
@@ -173,6 +173,25 @@ fn malformed_metadata_never_claims_an_updater_entry() {
     );
 }
 
+/// Probe version 2 carried generations without a signed release; neither side of that skew can
+/// start the other, so the sender refuses before publishing any trial.
+#[test]
+fn probe_senders_and_updaters_from_before_signed_release_labels_refuse_each_other()
+-> Result<(), Rejection> {
+    let previous = UpdaterContract::decode(
+        br#"{"schema_version":3,"installation_schemas":[2],"entry_protocols":{"prepare":[1],"probe":[2],"activate":[2]}}"#,
+    )?;
+    let schema = crate::installation::SCHEMA_VERSION;
+    assert_eq!(previous.require_probe(probe::PROBE_PROTOCOL, schema), Err(Rejection::Unsupported));
+    let current = UpdaterContract::decode(CURRENT_UPDATER_CONTRACT)?;
+    assert_eq!(current.require_probe(2, schema), Err(Rejection::Unsupported));
+    assert_eq!(
+        probe::PROBE_ARGUMENT,
+        format!("--internal-updater-probe-v{}", probe::PROBE_PROTOCOL)
+    );
+    Ok(())
+}
+
 #[test]
 fn engine_and_app_from_either_side_of_the_channel_change_refuse_each_other() -> Result<(), Rejection>
 {
@@ -184,7 +203,7 @@ fn engine_and_app_from_either_side_of_the_channel_change_refuse_each_other() -> 
     );
     // A newer app finds an older engine that cannot inherit an update-attempt channel.
     let older = UpdaterContract::decode(
-        br#"{"schema_version":3,"installation_schemas":[1],"entry_protocols":{"prepare":[1],"probe":[2],"activate":[2]}}"#,
+        br#"{"schema_version":3,"installation_schemas":[2],"entry_protocols":{"prepare":[1],"probe":[3],"activate":[2]}}"#,
     )?;
     assert_eq!(
         older.require_preparation(PREPARATION_PROTOCOL, crate::installation::SCHEMA_VERSION),

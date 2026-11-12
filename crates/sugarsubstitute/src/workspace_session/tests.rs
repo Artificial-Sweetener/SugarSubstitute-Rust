@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Qualify real storage jobs and bounded transfers over isolated owned directories.
 mod baseline;
+mod close_records;
 mod profiles;
 mod storage;
 mod transfers;

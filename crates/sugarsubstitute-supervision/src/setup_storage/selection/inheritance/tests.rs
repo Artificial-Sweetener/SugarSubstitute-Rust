@@ -39,7 +39,9 @@ fn protocol_requires_exact_version_canonical_handle_and_no_extra_arguments() {
         vec![PREFIX, "+4"],
         vec![PREFIX, "04"],
         vec![PREFIX, "4", "extra"],
+        vec!["--installed-launch-v1", "4"],
         vec!["--installed-launch-v2", "4"],
+        vec!["--installed-launch-v5", "4"],
     ] {
         assert!(parse(input.into_iter().map(OsString::from)).is_err());
     }

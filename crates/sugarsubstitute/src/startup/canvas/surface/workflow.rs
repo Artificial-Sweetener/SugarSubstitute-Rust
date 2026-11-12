@@ -430,6 +430,7 @@ impl NativeSurface {
             let path = super::operations::fixture_file(output, file)
                 .ok_or_else(|| failure(CanvasFailureStatus::Error, "No such fixture file"))?;
             let acquirer = Arc::new(super::fixture_file::FixtureFile::new(path));
+            let acquirer = self.retain_temporary(file, &reference, acquirer);
             return Ok(ComfyFile { reference, acquirer });
         }
         let backend = self
@@ -438,7 +439,26 @@ impl NativeSurface {
             .ok_or_else(|| failure(CanvasFailureStatus::Unavailable, "No canvas backend"))?;
         let owner = super::super::comfy_source::ComfySource::new(backend, target, None)
             .map_err(|_| failure(CanvasFailureStatus::Error, "An input file is unreachable"))?;
-        Ok(ComfyFile { reference, acquirer: Arc::new(owner) })
+        let acquirer = self.retain_temporary(file, &reference, Arc::new(owner));
+        Ok(ComfyFile { reference, acquirer })
+    }
+
+    /// Keep the original of a ComfyUI temporary or output file in the session directory:
+    /// ComfyUI deletes its temporary files when it starts and reuses their names, and outputs
+    /// are the user's to move or delete. Input files are the workflow's own sources.
+    fn retain_temporary(
+        &self,
+        file: &CanvasFileReference,
+        reference: &Arc<str>,
+        live: Arc<dyn crate::native_canvas::session::acquisition::SourceAcquirer>,
+    ) -> Arc<dyn crate::native_canvas::session::acquisition::SourceAcquirer> {
+        use sugarsubstitute_contracts::canvas_surface::CanvasFileStorage;
+        match (&self.retained_bases, file.storage()) {
+            (Some(bases), CanvasFileStorage::Temporary | CanvasFileStorage::Output) => Arc::new(
+                super::retained_base::RetainedBase::new(reference.clone(), live, bases.clone()),
+            ),
+            _ => live,
+        }
     }
 }
 

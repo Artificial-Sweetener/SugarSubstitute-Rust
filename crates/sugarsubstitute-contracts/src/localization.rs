@@ -3,6 +3,8 @@
 
 //! Own SugarSubstitute's product copy and its sole supported-locale inventory.
 
+/// Localized close-save state and the next start's unsaved-work notice.
+pub mod closing;
 /// Localized profile-conflict decisions.
 pub mod conflict;
 /// Localized native incident reporting copy.
@@ -11,6 +13,8 @@ pub mod incident;
 pub mod installer;
 /// Localized operation-specific startup feedback.
 pub mod startup;
+/// Localized update controls, update report steps and start-up update lines.
+pub mod updates;
 /// Localized standalone canvas viewer status.
 pub mod viewer;
 /// Localized native main-window controls.
@@ -64,6 +68,10 @@ pub struct Messages {
     pub report: &'static incident::ReportMessages,
     /// Accessible names for the native main-window caption controls.
     pub window: &'static window::WindowMessages,
+    /// The close save's window state and the next start's unsaved-work notice.
+    pub closing: &'static closing::ClosingMessages,
+    /// The window's update controls, the update report's steps and start-up update lines.
+    pub updates: &'static updates::UpdateMessages,
     /// Native canvas viewer title and image-opening feedback.
     pub viewer: &'static viewer::ViewerMessages,
 }
@@ -87,10 +95,12 @@ pub static LOCALES: &[Messages] = &[
         cleanup_failed: "Cleanup failed. Retry is unavailable",
         retry_ready: "Connection failed. Select here to retry",
         retry: "Retry",
-        profile_in_use: "This profile is already in use by another SugarSubstitute window or copy. Close that copy and let it finish shutting down, then open SugarSubstitute again. Your profile has not been changed.",
+        profile_in_use: "Another SugarSubstitute window is still open. Close it, then start SugarSubstitute again.",
         report: &incident::EN,
         conflict: &conflict::EN,
         window: &window::EN,
+        closing: &closing::EN,
+        updates: &updates::EN,
         viewer: &viewer::EN,
     },
     Messages {
@@ -110,10 +120,12 @@ pub static LOCALES: &[Messages] = &[
         cleanup_failed: "清理失败，无法重试",
         retry_ready: "连接失败，点击此处重试",
         retry: "重试",
-        profile_in_use: "另一个 SugarSubstitute 窗口或副本正在使用此配置文件。请关闭该副本并等待其完全退出，然后重新打开 SugarSubstitute。您的配置文件未被更改。",
+        profile_in_use: "另一个 SugarSubstitute 窗口仍处于打开状态。请关闭它，然后重新启动 SugarSubstitute。",
         report: &incident::ZH_HANS,
         conflict: &conflict::ZH_HANS,
         window: &window::ZH_HANS,
+        closing: &closing::ZH_HANS,
+        updates: &updates::ZH_HANS,
         viewer: &viewer::ZH_HANS,
     },
     Messages {
@@ -133,10 +145,12 @@ pub static LOCALES: &[Messages] = &[
         cleanup_failed: "終了処理に失敗しました。再試行できません",
         retry_ready: "接続に失敗しました。ここを選択して再試行",
         retry: "再試行",
-        profile_in_use: "このプロファイルは別の SugarSubstitute のウィンドウまたはコピーで使用中です。そのコピーを閉じて終了処理が完了してから、SugarSubstitute を開き直してください。プロファイルは変更されていません。",
+        profile_in_use: "別の SugarSubstitute ウィンドウがまだ開いています。それを閉じてから、SugarSubstitute をもう一度起動してください。",
         report: &incident::JA,
         conflict: &conflict::JA,
         window: &window::JA,
+        closing: &closing::JA,
+        updates: &updates::JA,
         viewer: &viewer::JA,
     },
     Messages {
@@ -156,10 +170,12 @@ pub static LOCALES: &[Messages] = &[
         cleanup_failed: "정리 실패. 다시 시도할 수 없습니다",
         retry_ready: "연결 실패. 여기를 선택하여 다시 시도",
         retry: "다시 시도",
-        profile_in_use: "다른 SugarSubstitute 창 또는 복사본이 이 프로필을 사용 중입니다. 해당 복사본을 닫고 종료가 완료될 때까지 기다린 다음 SugarSubstitute를 다시 여세요. 프로필은 변경되지 않았습니다.",
+        profile_in_use: "다른 SugarSubstitute 창이 아직 열려 있습니다. 그 창을 닫은 다음 SugarSubstitute를 다시 시작하세요.",
         report: &incident::KO,
         conflict: &conflict::KO,
         window: &window::KO,
+        closing: &closing::KO,
+        updates: &updates::KO,
         viewer: &viewer::KO,
     },
     Messages {
@@ -179,10 +195,12 @@ pub static LOCALES: &[Messages] = &[
         cleanup_failed: "Falló la limpieza. No se puede reintentar",
         retry_ready: "Error de conexión. Selecciona aquí para reintentar",
         retry: "Reintentar",
-        profile_in_use: "Otra ventana o copia de SugarSubstitute está usando este perfil. Cierra esa copia y espera a que termine de cerrarse; después, vuelve a abrir SugarSubstitute. Tu perfil no se ha modificado.",
+        profile_in_use: "Otra ventana de SugarSubstitute sigue abierta. Ciérrala y vuelve a iniciar SugarSubstitute.",
         report: &incident::ES,
         conflict: &conflict::ES,
         window: &window::ES,
+        closing: &closing::ES,
+        updates: &updates::ES,
         viewer: &viewer::ES,
     },
 ];
@@ -224,6 +242,8 @@ mod tests {
                 .chain(locale.report.labels())
                 .chain(locale.conflict.labels())
                 .chain(locale.window.labels())
+                .chain(locale.closing.labels())
+                .chain(locale.updates.labels())
                 .chain(locale.viewer.labels())
                 .chain(locale.startup.labels())
                 .all(|text| !text.trim().is_empty() && !text.contains('\0'))

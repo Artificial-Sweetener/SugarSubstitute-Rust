@@ -10,13 +10,19 @@ pub use launcher::{CURRENT_LAUNCHER_CONTRACT, LAUNCHER_CONTRACT_FILE, LauncherCo
 /// Filename beneath the authenticated application's payload directory.
 pub const CONTRACT_FILE: &str = "sugarsubstitute-application.json";
 /// Current inherited selection protocol implemented by the native entry boundary.
-pub const INSTALLED_LAUNCH_PROTOCOL: u32 = 1;
+///
+/// The transferred selection carries installation selection schema 2, whose generations name
+/// their signed release. Protocols 1 (accepted) and 2 (trial) carried schema 1; a launcher and
+/// application compare declared numbers before creation, so a skewed pair is refused instead
+/// of exchanging records the receiver would misread.
+pub const INSTALLED_LAUNCH_PROTOCOL: u32 = 3;
 /// Versioned entry argument; the following value names the explicitly inherited selection handle.
-pub const INSTALLED_LAUNCH_ARGUMENT: &str = "--installed-launch-v1";
+pub const INSTALLED_LAUNCH_ARGUMENT: &str = "--installed-launch-v3";
 /// Trial entry carries explicit run and snapshot handles instead of accepted-only selection.
-pub const TRIAL_LAUNCH_PROTOCOL: u32 = 2;
+/// Its snapshot holds a selection schema 2 record, like `INSTALLED_LAUNCH_PROTOCOL`.
+pub const TRIAL_LAUNCH_PROTOCOL: u32 = 4;
 /// Versioned trial entry argument followed by run and snapshot handle values, in that order.
-pub const TRIAL_LAUNCH_ARGUMENT: &str = "--installed-launch-v2";
+pub const TRIAL_LAUNCH_ARGUMENT: &str = "--installed-launch-v4";
 /// Exact contract distributed with applications built from this source.
 pub const CURRENT_CONTRACT: &[u8] = include_bytes!("application_launch/current.json");
 /// Bound before decoding untrusted application compatibility metadata.

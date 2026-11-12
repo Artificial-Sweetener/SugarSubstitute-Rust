@@ -34,9 +34,11 @@ pub fn run() -> ExitCode {
             let Err(cause) = run_inner() else { return Ok(()) };
             let details = crate::failure_details::Details(cause.as_ref());
             tracing::error!(operation="stable_launcher_failed",cause=%details,"Installed application could not start");
+            let copy = sugarsubstitute_contracts::localization::messages("en");
             if let Err(secondary) = sugarsubstitute_desktop::show_startup_failure(
+                copy,
                 crate::APPLICATION_NAME,
-                sugarsubstitute_contracts::localization::messages("en").report.startup_failed,
+                copy.report.startup_failed,
                 format_args!("{details}"),
             ) {
                 tracing::error!(operation="stable_launcher_failure_presentation",cause=?secondary,"Startup failure presentation failed");

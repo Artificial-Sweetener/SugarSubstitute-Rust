@@ -44,6 +44,15 @@ pub enum Element {
         /// Render the glyph with the resolved surface mode's on-accent foreground.
         on_accent: bool,
     },
+    /// A bundled Fluent icon recolored to an explicit foreground, such as a theme's text tone.
+    Glyph {
+        /// Logical icon viewport.
+        bounds: Bounds,
+        /// Authoritative icon identity.
+        icon: FluentIcon,
+        /// Unpremultiplied foreground replacing the icon's authored color.
+        color: [u8; 4],
+    },
     /// Embedded product artwork, parsed with the shared resource restrictions.
     Artwork {
         /// Logical artwork viewport.
@@ -67,6 +76,7 @@ impl Element {
         match self {
             Self::Decoration { bounds, .. }
             | Self::Icon { bounds, .. }
+            | Self::Glyph { bounds, .. }
             | Self::Artwork { bounds, .. } => {
                 bounds.x += x;
                 bounds.y += y;
@@ -190,7 +200,9 @@ impl SceneCursor {
                 Element::Decoration { bounds, .. } => {
                     bounds.validate(surface.scale).map_err(io::Error::other)?
                 }
-                Element::Icon { bounds: b, .. } | Element::Artwork { bounds: b, .. } => {
+                Element::Icon { bounds: b, .. }
+                | Element::Glyph { bounds: b, .. }
+                | Element::Artwork { bounds: b, .. } => {
                     VectorViewport {
                         x: b.x,
                         y: b.y,
@@ -287,6 +299,9 @@ impl SceneCursor {
                     )
                 });
                 self.vector(bounds, icon.source(), foreground)?
+            }
+            Element::Glyph { bounds, icon, color } => {
+                self.vector(bounds, icon.source(), Some(color))?
             }
             Element::Artwork { bounds, source } => self.vector(bounds, source, None)?,
         });

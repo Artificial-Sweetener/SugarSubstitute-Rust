@@ -17,6 +17,10 @@ pub enum TrustFailure {
         /// Native protection retirement failure.
         retirement: io::Error,
     },
+    /// Another holder kept the trust writer past the bounded wait or the job deadline.
+    LockTimeout,
+    /// The job was cancelled while waiting for the trust writer.
+    LockCancelled,
     /// Verification failed; any previously accepted progress was saved successfully.
     Verification(Verification),
     /// Accepted trust could not be saved. No offer is returned; both failures are retained.
@@ -32,6 +36,8 @@ impl fmt::Display for TrustFailure {
         formatter.write_str(match self {
             Self::Retirement { .. } => "Update trust and protection retirement failed",
             Self::Storage(_) => "Update trust storage failed",
+            Self::LockTimeout => "Update trust stayed locked by another process",
+            Self::LockCancelled => "Update trust wait was cancelled",
             Self::Verification(_) => "Update verification failed",
             Self::Publication { .. } => "Update trust could not be committed",
         })
@@ -43,12 +49,23 @@ impl Error for TrustFailure {
             Self::Storage(cause) | Self::Publication { storage: cause, .. } => Some(cause),
             Self::Verification(cause) => Some(cause),
             Self::Retirement { operation, .. } => Some(operation.as_ref()),
+            Self::LockTimeout | Self::LockCancelled => None,
         }
     }
 }
 impl From<io::Error> for TrustFailure {
     fn from(cause: io::Error) -> Self {
         Self::Storage(cause)
+    }
+}
+impl From<super::super::short_lock::Refused> for TrustFailure {
+    fn from(refused: super::super::short_lock::Refused) -> Self {
+        use super::super::short_lock::Refused;
+        match refused {
+            Refused::Timeout => Self::LockTimeout,
+            Refused::Cancelled => Self::LockCancelled,
+            Refused::Storage(cause) => Self::Storage(cause),
+        }
     }
 }
 impl From<Verification> for TrustFailure {

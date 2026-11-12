@@ -7,7 +7,12 @@ use std::error::Error;
 /// Present only this user-facing Root's failed lifetime, retaining its exact original error.
 pub(super) fn report_failure<C: EntryActivation + 'static, E: Error + 'static>(
     cause: Box<dyn Error>,
-    show: impl FnOnce(&str, &str, std::fmt::Arguments<'_>) -> Result<(), E>,
+    show: impl FnOnce(
+        &'static sugarsubstitute_contracts::localization::Messages,
+        &str,
+        &str,
+        std::fmt::Arguments<'_>,
+    ) -> Result<(), E>,
 ) -> Box<dyn Error> {
     if super::entry_runner::is_normal_shutdown_failure::<C>(cause.as_ref()) {
         tracing::error!(operation="application_shutdown_failed",
@@ -23,6 +28,7 @@ pub(super) fn report_failure<C: EntryActivation + 'static, E: Error + 'static>(
             copy.report.startup_failed
         };
     if let Err(secondary) = show(
+        copy,
         sugarsubstitute::APPLICATION_NAME,
         summary,
         format_args!("{:?}", super::entry_runner::FailureDisplay(cause.as_ref())),

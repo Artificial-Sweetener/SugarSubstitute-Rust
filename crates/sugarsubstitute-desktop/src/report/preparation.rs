@@ -35,7 +35,7 @@ pub trait ReportSessionPreparation: ReportSessionContent {
 pub fn run_prepared_report_surface<C: ReportSessionPreparation + 'static>(
     mut content: C,
 ) -> Result<ReportSurfaceReceipt, ReportSurfaceError> {
-    super::windows::validate_content_capacity::<Prepared<C>>()?;
+    super::surface::validate_content_capacity::<Prepared<C>>()?;
     let bootstrap = Bootstrap::new()?;
     let mut failure = Failures::default();
     if let Err(cause) = call(|| content.start(bootstrap.wake())) {

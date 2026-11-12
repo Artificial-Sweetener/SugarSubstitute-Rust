@@ -5,7 +5,7 @@ use super::{RuntimePaths, Selection, check, invalid};
 use crate::durable_storage::files::{self, Directory};
 use serde::Deserialize;
 use std::{fs::File, io};
-use sugarsubstitute_contracts::{execution::JobContext, installation::Generation};
+use sugarsubstitute_contracts::{execution::JobContext, installation::PackageDigest};
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -21,7 +21,7 @@ pub(super) struct ReadyRecord {
 pub(super) fn read(
     root: &Directory,
     directory: &Directory,
-    expected: Option<&Generation>,
+    expected: Option<&PackageDigest>,
     context: &JobContext,
 ) -> io::Result<(ReadyRecord, File)> {
     check(context)?;
@@ -35,7 +35,7 @@ pub(super) fn read(
     {
         return Err(invalid("Unsupported native installation record"));
     }
-    if expected.is_some_and(|generation| generation.package.as_str() != record.bundle_sha256) {
+    if expected.is_some_and(|package| package.as_str() != record.bundle_sha256) {
         return Err(invalid("Saved configuration differs from its recorded package identity"));
     }
     record.selection.validate()?;

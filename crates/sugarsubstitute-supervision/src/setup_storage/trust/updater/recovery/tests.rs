@@ -69,6 +69,10 @@ fn recovery_preserves_history_user_files_and_damaged_candidate_without_applicati
             let generation = Generation {
                 id: GenerationId::new(format!("{number:032x}"))?,
                 package: PackageDigest::new(format!("{number:064x}"))?,
+                release: sugarsubstitute_contracts::installation::SignedRelease::new(
+                    format!("1.0.{number}"),
+                    number + 1,
+                )?,
             };
             history = history
                 .prepare(generation.clone(), PreparationIntent::Automatic)?
@@ -80,7 +84,7 @@ fn recovery_preserves_history_user_files_and_damaged_candidate_without_applicati
             history = history.accept(attempt)?;
         }
         trust.protected(context, |protection| {
-            let _writer = trust.writer(protection)?;
+            let _writer = trust.writer(protection, context)?;
             trust.write_updater(&history, protection, context)
         })?;
         let mut trial = seed.stage(|| NOW, context)?.reserve_trial(context)?;
@@ -165,7 +169,7 @@ fn newer_authenticated_payload_recovers_abandoned_trial_during_normal_staging() 
         let trial = trial(root.path(), workspace.path(), context)?;
         let previous = trial.attempt().generation.clone();
         drop(trial);
-        let newer = br#"{"schema_version":2,"preparation_protocols":[1,2],"installation_schemas":[1],"probe_protocols":[2]}"#;
+        let newer = br#"{"schema_version":2,"preparation_protocols":[1,2],"installation_schemas":[2],"probe_protocols":[2]}"#;
         let staged = package(
             root.path(),
             workspace.path(),

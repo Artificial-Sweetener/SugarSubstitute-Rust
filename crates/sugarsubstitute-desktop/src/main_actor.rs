@@ -22,6 +22,7 @@ mod render_preview;
 mod retirement;
 mod session;
 mod timeout;
+mod updates;
 mod window_lifecycle;
 use crate::{
     DesktopError, DesktopStartupObservation, MainWindowRequest, NativeMaterial,
@@ -66,6 +67,8 @@ pub(crate) struct MainActor {
     request: Option<MainWindowRequest>,
     admission: Admission,
     recovery: crate::main_backend::Recovery,
+    /// The caption's update button, restart offer, saving state and one-time messages.
+    updates: updates::CaptionText,
     stage: ConstructionStage,
     window: Option<Rc<Window>>,
     presenter: Option<Presenter>,
@@ -99,6 +102,8 @@ pub(crate) struct MainActor {
     events: Option<Rc<Events>>,
     readiness: Option<MainReadiness>,
     revealed: bool,
+    /// A window owned by this one is open; Windows would destroy it with this window.
+    owned_window_open: bool,
     reload: crate::main_reload::ReloadAdmission,
     retired: bool,
     navigations: u64,
@@ -157,6 +162,7 @@ impl MainActor {
             request: Some(request),
             admission,
             recovery,
+            updates: updates::CaptionText::default(),
             stage: ConstructionStage::Window,
             window: None,
             presenter: None,
@@ -186,6 +192,7 @@ impl MainActor {
             events: Some(events),
             readiness: Some(readiness),
             revealed: false,
+            owned_window_open: false,
             reload: crate::main_reload::ReloadAdmission::default(),
             retired: false,
             navigations: 0,

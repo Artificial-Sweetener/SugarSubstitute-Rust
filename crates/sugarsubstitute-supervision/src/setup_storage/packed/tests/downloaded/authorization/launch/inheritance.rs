@@ -39,7 +39,8 @@ fn child_copy(
 }
 
 #[test]
-fn inherited_pin_survives_parent_drop_then_releases_after_coordinator_adoption() -> TestResult {
+fn inherited_reservation_survives_parent_drop_and_a_candidate_replacement_before_adoption()
+-> TestResult {
     worker::run_reserved(TRUST_RESERVATION_BYTES + 112 * 1024 * 1024, |context, _| {
         let temporary = tempfile::tempdir()?;
         let directory = Directory::open(temporary.path(), false)?;
@@ -57,17 +58,23 @@ fn inherited_pin_survives_parent_drop_then_releases_after_coordinator_adoption()
             Generation {
                 id: GenerationId::new("2".repeat(32))?,
                 package: PackageDigest::new("c".repeat(64))?,
+                release: sugarsubstitute_contracts::installation::SignedRelease::new(
+                    "1.0.0".to_owned(),
+                    1,
+                )?,
             },
             PreparationIntent::Automatic,
         )?;
-        assert!(store.compare_exchange(&before, &next, context).is_err());
+        // The reservation travels as a value, so a replacement landing before the child uses it
+        // is not blocked; it changed only the candidate, so the launch re-resolves and proceeds.
+        store.compare_exchange(&before, &next, context)?;
         let mut run = InstallationRun::acquire(store.clone(), context)?;
         let InstallationLaunch::Application(application) =
             run.select_launch(Some(child), context)?
         else {
             return Err("Application absent".into());
         };
-        store.compare_exchange(&before, &next, context)?;
+        assert_eq!(application.generation(), &generation);
         drop(run);
         assert!(InstallationRun::acquire(store.clone(), context).is_err());
         drop(application);

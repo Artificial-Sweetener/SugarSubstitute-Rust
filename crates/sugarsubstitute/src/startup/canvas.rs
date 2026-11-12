@@ -23,6 +23,8 @@ use sugarsubstitute_execution::ExecutionClient;
 use sugarsubstitute_image_ops::Extent;
 
 #[cfg(feature = "native-composition")]
+mod close_save;
+#[cfg(feature = "native-composition")]
 mod comfy_source;
 #[cfg(feature = "native-composition")]
 pub(in crate::startup) mod session_source;
@@ -66,6 +68,9 @@ pub(super) struct EmbeddedCanvas {
     #[cfg(feature = "native-composition")]
     retained_limit: Option<u64>,
     cutoff: Option<Moment>,
+    /// Whether the close save began; routed gestures can no longer change saved documents.
+    #[cfg(feature = "native-composition")]
+    close_saving: bool,
     reported_ready: bool,
     /// The showing display's refresh rate, kept for a session created after it was reported.
     #[cfg(feature = "native-composition")]
@@ -173,6 +178,8 @@ impl EmbeddedCanvas {
             #[cfg(feature = "native-composition")]
             retained_limit: None,
             cutoff: None,
+            #[cfg(feature = "native-composition")]
+            close_saving: false,
             reported_ready: false,
             #[cfg(feature = "native-composition")]
             display: None,
@@ -274,18 +281,22 @@ impl EmbeddedCanvas {
             session.input(Input::DisplayRefresh(hertz))?;
         }
         #[cfg(feature = "native-composition")]
-        session.persist_inputs(
-            crate::input_documents::InputDocumentStore::new(
-                self.input_directory.clone().unwrap_or_else(|| {
-                    sugarsubstitute_configuration::layout::InstallationLayout::for_image_directory(
-                        &self.anchor,
-                    )
-                    .user()
-                    .join(INPUT_DOCUMENTS)
-                }),
-            )?,
-            self.input_plan.clone(),
-        );
+        {
+            let directory = self.input_directory.clone().unwrap_or_else(|| {
+                sugarsubstitute_configuration::layout::InstallationLayout::for_image_directory(
+                    &self.anchor,
+                )
+                .user()
+                .join(INPUT_DOCUMENTS)
+            });
+
+            self.surface.retained_bases =
+                Some(crate::input_documents::bases::RetainedBases::new(&directory));
+            session.persist_inputs(
+                crate::input_documents::InputDocumentStore::new(directory)?,
+                self.input_plan.clone(),
+            );
+        }
         self.session = Some(session);
         let runtime = Runtime::shared(client, self.scope)?;
         self.session.as_mut().ok_or("Application canvas disappeared")?.start_runtime(runtime)
@@ -466,8 +477,8 @@ impl EmbeddedCanvas {
         input: sugarsubstitute_desktop::canvas::MainCanvasInput,
     ) -> Result<surface::RoutedInput, Box<dyn Error>> {
         let routed = match self.session.as_mut() {
-            Some(session) => self.surface.routed_input(input, session)?,
-            None => return Ok(surface::RoutedInput::Refused),
+            Some(session) if !self.close_saving => self.surface.routed_input(input, session)?,
+            _ => return Ok(surface::RoutedInput::Refused),
         };
         if routed == surface::RoutedInput::Applied {
             self.poll()?;

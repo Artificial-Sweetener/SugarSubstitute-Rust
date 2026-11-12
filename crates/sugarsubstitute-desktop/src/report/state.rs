@@ -53,6 +53,9 @@ impl State {
     pub(super) const fn binding(&self) -> ReportBinding {
         self.binding
     }
+    pub(super) const fn is_presented(&self) -> bool {
+        self.presented
+    }
     pub(super) const fn closing(&self) -> bool {
         self.closing
     }
@@ -177,7 +180,7 @@ impl State {
         self.native_retired = true;
         Ok(())
     }
-    pub(super) fn receipt(self) -> Result<ReportSurfaceReceipt, ReportSurfaceError> {
+    pub(super) fn receipt(&self) -> Result<ReportSurfaceReceipt, ReportSurfaceError> {
         if !self.native_retired {
             return Err(ReportSurfaceError::rejected("report_receipt_without_retirement"));
         }
