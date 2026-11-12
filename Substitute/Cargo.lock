@@ -3592,16 +3592,14 @@ dependencies = [
 
 [[package]]
 name = "webview2-com"
-version = "0.39.0"
+version = "0.39.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4bf1ceff8b5f9c72157e7e013ffe3c30d6e2b5d78e4ba243774fe201c69f80f1"
+checksum = "3f89fca7a704cee10dcb3654c1dbb8941d1783132f1917358af75bec37a7d7e6"
 dependencies = [
  "webview2-com-macros",
  "webview2-com-sys",
  "windows",
  "windows-core",
- "windows-implement",
- "windows-interface",
 ]
 
 [[package]]
