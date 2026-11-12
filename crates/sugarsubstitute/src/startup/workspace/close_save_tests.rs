@@ -221,6 +221,35 @@ fn a_critical_session_end_saves_within_four_seconds() -> TestResult {
 }
 
 #[test]
+fn the_window_reads_the_close_progress_notice_and_language_the_host_holds() -> TestResult {
+    use sugarsubstitute_desktop::StartupWindowContent;
+    let mut fixture = Fixture::new(true)?;
+    fixture.host.workspace.as_mut().ok_or("Workspace")?.driver = None;
+    fixture.host.input_probe = Some(InputSaveProbe::default());
+    let notice = NotSavedLastTime {
+        reason: CloseReason::Close,
+        items: vec![UnsavedItem::InputCanvas(UnsavedCause::Failed(SaveFailure::Storage))],
+    };
+    fixture.host.workspace.as_mut().ok_or("Workspace")?.notice = Some(notice.clone());
+    assert_eq!(StartupWindowContent::take_unsaved_notice(&mut fixture.host), Some(notice));
+    assert_eq!(StartupWindowContent::take_unsaved_notice(&mut fixture.host), None, "taken once");
+    assert_eq!(StartupWindowContent::close_save_progress(&fixture.host), None, "before close");
+    fixture.host.request_restart_to_apply()?;
+    fixture.poll()?;
+    assert!(matches!(
+        StartupWindowContent::close_save_progress(&fixture.host),
+        Some(CloseSaveProgress::Saving { reason: CloseReason::RestartToApply, .. })
+    ));
+    assert!(std::ptr::eq(
+        fixture.host.locale_messages(),
+        sugarsubstitute_contracts::localization::messages("en")
+    ));
+    fixture.host.input_probe.as_mut().ok_or("Probe")?.verdict = Some(SaveVerdict::Saved);
+    fixture.exit_intent()?;
+    fixture.retire()
+}
+
+#[test]
 fn restart_to_apply_relaunches_only_once_the_close_save_has_its_outcome() -> TestResult {
     use sugarsubstitute_desktop::StartupWindowContent;
     let mut fixture = Fixture::new(true)?;

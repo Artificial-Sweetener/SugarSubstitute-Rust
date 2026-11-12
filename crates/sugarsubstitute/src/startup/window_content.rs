@@ -79,10 +79,27 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
     }
 
     fn session_end_reason(&self) -> &'static str {
+        self.locale_messages().closing.saving
+    }
+
+    fn close_save_progress(
+        &self,
+    ) -> Option<sugarsubstitute_application::workspace_session::close_save::CloseSaveProgress> {
+        Self::close_save_progress(self)
+    }
+
+    fn take_unsaved_notice(
+        &mut self,
+    ) -> Option<sugarsubstitute_application::workspace_session::close_save::NotSavedLastTime> {
+        Self::take_unsaved_notice(self)
+    }
+
+    /// The configured language once startup has its session; English before then.
+    fn locale_messages(&self) -> &'static sugarsubstitute_contracts::localization::Messages {
         let locale = self.startup.as_ref().map_or("en", |startup| {
             startup.session().configuration().presentation().locale().as_str()
         });
-        sugarsubstitute_contracts::localization::messages(locale).closing.saving
+        sugarsubstitute_contracts::localization::messages(locale)
     }
 
     #[cfg(all(windows, feature = "native-composition"))]
