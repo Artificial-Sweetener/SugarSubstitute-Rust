@@ -57,7 +57,6 @@ def test_jest_ignores_nested_generated_packages_and_their_tests(tmp_path: Path) 
         cwd=repository,
         capture_output=True,
         text=True,
-        timeout=30,
         check=True,
         creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
     )

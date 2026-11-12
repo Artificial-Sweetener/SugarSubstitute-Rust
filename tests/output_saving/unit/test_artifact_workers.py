@@ -27,6 +27,7 @@ from sugarcubes.output_saving.domain.artifact import (
 from sugarcubes.output_saving.domain.transfer import OutputFileReference
 from sugarcubes.output_saving.infrastructure.artifact_budget import ArtifactBudget
 from sugarcubes.output_saving.infrastructure.artifact_workers import ArtifactWorkers
+from tests.support.no_progress import wait_for_event
 
 
 def test_two_active_two_queued_overload_and_observed_shutdown() -> None:
@@ -44,8 +45,7 @@ def test_two_active_two_queued_overload_and_observed_shutdown() -> None:
             """Block only this test boundary until explicit release and then observe cancellation."""
             budgets.append(budget)
             loop.call_soon_threadsafe(entered.put_nowait, len(budgets))
-            if not release.wait(5):
-                raise RuntimeError("Test worker release was not delivered.")
+            wait_for_event(release, "Test worker release was not delivered.")
             budget.check()
             return ArtifactReceipt(
                 OutputFileReference("image.png", "", "output"),

@@ -34,6 +34,7 @@ from sugarcubes.model_library.infrastructure.runtime import ModelLibraryRuntime
 from tests.model_library.support.enrichment import ObservedPreviews, ObservedProvider
 from tests.model_library.support.model_roots import FixtureFileRoots
 from tests.model_library.support.thumbnail_freshness import fixture_provider_version
+from tests.support.no_progress import await_outcome, wait_for_event
 
 
 @pytest.mark.parametrize("cancel", (False, True))
@@ -61,8 +62,7 @@ def test_maintenance_observes_terminal_publication_before_clearing_provider_stat
     ) -> None:
         """Hold the real SQLite publication boundary without replacing its persistence behavior."""
         started.set()
-        if not release.wait(5):
-            raise RuntimeError("Proof did not release catalog publication.")
+        wait_for_event(release, "Proof did not release catalog publication.")
         original(
             repository, sha256, records, prepared_assets_changed=prepared_assets_changed
         )
@@ -91,7 +91,7 @@ def test_maintenance_observes_terminal_publication_before_clearing_provider_stat
         job = await runtime.refresh_metadata(initial.evidence.location_id)
         writer: asyncio.Task[None] | None = None
         try:
-            assert await asyncio.to_thread(started.wait, 5)
+            await asyncio.to_thread(wait_for_event, started)
             writer = asyncio.create_task(maintenance())
             await asyncio.sleep(0)
             if cancel:
@@ -99,7 +99,7 @@ def test_maintenance_observes_terminal_publication_before_clearing_provider_stat
                 await asyncio.sleep(0)
             assert not entered.is_set()
             release.set()
-            await asyncio.wait_for(writer, 2)
+            await await_outcome(writer)
             result = await runtime.jobs.wait(job.job_id)
             assert result is not None and result.status == (
                 "cancelled" if cancel else "completed"

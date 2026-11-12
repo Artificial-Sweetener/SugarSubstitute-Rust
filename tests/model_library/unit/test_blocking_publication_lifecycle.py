@@ -24,6 +24,7 @@ import pytest
 from sugarcubes.model_library.application.blocking_model_work import (
     complete_blocking_model_work,
 )
+from tests.support.no_progress import wait_for_event
 
 
 def test_blocking_failure_after_cancellation_remains_observable(
@@ -35,15 +36,14 @@ def test_blocking_failure_after_cancellation_remains_observable(
     def operation() -> None:
         """Expose a bounded blocking failure after the caller cancels its waiter."""
         started.set()
-        if not release.wait(5):
-            raise RuntimeError("Proof did not release the worker.")
+        wait_for_event(release, "Proof did not release the worker.")
         raise ValueError("fixture physical publication failed")
 
     async def exercise() -> None:
         """Retain the actual worker task until its exception is observed."""
         task = asyncio.create_task(complete_blocking_model_work(operation))
         try:
-            assert await asyncio.to_thread(started.wait, 5)
+            await asyncio.to_thread(wait_for_event, started)
             task.cancel()
             await asyncio.sleep(0)
             assert not task.done()
