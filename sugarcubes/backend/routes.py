@@ -31,6 +31,7 @@ from .implementation_save_routes import build_implementation_save_route_handlers
 from .legacy_workflow_routes import build_legacy_workflow_route_handlers
 from .repository_routes import build_repository_route_handlers
 from .self_update_routes import (
+    accept_updates_on_full_start,
     build_self_update_route_handlers,
     publish_self_update_events,
 )
@@ -110,6 +111,7 @@ class RouteHandlers:
     schedule_self_update: RouteHandler
     cancel_self_update: RouteHandler
     dismiss_self_update_notice: RouteHandler
+    report_self_update_page_load: RouteHandler
 
 
 def build_route_handlers(services: BackendServices) -> RouteHandlers:
@@ -192,6 +194,7 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
         schedule_self_update=self_update.schedule_self_update,
         cancel_self_update=self_update.cancel_self_update,
         dismiss_self_update_notice=self_update.dismiss_self_update_notice,
+        report_self_update_page_load=self_update.report_self_update_page_load,
     )
 
 
@@ -269,8 +272,9 @@ def register_routes(prompt_server: Any, services: BackendServices) -> RouteHandl
     routes.post("/sugarcubes/self-update/install")(handlers.schedule_self_update)
     routes.delete("/sugarcubes/self-update/install")(handlers.cancel_self_update)
     routes.delete("/sugarcubes/self-update/notice")(handlers.dismiss_self_update_notice)
-    # Routes register only inside a running ComfyUI, so reaching here proves this
-    # version's backend started; that settles an update installed at this start.
+    routes.post("/sugarcubes/self-update/page-load")(
+        handlers.report_self_update_page_load
+    )
     publish_self_update_events(server, services)
-    services.self_update.confirm_started()
+    accept_updates_on_full_start(server, services)
     return handlers

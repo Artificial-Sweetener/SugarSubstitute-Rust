@@ -35,6 +35,14 @@ def describe_notice(outcome: StartupOutcome) -> str:
             f"Installing SugarCubes {outcome.version} was interrupted, so the "
             f"previous version ({outcome.from_version}) was put back. Nothing else changed."
         )
+    if (
+        outcome.kind is StartupOutcomeKind.RESTORED
+        and outcome.reason == "page-did-not-load"
+    ):
+        return (
+            f"SugarCubes {outcome.version} didn't load in the page, so the previous "
+            f"version ({outcome.from_version}) was put back. Nothing else changed."
+        )
     if outcome.kind is StartupOutcomeKind.RESTORED:
         return (
             f"SugarCubes {outcome.version} didn't start properly, so the previous "

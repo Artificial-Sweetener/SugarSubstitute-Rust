@@ -18,6 +18,7 @@
  */
 import { app } from '/scripts/app.js';
 import { api } from '/scripts/api.js';
+import { announcedSetup } from './ui/core/updates/PageLoadReport.js';
 import { createEditorActionsRuntime } from './ui/editor_actions/EditorActionsComposition.js';
 import { createComfyCubeRuntime } from './ui/cube/ComfyCubeRuntime.js';
 import { ComfyCubeRuntimeLifecycle } from './ui/cube/ComfyCubeRuntimeLifecycle.js';
@@ -411,7 +412,7 @@ export const sugarCubesExtension = {
     getNodeMenuItems(node) {
         return canvasInputs.surfaces.withNodeMenuItems(node, cubeAffordances.getNodeMenuItems(node));
     },
-    async setup() {
+    setup: announcedSetup(documentRef ?? document, async () => {
         promptEditors.setup(canvasInputs.surfaces.regions, { app: appRef, logger, scenes });
         await extensionSetupLifecycle.setup();
         workflowHistory.install();
@@ -427,7 +428,7 @@ export const sugarCubesExtension = {
         modelProviderSettings.setup(appRef);
         modelProviderCacheSettings.setup(appRef);
         modelUpdateLifecycle.start();
-    },
+    }),
     beforeConfigureGraph(graphData) {
         canvasInputs.beforeConfigureGraph();
         workflowHistory.setConfiguring(true);

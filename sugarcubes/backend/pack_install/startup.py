@@ -20,7 +20,8 @@ SugarCubes is loaded yet and the backend is never replaced under a running
 session. This step needs no network. It first settles any earlier replacement:
 an interrupted one, or one whose new version never confirmed a successful start,
 is rolled back. Then it installs the release the user chose, if every check
-still holds. The new version confirms itself once its backend is up.
+still holds. The new version is accepted only after a complete ComfyUI start and
+its first page load; a start or page that fails restores the previous version.
 """
 
 from __future__ import annotations
@@ -94,8 +95,14 @@ def run_startup_update(
         return outcome
 
 
-def confirm_started(pack_folder: Path, running_version: str) -> StartupOutcome | None:
-    """Accept an applied update once the new version's backend is running."""
+def accept_backend_start(
+    pack_folder: Path, running_version: str
+) -> StartupOutcome | None:
+    """Record that a just-installed version completed a full ComfyUI start.
+
+    Call only once ComfyUI is listening with every SugarCubes node registered.
+    The backup is kept until the version's first page load reports in.
+    """
 
     root = updates_root(pack_folder)
     if not root.is_dir():
@@ -109,17 +116,51 @@ def confirm_started(pack_folder: Path, running_version: str) -> StartupOutcome |
             or pending.to_version != running_version
         ):
             return None
-        replacement.confirm()
+        replacement.advance(JournalPhase.STARTED)
         outcome = StartupOutcome(
             StartupOutcomeKind.INSTALLED, pending.to_version, pending.from_version, ""
         )
         write_outcome(root, outcome)
         _logger.info(
-            "SugarCubes update event=installed version=%s from=%s",
+            "SugarCubes update event=installed version=%s from=%s awaiting=page",
             pending.to_version,
             pending.from_version,
         )
         return outcome
+
+
+def report_page_load(pack_folder: Path, running_version: str, *, loaded: bool) -> bool:
+    """Settle a started version by its first page load; returns whether it applied.
+
+    A page that loaded confirms the update and drops the backup. A page that
+    reports a load failure marks the update failed, so the next start restores
+    the previous version.
+    """
+
+    root = updates_root(pack_folder)
+    if not root.is_dir():
+        return False
+    with exclusive_update_lock(root):
+        replacement = TrackedReplacement(root / _TRANSACTION)
+        pending = replacement.pending()
+        if (
+            pending is None
+            or pending.phase is not JournalPhase.STARTED
+            or pending.to_version != running_version
+        ):
+            return False
+        if loaded:
+            replacement.confirm()
+            _logger.info(
+                "SugarCubes update event=page_loaded version=%s", running_version
+            )
+        else:
+            replacement.advance(JournalPhase.PAGE_FAILED)
+            _logger.warning(
+                "SugarCubes update event=page_failed version=%s action=restore_at_next_start",
+                running_version,
+            )
+        return True
 
 
 def read_outcome(root: Path) -> StartupOutcome | None:
@@ -167,12 +208,21 @@ def _settle_earlier_replacement(
     if pending.phase is JournalPhase.BACKING_UP:
         replacement.discard_unstarted()
         return None
+    if pending.phase is JournalPhase.STARTED:
+        # The version started; no page has loaded yet. A newer chosen update
+        # supersedes the wait, otherwise the backup stays for the first page.
+        if StagedStore(updates_root(pack_folder)).has_schedule():
+            replacement.confirm()
+        return None
     replacement.roll_back(pack_folder)
     interrupted = pending.phase is JournalPhase.REPLACING
     if interrupted:
         # The release stays ready; installing it again is the user's choice.
         StagedStore(updates_root(pack_folder)).unschedule()
-    reason = "interrupted" if interrupted else "did-not-start"
+    reason = {
+        JournalPhase.REPLACING: "interrupted",
+        JournalPhase.PAGE_FAILED: "page-did-not-load",
+    }.get(pending.phase, "did-not-start")
     _logger.warning(
         "SugarCubes update event=restored version=%s from=%s reason=%s",
         pending.to_version,
@@ -277,8 +327,9 @@ __all__ = [
     "StartupOutcome",
     "StartupOutcomeKind",
     "clear_outcome",
-    "confirm_started",
+    "accept_backend_start",
     "read_outcome",
+    "report_page_load",
     "run_startup_update",
     "updates_root",
     "write_outcome",

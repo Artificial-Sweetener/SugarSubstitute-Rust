@@ -19,7 +19,8 @@
 background check (`{"force": true}` when the user asks). `POST .../install`
 with `{"version": "x.y.z"}` records the choice to install at the next start;
 `DELETE .../install` withdraws it. `DELETE .../notice` dismisses the report of
-the last start. Every reply, and every `sugarcubes.self_update` websocket event,
+the last start. `POST .../page-load` with `{"loaded": bool}` reports whether the
+page loaded SugarCubes, settling a just-installed version. Every reply, and every `sugarcubes.self_update` websocket event,
 is the state object described in `self_update.wire`.
 """
 
@@ -33,7 +34,9 @@ from typing import Any
 from .composition import BackendServices
 from .responses import BackendError, json_error_from_exception, json_success
 from .route_types import RouteHandler
+from ..nodes import NODE_CLASS_MAPPINGS
 from .self_update import SelfUpdateRejected, snapshot_to_wire
+from .self_update.comfy_start import watch_comfy_start
 from .validation import get_bool, parse_optional_json_body
 
 _VERSION = re.compile(r"^[0-9]{1,9}\.[0-9]{1,9}\.[0-9]{1,9}$")
@@ -48,6 +51,7 @@ class SelfUpdateRouteHandlers:
     schedule_self_update: RouteHandler
     cancel_self_update: RouteHandler
     dismiss_self_update_notice: RouteHandler
+    report_self_update_page_load: RouteHandler
 
 
 def build_self_update_route_handlers(
@@ -89,6 +93,19 @@ def build_self_update_route_handlers(
         except SelfUpdateRejected as error:
             return json_error_from_exception(BackendError(str(error), status=409))
 
+    async def report_self_update_page_load(request: Any) -> Any:
+        try:
+            body = await parse_optional_json_body(request)
+        except BackendError as error:
+            return json_error_from_exception(error)
+        loaded = (body or {}).get("loaded")
+        if not isinstance(loaded, bool):
+            return json_error_from_exception(
+                BackendError("Say whether the page loaded.", status=400)
+            )
+        await asyncio.to_thread(updater.report_page_load, loaded=loaded)
+        return json_success(snapshot_to_wire(updater.snapshot()))
+
     async def dismiss_self_update_notice(request: Any) -> Any:
         _ = request
         return json_success(snapshot_to_wire(updater.dismiss_notice()))
@@ -99,6 +116,7 @@ def build_self_update_route_handlers(
         schedule_self_update=schedule_self_update,
         cancel_self_update=cancel_self_update,
         dismiss_self_update_notice=dismiss_self_update_notice,
+        report_self_update_page_load=report_self_update_page_load,
     )
 
 
@@ -120,8 +138,22 @@ def publish_self_update_events(server: Any, services: BackendServices) -> None:
     )
 
 
+def accept_updates_on_full_start(server: Any, services: BackendServices) -> None:
+    """Accept a just-installed version only once ComfyUI finishes starting."""
+
+    updater = services.self_update
+    watch_comfy_start(
+        server,
+        expected_nodes=NODE_CLASS_MAPPINGS,
+        on_started=lambda registered: updater.accept_backend_start(
+            nodes_registered=registered
+        ),
+    )
+
+
 __all__ = [
     "SELF_UPDATE_EVENT",
+    "accept_updates_on_full_start",
     "SelfUpdateRouteHandlers",
     "build_self_update_route_handlers",
     "publish_self_update_events",

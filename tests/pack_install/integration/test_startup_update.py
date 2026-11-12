@@ -26,8 +26,9 @@ from sugarcubes.backend.pack_install.file_lock import exclusive_update_lock
 from sugarcubes.backend.pack_install.staging import StagedStore
 from sugarcubes.backend.pack_install.startup import (
     StartupOutcomeKind,
-    confirm_started,
+    accept_backend_start,
     read_outcome,
+    report_page_load,
     run_startup_update,
     updates_root,
 )
@@ -75,8 +76,10 @@ def test_chosen_update_installs_at_start_and_is_confirmed(tmp_path: Path) -> Non
     assert snapshot_folder(pack) == _expected_new(pack)
     assert (pack / ".tracking").read_text(encoding="utf-8").splitlines() == list(NEW)
     assert store.load() is None
-    confirmed = confirm_started(pack, "1.1.0")
-    assert confirmed is not None and confirmed.reason == ""
+    accepted = accept_backend_start(pack, "1.1.0")
+    assert accepted is not None and accepted.reason == ""
+    assert (updates_root(pack) / "transaction").exists()
+    assert report_page_load(pack, "1.1.0", loaded=True)
     assert not (updates_root(pack) / "transaction").exists()
     assert run_startup_update(pack) is None
     assert snapshot_folder(pack) == _expected_new(pack)
@@ -105,8 +108,53 @@ def test_confirmation_from_another_version_settles_nothing(tmp_path: Path) -> No
 
     pack, _store = _prepare(tmp_path)
     run_startup_update(pack)
-    assert confirm_started(pack, "1.0.0") is None
+    assert accept_backend_start(pack, "1.0.0") is None
+    assert not report_page_load(pack, "1.1.0", loaded=True)
     assert (updates_root(pack) / "transaction").exists()
+
+
+def test_started_version_keeps_its_backup_until_a_page_loads(tmp_path: Path) -> None:
+    """A headless start accepts the backend; later starts keep that version."""
+
+    pack, _store = _prepare(tmp_path)
+    run_startup_update(pack)
+    accept_backend_start(pack, "1.1.0")
+    assert run_startup_update(pack) is None
+    assert snapshot_folder(pack) == _expected_new(pack)
+    assert (updates_root(pack) / "transaction").exists()
+
+
+def test_page_that_fails_to_load_restores_the_previous_version(tmp_path: Path) -> None:
+    """A load failure the page reports counts as a failed start."""
+
+    pack, _store = _prepare(tmp_path)
+    original = snapshot_folder(pack)
+    run_startup_update(pack)
+    accept_backend_start(pack, "1.1.0")
+    assert report_page_load(pack, "1.1.0", loaded=False)
+    assert not report_page_load(pack, "1.1.0", loaded=True)
+    outcome = run_startup_update(pack)
+    assert outcome is not None
+    assert (outcome.kind, outcome.reason) == (
+        StartupOutcomeKind.RESTORED,
+        "page-did-not-load",
+    )
+    assert snapshot_folder(pack) == original
+
+
+def test_newer_choice_settles_a_started_version_and_installs(tmp_path: Path) -> None:
+    """Choosing another update while one waits for its page settles the first."""
+
+    pack, _store = _prepare(tmp_path)
+    run_startup_update(pack)
+    accept_backend_start(pack, "1.1.0")
+    store = stage_release(tmp_path, pack, pack_files("1.2.0"), "1.2.0")
+    release = store.load()
+    assert release is not None
+    store.schedule(release)
+    outcome = run_startup_update(pack)
+    assert outcome is not None and outcome.kind is StartupOutcomeKind.INSTALLED
+    assert (pack / "__init__.py").read_text(encoding="utf-8") == "VERSION = '1.2.0'\n"
 
 
 def test_staged_release_without_the_users_choice_is_not_installed(

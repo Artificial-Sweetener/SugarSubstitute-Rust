@@ -18,8 +18,11 @@
 The journal moves through three phases. `backing-up`: nothing in the pack has
 changed yet, so recovery only discards the backup. `replacing`: the pack may be
 half replaced, so recovery restores every backed-up file. `applied`: the new
-version is in place and waits for its first successful start; until that start
+version is in place and waits for its first complete start; until that start
 confirms it, recovery treats the update as failed and restores the backup.
+`started`: the backend finished a full start and the backup waits for the page's
+first load; `page-failed`: that page reported a load failure, so the next start
+restores the backup as well.
 A completed replacement records `.tracking-digests.json`, so later local-edit
 checks need no network. Untracked files (user data, caches) are never touched, except that an untracked
 file sitting where the new release puts a file is backed up and restored too.
@@ -54,6 +57,8 @@ class JournalPhase(str, Enum):
     BACKING_UP = "backing-up"
     REPLACING = "replacing"
     APPLIED = "applied"
+    STARTED = "started"
+    PAGE_FAILED = "page-failed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,11 +152,24 @@ class TrackedReplacement:
             self.roll_back(plan.target)
             raise
 
+    def advance(self, phase: JournalPhase) -> None:
+        """Record that an applied replacement reached a later point of its trial."""
+
+        path = self.transaction_root / _JOURNAL_NAME
+        record = read_record(path)
+        if record is None:
+            return
+        record.pop("schema", None)
+        write_record(path, {**record, "phase": phase.value})
+
     def confirm(self) -> None:
-        """Settle an applied replacement after the new version has started."""
+        """Settle a replacement whose new version started and loaded its page."""
 
         pending = self.pending()
-        if pending is None or pending.phase is not JournalPhase.APPLIED:
+        if pending is None or pending.phase not in {
+            JournalPhase.APPLIED,
+            JournalPhase.STARTED,
+        }:
             return
         remove_tree(self.transaction_root)
 
