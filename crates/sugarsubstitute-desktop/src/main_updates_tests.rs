@@ -178,3 +178,51 @@ fn the_not_saved_notice_is_one_line_the_user_can_dismiss() {
     caption.notify(Notice::not_saved(&inputs_only));
     assert_eq!(caption.view(messages("ja")).line.text, messages("ja").closing.not_saved_inputs);
 }
+
+#[test]
+fn the_first_start_on_a_new_version_says_so_once_with_a_link_to_its_notes()
+-> Result<(), Box<dyn std::error::Error>> {
+    let en = messages("en");
+    let notes = url::Url::parse("https://github.com/example/releases/tag/v2.4.1")?;
+    let mut caption = CaptionUpdates::default();
+    assert!(caption.notify(Notice::update(crate::UpdateNotice::Updated {
+        version: "2.4.1".into(),
+        changelog: Some(notes.clone()),
+    })));
+    // A loss at the same start waits behind the update line.
+    assert!(!caption.notify(Notice::NotSaved { workspace: true, inputs: false }));
+    let view = caption.view(en);
+    assert_eq!(shown(&view), vec![LINE, LINK, DISMISS]);
+    assert_eq!(view.line.text, "Updated to version 2.4.1");
+    assert_eq!(view.link.text, "What's new");
+    assert_eq!(caption.view(messages("ja")).line.text, "バージョン 2.4.1 に更新しました");
+    assert_eq!(caption.activate(LINK), (false, Some(UpdateIntent::OpenChangelog(notes))));
+    assert_eq!(caption.activate(DISMISS), (true, None));
+    let view = caption.view(en);
+    assert_eq!(shown(&view), vec![LINE, DISMISS]);
+    assert_eq!(view.line.text, en.closing.not_saved_workspace);
+    assert_eq!(caption.activate(LINK), (false, None));
+    Ok(())
+}
+
+#[test]
+fn without_release_notes_the_update_line_has_no_link_and_a_rollback_is_one_plain_line() {
+    let en = messages("en");
+    let mut caption = CaptionUpdates::default();
+    caption.notify(Notice::update(crate::UpdateNotice::Updated {
+        version: "2.4.1".into(),
+        changelog: None,
+    }));
+    assert_eq!(shown(&caption.view(en)), vec![LINE, DISMISS]);
+    caption.activate(DISMISS);
+    caption.notify(Notice::update(crate::UpdateNotice::PreviousVersionRunning));
+    let view = caption.view(en);
+    assert_eq!(shown(&view), vec![LINE, DISMISS]);
+    assert_eq!(view.line.text, "The previous version is running.");
+    assert_eq!(caption.view(messages("es")).line.text, "Se está usando la versión anterior.");
+    // While saving, the message waits and the saving line shows instead.
+    caption.observe(UpdateFeed { saving: true, ..UpdateFeed::default() });
+    assert_eq!(caption.view(en).line.text, "Saving your workspace…");
+    caption.observe(UpdateFeed::default());
+    assert_eq!(caption.view(en).line.text, "The previous version is running.");
+}

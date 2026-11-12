@@ -9,7 +9,10 @@ use std::borrow::Cow;
 use sugarsubstitute_application::workspace_session::close_save::{
     CloseSaveProgress, NotSavedLastTime, UnsavedItem,
 };
-use sugarsubstitute_contracts::{localization::Messages, update::status::UpdateStatus};
+use sugarsubstitute_contracts::{
+    localization::{Messages, updates::UpdateMessages},
+    update::status::UpdateStatus,
+};
 
 /// Caption peer showing the update button.
 pub(crate) const UPDATE: u16 = 5;
@@ -78,6 +81,15 @@ pub(crate) enum Notice {
         /// Input canvas edits were lost.
         inputs: bool,
     },
+    /// The first start on a new version, with where its release notes are.
+    Updated {
+        /// The version now running.
+        version: String,
+        /// The release notes, opened by the caption's link when present.
+        changelog: Option<url::Url>,
+    },
+    /// A new version did not start, so the one before it is running.
+    PreviousVersionRunning,
 }
 
 impl Notice {
@@ -89,15 +101,27 @@ impl Notice {
             inputs: lost(|item| matches!(item, UnsavedItem::InputCanvas(_))),
         }
     }
+
+    /// The line for a start-up update message.
+    pub(crate) fn update(notice: crate::UpdateNotice) -> Self {
+        match notice {
+            crate::UpdateNotice::Updated { version, changelog } => {
+                Self::Updated { version, changelog }
+            }
+            crate::UpdateNotice::PreviousVersionRunning => Self::PreviousVersionRunning,
+        }
+    }
 }
 
 /// What a click asks of the application.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum UpdateIntent {
     /// Open the report of the failed update attempt.
     OpenReport,
     /// Run the ordinary close and relaunch so the ready update applies.
     RestartToApply,
+    /// Open the running version's release notes in the user's browser.
+    OpenChangelog(url::Url),
 }
 
 /// One caption peer's current state. `label` is the peer's stable localized name; `text` is
@@ -145,7 +169,8 @@ impl UpdateCaptionView {
 pub(crate) struct CaptionUpdates {
     feed: UpdateFeed,
     offer_open: bool,
-    notice: Option<Notice>,
+    /// One-time messages, shown one at a time in arrival order.
+    notices: std::collections::VecDeque<Notice>,
 }
 
 impl CaptionUpdates {
@@ -158,11 +183,14 @@ impl CaptionUpdates {
         changed
     }
 
-    /// Show `notice` until the user dismisses it; a later notice replaces an earlier one.
+    /// Show `notice` until the user dismisses it, after any message already waiting. A repeat
+    /// of a waiting message is ignored. Returns whether the caption changes.
     pub(crate) fn notify(&mut self, notice: Notice) -> bool {
-        let changed = self.notice.as_ref() != Some(&notice);
-        self.notice = Some(notice);
-        changed
+        if self.notices.contains(&notice) {
+            return false;
+        }
+        self.notices.push_back(notice);
+        self.notices.len() == 1
     }
 
     /// Handle a click on caption peer `id`, acting only on what the caption shows now, so a
@@ -182,8 +210,14 @@ impl CaptionUpdates {
                 self.offer_open = false;
                 (true, Some(UpdateIntent::RestartToApply))
             }
+            (LINK, _) => match self.notices.front() {
+                Some(Notice::Updated { changelog: Some(url), .. }) => {
+                    (false, Some(UpdateIntent::OpenChangelog(url.clone())))
+                }
+                _ => (false, None),
+            },
             (DISMISS, _) => {
-                self.notice = None;
+                self.notices.pop_front();
                 (true, None)
             }
             _ => (false, None),
@@ -196,8 +230,15 @@ impl CaptionUpdates {
         match id {
             UPDATE => quiet && self.feed.glyph != UpdateGlyph::Hidden,
             OFFER => quiet && self.feed.glyph == UpdateGlyph::Ready && self.offer_open,
-            LINE => !quiet || self.notice.is_some(),
-            DISMISS => quiet && self.notice.is_some(),
+            LINE => !quiet || !self.notices.is_empty(),
+            LINK => {
+                quiet
+                    && matches!(
+                        self.notices.front(),
+                        Some(Notice::Updated { changelog: Some(_), .. })
+                    )
+            }
+            DISMISS => quiet && !self.notices.is_empty(),
             _ => false,
         }
     }
@@ -213,12 +254,22 @@ impl CaptionUpdates {
         } else {
             updates.restart
         };
-        let notice = self.notice.as_ref().filter(|_| !saving).map(|notice| match notice {
-            Notice::NotSaved { workspace, inputs } => {
-                words.closing.not_saved(*workspace, *inputs).unwrap_or(words.closing.not_saved_both)
-            }
-        });
-        let line = PeerView::shown(self.shows(LINE), notice.unwrap_or(words.closing.saving));
+        let line = match self.notices.front().filter(|_| !saving) {
+            None => PeerView::shown(self.shows(LINE), words.closing.saving),
+            Some(Notice::NotSaved { workspace, inputs }) => PeerView::shown(
+                true,
+                words
+                    .closing
+                    .not_saved(*workspace, *inputs)
+                    .unwrap_or(words.closing.not_saved_both),
+            ),
+            Some(Notice::Updated { version, .. }) => PeerView {
+                visible: true,
+                label: updates.updated,
+                text: Cow::Owned(UpdateMessages::with_version(updates.updated, version)),
+            },
+            Some(Notice::PreviousVersionRunning) => PeerView::shown(true, updates.previous_running),
+        };
         UpdateCaptionView {
             glyph,
             update: PeerView::shown(
