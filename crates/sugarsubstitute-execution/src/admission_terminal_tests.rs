@@ -131,6 +131,78 @@ fn abandoned_result_retirement_is_announced<J>(
     Ok(())
 }
 
+/// Hold the first wake delivered after arming inside its callback until the test releases it.
+#[derive(Default)]
+struct HeldWake {
+    armed: std::sync::atomic::AtomicBool,
+    entered: Gate,
+    release: Gate,
+    delivered: crate::runtime_test_support::Wake,
+}
+/// Open both gates before the owner joins its workers, including on assertion unwind.
+struct ReleaseOnDrop(Arc<HeldWake>, Arc<Gate>);
+impl Drop for ReleaseOnDrop {
+    fn drop(&mut self) {
+        self.1.open();
+        self.0.release.open();
+    }
+}
+impl CompletionWake for HeldWake {
+    fn wake(&self) -> Result<(), ExecutionError> {
+        if self.armed.swap(false, std::sync::atomic::Ordering::AcqRel) {
+            self.entered.open();
+            self.release.wait().map_err(|cause| {
+                ExecutionError::new(
+                    sugarsubstitute_contracts::execution::Operation::Infrastructure,
+                    Box::new(std::io::Error::other(cause.to_string())),
+                )
+            })?;
+        }
+        self.delivered.wake()
+    }
+}
+
+/// A retired record leaves the observable job set before its capacity wake reaches the owner;
+/// progress reports that wake as owed for exactly that window, so an observer that finds no
+/// work waits for it instead of concluding that nothing will ever wake it.
+#[test]
+fn retirement_reports_its_capacity_wake_as_pending_until_delivery() -> TestResult {
+    let wake = Arc::new(HeldWake::default());
+    let mut owner = ExecutionOwner::with_cpu_workers(
+        Arc::new(ClockPort(Arc::new(ManualClock::default()))),
+        wake.clone(),
+        2,
+    )?;
+    let client = owner.client();
+    let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
+    let (entered, release) = (Arc::new(Gate::default()), Arc::new(Gate::default()));
+    let job = held_blocking(&client, &scope, 4096, entered.clone(), release.clone())?;
+    let released = ReleaseOnDrop(wake.clone(), release.clone());
+    entered.wait()?;
+    assert!(!owner.poll_shutdown()?.capacity_wake_pending);
+    drop(job);
+    wake.armed.store(true, std::sync::atomic::Ordering::Release);
+    release.open();
+    // The worker that retired the abandoned record is now delivering its capacity wake.
+    wake.entered.wait()?;
+    let progress = owner.poll_shutdown()?;
+    assert!(progress.unresolved_jobs.is_empty(), "{:?}", progress.unresolved_jobs);
+    assert_eq!(progress.running + progress.queued, 0);
+    assert!(progress.capacity_wake_pending, "an owed wake looked like quiescence");
+    drop(released);
+    drop(scope);
+    owner.request_shutdown(Moment::from_nanos(0));
+    loop {
+        let observed = wake.delivered.count();
+        if owner.poll_shutdown()?.settled {
+            break;
+        }
+        wake.delivered.wait_after(observed)?;
+    }
+    owner.finish_shutdown()?;
+    Ok(())
+}
+
 #[test]
 fn abandoned_blocking_retirement_wakes_a_live_scope_observer() -> TestResult {
     abandoned_result_retirement_is_announced(held_blocking, false, 4096)

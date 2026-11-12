@@ -236,6 +236,12 @@ impl State {
             && self.capacity_wakes_inflight == 0
             && !self.scopes.values().any(|scope| scope.cancel.pending())
     }
+
+    /// A selected capacity wake is still owed to the completion wake, and shutdown has not
+    /// suppressed it. The release it announces is already observable under this lock.
+    pub(crate) fn capacity_wake_pending(&self) -> bool {
+        !self.stopping && self.capacity_wakes_inflight > 0
+    }
 }
 
 pub(crate) struct Core {

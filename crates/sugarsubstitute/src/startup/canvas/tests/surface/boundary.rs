@@ -19,7 +19,8 @@ const TIMER_STEP_NANOS: u64 = 100_000_000;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum Execution {
     /// Admitted work is queued, running, or retiring custody its worker still holds after
-    /// acknowledgement; its completion or retirement supplies a wake.
+    /// acknowledgement, or a finished retirement's capacity wake is still being delivered; its
+    /// completion or retirement supplies a wake.
     Running,
     /// A terminal completion has not been taken by its owner; its wake may still be in flight.
     Delivering,
@@ -30,7 +31,8 @@ pub(super) enum Execution {
 /// Classify the admitted work of `owner` that can still publish a completion wake.
 pub(super) fn classify(owner: &ExecutionOwner) -> Result<Execution, Box<dyn Error>> {
     let progress = owner.poll_shutdown()?;
-    if progress.running + progress.queued > 0 {
+    // A retirement is observable before its capacity wake is delivered; that wake is still owed.
+    if progress.running + progress.queued > 0 || progress.capacity_wake_pending {
         return Ok(Execution::Running);
     }
     // An acknowledged record stays registered only while cancellation or native custody defers
