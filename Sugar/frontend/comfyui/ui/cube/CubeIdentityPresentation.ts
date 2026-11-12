@@ -1,0 +1,153 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Resolve the shared instance and definition identity shown by Cube chrome. */
+
+import { resolveCubeIconModel, type CubeIconModel } from '../core/CubeIconResolver.js';
+import { parseCanonicalCubeId } from '../core/CubeId.js';
+import {
+  resolveCubeDisplayName,
+  resolveInstanceDisplayName,
+  type CubeGroupMetadataRecord,
+} from '../graph/GroupMetadata.js';
+import { isRecord, type UnknownRecord } from '../types/common.js';
+import {
+  resolveCubeModelTitle,
+  type CubeModelTitlePresentation,
+} from './CubeModelTitlePresentation.js';
+import type { WorkflowCubeLibraryClass } from '../workflow/CubeWorkflowLibraryState.js';
+
+export interface CubeIdentityPresentation {
+  instanceTitle: string;
+  definitionTitle: string;
+  targetModel: string;
+  versionText: string;
+  definitionLine: string;
+  instanceModelTitle: CubeModelTitlePresentation;
+  definitionModelTitle: CubeModelTitlePresentation;
+  awaitingFirstSave: boolean;
+  isWild: boolean;
+  isCaptured: boolean;
+  sourceLine: string;
+  icon: CubeIconModel;
+}
+
+export interface CubeIdentitySource {
+  sourceKind?: string;
+  author?: string;
+  pack?: string;
+  namespace?: string;
+  libraryClass?: WorkflowCubeLibraryClass;
+}
+
+export interface CubeIdentityPresentationInput {
+  metadata: UnknownRecord;
+  instanceTitle: string;
+  fallbackDefinitionTitle: string;
+  fallbackSource?: CubeIdentitySource | null;
+}
+
+/** Format a Cube version using the shared compact display prefix. */
+export function formatCubeVersionText(metadata: UnknownRecord): string {
+  const version = typeof metadata.cube_version === 'string' ? metadata.cube_version.trim() : '';
+  if (!version) return '';
+  return /^v/i.test(version) ? version : `v${version}`;
+}
+
+/** Format the former group-chrome source line from canonical Cube identity. */
+export function formatCubeSourceText(
+  metadata: UnknownRecord,
+  fallbackSource: CubeIdentitySource | null = null,
+): string {
+  const cubeId = typeof metadata.cube_id === 'string' ? metadata.cube_id.trim() : '';
+  if (cubeId) {
+    try {
+      const parsed = parseCanonicalCubeId(cubeId);
+      if (parsed.sourceKind === 'github') {
+        return `from ${parsed.repo} by ${parsed.owner}`;
+      }
+      if (parsed.namespace === 'personal') return 'Personal Cube';
+      return parsed.namespace ? `Local Cube · ${parsed.namespace}` : 'Local Cube';
+    } catch (_error) {
+      // Presentation remains available for legacy or malformed persisted identifiers.
+    }
+  }
+  const pack = typeof fallbackSource?.pack === 'string' ? fallbackSource.pack.trim() : '';
+  const author = typeof fallbackSource?.author === 'string' ? fallbackSource.author.trim() : '';
+  const namespace =
+    typeof fallbackSource?.namespace === 'string' ? fallbackSource.namespace.trim() : '';
+  if (fallbackSource?.sourceKind === 'local') {
+    if (namespace === 'personal') return 'Personal Cube';
+    return namespace ? `Local Cube · ${namespace}` : 'Local Cube';
+  }
+  if (pack && author) return `from ${pack} by ${author}`;
+  if (pack) return `from ${pack}`;
+  if (author) return `by ${author}`;
+  return 'Unknown source';
+}
+
+/** Build the one identity model consumed by canvas and DOM Cube headers. */
+export function resolveCubeIdentityPresentation(
+  input: CubeIdentityPresentationInput,
+): CubeIdentityPresentation {
+  const metadata = (isRecord(input.metadata) ? input.metadata : {}) as CubeGroupMetadataRecord;
+  const fallbackDefinitionTitle = input.fallbackDefinitionTitle.trim() || 'SugarCube';
+  const definitionTitle = resolveCubeDisplayName({
+    metadata,
+    fallback: fallbackDefinitionTitle,
+  });
+  const explicitInstanceTitle = input.instanceTitle.trim();
+  const instanceTitle =
+    explicitInstanceTitle ||
+    resolveInstanceDisplayName({
+      metadata,
+      fallback: definitionTitle,
+    });
+  const versionText = formatCubeVersionText(metadata);
+  const targetModel = typeof metadata.target_model === 'string' ? metadata.target_model.trim() : '';
+  const instanceModelTitle = resolveCubeModelTitle({
+    targetModel,
+    title: instanceTitle,
+  });
+  const definitionModelTitle = resolveCubeModelTitle({
+    targetModel,
+    title: definitionTitle,
+    suffix: versionText,
+  });
+  const cubeId = typeof metadata.cube_id === 'string' ? metadata.cube_id.trim() : '';
+  const sourceLine = cubeId
+    ? formatCubeSourceText(metadata, input.fallbackSource ?? null)
+    : 'Workflow only';
+  return {
+    instanceTitle,
+    definitionTitle,
+    targetModel,
+    versionText,
+    definitionLine: definitionModelTitle.accessibleText,
+    instanceModelTitle,
+    definitionModelTitle,
+    awaitingFirstSave: isCubeAwaitingFirstSave(metadata),
+    isWild: input.fallbackSource?.libraryClass === 'none',
+    isCaptured: input.fallbackSource?.libraryClass === 'captured',
+    sourceLine,
+    icon: resolveCubeIconModel(metadata),
+  };
+}
+
+/** Return whether Cube chrome should expose the one-time first-save warning. */
+export function isCubeAwaitingFirstSave(metadata: unknown): boolean {
+  if (!isRecord(metadata)) return true;
+  return !(typeof metadata.cube_id === 'string' && Boolean(metadata.cube_id.trim()));
+}

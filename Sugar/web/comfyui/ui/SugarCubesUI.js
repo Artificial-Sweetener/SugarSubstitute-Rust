@@ -1,0 +1,323 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/**
+ * Own the SugarCubes UI orchestration layer in `frontend/comfyui/ui/SugarCubesUI.js`.
+ */
+import { ComfyAdapter } from './core/ComfyAdapter.js';
+import { EventBus } from './core/EventBus.js';
+import { Scheduler } from './core/Scheduler.js';
+import { ToastService } from './core/ToastService.js';
+import { StorageService } from './core/StorageService.js';
+import { CubeLibraryApi } from './core/CubeLibraryApi.js';
+import { OverlayManager } from './overlays/OverlayManager.js';
+import { CubeLibraryCatalog } from './core/CubeLibraryCatalog.js';
+import { CubeModelSuggestions } from './core/CubeModelSuggestions.js';
+import { ConfirmDialog } from './dialogs/ConfirmDialog.js';
+import { ModalService } from './dialogs/ModalService.js';
+import { VersionDialog } from './dialogs/VersionDialog.js';
+import { InstanceManager } from './graph/InstanceManager.js';
+import { DirtyManager } from './graph/DirtyManager.js';
+import { CubeSaveService } from './save/CubeSaveService.js';
+import { CubeSavePreflightService } from './save/CubeSavePreflightService.js';
+import { CubeDefaultReviewService } from './save/CubeDefaultReviewService.js';
+import { CubeEditorSaveService } from './save/CubeEditorSaveService.js';
+import { CubeLayoutService } from './layout/CubeLayoutService.js';
+import { CubeContainmentService } from './layout/CubeContainmentService.js';
+import { CubeCollisionService } from './layout/CubeCollisionService.js';
+import { CubeBoundsReconciler } from './layout/CubeBoundsReconciler.js';
+import { FlavorService } from './flavors/FlavorService.js';
+import { CubeDefinitionStore } from './graph/CubeDefinitionStore.js';
+import { CubeSaveReconciler } from './save/CubeSaveReconciler.js';
+import { CubeCreationService } from './create/CubeCreationService.js';
+import { CubeAuthoringService } from './create/CubeAuthoringService.js';
+import { ComfyCubeSaveAdapter } from './cube/node/ComfyCubeSaveAdapter.js';
+import { CubePackService } from './packs/CubePackService.js';
+import { RendererGeometryCoordinator } from './geometry/RendererGeometryCoordinator.js';
+import { CubeWorkflowLibraryState } from './workflow/CubeWorkflowLibraryState.js';
+import { CubeGraphAnalysisCache } from './workflow/application/CubeGraphAnalysisCache.js';
+import { CubeGraphApi } from './workflow/infrastructure/CubeGraphApi.js';
+import { MemoryBudgetRegistry } from './core/memory/MemoryBudgetRegistry.js';
+import { ComfyCubeRuntimeCaches } from './cube/ComfyCubeRuntimeCaches.js';
+import { CubeWorkflowLibraryActions } from './workflow/CubeWorkflowLibraryActions.js';
+import { CubeWorkflowLibraryPresentation } from './workflow/CubeWorkflowLibraryPresentation.js';
+import { CubeWorkflowPreconfiguration } from './cube/CubeWorkflowPreconfiguration.js';
+import { CubeWorkflowNodePackMetadata } from './cube/node/CubeWorkflowNodePackMetadata.js';
+import { CubeSerializedWidgetRehydrator } from './cube/CubeSerializedWidgetRehydrator.js';
+/**
+ * Coordinate sugar cubes ui behavior for the SugarCubes UI.
+ */
+export class SugarCubesUI {
+    adapter;
+    events;
+    scheduler;
+    storage;
+    api;
+    dialogs;
+    toast;
+    confirmDialog;
+    versionDialog;
+    libraryCatalog;
+    modelSuggestions;
+    definitionStore;
+    instanceManager;
+    dirtyManager;
+    flavorService;
+    saveReconciler;
+    packService;
+    cubeSave;
+    cubeAuthoring;
+    cubeCreation;
+    cubeEditorSave;
+    layoutService;
+    containmentService;
+    collisionService;
+    boundsReconciler;
+    rendererGeometry;
+    workflowLibraryState;
+    /** Share canonical workflow analyses across runtimes so unchanged switches issue no request. */
+    workflowGraphAnalyses;
+    /** Enforce one page allowance across every SugarCubes in-memory cache. */
+    memory = new MemoryBudgetRegistry();
+    /** Keep workflow-independent Cube runtime caches across workflow switches. */
+    runtimeCaches;
+    workflowLibraryActions;
+    workflowLibraryPresentation;
+    workflowPreconfiguration;
+    workflowNodePackMetadata;
+    overlayManager;
+    _setupDone;
+    constructor(options = {}) {
+        this.adapter = options.adapter || new ComfyAdapter(options.adapterOptions);
+        this.events = options.events || new EventBus();
+        this.scheduler = options.scheduler || new Scheduler(this.adapter);
+        this.storage = options.storage || new StorageService(this.adapter);
+        this.api = options.cubeApi || new CubeLibraryApi(this.adapter);
+        this.dialogs = options.dialogs || new ModalService({ adapter: this.adapter });
+        this.toast = options.toast || new ToastService(this.adapter, { dialogs: this.dialogs });
+        this.confirmDialog = this.dialogs.confirmDialog || new ConfirmDialog({ adapter: this.adapter });
+        this.versionDialog = new VersionDialog({ adapter: this.adapter, storage: this.storage });
+        this._setupDone = false;
+        this.workflowNodePackMetadata = new CubeWorkflowNodePackMetadata();
+        this.workflowLibraryState = new CubeWorkflowLibraryState(this.api, this.adapter.getConsole?.() ?? console);
+        this.workflowGraphAnalyses = new CubeGraphAnalysisCache(new CubeGraphApi(this.api));
+        this.runtimeCaches = new ComfyCubeRuntimeCaches(this.memory, this.api, this.adapter.getConsole?.() ?? console);
+        this.workflowLibraryActions = new CubeWorkflowLibraryActions({
+            api: this.api,
+            state: this.workflowLibraryState,
+            host: this.adapter,
+            dialogs: this.dialogs,
+            feedback: this.toast,
+        });
+        this.libraryCatalog = new CubeLibraryCatalog({
+            api: this.api,
+            logger: this.adapter.getConsole() ?? console,
+            onUpdated: (entries) => this.dirtyManager.updateKnownCubes(entries),
+        });
+        this.modelSuggestions = new CubeModelSuggestions(this.adapter.getFetch(), this.adapter.getConsole() ?? console);
+        this.definitionStore = new CubeDefinitionStore({
+            api: this.api,
+            logger: this.adapter?.getConsole?.(),
+            onUpdate: (definitionKey, entry) => this.handleDefinitionUpdate(definitionKey, entry),
+        });
+        this.workflowPreconfiguration = CubeWorkflowPreconfiguration.withEmbeddedDefinitions(this.definitionStore, this.workflowLibraryState, new CubeSerializedWidgetRehydrator((type) => this.adapter.getLiteGraph()?.createNode(type) ?? null));
+        this.instanceManager = new InstanceManager({
+            adapter: this.adapter,
+            events: this.events,
+            scheduler: this.scheduler,
+            requestDirtyRefresh: (opts) => this.dirtyManager.requestRefresh(opts),
+        });
+        this.dirtyManager = new DirtyManager({
+            adapter: this.adapter,
+            events: this.events,
+            scheduler: this.scheduler,
+            libraryCatalog: this.libraryCatalog,
+            definitionStore: this.definitionStore,
+        });
+        const invalidateCatalogs = options.invalidateCubeCatalogs ??
+            (async () => {
+                await this.libraryCatalog.refresh({ force: true });
+            });
+        this.flavorService = new FlavorService({
+            adapter: this.adapter,
+            dialogs: this.dialogs,
+            events: this.events,
+            storage: this.storage,
+            toast: this.toast,
+            api: this.api,
+            dirtyManager: this.dirtyManager,
+            invalidateCatalogs,
+        });
+        const getCubeNodeCatalog = options.getCubeNodeCatalog ?? (() => null);
+        const cubeNodeSave = new ComfyCubeSaveAdapter({ getCatalog: getCubeNodeCatalog });
+        this.saveReconciler = new CubeSaveReconciler({
+            definitionStore: this.definitionStore,
+            instanceManager: this.instanceManager,
+            dirtyManager: this.dirtyManager,
+            flavorService: this.flavorService,
+            cubeNodeSave,
+        });
+        this.packService = new CubePackService({
+            api: this.api,
+            dialogs: this.dialogs,
+            toast: this.toast,
+        });
+        this.workflowLibraryPresentation = new CubeWorkflowLibraryPresentation(this.workflowLibraryState, this.packService);
+        const cubeSaveWorkflow = new CubeSaveService({
+            adapter: this.adapter,
+            api: this.api,
+            toast: this.toast,
+            instanceManager: this.instanceManager,
+            dirtyManager: this.dirtyManager,
+            libraryCatalog: this.libraryCatalog,
+            versionDialog: this.versionDialog,
+            dialogs: this.dialogs,
+            saveReconciler: this.saveReconciler,
+            cubeNodeSave,
+            defaultReview: new CubeDefaultReviewService({ api: this.api, dialogs: this.dialogs }),
+            catalogInvalidator: {
+                invalidate: invalidateCatalogs,
+            },
+        });
+        this.cubeSave = new CubeSavePreflightService({
+            workflow: cubeSaveWorkflow,
+            validate: options.validateCubePersistence ?? (() => undefined),
+            feedback: this.toast,
+        });
+        this.cubeAuthoring = new CubeAuthoringService({
+            catalog: this.libraryCatalog,
+            modelSuggestions: this.modelSuggestions,
+            dialogs: this.dialogs,
+            packService: this.packService,
+            toast: this.toast,
+        });
+        this.cubeCreation = new CubeCreationService({
+            authoring: this.cubeAuthoring,
+            getAuthoring: options.getCubeAuthoring ??
+                (() => {
+                    throw new Error('SugarCubes native authoring is unavailable.');
+                }),
+            cubeSave: this.cubeSave,
+            toast: this.toast,
+            logger: this.adapter.getConsole?.(),
+        });
+        this.cubeEditorSave = new CubeEditorSaveService({
+            getCatalog: getCubeNodeCatalog,
+            authoring: this.cubeAuthoring,
+            cubeCreation: this.cubeCreation,
+            cubeSave: this.cubeSave,
+        });
+        this.layoutService = new CubeLayoutService({
+            adapter: this.adapter,
+            instanceManager: this.instanceManager,
+            dirtyManager: this.dirtyManager,
+        });
+        this.containmentService = new CubeContainmentService();
+        this.collisionService = new CubeCollisionService();
+        this.boundsReconciler = new CubeBoundsReconciler();
+        this.rendererGeometry = new RendererGeometryCoordinator({
+            adapter: this.adapter,
+            scheduler: this.scheduler,
+            onStabilized: (graph) => {
+                this.instanceManager.refresh({ graph, reason: 'renderer-geometry', force: true });
+                this.dirtyManager.requestRefresh({ graph, reason: 'renderer-geometry' });
+            },
+        });
+        this.overlayManager = new OverlayManager({
+            adapter: this.adapter,
+            events: this.events,
+            scheduler: this.scheduler,
+            storage: this.storage,
+            libraryCatalog: this.libraryCatalog,
+            saveService: this.cubeSave,
+            saveDraft: (instanceId, graphSummary) => this.cubeCreation.saveDraft(instanceId, graphSummary ?? {}),
+            toast: this.toast,
+            requestDirtyRefresh: (opts) => this.dirtyManager.requestRefresh(opts),
+            layoutService: this.layoutService,
+            containmentService: this.containmentService,
+            collisionService: this.collisionService,
+            boundsReconciler: this.boundsReconciler,
+            workflowLibraryState: this.workflowLibraryState,
+            workflowLibraryActions: this.workflowLibraryActions,
+            icons: this.runtimeCaches.images.icons,
+        });
+    }
+    /** Publish definition updates to consumers without assigning them cache ownership. */
+    handleDefinitionUpdate(definitionKey, entry) {
+        const graph = this.adapter?.getApp?.()?.graph || null;
+        if (entry?.status === 'ready' && entry?.payload) {
+            this.events?.emit?.('cube:definition:loaded', {
+                cubeId: entry.cubeId,
+                definitionKey,
+                entry,
+                graph,
+            });
+        }
+        if (graph) {
+            this.dirtyManager?.requestRefresh?.({ graph, reason: 'definition-update' });
+        }
+    }
+    async setup() {
+        if (this._setupDone) {
+            return;
+        }
+        const metadataResult = await this.api.getStatus();
+        if (!metadataResult.response.ok) {
+            throw new Error('SugarCubes workflow node-pack metadata could not be loaded.');
+        }
+        this.workflowNodePackMetadata.updateFromStatus(metadataResult.data);
+        await Promise.all([this.modelSuggestions.setup(), this.libraryCatalog.refresh()]);
+        this.instanceManager.setup();
+        this.dirtyManager.setup();
+        await this.flavorService.setup();
+        this.rendererGeometry.setup();
+        this.events.on('cube:instances:refresh', (options) => {
+            if (!options || typeof options !== 'object') {
+                return;
+            }
+            this.instanceManager.scheduleRefresh(options);
+        });
+        this.overlayManager.setup();
+        this._setupDone = true;
+    }
+    /** Retire workflow results derived from a catalog that a local mutation just changed. */
+    retireWorkflowCatalogResults() {
+        this.workflowLibraryState.invalidateCatalog();
+        this.workflowGraphAnalyses.invalidate();
+        this.runtimeCaches.invalidateLibrary();
+    }
+    dispose() {
+        this.workflowLibraryState.clear();
+        this.rendererGeometry.dispose();
+        this.overlayManager.dispose();
+        this.libraryCatalog.dispose();
+        this.dirtyManager.dispose();
+        this.flavorService.dispose();
+    }
+    async listCubes() {
+        const { data } = await this.api.list();
+        return data;
+    }
+    async previewCube(cubeId) {
+        const { data } = await this.api.preview(cubeId);
+        return data;
+    }
+    scheduleCubeInstanceRefresh(options = {}) {
+        this.instanceManager.scheduleRefresh(options);
+    }
+    scheduleCubeDirtyRefresh(options = {}) {
+        this.dirtyManager.requestRefresh(options);
+    }
+}

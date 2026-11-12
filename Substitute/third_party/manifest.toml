@@ -1,0 +1,419 @@
+schema_version = 1
+
+[[components]]
+id = "qt-native-hand-cursors"
+source_url = "https://github.com/qt/qtbase/tree/8ba7ea4b77a4b8f1948760221e264917ddc9e1c8/src/plugins/platforms/windows/images"
+license = "GPL-3.0-only"
+license_file = "third_party/licenses/qt-hand-cursors.GPL-3.0-only.txt"
+files = [
+  "crates/sugarsubstitute-desktop/assets/cursors/openhandcursor_32.png",
+  "crates/sugarsubstitute-desktop/assets/cursors/openhandcursor_48.png",
+  "crates/sugarsubstitute-desktop/assets/cursors/openhandcursor_64.png",
+  "crates/sugarsubstitute-desktop/assets/cursors/closedhandcursor_32.png",
+  "crates/sugarsubstitute-desktop/assets/cursors/closedhandcursor_48.png",
+  "crates/sugarsubstitute-desktop/assets/cursors/closedhandcursor_64.png",
+  "crates/sugarsubstitute-desktop/assets/cursors/qt-open-hand.cur",
+  "crates/sugarsubstitute-desktop/assets/cursors/qt-closed-hand.cur",
+]
+
+[[components]]
+id = "qt-native-drag-cursors"
+source_url = "https://github.com/qt/qtbase/tree/v6.10.2/src/plugins/platforms/windows/images"
+license = "GPL-3.0-only"
+license_file = "third_party/licenses/qt-hand-cursors.GPL-3.0-only.txt"
+files = [
+  "crates/sugarsubstitute-desktop/assets/cursors/dragcopycursor_32.png",
+  "crates/sugarsubstitute-desktop/assets/cursors/dragcopycursor_48.png",
+  "crates/sugarsubstitute-desktop/assets/cursors/dragcopycursor_64.png",
+]
+
+[[components]]
+id = "fluent-canvas-cursors"
+source_url = "https://github.com/Artificial-Sweetener/SugarSubstitute/tree/e6a5a990a91f7e9a2701e48d5af5ace821508c43/substitute/presentation/resources/cursors"
+license = "MIT AND GPL-3.0-or-later"
+license_file = "third_party/licenses/fluentui-system-icons.MIT.txt"
+files = [
+  "crates/sugarsubstitute-ui/assets/cursors/SelectionTranslateCursor.svg",
+  "crates/sugarsubstitute-ui/assets/cursors/MoveCutCursor.svg",
+]
+
+[[components]]
+id = "qt-raster-numerical-adaptations"
+source_url = "https://github.com/qt/qtbase/tree/v6.11.0/src/gui/painting"
+license = "GPL-3.0-only AND FTL"
+license_file = "third_party/licenses/qt-raster.GPL-3.0-and-FTL.txt"
+files = [
+  "crates/sugarsubstitute-ui/src/panel_border.rs",
+  "crates/sugarsubstitute-splash/src/character.rs",
+  "crates/sugarsubstitute-splash/src/character_sampling.rs",
+  "crates/sugarsubstitute-splash/src/character_sample.rs",
+  "crates/sugarsubstitute-splash/src/character_render.rs",
+  "crates/sugarsubstitute-splash/src/character_transform.rs",
+  "crates/sugarsubstitute-splash/src/chrome.rs",
+  "crates/sugarsubstitute-ui/src/panel_cursor.rs",
+  "crates/sugarsubstitute-ui/src/panel.rs",
+  "crates/sugarsubstitute-ui/src/caption.rs",
+  "crates/sugarsubstitute-splash/src/progress.rs",
+  "crates/sugarsubstitute-ui/src/progress.rs",
+  "crates/sugarsubstitute-ui/src/progress_render.rs",
+  "crates/sugarsubstitute-ui/src/shapes.rs",
+  "crates/sugarsubstitute-ui/src/shapes_raster.rs",
+  "crates/sugarsubstitute-ui/src/shapes_composite.rs",
+  "crates/sugarsubstitute-ui/src/text_windows.rs",
+  "crates/sugarsubstitute-ui/src/text_windows_cursor.rs",
+  "crates/sugarsubstitute-splash/src/text_layout.rs",
+]
+
+[[components]]
+id = "fluent-console-icon"
+source_url = "https://github.com/microsoft/fluentui-system-icons"
+license = "MIT"
+license_file = "third_party/licenses/fluentui-system-icons.MIT.txt"
+files = [
+  "crates/sugarsubstitute-splash/assets/caption/console-100.png",
+  "crates/sugarsubstitute-splash/assets/caption/console-125.png",
+  "crates/sugarsubstitute-splash/assets/caption/console-150.png",
+  "crates/sugarsubstitute-splash/assets/caption/console-175.png",
+  "crates/sugarsubstitute-splash/assets/caption/console-200.png",
+  "crates/sugarsubstitute-splash/assets/caption/console-250.png",
+  "crates/sugarsubstitute-splash/assets/caption/console-300.png",
+  "crates/sugarsubstitute-splash/assets/caption/console-350.png",
+  "crates/sugarsubstitute-splash/assets/caption/console-400.png",
+]
+
+[[components]]
+id = "frameless-close-icon"
+source_url = "https://github.com/zhiyiYo/PyQt-Frameless-Window"
+license = "MIT"
+license_file = "third_party/licenses/frameless-window.LICENSE.txt"
+files = [
+  "crates/sugarsubstitute-desktop/assets/caption/close.coverage",
+  "crates/sugarsubstitute-desktop/src/windows_caption_glyphs.rs",
+  "crates/sugarsubstitute-splash/assets/caption/close-100.png",
+  "crates/sugarsubstitute-splash/assets/caption/close-125.png",
+  "crates/sugarsubstitute-splash/assets/caption/close-150.png",
+  "crates/sugarsubstitute-splash/assets/caption/close-175.png",
+  "crates/sugarsubstitute-splash/assets/caption/close-200.png",
+  "crates/sugarsubstitute-splash/assets/caption/close-250.png",
+  "crates/sugarsubstitute-splash/assets/caption/close-300.png",
+  "crates/sugarsubstitute-splash/assets/caption/close-350.png",
+  "crates/sugarsubstitute-splash/assets/caption/close-400.png",
+]
+
+[[components]]
+id = "legacy-splash-characters"
+source_url = "https://github.com/Artificial-Sweetener/SugarSubstitute/tree/main/substitute/presentation/resources/splash_poses"
+license = "GPL-3.0-or-later"
+license_file = "third_party/licenses/splash-characters.GPL-3.0.txt"
+files = [
+  "crates/sugarsubstitute-splash/assets/poses/1.png",
+  "crates/sugarsubstitute-splash/assets/poses/2.png",
+  "crates/sugarsubstitute-splash/assets/poses/3.png",
+  "crates/sugarsubstitute-splash/assets/poses/4.png",
+  "crates/sugarsubstitute-splash/assets/poses/5.png",
+  "crates/sugarsubstitute-splash/assets/poses/6.png",
+  "crates/sugarsubstitute-splash/assets/poses/7.png",
+  "crates/sugarsubstitute-splash/assets/poses/8.png",
+  "crates/sugarsubstitute-splash/assets/poses/9.png",
+  "crates/sugarsubstitute-splash/assets/poses/10.png",
+  "crates/sugarsubstitute-splash/assets/poses/11.png",
+  "crates/sugarsubstitute-splash/assets/poses/12.png",
+  "crates/sugarsubstitute-splash/assets/poses/13.png",
+  "crates/sugarsubstitute-splash/assets/poses/14.png",
+  "crates/sugarsubstitute-splash/assets/poses/15.png",
+  "crates/sugarsubstitute-splash/assets/poses/16.png",
+  "crates/sugarsubstitute-splash/assets/poses/17.png",
+  "crates/sugarsubstitute-splash/assets/poses/18.png",
+  "crates/sugarsubstitute-splash/assets/poses/19.png",
+  "crates/sugarsubstitute-splash/assets/poses/20.png",
+  "crates/sugarsubstitute-splash/assets/poses/21.png",
+  "crates/sugarsubstitute-splash/assets/poses/22.png",
+  "crates/sugarsubstitute-splash/assets/poses/23.png",
+  "crates/sugarsubstitute-splash/assets/poses/24.png",
+  "crates/sugarsubstitute-splash/assets/poses/25.png",
+  "crates/sugarsubstitute-splash/assets/poses/26.png",
+  "crates/sugarsubstitute-splash/assets/poses/27.png",
+  "crates/sugarsubstitute-splash/assets/poses/28.png",
+  "crates/sugarsubstitute-splash/assets/poses/cass.png",
+  "crates/sugarsubstitute-splash/assets/poses/comfy.png",
+  "crates/sugarsubstitute-splash/assets/poses/comfy2.png",
+  "crates/sugarsubstitute-splash/assets/poses/cubby.png",
+  "crates/sugarsubstitute-splash/assets/poses/diffusion.png",
+  "crates/sugarsubstitute-splash/assets/poses/liz.png",
+  "crates/sugarsubstitute-splash/assets/poses/lvgf.png",
+  "crates/sugarsubstitute-splash/assets/poses/married.png",
+  "crates/sugarsubstitute-splash/assets/poses/pixelandlibrary.png",
+  "crates/sugarsubstitute-splash/assets/poses/ren.png",
+  "crates/sugarsubstitute-splash/assets/poses/syl.png",
+  "crates/sugarsubstitute-splash/assets/poses/witchy.png",
+]
+
+[[components]]
+id = "crashpad-native-registration-adaptations"
+source_url = "https://chromium.googlesource.com/crashpad/crashpad/+/60dd943f48d77dc8d05dabc04badbd8561d0b8c4/"
+license = "Apache-2.0 AND GPL-3.0-or-later"
+license_file = "third_party/licenses/crashpad.Apache-2.0.txt"
+files = ["native/crashpad/owned_start.h", "native/crashpad/owned_registration.cc"]
+
+[[components]]
+id = "crashpad-source-build-adaptations"
+source_url = "https://chromium.googlesource.com/crashpad/crashpad/+/60dd943f48d77dc8d05dabc04badbd8561d0b8c4/DEPS"
+license = "Apache-2.0 AND BSD-3-Clause AND GPL-3.0-or-later"
+license_file = "third_party/licenses/crashpad-mini-chromium.Apache-2.0-and-BSD.txt"
+files = ["tools/crashpad/prepare_source.py"]
+
+[[components]]
+id = "wry-owned-webview-lifecycle"
+source_url = "https://github.com/tauri-apps/wry/tree/792d0359ba6501a4fc360ece17de2ae42329a47c"
+license = "(Apache-2.0 OR MIT) AND GPL-3.0-or-later"
+license_file = "third_party/licenses/wry.Apache-2.0-and-MIT.txt"
+files = [
+  "third_party/wry/.cargo/audit.toml",
+  "third_party/wry/.cargo/config.toml",
+  "third_party/wry/.cargo_vcs_info.json",
+  "third_party/wry/.gitignore",
+  "third_party/wry/.license_template",
+  "third_party/wry/CHANGELOG.md",
+  "third_party/wry/Cargo.lock",
+  "third_party/wry/Cargo.toml",
+  "third_party/wry/Cargo.toml.orig",
+  "third_party/wry/LICENSE-APACHE",
+  "third_party/wry/LICENSE-MIT",
+  "third_party/wry/LICENSE.spdx",
+  "third_party/wry/MOBILE.md",
+  "third_party/wry/README.md",
+  "third_party/wry/SECURITY.md",
+  "third_party/wry/build.rs",
+  "third_party/wry/examples/async_custom_protocol.rs",
+  "third_party/wry/examples/cookies.rs",
+  "third_party/wry/examples/custom_protocol.rs",
+  "third_party/wry/examples/custom_protocol/index.html",
+  "third_party/wry/examples/custom_protocol/script.js",
+  "third_party/wry/examples/custom_protocol/subpage.html",
+  "third_party/wry/examples/custom_protocol/wasm.wasm",
+  "third_party/wry/examples/custom_titlebar.rs",
+  "third_party/wry/examples/gtk_multiwebview.rs",
+  "third_party/wry/examples/gtk_opengl.rs",
+  "third_party/wry/examples/multiwebview.rs",
+  "third_party/wry/examples/multiwindow.rs",
+  "third_party/wry/examples/permission_handler.rs",
+  "third_party/wry/examples/reparent.rs",
+  "third_party/wry/examples/simple.rs",
+  "third_party/wry/examples/streaming.rs",
+  "third_party/wry/examples/streaming/index.html",
+  "third_party/wry/examples/transparent.rs",
+  "third_party/wry/examples/wgpu.rs",
+  "third_party/wry/examples/window_border.rs",
+  "third_party/wry/examples/winit.rs",
+  "third_party/wry/renovate.json",
+  "third_party/wry/rustfmt.toml",
+  "third_party/wry/src/android/binding.rs",
+  "third_party/wry/src/android/kotlin/Ipc.kt",
+  "third_party/wry/src/android/kotlin/Logger.kt",
+  "third_party/wry/src/android/kotlin/PermissionHelper.kt",
+  "third_party/wry/src/android/kotlin/Rust.kt",
+  "third_party/wry/src/android/kotlin/RustWebChromeClient.kt",
+  "third_party/wry/src/android/kotlin/RustWebView.kt",
+  "third_party/wry/src/android/kotlin/RustWebViewClient.kt",
+  "third_party/wry/src/android/kotlin/WryActivity.kt",
+  "third_party/wry/src/android/kotlin/proguard-wry.pro",
+  "third_party/wry/src/android/main_pipe.rs",
+  "third_party/wry/src/android/mod.rs",
+  "third_party/wry/src/custom_protocol_workaround.rs",
+  "third_party/wry/src/error.rs",
+  "third_party/wry/src/inject_initialization_scripts.rs",
+  "third_party/wry/src/lib.rs",
+  "third_party/wry/src/permissions.rs",
+  "third_party/wry/src/proxy.rs",
+  "third_party/wry/src/util.rs",
+  "third_party/wry/src/web_context.rs",
+  "third_party/wry/src/webkitgtk/drag_drop.rs",
+  "third_party/wry/src/webkitgtk/mod.rs",
+  "third_party/wry/src/webkitgtk/synthetic_mouse_events.rs",
+  "third_party/wry/src/webkitgtk/web_context.rs",
+  "third_party/wry/src/webview2/construction.rs",
+  "third_party/wry/src/webview2/construction_admission.rs",
+  "third_party/wry/src/webview2/construction_adoption.rs",
+  "third_party/wry/src/webview2/construction_composition.rs",
+  "third_party/wry/src/webview2/construction_effects.rs",
+  "third_party/wry/src/webview2/construction_environment.rs",
+  "third_party/wry/src/webview2/construction_initialize.rs",
+  "third_party/wry/src/webview2/drag_drop.rs",
+  "third_party/wry/src/webview2/mod.rs",
+  "third_party/wry/src/webview2/owned_config.rs",
+  "third_party/wry/src/webview2/owned_config_tests.rs",
+  "third_party/wry/src/webview2/owned_environment_tests.rs",
+  "third_party/wry/src/webview2/owned_race_tests.rs",
+  "third_party/wry/src/webview2/owned_state.rs",
+  "third_party/wry/src/webview2/private_profile.rs",
+  "third_party/wry/src/webview2/owned_tests.rs",
+  "third_party/wry/src/webview2/retirement.rs",
+  "third_party/wry/src/webview2/retirement_reference.rs",
+  "third_party/wry/src/webview2/retirement_subclass.rs",
+  "third_party/wry/src/webview2/util.rs",
+  "third_party/wry/src/wkwebview/class/document_title_changed_observer.rs",
+  "third_party/wry/src/wkwebview/class/mod.rs",
+  "third_party/wry/src/wkwebview/class/url_scheme_handler.rs",
+  "third_party/wry/src/wkwebview/class/wry_download_delegate.rs",
+  "third_party/wry/src/wkwebview/class/wry_navigation_delegate.rs",
+  "third_party/wry/src/wkwebview/class/wry_web_view.rs",
+  "third_party/wry/src/wkwebview/class/wry_web_view_delegate.rs",
+  "third_party/wry/src/wkwebview/class/wry_web_view_parent.rs",
+  "third_party/wry/src/wkwebview/class/wry_web_view_ui_delegate.rs",
+  "third_party/wry/src/wkwebview/download.rs",
+  "third_party/wry/src/wkwebview/drag_drop.rs",
+  "third_party/wry/src/wkwebview/ios/WKWebView.rs",
+  "third_party/wry/src/wkwebview/ios/mod.rs",
+  "third_party/wry/src/wkwebview/mod.rs",
+  "third_party/wry/src/wkwebview/navigation.rs",
+  "third_party/wry/src/wkwebview/proxy.rs",
+  "third_party/wry/src/wkwebview/synthetic_mouse_events.rs",
+  "third_party/wry/src/wkwebview/util.rs"
+]
+
+[[components]]
+id = "crashpad-bounded-finished-parser"
+source_url = "https://chromium.googlesource.com/crashpad/crashpad/+/60dd943f48d77dc8d05dabc04badbd8561d0b8c4/"
+license = "Apache-2.0 AND GPL-3.0-or-later"
+license_file = "third_party/licenses/crashpad.Apache-2.0.txt"
+files = ["native/crashpad/bounded_metadata.h", "native/crashpad/bounded_metadata.cc", "native/crashpad/bounded_metadata_tests.cc", "native/crashpad/incident_bridge.h", "native/crashpad/incident_bridge.cc", "native/crashpad/incident_bridge_tests.cc"]
+
+[[components]]
+id = "crashpad-native-capture-attachment-adaptations"
+source_url = "https://chromium.googlesource.com/crashpad/crashpad/+/60dd943f48d77dc8d05dabc04badbd8561d0b8c4/"
+license = "Apache-2.0 AND BSD-3-Clause AND GPL-3.0-or-later"
+license_file = "third_party/licenses/crashpad-mini-chromium.Apache-2.0-and-BSD.txt"
+files = [
+  "native/crashpad/BUILD.gn",
+  "native/crashpad/capture_attach_boundary.cc",
+  "native/crashpad/capture_attach_boundary.h",
+  "native/crashpad/capture_attach_boundary_tests.cc",
+  "native/crashpad/capture_attach_v2.h",
+  "native/crashpad/capture_attach_validation.cc",
+  "native/crashpad/capture_attach_validation.h",
+  "native/crashpad/capture_attach_validation_tests.cc",
+  "native/crashpad/capture_bridge.cc",
+  "native/crashpad/capture_bridge.h",
+  "native/crashpad/capture_endpoint.h",
+  "native/crashpad/capture_event.cc",
+  "native/crashpad/capture_event.h",
+  "native/crashpad/capture_event_tests.cc",
+  "native/crashpad/capture_runtime_test_source.py",
+  "native/crashpad/capture_runtime_tests.cc",
+  "native/crashpad/capture_source.cc",
+  "native/crashpad/capture_source.h",
+  "native/crashpad/capture_source_tests.cc",
+  "native/crashpad/owned_attach.cc",
+  "native/crashpad/owned_attach.h",
+  "native/crashpad/owned_attach_protocol.cc",
+  "native/crashpad/owned_attach_test_support.h",
+  "native/crashpad/owned_attach_tests.cc",
+  "native/crashpad/owned_connection.cc",
+  "native/crashpad/owned_connection.h",
+  "native/crashpad/owned_registration_tests.cc",
+]
+
+[[components]]
+id = "comfy-desktop-provisioning"
+source_url = "https://github.com/Comfy-Org/Comfy-Desktop/tree/195ae80ae06ac5cf9e9c3b2978ea5e0b73f1f464"
+license = "AGPL-3.0-or-later"
+license_file = "third_party/licenses/comfy-desktop.AGPL-3.0.txt"
+files = [
+  "installer/patches/0001-provisioning-entry.patch",
+  "installer/patches/0002-require-complete-provisioning.patch",
+  "installer/patches/0003-shared-cache-grants.patch",
+  "installer/patches/0004-native-metadata.patch",
+  "installer/patches/0005-native-download-storage.patch",
+  "third_party/comfy-desktop/lib/git_operations.py",
+  "third_party/comfy-desktop/lib/pygit2_compat.py",
+  "third_party/comfy-desktop/lib/update_comfyui.py",
+  "third_party/comfy-desktop/locales/drafts/README.md",
+  "third_party/comfy-desktop/locales/en.json",
+  "third_party/comfy-desktop/locales/zh.json",
+  "third_party/comfy-desktop/src/main/lib/cache.ts",
+  "third_party/comfy-desktop/src/main/lib/cnr.ts",
+  "third_party/comfy-desktop/src/main/lib/comfyui-releases.ts",
+  "third_party/comfy-desktop/src/main/lib/copy.ts",
+  "third_party/comfy-desktop/src/main/lib/download.ts",
+  "third_party/comfy-desktop/src/main/lib/extract.ts",
+  "third_party/comfy-desktop/src/main/lib/fetch.ts",
+  "third_party/comfy-desktop/src/main/lib/git.ts",
+  "third_party/comfy-desktop/src/main/lib/github-mirror.ts",
+  "third_party/comfy-desktop/src/main/lib/gpu.ts",
+  "third_party/comfy-desktop/src/main/lib/i18n.ts",
+  "third_party/comfy-desktop/src/main/lib/installer.ts",
+  "third_party/comfy-desktop/src/main/lib/logged-process.ts",
+  "third_party/comfy-desktop/src/main/lib/nodes.ts",
+  "third_party/comfy-desktop/src/main/lib/opMarker.ts",
+  "third_party/comfy-desktop/src/main/lib/pip.ts",
+  "third_party/comfy-desktop/src/main/lib/process.ts",
+  "third_party/comfy-desktop/src/main/lib/processIdentity.ts",
+  "third_party/comfy-desktop/src/main/lib/pythonEnv.ts",
+  "third_party/comfy-desktop/src/main/lib/r2Mirror.ts",
+  "third_party/comfy-desktop/src/main/lib/safe-file.ts",
+  "third_party/comfy-desktop/src/main/lib/snapshots/diff.ts",
+  "third_party/comfy-desktop/src/main/lib/snapshots/exportImport.ts",
+  "third_party/comfy-desktop/src/main/lib/snapshots/index.ts",
+  "third_party/comfy-desktop/src/main/lib/snapshots/restore.ts",
+  "third_party/comfy-desktop/src/main/lib/snapshots/store.ts",
+  "third_party/comfy-desktop/src/main/lib/snapshots/tabData.ts",
+  "third_party/comfy-desktop/src/main/lib/stderrTail.ts",
+  "third_party/comfy-desktop/src/main/lib/util.ts",
+  "third_party/comfy-desktop/src/main/lib/version-resolve.ts",
+  "third_party/comfy-desktop/src/main/lib/version.ts",
+  "third_party/comfy-desktop/src/main/sources/common/nestedRoot.ts",
+  "third_party/comfy-desktop/src/main/sources/standalone/envPaths.ts",
+  "third_party/comfy-desktop/src/main/sources/standalone/index.ts",
+  "third_party/comfy-desktop/src/main/sources/standalone/install.ts",
+  "third_party/comfy-desktop/src/main/sources/standalone/macRepair.ts",
+  "third_party/comfy-desktop/src/main/sources/standalone/r2Catalog.ts",
+  "third_party/comfy-desktop/src/main/sources/standalone/torchIndexManifest.ts",
+  "third_party/comfy-desktop/src/main/sources/standalone/torchStackCatalog.ts",
+  "third_party/comfy-desktop/src/main/sources/standalone/torchStackTypes.ts",
+  "third_party/comfy-desktop/src/main/sources/standalone/updateOrchestrator.ts",
+  "third_party/comfy-desktop/src/shared/errorBucket.ts",
+  "third_party/comfy-desktop/src/shared/errorEvent.ts",
+  "third_party/comfy-desktop/src/shared/piiScrub.ts",
+  "installer/patches/0006-standalone-node-runtime.patch",
+]
+
+[[components]]
+id = "legacy-installer-wordmark"
+source_url = "https://github.com/Artificial-Sweetener/SugarSubstitute/blob/main/docs/readme/sugarsubstitute-logo.svg"
+license = "GPL-3.0-or-later"
+license_file = "third_party/licenses/splash-characters.GPL-3.0.txt"
+files = ["assets/brand/wordmark.svg"]
+
+[[components]]
+id = "installer-fluent-icons"
+source_url = "https://github.com/zhiyiYo/PyQt-Fluent-Widgets/tree/d90c008c534b2b0079ce7981d19b2bc957b354a5/qfluentwidgets/_rc/images/icons"
+license = "GPL-3.0-only"
+license_file = "third_party/licenses/qfluentwidgets.GPL-3.0.txt"
+files = [
+  "crates/sugarsubstitute-ui/assets/fluent/Accept.svg",
+  "crates/sugarsubstitute-ui/assets/fluent/ChevronDown.svg",
+  "crates/sugarsubstitute-ui/assets/fluent/Close.svg",
+  "crates/sugarsubstitute-ui/assets/fluent/Folder.svg",
+  "crates/sugarsubstitute-ui/assets/fluent/Home.svg",
+  "crates/sugarsubstitute-ui/assets/fluent/Language.svg",
+  "crates/sugarsubstitute-ui/assets/fluent/Link.svg",
+  "crates/sugarsubstitute-ui/assets/fluent/Sync.svg",
+]
+
+[[components]]
+id = "report-severity-icons"
+source_url = "https://github.com/zhiyiYo/PyQt-Fluent-Widgets/tree/d90c008c534b2b0079ce7981d19b2bc957b354a5/qfluentwidgets/_rc/images/info_bar"
+license = "GPL-3.0-only"
+license_file = "third_party/licenses/qfluentwidgets.GPL-3.0.txt"
+files = [
+  "crates/sugarsubstitute-ui/assets/fluent/SeverityError.svg",
+  "crates/sugarsubstitute-ui/assets/fluent/SeverityInfo.svg",
+  "crates/sugarsubstitute-ui/assets/fluent/SeverityWarning.svg",
+]
+
+[[components]]
+id = "nodejs-provisioning-runtime"
+source_url = "https://nodejs.org/dist/v24.22.1/"
+license = "MIT AND LicenseRef-Nodejs-Bundled-Dependencies"
+license_file = "third_party/licenses/nodejs-24.22.1.txt"
+files = ["installer/runtime.json"]
