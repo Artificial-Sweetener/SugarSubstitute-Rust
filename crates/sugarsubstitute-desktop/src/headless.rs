@@ -64,6 +64,7 @@ pub fn run_headless(lifetime: &mut impl HeadlessLifetime) -> Result<(), DesktopE
         state.fail(lifetime, cause);
         prepare_before_loop(&bootstrap, &mut state, lifetime);
     }
+    let session_end = headless_session_end();
     while !state.settled() {
         let exit_code = event_loop.run_return(|event, _, control| {
             match event {
@@ -79,10 +80,49 @@ pub fn run_headless(lifetime: &mut impl HeadlessLifetime) -> Result<(), DesktopE
         state.native_return(lifetime, exit_code);
     }
     state.retire_bootstrap(&bootstrap);
+    if let Some(watch) = session_end
+        && let Err(cause) = watch.retire()
+    {
+        tracing::error!(operation = "retire_session_end", cause = %cause,
+            "The headless session-end watch could not be removed");
+    }
     state.finish(lifetime, || {
         wake_lifetime.disconnect();
         drop(event_loop);
     })
+}
+
+/// Keep Tao from exiting a headless process from inside its window procedure at session end.
+/// A headless role holds nothing open for the user, so it never delays the session end.
+#[cfg(target_os = "windows")]
+fn headless_session_end() -> Option<crate::windows_session_end::SessionEndWatch> {
+    match crate::windows_session_end::SessionEndWatch::install("", || {}) {
+        Ok(watch) => {
+            watch.set_outstanding(false);
+            Some(watch)
+        }
+        Err(cause) => {
+            tracing::error!(operation = "install_session_end", cause = %cause,
+                "A headless session end will exit without its owned shutdown");
+            None
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn headless_session_end() -> Option<NoSessionEnd> {
+    None
+}
+
+/// Platforms without Tao's session-end exit need no watch.
+#[cfg(not(target_os = "windows"))]
+struct NoSessionEnd;
+
+#[cfg(not(target_os = "windows"))]
+impl NoSessionEnd {
+    fn retire(self) -> Result<(), DesktopError> {
+        Ok(())
+    }
 }
 
 /// Closing keeps the same original lifetime, with at most 32 owner/message notices per turn.

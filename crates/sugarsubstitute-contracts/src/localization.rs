@@ -13,6 +13,8 @@ pub mod incident;
 pub mod installer;
 /// Localized operation-specific startup feedback.
 pub mod startup;
+/// Localized update controls, update report steps and start-up update lines.
+pub mod updates;
 /// Localized standalone canvas viewer status.
 pub mod viewer;
 /// Localized native main-window controls.
@@ -68,6 +70,8 @@ pub struct Messages {
     pub window: &'static window::WindowMessages,
     /// The close save's window state and the next start's unsaved-work notice.
     pub closing: &'static closing::ClosingMessages,
+    /// The window's update controls, the update report's steps and start-up update lines.
+    pub updates: &'static updates::UpdateMessages,
     /// Native canvas viewer title and image-opening feedback.
     pub viewer: &'static viewer::ViewerMessages,
 }
@@ -96,6 +100,7 @@ pub static LOCALES: &[Messages] = &[
         conflict: &conflict::EN,
         window: &window::EN,
         closing: &closing::EN,
+        updates: &updates::EN,
         viewer: &viewer::EN,
     },
     Messages {
@@ -120,6 +125,7 @@ pub static LOCALES: &[Messages] = &[
         conflict: &conflict::ZH_HANS,
         window: &window::ZH_HANS,
         closing: &closing::ZH_HANS,
+        updates: &updates::ZH_HANS,
         viewer: &viewer::ZH_HANS,
     },
     Messages {
@@ -144,6 +150,7 @@ pub static LOCALES: &[Messages] = &[
         conflict: &conflict::JA,
         window: &window::JA,
         closing: &closing::JA,
+        updates: &updates::JA,
         viewer: &viewer::JA,
     },
     Messages {
@@ -168,6 +175,7 @@ pub static LOCALES: &[Messages] = &[
         conflict: &conflict::KO,
         window: &window::KO,
         closing: &closing::KO,
+        updates: &updates::KO,
         viewer: &viewer::KO,
     },
     Messages {
@@ -192,6 +200,7 @@ pub static LOCALES: &[Messages] = &[
         conflict: &conflict::ES,
         window: &window::ES,
         closing: &closing::ES,
+        updates: &updates::ES,
         viewer: &viewer::ES,
     },
 ];
@@ -234,6 +243,7 @@ mod tests {
                 .chain(locale.conflict.labels())
                 .chain(locale.window.labels())
                 .chain(locale.closing.labels())
+                .chain(locale.updates.labels())
                 .chain(locale.viewer.labels())
                 .chain(locale.startup.labels())
                 .all(|text| !text.trim().is_empty() && !text.contains('\0'))

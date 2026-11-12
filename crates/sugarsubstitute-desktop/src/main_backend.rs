@@ -161,33 +161,6 @@ impl Recovery {
         self.closed = true;
     }
 }
-/// Keep caption identities/geometry while carrying the actual recovery owner's Retry availability.
-pub(crate) fn caption_controls(
-    width: f64,
-    maximized: bool,
-    labels: crate::MainCaptionLabels,
-    retry: RetryPresentation,
-) -> [crate::AccessibleControl; 4] {
-    let names = [
-        labels.minimize,
-        if maximized { labels.restore } else { labels.maximize },
-        labels.close,
-        retry.label,
-    ];
-    std::array::from_fn(|index| crate::AccessibleControl {
-        enabled: true,
-        id: index as u16 + 1,
-        label: names[index],
-        bounds: crate::ControlBounds {
-            x: if index == 3 { 8.0 } else { width - 138.0 + index as f64 * 46.0 },
-            y: 1.0,
-            width: if index == 3 { (width - 154.0).clamp(144.0, 480.0) } else { 46.0 },
-            height: 32.0,
-        },
-        close: index == 2,
-        visible: index != 3 || retry.visible,
-    })
-}
 #[cfg(test)]
 #[path = "main_backend_tests.rs"]
 mod tests;

@@ -54,6 +54,8 @@ struct Registration {
 /// Keep immutable peer identities and the UI-only wake proxy behind stable reference ownership.
 pub(crate) struct Callback {
     proxy: EventLoopProxy<NativeAction>,
+    /// A form window sharing its event loop posts its peers' actions under this scope.
+    scope: Option<crate::native_action::FormScope>,
     timings: Option<TimingObserver>,
     controls: RefCell<Vec<Registration>>,
     failure: RefCell<Option<DesktopError>>,
@@ -71,6 +73,7 @@ impl Callback {
         paint_mode: crate::windows_controls::PaintMode,
         theme: sugarsubstitute_contracts::configuration::Theme,
         count: usize,
+        scope: Option<crate::native_action::FormScope>,
     ) -> Result<Self, DesktopError> {
         let mut controls = Vec::new();
         controls
@@ -84,6 +87,7 @@ impl Callback {
         }
         Ok(Self {
             proxy,
+            scope,
             timings,
             controls: RefCell::new(controls),
             failure: RefCell::new(None),
@@ -179,6 +183,10 @@ impl Callback {
 
     /// Wake the native loop without borrowing content or running application work inside a procedure.
     fn send(&self, action: NativeAction) {
+        let action = match (self.scope, crate::native_action::FormAction::from_native(action)) {
+            (Some(scope), Some(form)) => NativeAction::Form(scope, form),
+            _ => action,
+        };
         if let Err(error) = self.proxy.send_event(action) {
             tracing::error!(operation = "native_control_delivery", cause = %error, "Native control event could not reach its event loop");
         }

@@ -158,3 +158,33 @@ fn wake_failure_does_not_replace_the_owned_shell_result() -> Result<(), Box<dyn 
     picker.retire()?;
     Ok(())
 }
+
+#[test]
+fn a_released_picker_serves_the_next_window_and_never_the_old_one() -> Result<(), Box<dyn Error>> {
+    let first = Window::new()?;
+    let second = Window::new()?;
+    let windows = Rc::new(RefCell::new(Vec::new()));
+    let seen = windows.clone();
+    let picker = fixture(
+        first.0,
+        Box::new(move |window, _, _| {
+            seen.borrow_mut().push(window);
+            Ok(None)
+        }),
+    )?;
+    picker.request(SelectionKind::File)?;
+    assert!(picker.release().is_err(), "a pending request keeps its window");
+    picker.0.message_turn();
+    assert_eq!(picker.take_result().transpose()?, Some(None));
+    picker.release()?;
+    assert!(picker.request(SelectionKind::File).is_err(), "no window is bound");
+    picker.0.message_turn();
+    picker.bind(second.0, || Ok(()))?;
+    picker.request(SelectionKind::File)?;
+    picker.0.message_turn();
+    assert_eq!(picker.take_result().transpose()?, Some(None));
+    assert_eq!(*windows.borrow(), vec![first.0, second.0]);
+    picker.retire()?;
+    assert!(picker.bind(first.0, || Ok(())).is_err());
+    Ok(())
+}

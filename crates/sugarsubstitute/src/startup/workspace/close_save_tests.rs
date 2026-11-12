@@ -171,3 +171,108 @@ fn a_failed_final_workspace_publication_is_recorded_before_the_exit_intent() -> 
     );
     fixture.retire()
 }
+
+#[test]
+fn a_session_end_closes_through_the_close_save_and_is_settled_only_with_its_outcome() -> TestResult
+{
+    use sugarsubstitute_desktop::StartupWindowContent;
+    let mut fixture = Fixture::new(true)?;
+    fixture.host.workspace.as_mut().ok_or("Workspace")?.driver = None;
+    fixture.host.input_probe = Some(InputSaveProbe::default());
+    assert!(!fixture.host.close_save_settled(), "nothing has been saved before a close");
+    fixture.host.request_session_close(false)?;
+    let budget = fixture.host.shutdown.budget()?;
+    fixture.poll()?;
+    let probe = fixture.host.input_probe.as_ref().ok_or("Probe")?;
+    assert_eq!(probe.begun, Some(budget.graceful_until), "an ordinary end keeps the full budget");
+    assert!(!fixture.host.close_save_settled(), "the session end is held while saving");
+    fixture.host.input_probe.as_mut().ok_or("Probe")?.verdict = Some(SaveVerdict::Saved);
+    fixture.exit_intent()?;
+    assert!(fixture.host.close_save_settled());
+    assert_eq!(
+        fixture.host.close_save_outcome().map(|outcome| outcome.reason),
+        Some(CloseReason::SessionEnding { critical: false })
+    );
+    assert_eq!(fixture.host.session_end_reason(), "Saving your workspace…");
+    fixture.retire()
+}
+
+#[test]
+fn a_critical_session_end_saves_within_four_seconds() -> TestResult {
+    use sugarsubstitute_desktop::StartupWindowContent;
+    let mut fixture = Fixture::new(true)?;
+    fixture.host.workspace.as_mut().ok_or("Workspace")?.driver = None;
+    fixture.host.input_probe = Some(InputSaveProbe::default());
+    let before = fixture.host.clock.now();
+    fixture.host.request_session_close(true)?;
+    let after = fixture.host.clock.now();
+    let budget = fixture.host.shutdown.budget()?;
+    fixture.poll()?;
+    let begun = fixture.host.input_probe.as_ref().and_then(|probe| probe.begun).ok_or("Begun")?;
+    assert!(begun < budget.graceful_until, "the critical cutoff is shorter than the budget's");
+    let four = Duration::from_secs(4);
+    assert!(
+        before.checked_add(four)? <= begun && begun <= after.checked_add(four)?,
+        "four seconds"
+    );
+    fixture.host.input_probe.as_mut().ok_or("Probe")?.verdict = Some(SaveVerdict::Saved);
+    fixture.exit_intent()?;
+    fixture.retire()
+}
+
+#[test]
+fn the_window_reads_the_close_progress_notice_and_language_the_host_holds() -> TestResult {
+    use sugarsubstitute_desktop::StartupWindowContent;
+    let mut fixture = Fixture::new(true)?;
+    fixture.host.workspace.as_mut().ok_or("Workspace")?.driver = None;
+    fixture.host.input_probe = Some(InputSaveProbe::default());
+    let notice = NotSavedLastTime {
+        reason: CloseReason::Close,
+        items: vec![UnsavedItem::InputCanvas(UnsavedCause::Failed(SaveFailure::Storage))],
+    };
+    fixture.host.workspace.as_mut().ok_or("Workspace")?.notice = Some(notice.clone());
+    assert_eq!(StartupWindowContent::take_unsaved_notice(&mut fixture.host), Some(notice));
+    assert_eq!(StartupWindowContent::take_unsaved_notice(&mut fixture.host), None, "taken once");
+    assert_eq!(StartupWindowContent::close_save_progress(&fixture.host), None, "before close");
+    fixture.host.request_restart_to_apply()?;
+    fixture.poll()?;
+    assert!(matches!(
+        StartupWindowContent::close_save_progress(&fixture.host),
+        Some(CloseSaveProgress::Saving { reason: CloseReason::RestartToApply, .. })
+    ));
+    assert!(std::ptr::eq(
+        fixture.host.locale_messages(),
+        sugarsubstitute_contracts::localization::messages("en")
+    ));
+    fixture.host.input_probe.as_mut().ok_or("Probe")?.verdict = Some(SaveVerdict::Saved);
+    fixture.exit_intent()?;
+    fixture.retire()
+}
+
+#[test]
+fn restart_to_apply_relaunches_only_once_the_close_save_has_its_outcome() -> TestResult {
+    use sugarsubstitute_desktop::StartupWindowContent;
+    let mut fixture = Fixture::new(true)?;
+    fixture.host.workspace.as_mut().ok_or("Workspace")?.driver = None;
+    fixture.host.input_probe = Some(InputSaveProbe::default());
+    fixture.host.request_restart_to_apply()?;
+    let budget = fixture.host.shutdown.budget()?;
+    fixture.poll()?;
+    let probe = fixture.host.input_probe.as_ref().ok_or("Probe")?;
+    assert_eq!(probe.begun, Some(budget.graceful_until), "the close save began");
+    assert!(fixture.host.child.shutdown_requests.is_empty(), "no exit intent while saving");
+    assert!(matches!(
+        fixture.host.close_save_progress(),
+        Some(CloseSaveProgress::Saving { reason: CloseReason::RestartToApply, .. })
+    ));
+    assert!(fixture.host.close_save_outcome().is_none(), "no relaunch while saving");
+    assert!(!fixture.host.close_save_settled());
+    fixture.host.input_probe.as_mut().ok_or("Probe")?.verdict = Some(SaveVerdict::Saved);
+    fixture.exit_intent()?;
+    assert_eq!(
+        fixture.host.close_save_outcome().map(|outcome| outcome.reason),
+        Some(CloseReason::RestartToApply),
+        "the relaunch signal is the settled outcome"
+    );
+    fixture.retire()
+}

@@ -6,11 +6,16 @@
 mod commands;
 #[path = "startup_presentation.rs"]
 mod presentation;
+#[path = "startup_report.rs"]
+mod report;
+#[path = "startup_updates.rs"]
+mod updates;
 use super::*;
 use crate::{
     cadence::{advance_deadline, closing_wait, presentation_wait},
     native_surface::input,
 };
+pub(super) use report::HostedReport;
 use sugarsubstitute_contracts::startup::{StartupFailure, StartupFailureCode};
 use tao::{
     event::Event,
@@ -29,6 +34,7 @@ pub(super) fn system_accent(
     content: &mut impl StartupWindowContent,
 ) -> Result<(), DesktopError> {
     if let Some(accent) = session.accent.take_change() {
+        report::accent(session, accent);
         content
             .system_accent(accent)
             .map_err(|cause| DesktopError::boxed("adopt_system_accent", cause))?;
@@ -68,6 +74,13 @@ pub(super) fn dispatch(
         session.splash.state.visibility(content, visible);
     }
     match event {
+        Event::WindowEvent { window_id, event, .. } if report::owns_window(session, window_id) => {
+            report::window_event(session, &event);
+        }
+        Event::UserEvent(NativeAction::Form(scope, action)) => {
+            report::action(session, scope, action)
+        }
+        Event::RedrawRequested(id) if report::owns_window(session, id) => report::redraw(session),
         Event::WindowEvent { window_id, event, .. } => {
             if session.main.is_some() {
                 main_operation(session, content, |main| main.window_event(window_id, &event))?;
@@ -107,6 +120,19 @@ pub(super) fn dispatch(
         Event::UserEvent(NativeAction::Close) if !session.closing => {
             session.observe(content, DesktopStartupObservation::CloseRequested)?;
         }
+        Event::UserEvent(NativeAction::SessionEnding) => {
+            use crate::windows_session_end::SessionEndSignal;
+            match session.session_end.as_ref().and_then(|watch| watch.take_signal()) {
+                Some(SessionEndSignal::Ending { critical }) if !session.closing => content
+                    .request_session_close(critical)
+                    .map_err(|cause| DesktopError::boxed("session_end_close", cause))?,
+                Some(SessionEndSignal::Cancelled) => tracing::info!(
+                    operation = "session_end",
+                    "Windows cancelled the session end; a close already under way continues"
+                ),
+                _ => {}
+            }
+        }
         Event::UserEvent(NativeAction::Activate(id))
             if !session.closing && !session.splash.retiring =>
         {
@@ -118,7 +144,11 @@ pub(super) fn dispatch(
             if let Some(main) = &session.main
                 && let Some(id) = action.main_control(main.identity())
             {
-                main_operation(session, content, |main| main.activate(id))?;
+                if crate::main_updates::owns(id) {
+                    updates::activate(session, content, id, target, proxy.clone(), context.title)?;
+                } else {
+                    main_operation(session, content, |main| main.activate(id))?;
+                }
             }
         }
         Event::UserEvent(NativeAction::MainBackendRetry(action)) if !session.closing => {
@@ -245,6 +275,7 @@ pub(super) fn dispatch(
                     DesktopStartupObservation::SplashRetired(session.splash.launch),
                 )?;
             }
+            updates::turn(session, content)?;
             commands::drain(session, content, proxy)?;
         }
         _ => {}

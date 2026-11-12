@@ -111,6 +111,7 @@ impl MainActor {
                         )
                     })?
                     .initialize()?;
+                self.resize_caption()?;
                 self.present_recovery_control()?;
                 #[cfg(feature = "native-composition")]
                 {
@@ -347,21 +348,28 @@ impl MainActor {
         let size = self.window()?.inner_size();
         Ok(super::frame::browser_bounds(size.width, size.height))
     }
-    pub(super) fn caption_controls(&self) -> Result<[AccessibleControl; 4], DesktopError> {
+    pub(super) fn caption_controls(
+        &self,
+    ) -> Result<[AccessibleControl; crate::main_caption::PEERS], DesktopError> {
+        use tao::platform::windows::WindowExtWindows;
         let window = self.window()?;
         let width = window.inner_size().to_logical::<f64>(window.scale_factor()).width.max(144.0);
         let settings = self.request()?.settings();
-        Ok(crate::main_backend::caption_controls(
+        let hwnd = windows::Win32::Foundation::HWND(window.hwnd() as *mut _);
+        crate::main_caption::caption_controls(
             width,
             window.is_maximized(),
             settings.labels,
             self.recovery.presentation(settings.recovery),
-        ))
+            &self.updates.view(),
+            |text| crate::windows_callbacks::caption::measure_text(hwnd, text),
+        )
     }
     pub(super) fn resize(&mut self) -> Result<(), DesktopError> {
         let controls = self.caption_controls()?;
+        let view = self.updates.view();
         if let Some(owner) = &mut self.controls {
-            owner.update(&crate::windows_controls::Specification::buttons(&controls))?;
+            owner.present_caption(&controls, &view)?;
         }
         if let Some(view) = &self.view {
             view.set_bounds(self.browser_bounds()?)
