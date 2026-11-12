@@ -7,9 +7,16 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
-      - id: sugarsubstitute-check
-        name: Check SugarSubstitute governance, formatting and lints
-        entry: cargo xtask check
+      - id: substitute-check
+        name: Check Substitute governance, formatting and lints
+        entry: python -c "import subprocess, sys; sys.exit(subprocess.call(['cargo', 'xtask', 'check'], cwd='Substitute'))"
         language: system
         pass_filenames: false
+        files: ^(Substitute/|Sugar/integrations/contracts/)
         exclude: '\.md$'
+      - id: sugar-check
+        name: Check the staged SugarCubes snapshot
+        entry: npm --prefix Sugar run check:staged
+        language: system
+        pass_filenames: false
+        files: ^Sugar/

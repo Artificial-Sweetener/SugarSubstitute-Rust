@@ -1,0 +1,45 @@
+:root {
+  color-scheme: dark;
+}
+body {
+  margin: 0;
+  background: var(--sc-gimp-background);
+  color: var(--sc-gimp-foreground);
+  font:
+    12px/18px 'Segoe UI',
+    sans-serif;
+}
+main {
+  padding: 24px 18px;
+}
+h1 {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+p {
+  margin: 0 0 10px;
+  overflow-wrap: anywhere;
+}
+#connection-address {
+  color: var(--sc-gimp-dimmed);
+}
+button {
+  min-height: 26px;
+  padding: 2px 14px;
+  border: 1px solid var(--sc-gimp-border);
+  border-radius: 3px;
+  background: var(--sc-gimp-widget);
+  color: inherit;
+  font: inherit;
+}
+button:hover {
+  background: var(--sc-gimp-hover);
+}
+button:focus-visible {
+  outline: 1px solid var(--sc-gimp-foreground);
+  outline-offset: 2px;
+}
+button:disabled {
+  color: var(--sc-gimp-disabled);
+}

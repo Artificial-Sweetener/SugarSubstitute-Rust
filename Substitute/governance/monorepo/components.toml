@@ -1,0 +1,73 @@
+schema_version = 1
+
+# Substitute compiles and tests against the SugarCubes host contract directly from its single
+# source in the pack. These are the exact contract files it consumes and the authored files
+# allowed to reference them.
+[[components]]
+id = "sugarcubes-contracts"
+root = "Sugar/integrations/contracts"
+owner = "SugarCubes integrations/contracts: portable editor schemas, generated bindings and shared wire vectors"
+files = [
+  "Sugar/integrations/contracts/canvas_capability_vectors.json",
+  "Sugar/integrations/contracts/canvas_context_vectors.json",
+  "Sugar/integrations/contracts/canvas_editing_vectors.json",
+  "Sugar/integrations/contracts/canvas_surface_address_vectors.json",
+  "Sugar/integrations/contracts/canvas_surface_discovery_vectors.json",
+  "Sugar/integrations/contracts/canvas_surface_file_vectors.json",
+  "Sugar/integrations/contracts/canvas_surface_geometry_vectors.json",
+  "Sugar/integrations/contracts/canvas_surface_inspection_vectors.json",
+  "Sugar/integrations/contracts/canvas_surface_message_vectors.json",
+  "Sugar/integrations/contracts/canvas_surface_occlusion_vectors.json",
+  "Sugar/integrations/contracts/canvas_surface_overview_vectors.json",
+  "Sugar/integrations/contracts/canvas_surface_preview_admission_vectors.json",
+  "Sugar/integrations/contracts/canvas_surface_preview_vectors.json",
+  "Sugar/integrations/contracts/canvas_surface_viewport_vectors.json",
+  "Sugar/integrations/contracts/canvas_workflow_vectors.json",
+  "Sugar/integrations/contracts/canvas.schema.json",
+  "Sugar/integrations/contracts/CanvasNativeProtocol.generated.rs",
+  "Sugar/integrations/contracts/CanvasSurfaceProtocol.generated.rs",
+  "Sugar/integrations/contracts/memory.schema.json",
+  "Sugar/integrations/contracts/MemoryProtocol.generated.rs",
+  "Sugar/integrations/contracts/panel_wire_vectors.json",
+  "Sugar/integrations/contracts/panel.schema.json",
+  "Sugar/integrations/contracts/PanelProtocol.generated.rs",
+  "Sugar/integrations/contracts/session_shape_vectors.json",
+  "Sugar/integrations/contracts/session_vectors.json",
+  "Sugar/integrations/contracts/session.schema.json",
+  "Sugar/integrations/contracts/SessionProtocol.generated.rs",
+]
+consumers = [
+  "crates/sugarsubstitute-application/src/workspace_session/tests.rs",
+  "crates/sugarsubstitute-contracts/src/canvas_native/tests/context.rs",
+  "crates/sugarsubstitute-contracts/src/canvas_native/tests/edit.rs",
+  "crates/sugarsubstitute-contracts/src/canvas_native/tests/workflow.rs",
+  "crates/sugarsubstitute-contracts/src/canvas_native/wire.rs",
+  "crates/sugarsubstitute-contracts/src/canvas_surface/camera/tests.rs",
+  "crates/sugarsubstitute-contracts/src/canvas_surface/capabilities/tests.rs",
+  "crates/sugarsubstitute-contracts/src/canvas_surface/file_reference/tests.rs",
+  "crates/sugarsubstitute-contracts/src/canvas_surface/message/tests.rs",
+  "crates/sugarsubstitute-contracts/src/canvas_surface/presentation/tests.rs",
+  "crates/sugarsubstitute-contracts/src/canvas_surface/preview/tests.rs",
+  "crates/sugarsubstitute-contracts/src/canvas_surface/tests.rs",
+  "crates/sugarsubstitute-contracts/src/canvas_surface/viewport/tests.rs",
+  "crates/sugarsubstitute-contracts/src/canvas_surface/wire.rs",
+  "crates/sugarsubstitute-contracts/src/desktop_session/tests.rs",
+  "crates/sugarsubstitute-contracts/src/desktop_session/wire.rs",
+  "crates/sugarsubstitute-contracts/src/memory/tests.rs",
+  "crates/sugarsubstitute-contracts/src/memory/wire.rs",
+  "crates/sugarsubstitute-contracts/src/panel/tests.rs",
+  "crates/sugarsubstitute-contracts/src/panel/wire.rs",
+  "crates/sugarsubstitute-contracts/tests/desktop_session_bounds.rs",
+  "crates/sugarsubstitute-contracts/tests/desktop_session.rs",
+  "crates/sugarsubstitute-desktop/src/main_panel_ingress_vectors_tests.rs",
+  "crates/sugarsubstitute-desktop/src/main_session_contract/tests.rs",
+  "crates/sugarsubstitute-desktop/src/main_session_ingress/tests.rs",
+  "crates/sugarsubstitute-desktop/src/main_session_media/route.rs",
+  "crates/sugarsubstitute-desktop/src/windows_main_receivers/session_media/tests.rs",
+  "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs",
+  "crates/sugarsubstitute/src/input_documents/tests/storage/legacy.rs",
+  "crates/sugarsubstitute/src/startup/workspace/admission_tests.rs",
+  "crates/sugarsubstitute/src/startup/workspace/closing_tests.rs",
+  "crates/sugarsubstitute/src/workspace_session/driver/tests.rs",
+  "crates/sugarsubstitute/src/workspace_session/tests.rs",
+]

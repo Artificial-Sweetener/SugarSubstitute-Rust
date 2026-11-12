@@ -1,0 +1,349 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://artificialsweetener.ai/schemas/sugarcubes/gimp/native/v1",
+  "title": "Private GIMP native primitives",
+  "$defs": {
+    "NativeId": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+    "NativeTattoo": { "type": "integer", "minimum": 1, "maximum": 4294967295 },
+    "NativeToken": { "type": "string", "maxLength": 80, "pattern": "^[a-zA-Z0-9-]+(?![\\s\\S])" },
+    "NativeDocument": {
+      "type": "object",
+      "properties": {
+        "imageId": { "$ref": "#/$defs/NativeId" },
+        "revision": { "type": "string", "maxLength": 512 },
+        "width": { "$ref": "#/$defs/CanvasWidth" },
+        "height": { "$ref": "#/$defs/CanvasHeight" },
+        "name": { "type": "string", "maxLength": 256 }
+      },
+      "required": ["imageId", "revision", "width", "height", "name"],
+      "additionalProperties": false
+    },
+    "NativeLayer": {
+      "type": "object",
+      "properties": {
+        "tattoo": { "$ref": "#/$defs/NativeTattoo" },
+        "parentTattoo": { "oneOf": [{ "$ref": "#/$defs/NativeTattoo" }, { "const": null }] },
+        "name": { "type": "string", "maxLength": 256 },
+        "depth": { "type": "integer", "minimum": 0, "maximum": 128 },
+        "visible": { "type": "boolean" },
+        "hasMask": { "type": "boolean" }
+      },
+      "required": ["tattoo", "parentTattoo", "name", "depth", "visible", "hasMask"],
+      "additionalProperties": false
+    },
+    "NativeLayers": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/NativeLayer" },
+      "maxItems": 4096
+    },
+    "NativeVisibility": {
+      "type": "object",
+      "properties": {
+        "tattoo": { "$ref": "#/$defs/NativeTattoo" },
+        "visible": { "type": "boolean" }
+      },
+      "required": ["tattoo", "visible"],
+      "additionalProperties": false
+    },
+    "NativeCommand": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": { "type": { "const": "context" } },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "snapshot.begin" },
+            "document": { "$ref": "#/$defs/NativeDocument" }
+          },
+          "required": ["type", "document"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "snapshot.release" },
+            "token": { "$ref": "#/$defs/NativeToken" }
+          },
+          "required": ["type", "token"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "snapshot.selection" },
+            "token": { "$ref": "#/$defs/NativeToken" },
+            "width": { "$ref": "#/$defs/RasterWidth" },
+            "height": { "$ref": "#/$defs/RasterHeight" },
+            "scale": { "type": "number", "minimum": 0, "maximum": 1 }
+          },
+          "required": ["type", "token", "width", "height", "scale"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "snapshot.projection" },
+            "token": { "$ref": "#/$defs/NativeToken" },
+            "width": { "$ref": "#/$defs/RasterWidth" },
+            "height": { "$ref": "#/$defs/RasterHeight" },
+            "scale": { "type": "number", "minimum": 0, "maximum": 1 },
+            "visibility": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/NativeVisibility" },
+              "maxItems": 4096
+            }
+          },
+          "required": ["type", "token", "width", "height", "scale", "visibility"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "channel.create" },
+            "document": { "$ref": "#/$defs/NativeDocument" },
+            "name": { "type": "string", "maxLength": 256 },
+            "source": { "enum": ["selection", "blank", "pixels"] },
+            "data": { "oneOf": [{ "$ref": "#/$defs/RasterData" }, { "const": null }] }
+          },
+          "required": ["type", "document", "name", "source", "data"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "channel.select" },
+            "document": { "$ref": "#/$defs/NativeDocument" },
+            "tattoo": { "$ref": "#/$defs/NativeTattoo" }
+          },
+          "required": ["type", "document", "tattoo"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "channel.release" },
+            "tattoo": { "oneOf": [{ "$ref": "#/$defs/NativeTattoo" }, { "const": null }] }
+          },
+          "required": ["type", "tattoo"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "snapshot.channel" },
+            "token": { "$ref": "#/$defs/NativeToken" },
+            "tattoo": { "$ref": "#/$defs/NativeTattoo" },
+            "width": { "$ref": "#/$defs/RasterWidth" },
+            "height": { "$ref": "#/$defs/RasterHeight" },
+            "scale": { "type": "number", "minimum": 0, "maximum": 1 }
+          },
+          "required": ["type", "token", "tattoo", "width", "height", "scale"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "image.insert" },
+            "document": { "$ref": "#/$defs/NativeDocument" },
+            "data": { "$ref": "#/$defs/PngData" },
+            "width": { "type": "integer", "minimum": 1, "maximum": 30000 },
+            "height": { "type": "integer", "minimum": 1, "maximum": 30000 },
+            "name": { "type": "string", "maxLength": 256 },
+            "left": { "type": "integer", "minimum": -300000, "maximum": 300000 },
+            "top": { "type": "integer", "minimum": -300000, "maximum": 300000 }
+          },
+          "required": ["type", "document", "data", "width", "height", "name", "left", "top"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "geometry.context" },
+            "document": { "$ref": "#/$defs/NativeDocument" }
+          },
+          "required": ["type", "document"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "image.resize" },
+            "document": { "$ref": "#/$defs/NativeDocument" },
+            "width": { "$ref": "#/$defs/CanvasWidth" },
+            "height": { "$ref": "#/$defs/CanvasHeight" }
+          },
+          "required": ["type", "document", "width", "height"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "NativeResult": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "channel-created" },
+            "tattoo": { "$ref": "#/$defs/NativeTattoo" },
+            "committed": { "const": true }
+          },
+          "required": ["kind", "tattoo", "committed"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": { "kind": { "const": "channel-selected" }, "committed": { "const": true } },
+          "required": ["kind", "committed"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "context" },
+            "hostId": { "$ref": "#/$defs/NativeToken" },
+            "document": { "oneOf": [{ "$ref": "#/$defs/NativeDocument" }, { "const": null }] },
+            "layers": { "$ref": "#/$defs/NativeLayers" },
+            "primaryLayer": { "oneOf": [{ "$ref": "#/$defs/NativeTattoo" }, { "const": null }] },
+            "rgb": { "type": "boolean" }
+          },
+          "required": ["kind", "hostId", "document", "layers", "primaryLayer", "rgb"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "snapshot" },
+            "token": { "$ref": "#/$defs/NativeToken" },
+            "document": { "$ref": "#/$defs/NativeDocument" },
+            "layers": { "$ref": "#/$defs/NativeLayers" },
+            "primaryLayer": { "oneOf": [{ "$ref": "#/$defs/NativeTattoo" }, { "const": null }] }
+          },
+          "required": ["kind", "token", "document", "layers", "primaryLayer"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": { "kind": { "const": "released" } },
+          "required": ["kind"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "pixels" },
+            "width": { "$ref": "#/$defs/RasterWidth" },
+            "height": { "$ref": "#/$defs/RasterHeight" },
+            "format": { "enum": ["rgba8", "coverage8"] },
+            "data": { "$ref": "#/$defs/RasterData" }
+          },
+          "required": ["kind", "width", "height", "format", "data"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "inserted" },
+            "committed": { "const": true },
+            "tattoo": { "$ref": "#/$defs/NativeTattoo" },
+            "left": { "type": "integer", "minimum": -300000, "maximum": 300000 },
+            "top": { "type": "integer", "minimum": -300000, "maximum": 300000 },
+            "width": { "type": "integer", "minimum": 1, "maximum": 30000 },
+            "height": { "type": "integer", "minimum": 1, "maximum": 30000 }
+          },
+          "required": ["kind", "committed", "tattoo", "left", "top", "width", "height"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "failure" },
+            "status": { "enum": ["cancelled", "stale", "unsupported", "error"] },
+            "message": { "type": "string", "maxLength": 512 }
+          },
+          "required": ["kind", "status", "message"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "geometry" },
+            "document": { "$ref": "#/$defs/NativeDocument" },
+            "selection": {
+              "oneOf": [{ "$ref": "#/$defs/CanvasSelectionBounds" }, { "const": null }]
+            }
+          },
+          "required": ["kind", "document", "selection"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": { "const": "resized" },
+            "document": { "$ref": "#/$defs/NativeDocument" },
+            "committed": { "const": true }
+          },
+          "required": ["kind", "document", "committed"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "NativeRequest": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "request" },
+        "id": { "$ref": "#/$defs/NativeId" },
+        "command": { "$ref": "#/$defs/NativeCommand" }
+      },
+      "required": ["type", "id", "command"],
+      "additionalProperties": false
+    },
+    "NativeCancel": {
+      "type": "object",
+      "properties": { "type": { "const": "cancel" }, "id": { "$ref": "#/$defs/NativeId" } },
+      "required": ["type", "id"],
+      "additionalProperties": false
+    },
+    "NativeReply": {
+      "type": "object",
+      "properties": {
+        "type": { "const": "reply" },
+        "id": { "$ref": "#/$defs/NativeId" },
+        "result": { "$ref": "#/$defs/NativeResult" }
+      },
+      "required": ["type", "id", "result"],
+      "additionalProperties": false
+    },
+    "CanvasWidth": { "type": "integer", "minimum": 1, "maximum": 300000 },
+    "CanvasHeight": { "type": "integer", "minimum": 1, "maximum": 300000 },
+    "CanvasSelectionBounds": {
+      "type": "object",
+      "properties": {
+        "left": { "type": "integer", "minimum": -300000, "maximum": 300000 },
+        "top": { "type": "integer", "minimum": -300000, "maximum": 300000 },
+        "width": { "type": "integer", "minimum": 1, "maximum": 300000 },
+        "height": { "type": "integer", "minimum": 1, "maximum": 300000 }
+      },
+      "required": ["left", "top", "width", "height"],
+      "additionalProperties": false
+    },
+    "RasterWidth": { "type": "integer", "minimum": 1, "maximum": 65536 },
+    "RasterHeight": { "type": "integer", "minimum": 1, "maximum": 65536 },
+    "PngData": { "type": "string", "maxLength": 89478488 },
+    "RasterData": { "type": "string", "maxLength": 89478488 }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/NativeRequest" },
+    { "$ref": "#/$defs/NativeCancel" },
+    { "$ref": "#/$defs/NativeReply" }
+  ],
+  "x-generated-by": "scripts/gimp/NativeContract.ts",
+  "x-limits": {
+    "pngBytes": 67108864,
+    "rasterBytes": 67108864,
+    "frameBytes": 93672792,
+    "pendingRequests": 8
+  }
+}

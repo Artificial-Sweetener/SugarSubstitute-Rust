@@ -1,0 +1,199 @@
+{
+  "schema": 1,
+  "host": "gimp",
+  "release": "0.15.3",
+  "channel": "panel",
+  "session": "panel-0123456789abcdef",
+  "transcript": [
+    {
+      "from": "page",
+      "message": {
+        "protocol": "sugarcubes.panel",
+        "version": 3,
+        "session": "panel-0123456789abcdef",
+        "type": "ready"
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "protocol": "sugarcubes.host",
+        "version": 1,
+        "session": "panel-0123456789abcdef",
+        "type": "description",
+        "protocols": [
+          {
+            "name": "sugarcubes.panel",
+            "version": 3
+          },
+          {
+            "name": "sugarcubes.canvas",
+            "version": 3
+          },
+          {
+            "name": "sugarcubes.canvas.masks",
+            "version": 2
+          }
+        ],
+        "capabilities": [
+          {
+            "name": "presentation.host-styles"
+          }
+        ]
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "protocol": "sugarcubes.panel",
+        "version": 3,
+        "session": "panel-0123456789abcdef",
+        "type": "configure",
+        "presentation": {
+          "pluginMode": true,
+          "visualStyle": "gimp",
+          "accentColor": null,
+          "resizeCornerSize": 0
+        }
+      }
+    },
+    {
+      "from": "page",
+      "message": {
+        "protocol": "sugarcubes.panel",
+        "version": 3,
+        "session": "panel-0123456789abcdef",
+        "type": "applied"
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "protocol": "sugarcubes.panel",
+        "version": 3,
+        "session": "panel-0123456789abcdef",
+        "type": "ping"
+      }
+    },
+    {
+      "from": "page",
+      "message": {
+        "protocol": "sugarcubes.canvas",
+        "version": 3,
+        "session": "panel-0123456789abcdef",
+        "requestId": 1,
+        "type": "surface.capabilities.request",
+        "schema": 3
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "protocol": "sugarcubes.canvas",
+        "version": 3,
+        "session": "panel-0123456789abcdef",
+        "requestId": 1,
+        "type": "surface.capabilities.reply",
+        "status": "unsupported",
+        "capabilities": {
+          "schema": 3,
+          "imageFormats": [],
+          "viewportCommands": [],
+          "viewportState": false,
+          "previewFormats": [],
+          "comparison": false,
+          "overview": false,
+          "input": false
+        },
+        "message": "This canvas does not provide an output surface."
+      }
+    },
+    {
+      "from": "page",
+      "message": {
+        "protocol": "sugarcubes.canvas",
+        "version": 3,
+        "session": "panel-0123456789abcdef",
+        "requestId": 2,
+        "type": "surface.capabilities.request",
+        "schema": 1003
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "protocol": "sugarcubes.canvas",
+        "version": 3,
+        "session": "panel-0123456789abcdef",
+        "requestId": 2,
+        "type": "surface.capabilities.reply",
+        "status": "unsupported",
+        "capabilities": {
+          "schema": 3,
+          "imageFormats": [],
+          "viewportCommands": [],
+          "viewportState": false,
+          "previewFormats": [],
+          "comparison": false,
+          "overview": false,
+          "input": false
+        },
+        "message": "This canvas does not provide an output surface."
+      }
+    },
+    {
+      "from": "page",
+      "message": {
+        "protocol": "sugarcubes.canvas.masks",
+        "version": 2,
+        "session": "panel-0123456789abcdef",
+        "requestId": 1,
+        "command": {
+          "type": "context"
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "protocol": "sugarcubes.canvas.masks",
+        "version": 2,
+        "session": "panel-0123456789abcdef",
+        "requestId": 1,
+        "result": {
+          "kind": "context",
+          "supported": true,
+          "document": null,
+          "observesChanges": false
+        }
+      }
+    },
+    {
+      "from": "page",
+      "message": {
+        "protocol": "sugarcubes.canvas.masks",
+        "version": 2,
+        "session": "panel-0123456789abcdef",
+        "requestId": 1,
+        "command": {
+          "type": "watch",
+          "enabled": false
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "protocol": "sugarcubes.canvas.masks",
+        "version": 2,
+        "session": "panel-0123456789abcdef",
+        "requestId": 1,
+        "result": {
+          "kind": "failure",
+          "status": "stale",
+          "message": "Mask request identity was reused."
+        }
+      }
+    }
+  ]
+}

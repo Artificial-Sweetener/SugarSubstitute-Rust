@@ -1,0 +1,18 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="panel.css" />
+    <script src="main.js" defer></script>
+  </head>
+  <body>
+    <div id="panel">
+      <webview id="comfyui" width="100%" height="100%"></webview>
+      <div id="connection" role="status" aria-live="polite">
+        <h2 id="connection-title">Loading SugarCubes</h2>
+        <p id="connection-message">Connecting to ComfyUI.</p>
+        <button id="retry" type="button">Retry connection</button>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "SugarCubes GIMP",
+  "version": "0.1.0",
+  "identifier": "ai.artificialsweetener.sugarcubes.gimp",
+  "build": { "frontendDist": "../../../build/gimp/companion" },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "companion",
+        "create": false,
+        "title": "SugarCubes — GIMP",
+        "width": 520,
+        "height": 760,
+        "minWidth": 304,
+        "minHeight": 240
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'",
+      "capabilities": [
+        {
+          "identifier": "local-shell",
+          "webviews": ["companion"],
+          "permissions": [
+            "core:default",
+            "allow-connect-comfy",
+            "allow-native-open",
+            "allow-native-submit",
+            "allow-native-wait",
+            "allow-native-cancel",
+            "allow-native-close",
+            "allow-panel-open",
+            "allow-panel-send",
+            "allow-panel-visible"
+          ]
+        }
+      ]
+    }
+  },
+  "bundle": { "active": false, "icon": ["../../../build/gimp/companion/companion.ico"] }
+}

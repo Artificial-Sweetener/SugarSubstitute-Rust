@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.integrations.json",
+  "compilerOptions": { "lib": ["ES2022", "DOM"], "types": [] },
+  "include": ["integrations/gimp/src/**/*.ts"],
+  "exclude": []
+}

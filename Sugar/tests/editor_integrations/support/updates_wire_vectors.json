@@ -1,0 +1,748 @@
+[
+  {
+    "label": "ready state",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "state",
+      "revision": 1,
+      "update": {
+        "currentVersion": "0.4.2",
+        "channel": "beta",
+        "lastSuccessfulCheck": {
+          "completedAt": 1762876800000
+        },
+        "status": {
+          "state": "ready",
+          "version": "0.5.0-beta.1"
+        },
+        "previousVersionRunning": false,
+        "scheduledRestart": "none",
+        "workflowRunning": false
+      }
+    }
+  },
+  {
+    "label": "up to date without a check yet",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "state",
+      "revision": 1,
+      "update": {
+        "currentVersion": "0.4.2",
+        "channel": "beta",
+        "status": {
+          "state": "up-to-date"
+        },
+        "previousVersionRunning": false,
+        "scheduledRestart": "none",
+        "workflowRunning": false
+      }
+    }
+  },
+  {
+    "label": "checking",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "state",
+      "revision": 2,
+      "update": {
+        "currentVersion": "0.4.2",
+        "channel": "beta",
+        "lastSuccessfulCheck": {
+          "completedAt": 1762876800000
+        },
+        "status": {
+          "state": "checking"
+        },
+        "previousVersionRunning": false,
+        "scheduledRestart": "none",
+        "workflowRunning": false
+      }
+    }
+  },
+  {
+    "label": "available",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "state",
+      "revision": 1,
+      "update": {
+        "currentVersion": "0.4.2",
+        "channel": "beta",
+        "lastSuccessfulCheck": {
+          "completedAt": 1762876800000
+        },
+        "status": {
+          "state": "available",
+          "version": "0.5.0"
+        },
+        "previousVersionRunning": false,
+        "scheduledRestart": "none",
+        "workflowRunning": false
+      }
+    }
+  },
+  {
+    "label": "failed update with report after rollback",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "state",
+      "revision": 1,
+      "update": {
+        "currentVersion": "0.4.2",
+        "channel": "stable",
+        "status": {
+          "state": "failed",
+          "during": "update"
+        },
+        "report": {
+          "version": "0.5.0",
+          "phase": "verify",
+          "causes": [
+            {
+              "message": "The downloaded release did not match its published signature."
+            },
+            {
+              "message": "Signature check failed."
+            }
+          ]
+        },
+        "previousVersionRunning": true,
+        "scheduledRestart": "none",
+        "workflowRunning": false
+      }
+    }
+  },
+  {
+    "label": "couldn't check",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "state",
+      "revision": 1,
+      "update": {
+        "currentVersion": "0.4.2",
+        "channel": "beta",
+        "lastSuccessfulCheck": {
+          "completedAt": 1762876800000
+        },
+        "status": {
+          "state": "failed",
+          "during": "check"
+        },
+        "previousVersionRunning": false,
+        "scheduledRestart": "none",
+        "workflowRunning": false
+      }
+    }
+  },
+  {
+    "label": "restart scheduled after the workflow",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "state",
+      "revision": 1,
+      "update": {
+        "currentVersion": "0.4.2",
+        "channel": "beta",
+        "lastSuccessfulCheck": {
+          "completedAt": 1762876800000
+        },
+        "status": {
+          "state": "ready",
+          "version": "0.5.0-beta.1"
+        },
+        "previousVersionRunning": false,
+        "scheduledRestart": "after-workflow",
+        "workflowRunning": true
+      }
+    }
+  },
+  {
+    "label": "rejected",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "rejected",
+      "request": "restart-2",
+      "reason": "not-ready"
+    }
+  },
+  {
+    "label": "accepted",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "accepted",
+      "request": "restart-2"
+    }
+  },
+  {
+    "label": "watch",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "watch"
+    }
+  },
+  {
+    "label": "check",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "check",
+      "request": "check-1"
+    }
+  },
+  {
+    "label": "restart now",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "restart",
+      "request": "restart-1",
+      "when": "now"
+    }
+  },
+  {
+    "label": "restart after workflow",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "restart",
+      "request": "restart-2",
+      "when": "after-workflow"
+    }
+  },
+  {
+    "label": "unknown state",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "state",
+      "revision": 1,
+      "update": {
+        "currentVersion": "0.4.2",
+        "channel": "beta",
+        "lastSuccessfulCheck": {
+          "completedAt": 1762876800000
+        },
+        "status": {
+          "state": "trial"
+        },
+        "previousVersionRunning": false,
+        "scheduledRestart": "none",
+        "workflowRunning": false
+      }
+    }
+  },
+  {
+    "label": "ready without version",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "state",
+      "revision": 1,
+      "update": {
+        "currentVersion": "0.4.2",
+        "channel": "beta",
+        "lastSuccessfulCheck": {
+          "completedAt": 1762876800000
+        },
+        "status": {
+          "state": "ready"
+        },
+        "previousVersionRunning": false,
+        "scheduledRestart": "none",
+        "workflowRunning": false
+      }
+    }
+  },
+  {
+    "label": "failed without phase of failure",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "state",
+      "revision": 1,
+      "update": {
+        "currentVersion": "0.4.2",
+        "channel": "beta",
+        "lastSuccessfulCheck": {
+          "completedAt": 1762876800000
+        },
+        "status": {
+          "state": "failed"
+        },
+        "previousVersionRunning": false,
+        "scheduledRestart": "none",
+        "workflowRunning": false
+      }
+    }
+  },
+  {
+    "label": "uppercase version",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "state",
+      "revision": 1,
+      "update": {
+        "currentVersion": "V1.0",
+        "channel": "beta",
+        "lastSuccessfulCheck": {
+          "completedAt": 1762876800000
+        },
+        "status": {
+          "state": "ready",
+          "version": "0.5.0-beta.1"
+        },
+        "previousVersionRunning": false,
+        "scheduledRestart": "none",
+        "workflowRunning": false
+      }
+    }
+  },
+  {
+    "label": "unknown channel",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "state",
+      "revision": 1,
+      "update": {
+        "currentVersion": "0.4.2",
+        "channel": "nightly",
+        "lastSuccessfulCheck": {
+          "completedAt": 1762876800000
+        },
+        "status": {
+          "state": "ready",
+          "version": "0.5.0-beta.1"
+        },
+        "previousVersionRunning": false,
+        "scheduledRestart": "none",
+        "workflowRunning": false
+      }
+    }
+  },
+  {
+    "label": "zero revision",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "state",
+      "revision": 0,
+      "update": {
+        "currentVersion": "0.4.2",
+        "channel": "beta",
+        "lastSuccessfulCheck": {
+          "completedAt": 1762876800000
+        },
+        "status": {
+          "state": "ready",
+          "version": "0.5.0-beta.1"
+        },
+        "previousVersionRunning": false,
+        "scheduledRestart": "none",
+        "workflowRunning": false
+      }
+    }
+  },
+  {
+    "label": "null last check",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "state",
+      "revision": 1,
+      "update": {
+        "currentVersion": "0.4.2",
+        "channel": "beta",
+        "lastSuccessfulCheck": null,
+        "status": {
+          "state": "ready",
+          "version": "0.5.0-beta.1"
+        },
+        "previousVersionRunning": false,
+        "scheduledRestart": "none",
+        "workflowRunning": false
+      }
+    }
+  },
+  {
+    "label": "negative check time",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "state",
+      "revision": 1,
+      "update": {
+        "currentVersion": "0.4.2",
+        "channel": "beta",
+        "lastSuccessfulCheck": {
+          "completedAt": -1
+        },
+        "status": {
+          "state": "ready",
+          "version": "0.5.0-beta.1"
+        },
+        "previousVersionRunning": false,
+        "scheduledRestart": "none",
+        "workflowRunning": false
+      }
+    }
+  },
+  {
+    "label": "report without causes",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "state",
+      "revision": 1,
+      "update": {
+        "currentVersion": "0.4.2",
+        "channel": "stable",
+        "status": {
+          "state": "failed",
+          "during": "update"
+        },
+        "report": {
+          "version": "0.5.0",
+          "phase": "verify",
+          "causes": []
+        },
+        "previousVersionRunning": true,
+        "scheduledRestart": "none",
+        "workflowRunning": false
+      }
+    }
+  },
+  {
+    "label": "report with nine causes",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "state",
+      "revision": 1,
+      "update": {
+        "currentVersion": "0.4.2",
+        "channel": "stable",
+        "status": {
+          "state": "failed",
+          "during": "update"
+        },
+        "report": {
+          "version": "0.5.0",
+          "phase": "verify",
+          "causes": [
+            {
+              "message": "x"
+            },
+            {
+              "message": "x"
+            },
+            {
+              "message": "x"
+            },
+            {
+              "message": "x"
+            },
+            {
+              "message": "x"
+            },
+            {
+              "message": "x"
+            },
+            {
+              "message": "x"
+            },
+            {
+              "message": "x"
+            },
+            {
+              "message": "x"
+            }
+          ]
+        },
+        "previousVersionRunning": true,
+        "scheduledRestart": "none",
+        "workflowRunning": false
+      }
+    }
+  },
+  {
+    "label": "cause too long",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "state",
+      "revision": 1,
+      "update": {
+        "currentVersion": "0.4.2",
+        "channel": "stable",
+        "status": {
+          "state": "failed",
+          "during": "update"
+        },
+        "report": {
+          "version": "0.5.0",
+          "phase": "verify",
+          "causes": [
+            {
+              "message": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            }
+          ]
+        },
+        "previousVersionRunning": true,
+        "scheduledRestart": "none",
+        "workflowRunning": false
+      }
+    }
+  },
+  {
+    "label": "unknown phase",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "state",
+      "revision": 1,
+      "update": {
+        "currentVersion": "0.4.2",
+        "channel": "stable",
+        "status": {
+          "state": "failed",
+          "during": "update"
+        },
+        "report": {
+          "version": "0.5.0",
+          "phase": "quarantine",
+          "causes": [
+            {
+              "message": "x"
+            }
+          ]
+        },
+        "previousVersionRunning": true,
+        "scheduledRestart": "none",
+        "workflowRunning": false
+      }
+    }
+  },
+  {
+    "label": "extra state member",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "state",
+      "revision": 1,
+      "update": {
+        "currentVersion": "0.4.2",
+        "channel": "beta",
+        "lastSuccessfulCheck": {
+          "completedAt": 1762876800000
+        },
+        "status": {
+          "state": "ready",
+          "version": "0.5.0-beta.1"
+        },
+        "previousVersionRunning": false,
+        "scheduledRestart": "none",
+        "path": "C:/Users/x",
+        "workflowRunning": false
+      }
+    }
+  },
+  {
+    "label": "extra envelope member",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "watch",
+      "extra": true
+    }
+  },
+  {
+    "label": "wrong version",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 2,
+      "session": "panel-0123456789abcdef",
+      "type": "watch"
+    }
+  },
+  {
+    "label": "bad session",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "short",
+      "type": "watch"
+    }
+  },
+  {
+    "label": "check without request",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "check"
+    }
+  },
+  {
+    "label": "uppercase request",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "check",
+      "request": "Check-1"
+    }
+  },
+  {
+    "label": "restart without timing",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "restart",
+      "request": "restart-1"
+    }
+  },
+  {
+    "label": "restart later",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "restart",
+      "request": "restart-1",
+      "when": "later"
+    }
+  },
+  {
+    "label": "unknown rejection",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "rejected",
+      "request": "restart-2",
+      "reason": "quarantined"
+    }
+  },
+  {
+    "label": "unknown type",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "apply",
+      "request": "apply-1"
+    }
+  },
+  {
+    "label": "state without workflow activity",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "state",
+      "revision": 1,
+      "update": {
+        "currentVersion": "0.4.2",
+        "channel": "beta",
+        "lastSuccessfulCheck": {
+          "completedAt": 1762876800000
+        },
+        "status": {
+          "state": "ready",
+          "version": "0.5.0-beta.1"
+        },
+        "previousVersionRunning": false,
+        "scheduledRestart": "none"
+      }
+    }
+  },
+  {
+    "label": "accepted with a reason",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.updates",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "accepted",
+      "request": "restart-2",
+      "reason": "busy"
+    }
+  }
+]
