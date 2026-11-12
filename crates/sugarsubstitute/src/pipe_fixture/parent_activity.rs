@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Consume bounded actual metadata and progress one owned campaign decision per wake.
 use super::{Result, parent::Parent, parent_protocol};
-use std::{num::NonZeroUsize, time::Instant};
+use std::num::NonZeroUsize;
 use sugarsubstitute_contracts::execution::{Clock, ExecutionPort, TerminalKind};
 use sugarsubstitute_desktop::HeadlessStep;
 
@@ -10,6 +10,9 @@ impl Parent {
     pub(super) fn activity(&mut self, max: NonZeroUsize) -> Result<HeadlessStep> {
         if let Some(client) = &self.client {
             let batch = client.drain_completions(max)?;
+            if !batch.notifications.is_empty() {
+                self.watch.progressed();
+            }
             for case in &mut self.cases {
                 if let Some(session) = &case.session {
                     case.terminal_notice.capture(
@@ -28,10 +31,7 @@ impl Parent {
                 registry.consume(&batch)?;
             }
             if self.registry.is_none() {
-                if !self.deadline_observed && Instant::now() >= self.deadline {
-                    self.deadline_observed = true;
-                    return Err("Registry construction exceeded original qualifier deadline".into());
-                }
+                self.watch.check()?;
                 return Ok(if self.closing {
                     sugarsubstitute_desktop::HeadlessStep::Shutdown
                 } else {
@@ -72,16 +72,14 @@ impl Parent {
                             .as_ref()
                             .and_then(|session| session.control.take_observation());
                         let Some(next) = next else { break };
+                        self.watch.progressed();
                         parent_protocol::observe(case, next)?;
                     }
                     parent_protocol::consume(case)?;
                 }
             }
         }
-        if !self.deadline_observed && Instant::now() >= self.deadline {
-            self.deadline_observed = true;
-            return Err("Lifecycle qualification reached its original sixty-second deadline".into());
-        }
+        self.watch.check()?;
         if self.current == self.cases.len() {
             return Ok(HeadlessStep::Shutdown);
         }

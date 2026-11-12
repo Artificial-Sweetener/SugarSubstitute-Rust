@@ -131,7 +131,7 @@ fn activity_arming_retained_past_owner_and_resource_cannot_hide_other_backend_gr
             .as_ref()
             .ok_or("Cause absent")?,
     );
-    let anchor = Instant::now();
+    let anchor = sugarsubstitute_execution::qualification_time::anchor();
     activation.arm_next_wake(&client, anchor)?;
     assert_eq!(activation.next_wake, anchor.checked_add(Duration::from_secs(10)));
     assert_eq!(
@@ -190,7 +190,7 @@ fn activity_arming_selects_unchanged_total_after_due_grace_without_renewing_or_m
     );
     let before: Vec<_> =
         activation.backend.as_ref().ok_or("Backend absent")?.backend.deadlines().collect();
-    let anchor = Instant::now();
+    let anchor = sugarsubstitute_execution::qualification_time::anchor();
     activation.arm_next_wake(&client, anchor)?;
     assert_eq!(activation.next_wake, anchor.checked_add(Duration::from_secs(10)));
     clock.0.store(moment(30).as_nanos(), Ordering::Release);
@@ -230,7 +230,7 @@ fn activity_arming_empty_owner_clears_previous_native_wake() -> Result<()> {
         Arc::new(Wake),
     )?;
     let mut activation = owner()?;
-    let anchor = Instant::now();
+    let anchor = sugarsubstitute_execution::qualification_time::anchor();
     activation.next_wake = Some(anchor);
     activation.arm_next_wake(&executor.client(), anchor)?;
     assert_eq!(activation.next_wake, None);

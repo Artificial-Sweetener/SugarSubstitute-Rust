@@ -28,8 +28,8 @@ impl Parent {
             "shutdown": case.stop.as_ref().map(|stop| serde_json::json!({"id": stop.id.get(), "started_nanoseconds": stop.budget.started.as_nanos(), "graceful_until_nanoseconds": stop.budget.graceful_until.as_nanos(), "settle_until_nanoseconds": stop.budget.settle_until.as_nanos()})),
         }));
         Ok(
-            serde_json::json!({"schema_version": 1, "qualification": "same_executable_authenticated_lifecycle_transport",
-            "inner_deadline_seconds": 60, "explicit_empty_environment": true, "readonly_section_only_inheritance": true,
+            serde_json::json!({"schema_version": 2, "qualification": "same_executable_authenticated_lifecycle_transport",
+            "stall_seconds": sugarsubstitute_execution::qualification_time::STALL.as_secs(), "custody_seconds": crate::campaign_watch::CUSTODY.as_secs(), "explicit_empty_environment": true, "readonly_section_only_inheritance": true,
             "cases": cases, "registry_empty": true, "finished_after_native_teardown": true,
             "workers": {"async_finished": workers.async_finished, "cpu_finished": workers.cpu_finished, "native_finished": workers.native_finished}}),
         )

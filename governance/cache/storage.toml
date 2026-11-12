@@ -110,7 +110,7 @@ rationale = "Registry parser rejection fixtures and exact expected scope-directo
 [[namespace_reviews]]
 path = "tools/test_updater_qualification.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:cc23458d26a2a168e479720aa31e61d4ea93f3e116fab1d052646904ff1027af"
+source_sha256 = "sha256:e1c53a3df53d5cd0ad9243f604372ecdf99b0a26163983ad26f7552fd21dce98"
 rationale = "The isolated publication observer regression deliberately creates legacy payload namespace bytes to prove that only registered shared generations count and unrelated original content is preserved."
 
 [[script_boundaries]]

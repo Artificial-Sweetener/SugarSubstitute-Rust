@@ -3068,7 +3068,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Own
 [[records]]
 path = "crates/sugarsubstitute/src/production/entry_runner/tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:3af2a2700ed8d895c5f6284140c5fca5c7017f288d60a8e4308cee86b8b678fd"
+source_sha256 = "sha256:ea9c8082fd5b6790957aff5403b94064c06afbf79d2485ea534392345e6dbf45"
 capabilities = ["std::fs::create_dir", "std::fs::remove_dir", "std::fs::remove_file", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Fail configuration before any environment capture and observe real runner joins. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -3966,7 +3966,7 @@ rationale = "Repository tooling test_startup_windows.py: test startup windows Re
 [[records]]
 path = "tools/test_updater_feed_fixture.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:7cf839f1d8d52e7c412bf2156ff77514d4ddf6661ea6ab744ddb55440f1e4ea1"
+source_sha256 = "sha256:3a9ab5f1175d49f2edf6ae81e3c8b9dcdd1a8a6218225224b2bd719b8345039f"
 capabilities = ["TemporaryDirectory", "pathlib", "tempfile", "unlink", "write_bytes"]
 disposition = "tooling"
 rationale = "Repository tooling test_updater_feed_fixture.py: test updater feed fixture Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -3974,7 +3974,7 @@ rationale = "Repository tooling test_updater_feed_fixture.py: test updater feed 
 [[records]]
 path = "tools/test_updater_qualification.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:cc23458d26a2a168e479720aa31e61d4ea93f3e116fab1d052646904ff1027af"
+source_sha256 = "sha256:e1c53a3df53d5cd0ad9243f604372ecdf99b0a26163983ad26f7552fd21dce98"
 capabilities = ["TemporaryDirectory", "open", "pathlib", "read_bytes", "read_text", "replace", "stat", "tempfile", "unlink", "write_bytes", "write_text"]
 disposition = "tooling"
 rationale = "Isolated publication and retirement harness fixtures own their temporary files, fake only native metadata boundaries, and replace text in TOML rejection inputs; actual cache generations and unknown legacy bytes are checked through the production observer."
@@ -3982,7 +3982,7 @@ rationale = "Isolated publication and retirement harness fixtures own their temp
 [[records]]
 path = "tools/updater_feed_fixture.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:67b0ba2bd20011f376ecbfe7ac1977e05f49358baaf385e5ecf1641c8cc1f124"
+source_sha256 = "sha256:7f3ffd8a1ff7f405a9bbc80f7240f130dc97db2e52ee7319785f0edce360b57c"
 capabilities = ["open", "pathlib", "read_text", "stat", "write_text"]
 disposition = "tooling"
 rationale = "Repository tooling updater_feed_fixture.py: updater feed fixture Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -3998,7 +3998,7 @@ rationale = "Repository tooling updater_native_support.py: updater native suppor
 [[records]]
 path = "tools/updater_publication_qualification.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:0fc7b697eb5efa48924f8833063b3ef8703c53abf114de28673ecd2cd8ae198d"
+source_sha256 = "sha256:1922029df07c5a1d10cf88e1201d51ece4d77e70400d759c59ef2bc49608e8e1"
 capabilities = ["glob", "iterdir", "open", "pathlib", "read_text", "rename", "stat", "write_text"]
 disposition = "tooling"
 rationale = "The isolated publication observer reads its registered shared cache namespace and native directory identities, preserves unknown content, and restores only its digest-verified original launcher after a failed campaign; evidence is written outside the installation workspace."
@@ -4166,7 +4166,7 @@ rationale = "Repository tooling tests.rs: Adversarial capability, copy-provenanc
 [[records]]
 path = "tools/xtask/src/main.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:38f0580d8718fcad8a1f15ae4af901fa90ba61e85993d6dcefe223feca368621"
+source_sha256 = "sha256:82b19f8eb05b7b8dd259e341d6df3b20dde8626784265f21bda188812e80beb3"
 capabilities = ["method canonicalize"]
 disposition = "tooling"
 rationale = "Repository tooling main.rs: Provide the same portable verification entry point for local work, hooks and CI. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -4182,7 +4182,7 @@ rationale = "Repository tooling external.rs binds upstream HTTP sources to the r
 [[records]]
 path = "tools/xtask/src/policy.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:c12e32b21a3d20fa2330fffcf4718efd13661069f019ca22618fc0cc0a54d848"
+source_sha256 = "sha256:93ec8c957b48f8fb8400ddc873632d79b73fd734f7ec703f931e059b0efa7083"
 capabilities = ["std::fs::write", "tempfile::tempdir"]
 disposition = "tooling"
 rationale = "Repository tooling policy.rs: Decode strict, versioned policy documents without accepting unknown fields. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -4710,7 +4710,7 @@ rationale = "Canonical recovery/original pairs retain exact native row bytes and
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/imports/tests/cancellation.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:f5b07f4fb9b65620952855c1afa1252e251372a095d28a1c0b79eed620affe0f"
+source_sha256 = "sha256:d29e137005eecb49718bafc8d61927df33a84b9e62504d214f90aa69b1475faf"
 capabilities = ["std::fs::read", "tempfile::TempDir"]
 disposition = "implementation"
 rationale = "An admitted real job reaches a fixture-input checkpoint before actual cancellation; terminal observation and a fresh execution owner prove preserved originals and successful restart without a process actor or native window."

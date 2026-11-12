@@ -3,6 +3,7 @@
 //! Exercise mascot input and disclosure with deterministic presentation timestamps.
 use super::*;
 use std::error::Error;
+use sugarsubstitute_execution::qualification_time::anchor;
 
 fn view(reduced: bool) -> Result<StartupView, Box<dyn Error>> {
     Ok(StartupView::new(
@@ -37,7 +38,7 @@ fn console_controls_and_background_do_not_trigger_mascot() -> Result<(), Box<dyn
     }
     let mut view = view(false)?;
     view.activate(1);
-    view.sample(StartupPhase::PreparingConnection, Duration::from_millis(220), Instant::now());
+    view.sample(StartupPhase::PreparingConnection, Duration::from_millis(220), anchor());
     view.publish_controls(view.appearance);
     let original = view.animation.frame(Duration::from_millis(320));
     assert!(!view.pointer(PointerAction::Press, Pointer { x: 270.0, y: 380.0 }));
@@ -49,7 +50,7 @@ fn console_controls_and_background_do_not_trigger_mascot() -> Result<(), Box<dyn
 fn disclosure_reverses_continuously_and_native_geometry_waits_for_accepted_frame()
 -> Result<(), Box<dyn Error>> {
     let mut view = view(false)?;
-    let now = Instant::now();
+    let now = anchor();
     assert!(view.activate(1));
     assert_eq!(view.appearance.reveal, 0.0);
     assert!(!view.appearance.status_visible());

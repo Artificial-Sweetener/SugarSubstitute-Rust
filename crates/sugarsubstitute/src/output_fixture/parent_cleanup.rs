@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Preserve original stop budgets and actual root-versus-family facts through cleanup.
 use super::{Result, evidence::Stop, options::Role, parent::Parent};
-use std::time::Instant;
 use sugarsubstitute_contracts::{
     execution::{Clock, JobClass},
     lifecycle::ShutdownId,
@@ -21,7 +20,7 @@ impl Parent {
             let stop = Stop::new(
                 ShutdownId::new(self.current as u64 + 1)?,
                 self.clock.now(),
-                Instant::now(),
+                crate::campaign_watch::native_now(),
             )?;
             self.registry.as_mut().ok_or("Actual registry is not prepared")?.begin_stop(
                 key,

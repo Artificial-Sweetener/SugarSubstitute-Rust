@@ -7,17 +7,12 @@ use super::{
     evidence::{Case, STORE_BYTES, Store},
     options::Role,
 };
-use std::{
-    ffi::OsString,
-    io,
-    os::windows::io::AsRawHandle,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use crate::campaign_watch::{self, CampaignWatch};
+use std::{ffi::OsString, io, os::windows::io::AsRawHandle, sync::Arc};
 use sugarsubstitute_contracts::{
     execution::{
-        Clock, CompletionWake, ExecutionPort, JobClass, JobId, JobSpec, Moment, Operation, Scope,
-        ScopeId, ScopeSpec,
+        CompletionWake, ExecutionPort, JobClass, JobId, JobSpec, Moment, Operation, Scope, ScopeId,
+        ScopeSpec,
     },
     lifecycle::*,
 };
@@ -37,9 +32,9 @@ pub(super) fn run() -> Result<serde_json::Value> {
 }
 pub(super) struct Parent {
     pub(super) clock: Arc<MonotonicClock>,
-    pub(super) deadline: Instant,
+    pub(super) watch: CampaignWatch,
     pub(super) original: Moment,
-    pub(super) deadline_observed: bool,
+    pub(super) custody_expired: bool,
     pub(super) registry: Option<WindowsProcessRegistry>,
     pub(super) registry_creation: Option<crate::process_fixture::registry::PendingRegistry>,
     pub(super) owner: Option<ExecutionOwner>,
@@ -58,16 +53,8 @@ pub(super) struct Parent {
 }
 impl Parent {
     pub(super) fn new() -> Result<Self> {
-        let deadline = Instant::now()
-            .checked_add(Duration::from_secs(60))
-            .ok_or("Output campaign deadline overflow")?;
-        let clock = MonotonicClock::new();
-        let before = clock.now();
-        let original = before.checked_add(
-            deadline
-                .checked_duration_since(Instant::now())
-                .ok_or("Output campaign expired before admission")?,
-        )?;
+        let clock = campaign_watch::execution_clock();
+        let (_, original) = campaign_watch::custody(clock.as_ref())?;
         let owner = CoordinatorKey {
             namespace: NamespaceId::new([0x81; 32]),
             epoch: CoordinatorEpoch::new([0x82; 16])?,
@@ -89,9 +76,9 @@ impl Parent {
         };
         Ok(Self {
             clock,
-            deadline,
+            watch: CampaignWatch::new("Output qualification"),
             original,
-            deadline_observed: false,
+            custody_expired: false,
             registry: None,
             registry_creation: None,
             owner: None,
