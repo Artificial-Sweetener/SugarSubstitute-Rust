@@ -20,12 +20,12 @@ fn key(role: DiagnosticRole) -> Result<DiagnosticKey, Box<dyn Error>> {
     Ok(DiagnosticKey::new(owner()?, role, DiagnosticSessionId::new(session)?))
 }
 /// Retain the actual native scope through all original inherited/session custody.
-struct PreparedSession {
-    session: PurposePipeSession,
+pub(super) struct PreparedSession {
+    pub(super) session: PurposePipeSession,
     _scope: Arc<Scope>,
 }
 /// Retain one actual transport scope independently of the 131 contained-family scopes.
-fn pipe_scope(h: &mut Harness) -> Result<Arc<Scope>, Box<dyn Error>> {
+pub(super) fn pipe_scope(h: &mut Harness) -> Result<Arc<Scope>, Box<dyn Error>> {
     let scope = h
         .client
         .create_native_scope(ScopeSpec { id: ScopeId::new(h.next_scope)?, deadline: None }, None)?;
@@ -38,11 +38,19 @@ fn pins(
     key: DiagnosticKey,
     scope: &Arc<Scope>,
 ) -> Result<(PreparedSession, PurposePipeBootstrap, PurposeEnrollment), Box<dyn Error>> {
+    purpose_pins(h, PurposeKey::Diagnostic(key), scope)
+}
+/// The same original pins for any purpose's server.
+pub(super) fn purpose_pins(
+    h: &mut Harness,
+    key: PurposeKey,
+    scope: &Arc<Scope>,
+) -> Result<(PreparedSession, PurposePipeBootstrap, PurposeEnrollment), Box<dyn Error>> {
     let spec = h.spec(JobClass::NativeObservation, MIN_LIFECYCLE_PIPE_BYTES)?;
     let mut session = h.client.reserve_purpose_pipe_server(
         scope,
         spec,
-        PurposeKey::Diagnostic(key),
+        key,
         Moment::from_nanos(60_000_000_000),
     )?;
     loop {

@@ -5,13 +5,15 @@ use super::{MAX_CONTRACT_BYTES, Rejection, valid_versions};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 pub mod activation;
+pub mod preparation;
 pub mod probe;
 
 /// Authenticated declaration accompanying the independently executable updater.
 pub const UPDATER_CONTRACT_FILE: &str = "sugarsubstitute-updater.json";
 /// Exact entry capabilities emitted by this producing build.
 pub const CURRENT_UPDATER_CONTRACT: &[u8] = include_bytes!("updater.json");
-/// Preparation takes an installation path and workspace path, with no inherited authority.
+/// Preparation takes an installation path and workspace path, then the inherited
+/// update-attempt channel (see [`preparation`]). No other authority is inherited.
 pub const PREPARATION_PROTOCOL: u32 = 1;
 /// Public process-entry spelling retained for installed application-role compatibility.
 pub const PREPARATION_ARGUMENT: &str = "--internal-update-preparation";

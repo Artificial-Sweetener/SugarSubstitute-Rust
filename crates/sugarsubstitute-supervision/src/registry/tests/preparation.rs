@@ -27,12 +27,14 @@ fn preparation(
     preparation_with(
         h,
         Some(sugarsubstitute_contracts::application_launch::updater::CURRENT_UPDATER_CONTRACT),
+        None,
     )
 }
 
 fn preparation_with(
     h: &mut Harness,
     updater: Option<&'static [u8]>,
+    attempt: Option<crate::UpdateAttemptPins>,
 ) -> Result<(Fixture, WindowsLaunchInput, std::path::PathBuf), Box<dyn Error>> {
     let fixture = storage(h, SIGNED_INSTALLER_RESERVATION_BYTES, move |context| {
         let fixture = Fixture::with_distribution(
@@ -75,6 +77,7 @@ fn preparation_with(
             image,
             fixture.workspace.path(),
             crate::LaunchEnvironment::from_snapshot_utf16(&[0, 0], &[])?,
+            attempt,
         )?;
         assert!(!input.is_updater_probe());
         Ok((fixture, input, executable))
@@ -138,6 +141,84 @@ fn preparation_retains_files_through_partial_native_close_without_retaining_run(
     assert!(h.registry.snapshot(ticket.process())?.settled);
     assert!(writable(&executable));
     fixture.preserved().map_err(|cause| cause as Box<dyn Error>)?;
+    Ok(())
+}
+
+fn attempt_channel(attempt: u64) -> Result<PurposeKey, Box<dyn Error>> {
+    use sugarsubstitute_contracts::update::attempt::codec::{
+        UpdateAttemptChannel, UpdateAttemptKey,
+    };
+    let attempt = std::num::NonZeroU64::new(attempt).ok_or("Zero attempt")?;
+    Ok(PurposeKey::UpdateAttempt(UpdateAttemptChannel::new(
+        owner()?,
+        UpdateAttemptKey::new(attempt),
+    )))
+}
+
+#[test]
+fn preparation_inherits_its_update_attempt_channel_and_enrolls_the_suspended_helper() -> TestResult
+{
+    let mut h = Harness::new()?;
+    let scope = super::diagnostic::pipe_scope(&mut h)?;
+    let channel = attempt_channel(7)?;
+    let (session, bootstrap, enrollment) =
+        super::diagnostic::purpose_pins(&mut h, channel, &scope)?;
+    let pins = crate::UpdateAttemptPins { bootstrap, enrollment };
+    let (fixture, input, _executable) = preparation_with(
+        &mut h,
+        Some(sugarsubstitute_contracts::application_launch::updater::CURRENT_UPDATER_CONTRACT),
+        Some(pins),
+    )?;
+    let text =
+        String::from_utf16(&input.command.command_line[..input.command.command_line.len() - 1])?;
+    assert!(text.contains(
+        sugarsubstitute_contracts::application_launch::updater::preparation::ATTEMPT_ARGUMENT
+    ));
+    assert!(input.purpose.as_ref().is_some_and(|launch| launch.key == channel));
+    let mut foreign = owner()?;
+    foreign.epoch = CoordinatorEpoch::new([2; 16])?;
+    assert!(matches!(
+        h.registry.validate_input(FamilyBinding::Preparation(foreign), &input),
+        Err(RegistryAdmissionError::InvalidSpecification)
+    ));
+    let ticket = submit(&mut h, FamilyBinding::Preparation(owner()?), input)?;
+    h.created(ticket.process())?;
+    assert!(h.fake.enrollment_entered.load(Ordering::Acquire));
+    assert_eq!(lock(&h.fake.inherited).1, 1);
+    h.fake.root_alive.store(false, Ordering::Release);
+    h.exit(ticket.process(), ROOT, true, 0)?;
+    h.stop(ticket.process())?;
+    h.cleanup(ticket.process())?;
+    assert!(h.registry.snapshot(ticket.process())?.settled);
+    session.session.control().close();
+    drop((session, fixture));
+    Ok(())
+}
+
+#[test]
+fn preparation_rejects_a_diagnostic_channel_as_its_attempt_channel() -> TestResult {
+    let mut h = Harness::new()?;
+    let scope = super::diagnostic::pipe_scope(&mut h)?;
+    let diagnostic =
+        PurposeKey::Diagnostic(sugarsubstitute_contracts::incident::DiagnosticKey::new(
+            owner()?,
+            sugarsubstitute_contracts::incident::DiagnosticRole::Storage,
+            sugarsubstitute_contracts::incident::DiagnosticSessionId::new(
+                (u64::from(std::process::id()) << 32) | 0xffff_0001,
+            )?,
+        ));
+    let (session, bootstrap, enrollment) =
+        super::diagnostic::purpose_pins(&mut h, diagnostic, &scope)?;
+    let pins = crate::UpdateAttemptPins { bootstrap, enrollment };
+    assert!(
+        preparation_with(
+            &mut h,
+            Some(sugarsubstitute_contracts::application_launch::updater::CURRENT_UPDATER_CONTRACT),
+            Some(pins),
+        )
+        .is_err()
+    );
+    session.session.control().close();
     Ok(())
 }
 

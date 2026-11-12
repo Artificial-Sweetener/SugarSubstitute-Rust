@@ -3,7 +3,7 @@
 //! Dedicated updater process entry shares the admitted preparation session with historical hosts.
 use std::{error::Error, ffi::OsString, io, process::ExitCode, sync::Arc};
 use sugarsubstitute_contracts::application_launch::updater::{
-    ACTIVATION_ARGUMENT, PREPARATION_ARGUMENT, probe::PROBE_ARGUMENT,
+    ACTIVATION_ARGUMENT, PREPARATION_ARGUMENT, preparation::HelperExit, probe::PROBE_ARGUMENT,
 };
 use sugarsubstitute_supervision::application_launch::broker::ActivationSender;
 use sugarsubstitute_supervision::setup_storage::InheritedUpdaterProbe;
@@ -37,10 +37,11 @@ pub fn entry(
             result
         },
     );
-    match result {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(_retained) => ExitCode::FAILURE,
-    }
+    let class = match result {
+        Ok(()) => HelperExit::Retired,
+        Err(_retained) => HelperExit::Failed,
+    };
+    ExitCode::from(u8::try_from(class.code()).unwrap_or(u8::MAX))
 }
 
 /// Exact public entry selection prevents desktop or installer modes in the updater executable.

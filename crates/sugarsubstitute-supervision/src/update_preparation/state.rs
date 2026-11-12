@@ -44,6 +44,8 @@ pub(super) struct State {
     pub(super) progress: Progress,
     pub(super) failure: Option<Arc<Failure>>,
     pub(super) retirement_failure: Option<Arc<Failure>>,
+    /// Version label of the offer this campaign authenticated, for its attempt report.
+    pub(super) version: Option<String>,
 }
 impl State {
     /// Advance a single admitted boundary. Failed custody retires on the same worker where possible.
@@ -52,12 +54,28 @@ impl State {
         now: impl FnMut() -> i64,
         context: &JobContext,
     ) -> Result<(), Arc<Failure>> {
-        self.step(now, context).map_err(|cause| {
+        let stepped = self.step(now, context);
+        self.note_version();
+        stepped.map_err(|cause| {
             let cause = Arc::new(cause);
             self.failure = Some(cause.clone());
             self.progress = Progress::Failed;
             cause
         })
+    }
+
+    /// Remember the authenticated offer's version once a phase holds it; it outlives the phase
+    /// so a later failure can still say which version the attempt was updating to.
+    fn note_version(&mut self) {
+        let offer = match &self.phase {
+            Phase::Reopen(_, offer)
+            | Phase::RestoreArchive(_, offer)
+            | Phase::Download(_, offer)
+            | Phase::Import(_, offer, _)
+            | Phase::ImportEngine(_, offer, _) => offer,
+            _ => return,
+        };
+        self.version = Some(offer.offer().offer().version().to_owned());
     }
 
     /// Consume one phase; an interrupted phase never masquerades as a completed candidate.

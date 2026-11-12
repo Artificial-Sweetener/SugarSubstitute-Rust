@@ -39,8 +39,11 @@ impl<C: EntryActivation> EntryRunner<C> {
             Some(schedule) => schedule,
             None => self.update_schedule.insert(CheckSchedule::new(now)?),
         };
-        if let Some(outcome) = self.updater.as_mut().and_then(Parent::take_check_outcome) {
+        if let Some((outcome, attempt)) = self.updater.as_mut().and_then(Parent::take_check_outcome)
+        {
             self.updater = None;
+            tracing::info!(operation = "update_check_finished", outcome = ?attempt,
+                "Update check finished");
             schedule.finish(outcome, now)?;
         }
         if self.updater.is_none() && schedule.begin(now) {

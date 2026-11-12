@@ -37,11 +37,20 @@ impl Engine {
             native: ScopeSpec { id: ScopeId::new(first + 2)?, deadline: None },
             key: key()?,
         };
-        let mut state = self.state()?;
+        let mut state = observed_state(&self.state)?;
         let Phase::Input(input) = &mut state.phase else {
             return Err("Updater launch input absent".into());
         };
-        let parent = Parent::from_input(self.client.clone(), scope, input)
+        // Only a delegated preparation reports an attempt; a probe reports by exit and custody.
+        let attempt = if input
+            .as_ref()
+            .is_some_and(sugarsubstitute_supervision::WindowsLaunchInput::is_updater_probe)
+        {
+            None
+        } else {
+            self.attempt.take()
+        };
+        let parent = Parent::from_input(self.client.clone(), scope, input, attempt)
             .map_err(|cause| cause as Box<dyn Error>)?;
         state.phase = Phase::Empty;
         drop(state);
@@ -73,7 +82,10 @@ impl Engine {
                 state.phase = Phase::Input(Some(*input))
             }
             Some(parent::ProbeCustody::Settled(probe)) => state.phase = Phase::Settled(probe),
-            None => self.succeeded = done.succeeded && self.closing.is_none(),
+            None => {
+                self.succeeded = done.succeeded && self.closing.is_none();
+                self.attempt_outcome = done.attempt;
+            }
         }
         if let Some(cause) = done.failure {
             return Err(cause as Box<dyn Error>);

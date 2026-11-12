@@ -23,6 +23,8 @@ pub(in crate::updates) struct Completion {
     pub probe: Option<ProbeCustody>,
     pub failure: Option<Failure>,
     pub succeeded: bool,
+    /// What the attempt reported; `None` only for a probe.
+    pub attempt: Option<AttemptOutcome>,
 }
 
 impl Parent {
@@ -33,6 +35,7 @@ impl Parent {
         client: ExecutionClient,
         scope: LaunchScope,
         input: &mut Option<WindowsLaunchInput>,
+        attempt: Option<AttemptChannel>,
     ) -> Result<Self> {
         let probe = input.as_ref().ok_or("Prepared helper input absent")?.is_updater_probe();
         let cutoff = if probe {
@@ -50,6 +53,7 @@ impl Parent {
             cutoff.map(|(_, wake_at)| wake_at),
         );
         parent.until = cutoff.map(|(until, _)| until);
+        parent.attempt = attempt;
         Ok(parent)
     }
 
@@ -86,20 +90,27 @@ impl Parent {
             probe_custody: None,
             successful_exit: false,
             completion_taken: false,
+            attempt: None,
+            exit: None,
         }
     }
 
     /// Transfer after all native observations and ordinary custody retirement have completed.
     /// An unstarted probe must be withdrawn; a settled probe must publish its immutable outcome.
     pub(in crate::updates) fn take_completion(&mut self) -> Option<Completion> {
-        if !self.retired || self.completion_taken {
+        if !self.retired
+            || self.completion_taken
+            || self.attempt.as_ref().is_some_and(|channel| !channel.is_settled())
+        {
             return None;
         }
         self.completion_taken = true;
+        let attempt = self.conclude_attempt();
         Some(Completion {
             probe: self.probe_custody.take(),
             succeeded: self.successful_exit && self.failure.is_none(),
             failure: self.failure.take(),
+            attempt,
         })
     }
 }

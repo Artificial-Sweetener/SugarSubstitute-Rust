@@ -1651,7 +1651,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Exe
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/registry/tests/preparation.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:e0ab147758029bcce0ae4a858128fc3ad87c6e905b7783d8cb0a26773702f24e"
+source_sha256 = "sha256:3ba36b5c0c580edbc6761cbec008c7f420e8df864f57ee2ad8f1dc52108381bd"
 capabilities = ["std::fs::OpenOptions::new"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Real signed image custody follows the registry; only process effects use the native boundary fake. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -1667,7 +1667,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Sig
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/registry/tests/preparation/probe_tests/continuation.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:b0547b4ef01ef9b82cad79f0868828c35236ede94c6eabed5df5916c39ec5c4f"
+source_sha256 = "sha256:b561ebe5bf3056089f2453cd4ccd62c19a7c900007bcf454130784422f240e09"
 capabilities = ["std::fs::OpenOptions::new"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Observed engine health supplies a pinned next process without carrying preparation exclusion. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2839,7 +2839,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Can
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/update_preparation/tests/engine.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:c2aecabd44e1e21e0ccf15e1a32451349ed2ba5235788b94f5a6d77e0872c95f"
+source_sha256 = "sha256:d44ef7fec6ffe31f87248b4a0ab0d8b2b0ef8b02ba6006ece021ab977bb4d322"
 capabilities = ["assert! restricted capability fragments", "std::fs::OpenOptions::new"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Signed application requirements drive real local engine discovery, staging and owned transfer. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

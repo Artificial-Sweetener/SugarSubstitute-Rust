@@ -96,6 +96,7 @@ fn accepted_engine_is_reused_without_fetching_an_engine_offer_or_retaining_prepa
             *image,
             &workspace,
             crate::LaunchEnvironment::from_snapshot_utf16(&[0, 0], &[])?,
+            None,
         )?;
         let mut trust = TrustStore::open(&root, [92; 32], &context)?;
         trust.acquire_preparation(&context)?;

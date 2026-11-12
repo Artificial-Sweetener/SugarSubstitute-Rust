@@ -108,4 +108,4 @@ impl fmt::Debug for WindowsLaunchInput {
     }
 }
 
-pub use preparation::ProvisioningEndpoint;
+pub use preparation::{ProvisioningEndpoint, UpdateAttemptPins};

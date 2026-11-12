@@ -15,6 +15,23 @@ impl HeadlessLifetime for Session {
             Some(client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?);
         self.work =
             Some(client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?);
+        // The channel lives in the cleanup scope so the result outlives work cancellation.
+        if let Some(attempt) = &mut self.attempt {
+            let spec = JobSpec {
+                id: self.jobs.allocate()?,
+                operation: Operation::NativeLifecycle,
+                class: JobClass::NativeObservation,
+                deadline: None,
+                reservation_bytes:
+                    sugarsubstitute_execution::purpose_pipe::MIN_LIFECYCLE_PIPE_BYTES,
+                replacement: None,
+            };
+            attempt.reserve(
+                &client,
+                self.cleanup.as_ref().ok_or("Update cleanup scope absent")?,
+                spec,
+            )?;
+        }
         let factory = self.factory.take().ok_or("Update factory consumed")?;
         self.initializing = Some(client.submit_blocking(
             self.work.as_ref().ok_or("Update work scope absent")?,
@@ -84,10 +101,21 @@ impl HeadlessLifetime for Session {
             }
             return self.unsettled();
         }
-        if let Some(engine) = &self.engine
+        if let Some(engine) = &mut self.engine
             && !engine.settled()?
         {
             return self.unsettled();
+        }
+        // The result is written before the channel closes, and the channel retires before the
+        // execution owner is asked to join.
+        if let Some(attempt) = &mut self.attempt {
+            if !attempt.quiet() {
+                return self.unsettled();
+            }
+            attempt.close();
+            if !attempt.settled() {
+                return self.unsettled();
+            }
         }
         let Some(owner) = &mut self.owner else {
             return Ok(true);
@@ -105,6 +133,7 @@ impl HeadlessLifetime for Session {
         if let Some(owner) = &mut self.owner {
             owner.finish_shutdown()?;
         }
+        self.attempt = None;
         self.worker = None;
         self.engine = None;
         self.work = None;

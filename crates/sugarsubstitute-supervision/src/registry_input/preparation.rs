@@ -6,8 +6,18 @@ use super::*;
 use crate::setup_storage::{PreparationImage, TrustFailure, UpdaterProbeTransfer};
 pub use provisioning::ProvisioningEndpoint;
 use provisioning::ProvisioningLaunch;
-use std::{ffi::OsString, io, path::Path};
+use std::{ffi::OsString, io, os::windows::io::AsRawHandle, path::Path};
 use sugarsubstitute_contracts::{configuration::LaunchConfiguration, lifecycle::CoordinatorKey};
+use sugarsubstitute_execution::windows_purpose_pipe::{PurposeEnrollment, PurposePipeBootstrap};
+
+/// The update-attempt channel a preparation helper inherits: the read-only bootstrap section
+/// and the enrollment of the suspended helper. Both come from the launching parent's channel.
+pub struct UpdateAttemptPins {
+    /// Bootstrap of the parent's update-attempt channel.
+    pub bootstrap: PurposePipeBootstrap,
+    /// Enrollment that binds the suspended helper to that channel before it resumes.
+    pub enrollment: PurposeEnrollment,
+}
 
 /// Move file custody into the native family before creation and retain it through settlement.
 pub(crate) struct PreparationLaunch {
@@ -74,30 +84,58 @@ impl WindowsLaunchInput {
     }
 
     /// Compose one preparation helper from this coordinator's verified running generation.
-    /// No handles, run locks, application leases or transport authority are inherited.
+    /// No run locks, application leases or other transport authority are inherited; the only
+    /// inherited handle is the optional update-attempt channel's read-only bootstrap section,
+    /// whose suspended helper is enrolled before it resumes.
     /// The caller supplies the environment and locally selected workspace.
     /// Call on an admitted worker; the image keeps its original admitted memory charge.
     /// # Errors
-    /// Rejects invalid paths, command capacity or environment storage. Failure disposes the
-    /// supplied image; success transfers it into the registry's eventual native family.
+    /// Rejects invalid paths, command capacity, environment storage and attempt pins that belong
+    /// to another coordinator, purpose or session. Failure disposes the supplied image and pins;
+    /// success transfers them into the registry's eventual native family.
     pub fn preparation(
         owner: CoordinatorKey,
         image: PreparationImage,
         workspace: &Path,
         environment: LaunchEnvironment,
+        attempt: Option<UpdateAttemptPins>,
     ) -> io::Result<Self> {
+        use sugarsubstitute_contracts::application_launch::updater::{
+            PREPARATION_ARGUMENT, preparation::ATTEMPT_ARGUMENT,
+        };
         LaunchConfiguration::validate_path(workspace).map_err(io::Error::other)?;
-        let arguments = [
-            OsString::from(
-                sugarsubstitute_contracts::application_launch::updater::PREPARATION_ARGUMENT,
-            ),
+        let mut arguments = vec![
+            OsString::from(PREPARATION_ARGUMENT),
             image.installation().as_os_str().to_owned(),
             workspace.as_os_str().to_owned(),
         ];
+        if let Some(pins) = &attempt {
+            let bootstrap = &pins.bootstrap;
+            if bootstrap.key().update_attempt().is_none_or(|channel| channel.owner() != owner)
+                || !bootstrap.matches_enrollment(&pins.enrollment)
+            {
+                return Err(io::Error::other("Update attempt channel belongs to another launch"));
+            }
+            let deadline = bootstrap
+                .deadline()
+                .ok_or_else(|| io::Error::other("Update attempt handshake is unavailable"))?;
+            let token = bootstrap.borrow_inheritance().section.as_raw_handle() as usize;
+            arguments.extend([
+                OsString::from(ATTEMPT_ARGUMENT),
+                OsString::from(token.to_string()),
+                OsString::from(deadline.ticks().to_string()),
+                OsString::from(deadline.frequency().to_string()),
+            ]);
+        }
         let command =
             WindowsLaunchCommand::from_os(&image.executable(), image.directory(), &arguments)
                 .map_err(io::Error::other)?;
         let mut input = Self::new(command, environment).map_err(io::Error::other)?;
+        if let Some(UpdateAttemptPins { bootstrap, enrollment }) = attempt {
+            input
+                .with_purpose_pipe(&mut Some(bootstrap), &mut Some(enrollment))
+                .map_err(io::Error::other)?;
+        }
         input.preparation = Some(Box::new(PreparationLaunch {
             owner,
             payload: PreparationPayload::Image { _image: Box::new(image) },

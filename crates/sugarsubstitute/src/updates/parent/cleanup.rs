@@ -18,6 +18,9 @@ impl Parent {
         self.settle_wake =
             anchor.checked_add(budget.settle_until.checked_duration_since(now).unwrap_or_default());
         self.shutdown = Some(budget);
+        if let Some(channel) = &mut self.attempt {
+            channel.request_cancel();
+        }
         self.work.cancel();
         if let Some(registry) = self.retained.as_mut().and_then(|held| held.registry.as_mut()) {
             registry.close_launch_admission();

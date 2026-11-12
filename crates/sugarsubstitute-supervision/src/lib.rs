@@ -141,7 +141,7 @@ pub use registry::{SettledRegistryFailure, SettledUpdaterProbe, WindowsProcessRe
 #[cfg(windows)]
 pub use registry_error::{RegistryAdmissionError, RegistryError, RegistryInputError};
 #[cfg(windows)]
-pub use registry_input::{RejectedOutputLaunch, WindowsLaunchInput};
+pub use registry_input::{RejectedOutputLaunch, UpdateAttemptPins, WindowsLaunchInput};
 #[cfg(windows)]
 pub use registry_types::{
     FamilyBinding, LaunchTicket, RegistryObservation, RegistrySnapshot, RootObservationOutcome,

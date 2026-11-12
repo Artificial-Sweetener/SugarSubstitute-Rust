@@ -25,6 +25,8 @@ pub(super) enum Phase {
 pub(super) struct State {
     pub phase: Phase,
     pub failure: Option<Arc<io::Error>>,
+    /// Pins of the delegated helper's update-attempt channel, consumed by its launch input.
+    pub attempt: Option<sugarsubstitute_supervision::UpdateAttemptPins>,
 }
 impl State {
     /// Every fallible published-custody transition preserves its original owner on failure.
@@ -69,11 +71,14 @@ impl State {
                 let environment = crate::worker_environment::capture().map_err(io::Error::other)?;
                 let image = image.take().ok_or_else(|| absent("Accepted engine image"))?;
                 let workspace = image.installation().join(".update-workspace");
+                let attempt =
+                    self.attempt.take().ok_or_else(|| absent("Update attempt channel"))?;
                 Phase::Input(Some(WindowsLaunchInput::preparation(
                     key,
                     *image,
                     &workspace,
                     environment,
+                    Some(attempt),
                 )?))
             }
             Phase::Input(_) | Phase::Empty => return Err(absent("Engine storage step")),

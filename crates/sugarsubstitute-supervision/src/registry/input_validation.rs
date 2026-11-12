@@ -11,17 +11,20 @@ impl WindowsProcessRegistry {
         original: &WindowsLaunchInput,
     ) -> Result<(), RegistryAdmissionError> {
         if let FamilyBinding::Preparation(owner) = binding {
+            let probe = original.preparation.as_ref().and_then(|launch| launch.probe());
+            // Only an ordinary preparation helper may carry its own update-attempt channel.
+            let foreign_attempt = original.purpose.as_ref().is_some_and(|launch| {
+                probe.is_some()
+                    || launch.key.update_attempt().is_none_or(|channel| channel.owner() != owner)
+                    || !launch.validates(launch.key)
+            });
             if original.preparation.as_ref().is_none_or(|launch| launch.owner != owner)
-                || original
-                    .preparation
-                    .as_ref()
-                    .and_then(|launch| launch.probe())
-                    .is_some_and(|probe| !probe.can_launch())
+                || probe.is_some_and(|probe| !probe.can_launch())
                 || original.recovery_carrier.is_some()
                 || original.profile_custody.is_some()
                 || original.managed_custody.is_some()
                 || original.backend_custody.is_some()
-                || original.purpose.is_some()
+                || foreign_attempt
                 || original.lifecycle.is_some()
                 || original.output.is_some()
                 || original.fixture_events.is_some()
@@ -74,7 +77,7 @@ impl WindowsProcessRegistry {
             {
                 return Err(RegistryAdmissionError::InvalidSpecification);
             }
-        } else if original.purpose.is_some() {
+        } else if original.purpose.is_some() && !matches!(binding, FamilyBinding::Preparation(_)) {
             return Err(RegistryAdmissionError::InvalidSpecification);
         }
         if binding.owner() != self.owner {

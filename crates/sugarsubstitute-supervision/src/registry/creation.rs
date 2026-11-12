@@ -78,7 +78,13 @@ fn create_owned(
         FamilyBinding::BackendCustody(key) => {
             shared.port.enroll_backend_custody(family, key, ticket.process)?
         }
-        FamilyBinding::Managed(_) | FamilyBinding::Preparation(_) => {}
+        FamilyBinding::Preparation(_) => {
+            // A preparation helper's update-attempt channel enrolls the suspended root.
+            if let Some(key) = family.purpose_key {
+                shared.port.enroll_purpose(family, key, ticket.process)?
+            }
+        }
+        FamilyBinding::Managed(_) => {}
     }
     family.validate_output_for_resume()?;
     if stopped(context)

@@ -42,6 +42,8 @@ fn partial(client: ExecutionClient) -> Result<Parent> {
         probe_custody: None,
         successful_exit: false,
         completion_taken: false,
+        attempt: None,
+        exit: None,
     })
 }
 
@@ -78,6 +80,26 @@ fn close_before_admission_runs_no_registry_or_process_and_joins() -> TestResult 
     parent.close(None).map_err(|cause| cause as Box<dyn Error>)?;
     assert!(parent.constructing.is_none());
     finish(&mut parent, &mut owner, &wake, &JobSequence::new())
+}
+
+#[test]
+fn an_attempt_that_never_reported_concludes_once_as_a_typed_failure() -> TestResult {
+    use sugarsubstitute_contracts::update::attempt::{AttemptOutcome, AttemptPhase};
+    let clock = Arc::new(Manual::default());
+    let wake = Arc::new(Wake::default());
+    let mut owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
+    let mut parent = partial(owner.client()).map_err(|cause| cause as Box<dyn Error>)?;
+    parent.close(None).map_err(|cause| cause as Box<dyn Error>)?;
+    finish(&mut parent, &mut owner, &wake, &JobSequence::new())?;
+    let (check, attempt) = parent.take_check_outcome().ok_or("Settled check absent")?;
+    assert_eq!(check, crate::updates::schedule::CheckOutcome::Failed);
+    let AttemptOutcome::Failed(report) = attempt else {
+        return Err("A helper that reported nothing was not a failure".into());
+    };
+    assert_eq!(report.phase, AttemptPhase::Opening);
+    assert!(!report.causes.is_empty());
+    assert!(parent.take_check_outcome().is_none());
+    Ok(())
 }
 
 #[test]

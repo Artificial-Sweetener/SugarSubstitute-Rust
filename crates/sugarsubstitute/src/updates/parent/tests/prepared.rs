@@ -25,7 +25,7 @@ fn adoption_without_input_is_rejected_before_any_helper_exists() -> TestResult {
     let client = owner.client();
     let mut input = None;
     let scope = scope(&client).map_err(|cause| cause as Box<dyn Error>)?;
-    assert!(Parent::from_input(client.clone(), scope, &mut input).is_err());
+    assert!(Parent::from_input(client.clone(), scope, &mut input, None).is_err());
     owner.request_shutdown(ShutdownBudget::new(clock.now())?.settle_until);
     observe(&wake, || {
         client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
@@ -43,8 +43,8 @@ fn adopted_preparation_input_has_no_outer_cutoff_and_returns_completion_once() -
     let client = owner.client();
     let scope = scope(&client).map_err(|cause| cause as Box<dyn Error>)?;
     let mut input = Some(untrusted_input()?);
-    let mut parent =
-        Parent::from_input(client, scope, &mut input).map_err(|cause| cause as Box<dyn Error>)?;
+    let mut parent = Parent::from_input(client, scope, &mut input, None)
+        .map_err(|cause| cause as Box<dyn Error>)?;
     assert!(input.is_none());
     assert_eq!(parent.until, None);
     assert_eq!(parent.next_deadline(), None);

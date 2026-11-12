@@ -4,6 +4,7 @@
 mod lifetime;
 #[cfg(test)]
 mod tests;
+use super::attempt::{AttemptReporter, attempt_outcome, attempt_progress};
 use crate::{authority_clock::Receipt, job_sequence::JobSequence};
 use std::{
     error::Error,
@@ -13,6 +14,7 @@ use std::{
     time::{Duration, Instant},
 };
 use sugarsubstitute_contracts::execution::*;
+use sugarsubstitute_contracts::update::attempt::{AttemptOutcome, AttemptPhase, UpdateReport};
 use sugarsubstitute_desktop::{HeadlessLifetime, HeadlessStep, StartupPreparationStep};
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner, MonotonicClock};
 use sugarsubstitute_supervision::update_preparation::{Progress, Worker};
@@ -44,6 +46,10 @@ pub(super) struct Session {
     finished: bool,
     initialized: bool,
     pub(super) result: Option<Progress>,
+    /// Reports this attempt to the launching process; absent for one-shot verification roles.
+    attempt: Option<AttemptReporter>,
+    /// Stage of the attempt as last reported, for a failure report.
+    phase: AttemptPhase,
 }
 impl Session {
     /// Keep construction inert; distribution decoding is admitted by `start`.
@@ -69,11 +75,86 @@ impl Session {
             finished: false,
             initialized: false,
             result: None,
+            attempt: None,
+            phase: AttemptPhase::Opening,
+        }
+    }
+
+    /// Report this attempt's progress and one result over the inherited update-attempt channel.
+    pub(super) fn with_attempt(mut self, attempt: AttemptReporter) -> Self {
+        self.attempt = Some(attempt);
+        self
+    }
+
+    /// Advance the campaign, then report what it did. Every failure that ends the campaign is
+    /// reported as its result before the error propagates to the orderly shutdown.
+    fn advance(&mut self, maximum: NonZeroUsize) -> Result<HeadlessStep> {
+        let stepped = self.step(maximum);
+        if self.attempt.is_some() {
+            self.report(stepped.as_ref().err().map(|cause| cause.as_ref()));
+            let now = self.clock.now();
+            let attempt = self.attempt.as_mut().ok_or("Update attempt reporter absent")?;
+            if let Err(cause) = attempt.poll(now) {
+                tracing::warn!(operation = "update_attempt_channel_failed", cause = %cause,
+                    "The update attempt channel failed; the parent will see no result");
+            }
+            if attempt.cancel_requested() && !self.closing {
+                return stepped.map(|_| HeadlessStep::Shutdown);
+            }
+        }
+        stepped
+    }
+
+    /// Forward progress, and the result once the campaign reached one or failed.
+    fn report(&mut self, failure: Option<&(dyn Error + 'static)>) {
+        let progress = match &self.engine {
+            Some(engine) => engine.attempt_progress(),
+            None => self.worker.as_ref().map(Worker::progress).and_then(attempt_progress),
+        };
+        let version = self.worker.as_ref().and_then(Worker::version).map(str::to_owned);
+        let Some(attempt) = &mut self.attempt else { return };
+        if let Some(progress) = progress {
+            self.phase = progress.phase;
+            attempt.progress(progress);
+        }
+        if attempt.has_result() {
+            return;
+        }
+        let outcome = if let Some(cause) = failure {
+            Some(AttemptOutcome::Failed(UpdateReport::from_error(
+                version.as_deref(),
+                self.phase,
+                cause,
+            )))
+        } else {
+            match self.result {
+                Some(Progress::Closed) => Some(
+                    self.engine
+                        .as_mut()
+                        .and_then(super::engine::Engine::take_attempt_outcome)
+                        .unwrap_or_else(|| {
+                            AttemptOutcome::Failed(UpdateReport::from_error(
+                                version.as_deref(),
+                                self.phase,
+                                &io::Error::other(
+                                    "The new update engine ended without reporting a result",
+                                ),
+                            ))
+                        }),
+                ),
+                Some(progress) => Some(attempt_outcome(progress, version.as_deref(), self.phase)),
+                None => None,
+            }
+        };
+        if let Some(outcome) = outcome
+            && let Some(attempt) = &mut self.attempt
+        {
+            attempt.finish(outcome);
         }
     }
 
     /// Consume terminal values before admitting another phase; never block on worker storage.
-    fn advance(&mut self, maximum: NonZeroUsize) -> Result<HeadlessStep> {
+    fn step(&mut self, maximum: NonZeroUsize) -> Result<HeadlessStep> {
         let batch = match &self.client {
             Some(client) => client.drain_completions(maximum)?,
             None => CompletionBatch { notifications: Vec::new(), remaining: 0 },

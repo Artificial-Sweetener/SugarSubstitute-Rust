@@ -3,6 +3,7 @@
 //! Compose preparation from producing-build feed bytes and locally selected installation paths.
 mod activation;
 pub(crate) mod admission;
+mod attempt;
 mod engine;
 mod entry;
 pub mod launch;
@@ -93,12 +94,13 @@ pub(crate) fn run(
     arguments: impl IntoIterator<Item = std::ffi::OsString>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let options = options::Options::parse(arguments)?;
+    let (bootstrap, deadline) = options.attempt;
+    let (installation, workspace) = (options.installation, options.workspace);
     let mut session = session::Session::new(
         1024 * 1024,
-        Box::new(move |_| {
-            preparation(options.installation, options.workspace, Duration::from_secs(30))
-        }),
-    );
+        Box::new(move |_| preparation(installation, workspace, Duration::from_secs(30))),
+    )
+    .with_attempt(attempt::AttemptReporter::new(bootstrap, deadline));
     sugarsubstitute_desktop::run_headless(&mut session)?;
     tracing::info!(operation="update_preparation_retired",result=?session.result,"Update preparation process retired");
     Ok(())
