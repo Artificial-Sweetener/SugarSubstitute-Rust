@@ -125,9 +125,15 @@ fn watched_live_root_receives_one_step_per_fact_across_repeated_driver_turns() -
     h.exit(key, ROOT, true, 1)?;
     assert_eq!(turns(&mut h, key, &mut held, 40)?, 1);
     assert_eq!(h.fake.closes.load(Ordering::Acquire), 1);
+    // The fake's unbound root watch retires as cancelled once the Job closes. That terminal is
+    // an execution event, so wait for it instead of assuming the earlier turns received it.
+    let index = h.registry.index(key)?;
+    let root = h.registry.records[index].as_ref().ok_or("Missing family")?.root_spec;
+    let notice = take_watch_notice(&mut h, root, &mut held)?;
+    held.push(notice);
     h.registry
         .consume(&CompletionBatch { notifications: std::mem::take(&mut held), remaining: 0 })?;
-    // The fake's unbound root watch retires as cancelled; settlement still follows it.
+    // Settlement follows the root watch's observed terminal.
     let settled = h.registry.snapshot(key)?;
     assert!(settled.settled && settled.forced);
     assert_eq!(settled.root_exit, Some(1));

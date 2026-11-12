@@ -144,10 +144,18 @@ fn preparation_retains_files_through_partial_native_close_without_retaining_run(
     Ok(())
 }
 
-fn attempt_channel(attempt: u64) -> Result<PurposeKey, Box<dyn Error>> {
+/// Give concurrent test processes distinct pipe endpoints, as the diagnostic fixtures do.
+fn attempt_channel() -> Result<PurposeKey, Box<dyn Error>> {
     use sugarsubstitute_contracts::update::attempt::codec::{
         UpdateAttemptChannel, UpdateAttemptKey,
     };
+    static NEXT: AtomicU64 = AtomicU64::new(1);
+    let sequence = NEXT
+        .fetch_update(Ordering::AcqRel, Ordering::Acquire, |value| {
+            value.checked_add(1).filter(|next| *next <= u64::from(u32::MAX))
+        })
+        .map_err(|_| "Attempt fixture identities exhausted")?;
+    let attempt = (u64::from(std::process::id()) << 32) | sequence;
     let attempt = std::num::NonZeroU64::new(attempt).ok_or("Zero attempt")?;
     Ok(PurposeKey::UpdateAttempt(UpdateAttemptChannel::new(
         owner()?,
@@ -160,7 +168,7 @@ fn preparation_inherits_its_update_attempt_channel_and_enrolls_the_suspended_hel
 {
     let mut h = Harness::new()?;
     let scope = super::diagnostic::pipe_scope(&mut h)?;
-    let channel = attempt_channel(7)?;
+    let channel = attempt_channel()?;
     let (session, bootstrap, enrollment) =
         super::diagnostic::purpose_pins(&mut h, channel, &scope)?;
     let pins = crate::UpdateAttemptPins { bootstrap, enrollment };

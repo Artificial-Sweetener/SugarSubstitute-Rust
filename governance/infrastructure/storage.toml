@@ -1651,7 +1651,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Exe
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/registry/tests/preparation.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:3ba36b5c0c580edbc6761cbec008c7f420e8df864f57ee2ad8f1dc52108381bd"
+source_sha256 = "sha256:358857b1cd81fbb7daaf95c64461d654f22ba482fb6ebb6c59e8428c6f7fdeb0"
 capabilities = ["std::fs::OpenOptions::new"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Real signed image custody follows the registry; only process effects use the native boundary fake. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
