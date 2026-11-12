@@ -176,7 +176,7 @@ fn native_effect_failure_or_reentrant_retirement_keeps_mapping_disarmed_and_orig
 }
 #[test]
 fn compiled_largest_retry_layout_fits_original_metadata_and_overflow_rejects() {
-    let bytes = Controls::storage_bytes(4)
+    let bytes = Controls::storage_bytes(crate::main_caption::PEERS)
         .and_then(|controls| controls.checked_add(size_of::<crate::main_actor::MainActor>()));
     assert!(bytes.is_some_and(|bytes| bytes <= 512 * 1024));
     assert!(Controls::storage_bytes(usize::MAX).is_none());
@@ -229,17 +229,12 @@ fn actual_recovery_caption_resize_keeps_ready_action_and_retrying_disabled_peer(
     let ready = owner.presentation(labels);
     apply(&mut port, ready)?;
     let actual_action = port.action.ok_or("Actual Main retry mapping absent")?;
-    let mut retained = crate::main_backend::caption_controls(1280.0, false, captions, ready);
+    let mut retained = caption(1280.0, false, captions, ready);
     // The existing present_retry commits actual native visibility into this retained peer snapshot.
     retained[3].visible = port.visible;
     port.calls.clear();
     for (width, maximized) in [(1600.0, true), (960.0, false)] {
-        let resized = crate::main_backend::caption_controls(
-            width,
-            maximized,
-            captions,
-            owner.presentation(labels),
-        );
+        let resized = caption(width, maximized, captions, owner.presentation(labels));
         super::super::state::validate_inventory(&retained, &resized)?;
         sugarsubstitute_ui::availability::reconcile(
             retained[3].availability(),
@@ -256,8 +251,7 @@ fn actual_recovery_caption_resize_keeps_ready_action_and_retrying_disabled_peer(
     assert!(port.visible && !port.enabled && port.action.is_none());
     retained[3].visible = port.visible;
     port.calls.clear();
-    let resized =
-        crate::main_backend::caption_controls(1920.0, true, captions, owner.presentation(labels));
+    let resized = caption(1920.0, true, captions, owner.presentation(labels));
     super::super::state::validate_inventory(&retained, &resized)?;
     sugarsubstitute_ui::availability::reconcile(
         retained[3].availability(),
@@ -268,4 +262,22 @@ fn actual_recovery_caption_resize_keeps_ready_action_and_retrying_disabled_peer(
     assert!(port.calls.is_empty());
     assert!(owner.consume(actual_action)?.is_none());
     Ok(())
+}
+
+/// The caption with no update, saving or message showing.
+fn caption(
+    width: f64,
+    maximized: bool,
+    captions: crate::MainCaptionLabels,
+    retry: crate::main_backend::RetryPresentation,
+) -> [crate::AccessibleControl; crate::main_caption::PEERS] {
+    let updates = crate::main_updates::CaptionUpdates::default()
+        .view(sugarsubstitute_contracts::localization::messages("en"));
+    let measure = |text: &str| Ok::<_, std::convert::Infallible>(text.len() as f64 * 6.0);
+    match crate::main_caption::caption_controls(
+        width, maximized, captions, retry, &updates, measure,
+    ) {
+        Ok(controls) => controls,
+        Err(never) => match never {},
+    }
 }

@@ -25,6 +25,10 @@ pub(super) struct InputSaveProbe {
         Option<sugarsubstitute_application::workspace_session::close_save::SaveVerdict>,
 }
 
+/// How long a critical session end leaves the close save: Windows waits for no answer and ends
+/// the process soon after, so the save must finish well within that.
+const CRITICAL_SAVE: std::time::Duration = std::time::Duration::from_secs(4);
+
 impl<B: StartupBackend> StartupHost<B> {
     /// Close the application for `reason`, keeping everything authored: the single entry point
     /// for the close button, restart to apply and session end. The first reason stands; a later
@@ -36,7 +40,19 @@ impl<B: StartupBackend> StartupHost<B> {
         if !self.closing {
             self.close_reason = reason;
         }
+        if matches!(reason, CloseReason::SessionEnding { critical: true }) {
+            let now = sugarsubstitute_contracts::execution::Clock::now(&*self.clock);
+            let until = now.checked_add(CRITICAL_SAVE)?;
+            self.critical_until =
+                Some(self.critical_until.map_or(until, |earlier| earlier.min(until)));
+        }
         self.close_owned()
+    }
+
+    /// The graceful cutoff the close save works to: the budget's, or the shorter one a
+    /// critical session end allows.
+    pub(super) fn close_save_cutoff(&self, budget: ShutdownBudget) -> Moment {
+        self.critical_until.map_or(budget.graceful_until, |until| until.min(budget.graceful_until))
     }
 
     /// What the window shows while it stays up for the close save; `None` before close began.
@@ -72,8 +88,9 @@ impl<B: StartupBackend> StartupHost<B> {
         budget: ShutdownBudget,
         now: Moment,
     ) -> Result<bool, Box<dyn Error>> {
+        let cutoff = self.close_save_cutoff(budget);
         if self.close_save.is_none() {
-            self.close_save = Some(CloseSave::begin(self.close_reason, now, budget.graceful_until));
+            self.close_save = Some(CloseSave::begin(self.close_reason, now, cutoff));
             tracing::info!(
                 operation = "close_save",
                 reason = ?self.close_reason,
@@ -81,15 +98,15 @@ impl<B: StartupBackend> StartupHost<B> {
             );
             #[cfg(all(windows, feature = "native-composition"))]
             if let Some(canvas) = &mut self.canvas {
-                canvas.begin_close_save(budget.graceful_until);
+                canvas.begin_close_save(cutoff);
             }
             #[cfg(all(test, windows, feature = "native-composition"))]
             if let Some(probe) = &mut self.input_probe {
-                probe.begun = Some(budget.graceful_until);
+                probe.begun = Some(cutoff);
             }
         }
         let Some(save) = &mut self.close_save else { return Ok(false) };
-        save.tighten(budget.graceful_until);
+        save.tighten(cutoff);
         #[cfg(all(windows, feature = "native-composition"))]
         {
             use sugarsubstitute_application::workspace_session::close_save::SaveVerdict;

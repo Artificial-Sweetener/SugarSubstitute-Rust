@@ -33,6 +33,8 @@ mod text;
 pub(crate) struct Caption {
     pub(crate) dark: bool,
     pub(crate) material: NativeMaterial,
+    /// State of the update button, which selects its tint.
+    pub(crate) update: crate::main_updates::UpdateGlyph,
 }
 
 /// Route only this configured Main's parent paint and exact registered owner-drawn children.
@@ -73,6 +75,22 @@ pub(super) fn child(callback: &Callback, hwnd: HWND, message: u32, wparam: WPARA
     if callback.caption.get().is_some() {
         report(hover::child(&callback.hovered, hwnd, message, wparam, lparam));
     }
+}
+
+/// Logical width of `text` in the caption font on `hwnd`'s monitor.
+/// # Errors
+/// Preserves font and measurement failures.
+pub(crate) fn measure_text(hwnd: HWND, text: &str) -> Result<f64, DesktopError> {
+    // SAFETY: Query only the retained window's current device scale.
+    let dpi = unsafe { GetDpiForWindow(hwnd) }.max(96);
+    let units: Vec<u16> = text.encode_utf16().collect();
+    Ok(f64::from(text::measure(&units, dpi)?) * 96.0 / f64::from(dpi))
+}
+
+/// The update glyph's dark-theme tint, for captures that check it.
+#[cfg(test)]
+pub(crate) const fn update_tint(warning: bool) -> [u8; 3] {
+    glyphs::update_tint(warning, true)
 }
 
 /// Clear the native backing plane; the full-window browser owns its complete frame presentation.
@@ -124,16 +142,24 @@ fn paint_button(item: &DRAWITEMSTRUCT, caption: Caption, hot: bool) -> Result<()
             pixels::with_pixels(handle, item.rcItem, |pixels| {
                 glyphs::draw(pixels, item.CtlID, maximized, dpi, if light { 255 } else { 0 })
             })?;
+        } else if item.CtlID == u32::from(crate::main_updates::UPDATE) {
+            let warning = caption.update == crate::main_updates::UpdateGlyph::Warning;
+            pixels::with_pixels(handle, item.rcItem, |pixels| {
+                glyphs::update(pixels, dpi, glyphs::update_tint(warning, caption.dark));
+                Ok(())
+            })?;
         } else {
             let mut label = [0_u16; 129];
-            // SAFETY: Read the original localized retry peer name into a bounded buffer.
+            // SAFETY: Read the peer's current localized text into a bounded buffer.
             let length = unsafe { GetWindowTextW(item.hwndItem, &mut label) }.max(0) as usize;
+            // The retry and message line read from the left; the short actions are centred.
+            let centered = !matches!(item.CtlID, 4 | 7);
             text::draw(
                 item.hwndItem,
                 buffer,
                 item.rcItem,
                 &label[..length],
-                text::Style { light_foreground: light, disabled, dpi },
+                text::Style { light_foreground: light, disabled, centered, dpi },
             )?;
         }
         if item.itemState.0 & ODS_FOCUS.0 != 0 && item.itemState.0 & ODS_NOFOCUSRECT.0 == 0 {

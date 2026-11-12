@@ -4,11 +4,11 @@
 use super::*;
 use crate::{MainBackendState, main_backend::RetryAction};
 use sugarsubstitute_contracts::lifecycle::LeaseKey;
-/// Preserve the original reservation; include largest four-peer/retry layouts before native effects.
+/// Preserve the original reservation; include the largest caption peer layout before native effects.
 pub(super) const NATIVE_BYTES: u64 = 512 * 1024;
-/// Reject an oversized compiled four-peer owner before the original metadata claim/native initialization.
+/// Reject an oversized compiled caption owner before the original metadata claim/native initialization.
 pub(super) fn check_storage() -> Result<(), DesktopError> {
-    let required = Controls::storage_bytes(4)
+    let required = Controls::storage_bytes(crate::main_caption::PEERS)
         .and_then(|controls| controls.checked_add(size_of::<MainActor>()))
         .and_then(|bytes| bytes.checked_add(placement::STORAGE_BYTES as usize));
     if required.is_none_or(|bytes| bytes as u64 > NATIVE_BYTES) {
@@ -98,7 +98,7 @@ impl MainActor {
             None => Ok(observation),
         }
     }
-    /// Reuse the retained fourth peer without reentering browser or navigation owners.
+    /// Reuse the retained retry peer without reentering browser or navigation owners.
     pub(super) fn present_recovery_control(&mut self) -> Result<(), DesktopError> {
         if self.controls.is_none() {
             return Ok(());

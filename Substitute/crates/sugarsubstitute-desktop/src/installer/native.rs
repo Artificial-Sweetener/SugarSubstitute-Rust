@@ -193,6 +193,12 @@ pub trait Lifetime {
 #[cfg(windows)]
 #[allow(unsafe_code)]
 mod windows;
+#[cfg(windows)]
+pub(crate) use windows::{FormInput, FormOwner, FormTurn, FormWindow};
+#[cfg(windows)]
+mod hosted;
+#[cfg(windows)]
+pub(crate) use hosted::HostedForm;
 
 /// Reserve the native backing image, bounded field documents/providers, and copied peer values.
 /// Raster preparation and application metadata require their own original reservations.
