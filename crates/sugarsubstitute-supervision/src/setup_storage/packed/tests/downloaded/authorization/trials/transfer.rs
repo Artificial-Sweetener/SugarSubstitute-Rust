@@ -81,6 +81,11 @@ fn snapshots(root: &Path) -> io::Result<Vec<std::path::PathBuf>> {
         .collect()
 }
 
+/// The host's own startup failure, settled by the coordinator.
+const BAD: sugarsubstitute_contracts::installation::TrialVerdict =
+    sugarsubstitute_contracts::installation::TrialVerdict::Bad(
+        sugarsubstitute_contracts::installation::BadTrial::StartupFailed,
+    );
 #[test]
 fn receiving_trial_after_creator_drop_retains_payloads_and_accepts_only_once() -> TestResult {
     run(1, |case| {
@@ -111,7 +116,7 @@ fn receiving_trial_after_creator_drop_retains_payloads_and_accepts_only_once() -
         let accepted = application.accept(case.context)?;
         assert_eq!(accepted.accepted(), Some(&application.attempt().generation));
         assert!(application.accept(case.context).is_err());
-        assert!(application.reject(case.context).is_err());
+        assert_eq!(application.finish_settled(BAD, case.context)?, accepted);
         assert!(InstallationRun::acquire(store.clone(), case.context).is_err());
         drop(running);
         let _run = InstallationRun::acquire(store, case.context)?;
@@ -166,9 +171,15 @@ fn received_trial_rejection_preserves_the_previous_accepted_generation() -> Test
         let application =
             InstallationRun::receive_trial(store.clone(), inherited, &directory, case.context)?;
         // Storage-boundary settlement input; no native process is represented by this fixture.
-        let rejected = application.reject(case.context)?;
+        let rejected = application.finish_settled(BAD, case.context)?;
         assert_eq!(rejected.accepted(), before.accepted());
-        assert!(rejected.rejected().contains(&application.attempt().generation.package));
+        assert_eq!(rejected.rollback(), Some(&application.attempt().generation));
+        assert!(
+            rejected
+                .strikes()
+                .iter()
+                .any(|strike| strike.package == application.attempt().generation.package)
+        );
         assert!(application.accept(case.context).is_err());
         assert!(InstallationRun::acquire(store.clone(), case.context).is_err());
         drop(application);

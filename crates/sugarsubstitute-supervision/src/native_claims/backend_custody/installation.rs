@@ -8,7 +8,10 @@ use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
 };
-use sugarsubstitute_contracts::execution::{CompletionWake, Moment};
+use sugarsubstitute_contracts::{
+    execution::{CompletionWake, Moment},
+    installation::HostExit,
+};
 use sugarsubstitute_execution::backend_custody::BackendCustodyWake;
 pub use worker::BackendCustodyInstallation;
 
@@ -30,6 +33,7 @@ struct Data {
     until: Option<Moment>,
     cleanup_until: Option<Moment>,
     input: Option<[OwnedHandle; 2]>,
+    exit: Option<HostExit>,
     witness: Option<Arc<TrialWitness>>,
     native_wake: Option<Arc<dyn CompletionWake>>,
     failure: Option<ClaimError>,
@@ -62,6 +66,7 @@ impl Control {
                 until: None,
                 cleanup_until: None,
                 input: None,
+                exit: None,
                 witness: None,
                 native_wake: None,
                 failure: None,
@@ -121,9 +126,11 @@ impl Control {
         Ok(data.phase == Phase::Ready)
     }
 
-    /// Called only after native family settlement and authenticated closing or parent exit.
+    /// Called only after native family settlement. `exit` is how the coordinator ended, its
+    /// authenticated finish or its observed process exit; `None` means neither happened yet.
     /// Preserve the first cleanup cutoff while admission completion is still being consumed.
-    pub(super) fn settle(&self, until: Moment, authorized: bool) -> Result<bool, ClaimError> {
+    pub(super) fn settle(&self, until: Moment, exit: Option<HostExit>) -> Result<bool, ClaimError> {
+        let authorized = exit.is_some();
         let requested = {
             let mut data = crate::registry::lock(&self.0.data);
             if let Some(cause) = &data.failure {
@@ -137,6 +144,7 @@ impl Control {
                     }
                     let cutoff = *data.cleanup_until.get_or_insert(until);
                     data.until = Some(cutoff);
+                    data.exit = exit;
                     data.phase = Phase::SettlementRequested;
                     true
                 }

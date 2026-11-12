@@ -169,7 +169,7 @@ fn successful_probe_keeps_original_exclusion_and_pins_until_authenticated_public
     let (_fixture, after) = selection(&mut h, fixture)?;
     assert_eq!(after.accepted(), Some(&expected));
     assert!(after.candidate().is_none());
-    assert!(after.rejected().is_empty());
+    assert!(after.strikes().is_empty());
     Ok(())
 }
 
@@ -201,7 +201,7 @@ fn rejection(code: u32, stop_first: bool, partial_close: bool) -> TestResult {
     let (_fixture, state) = selection(&mut h, fixture)?;
     assert!(state.accepted().is_none());
     assert!(state.candidate().is_none());
-    assert_eq!(state.rejected().len(), 1);
+    assert_eq!(state.strikes().len(), 1);
     Ok(())
 }
 #[test]
@@ -240,7 +240,7 @@ fn recovered(h: &mut Harness, fixture: ProbeFixture) -> Result<ProbeFixture, Box
             let after = trust.recover_updater_trial(&context)?;
             assert!(after.candidate().is_none());
             assert!(after.accepted().is_none());
-            assert_eq!(after.rejected().len(), 1);
+            assert_eq!(after.strikes().len(), 1);
             Ok(fixture)
         },
     )
@@ -315,7 +315,7 @@ fn failed_creation_with_no_process_restores_preparation_without_quarantine() -> 
     let (_fixture, state) = selection(&mut h, fixture)?;
     assert!(matches!(state.candidate(), Some(Candidate::Prepared { .. })));
     assert!(state.accepted().is_none());
-    assert!(state.rejected().is_empty());
+    assert!(state.strikes().is_empty());
     Ok(())
 }
 

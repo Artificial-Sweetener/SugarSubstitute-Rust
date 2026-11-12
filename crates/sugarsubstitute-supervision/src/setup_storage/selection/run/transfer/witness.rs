@@ -106,16 +106,19 @@ impl TrialWitness {
 
     /// Finalize after all owned families settle and the coordinator either exits or sends its
     /// authenticated closing request. The coordinator retains its own run exclusion until exit.
-    /// Preserve committed acceptance despite a lost coordinator result; reject unresolved trials
-    /// once. Retain this owner on failure and until the finalization result has been observed.
+    /// `verdict` classifies how the coordinator ended (`HostExit::verdict`). Preserve committed
+    /// acceptance and any coordinator settlement despite a lost coordinator result; settle an
+    /// unresolved trial once. Retain this owner on failure and until the finalization result has
+    /// been observed.
     /// Run on an independently admitted storage worker under its original cleanup deadline;
     /// a cancelled or expired native-custody worker cannot authorize this publication.
     /// # Errors
     /// Preserves changed activation history, cancellation and native publication failures.
     pub fn finish_settled(
         &self,
+        verdict: sugarsubstitute_contracts::installation::TrialVerdict,
         context: &JobContext,
     ) -> Result<InstallationRecord, SelectionFailure> {
-        self.run.finish_trial(&self.trial, context)
+        self.run.finish_trial(&self.trial, verdict, context)
     }
 }

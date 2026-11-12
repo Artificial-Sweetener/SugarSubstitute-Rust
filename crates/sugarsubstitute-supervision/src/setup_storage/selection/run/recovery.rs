@@ -4,9 +4,12 @@
 use super::*;
 
 impl InstallationRun {
-    /// Quarantine an interrupted trial under newly acquired installation-run exclusion.
-    /// Original run and witness holders exclude this owner while they retain custody. A run
-    /// that has admitted an application or trial cannot use this operation on its own work.
+    /// Resolve an interrupted trial whose ending nobody observed, under newly acquired
+    /// installation-run exclusion. Original run and witness holders exclude this owner while they
+    /// retain custody. A run that has admitted an application or trial cannot use this operation
+    /// on its own work. The candidate returns to prepared without a verdict, except that the
+    /// third abandoned trial of one package in a row counts as a strike (see
+    /// `InstallationRecord::abandon_trial`).
     /// This changes selection only: it neither proves descendant settlement nor grants payload
     /// deletion, process termination, backend ownership or health authority. The accepted
     /// generation remains subject to ordinary verified launch and resource-claim admission.
@@ -28,14 +31,15 @@ impl InstallationRun {
             let Some(Candidate::Trial { attempt }) = current.candidate() else {
                 return Ok(current);
             };
-            let recovered = current.reject(attempt)?;
+            let recovered = current.abandon_trial(attempt, super::settlement::unix_now()?)?;
             store.publish(protection, &recovered, context)?;
             tracing::info!(
                 operation = "installation_abandoned_trial_recovered",
                 installation = attempt.installation.as_str(),
                 generation = attempt.generation.id.as_str(),
                 revision = attempt.revision,
-                "Restored accepted launch selection while retaining interrupted payloads"
+                prepared = matches!(recovered.candidate(), Some(Candidate::Prepared { .. })),
+                "Resolved an abandoned trial while retaining interrupted payloads"
             );
             Ok(recovered)
         })

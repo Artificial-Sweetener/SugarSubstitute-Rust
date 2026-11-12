@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Strict schema-two selection records preserve the last accepted generation during trials.
+//! Schema-three selection records preserve the last accepted generation during trials.
+//!
+//! Decoding ignores fields it does not know, so a later release may add fields without a new
+//! schema number; the number changes only when an older reader would misread the record.
 use super::*;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
 /// Immutable directory identity and exact verified package used to populate it.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Generation {
     /// Opaque directory key; native storage separately verifies resolved ownership.
     pub id: GenerationId,
@@ -27,7 +29,6 @@ pub struct SignedRelease {
     sequence: u64,
 }
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
 struct SignedReleaseWire {
     version: String,
     sequence: u64,
@@ -67,7 +68,8 @@ impl TryFrom<SignedReleaseWire> for SignedRelease {
 }
 
 /// Correlate readiness or rejection to an exact persisted launch attempt.
-/// This record is correlation data; native authenticated transport supplies authority.
+/// This record is correlation data; native authenticated transport supplies authority. Unlike the
+/// rest of the record it refuses unknown fields, because native IPC correlates it exactly.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Trial {
@@ -81,7 +83,7 @@ pub struct Trial {
 
 /// Preparation never changes the accepted launch selection.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "phase", rename_all = "snake_case", deny_unknown_fields)]
+#[serde(tag = "phase", rename_all = "snake_case")]
 pub enum Candidate {
     /// Copy/extraction may be incomplete. Native staging can resume or be abandoned.
     Staging {
@@ -109,6 +111,43 @@ impl Candidate {
     }
 }
 
+/// Bad trial verdicts recorded against one package. Two unexpired strikes withhold the package
+/// from automatic preparation; a strike older than [`STRIKE_LIFETIME_SECONDS`] no longer counts.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct Strike {
+    /// Package whose trial was judged bad.
+    pub package: PackageDigest,
+    /// Signed release sequence the package was prepared from, so an offer of the same release
+    /// can be withheld before anything is downloaded.
+    pub sequence: u64,
+    /// Bad verdicts within one lifetime of each other, at least one.
+    pub count: u8,
+    /// UTC whole seconds since the Unix epoch of the latest bad verdict, as the adapter's
+    /// clock reported it.
+    pub at: u64,
+}
+impl Strike {
+    /// Whether this strike still withholds its package at `now` (UTC Unix seconds).
+    /// A clock that moved before the strike treats the strike as expired: a wrong clock can at
+    /// worst give the release one more trial, never withhold it indefinitely.
+    pub const fn withholds(&self, now: u64) -> bool {
+        self.count >= QUARANTINE_STRIKES && self.live(now)
+    }
+    pub(super) const fn live(&self, now: u64) -> bool {
+        now >= self.at && now - self.at < STRIKE_LIFETIME_SECONDS
+    }
+}
+
+/// Consecutive trials of one package whose ending nobody observed: neither the coordinator nor
+/// the custody witness settled them, and the next launch found the trial record abandoned.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct Unwitnessed {
+    /// Package of the abandoned trials.
+    pub package: PackageDigest,
+    /// Abandoned trials in a row, below [`UNWITNESSED_LIMIT`].
+    pub count: u8,
+}
+
 /// Authoritative accepted/candidate selection. Private fields enforce validation at decode.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct InstallationRecord {
@@ -118,11 +157,12 @@ pub struct InstallationRecord {
     pub(super) accepted: Option<Generation>,
     pub(super) retained: Option<Generation>,
     pub(super) candidate: Option<Candidate>,
-    pub(super) rejected: Vec<PackageDigest>,
+    pub(super) strikes: Vec<Strike>,
+    pub(super) unwitnessed: Option<Unwitnessed>,
     pub(super) rollback: Option<Generation>,
+    pub(super) repair: Option<Generation>,
 }
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
 struct Wire {
     schema_version: u32,
     installation: InstallationId,
@@ -133,9 +173,13 @@ struct Wire {
     retained: Option<Generation>,
     #[serde(deserialize_with = "required_option")]
     candidate: Option<Candidate>,
-    rejected: Vec<PackageDigest>,
+    strikes: Vec<Strike>,
+    #[serde(deserialize_with = "required_option")]
+    unwitnessed: Option<Unwitnessed>,
     #[serde(deserialize_with = "required_option")]
     rollback: Option<Generation>,
+    #[serde(deserialize_with = "required_option")]
+    repair: Option<Generation>,
 }
 /// Read only the schema number first, so a record from another release is reported as an
 /// unsupported schema rather than as damaged bytes, whatever its other fields look like.
@@ -158,8 +202,10 @@ impl InstallationRecord {
             accepted: None,
             retained: None,
             candidate: None,
-            rejected: Vec::new(),
+            strikes: Vec::new(),
+            unwitnessed: None,
             rollback: None,
+            repair: None,
         }
     }
     /// Decode bounded JSON and validate all references; never modifies the source bytes.
@@ -183,8 +229,10 @@ impl InstallationRecord {
             accepted: wire.accepted,
             retained: wire.retained,
             candidate: wire.candidate,
-            rejected: wire.rejected,
+            strikes: wire.strikes,
+            unwitnessed: wire.unwitnessed,
             rollback: wire.rollback,
+            repair: wire.repair,
         };
         record.validate()?;
         Ok(record)
@@ -220,16 +268,37 @@ impl InstallationRecord {
     pub fn candidate(&self) -> Option<&Candidate> {
         self.candidate.as_ref()
     }
-    /// Recently failed package identities; explicit repair may request another trial.
-    pub fn rejected(&self) -> &[PackageDigest] {
-        &self.rejected
+    /// Bad trial verdicts per package; explicit repair may request another trial regardless.
+    pub fn strikes(&self) -> &[Strike] {
+        &self.strikes
+    }
+    /// Consecutive abandoned trials of the current package, if any.
+    pub fn unwitnessed(&self) -> Option<&Unwitnessed> {
+        self.unwitnessed.as_ref()
+    }
+    /// Whether automatic preparation withholds `package` at `now` (UTC Unix seconds). Check this
+    /// before downloading an offer; preparation enforces it again when reserving a generation.
+    pub fn withheld(&self, package: &PackageDigest, now: u64) -> bool {
+        self.strikes.iter().any(|strike| &strike.package == package && strike.withholds(now))
+    }
+    /// Whether automatic preparation withholds the signed release `sequence` at `now` (UTC Unix
+    /// seconds). An offer names its release before its package is downloaded, so discovery checks
+    /// this to avoid downloading a release that reservation would refuse.
+    pub fn withheld_release(&self, sequence: u64, now: u64) -> bool {
+        self.strikes.iter().any(|strike| strike.sequence == sequence && strike.withholds(now))
     }
     /// Newer generation whose trial was judged bad, leaving `accepted` running in its place.
     ///
-    /// Only a rejected trial sets this; a trial that ends without a verdict returns to
+    /// Only a bad trial verdict sets this; a trial that ends without a verdict returns to
     /// `Candidate::Prepared` instead. Accepting any later trial clears it.
     pub fn rollback(&self) -> Option<&Generation> {
         self.rollback.as_ref()
+    }
+    /// Newer accepted generation whose files were found damaged, so the retained generation runs
+    /// in its place until preparation downloads and verifies that release again. This is not a
+    /// bad verdict: the release did nothing wrong and is never withheld for it.
+    pub fn repair(&self) -> Option<&Generation> {
+        self.repair.as_ref()
     }
     /// Determine startup work without guessing whether a recorded process is alive.
     pub fn startup_selection(&self) -> StartupSelection<'_> {
@@ -245,16 +314,23 @@ impl InstallationRecord {
         if self.schema_version != SCHEMA_VERSION {
             return Err(Rejection::Schema);
         }
-        if self.rejected.len() > MAX_REJECTED_PACKAGES {
+        if self.strikes.len() > MAX_STRUCK_PACKAGES {
             return Err(Rejection::Capacity);
         }
-        if self.rejected.iter().collect::<BTreeSet<_>>().len() != self.rejected.len()
+        if self.strikes.iter().map(|strike| &strike.package).collect::<BTreeSet<_>>().len()
+            != self.strikes.len()
+            || self.strikes.iter().any(|strike| strike.count == 0)
+            || self.unwitnessed.as_ref().is_some_and(|abandoned| {
+                abandoned.count == 0 || abandoned.count >= UNWITNESSED_LIMIT
+            })
             || (self.retained.is_some() && self.accepted.is_none())
             || (self.revision == 0
                 && (self.accepted.is_some()
                     || self.candidate.is_some()
-                    || !self.rejected.is_empty()
-                    || self.rollback.is_some()))
+                    || !self.strikes.is_empty()
+                    || self.unwitnessed.is_some()
+                    || self.rollback.is_some()
+                    || self.repair.is_some()))
         {
             return Err(Rejection::Invariant);
         }
@@ -262,6 +338,7 @@ impl InstallationRecord {
             .accepted
             .iter()
             .chain(self.retained.iter())
+            .chain(self.repair.iter())
             .chain(self.candidate.iter().map(Candidate::generation));
         let mut ids = BTreeSet::new();
         for generation in generations {
