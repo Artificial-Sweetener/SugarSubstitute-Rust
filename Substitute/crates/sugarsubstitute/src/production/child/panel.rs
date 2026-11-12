@@ -273,7 +273,7 @@ fn presentation(accent: Option<AccentColor>) -> Result<PanelPresentation> {
     Ok(PanelPresentation::new(
         false,
         PanelStyle::Comfy,
-        PanelPalette::DarkGray,
+        Some(PanelPalette::DarkGray),
         accent.map(AccentColor::css_hex),
         0,
     )?)

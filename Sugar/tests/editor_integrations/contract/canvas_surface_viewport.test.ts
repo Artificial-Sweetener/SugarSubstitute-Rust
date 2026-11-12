@@ -62,7 +62,13 @@ const vectors: {
   invalidRequests: unknown[];
   invalidReplies: unknown[];
 } = JSON.parse(
-  readFileSync(new URL('../support/canvas_surface_viewport_vectors.json', import.meta.url), 'utf8'),
+  readFileSync(
+    new URL(
+      '../../../integrations/contracts/canvas_surface_viewport_vectors.json',
+      import.meta.url,
+    ),
+    'utf8',
+  ),
 );
 
 /** Keep transport and deadline effects observable without introducing real timers. */

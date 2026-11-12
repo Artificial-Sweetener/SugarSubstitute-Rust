@@ -13,7 +13,7 @@ use sugarsubstitute_contracts::{desktop_session::decode_checkpoint, execution::*
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner};
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 const VECTORS: &str =
-    include_str!("../../../../third_party/sugarcubes-session/session_vectors.json");
+    include_str!("../../../../../Sugar/integrations/contracts/session_vectors.json");
 fn checkpoint(number: u16) -> TestResult<SessionCheckpoint> {
     let vectors: serde_json::Value = serde_json::from_str(VECTORS)?;
     let mut value = vectors["checkpoints"][0]["value"].clone();

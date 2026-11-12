@@ -38,7 +38,7 @@ fn terminal<T, E>(
 impl Fixture {
     pub(super) fn new(persistence: bool) -> TestResult<Self> {
         let vectors: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../../third_party/sugarcubes-session/session_vectors.json"
+            "../../../../../../Sugar/integrations/contracts/session_vectors.json"
         ))?;
         let mut checkpoint = sugarsubstitute_contracts::desktop_session::decode_checkpoint(
             &serde_json::to_vec(&vectors["checkpoints"][0]["value"])?,

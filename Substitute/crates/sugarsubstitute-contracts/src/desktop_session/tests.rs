@@ -36,9 +36,10 @@ fn graph_admission_bounds_bytes_shape_and_depth_without_interpreting_comfy_seman
 
 #[test]
 fn generated_session_decoder_fingerprints_the_retained_schema() -> Result<(), Box<dyn Error>> {
-    let schema = include_str!("../../../../third_party/sugarcubes-session/session.schema.json")
+    let schema = include_str!("../../../../../Sugar/integrations/contracts/session.schema.json")
         .replace("\r\n", "\n");
-    let wire = include_str!("wire.rs");
+    let wire =
+        include_str!("../../../../../Sugar/integrations/contracts/SessionProtocol.generated.rs");
     let recorded = wire
         .lines()
         .find_map(|line| line.strip_prefix("// Schema SHA-256 (LF): "))
@@ -50,7 +51,7 @@ fn generated_session_decoder_fingerprints_the_retained_schema() -> Result<(), Bo
 /// Reuse the shared accepted occurrence when exercising complete document byte admission.
 fn document_fixture() -> Result<wire::SessionDocument, Box<dyn Error>> {
     let fixture: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../third_party/sugarcubes-session/session_vectors.json"
+        "../../../../../Sugar/integrations/contracts/session_vectors.json"
     ))?;
     Ok(serde_json::from_value(
         fixture["checkpoints"][0]["value"]["entries"][0]["document"].clone(),

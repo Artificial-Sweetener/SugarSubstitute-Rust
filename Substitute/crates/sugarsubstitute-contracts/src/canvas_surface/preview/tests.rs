@@ -10,7 +10,7 @@ use std::error::Error;
 pub(crate) fn vectors() -> Result<Value, Box<dyn Error>> {
     Ok(serde_json::from_str(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../third_party/sugarcubes-canvas/preview_vectors.json"
+        "/../../../Sugar/integrations/contracts/canvas_surface_preview_vectors.json"
     )))?)
 }
 
@@ -183,7 +183,7 @@ fn preview_chunk_syntax_is_bounded_before_native_byte_admission() -> Result<(), 
 fn shared_preview_semantic_admission_matches_the_web_client() -> Result<(), Box<dyn Error>> {
     let vectors: Value = serde_json::from_str(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../third_party/sugarcubes-canvas/preview_admission_vectors.json"
+        "/../../../Sugar/integrations/contracts/canvas_surface_preview_admission_vectors.json"
     )))?;
     for value in vectors["validCommands"].as_array().ok_or("Missing valid commands")? {
         assert!(request(value).is_ok(), "{value}");

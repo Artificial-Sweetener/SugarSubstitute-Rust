@@ -18,7 +18,7 @@ impl NativeSurface {
         claim: MemoryClaim,
         session: &Session,
     ) -> Result<(), Box<dyn Error>> {
-        self.rejected_schema = (!matches!(request.schema(), 2 | 3)).then_some(identity);
+        self.rejected_schema = (request.schema() == 1).then_some(identity);
         let available = session.initialized() && self.available(identity);
         let capabilities = CanvasSurfaceCapabilities {
             image_formats: if available {

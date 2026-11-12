@@ -6,7 +6,7 @@ use crate::input_documents::{InputRestorePlan, legacy};
 use sugarsubstitute_contracts::desktop_session::{decode_checkpoint, wire::SessionCheckpoint};
 fn checkpoint(mask: &str) -> TestResult<SessionCheckpoint> {
     let vectors: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../../../third_party/sugarcubes-session/session_vectors.json"
+        "../../../../../../../Sugar/integrations/contracts/session_vectors.json"
     ))?;
     let mut checkpoint =
         decode_checkpoint(&serde_json::to_vec(&vectors["checkpoints"][0]["value"])?)?;

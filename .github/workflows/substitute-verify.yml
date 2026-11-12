@@ -4,11 +4,13 @@ on:
   push:
     paths:
       - 'Substitute/**'
+      - 'Sugar/integrations/contracts/**'
       - '.github/workflows/substitute-verify.yml'
       - '!**/*.md'
   pull_request:
     paths:
       - 'Substitute/**'
+      - 'Sugar/integrations/contracts/**'
       - '.github/workflows/substitute-verify.yml'
       - '!**/*.md'
   workflow_dispatch:

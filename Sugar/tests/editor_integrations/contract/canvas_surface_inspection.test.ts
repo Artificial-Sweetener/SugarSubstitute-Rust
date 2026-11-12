@@ -52,7 +52,10 @@ const vectors: {
   cameraChanges: { valid: Vector[]; invalid: Vector[] };
 } = JSON.parse(
   readFileSync(
-    new URL('../support/canvas_surface_inspection_vectors.json', import.meta.url),
+    new URL(
+      '../../../integrations/contracts/canvas_surface_inspection_vectors.json',
+      import.meta.url,
+    ),
     'utf8',
   ),
 );

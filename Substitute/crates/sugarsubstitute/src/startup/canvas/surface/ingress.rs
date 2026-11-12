@@ -115,7 +115,7 @@ impl NativeSurface {
                 self.reply(identity, &request, CanvasSurfaceReplyStatus::Unavailable, claim)
             }
             CanvasSurfaceMessage::Discovery(request) => {
-                self.rejected_schema = (!matches!(request.schema(), 2 | 3)).then_some(identity);
+                self.rejected_schema = (request.schema() == 1).then_some(identity);
                 self.enqueue(DesktopStartupCommand::SendSurface(SurfaceReply::discovery(
                     identity,
                     &request,

@@ -1,45 +1,6 @@
 schema_version = 1
 
 [[components]]
-id = "sugarcubes-canvas-surface-contract"
-source_url = "https://github.com/Artificial-Sweetener/SugarCubes/tree/main/integrations/contracts"
-license = "AGPL-3.0-or-later"
-license_file = "third_party/licenses/sugarcubes.AGPL-3.0.txt"
-license_header_files = ["crates/sugarsubstitute-contracts/src/canvas_surface/wire.rs", "crates/sugarsubstitute-contracts/src/canvas_native/wire.rs"]
-files = [
-  "third_party/sugarcubes-canvas/canvas.schema.json",
-  "third_party/sugarcubes-canvas/address_vectors.json",
-  "third_party/sugarcubes-canvas/file_vectors.json",
-  "third_party/sugarcubes-canvas/geometry_vectors.json",
-  "third_party/sugarcubes-canvas/message_vectors.json",
-  "third_party/sugarcubes-canvas/context_vectors.json",
-  "third_party/sugarcubes-canvas/discovery_vectors.json",
-  "third_party/sugarcubes-canvas/viewport_vectors.json",
-  "third_party/sugarcubes-canvas/preview_admission_vectors.json",
-  "third_party/sugarcubes-canvas/preview_vectors.json",
-  "third_party/sugarcubes-canvas/overview_vectors.json",
-  "third_party/sugarcubes-canvas/occlusion_vectors.json",
-  "third_party/sugarcubes-canvas/inspection_vectors.json",
-  "third_party/sugarcubes-canvas/capability_vectors.json",
-  "third_party/sugarcubes-canvas/editing_vectors.json",
-  "third_party/sugarcubes-canvas/workflow_vectors.json",
-  "crates/sugarsubstitute-contracts/src/canvas_surface/wire.rs",
-  "crates/sugarsubstitute-contracts/src/canvas_native/wire.rs",
-]
-
-[[components]]
-id = "sugarcubes-panel-contract"
-source_url = "https://github.com/Artificial-Sweetener/SugarCubes/tree/main/integrations/contracts"
-license = "AGPL-3.0-or-later"
-license_file = "third_party/licenses/sugarcubes.AGPL-3.0.txt"
-license_header_files = ["crates/sugarsubstitute-contracts/src/panel/wire.rs"]
-files = [
-  "third_party/sugarcubes-panel/panel.schema.json",
-  "third_party/sugarcubes-panel/panel_vectors.json",
-  "crates/sugarsubstitute-contracts/src/panel/wire.rs",
-]
-
-[[components]]
 id = "qt-native-hand-cursors"
 source_url = "https://github.com/qt/qtbase/tree/8ba7ea4b77a4b8f1948760221e264917ddc9e1c8/src/plugins/platforms/windows/images"
 license = "GPL-3.0-only"
@@ -445,16 +406,3 @@ source_url = "https://nodejs.org/dist/v24.22.1/"
 license = "MIT AND LicenseRef-Nodejs-Bundled-Dependencies"
 license_file = "third_party/licenses/nodejs-24.22.1.txt"
 files = ["installer/runtime.json"]
-
-[[components]]
-id = "sugarcubes-desktop-session-contract"
-source_url = "https://github.com/Artificial-Sweetener/SugarCubes/tree/bfdfd7ea4c03b950b9fb3877d6c092b7562077b3/integrations/contracts"
-license = "AGPL-3.0-or-later"
-license_file = "third_party/licenses/sugarcubes.AGPL-3.0.txt"
-license_header_files = ["crates/sugarsubstitute-contracts/src/desktop_session/wire.rs"]
-files = [
-  "third_party/sugarcubes-session/session.schema.json",
-  "third_party/sugarcubes-session/session_vectors.json",
-  "third_party/sugarcubes-session/session_shape_vectors.json",
-  "crates/sugarsubstitute-contracts/src/desktop_session/wire.rs",
-]

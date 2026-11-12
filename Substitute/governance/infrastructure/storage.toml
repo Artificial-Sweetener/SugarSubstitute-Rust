@@ -4086,8 +4086,8 @@ rationale = "Repository tooling execution_exports_modules.rs: Load execution-own
 [[records]]
 path = "tools/xtask/src/fixtures.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:31c414a10300b712a05857f2b46faa7433d989de1d9b1b972f0af8b902629d27"
-capabilities = ["std::fs::create_dir_all", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir"]
+source_sha256 = "sha256:8549fcdd000f4f243433d77a844e90f2ee8e3c38e7a32df8e92484b1a6c7d1ae"
+capabilities = ["std::fs::create_dir_all", "std::fs::write", "std::os::unix::fs::symlink", "tempfile::Builder::new", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "tooling"
 rationale = "Repository tooling fixtures.rs: Build isolated synthetic repositories for governance rejection proof. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
 
@@ -4158,7 +4158,7 @@ rationale = "Repository tooling tests.rs: Adversarial capability, copy-provenanc
 [[records]]
 path = "tools/xtask/src/main.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:38f0580d8718fcad8a1f15ae4af901fa90ba61e85993d6dcefe223feca368621"
+source_sha256 = "sha256:75136c55921a618aeed0f03e439afd92a83642e156656924590cedc77969d6ef"
 capabilities = ["method canonicalize"]
 disposition = "tooling"
 rationale = "Repository tooling main.rs: Provide the same portable verification entry point for local work, hooks and CI. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -4180,9 +4180,17 @@ disposition = "tooling"
 rationale = "Repository tooling policy.rs: Decode strict, versioned policy documents without accepting unknown fields. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
 
 [[records]]
+path = "tools/xtask/src/shared_components.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:f606d238e1a675c8019ff6ec65105d8185a8a0d884699a02dea22e2ed7c39b6a"
+capabilities = ["method canonicalize", "method symlink_metadata"]
+disposition = "tooling"
+rationale = "Repository tooling shared_components.rs: Govern the exact sibling-component files of the monorepo that this workspace consumes. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
+
+[[records]]
 path = "tools/xtask/src/source.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:87fc57da92f44444e136639693979b168b06cd90f49fee9d7eaf0cd7e3bee637"
+source_sha256 = "sha256:ace2e9e5381b50af02063135abf6e1d4afe8ab813962f5c660d5c6b72e20cbbf"
 capabilities = ["method canonicalize", "std::fs::read_dir", "std::fs::write", "tempfile::tempdir"]
 disposition = "tooling"
 rationale = "Repository tooling source.rs: Own portable source discovery, safe policy paths, and exact review fingerprints. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -4515,7 +4523,7 @@ rationale = "An owned temporary cache scope qualifies actual PNG/JPEG and author
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:d460c21f3025978229748a1b3a4d2cd5af9a23b12a81fb8051bdf7e3b4649a1d"
+source_sha256 = "sha256:545b83f7de9fb25f4d4ed4ed389cbc42122683aca24754a0219af4c1a3f05669"
 capabilities = ["node:fs", "readFileSync"]
 disposition = "fixture"
 rationale = "Read the injected transport and protocol-policy bootstrap sources for executable envelope and custody regression tests."
@@ -4919,7 +4927,7 @@ rationale = "Owned temporary artifacts qualify immutable pinned readers, write/r
 [[records]]
 path = "crates/sugarsubstitute/src/input_documents/tests/storage/legacy.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:b12ce0ad8378ff85beb00fc9a99ac3071b723bab57ebac0ad05aee81bdc6281f"
+source_sha256 = "sha256:a2d7e2e0c91729dfb92d0144578312d3e199883752956ef2ee406f935e787666"
 capabilities = ["std::fs::read", "std::fs::write"]
 disposition = "fixture"
 rationale = "Owned temporary native archives qualify exact graph metadata association, immutable codec receipts, changed scope rejection and preservation of unmatched originals."
@@ -4943,7 +4951,7 @@ rationale = "Owned temporary media qualify one verified immutable reader, range 
 [[records]]
 path = "crates/sugarsubstitute/src/workspace_session/tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:4a605c2002c674beea607a2e337477e1219a22b118e9a3dc4fc99417501bb5b5"
+source_sha256 = "sha256:db77d2981c83fe817420a006c76dca7191c2ba515e99484702575db08afe5415"
 capabilities = ["tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary profile and workspace roots qualify the actual session store through real admitted execution jobs."
@@ -4983,7 +4991,7 @@ rationale = "Owned temporary checkpoint files qualify atomic publication, exact 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/workspace/closing_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:b6d9ed7fb63378528d2c05bd6d0ff281fc2d2ba859fd84b31feca4da4a3fe3e6"
+source_sha256 = "sha256:9abe86f19e17c0ec6acbca95c286c2e54aa35e1a89cf1ba23993f06fc0f487a3"
 capabilities = ["tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "An owned temporary workspace drives actual missing-checkpoint load and durable publication through the execution owner, proving ordinary startup polling retains the native peer until final delivery or the unchanged capture cutoff."

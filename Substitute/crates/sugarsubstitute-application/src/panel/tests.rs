@@ -14,7 +14,7 @@ fn moment(seconds: u64) -> Moment {
 fn fixture() -> Result<(PanelHostSession, PanelSession, PanelPresentation)> {
     let session = PanelSession::new("session-12345678".into())?;
     let presentation =
-        PanelPresentation::new(false, PanelStyle::Comfy, PanelPalette::DarkGray, None, 0)?;
+        PanelPresentation::new(false, PanelStyle::Comfy, Some(PanelPalette::DarkGray), None, 0)?;
     let host = PanelHostSession::new(session.clone(), presentation.clone(), moment(0))?;
     Ok((host, session, presentation))
 }
@@ -44,7 +44,8 @@ fn current_session_handshake_preserves_presentation_and_connection_state() -> Re
         None
     );
     assert_eq!(host.update_presentation(presentation).send, None);
-    let changed = PanelPresentation::new(false, PanelStyle::Fluent, PanelPalette::Black, None, 0)?;
+    let changed =
+        PanelPresentation::new(false, PanelStyle::Fluent, Some(PanelPalette::Black), None, 0)?;
     assert_eq!(
         host.update_presentation(changed.clone()).send,
         Some(PanelMessage::Configure { session, presentation: changed })

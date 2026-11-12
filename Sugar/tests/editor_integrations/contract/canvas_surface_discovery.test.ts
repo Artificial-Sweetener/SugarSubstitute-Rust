@@ -300,7 +300,7 @@ test.each([
 /** Exercise the same discovery documents vendored by the Rust host. */
 test('accepts shared valid discovery vectors and rejects each malformed variant', () => {
   const vectors = JSON.parse(
-    readFileSync('tests/editor_integrations/support/canvas_surface_discovery_vectors.json', 'utf8'),
+    readFileSync('integrations/contracts/canvas_surface_discovery_vectors.json', 'utf8'),
   ) as {
     request: unknown;
     futureRequest: unknown;

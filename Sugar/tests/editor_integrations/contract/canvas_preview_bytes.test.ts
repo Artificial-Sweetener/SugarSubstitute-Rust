@@ -61,7 +61,10 @@ const vectors: {
   validChanges: unknown[];
   invalidMessages: unknown[];
 } = JSON.parse(
-  readFileSync(new URL('../support/canvas_surface_preview_vectors.json', import.meta.url), 'utf8'),
+  readFileSync(
+    new URL('../../../integrations/contracts/canvas_surface_preview_vectors.json', import.meta.url),
+    'utf8',
+  ),
 );
 
 test('shares strict attribution and canonical byte admission vectors beyond wire shape validation', () => {
@@ -72,7 +75,10 @@ test('shares strict attribution and canonical byte admission vectors beyond wire
     invalidChanges: unknown[];
   } = JSON.parse(
     readFileSync(
-      new URL('../support/canvas_surface_preview_admission_vectors.json', import.meta.url),
+      new URL(
+        '../../../integrations/contracts/canvas_surface_preview_admission_vectors.json',
+        import.meta.url,
+      ),
       'utf8',
     ),
   );

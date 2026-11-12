@@ -13,6 +13,7 @@ use crate::panel::PanelSession;
 /// upgrade diagnostic. Hosts and SugarCubes upgrade together; canvas envelope version three
 /// and presentation observation schema one retain their independent meanings.
 /// Discovery schema three adds native backdrop regions; schema-two replies omit that field.
+/// A request for a newer schema is answered in the newest schema this host knows.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CanvasSurfaceCapabilities {
     /// Admitted selected-image encodings, bounded to three entries by the shared schema.
@@ -85,6 +86,9 @@ pub enum CanvasSurfaceDiscoveryStatus {
     Error,
 }
 
+/// Newest native surface discovery schema this host implements.
+const NEWEST_DISCOVERY_SCHEMA: u64 = 3;
+
 /// A schema-valid discovery request whose session still requires independent navigation checks.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CanvasSurfaceDiscoveryRequest {
@@ -130,6 +134,8 @@ impl CanvasSurfaceDiscoveryRequest {
     /// runtime support and grants no native authority. Message length is measured in
     /// Unicode scalar values, and the complete reply retains the surface byte budget.
     /// Schema-one requests receive an empty unsupported descriptor and an upgrade diagnostic.
+    /// A request for a schema newer than this host's is answered in the newest schema it knows,
+    /// so the page keeps what that schema expresses and treats the rest as unsupported.
     /// # Errors
     /// Rejects nonempty failure descriptors, oversized lists or text, and JSON failures.
     pub fn reply(
@@ -154,9 +160,10 @@ impl CanvasSurfaceDiscoveryRequest {
         {
             return Err(CanvasSurfaceMessageError::Invalid);
         }
+        let answered = self.schema.min(NEWEST_DISCOVERY_SCHEMA);
         let mut capabilities = capabilities.to_wire()?;
-        capabilities.schema = self.schema;
-        if self.schema < 3 {
+        capabilities.schema = answered;
+        if answered < 3 {
             capabilities.backdrop = None;
         }
         let value = wire::CanvasSurfaceCapabilitiesReply {

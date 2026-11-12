@@ -157,7 +157,7 @@ fn presented_outcomes_require_the_exact_fit_preview_and_retained_previews_stay_f
 fn shared_presentation_admission_vectors_match_the_web_client() -> Result<(), Box<dyn Error>> {
     let vectors: Value = serde_json::from_str(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../third_party/sugarcubes-canvas/preview_admission_vectors.json"
+        "/../../../Sugar/integrations/contracts/canvas_surface_preview_admission_vectors.json"
     )))?;
     for value in vectors["validChanges"].as_array().ok_or("Missing valid changes")? {
         assert!(typed_change(value).is_ok(), "{value}");

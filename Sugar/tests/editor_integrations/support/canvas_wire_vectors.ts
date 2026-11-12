@@ -31,11 +31,9 @@ export interface CanvasWireVectors {
   readonly invalid: readonly CanvasWireMutation[];
 }
 
-/** Load one vector file from the editor integration support directory. */
+/** Load one shared wire-vector file from the portable contract directory. */
 export function readCanvasWireVectors(file: string): CanvasWireVectors {
-  return JSON.parse(
-    readFileSync(`tests/editor_integrations/support/${file}`, 'utf8'),
-  ) as CanvasWireVectors;
+  return JSON.parse(readFileSync(`integrations/contracts/${file}`, 'utf8')) as CanvasWireVectors;
 }
 
 /** Return a deep copy of one valid message so tests can alter it freely. */

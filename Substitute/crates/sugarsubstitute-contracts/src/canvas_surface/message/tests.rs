@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 fn vectors() -> Result<Value, Box<dyn Error>> {
     Ok(serde_json::from_str(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../third_party/sugarcubes-canvas/message_vectors.json"
+        "/../../../Sugar/integrations/contracts/canvas_surface_message_vectors.json"
     )))?)
 }
 
@@ -148,7 +148,7 @@ fn overview_requests_match_the_shared_vectors_including_identity_and_size_bounds
 -> Result<(), Box<dyn Error>> {
     let vectors: Value = serde_json::from_str(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../third_party/sugarcubes-canvas/overview_vectors.json"
+        "/../../../Sugar/integrations/contracts/canvas_surface_overview_vectors.json"
     )))?;
     assert_eq!(vectors["messageBytes"], MAX_SURFACE_MESSAGE_BYTES);
     for case in vectors["validRequests"].as_array().ok_or("Missing valid requests")? {
@@ -184,7 +184,7 @@ fn overview_requests_match_the_shared_vectors_including_identity_and_size_bounds
 fn geometry_occlusion_requests_match_the_shared_vectors() -> Result<(), Box<dyn Error>> {
     let vectors: Value = serde_json::from_str(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../third_party/sugarcubes-canvas/occlusion_vectors.json"
+        "/../../../Sugar/integrations/contracts/canvas_surface_occlusion_vectors.json"
     )))?;
     assert_eq!(vectors["maxOcclusions"], crate::canvas_surface::MAX_GEOMETRY_OCCLUSIONS);
     for case in vectors["validRequests"].as_array().ok_or("Missing valid requests")? {

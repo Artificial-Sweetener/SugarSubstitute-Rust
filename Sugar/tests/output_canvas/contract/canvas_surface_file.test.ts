@@ -21,7 +21,7 @@ import { readFileSync } from 'node:fs';
 
 const file = { filename: 'résumé🌈.png', subfolder: 'batch/one', type: 'output' };
 const vectors = JSON.parse(
-  readFileSync('tests/output_canvas/support/canvas_surface_file_vectors.json', 'utf8'),
+  readFileSync('integrations/contracts/canvas_surface_file_vectors.json', 'utf8'),
 ) as { name: string; value: unknown; valid: boolean }[];
 
 test.each(vectors)('matches the shared Rust/web file reference vector: $name', (vector) => {

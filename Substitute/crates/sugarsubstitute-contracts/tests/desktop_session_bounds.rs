@@ -72,9 +72,9 @@ fn valid(name: &str, value: &Value) -> bool {
 fn shared_shape_vectors_reject_every_field_bound_unknown_member_and_missing_member()
 -> Result<(), Box<dyn Error>> {
     let vectors: Vectors = serde_json::from_str(include_str!(
-        "../../../third_party/sugarcubes-session/session_shape_vectors.json"
+        "../../../../Sugar/integrations/contracts/session_shape_vectors.json"
     ))?;
-    let schema = include_str!("../../../third_party/sugarcubes-session/session.schema.json")
+    let schema = include_str!("../../../../Sugar/integrations/contracts/session.schema.json")
         .replace("\r\n", "\n");
     assert_eq!(vectors.schema_sha256, format!("{:x}", Sha256::digest(schema.as_bytes())));
     let shapes = vectors.shapes;

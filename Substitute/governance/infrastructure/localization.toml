@@ -732,7 +732,7 @@ rationale = "The bulk channel transport helper moves exact JSON bytes through ho
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
-source_sha256 = "sha256:d460c21f3025978229748a1b3a4d2cd5af9a23b12a81fb8051bdf7e3b4649a1d"
+source_sha256 = "sha256:545b83f7de9fb25f4d4ed4ed389cbc42122683aca24754a0219af4c1a3f05669"
 kind = "fixture"
 rationale = "The isolated JavaScript VM fixture supplies promptId and sourceId attribution fields to exercise the actual bounded native transport; these technical protocol identities are fixture data and never become product labels or a prompt editor route."
 
@@ -744,7 +744,7 @@ rationale = "Native placement fixture uses fixed caption labels only to construc
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_session_contract/tests.rs"
-source_sha256 = "sha256:3a3f3d4506c673045680384754629dad7c3a1581c8aa7639e3dfe01a9ee44b6c"
+source_sha256 = "sha256:1a15073c4f131a6e33337f56cd2af293dba8803f1a107412d62b2e8eecd09525"
 kind = "fixture"
 rationale = "Session admission fixture uses fixed caption labels while testing exact scope, profile and bridge rejection."
 

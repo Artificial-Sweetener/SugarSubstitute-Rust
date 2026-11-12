@@ -179,7 +179,8 @@ pub(super) struct NativeSurface {
     /// The latest routed drag-out awaiting its copied original.
     drag_out: Option<input::DragRequest>,
     drag_sequence: u64,
-    /// A rejected feature schema fences this navigation's later surface mutations.
+    /// A schema-one discovery fences this navigation's later surface mutations; newer schemas are
+    /// answered in the newest known schema and keep the surface.
     rejected_schema: Option<MainIdentity>,
     closed: bool,
 }

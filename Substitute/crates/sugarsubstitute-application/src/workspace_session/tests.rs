@@ -5,7 +5,7 @@ use super::*;
 use sugarsubstitute_contracts::desktop_session::{decode_checkpoint, wire::SessionCheckpoint};
 type Result<T = ()> = std::result::Result<T, Box<dyn Error>>;
 const FIXTURE: &str =
-    include_str!("../../../../third_party/sugarcubes-session/session_vectors.json");
+    include_str!("../../../../../Sugar/integrations/contracts/session_vectors.json");
 fn at(milliseconds: u64) -> Moment {
     Moment::from_nanos(milliseconds * 1_000_000)
 }

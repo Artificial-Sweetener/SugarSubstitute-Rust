@@ -8,7 +8,7 @@ use sugarsubstitute_contracts::desktop_session::{
     wire::{SessionCapabilities, SessionFence, SessionScope},
 };
 
-const VECTORS: &str = include_str!("../../../third_party/sugarcubes-session/session_vectors.json");
+const VECTORS: &str = include_str!("../../../../Sugar/integrations/contracts/session_vectors.json");
 
 #[derive(Deserialize)]
 struct Vector {

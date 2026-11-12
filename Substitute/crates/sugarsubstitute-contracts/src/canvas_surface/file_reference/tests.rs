@@ -9,7 +9,7 @@ use serde_json::Value;
 fn shared_file_reference_vectors_match_web_validation() -> Result<(), Box<dyn Error>> {
     let vectors: Vec<Value> = serde_json::from_str(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../third_party/sugarcubes-canvas/file_vectors.json"
+        "/../../../Sugar/integrations/contracts/canvas_surface_file_vectors.json"
     )))?;
     for case in vectors {
         let name = case.get("name").and_then(Value::as_str).ok_or("Missing vector name")?;

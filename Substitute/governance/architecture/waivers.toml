@@ -1,28 +1,2 @@
 schema_version = 1
-
-[[records]]
-path = "crates/sugarsubstitute-contracts/src/canvas_surface/wire.rs"
-owner = "sugarsubstitute-contracts"
-kind = "structural"
-source_sha256 = "sha256:09231545e0fc4e5a1f72a709e2f50d7c5b063589ebf5b6e63fdb7b90a5c603f2"
-review_until = "2026-12-01"
-line_limit = 1003
-rationale = "This exact vendored module is generated from the single SugarCubes canvas schema and contains only closed wire data shapes and their schema validators. Shared attribution, address, viewport, preview and schema-three backdrop declarations form one versioned decoding boundary. The added backdrop support and bounded geometry carry values and schema checks; native material evaluation, frame acknowledgement, application state, transport and scheduling remain in authored owners. Hand extraction would separate generated validators from their common shape authority and break exact generator parity. Keep the upstream generated module intact, with authored semantic admission and runtime coordination in separate owners. The reviewed source is covered by shared rejection vectors, generated parity checks and Rust contract tests."
-
-[[records]]
-path = "crates/sugarsubstitute-contracts/src/canvas_native/wire.rs"
-owner = "sugarsubstitute-contracts"
-kind = "structural"
-source_sha256 = "sha256:756358cc59ab4aa4062343955113bfb01824fb2bf142d4be1fc0a45b651bdb4d"
-review_until = "2026-12-01"
-line_limit = 1113
-rationale = "This exact vendored module is generated from the single SugarCubes canvas schema and holds only the closed wire shapes and schema validators of the native canvas protocol: context, source, geometry, editing and workflow-surface requests, replies and notifications. The families share one version-three envelope, document, failure and file-reference definitions, so they form one decoding boundary with no application state, transport, scheduling or presentation policy. Hand extraction would split generated validators from their common shape authority and break exact generator parity. Authored domain admission and encoding live in the separate canvas_native owners; the source is covered by the shared capability, editing and workflow rejection vectors and Rust contract tests."
-
-[[records]]
-path = "crates/sugarsubstitute-contracts/src/desktop_session/wire.rs"
-owner = "sugarsubstitute-contracts"
-kind = "structural"
-source_sha256 = "sha256:953790e518a692972459112126feede9eeace86715b386afbdc609ccfbbf05d4"
-review_until = "2026-12-01"
-line_limit = 687
-rationale = "This exact generated module is the closed decoding boundary of the single version-one SugarCubes desktop-session schema. Checkpoint sections and operations share occurrence, artifact, scene, inspection and generation-fence declarations; shape validators must remain generated from the same authority. It contains no transport, filesystem implementation, scheduling, native handles or application lifecycle policy. Hand extraction would detach generated validators from their common schema and break exact Rust/TypeScript generation parity. Authored identity, semantic snapshot, submission, navigation and operation admission remain separate cohesive owners. Schema-fingerprinted shape probes, shared rejection/roundtrip vectors, and actual canvas-inspection projection tests review this boundary."
+records = []

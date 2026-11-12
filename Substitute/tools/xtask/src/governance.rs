@@ -10,7 +10,7 @@ use crate::{
     error::{Failure, Result, read, require},
     execution, infrastructure, localization, networking,
     policy::{self, Architecture, Debt, Records, Testing, Waiver},
-    structure, testing, ui, vendor,
+    shared_components, structure, testing, ui, vendor,
     workspace::Workspace,
 };
 
@@ -58,9 +58,12 @@ pub(crate) fn check(root: &Path) -> Result<()> {
     )?;
     let testing: Testing = policy::load(root, "governance/testing/policy.toml")?;
     testing::check(root, &testing, &architecture)?;
+    let shared: shared_components::Components =
+        policy::load(root, "governance/monorepo/components.toml")?;
+    shared_components::check(root, &architecture, &shared)?;
     let persistence: catalog::Persistence =
         policy::load(root, "governance/persistence/catalog.toml")?;
-    catalog::check_persistence(root, &architecture, &persistence, &vendors)?;
+    catalog::check_persistence(root, &architecture, &persistence, &vendors, &shared)?;
     let caches: catalog::Caches = policy::load(root, "governance/cache/catalog.toml")?;
     catalog::check_caches(root, &architecture, &caches)?;
     let storage: cache_storage::Storage = policy::load(root, "governance/cache/storage.toml")?;

@@ -8,21 +8,17 @@
 //! shape and bounds only; it grants no host authority.
 
 use crate::panel::{PanelError, PanelSession};
-use serde::{Deserialize, Serialize};
 use std::{error::Error, fmt};
+
+mod wire;
 
 /// Maximum encoded memory message admitted before JSON decoding, in UTF-8 bytes.
 pub const MAX_MEMORY_MESSAGE_BYTES: usize = 4096;
-/// Maximum cache consumers one usage report may itemize.
-pub const MAX_MEMORY_CONSUMERS: usize = 16;
 const PROTOCOL: &str = "sugarcubes.memory";
 const VERSION: u64 = 1;
-/// Largest byte count JavaScript represents exactly.
-const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
 /// How hard the system is pressed for memory.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MemoryLevel {
     /// Caches may grow to their allowance.
     Normal,
@@ -35,8 +31,7 @@ pub enum MemoryLevel {
 }
 
 /// The user's application memory ceiling as the page reports and displays it.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "mode", rename_all = "lowercase", deny_unknown_fields)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MemoryPreferenceChoice {
     /// A percentage of physical memory, between 10 and 75.
     Share {
@@ -50,18 +45,8 @@ pub enum MemoryPreferenceChoice {
     },
 }
 
-impl MemoryPreferenceChoice {
-    fn valid(self) -> bool {
-        match self {
-            Self::Share { percent } => (10..=75).contains(&percent),
-            Self::Fixed { bytes } => (1..=MAX_SAFE_INTEGER).contains(&bytes),
-        }
-    }
-}
-
 /// One cache family's reported bytes.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MemoryConsumer {
     /// Stable lowercase identifier, 1 to 48 of `a-z`, `0-9`, `.`, `-`.
     pub id: String,
@@ -125,39 +110,26 @@ impl MemoryMessage {
         if bytes.len() > MAX_MEMORY_MESSAGE_BYTES {
             return Err(MemoryError::TooLarge);
         }
-        let wire: WireClient = serde_json::from_slice(bytes).map_err(MemoryError::Malformed)?;
-        match wire {
-            WireClient::Usage {
-                protocol,
-                version,
-                session,
-                used_bytes,
-                demand_bytes,
-                consumers,
-            } => {
-                let valid = header(&protocol, version)
-                    && used_bytes <= MAX_SAFE_INTEGER
-                    && demand_bytes <= MAX_SAFE_INTEGER
-                    && consumers.len() <= MAX_MEMORY_CONSUMERS
-                    && consumers.iter().all(|consumer| {
-                        valid_consumer_id(&consumer.id) && consumer.bytes <= MAX_SAFE_INTEGER
-                    });
-                if !valid {
-                    return Err(MemoryError::Invalid);
-                }
-                Ok(Self::Usage {
-                    session: session_of(session)?,
-                    used_bytes,
-                    demand_bytes,
-                    consumers,
-                })
-            }
-            WireClient::Preference { protocol, version, session, preference } => {
-                if !header(&protocol, version) || !preference.valid() {
-                    return Err(MemoryError::Invalid);
-                }
-                Ok(Self::Preference { session: session_of(session)?, preference })
-            }
+        let message: wire::MemoryClientMessage =
+            serde_json::from_slice(bytes).map_err(MemoryError::Malformed)?;
+        if !message.valid() {
+            return Err(MemoryError::Invalid);
+        }
+        match message {
+            wire::MemoryClientMessage::Usage(usage) => Ok(Self::Usage {
+                session: session_of(usage.session)?,
+                used_bytes: usage.used_bytes,
+                demand_bytes: usage.demand_bytes,
+                consumers: usage
+                    .consumers
+                    .into_iter()
+                    .map(|consumer| MemoryConsumer { id: consumer.id, bytes: consumer.bytes })
+                    .collect(),
+            }),
+            wire::MemoryClientMessage::Preference(preference) => Ok(Self::Preference {
+                session: session_of(preference.session)?,
+                preference: MemoryPreferenceChoice::from_wire(preference.preference)?,
+            }),
         }
     }
 }
@@ -168,78 +140,56 @@ impl MemoryAllowance {
     /// # Errors
     /// Rejects byte counts JavaScript cannot represent exactly.
     pub fn encode(&self, session: &PanelSession) -> Result<Vec<u8>, MemoryError> {
-        let exact = [self.generation, self.allowance_bytes, self.ceiling_bytes, self.total_bytes]
-            .into_iter()
-            .all(|value| value <= MAX_SAFE_INTEGER);
-        if !exact || !self.preference.valid() {
-            return Err(MemoryError::Invalid);
-        }
-        serde_json::to_vec(&WireAllowance {
-            protocol: PROTOCOL,
+        let message = wire::MemoryAllowanceMessage {
+            protocol: PROTOCOL.to_owned(),
             version: VERSION,
-            session: session.as_str(),
-            kind: "allowance",
+            session: session.as_str().to_owned(),
+            r#type: "allowance".to_owned(),
             generation: self.generation,
-            level: self.level,
+            level: self.level.to_wire(),
             allowance_bytes: self.allowance_bytes,
             ceiling_bytes: self.ceiling_bytes,
             total_bytes: self.total_bytes,
-            preference: self.preference,
-        })
-        .map_err(MemoryError::Malformed)
+            preference: self.preference.to_wire(),
+        };
+        if !message.valid() {
+            return Err(MemoryError::Invalid);
+        }
+        serde_json::to_vec(&message).map_err(MemoryError::Malformed)
     }
 }
 
-fn header(protocol: &str, version: u64) -> bool {
-    protocol == PROTOCOL && version == VERSION
+impl MemoryLevel {
+    fn to_wire(self) -> wire::MemoryLevel {
+        match self {
+            Self::Normal => wire::MemoryLevel::Normal,
+            Self::Elevated => wire::MemoryLevel::Elevated,
+            Self::High => wire::MemoryLevel::High,
+            Self::Critical => wire::MemoryLevel::Critical,
+        }
+    }
+}
+
+impl MemoryPreferenceChoice {
+    fn to_wire(self) -> wire::MemoryPreference {
+        match self {
+            Self::Share { percent } => wire::MemoryPreference::Share { percent: percent.into() },
+            Self::Fixed { bytes } => wire::MemoryPreference::Fixed { bytes },
+        }
+    }
+
+    fn from_wire(preference: wire::MemoryPreference) -> Result<Self, MemoryError> {
+        match preference {
+            wire::MemoryPreference::Share { percent } => Ok(Self::Share {
+                percent: u8::try_from(percent).map_err(|_| MemoryError::Invalid)?,
+            }),
+            wire::MemoryPreference::Fixed { bytes } => Ok(Self::Fixed { bytes }),
+        }
+    }
 }
 
 fn session_of(value: String) -> Result<PanelSession, MemoryError> {
     PanelSession::new(value).map_err(MemoryError::Session)
-}
-
-fn valid_consumer_id(id: &str) -> bool {
-    (1..=48).contains(&id.len())
-        && id
-            .bytes()
-            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || b".-".contains(&byte))
-}
-
-#[derive(Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase", deny_unknown_fields)]
-enum WireClient {
-    #[serde(rename_all = "camelCase")]
-    Usage {
-        protocol: String,
-        version: u64,
-        session: String,
-        used_bytes: u64,
-        demand_bytes: u64,
-        consumers: Vec<MemoryConsumer>,
-    },
-    #[serde(rename_all = "camelCase")]
-    Preference {
-        protocol: String,
-        version: u64,
-        session: String,
-        preference: MemoryPreferenceChoice,
-    },
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct WireAllowance<'a> {
-    protocol: &'static str,
-    version: u64,
-    session: &'a str,
-    #[serde(rename = "type")]
-    kind: &'static str,
-    generation: u64,
-    level: MemoryLevel,
-    allowance_bytes: u64,
-    ceiling_bytes: u64,
-    total_bytes: u64,
-    preference: MemoryPreferenceChoice,
 }
 
 /// Identify a bounded wire failure while retaining actual JSON errors as causes.

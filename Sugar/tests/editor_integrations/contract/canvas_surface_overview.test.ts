@@ -59,7 +59,13 @@ const vectors: {
   oversizedRequests: Vector[];
   presentation: { valid: Vector[]; invalid: Vector[]; unpresentable: Vector[] };
 } = JSON.parse(
-  readFileSync(new URL('../support/canvas_surface_overview_vectors.json', import.meta.url), 'utf8'),
+  readFileSync(
+    new URL(
+      '../../../integrations/contracts/canvas_surface_overview_vectors.json',
+      import.meta.url,
+    ),
+    'utf8',
+  ),
 );
 const session = 'surface-overview-session';
 const address = {

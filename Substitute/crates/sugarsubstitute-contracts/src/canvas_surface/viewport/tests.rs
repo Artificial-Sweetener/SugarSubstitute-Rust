@@ -12,7 +12,7 @@ use std::error::Error;
 fn vectors() -> Result<Value, Box<dyn Error>> {
     Ok(serde_json::from_str(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../third_party/sugarcubes-canvas/viewport_vectors.json"
+        "/../../../Sugar/integrations/contracts/canvas_surface_viewport_vectors.json"
     )))?)
 }
 
@@ -159,7 +159,7 @@ fn viewport_snapshots_reject_nonfinite_scales_and_invalid_dimensions() -> Result
 fn inspection_vectors() -> Result<Value, Box<dyn Error>> {
     Ok(serde_json::from_str(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../third_party/sugarcubes-canvas/inspection_vectors.json"
+        "/../../../Sugar/integrations/contracts/canvas_surface_inspection_vectors.json"
     )))?)
 }
 
