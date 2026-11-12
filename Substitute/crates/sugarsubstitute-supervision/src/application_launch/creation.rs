@@ -5,7 +5,7 @@ use super::LaunchCustody;
 use crate::{ClaimError, WindowsLaunchBuffers, creation_error_mode::with_image_errors_reported};
 use std::{mem::size_of, os::windows::io::AsRawHandle};
 use windows::{
-    Win32::{Foundation::HANDLE, System::Threading::*},
+    Win32::System::Threading::*,
     core::{PCWSTR, PWSTR},
 };
 
@@ -17,8 +17,8 @@ impl Attributes {
     fn pointer(&mut self) -> LPPROC_THREAD_ATTRIBUTE_LIST {
         LPPROC_THREAD_ATTRIBUTE_LIST(self.storage.as_mut_ptr().cast())
     }
-    fn initialize(&mut self, handles: &[usize], jobs: &[HANDLE]) -> Result<(), ClaimError> {
-        let count = u32::from(!handles.is_empty()) + u32::from(!jobs.is_empty());
+    fn initialize(&mut self, handles: &[usize]) -> Result<(), ClaimError> {
+        let count = 1;
         let mut bytes = 0;
         // SAFETY: documented sizing query supplies required bytes without accessing a list.
         let measured = unsafe { InitializeProcThreadAttributeList(None, count, None, &mut bytes) };
@@ -35,38 +35,20 @@ impl Attributes {
         unsafe { InitializeProcThreadAttributeList(Some(list), count, None, &mut bytes) }
             .map_err(|cause| ClaimError::new("application_launch_attributes", cause))?;
         self.initialized = true;
-        if !handles.is_empty() {
-            // SAFETY: the caller retains these bounded handle values and their owning custody throughout
-            // process creation and attribute deletion. No ambient handle is added to the list.
-            unsafe {
-                UpdateProcThreadAttribute(
-                    list,
-                    0,
-                    PROC_THREAD_ATTRIBUTE_HANDLE_LIST as usize,
-                    Some(handles.as_ptr().cast()),
-                    std::mem::size_of_val(handles),
-                    None,
-                    None,
-                )
-            }
-            .map_err(|cause| ClaimError::new("application_launch_inheritance", cause))?;
+        // SAFETY: the caller retains these bounded handle values and their owning custody throughout
+        // process creation and attribute deletion. No ambient handle is added to the list.
+        unsafe {
+            UpdateProcThreadAttribute(
+                list,
+                0,
+                PROC_THREAD_ATTRIBUTE_HANDLE_LIST as usize,
+                Some(handles.as_ptr().cast()),
+                std::mem::size_of_val(handles),
+                None,
+                None,
+            )
         }
-        if !jobs.is_empty() {
-            // SAFETY: the caller owns the exact Job and the stable one-element slice until
-            // creation and attribute deletion finish. Assignment is atomic with creation.
-            unsafe {
-                UpdateProcThreadAttribute(
-                    list,
-                    0,
-                    PROC_THREAD_ATTRIBUTE_JOB_LIST as usize,
-                    Some(jobs.as_ptr().cast()),
-                    std::mem::size_of_val(jobs),
-                    None,
-                    None,
-                )
-            }
-            .map_err(|cause| ClaimError::new("activation_job_assignment", cause))?;
-        }
+        .map_err(|cause| ClaimError::new("application_launch_inheritance", cause))?;
         Ok(())
     }
 }
@@ -92,34 +74,24 @@ pub(super) fn create(
         Some(LaunchCustody::Trial(trial)) => {
             (trial.transfer()?.handles().map(|handle| handle.as_raw_handle() as usize), 2)
         }
-        Some(LaunchCustody::Broker(pins)) => pins.inheritance(),
         None => ([0; 2], 0),
     };
-    create_native(command, &handles[..count], &[], false, process)
+    create_native(command, &handles[..count], process)
 }
 
-/// Create the activation engine suspended and atomically contained with exact channel inheritance.
-pub(super) fn contained(
+/// Create a generation's launch engine, uncontained, inheriting exactly its takeover event.
+pub(super) fn engine(
     command: &mut WindowsLaunchBuffers,
-    job: HANDLE,
-    channel: usize,
+    event: usize,
     process: &mut PROCESS_INFORMATION,
 ) -> Result<(), ClaimError> {
-    create_native(
-        command,
-        if channel == 0 { &[] } else { std::slice::from_ref(&channel) },
-        &[job],
-        true,
-        process,
-    )
+    create_native(command, std::slice::from_ref(&event), process)
 }
 
 /// Keep attribute storage, exact inheritance and native outputs under one creation implementation.
 fn create_native(
     command: &mut WindowsLaunchBuffers,
     inherited: &[usize],
-    jobs: &[HANDLE],
-    suspended: bool,
     process: &mut PROCESS_INFORMATION,
 ) -> Result<(), ClaimError> {
     let mut attributes = Attributes { storage: Box::new([0; 128]), initialized: false };
@@ -127,11 +99,8 @@ fn create_native(
     // Windows ignores CREATE_NO_WINDOW for GUI images; their splash/Main remains visible.
     // https://learn.microsoft.com/en-us/windows/win32/procthread/process-creation-flags
     let mut flags = CREATE_UNICODE_ENVIRONMENT | CREATE_NO_WINDOW;
-    if suspended {
-        flags |= CREATE_SUSPENDED;
-    }
-    if !inherited.is_empty() || !jobs.is_empty() {
-        attributes.initialize(inherited, jobs)?;
+    if !inherited.is_empty() {
+        attributes.initialize(inherited)?;
         startup.StartupInfo.cb = size_of::<STARTUPINFOEXW>() as u32;
         startup.lpAttributeList = attributes.pointer();
         flags |= EXTENDED_STARTUPINFO_PRESENT;
@@ -141,8 +110,8 @@ fn create_native(
     // A damaged or non-PE image must come back as the creation error, never as a modal dialog.
     with_image_errors_reported(|| {
         // SAFETY: exact validated command buffers, current-directory buffer, original inherited
-        // selection, optional containment Job and heap attribute list remain live through this
-        // call. The caller adopts every output before resuming a suspended activation engine.
+        // handles and heap attribute list remain live through this call. The caller adopts every
+        // output.
         unsafe {
             CreateProcessW(
                 PCWSTR(command.application_name.as_ptr()),

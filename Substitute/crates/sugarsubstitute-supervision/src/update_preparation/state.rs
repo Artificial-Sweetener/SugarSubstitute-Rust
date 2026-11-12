@@ -184,7 +184,7 @@ impl State {
             Phase::SelectEngine(trust, minimum) => {
                 match trust.pin_updater(self.channel(&trust, context)?, minimum, context)? {
                     Some(image) if self.source.cached() => {
-                        image.require_activation()?;
+                        image.require_engine()?;
                         (Phase::ActivationReady(Box::new(image)), Progress::ActivationReady)
                     }
                     Some(image) => (

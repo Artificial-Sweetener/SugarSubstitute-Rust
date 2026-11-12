@@ -12,7 +12,7 @@ mod transition;
 use super::*;
 use crate::{
     durable_storage::protection::Protection,
-    setup_storage::{application::VerifiedApplication, check, publication},
+    setup_storage::{application::VerifiedApplication, check, launch_pointer, publication},
 };
 use sugarsubstitute_contracts::application_launch::LauncherContract;
 
@@ -69,6 +69,7 @@ pub(in crate::setup_storage) fn repair(
         &LauncherContract::decode(record.contract.as_bytes()).map_err(io::Error::other)?,
     )?;
     publish_owned(root, state, &record, protection, context)?;
+    ensure_pointer(root, &application.generation.id, &application.directory, protection, context)?;
     Ok(true)
 }
 
@@ -92,7 +93,50 @@ pub(in crate::setup_storage) fn install(
         &LauncherContract::decode(record.contract.as_bytes()).map_err(io::Error::other)?,
     )?;
     let record = initialize(root, state, record, protection, context)?;
-    publish_owned(root, state, &record, protection, context)
+    publish_owned(root, state, &record, protection, context)?;
+    point(root, &candidate.generation().id, &directory, protection, context)
+}
+
+/// Point the stable entry at this generation's launch engine, replacing any earlier pointer.
+fn point(
+    root: &Directory,
+    generation: &sugarsubstitute_contracts::installation::GenerationId,
+    directory: &Directory,
+    protection: &mut Protection,
+    context: &JobContext,
+) -> io::Result<()> {
+    let state = Directory::open(&crate::setup_storage::ownership::state_path(root), false)?;
+    let primary = launch_pointer::EngineTarget::of(generation, directory, context)?;
+    launch_pointer::publish(
+        &state,
+        &launch_pointer::LaunchPointer::new(primary, None),
+        protection,
+        context,
+    )
+}
+
+/// Repair a missing or damaged pointer from the accepted, running generation. A readable pointer,
+/// or one a newer release wrote in a format this release cannot read, is left alone, because only
+/// the installer and redirecting engines choose what the stable entry starts.
+fn ensure_pointer(
+    root: &Directory,
+    generation: &sugarsubstitute_contracts::installation::GenerationId,
+    directory: &Directory,
+    protection: &mut Protection,
+    context: &JobContext,
+) -> io::Result<()> {
+    let state = Directory::open(&crate::setup_storage::ownership::state_path(root), false)?;
+    match launch_pointer::read(&state, protection) {
+        Err(launch_pointer::PointerFailure::Missing | launch_pointer::PointerFailure::Damaged) => {
+            point(root, generation, directory, protection, context)
+        }
+        Ok(_)
+        | Err(
+            launch_pointer::PointerFailure::Incompatible
+            | launch_pointer::PointerFailure::EngineMismatch,
+        ) => Ok(()),
+        Err(launch_pointer::PointerFailure::Storage(cause)) => Err(cause),
+    }
 }
 
 /// Establish create-only ownership before copying any executable; preserve unknown root files.

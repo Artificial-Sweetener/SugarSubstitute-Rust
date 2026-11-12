@@ -37,14 +37,6 @@ pub struct PreparedCandidate {
     evidence: Evidence,
 }
 impl PreparedCandidate {
-    /// Native launch transfer retains the actual candidate files and all pinned ancestors.
-    pub(super) fn launch_pins(&self) -> impl Iterator<Item = &File> {
-        self.directory
-            .native_pins()
-            .chain(self.installation.native_pins())
-            .chain(self._payload.launch_pins())
-    }
-
     /// Exact generation recorded as prepared, with its verified manifest digest.
     pub fn generation(&self) -> &Generation {
         &self.generation

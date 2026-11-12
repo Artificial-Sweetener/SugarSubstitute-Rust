@@ -24,15 +24,6 @@ pub struct LaunchInheritance {
     selection: File,
 }
 impl LaunchInheritance {
-    /// Retain the authenticated payload, inventory and ancestry across a native launch broker.
-    /// Selection ownership travels separately as the installed-entry inheritance handle.
-    pub(crate) fn launch_pins(&self) -> impl Iterator<Item = &File> {
-        let application = &self.application.application;
-        std::iter::once(&application.inventory)
-            .chain(application.directory.native_pins())
-            .chain(application.payload.launch_pins())
-    }
-
     /// Verified payload retained through the actual process-creation call.
     pub fn application(&self) -> &ReservedApplication {
         &self.application

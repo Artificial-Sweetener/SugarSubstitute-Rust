@@ -66,7 +66,11 @@ impl UnstartedUpdaterTrial {
     ) -> Result<UpdaterProbeTransfer, RejectedUpdaterProbe> {
         let prepared = (|| -> Result<File, TrustFailure> {
             self.publish(now, context)?;
-            let exclusion = duplicate_inheritable(&self.prepared._preparation)?;
+            let exclusion = {
+                // The child adopts while this creator still holds its slot and handoff byte.
+                self.prepared._preparation.hold_handoff()?;
+                duplicate_inheritable(self.prepared._preparation.witness())?
+            };
             check(context)?;
             Ok(exclusion)
         })();

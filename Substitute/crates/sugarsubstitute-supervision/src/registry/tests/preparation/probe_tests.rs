@@ -217,11 +217,11 @@ fn partial_native_close_retains_custody_and_prevents_acceptance() -> TestResult 
     rejection(0, false, true)
 }
 
-/// Native sharing failure proves the original exclusion remains held, without opening another trust store.
+/// A held exclusion slot proves the original exclusion remains held, without opening another
+/// trust store.
 fn excluded(fixture: &ProbeFixture) -> Result<(), Failure> {
-    let result =
-        std::fs::File::open(fixture.root.path().join("state/update-trust/updater-preparation-v1"));
-    assert!(matches!(result, Err(cause) if cause.raw_os_error() == Some(32)));
+    let path = fixture.root.path().join("state/update-trust/updater-preparation-v1");
+    assert!(crate::durable_storage::protection::exclusion_held(&path)?);
     Ok(())
 }
 fn journal(fixture: &ProbeFixture) -> std::io::Result<Vec<u8>> {
