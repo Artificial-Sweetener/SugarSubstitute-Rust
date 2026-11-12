@@ -17,7 +17,9 @@
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
+import itertools
 import threading
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -31,8 +33,10 @@ from sugarcubes.backend.self_update.http_client import (
     HttpFailureKind,
     UrllibHttpClient,
 )
+from tests.support.no_progress import join_thread
 
 PAYLOAD = b"x" * 4096
+DRIP_LENGTH = 64 * 1024 * 1024
 HOSTS = frozenset({"127.0.0.1"})
 
 
@@ -73,9 +77,9 @@ class _Handler(BaseHTTPRequestHandler):
             self.server.release.wait()
         elif path == "/drip":
             self.send_response(200)
-            self.send_header("Content-Length", "100000")
+            self.send_header("Content-Length", str(DRIP_LENGTH))
             self.end_headers()
-            while not self.server.release.wait(0.05):
+            while not self.server.release.is_set():
                 self.wfile.write(b"x" * 64)
                 self.wfile.flush()
         elif path.startswith("/hop/"):
@@ -109,7 +113,7 @@ def server() -> Iterator[str]:
         instance.release.set()
         instance.shutdown()
         instance.server_close()
-        thread.join(timeout=10)
+        join_thread(thread)
 
 
 def _client() -> UrllibHttpClient:
@@ -175,20 +179,29 @@ def test_server_that_stalls_mid_body_times_out(server: str, tmp_path: Path) -> N
     assert raised.value.kind is HttpFailureKind.TIMED_OUT
 
 
-def test_slow_drip_is_ended_by_the_overall_deadline(
+def test_body_still_arriving_at_the_deadline_is_ended(
     server: str, tmp_path: Path
 ) -> None:
-    """Bytes trickling in under the read timeout still cannot outlast the deadline."""
+    """Data arriving faster than the read timeout cannot outlast the overall deadline.
 
+    The deadline runs on a clock that advances one second per reading, so the
+    outcome depends on how many chunks were read, never on elapsed time.
+    """
+
+    ticks = itertools.count()
+    client = dataclasses.replace(
+        _client(), download_deadline_seconds=5.0, clock=lambda: float(next(ticks))
+    )
     with pytest.raises(HttpFailure) as raised:
-        _client().download(
+        client.download(
             f"{server}/drip",
             tmp_path / "f",
             allowed_hosts=HOSTS,
-            max_bytes=100_000,
+            max_bytes=DRIP_LENGTH,
             cancelled=lambda: False,
         )
     assert raised.value.kind is HttpFailureKind.TIMED_OUT
+    assert (tmp_path / "f").stat().st_size < DRIP_LENGTH
 
 
 def test_cancellation_stops_a_download(server: str, tmp_path: Path) -> None:
@@ -199,7 +212,7 @@ def test_cancellation_stops_a_download(server: str, tmp_path: Path) -> None:
             f"{server}/drip",
             tmp_path / "f",
             allowed_hosts=HOSTS,
-            max_bytes=100_000,
+            max_bytes=DRIP_LENGTH,
             cancelled=lambda: True,
         )
     assert raised.value.kind is HttpFailureKind.CANCELLED

@@ -165,6 +165,8 @@ class UrllibHttpClient:
     read_timeout_seconds: float = _READ_TIMEOUT_SECONDS
     metadata_deadline_seconds: float = _METADATA_DEADLINE_SECONDS
     download_deadline_seconds: float = _DOWNLOAD_DEADLINE_SECONDS
+    # The overall deadline is measured on this clock, so tests can drive it.
+    clock: Callable[[], float] = time.monotonic
 
     def get_json(
         self, url: str, *, allowed_hosts: frozenset[str], max_bytes: int
@@ -240,7 +242,7 @@ class UrllibHttpClient:
         request = urllib.request.Request(
             url, headers={"Accept": accept, "User-Agent": _USER_AGENT}
         )
-        expires_at = time.monotonic() + deadline
+        expires_at = self.clock() + deadline
         received = 0
         try:
             with opener.open(request, timeout=self.read_timeout_seconds) as response:
@@ -255,7 +257,7 @@ class UrllibHttpClient:
                         raise HttpFailure(
                             HttpFailureKind.CANCELLED, "The request was stopped."
                         )
-                    if time.monotonic() > expires_at:
+                    if self.clock() > expires_at:
                         raise HttpFailure(
                             HttpFailureKind.TIMED_OUT, "The reply took too long."
                         )
