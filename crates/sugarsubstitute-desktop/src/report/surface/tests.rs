@@ -195,97 +195,6 @@ fn large_reports_measure_behind_the_first_frame_without_long_turns() -> TestResu
     Ok(())
 }
 
-/// A fake export that finishes when told to.
-#[derive(Default)]
-struct Exports {
-    begun: Vec<PathBuf>,
-    outcome: Option<std::result::Result<(), Box<dyn Error>>>,
-    closed: bool,
-}
-impl UpdateExport for Exports {
-    fn start(&mut self, _: Arc<dyn CompletionWake>) -> TestResult {
-        Ok(())
-    }
-    fn begin(&mut self, destination: PathBuf) -> TestResult {
-        self.begun.push(destination);
-        Ok(())
-    }
-    fn finished(&mut self) -> Option<std::result::Result<(), Box<dyn Error>>> {
-        self.outcome.take()
-    }
-    fn close(&mut self) {
-        self.closed = true;
-    }
-    fn settled(&mut self) -> bool {
-        true
-    }
-}
-
-#[test]
-fn update_failure_report_offers_copy_and_export_without_restart() -> TestResult {
-    let copy = messages("en");
-    let mut exports = Exports::default();
-    let presentation = ReportPresentation::update_failure(
-        copy,
-        "SugarSubstitute",
-        "0.5.0",
-        "Downloading",
-        "update 0.5.0 failed while downloading\ncaused by: connection reset\n".into(),
-    );
-    assert_eq!(presentation.content.kind, sugarsubstitute_ui::report::ReportKind::UpdateFailure);
-    {
-        let mut owner = UpdateReport::new(&mut exports, copy.report);
-        let mut lifetime = ReportLifetime::new(presentation, &mut owner)?;
-        assert!(lifetime.inventory().iter().all(|c| c.id != ReportAction::Restart.id()));
-        started(&mut lifetime)?;
-        next_frame(&mut lifetime, Duration::ZERO)?;
-        let shown = visible(&lifetime);
-        for action in [ReportAction::Copy, ReportAction::Export, ReportAction::Close] {
-            assert!(shown.contains(&action), "{action:?}");
-        }
-        invoke(&mut lifetime, ReportAction::Export)?;
-        let picker = lifetime.picker().ok_or("export asks for a destination")?;
-        assert!(matches!(picker.kind, crate::SelectionKind::Save { .. }));
-        lifetime.input(Event::Picked(picker, Ok(Some(r"D:\reports\update.txt".into()))))?;
-        next_frame(&mut lifetime, Duration::ZERO)?;
-        assert!(!visible(&lifetime).is_empty());
-    }
-    assert_eq!(exports.begun, vec![PathBuf::from(r"D:\reports\update.txt")]);
-    Ok(())
-}
-
-#[test]
-fn update_export_outcome_becomes_the_footer_status() -> TestResult {
-    let copy = messages("en");
-    let mut exports = Exports { outcome: Some(Err("disk full".into())), ..Exports::default() };
-    let mut owner = UpdateReport::new(&mut exports, copy.report);
-    let (mut message, mut state, mut closed, mut changed) = (
-        String::new(),
-        ReportState::new(sugarsubstitute_ui::report::ReportKind::UpdateFailure),
-        false,
-        false,
-    );
-    let mut control = ReportControl {
-        message: &mut message,
-        state: &mut state,
-        closed: &mut closed,
-        changed: &mut changed,
-        requests: &mut ControlRequests::default(),
-    };
-    owner.command(
-        ReportCommand::Export { destination: "a.txt".into(), include_dump: false },
-        &mut control,
-    )?;
-    owner.poll(&mut control)?;
-    assert_eq!(
-        control.state.status,
-        Some(ReportStatus { text: copy.report.export_failed.into(), error: true })
-    );
-    owner.command(ReportCommand::Action(ReportAction::Close), &mut control)?;
-    assert!(*control.closed);
-    Ok(())
-}
-
 /// The real conflict phase on an injected clock, as the application controller drives it.
 struct Conflict {
     phase: Phase,
@@ -533,3 +442,6 @@ fn a_long_message_on_a_small_work_area_scrolls_the_body_above_a_fixed_footer() -
     assert!(toggle.availability.visible, "scrolling the body reaches Show report");
     Ok(())
 }
+
+#[path = "update_tests.rs"]
+mod update;

@@ -134,6 +134,9 @@ impl MainActor {
             return Ok(None);
         }
         if let Some(window) = &self.window {
+            if self.owned_window_open {
+                return Ok(None);
+            }
             let hwnd = HWND(window.hwnd() as *mut std::ffi::c_void);
             // SAFETY: All child interfaces and callback registrations have retired;
             // this creating thread retains the exact parent until actual destruction succeeds.
