@@ -22,7 +22,8 @@ impl Buffer {
     }
 }
 /// Own the single preclaimed outgoing buffer while encoding a complete wire message.
-/// Drop returns storage and wakes its owner without closing any native handle.
+/// Drop returns storage and wakes its owner without closing any native handle. Holding it never
+/// delays the session's retirement; after retirement, drop frees the storage and its charge.
 pub struct LifecyclePipeWriteBuffer {
     pub(crate) buffer: Option<Buffer>,
     pub(crate) shared: SharedRef,
@@ -36,17 +37,25 @@ impl LifecyclePipeWriteBuffer {
 impl Drop for LifecyclePipeWriteBuffer {
     fn drop(&mut self) {
         if let Some(buffer) = self.buffer.take() {
-            {
+            let retired = {
                 let mut state = lock(&self.shared.state);
-                state.write_buffer = Some(buffer);
                 state.loans -= 1;
-            }
+                if state.retired {
+                    Some(buffer)
+                } else {
+                    state.write_buffer = Some(buffer);
+                    None
+                }
+            };
+            // Freed outside the session lock; storage drops before its memory claim.
+            drop(retired);
             self.shared.changed();
         }
     }
 }
 /// Own one immutable complete native message and its original charged allocation.
-/// Holding this guard applies bounded read backpressure; bytes are secret-redacted.
+/// Holding this guard applies bounded read backpressure; bytes are secret-redacted. It never
+/// delays the session's retirement; after retirement, drop frees the storage and its charge.
 pub struct ReceivedLifecycleFrame {
     pub(crate) buffer: Option<Buffer>,
     pub(crate) length: usize,
@@ -61,11 +70,17 @@ impl ReceivedLifecycleFrame {
 impl Drop for ReceivedLifecycleFrame {
     fn drop(&mut self) {
         if let Some(buffer) = self.buffer.take() {
-            {
+            let retired = {
                 let mut s = lock(&self.shared.state);
-                s.read_buffer = Some(buffer);
                 s.loans -= 1;
-            }
+                if s.retired {
+                    Some(buffer)
+                } else {
+                    s.read_buffer = Some(buffer);
+                    None
+                }
+            };
+            drop(retired);
             self.shared.changed();
         }
     }

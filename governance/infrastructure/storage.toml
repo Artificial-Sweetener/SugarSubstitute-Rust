@@ -823,7 +823,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Cha
 [[records]]
 path = "crates/sugarsubstitute-execution/src/windows_purpose_pipe.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:ddef1ccd7b1e0851ca38e5b7423adbad83ef70070055293076ab1a8fef203d39"
+source_sha256 = "sha256:624dc39f608015d0f902e5ce83a4b1597894aca3595dbce5745fe4b7db97cade"
 capabilities = ["export public restricted capability std::os::windows::io::OwnedHandle"]
 disposition = "boundary"
 rationale = "Execution-owned native pipe, shared section, process or handle lifetime: Admit isolated purpose-typed helper transport before native adoption or launch. Native object custody and original queue, memory and shutdown limits remain with the execution owner."

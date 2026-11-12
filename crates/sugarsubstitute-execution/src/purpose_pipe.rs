@@ -12,6 +12,7 @@ pub use crate::lifecycle_pipe::{
     MAX_LIFECYCLE_MESSAGE_BYTES, MIN_LIFECYCLE_PIPE_BYTES, NativeWriteAdmission,
     NativeWriteRevocation, ReceivedLifecycleFrame,
 };
+pub(crate) use control::apply_loan_rule;
 pub use control::{PurposePipeControl, PurposePipeObservations, PurposePipeSession};
 pub(crate) use types::Side;
 pub use types::{

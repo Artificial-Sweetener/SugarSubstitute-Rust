@@ -181,6 +181,12 @@ pub(crate) struct State {
     pub(crate) write_slots: usize,
     pub(crate) write_admission: Option<admission::Admission>,
     pub(crate) loans: u8,
+    /// Native work and every pool buffer retired; later guard drops free their storage.
+    pub(crate) retired: bool,
+    /// Whether outstanding buffer loans hold back retirement. Owners that order their work by
+    /// holding a loan keep this; a purpose whose callers must never be able to stall
+    /// retirement clears it at reservation, before any loan exists.
+    pub(crate) loans_fence_retirement: bool,
     pub(crate) read_buffer: Option<buffers::Buffer>,
     pub(crate) write_buffer: Option<buffers::Buffer>,
     pub(crate) observations: VecDeque<Observation>,
@@ -224,6 +230,8 @@ impl State {
             write_slots: 0,
             write_admission: None,
             loans: 0,
+            retired: false,
+            loans_fence_retirement: true,
             read_buffer: None,
             write_buffer: None,
             observations: VecDeque::with_capacity(8),

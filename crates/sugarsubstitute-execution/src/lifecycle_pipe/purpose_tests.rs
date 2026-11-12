@@ -46,6 +46,7 @@ fn purpose_session(
     )?;
     let side = if server { Side::Parent } else { Side::Helper };
     let purpose = key.purpose();
+    crate::purpose_pipe::apply_loan_rule(&inner, purpose);
     Ok(PurposePipeSession { control: PurposePipeControl { inner, purpose, side }, completion })
 }
 fn fact(
@@ -178,10 +179,45 @@ fn update_attempt_helper_cannot_send_the_parents_cancel_request() -> TestResult 
         .err()
         .ok_or("Helper sent the parent's cancel request")?;
     assert_eq!(rejected.error, LifecyclePipeError::Direction);
-    // Retirement waits for every charged buffer loan; the rejection hands the original back.
-    drop(rejected);
+    // Closing while the caller still holds the rejected buffer must settle, not wait on it.
     helper.control.close();
     drop(terminal(&rig, &mut helper)?);
+    drop(rejected);
+    Ok(())
+}
+#[test]
+fn update_attempt_parent_holding_a_received_frame_still_settles_on_close() -> TestResult {
+    let rig = Rig::new()?;
+    let scope = scope(&rig)?;
+    let boundary = Boundary::new();
+    boundary.pending_read.store(false, Ordering::Release);
+    let channel = PurposeKey::UpdateAttempt(attempt()?);
+    let mut parent = purpose_session(&rig, &scope, &boundary, true, channel)?;
+    connected(&rig, &mut parent)?;
+    authenticate_as(&rig, &mut parent, channel)?;
+    parent.control.read(LifecyclePipeOperationId::new(2)?, Moment::from_nanos(900))?;
+    let frame = fact(&rig, &mut parent, |f| matches!(f, Fact::Received { .. }))?;
+    let output = parent.control.take_write_buffer()?.ok_or("Missing original buffer")?;
+    parent.control.close();
+    assert!(matches!(terminal(&rig, &mut parent)?.outcome, JobOutcome::Cancelled));
+    // Each held guard still carries its own charge after settlement.
+    assert_eq!(rig.client.core.scope_snapshot(scope.id()).reserved_bytes, MIN_LIFECYCLE_PIPE_BYTES);
+    drop((frame, output));
+    Ok(())
+}
+#[test]
+fn diagnostic_loans_still_fence_retirement_for_their_ordering_owners() -> TestResult {
+    let rig = Rig::new()?;
+    let scope = scope(&rig)?;
+    let boundary = Boundary::new();
+    let mut session = session(&rig, &scope, &boundary, true)?;
+    connected(&rig, &mut session)?;
+    let output = session.control.take_write_buffer()?.ok_or("Missing original buffer")?;
+    session.control.close();
+    boundary.retiring.wait()?;
+    assert!(session.take_terminal().is_none());
+    drop(output);
+    assert!(matches!(terminal(&rig, &mut session)?.outcome, JobOutcome::Cancelled));
     Ok(())
 }
 #[test]

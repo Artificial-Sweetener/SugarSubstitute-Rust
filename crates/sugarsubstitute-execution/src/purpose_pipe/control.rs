@@ -176,3 +176,12 @@ impl PurposePipeControl {
         self.inner.close()
     }
 }
+/// Diagnostic owners order their work by holding loans, so their loans keep fencing retirement.
+/// An update attempt's callers can never stall retirement by holding a buffer. Applied at
+/// reservation, before any loan exists.
+pub(crate) fn apply_loan_rule(control: &Control, purpose: Purpose) {
+    crate::scope::lock(&control.shared.state).loans_fence_retirement = match purpose {
+        Purpose::Diagnostic(_) => true,
+        Purpose::UpdateAttempt => false,
+    };
+}

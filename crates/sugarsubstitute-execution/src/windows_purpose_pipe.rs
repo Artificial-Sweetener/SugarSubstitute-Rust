@@ -183,6 +183,7 @@ impl ExecutionClient {
             Owner::Purpose,
         )
         .map_err(LifecyclePipeAdmissionError::Admission)?;
+        crate::purpose_pipe::apply_loan_rule(&inner, key.purpose());
         Ok(PurposePipeSession {
             control: PurposePipeControl { inner, purpose: key.purpose(), side: Side::Parent },
             completion,
@@ -263,6 +264,7 @@ impl ExecutionClient {
             error: LifecyclePipeAdmissionError::Admission(error),
             resources,
         })?;
+        crate::purpose_pipe::apply_loan_rule(&inner, expected);
         Ok(PurposePipeClientPermit {
             original_deadline: until,
             session: Some(PurposePipeSession {
