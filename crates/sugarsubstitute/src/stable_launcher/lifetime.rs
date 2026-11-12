@@ -30,6 +30,7 @@ use sugarsubstitute_supervision::{
 };
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 enum Work {
+    Routed(setup_storage::Route),
     Installation(Option<ApplicationLaunch>),
     Cache(Worker),
     Prepared(ApplicationLaunch),
@@ -50,6 +51,7 @@ enum Work {
 /// The exact admitted operation controls memory, cleanup scope and optional-update fallback.
 #[derive(Clone, Copy)]
 enum Task {
+    Route,
     Installation,
     Cache,
     Select,
@@ -72,6 +74,7 @@ struct Pending {
 
 /// One next action, changed only after an observed outcome or rejected admission.
 enum Choice {
+    Route,
     Installation,
     OpenEngine,
     VerifyEngine,
@@ -90,6 +93,10 @@ enum Choice {
 
 pub(super) struct Launcher {
     root: PathBuf,
+    /// This engine's own generation and hop, present when it runs as a generation's engine.
+    route: Option<(sugarsubstitute_contracts::installation::GenerationId, u8)>,
+    /// Start only the accepted release; set when this engine is a fallback.
+    accepted_only: bool,
     clock: Arc<dyn Clock>,
     owner: Option<ExecutionOwner>,
     client: Option<ExecutionClient>,
@@ -124,6 +131,8 @@ impl Launcher {
     pub(super) fn new(root: PathBuf) -> Self {
         Self {
             root,
+            route: None,
+            accepted_only: false,
             clock: MonotonicClock::new(),
             owner: None,
             client: None,
@@ -154,6 +163,30 @@ impl Launcher {
             finished: false,
         }
     }
+    /// A generation's launch engine first hands startup to the generation that should run.
+    pub(super) fn engine(
+        root: PathBuf,
+        generation: sugarsubstitute_contracts::installation::GenerationId,
+        hops: u8,
+    ) -> Self {
+        let mut launcher = Self::new(root);
+        launcher.route = Some((generation, hops));
+        launcher.choice = Choice::Route;
+        launcher
+    }
+    fn routed(&mut self, route: setup_storage::Route) {
+        match route {
+            setup_storage::Route::Own => self.choice = Choice::Installation,
+            setup_storage::Route::AcceptedOnly => {
+                self.accepted_only = true;
+                self.choice = Choice::Installation;
+            }
+            setup_storage::Route::Redirected => {
+                self.completed = true;
+                self.choice = Choice::Complete;
+            }
+        }
+    }
     fn advance(&mut self, max: NonZeroUsize) -> Result<HeadlessStep> {
         if let Some(client) = &self.client {
             client.drain_completions(max)?;
@@ -164,6 +197,7 @@ impl Launcher {
             let task = pending.task;
             self.job = None;
             match completion.outcome {
+                JobOutcome::Success(Work::Routed(route)) => self.routed(route),
                 JobOutcome::Success(Work::Installation(launch)) => {
                     self.installed(launch);
                 }

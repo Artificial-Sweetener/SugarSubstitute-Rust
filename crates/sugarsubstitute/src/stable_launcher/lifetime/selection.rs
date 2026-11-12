@@ -46,6 +46,7 @@ impl Launcher {
             return Ok(());
         }
         let task = match self.choice {
+            Choice::Route => Task::Route,
             Choice::Installation => Task::Installation,
             Choice::OpenEngine => Task::OpenEngine,
             Choice::VerifyEngine => Task::VerifyEngine,
@@ -62,6 +63,16 @@ impl Launcher {
             Choice::Complete => return Ok(()),
         };
         let submitted = match self.choice {
+            Choice::Route => {
+                let root = self.root.clone();
+                let (generation, hops) =
+                    self.route.clone().ok_or("Launch engine generation absent")?;
+                self.submit(Task::Route, move |context| {
+                    setup_storage::route_launch(&root, &generation, hops, &context)
+                        .map(Work::Routed)
+                        .map_err(io::Error::other)
+                })
+            }
             Choice::Installation => self.reopen_installation(),
             Choice::OpenEngine => {
                 let guard = self.engine.as_ref().ok_or("Receiving engine identity absent")?.clone();

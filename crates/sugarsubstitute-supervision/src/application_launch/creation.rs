@@ -98,6 +98,15 @@ pub(super) fn create(
     create_native(command, &handles[..count], &[], false, process)
 }
 
+/// Create a generation's launch engine, uncontained, inheriting exactly its takeover event.
+pub(super) fn engine(
+    command: &mut WindowsLaunchBuffers,
+    event: usize,
+    process: &mut PROCESS_INFORMATION,
+) -> Result<(), ClaimError> {
+    create_native(command, std::slice::from_ref(&event), &[], false, process)
+}
+
 /// Create the activation engine suspended and atomically contained with exact channel inheritance.
 pub(super) fn contained(
     command: &mut WindowsLaunchBuffers,

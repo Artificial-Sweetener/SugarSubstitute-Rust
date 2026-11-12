@@ -61,6 +61,7 @@ impl Launcher {
                         sugarsubstitute_supervision::application_launch::RECOVERY_RESERVATION_BYTES
                     }
                     Task::Installation | Task::Select => setup_storage::LAUNCH_RESERVATION_BYTES,
+                    Task::Route => setup_storage::ROUTE_RESERVATION_BYTES,
                 },
                 replacement: None,
             },

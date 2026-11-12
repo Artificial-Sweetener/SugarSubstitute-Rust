@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Stable installed entry point; the selected application owns the only visible startup window.
+//!
+//! Run from the installation root with no arguments, this is the stable entry: it starts the
+//! launch engine the launch pointer names and exits. Run from a generation folder with the
+//! engine argument, it is that generation's launch engine and owns the rest of startup.
 mod lifetime;
+mod root;
 use std::{
     error::Error,
     ffi::OsString,
@@ -27,11 +32,13 @@ pub(crate) fn activate(
 /// Run beside the installation record without acquiring the application run lock.
 /// Must be called once on the native main thread. Selected application startup is independent
 /// after creation; this process retires its own worker scopes and inherited-handle duplicates.
-pub fn run() -> ExitCode {
+pub fn run(
+    engine: std::io::Result<Option<sugarsubstitute_supervision::application_launch::EngineLaunch>>,
+) -> ExitCode {
     let result = crate::diagnostics::Diagnostics::run(
         crate::diagnostics::RecordsBase::RunningImage,
         |_health| {
-            let Err(cause) = run_inner() else { return Ok(()) };
+            let Err(cause) = run_inner(engine) else { return Ok(()) };
             let details = crate::failure_details::Details(cause.as_ref());
             tracing::error!(operation="stable_launcher_failed",cause=%details,"Installed application could not start");
             if let Err(secondary) = sugarsubstitute_desktop::show_startup_failure(
@@ -51,11 +58,50 @@ pub fn run() -> ExitCode {
     }
 }
 
-/// Run the existing installed-launch lifetime while the caller retains diagnostic routing.
-fn run_inner() -> Result<(), Box<dyn Error>> {
-    let root = installation_root(&std::env::current_exe()?, std::env::args_os().skip(1))?;
-    sugarsubstitute_desktop::run_headless(&mut lifetime::Launcher::new(root))?;
+/// Run the stable entry or this generation's launch engine while the caller retains diagnostics.
+fn run_inner(
+    engine: std::io::Result<Option<sugarsubstitute_supervision::application_launch::EngineLaunch>>,
+) -> Result<(), Box<dyn Error>> {
+    let executable = std::env::current_exe()?;
+    match engine? {
+        Some(launch) => {
+            let root = engine_installation(&executable, launch.installation())?;
+            let generation = executable
+                .parent()
+                .and_then(Path::file_name)
+                .and_then(|name| name.to_str())
+                .ok_or("Launch engine generation folder is unnamed")?;
+            let generation =
+                sugarsubstitute_contracts::installation::GenerationId::new(generation.to_owned())?;
+            sugarsubstitute_desktop::run_headless(&mut lifetime::Launcher::engine(
+                root,
+                generation,
+                launch.hops(),
+            ))?;
+        }
+        None => {
+            let root = installation_root(&executable, std::env::args_os().skip(1))?;
+            sugarsubstitute_desktop::run_headless(&mut root::Root::new(root))?;
+        }
+    }
     Ok(())
+}
+
+/// A launch engine runs from `<installation>\releases\<generation>` of the installation its
+/// creator named; any other placement is refused.
+fn engine_installation(executable: &Path, named: &Path) -> Result<PathBuf, Box<dyn Error>> {
+    let releases = executable
+        .parent()
+        .and_then(Path::parent)
+        .filter(|releases| {
+            releases.file_name().is_some_and(|name| name.eq_ignore_ascii_case("releases"))
+        })
+        .ok_or("Launch engine must run from a generation folder")?;
+    let installation = releases.parent().ok_or("Launch engine installation is absent")?;
+    if !installation.as_os_str().eq_ignore_ascii_case(named.as_os_str()) {
+        return Err("Launch engine belongs to a different installation".into());
+    }
+    Ok(installation.to_path_buf())
 }
 
 /// The stable executable's parent is the installation identity; callers cannot redirect it.
@@ -83,6 +129,20 @@ mod tests {
             installation_root(Path::new(r"E:\unopened\SugarSubstitute.exe"), [])?,
             Path::new(r"E:\unopened")
         );
+        Ok(())
+    }
+    #[test]
+    fn an_engine_runs_only_from_a_generation_of_the_installation_its_creator_named()
+    -> Result<(), Box<dyn Error>> {
+        let engine = Path::new(r"E:\Sugar\releases\0123\sugarsubstitute-launcher.exe");
+        assert_eq!(engine_installation(engine, Path::new(r"e:\sugar"))?, Path::new(r"E:\Sugar"));
+        assert!(engine_installation(engine, Path::new(r"E:\Other")).is_err());
+        for misplaced in [
+            r"E:\Sugar\sugarsubstitute-launcher.exe",
+            r"E:\Sugar\other\0123\sugarsubstitute-launcher.exe",
+        ] {
+            assert!(engine_installation(Path::new(misplaced), Path::new(r"E:\Sugar")).is_err());
+        }
         Ok(())
     }
     #[test]

@@ -988,6 +988,14 @@ rationale = "Lend storage-owner-acquired verified file pins to the bounded authe
 boundary = "native_custody"
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/src/application_launch/engine/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:7ad66499cadb65150c6a35995ba846454e3d4e15127895a69f505aca4458afa4"
+capabilities = ["tempfile::TempDir"]
+disposition = "fixture"
+rationale = "Launch engine owner tests: stand-in engines prove takeover, early exit, silent termination, changed bytes, missing fallback and corrupt pointers each end in a running engine or a typed refusal."
+
+[[records]]
 path = "crates/sugarsubstitute-supervision/src/application_launch/rejected_creation.rs"
 owner = "sugarsubstitute-supervision"
 source_sha256 = "sha256:20afd7dfbcd0afa896c652e03efe703f7033afe447f2a18e85e190d41b44b2d8"
@@ -2016,6 +2024,23 @@ disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Reject undeclared package files before any worker or library can load from the bundle. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/launch_pointer.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:fa9a85d9cdd008715eb333381f35f866c27a40ffff2253ad608a2b9d2c439888"
+capabilities = ["std::fs::File"]
+disposition = "boundary"
+rationale = "Retain or lend storage-owner-acquired verified file custody for: read the permanent protected launch pointer and pin only engine bytes that match it, denying writes and deletion until the engine exists. Private file values do not grant constructors or detach native ancestry."
+boundary = "native_custody"
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/launch_pointer/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:87f8cb95ce2f9d935ca1981d7fe832edc5cf8a527f90f922c9856c43effd114b"
+capabilities = ["assert! restricted capability fragments", "std::fs::OpenOptions::new", "std::fs::remove_file"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: forward-tolerant pointer decoding, typed refusals and exact protected engine pinning. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/ownership.rs"
 owner = "sugarsubstitute-supervision"
 source_sha256 = "sha256:018aed83ce3adf9b489ec3a96a3a3623ffd9f43d22c084a3a9575366ca3ea4d5"
@@ -2268,7 +2293,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: For
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/selection.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:74dec6f239462c7fb4e28d29643e508b830dc1e8498c2a870aad278684b3afb8"
+source_sha256 = "sha256:953f23768d6200b538532d0c355bea58de2b677c20f37b15dbd8e5142acef9ca"
 capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Protected selection publication and independent OS-backed application-run ownership. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."

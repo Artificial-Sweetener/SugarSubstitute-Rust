@@ -3,6 +3,11 @@
 //! Transfer startup to a fresh, independently owned application Root.
 pub mod broker;
 mod creation;
+mod engine;
+pub use engine::{
+    ENGINE_TAKEOVER, EngineLaunch, MAX_ENGINE_HOPS, StartedEngine, StartupRefused, Takeover,
+    capture_engine_launch, start_engine, start_pointed,
+};
 #[cfg(test)]
 pub(crate) mod rejected_creation;
 #[cfg(test)]

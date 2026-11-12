@@ -30,7 +30,14 @@ pub use existing::{InstallationSummary, RecoveryFailure, inspect_installation};
 mod identity;
 mod image;
 mod inventory;
+mod launch_pointer;
 pub use image::PreparationImage;
+#[cfg(test)]
+pub(crate) use launch_pointer::tests as launch_pointer_fixture;
+pub use launch_pointer::{
+    EngineTarget, LAUNCH_ENGINE, LAUNCH_POINTER_FILE, LaunchPointer, POINTER_RESERVATION_BYTES,
+    PinnedEngine, PointerFailure, pin_engine, read_launch_pointer,
+};
 mod running;
 mod runtime_record;
 mod user_data;
@@ -65,6 +72,7 @@ pub use selection::{
 pub use selection::{
     InstalledRelease, PreparedUpdate, Rollback, UpdateSelection, read_update_selection,
 };
+pub use selection::{ROUTE_RESERVATION_BYTES, Route, RouteFailure, route_launch};
 use std::io;
 use sugarsubstitute_contracts::execution::JobContext;
 pub use transaction::{

@@ -23,6 +23,8 @@ pub use presentation::{
 };
 pub(super) mod publication;
 mod reservation;
+mod route;
+pub use route::{ROUTE_RESERVATION_BYTES, Route, RouteFailure, route_launch};
 mod snapshot;
 pub use reservation::{ReservedApplication, ReservedLaunch, reserve_installed_launch};
 mod run;
