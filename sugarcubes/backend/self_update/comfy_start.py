@@ -18,13 +18,14 @@
 ComfyUI imports every custom node, then starts its server; `start_multi_address`
 returns once every address is listening. ComfyUI offers no extension hook after
 that point, so this adapter wraps that one server method on the running
-instance. At that moment the pack's import is proven complete only if ComfyUI
+instance, after checking it still has the shape it wraps. At that moment the pack's import is proven complete only if ComfyUI
 registered every SugarCubes node class, which it does only after the whole
 module imported.
 """
 
 from __future__ import annotations
 
+import inspect
 import logging
 import sys
 from collections.abc import Callable, Mapping
@@ -43,26 +44,47 @@ def comfy_registered_nodes(expected: Mapping[str, object]) -> bool:
     return all(registry.get(name) is node for name, node in expected.items())
 
 
+_EXPECTED_PARAMETERS = ("addresses", "call_on_start", "verbose")
+UNOBSERVABLE_START_WARNING = (
+    "couldn't confirm ComfyUI finished starting; the update will be confirmed "
+    "when the page loads"
+)
+
+
+def _observable_start(server: Any) -> Callable[..., Any] | None:
+    """Return ComfyUI's server start method if it still has the shape we wrap."""
+
+    start = getattr(server, "start_multi_address", None)
+    if not callable(start) or not inspect.iscoroutinefunction(start):
+        return None
+    try:
+        parameters = tuple(inspect.signature(start).parameters)
+    except (TypeError, ValueError):
+        return None
+    return start if parameters == _EXPECTED_PARAMETERS else None
+
+
 def watch_comfy_start(
     server: Any, *, expected_nodes: Mapping[str, object], on_started: StartReport
 ) -> bool:
     """Call `on_started(nodes_registered)` once ComfyUI's server is listening.
 
-    Returns whether the server start could be observed. When ComfyUI's server
-    no longer has the method, nothing is reported, so an update stays unaccepted
-    and the next start restores the previous version rather than trusting a
-    start nobody saw complete.
+    The wrap is installed only when `start_multi_address` is still a coroutine
+    taking `(addresses, call_on_start, verbose)`. Returns whether it was
+    installed; when it was not, one plain warning is logged and the caller
+    falls back to confirming the update when the page loads, so a renamed or
+    reshaped ComfyUI method can never roll back a version that started fine.
     """
 
-    start = getattr(server, "start_multi_address", None)
-    if not callable(start):
-        _logger.error(
-            "SugarCubes update event=start_unobservable action=keep_previous_version_on_restart"
-        )
+    start = _observable_start(server)
+    if start is None:
+        _logger.warning("SugarCubes update: %s", UNOBSERVABLE_START_WARNING)
         return False
 
-    async def start_then_report(*args: Any, **kwargs: Any) -> Any:
-        result = await start(*args, **kwargs)
+    async def start_then_report(
+        addresses: Any, call_on_start: Any = None, verbose: bool = True
+    ) -> Any:
+        result = await start(addresses, call_on_start, verbose)
         on_started(comfy_registered_nodes(expected_nodes))
         return result
 
@@ -70,4 +92,8 @@ def watch_comfy_start(
     return True
 
 
-__all__ = ["comfy_registered_nodes", "watch_comfy_start"]
+__all__ = [
+    "UNOBSERVABLE_START_WARNING",
+    "comfy_registered_nodes",
+    "watch_comfy_start",
+]

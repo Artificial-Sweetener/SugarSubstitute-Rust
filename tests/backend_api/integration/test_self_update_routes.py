@@ -42,7 +42,7 @@ from tests.pack_install.support.pack_fixture import install_registry_pack, pack_
 from tests.self_update.support.fake_release_web import FakeReleaseWeb
 
 
-class RecordingServer:
+class RouteRecorder:
     """Record route registration and websocket messages like PromptServer."""
 
     def __init__(self) -> None:
@@ -81,6 +81,10 @@ class RecordingServer:
         """Record one websocket message."""
 
         self.messages.append((event, payload))
+
+
+class RecordingServer(RouteRecorder):
+    """A PromptServer whose start method has the shape ComfyUI uses today."""
 
     async def start_multi_address(
         self,
@@ -150,8 +154,8 @@ def test_routes_check_choose_and_withdraw_an_update(
 
 
 def _installed_and_restarted(
-    tmp_path: Path, factory: BackendServicesFactory
-) -> tuple[Any, Path, RecordingServer]:
+    tmp_path: Path, factory: BackendServicesFactory, server: Any = None
+) -> tuple[Any, Path, Any]:
     """Install 1.1.0 at a start, then register the new version's routes."""
 
     services, pack = _services_with_pack(tmp_path, factory)
@@ -159,7 +163,7 @@ def _installed_and_restarted(
     services.self_update.schedule_install("1.1.0")
     run_startup_update(pack)
     restarted, _pack = _services_with_pack(tmp_path, factory, running="1.1.0")
-    server = RecordingServer()
+    server = server or RecordingServer()
     register_routes(server, restarted)
     return restarted, pack, server
 
@@ -244,3 +248,59 @@ def test_page_reported_load_failure_rolls_back_at_the_next_start(
     assert outcome is not None
     assert (outcome.kind.value, outcome.reason) == ("restored", "page-did-not-load")
     assert (pack / "__init__.py").read_text(encoding="utf-8") == "VERSION = '1.0.0'\n"
+
+
+class RenamedStartServer(RouteRecorder):
+    """A ComfyUI whose server start method was renamed."""
+
+    async def start_sites(self, addresses: list[object]) -> None:
+        """Stand in for a renamed start."""
+
+        self.started = True
+
+
+class ReshapedStartServer(RouteRecorder):
+    """A ComfyUI whose server start method takes different parameters."""
+
+    async def start_multi_address(self, sites: list[object]) -> None:
+        """Stand in for a reshaped start."""
+
+        self.started = True
+
+
+@pytest.mark.parametrize("server_type", [RenamedStartServer, ReshapedStartServer])
+def test_unobservable_start_is_confirmed_by_the_page_and_never_rolled_back(
+    tmp_path: Path,
+    backend_services_factory: BackendServicesFactory,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    server_type: type[RouteRecorder],
+) -> None:
+    """A changed ComfyUI keeps a good update and says so in one plain warning."""
+
+    with caplog.at_level("WARNING", logger="sugarcubes.self_update"):
+        restarted, pack, server = _installed_and_restarted(
+            tmp_path, backend_services_factory, server_type()
+        )
+    warnings = [
+        record.getMessage()
+        for record in caplog.records
+        if "couldn't confirm" in record.getMessage()
+    ]
+    assert warnings == [
+        "SugarCubes update: couldn't confirm ComfyUI finished starting; "
+        "the update will be confirmed when the page loads"
+    ]
+    assert not server.started
+    journal = pack / ".sugarcubes" / "updates" / "transaction" / "journal.json"
+    assert '"unobserved"' in journal.read_text(encoding="utf-8")
+    assert run_startup_update(pack) is None
+    assert (pack / "__init__.py").read_text(
+        encoding="utf-8"
+    ) == "VERSION = '1.1.0'" + "\n"
+    _comfy_nodes(monkeypatch, registered=True)
+    handlers = build_route_handlers(restarted)
+    asyncio.run(
+        handlers.report_self_update_page_load(FakeRequest(body={"loaded": True}))
+    )
+    assert not journal.exists()

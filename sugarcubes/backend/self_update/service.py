@@ -41,6 +41,7 @@ from ..pack_install.staging import StagedStore
 from ..pack_install.startup import (
     clear_outcome,
     accept_backend_start,
+    mark_start_unobservable,
     read_outcome,
     report_page_load,
     updates_root,
@@ -160,11 +161,24 @@ class SelfUpdateService:
                 self._commit(replace(self._snapshot, notice=outcome))
             self._notify()
 
-    def report_page_load(self, *, loaded: bool) -> None:
-        """Settle a started version by its first page load."""
+    def start_unobservable(self) -> None:
+        """Fall back to confirming a just-installed version when its page loads."""
 
         try:
-            report_page_load(self._pack_folder, self._running_version, loaded=loaded)
+            mark_start_unobservable(self._pack_folder, self._running_version)
+        except (OSError, PackInstallError) as exc:
+            _logger.warning("SugarCubes update event=unobserved_failed cause=%s", exc)
+
+    def report_page_load(self, *, loaded: bool, nodes_registered: bool) -> None:
+        """Settle a just-installed version by its first page load."""
+
+        try:
+            report_page_load(
+                self._pack_folder,
+                self._running_version,
+                loaded=loaded,
+                nodes_registered=nodes_registered,
+            )
         except (OSError, PackInstallError) as exc:
             _logger.warning("SugarCubes update event=page_report_failed cause=%s", exc)
 
