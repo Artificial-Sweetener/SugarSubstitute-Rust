@@ -50,6 +50,5 @@ export async function expectDrawnCaretOnRow(
       return rect.height > 0 && middle >= top && middle <= bottom;
     },
     { top: row.top, bottom: row.bottom },
-    { timeout: 2_000 },
   );
 }

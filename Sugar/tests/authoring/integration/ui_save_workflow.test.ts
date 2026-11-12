@@ -361,7 +361,7 @@ function saveWorkflowCase(name: string, arrange: () => Promise<SaveBehavior>): v
     beforeEach(async () => {
       behavior = null;
       behavior = await arrange();
-    }, 30_000);
+    });
     test(name, async () => {
       if (!behavior) throw new Error('Save fixture did not reach its prepared boundary');
       await behavior();

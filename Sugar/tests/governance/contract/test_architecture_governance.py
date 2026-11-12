@@ -22,7 +22,13 @@ from pathlib import Path
 
 import pytest
 
+from collections.abc import Callable
+from typing import Any
+
+from tools.architecture.browser_ui_policy import scan_browser_ui
 from tools.architecture.checker import check_repository
+from tools.architecture.integration_policy import scan_integrations
+from tools.architecture.model import Diagnostic, IntegrationPolicy
 from tools.architecture.registry import RegistryError, load_waivers
 from tools.architecture.registry import load_policy
 from tools.architecture.scanner import (
@@ -407,3 +413,79 @@ const load = () => import('./dynamic.js');
             "frontend/domain/dynamic",
         }
     )
+
+
+SLOW_AUDIT = """
+process.stdin.resume();
+process.stdin.on('end', () => setTimeout(() => process.stdout.write('[]'), 2000));
+"""
+FAILING_AUDIT = """
+process.stdin.resume();
+process.stdin.on('end', () => {
+  process.stderr.write('compiler rejected the editor boundary');
+  process.exitCode = 3;
+});
+"""
+AUDITS: dict[str, tuple[Callable[[Path, Path], tuple[Diagnostic, ...]], str]] = {
+    "integration": (
+        lambda root, tooling: scan_integrations(
+            root,
+            tooling,
+            ("integrations/photoshop/src/index.ts",),
+            IntegrationPolicy("integrations/contracts", "integrations/shared", ()),
+        ),
+        "Integration compiler audit failed: ",
+    ),
+    "browser UI": (
+        lambda root, tooling: scan_browser_ui(
+            root, tooling, ("frontend/comfyui/ui.ts",), ()
+        ),
+        "TypeScript browser UI audit failed: ",
+    ),
+}
+
+
+def _audit_tooling(root: Path, behaviour: str) -> Path:
+    """Stage a tooling root whose tsx runtime is a stand-in audit with `behaviour`."""
+
+    tooling = root / "tooling"
+    runtime = tooling / "node_modules/tsx/dist/cli.mjs"
+    runtime.parent.mkdir(parents=True)
+    runtime.write_text(behaviour, encoding="utf-8")
+    for script in ("scripts/integrations/audit-cli.ts", "scripts/browser-ui-audit.ts"):
+        (tooling / script).parent.mkdir(parents=True, exist_ok=True)
+        (tooling / script).write_text("", encoding="utf-8")
+    return tooling
+
+
+@pytest.mark.parametrize("audit", AUDITS)
+def test_slow_working_compiler_audit_passes_without_a_deadline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, audit: str
+) -> None:
+    """A compiler audit that is slow under load but succeeds passes, with no wall-clock cutoff."""
+
+    scan, _ = AUDITS[audit]
+    launches: list[dict[str, Any]] = []
+    run = subprocess.run
+
+    def observed_run(*args: Any, **options: Any) -> Any:
+        launches.append(options)
+        return run(*args, **options)
+
+    monkeypatch.setattr(subprocess, "run", observed_run)
+    assert scan(tmp_path, _audit_tooling(tmp_path, SLOW_AUDIT)) == ()
+    assert len(launches) == 1
+    assert launches[0].get("timeout") is None
+
+
+@pytest.mark.parametrize("audit", AUDITS)
+def test_failing_compiler_audit_fails_with_its_own_message(
+    tmp_path: Path, audit: str
+) -> None:
+    """A compiler audit that exits with failure blocks the gate and reports what it said."""
+
+    scan, prefix = AUDITS[audit]
+    diagnostics = scan(tmp_path, _audit_tooling(tmp_path, FAILING_AUDIT))
+    assert [item.message for item in diagnostics] == [
+        f"{prefix}compiler rejected the editor boundary"
+    ]

@@ -217,40 +217,36 @@ function abortReentryFixture() {
   };
 }
 
-test(
-  'host import abort reentry preserves the newer ignored-abort paste until native destruction',
-  { timeout: 1_000 },
-  async () => {
-    const c = abortReentryFixture(),
-      causes: unknown[] = [];
-    const literal = 'https://danbooru.donmai.us/posts/123';
+test('host import abort reentry preserves the newer ignored-abort paste until native destruction', async () => {
+  const c = abortReentryFixture(),
+    causes: unknown[] = [];
+  const literal = 'https://danbooru.donmai.us/posts/123';
+  try {
+    assert.equal(c.owner.fromPasteImport(literal), true);
+    await c.enteredLookup;
+    const accepted = c.state();
+    assert.equal(readExactSource(accepted) === literal, true);
+    assert.deepEqual([undoDepth(accepted), redoDepth(accepted)], [1, 0]);
+    c.blur();
+    assert.equal(c.aborts(), 1);
+    await c.enteredRead;
+    assert.equal(c.reads(), 1);
+    assert.equal(c.state(), accepted);
+    c.owner.destroy();
+    assert.deepEqual(await c.newerOutcome(), { status: 'disposed' });
+    assert.equal(c.state(), accepted);
+    assert.deepEqual([undoDepth(c.state()), redoDepth(c.state())], [1, 0]);
+    await c.dispose();
+    assert.equal(c.state(), accepted);
+  } catch (cause) {
+    causes.push(cause);
+  } finally {
     try {
-      assert.equal(c.owner.fromPasteImport(literal), true);
-      await c.enteredLookup;
-      const accepted = c.state();
-      assert.equal(readExactSource(accepted) === literal, true);
-      assert.deepEqual([undoDepth(accepted), redoDepth(accepted)], [1, 0]);
-      c.blur();
-      assert.equal(c.aborts(), 1);
-      await c.enteredRead;
-      assert.equal(c.reads(), 1);
-      assert.equal(c.state(), accepted);
-      c.owner.destroy();
-      assert.deepEqual(await c.newerOutcome(), { status: 'disposed' });
-      assert.equal(c.state(), accepted);
-      assert.deepEqual([undoDepth(c.state()), redoDepth(c.state())], [1, 0]);
       await c.dispose();
-      assert.equal(c.state(), accepted);
     } catch (cause) {
       causes.push(cause);
-    } finally {
-      try {
-        await c.dispose();
-      } catch (cause) {
-        causes.push(cause);
-      }
     }
-    if (causes.length === 1) throw causes[0];
-    if (causes.length) throw new AggregateError(causes, 'Clipboard abort reentry control failed');
-  },
-);
+  }
+  if (causes.length === 1) throw causes[0];
+  if (causes.length) throw new AggregateError(causes, 'Clipboard abort reentry control failed');
+});

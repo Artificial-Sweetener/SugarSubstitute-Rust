@@ -21,8 +21,8 @@ import { runInNewContext } from 'node:vm';
 import { buildPhotoshop } from '../../../scripts/photoshop/build.js';
 import { jest } from '@jest/globals';
 import { reportPhotoshopError } from '../../../integrations/photoshop/src/infrastructure/PhotoshopDiagnostics.js';
+import { HANG_GUARD_MS } from '../../frontend_core/support/HangGuard.js';
 import type { PanelMessage } from '../../../integrations/contracts/PanelProtocol.generated.js';
-import { BUILD_FIXTURE_SETUP_TIMEOUT_MS } from '../../frontend_core/support/BuildFixtureBudget.js';
 
 type Listener = (event: unknown) => void;
 interface Lifecycle {
@@ -65,7 +65,7 @@ async function packageSource(): Promise<string> {
 let source = '';
 beforeAll(async () => {
   source = await packageSource();
-}, BUILD_FIXTURE_SETUP_TIMEOUT_MS);
+});
 
 /** Model only native element behavior used by the package boundary. */
 class NativeElement {
@@ -173,7 +173,8 @@ test('packaged entrypoint filters messages, acknowledges presentation, preserves
       encodeURIComponent,
       URL,
     },
-    { timeout: 1000 },
+    // A synchronous script cannot be interrupted by Jest, so it carries the hang guard itself.
+    { timeout: HANG_GUARD_MS },
   );
   const lifecycle = lifecycles[0];
   expect(lifecycle).toBeDefined();

@@ -18,6 +18,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { build } from 'esbuild';
 import { chromium } from '@playwright/test';
+import { OPERATION_HANG_GUARD_MS } from '../../frontend_core/support/HangGuard.js';
 
 /** Keep all screenshots and diagnostic outputs in the explicitly selected D-drive artifact directory. */
 async function main(): Promise<void> {
@@ -39,14 +40,17 @@ async function main(): Promise<void> {
   });
   const script = output.outputFiles[0]?.text;
   if (!script) throw new Error('The native round-trip proof did not compile.');
-  const browser = await chromium.connectOverCDP('http://127.0.0.1:9247', { timeout: 15_000 });
+  const browser = await chromium.connectOverCDP('http://127.0.0.1:9247', {
+    timeout: OPERATION_HANG_GUARD_MS,
+  });
   try {
     const page = browser
       .contexts()
       .flatMap((context) => context.pages())
       .find((page) => page.url().startsWith('http://tauri.localhost/'));
     if (!page) throw new Error('The isolated native companion page is unavailable.');
-    await page.locator('#native-document').waitFor({ state: 'visible', timeout: 15_000 });
+    page.setDefaultTimeout(OPERATION_HANG_GUARD_MS);
+    await page.locator('#native-document').waitFor({ state: 'visible' });
     const documentLabel = await page.locator('#native-document').textContent();
     const result: unknown = await page.evaluate(
       `${script}\nSugarCubesNativeProof.proveNativeRoundTrip(globalThis, ${JSON.stringify(fixture)});`,

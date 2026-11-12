@@ -154,16 +154,11 @@ test('a handle that never releases terminates after the bounded retry budget', a
   expect(existsSync(path.join(runtime, 'held.js'))).toBe(false);
 });
 
-/** Observe one IPC boundary with a bounded lifetime and no test-order dependence. */
+/** Await the holder's reply on its IPC boundary with no test-order dependence. */
 function childDirectory(child: ChildProcess): Promise<string> {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      cleanup();
-      reject(new Error('Directory holder did not respond.'));
-    }, 5000);
-    /** Release listeners on success, failure or timeout. */
+    /** Release listeners on success or failure. */
     const cleanup = () => {
-      clearTimeout(timer);
       child.removeListener('message', receive);
       child.removeListener('error', failed);
     };
@@ -212,4 +207,4 @@ test('rebuilding preserves a runtime directory held by an active host process', 
     child.kill();
     await exited;
   }
-}, 15000);
+});

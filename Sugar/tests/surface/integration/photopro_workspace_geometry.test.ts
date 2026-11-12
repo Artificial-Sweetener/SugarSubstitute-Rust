@@ -16,10 +16,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove compact workspace edges and Photoshop tool states across panel widths. */
 import { chromium, type Browser } from '@playwright/test';
-import {
-  BROWSER_FIXTURE_SETUP_TIMEOUT_MS,
-  launchHeadlessBrowser,
-} from '../../frontend_core/support/BrowserFixtureLifetime.js';
+import { launchHeadlessBrowser } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 import { build } from 'esbuild';
 import { photoProAppearanceCss } from '../../../frontend/comfyui/ui/surface/appearance/PhotoProAppearanceStyles.js';
 import { photoProTokenDeclarations } from '../../../frontend/comfyui/ui/surface/appearance/PhotoProThemeTokens.js';
@@ -43,7 +40,7 @@ beforeAll(async () => {
     format: 'iife',
   });
   stackStyles = output.outputFiles[0]!.text;
-}, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
+});
 afterAll(async () => {
   await browser.close();
 });

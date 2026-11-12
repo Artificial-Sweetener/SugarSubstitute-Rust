@@ -34,3 +34,12 @@ class ModelArchitecture:
             "comfyClass": self.comfy_class,
             "source": "comfy_tensor_shapes",
         }
+
+
+class DamagedModelFile(ValueError):
+    """A model file's own content prevents inspection; `reason` says why in plain words."""
+
+    def __init__(self, reason: str) -> None:
+        """Keep the plain reason, such as "the file is empty", for the user-facing warning."""
+        super().__init__(reason)
+        self.reason = reason

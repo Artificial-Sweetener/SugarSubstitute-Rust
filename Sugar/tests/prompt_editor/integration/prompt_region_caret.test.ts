@@ -25,18 +25,17 @@ import {
   startPromptBrowser,
   type PromptBrowserFixture,
 } from '../support/PromptBrowserServer.js';
-import { BROWSER_FIXTURE_SETUP_TIMEOUT_MS } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 
 let fixture: PromptBrowserFixture;
 const source = 'global tags\n[SEP|left side]\nred hair\n[SEP|end]';
 
 beforeAll(async () => {
   fixture = await startPromptBrowser();
-}, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
+});
 
 afterAll(async () => {
   await fixture.close();
-}, 30_000);
+});
 
 /** Return the rendered row of one regional separator. */
 async function separatorRow(
@@ -82,7 +81,6 @@ test.each(['nodes-1', 'nodes-2'] as const)(
       await page.close();
     }
   },
-  30_000,
 );
 
 test.each(['nodes-1', 'nodes-2'] as const)(
@@ -106,5 +104,4 @@ test.each(['nodes-1', 'nodes-2'] as const)(
       await page.close();
     }
   },
-  30_000,
 );

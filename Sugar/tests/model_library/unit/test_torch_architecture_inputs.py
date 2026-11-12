@@ -24,6 +24,7 @@ from types import ModuleType, TracebackType
 
 import pytest
 
+from sugarcubes.model_library.domain.architecture import DamagedModelFile
 from sugarcubes.model_library.infrastructure.architecture_tensors import (
     TensorDescriptor,
 )
@@ -100,6 +101,9 @@ def test_unsafe_checkpoint_is_rejected_without_unrestricted_retry(
     setattr(virtual, "FakeTensorMode", nullcontext)
     monkeypatch.setitem(sys.modules, "torch", torch)
     monkeypatch.setitem(sys.modules, "torch._subclasses.fake_tensor", virtual)
-    with pytest.raises(ValueError, match="restricted virtual loader"):
+    with pytest.raises(DamagedModelFile) as damage:
         read_torch_architecture(tmp_path / "unsafe.pkl")
+    assert damage.value.reason == (
+        "the checkpoint cannot be read by PyTorch's restricted loader"
+    )
     assert calls == [True]

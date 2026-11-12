@@ -26,7 +26,6 @@ import {
   startPromptBrowser,
   type PromptBrowserFixture,
 } from '../support/PromptBrowserServer.js';
-import { BROWSER_FIXTURE_SETUP_TIMEOUT_MS } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 
 let fixture: PromptBrowserFixture;
 
@@ -36,11 +35,11 @@ const weighted = (weight: string): string => `${prefix}(oversized brim:${weight}
 
 beforeAll(async () => {
   fixture = await startPromptBrowser();
-}, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
+});
 
 afterAll(async () => {
   await fixture.close();
-}, 30_000);
+});
 
 /** Wait until queued native measurement and the wrap publication it schedules have painted. */
 async function settle(page: Page): Promise<void> {
@@ -180,5 +179,4 @@ test.each(['nodes-1', 'nodes-2'] as const)(
       await page.close();
     }
   },
-  90_000,
 );

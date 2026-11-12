@@ -17,13 +17,12 @@
 
 from __future__ import annotations
 
-import json
 import shutil
-import subprocess
 from dataclasses import asdict
 from pathlib import Path
 
 from .model import Diagnostic, IntegrationPolicy, Severity
+from .node_audit import NodeAuditFailure, run_node_audit
 
 
 def scan_integrations(
@@ -43,34 +42,20 @@ def scan_integrations(
             _failure("Node is unavailable for integration architecture validation."),
         )
     try:
-        result = subprocess.run(
-            [
-                node,
-                str(tooling_root / "node_modules/tsx/dist/cli.mjs"),
-                str(tooling_root / "scripts/integrations/audit-cli.ts"),
-                str(root),
-            ],
-            input=json.dumps({"files": files, "policy": asdict(policy)}),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            timeout=60,
-            check=False,
+        payload = run_node_audit(
+            node,
+            tooling_root / "node_modules/tsx/dist/cli.mjs",
+            tooling_root / "scripts/integrations/audit-cli.ts",
+            root,
+            {"files": files, "policy": asdict(policy)},
         )
-        if result.returncode:
-            return (
-                _failure(f"Integration compiler audit failed: {result.stderr.strip()}"),
-            )
-        payload: object = json.loads(result.stdout)
-        if not isinstance(payload, list) or not all(
-            isinstance(item, str) for item in payload
-        ):
-            return (
-                _failure("Integration compiler audit returned invalid diagnostics."),
-            )
-        return tuple(_failure(str(item)) for item in payload)
-    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError) as error:
-        return (_failure(f"Integration compiler audit could not complete: {error}"),)
+    except NodeAuditFailure as failure:
+        return (_failure(f"Integration compiler audit {failure}"),)
+    if not isinstance(payload, list) or not all(
+        isinstance(item, str) for item in payload
+    ):
+        return (_failure("Integration compiler audit returned invalid diagnostics."),)
+    return tuple(_failure(str(item)) for item in payload)
 
 
 def _failure(message: str) -> Diagnostic:

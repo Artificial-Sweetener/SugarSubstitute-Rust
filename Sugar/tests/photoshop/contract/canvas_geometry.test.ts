@@ -20,7 +20,6 @@ import { build } from 'esbuild';
 import { runInNewContext } from 'node:vm';
 import type { CanvasGeometryHost } from '../../../integrations/contracts/CanvasGeometry.js';
 import { CanvasCancellation } from '../../../integrations/shared/CanvasCancellation.js';
-import { BUILD_FIXTURE_SETUP_TIMEOUT_MS } from '../../frontend_core/support/BuildFixtureBudget.js';
 
 let code = '';
 beforeAll(async () => {
@@ -34,7 +33,7 @@ beforeAll(async () => {
     external: ['photoshop'],
   });
   code = output.outputFiles[0]!.text;
-}, BUILD_FIXTURE_SETUP_TIMEOUT_MS);
+});
 
 /** Substitute native document primitives while retaining production identity and geometry policy. */
 function fixture() {

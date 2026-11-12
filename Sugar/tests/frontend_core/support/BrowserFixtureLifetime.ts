@@ -16,31 +16,53 @@
 /** Create and retire headless browser fixtures independently of desktop input and visibility. */
 import type { Server } from 'node:http';
 import type { Browser, LaunchOptions } from '@playwright/test';
+import { OPERATION_HANG_GUARD_MS } from './HangGuard.js';
 
-/**
- * Bound every browser suite's fixture setup hook: browser launch, page bundle builds and page
- * creation. Native browser start-up stretches with machine-wide CPU load in a way the tests'
- * observations do not, so setup shares this budget while test bodies keep their own limits.
- */
-export const BROWSER_FIXTURE_SETUP_TIMEOUT_MS = 60_000;
+/** The page factories through which suites open every context and page they observe. */
+export type PageFactories = Pick<Browser, 'newContext' | 'newPage'>;
 
-interface HeadlessBrowserEngine<Result> {
+interface HeadlessBrowserEngine<Result extends PageFactories> {
   name(): string;
   launch(options: LaunchOptions): Promise<Result>;
 }
 
-/** Keep display mode, desktop-key handling and hidden-window rendering under one fixture owner. */
-export async function launchHeadlessBrowser<Result>(
+/**
+ * Keep display mode, desktop-key handling and hidden-window rendering under one fixture owner.
+ *
+ * The launch and every context and page opened from the browser wait under the browser hang
+ * guard instead of Playwright's 30 s defaults, so they await the observed outcome.
+ */
+export async function launchHeadlessBrowser<Result extends PageFactories>(
   engine: HeadlessBrowserEngine<Result>,
-  options: Omit<LaunchOptions, 'headless' | 'env' | 'firefoxUserPrefs'> = {},
+  options: Omit<LaunchOptions, 'headless' | 'env' | 'firefoxUserPrefs' | 'timeout'> = {},
 ): Promise<Result> {
-  return engine.launch({
+  const browser = await engine.launch({
     ...options,
     headless: true,
+    timeout: OPERATION_HANG_GUARD_MS,
     env: { ...process.env, MOZ_DISABLE_SAFE_MODE_KEY: '1' },
     ...(engine.name() === 'firefox'
       ? { firefoxUserPrefs: { 'widget.windows.window_occlusion_tracking.enabled': false } }
       : {}),
+  });
+  return guardPageWaits(browser);
+}
+
+/** Give every context and page opened from `browser` the browser hang guard as its default. */
+export function guardPageWaits<Result extends PageFactories>(browser: Result): Result {
+  const newContext = browser.newContext.bind(browser);
+  const newPage = browser.newPage.bind(browser);
+  return Object.assign(browser, {
+    newContext: async (...args: Parameters<PageFactories['newContext']>) => {
+      const context = await newContext(...args);
+      context.setDefaultTimeout(OPERATION_HANG_GUARD_MS);
+      return context;
+    },
+    newPage: async (...args: Parameters<PageFactories['newPage']>) => {
+      const page = await newPage(...args);
+      page.setDefaultTimeout(OPERATION_HANG_GUARD_MS);
+      return page;
+    },
   });
 }
 
