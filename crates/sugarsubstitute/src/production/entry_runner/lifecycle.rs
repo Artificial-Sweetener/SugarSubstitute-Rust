@@ -58,7 +58,10 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
             return Ok(());
         }
         self.closing = true;
-        let close_requested = self.normal_shutdown || self.child.normal_close_requested();
+        let close_requested = close_requested(
+            self.normal_shutdown || self.child.normal_close_requested(),
+            self.child.desktop_close_intent(),
+        );
         if let Some(authority) = &mut self.authority {
             observe_close_cause(authority, close_requested);
         }
@@ -279,6 +282,20 @@ fn tighten(original: ShutdownBudget, previous: Option<ShutdownBudget>) -> Shutdo
     })
 }
 
+/// Whether this run was asked to close: the user's or the app's own close, or the desktop's
+/// authenticated exit intent attributing its exit to a deliberate close. A desktop closing for
+/// a session end announces a deliberate close too, so that exit is a close in whichever order
+/// it and this process's own session-end signal arrive. A desktop that announces a startup
+/// failure, or that ends without announcing anything, was not asked to close.
+fn close_requested(
+    requested: bool,
+    desktop: Option<sugarsubstitute_contracts::lifecycle::CompletionIntent>,
+) -> bool {
+    use sugarsubstitute_contracts::lifecycle::CompletionIntent;
+    requested
+        || matches!(desktop, Some(CompletionIntent::Normal | CompletionIntent::StartupCancelled))
+}
+
 /// Record why this run is closing, for an unaccepted update trial's verdict. A close the user
 /// or the app asked for is no verdict. A run ending without any close request, such as its
 /// window exiting on its own before readiness, is the host failing its own startup. A failure
@@ -321,6 +338,30 @@ mod tests {
         ending.observe_trial_close(CloseCause::SessionEnd);
         observe_close_cause(&mut ending, false);
         assert_eq!(ending.trial_verdict(), TrialVerdict::NoVerdict(Undecided::SessionEnd));
+        Ok(())
+    }
+
+    /// The desktop's session-end close announces a deliberate exit. When it reaches this run
+    /// before this process's own session-end signal, the trial is still no verdict; a desktop
+    /// that announces a startup failure, or none at all, failed its own start.
+    #[test]
+    fn a_desktop_session_end_exit_is_no_verdict_whichever_signal_arrives_first()
+    -> Result<(), Box<dyn Error>> {
+        use sugarsubstitute_contracts::lifecycle::CompletionIntent;
+        for intent in [CompletionIntent::Normal, CompletionIntent::StartupCancelled] {
+            let mut reversed = authority()?;
+            observe_close_cause(&mut reversed, close_requested(false, Some(intent)));
+            reversed.observe_trial_close(CloseCause::SessionEnd);
+            assert_eq!(
+                reversed.trial_verdict(),
+                TrialVerdict::NoVerdict(Undecided::CloseRequested)
+            );
+        }
+        for desktop in [Some(CompletionIntent::StartupFailed), None] {
+            let mut failed = authority()?;
+            observe_close_cause(&mut failed, close_requested(false, desktop));
+            assert_eq!(failed.trial_verdict(), TrialVerdict::Bad(BadTrial::StartupFailed));
+        }
         Ok(())
     }
     use sugarsubstitute_contracts::execution::Moment;

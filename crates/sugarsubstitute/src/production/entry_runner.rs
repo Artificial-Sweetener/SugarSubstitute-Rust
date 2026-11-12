@@ -97,6 +97,12 @@ pub(crate) trait EntryActivation {
     /// Which process the exposed failure belongs to: the backend when it came from a backend
     /// resource, otherwise the host itself. Decides an unaccepted update trial's verdict.
     fn failed_process(&self) -> sugarsubstitute_contracts::installation::FailedProcess;
+    /// How the desktop attributed its own exit in its authenticated exit intent, once it sent
+    /// one: a deliberate close (including a close for a session end) or a startup failure.
+    /// Absent while no desktop has announced its exit.
+    fn desktop_close_intent(
+        &self,
+    ) -> Option<sugarsubstitute_contracts::lifecycle::CompletionIntent>;
     /// Return its actual next native-thread wake without introducing timers.
     fn next_deadline(&self) -> Option<Instant>;
     /// Observe actual child/process/transport settlement, retaining uncertainty.

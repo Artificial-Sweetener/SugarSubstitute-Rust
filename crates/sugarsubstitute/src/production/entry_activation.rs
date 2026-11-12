@@ -387,6 +387,18 @@ impl EntryActivation for ProductionActivation {
     fn failure_source(&self) -> Option<&(dyn Error + 'static)> {
         ProductionActivation::failure_source(self)
     }
+    fn desktop_close_intent(
+        &self,
+    ) -> Option<sugarsubstitute_contracts::lifecycle::CompletionIntent> {
+        use sugarsubstitute_contracts::lifecycle::CompletionIntent;
+        self.records.iter().flatten().find_map(|held| {
+            let record = &held.record;
+            if record.completed_normal.is_some() {
+                return Some(CompletionIntent::Normal);
+            }
+            record.parent.as_ref()?.close_progress_request().map(|request| request.intent())
+        })
+    }
     fn failed_process(&self) -> sugarsubstitute_contracts::installation::FailedProcess {
         use sugarsubstitute_contracts::installation::FailedProcess;
         if self.failure_resource.is_some() { FailedProcess::Backend } else { FailedProcess::Host }
