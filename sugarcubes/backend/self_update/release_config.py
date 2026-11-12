@@ -25,12 +25,16 @@ uses a tag's source archive, which in the monorepo is the whole repository.
 from __future__ import annotations
 
 import json
+import os
 import re
 import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
 
+from .http_client import origin_is_allowed
+
 _CONFIG_PATH = Path(__file__).with_name("release_source.json")
+RELEASE_SOURCE_OVERRIDE = "SUGARCUBES_RELEASE_SOURCE_FILE"
 _REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$")
 _HOST = re.compile(r"^[a-z0-9.-]{1,253}$")
 _TAG_PREFIX = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
@@ -80,8 +84,20 @@ class ReleaseSourceConfig:
     github_release: GitHubReleaseConfig
 
 
+def configured_release_source_path() -> Path:
+    """Return the shipped configuration, or the file a test setup names.
+
+    `SUGARCUBES_RELEASE_SOURCE_FILE` lets an isolated test ComfyUI point the
+    updater at a local release server without editing the pack. The named file
+    passes the same validation, so it can only name allowed origins.
+    """
+
+    override = os.environ.get(RELEASE_SOURCE_OVERRIDE, "").strip()
+    return Path(override) if override else _CONFIG_PATH
+
+
 def load_release_config(path: Path = _CONFIG_PATH) -> ReleaseSourceConfig:
-    """Load and validate the shipped release-source configuration."""
+    """Load and validate one release-source configuration."""
 
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -141,29 +157,35 @@ def _host(value: object) -> str:
 
 
 def _https_root(table: dict[str, object], key: str) -> str:
-    """Return one HTTPS origin without path, credentials, query or fragment."""
+    """Return one allowed origin without path, credentials, query or fragment."""
 
     value = table.get(key)
     if not isinstance(value, str):
         raise ReleaseConfigError(f"{key} is invalid.")
     parsed = urllib.parse.urlsplit(value)
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ReleaseConfigError(f"{key} has a bad port.") from exc
     if (
-        parsed.scheme != "https"
-        or not parsed.hostname
+        not parsed.hostname
+        or not origin_is_allowed(parsed.scheme, parsed.hostname, port)
         or parsed.username is not None
-        or parsed.port is not None
         or parsed.path not in {"", "/"}
         or parsed.query
         or parsed.fragment
     ):
         raise ReleaseConfigError(f"{key} must be an HTTPS origin.")
-    return f"https://{parsed.hostname}"
+    host = f"[{parsed.hostname}]" if ":" in parsed.hostname else parsed.hostname
+    return f"{parsed.scheme}://{host}" + (f":{port}" if port is not None else "")
 
 
 __all__ = [
     "GitHubReleaseConfig",
     "RegistrySourceConfig",
     "ReleaseConfigError",
+    "RELEASE_SOURCE_OVERRIDE",
     "ReleaseSourceConfig",
+    "configured_release_source_path",
     "load_release_config",
 ]

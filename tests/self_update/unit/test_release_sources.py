@@ -35,7 +35,9 @@ from sugarcubes.backend.self_update.http_client import (
     require_allowed_url,
 )
 from sugarcubes.backend.self_update.release_config import (
+    RELEASE_SOURCE_OVERRIDE,
     ReleaseConfigError,
+    configured_release_source_path,
     load_release_config,
 )
 from sugarcubes.backend.self_update.release_sources import (
@@ -198,3 +200,27 @@ def test_report_sentences_use_plain_words(kind: StartupOutcomeKind) -> None:
             "/",
         ):
             assert word not in lowered, (kind, reason, word)
+
+
+def test_test_setup_can_point_the_updater_at_a_loopback_release_server(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An isolated test ComfyUI names its own release file; only loopback may skip TLS."""
+
+    payload = json.loads(
+        (_REPOSITORY / "sugarcubes/backend/self_update/release_source.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    payload["registry"] = {
+        "apiRoot": "http://127.0.0.1:8392",
+        "archiveHost": "127.0.0.1",
+    }
+    path = tmp_path / "release_source.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    monkeypatch.setenv(RELEASE_SOURCE_OVERRIDE, str(path))
+    assert configured_release_source_path() == path
+    assert load_release_config(path).registry.api_root == "http://127.0.0.1:8392"
+    monkeypatch.delenv(RELEASE_SOURCE_OVERRIDE)
+    assert configured_release_source_path().name == "release_source.json"
+    assert configured_release_source_path() != path

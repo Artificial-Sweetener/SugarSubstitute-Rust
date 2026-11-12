@@ -22,7 +22,11 @@ import time
 from pathlib import Path
 
 from .http_client import HttpClient, UrllibHttpClient
-from .release_config import ReleaseSourceConfig, load_release_config
+from .release_config import (
+    ReleaseSourceConfig,
+    configured_release_source_path,
+    load_release_config,
+)
 from .release_sources import GitHubReleases, RegistryReleases
 from .release_stager import ReleaseStager
 from .service import BackgroundRunner, Clock, SelfUpdateService, ThreadRunner
@@ -55,7 +59,7 @@ def build_self_update_service(
 ) -> SelfUpdateService:
     """Build the updater with the shipped release sources and real transport."""
 
-    sources = config or load_release_config()
+    sources = config or load_release_config(configured_release_source_path())
     transport = http or UrllibHttpClient()
     stager = ReleaseStager(
         pack_folder=pack_folder,
