@@ -286,11 +286,87 @@ def _audit_docstrings(root: Path) -> list[str]:
     return failures
 
 
+WALL_CLOCK_ROOTS = ("tests", "tools", "scripts")
+# Positional seconds are unambiguous only here; `result(n)` is often an identifier.
+_WAIT_METHODS = {"wait", "join"}
+_CLOCK_CALLS = {"monotonic", "perf_counter", "time", "monotonic_ns", "perf_counter_ns"}
+
+
+def _is_wait_literal(node: ast.expr | None) -> bool:
+    """Return whether an argument is a literal number of seconds to wait."""
+
+    return (
+        isinstance(node, ast.Constant)
+        and isinstance(node.value, (int, float))
+        and not isinstance(node.value, bool)
+        and node.value != 0
+    )
+
+
+def _wall_clock_call(node: ast.Call) -> str | None:
+    """Return why one call waits on a literal wall-clock duration, if it does."""
+
+    name = _call_name(node)
+    last = name.rsplit(".", 1)[-1]
+    if last.startswith(("assert_called", "assert_any_call", "assert_has_calls")):
+        return None
+    if any(
+        keyword.arg == "timeout" and _is_wait_literal(keyword.value)
+        for keyword in node.keywords
+    ):
+        return f"{name}(timeout=<seconds>)"
+    if last in _WAIT_METHODS and node.args and _is_wait_literal(node.args[0]):
+        return f"{name}(<seconds>)"
+    if last == "wait_for" and len(node.args) > 1 and _is_wait_literal(node.args[1]):
+        return f"{name}(..., <seconds>)"
+    return None
+
+
+def _assert_measures_time(node: ast.Assert) -> bool:
+    """Return whether an assert compares readings of a real clock."""
+
+    return any(
+        isinstance(child, ast.Call)
+        and _call_name(child).rsplit(".", 1)[-1] in _CLOCK_CALLS
+        for child in ast.walk(node.test)
+    )
+
+
+def _audit_wall_clock_waits(root: Path) -> list[str]:
+    """Reject tests and tooling that pass or fail on elapsed seconds (decision M-3).
+
+    Waits go through `tests/support/no_progress.py`, whose single far hang guard
+    is a named constant, or rely on the awaited process's own exit.
+    """
+
+    failures: list[str] = []
+    for relative_root in WALL_CLOCK_ROOTS:
+        for path in sorted((root / relative_root).rglob("*.py")):
+            relative = path.relative_to(root).as_posix()
+            for node in ast.walk(_read_tree(path)):
+                if isinstance(node, ast.Call):
+                    reason = _wall_clock_call(node)
+                    if reason is not None:
+                        failures.append(
+                            f"{relative}:{node.lineno} waits on a literal duration: "
+                            f"{reason}; wait for the observed event instead"
+                        )
+                elif isinstance(node, ast.Assert) and _assert_measures_time(node):
+                    failures.append(
+                        f"{relative}:{node.lineno} asserts on elapsed real time"
+                    )
+    return failures
+
+
 def run_audit(root: Path | None = None) -> list[str]:
     """Run the Python standards audit and return human-readable failures."""
 
     repo_root = root or _repo_root()
-    return _audit_runtime_exceptions(repo_root) + _audit_docstrings(repo_root)
+    return (
+        _audit_runtime_exceptions(repo_root)
+        + _audit_docstrings(repo_root)
+        + _audit_wall_clock_waits(repo_root)
+    )
 
 
 def main() -> int:
