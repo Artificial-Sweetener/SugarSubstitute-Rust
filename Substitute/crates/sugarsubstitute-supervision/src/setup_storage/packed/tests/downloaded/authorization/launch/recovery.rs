@@ -18,7 +18,11 @@ fn pending(
             1,
         )?,
     };
-    let staging = before.prepare(generation.clone(), PreparationIntent::Automatic)?;
+    let staging = before.prepare(
+        generation.clone(),
+        PreparationIntent::Automatic,
+        crate::setup_storage::selection::unix_now()?,
+    )?;
     store.compare_exchange(&before, &staging, context)?;
     let prepared = staging.prepared(&generation)?;
     store.compare_exchange(&staging, &prepared, context)?;
@@ -52,8 +56,13 @@ fn interrupted_trial_restores_accepted_launch_without_retiring_candidate_files()
         assert_eq!(application.generation(), &healthy);
         let recovered = store.load(context)?.ok_or("Recovered selection absent")?;
         assert_eq!(recovered.accepted(), Some(&healthy));
-        assert_eq!(recovered.rejected(), &[failed.package]);
-        assert!(recovered.candidate().is_none());
+        assert!(recovered.strikes().is_empty());
+        assert_eq!(
+            recovered.candidate(),
+            Some(&sugarsubstitute_contracts::installation::Candidate::Prepared {
+                generation: failed.clone()
+            })
+        );
         assert_eq!(std::fs::read(unknown)?, b"retained candidate data");
         assert_eq!(std::fs::read(user)?, b"authored data");
         drop(application);

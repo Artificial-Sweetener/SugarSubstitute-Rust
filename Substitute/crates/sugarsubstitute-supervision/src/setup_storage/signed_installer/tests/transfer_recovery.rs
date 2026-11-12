@@ -71,7 +71,7 @@ fn expired_transfer_and_discarded_success_recover_with_the_original_creator() ->
             );
             let restored = store.load(&context)?.ok_or("Selection absent")?;
             assert!(matches!(restored.candidate(), Some(Candidate::Prepared { .. })));
-            assert!(restored.rejected().is_empty());
+            assert!(restored.strikes().is_empty());
             if phase == "before" {
                 assert_eq!(restored.encode()?, before);
             } else {

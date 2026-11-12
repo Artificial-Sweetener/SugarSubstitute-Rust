@@ -64,6 +64,7 @@ pub use selection::{
 };
 pub use selection::{
     InstalledRelease, PreparedUpdate, Rollback, UpdateSelection, read_update_selection,
+    release_withheld,
 };
 use std::io;
 use sugarsubstitute_contracts::execution::JobContext;

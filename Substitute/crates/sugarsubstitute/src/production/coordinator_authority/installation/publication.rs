@@ -3,14 +3,15 @@
 //! Own trial publication jobs and their observed terminals through coordinator retirement.
 use super::*;
 use std::io;
+use sugarsubstitute_contracts::installation::TrialVerdict;
 
-/// The caller supplies authenticated readiness or verified native family settlement.
+/// The caller supplies authenticated readiness or the verdict it classified for settlement.
 #[derive(Clone, Copy, Debug)]
 pub(super) enum Decision {
     /// Accept only after authenticated startup readiness.
     Accept,
-    /// Preserve committed acceptance or reject the unresolved, now-settled attempt.
-    FinishSettled,
+    /// Preserve committed acceptance or settle the unresolved attempt with this verdict.
+    Finish(TrialVerdict),
 }
 
 /// One publication job and its original terminal remain owned until coordinator retirement.
@@ -53,7 +54,7 @@ impl Publication {
             if let Some(trial) = application.trial() {
                 let record = match decision {
                     Decision::Accept => trial.accept(&context),
-                    Decision::FinishSettled => trial.finish_settled(&context),
+                    Decision::Finish(verdict) => trial.finish_settled(verdict, &context),
                 }
                 .map_err(io::Error::other)?;
                 tracing::info!(

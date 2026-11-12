@@ -97,7 +97,11 @@ fn exercise(
         move |context, handoff: &Handoff| {
             let initial = initial()?;
             let store = SelectionStore::initialize(&worker_path, &initial, context)?;
-            let successor = initial.prepare(generation(1)?, PreparationIntent::Automatic)?;
+            let successor = initial.prepare(
+                generation(1)?,
+                PreparationIntent::Automatic,
+                crate::setup_storage::selection::unix_now()?,
+            )?;
             handoff.reach(READY);
             handoff.wait(HELD);
             let outcome = match operation {

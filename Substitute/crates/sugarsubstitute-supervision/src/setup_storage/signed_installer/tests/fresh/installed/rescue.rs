@@ -4,19 +4,39 @@
 use super::*;
 use crate::setup_storage::{CompletedInstallation, ReservedLaunch, reserve_installed_launch};
 
-/// Publish a real trial and lose its native custody, exercising the ordinary quarantine owner.
+/// Publish a real first installation whose trial is lost until the installation withholds the
+/// package: `UNWITNESSED_LIMIT` lost trials in a row make one strike, and a bad verdict for the
+/// same generation makes the second.
 fn quarantine(path: &Path, context: &JobContext) -> Result<CompletedInstallation, Failure> {
+    use sugarsubstitute_contracts::installation::{BadTrial, TrialVerdict, UNWITNESSED_LIMIT};
     let runtime = runtime(path)?;
     let completed = import(path, context)?
         .prepare_installation(|| NOW, context)?
         .complete(&runtime, || NOW, context)?
         .authorize_installation(|| NOW, context)?
         .publish(context)?;
-    lose_trial(&completed, context)?;
+    for _ in 0..UNWITNESSED_LIMIT {
+        lose_trial(&completed, context)?;
+    }
+    let store = Arc::new(SelectionStore::open(completed.root(), context)?);
+    let struck = store.load(context)?.ok_or("State absent")?;
+    let generation = struck.rollback().ok_or("Strike absent")?.clone();
+    let now = crate::setup_storage::selection::unix_now().map_err(std::io::Error::other)?;
+    let staging = struck.prepare(generation.clone(), PreparationIntent::Repair, now)?;
+    store.compare_exchange(&struck, &staging, context)?;
+    let prepared = staging.prepared(&generation)?;
+    store.compare_exchange(&staging, &prepared, context)?;
+    let mut run = InstallationRun::acquire(store.clone(), context)?;
+    let trial = run.begin_trial(&prepared, context)?;
+    let record = run.finish_trial(&trial, TrialVerdict::Bad(BadTrial::Crashed), context)?;
+    assert!(record.candidate().is_none());
+    let later = crate::setup_storage::selection::unix_now().map_err(std::io::Error::other)?;
+    assert!(record.withheld(&generation.package, later));
     Ok(completed)
 }
 
-/// Inspection during a live trial is read-only; lost custody quarantines its execution choice.
+/// Inspection during a live trial is read-only; lost custody leaves its trial abandoned, which
+/// the next launch resolves without starting the unaccepted candidate.
 fn lose_trial(completed: &CompletedInstallation, context: &JobContext) -> TestResult {
     let installed =
         InstalledCandidate::reopen(completed.root(), context)?.ok_or("Choice absent")?;
@@ -40,8 +60,10 @@ fn lose_trial(completed: &CompletedInstallation, context: &JobContext) -> TestRe
     let record =
         SelectionStore::open(completed.root(), context)?.load(context)?.ok_or("State absent")?;
     assert!(record.accepted().is_none());
-    assert!(record.candidate().is_none());
-    assert_eq!(record.rejected().len(), 1);
+    assert!(!matches!(
+        record.candidate(),
+        Some(sugarsubstitute_contracts::installation::Candidate::Trial { .. })
+    ));
     Ok(())
 }
 
@@ -179,7 +201,9 @@ fn stable_launcher_source_does_not_choose_between_conflicting_unaccepted_setting
             .complete(&runtime, || NOW, context)?
             .authorize_installation(|| NOW, context)?
             .publish(context)?;
-        lose_trial(&second, context)?;
+        for _ in 0..sugarsubstitute_contracts::installation::UNWITNESSED_LIMIT {
+            lose_trial(&second, context)?;
+        }
         let configuration = first.directory().join("startup.local.toml");
         let changed = b"schema_version = 1\n# Preserved user alternative\n";
         std::fs::write(&configuration, changed)?;

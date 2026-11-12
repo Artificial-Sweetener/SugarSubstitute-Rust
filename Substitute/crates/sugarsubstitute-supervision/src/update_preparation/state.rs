@@ -104,6 +104,12 @@ impl State {
                     Some(offer) => (Phase::Reopen(trust, Box::new(offer)), Progress::Reopening),
                 }
             }
+            Phase::Reopen(trust, offer)
+                if setup_storage::release_withheld(&self.installation, &offer, &trust, context)
+                    .map_err(io::Error::other)? =>
+            {
+                (Phase::Empty, Progress::Decision(Admission::Withheld))
+            }
             Phase::Reopen(trust, offer) => {
                 match SignedCandidate::reopen_cached(
                     &self.installation,
@@ -210,7 +216,9 @@ impl State {
                             Admission::Current => {
                                 (Phase::SelectEngine(trust, minimum), Progress::SelectingEngine)
                             }
-                            Admission::Installer | Admission::UpdateEngine => {
+                            Admission::Installer
+                            | Admission::UpdateEngine
+                            | Admission::Withheld => {
                                 (Phase::Empty, Progress::Decision(Admission::Installer))
                             }
                         }

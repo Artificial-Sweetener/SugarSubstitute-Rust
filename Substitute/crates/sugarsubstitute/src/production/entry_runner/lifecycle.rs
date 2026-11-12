@@ -58,6 +58,13 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
             return Ok(());
         }
         self.closing = true;
+        let close_requested = close_requested(
+            self.normal_shutdown || self.child.normal_close_requested(),
+            self.child.desktop_close_intent(),
+        );
+        if let Some(authority) = &mut self.authority {
+            observe_close_cause(authority, close_requested);
+        }
         drop(self.pending_activation.take());
         if let Some(bootstrap) = &mut self.bootstrap {
             bootstrap.request_close();
@@ -215,6 +222,19 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
         }
         Ok(actual.settled)
     }
+    fn session_ending(&mut self) {
+        let Some(authority) = &mut self.authority else { return };
+        let (Some(client), Some(scope)) = (&self.client, &self.finite) else {
+            authority.observe_trial_close(
+                sugarsubstitute_contracts::installation::CloseCause::SessionEnd,
+            );
+            return;
+        };
+        if let Err(cause) = authority.observe_session_end(client, scope, &self.jobs) {
+            tracing::warn!(operation = "production_session_end", cause = %cause,
+                "The session end could not settle the update trial before the close save");
+        }
+    }
     fn finish_shutdown(&mut self) -> Result<(), Box<dyn Error>> {
         if self.finished {
             return Err("Production lifetime already finished".into());
@@ -261,9 +281,89 @@ fn tighten(original: ShutdownBudget, previous: Option<ShutdownBudget>) -> Shutdo
         settle_until: original.settle_until.min(previous.settle_until),
     })
 }
+
+/// Whether this run was asked to close: the user's or the app's own close, or the desktop's
+/// authenticated exit intent attributing its exit to a deliberate close. A desktop closing for
+/// a session end announces a deliberate close too, so that exit is a close in whichever order
+/// it and this process's own session-end signal arrive. A desktop that announces a startup
+/// failure, or that ends without announcing anything, was not asked to close.
+fn close_requested(
+    requested: bool,
+    desktop: Option<sugarsubstitute_contracts::lifecycle::CompletionIntent>,
+) -> bool {
+    use sugarsubstitute_contracts::lifecycle::CompletionIntent;
+    requested
+        || matches!(desktop, Some(CompletionIntent::Normal | CompletionIntent::StartupCancelled))
+}
+
+/// Record why this run is closing, for an unaccepted update trial's verdict. A close the user
+/// or the app asked for is no verdict. A run ending without any close request, such as its
+/// window exiting on its own before readiness, is the host failing its own startup. A failure
+/// or session end observed earlier decides first.
+fn observe_close_cause(authority: &mut CoordinatorAuthority, close_requested: bool) {
+    if close_requested {
+        authority
+            .observe_trial_close(sugarsubstitute_contracts::installation::CloseCause::Requested);
+    } else {
+        authority
+            .observe_trial_failure(sugarsubstitute_contracts::installation::FailedProcess::Host);
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sugarsubstitute_contracts::installation::{BadTrial, CloseCause, TrialVerdict, Undecided};
+
+    fn authority() -> Result<CoordinatorAuthority, Box<dyn Error>> {
+        Ok(CoordinatorAuthority::new(
+            sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget::new(
+                sugarsubstitute_contracts::execution::Moment::from_nanos(0),
+            )?,
+            None,
+        )?)
+    }
+
+    /// A trial whose window exits on its own before readiness is the release's own startup
+    /// failure, so it is struck; closing during a slow first start, or a session end, is not.
+    #[test]
+    fn only_a_run_ending_without_a_close_request_judges_the_trial_bad() -> Result<(), Box<dyn Error>>
+    {
+        let mut crashed = authority()?;
+        observe_close_cause(&mut crashed, false);
+        assert_eq!(crashed.trial_verdict(), TrialVerdict::Bad(BadTrial::StartupFailed));
+        let mut closed = authority()?;
+        observe_close_cause(&mut closed, true);
+        assert_eq!(closed.trial_verdict(), TrialVerdict::NoVerdict(Undecided::CloseRequested));
+        let mut ending = authority()?;
+        ending.observe_trial_close(CloseCause::SessionEnd);
+        observe_close_cause(&mut ending, false);
+        assert_eq!(ending.trial_verdict(), TrialVerdict::NoVerdict(Undecided::SessionEnd));
+        Ok(())
+    }
+
+    /// The desktop's session-end close announces a deliberate exit. When it reaches this run
+    /// before this process's own session-end signal, the trial is still no verdict; a desktop
+    /// that announces a startup failure, or none at all, failed its own start.
+    #[test]
+    fn a_desktop_session_end_exit_is_no_verdict_whichever_signal_arrives_first()
+    -> Result<(), Box<dyn Error>> {
+        use sugarsubstitute_contracts::lifecycle::CompletionIntent;
+        for intent in [CompletionIntent::Normal, CompletionIntent::StartupCancelled] {
+            let mut reversed = authority()?;
+            observe_close_cause(&mut reversed, close_requested(false, Some(intent)));
+            reversed.observe_trial_close(CloseCause::SessionEnd);
+            assert_eq!(
+                reversed.trial_verdict(),
+                TrialVerdict::NoVerdict(Undecided::CloseRequested)
+            );
+        }
+        for desktop in [Some(CompletionIntent::StartupFailed), None] {
+            let mut failed = authority()?;
+            observe_close_cause(&mut failed, close_requested(false, desktop));
+            assert_eq!(failed.trial_verdict(), TrialVerdict::Bad(BadTrial::StartupFailed));
+        }
+        Ok(())
+    }
     use sugarsubstitute_contracts::execution::Moment;
     #[test]
     fn actual_child_cutoffs_tighten_both_intervals_without_renewal() -> Result<(), Box<dyn Error>> {

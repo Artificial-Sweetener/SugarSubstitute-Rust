@@ -325,6 +325,14 @@ impl EntryActivation for ProfileComponent {
             })
             .or(self.failure.as_deref())
     }
+    fn desktop_close_intent(
+        &self,
+    ) -> Option<sugarsubstitute_contracts::lifecycle::CompletionIntent> {
+        None
+    }
+    fn failed_process(&self) -> sugarsubstitute_contracts::installation::FailedProcess {
+        sugarsubstitute_contracts::installation::FailedProcess::Host
+    }
     fn next_deadline(&self) -> Option<Instant> {
         self.next_wake
     }

@@ -277,8 +277,19 @@ fn a_final_input_save_unfinished_at_the_cutoff_is_stale() -> Result<(), Box<dyn 
     first.close()
 }
 
+/// When the input documents' next automatic save is due, on the fixture clock.
+fn autosave_due(inputs: &Inputs) -> Option<Moment> {
+    inputs.canvas.session.as_ref().and_then(|session| session.input_autosave_deadline())
+}
+
+/// Move the fixture clock to `moment`; it never moves backwards.
+fn advance_to(inputs: &Inputs, moment: Moment) {
+    inputs.clock.0.fetch_max(moment.as_nanos(), Ordering::SeqCst);
+}
+
 #[test]
 fn a_hard_kill_loses_at_most_one_autosave_window_of_strokes() -> Result<(), Box<dyn Error>> {
+    let longest = crate::native_canvas::session::inputs::AUTOSAVE.longest;
     let directory = anchor()?;
     let archive = session_directory(directory.path()).join("input-documents.ssdoc");
     let mut first = Inputs::start(directory.path())?;
@@ -286,22 +297,28 @@ fn a_hard_kill_loses_at_most_one_autosave_window_of_strokes() -> Result<(), Box<
     first.workflow(activate(Some("image"), Some("empty"), "input"))?;
     first.context_until(|document| document["id"] == image["document"]["id"])?;
     first.save_until(|| archive.is_file())?;
+    // Save every earlier change first, so the next scheduled save is the stroke's own.
+    while let Some(due) = autosave_due(&first) {
+        advance_to(&first, due);
+        first.until("An earlier save did not start", |inputs| autosave_due(inputs) != Some(due))?;
+    }
+    first.until("An earlier save did not finish", |inputs| autosave_due(inputs).is_none())?;
     let saved = std::fs::read(&archive)?;
     first.ask("edit.request", Some(json!({"type":"tool", "tool":"brush"})))?;
     first.drag(&[[2.0, 3.0], [6.0, 3.0]])?;
     first.release()?;
-    // The stroke's end schedules its save; one longest delay later it is on disk, with no close.
-    first.ask("context.request", None)?;
-    first.clock.0.fetch_add(
-        u64::try_from(crate::native_canvas::session::inputs::AUTOSAVE.longest.as_nanos())?,
-        Ordering::SeqCst,
-    );
+    // The stroke's end schedules its save no later than one longest delay after it.
+    first.until("The stroke's end scheduled no save", |inputs| autosave_due(inputs).is_some())?;
+    let ended = Moment::from_nanos(first.clock.0.load(Ordering::SeqCst));
+    let due = autosave_due(&first).ok_or("The stroke's save vanished")?;
+    assert!(due <= ended.checked_add(longest)?, "the save waits at most one autosave window");
+    // A hard kill now would lose only what this save is about to write.
+    advance_to(&first, due);
     first.until("The stroke was not saved within one autosave window", |_| {
         std::fs::read(&archive).is_ok_and(|bytes| bytes != saved)
     })?;
     first.close()
 }
-
 /// A surface whose base is a ComfyUI temporary file, which ComfyUI deletes when it starts.
 fn temporary_surfaces() -> Value {
     surfaces_on("temp")

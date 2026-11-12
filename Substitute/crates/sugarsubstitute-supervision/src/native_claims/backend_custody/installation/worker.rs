@@ -165,12 +165,15 @@ fn run(control: &Control, operation: Phase, context: &JobContext) -> Result<(), 
         crate::registry::lock(&control.0.data).witness = Some(Arc::new(witness));
         Ok(())
     } else {
-        let witness = crate::registry::lock(&control.0.data)
-            .witness
-            .clone()
-            .ok_or_else(|| ClaimError::invalid("installation_witness_settlement_owner"))?;
+        let (witness, exit) = {
+            let data = crate::registry::lock(&control.0.data);
+            (data.witness.clone(), data.exit)
+        };
+        let witness =
+            witness.ok_or_else(|| ClaimError::invalid("installation_witness_settlement_owner"))?;
+        let exit = exit.ok_or_else(|| ClaimError::invalid("installation_witness_host_exit"))?;
         witness
-            .finish_settled(context)
+            .finish_settled(exit.verdict(), context)
             .map(|_| ())
             .map_err(|cause| ClaimError::new("installation_witness_finalization", cause))
     }
