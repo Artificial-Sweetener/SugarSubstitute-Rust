@@ -21,7 +21,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from ..domain.architecture import ModelArchitecture
+from ..domain.architecture import DamagedModelFile, ModelArchitecture
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,5 +70,5 @@ def tensor_shape(value: object) -> tuple[int, ...]:
         or len(value) > 16
         or any(type(dim) is not int or dim < 0 for dim in value)
     ):
-        raise ValueError("Invalid tensor dimensions.")
+        raise DamagedModelFile("a tensor's dimensions are invalid")
     return tuple(value)
