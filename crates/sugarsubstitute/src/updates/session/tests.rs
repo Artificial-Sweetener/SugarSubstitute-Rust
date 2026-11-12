@@ -124,14 +124,14 @@ fn repeated_close_keeps_the_original_cleanup_deadline_and_observes_initializatio
     finish(&mut session, &wake)
 }
 #[test]
-fn expired_campaign_does_not_admit_storage_and_cleanup_uses_a_live_separate_scope() -> Result<()> {
+fn initialization_uses_one_step_deadline_and_cleanup_uses_a_live_separate_scope() -> Result<()> {
     let wake = Arc::new(Wake::default());
     let clock = Arc::new(Manual::default());
     let mut session = Session::new(
         1024 * 1024,
         Box::new(|_| {
             let bytes = serde_json::to_vec(
-                &serde_json::json!({"schema_version":1,"repository":vec![92;32],
+                &serde_json::json!({"schema_version":2,"update_policy":"standard","repository":vec![92;32],
             "feed":{"transport":"https","base":"https://updates.example.test/","redirects":[]}}),
             )?;
             crate::updates::configuration(
@@ -145,12 +145,14 @@ fn expired_campaign_does_not_admit_storage_and_cleanup_uses_a_live_separate_scop
         }),
     );
     session.clock = clock.clone();
+    clock.0.store(7_000_000_000, Ordering::SeqCst);
     session.start(wake.clone())?;
-    let until = session.until.ok_or("Campaign cutoff absent")?;
     assert_eq!(
         session.initializing.as_ref().ok_or("Initialization absent")?.spec().deadline,
-        Some(until)
+        Some(clock.now().checked_add(crate::updates::STEP)?)
     );
+    assert_eq!(session.work.as_ref().ok_or("Work scope absent")?.spec().deadline, None);
+    assert_eq!(session.next_deadline(), None);
     // Observe the constructor directly so no storage phase can race the deliberate clock advance.
     observe(&wake, || {
         session
@@ -169,13 +171,6 @@ fn expired_campaign_does_not_admit_storage_and_cleanup_uses_a_live_separate_scop
         }
         Ok(false)
     })?;
-    clock.0.store(901_000_000_000, Ordering::SeqCst);
-    let error =
-        session.activity(NonZeroUsize::MIN).err().ok_or("Expired campaign admitted storage")?;
-    assert_eq!(
-        error.downcast_ref::<io::Error>().map(io::Error::kind),
-        Some(io::ErrorKind::TimedOut)
-    );
     assert_eq!(session.worker.as_ref().ok_or("Worker absent")?.progress(), Progress::Opening);
     assert!(!session.worker.as_ref().ok_or("Worker absent")?.pending());
     session.request_shutdown()?;

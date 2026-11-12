@@ -254,6 +254,17 @@ impl WorkspaceDriver {
             && (self.last_ack.as_ref().is_none_or(|ack| ack.4)
                 || self.close_cutoff.is_some_and(|cutoff| now >= cutoff))
     }
+    /// What the close kept, once actual native close is permitted; see
+    /// [`WorkspaceSession::close_verdict`].
+    pub fn close_verdict(
+        &self,
+        now: Moment,
+    ) -> Option<sugarsubstitute_application::workspace_session::close_save::SaveVerdict> {
+        if !self.close_ready(now) {
+            return None;
+        }
+        self.policy.close_verdict(now)
+    }
     /// Abandon only an unsubmitted capture after native retirement; callers first observe any
     /// actual worker terminal before invoking this method.
     /// # Errors

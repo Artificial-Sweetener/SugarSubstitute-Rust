@@ -3,6 +3,8 @@
 //! Native update offer routing and package admission, independent of discovery and signatures.
 use crate::installation::PreparationIntent;
 use serde::{Deserialize, Serialize};
+pub mod attempt;
+pub mod status;
 pub mod subscription;
 
 /// Maximum byte size of the small authenticated channel descriptor.
@@ -133,6 +135,9 @@ pub enum Admission {
     UpdateEngine,
     /// This engine cannot consume the package/protocol; use a compatible installer.
     Installer,
+    /// The installation withholds this package after repeated bad trials; nothing is downloaded
+    /// until the withholding expires or a newer release is published.
+    Withheld,
 }
 
 #[derive(Deserialize)]

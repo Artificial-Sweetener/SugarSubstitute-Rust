@@ -152,7 +152,10 @@ impl UpdaterProbeTransfer {
         let trial = self.trial.snapshot.begin_trial().map_err(io::Error::other)?;
         let next = match disposition {
             UpdaterProbeDisposition::Accepted => trial.accept(&self.trial.attempt),
-            UpdaterProbeDisposition::Rejected => trial.reject(&self.trial.attempt),
+            UpdaterProbeDisposition::Rejected => trial.reject(
+                &self.trial.attempt,
+                crate::setup_storage::selection::unix_now().map_err(io::Error::other)?,
+            ),
             UpdaterProbeDisposition::Unstarted => trial.cancel_unstarted_trial(&self.trial.attempt),
         }
         .map_err(io::Error::other)?;

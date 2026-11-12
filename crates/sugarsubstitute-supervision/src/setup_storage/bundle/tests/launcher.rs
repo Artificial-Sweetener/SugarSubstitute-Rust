@@ -63,19 +63,19 @@ fn authenticated_but_incompatible_pairs_do_not_become_verified_bundles() -> test
             (None, CURRENT_LAUNCHER_CONTRACT, "Missing"),
             (
                 Some(CURRENT_CONTRACT),
-                br#"{"schema_version":1,"installation_schemas":[2],"installed_launch_protocol":2}"#
+                br#"{"schema_version":1,"installation_schemas":[3],"installed_launch_protocol":2}"#
                     .as_slice(),
                 "Unsupported",
             ),
             (
                 Some(CURRENT_CONTRACT),
-                br#"{"schema_version":1,"installation_schemas":[3],"installed_launch_protocol":1}"#
+                br#"{"schema_version":1,"installation_schemas":[4],"installed_launch_protocol":1}"#
                     .as_slice(),
                 "InstallationSchema",
             ),
             (
                 Some(CURRENT_CONTRACT),
-                br#"{"schema_version":2,"installation_schemas":[2],"installed_launch_protocol":1}"#
+                br#"{"schema_version":2,"installation_schemas":[3],"installed_launch_protocol":1}"#
                     .as_slice(),
                 "Format",
             ),

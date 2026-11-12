@@ -104,6 +104,12 @@ impl State {
                     Some(offer) => (Phase::Reopen(trust, Box::new(offer)), Progress::Reopening),
                 }
             }
+            Phase::Reopen(trust, offer)
+                if setup_storage::release_withheld(&self.installation, &offer, &trust, context)
+                    .map_err(io::Error::other)? =>
+            {
+                (Phase::Empty, Progress::Decision(Admission::Withheld))
+            }
             Phase::Reopen(trust, offer) => {
                 match SignedCandidate::reopen_cached(
                     &self.installation,
@@ -210,7 +216,9 @@ impl State {
                             Admission::Current => {
                                 (Phase::SelectEngine(trust, minimum), Progress::SelectingEngine)
                             }
-                            Admission::Installer | Admission::UpdateEngine => {
+                            Admission::Installer
+                            | Admission::UpdateEngine
+                            | Admission::Withheld => {
                                 (Phase::Empty, Progress::Decision(Admission::Installer))
                             }
                         }
@@ -225,6 +233,16 @@ impl State {
                 context,
             )? {
                 Preparation::Pending { received, total } => {
+                    (Phase::Download(trust, offer), Progress::Downloading { received, total })
+                }
+                Preparation::Interrupted { received, total, cause } => {
+                    tracing::warn!(
+                        operation = "update_download_resumed",
+                        received,
+                        total,
+                        cause = %cause,
+                        "Package transfer ended early after progress; continuing from the saved prefix"
+                    );
                     (Phase::Download(trust, offer), Progress::Downloading { received, total })
                 }
                 Preparation::Complete(download) => {
@@ -285,6 +303,14 @@ impl State {
         self.phase = next;
         self.progress = progress;
         Ok(())
+    }
+
+    /// A completed download interval retains its offer and continues in the next admitted step,
+    /// even when that interval ran to its job deadline while bytes were still arriving.
+    pub(super) fn continues_download(&self) -> bool {
+        self.failure.is_none()
+            && matches!(self.phase, Phase::Download(..))
+            && matches!(self.progress, Progress::Downloading { .. })
     }
 
     /// Close HTTP custody before dropping storage owners on this admitted cleanup worker.

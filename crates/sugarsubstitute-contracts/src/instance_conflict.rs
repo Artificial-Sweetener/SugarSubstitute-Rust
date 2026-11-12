@@ -65,16 +65,51 @@ pub trait ConflictBackend: Clone + Send + Sync + 'static {
     /// Report actual resource-release failures without claiming settlement.
     fn retire_relaunch(&self) -> Result<(), Self::Error>;
 }
-/// Presentation state does not grant native process privileges.
-pub struct ConflictView {
-    /// Localized status and verified installation location.
-    pub text: String,
-    /// Ordinary close is currently available.
-    pub close_enabled: bool,
-    /// Explicit force termination is currently available.
-    pub force_enabled: bool,
+/// What conflict resolution is doing, as a surface presents it.
+///
+/// Surfaces choose their own localized words from this phase; it carries no text, paths or
+/// process identities, and naming a phase never authorizes the operation it describes.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ConflictPhase {
+    /// Verifying the previous copy's actual ownership.
+    Checking,
+    /// The verified previous copy awaits the user's decision to close it.
+    AwaitingDecision,
+    /// Ordinary close was requested and is still in progress.
+    Closing,
+    /// Ordinary close has stalled; ending the previous copy outright is offered.
+    ForceOffered,
+    /// Ending the previous copy outright is in progress.
+    Forcing,
+    /// Resolution failed; only cancellation remains.
+    Failed,
+    /// Native custody is retiring; `continuing` records whether this launch then starts.
+    Retiring {
+        /// The previous copy has released and this launch continues after retirement.
+        continuing: bool,
+    },
     /// Native custody and execution workers have finished retiring.
-    pub done: bool,
+    Done,
+}
+/// Presentation state does not grant native process privileges.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ConflictView {
+    /// Current resolution phase.
+    pub phase: ConflictPhase,
+}
+impl ConflictView {
+    /// Ordinary close is currently available.
+    pub fn close_enabled(self) -> bool {
+        self.phase == ConflictPhase::AwaitingDecision
+    }
+    /// Explicit force termination is currently available.
+    pub fn force_enabled(self) -> bool {
+        self.phase == ConflictPhase::ForceOffered
+    }
+    /// Native custody and execution workers have finished retiring.
+    pub fn done(self) -> bool {
+        self.phase == ConflictPhase::Done
+    }
 }
 /// UI-thread controller. Every callback returns promptly; work uses the execution owner.
 pub trait ConflictController {

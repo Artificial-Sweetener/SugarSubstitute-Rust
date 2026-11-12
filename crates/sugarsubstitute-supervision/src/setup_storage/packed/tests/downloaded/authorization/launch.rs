@@ -106,6 +106,7 @@ fn accepted_launch_needs_no_extracted_cache_or_repository_and_retains_native_cus
                 )?,
             },
             PreparationIntent::Automatic,
+            crate::setup_storage::selection::unix_now()?,
         )?;
         store.compare_exchange(&before, &pending, context)?;
         assert_eq!(store.load(context)?.ok_or("Selection absent")?.accepted(), Some(&generation));
@@ -155,7 +156,11 @@ fn released_run_lock_recovers_previous_acceptance_without_accepting_the_interrup
                 1,
             )?,
         };
-        let staging = before.prepare(generation.clone(), PreparationIntent::Automatic)?;
+        let staging = before.prepare(
+            generation.clone(),
+            PreparationIntent::Automatic,
+            crate::setup_storage::selection::unix_now()?,
+        )?;
         store.compare_exchange(&before, &staging, context)?;
         let prepared = staging.prepared(&generation)?;
         store.compare_exchange(&staging, &prepared, context)?;
@@ -170,8 +175,13 @@ fn released_run_lock_recovers_previous_acceptance_without_accepting_the_interrup
         };
         assert_eq!(actual.generation(), &healthy);
         let recovered = store.load(context)?.ok_or("Recovered selection absent")?;
-        assert_eq!(recovered.rejected(), &[expected.generation.package]);
-        assert!(recovered.candidate().is_none());
+        assert!(recovered.strikes().is_empty());
+        assert_eq!(
+            recovered.candidate(),
+            Some(&sugarsubstitute_contracts::installation::Candidate::Prepared {
+                generation: expected.generation.clone()
+            })
+        );
         Ok(())
     })
 }

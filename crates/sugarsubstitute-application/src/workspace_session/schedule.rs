@@ -38,6 +38,10 @@ impl Schedule {
     pub(super) fn deadline(&self) -> Option<Moment> {
         self.due
     }
+    /// When the oldest change not yet captured was observed.
+    pub(super) fn since(&self) -> Option<Moment> {
+        self.first
+    }
     pub(super) fn dirty(&self) -> bool {
         self.due.is_some()
     }

@@ -28,6 +28,8 @@ mod sync;
 
 use super::*;
 pub(crate) use crate::native_canvas::work::capture::CapturePixels;
+#[cfg(test)]
+pub(crate) use archive::POLICY as AUTOSAVE;
 pub(crate) use capture::{
     CaptureEncoder, CaptureRejection, CaptureTarget, CaptureTicket, EncodedCapture, InputCapture,
     capture_extent,

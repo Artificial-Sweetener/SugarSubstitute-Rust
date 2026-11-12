@@ -146,7 +146,7 @@ fn rescue_rejects_incompatible_replacement_without_discarding_old_intent() -> Te
         let original = std::fs::read(state.path().join(JOURNAL))?;
         let mut replacement = replacement(&root, context)?;
         replacement.contract =
-            r#"{"schema_version":1,"installation_schemas":[2],"installed_launch_protocol":2}"#
+            r#"{"schema_version":1,"installation_schemas":[3],"installed_launch_protocol":2}"#
                 .into();
         protection::with(context, |protection| {
             assert!(supersede(&root, &state, replacement, protection, context).is_err());

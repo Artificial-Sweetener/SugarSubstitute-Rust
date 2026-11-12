@@ -49,7 +49,7 @@ fn duplicate_trial_reference_permits_health_and_never_retains_run_ownership() ->
         let inherited = reserved.prepare_inheritance(context)?;
         let accepted = run.accept(&trial, context)?;
         assert_eq!(accepted.accepted(), Some(&trial.attempt().generation));
-        assert!(accepted.rejected().is_empty());
+        assert!(accepted.strikes().is_empty());
         drop(trial);
         drop(run);
         assert!(InstallationRun::acquire(store, context).is_ok());
@@ -80,8 +80,12 @@ fn duplicate_trial_reference_cannot_promote_itself_after_the_original_owner_exit
         ));
         let after = store.load(context)?.ok_or("Recovered selection absent")?;
         assert!(after.accepted().is_none());
-        assert!(after.candidate().is_none());
-        assert_eq!(after.rejected().len(), 1);
+        assert!(matches!(
+            after.candidate(),
+            Some(sugarsubstitute_contracts::installation::Candidate::Prepared { .. })
+        ));
+        assert!(after.strikes().is_empty());
+        assert_eq!(after.unwitnessed().map(|abandoned| abandoned.count), Some(1));
         Ok(())
     })
 }

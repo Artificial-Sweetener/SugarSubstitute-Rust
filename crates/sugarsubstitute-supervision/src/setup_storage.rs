@@ -71,6 +71,7 @@ pub use selection::{
 };
 pub use selection::{
     InstalledRelease, PreparedUpdate, Rollback, UpdateSelection, read_update_selection,
+    release_withheld,
 };
 pub use selection::{ROUTE_RESERVATION_BYTES, Route, RouteFailure, route_launch};
 use std::io;

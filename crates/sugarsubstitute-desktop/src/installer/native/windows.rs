@@ -46,18 +46,19 @@ pub(super) fn run(
     let mut events = builder.build();
     let proxy = events.create_proxy();
     let wake_lifetime = WakeLifetime::new();
-    let window = Rc::new(
-        WindowBuilder::new()
-            .with_title(options.title)
-            .with_inner_size(LogicalSize::new(1180, 760))
-            .with_min_inner_size(LogicalSize::new(720, 560))
-            .with_max_inner_size(tao::dpi::PhysicalSize::new(4096, 4096))
-            .with_decorations(false)
-            .with_transparent(true)
-            .with_theme(None)
-            .with_visible(false)
-            .build(&events)?,
-    );
+    let mut builder = WindowBuilder::new()
+        .with_title(options.title)
+        .with_inner_size(LogicalSize::new(options.size[0], options.size[1]))
+        .with_resizable(options.resizable)
+        .with_max_inner_size(tao::dpi::PhysicalSize::new(4096, 4096))
+        .with_decorations(false)
+        .with_transparent(true)
+        .with_theme(None)
+        .with_visible(false);
+    if let Some([width, height]) = options.min_size {
+        builder = builder.with_min_inner_size(LogicalSize::new(width, height));
+    }
+    let window = Rc::new(builder.build(&events)?);
     let (mut presenter, mut failure): (_, Option<Box<dyn Error>>) =
         match Presenter::new_main(window.clone(), window.theme() == Theme::Dark) {
             Ok(owner) => (Some(owner), None),
@@ -76,6 +77,16 @@ pub(super) fn run(
         failure = Some(Box::new(cause));
     }
     let mut picker_request = None;
+    let mut applied_size = None;
+    match presenter.as_ref().map(Presenter::work_area_height).transpose() {
+        Ok(Some(height)) => lifetime.work_area(height),
+        Ok(None) => {}
+        Err(cause) => {
+            if failure.is_none() {
+                failure = Some(Box::new(cause));
+            }
+        }
+    }
     let scroll = ScrollViewport::new(window.clone());
     if let Err(cause) = scroll.initialize()
         && failure.is_none()
@@ -123,8 +134,10 @@ pub(super) fn run(
         *control = ControlFlow::WaitUntil(Instant::now() + Duration::from_millis(20));
         let result: Result<(), Box<dyn Error>> = (|| {
             match event {
-                NativeEvent::WindowEvent { event: WindowEvent::CloseRequested, .. }
-                | NativeEvent::UserEvent(NativeAction::Close) => closing = true,
+                NativeEvent::WindowEvent { event: WindowEvent::CloseRequested, .. } if !closing => {
+                    closing = lifetime.close_request()?;
+                }
+                NativeEvent::UserEvent(NativeAction::Close) => closing = true,
                 NativeEvent::UserEvent(NativeAction::Activate(id)) if !closing => {
                     if let Some(input) = controls.as_ref().map(|owner| owner.observe(id)).transpose()?.flatten() {
                         lifetime.input(Event::Control(ControlId::new(id)?, input))?;
@@ -172,7 +185,7 @@ pub(super) fn run(
                 NativeEvent::WindowEvent { event: WindowEvent::KeyboardInput { event, .. }, .. }
                     if !closing && event.state == ElementState::Pressed && !event.repeat => {
                     match event.logical_key {
-                        tao::keyboard::Key::Escape => closing = true,
+                        tao::keyboard::Key::Escape => closing = lifetime.close_request()?,
                         tao::keyboard::Key::Tab => if let Some(owner) = &controls { owner.focus_next(crate::windows_controls::shift_pressed())?; },
                         _ => {}
                     }
@@ -220,6 +233,25 @@ pub(super) fn run(
                         lifetime.input(Event::Scroll(position))?;
                     }
                     lifetime.advance(started.elapsed())?;
+                    if !closing && let Some(transfer) = lifetime.clipboard() {
+                        let copied = copy_transfer(::windows::Win32::Foundation::HWND(window.hwnd() as *mut _), &transfer);
+                        lifetime.copied(copied)?;
+                    }
+                    if !closing && let Some(size) = lifetime.preferred_size() {
+                        if Some(size) != applied_size {
+                            apply_client_size(&window, size);
+                            applied_size = Some(size);
+                            if !revealed { presenter.as_ref().ok_or("Native installer presenter absent")?.recenter()?; }
+                        }
+                        // Acknowledge every turn with the size the window really has, so a
+                        // lifetime waiting on its request prepares for this window, not the request.
+                        let current = window.inner_size();
+                        if current.width > 0 && current.height > 0 {
+                            let next = FrameShape::new(current.width, current.height, window.scale_factor())?;
+                            shape = Some(next);
+                            lifetime.resize(next)?;
+                        }
+                    }
                     if !closing {
                         if let Some(page) = lifetime.page()
                             && Some(page.frame.shape()) == shape
@@ -265,7 +297,7 @@ pub(super) fn run(
                             scroll.capture(observer)?;
                             observer.finished();
                         }
-                    } else if lifetime.settled()? && !picker.busy() {
+                    } else if lifetime.window_releasable()? && !picker.busy() {
                         if let Some(owner) = &mut controls {
                             owner.shutdown()?;
                             if !owner.retired() { return Ok(()); }
@@ -290,7 +322,6 @@ pub(super) fn run(
     accent.retire();
     picker.retire()?;
     drop(picker);
-    wake_lifetime.disconnect();
     drop(scroll);
     drop(controls);
     drop(projection);
@@ -320,16 +351,112 @@ pub(super) fn run(
     if !destroyed {
         return Err("Native installer window destruction was not observed".into());
     }
+    let mut retain = |cause: Box<dyn Error>| {
+        if failure.is_none() {
+            failure = Some(cause);
+        } else {
+            tracing::error!(operation="native_installer_settlement", cause=%cause, "Additional failure after window retirement");
+        }
+    };
+    if let Err(cause) = lifetime.window_retired() {
+        retain(cause);
+    }
+    settle_after_retirement(&mut events, lifetime, started, &mut retain);
+    wake_lifetime.disconnect();
     drop(events);
-    // SAFETY: Checked peers, render buffers and their event-loop window retired on this thread.
-    unsafe { apartment.release_after_teardown()? };
     let finished = lifetime.finish();
-    match (failure, finished) {
-        (Some(cause), Err(retirement)) => {
+    // SAFETY: Checked peers, render buffers, their event-loop window and the lifetime's final
+    // owners all retired on this thread.
+    let released = unsafe { apartment.release_after_teardown() };
+    match (failure, finished, released) {
+        (Some(cause), Err(retirement), _) => {
             Err(format!("{cause}; native installer finalization: {retirement}").into())
         }
-        (Some(cause), _) => Err(cause),
-        (None, result) => result,
+        (Some(cause), _, _) => Err(cause),
+        (None, Err(cause), _) => Err(cause),
+        (None, Ok(()), released) => released.map_err(Into::into),
+    }
+}
+
+/// Keep the event loop and completion wake live after the window has retired until the
+/// lifetime has settled. An error ends settlement; `finish` retains what has not retired.
+fn settle_after_retirement(
+    events: &mut tao::event_loop::EventLoop<NativeAction>,
+    lifetime: &mut impl Lifetime,
+    started: Instant,
+    retain: &mut impl FnMut(Box<dyn Error>),
+) {
+    match lifetime.settled() {
+        Ok(true) => return,
+        Ok(false) => {}
+        Err(cause) => return retain(cause),
+    }
+    events.run_return(|event, _, control| {
+        *control = crate::cadence::closing_wait(Instant::now());
+        if let NativeEvent::MainEventsCleared = event {
+            match lifetime.advance(started.elapsed()).and_then(|()| lifetime.settled()) {
+                Ok(true) => *control = ControlFlow::Exit,
+                Ok(false) => {}
+                Err(cause) => {
+                    retain(cause);
+                    *control = ControlFlow::Exit;
+                }
+            }
+        }
+    });
+}
+
+/// Copy `transfer` as `window`, entering the clipboard only while its counter deadline holds.
+fn copy_transfer(
+    window: ::windows::Win32::Foundation::HWND,
+    transfer: &ClipboardTransfer,
+) -> Result<(), CopyFailure> {
+    let admitted = crate::windows_clipboard::copy_text_if(window, &transfer.text, || {
+        transfer.before.map_or(Ok(true), counter_before)
+    });
+    match admitted {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(CopyFailure::Expired),
+        Err(cause) => Err(CopyFailure::Transfer(cause.to_string())),
+    }
+}
+
+/// Whether this thread's performance counter is still before `deadline`, read on the same
+/// thread and clock source that the deadline was issued against. Nothing is renewed.
+fn counter_before(
+    deadline: sugarsubstitute_contracts::execution::CounterDeadline,
+) -> Result<bool, crate::DesktopError> {
+    use crate::timing::TimingClock;
+    let mut clock = crate::windows_timing::WindowsClock::new()?;
+    let stamp = clock.read()?;
+    if stamp.thread != clock.thread() || stamp.source != crate::timing::QPC_SOURCE {
+        return Err(crate::DesktopError::message(
+            "report_copy_clock_identity",
+            "performance counter identity changed",
+        ));
+    }
+    Ok(stamp.ticks > 0
+        && clock.frequency() == deadline.frequency()
+        && stamp.ticks < deadline.ticks())
+}
+
+/// Give the window `size` physical client pixels. Tao enlarges a request for an undecorated
+/// window with a shadow by its hidden frame, and not on every call, so each observed difference
+/// is fed back into the next request. A window that still differs keeps its real size; the
+/// lifetime is told that size and prepares for it.
+fn apply_client_size(window: &tao::window::Window, size: [u32; 2]) {
+    let mut request = size;
+    for _ in 0..3 {
+        window.set_inner_size(tao::dpi::PhysicalSize::new(request[0], request[1]));
+        let actual = window.inner_size();
+        if [actual.width, actual.height] == size {
+            return;
+        }
+        let adjust = |request: u32, wanted: u32, got: u32| {
+            (i64::from(request) + i64::from(wanted) - i64::from(got)).clamp(1, 4096) as u32
+        };
+        request =
+            [adjust(request[0], size[0], actual.width), adjust(request[1], size[1], actual.height)];
     }
 }
 

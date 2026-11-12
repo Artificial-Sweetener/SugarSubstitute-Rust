@@ -15,11 +15,12 @@ use windows::{
         Foundation::{ERROR_CANCELLED, HWND},
         System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance, CoTaskMemFree},
         UI::Shell::{
-            FOS_FILEMUSTEXIST, FOS_FORCEFILESYSTEM, FOS_PATHMUSTEXIST, FOS_PICKFOLDERS,
-            FileOpenDialog, IFileOpenDialog, SIGDN_FILESYSPATH,
+            Common::COMDLG_FILTERSPEC, FOS_FILEMUSTEXIST, FOS_FORCEFILESYSTEM, FOS_OVERWRITEPROMPT,
+            FOS_PATHMUSTEXIST, FOS_PICKFOLDERS, FileOpenDialog, FileSaveDialog, IFileDialog,
+            IFileOpenDialog, IFileSaveDialog, SIGDN_FILESYSPATH,
         },
     },
-    core::HRESULT,
+    core::{HRESULT, HSTRING, Interface, PCWSTR},
 };
 
 /// Native shell selection semantics; storage owners validate the selected original later.
@@ -29,6 +30,17 @@ pub enum SelectionKind {
     Folder,
     /// Choose an existing regular filesystem file.
     File,
+    /// Choose where to save a file; the shell confirms replacing an existing file.
+    Save {
+        /// Localized dialog title.
+        title: &'static str,
+        /// Suggested file name.
+        file_name: &'static str,
+        /// Localized file type label, such as "Text report (*.txt)".
+        filter: &'static str,
+        /// File extension without its dot, such as "txt".
+        extension: &'static str,
+    },
 }
 
 #[cfg(windows)]
@@ -42,15 +54,35 @@ fn choose(
     active: &ActiveDialog,
 ) -> Result<Option<PathBuf>, Box<dyn Error>> {
     // SAFETY: The caller retains its UI STA, parent HWND and event loop across this
-    // modal operation. Every COM object is released before returning to that loop.
+    // modal operation. Every COM object is released before returning to that loop; the
+    // borrowed title, name and filter strings outlive the synchronous configuration calls.
     unsafe {
-        let dialog: IFileOpenDialog =
-            CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER)?;
-        let kind = match kind {
-            SelectionKind::File => FOS_FILEMUSTEXIST,
-            SelectionKind::Folder => FOS_PICKFOLDERS,
+        let dialog: IFileDialog = match kind {
+            SelectionKind::Save { title, file_name, filter, extension } => {
+                let dialog: IFileSaveDialog =
+                    CoCreateInstance(&FileSaveDialog, None, CLSCTX_INPROC_SERVER)?;
+                let (title, file_name, filter) =
+                    (HSTRING::from(title), HSTRING::from(file_name), HSTRING::from(filter));
+                let pattern = HSTRING::from(format!("*.{extension}"));
+                dialog.SetFileTypes(&[COMDLG_FILTERSPEC {
+                    pszName: PCWSTR(filter.as_ptr()),
+                    pszSpec: PCWSTR(pattern.as_ptr()),
+                }])?;
+                dialog.SetDefaultExtension(&HSTRING::from(extension))?;
+                dialog.SetTitle(&title)?;
+                dialog.SetFileName(&file_name)?;
+                dialog.SetOptions(FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | FOS_OVERWRITEPROMPT)?;
+                dialog.cast()?
+            }
+            open => {
+                let dialog: IFileOpenDialog =
+                    CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER)?;
+                let flags =
+                    if open == SelectionKind::Folder { FOS_PICKFOLDERS } else { FOS_FILEMUSTEXIST };
+                dialog.SetOptions(FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | flags)?;
+                dialog.cast()?
+            }
         };
-        dialog.SetOptions(FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | kind)?;
         *active.0.borrow_mut() = Some(dialog.clone());
         let shown = dialog.Show(Some(window));
         active.0.borrow_mut().take();
@@ -72,7 +104,7 @@ fn choose(
 /// UI-thread-only cancellation access, independent of the application's mutable event handler.
 #[cfg(windows)]
 #[derive(Default)]
-pub(super) struct ActiveDialog(RefCell<Option<IFileOpenDialog>>);
+pub(super) struct ActiveDialog(RefCell<Option<IFileDialog>>);
 #[cfg(windows)]
 impl ActiveDialog {
     /// Close the retained shell receiver without holding a RefCell borrow across native reentry.

@@ -29,7 +29,10 @@ fn abandoned_recovery_waits_for_the_trial_owner_and_not_for_witness_duplicates()
         let Some(Candidate::Trial { attempt }) = pending.candidate() else {
             return Err("Expected published trial".into());
         };
-        assert_eq!(recovered, pending.reject(attempt)?);
+        assert_eq!(
+            recovered,
+            pending.reject(attempt, crate::setup_storage::selection::unix_now()?)?
+        );
         drop(duplicate);
         Ok(())
     })
@@ -41,7 +44,7 @@ fn historical_preparation_only_engine_remains_staged_without_a_probe_trial() -> 
         let root = worker::installation(127, context)?;
         let workspace = tempfile::tempdir()?;
         let historical =
-            br#"{"schema_version":1,"preparation_protocols":[1],"installation_schemas":[2]}"#;
+            br#"{"schema_version":1,"preparation_protocols":[1],"installation_schemas":[3]}"#;
         let (bytes, _) = archive(historical)?;
         let (trust, offer, download) = evidence(root.path(), &bytes, Component::Updater, context)?;
         let prepared = UpdaterPackage::import(

@@ -21,13 +21,13 @@ fn records() -> Result<[InstallationRecord; 4]> {
     let a = generation(1)?;
     let b = generation(2)?;
     let empty = InstallationRecord::empty(InstallationId::new("9".repeat(32))?);
-    let staged = empty.prepare(a.clone(), PreparationIntent::Automatic)?;
+    let staged = empty.prepare(a.clone(), PreparationIntent::Automatic, 1)?;
     let trial = staged.prepared(&a)?.begin_trial()?;
     let Some(Candidate::Trial { attempt }) = trial.candidate() else {
         return Err("Expected a trial".into());
     };
     let accepted = trial.accept(&attempt.clone())?;
-    let staging = accepted.prepare(b.clone(), PreparationIntent::Automatic)?;
+    let staging = accepted.prepare(b.clone(), PreparationIntent::Automatic, 1)?;
     let prepared = staging.prepared(&b)?;
     let on_trial = prepared.begin_trial()?;
     Ok([accepted, staging, prepared, on_trial])

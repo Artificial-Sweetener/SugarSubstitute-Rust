@@ -45,9 +45,10 @@ impl CoordinatorAuthority {
         )?;
         let application =
             self.installation.application().cloned().ok_or(AuthorityIssue::Identity)?;
+        let verdict = self.installation.verdict();
         self.installation
             .settlement
-            .start(client, scope, spec, application, publication::Decision::FinishSettled)
+            .start(client, scope, spec, application, publication::Decision::Finish(verdict))
             .map_err(|cause| {
                 self.fail(Failure::InstallationAdmission(cause));
                 AuthorityIssue::Adapter

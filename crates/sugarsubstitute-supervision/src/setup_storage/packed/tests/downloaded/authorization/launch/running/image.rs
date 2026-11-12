@@ -50,6 +50,7 @@ fn helper_image_pins_payloads_but_releases_run_and_allows_selection_and_setup() 
                 )?,
             },
             PreparationIntent::Automatic,
+            crate::setup_storage::selection::unix_now()?,
         )?;
         store.compare_exchange(&before, &prepared, &context)?;
         drop(setup);

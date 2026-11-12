@@ -170,14 +170,14 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded/authorization/launch/maintenance.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:c2848db7c679138f3085a7dba0960b7c94a8be5d08994c3525d7b5ea2d70bcc4"
+source_sha256 = "sha256:b75a998dfb9571e2ebf8c5388f49dd25a59c89b639027a28174bf70aa4738b33"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded/authorization/launch/running/image.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:5c32e6b3248b7ef00c433c03a586526ee7ebc76ed5e3da2d1972d0eb3a00dc36"
+source_sha256 = "sha256:464c2ba9a27cc932921d125453ee8abfdf448b5bab3d2bf2af7411a76165e79c"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -219,7 +219,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/test_package/maintenance.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:5ca5100036a47daf6a4305014ce7734a87776eb30308b95dd4264628a6624081"
+source_sha256 = "sha256:1ca22fb83e63bd8c5d578b4c5fe70f8ac35f16db81ac4d6dc6a1fb9880742764"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -303,7 +303,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute/src/setup.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:5fb663595bafee906bf4154b116346ffaa84632fa6a165ee4272ce2526a23a42"
+source_sha256 = "sha256:bb99065368dc81803c6bcc78317425df6c2dab3c4cca65bac5ffcd3e0b644f04"
 capabilities = ["arguments"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -317,7 +317,7 @@ rationale = "Launch engine stand-in fixture: the child half reads its own fault 
 [[records]]
 path = "crates/sugarsubstitute/src/stable_launcher.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:cb9afbd9eacb66133aa31014379010614f7c9b9fb96ab398a88fccd28a2d6f91"
+source_sha256 = "sha256:75b34e505402a7ef79bf2349001b79921d548fc8bb9f205ac495a2dd92357f40"
 capabilities = ["arguments"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -534,7 +534,7 @@ rationale = "Native first-install publication fixtures observe saved startup doc
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/fresh/installed/rescue.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:00199c7a158797de8a08abad76ece7a47168a95ca2f90f61353837828cb017f8"
+source_sha256 = "sha256:a45707b1aa99d6f824a1a8a16938b5d3fb37a6e4b908a11f371aeb978761b6b5"
 capabilities = ["document"]
 rationale = "Lost-trial rescue fixtures preserve exact saved startup bytes and reject reauthorization of failed payloads."
 
@@ -889,9 +889,16 @@ capabilities = ["codec"]
 rationale = "Construct isolated malformed UI policy documents to verify unknown-schema, duplicate, stale-review and dependency-identity rejection through the real governance checker."
 
 [[records]]
+path = "crates/sugarsubstitute-desktop/src/report/surface/native_tests/evidence.rs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:f149809abb75fb8c0c56d7f849f728d6354eb4fbdd688137fbce747bbc34e0ac"
+capabilities = ["environment"]
+rationale = "Read only the optional qualification evidence directory for report captures; tests write their own rendered frames there and read or write no product settings."
+
+[[records]]
 path = "crates/sugarsubstitute-desktop/src/windows_test_desktop.rs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:b186f6268b007a7c928cb431564be681aadf246c2950be073e758deaa23f2fa5"
+source_sha256 = "sha256:3c92ea96f776a5b0e08fd2557b37429671e0180ea3c5f2010eb20232ec432f85"
 capabilities = ["environment"]
 rationale = "Read only the exact per-test private-desktop and target environment selectors; the parent retains the actual child process and desktop through checked process termination without reading or writing product settings."
 
@@ -982,7 +989,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/user_data/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:53989fe6c3df2023968c044b71046a4c61a393dcecdab7b8efec2da521803d50"
+source_sha256 = "sha256:054f04d3efe3e610e7d49bc9e2cbcd879e898655a5d229c71d072cf865314fc8"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 

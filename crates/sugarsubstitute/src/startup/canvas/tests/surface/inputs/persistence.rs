@@ -3,6 +3,8 @@
 //! Restore input documents across a restart and rebuild them when the archive is corrupt.
 
 use super::*;
+use sugarsubstitute_application::workspace_session::close_save::{SaveFailure, SaveVerdict};
+use sugarsubstitute_contracts::execution::Moment;
 
 /// Debounce periods that may elapse on the fixture clock before an absent save counts as lost.
 const SAVE_PERIODS: u32 = 16;
@@ -189,6 +191,208 @@ fn closing_saves_edits_made_before_the_autosave_debounce_elapses() -> Result<(),
     let mut second = Inputs::start(directory.path())?;
     let result = second.workflow(sync(None))?;
     assert_eq!(synced(&result, "latent")?, &latent);
+    second.close()
+}
+
+/// The close save's input verdict at the fixture clock's current moment.
+fn verdict(inputs: &Inputs) -> Option<SaveVerdict> {
+    inputs.canvas.input_close_verdict(Moment::from_nanos(inputs.clock.0.load(Ordering::SeqCst)))
+}
+
+/// A graceful cutoff `seconds` after the fixture clock's current moment.
+fn cutoff_after(inputs: &Inputs, seconds: u64) -> Moment {
+    Moment::from_nanos(inputs.clock.0.load(Ordering::SeqCst) + seconds * 1_000_000_000)
+}
+
+#[test]
+fn the_close_save_writes_unsaved_input_edits_while_the_canvas_stays_open()
+-> Result<(), Box<dyn Error>> {
+    let directory = anchor()?;
+    let archive = session_directory(directory.path()).join("input-documents.ssdoc");
+    let mut first = Inputs::start(directory.path())?;
+    first.workflow(sync(None))?;
+    first.save_until(|| archive.is_file())?;
+    let saved = std::fs::read(&archive)?;
+    let resize = json!({"type":"resize", "workflow":WORKFLOW, "surface":"latent", "width":7,
+        "height":3, "mode":{"kind":"scale", "resampling":"nearest"}});
+    let latent = synced(&first.workflow(resize)?, "latent")?.clone();
+    let cutoff = cutoff_after(&first, 10);
+    first.canvas.begin_close_save(cutoff);
+    // The final save is owned work submitted before any exit intent or canvas close.
+    first.until("The final input save never settled", |inputs| verdict(inputs).is_some())?;
+    assert_eq!(verdict(&first), Some(SaveVerdict::Saved));
+    assert!(first.canvas.cutoff.is_none(), "the canvas is still open");
+    assert_ne!(std::fs::read(&archive)?, saved, "the close save wrote the edit");
+    first.close()?;
+
+    let mut second = Inputs::start(directory.path())?;
+    assert_eq!(synced(&second.workflow(sync(None))?, "latent")?, &latent);
+    second.close()
+}
+
+#[test]
+fn a_failed_final_input_write_is_reported_failed_and_keeps_the_previous_archive()
+-> Result<(), Box<dyn Error>> {
+    let directory = anchor()?;
+    let session = session_directory(directory.path());
+    let archive = session.join("input-documents.ssdoc");
+    let mut first = Inputs::start(directory.path())?;
+    first.workflow(sync(None))?;
+    first.save_until(|| archive.is_file())?;
+    let resize = json!({"type":"resize", "workflow":WORKFLOW, "surface":"latent", "width":7,
+        "height":3, "mode":{"kind":"scale", "resampling":"nearest"}});
+    first.workflow(resize)?;
+    // Fault injection at the store write: the archive leaf cannot be replaced.
+    let previous = std::fs::read(&archive)?;
+    std::fs::remove_file(&archive)?;
+    std::fs::create_dir(&archive)?;
+    first.canvas.begin_close_save(cutoff_after(&first, 10));
+    first.until("The final input save never settled", |inputs| verdict(inputs).is_some())?;
+    assert_eq!(verdict(&first), Some(SaveVerdict::Failed(SaveFailure::Storage)));
+    std::fs::remove_dir(&archive)?;
+    std::fs::write(&archive, &previous)?;
+    first.close()
+}
+
+#[test]
+fn a_final_input_save_unfinished_at_the_cutoff_is_stale() -> Result<(), Box<dyn Error>> {
+    let directory = anchor()?;
+    let archive = session_directory(directory.path()).join("input-documents.ssdoc");
+    let mut first = Inputs::start(directory.path())?;
+    first.workflow(sync(None))?;
+    first.save_until(|| archive.is_file())?;
+    let resize = json!({"type":"resize", "workflow":WORKFLOW, "surface":"latent", "width":7,
+        "height":3, "mode":{"kind":"scale", "resampling":"nearest"}});
+    first.workflow(resize)?;
+    let edited = Moment::from_nanos(first.clock.0.load(Ordering::SeqCst));
+    // An already-reached cutoff: the save is stopped before it replaces the archive.
+    let cutoff = Moment::from_nanos(first.clock.0.load(Ordering::SeqCst));
+    first.canvas.begin_close_save(cutoff);
+    first.until("The final input save never settled", |inputs| verdict(inputs).is_some())?;
+    assert!(
+        matches!(verdict(&first), Some(SaveVerdict::Stale { since }) if since <= edited),
+        "{:?}",
+        verdict(&first)
+    );
+    first.close()
+}
+
+#[test]
+fn a_hard_kill_loses_at_most_one_autosave_window_of_strokes() -> Result<(), Box<dyn Error>> {
+    let directory = anchor()?;
+    let archive = session_directory(directory.path()).join("input-documents.ssdoc");
+    let mut first = Inputs::start(directory.path())?;
+    let image = synced(&first.workflow(sync(None))?, "image")?.clone();
+    first.workflow(activate(Some("image"), Some("empty"), "input"))?;
+    first.context_until(|document| document["id"] == image["document"]["id"])?;
+    first.save_until(|| archive.is_file())?;
+    let saved = std::fs::read(&archive)?;
+    first.ask("edit.request", Some(json!({"type":"tool", "tool":"brush"})))?;
+    first.drag(&[[2.0, 3.0], [6.0, 3.0]])?;
+    first.release()?;
+    // The stroke's end schedules its save; one longest delay later it is on disk, with no close.
+    first.ask("context.request", None)?;
+    first.clock.0.fetch_add(
+        u64::try_from(crate::native_canvas::session::inputs::AUTOSAVE.longest.as_nanos())?,
+        Ordering::SeqCst,
+    );
+    first.until("The stroke was not saved within one autosave window", |_| {
+        std::fs::read(&archive).is_ok_and(|bytes| bytes != saved)
+    })?;
+    first.close()
+}
+
+/// A surface whose base is a ComfyUI temporary file, which ComfyUI deletes when it starts.
+fn temporary_surfaces() -> Value {
+    surfaces_on("temp")
+}
+
+/// A surface whose base is `preview.png` in ComfyUI's `storage`, with one loaded mask.
+fn surfaces_on(storage: &str) -> Value {
+    json!([
+        {"key":"image", "label":"Preview",
+         "base":{"kind":"file", "file":{"filename":"preview.png", "subfolder":"", "type":storage}},
+         "masks":[
+            {"key":"painted", "label":"Painted", "color":"#ff0000", "opacity":0.5,
+             "initial":input_file("mask.png"), "channel":"red"}]}
+    ])
+}
+
+#[test]
+fn a_temporary_base_and_its_masks_restore_after_comfyui_cleared_its_temporary_files()
+-> Result<(), Box<dyn Error>> {
+    restores_after_its_file_is_gone("temp")
+}
+
+#[test]
+fn an_output_base_and_its_masks_restore_after_the_output_was_deleted() -> Result<(), Box<dyn Error>>
+{
+    restores_after_its_file_is_gone("output")
+}
+
+/// Author masks over a base in `storage`, restart without its file, and restore everything.
+fn restores_after_its_file_is_gone(storage: &str) -> Result<(), Box<dyn Error>> {
+    let directory = anchor()?;
+    let output = directory.path().join("canvas-qualification-output");
+    rgba(&output.join("preview.png"), 8, 6, |x, y| [200, x as u8 * 20, y as u8 * 30, 255])?;
+    let archive = session_directory(directory.path()).join("input-documents.ssdoc");
+    let sync = json!({"type":"sync", "workflow":WORKFLOW, "surfaces":surfaces_on(storage)});
+    let mut first = Inputs::start(directory.path())?;
+    let result = first.workflow(sync.clone())?;
+    let image = synced(&result, "image")?.clone();
+    first.workflow(activate(Some("image"), Some("painted"), "input"))?;
+    first.context_until(|document| document["id"] == image["document"]["id"])?;
+    let targets = json!([{"kind":"composition"}, {"kind":"layer", "layerId":"layer-2"}]);
+    let authored =
+        first.ask("source.request", Some(capture_command(&image["document"], &targets)))?;
+    first.save_until(|| archive.is_file())?;
+    first.close()?;
+    std::fs::remove_file(output.join("preview.png"))?;
+
+    let mut second = Inputs::start(directory.path())?;
+    let result = second.workflow(sync)?;
+    assert_eq!(synced(&result, "image")?, &image, "{result}");
+    second.context_until(|document| document["id"] == image["document"]["id"])?;
+    let restored =
+        second.ask("source.request", Some(capture_command(&image["document"], &targets)))?;
+    // Pixels and every other field match; a document revision counts edits within one run.
+    let without_revision = |value: &Value| -> Value {
+        let mut value = value.clone();
+        if let Some(snapshots) = value.as_array_mut() {
+            snapshots.iter_mut().filter_map(Value::as_object_mut).for_each(|snapshot| {
+                snapshot.remove("revision");
+            });
+        }
+        value
+    };
+    assert_eq!(
+        without_revision(&restored["result"]["snapshots"]),
+        without_revision(&authored["result"]["snapshots"])
+    );
+    second.close()
+}
+
+#[test]
+fn without_a_retained_original_a_temporary_base_cannot_restore_after_comfyui_cleared_it()
+-> Result<(), Box<dyn Error>> {
+    let directory = anchor()?;
+    let output = directory.path().join("canvas-qualification-output");
+    rgba(&output.join("preview.png"), 8, 6, |_, _| [200, 10, 10, 255])?;
+    let archive = session_directory(directory.path()).join("input-documents.ssdoc");
+    let sync = json!({"type":"sync", "workflow":WORKFLOW, "surfaces":temporary_surfaces()});
+    let mut first = Inputs::start(directory.path())?;
+    first.canvas.surface.retained_bases = None;
+    let image = synced(&first.workflow(sync.clone())?, "image")?.clone();
+    first.workflow(activate(Some("image"), Some("painted"), "input"))?;
+    first.context_until(|document| document["id"] == image["document"]["id"])?;
+    first.save_until(|| archive.is_file())?;
+    first.close()?;
+    std::fs::remove_file(output.join("preview.png"))?;
+
+    let mut second = Inputs::start(directory.path())?;
+    let result = second.workflow(sync)?;
+    let restored = synced(&result, "image").ok().filter(|surface| !surface["document"].is_null());
+    assert!(restored.is_none(), "the archived masks lost their base: {result}");
     second.close()
 }
 

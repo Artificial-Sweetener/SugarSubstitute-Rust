@@ -88,6 +88,7 @@ impl WorkspaceSession {
             closing: self.closing.is_some(),
         };
         self.next_revision = revision;
+        self.unsaved_since = self.unsaved_since.or(self.schedule.since());
         self.schedule.take();
         self.active = Some(ticket.clone());
         Ok(Some(ticket))
@@ -168,6 +169,7 @@ impl WorkspaceSession {
             let receipt =
                 DurableCheckpoint { id: ticket.checkpoint.clone(), revision: ticket.revision };
             self.durable = Some(receipt.clone());
+            self.unsaved_since = None;
             if self.closing.is_some() && self.schedule.dirty() {
                 self.schedule.force(now);
             }

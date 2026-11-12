@@ -8,6 +8,12 @@ use crate::setup_storage::{
 };
 use std::{os::windows::io::OwnedHandle, sync::Mutex};
 
+/// The custody witness saw the coordinator crash before it settled the trial.
+const CRASHED: sugarsubstitute_contracts::installation::TrialVerdict =
+    sugarsubstitute_contracts::installation::TrialVerdict::Bad(
+        sugarsubstitute_contracts::installation::BadTrial::Crashed,
+    );
+
 type Failure = Box<dyn std::error::Error + Send + Sync>;
 type Transfer = (tempfile::TempDir, PathBuf, [OwnedHandle; 2]);
 
@@ -55,9 +61,13 @@ fn authenticated_noninheritable_outputs_fit_the_independent_storage_reservation(
         let witness =
             TrialWitness::receive_transferred(store.clone(), handles, &generation, context)?;
         assert_eq!(store.load(context)?, Some(original.clone()));
-        let rejected = witness.finish_settled(context)?;
-        assert_eq!(rejected, original.reject(witness.attempt())?);
-        assert_eq!(witness.finish_settled(context)?, rejected);
+        let rejected = witness.finish_settled(CRASHED, context)?;
+        assert_eq!(
+            rejected,
+            original
+                .reject(witness.attempt(), rejected.strikes().first().ok_or("Strike absent")?.at)?
+        );
+        assert_eq!(witness.finish_settled(CRASHED, context)?, rejected);
         assert!(InstallationRun::acquire(store.clone(), context).is_err());
         drop(witness);
         let _successor = InstallationRun::acquire(store, context)?;
@@ -76,7 +86,7 @@ fn admission_job_expiry_does_not_destroy_transferred_witness_custody() -> TestRe
         let witness =
             TrialWitness::receive_transferred(store.clone(), handles, &generation, context)?;
         clock.expire();
-        match witness.finish_settled(context) {
+        match witness.finish_settled(CRASHED, context) {
             Err(SelectionFailure::Storage(cause)) => {
                 assert_eq!(cause.kind(), io::ErrorKind::TimedOut)
             }
@@ -92,8 +102,12 @@ fn admission_job_expiry_does_not_destroy_transferred_witness_custody() -> TestRe
             retained.as_ref().ok_or("Witness custody absent")?;
         assert_eq!(store.load(context)?.as_ref(), Some(original));
         assert!(InstallationRun::acquire(store.clone(), context).is_err());
-        let rejected = witness.finish_settled(context)?;
-        assert_eq!(rejected, original.reject(witness.attempt())?);
+        let rejected = witness.finish_settled(CRASHED, context)?;
+        assert_eq!(
+            rejected,
+            original
+                .reject(witness.attempt(), rejected.strikes().first().ok_or("Strike absent")?.at)?
+        );
         assert_eq!(store.load(context)?, Some(rejected));
         Ok(())
     })

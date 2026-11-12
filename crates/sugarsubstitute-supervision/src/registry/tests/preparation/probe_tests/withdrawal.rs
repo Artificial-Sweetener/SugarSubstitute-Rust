@@ -78,7 +78,7 @@ fn withdrawal(reject_before: bool, fail_write: bool) -> TestResult {
     let (_fixture, state) = selection(&mut h, fixture)?;
     assert!(matches!(state.candidate(), Some(Candidate::Prepared { .. })));
     assert!(state.accepted().is_none());
-    assert!(state.rejected().is_empty());
+    assert!(state.strikes().is_empty());
     Ok(())
 }
 

@@ -124,8 +124,8 @@ impl SelectionStore {
 }
 
 /// Resolve an existing installed selection for the stable launcher without creating state.
-/// Offline accepted selection is sufficient. Abandoned trials are quarantined under exclusive
-/// run ownership before pinning the accepted selection. No payloads or user files are retired.
+/// Offline accepted selection is sufficient. Abandoned trials are resolved without a verdict
+/// under exclusive run ownership before pinning the accepted selection. No payloads or user files are retired.
 /// A live trial supplies a verified invocation for coordinator forwarding without transferring
 /// its run custody or claiming health. Its snapshot permits the original owner's publication.
 /// # Errors

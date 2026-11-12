@@ -66,7 +66,7 @@ mod tests {
             let returned = crate::production::entry_failure::report_failure::<
                 NoChild,
                 std::io::Error,
-            >(failure, |_, summary, details| {
+            >(failure, |_, _, summary, details| {
                 assert_eq!(summary, selected.report.startup_failed);
                 assert!(details.to_string().contains("Original failure"));
                 shown = true;

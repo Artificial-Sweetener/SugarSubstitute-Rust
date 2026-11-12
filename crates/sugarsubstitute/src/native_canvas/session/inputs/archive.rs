@@ -10,24 +10,34 @@
 //! metadata is invalid, leaves no documents: the next sync rebuilds them from the workflow.
 //!
 //! After that, every change to the documents or their synced state advances a content
-//! generation that [`Autosave`] coalesces into one save of only changed content. Close cancels
-//! the startup load and saves whatever is still unsaved as a final owned job bounded by the
-//! shutdown cutoff; a save that cannot finish by then leaves the previous archive intact.
+//! generation that [`Autosave`] coalesces into one save of only changed content. A brush stroke
+//! commits to its document when it ends, so the stroke's end is the change that schedules its
+//! save: a quarter second later, and never more than two seconds after the oldest unsaved
+//! change while strokes keep arriving. A hard kill therefore loses at most that window.
+//!
+//! The application's close save begins the final save while the window is still up, before
+//! the exit intent: it captures whatever is unsaved and saves it as an owned job bounded by the
+//! graceful cutoff, and answers with a [`SaveVerdict`]. A save that cannot finish by then
+//! leaves the previous archive intact and is reported stale; a failed write is reported failed.
+mod final_save;
 mod metadata;
+mod retirement;
 mod workspace;
 
 use super::*;
 use crate::input_documents::{
     Autosave, AutosavePolicy, InputDocumentStore, Restored, SaveOutcome, StoreError,
 };
+use final_save::{FinalSave, FinalStage};
 use std::hash::{DefaultHasher, Hash, Hasher};
+use sugarsubstitute_application::workspace_session::close_save::{SaveFailure, SaveVerdict};
 use sugarsubstitute_canvas::{
     ArchiveError, ArchivedDocument, InputDocumentArchive, LayerContent, SourceReference,
 };
 
-/// Debounce of automatic saves.
-const POLICY: AutosavePolicy =
-    AutosavePolicy { quiet: Duration::from_secs(2), longest: Duration::from_secs(10) };
+/// Debounce of automatic saves, matching the workspace checkpoint's longest delay.
+pub(crate) const POLICY: AutosavePolicy =
+    AutosavePolicy { quiet: Duration::from_millis(250), longest: Duration::from_secs(2) };
 
 /// Startup restore and automatic saving of one session directory.
 pub(in crate::native_canvas::session) struct Persistence {
@@ -37,14 +47,12 @@ pub(in crate::native_canvas::session) struct Persistence {
     autosave: Option<Autosave>,
     generation: u64,
     signature: Option<u64>,
-    /// The final save of the first close, once close was requested.
+    /// When the oldest change not yet durable was made.
+    unsaved_since: Option<Moment>,
+    /// The final save of the close save, once it began.
     final_save: Option<FinalSave>,
-}
-
-/// Unsaved content captured at close, waiting for a running save, or already submitted.
-enum FinalSave {
-    Waiting(Box<InputDocumentArchive>),
-    Submitted,
+    /// The decision which retained originals no document needs, after a durable save.
+    retirement: Option<OwnedJob<Vec<String>, StoreError>>,
 }
 
 enum Load {
@@ -59,12 +67,16 @@ impl Persistence {
     pub(super) fn in_flight(&self) -> bool {
         matches!(self.load, Load::Running(_))
             || self.autosave.as_ref().is_some_and(Autosave::saving)
+            || self.retirement.is_some()
     }
 
     /// Cancel the startup load; its outcome is still observed. A running save continues so the
     /// final save can follow it.
     pub(super) fn close(&mut self) {
         if let Load::Running(job) = &self.load {
+            job.cancel();
+        }
+        if let Some(job) = &self.retirement {
             job.cancel();
         }
     }
@@ -90,7 +102,9 @@ impl Session {
             autosave: None,
             generation: 0,
             signature: None,
+            unsaved_since: None,
             final_save: None,
+            retirement: None,
         });
     }
     /// Resolve the existing host-association hold before admitting any workflow input sync.
@@ -164,12 +178,13 @@ impl Session {
         &mut self,
     ) -> Result<(), Box<dyn Error>> {
         let now = self.clock.now();
-        let closing = self.closing;
         let Some(persistence) = self.inputs.persistence.as_mut() else { return Ok(()) };
         if let Some(autosave) = &mut persistence.autosave
             && let Some(outcome) = autosave.observe(now)?
         {
-            match outcome {
+            let dirty = autosave.dirty();
+            let closing = persistence.final_save.is_some();
+            match &outcome {
                 SaveOutcome::Saved(receipt) => tracing::debug!(
                     operation = "input_documents_autosave",
                     bytes = receipt.bytes,
@@ -183,11 +198,29 @@ impl Session {
                     tracing::debug!(operation = "input_documents_autosave", outcome = ?kind, "Input document save stopped")
                 }
             }
-            if closing {
+            let durable = matches!(outcome, SaveOutcome::Saved(_) | SaveOutcome::Unchanged);
+            if durable && !dirty {
+                persistence.unsaved_since = None;
+            }
+            let written = matches!(outcome, SaveOutcome::Saved(_));
+            if let Some(final_save) = &mut persistence.final_save {
+                if matches!(final_save.stage, FinalStage::Running) {
+                    let since = persistence.unsaved_since.unwrap_or(final_save.began);
+                    final_save.stage = FinalStage::Settled(match outcome {
+                        _ if durable && !dirty => SaveVerdict::Saved,
+                        SaveOutcome::Failed(_) => SaveVerdict::Failed(SaveFailure::Storage),
+                        _ => SaveVerdict::Stale { since },
+                    });
+                }
                 self.submit_final_save();
                 return Ok(());
             }
+            if written {
+                self.plan_base_retirement()?;
+            }
         }
+        self.observe_base_retirement();
+        let Some(persistence) = self.inputs.persistence.as_mut() else { return Ok(()) };
         let Load::Running(job) = &mut persistence.load else { return Ok(()) };
         let Some(completion) = job.try_take_completion() else { return Ok(()) };
         persistence.load = Load::Done;
@@ -229,11 +262,9 @@ impl Session {
     pub(in crate::native_canvas::session) fn advance_input_autosave(
         &mut self,
     ) -> Result<(), Box<dyn Error>> {
-        let saving = self
-            .inputs
-            .persistence
-            .as_ref()
-            .is_some_and(|persistence| persistence.autosave.is_some());
+        let saving = self.inputs.persistence.as_ref().is_some_and(|persistence| {
+            persistence.autosave.is_some() && persistence.final_save.is_none()
+        });
         if self.closing || !saving {
             return Ok(());
         }
@@ -246,6 +277,7 @@ impl Session {
             Some(previous) if previous == signature => {}
             Some(_) => {
                 persistence.generation += 1;
+                persistence.unsaved_since.get_or_insert(now);
                 autosave.changed(persistence.generation, now)?;
             }
         }
@@ -262,6 +294,9 @@ impl Session {
             None => Ok(None),
         };
         if let Some(persistence) = self.inputs.persistence.as_mut() {
+            if matches!(polled, Ok(Some(SaveOutcome::Unchanged))) && !autosave.dirty() {
+                persistence.unsaved_since = None;
+            }
             persistence.autosave = Some(autosave);
         }
         if let Err(cause) = polled {
@@ -270,70 +305,6 @@ impl Session {
         Ok(())
     }
 
-    /// At the first close, capture every unsaved change while the documents are still in place
-    /// and save it as an owned job bounded by the shutdown cutoff. A save already running
-    /// finishes first; observing it submits the captured final save.
-    pub(in crate::native_canvas::session) fn close_input_documents(&mut self) {
-        let now = self.clock.now();
-        let signature = self.input_signature();
-        let Some(persistence) = self.inputs.persistence.as_mut() else { return };
-        let Some(autosave) = persistence.autosave.as_mut() else { return };
-        if persistence.final_save.is_some() {
-            return;
-        }
-        persistence.final_save = Some(FinalSave::Submitted);
-        // A change since the last poll has not reached the schedule yet.
-        if persistence.signature.replace(signature).is_some_and(|previous| previous != signature) {
-            persistence.generation += 1;
-            if let Err(cause) = autosave.changed(persistence.generation, now) {
-                tracing::warn!(operation = "input_documents_close_save", cause_chain = %crate::diagnostics::CauseChain(&cause), "A final input-document change could not be scheduled");
-            }
-        }
-        if !autosave.dirty() {
-            return;
-        }
-        match self.input_archive() {
-            Ok(archive) => {
-                let final_save = FinalSave::Waiting(Box::new(archive));
-                if let Some(persistence) = self.inputs.persistence.as_mut() {
-                    persistence.final_save = Some(final_save);
-                }
-                self.submit_final_save();
-            }
-            Err(cause) => {
-                tracing::warn!(operation = "input_documents_close_save", cause_chain = %crate::diagnostics::CauseChain(&cause), "The final input documents could not be captured; the previous archive is kept");
-            }
-        }
-    }
-
-    /// Submit the captured final save once no other save is running.
-    fn submit_final_save(&mut self) {
-        let Some(cutoff) = self.shutdown_deadline else { return };
-        let now = self.clock.now();
-        let Some(persistence) = self.inputs.persistence.as_mut() else { return };
-        if persistence.autosave.as_ref().is_none_or(Autosave::saving)
-            || !matches!(persistence.final_save, Some(FinalSave::Waiting(_)))
-        {
-            return;
-        }
-        let Some(FinalSave::Waiting(archive)) =
-            persistence.final_save.replace(FinalSave::Submitted)
-        else {
-            return;
-        };
-        let Some(autosave) = persistence.autosave.as_mut() else { return };
-        let flushed = match self.runtime.as_ref() {
-            Some(runtime) => {
-                autosave.flush(now, cutoff, &runtime.client, &runtime.scope, &self.sequence, || {
-                    Ok(*archive)
-                })
-            }
-            None => Ok(None),
-        };
-        if let Err(cause) = flushed {
-            tracing::warn!(operation = "input_documents_close_save", cause_chain = %crate::diagnostics::CauseChain(&cause), "The final input-document save could not start; the previous archive is kept");
-        }
-    }
     /// When the next automatic save is due.
     pub(in crate::native_canvas::session) fn input_autosave_deadline(&self) -> Option<Moment> {
         self.inputs.persistence.as_ref()?.autosave.as_ref()?.deadline()

@@ -59,7 +59,7 @@ fn only_accepted_normal_shutdown_suppresses_a_nested_failure_dialog() -> Result<
         let reported = crate::production::entry_failure::report_failure::<
             super::super::tests::NoChild,
             std::io::Error,
-        >(failure, |_, _, _| {
+        >(failure, |_, _, _, _| {
             shown.set(true);
             Ok(())
         });

@@ -134,6 +134,12 @@ impl WorkspaceWork {
         }) {
             Ok(job) => self.active = Some(Active::Publish { ticket,job }),
             Err(OwnedInputError::Admission(AdmissionError::MemorySaturated {..} | AdmissionError::QueueSaturated {..} | AdmissionError::CompletionSaturated)) => {}
+            // A publication no release can ever admit fails now; the previous checkpoint stays.
+            Err(OwnedInputError::Admission(cause @ AdmissionError::ExceedsCapacity { .. })) => {
+                tracing::warn!(operation="workspace_publish",cause=%cause,"Workspace publication can never be admitted; previous checkpoint retained");
+                let input = self.publish_input.take().ok_or("Workspace publication input disappeared")?;
+                self.driver.as_mut().ok_or("Workspace driver absent")?.publication_failed(&input.ticket, now)?;
+            }
             Err(cause) => return Err(cause.into()),
         }
         Ok(())

@@ -3,7 +3,10 @@
 //! Keep installation admission and its original completion with the elected coordinator.
 use super::*;
 use std::sync::Arc;
-use sugarsubstitute_contracts::execution::ExecutionPort;
+use sugarsubstitute_contracts::{
+    execution::{AdmissionError, ExecutionPort},
+    installation::{CloseCause, FailedProcess, TrialFacts, TrialVerdict},
+};
 use sugarsubstitute_supervision::setup_storage::{self, RunningApplication};
 #[path = "installation/health.rs"]
 mod health;
@@ -20,6 +23,9 @@ mod terminal;
 #[cfg(test)]
 #[path = "installation/test_completion.rs"]
 mod test_completion;
+#[cfg(test)]
+#[path = "installation/trial_tests.rs"]
+mod trial_tests;
 
 type Completion = JobCompletion<Option<Arc<RunningApplication>>, std::io::Error>;
 
@@ -44,6 +50,18 @@ impl CoordinatorAuthority {
         Some((self.key()?, application.clone()))
     }
 
+    /// Record that `process` failed, for the verdict of an unaccepted trial. Call it where the
+    /// failure is first observed; the first ending fact decides the verdict.
+    pub(in crate::production) fn observe_trial_failure(&mut self, process: FailedProcess) {
+        self.installation.facts.observe_failure(process);
+    }
+
+    /// Record that an owner asked this app to close for `cause`, for the verdict of an
+    /// unaccepted trial. A failure observed after it is a consequence of closing.
+    pub(in crate::production) fn observe_trial_close(&mut self, cause: CloseCause) {
+        self.installation.facts.observe_close(cause);
+    }
+
     /// Authenticated helper Finish may publish only after our installation workers retire.
     /// Observe actual terminals first, including failed/discarded health publication results.
     pub(in crate::production) fn installation_writers_retired(&self) -> bool {
@@ -60,6 +78,10 @@ pub(super) struct Ownership {
     settlement: publication::Publication,
     shell: shell::Shell,
     readiness_observed: bool,
+    facts: TrialFacts,
+    /// The health publication could not be admitted because execution capacity was full; the
+    /// next completion batch, which releases capacity, retries it.
+    health_waiting: bool,
     release: release::Release,
 }
 
@@ -74,6 +96,8 @@ impl Ownership {
             settlement: publication::Publication::new(),
             shell: shell::Shell::new(),
             readiness_observed: false,
+            facts: TrialFacts::default(),
+            health_waiting: false,
             release: release::Release::new(),
         }
     }
@@ -94,8 +118,17 @@ impl Ownership {
     }
 
     /// Consume the exact worker terminal once, preserving all success and failure custody.
+    /// A health publication that fails leaves the app open: its trial ends without a verdict
+    /// at settlement, and its original cause stays retained for the report.
     pub(super) fn consume(&mut self, batch: &CompletionBatch) -> Result<(), AuthorityIssue> {
-        self.health.consume(batch)?;
+        if let Err(issue) = self.health.consume(batch) {
+            tracing::warn!(
+                operation = "installation_trial_acceptance_unresolved",
+                issue = ?issue,
+                cause = ?self.health.failure_source().map(ToString::to_string),
+                "Trial acceptance was not published; the app stays open and the trial ends without a verdict"
+            );
+        }
         self.settlement.consume(batch)?;
         self.shell.consume(batch)?;
         let Some(job) = &mut self.job else { return Ok(()) };
@@ -158,6 +191,12 @@ impl Ownership {
     /// Record only authenticated main/browser/backend readiness supplied by the parent owner.
     pub(super) fn observe_readiness(&mut self) {
         self.readiness_observed = true;
+        self.facts.observe_readiness();
+    }
+
+    /// Verdict for settling an unaccepted trial, from the facts observed so far.
+    pub(super) fn verdict(&self) -> TrialVerdict {
+        self.facts.verdict()
     }
 
     fn application(&self) -> Option<&Arc<RunningApplication>> {
@@ -167,19 +206,34 @@ impl Ownership {
         }
     }
 
+    /// Whether observed readiness still waits for its health publication to be admitted.
+    pub(super) fn health_waiting(&self) -> bool {
+        self.health_waiting && self.readiness_observed && self.needs_health()
+    }
+
     /// Preserve the original ownership completion while the health writer borrows shared custody.
-    pub(super) fn accept_ready(
-        &mut self,
-        client: &ExecutionClient,
-        scope: &Scope,
-        spec: JobSpec,
-    ) -> Result<(), sugarsubstitute_contracts::execution::AdmissionError> {
-        if self.needs_health()
-            && let Some(application) = self.application().cloned()
-        {
-            self.health.start(client, scope, spec, application, publication::Decision::Accept)?;
+    /// Full execution capacity defers the publication to the next completion batch; any other
+    /// admission refusal leaves acceptance unpublished and the app open.
+    pub(super) fn accept_ready(&mut self, client: &ExecutionClient, scope: &Scope, spec: JobSpec) {
+        let Some(application) = self.application().cloned().filter(|_| self.needs_health()) else {
+            return;
+        };
+        let decision = publication::Decision::Accept;
+        self.health_waiting = false;
+        if let Err(cause) = self.health.start(client, scope, spec, application, decision) {
+            self.health_waiting = matches!(
+                cause,
+                AdmissionError::QueueSaturated { .. }
+                    | AdmissionError::CompletionSaturated
+                    | AdmissionError::MemorySaturated { .. }
+            );
+            tracing::warn!(
+                operation = "installation_trial_acceptance_deferred",
+                cause = %cause,
+                retry = self.health_waiting,
+                "Trial acceptance could not start; the app stays open"
+            );
         }
-        Ok(())
     }
 
     /// Publish shell access only after observed acceptance, with its own bounded worker lifetime.

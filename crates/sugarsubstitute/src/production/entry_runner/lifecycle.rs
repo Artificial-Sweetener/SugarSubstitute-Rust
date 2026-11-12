@@ -40,13 +40,14 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
         } else {
             None
         };
-        let child = match (
+        let child = [
             self.child.next_deadline(),
             self.updater.as_ref().and_then(crate::updates::parent::Parent::next_deadline),
-        ) {
-            (Some(a), Some(b)) => Some(a.min(b)),
-            (a, b) => a.or(b),
-        };
+            (!self.closing).then_some(self.update_wake).flatten(),
+        ]
+        .into_iter()
+        .flatten()
+        .min();
         match (own, child) {
             (Some(a), Some(b)) => Some(a.min(b)),
             (a, b) => a.or(b),
@@ -57,6 +58,11 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
             return Ok(());
         }
         self.closing = true;
+        if let Some(authority) = &mut self.authority {
+            authority.observe_trial_close(
+                sugarsubstitute_contracts::installation::CloseCause::Requested,
+            );
+        }
         drop(self.pending_activation.take());
         if let Some(bootstrap) = &mut self.bootstrap {
             bootstrap.request_close();

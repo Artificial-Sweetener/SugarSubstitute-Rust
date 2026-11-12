@@ -63,3 +63,12 @@ fn failed_native_construction_retains_original_owner_and_cause_until_actual_sett
     assert!(bootstrap.wake().wake().is_err());
     Ok(())
 }
+
+/// A host that offers no update refuses restart to apply instead of silently ignoring it.
+#[test]
+fn restart_to_apply_is_refused_by_a_host_without_an_updater() -> TestResult {
+    let mut content = Content::new()?;
+    assert!(crate::StartupWindowContent::request_restart_to_apply(&mut content).is_err());
+    assert!(content.calls.is_empty(), "refusing starts no close");
+    Ok(())
+}

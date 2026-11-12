@@ -9,16 +9,29 @@
 mod identity;
 mod record;
 mod transition;
+mod verdict;
 pub use identity::{GenerationId, InstallationId, PackageDigest};
-pub use record::{Candidate, Generation, InstallationRecord, SignedRelease, Trial};
+pub use record::{
+    Candidate, Generation, InstallationRecord, SignedRelease, Strike, Trial, Unwitnessed,
+};
+pub use verdict::{
+    BadTrial, CloseCause, FailedProcess, HostExit, TrialFacts, TrialVerdict,
+    UNRESPONSIVE_EXIT_STATUS, Undecided,
+};
 
 /// Selection schema read and written by this installation state owner.
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 
 /// Maximum encoded installation selection size in bytes, checked before parsing.
 pub const MAX_RECORD_BYTES: usize = 16 * 1024;
-/// Bounded recent failed package identities retained to suppress automatic retry loops.
-pub const MAX_REJECTED_PACKAGES: usize = 16;
+/// Bounded recently struck package identities retained to suppress automatic retry loops.
+pub const MAX_STRUCK_PACKAGES: usize = 16;
+/// Unexpired strikes that withhold a package from automatic preparation.
+pub const QUARANTINE_STRIKES: u8 = 2;
+/// Seconds a strike keeps counting, and so how long a withheld package stays withheld.
+pub const STRIKE_LIFETIME_SECONDS: u64 = 7 * 24 * 60 * 60;
+/// Abandoned trials of one package in a row whose last one counts as a strike.
+pub const UNWITNESSED_LIMIT: u8 = 3;
 
 /// A record or transition that cannot be admitted without changing its meaning.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -37,7 +50,7 @@ pub enum Rejection {
     Phase,
     /// A completion belongs to a different installation, generation or attempt.
     Binding,
-    /// Automatic retry of a package previously rejected by this installation.
+    /// Automatic retry of a package this installation currently withholds after bad trials.
     Quarantined,
 }
 impl std::fmt::Display for Rejection {

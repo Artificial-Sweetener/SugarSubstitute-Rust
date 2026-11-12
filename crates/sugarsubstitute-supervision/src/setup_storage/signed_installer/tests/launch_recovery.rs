@@ -60,7 +60,7 @@ fn unstarted_and_native_failed_creations_resume_the_same_signed_candidate_after_
             let store = Arc::new(SelectionStore::open(fixture.installation.path(), &context)?);
             let snapshot = store.load(&context)?.ok_or("Selection absent")?;
             assert!(matches!(snapshot.candidate(), Some(Candidate::Prepared { .. })));
-            assert!(snapshot.rejected().is_empty());
+            assert!(snapshot.strikes().is_empty());
             let run = InstallationRun::acquire(store, &context)?;
             drop(run);
             let prepared = fixture

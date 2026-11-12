@@ -10,6 +10,8 @@
 mod canvas;
 #[path = "startup/close_diagnostic.rs"]
 mod close_diagnostic;
+#[path = "startup/close_save.rs"]
+mod close_save;
 #[path = "startup/commands.rs"]
 mod commands;
 #[cfg(all(windows, feature = "native-composition"))]
@@ -112,6 +114,13 @@ pub struct StartupHost<B: StartupBackend> {
     commands: commands::StartupCommands,
     next_deadline: Option<Instant>,
     shutdown: shutdown::ShutdownTransaction,
+    /// Why the application closes; the first close request decides it.
+    close_reason: sugarsubstitute_application::workspace_session::close_save::CloseReason,
+    /// The close save, once the shutdown budget was measured.
+    close_save: Option<sugarsubstitute_application::workspace_session::close_save::CloseSave>,
+    close_record_submitted: bool,
+    #[cfg(all(test, windows, feature = "native-composition"))]
+    input_probe: Option<close_save::InputSaveProbe>,
 }
 
 #[cfg(all(test, windows, feature = "windows-native-host"))]
@@ -184,6 +193,12 @@ impl<B: StartupBackend> StartupHost<B> {
             commands: commands::StartupCommands::new(),
             next_deadline: None,
             shutdown: shutdown::ShutdownTransaction::new(),
+            close_reason:
+                sugarsubstitute_application::workspace_session::close_save::CloseReason::Close,
+            close_save: None,
+            close_record_submitted: false,
+            #[cfg(all(test, windows, feature = "native-composition"))]
+            input_probe: None,
         })
     }
     fn invalidate(&mut self, changed: bool) -> bool {
