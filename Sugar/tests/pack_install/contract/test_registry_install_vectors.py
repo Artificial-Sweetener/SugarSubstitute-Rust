@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 import os
 from pathlib import Path
@@ -31,10 +32,13 @@ from sugarcubes.backend.pack_install.archive import (
     list_registry_archive,
 )
 from sugarcubes.backend.pack_install.digest_manifest import (
+    DIGEST_MANIFEST_NAME,
+    DIGEST_RECORD_VERSION,
     parse_digest_manifest,
     read_digest_manifest,
+    render_digest_manifest,
 )
-from sugarcubes.backend.pack_install.entry_paths import parse_entry
+from sugarcubes.backend.pack_install.entry_paths import TRACKING_FILE_NAME, parse_entry
 from sugarcubes.backend.pack_install.errors import PackInstallError
 from sugarcubes.backend.pack_install.ownership import (
     OwnedPack,
@@ -46,6 +50,7 @@ from sugarcubes.backend.pack_install.replacement import (
     TrackedReplacement,
 )
 from sugarcubes.backend.pack_install.tracking import (
+    TRACKING_FORMAT_VERSION,
     parse_tracking,
     read_tracking,
     render_tracking,
@@ -235,3 +240,73 @@ def test_digest_manifest_vectors(vector: JsonObject) -> None:
         assert recorded == expected["files"]
     else:
         assert recorded is None
+
+
+def test_digest_record_renders_exactly_the_shared_bytes() -> None:
+    """Every implementation writes the same record bytes for the same install."""
+
+    first = cast(JsonObject, DIGEST_CASES[0]["manifest"])
+    rendered = render_digest_manifest(
+        version=str(DIGEST_MANIFESTS["version"]),
+        tracking_sha256=str(first["tracking"]),
+        files=cast(dict[str, str], first["files"]),
+    )
+    assert rendered == DIGEST_MANIFESTS["rendered"]
+
+
+def test_format_versions_match_the_shared_catalog() -> None:
+    """The record names and versions written here are the ones the vectors declare."""
+
+    formats = cast(dict[str, JsonObject], load_vectors()["formats"])
+    assert formats["tracking"] == {
+        "file": TRACKING_FILE_NAME,
+        "version": TRACKING_FORMAT_VERSION,
+    }
+    assert formats["digestRecord"] == {
+        "file": DIGEST_MANIFEST_NAME,
+        "version": DIGEST_RECORD_VERSION,
+    }
+
+
+# Every vector group and the Python suite that drives each of its vectors. The decision
+# groups run end to end through the updater in
+# tests/self_update/integration/test_update_decision_vectors.py.
+PYTHON_VECTOR_GROUPS = {
+    "formats": "test_format_versions_match_the_shared_catalog",
+    "trackingParse": "test_tracking_parse_vectors",
+    "trackingRender": "test_tracking_render_vectors",
+    "archives": "test_archive_vectors",
+    "archiveLimits": "test_archive_limit_vectors",
+    "ownership": "test_ownership_vectors",
+    "localEdits": "test_local_edit_vectors",
+    "replacements": "test_replacement_vectors",
+    "digestManifests": "test_digest_manifest_vectors",
+    "sourceSelection": "test_source_selection_vectors",
+    "updateRefusals": "test_update_refusal_vectors",
+    "rollbackTriggers": "test_rollback_trigger_vectors",
+}
+
+
+def test_every_vector_group_is_driven_and_every_name_is_unique() -> None:
+    """A group added to the shared file fails here until a Python suite drives it."""
+
+    document = load_vectors()
+    groups = set(document) - {"schema", "description"}
+    assert groups == set(PYTHON_VECTOR_GROUPS)
+    for name in groups:
+        value = document[name]
+        vectors = (
+            value
+            if isinstance(value, list)
+            else cast(JsonObject, value).get("cases", [])
+        )
+        names = [
+            str(cast(JsonObject, vector)["name"])
+            for vector in cast(list[object], vectors)
+        ]
+        assert len(names) == len(set(names)), name
+    decisions = importlib.import_module(
+        "tests.self_update.integration.test_update_decision_vectors"
+    )
+    for test in PYTHON_VECTOR_GROUPS.values():
+        assert callable(globals().get(test) or getattr(decisions, test, None)), test

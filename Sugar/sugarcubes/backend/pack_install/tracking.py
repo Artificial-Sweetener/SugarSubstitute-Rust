@@ -30,6 +30,9 @@ from .entry_paths import TRACKING_FILE_NAME, EntryName, parse_entry, validate_en
 from .errors import PackInstallError, PackInstallErrorCode
 from .filesystem import durable_replace_text
 
+# .tracking carries no version of its own (ComfyUI Manager defines it); this is the
+# version the shared install-format catalog records for the layout written here.
+TRACKING_FORMAT_VERSION = 1
 MAX_TRACKING_BYTES = 4 * 1024 * 1024
 MAX_TRACKED_ENTRIES = 20_000
 
@@ -103,6 +106,7 @@ def write_tracking(folder: Path, entries: tuple[EntryName, ...]) -> None:
 __all__ = [
     "MAX_TRACKED_ENTRIES",
     "MAX_TRACKING_BYTES",
+    "TRACKING_FORMAT_VERSION",
     "parse_tracking",
     "read_tracking",
     "render_tracking",

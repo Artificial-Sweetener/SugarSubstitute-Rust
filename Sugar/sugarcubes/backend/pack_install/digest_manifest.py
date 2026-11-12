@@ -35,7 +35,7 @@ from pathlib import Path
 from .entry_paths import DIGEST_MANIFEST_NAME, TRACKING_FILE_NAME, EntryName
 from .filesystem import durable_replace_text
 
-_SCHEMA = 1
+DIGEST_RECORD_VERSION = 1
 _MAX_BYTES = 8 * 1024 * 1024
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
@@ -56,7 +56,7 @@ def render_digest_manifest(
 
     return json.dumps(
         {
-            "schema": _SCHEMA,
+            "schema": DIGEST_RECORD_VERSION,
             "version": version,
             "tracking": tracking_sha256,
             "files": dict(sorted(files.items())),
@@ -87,7 +87,7 @@ def parse_digest_manifest(
         return None
     if (
         not isinstance(payload, dict)
-        or payload.get("schema") != _SCHEMA
+        or payload.get("schema") != DIGEST_RECORD_VERSION
         or payload.get("version") != version
         or payload.get("tracking") != tracking_sha256
     ):
@@ -141,6 +141,7 @@ def write_digest_manifest(
 
 __all__ = [
     "DIGEST_MANIFEST_NAME",
+    "DIGEST_RECORD_VERSION",
     "parse_digest_manifest",
     "read_digest_manifest",
     "render_digest_manifest",
