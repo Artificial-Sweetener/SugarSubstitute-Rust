@@ -226,8 +226,16 @@ fn restart_to_apply_relaunches_only_once_the_close_save_has_its_outcome() -> Tes
     let mut fixture = Fixture::new(true)?;
     fixture.host.workspace.as_mut().ok_or("Workspace")?.driver = None;
     fixture.host.input_probe = Some(InputSaveProbe::default());
-    fixture.host.request_close(CloseReason::RestartToApply)?;
+    fixture.host.request_restart_to_apply()?;
+    let budget = fixture.host.shutdown.budget()?;
     fixture.poll()?;
+    let probe = fixture.host.input_probe.as_ref().ok_or("Probe")?;
+    assert_eq!(probe.begun, Some(budget.graceful_until), "the close save began");
+    assert!(fixture.host.child.shutdown_requests.is_empty(), "no exit intent while saving");
+    assert!(matches!(
+        fixture.host.close_save_progress(),
+        Some(CloseSaveProgress::Saving { reason: CloseReason::RestartToApply, .. })
+    ));
     assert!(fixture.host.close_save_outcome().is_none(), "no relaunch while saving");
     assert!(!fixture.host.close_save_settled());
     fixture.host.input_probe.as_mut().ok_or("Probe")?.verdict = Some(SaveVerdict::Saved);

@@ -67,6 +67,13 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
         )
     }
 
+    /// Restart to apply a prepared update through the same close save as every other close.
+    fn request_restart_to_apply(&mut self) -> Result<(), Box<dyn Error>> {
+        self.request_close(
+            sugarsubstitute_application::workspace_session::close_save::CloseReason::RestartToApply,
+        )
+    }
+
     fn close_save_settled(&self) -> bool {
         self.close_save_outcome().is_some()
     }
