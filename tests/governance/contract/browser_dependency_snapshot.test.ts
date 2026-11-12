@@ -29,41 +29,52 @@ import os from 'node:os';
 import path from 'node:path';
 import { build } from 'esbuild';
 import { browserDependencyResolution } from '../../../scripts/BrowserBuildEnvironment.js';
+import { BUILD_FIXTURE_SETUP_TIMEOUT_MS } from '../../frontend_core/support/BuildFixtureBudget.js';
 
-test('preserves browser bundle bytes when a snapshot attaches the dependency installation', async () => {
-  const fixture = mkdtempSync(path.join(os.tmpdir(), 'sc-browser-dependencies-'));
-  const root = path.join(fixture, 'project');
-  const dependencies = path.join(root, 'node_modules');
-  let attached = false;
-  try {
-    mkdirSync(path.join(dependencies, 'fixture'), { recursive: true });
-    writeFileSync(path.join(dependencies, 'fixture/package.json'), '{"main":"index.js"}');
-    writeFileSync(path.join(dependencies, 'fixture/index.js'), 'export const answer=42;');
-    writeFileSync(path.join(root, 'entry.js'), 'export {answer} from "fixture";');
-    const compile = async (): Promise<string[]> => {
-      const result = await build({
-        ...browserDependencyResolution,
-        absWorkingDir: root,
-        entryPoints: ['entry.js'],
-        outdir: 'output',
-        bundle: true,
-        write: false,
-        format: 'esm',
-        platform: 'browser',
-      });
-      return result.outputFiles.map((file) => file.text);
-    };
-    const installed = await compile();
-    const external = path.join(fixture, 'installed');
-    renameSync(dependencies, external);
-    symlinkSync(external, dependencies, process.platform === 'win32' ? 'junction' : 'dir');
-    attached = true;
-    expect(await compile()).toEqual(installed);
-  } finally {
-    if (attached) {
-      if (process.platform === 'win32') rmdirSync(dependencies);
-      else unlinkSync(dependencies);
-    }
-    rmSync(fixture, { recursive: true, force: true });
+const fixture = mkdtempSync(path.join(os.tmpdir(), 'sc-browser-dependencies-'));
+const root = path.join(fixture, 'project');
+const dependencies = path.join(root, 'node_modules');
+let attached = false;
+let installed: string[] = [];
+let snapshot: string[] = [];
+
+/** Bundle the fixture entry through the browser dependency resolution under test. */
+async function compile(): Promise<string[]> {
+  const result = await build({
+    ...browserDependencyResolution,
+    absWorkingDir: root,
+    entryPoints: ['entry.js'],
+    outdir: 'output',
+    bundle: true,
+    write: false,
+    format: 'esm',
+    platform: 'browser',
+  });
+  return result.outputFiles.map((file) => file.text);
+}
+
+beforeAll(async () => {
+  mkdirSync(path.join(dependencies, 'fixture'), { recursive: true });
+  writeFileSync(path.join(dependencies, 'fixture/package.json'), '{"main":"index.js"}');
+  writeFileSync(path.join(dependencies, 'fixture/index.js'), 'export const answer=42;');
+  writeFileSync(path.join(root, 'entry.js'), 'export {answer} from "fixture";');
+  installed = await compile();
+  const external = path.join(fixture, 'installed');
+  renameSync(dependencies, external);
+  symlinkSync(external, dependencies, process.platform === 'win32' ? 'junction' : 'dir');
+  attached = true;
+  snapshot = await compile();
+}, BUILD_FIXTURE_SETUP_TIMEOUT_MS);
+
+afterAll(() => {
+  if (attached) {
+    if (process.platform === 'win32') rmdirSync(dependencies);
+    else unlinkSync(dependencies);
   }
-}, 20000);
+  rmSync(fixture, { recursive: true, force: true });
+});
+
+test('preserves browser bundle bytes when a snapshot attaches the dependency installation', () => {
+  expect(installed).not.toEqual([]);
+  expect(snapshot).toEqual(installed);
+});

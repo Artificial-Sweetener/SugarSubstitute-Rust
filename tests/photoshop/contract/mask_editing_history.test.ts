@@ -33,19 +33,33 @@ interface NativeMasks {
   dispose(): void;
 }
 let code = '';
+let sessionCode = '';
 beforeAll(async () => {
-  const bundle = await build({
-    entryPoints: ['integrations/photoshop/src/infrastructure/PhotoshopCanvasMasks.ts'],
-    bundle: true,
-    write: false,
-    format: 'cjs',
-    platform: 'neutral',
-    target: 'es2022',
-    external: ['photoshop'],
-  });
-  const file = bundle.outputFiles[0];
-  if (!file) throw new Error('Missing native mask adapter bundle.');
-  code = file.text;
+  const [masks, session] = await Promise.all([
+    build({
+      entryPoints: ['integrations/photoshop/src/infrastructure/PhotoshopCanvasMasks.ts'],
+      bundle: true,
+      write: false,
+      format: 'cjs',
+      platform: 'neutral',
+      target: 'es2022',
+      external: ['photoshop'],
+    }),
+    build({
+      entryPoints: ['integrations/photoshop/src/infrastructure/PhotoshopMaskSession.ts'],
+      bundle: true,
+      write: false,
+      format: 'cjs',
+      platform: 'neutral',
+      target: 'es2022',
+    }),
+  ]);
+  const masksFile = masks.outputFiles[0];
+  if (!masksFile) throw new Error('Missing native mask adapter bundle.');
+  const sessionFile = session.outputFiles[0];
+  if (!sessionFile) throw new Error('Missing native association storage bundle.');
+  code = masksFile.text;
+  sessionCode = sessionFile.text;
 }, BUILD_FIXTURE_SETUP_TIMEOUT_MS);
 
 test('observes committed selection edits without adding history and restores the same editing association', async () => {
@@ -158,21 +172,11 @@ test('observes committed selection edits without adding history and restores the
   stale.dispose();
 });
 
-test('validates retained editing references and retires released state', async () => {
-  const bundle = await build({
-    entryPoints: ['integrations/photoshop/src/infrastructure/PhotoshopMaskSession.ts'],
-    bundle: true,
-    write: false,
-    format: 'cjs',
-    platform: 'neutral',
-    target: 'es2022',
-  });
-  const file = bundle.outputFiles[0];
-  if (!file) throw new Error('Missing native association storage bundle.');
+test('validates retained editing references and retires released state', () => {
   const values = new Map<string, string>(),
     report = jest.fn();
   const module: { exports: Record<string, unknown> } = { exports: {} };
-  runInNewContext(file.text, {
+  runInNewContext(sessionCode, {
     module,
     localStorage: {
       getItem: (key: string) => values.get(key) ?? null,
