@@ -255,8 +255,10 @@ fn cancellation_after_fresh_exclusion_preserves_trial_and_releases_the_native_ha
             let before = std::fs::read(&selection_path)?;
             let rendezvous = trust.root.path().join("updater-preparation-v1");
             let observed = rendezvous.clone();
-            // Expire only once the real share-none acquisition denies another data reader.
-            clock.observe_checks(move || std::fs::read(&observed).is_err())?;
+            // Expire only once the real fresh acquisition holds its exclusion slot.
+            clock.observe_checks(move || {
+                crate::durable_storage::protection::exclusion_held(&observed).unwrap_or(false)
+            })?;
             assert!(trust.recover_updater_trial(context).is_err());
             assert_eq!(std::fs::read(selection_path)?, before);
             assert!(std::fs::read(rendezvous)?.is_empty());

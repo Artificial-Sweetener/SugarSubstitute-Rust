@@ -19,7 +19,7 @@ pub struct PreparedUpdater {
     source: UpdaterPackage,
     generation: Generation,
     payload: Payload,
-    _preparation: File,
+    _preparation: crate::durable_storage::protection::SlotExclusion,
 }
 impl PreparedUpdater {
     /// Exact durable generation that completed verification, independent of app generations.

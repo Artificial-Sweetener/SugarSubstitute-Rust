@@ -70,7 +70,7 @@ impl InstallationRun {
     ) -> Result<Self, SelectionFailure> {
         let lock = store.protected(context, |protection| {
             let lock = protection
-                .exclusive_rendezvous(&store.root.path().join(LOCK), context)
+                .transferable_rendezvous(&store.root.path().join(LOCK), context)
                 .map_err(classify_run_open)?;
             let _reader = super::reader(&store.root, protection, context)?;
             store.read(protection)?.ok_or(SelectionFailure::Missing)?;

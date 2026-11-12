@@ -101,11 +101,11 @@ impl TrustStore {
         request: &Request,
         offer: &VerifiedOffer,
         digest: &str,
-        preparation: &File,
+        preparation: &crate::durable_storage::protection::SlotExclusion,
         context: &JobContext,
     ) -> Result<Generation, TrustFailure> {
         protection::with_domain(context, |protection| -> Result<_, TrustFailure> {
-            self.verify_updater_preparation(preparation, protection, context)?;
+            self.verify_updater_preparation(preparation.witness(), protection, context)?;
             let state = self.updater_locked(protection, SelectionRead::Initialize, context)?;
             let state = self.recover_updater_locked(state, protection, context)?;
             if let Some(candidate) = state.candidate()
