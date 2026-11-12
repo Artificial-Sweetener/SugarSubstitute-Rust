@@ -45,6 +45,9 @@ export const settingsWorkspaceCss = `
 [data-sc-settings] [data-setting-id="SugarCubes.About.Information"] > div { display:block; }
 [data-sc-settings] [data-setting-id="SugarCubes.About.Information"] .form-label { display:none; }
 [data-sc-settings] [data-setting-id="SugarCubes.About.Information"] .form-input { display:block; }
+[data-sc-settings] [data-setting-id="SugarCubes.Updates.Status"] > div { display:block; }
+[data-sc-settings] [data-setting-id="SugarCubes.Updates.Status"] .form-label { display:none; }
+[data-sc-settings] [data-setting-id="SugarCubes.Updates.Status"] .form-input { display:block; }
 .sc-settings-about h1 { font-size:28px; font-weight:600; margin:0 0 8px; }
 .sc-settings-about h2 { font-size:18px; font-weight:600; margin:28px 0 12px; }
 .sc-settings-about p { margin:8px 0; line-height:1.55; }
@@ -63,6 +66,9 @@ export const settingsWorkspaceCss = `
 .sc-settings-about a:active { color:var(--sc-accent-link-pressed,var(--p-primary-color)); }
 .sc-settings-about__actions { display:flex; gap:16px; flex-wrap:wrap; margin-top:12px; }
 .sc-settings-about__status { color:var(--sc-settings-muted); }
+.sc-settings-updates__status { font-weight:600; }
+.sc-settings-updates__causes { margin:8px 0; padding-left:20px; color:var(--sc-settings-muted); line-height:1.5; }
+.sc-settings-updates__causes:empty { display:none; }
 .sc-settings-about button { font:inherit; }
 [data-sc-settings-themed] {
   --sc-settings-text:var(--sc-text);
