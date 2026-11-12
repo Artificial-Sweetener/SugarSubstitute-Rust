@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Keep force termination an explicit choice, separate from ordinary shutdown and waiting.
+//!
+//! A previous copy that is closing by itself is waited for without a question. A previous
+//! copy that is not responding is ended only after the user chooses to close it and start.
 use std::time::Duration;
 use sugarsubstitute_contracts::execution::Moment;
 use sugarsubstitute_contracts::instance_conflict::{
@@ -17,6 +20,10 @@ pub enum Phase {
     Checking,
     /// Verified owner awaiting a user decision.
     Ready,
+    /// Verified owner is not responding; closing it ends it outright, after the user chooses.
+    Unresponsive,
+    /// Verified owner is closing by itself; only cancellation is offered while it exits.
+    AwaitingExit,
     /// Ordinary shutdown requested at the retained moment of the controller's execution clock.
     Closing(Moment),
     /// Explicit force request in progress.
@@ -48,6 +55,10 @@ impl Phase {
                 *self = Self::Closing(now);
                 Some(Op::Close)
             }
+            ConflictAction::Close if *self == Self::Unresponsive => {
+                *self = Self::Forcing;
+                Some(Op::Force)
+            }
             ConflictAction::Force if self.can_force(now) => {
                 *self = Self::Forcing;
                 Some(Op::Force)
@@ -63,7 +74,8 @@ impl Phase {
     pub fn view(self, now: Moment) -> ConflictView {
         let phase = match self {
             Self::Checking => ConflictPhase::Checking,
-            Self::Ready => ConflictPhase::AwaitingDecision,
+            Self::Ready | Self::Unresponsive => ConflictPhase::AwaitingDecision,
+            Self::AwaitingExit => ConflictPhase::AwaitingExit,
             Self::Closing(_) if self.can_force(now) => ConflictPhase::ForceOffered,
             Self::Closing(_) => ConflictPhase::Closing,
             Self::Forcing => ConflictPhase::Forcing,
@@ -98,6 +110,25 @@ mod tests {
         assert!(matches!(phase, Phase::Closing(_)));
         assert_eq!(phase.choose(ConflictAction::Force, at(16)), Some(Op::Force));
         assert_eq!(phase.choose(ConflictAction::Force, at(30)), None);
+    }
+    /// An unresponsive copy is ended only by the user's choice, at once; a closing copy offers
+    /// nothing but Cancel and never ends anything.
+    #[test]
+    fn unresponsive_copy_ends_on_choice_and_closing_copy_is_only_waited_for() {
+        let mut unresponsive = Phase::Unresponsive;
+        assert_eq!(unresponsive.view(at(0)).phase, ConflictPhase::AwaitingDecision);
+        assert!(unresponsive.view(at(0)).close_enabled());
+        assert_eq!(unresponsive.choose(ConflictAction::Force, at(0)), None);
+        assert_eq!(unresponsive.choose(ConflictAction::Close, at(0)), Some(Op::Force));
+        assert_eq!(unresponsive, Phase::Forcing);
+        let mut closing = Phase::AwaitingExit;
+        let view = closing.view(at(100));
+        assert_eq!(view.phase, ConflictPhase::AwaitingExit);
+        assert!(!view.close_enabled() && !view.force_enabled() && !view.done());
+        assert_eq!(closing.choose(ConflictAction::Close, at(100)), None);
+        assert_eq!(closing.choose(ConflictAction::Force, at(100)), None);
+        assert_eq!(closing.choose(ConflictAction::Cancel, at(100)), Some(Op::Retire));
+        assert_eq!(closing, Phase::Retiring(false));
     }
     #[test]
     fn a_clock_reading_before_the_close_request_never_offers_force() {

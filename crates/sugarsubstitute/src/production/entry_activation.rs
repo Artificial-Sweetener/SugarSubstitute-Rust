@@ -52,6 +52,7 @@ mod progress_deadline_tests;
 mod projection;
 #[path = "entry_activation/reactivation.rs"]
 mod reactivation;
+pub(in crate::production) use reactivation::{ProbeProcess, ResponsivenessProbe};
 #[path = "entry_activation/record.rs"]
 mod record;
 #[path = "entry_activation/record_progress.rs"]
@@ -313,6 +314,7 @@ impl EntryActivation for ProductionActivation {
             source,
             completion: None,
             restart: false,
+            probe: Default::default(),
         });
         Ok(())
     }

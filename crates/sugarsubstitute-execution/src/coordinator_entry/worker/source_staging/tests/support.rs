@@ -123,6 +123,9 @@ impl EntryLease for Lease {
     fn nonce(&mut self) -> Result<[u8; 32], EntryTransportError> {
         Err(EntryTransportError::InvalidPhase)
     }
+    fn allow_foreground(&mut self, _: u32) -> Result<(), NativeObservationError> {
+        Ok(())
+    }
     fn retire_connection(&mut self, _: usize, _: bool) -> Result<bool, EntryTransportError> {
         Ok(true)
     }

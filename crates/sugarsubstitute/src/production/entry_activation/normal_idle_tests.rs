@@ -148,6 +148,7 @@ fn normal_idle_empty_queued_projection_and_retained_failure_never_issue_normal_c
         connection: ConnectionId::new(1)?,
         job: None,
         completion: None,
+        probe: Default::default(),
     });
     assert!(!owner.normal_close_requested());
     assert!(owner.shutdown_budget().is_none());

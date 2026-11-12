@@ -113,6 +113,15 @@ impl<B: ConflictBackend> Service<B> {
                     Observation::Owner(_) => {
                         self.phase = Phase::Ready;
                     }
+                    Observation::Unresponsive
+                        if matches!(self.phase, Phase::Checking | Phase::AwaitingExit) =>
+                    {
+                        self.phase = Phase::Unresponsive;
+                    }
+                    Observation::Closing if self.phase == Phase::Checking => {
+                        self.phase = Phase::AwaitingExit;
+                    }
+                    Observation::Unresponsive | Observation::Closing => {}
                     Observation::Released => {
                         self.phase = Phase::Retiring(true);
                         self.wanted = Some(Op::Retire);
@@ -193,7 +202,10 @@ impl<B: ConflictBackend> Service<B> {
             return Ok(());
         }
         if self.wanted.is_none()
-            && matches!(self.phase, Phase::Checking | Phase::Closing(_) | Phase::Forcing)
+            && matches!(
+                self.phase,
+                Phase::Checking | Phase::Closing(_) | Phase::Forcing | Phase::AwaitingExit
+            )
             && self.clock.now() >= self.next_poll
         {
             self.wanted = Some(Op::Observe);

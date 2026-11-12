@@ -40,6 +40,7 @@ pub(in crate::coordinator_entry) fn decode(bytes: &[u8]) -> Result<Frame<'_>, En
         Kind::Challenge => DecodedPayload::Challenge,
         Kind::Initializing => DecodedPayload::Initializing,
         Kind::Closing => DecodedPayload::Closing,
+        Kind::Unresponsive => DecodedPayload::Unresponsive,
         Kind::Launch => DecodedPayload::Launch(launch_payload::decode(
             reader.bytes(bytes.len() - HEADER_BYTES)?,
         )?),

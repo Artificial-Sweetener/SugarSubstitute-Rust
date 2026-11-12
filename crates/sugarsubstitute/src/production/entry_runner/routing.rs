@@ -61,6 +61,9 @@ impl<C: EntryActivation> EntryRunner<C> {
                 && self.forward.is_none()
                 && matches!(entry.snapshot().phase, EntryPhase::Candidate | EntryPhase::Contended)
             {
+                if self.forward_wait.is_none() {
+                    self.forward_wait = Some(forward_recovery::wait::ForwardWait::new(client.now()?)?);
+                }
                 let input = entry.client_input()?.with_unsubmitted_recovery();
                 let spec = JobSpec {
                     id: self.jobs.allocate()?,
@@ -93,6 +96,9 @@ impl<C: EntryActivation> EntryRunner<C> {
                     ?observed,
                     "Existing coordinator request advanced"
                 );
+                if let Some(wait) = &mut self.forward_wait {
+                    wait.observe(&observed);
+                }
                 if let EntryTransportObservation::OutcomeReceived { outcome: actual, .. } = observed
                 {
                     outcome = Some(actual);
@@ -105,6 +111,9 @@ impl<C: EntryActivation> EntryRunner<C> {
                         self.initial_completed = true;
                         self.request_shutdown()?;
                     }
+                    // The forward wait presents an unresponsive copy; a closing copy returns
+                    // the source for re-election once its connection has retired.
+                    EntryOutcome::Unresponsive | EntryOutcome::Closing => {}
                     EntryOutcome::Rejected(reason) => {
                         self.retain(Box::new(Rejected(reason)));
                         return Err("Existing coordinator rejected the entry request".into());
@@ -113,6 +122,7 @@ impl<C: EntryActivation> EntryRunner<C> {
             }
         }
         self.observe_transport_completions(&mut activation_attempted)?;
+        self.advance_forward_wait()?;
         self.advance_updates(batch)?;
         if self.closing {
             if let Some(budget) = self.shutdown {
@@ -178,6 +188,7 @@ impl<C: EntryActivation> EntryRunner<C> {
             && let Some(entry) = bootstrap.owner_mut()
         {
             let events = intake.poll(entry).into_events();
+            let mut declined = Vec::new();
             for event in events {
                 if let Some(failure) = event.failure {
                     self.retain(Box::new(failure));
@@ -207,6 +218,10 @@ impl<C: EntryActivation> EntryRunner<C> {
                     (
                         EntrySide::Server,
                         EntryTransportObservation::RequestAuthenticated { request, .. },
+                    ) if self.closing => declined.push(request),
+                    (
+                        EntrySide::Server,
+                        EntryTransportObservation::RequestAuthenticated { request, .. },
                     ) if !self.closing => {
                         if self.pending_activation.is_some() {
                             return Err(
@@ -220,8 +235,38 @@ impl<C: EntryActivation> EntryRunner<C> {
                     _ => {}
                 }
             }
+            self.decline_while_closing(declined);
         }
         Ok(())
+    }
+    /// A closing coordinator admits nothing; each launching process waits for it to exit and
+    /// then starts by itself. A reply that cannot be sent leaves that launch to its own probe.
+    fn decline_while_closing(
+        &mut self,
+        declined: Vec<sugarsubstitute_execution::AuthenticatedEntryLaunch>,
+    ) {
+        for request in declined {
+            let replied = (|| -> Result<(), Box<dyn Error>> {
+                let client = self.client.as_ref().ok_or("Execution client missing")?;
+                let intake = self.intake.as_mut().ok_or("Entry intake missing")?;
+                let deadline = client
+                    .now()?
+                    .checked_add(std::time::Duration::from_secs(2))?
+                    .min(request.until());
+                intake.server().control.reply(
+                    request.peer().connection(),
+                    request.request_id(),
+                    sugarsubstitute_contracts::coordinator_entry::EntryOperationId::new(1)?,
+                    deadline,
+                    EntryOutcome::Closing,
+                )?;
+                Ok(())
+            })();
+            if let Err(cause) = replied {
+                tracing::warn!(operation = "entry_closing_reply", cause = %cause,
+                    "A closing coordinator could not answer a repeated launch");
+            }
+        }
     }
     fn enter_pending(&mut self) -> Result<(), Box<dyn Error>> {
         let Some(request) = self.pending_activation.as_ref() else {
@@ -435,6 +480,11 @@ fn initial_outcome(
             Ok(true)
         }
         EntryOutcome::Accepted(_) => Err(Box::new(EntryTransportError::Authentication)),
+        // This coordinator's own server answers its initial launch; it is never closing or
+        // unresponsive to itself while setup runs.
+        EntryOutcome::Unresponsive | EntryOutcome::Closing => {
+            Err(Box::new(EntryTransportError::InvalidPhase))
+        }
         EntryOutcome::Rejected(reason) => Err(Box::new(Rejected(reason))),
     }
 }

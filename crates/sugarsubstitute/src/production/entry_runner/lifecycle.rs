@@ -36,7 +36,8 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
         let own = if self.closing {
             (!self.deadline_reported).then_some(self.cleanup_deadline).flatten()
         } else if !self.initial_completed {
-            self.setup_deadline
+            let forward = self.forward_wait.as_ref().and_then(forward_recovery::wait::ForwardWait::native_wake);
+            self.setup_deadline.into_iter().chain(forward).min()
         } else {
             None
         };

@@ -3,6 +3,7 @@
 //! Retain real entry, authority, child and execution lifetimes through native pumping.
 #[path = "entry_runner/forward_recovery.rs"]
 mod forward_recovery;
+pub(super) use forward_recovery::wait::{PreviousCopy, PreviousCopyBusy, PreviousCopyState};
 #[path = "entry_runner/initialization.rs"]
 mod initialization;
 #[path = "entry_runner/lifecycle.rs"]
@@ -153,6 +154,21 @@ pub(crate) fn run_application<C: EntryActivation + 'static>(
         Ok(()) => return Ok(()),
         Err(cause) => cause,
     };
+    if let Some(failure) = cause.downcast_ref::<RunFailure<C>>()
+        && failure.lifetime.finished
+        && let Some(busy) = forward_recovery::wait::PreviousCopyBusy::find(cause.as_ref())
+    {
+        match super::profile_conflict::resolve_previous_copy(
+            busy,
+            presentation::locale::<C>(cause.as_ref()),
+        ) {
+            Ok(_) => return Ok(()),
+            Err(secondary) => {
+                tracing::error!(operation="previous_copy_presentation", cause=?FailureDisplay(secondary.as_ref()),
+                    "Previous-copy resolution failed; retaining the original startup failure");
+            }
+        }
+    }
     if let Some(failure) = cause.downcast_ref::<RunFailure<C>>()
         && failure.lifetime.finished
         && let Some(request) =
@@ -355,6 +371,8 @@ pub(crate) struct EntryRunner<C: EntryActivation> {
     intake_settled: bool,
     intake_ready: bool,
     forward: Option<CoordinatorEntryClientSession>,
+    /// Decides when a launch forwarded to a running copy needs something on screen.
+    forward_wait: Option<forward_recovery::wait::ForwardWait>,
     transport_completions: [Option<JobCompletion<EntryTransportReport, EntryTransportError>>; 3],
     deadline_reported: bool,
     execution_stopping: bool,
@@ -410,6 +428,7 @@ impl<C: EntryActivation> EntryRunner<C> {
             intake_settled: false,
             intake_ready: false,
             forward: None,
+            forward_wait: None,
             transport_completions: std::array::from_fn(|_| None),
             deadline_reported: false,
             execution_stopping: false,

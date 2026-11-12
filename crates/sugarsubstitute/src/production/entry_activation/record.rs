@@ -48,6 +48,8 @@ pub(super) struct PendingProjection {
     pub(super) job: Option<OwnedJob<ProjectedEntry, ProjectionFailure>>,
     pub(super) completion: Option<JobCompletion<ProjectedEntry, ProjectionFailure>>,
     pub(super) restart: bool,
+    /// A repeated launch's probe of the existing desktop's responsiveness.
+    pub(super) probe: super::reactivation::ResponsivenessProbe,
 }
 pub(super) struct RetainedRecord {
     pub(super) record: Box<Record>,

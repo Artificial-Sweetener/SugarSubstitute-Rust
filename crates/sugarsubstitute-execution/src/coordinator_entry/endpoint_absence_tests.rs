@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Reprobe actual endpoint absence without authenticating a peer or renewing source custody.
+//! Reprobe actual endpoint absence without authenticating a peer or renewing source custody,
+//! and settle a source retained through an issued Launch by its outcome or a lost peer.
 use super::kernel::*;
 use crate::{
     coordinator_entry::*,
@@ -8,7 +9,7 @@ use crate::{
     scope::lock,
 };
 use std::{num::NonZeroUsize, sync::Arc, sync::atomic::Ordering};
-use sugarsubstitute_contracts::execution::*;
+use sugarsubstitute_contracts::{coordinator_entry::EntryOutcome, execution::*};
 
 fn client(
     rig: &Rig,
@@ -135,17 +136,122 @@ fn cancellation_of_absent_endpoint_never_returns_source_for_fresh_admission() ->
     Ok(())
 }
 
+fn validate_returned(rig: &Rig, returned: &UnsubmittedEntryRequest) -> TestResult {
+    returned.validate(
+        &facts()?,
+        None,
+        source()?,
+        &rig.client,
+        sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget::new(Moment::from_nanos(0))?,
+    )?;
+    Ok(())
+}
+
+/// A coordinator that is closing admits nothing, so the issued source returns for
+/// re-election after the original probe instead of being consumed.
 #[test]
-fn issued_launch_permanently_consumes_source_handback() -> TestResult {
+fn closing_outcome_after_launch_returns_the_issued_source_for_reelection() -> TestResult {
     let rig = Rig::new()?;
     let boundary = Boundary::new(&rig, false)?;
     boundary.closing_after_launch.store(true, Ordering::Release);
     let (_scope, mut session) = client_with_recovery(&rig, &boundary, true)?;
-    fact(&rig, &session.control, |fact| {
+    let outcome = fact(&rig, &session.control, |fact| {
+        matches!(fact, EntryTransportObservation::OutcomeReceived { .. })
+    })?;
+    assert!(matches!(
+        outcome,
+        EntryTransportObservation::OutcomeReceived { outcome: EntryOutcome::Closing, .. }
+    ));
+    rig.clock.wait_until_registered(Moment::from_nanos(2_000_000_000))?;
+    assert!(session.control.take_unsubmitted_request().is_none());
+    rig.clock.advance(2_000_000_000);
+    assert!(matches!(rig.completion(&mut session.completion)?.outcome, JobOutcome::Success(_)));
+    let returned = session.control.take_unsubmitted_request().ok_or("Closing consumed source")?;
+    validate_returned(&rig, &returned)?;
+    assert_eq!(returned.into_request().units(), request()?.environment());
+    assert_eq!(lock(&boundary.client_launches).len(), 1);
+    Ok(())
+}
+
+/// The coordinator died after Launch was written: the source returns for re-election instead
+/// of failing the launch. A coordinator that is still alive answers the repeated request from
+/// its replay cache, so re-forwarding cannot launch twice.
+#[test]
+fn peer_lost_after_issued_launch_returns_the_source_for_reelection() -> TestResult {
+    let rig = Rig::new()?;
+    let boundary = Boundary::new(&rig, false)?;
+    boundary.disconnect_after_launch.store(true, Ordering::Release);
+    let (_scope, mut session) = client_with_recovery(&rig, &boundary, true)?;
+    let retired = fact(&rig, &session.control, |fact| {
         matches!(fact, EntryTransportObservation::ConnectionRetired { .. })
     })?;
+    assert!(matches!(
+        retired,
+        EntryTransportObservation::ConnectionRetired {
+            failure: Some(EntryTransportError::PeerDisconnected(_)),
+            ..
+        }
+    ));
+    assert!(matches!(rig.completion(&mut session.completion)?.outcome, JobOutcome::Success(_)));
+    let returned = session.control.take_unsubmitted_request().ok_or("Lost peer consumed source")?;
+    validate_returned(&rig, &returned)?;
+    assert_eq!(lock(&boundary.client_launches).len(), 1);
+    Ok(())
+}
+
+/// Without recovery the forward still fails closed when its peer is lost after Launch.
+#[test]
+fn peer_lost_after_launch_without_recovery_fails_without_handback() -> TestResult {
+    let rig = Rig::new()?;
+    let boundary = Boundary::new(&rig, false)?;
+    boundary.disconnect_after_launch.store(true, Ordering::Release);
+    let (_scope, mut session) = client(&rig, &boundary)?;
+    let completed = loop {
+        let observed = rig.wake.count();
+        if rig.client.drain_completions(NonZeroUsize::MIN).is_err() {
+            continue;
+        }
+        if let Some(completed) = session.completion.try_take_completion() {
+            break completed;
+        }
+        rig.wake.wait_after(observed)?;
+    };
+    assert!(matches!(completed.outcome, JobOutcome::Failure(_)));
+    assert!(session.control.take_unsubmitted_request().is_none());
+    Ok(())
+}
+
+/// An unresponsive running copy admitted nothing; the outcome reaches the launching process
+/// and the source obligation ends there.
+#[test]
+fn unresponsive_outcome_is_delivered_and_ends_the_source_obligation() -> TestResult {
+    let rig = Rig::new()?;
+    let boundary = Boundary::new(&rig, false)?;
+    boundary.unresponsive_after_launch.store(true, Ordering::Release);
+    let (_scope, mut session) = client_with_recovery(&rig, &boundary, true)?;
+    let outcome = fact(&rig, &session.control, |fact| {
+        matches!(fact, EntryTransportObservation::OutcomeReceived { .. })
+    })?;
+    assert!(matches!(
+        outcome,
+        EntryTransportObservation::OutcomeReceived { outcome: EntryOutcome::Unresponsive, .. }
+    ));
     assert!(matches!(rig.completion(&mut session.completion)?.outcome, JobOutcome::Success(_)));
     assert!(session.control.take_unsubmitted_request().is_none());
+    Ok(())
+}
+
+/// The verified coordinator receives foreground rights before the Launch it answers is written.
+#[test]
+fn foreground_rights_go_to_the_verified_peer_before_launch() -> TestResult {
+    let rig = Rig::new()?;
+    let boundary = Boundary::new(&rig, false)?;
+    let (_scope, mut session) = client(&rig, &boundary)?;
+    fact(&rig, &session.control, |fact| {
+        matches!(fact, EntryTransportObservation::OutcomeReceived { .. })
+    })?;
+    assert!(matches!(rig.completion(&mut session.completion)?.outcome, JobOutcome::Success(_)));
+    assert_eq!(*lock(&boundary.foreground_grants), [(17, 0)]);
     assert_eq!(lock(&boundary.client_launches).len(), 1);
     Ok(())
 }

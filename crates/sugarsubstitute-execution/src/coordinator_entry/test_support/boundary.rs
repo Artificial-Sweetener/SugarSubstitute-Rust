@@ -55,6 +55,10 @@ pub(in crate::coordinator_entry::tests) struct Boundary {
     pub(in crate::coordinator_entry::tests) busy_endpoint: AtomicBool,
     pub(in crate::coordinator_entry::tests) closing_before_launch: AtomicBool,
     pub(in crate::coordinator_entry::tests) closing_after_launch: AtomicBool,
+    pub(in crate::coordinator_entry::tests) unresponsive_after_launch: AtomicBool,
+    pub(in crate::coordinator_entry::tests) disconnect_after_launch: AtomicBool,
+    /// Each foreground grant's process id with the number of Launch frames written before it.
+    pub(in crate::coordinator_entry::tests) foreground_grants: Mutex<Vec<(u32, usize)>>,
     pub(in crate::coordinator_entry::tests) reads_issued: AtomicUsize,
     pub(in crate::coordinator_entry::tests) read_failure: Mutex<Option<EntryTransportError>>,
 }
@@ -109,6 +113,9 @@ impl Boundary {
             busy_endpoint: AtomicBool::new(false),
             closing_before_launch: AtomicBool::new(false),
             closing_after_launch: AtomicBool::new(false),
+            unresponsive_after_launch: AtomicBool::new(false),
+            disconnect_after_launch: AtomicBool::new(false),
+            foreground_grants: Mutex::new(Vec::new()),
             reads_issued: AtomicUsize::new(0),
             read_failure: Mutex::new(None),
         }))
@@ -321,6 +328,8 @@ impl EntryLease for Lease {
                 frame.payload,
                 protocol::DecodedPayload::Accepted(_)
                     | protocol::DecodedPayload::Rejected(_)
+                    | protocol::DecodedPayload::Unresponsive
+                    | protocol::DecodedPayload::Closing
                     | protocol::DecodedPayload::Initializing
             );
             match frame.payload {
@@ -364,8 +373,19 @@ impl EntryLease for Lease {
                 }
                 protocol::DecodedPayload::Launch(_) if !self.0.server => {
                     lock(&self.0.client_launches).push(frame.header);
-                    if self.0.closing_after_launch.load(Ordering::Acquire) {
+                    if self.0.disconnect_after_launch.load(Ordering::Acquire) {
+                        *lock(&self.0.read_failure) = Some(EntryTransportError::native(
+                            NativeObservationError::new(
+                                "pipe_completion",
+                                windows::core::Error::from_hresult(
+                                    windows::core::HRESULT::from_win32(109),
+                                ),
+                            ),
+                        ));
+                    } else if self.0.closing_after_launch.load(Ordering::Acquire) {
                         self.0.push(index, frame.header, protocol::Payload::Closing)?;
+                    } else if self.0.unresponsive_after_launch.load(Ordering::Acquire) {
+                        self.0.push(index, frame.header, protocol::Payload::Unresponsive)?;
                     } else if !self.0.defer_client_outcome.load(Ordering::Acquire) {
                         self.0.push(
                             index,
@@ -381,6 +401,12 @@ impl EntryLease for Lease {
                 }
                 protocol::DecodedPayload::Rejected(reason) => {
                     lock(&self.0.replies).push((frame.header, EntryOutcome::Rejected(reason)))
+                }
+                protocol::DecodedPayload::Unresponsive if self.0.server => {
+                    lock(&self.0.replies).push((frame.header, EntryOutcome::Unresponsive))
+                }
+                protocol::DecodedPayload::Closing if self.0.server => {
+                    lock(&self.0.replies).push((frame.header, EntryOutcome::Closing))
                 }
                 protocol::DecodedPayload::Initializing => {}
                 _ => return Err(EntryTransportError::InvalidPhase),
@@ -459,6 +485,11 @@ impl EntryLease for Lease {
             .map_err(EntryTransportError::Shape)?;
         }
         Ok(KernelPeer { facts, pid: 17, birth: 23 })
+    }
+    fn allow_foreground(&mut self, pid: u32) -> Result<(), NativeObservationError> {
+        let launches = lock(&self.0.client_launches).len();
+        lock(&self.0.foreground_grants).push((pid, launches));
+        Ok(())
     }
     fn nonce(&mut self) -> Result<[u8; 32], EntryTransportError> {
         let value = self.0.nonce.fetch_add(1, Ordering::AcqRel) + 1;

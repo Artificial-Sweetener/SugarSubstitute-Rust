@@ -161,8 +161,8 @@ fn originals_reference_survives_full_staged_body_and_header_rebinding_without_dy
     assert_eq!(stage_launch(&mut staged, &original)?, length);
     bind_staged_launch(&mut staged, length, &header()?)?;
     assert_eq!(staged[..length], full[..length]);
-    assert_eq!(u16::from_le_bytes([full[4], full[5]]), 3);
-    full[4..6].copy_from_slice(&2_u16.to_le_bytes());
+    assert_eq!(u16::from_le_bytes([full[4], full[5]]), 4);
+    full[4..6].copy_from_slice(&3_u16.to_le_bytes());
     assert!(decode(&full[..length]).is_err());
     for kind in [2, 255] {
         let mut unknown = body.clone();

@@ -472,8 +472,8 @@ sources = ["crates/sugarsubstitute-execution/src/coordinator_entry/protocol.rs",
 source_sha256 = "sha256:ab5f788d7ebe4734a05d69feb990ea9a8fc8027fb4c005897dcab6173edf0a34"
 classification = "protocol"
 preservation = "must_preserve"
-current_version = 3
-accepted_versions = [3]
+current_version = 4
+accepted_versions = [4]
 compatibility = "reject"
 migrations = []
 

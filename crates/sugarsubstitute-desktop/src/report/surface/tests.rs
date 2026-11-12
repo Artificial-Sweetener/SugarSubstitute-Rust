@@ -327,6 +327,7 @@ fn every_conflict_phase_shows_its_own_words_in_the_surface_locale() -> TestResul
             (ConflictPhase::Retiring { continuing: true }, words.prompt, Some(words.cleanup), true),
             (ConflictPhase::Retiring { continuing: false }, words.prompt, None, true),
             (ConflictPhase::Done, words.prompt, None, false),
+            (ConflictPhase::AwaitingExit, words.cleanup, None, true),
         ];
         for (phase, message, progress, cancellable) in cases {
             let mut controller = Fixed(phase);
@@ -445,3 +446,53 @@ fn a_long_message_on_a_small_work_area_scrolls_the_body_above_a_fixed_footer() -
 
 #[path = "update_tests.rs"]
 mod update;
+
+/// A controller that reports a scripted sequence of phases, holding the last one.
+struct Script(Vec<ConflictPhase>);
+impl ConflictController for Script {
+    fn start(&mut self, _: Arc<dyn CompletionWake>) {}
+    fn poll(&mut self) -> ConflictView {
+        let phase = if self.0.len() > 1 { self.0.remove(0) } else { self.0[0] };
+        ConflictView { phase }
+    }
+    fn choose(&mut self, _: ConflictAction) {}
+}
+
+/// While a closing previous window is waited for, continuing describes finishing the close,
+/// never the unresponsive question; once the question was asked, continuing keeps its words.
+#[test]
+fn waiting_for_a_closing_copy_never_shows_the_question_while_continuing() -> TestResult {
+    let words = sugarsubstitute_contracts::localization::LOCALES[0].conflict;
+    for (script, message) in [
+        (
+            vec![ConflictPhase::AwaitingExit, ConflictPhase::Retiring { continuing: true }],
+            words.cleanup,
+        ),
+        (
+            vec![
+                ConflictPhase::AwaitingExit,
+                ConflictPhase::AwaitingDecision,
+                ConflictPhase::Retiring { continuing: true },
+            ],
+            words.prompt,
+        ),
+    ] {
+        let steps = script.len();
+        let mut controller = Script(script);
+        let mut owner = ConflictReport::new(&mut controller, words);
+        let (mut text, mut state, mut closed, mut changed) =
+            (String::new(), ReportState::new(ReportKind::UnresponsiveCopy), false, false);
+        let mut control = ReportControl {
+            message: &mut text,
+            state: &mut state,
+            closed: &mut closed,
+            changed: &mut changed,
+            requests: &mut ControlRequests::default(),
+        };
+        for _ in 0..steps {
+            owner.poll(&mut control)?;
+        }
+        assert_eq!(control.message.as_str(), message);
+    }
+    Ok(())
+}

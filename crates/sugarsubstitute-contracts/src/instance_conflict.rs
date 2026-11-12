@@ -33,6 +33,10 @@ pub enum ConflictOperation {
 pub enum ConflictObservation {
     /// Verified installation location for presentation to the user.
     Owner(PathBuf),
+    /// The verified owner is not responding; ending it needs the user's explicit choice.
+    Unresponsive,
+    /// The verified owner is closing by itself; this launch waits for it to exit.
+    Closing,
     /// Process or lock custody remains live.
     Waiting,
     /// Retained processes exited and the required exclusions were available.
@@ -79,6 +83,8 @@ pub enum ConflictPhase {
     Closing,
     /// Ordinary close has stalled; ending the previous copy outright is offered.
     ForceOffered,
+    /// The previous copy is closing by itself; this launch starts once it has exited.
+    AwaitingExit,
     /// Ending the previous copy outright is in progress.
     Forcing,
     /// Resolution failed; only cancellation remains.

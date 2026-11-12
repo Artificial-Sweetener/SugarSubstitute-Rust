@@ -18,6 +18,9 @@ pub struct ConflictReport<'a> {
     words: &'static ConflictMessages,
     /// The controller allows ending the previous window outright rather than asking it to close.
     forceable: bool,
+    /// The previous copy is closing by itself and nothing has been asked, so the surface
+    /// describes waiting rather than the question.
+    waiting: bool,
     done: bool,
     cancelled: bool,
 }
@@ -28,7 +31,7 @@ impl<'a> ConflictReport<'a> {
         controller: &'a mut dyn ConflictController,
         words: &'static ConflictMessages,
     ) -> Self {
-        Self { controller, words, forceable: false, done: false, cancelled: false }
+        Self { controller, words, forceable: false, waiting: false, done: false, cancelled: false }
     }
 
     /// The question and the progress line this surface shows for `phase`, in its own locale.
@@ -39,7 +42,9 @@ impl<'a> ConflictReport<'a> {
             ConflictPhase::AwaitingDecision | ConflictPhase::Done => (words.prompt, None),
             ConflictPhase::Closing | ConflictPhase::Forcing => (words.prompt, Some(words.waiting)),
             ConflictPhase::ForceOffered => (words.force_prompt, None),
+            ConflictPhase::AwaitingExit => (words.cleanup, None),
             ConflictPhase::Failed => (words.failed, None),
+            ConflictPhase::Retiring { continuing: true } if self.waiting => (words.cleanup, None),
             ConflictPhase::Retiring { continuing: true } => (words.prompt, Some(words.cleanup)),
             ConflictPhase::Retiring { continuing: false } => (words.prompt, None),
         }
@@ -69,6 +74,11 @@ impl ReportOwner for ConflictReport<'_> {
     fn poll(&mut self, report: &mut ReportControl<'_>) -> Result<(), Box<dyn Error>> {
         let view = self.controller.poll();
         self.forceable = view.force_enabled();
+        match view.phase {
+            ConflictPhase::AwaitingExit => self.waiting = true,
+            ConflictPhase::AwaitingDecision | ConflictPhase::ForceOffered => self.waiting = false,
+            _ => {}
+        }
         let actionable = (view.close_enabled() || view.force_enabled()) && !self.cancelled;
         report.set_command(ReportAction::Close, shown(actionable));
         report.set_command(ReportAction::Cancel, shown(!view.done() && !self.cancelled));

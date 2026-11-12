@@ -194,6 +194,7 @@ impl ProductionActivation {
             source: None,
             completion: None,
             restart: true,
+            probe: Default::default(),
         });
         Ok(())
     }
