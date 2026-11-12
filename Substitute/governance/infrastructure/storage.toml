@@ -43,7 +43,7 @@ owner = "sugarsubstitute-desktop"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:3ad21e0cf3c9214a7b8f9fa23d52fc307588e1bec1d6e3d82a12a02e8ba7f28a"
+source_sha256 = "sha256:95d446722617efd7dd6567ad0114c6d0d209c0a0dc2fdfa5a04306fc81720683"
 rationale = "Native OS adapter bindings for sugarsubstitute-desktop; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -2310,7 +2310,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Exe
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/report/surface/native_tests/evidence.rs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:f149809abb75fb8c0c56d7f849f728d6354eb4fbdd688137fbce747bbc34e0ac"
+source_sha256 = "sha256:44ab9479e475c3b69dcd9685e562926a68d1ccd476b0b9db24e18515e473c4c9"
 capabilities = ["std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture observation for: Show each report kind in the real form window on a private desktop. Writes only its own rendered captures to the optional qualification evidence directory, not runtime storage."
@@ -4983,7 +4983,7 @@ rationale = "An owned temporary workspace is seeded with a previous run's checkp
 [[records]]
 path = "crates/sugarsubstitute/src/startup/workspace/close_save_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:2462dade4755e48784f2a7024c9c6707ff7dc2bee16590c602a123c8a4eb6667"
+source_sha256 = "sha256:ff774bc0e6210bf8931603cef496650e6f7170d9624e4eba9652ee1b2cad8f16"
 capabilities = ["std::fs::remove_dir_all", "std::fs::write"]
 disposition = "fixture"
 rationale = "The owned temporary workspace's checkpoint folder is replaced by a file to inject a failed final publication, which the close save must record before the exit intent."

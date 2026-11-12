@@ -89,6 +89,45 @@ pub(super) fn draw(
     Ok(())
 }
 
+/// The update button's arrow into a tray, in the caption buttons' 10-pixel glyph box, drawn
+/// whole in `tint` so ready and warning read at a glance.
+pub(super) fn update(pixels: &mut Pixels<'_>, dpi: u32, tint: [u8; 3]) {
+    let scale = |value: usize| value * dpi as usize / 96;
+    let stroke = scale(1).max(1);
+    let mut dot = |x: usize, y: usize| {
+        for dy in 0..stroke {
+            for dx in 0..stroke {
+                pixels.over_color(x + dx, y + dy, tint, 255);
+            }
+        }
+    };
+    let (left, top, side) = (scale(18), scale(11), scale(10));
+    let middle = left + side / 2;
+    for y in top..=top + side * 7 / 10 {
+        dot(middle, y);
+    }
+    // The arrowhead's two diagonals meet at the stem's foot.
+    let head = side * 4 / 10;
+    let foot = top + side * 7 / 10;
+    for step in 0..=head {
+        dot(middle - step, foot - step);
+        dot(middle + step, foot - step);
+    }
+    for x in left..=left + side {
+        dot(x, top + side);
+    }
+}
+
+/// Tint of the update glyph: Fluent success green when ready, caution amber after a failure.
+pub(super) const fn update_tint(warning: bool, dark: bool) -> [u8; 3] {
+    match (warning, dark) {
+        (false, false) => [0x0f, 0x7b, 0x0f],
+        (false, true) => [0x6c, 0xcb, 0x5f],
+        (true, false) => [0x9d, 0x5d, 0x00],
+        (true, true) => [0xfc, 0xe1, 0x00],
+    }
+}
+
 /// Validate every resource boundary before publishing either original SVG path.
 fn close(pixels: &mut Pixels<'_>, dpi: u32, color: u8, bytes: &[u8]) -> Result<(), DesktopError> {
     let invalid = || {

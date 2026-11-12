@@ -22,7 +22,8 @@ use std::{cell::RefCell, rc::Rc};
 use sugarsubstitute_contracts::presentation::FrameShape;
 
 mod crash_report;
-mod evidence;
+pub(crate) mod evidence;
+mod hosted;
 use evidence::{Capture, Captures, Observer, assert_painted, keep};
 use sugarsubstitute_contracts::{
     instance_conflict::{ConflictAction, ConflictController, ConflictPhase, ConflictView},
@@ -450,7 +451,7 @@ fn update_body() -> TestResult {
     let title = "SugarSubstitute";
     let copy = messages("en");
     let mut export = NoExport;
-    let mut inner = UpdateReport::new(&mut export, copy.report);
+    let mut inner = UpdateReport::new(Some(&mut export), copy.report);
     let mut script = Script::new(
         title,
         &mut inner,
