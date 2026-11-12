@@ -16,42 +16,8 @@ use sugarsubstitute_contracts::{
     startup::{LaunchId, ReadinessReceipt, StartupFailure},
 };
 
+use crate::{MainBackendState, MainCaptionLabels, MainRecoveryLabels, WorkflowActivity};
 pub use sugarsubstitute_contracts::startup::MainIdentity;
-
-/// Borrow localized native caption names from the authoritative locale owner.
-#[derive(Clone, Copy, Debug)]
-pub struct MainCaptionLabels {
-    /// Accessible minimize control name.
-    pub minimize: &'static str,
-    /// Accessible maximize control name.
-    pub maximize: &'static str,
-    /// Accessible restore control name.
-    pub restore: &'static str,
-    /// Accessible close control name.
-    pub close: &'static str,
-}
-
-/// Borrow canonical localized connection-retry copy without allocating product text.
-#[derive(Clone, Copy, Debug)]
-pub struct MainRecoveryLabels {
-    /// Existing localized retry action.
-    pub retry: &'static str,
-    /// Existing localized actionable retry-ready status.
-    pub retry_ready: &'static str,
-}
-
-/// Present current backend recovery data; this state grants no backend admission.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum MainBackendState {
-    /// Genuine old backend ownership remains unsettled; retry stays hidden.
-    Retiring,
-    /// The composing owner reports actual old settlement and retained cause.
-    RetryReady,
-    /// An explicit retry or shared-cohort successor is pending; retry is disabled.
-    Retrying,
-    /// The composing owner accepted a current same-origin replacement for this failed lease.
-    Recovered,
-}
 
 /// Configure the initial main client rectangle in logical pixels.
 #[derive(Clone, Copy, Debug)]
@@ -807,6 +773,46 @@ pub trait StartupWindowContent: WindowContent {
     /// no update to apply.
     fn request_restart_to_apply(&mut self) -> Result<(), Box<dyn Error>> {
         Err("This host offers no update to apply".into())
+    }
+
+    // What the window shows about updates, the close save and last session's losses. Each is
+    // read on the event-loop thread at most once per turn and must return promptly.
+
+    /// The host's update status, or `None` for a host without an updater. The caption's update
+    /// button is hidden unless an update is ready or the latest attempt failed.
+    fn update_status(&self) -> Option<sugarsubstitute_contracts::update::status::UpdateStatus> {
+        None
+    }
+
+    /// The close save's progress while the window stays up for it; `None` before close began.
+    fn close_save_progress(
+        &self,
+    ) -> Option<sugarsubstitute_application::workspace_session::close_save::CloseSaveProgress> {
+        None
+    }
+
+    /// Take, once, what the previous close did not keep. The window shows it as one line the
+    /// user can dismiss; it is taken only once the main window can show it.
+    fn take_unsaved_notice(
+        &mut self,
+    ) -> Option<sugarsubstitute_application::workspace_session::close_save::NotSavedLastTime> {
+        None
+    }
+
+    /// Whether a workflow is running, so the restart offer can say it waits for it.
+    fn workflow_activity(&self) -> WorkflowActivity {
+        WorkflowActivity::Idle
+    }
+
+    /// Take the writer that exports the current update report to a file the user selects,
+    /// once per opened report. `None` hides Export; Copy stays available.
+    fn update_report_export(&mut self) -> Option<Box<dyn crate::report::surface::UpdateExport>> {
+        None
+    }
+
+    /// The user's language for native caption lines and reports opened from the main window.
+    fn locale_messages(&self) -> &'static sugarsubstitute_contracts::localization::Messages {
+        sugarsubstitute_contracts::localization::messages("en")
     }
 }
 

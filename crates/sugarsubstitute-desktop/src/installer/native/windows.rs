@@ -4,31 +4,23 @@
 use super::*;
 use crate::{
     completion_wake::{ProxyWake, WakeLifetime},
-    native_action::NativeAction,
-    windows::Presenter,
-    windows_controls::{Controls, PaintMode},
-    windows_scroll::ScrollViewport,
+    native_action::{FormScope, NativeAction},
+    windows_controls::Controls,
 };
-use std::{rc::Rc, time::Instant};
+use std::time::Instant;
 use tao::{
-    dpi::LogicalSize,
-    event::{ElementState, Event as NativeEvent, MouseButton, WindowEvent},
+    event::{Event as NativeEvent, WindowEvent},
     event_loop::{ControlFlow, EventLoopBuilder},
-    platform::{run_return::EventLoopExtRunReturn, windows::WindowExtWindows},
-    window::{Theme, WindowBuilder},
+    platform::run_return::EventLoopExtRunReturn,
 };
+#[path = "form_window.rs"]
+mod form_window;
 #[path = "projection.rs"]
 mod projection;
+pub(crate) use form_window::{FormInput, FormOwner, FormTurn, FormWindow};
 use projection::Projection;
-
-/// Translate the same theme resolved by the native window into shared preparation input.
-fn paint_theme(theme: Theme) -> sugarsubstitute_contracts::configuration::Theme {
-    if theme == Theme::Dark {
-        sugarsubstitute_contracts::configuration::Theme::Dark
-    } else {
-        sugarsubstitute_contracts::configuration::Theme::Light
-    }
-}
+#[cfg(test)]
+use {form_window::paint_theme, tao::window::Theme};
 
 /// Own a single event loop from hidden construction through checked native and application teardown.
 pub(super) fn run(
@@ -46,289 +38,63 @@ pub(super) fn run(
     let mut events = builder.build();
     let proxy = events.create_proxy();
     let wake_lifetime = WakeLifetime::new();
-    let mut builder = WindowBuilder::new()
-        .with_title(options.title)
-        .with_inner_size(LogicalSize::new(options.size[0], options.size[1]))
-        .with_resizable(options.resizable)
-        .with_max_inner_size(tao::dpi::PhysicalSize::new(4096, 4096))
-        .with_decorations(false)
-        .with_transparent(true)
-        .with_theme(None)
-        .with_visible(false);
-    if let Some([width, height]) = options.min_size {
-        builder = builder.with_min_inner_size(LogicalSize::new(width, height));
-    }
-    let window = Rc::new(builder.build(&events)?);
-    let (mut presenter, mut failure): (_, Option<Box<dyn Error>>) =
-        match Presenter::new_main(window.clone(), window.theme() == Theme::Dark) {
-            Ok(owner) => (Some(owner), None),
-            Err(cause) => (None, Some(Box::new(cause))),
-        };
-    let picker_proxy = proxy.clone();
-    let bound =
-        picker.bind(::windows::Win32::Foundation::HWND(window.hwnd() as *mut _), move || {
-            picker_proxy
-                .send_event(NativeAction::Completions)
-                .map_err(|cause| crate::DesktopError::new("installer_picker_wake", cause))
-        });
-    if let Err(cause) = bound
-        && failure.is_none()
-    {
-        failure = Some(Box::new(cause));
-    }
-    let mut picker_request = None;
-    let mut applied_size = None;
-    match presenter.as_ref().map(Presenter::work_area_height).transpose() {
-        Ok(Some(height)) => lifetime.work_area(height),
-        Ok(None) => {}
-        Err(cause) => {
-            if failure.is_none() {
-                failure = Some(Box::new(cause));
-            }
-        }
-    }
-    let scroll = ScrollViewport::new(window.clone());
-    if let Err(cause) = scroll.initialize()
-        && failure.is_none()
-    {
-        failure = Some(Box::new(cause));
-    }
-    let mut controls: Option<Controls> = None;
-    let mut storage = None;
-    let mut projection: Option<Projection> = None;
-    let mut identity = None;
-    let mut shape = None;
-    let mut hovered = None;
-    let mut pressed = None;
-    let mut point = (0.0, 0.0);
-    let mut closing = false;
-    let mut close_started = false;
-    let mut revealed = false;
-    let started = Instant::now();
-    // Resolve before start so the first prepared page and native peers share this window's mode.
-    if let Err(cause) = lifetime.input(Event::SystemTheme(paint_theme(window.theme())))
-        && failure.is_none()
-    {
-        failure = Some(cause);
-    }
     let mut accent =
         crate::windows_system_accent::SystemAccent::observe(proxy.clone(), wake_lifetime.clone());
-    // The first installer page is prepared with the current accent.
-    if let Some(current) = accent.take_change()
-        && let Err(cause) = lifetime.input(Event::SystemAccent(current))
-        && failure.is_none()
-    {
-        failure = Some(cause);
-    }
-    if let Err(cause) = lifetime.start(Arc::new(ProxyWake::new(
-        proxy.clone(),
-        wake_lifetime.clone(),
-        NativeAction::Completions,
-    ))) {
-        tracing::error!(operation="native_installer_start", cause=%cause, "Installer start failed");
-        if failure.is_none() {
-            failure = Some(cause);
-        }
-    }
+    let wake =
+        Arc::new(ProxyWake::new(proxy.clone(), wake_lifetime.clone(), NativeAction::Completions));
+    let scope = FormScope(0);
+    let mut form = FormWindow::open(
+        &events,
+        proxy,
+        scope,
+        picker,
+        None,
+        options,
+        accent.take_change().flatten(),
+        lifetime,
+        wake,
+    )?;
+    let started = Instant::now();
     events.run_return(|event, _, control| {
         *control = ControlFlow::WaitUntil(Instant::now() + Duration::from_millis(20));
-        let result: Result<(), Box<dyn Error>> = (|| {
-            match event {
-                NativeEvent::WindowEvent { event: WindowEvent::CloseRequested, .. } if !closing => {
-                    closing = lifetime.close_request()?;
-                }
-                NativeEvent::UserEvent(NativeAction::Close) => closing = true,
-                NativeEvent::UserEvent(NativeAction::Activate(id)) if !closing => {
-                    if let Some(input) = controls.as_ref().map(|owner| owner.observe(id)).transpose()?.flatten() {
-                        lifetime.input(Event::Control(ControlId::new(id)?, input))?;
-                    }
-                }
-                NativeEvent::UserEvent(NativeAction::FocusNext(backward)) if !closing => {
-                    if let Some(owner) = &controls { owner.focus_next(backward)?; }
-                }
-                NativeEvent::UserEvent(NativeAction::ScrollPage(key)) if !closing => scroll.key(key)?,
-                NativeEvent::UserEvent(NativeAction::SystemAccent) if !closing => {
-                    if let Some(current) = accent.take_change() { lifetime.input(Event::SystemAccent(current))?; }
-                }
-                NativeEvent::UserEvent(NativeAction::FocusChanged) if !closing => {
-                    lifetime.input(Event::Interaction { hovered, pressed, focused: controls.as_ref().and_then(Controls::focused) })?;
-                }
-                NativeEvent::WindowEvent { event: WindowEvent::ThemeChanged(theme), .. } if !closing => {
-                    presenter.as_mut().ok_or("Native installer presenter absent")?.set_theme(theme == Theme::Dark)?;
-                    lifetime.input(Event::SystemTheme(paint_theme(theme)))?;
-                }
-                NativeEvent::WindowEvent { event: WindowEvent::CursorMoved { position, .. }, .. } if !closing => {
-                    let scale = window.scale_factor();
-                    point = (position.x / scale, position.y / scale);
-                    let next = if scroll.captured() { None } else { projection.as_ref().and_then(|value| value.hit(point.0, point.1, scale)) };
-                    if next != hovered {
-                        hovered = next;
-                        lifetime.input(Event::Interaction { hovered, pressed, focused: controls.as_ref().and_then(Controls::focused) })?;
-                    }
-                }
-                NativeEvent::WindowEvent { event: WindowEvent::CursorLeft { .. }, .. } if !closing => {
-                    hovered = None;
-                    lifetime.input(Event::Interaction { hovered, pressed, focused: controls.as_ref().and_then(Controls::focused) })?;
-                }
-                NativeEvent::WindowEvent { event: WindowEvent::MouseInput { state, button: MouseButton::Left, .. }, .. }
-                    if !closing => {
-                    if state == ElementState::Pressed {
-                        pressed = hovered;
-                        if let Some(id) = pressed && let Some(owner) = &controls { owner.focus(id.get())?; }
-                        if pressed.is_none() && lifetime.page().is_some_and(|page| page.draggable(point.0, point.1)) { crate::windows_drag::begin(window.as_ref())?; }
-                    } else {
-                        let invoke = pressed.take().filter(|id| Some(*id) == hovered);
-                        if let Some(id) = invoke { lifetime.input(Event::Control(id, Input::Invoke))?; }
-                    }
-                    lifetime.input(Event::Interaction { hovered, pressed, focused: controls.as_ref().and_then(Controls::focused) })?;
-                }
-                NativeEvent::WindowEvent { event: WindowEvent::KeyboardInput { event, .. }, .. }
-                    if !closing && event.state == ElementState::Pressed && !event.repeat => {
-                    match event.logical_key {
-                        tao::keyboard::Key::Escape => closing = lifetime.close_request()?,
-                        tao::keyboard::Key::Tab => if let Some(owner) = &controls { owner.focus_next(crate::windows_controls::shift_pressed())?; },
-                        _ => {}
-                    }
-                }
-                NativeEvent::WindowEvent { event: WindowEvent::Focused(false), .. } if !closing => {
-                    hovered = None;
-                    pressed = None;
-                    lifetime.input(Event::Interaction { hovered, pressed, focused: None })?;
-                }
-                NativeEvent::RedrawRequested(_) if identity.is_some() && !closing => {
-                    presenter.as_ref().ok_or("Native installer presenter absent")?.expose_prepared()?;
-                    scroll.paint()?;
-                },
-                NativeEvent::MainEventsCleared => {
-                    if let Some(owner) = &controls {owner.check()?;}
-                    picker.check()?;
-                    closing |= failure.is_some() || lifetime.close_requested();
-                    if closing { picker.cancel()?; }
-                    if closing && !close_started {
-                        lifetime.close()?;
-                        scroll.shutdown()?;
-                        close_started = true;
-                    }
-                    if !closing {
-                        let size = window.inner_size();
-                        if size.width > 0 && size.height > 0 {
-                            let next = FrameShape::new(size.width, size.height, window.scale_factor())?;
-                            if shape != Some(next) { lifetime.resize(next)?; shape = Some(next); }
-                        }
-                    }
-                    if let Some(result) = picker.take_result() {
-                        let request = picker_request.take().ok_or("Native picker returned without a request")?;
-                        if !closing {
-                            let result = result.and_then(|path| path.map(|path| path.into_os_string().into_string().map_err(|_| {
-                                Box::<dyn Error>::from("Selected path cannot be represented in interface text")
-                            })).transpose()).map_err(|cause| cause.to_string());
-                            lifetime.input(Event::Picked(request, result))?;
-                        } else { result?; }
-                    }
-                    if !closing && !picker.busy() && let Some(request) = lifetime.picker() {
-                        picker.request(request.kind)?;
-                        picker_request = Some(request);
-                    }
-                    if !closing && let Some(position) = scroll.take_position()? {
-                        lifetime.input(Event::Scroll(position))?;
-                    }
-                    lifetime.advance(started.elapsed())?;
-                    if !closing && let Some(transfer) = lifetime.clipboard() {
-                        let copied = copy_transfer(::windows::Win32::Foundation::HWND(window.hwnd() as *mut _), &transfer);
-                        lifetime.copied(copied)?;
-                    }
-                    if !closing && let Some(size) = lifetime.preferred_size() {
-                        if Some(size) != applied_size {
-                            apply_client_size(&window, size);
-                            applied_size = Some(size);
-                            if !revealed { presenter.as_ref().ok_or("Native installer presenter absent")?.recenter()?; }
-                        }
-                        // Acknowledge every turn with the size the window really has, so a
-                        // lifetime waiting on its request prepares for this window, not the request.
-                        let current = window.inner_size();
-                        if current.width > 0 && current.height > 0 {
-                            let next = FrameShape::new(current.width, current.height, window.scale_factor())?;
-                            shape = Some(next);
-                            lifetime.resize(next)?;
-                        }
-                    }
-                    if !closing {
-                        if let Some(page) = lifetime.page()
-                            && Some(page.frame.shape()) == shape
-                            && Some(page.frame.identity()) != identity {
-                            let next = Projection::new(lifetime.inventory(), &page, options.close)?;
-                            scroll.present(page.frame, page.viewport, page.content_height, page.scroll)?;
-                            if controls.is_none() {
-                                let fields = lifetime.inventory().iter().filter(|item| matches!(item.role, sugarsubstitute_ui::form::Role::TextField(_))).count();
-                                storage = Some(page.frame.claim_storage(2 * 1024 * 1024 * (fields as u64 + 1))?);
-                                let mut hidden = next.specifications.clone();
-                                for spec in &mut hidden { spec.control.visible = false; }
-                                controls = Some(Controls::new(window.clone(), proxy.clone(), &hidden, PaintMode::PreparedPixels, None)?);
-                                controls.as_mut().ok_or("Native form owner absent")?.initialize()?;
-                            }
-                            let owner = controls.as_mut().ok_or("Native form owner absent")?;
-                            owner.update(&next.specifications)?;
-                            owner.clip(&next.clips)?;
-                            owner.present_fields(page.frame, window.theme() == Theme::Dark)?;
-                            page.frame.fund_storage(storage.as_mut().ok_or("Native control storage absent")?)?;
-                            let painter = presenter.as_mut().ok_or("Native installer presenter absent")?;
-                            painter.present(page.frame, None)?;
-                            identity = Some(page.frame.identity());
-                            projection = Some(next);
-                            if !revealed {
-                                window.set_visible(options.visible);
-                                if options.visible { window.set_focus(); }
-                                revealed = true;
-                            }
-                            painter.expose_prepared()?;
-                            let observations = next_observations(owner, projection.as_ref().ok_or("Native page projection absent")?)?;
-                            for (id, input) in observations { lifetime.input(Event::Control(id, input))?; }
-                            lifetime.presented()?;
-                        }
-                        if let Some(prepared) = lifetime.console() && let Some(owner) = &mut controls {
-                            owner.present_console(prepared.frame, Some(prepared.view), prepared.focus_return.map(|id| id.get()))?;
-                        }
-                        scroll.paint()?;
-                        #[cfg(any(test, feature = "boundary-fixtures"))]
-                        if let Some(frame) = lifetime.page().filter(|page| Some(page.frame.identity()) == identity).map(|page| page.frame.clone())
-                            && let Some(observer) = lifetime.pixel_capture() {
-                            observer.surface(&frame);
-                            controls.as_ref().ok_or("Native capture controls absent")?.capture(&projection.as_ref().ok_or("Native capture projection absent")?.clips, observer)?;
-                            scroll.capture(observer)?;
-                            observer.finished();
-                        }
-                    } else if lifetime.window_releasable()? && !picker.busy() {
-                        if let Some(owner) = &mut controls {
-                            owner.shutdown()?;
-                            if !owner.retired() { return Ok(()); }
-                        }
-                        controls = None;
-                        projection = None;
-                        storage = None;
-                        if let Some(owner) = &mut presenter { owner.shutdown()?; }
-                        *control = ControlFlow::Exit;
-                    }
-                }
-                _ => {}
+        match event {
+            NativeEvent::WindowEvent { window_id, event, .. } if window_id == form.window_id() => {
+                form.input(FormInput::Window(&event), lifetime);
             }
-            Ok(())
-        })();
-        if let Err(cause) = result {
-            tracing::error!(operation="native_installer_window", cause=%cause, "Installer entered cleanup");
-            if failure.is_none() { failure = Some(cause); }
-            closing = true;
+            NativeEvent::UserEvent(NativeAction::Form(action_scope, action))
+                if action_scope == scope =>
+            {
+                form.input(FormInput::Action(action), lifetime);
+            }
+            NativeEvent::UserEvent(NativeAction::SystemAccent) => {
+                if let Some(current) = accent.take_change() {
+                    form.input(FormInput::Accent(current), lifetime);
+                }
+            }
+            NativeEvent::RedrawRequested(id) if id == form.window_id() => {
+                form.input(FormInput::Redraw, lifetime);
+            }
+            NativeEvent::MainEventsCleared => {
+                if form.turn(lifetime) == FormTurn::Released {
+                    *control = ControlFlow::Exit;
+                }
+            }
+            _ => {}
         }
     });
     accent.retire();
-    picker.retire()?;
+    let (original, picker, mut failure) = form.retire();
+    let retain = |cause: Box<dyn Error>, failure: &mut Option<Box<dyn Error>>| {
+        if failure.is_none() {
+            *failure = Some(cause);
+        } else {
+            tracing::error!(operation="native_installer_settlement", cause=%cause, "Additional failure after window retirement");
+        }
+    };
+    if let Err(cause) = picker.retire() {
+        retain(Box::new(cause), &mut failure);
+    }
     drop(picker);
-    drop(scroll);
-    drop(controls);
-    drop(projection);
-    drop(storage);
-    drop(presenter);
-    let original = window.id();
-    drop(window);
     // Tao posts its destruction request from Drop. Keep pumping the same event loop until the
     // original OS window reports destruction, rather than mistaking an Rc drop for retirement.
     let deadline = Instant::now() + Duration::from_secs(15);
@@ -351,17 +117,12 @@ pub(super) fn run(
     if !destroyed {
         return Err("Native installer window destruction was not observed".into());
     }
-    let mut retain = |cause: Box<dyn Error>| {
-        if failure.is_none() {
-            failure = Some(cause);
-        } else {
-            tracing::error!(operation="native_installer_settlement", cause=%cause, "Additional failure after window retirement");
-        }
-    };
     if let Err(cause) = lifetime.window_retired() {
-        retain(cause);
+        retain(cause, &mut failure);
     }
-    settle_after_retirement(&mut events, lifetime, started, &mut retain);
+    settle_after_retirement(&mut events, lifetime, started, &mut |cause| {
+        retain(cause, &mut failure)
+    });
     wake_lifetime.disconnect();
     drop(events);
     let finished = lifetime.finish();

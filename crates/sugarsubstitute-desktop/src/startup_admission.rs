@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Admit the actual Tao loop only after pre-Tao preparation, retaining failed partial custody.
 use super::preparation::{self, PreparationExit};
+use crate::file_dialog::Picker;
 use crate::{
     DesktopError, StartupWindowContent,
     bootstrap::{Bootstrap, construct_loop},
@@ -12,7 +13,8 @@ use crate::{
 use std::{num::NonZeroUsize, sync::Arc, time::Instant};
 use tao::event_loop::{EventLoop, EventLoopBuilder};
 
-/// Start once, observe actual preparation, construct Tao and retarget the retained wake.
+/// Start once, observe actual preparation, construct Tao with its shell picker and retarget the
+/// retained wake.
 /// Failure returns only after the original content owner has actually settled;
 /// checked event-close failures retain native custody in the returned error.
 pub(super) fn admit(
@@ -21,10 +23,15 @@ pub(super) fn admit(
     maximum: NonZeroUsize,
     limit: Option<Instant>,
     timings: Option<&TimingObserver>,
-) -> Result<(EventLoop<NativeAction>, WakeLifetime), DesktopError> {
+) -> Result<((EventLoop<NativeAction>, Picker), WakeLifetime), DesktopError> {
     admit_with(bootstrap, content, maximum, limit, timings, || {
-        let event_loop =
-            construct_loop(|| EventLoopBuilder::<NativeAction>::with_user_event().build())?;
+        // The shell picker's pre-dispatch hook exists only from the builder; reports opened
+        // over the main window borrow it in turn.
+        let (event_loop, picker) = construct_loop(|| {
+            let mut builder = EventLoopBuilder::<NativeAction>::with_user_event();
+            let picker = Picker::new(&mut builder);
+            (builder.build(), picker)
+        })?;
         let lifetime = WakeLifetime::new();
         let target = Arc::new(ProxyWake::new(
             event_loop.create_proxy(),
@@ -32,7 +39,7 @@ pub(super) fn admit(
             NativeAction::Completions,
         ));
         Ok((
-            event_loop,
+            (event_loop, picker),
             lifetime,
             target as Arc<dyn sugarsubstitute_contracts::execution::CompletionWake>,
         ))

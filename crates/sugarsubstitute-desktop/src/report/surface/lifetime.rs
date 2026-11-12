@@ -66,9 +66,9 @@ pub(super) struct SliceWork {
     pub(super) paint_steps: usize,
 }
 
-pub(super) struct ReportLifetime<'a> {
+pub(crate) struct ReportLifetime<'a> {
     presentation: ReportPresentation,
-    owner: &'a mut dyn ReportOwner,
+    owner: Box<dyn ReportOwner + 'a>,
     inventory: Vec<Control>,
     state: ReportState,
     theme: Theme,
@@ -96,16 +96,16 @@ pub(super) struct ReportLifetime<'a> {
 }
 
 impl<'a> ReportLifetime<'a> {
-    pub(super) fn new(
+    pub(crate) fn new(
         presentation: ReportPresentation,
-        owner: &'a mut dyn ReportOwner,
+        owner: impl ReportOwner + 'a,
     ) -> Result<Self> {
         let details = presentation.details.as_deref().map(DetailsText::new).transpose()?;
         let inventory = ReportLayout::inventory(presentation.content.kind, &presentation.labels);
         let state = ReportState::new(presentation.content.kind);
         Ok(Self {
             presentation,
-            owner,
+            owner: Box::new(owner),
             inventory,
             state,
             theme: Theme::Dark,

@@ -173,36 +173,6 @@ fn closing_and_exhausted_revision_never_reset_or_wrap_action_identity() -> TestR
     Ok(())
 }
 #[test]
-fn native_caption_matches_reference_geometry_without_reserving_a_browser_row() -> TestResult {
-    let captions = crate::MainCaptionLabels {
-        minimize: "min",
-        maximize: "max",
-        restore: "restore",
-        close: "close",
-    };
-    for (width, maximized) in [(304.0, false), (1280.0, false), (1600.0, true)] {
-        let controls = caption_controls(
-            width,
-            maximized,
-            captions,
-            Recovery::new(identity()?).presentation(labels()),
-        );
-        assert_eq!(controls.map(|control| control.id), [1, 2, 3, 4]);
-        for (index, control) in controls[..3].iter().enumerate() {
-            assert_eq!(control.bounds.x, width - 138.0 + index as f64 * 46.0);
-            assert_eq!(control.bounds.width, 46.0);
-            assert_eq!(control.bounds.y, 1.0);
-            assert_eq!(control.bounds.height, 32.0);
-            assert_eq!(control.close, index == 2);
-        }
-        assert_eq!(controls[1].label, if maximized { captions.restore } else { captions.maximize });
-        assert_eq!(controls[3].bounds.x, 8.0);
-        assert!(controls[3].bounds.x + controls[3].bounds.width <= controls[0].bounds.x);
-        assert!(!controls[3].close);
-    }
-    Ok(())
-}
-#[test]
 fn duplicate_presentation_is_inert_and_shared_retrying_has_no_click_mapping() -> TestResult {
     let current = identity()?;
     let failed = lease(current, 1)?;

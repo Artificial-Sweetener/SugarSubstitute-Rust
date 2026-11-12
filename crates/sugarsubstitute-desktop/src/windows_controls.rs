@@ -32,6 +32,8 @@ use windows::{
     core::{PCWSTR, w},
 };
 
+#[path = "windows_controls_caption.rs"]
+mod caption;
 #[path = "windows_controls_creation.rs"]
 mod creation;
 #[path = "windows_controls_native.rs"]
@@ -108,9 +110,11 @@ impl Controls {
 
     /// Set the native caption palette before its original peers are constructed.
     pub(crate) fn configure_caption(&self, dark: bool, material: crate::NativeMaterial) {
-        self.callback
-            .caption
-            .set(Some(crate::windows_callbacks::caption::Caption { dark, material }));
+        self.callback.caption.set(Some(crate::windows_callbacks::caption::Caption {
+            dark,
+            material,
+            update: Default::default(),
+        }));
     }
     /// Allocate inert retained callback/control data before any native initialization.
     pub(crate) fn new(
@@ -120,13 +124,36 @@ impl Controls {
         paint_mode: PaintMode,
         timings: Option<crate::timing::TimingObserver>,
     ) -> Result<Self, DesktopError> {
+        Self::create(window, proxy, controls, paint_mode, timings, None)
+    }
+
+    /// Prepared-pixel peers of a form window whose actions arrive as
+    /// [`NativeAction::Form`] under `scope`, apart from the loop's other surfaces.
+    pub(crate) fn new_form(
+        window: Rc<Window>,
+        proxy: EventLoopProxy<NativeAction>,
+        controls: &[Specification],
+        scope: crate::native_action::FormScope,
+    ) -> Result<Self, DesktopError> {
+        Self::create(window, proxy, controls, PaintMode::PreparedPixels, None, Some(scope))
+    }
+
+    fn create(
+        window: Rc<Window>,
+        proxy: EventLoopProxy<NativeAction>,
+        controls: &[Specification],
+        paint_mode: PaintMode,
+        timings: Option<crate::timing::TimingObserver>,
+        scope: Option<crate::native_action::FormScope>,
+    ) -> Result<Self, DesktopError> {
         specification::validate(&[], controls)?;
         let theme = if window.theme() == tao::window::Theme::Dark {
             sugarsubstitute_contracts::configuration::Theme::Dark
         } else {
             sugarsubstitute_contracts::configuration::Theme::Light
         };
-        let callback = Rc::new(Callback::new(proxy, timings, paint_mode, theme, controls.len())?);
+        let callback =
+            Rc::new(Callback::new(proxy, timings, paint_mode, theme, controls.len(), scope)?);
         let mut planned = Vec::new();
         planned
             .try_reserve_exact(controls.len())

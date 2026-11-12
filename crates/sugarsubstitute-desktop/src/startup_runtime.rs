@@ -35,6 +35,10 @@ struct Session {
     session_end: Option<crate::windows_session_end::SessionEndWatch>,
     splash: surface::Splash,
     main: Option<MainActor>,
+    /// The update report opened over the main window, until it has settled.
+    report: Option<events::HostedReport>,
+    /// The loop's shell picker while no report holds it.
+    picker: Option<crate::file_dialog::Picker>,
     main_fence: main_fence::MainFence,
     closing: bool,
     failure: Option<DesktopError>,
@@ -55,6 +59,7 @@ impl Session {
             closing: self.closing,
             splash_retired: self.splash.retired,
             main_retired: self.main.as_ref().is_none_or(MainActor::retired)
+                && self.report.is_none()
                 && self.observers.retired()
                 && self.activity.retired(),
             execution_settled: self.splash.state.settled,
@@ -131,7 +136,7 @@ pub fn run_startup(
     )?;
     let bootstrap = crate::bootstrap::Bootstrap::new()?;
     let drain = NonZeroUsize::MIN.saturating_add(31);
-    let (mut event_loop, wake_lifetime) =
+    let ((mut event_loop, picker), wake_lifetime) =
         match admission::admit(&bootstrap, &mut content, drain, limit, timings.as_ref()) {
             Ok(admitted) => admitted,
             Err(cause) => {
@@ -187,6 +192,8 @@ pub fn run_startup(
         session_end: session_end_watch(&content, event_loop.create_proxy()),
         splash,
         main: None,
+        report: None,
+        picker: Some(picker),
         main_fence: main_fence::MainFence::new(),
         closing: false,
         failure: None,
@@ -268,6 +275,9 @@ pub fn run_startup(
             if let Some(watch) = session.session_end.take()
                 && let Err(cause) = watch.retire()
             {
+                session.retain(cause);
+            }
+            if let Some(Err(cause)) = session.picker.take().map(|picker| picker.retire()) {
                 session.retain(cause);
             }
             wake_lifetime.disconnect();
