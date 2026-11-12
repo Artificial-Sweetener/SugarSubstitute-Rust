@@ -7,7 +7,7 @@ use std::{
 };
 
 #[derive(Clone, Default)]
-pub(super) struct Output(Arc<Mutex<Vec<u8>>>);
+pub(in crate::production) struct Output(Arc<Mutex<Vec<u8>>>);
 impl Write for Output {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
         self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner).extend_from_slice(bytes);
@@ -19,13 +19,13 @@ impl Write for Output {
 }
 /// Retain both registrations until the installed formatter has left this thread.
 /// The additional registry is never installed and receives no events or causes.
-pub(super) struct ScopedCapture {
+pub(in crate::production) struct ScopedCapture {
     _subscriber: tracing::subscriber::DefaultGuard,
     _callsite_registry: tracing::Dispatch,
 }
 impl Output {
     /// Install a thread-local formatter with independent output and stable callsite interest.
-    pub(super) fn observe(&self) -> ScopedCapture {
+    pub(in crate::production) fn observe(&self) -> ScopedCapture {
         // The pinned tracing-core single-registrar path samples the registering
         // thread's default. Two live registrars keep unsubscribed threads from
         // disabling this capture's shared callsites during first registration.
@@ -41,7 +41,7 @@ impl Output {
         ScopedCapture { _subscriber: subscriber, _callsite_registry: callsite_registry }
     }
     /// Borrow no runtime cause or custody while inspecting the external diagnostic bytes.
-    pub(super) fn text(&self) -> Result<String, std::string::FromUtf8Error> {
+    pub(in crate::production) fn text(&self) -> Result<String, std::string::FromUtf8Error> {
         String::from_utf8(self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone())
     }
 }
