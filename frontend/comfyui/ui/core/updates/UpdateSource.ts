@@ -37,14 +37,19 @@ export type {
 /**
  * Where an update stands.
  *
- * The protocol states are shared by every source. `restart-comfyui` means an update was applied
- * and takes effect when the user restarts ComfyUI. `unmanaged` means this copy is a git checkout
- * or has local changes, so it is never updated in place.
+ * The protocol states are shared by every source. `restart-comfyui` means an update is prepared
+ * and is installed when the user next starts ComfyUI, before SugarCubes loads. `unmanaged` means
+ * this copy is a git checkout, has local changes, is installed through a linked folder (a junction
+ * or symbolic link), or has no valid ComfyUI Manager install record, so it is never updated in
+ * place.
  */
 export type UpdateStatus =
   | UpdatesStatus
   | { readonly state: 'restart-comfyui'; readonly version: string }
-  | { readonly state: 'unmanaged'; readonly reason: 'git-checkout' | 'local-changes' };
+  | {
+      readonly state: 'unmanaged';
+      readonly reason: 'git-checkout' | 'local-changes' | 'linked-folder' | 'not-registry-install';
+    };
 
 /** Everything the Updates entry shows; a new snapshot replaces the previous one whole. */
 export interface UpdateSnapshot {
