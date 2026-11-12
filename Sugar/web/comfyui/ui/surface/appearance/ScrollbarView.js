@@ -1,0 +1,235 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Present accessible overlay handles that delegate every value change to native scrolling. */
+import { scrollbarDragPosition, scrollbarGeometry } from './ScrollbarGeometry.js';
+import { scrollWheelDistance } from '../ScrollWheelDistance.js';
+import { scrollbarPresentation } from './ScrollbarPresentation.js';
+/** Keep input handling on the owned thumb, outside graph drag and zoom handlers. */
+export class ScrollbarView {
+    element;
+    #trackElement;
+    #owner;
+    #axis;
+    #schedule;
+    #geometry = null;
+    #drag = null;
+    #rtl = false;
+    /** Create a layout-neutral control linked to its native scroll owner. */
+    constructor(owner, axis, ownerId, schedule) {
+        this.#owner = owner;
+        this.#axis = axis;
+        this.#schedule = schedule;
+        this.element = owner.ownerDocument.createElement('div');
+        this.element.className = 'sc-style-scrollbar';
+        this.element.hidden = true;
+        this.element.tabIndex = 0;
+        this.element.setAttribute('role', 'scrollbar');
+        this.element.setAttribute('aria-label', `${axis === 'vertical' ? 'Vertical' : 'Horizontal'} scroll`);
+        this.element.setAttribute('aria-orientation', axis);
+        this.element.setAttribute('aria-controls', ownerId);
+        this.element.setAttribute('aria-valuemin', '0');
+        this.#trackElement = owner.ownerDocument.createElement('div');
+        this.#trackElement.className = 'sc-style-scrollbar-track';
+        this.#trackElement.hidden = true;
+        this.#trackElement.addEventListener('pointerdown', (event) => event.stopPropagation());
+        this.#trackElement.addEventListener('click', (event) => {
+            if (event.target !== this.#trackElement || !this.#geometry)
+                return;
+            event.stopPropagation();
+            const thumb = this.element.getBoundingClientRect();
+            const before = this.#axis === 'vertical' ? event.clientY < thumb.top : event.clientX < thumb.left;
+            const page = this.#axis === 'vertical' ? this.#owner.clientHeight : this.#owner.clientWidth;
+            this.#scroll(this.#position() + (before ? -page : page));
+        });
+        for (const [edge, delta] of [
+            ['start', -40],
+            ['end', 40],
+        ]) {
+            const button = owner.ownerDocument.createElement('button');
+            button.type = 'button';
+            button.tabIndex = -1;
+            button.dataset.scScrollStep = edge;
+            button.setAttribute('aria-label', `${edge === 'start' ? 'Previous' : 'Next'} scroll step`);
+            button.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.#scroll(this.#position() + delta);
+            });
+            this.#trackElement.append(button);
+        }
+        this.element.append(this.#trackElement);
+        this.element.addEventListener('pointerdown', this.beginDrag);
+        this.element.addEventListener('pointermove', this.#pointerMove);
+        this.element.addEventListener('pointerup', this.#pointerEnd);
+        this.element.addEventListener('pointercancel', this.#pointerEnd);
+        this.element.addEventListener('lostpointercapture', this.#pointerEnd);
+        this.element.addEventListener('keydown', this.#keyDown);
+        this.element.addEventListener('wheel', this.#wheel, { passive: false });
+    }
+    /** Capture native range and clipping before sibling scrollbar writes invalidate style and layout. */
+    prepare(track, space) {
+        const vertical = this.#axis === 'vertical';
+        const style = this.#owner.ownerDocument.defaultView?.getComputedStyle(this.#owner);
+        const overflow = (vertical ? style?.overflowY : style?.overflowX) || style?.overflow;
+        if (this.#owner !== this.#owner.ownerDocument.scrollingElement &&
+            !/auto|scroll/.test(overflow ?? '')) {
+            return () => {
+                this.element.hidden = true;
+                this.#trackElement.hidden = true;
+            };
+        }
+        this.#rtl = track?.rtl ?? false;
+        const presentation = scrollbarPresentation(this.#owner.ownerDocument);
+        const crossOverflow = vertical
+            ? this.#owner.scrollWidth > this.#owner.clientWidth
+            : this.#owner.scrollHeight > this.#owner.clientHeight;
+        const corner = presentation.reserveCorner && crossOverflow ? presentation.width : 0;
+        const viewport = (vertical ? this.#owner.clientHeight : this.#owner.clientWidth) - corner;
+        const content = (vertical ? this.#owner.scrollHeight : this.#owner.scrollWidth) - corner;
+        const position = this.#position();
+        const arrowSpace = presentation.arrows ? presentation.width * 2 : 0;
+        const edgeInset = presentation.preserveOwnerExtent ? 0 : 1;
+        const crossSize = presentation.width;
+        const size = track
+            ? (vertical ? track.height : track.width) - corner - edgeInset * 2 - arrowSpace
+            : 0;
+        this.#geometry = scrollbarGeometry(size, viewport, content, position);
+        const geometry = this.#geometry;
+        if (!track || !geometry || (vertical && track.verticalEdge === null)) {
+            return () => {
+                this.element.hidden = true;
+                this.#trackElement.hidden = true;
+            };
+        }
+        const offset = !vertical && this.#rtl ? geometry.travel - geometry.offset : geometry.offset;
+        const left = vertical
+            ? (track.verticalEdge ?? track.left) - (this.#rtl ? 0 : crossSize)
+            : track.left + edgeInset + arrowSpace / 2 + offset;
+        const top = vertical
+            ? track.top + edgeInset + arrowSpace / 2 + offset
+            : track.horizontalBottom - crossSize;
+        const localLeft = (left - space.left) / space.scaleX;
+        const localTop = (top - space.top) / space.scaleY;
+        const width = (vertical ? crossSize : geometry.length) / space.scaleX;
+        const height = (vertical ? geometry.length : crossSize) / space.scaleY;
+        const css = `left:${localLeft}px;top:${localTop}px;width:${width}px;height:${height}px;--sc-scrollbar-scale-x:${space.scaleX};--sc-scrollbar-scale-y:${space.scaleY}`;
+        const trackCss = vertical
+            ? `left:0px;top:${(track.top - top) / space.scaleY}px;width:${crossSize / space.scaleX}px;height:${(track.height - corner) / space.scaleY}px`
+            : `left:${(track.left - left) / space.scaleX}px;top:0px;width:${(track.width - corner) / space.scaleX}px;height:${crossSize / space.scaleY}px`;
+        return () => {
+            this.element.hidden = false;
+            if (this.element.getAttribute('style') !== css)
+                this.element.setAttribute('style', css);
+            if (this.element.getAttribute('data-sc-scrollbar-style') !== presentation.kind)
+                this.element.setAttribute('data-sc-scrollbar-style', presentation.kind);
+            this.#trackElement.hidden = !presentation.preserveOwnerExtent;
+            if (presentation.preserveOwnerExtent && this.#trackElement.getAttribute('style') !== trackCss)
+                this.#trackElement.setAttribute('style', trackCss);
+            this.element.setAttribute('aria-valuemax', String(Math.round(geometry.maximum)));
+            this.element.setAttribute('aria-valuenow', String(Math.round(position)));
+        };
+    }
+    /** Release capture and disconnect the owned control. */
+    dispose() {
+        this.#pointerEnd();
+        this.element.remove();
+    }
+    /** Suppress a track while its owner is between stable presentation coordinates. */
+    hide() {
+        this.element.hidden = true;
+        this.#trackElement.hidden = true;
+    }
+    /** Read native RTL coordinates as a positive distance from the leading edge. */
+    #position() {
+        return this.#axis === 'vertical' ? this.#owner.scrollTop : Math.abs(this.#owner.scrollLeft);
+    }
+    /** Write native state rather than accumulating independent scrollbar state. */
+    #scroll(position) {
+        if (this.#axis === 'vertical')
+            this.#owner.scrollTop = position;
+        else
+            this.#owner.scrollLeft = this.#rtl ? -position : position;
+        this.#schedule();
+    }
+    /** Capture dragging without sending pointer gestures to the graph canvas. */
+    beginDrag = (event) => {
+        if (event.button !== 0 || !this.#geometry)
+            return;
+        event.preventDefault();
+        event.stopPropagation();
+        this.#drag = {
+            pointer: event.pointerId,
+            coordinate: this.#axis === 'vertical' ? event.clientY : event.clientX,
+            position: this.#position(),
+            geometry: this.#geometry,
+        };
+        this.element.setPointerCapture(event.pointerId);
+        this.element.setAttribute('data-dragging', '');
+        this.element.focus({ preventScroll: true });
+    };
+    /** Map captured movement using the range at gesture start. */
+    #pointerMove = (event) => {
+        if (!this.#drag || event.pointerId !== this.#drag.pointer)
+            return;
+        event.preventDefault();
+        event.stopPropagation();
+        const coordinate = this.#axis === 'vertical' ? event.clientY : event.clientX;
+        const direction = this.#axis === 'horizontal' && this.#rtl ? -1 : 1;
+        this.#scroll(scrollbarDragPosition(this.#drag.geometry, this.#drag.position, (coordinate - this.#drag.coordinate) * direction));
+    };
+    /** Finish a gesture even when the scroll owner disappears mid-drag. */
+    #pointerEnd = () => {
+        const drag = this.#drag;
+        this.#drag = null;
+        if (drag && this.element.hasPointerCapture(drag.pointer))
+            this.element.releasePointerCapture(drag.pointer);
+        this.element.removeAttribute('data-dragging');
+    };
+    /** Preserve conventional keyboard scrolling on a focused accessible scrollbar. */
+    #keyDown = (event) => {
+        if (!this.#geometry)
+            return;
+        const page = this.#axis === 'vertical' ? this.#owner.clientHeight : this.#owner.clientWidth;
+        const values = {
+            ArrowDown: 40,
+            ArrowUp: -40,
+            ArrowRight: this.#rtl ? -40 : 40,
+            ArrowLeft: this.#rtl ? 40 : -40,
+            PageDown: page,
+            PageUp: -page,
+        };
+        const delta = values[event.key];
+        if (delta === undefined && event.key !== 'Home' && event.key !== 'End')
+            return;
+        event.preventDefault();
+        event.stopPropagation();
+        this.#scroll(event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+                ? this.#geometry.maximum
+                : this.#position() + (delta ?? 0));
+    };
+    /** Keep wheel gestures over the handle in its scroll area rather than the graph. */
+    #wheel = (event) => {
+        if (!this.#geometry)
+            return;
+        event.preventDefault();
+        event.stopPropagation();
+        const page = this.#axis === 'vertical' ? this.#owner.clientHeight : this.#owner.clientWidth;
+        const distance = scrollWheelDistance(event, this.#axis, page);
+        this.#scroll(Math.min(this.#geometry.maximum, Math.max(0, this.#position() + distance)));
+    };
+}

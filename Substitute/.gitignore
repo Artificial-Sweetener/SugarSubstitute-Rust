@@ -1,0 +1,45 @@
+# Build, packaging, test and diagnostic outputs.
+/target/
+/build/
+/dist/
+/artifacts/
+**/target/
+*.log
+*.dmp
+*.pdb
+*.profraw
+*.profdata
+*.tmp
+*.bak
+__pycache__/
+.mypy_cache/
+.ruff_cache/
+
+# Local development environments and editor state.
+.idea/
+.vscode/
+.venv/
+node_modules/
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+
+# Secrets and machine-local configuration.
+.env
+.env.*
+!.env.example
+*.local.toml
+*.local.json
+*.pem
+*.key
+
+# Installed application state and managed ComfyUI, not source fixtures.
+/user/
+/appdata/
+/runtime/
+/comfyui/
+/config/
+/state/
+
+# Cargo.lock belongs in version control for this application workspace.

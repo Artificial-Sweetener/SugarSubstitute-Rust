@@ -1,0 +1,112 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Share native suppression and owned overlay scrollbar paint across visual styles. */
+import { PHOTOPRO_SCROLLBAR_WIDTH } from './ScrollbarGeometry.js';
+/** Own the themed-wide native suppression and floating scrollbar presentation. */
+export function nativeScrollbarCss() {
+    return `
+    * { scrollbar-width:none!important; scrollbar-gutter:auto!important; }
+    *::-webkit-scrollbar { display:none!important; width:0!important; height:0!important; }
+    *::-webkit-scrollbar-button, *::-webkit-scrollbar-corner { display:none!important; }
+    .p-scrollpanel-bar { display:none!important; }
+  `;
+}
+/** Let viewport-clipped handles paint beyond a layer that moves with native scroll content. */
+export function scrollbarPresentationCss() {
+    return `
+    [data-sc-scroll-gutter] {
+      padding-right:calc(var(--sc-scrollbar-base-padding-right,0px) + var(--sc-scrollbar-gutter-width,0px)) !important;
+      padding-bottom:calc(var(--sc-scrollbar-base-padding-bottom,0px) + var(--sc-scrollbar-gutter-height,0px)) !important;
+    }
+    .sc-style-scrollbar-layer {
+      position:absolute; inset:0; z-index:1; overflow:visible; pointer-events:none;
+    }
+    .sc-style-scrollbar {
+      position:absolute; inset:auto; margin:0; box-sizing:border-box; pointer-events:auto; touch-action:none;
+      background:transparent; outline:none;
+    }
+    .sc-style-scrollbar[hidden] { display:none!important; }
+    .sc-style-scrollbar::before {
+      content:''; position:absolute; border-radius:999px;
+      background:var(--sc-style-scrollbar-thumb,rgba(255,255,255,.55));
+      transition:width 150ms cubic-bezier(.2,0,0,1),height 150ms cubic-bezier(.2,0,0,1),background-color 150ms;
+    }
+    .sc-style-scrollbar[aria-orientation="vertical"]::before { width:calc(3px / var(--sc-scrollbar-scale-x,1)); height:100%; right:calc(1px / var(--sc-scrollbar-scale-x,1)); }
+    .sc-style-scrollbar[aria-orientation="horizontal"]::before { height:calc(2px / var(--sc-scrollbar-scale-y,1)); width:100%; bottom:0; }
+    .sc-style-scrollbar[aria-orientation="vertical"]:is(:hover,:focus-visible,[data-dragging])::before { width:calc(6px / var(--sc-scrollbar-scale-x,1)); }
+    .sc-style-scrollbar[aria-orientation="horizontal"]:is(:hover,:focus-visible,[data-dragging])::before { height:calc(4px / var(--sc-scrollbar-scale-y,1)); }
+    .sc-style-scrollbar:focus-visible::before { outline:1px solid var(--sc-accent-indicator,Highlight); outline-offset:1px; }
+    @media (prefers-reduced-motion:reduce) { .sc-style-scrollbar::before { transition:none; } }
+    @media (forced-colors:active) { .sc-style-scrollbar::before { background:ButtonText; } }
+    @media (forced-colors:active) { .sc-style-scrollbar:focus-visible::before { outline-color:Highlight; } }
+  `;
+}
+/** Paint the same overlay controls as Photoshop's square tracks in every PhotoPro palette. */
+export function photoProScrollbarCss() {
+    return `
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"] { isolation:isolate; }
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"] .sc-style-scrollbar-track {
+      position:absolute; z-index:0; display:flex; box-sizing:border-box; justify-content:space-between;
+      border:0; border-radius:0;
+      background:var(--sc-photopro-scroll-track,#333); pointer-events:auto;
+    }
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"] .sc-style-scrollbar-track[hidden] { display:none!important; }
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"][aria-orientation="vertical"] .sc-style-scrollbar-track { flex-direction:column; }
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"][aria-orientation="horizontal"] .sc-style-scrollbar-track { flex-direction:row; }
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"] .sc-style-scrollbar-track button {
+      position:relative; flex:none; box-sizing:border-box; width:calc(${String(PHOTOPRO_SCROLLBAR_WIDTH)}px / var(--sc-scrollbar-scale-x,1)); height:calc(${String(PHOTOPRO_SCROLLBAR_WIDTH)}px / var(--sc-scrollbar-scale-y,1)); padding:0;
+      border:0; border-radius:0; background:var(--sc-photopro-scroll-track,#333);
+      color:var(--sc-photopro-scroll-arrow,#999); cursor:default;
+    }
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"] .sc-style-scrollbar-track button::before {
+      content:''; position:absolute; box-sizing:content-box; left:calc(6px / var(--sc-scrollbar-scale-x,1)); top:calc(6px / var(--sc-scrollbar-scale-y,1)); width:calc(4px / var(--sc-scrollbar-scale-x,1)); height:calc(4px / var(--sc-scrollbar-scale-y,1));
+      border-top:calc(1px / var(--sc-scrollbar-scale-y,1)) solid currentColor; border-left:calc(1px / var(--sc-scrollbar-scale-x,1)) solid currentColor;
+    }
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"][aria-orientation="vertical"] [data-sc-scroll-step="start"]::before { top:calc(9px / var(--sc-scrollbar-scale-y,1)); transform:rotate(45deg); }
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"][aria-orientation="vertical"] [data-sc-scroll-step="end"]::before { top:calc(1px / var(--sc-scrollbar-scale-y,1)); transform:rotate(225deg); }
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"][aria-orientation="horizontal"] [data-sc-scroll-step="start"]::before { left:calc(9px / var(--sc-scrollbar-scale-x,1)); transform:rotate(-45deg); }
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"][aria-orientation="horizontal"] [data-sc-scroll-step="end"]::before { left:calc(1px / var(--sc-scrollbar-scale-x,1)); transform:rotate(135deg); }
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"]::before {
+      z-index:1; box-sizing:border-box; border:0; border-radius:2px;
+      background:var(--sc-photopro-scroll-thumb,#555); transition:none;
+    }
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"][aria-orientation="vertical"]::before,
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"][aria-orientation="vertical"]:is(:hover,:focus-visible,[data-dragging])::before {
+      width:calc(${String(PHOTOPRO_SCROLLBAR_WIDTH - 4)}px / var(--sc-scrollbar-scale-x,1)); height:100%; right:calc(2px / var(--sc-scrollbar-scale-x,1));
+    }
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"][aria-orientation="horizontal"]::before,
+    .sc-style-scrollbar[data-sc-scrollbar-style="photopro"][aria-orientation="horizontal"]:is(:hover,:focus-visible,[data-dragging])::before {
+      height:calc(${String(PHOTOPRO_SCROLLBAR_WIDTH - 4)}px / var(--sc-scrollbar-scale-y,1)); width:100%; bottom:calc(2px / var(--sc-scrollbar-scale-y,1));
+    }
+  `;
+}
+/** Apply the current palette without overriding the native owner's stacking context. */
+export function scrollbarCss(dark) {
+    return `${nativeScrollbarCss()} :root { --sc-style-scrollbar-thumb:${dark ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.45)'}; } ${scrollbarPresentationCss()} ${photoProScrollbarCss()} ${gimpScrollbarCss()}`;
+}
+/** Paint GIMP's stable trough and thumb in document and shadow-root scrollbar layers. */
+export function gimpScrollbarCss() {
+    const scope = '.sc-style-scrollbar[data-sc-scrollbar-style="gimp"]';
+    return `
+    ${scope} { isolation:isolate; }
+    ${scope} .sc-style-scrollbar-track { position:absolute; z-index:0; box-sizing:border-box; background:var(--sc-gimp-trough); pointer-events:auto; }
+    ${scope} .sc-style-scrollbar-track[hidden] { display:none!important; }
+    ${scope} .sc-style-scrollbar-track button { display:none; }
+    ${scope}::before { z-index:1; box-sizing:border-box; border-radius:3px; background:var(--sc-gimp-scrollbar); border:2px solid var(--sc-gimp-border); transition:none; }
+    ${scope}[aria-orientation="vertical"]::before, ${scope}[aria-orientation="vertical"]:is(:hover,:focus-visible,[data-dragging])::before { width:calc(8px / var(--sc-scrollbar-scale-x,1)); right:calc(2px / var(--sc-scrollbar-scale-x,1)); }
+    ${scope}[aria-orientation="horizontal"]::before, ${scope}[aria-orientation="horizontal"]:is(:hover,:focus-visible,[data-dragging])::before { height:calc(8px / var(--sc-scrollbar-scale-y,1)); bottom:calc(2px / var(--sc-scrollbar-scale-y,1)); }
+  `;
+}

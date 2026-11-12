@@ -1,0 +1,550 @@
+{
+  "request": {
+    "protocol": "sugarcubes.canvas",
+    "version": 3,
+    "session": "surface-discovery-session",
+    "requestId": 7,
+    "type": "surface.capabilities.request",
+    "schema": 2
+  },
+  "futureRequest": {
+    "protocol": "sugarcubes.canvas",
+    "version": 3,
+    "session": "surface-discovery-session",
+    "requestId": 7,
+    "type": "surface.capabilities.request",
+    "schema": 4
+  },
+  "available": {
+    "protocol": "sugarcubes.canvas",
+    "version": 3,
+    "session": "surface-discovery-session",
+    "requestId": 7,
+    "type": "surface.capabilities.reply",
+    "status": "available",
+    "capabilities": {
+      "schema": 2,
+      "imageFormats": ["png"],
+      "viewportCommands": [],
+      "viewportState": false,
+      "previewFormats": [],
+      "comparison": false,
+      "overview": false,
+      "input": false
+    },
+    "message": ""
+  },
+  "unsupported": {
+    "protocol": "sugarcubes.canvas",
+    "version": 3,
+    "session": "surface-discovery-session",
+    "requestId": 7,
+    "type": "surface.capabilities.reply",
+    "status": "unsupported",
+    "capabilities": {
+      "schema": 2,
+      "imageFormats": [],
+      "viewportCommands": [],
+      "viewportState": false,
+      "previewFormats": [],
+      "comparison": false,
+      "overview": false,
+      "input": false
+    },
+    "message": ""
+  },
+  "invalidRequests": [
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.request",
+      "schema": 0
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 0,
+      "type": "surface.capabilities.request",
+      "schema": 2
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 2147483648,
+      "type": "surface.capabilities.request",
+      "schema": 2
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "bad",
+      "requestId": 7,
+      "type": "surface.capabilities.request",
+      "schema": 2
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.request",
+      "schema": 2,
+      "other": true
+    }
+  ],
+  "invalidReplies": [
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.reply",
+      "status": "ready",
+      "capabilities": {
+        "schema": 2,
+        "imageFormats": ["png"],
+        "viewportCommands": [],
+        "viewportState": false,
+        "previewFormats": [],
+        "comparison": false,
+        "overview": false,
+        "input": false
+      },
+      "message": ""
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.reply",
+      "status": "available",
+      "capabilities": {
+        "schema": 2,
+        "imageFormats": ["png"],
+        "viewportCommands": [],
+        "viewportState": false,
+        "previewFormats": [],
+        "comparison": false,
+        "overview": false,
+        "input": false
+      },
+      "message": "",
+      "other": true
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.reply",
+      "status": "available",
+      "capabilities": {
+        "schema": 4,
+        "imageFormats": ["png"],
+        "viewportCommands": [],
+        "viewportState": false,
+        "previewFormats": [],
+        "comparison": false,
+        "overview": false,
+        "input": false
+      },
+      "message": ""
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.reply",
+      "status": "available",
+      "capabilities": {
+        "schema": 2,
+        "imageFormats": ["tiff"],
+        "viewportCommands": [],
+        "viewportState": false,
+        "previewFormats": [],
+        "comparison": false,
+        "overview": false,
+        "input": false
+      },
+      "message": ""
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.reply",
+      "status": "available",
+      "capabilities": {
+        "schema": 2,
+        "imageFormats": ["png", "png", "png", "png"],
+        "viewportCommands": [],
+        "viewportState": false,
+        "previewFormats": [],
+        "comparison": false,
+        "overview": false,
+        "input": false
+      },
+      "message": ""
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.reply",
+      "status": "available",
+      "capabilities": {
+        "schema": 2,
+        "imageFormats": ["png"],
+        "viewportCommands": ["fit", "fit", "fit", "fit", "fit", "fit", "fit"],
+        "viewportState": false,
+        "previewFormats": [],
+        "comparison": false,
+        "overview": false,
+        "input": false
+      },
+      "message": ""
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.reply",
+      "status": "available",
+      "capabilities": {
+        "schema": 2,
+        "imageFormats": ["png"],
+        "viewportCommands": ["comparison"],
+        "viewportState": false,
+        "previewFormats": [],
+        "comparison": false,
+        "overview": false,
+        "input": false
+      },
+      "message": ""
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.reply",
+      "status": "available",
+      "capabilities": {
+        "schema": 2,
+        "imageFormats": ["png"],
+        "viewportCommands": [],
+        "viewportState": null,
+        "previewFormats": [],
+        "comparison": false,
+        "overview": false,
+        "input": false
+      },
+      "message": ""
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.reply",
+      "status": "available",
+      "capabilities": {
+        "schema": 2,
+        "imageFormats": ["png"],
+        "viewportCommands": [],
+        "viewportState": false,
+        "previewFormats": ["webp"],
+        "comparison": false,
+        "overview": false,
+        "input": false
+      },
+      "message": ""
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.reply",
+      "status": "available",
+      "capabilities": {
+        "schema": 2,
+        "imageFormats": ["png"],
+        "viewportCommands": [],
+        "viewportState": false,
+        "previewFormats": ["png", "png", "png"],
+        "comparison": false,
+        "overview": false,
+        "input": false
+      },
+      "message": ""
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.reply",
+      "status": "available",
+      "capabilities": {
+        "schema": 2,
+        "imageFormats": ["png"],
+        "viewportCommands": [],
+        "viewportState": false,
+        "previewFormats": [],
+        "comparison": 0,
+        "overview": false,
+        "input": false
+      },
+      "message": ""
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.reply",
+      "status": "available",
+      "capabilities": {
+        "schema": 2,
+        "imageFormats": ["png"],
+        "viewportCommands": [],
+        "viewportState": false,
+        "previewFormats": [],
+        "comparison": false,
+        "overview": "yes",
+        "input": false
+      },
+      "message": ""
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.reply",
+      "status": "available",
+      "capabilities": {
+        "imageFormats": ["png"],
+        "viewportCommands": [],
+        "viewportState": false,
+        "previewFormats": [],
+        "comparison": false,
+        "overview": false,
+        "input": false
+      },
+      "message": ""
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.reply",
+      "status": "available",
+      "capabilities": {
+        "schema": 1,
+        "viewportCommands": [],
+        "viewportState": false,
+        "previewFormats": [],
+        "comparison": false,
+        "overview": false,
+        "input": false
+      },
+      "message": ""
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.reply",
+      "status": "available",
+      "capabilities": {
+        "schema": 2,
+        "imageFormats": ["png"],
+        "viewportState": false,
+        "previewFormats": [],
+        "comparison": false,
+        "overview": false,
+        "input": false
+      },
+      "message": ""
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.reply",
+      "status": "available",
+      "capabilities": {
+        "schema": 2,
+        "imageFormats": ["png"],
+        "viewportCommands": [],
+        "previewFormats": [],
+        "comparison": false,
+        "overview": false,
+        "input": false
+      },
+      "message": ""
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.reply",
+      "status": "available",
+      "capabilities": {
+        "schema": 2,
+        "imageFormats": ["png"],
+        "viewportCommands": [],
+        "viewportState": false,
+        "comparison": false,
+        "overview": false,
+        "input": false
+      },
+      "message": ""
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.reply",
+      "status": "available",
+      "capabilities": {
+        "schema": 2,
+        "imageFormats": ["png"],
+        "viewportCommands": [],
+        "viewportState": false,
+        "previewFormats": [],
+        "overview": false,
+        "input": false
+      },
+      "message": ""
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.reply",
+      "status": "available",
+      "capabilities": {
+        "schema": 2,
+        "imageFormats": ["png"],
+        "viewportCommands": [],
+        "viewportState": false,
+        "previewFormats": [],
+        "comparison": false,
+        "input": false
+      },
+      "message": ""
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.reply",
+      "status": "available",
+      "capabilities": {
+        "schema": 2,
+        "imageFormats": ["png"],
+        "viewportCommands": ["wipe", "swap"],
+        "viewportState": false,
+        "previewFormats": [],
+        "comparison": false,
+        "overview": false,
+        "input": false
+      },
+      "message": ""
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.reply",
+      "status": "available",
+      "capabilities": {
+        "schema": 2,
+        "imageFormats": ["png"],
+        "viewportCommands": [],
+        "viewportState": false,
+        "previewFormats": [],
+        "comparison": false,
+        "overview": false
+      },
+      "message": ""
+    },
+    {
+      "protocol": "sugarcubes.canvas",
+      "version": 3,
+      "session": "surface-discovery-session",
+      "requestId": 7,
+      "type": "surface.capabilities.reply",
+      "status": "available",
+      "capabilities": {
+        "schema": 2,
+        "imageFormats": ["png"],
+        "viewportCommands": [],
+        "viewportState": false,
+        "previewFormats": [],
+        "comparison": false,
+        "overview": false,
+        "input": "yes"
+      },
+      "message": ""
+    }
+  ],
+  "comparison": {
+    "protocol": "sugarcubes.canvas",
+    "version": 3,
+    "session": "surface-discovery-session",
+    "requestId": 7,
+    "type": "surface.capabilities.reply",
+    "status": "available",
+    "capabilities": {
+      "schema": 2,
+      "imageFormats": ["png"],
+      "viewportCommands": ["fit", "native", "zoom", "pan", "wipe"],
+      "viewportState": true,
+      "previewFormats": [],
+      "comparison": true,
+      "overview": false,
+      "input": false
+    },
+    "message": ""
+  },
+  "input": {
+    "protocol": "sugarcubes.canvas",
+    "version": 3,
+    "session": "surface-discovery-session",
+    "requestId": 7,
+    "type": "surface.capabilities.reply",
+    "status": "available",
+    "capabilities": {
+      "schema": 2,
+      "imageFormats": ["png"],
+      "viewportCommands": ["fit", "native", "zoom", "pan", "wipe"],
+      "viewportState": true,
+      "previewFormats": [],
+      "comparison": true,
+      "overview": false,
+      "input": true
+    },
+    "message": ""
+  }
+}

@@ -1,0 +1,393 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://artificialsweetener.ai/schemas/sugarcubes/canvas/masks/v2",
+  "title": "SugarCubes canvas mask protocol version 2",
+  "$defs": {
+    "CanvasDocument": {
+      "$ref": "canvas.schema.json#/$defs/CanvasDocument"
+    },
+    "CanvasMaskPixels": {
+      "type": "object",
+      "properties": {
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "data": {
+          "type": "string",
+          "maxLength": 89478488
+        }
+      },
+      "required": ["width", "height", "data"],
+      "additionalProperties": false
+    },
+    "CanvasMaskReference": {
+      "type": "object",
+      "properties": {
+        "canvasId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "document": {
+          "$ref": "#/$defs/CanvasDocument"
+        },
+        "id": {
+          "type": "string",
+          "maxLength": 128
+        }
+      },
+      "required": ["canvasId", "document", "id"],
+      "additionalProperties": false
+    },
+    "CanvasMaskSnapshot": {
+      "type": "object",
+      "properties": {
+        "mask": {
+          "$ref": "#/$defs/CanvasMaskReference"
+        },
+        "revision": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "pixels": {
+          "$ref": "#/$defs/CanvasMaskPixels"
+        }
+      },
+      "required": ["mask", "revision", "pixels"],
+      "additionalProperties": false
+    },
+    "CanvasMaskContext": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "context"
+        },
+        "supported": {
+          "type": "boolean"
+        },
+        "document": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/CanvasDocument"
+            },
+            {
+              "const": null
+            }
+          ]
+        },
+        "observesChanges": {
+          "type": "boolean"
+        }
+      },
+      "required": ["kind", "supported", "document", "observesChanges"],
+      "additionalProperties": false
+    },
+    "CanvasMaskCreate": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "create"
+        },
+        "document": {
+          "$ref": "#/$defs/CanvasDocument"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "source": {
+          "enum": ["selection", "blank", "pixels"]
+        },
+        "pixels": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/CanvasMaskPixels"
+            },
+            {
+              "const": null
+            }
+          ]
+        }
+      },
+      "required": ["type", "document", "name", "source", "pixels"],
+      "additionalProperties": false
+    },
+    "CanvasMaskActivate": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "activate"
+        },
+        "mask": {
+          "$ref": "#/$defs/CanvasMaskReference"
+        }
+      },
+      "required": ["type", "mask"],
+      "additionalProperties": false
+    },
+    "CanvasMaskCapture": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "capture"
+        },
+        "masks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CanvasMaskReference"
+          },
+          "maxItems": 64
+        },
+        "maximumSize": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1024
+        }
+      },
+      "required": ["type", "masks", "maximumSize"],
+      "additionalProperties": false
+    },
+    "CanvasMaskCommand": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/CanvasMaskQuery"
+        },
+        {
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "type": {
+              "const": "watch"
+            }
+          },
+          "additionalProperties": false,
+          "required": ["enabled", "type"],
+          "type": "object"
+        }
+      ]
+    },
+    "CanvasMaskResult": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/CanvasMaskContext"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "created"
+            },
+            "mask": {
+              "$ref": "#/$defs/CanvasMaskReference"
+            }
+          },
+          "required": ["kind", "mask"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "activated"
+            }
+          },
+          "required": ["kind"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "captured"
+            },
+            "snapshots": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/CanvasMaskSnapshot"
+              },
+              "maxItems": 64
+            }
+          },
+          "required": ["kind", "snapshots"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "failure"
+            },
+            "status": {
+              "enum": ["unavailable", "unsupported", "stale", "cancelled", "error"]
+            },
+            "message": {
+              "type": "string",
+              "maxLength": 512
+            }
+          },
+          "required": ["kind", "status", "message"],
+          "additionalProperties": false
+        },
+        {
+          "properties": {
+            "supported": {
+              "type": "boolean"
+            },
+            "kind": {
+              "const": "watching"
+            }
+          },
+          "additionalProperties": false,
+          "required": ["supported", "kind"],
+          "type": "object"
+        }
+      ]
+    },
+    "CanvasMaskRequest": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.canvas.masks"
+        },
+        "version": {
+          "const": 2
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "command": {
+          "$ref": "#/$defs/CanvasMaskCommand"
+        }
+      },
+      "required": ["protocol", "version", "session", "requestId", "command"],
+      "additionalProperties": false
+    },
+    "CanvasMaskReply": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.canvas.masks"
+        },
+        "version": {
+          "const": 2
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "requestId": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "result": {
+          "$ref": "#/$defs/CanvasMaskResult"
+        }
+      },
+      "required": ["protocol", "version", "session", "requestId", "result"],
+      "additionalProperties": false
+    },
+    "CanvasMaskChanged": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.canvas.masks"
+        },
+        "version": {
+          "const": 2
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "type": {
+          "const": "changed"
+        },
+        "documentId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "revision": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "maskId": {
+          "type": "string",
+          "maxLength": 128
+        }
+      },
+      "required": ["protocol", "version", "session", "type", "documentId", "revision", "maskId"],
+      "additionalProperties": false
+    },
+    "CanvasMaskQuery": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "context"
+            }
+          },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "$ref": "#/$defs/CanvasMaskCreate"
+        },
+        {
+          "$ref": "#/$defs/CanvasMaskActivate"
+        },
+        {
+          "$ref": "#/$defs/CanvasMaskCapture"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "const": "release"
+            },
+            "mask": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/CanvasMaskReference"
+                },
+                {
+                  "const": null
+                }
+              ]
+            }
+          },
+          "required": ["type", "mask"],
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/CanvasMaskRequest"
+    },
+    {
+      "$ref": "#/$defs/CanvasMaskReply"
+    },
+    {
+      "$ref": "#/$defs/CanvasMaskChanged"
+    }
+  ]
+}

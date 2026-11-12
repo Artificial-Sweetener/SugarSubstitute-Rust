@@ -1,0 +1,146 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/**
+ * Own claimed identity and writable pack creation for authoring workflows.
+ */
+import { parseCanonicalCubeId } from '../core/CubeId.js';
+import { isRecord } from '../types/common.js';
+function readApiError(data) {
+    const error = isRecord(data.error) ? data.error : {};
+    return typeof error.message === 'string' ? error.message : '';
+}
+/** Coordinate claimed identity and authoring pack setup through SugarCubes dialogs. */
+export class CubePackService {
+    api;
+    dialogs;
+    toast;
+    constructor({ api, dialogs, toast } = {}) {
+        if (!api) {
+            throw new Error('Cube library API is required.');
+        }
+        this.api = api;
+        this.dialogs = dialogs ?? null;
+        this.toast = toast ?? null;
+    }
+    /** List writable packs owned by the installation's claimed author identity. */
+    async listAuthoringPacks() {
+        const catalog = await this.loadCatalog();
+        const owner = String(catalog.identityPolicy.claimed_github_owner || '').trim();
+        if (!owner)
+            return [];
+        return catalog.packs.filter((pack) => pack.owner.localeCompare(owner, undefined, { sensitivity: 'accent' }) === 0);
+    }
+    /** Create one writable pack under the claimed author identity. */
+    async createAuthoringPackForClaimedOwner() {
+        const catalog = await this.loadCatalog();
+        const owner = await this.ensureClaimedOwner(catalog.identityPolicy);
+        return owner ? this.createAuthoringPack(owner) : null;
+    }
+    /** Determine whether the active installation can save one persisted Cube in place. */
+    async canWriteCube(cubeId) {
+        try {
+            const identity = parseCanonicalCubeId(cubeId);
+            if (identity.sourceKind === 'local')
+                return true;
+            const { packs } = await this.loadCatalog();
+            return packs.some((pack) => pack.owner.localeCompare(identity.owner, undefined, { sensitivity: 'accent' }) === 0 &&
+                pack.repo.localeCompare(identity.repo, undefined, { sensitivity: 'accent' }) === 0);
+        }
+        catch (_error) {
+            return false;
+        }
+    }
+    /** Load writable packs and the authoritative claimed-owner policy. */
+    async loadCatalog() {
+        const { response, data } = await this.api.listCubePacks();
+        if (!response.ok || data.error) {
+            throw new Error(readApiError(data) || response.statusText || 'Failed to load cube packs');
+        }
+        const packs = (Array.isArray(data.repos) ? data.repos : [])
+            .filter(isRecord)
+            .filter((repo) => repo.enabled && repo.is_writable && repo.owner && repo.repo)
+            .map((repo) => ({
+            owner: String(repo.owner).trim(),
+            repo: String(repo.repo).trim(),
+            repoRef: `${String(repo.owner).trim()}/${String(repo.repo).trim()}`,
+        }));
+        return { packs, identityPolicy: isRecord(data.identity_policy) ? data.identity_policy : {} };
+    }
+    /** Prompt once for the GitHub owner whose packs this installation manages. */
+    async ensureClaimedOwner(identityPolicy = {}) {
+        const current = String(identityPolicy.claimed_github_owner || '').trim();
+        if (current) {
+            return current;
+        }
+        const values = await this.dialogs?.openForm?.({
+            title: 'Claim Your Pack Owner',
+            message: ['Enter the GitHub owner used for packs you manage.'],
+            confirmLabel: 'Claim Owner',
+            fields: [
+                {
+                    key: 'owner',
+                    label: 'GitHub owner',
+                    placeholder: 'YourGitHubName',
+                    required: true,
+                    normalizeValue: (value) => value.trim(),
+                },
+            ],
+        });
+        if (typeof values?.owner !== 'string' || !values.owner) {
+            return '';
+        }
+        const { response, data } = await this.api.updateIdentityPolicy(JSON.stringify({ claimed_github_owner: values.owner }), { headers: { 'Content-Type': 'application/json' } });
+        if (!response.ok || data.error) {
+            throw new Error(readApiError(data) || response.statusText || 'Failed to claim owner');
+        }
+        return String(data?.claimed_github_owner || values.owner).trim();
+    }
+    /** Create one initialized writable pack for the claimed owner. */
+    async createAuthoringPack(owner) {
+        const values = await this.dialogs?.openForm?.({
+            title: 'Create Cube Pack',
+            message: [`Create a managed pack owned by ${owner}.`],
+            confirmLabel: 'Create Pack',
+            fields: [
+                {
+                    key: 'repo',
+                    label: 'Pack name',
+                    placeholder: 'My-Cubes',
+                    required: true,
+                    normalizeValue: (value) => value.trim(),
+                },
+            ],
+        });
+        if (typeof values?.repo !== 'string' || !values.repo) {
+            return null;
+        }
+        const { response, data } = await this.api.createAuthoringCubePack(JSON.stringify({ owner, repo: values.repo, enabled: true }), { headers: { 'Content-Type': 'application/json' } });
+        if (!response.ok || data.error) {
+            throw new Error(readApiError(data) || response.statusText || 'Failed to create cube pack');
+        }
+        const repo = isRecord(data.repo) ? data.repo : {};
+        if (!repo.owner || !repo.repo || !repo.is_writable) {
+            throw new Error('Created cube pack is not writable.');
+        }
+        const pack = {
+            owner: String(repo.owner).trim(),
+            repo: String(repo.repo).trim(),
+            repoRef: `${String(repo.owner).trim()}/${String(repo.repo).trim()}`,
+        };
+        this.toast?.push('success', 'Cube Pack created', `${pack.repoRef} is ready.`);
+        return pack;
+    }
+}
