@@ -21,11 +21,11 @@ fn reader_and_entry_compatibility_are_independent() -> Result<(), Rejection> {
     let current = LauncherContract::decode(CURRENT_LAUNCHER_CONTRACT)?;
     let next_app =
         ApplicationContract::decode(br#"{"schema_version":1,"installed_launch_protocols":[3]}"#)?;
-    assert_eq!(current.require_application(&next_app, 1), Err(Rejection::Unsupported));
+    assert_eq!(current.require_application(&next_app, 2), Err(Rejection::Unsupported));
     let transition_app =
         ApplicationContract::decode(br#"{"schema_version":1,"installed_launch_protocols":[1,2]}"#)?;
-    current.require_application(&transition_app, 1)?;
-    assert_eq!(current.require_application(&transition_app, 2), Err(Rejection::InstallationSchema),);
+    current.require_application(&transition_app, 2)?;
+    assert_eq!(current.require_application(&transition_app, 3), Err(Rejection::InstallationSchema),);
     let next = LauncherContract::decode(
         br#"{"schema_version":1,"installation_schemas":[1,2],"installed_launch_protocol":3}"#,
     )?;
@@ -80,13 +80,13 @@ fn malformed_launcher_declarations_cannot_claim_capabilities() {
 #[test]
 fn launcher_replacement_preserves_reader_and_produced_entry() -> Result<(), Rejection> {
     let previous = LauncherContract::decode(CURRENT_LAUNCHER_CONTRACT)?;
-    previous.require_replacement_of(&previous, 1)?;
+    previous.require_replacement_of(&previous, 2)?;
     for (schemas, protocol, expected) in
-        [(json!([2]), 1, Rejection::InstallationSchema), (json!([1]), 2, Rejection::Unsupported)]
+        [(json!([3]), 1, Rejection::InstallationSchema), (json!([2]), 2, Rejection::Unsupported)]
     {
         let declaration = json!({"schema_version":1,"installation_schemas":schemas,"installed_launch_protocol":protocol}).to_string();
         let next = LauncherContract::decode(declaration.as_bytes())?;
-        assert_eq!(next.require_replacement_of(&previous, 1), Err(expected));
+        assert_eq!(next.require_replacement_of(&previous, 2), Err(expected));
     }
     Ok(())
 }

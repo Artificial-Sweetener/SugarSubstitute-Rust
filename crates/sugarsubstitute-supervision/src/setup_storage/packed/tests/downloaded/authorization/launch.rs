@@ -101,6 +101,10 @@ fn accepted_launch_needs_no_extracted_cache_or_repository_and_retains_native_cus
             Generation {
                 id: GenerationId::new("2".repeat(32))?,
                 package: PackageDigest::new("c".repeat(64))?,
+                release: sugarsubstitute_contracts::installation::SignedRelease::new(
+                    "1.0.0".to_owned(),
+                    1,
+                )?,
             },
             PreparationIntent::Automatic,
         )?;
@@ -147,6 +151,10 @@ fn released_run_lock_recovers_previous_acceptance_without_accepting_the_interrup
         let generation = Generation {
             id: GenerationId::new("2".repeat(32))?,
             package: PackageDigest::new("c".repeat(64))?,
+            release: sugarsubstitute_contracts::installation::SignedRelease::new(
+                "1.0.0".to_owned(),
+                1,
+            )?,
         };
         let staging = before.prepare(generation.clone(), PreparationIntent::Automatic)?;
         store.compare_exchange(&before, &staging, context)?;

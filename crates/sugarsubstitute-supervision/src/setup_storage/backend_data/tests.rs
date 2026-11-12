@@ -26,6 +26,11 @@ impl Fixture {
         let identity = Generation {
             id: GenerationId::new("a".repeat(32)).map_err(io::Error::other)?,
             package: PackageDigest::new("b".repeat(64)).map_err(io::Error::other)?,
+            release: sugarsubstitute_contracts::installation::SignedRelease::new(
+                "1.0.0".to_owned(),
+                1,
+            )
+            .map_err(io::Error::other)?,
         };
         let generation =
             Directory::open(&root.path().join("releases").join(identity.id.as_str()), true)?;

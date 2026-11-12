@@ -12,6 +12,7 @@ fn generation(number: u64) -> Result<Generation> {
     Ok(Generation {
         id: GenerationId::new(format!("{number:032x}"))?,
         package: PackageDigest::new(format!("{number:064x}"))?,
+        release: crate::installation::SignedRelease::new(format!("1.0.{number}"), number + 1)?,
     })
 }
 fn reload(record: &InstallationRecord) -> Result<InstallationRecord> {
@@ -58,6 +59,7 @@ fn broken_b_recovers_a_and_c_can_be_accepted_after_reloading_every_transition() 
     let trial = reload(&prepare(&accepted, &b)?.begin_trial()?)?;
     let recovered = reload(&trial.reject(&attempt(&trial)?)?)?;
     assert_eq!(recovered.startup_selection(), StartupSelection::Accepted(&a));
+    assert_eq!(recovered.rollback(), Some(&b));
     assert_eq!(
         recovered.prepare(b.clone(), PreparationIntent::Automatic),
         Err(Rejection::Quarantined)
@@ -66,6 +68,7 @@ fn broken_b_recovers_a_and_c_can_be_accepted_after_reloading_every_transition() 
     assert_eq!(accepted_c.accepted(), Some(&c));
     assert_eq!(accepted_c.retained(), Some(&a));
     assert!(accepted_c.candidate().is_none());
+    assert_eq!(accepted_c.rollback(), None);
     assert_eq!(accepted_c.rejected(), &[b.package]);
     Ok(())
 }
@@ -172,7 +175,11 @@ fn generations_cannot_alias_accepted_or_retained_directories() -> Result {
     let b = generation(2)?;
     let record = install(&install(&empty()?, &a)?, &b)?;
     for old in [a, b] {
-        let conflicting = Generation { id: old.id, package: generation(3)?.package };
+        let conflicting = Generation {
+            id: old.id,
+            release: generation(3)?.release,
+            package: generation(3)?.package,
+        };
         assert_eq!(
             record.prepare(conflicting, PreparationIntent::Repair),
             Err(Rejection::Invariant)
@@ -193,6 +200,7 @@ fn hostile_records_cannot_erase_selection_by_omitting_fields_or_exceed_capacity(
         "retained",
         "candidate",
         "rejected",
+        "rollback",
     ] {
         let mut changed = value.clone();
         changed.as_object_mut().ok_or("Object absent")?.remove(field);
@@ -204,8 +212,11 @@ fn hostile_records_cannot_erase_selection_by_omitting_fields_or_exceed_capacity(
     let mut changed = value.clone();
     changed["extra"] = true.into();
     assert!(InstallationRecord::decode(&serde_json::to_vec(&changed)?).is_err());
+    let mut unlabelled = value.clone();
+    unlabelled["accepted"].as_object_mut().ok_or("Accepted absent")?.remove("release");
+    assert!(InstallationRecord::decode(&serde_json::to_vec(&unlabelled)?).is_err());
     changed = value;
-    changed["schema_version"] = 2.into();
+    changed["schema_version"] = 1.into();
     assert_eq!(InstallationRecord::decode(&serde_json::to_vec(&changed)?), Err(Rejection::Schema));
     assert_eq!(
         InstallationRecord::decode(&vec![b' '; MAX_RECORD_BYTES + 1]),
@@ -267,5 +278,25 @@ fn identifiers_reject_paths_case_aliases_and_ambiguous_lengths() -> Result {
         GenerationId::new("a".repeat(32))?
     );
     assert!(serde_json::from_str::<GenerationId>("\"../outside\"").is_err());
+    Ok(())
+}
+
+#[test]
+fn signed_release_labels_admit_only_what_a_signed_offer_carries() -> Result {
+    let label = SignedRelease::new("1.2.3-beta.4+build".to_owned(), 7)?;
+    assert_eq!((label.version(), label.sequence()), ("1.2.3-beta.4+build", 7));
+    for (version, sequence) in [
+        (String::new(), 1),
+        ("1.0.0".to_owned(), 0),
+        ("1.0 0".to_owned(), 1),
+        ("../1".to_owned(), 1),
+        ("1".repeat(SignedRelease::MAX_VERSION_BYTES + 1), 1),
+    ] {
+        assert_eq!(SignedRelease::new(version, sequence), Err(Rejection::Identity));
+    }
+    let record = install(&empty()?, &generation(1)?)?;
+    let mut value: serde_json::Value = serde_json::from_slice(&record.encode()?)?;
+    value["accepted"]["release"]["sequence"] = 0.into();
+    assert!(InstallationRecord::decode(&serde_json::to_vec(&value)?).is_err());
     Ok(())
 }

@@ -42,7 +42,7 @@ fn historical_preparation_only_engine_remains_staged_without_a_probe_trial() -> 
         let root = worker::installation(127, context)?;
         let workspace = tempfile::tempdir()?;
         let historical =
-            br#"{"schema_version":1,"preparation_protocols":[1],"installation_schemas":[1]}"#;
+            br#"{"schema_version":1,"preparation_protocols":[1],"installation_schemas":[2]}"#;
         let (bytes, _) = archive(historical)?;
         let (trust, offer, download) = evidence(root.path(), &bytes, Component::Updater, context)?;
         let prepared = UpdaterPackage::import(

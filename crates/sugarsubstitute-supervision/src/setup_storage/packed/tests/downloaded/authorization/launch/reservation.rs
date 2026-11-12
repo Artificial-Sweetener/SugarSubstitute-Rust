@@ -8,6 +8,10 @@ fn next_generation() -> Result<Generation, Box<dyn std::error::Error + Send + Sy
     Ok(Generation {
         id: GenerationId::new("2".repeat(32))?,
         package: PackageDigest::new("c".repeat(64))?,
+        release: sugarsubstitute_contracts::installation::SignedRelease::new(
+            "1.0.0".to_owned(),
+            1,
+        )?,
     })
 }
 

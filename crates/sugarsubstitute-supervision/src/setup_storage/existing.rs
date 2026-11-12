@@ -14,7 +14,7 @@ pub use recovery::RecoveryFailure;
 use serde::Serialize;
 use std::{borrow::Cow, fs::File, io, path::Path};
 use sugarsubstitute_contracts::execution::JobContext;
-use sugarsubstitute_contracts::installation::Generation;
+use sugarsubstitute_contracts::installation::{Generation, PackageDigest};
 
 /// Native-owned maintenance summary; presentation cannot turn it into mutation authority.
 #[derive(Clone, Serialize)]
@@ -134,7 +134,7 @@ impl ExistingInstallation {
             root,
             directory,
             super::ownership::read(root)?,
-            Some(generation),
+            Some(&generation.package),
             context,
         )?;
         existing.summary.launch_entry_missing = !entry_present;
@@ -146,7 +146,7 @@ impl ExistingInstallation {
         root: &Directory,
         directory: Directory,
         marker: File,
-        expected: Option<&Generation>,
+        expected: Option<&PackageDigest>,
         context: &JobContext,
     ) -> io::Result<Self> {
         check(context)?;
@@ -225,7 +225,7 @@ impl ExistingInstallation {
             root,
             Directory::open(&path, false)?,
             super::ownership::read(root)?,
-            Some(generation),
+            Some(&generation.package),
             context,
         )?;
         if candidate.summary.selection != self.summary.selection

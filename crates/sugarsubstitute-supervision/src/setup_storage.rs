@@ -62,6 +62,9 @@ pub use selection::{
     InheritedTrial, TRIAL_WITNESS_RESERVATION_BYTES, TrialApplication, TrialTransfer, TrialWitness,
     TrialWitnessTransfer, capture_trial_custody,
 };
+pub use selection::{
+    InstalledRelease, PreparedUpdate, Rollback, UpdateSelection, read_update_selection,
+};
 use std::io;
 use sugarsubstitute_contracts::execution::JobContext;
 pub use transaction::{
@@ -110,6 +113,18 @@ fn check(context: &JobContext) -> io::Result<()> {
 
 fn invalid(message: &'static str) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidInput, message)
+}
+
+/// Record the authenticated offer's version label and sequence on the generation it prepares.
+fn signed_release(
+    offer: &sugarsubstitute_update::VerifiedOffer,
+) -> io::Result<sugarsubstitute_contracts::installation::SignedRelease> {
+    let offer = offer.offer();
+    sugarsubstitute_contracts::installation::SignedRelease::new(
+        offer.version().to_owned(),
+        offer.sequence(),
+    )
+    .map_err(io::Error::other)
 }
 
 #[cfg(test)]

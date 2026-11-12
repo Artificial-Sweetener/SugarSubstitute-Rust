@@ -26,6 +26,10 @@ pub(super) fn generation(number: u64) -> Result<Generation, Rejection> {
     Ok(Generation {
         id: GenerationId::new(format!("{number:032x}"))?,
         package: PackageDigest::new(format!("{number:064x}"))?,
+        release: sugarsubstitute_contracts::installation::SignedRelease::new(
+            format!("1.0.{number}"),
+            number + 1,
+        )?,
     })
 }
 
@@ -329,6 +333,75 @@ fn a_replacement_between_reservation_and_use_is_detected_by_record_value() -> Te
             store.reserve_inherited(Some(inherited(&launch)?), context),
             Err(SelectionFailure::Superseded)
         ));
+        Ok(())
+    })
+}
+
+/// The update view follows the record: only a complete candidate is prepared, a trial without
+/// a verdict returns to prepared, a bad verdict sets rollback, and a later acceptance clears it.
+#[test]
+fn update_selection_shows_prepared_candidates_and_rollback_only_after_a_bad_verdict() -> TestResult
+{
+    worker::run(|context, _| {
+        let root = root()?;
+        let initial = initial()?;
+        let store = SelectionStore::initialize(root.path(), &initial, context)?;
+        let view = || read_update_selection(root.path(), context);
+        assert!(matches!(view(), Err(SelectionFailure::Missing)));
+        let running = accept(&store, &initial, &generation(1)?, context)?;
+        let shown = view()?;
+        assert_eq!(shown.running.generation, generation(1)?.id);
+        assert_eq!((shown.running.version.as_str(), shown.running.release_sequence), ("1.0.1", 2));
+        assert_eq!((shown.prepared, shown.rollback), (None, None));
+
+        let candidate = generation(2)?;
+        let staged = running.prepare(candidate.clone(), PreparationIntent::Automatic)?;
+        let staged = advance(&store, &running, [staged], context)?;
+        assert_eq!(view()?.prepared, None);
+        let prepared = advance(&store, &staged, [staged.prepared(&candidate)?], context)?;
+        let expected = Some(PreparedUpdate {
+            generation: candidate.id.clone(),
+            version: "1.0.2".to_owned(),
+            release_sequence: 3,
+            package_digest: {
+                let mut digest = [0; 32];
+                digest[31] = 2;
+                digest
+            },
+        });
+        assert_eq!(view()?.prepared, expected);
+
+        let trial = prepared.begin_trial()?;
+        let Some(Candidate::Trial { attempt }) = trial.candidate().cloned() else {
+            return Err("Trial absent".into());
+        };
+        let trial = advance(&store, &prepared, [trial], context)?;
+        assert_eq!(view()?.prepared, None);
+        let no_verdict =
+            advance(&store, &trial, [trial.cancel_unstarted_trial(&attempt)?], context)?;
+        assert_eq!((view()?.prepared, view()?.rollback), (expected, None));
+
+        let trial = advance(&store, &no_verdict, [no_verdict.begin_trial()?], context)?;
+        let Some(Candidate::Trial { attempt }) = trial.candidate().cloned() else {
+            return Err("Trial absent".into());
+        };
+        let rejected = advance(&store, &trial, [trial.reject(&attempt)?], context)?;
+        let shown = view()?;
+        assert_eq!(shown.running.generation, generation(1)?.id);
+        assert_eq!(shown.prepared, None);
+        assert_eq!(
+            shown.rollback,
+            Some(Rollback {
+                rejected_generation: candidate.id,
+                rejected_version: "1.0.2".to_owned(),
+                rejected_release_sequence: 3,
+            })
+        );
+
+        accept(&store, &rejected, &generation(3)?, context)?;
+        let shown = view()?;
+        assert_eq!(shown.running.generation, generation(3)?.id);
+        assert_eq!(shown.rollback, None);
         Ok(())
     })
 }

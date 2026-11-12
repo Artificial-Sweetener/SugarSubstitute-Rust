@@ -5,7 +5,7 @@ use super::*;
 
 /// Serialize inert public correlation without opening an installation.
 fn encoded() -> String {
-    serde_json::json!({"installation":"1".repeat(32),"generation":{"id":"2".repeat(32),"package":"3".repeat(64)},"revision":7}).to_string()
+    serde_json::json!({"installation":"1".repeat(32),"generation":{"id":"2".repeat(32),"package":"3".repeat(64),"release":{"version":"1.0.0","sequence":1}},"revision":7}).to_string()
 }
 
 #[test]
