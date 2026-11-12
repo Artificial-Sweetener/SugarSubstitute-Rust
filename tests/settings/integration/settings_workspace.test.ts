@@ -18,6 +18,7 @@ import { afterEach, expect, jest, test } from '@jest/globals';
 import { ComfySettingsCatalog } from '../../../frontend/comfyui/ui/settings/ComfySettingsCatalog.js';
 import { SettingsWorkspaceSurface } from '../../../frontend/comfyui/ui/settings/SettingsWorkspaceSurface.js';
 import { SettingsWorkspaceHost } from '../../../frontend/comfyui/ui/settings/SettingsWorkspaceHost.js';
+import { UpdateSourceSlot } from '../../../frontend/comfyui/ui/core/updates/UpdateSource.js';
 import { SettingsPopupTheme } from '../../../frontend/comfyui/ui/settings/SettingsPopupTheme.js';
 import { settingsWorkspaceCss } from '../../../frontend/comfyui/ui/settings/SettingsWorkspaceStyles.js';
 import { publishVisualStyle } from '../../../frontend/comfyui/ui/surface/appearance/VisualStyleBoundary.js';
@@ -316,4 +317,34 @@ test('theme only portals anchored to standard settings and restore their host to
   expect(plugin.hasAttribute('data-sc-settings-popup')).toBe(false);
   theme.dispose();
   surface.dispose();
+});
+
+test('adds the Updates entry only once an update source attaches, and only once', () => {
+  const register = jest.fn<(definition: Record<string, unknown>) => void>();
+  const updates = new UpdateSourceSlot();
+  const host = new SettingsWorkspaceHost({
+    document,
+    app: { ui: { settings: { addSetting: register, settingsParamLookup: {} } } },
+    mode: { enabled: true, subscribe: () => () => undefined },
+    palette: { theme: { dark: true, color: '#479ef5' }, subscribe: () => () => {} },
+    updates,
+    report: (error) => {
+      throw error;
+    },
+  });
+  host.setup();
+  const ids = (): unknown[] => register.mock.calls.map(([definition]) => definition.id);
+  expect(ids()).toEqual(['SugarCubes.About.Information']);
+  const source = {
+    applies: 'host-restart' as const,
+    read: () => null,
+    subscribe: () => () => undefined,
+    check: () => Promise.resolve({ accepted: true as const }),
+    apply: () => Promise.resolve({ accepted: true as const }),
+  };
+  const release = updates.attach(source);
+  release();
+  updates.attach(source);
+  expect(ids()).toEqual(['SugarCubes.About.Information', 'SugarCubes.Updates.Status']);
+  host.dispose();
 });

@@ -31,6 +31,8 @@ import { EmbeddedPanelLayout } from './EmbeddedPanelLayout.js';
 import type { EmbeddedCanvasConnection } from './EmbeddedCanvasConnection.js';
 import type { MemoryBudgetRegistry } from '../memory/MemoryBudgetRegistry.js';
 import { MemoryHostLink, type MemoryPreferenceSource } from '../memory/MemoryHostLink.js';
+import { UpdatesHostLink } from '../updates/UpdatesHostLink.js';
+import type { UpdateSourceSlot } from '../updates/UpdateSource.js';
 
 /** Supply the browser lifetime without introducing another connection or preference owner. */
 export interface EmbeddedPanelOptions {
@@ -46,6 +48,8 @@ export interface EmbeddedPanelOptions {
     readonly registry: MemoryBudgetRegistry;
     preferences(): MemoryPreferenceSource;
   };
+  /** Receives the host's updater when the host declares `sugarcubes.updates`. */
+  readonly updates?: UpdateSourceSlot;
   connected(): boolean;
   subscribeConnection?(listener: (connected: boolean) => void): () => void;
   report(error: unknown): void;
@@ -57,6 +61,7 @@ export class EmbeddedPanelHost {
   #stop: (() => void) | null = null;
   #stopConnection: (() => void) | null = null;
   #memory: MemoryHostLink | null = null;
+  #updates: { readonly link: UpdatesHostLink; readonly detach: () => void } | null = null;
   #stopHost: (() => void) | null = null;
   #timer: number | null = null;
 
@@ -111,8 +116,8 @@ export class EmbeddedPanelHost {
         this.options.report(error);
       }
     };
-    this.#stopHost = this.options.host.subscribe(() => this.#joinMemoryBudget());
-    this.#joinMemoryBudget();
+    this.#stopHost = this.options.host.subscribe(() => this.#joinHostServices());
+    this.#joinHostServices();
     this.#timer = this.options.window.setInterval(ready, 1000);
     this.options.window.addEventListener('pagehide', this.dispose);
     ready();
@@ -144,6 +149,25 @@ export class EmbeddedPanelHost {
     return DeclaredHost.undeclared;
   }
 
+  /** Join each optional host protocol once the settled description declares it. */
+  #joinHostServices(): void {
+    this.#joinMemoryBudget();
+    this.#watchHostUpdates();
+  }
+
+  /** Present the host's updater in the Updates entry once the host declares that it serves it. */
+  #watchHostUpdates(): void {
+    const host = this.options.host.read();
+    if (this.#updates || !this.options.updates || !host?.serves(HOST_PROTOCOLS.updates)) return;
+    try {
+      const link = new UpdatesHostLink(this.transport, this.options.report);
+      this.#updates = { link, detach: this.options.updates.attach(link) };
+      link.start();
+    } catch (error: unknown) {
+      this.options.report(error);
+    }
+  }
+
   /** Join the desktop memory budget once the host declares that it serves it. */
   #joinMemoryBudget(): void {
     const host = this.options.host.read();
@@ -171,6 +195,9 @@ export class EmbeddedPanelHost {
     this.#stopHost = null;
     this.#memory?.dispose();
     this.#memory = null;
+    this.#updates?.detach();
+    this.#updates?.link.dispose();
+    this.#updates = null;
     if (this.#timer !== null) this.options.window.clearInterval(this.#timer);
     this.#timer = null;
     this.options.window.removeEventListener('pagehide', this.dispose);

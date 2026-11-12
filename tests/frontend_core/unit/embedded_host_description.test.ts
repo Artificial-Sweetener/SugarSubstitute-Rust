@@ -28,6 +28,7 @@ import {
   HOST_PROTOCOLS,
 } from '../../../frontend/comfyui/ui/core/embedded/PanelRuntime.js';
 import { MemoryBudgetRegistry } from '../../../frontend/comfyui/ui/core/memory/MemoryBudgetRegistry.js';
+import { UpdateSourceSlot } from '../../../frontend/comfyui/ui/core/updates/UpdateSource.js';
 
 const session = '00000000-0000-4000-8000-000000000001';
 
@@ -67,6 +68,7 @@ const configure = {
 
 /** Run one embedded page against a synchronous fixture host transport. */
 function page(options: { memory?: boolean } = {}) {
+  const updates = new UpdateSourceSlot();
   jest.useFakeTimers();
   const sent: string[] = [];
   const listeners = new Set<(value: unknown) => void>();
@@ -80,6 +82,7 @@ function page(options: { memory?: boolean } = {}) {
       host,
       presentation,
       canvas,
+      updates,
       connected: () => true,
       report,
       ...(options.memory
@@ -110,7 +113,7 @@ function page(options: { memory?: boolean } = {}) {
     for (const listener of [...listeners]) listener(value);
   };
   const protocols = (): string[] => [...new Set(sent)];
-  return { panel, host, presentation, canvas, report, sent, receive, protocols };
+  return { panel, host, presentation, canvas, updates, report, sent, receive, protocols };
 }
 
 test('a host that configures without describing itself serves only the panel', () => {
@@ -144,6 +147,22 @@ test('a described host gets its declared presentation, canvas, masks and memory 
   expect(f.canvas.masks).not.toBeNull();
   expect(f.report).not.toHaveBeenCalled();
   f.panel.dispose();
+});
+
+test('only a host that declares the update protocol supplies the Updates entry', () => {
+  const plain = page();
+  plain.receive(description([HOST_PROTOCOLS.panel]));
+  plain.receive(configure);
+  expect(plain.updates.read()).toBeNull();
+  expect(plain.protocols()).toEqual(['sugarcubes.panel']);
+  plain.panel.dispose();
+  const updating = page();
+  updating.receive(description([HOST_PROTOCOLS.panel, HOST_PROTOCOLS.updates]));
+  expect(updating.updates.read()?.applies).toBe('host-restart');
+  expect(updating.protocols()).toEqual(['sugarcubes.panel', 'sugarcubes.updates']);
+  updating.panel.dispose();
+  expect(updating.updates.read()).toBeNull();
+  expect(updating.report).not.toHaveBeenCalled();
 });
 
 test('a canvas host that does not serve masks gets no mask requests', () => {
