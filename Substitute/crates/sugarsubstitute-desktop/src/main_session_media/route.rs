@@ -147,7 +147,7 @@ mod tests {
     type Result<T = ()> = std::result::Result<T, Box<dyn std::error::Error>>;
     fn endpoint() -> Result<Endpoint> {
         let vectors: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../third_party/sugarcubes-session/session_vectors.json"
+            "../../../../../Sugar/integrations/contracts/session_vectors.json"
         ))?;
         let scope = serde_json::from_value(vectors["scope"].clone())?;
         Ok(Endpoint::new(

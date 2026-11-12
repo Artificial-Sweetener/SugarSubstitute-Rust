@@ -14,7 +14,7 @@ impl MemoryRelease for Release {
 }
 fn fixture() -> Result<(WorkspaceDriver, SessionFence), Box<dyn Error>> {
     let vectors: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../../third_party/sugarcubes-session/session_vectors.json"
+        "../../../../../../Sugar/integrations/contracts/session_vectors.json"
     ))?;
     let checkpoint = sugarsubstitute_contracts::desktop_session::decode_checkpoint(
         &serde_json::to_vec(&vectors["checkpoints"][0]["value"])?,

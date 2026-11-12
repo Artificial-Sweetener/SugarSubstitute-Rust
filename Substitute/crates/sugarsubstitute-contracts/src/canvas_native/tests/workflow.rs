@@ -6,7 +6,7 @@ use super::*;
 use crate::canvas_surface::{CanvasFileReference, CanvasFileStorage};
 
 const WORKFLOW: &str =
-    include_str!("../../../../../third_party/sugarcubes-canvas/workflow_vectors.json");
+    include_str!("../../../../../../Sugar/integrations/contracts/canvas_workflow_vectors.json");
 
 const REQUESTS: [&str; 8] = [
     "sync",

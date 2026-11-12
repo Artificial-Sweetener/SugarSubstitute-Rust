@@ -17,10 +17,13 @@ struct Vector {
 fn generated_panel_decoder_identifies_the_retained_schema() -> Result<(), Box<dyn Error>> {
     let schema = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../third_party/sugarcubes-panel/panel.schema.json"
+        "/../../../Sugar/integrations/contracts/panel.schema.json"
     ))
     .replace("\r\n", "\n");
-    let source = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/panel/wire.rs"));
+    let source = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../Sugar/integrations/contracts/PanelProtocol.generated.rs"
+    ));
     let recorded = source
         .lines()
         .find_map(|line| line.strip_prefix("// Schema SHA-256 (LF): "))
@@ -34,7 +37,7 @@ fn shared_panel_vectors_match_schema_and_roundtrip_without_losing_fields()
 -> Result<(), Box<dyn Error>> {
     let vectors: Vec<Vector> = serde_json::from_str(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../third_party/sugarcubes-panel/panel_vectors.json"
+        "/../../../Sugar/integrations/contracts/panel_wire_vectors.json"
     )))?;
     assert!(!vectors.is_empty());
     for vector in vectors {
@@ -78,10 +81,11 @@ fn constructors_validate_session_presentation_and_all_supported_styles()
         PanelStyle::Gimp,
     ] {
         for palette in [
-            PanelPalette::Black,
-            PanelPalette::DarkGray,
-            PanelPalette::MediumGray,
-            PanelPalette::LightGray,
+            Some(PanelPalette::Black),
+            Some(PanelPalette::DarkGray),
+            Some(PanelPalette::MediumGray),
+            Some(PanelPalette::LightGray),
+            None,
         ] {
             let presentation =
                 PanelPresentation::new(false, style, palette, Some("#aF0123".into()), 64)?;
@@ -93,14 +97,15 @@ fn constructors_validate_session_presentation_and_all_supported_styles()
         PanelPresentation::new(
             false,
             PanelStyle::Comfy,
-            PanelPalette::Black,
+            Some(PanelPalette::Black),
             Some("#GG0000".into()),
             0
         )
         .is_err()
     );
     assert!(
-        PanelPresentation::new(false, PanelStyle::Comfy, PanelPalette::Black, None, 65).is_err()
+        PanelPresentation::new(false, PanelStyle::Comfy, Some(PanelPalette::Black), None, 65)
+            .is_err()
     );
     Ok(())
 }
@@ -113,7 +118,7 @@ fn system_accent_roundtrips_as_the_presentation_accent_color() -> Result<(), Box
     let presentation = PanelPresentation::new(
         false,
         PanelStyle::Comfy,
-        PanelPalette::DarkGray,
+        Some(PanelPalette::DarkGray),
         Some(accent.css_hex()),
         0,
     )?;

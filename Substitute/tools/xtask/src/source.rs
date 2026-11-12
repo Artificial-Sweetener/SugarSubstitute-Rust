@@ -84,6 +84,17 @@ pub(crate) fn source_files_excluding(
 
 /// Fingerprint exact source paths and normalized contents in sorted order.
 pub(crate) fn fingerprint(root: &Path, sources: &[String]) -> Result<String> {
+    fingerprint_resolved(sources, |relative| resolve(root, relative))
+}
+
+/// Fingerprint sources whose recorded paths a caller-owned resolver locates.
+///
+/// The digest binds each recorded path spelling and its normalized contents, so a caller that
+/// resolves some paths outside the workspace still reviews exactly what it records.
+pub(crate) fn fingerprint_resolved(
+    sources: &[String],
+    locate: impl Fn(&str) -> Result<PathBuf>,
+) -> Result<String> {
     require(!sources.is_empty(), "reviewed source inventory must not be empty")?;
     let mut sorted = sources.to_vec();
     sorted.sort();
@@ -91,7 +102,7 @@ pub(crate) fn fingerprint(root: &Path, sources: &[String]) -> Result<String> {
     require(sorted.len() == sources.len(), "reviewed source inventory contains duplicate paths")?;
     let mut digest = Sha256::new();
     for relative in sorted {
-        let source = read(&resolve(root, &relative)?)?;
+        let source = read(&locate(&relative)?)?;
         digest.update(relative.as_bytes());
         digest.update([0]);
         digest.update(source.as_bytes());

@@ -21,14 +21,6 @@ pub(crate) struct Manifest {
 }
 
 impl Manifest {
-    /// Return only the exact runtime files of an identified, checked component.
-    pub(crate) fn component_files(&self, id: &str) -> Option<&[String]> {
-        self.components
-            .iter()
-            .find(|component| component.id == id)
-            .map(|component| component.files.as_slice())
-    }
-
     /// Identify a copied Rust source whose original license header must remain intact.
     pub(crate) fn source_license(&self, path: &str) -> Option<&str> {
         self.components

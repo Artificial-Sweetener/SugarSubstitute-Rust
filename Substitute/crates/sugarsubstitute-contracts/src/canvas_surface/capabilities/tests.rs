@@ -11,7 +11,7 @@ use std::error::Error;
 fn vectors() -> Result<Value, Box<dyn Error>> {
     Ok(serde_json::from_str(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../third_party/sugarcubes-canvas/discovery_vectors.json"
+        "/../../../Sugar/integrations/contracts/canvas_surface_discovery_vectors.json"
     )))?)
 }
 
@@ -247,7 +247,7 @@ fn discovery_requires_exact_versions_and_unambiguous_request_fields() -> Result<
         ("version", json!(4)),
         ("version", json!(3.5)),
         ("schema", json!(0)),
-        ("schema", json!(4)),
+        ("schema", json!(2_147_483_648_u64)),
         ("protocol", json!("different.canvas")),
         ("requestId", json!(-1)),
         ("address", json!({})),
@@ -302,6 +302,29 @@ fn backdrop_support_is_negotiated_only_with_schema_three() -> Result<(), Box<dyn
         } else {
             assert!(value["capabilities"].get("backdrop").is_none());
         }
+        let wire: wire::CanvasSurfaceCapabilitiesReply = serde_json::from_slice(&bytes)?;
+        assert!(wire.valid());
+    }
+    Ok(())
+}
+
+/// A page that asks for a newer discovery schema is answered in the newest schema this host knows.
+#[test]
+fn newer_discovery_schemas_are_answered_in_the_newest_known_schema() -> Result<(), Box<dyn Error>> {
+    let capabilities = CanvasSurfaceCapabilities { backdrop: true, ..Default::default() };
+    for schema in [4_u64, 2_147_483_647] {
+        let mut value = vectors()?["request"].clone();
+        value["schema"] = json!(schema);
+        let CanvasSurfaceMessage::Discovery(request) =
+            CanvasSurfaceMessage::decode(&serde_json::to_vec(&value)?)?
+        else {
+            return Err("Expected discovery request".into());
+        };
+        assert_eq!(request.schema(), schema);
+        let bytes = request.reply(CanvasSurfaceDiscoveryStatus::Available, &capabilities, "")?;
+        let value: Value = serde_json::from_slice(&bytes)?;
+        assert_eq!(value["capabilities"]["schema"], 3);
+        assert_eq!(value["capabilities"]["backdrop"], json!({"schema": 1}));
         let wire: wire::CanvasSurfaceCapabilitiesReply = serde_json::from_slice(&bytes)?;
         assert!(wire.valid());
     }

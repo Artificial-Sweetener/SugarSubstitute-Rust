@@ -20,7 +20,7 @@ import { readFileSync } from 'node:fs';
 import { isCanvasMessage } from '../../../integrations/shared/CanvasValidation.generated.js';
 
 const vectors = JSON.parse(
-  readFileSync('tests/output_canvas/support/canvas_surface_message_vectors.json', 'utf8'),
+  readFileSync('integrations/contracts/canvas_surface_message_vectors.json', 'utf8'),
 ) as {
   base: Record<string, unknown>;
   cases: { name: string; path?: string; value?: unknown; remove?: boolean; valid: boolean }[];

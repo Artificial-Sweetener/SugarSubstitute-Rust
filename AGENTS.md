@@ -22,5 +22,8 @@ finding none above it.
 - Run Substitute commands from `Substitute/` (`cargo xtask check`, `cargo xtask verify`).
 - Run SugarCubes commands from `Sugar/` (`npm run check:changed`, `npm run check:staged`,
   `npm run check`).
+- Substitute consumes the SugarCubes host contract directly from `Sugar/integrations/contracts`,
+  declared in `Substitute/governance/monorepo/components.toml`. A change there changes both
+  components: run both components' gates.
 - Commits follow the component's own commit rules. Scope commits to one component unless the
   outcome is a single cross-component change.

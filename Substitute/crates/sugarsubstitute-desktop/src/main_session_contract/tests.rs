@@ -20,7 +20,7 @@ impl MemoryRelease for Release {
 }
 pub(super) fn bootstrap() -> Result<SessionBootstrap> {
     let vectors: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../third_party/sugarcubes-session/session_vectors.json"
+        "../../../../../Sugar/integrations/contracts/session_vectors.json"
     ))?;
     Ok(SessionBootstrap::new(
         serde_json::from_value(vectors["scope"].clone())?,

@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 
 use super::*;
+use sha2::{Digest, Sha256};
 
 const SESSION: &str = "panel-0123456789abcdef";
 
@@ -101,5 +102,19 @@ fn allowances_encode_the_exact_host_direction_shape() -> Result<(), Box<dyn Erro
     );
     let inexact = MemoryAllowance { total_bytes: u64::MAX, ..allowance };
     assert!(matches!(inexact.encode(&session), Err(MemoryError::Invalid)));
+    Ok(())
+}
+
+#[test]
+fn generated_memory_decoder_identifies_the_shared_schema() -> Result<(), Box<dyn Error>> {
+    let schema = include_str!("../../../../../Sugar/integrations/contracts/memory.schema.json")
+        .replace("\r\n", "\n");
+    let source =
+        include_str!("../../../../../Sugar/integrations/contracts/MemoryProtocol.generated.rs");
+    let recorded = source
+        .lines()
+        .find_map(|line| line.strip_prefix("// Schema SHA-256 (LF): "))
+        .ok_or("Generated memory schema fingerprint absent")?;
+    assert_eq!(recorded, format!("{:x}", Sha256::digest(schema.as_bytes())));
     Ok(())
 }

@@ -58,24 +58,23 @@ pub enum PanelPalette {
 }
 
 impl PanelPalette {
-    /// Select the exact schema spelling for a known palette.
-    fn wire(self) -> &'static str {
+    /// Select the generated schema token for a known palette.
+    const fn wire(self) -> wire::PanelPhotoProPalette {
         match self {
-            Self::Black => "black",
-            Self::DarkGray => "dark-gray",
-            Self::MediumGray => "medium-gray",
-            Self::LightGray => "light-gray",
+            Self::Black => wire::PanelPhotoProPalette::Black,
+            Self::DarkGray => wire::PanelPhotoProPalette::DarkGray,
+            Self::MediumGray => wire::PanelPhotoProPalette::MediumGray,
+            Self::LightGray => wire::PanelPhotoProPalette::LightGray,
         }
     }
 
-    /// Translate a schema-valid palette into its owned variant.
-    fn parse(value: &str) -> Result<Self, PanelError> {
+    /// Translate a decoded schema token into its owned variant.
+    const fn from_wire(value: wire::PanelPhotoProPalette) -> Self {
         match value {
-            "black" => Ok(Self::Black),
-            "dark-gray" => Ok(Self::DarkGray),
-            "medium-gray" => Ok(Self::MediumGray),
-            "light-gray" => Ok(Self::LightGray),
-            _ => Err(PanelError::Invalid),
+            wire::PanelPhotoProPalette::Black => Self::Black,
+            wire::PanelPhotoProPalette::DarkGray => Self::DarkGray,
+            wire::PanelPhotoProPalette::MediumGray => Self::MediumGray,
+            wire::PanelPhotoProPalette::LightGray => Self::LightGray,
         }
     }
 }
@@ -85,7 +84,7 @@ impl PanelPalette {
 pub struct PanelPresentation {
     plugin_mode: bool,
     style: PanelStyle,
-    palette: PanelPalette,
+    palette: Option<PanelPalette>,
     accent_color: Option<String>,
     resize_corner_size: u8,
 }
@@ -101,7 +100,7 @@ impl PanelPresentation {
     pub fn new(
         plugin_mode: bool,
         style: PanelStyle,
-        palette: PanelPalette,
+        palette: Option<PanelPalette>,
         accent_color: Option<String>,
         resize_corner_size: u8,
     ) -> Result<Self, PanelError> {
@@ -123,8 +122,8 @@ impl PanelPresentation {
         self.style
     }
 
-    /// Return the retained PhotoPro palette.
-    pub const fn palette(&self) -> PanelPalette {
+    /// Return the PhotoPro palette, absent when the host does not offer the PhotoPro style.
+    pub const fn palette(&self) -> Option<PanelPalette> {
         self.palette
     }
 
@@ -143,7 +142,7 @@ impl PanelPresentation {
         wire::PanelPresentation {
             plugin_mode: self.plugin_mode,
             visual_style: self.style.wire().into(),
-            photo_pro_palette: self.palette.wire().into(),
+            photo_pro_palette: self.palette.map(PanelPalette::wire),
             accent_color: self.accent_color.clone(),
             resize_corner_size: u64::from(self.resize_corner_size),
         }
@@ -157,7 +156,7 @@ impl PanelPresentation {
         Self::new(
             value.plugin_mode,
             PanelStyle::parse(&value.visual_style)?,
-            PanelPalette::parse(&value.photo_pro_palette)?,
+            value.photo_pro_palette.map(PanelPalette::from_wire),
             value.accent_color,
             u8::try_from(value.resize_corner_size).map_err(|_| PanelError::Invalid)?,
         )
@@ -172,8 +171,13 @@ mod tests {
     fn accepted_color_does_not_retain_unrelated_caller_capacity() -> Result<(), PanelError> {
         let mut value = String::with_capacity(8192);
         value.push_str("#aF0123");
-        let presentation =
-            PanelPresentation::new(false, PanelStyle::Comfy, PanelPalette::Black, Some(value), 0)?;
+        let presentation = PanelPresentation::new(
+            false,
+            PanelStyle::Comfy,
+            Some(PanelPalette::Black),
+            Some(value),
+            0,
+        )?;
         let color = presentation.accent_color.as_ref().ok_or(PanelError::Invalid)?;
         assert_eq!(color.capacity(), color.len());
         Ok(())

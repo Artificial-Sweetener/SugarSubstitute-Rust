@@ -22,7 +22,7 @@ import { isCanvasSurfaceGeometry } from '../../../integrations/shared/CanvasSurf
 import { canvasSnapshot } from '../support/CanvasPortFixture.js';
 
 const vectors = JSON.parse(
-  readFileSync('tests/output_canvas/support/canvas_surface_geometry_vectors.json', 'utf8'),
+  readFileSync('integrations/contracts/canvas_surface_geometry_vectors.json', 'utf8'),
 ) as {
   base: Record<string, unknown>;
   cases: { name: string; path?: string; value?: unknown; remove?: boolean; valid: boolean }[];

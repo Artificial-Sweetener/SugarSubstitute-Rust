@@ -25,7 +25,7 @@ struct Fixture {
 impl Fixture {
     fn new() -> Result<Self> {
         let vectors: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../third_party/sugarcubes-session/session_vectors.json"
+            "../../../../../Sugar/integrations/contracts/session_vectors.json"
         ))?;
         let webview = vectors["currentFence"]["webview"].as_str().ok_or("Missing webview")?;
         let bootstrap = SessionBootstrap::new(

@@ -12,7 +12,7 @@ repos:
         entry: python -c "import subprocess, sys; sys.exit(subprocess.call(['cargo', 'xtask', 'check'], cwd='Substitute'))"
         language: system
         pass_filenames: false
-        files: ^Substitute/
+        files: ^(Substitute/|Sugar/integrations/contracts/)
         exclude: '\.md$'
       - id: sugar-check
         name: Check the staged SugarCubes snapshot

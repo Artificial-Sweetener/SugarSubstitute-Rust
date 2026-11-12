@@ -22,7 +22,7 @@ import { isCanvasMessage } from '../../../integrations/shared/CanvasValidation.g
 
 const NATIVE = 'integrations/contracts/CanvasNativeProtocol.generated.rs';
 const vectors = JSON.parse(
-  readFileSync('tests/editor_integrations/support/canvas_context_vectors.json', 'utf8'),
+  readFileSync('integrations/contracts/canvas_context_vectors.json', 'utf8'),
 ) as {
   request: unknown;
   available: unknown;

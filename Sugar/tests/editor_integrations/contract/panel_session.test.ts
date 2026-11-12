@@ -275,7 +275,7 @@ test('generated language bindings and validators match the authoritative wire sc
 
 test('shared panel vectors preserve the closed version-three wire contract', () => {
   const vectors = JSON.parse(
-    readFileSync('tests/editor_integrations/support/panel_wire_vectors.json', 'utf8'),
+    readFileSync('integrations/contracts/panel_wire_vectors.json', 'utf8'),
   ) as { label: string; valid: boolean; value: unknown }[];
   for (const vector of vectors)
     expect([vector.label, isPanelMessage(vector.value)]).toEqual([vector.label, vector.valid]);

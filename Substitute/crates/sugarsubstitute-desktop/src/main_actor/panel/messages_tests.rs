@@ -40,7 +40,7 @@ fn ping(identity: MainIdentity) -> Result<PanelMessage, Box<dyn Error>> {
 fn configure(identity: MainIdentity, style: PanelStyle) -> Result<PanelMessage, Box<dyn Error>> {
     Ok(PanelMessage::Configure {
         session: PanelSession::for_main(identity)?,
-        presentation: PanelPresentation::new(false, style, PanelPalette::DarkGray, None, 0)?,
+        presentation: PanelPresentation::new(false, style, Some(PanelPalette::DarkGray), None, 0)?,
     })
 }
 

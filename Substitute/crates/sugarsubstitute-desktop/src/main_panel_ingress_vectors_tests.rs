@@ -17,7 +17,7 @@ macro_rules! vectors {
     ($name:literal) => {
         serde_json::from_str::<Value>(include_str!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../third_party/sugarcubes-canvas/",
+            "/../../../Sugar/integrations/contracts/",
             $name
         )))
     };
@@ -71,20 +71,35 @@ fn sets() -> Result<[VectorSet; 6], Box<dyn Error>> {
     Ok([
         (
             "viewport",
-            vectors!("viewport_vectors.json")?,
+            vectors!("canvas_surface_viewport_vectors.json")?,
             "validRequests",
             &["invalidRequests", "invalidRequestJson"],
         ),
-        ("occlusion", vectors!("occlusion_vectors.json")?, "validRequests", &["invalidRequests"]),
+        (
+            "occlusion",
+            vectors!("canvas_surface_occlusion_vectors.json")?,
+            "validRequests",
+            &["invalidRequests"],
+        ),
         (
             "overview",
-            vectors!("overview_vectors.json")?,
+            vectors!("canvas_surface_overview_vectors.json")?,
             "validRequests",
             &["invalidRequests", "oversizedRequests"],
         ),
-        ("preview", vectors!("preview_vectors.json")?, "validRequests", &["invalidMessages"]),
-        ("discovery", vectors!("discovery_vectors.json")?, "request", &["invalidRequests"]),
-        ("context", vectors!("context_vectors.json")?, "request", &["invalidRequests"]),
+        (
+            "preview",
+            vectors!("canvas_surface_preview_vectors.json")?,
+            "validRequests",
+            &["invalidMessages"],
+        ),
+        (
+            "discovery",
+            vectors!("canvas_surface_discovery_vectors.json")?,
+            "request",
+            &["invalidRequests"],
+        ),
+        ("context", vectors!("canvas_context_vectors.json")?, "request", &["invalidRequests"]),
     ])
 }
 
@@ -112,7 +127,7 @@ fn shared_invalid_vectors_never_reach_application_routing() -> Result<(), Box<dy
             }
         }
     }
-    let file = vectors!("message_vectors.json")?;
+    let file = vectors!("canvas_surface_message_vectors.json")?;
     let base = file.get("base").ok_or("Missing message base")?;
     let session = session_of(&serde_json::to_string(base)?)?;
     for case in file["cases"].as_array().ok_or("Missing message cases")? {

@@ -789,7 +789,7 @@ test('source and edit change notifications are zero-id current-session notificat
 });
 test('every shared surface and native canvas request type is admitted by the bridge policy', () => {
   const schema = JSON.parse(readFileSync(
-    new URL('../../../third_party/sugarcubes-canvas/canvas.schema.json', import.meta.url), 'utf8'));
+    new URL('../../../../Sugar/integrations/contracts/canvas.schema.json', import.meta.url), 'utf8'));
   const context = createContext({});
   new Script(policyFor("'host'")).runInContext(context);
   const policy = context.__sugarcubes_substitute_policy_v3;

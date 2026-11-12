@@ -10,10 +10,13 @@ use sha2::{Digest, Sha256};
 fn generated_decoder_identifies_the_retained_schema_snapshot() -> Result<(), Box<dyn Error>> {
     let schema = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../third_party/sugarcubes-canvas/canvas.schema.json"
+        "/../../../Sugar/integrations/contracts/canvas.schema.json"
     ))
     .replace("\r\n", "\n");
-    let source = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/canvas_surface/wire.rs"));
+    let source = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../Sugar/integrations/contracts/CanvasSurfaceProtocol.generated.rs"
+    ));
     let recorded = source
         .lines()
         .find_map(|line| line.strip_prefix("// Schema SHA-256 (LF): "))
@@ -26,7 +29,7 @@ fn generated_decoder_identifies_the_retained_schema_snapshot() -> Result<(), Box
 fn shared_surface_addresses_match_web_validation() -> Result<(), Box<dyn Error>> {
     let vectors: Value = serde_json::from_str(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../third_party/sugarcubes-canvas/address_vectors.json"
+        "/../../../Sugar/integrations/contracts/canvas_surface_address_vectors.json"
     )))?;
     let base = vectors.get("base").ok_or("Missing address vector base")?;
     let cases = vectors.get("cases").and_then(Value::as_array).ok_or("Missing address cases")?;
@@ -82,7 +85,7 @@ fn surface_address_rejects_ambiguous_json_and_preserves_each_coordinate()
 fn shared_geometry_vectors_match_web_validation() -> Result<(), Box<dyn Error>> {
     let vectors: Value = serde_json::from_str(include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../third_party/sugarcubes-canvas/geometry_vectors.json"
+        "/../../../Sugar/integrations/contracts/canvas_surface_geometry_vectors.json"
     )))?;
     let base = vectors.get("base").ok_or("Missing geometry vector base")?;
     let cases = vectors.get("cases").and_then(Value::as_array).ok_or("Missing geometry cases")?;

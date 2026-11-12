@@ -5,9 +5,9 @@
 use super::*;
 
 const CONTEXT: &str =
-    include_str!("../../../../../third_party/sugarcubes-canvas/context_vectors.json");
+    include_str!("../../../../../../Sugar/integrations/contracts/canvas_context_vectors.json");
 const CAPABILITIES: &str =
-    include_str!("../../../../../third_party/sugarcubes-canvas/capability_vectors.json");
+    include_str!("../../../../../../Sugar/integrations/contracts/canvas_capability_vectors.json");
 
 #[test]
 fn context_matches_shared_request_and_display_only_replies() -> TestResult {

@@ -5,7 +5,7 @@
 use super::*;
 
 const EDITING: &str =
-    include_str!("../../../../../third_party/sugarcubes-canvas/editing_vectors.json");
+    include_str!("../../../../../../Sugar/integrations/contracts/canvas_editing_vectors.json");
 
 const REQUESTS: [&str; 13] = [
     "state",
