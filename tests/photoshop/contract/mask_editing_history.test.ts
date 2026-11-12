@@ -26,6 +26,7 @@ import type {
   PhotoshopMaskEditingState,
   PhotoshopMaskSessionPort,
 } from '../../../integrations/photoshop/src/infrastructure/PhotoshopMaskSession.js';
+import { BUILD_FIXTURE_SETUP_TIMEOUT_MS } from '../../frontend_core/support/BuildFixtureBudget.js';
 
 interface NativeMasks {
   execute(command: CanvasMaskCommand): Promise<CanvasMaskResult>;
@@ -45,7 +46,7 @@ beforeAll(async () => {
   const file = bundle.outputFiles[0];
   if (!file) throw new Error('Missing native mask adapter bundle.');
   code = file.text;
-});
+}, BUILD_FIXTURE_SETUP_TIMEOUT_MS);
 
 test('observes committed selection edits without adding history and restores the same editing association', async () => {
   const channels = Object.assign([] as { name: string; typename: string }[], {

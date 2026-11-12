@@ -25,6 +25,7 @@ import type {
 } from '../../../integrations/contracts/CanvasProtocol.generated.js';
 import type { PreparedCanvasImage } from '../../../integrations/photoshop/src/application/InsertCanvasImage.js';
 import { CanvasCancellation } from '../../../integrations/shared/CanvasCancellation.js';
+import { BUILD_FIXTURE_SETUP_TIMEOUT_MS } from '../../frontend_core/support/BuildFixtureBudget.js';
 
 interface NativeCanvas {
   context(): CanvasContext;
@@ -52,7 +53,7 @@ beforeAll(async () => {
     external: ['photoshop'],
   });
   code = output.outputFiles[0]!.text;
-});
+}, BUILD_FIXTURE_SETUP_TIMEOUT_MS);
 
 /** Keep only the native document, imaging and history boundaries replaceable. */
 function fixture() {
