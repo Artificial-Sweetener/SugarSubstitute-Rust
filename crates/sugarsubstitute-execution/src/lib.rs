@@ -15,6 +15,9 @@ pub mod http_fixture;
 mod owned_input;
 /// Bounded transport for the owned upstream provisioning worker.
 pub mod provisioning_transport;
+/// Bounded client WebSocket to a loopback service inside one admitted async job.
+pub mod loopback_websocket;
+mod system_random;
 pub use owned_input::{ChargedBlockingInput, OwnedInputError};
 mod entry_preparation;
 #[cfg(windows)]

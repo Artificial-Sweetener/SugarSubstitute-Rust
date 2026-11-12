@@ -20,6 +20,8 @@ serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.151", features = ["float_roundtrip"] }
 url = "=2.5.8"
 sha2 = "=0.10.9"
+# WebSocket opening handshake only: RFC 6455 Sec-WebSocket-Accept is SHA-1 of the client key.
+sha1 = { version = "=0.10.6", default-features = false }
 ring = "=0.17.14"
 tuf = { version = "=0.3.0-beta14", default-features = false }
 chrono = { version = "=0.4.42", default-features = false, features = ["std"] }
