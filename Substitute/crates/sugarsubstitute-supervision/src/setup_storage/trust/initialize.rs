@@ -78,7 +78,7 @@ impl TrustStore {
         };
         let marker = protection::with_domain(context, |protection| {
             protection.directory(store.root.path(), Mode::Existing, context)?;
-            let _writer = store.writer(protection)?;
+            let _writer = store.writer(protection, context)?;
             continuity::ensure(&store, protection, context)
         })
         .map_err(TrustFailure::from)?;

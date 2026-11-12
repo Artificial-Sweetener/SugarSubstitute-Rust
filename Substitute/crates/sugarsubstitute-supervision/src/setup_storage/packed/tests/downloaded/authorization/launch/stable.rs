@@ -28,7 +28,7 @@ fn stable_lookup_does_not_enable_selection_for_an_earlier_installation() -> Test
 }
 
 #[test]
-fn prepared_native_launch_retains_selection_until_explicit_retirement_without_taking_run()
+fn prepared_native_launch_keeps_its_reservation_until_retirement_without_holding_the_record()
 -> TestResult {
     worker::run_reserved(TRUST_RESERVATION_BYTES + 96 * 1024 * 1024, |context, _| {
         let temporary = tempfile::tempdir()?;
@@ -45,7 +45,7 @@ fn prepared_native_launch_retains_selection_until_explicit_retirement_without_ta
         drop(launch);
         let run = InstallationRun::acquire(store.clone(), context)?;
         let record = directory.path().join("state/selection/.substitute-selection.json");
-        assert!(std::fs::OpenOptions::new().write(true).open(&record).is_err());
+        drop(std::fs::OpenOptions::new().write(true).open(&record)?);
         copy.retire()?;
         drop(std::fs::OpenOptions::new().write(true).open(record)?);
         assert!(InstallationRun::acquire(store.clone(), context).is_err());

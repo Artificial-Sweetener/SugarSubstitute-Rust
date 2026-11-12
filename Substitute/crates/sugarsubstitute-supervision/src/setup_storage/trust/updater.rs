@@ -42,7 +42,7 @@ impl TrustStore {
         context: &JobContext,
     ) -> Result<InstallationRecord, TrustFailure> {
         self.protected(context, |protection| {
-            let _writer = self.writer(protection)?;
+            let _writer = self.writer(protection, context)?;
             self.updater_locked(protection, SelectionRead::Initialize, context)
         })
     }

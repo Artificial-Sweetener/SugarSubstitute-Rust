@@ -112,7 +112,8 @@ impl SelectionStore {
     }
 
     /// Read only the current prepared choice. Absence is not implicit authorization.
-    /// Both native directories and the logical selection must still match under its writer.
+    /// Both native directories and the logical selection must still match under the shared
+    /// lock, which also excludes a concurrent authorization write.
     pub(in crate::setup_storage) fn installation_authorization(
         &self,
         expected: &InstallationRecord,
@@ -120,7 +121,7 @@ impl SelectionStore {
         context: &JobContext,
     ) -> Result<Option<InstallationAuthorization>, SelectionFailure> {
         self.protected(context, |protection| {
-            let _writer = writer(&self.root, protection, context)?;
+            let _reader = reader(&self.root, protection, context)?;
             if self.read(protection)?.as_ref() != Some(expected) {
                 return Err(SelectionFailure::Changed);
             }

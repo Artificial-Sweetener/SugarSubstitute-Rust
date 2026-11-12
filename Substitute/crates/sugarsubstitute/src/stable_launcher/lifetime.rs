@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain each launcher job through terminal consumption and execution shutdown.
 mod cached;
-mod contention;
 mod delegation;
 mod engine;
 mod installation;
@@ -107,7 +106,6 @@ pub(super) struct Launcher {
     activation_after: Option<Moment>,
     activation_wake: Option<Instant>,
     choice: Choice,
-    selection_wait: Option<contention::Wait>,
     recovery_until: Option<Moment>,
     recovery_wake: Option<Instant>,
     update_failure: Option<Box<dyn Error>>,
@@ -142,7 +140,6 @@ impl Launcher {
             activation_after: None,
             activation_wake: None,
             choice: Choice::Installation,
-            selection_wait: None,
             recovery_until: None,
             recovery_wake: None,
             update_failure: None,
@@ -218,10 +215,7 @@ impl Launcher {
             && !self.completed
             && self.until.is_some_and(|until| self.clock.now() >= until)
         {
-            return Err(self.selection_wait.take().map_or_else(
-                || "Launcher startup reached its original cutoff".into(),
-                |wait| wait.cause,
-            ));
+            return Err("Launcher startup reached its original cutoff".into());
         }
         if !self.closing && !self.completed && self.job.is_none() {
             self.select_next()?;
@@ -266,7 +260,6 @@ impl HeadlessLifetime for Launcher {
             self.wake_at,
             self.recovery_wake,
             self.activation_wake,
-            self.selection_wait.as_ref().map(|wait| wait.wake_at),
             self.cached.as_ref().and_then(cached::Cached::next_deadline),
         ]
         .into_iter()

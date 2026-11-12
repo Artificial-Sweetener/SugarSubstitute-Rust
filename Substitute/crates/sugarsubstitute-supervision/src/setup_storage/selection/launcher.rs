@@ -69,14 +69,15 @@ impl SelectionStore {
         })
     }
 
-    /// Check while the caller retains setup or run custody, excluding launcher installation.
+    /// Check while the caller retains setup or run custody; the shared lock excludes launcher
+    /// installation, which writes stable entries under the exclusive lock.
     pub(in crate::setup_storage) fn require_launcher(
         &self,
         compatibility: &Compatibility,
         context: &JobContext,
     ) -> Result<(), SelectionFailure> {
         self.protected(context, |protection| {
-            let _writer = writer(&self.root, protection, context)?;
+            let _reader = reader(&self.root, protection, context)?;
             entrypoint::stable::require_compatible(&self.root, compatibility, protection, context)?;
             Ok(())
         })
