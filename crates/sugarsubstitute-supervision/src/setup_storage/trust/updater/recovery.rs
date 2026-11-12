@@ -34,7 +34,9 @@ impl TrustStore {
         let Some(Candidate::Trial { attempt }) = state.candidate() else {
             return Ok(state);
         };
-        let recovered = state.reject(attempt).map_err(io::Error::other)?;
+        let recovered = state
+            .reject(attempt, crate::setup_storage::selection::unix_now().map_err(io::Error::other)?)
+            .map_err(io::Error::other)?;
         self.write_updater(&recovered, protection, context)?;
         tracing::info!(
             operation = "updater_abandoned_trial_recovered",

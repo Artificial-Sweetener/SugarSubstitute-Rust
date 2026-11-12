@@ -24,7 +24,9 @@ pub use presentation::{
 pub(super) mod publication;
 mod reservation;
 mod snapshot;
+mod withholding;
 pub use reservation::{ReservedApplication, ReservedLaunch, reserve_installed_launch};
+pub use withholding::release_withheld;
 mod run;
 use super::check;
 use super::short_lock::{self, LockKind};
@@ -36,6 +38,7 @@ use crate::durable_storage::{
 };
 pub use failure::SelectionFailure;
 pub(crate) use run::UnstartedTrial;
+pub(in crate::setup_storage) use run::unix_now;
 pub use run::{AcceptedApplication, InstallationLaunch, InstallationRun, OwnedTrial};
 pub use run::{
     InheritedTrial, TRIAL_WITNESS_RESERVATION_BYTES, TrialApplication, TrialTransfer, TrialWitness,
@@ -160,7 +163,9 @@ impl SelectionStore {
     ) -> Result<(), SelectionFailure> {
         if expected.accepted() != replacement.accepted()
             || expected.retained() != replacement.retained()
-            || expected.rejected() != replacement.rejected()
+            || expected.strikes() != replacement.strikes()
+            || expected.rollback() != replacement.rollback()
+            || expected.repair() != replacement.repair()
             || matches!(expected.candidate(), Some(Candidate::Trial { .. }))
             || matches!(replacement.candidate(), Some(Candidate::Trial { .. }))
         {

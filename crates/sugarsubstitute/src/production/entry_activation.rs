@@ -387,6 +387,10 @@ impl EntryActivation for ProductionActivation {
     fn failure_source(&self) -> Option<&(dyn Error + 'static)> {
         ProductionActivation::failure_source(self)
     }
+    fn failed_process(&self) -> sugarsubstitute_contracts::installation::FailedProcess {
+        use sugarsubstitute_contracts::installation::FailedProcess;
+        if self.failure_resource.is_some() { FailedProcess::Backend } else { FailedProcess::Host }
+    }
     fn next_deadline(&self) -> Option<Instant> {
         self.next_wake
     }

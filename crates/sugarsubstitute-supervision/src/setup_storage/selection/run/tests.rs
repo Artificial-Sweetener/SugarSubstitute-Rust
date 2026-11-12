@@ -6,7 +6,14 @@ use crate::setup_storage::{
     selection::tests::{TestResult, generation, initial, root},
     test_worker as worker,
 };
-use sugarsubstitute_contracts::installation::PreparationIntent;
+use sugarsubstitute_contracts::installation::{
+    BadTrial, PreparationIntent, TrialVerdict, Undecided,
+};
+
+/// A bad verdict: the new host itself crashed.
+pub(super) const BAD: TrialVerdict = TrialVerdict::Bad(BadTrial::Crashed);
+/// No verdict: the app was asked to close before readiness.
+pub(super) const NO_VERDICT: TrialVerdict = TrialVerdict::NoVerdict(Undecided::CloseRequested);
 
 pub(super) fn prepare(
     store: &SelectionStore,
@@ -15,7 +22,8 @@ pub(super) fn prepare(
     context: &JobContext,
 ) -> Result<InstallationRecord, SelectionFailure> {
     let generation = generation(number)?;
-    let staging = expected.prepare(generation.clone(), PreparationIntent::Automatic)?;
+    let staging =
+        expected.prepare(generation.clone(), PreparationIntent::Automatic, unix_now()?)?;
     store.compare_exchange(expected, &staging, context)?;
     let prepared = staging.prepared(&generation)?;
     store.compare_exchange(&staging, &prepared, context)?;
@@ -139,7 +147,7 @@ fn activation_requires_live_owner_and_acceptance_retains_previous_healthy_genera
         let first = run.accept(&token, context)?;
         assert_eq!(first.accepted(), Some(&generation(1)?));
         assert!(matches!(run.accept(&token, context), Err(SelectionFailure::Changed)));
-        assert!(matches!(run.reject(&token, context), Err(SelectionFailure::Changed)));
+        assert_eq!(run.finish_trial(&token, BAD, context)?, first);
         drop(token);
         drop(run);
         let prepared = prepare(&store, &first, 2, context)?;
@@ -172,11 +180,16 @@ fn rejected_trial_preserves_accepted_generation_and_foreign_tokens_have_no_autho
         let token = run.begin_trial(&prepared, context)?;
         let other = InstallationRun::acquire(foreign, context)?;
         assert!(matches!(other.accept(&token, context), Err(SelectionFailure::RunOwnership)));
-        assert!(matches!(other.reject(&token, context), Err(SelectionFailure::RunOwnership)));
-        let rejected = run.reject(&token, context)?;
+        assert!(matches!(
+            other.finish_trial(&token, BAD, context),
+            Err(SelectionFailure::RunOwnership)
+        ));
+        let rejected = run.finish_trial(&token, BAD, context)?;
         assert_eq!(rejected.accepted(), accepted.accepted());
-        assert_eq!(rejected.rejected(), &[generation(2)?.package]);
-        assert!(rejected.prepare(generation(2)?, PreparationIntent::Automatic).is_err());
+        assert_eq!(rejected.rollback(), Some(&generation(2)?));
+        assert_eq!(rejected.strikes().len(), 1);
+        assert_eq!(rejected.strikes()[0].package, generation(2)?.package);
+        assert!(!rejected.withheld(&generation(2)?.package, unix_now()?));
         assert!(matches!(run.accept(&token, context), Err(SelectionFailure::Changed)));
         Ok(())
     })

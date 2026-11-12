@@ -62,7 +62,7 @@ fn recovered_candidate_retries_creation_without_reimport_and_rechecks_expiry_and
             let store = Arc::new(SelectionStore::open(&installation, &context)?);
             let before = store.load(&context)?.ok_or("Selection absent")?;
             assert!(matches!(before.candidate(), Some(Candidate::Prepared { .. })));
-            assert!(before.rejected().is_empty());
+            assert!(before.strikes().is_empty());
             if rotate {
                 authority.trust.rotate(&root(&key(93)?, 2, Some(&key(92)?))?, &context)?;
             }

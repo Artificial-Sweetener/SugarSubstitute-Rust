@@ -58,6 +58,11 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
             return Ok(());
         }
         self.closing = true;
+        if let Some(authority) = &mut self.authority {
+            authority.observe_trial_close(
+                sugarsubstitute_contracts::installation::CloseCause::Requested,
+            );
+        }
         drop(self.pending_activation.take());
         if let Some(bootstrap) = &mut self.bootstrap {
             bootstrap.request_close();

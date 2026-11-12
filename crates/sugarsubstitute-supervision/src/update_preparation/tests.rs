@@ -92,7 +92,7 @@ fn current_and_incompatible_offers_do_not_download_or_take_setup_exclusion() -> 
                 )?;
                 fixture
             }
-            Admission::Prepare | Admission::UpdateEngine => {
+            Admission::Prepare | Admission::UpdateEngine | Admission::Withheld => {
                 return Err("Invalid decision fixture".into());
             }
         };
@@ -104,6 +104,43 @@ fn current_and_incompatible_offers_do_not_download_or_take_setup_exclusion() -> 
         assert!(worker.take_candidate().is_err());
         retire(&mut pipeline, &mut worker)?;
         assert_unlocked(&mut pipeline, &fixture)?;
+    }
+    Ok(())
+}
+
+/// A release withheld after two bad trials is decided at discovery: its package is never
+/// requested, and no preparation or setup exclusion follows. One bad trial does not withhold it.
+#[test]
+fn a_withheld_release_is_not_downloaded_again() -> TestResult {
+    for (strikes, downloads) in [(2, false), (1, true)] {
+        let mut pipeline = Pipeline::new()?;
+        let (fixture, signed) = initialized(&mut pipeline)?;
+        let root = fixture.installation.path().to_owned();
+        pipeline.run(RESERVATION_BYTES, move |context| {
+            crate::setup_storage::test_package::maintenance::strike_release(
+                &root, 1, strikes, &context,
+            )
+        })?;
+        let (mut worker, server) = campaign(&mut pipeline, &fixture, signed, downloads)?;
+        assert_eq!(step(&mut pipeline, &mut worker)?.progress, Progress::Checking);
+        assert_eq!(step(&mut pipeline, &mut worker)?.progress, Progress::Reopening);
+        let decided = step(&mut pipeline, &mut worker)?.progress;
+        if downloads {
+            assert!(matches!(decided, Progress::Downloading { .. }));
+            while !matches!(worker.progress(), Progress::Ready | Progress::Failed) {
+                step(&mut pipeline, &mut worker)?;
+            }
+            assert_eq!(worker.progress(), Progress::Ready);
+            server.finish()?;
+            drop(worker.take_candidate()?);
+        } else {
+            assert_eq!(decided, Progress::Decision(Admission::Withheld));
+            server.finish()?;
+            assert!(submit(&mut pipeline, &mut worker).is_err());
+            assert!(worker.take_candidate().is_err());
+            retire(&mut pipeline, &mut worker)?;
+            assert_unlocked(&mut pipeline, &fixture)?;
+        }
     }
     Ok(())
 }

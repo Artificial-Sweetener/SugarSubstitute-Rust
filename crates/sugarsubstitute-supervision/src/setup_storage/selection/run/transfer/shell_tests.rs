@@ -7,6 +7,12 @@ use crate::setup_storage::{
     test_worker::{self as worker, TestResult},
 };
 
+/// The custody witness saw the coordinator crash before it settled the trial.
+const CRASHED: sugarsubstitute_contracts::installation::TrialVerdict =
+    sugarsubstitute_contracts::installation::TrialVerdict::Bad(
+        sugarsubstitute_contracts::installation::BadTrial::Crashed,
+    );
+
 type Failure = Box<dyn std::error::Error + Send + Sync>;
 /// Historical shortcut published by the trial fixture's earlier installation.
 const LINK: &str = "SugarSubstitute.lnk";
@@ -37,7 +43,7 @@ fn retained_trial_publications_fit_their_independent_operation_reservation() -> 
             Ok(application)
         })?;
     pipeline.run(crate::setup_storage::SELECTION_PUBLICATION_RESERVATION_BYTES, move |context| {
-        assert_eq!(application.finish_settled(&context)?, accepted);
+        assert_eq!(application.finish_settled(CRASHED, &context)?, accepted);
         Ok(())
     })
 }

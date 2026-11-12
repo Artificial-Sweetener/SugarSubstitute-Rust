@@ -21,6 +21,7 @@ use sugarsubstitute_contracts::{
         CompletionBatch, ExecutionId, JobClass, JobCompletion, JobId, JobOutcome, JobSpec, Moment,
         Operation, OwnedJob, Scope, ScopeId, TerminalKind,
     },
+    installation::FailedProcess,
     lifecycle::CoordinatorKey,
 };
 use sugarsubstitute_execution::ExecutionClient;
@@ -252,7 +253,12 @@ impl CoordinatorAuthority {
         self.observations[at] = Some(value);
         self.observation_count += 1;
     }
+    /// Retain `cause` and close. Every failure here belongs to the host itself, except storage
+    /// and admission failures of installation work, which are not the release's fault.
     fn fail(&mut self, cause: Failure) {
+        if !matches!(cause, Failure::Installation(_) | Failure::InstallationAdmission(_)) {
+            self.observe_trial_failure(FailedProcess::Host);
+        }
         if self.failure.is_none() && !self.constructor_failed_first {
             self.failure = Some(cause);
         } else if self.cleanup_failure.is_none() {

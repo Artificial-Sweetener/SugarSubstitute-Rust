@@ -94,6 +94,9 @@ pub(crate) trait EntryActivation {
     /// Borrow its original retained fatal failure without separating its custody.
     /// An exposed source closes runner admission even when the last turn returned Active.
     fn failure_source(&self) -> Option<&(dyn Error + 'static)>;
+    /// Which process the exposed failure belongs to: the backend when it came from a backend
+    /// resource, otherwise the host itself. Decides an unaccepted update trial's verdict.
+    fn failed_process(&self) -> sugarsubstitute_contracts::installation::FailedProcess;
     /// Return its actual next native-thread wake without introducing timers.
     fn next_deadline(&self) -> Option<Instant>;
     /// Observe actual child/process/transport settlement, retaining uncertainty.
@@ -409,8 +412,15 @@ impl<C: EntryActivation> EntryRunner<C> {
         }
     }
     fn retain(&mut self, cause: Box<dyn Error>) {
-        self.first_origin.get_or_insert(FailureOrigin::Owned);
+        let origin = *self.first_origin.get_or_insert(FailureOrigin::Owned);
         if self.failure.is_none() {
+            let process = match origin {
+                FailureOrigin::Child => self.child.failed_process(),
+                _ => sugarsubstitute_contracts::installation::FailedProcess::Host,
+            };
+            if let Some(authority) = &mut self.authority {
+                authority.observe_trial_failure(process);
+            }
             self.failure = Some(cause);
             if let Some(primary) = self.failure_source() {
                 tracing::error!(operation="production_ownership_failed",cause_chain=%crate::diagnostics::CauseChain(primary),

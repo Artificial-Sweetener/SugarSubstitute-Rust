@@ -53,8 +53,8 @@ impl InstallationRun {
     /// An inherited launch snapshot must still select this executable's accepted generation.
     /// # Errors
     /// Rejects corrupt/missing inventory, altered payloads, links and unknown protection; a changed
-    /// accepted generation is `Superseded`. Interrupted trials are quarantined under this fresh
-    /// run's custody; recovery never accepts the candidate or grants process-settlement or
+    /// accepted generation is `Superseded`. Interrupted trials are resolved without a verdict
+    /// under this fresh run's custody; recovery never accepts the candidate or grants process-settlement or
     /// cleanup authority.
     /// Execute on a finite admitted native worker with `LAUNCH_RESERVATION_BYTES` available.
     pub fn select_launch(

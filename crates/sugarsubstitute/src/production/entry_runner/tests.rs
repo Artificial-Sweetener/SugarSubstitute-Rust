@@ -209,6 +209,9 @@ impl EntryActivation for NoChild {
     fn failure_source(&self) -> Option<&(dyn Error + 'static)> {
         None
     }
+    fn failed_process(&self) -> sugarsubstitute_contracts::installation::FailedProcess {
+        sugarsubstitute_contracts::installation::FailedProcess::Host
+    }
     fn next_deadline(&self) -> Option<Instant> {
         None
     }

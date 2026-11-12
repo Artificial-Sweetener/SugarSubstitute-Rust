@@ -65,6 +65,7 @@ impl CoordinatorAuthority {
                     self.fail(Failure::Claims(cause))
                 }
                 ClaimObservation::Stopped { target: ClaimTarget::Coordinator, kind } => {
+                    self.observe_trial_failure(FailedProcess::Host);
                     self.stopped.get_or_insert(kind);
                     self.notice(AuthorityIssue::Stopped);
                     self.request_close();
@@ -111,6 +112,7 @@ impl CoordinatorAuthority {
         }
         if self.serving() {
             self.installation.publish_shell(client, scope, jobs);
+            self.retry_health(client, scope, jobs)?;
         }
         Ok(self.serving())
     }
@@ -129,10 +131,12 @@ impl CoordinatorAuthority {
         self.registry_completion = Some(completion);
         self.registry_job = None;
         if !valid {
+            self.observe_trial_failure(FailedProcess::Host);
             self.request_close();
             return Err(AuthorityIssue::Identity);
         }
         if kind != TerminalKind::Success {
+            self.observe_trial_failure(FailedProcess::Host);
             self.constructor_failed_first |= self.failure.is_none();
             self.stopped.get_or_insert(kind);
             self.notice(AuthorityIssue::Stopped);

@@ -9,7 +9,20 @@ use crate::setup_storage::{
     },
     test_worker as worker,
 };
-use sugarsubstitute_contracts::installation::PreparationIntent;
+use sugarsubstitute_contracts::installation::{UNWITNESSED_LIMIT, Unwitnessed};
+
+/// Begin a trial of `prepared`, then lose every owner without settling it, as a power cut does.
+fn abandon(
+    store: &Arc<SelectionStore>,
+    prepared: &InstallationRecord,
+    context: &JobContext,
+) -> TestResult {
+    let mut run = InstallationRun::acquire(store.clone(), context)?;
+    let trial = run.begin_trial(prepared, context)?;
+    drop(trial);
+    drop(run);
+    Ok(())
+}
 
 #[test]
 fn admitted_run_cannot_recover_its_own_trial() -> TestResult {
@@ -29,34 +42,45 @@ fn admitted_run_cannot_recover_its_own_trial() -> TestResult {
         drop(run);
         let recovered = store.load_recovered(context)?;
         assert!(recovered.accepted().is_none());
-        assert!(recovered.candidate().is_none());
-        assert_eq!(recovered.rejected(), &[generation(1)?.package]);
+        assert_eq!(
+            recovered.candidate(),
+            Some(&Candidate::Prepared { generation: generation(1)? })
+        );
+        assert!(recovered.strikes().is_empty());
         assert_eq!(store.load_recovered(context)?, recovered);
         Ok(())
     })
 }
 
 #[test]
-fn abandoned_first_install_allows_explicit_repair_without_inventing_health() -> TestResult {
+fn an_abandoned_trial_activates_again_until_the_third_in_a_row_counts_as_a_strike() -> TestResult {
     worker::run(|context, _| {
         let root = root()?;
         let store = Arc::new(SelectionStore::initialize(root.path(), &initial()?, context)?);
-        let prepared = prepare(&store, &initial()?, 1, context)?;
-        let mut run = InstallationRun::acquire(store.clone(), context)?;
-        let trial = run.begin_trial(&prepared, context)?;
-        drop(trial);
-        drop(run);
-        let mut recovered_run = InstallationRun::acquire(store.clone(), context)?;
-        assert!(matches!(
-            recovered_run.select_launch(None, context)?,
-            InstallationLaunch::NeedsInstallation
-        ));
-        let recovered = store.load(context)?.ok_or("Recovered state absent")?;
-        assert!(recovered.prepare(generation(1)?, PreparationIntent::Automatic).is_err());
-        let retry = recovered.prepare(generation(1)?, PreparationIntent::Repair)?;
-        store.compare_exchange(&recovered, &retry, context)?;
-        assert_eq!(recovered_run.recover_abandoned_trial(context)?, retry);
-        assert!(retry.accepted().is_none());
+        let mut prepared = prepare(&store, &initial()?, 1, context)?;
+        for count in 1..UNWITNESSED_LIMIT {
+            abandon(&store, &prepared, context)?;
+            let mut launch = InstallationRun::acquire(store.clone(), context)?;
+            assert!(matches!(
+                launch.select_launch(None, context)?,
+                InstallationLaunch::NeedsInstallation
+            ));
+            prepared = store.load(context)?.ok_or("Recovered state absent")?;
+            assert_eq!(
+                prepared.candidate(),
+                Some(&Candidate::Prepared { generation: generation(1)? })
+            );
+            assert_eq!(
+                prepared.unwitnessed(),
+                Some(&Unwitnessed { package: generation(1)?.package, count })
+            );
+        }
+        abandon(&store, &prepared, context)?;
+        let struck = store.load_recovered(context)?;
+        assert!(struck.candidate().is_none());
+        assert_eq!(struck.rollback(), Some(&generation(1)?));
+        assert_eq!(struck.strikes().len(), 1);
+        assert!(struck.unwitnessed().is_none());
         Ok(())
     })
 }
@@ -78,7 +102,7 @@ fn recovery_preserves_committed_acceptance_and_independent_preparation() -> Test
         assert_eq!(run.recover_abandoned_trial(context)?, pending);
         assert_eq!(store.load_recovered(context)?, pending);
         assert_eq!(pending.accepted(), accepted.accepted());
-        assert!(pending.rejected().is_empty());
+        assert!(pending.strikes().is_empty());
         Ok(())
     })
 }
@@ -89,10 +113,7 @@ fn expired_recovery_preserves_original_selection_bytes() -> TestResult {
         let root = root()?;
         let store = Arc::new(SelectionStore::initialize(root.path(), &initial()?, context)?);
         let prepared = prepare(&store, &initial()?, 1, context)?;
-        let mut run = InstallationRun::acquire(store.clone(), context)?;
-        let trial = run.begin_trial(&prepared, context)?;
-        drop(trial);
-        drop(run);
+        abandon(&store, &prepared, context)?;
         let run = InstallationRun::acquire(store.clone(), context)?;
         let path = store.root.path().join(super::super::super::RECORD);
         let before = std::fs::read(&path)?;
