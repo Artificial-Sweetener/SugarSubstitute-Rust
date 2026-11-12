@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose existing panel negotiation and canvas dispatch over the replaceable companion transport. */
 import { PanelHostSession, type PanelState } from '../../../shared/PanelSession.js';
+import type { PanelPresentation } from '../../../contracts/PanelProtocol.generated.js';
 import {
   HOST_CAPABILITIES,
   HOST_PROTOCOLS,
@@ -41,6 +42,14 @@ export interface GimpPanelRenderer {
 export const GIMP_HOST_DESCRIPTION: HostDescriptionContent = Object.freeze({
   protocols: [HOST_PROTOCOLS.panel, HOST_PROTOCOLS.canvas, HOST_PROTOCOLS.canvasMasks],
   capabilities: [{ name: HOST_CAPABILITIES.hostStyles }],
+});
+
+/** GIMP's fixed panel presentation: plugin mode in the GIMP style, with no host accent. */
+export const GIMP_PANEL_PRESENTATION: PanelPresentation = Object.freeze({
+  pluginMode: true,
+  visualStyle: 'gimp',
+  accentColor: null,
+  resizeCornerSize: 0,
 });
 
 /** Retain one workflow and its shared protocol session across backend disconnects. */
@@ -114,12 +123,7 @@ export class GimpPanelConnection {
     this.#panel = new PanelHostSession(
       transport.session,
       GIMP_HOST_DESCRIPTION,
-      {
-        pluginMode: true,
-        visualStyle: 'gimp',
-        accentColor: null,
-        resizeCornerSize: 0,
-      },
+      GIMP_PANEL_PRESENTATION,
       {
         send,
         present: (state) => {
