@@ -207,7 +207,6 @@ impl EntryActivation for NoChild {
         &mut self,
         _: u64,
         _: &sugarsubstitute_contracts::update::status::UpdateStatus,
-        _: bool,
     ) -> Result<(), Box<dyn Error>> {
         Ok(())
     }

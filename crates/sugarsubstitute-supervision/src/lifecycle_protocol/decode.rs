@@ -129,16 +129,17 @@ pub(super) fn frame(source: &[u8]) -> Result<DecodedFrame<'_>, ProtocolError> {
         },
         22 => {
             let revision = main_fields::read_positive(&mut input)?;
-            let workflow_running = match input.u8()? {
-                1 => false,
-                2 => true,
+            let workflow = match input.u8()? {
+                1 => super::WorkflowQueue::Idle,
+                2 => super::WorkflowQueue::Busy,
+                3 => super::WorkflowQueue::Unobserved,
                 _ => return Err(ProtocolError::UnsupportedTag),
             };
             let length = usize::try_from(input.u32()?).map_err(|_| ProtocolError::Length)?;
             if length > super::MAX_UPDATE_STATUS_BYTES {
                 return Err(ProtocolError::Length);
             }
-            DecodedPayload::UpdateStatus { revision, workflow_running, status: input.take(length)? }
+            DecodedPayload::UpdateStatus { revision, workflow, status: input.take(length)? }
         }
         23 => DecodedPayload::RestartToApply,
         _ => return Err(ProtocolError::UnsupportedTag),

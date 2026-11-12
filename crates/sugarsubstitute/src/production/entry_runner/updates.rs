@@ -30,11 +30,8 @@ impl<C: EntryActivation> EntryRunner<C> {
         }
         self.update_status.poll();
         let (revision, status) = self.update_status.snapshot();
-        if revision > self.update_status_sent {
-            // The backend's queue is not observed here, so workflow activity reads as idle.
-            self.child.publish_update_status(revision, status, false)?;
-            self.update_status_sent = revision;
-        }
+        // Offered every turn, so a desktop child that starts later still receives it.
+        self.child.publish_update_status(revision, status)?;
         if self.closing
             && let Some(scope) = &self.update_status_scope
         {

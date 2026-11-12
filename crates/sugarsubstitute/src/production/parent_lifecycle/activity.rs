@@ -53,6 +53,7 @@ impl ParentLifecycle {
             self.activity_phase(resources, &mut failed, "active_delivery", |owner, resources| {
                 owner.check_main_deadline(resources)?;
                 owner.advance_attempt_cleanup(resources)?;
+                owner.advance_workflow_watch(resources);
                 owner.resume_acquisition_receive(resources)?;
                 owner.send_next(resources)?;
                 owner.receive_next(resources)

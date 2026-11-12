@@ -156,8 +156,8 @@ impl StartupBackend for Platform {
     fn update_status(&self) -> Option<&sugarsubstitute_contracts::update::status::UpdateStatus> {
         None
     }
-    fn workflow_running(&self) -> bool {
-        false
+    fn workflow_queue(&self) -> sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue {
+        sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue::Unobserved
     }
     fn request_restart_to_apply(&mut self) -> BackendResult<()> {
         self.restart_requests += 1;

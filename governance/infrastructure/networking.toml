@@ -43,6 +43,20 @@ boundary = "execution_ipc"
 rationale = "Execution owns authenticated finite loopback IPC, readiness, queue admission, cancellation and actual socket shutdown; this is not an HTTP downloader."
 
 [[records]]
+path = "crates/sugarsubstitute-execution/src/loopback_websocket.rs"
+owner = "sugarsubstitute-execution"
+source_sha256 = "sha256:d480d3b90ee4237775b0e8e7c4babfb2feb657fb67aee968e7806aa0de31cc9d"
+boundary = "loopback_client"
+rationale = "Execution owns the one client WebSocket to a validated loopback service inside an admitted async job: bounded opening, frames and writes, its memory claim, cancellation and the job deadline."
+
+[[records]]
+path = "crates/sugarsubstitute-execution/src/loopback_websocket/tests.rs"
+owner = "sugarsubstitute-execution"
+source_sha256 = "sha256:52bb330625db96756c4c149d226b00ec51c4bb7fd2a70194652e0d52a7fffac0"
+boundary = "fixture"
+rationale = "A scripted loopback server exercises the real upgrade, framing, ping, close, discard and cancellation handling."
+
+[[records]]
 path = "crates/sugarsubstitute-execution/src/provisioning_transport/tests.rs"
 owner = "sugarsubstitute-execution"
 source_sha256 = "sha256:2e48bd0d65f9c9f06b3af96514cf3ab7731bf2d5b19905a2dca662866df4ff95"
@@ -151,7 +165,7 @@ rationale = "Parsed network capability classification data contains literal nati
 [[records]]
 path = "tools/xtask/src/networking/tests.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:fc97f5e6bb44cf7f2bd384b28d30203c26859de4f008b3baf3541d48254c49f6"
+source_sha256 = "sha256:c74dd6b82046b5f2483126a6b38bb97067e12e746f4a6b3896e92f6bab0e5c4e"
 boundary = "fixture"
 rationale = "Deliberately invalid embedded JavaScript and native-symbol literals prove rejection across macro, wrapper, alias and inactive-target cases."
 
@@ -167,7 +181,7 @@ rationale = "Pure external-source fixtures deliberately contain Electron HTTP ca
 [[records]]
 path = "tools/xtask/src/networking.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:fb765d268bb9da576234b63fdbe3e3e50afd9fbbeb0b11083b69c7a99cf2b7a4"
+source_sha256 = "sha256:cc29af3f4c346cc1facca4136ad94aed276bff18e14ef1222990eebca258ca5f"
 boundary = "inspection"
 rationale = "Boundary-category classification data includes literal network module identifiers; direct transport construction remains forbidden in inspection sources."
 

@@ -107,12 +107,16 @@ fn payload(
             main_fields::write_identity(*identity, run, writer)?;
             lease(*failed, writer)
         }
-        WirePayload::UpdateStatus { revision, workflow_running, status } => {
+        WirePayload::UpdateStatus { revision, workflow, status } => {
             if status.len() > super::MAX_UPDATE_STATUS_BYTES {
                 return Err(ProtocolError::Length);
             }
             writer.u64(revision.get())?;
-            writer.u8(if *workflow_running { 2 } else { 1 })?;
+            writer.u8(match workflow {
+                super::WorkflowQueue::Idle => 1,
+                super::WorkflowQueue::Busy => 2,
+                super::WorkflowQueue::Unobserved => 3,
+            })?;
             writer.u32(u32::try_from(status.len()).map_err(|_| ProtocolError::Length)?)?;
             writer.put(status)
         }

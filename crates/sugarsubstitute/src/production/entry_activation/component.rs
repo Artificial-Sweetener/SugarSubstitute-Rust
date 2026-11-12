@@ -307,7 +307,6 @@ impl EntryActivation for ProfileComponent {
         &mut self,
         _: u64,
         _: &sugarsubstitute_contracts::update::status::UpdateStatus,
-        _: bool,
     ) -> Result<()> {
         Ok(())
     }

@@ -6,14 +6,19 @@
 //! sequence; the revision still decides, so a replayed or reordered older snapshot never
 //! replaces a newer one. The status is presentation only and grants nothing.
 use sugarsubstitute_contracts::update::status::UpdateStatus;
-use sugarsubstitute_supervision::lifecycle_protocol::DecodedPayload;
+use sugarsubstitute_supervision::lifecycle_protocol::{DecodedPayload, WorkflowQueue};
 
 /// What the coordinator last said about updates and the backend's workflow queue.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(in crate::production) struct CoordinatorUpdates {
     revision: u64,
     status: Option<UpdateStatus>,
-    workflow_running: bool,
+    workflow: WorkflowQueue,
+}
+impl Default for CoordinatorUpdates {
+    fn default() -> Self {
+        Self { revision: 0, status: None, workflow: WorkflowQueue::Unobserved }
+    }
 }
 impl CoordinatorUpdates {
     /// The newest status, once the coordinator has sent one.
@@ -21,9 +26,9 @@ impl CoordinatorUpdates {
         self.status.as_ref()
     }
 
-    /// Whether the backend's queue held a running or queued workflow at the newest snapshot.
-    pub(in crate::production) fn workflow_running(&self) -> bool {
-        self.workflow_running
+    /// The backend's workflow queue at the newest snapshot; unobserved before the first.
+    pub(in crate::production) fn workflow(&self) -> WorkflowQueue {
+        self.workflow
     }
 
     /// Adopt one decoded Kind22 payload when its revision is newer than the one kept.
@@ -34,14 +39,14 @@ impl CoordinatorUpdates {
         &mut self,
         payload: &DecodedPayload<'_>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let DecodedPayload::UpdateStatus { revision, workflow_running, status } = payload else {
+        let DecodedPayload::UpdateStatus { revision, workflow, status } = payload else {
             return Err("Lifecycle frame is not an update status".into());
         };
         let status = UpdateStatus::decode(status)?;
         if revision.get() > self.revision {
             self.revision = revision.get();
             self.status = Some(status);
-            self.workflow_running = *workflow_running;
+            self.workflow = *workflow;
         }
         Ok(())
     }
@@ -54,12 +59,12 @@ mod tests {
 
     fn snapshot(
         revision: u64,
-        running: bool,
+        workflow: WorkflowQueue,
         bytes: &[u8],
     ) -> Result<DecodedPayload<'_>, &'static str> {
         Ok(DecodedPayload::UpdateStatus {
             revision: NonZeroU64::new(revision).ok_or("zero revision")?,
-            workflow_running: running,
+            workflow,
             status: bytes,
         })
     }
@@ -73,15 +78,16 @@ mod tests {
         let idle_bytes = UpdateStatus::default().encode()?;
         let mut updates = CoordinatorUpdates::default();
         assert!(updates.status().is_none());
-        updates.receive(&snapshot(2, true, &checking_bytes)?)?;
-        updates.receive(&snapshot(1, false, &idle_bytes)?)?;
+        assert_eq!(updates.workflow(), WorkflowQueue::Unobserved);
+        updates.receive(&snapshot(2, WorkflowQueue::Busy, &checking_bytes)?)?;
+        updates.receive(&snapshot(1, WorkflowQueue::Idle, &idle_bytes)?)?;
         assert_eq!(updates.status(), Some(&checking));
-        assert!(updates.workflow_running());
-        assert!(updates.receive(&snapshot(3, false, b"{\"forged\":true}")?).is_err());
+        assert_eq!(updates.workflow(), WorkflowQueue::Busy);
+        assert!(updates.receive(&snapshot(3, WorkflowQueue::Idle, b"{\"forged\":true}")?).is_err());
         assert_eq!(updates.status(), Some(&checking));
-        updates.receive(&snapshot(3, false, &idle_bytes)?)?;
+        updates.receive(&snapshot(3, WorkflowQueue::Idle, &idle_bytes)?)?;
         assert_eq!(updates.status(), Some(&UpdateStatus::default()));
-        assert!(!updates.workflow_running());
+        assert_eq!(updates.workflow(), WorkflowQueue::Idle);
         Ok(())
     }
 }

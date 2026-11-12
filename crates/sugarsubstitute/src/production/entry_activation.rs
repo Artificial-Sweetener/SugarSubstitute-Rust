@@ -371,13 +371,12 @@ impl EntryActivation for ProductionActivation {
         &mut self,
         revision: u64,
         status: &sugarsubstitute_contracts::update::status::UpdateStatus,
-        workflow_running: bool,
     ) -> Result<()> {
         for retained in self.records.iter_mut().flatten() {
             if retained.record.retired.is_none()
                 && let Some(parent) = retained.record.parent.as_deref_mut()
             {
-                parent.publish_update_status(revision, status, workflow_running).map_err(outer)?;
+                parent.publish_update_status(revision, status).map_err(outer)?;
             }
         }
         Ok(())

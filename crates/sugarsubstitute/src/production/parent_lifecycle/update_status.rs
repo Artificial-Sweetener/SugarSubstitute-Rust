@@ -1,84 +1,116 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Tell the desktop child the coordinator's update status, and keep its restart-to-apply intent.
+//! Tell the desktop child the coordinator's update status and the backend's workflow queue, and
+//! keep its restart-to-apply intent.
 //!
-//! Only the newest snapshot matters, so one encoded snapshot waits for the shared write slot and
-//! a newer one replaces it. Snapshots go out after replies and the UI watchdog's challenge; a
-//! revoked write is retried unless a newer snapshot already replaced it. The child's
-//! RestartToApply only records intent: the entry runner relaunches when the child then exits
-//! normally, and never otherwise.
-use super::{ParentLifecycle, ParentResources, Result, types::WritePurpose};
+//! Only the newest state matters. A status change or a queue change marks the snapshot due; the
+//! next free write slot carries the newest status and queue under a fresh revision, so a revoked
+//! write is simply sent again with whatever is newest by then. Snapshots go out after replies
+//! and the UI watchdog's challenge. The child's RestartToApply only records intent: the entry
+//! runner relaunches when the child then exits normally, and never otherwise.
+use super::{ParentLifecycle, ParentResources, Result, types::WritePurpose, workflow_watch};
 use std::{num::NonZeroU64, time::Duration};
-use sugarsubstitute_contracts::update::status::{MAX_STATUS_BYTES, UpdateStatus};
-use sugarsubstitute_supervision::lifecycle_protocol::{WireHeader, WirePayload};
+use sugarsubstitute_contracts::{
+    execution::Moment,
+    update::status::{MAX_STATUS_BYTES, UpdateStatus},
+};
+use sugarsubstitute_supervision::lifecycle_protocol::{WireHeader, WirePayload, WorkflowQueue};
 
 /// How long one snapshot write may wait for the child to read.
 const WRITE: Duration = Duration::from_secs(30);
 
-/// One encoded snapshot.
-struct Snapshot {
-    revision: NonZeroU64,
-    workflow_running: bool,
-    status: Vec<u8>,
-}
-
-/// The snapshot waiting to be written, the one being written, and the child's intent.
+/// The newest status and queue, whether the child still needs them, and the child's intent.
 #[derive(Default)]
 pub(super) struct OutgoingUpdates {
-    pending: Option<Snapshot>,
-    writing: Option<Snapshot>,
+    status_revision: Option<u64>,
+    status: Option<Vec<u8>>,
+    sent_queue: Option<WorkflowQueue>,
+    due: bool,
+    revision: u64,
+    writing: bool,
     restart_to_apply: bool,
+    watch: workflow_watch::WorkflowWatch,
 }
 impl OutgoingUpdates {
-    /// Heap the two retained encodings may occupy inside the parent partition.
+    /// Heap the retained status encoding and the copy being written may occupy inside the
+    /// parent partition.
     pub(super) const fn heap_bytes() -> u64 {
         2 * MAX_STATUS_BYTES as u64
     }
 
-    /// Whether `revision` is newer than every snapshot waiting or being written.
-    fn newer(&self, revision: NonZeroU64) -> bool {
-        [&self.pending, &self.writing]
-            .into_iter()
-            .flatten()
-            .all(|snapshot| snapshot.revision < revision)
-    }
-
     /// The child's snapshot write finished.
     pub(super) fn written(&mut self) {
-        self.writing = None;
+        self.writing = false;
     }
 
-    /// The child's snapshot write was revoked before issue; retry it unless a newer one waits.
+    /// The child's snapshot write was revoked before issue; the newest state goes out again.
     pub(super) fn revoked(&mut self) {
-        let revoked = self.writing.take();
-        if self.pending.is_none() {
-            self.pending = revoked;
-        }
+        self.writing = false;
+        self.due = true;
     }
 
     /// The authenticated child finished its close save and is exiting so an update applies.
     pub(super) fn restart_to_apply(&mut self) {
         self.restart_to_apply = true;
     }
+
+    /// When the workflow watch's reconnect is due.
+    pub(super) fn deadline(&self) -> Option<Moment> {
+        self.watch.deadline()
+    }
+
+    /// Stop following the backend's queue; cleanup has begun.
+    pub(super) fn stop_watch(&mut self) {
+        self.watch.stop();
+    }
+
+    /// Adopt the watch's queue, marking the snapshot due when it changed.
+    fn observe_queue(&mut self) {
+        let queue = self.watch.queue();
+        if self.sent_queue != Some(queue) {
+            self.sent_queue = Some(queue);
+            self.due = true;
+        }
+    }
+
+    /// The next snapshot to write, when one is due and a status exists.
+    fn take_due(&mut self) -> Option<(NonZeroU64, WorkflowQueue, Vec<u8>)> {
+        if !self.due || self.writing {
+            return None;
+        }
+        let status = self.status.clone()?;
+        let revision = NonZeroU64::new(self.revision.checked_add(1)?)?;
+        self.revision = revision.get();
+        self.due = false;
+        Some((revision, self.sent_queue.unwrap_or(WorkflowQueue::Unobserved), status))
+    }
 }
 
 impl ParentLifecycle {
-    /// Queue `status` at `revision` for the child, replacing any snapshot not yet written.
-    /// Revisions must increase; an older or repeated revision is ignored.
+    /// Keep `status`, the coordinator's status at `revision`, for the child when it is newer
+    /// than the one kept. The caller may offer the same revision every turn.
     /// # Errors
-    /// Returns the status's encoding failure; nothing is queued then.
+    /// Returns the status's encoding failure; the kept status is unchanged.
     pub(crate) fn publish_update_status(
         &mut self,
         revision: u64,
         status: &UpdateStatus,
-        workflow_running: bool,
     ) -> Result<()> {
-        let Some(revision) = NonZeroU64::new(revision) else { return Ok(()) };
-        if self.updates.newer(revision) {
-            self.updates.pending =
-                Some(Snapshot { revision, workflow_running, status: status.encode()? });
+        if self.updates.status_revision.is_none_or(|kept| revision > kept) {
+            self.updates.status = Some(status.encode()?);
+            self.updates.status_revision = Some(revision);
+            self.updates.due = true;
         }
         Ok(())
+    }
+
+    /// Follow the granted backend's queue; nothing here fails the parent.
+    pub(super) fn advance_workflow_watch(&mut self, resources: &ParentResources<'_, '_>) {
+        let origin = self
+            .lease
+            .and_then(|lease| resources.backend.ready_origin(lease.resource).ok().flatten());
+        self.updates.watch.advance(origin, resources.execution);
+        self.updates.observe_queue();
     }
 
     /// Whether the authenticated child said it is exiting so a prepared update applies.
@@ -92,7 +124,6 @@ impl ParentLifecycle {
         if self.write.is_some() || !self.registered || self.cleanup.is_some() {
             return Ok(());
         }
-        let Some(snapshot) = self.updates.pending.take() else { return Ok(()) };
         let until = resources.execution.client.now()?.checked_add(WRITE)?;
         let header = WireHeader {
             run: self.run,
@@ -100,15 +131,12 @@ impl ParentLifecycle {
             request: None,
             deadline_qpc: resources.execution.client.encode_counter_deadline(until)?.ticks(),
         };
-        let payload = WirePayload::UpdateStatus {
-            revision: snapshot.revision,
-            workflow_running: snapshot.workflow_running,
-            status: &snapshot.status,
-        };
+        let Some((revision, workflow, status)) = self.updates.take_due() else { return Ok(()) };
+        let payload = WirePayload::UpdateStatus { revision, workflow, status: &status };
         if self.write_message(resources, header, payload, until, WritePurpose::UpdateStatus)? {
-            self.updates.writing = Some(snapshot);
+            self.updates.writing = true;
         } else {
-            self.updates.pending = Some(snapshot);
+            self.updates.due = true;
         }
         Ok(())
     }
@@ -118,31 +146,22 @@ impl ParentLifecycle {
 mod tests {
     use super::*;
 
-    fn snapshot(revision: u64) -> Result<Snapshot> {
-        Ok(Snapshot {
-            revision: NonZeroU64::new(revision).ok_or("zero revision")?,
-            workflow_running: false,
-            status: UpdateStatus::default().encode()?,
-        })
-    }
-
     #[test]
-    fn only_newer_snapshots_wait_and_a_revoked_write_retries_unless_replaced() -> Result<()> {
-        let mut updates =
-            OutgoingUpdates { pending: Some(snapshot(2)?), ..OutgoingUpdates::default() };
-        assert!(!updates.newer(NonZeroU64::new(2).ok_or("zero")?));
-        assert!(updates.newer(NonZeroU64::new(3).ok_or("zero")?));
-        updates.writing = updates.pending.take();
-        assert!(!updates.newer(NonZeroU64::new(1).ok_or("zero")?), "in flight still counts");
+    fn the_newest_status_and_queue_go_out_once_under_a_fresh_revision() -> Result<()> {
+        let mut updates = OutgoingUpdates::default();
+        updates.observe_queue();
+        assert!(updates.take_due().is_none(), "nothing goes out before a status exists");
+        updates.status = Some(UpdateStatus::default().encode()?);
+        let first = updates.take_due().map(|(revision, queue, _)| (revision.get(), queue));
+        assert_eq!(first, Some((1, WorkflowQueue::Unobserved)));
+        assert!(updates.take_due().is_none(), "an unchanged state is not resent");
+        updates.due = true;
+        updates.writing = true;
+        assert!(updates.take_due().is_none(), "one write at a time");
         updates.revoked();
-        assert_eq!(updates.pending.as_ref().map(|s| s.revision.get()), Some(2), "retried");
-        updates.writing = updates.pending.take();
-        updates.pending = Some(snapshot(4)?);
-        updates.revoked();
-        assert_eq!(updates.pending.as_ref().map(|s| s.revision.get()), Some(4), "newer kept");
-        updates.writing = updates.pending.take();
-        updates.written();
-        assert!(updates.writing.is_none() && updates.pending.is_none());
+        assert_eq!(updates.take_due().map(|(revision, ..)| revision.get()), Some(2));
+        updates.observe_queue();
+        assert!(updates.take_due().is_none(), "the same queue is not a change");
         assert!(!updates.restart_to_apply);
         updates.restart_to_apply();
         assert!(updates.restart_to_apply);

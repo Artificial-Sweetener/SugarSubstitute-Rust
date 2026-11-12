@@ -8,15 +8,22 @@ use std::num::NonZeroU64;
 fn update_status_and_restart_intent_round_trip_with_their_identity_rules() -> TestResult {
     let revision = NonZeroU64::new(5).ok_or("zero revision")?;
     let status = br#"{"activity":null}"#;
-    let source = encoded(WirePayload::UpdateStatus { revision, workflow_running: true, status })?;
+    let source =
+        encoded(WirePayload::UpdateStatus { revision, workflow: WorkflowQueue::Busy, status })?;
     let decoded = FrameCodec::decode(&source)?;
     assert!(decoded.header.request.is_none());
-    let DecodedPayload::UpdateStatus { revision: read, workflow_running, status: bytes } =
-        decoded.payload
+    let DecodedPayload::UpdateStatus { revision: read, workflow, status: bytes } = decoded.payload
     else {
         return Err("update status changed kind".into());
     };
-    assert_eq!((read, workflow_running, bytes), (revision, true, status.as_slice()));
+    assert_eq!((read, workflow, bytes), (revision, WorkflowQueue::Busy, status.as_slice()));
+    for queue in [WorkflowQueue::Idle, WorkflowQueue::Unobserved] {
+        let source = encoded(WirePayload::UpdateStatus { revision, workflow: queue, status })?;
+        let decoded = FrameCodec::decode(&source)?;
+        assert!(
+            matches!(decoded.payload, DecodedPayload::UpdateStatus { workflow, .. } if workflow == queue)
+        );
+    }
 
     let source = encoded(WirePayload::RestartToApply)?;
     let decoded = FrameCodec::decode(&source)?;
@@ -27,7 +34,7 @@ fn update_status_and_restart_intent_round_trip_with_their_identity_rules() -> Te
     with_request.request = Some(RequestId::new(13)?);
     let message = WireMessage {
         header: with_request,
-        payload: WirePayload::UpdateStatus { revision, workflow_running: false, status },
+        payload: WirePayload::UpdateStatus { revision, workflow: WorkflowQueue::Idle, status },
     };
     assert!(matches!(FrameCodec::encode(&message, &mut [0; 256]), Err(ProtocolError::Identity)));
     Ok(())
@@ -36,14 +43,17 @@ fn update_status_and_restart_intent_round_trip_with_their_identity_rules() -> Te
 #[test]
 fn malformed_update_status_frames_reject() -> TestResult {
     let revision = NonZeroU64::new(1).ok_or("zero revision")?;
-    let source =
-        encoded(WirePayload::UpdateStatus { revision, workflow_running: false, status: b"{}" })?;
+    let source = encoded(WirePayload::UpdateStatus {
+        revision,
+        workflow: WorkflowQueue::Idle,
+        status: b"{}",
+    })?;
     let payload = HEADER_BYTES;
     let mut zero_revision = source.clone();
     zero_revision[payload..payload + 8].copy_from_slice(&0u64.to_le_bytes());
     assert!(FrameCodec::decode(&zero_revision).is_err());
     let mut unknown_activity = source.clone();
-    unknown_activity[payload + 8] = 3;
+    unknown_activity[payload + 8] = 4;
     assert!(matches!(FrameCodec::decode(&unknown_activity), Err(ProtocolError::UnsupportedTag)));
     let mut overlong = source.clone();
     overlong[payload + 9..payload + 13]
@@ -58,7 +68,7 @@ fn malformed_update_status_frames_reject() -> TestResult {
         header: header(22)?,
         payload: WirePayload::UpdateStatus {
             revision,
-            workflow_running: false,
+            workflow: WorkflowQueue::Idle,
             status: &oversized,
         },
     };

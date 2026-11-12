@@ -856,7 +856,7 @@ rationale = "Repository tooling decodes the vendored-material TOML manifest to b
 [[records]]
 path = "tools/xtask/src/networking/tests.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:fc97f5e6bb44cf7f2bd384b28d30203c26859de4f008b3baf3541d48254c49f6"
+source_sha256 = "sha256:c74dd6b82046b5f2483126a6b38bb97067e12e746f4a6b3896e92f6bab0e5c4e"
 capabilities = ["codec"]
 rationale = "Networking-governance rejection fixtures decode only their own TOML policy schema and malformed registrations."
 

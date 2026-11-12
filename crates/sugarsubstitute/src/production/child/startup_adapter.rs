@@ -163,8 +163,8 @@ impl StartupBackend for ProductionChild {
     fn update_status(&self) -> Option<&sugarsubstitute_contracts::update::status::UpdateStatus> {
         self.bootstrap.coordinator_updates().status()
     }
-    fn workflow_running(&self) -> bool {
-        self.bootstrap.coordinator_updates().workflow_running()
+    fn workflow_queue(&self) -> sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue {
+        self.bootstrap.coordinator_updates().workflow()
     }
     fn request_restart_to_apply(&mut self) -> BackendResult<()> {
         ProductionChild::request_restart_to_apply(self)

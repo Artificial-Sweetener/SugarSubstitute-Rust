@@ -67,22 +67,32 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
         )
     }
 
-    /// Restart to apply a prepared update through the same close save as every other close.
+    /// Restart to apply a prepared update through the same close save as every other close,
+    /// once the backend's running workflow finishes.
     fn request_restart_to_apply(&mut self) -> Result<(), Box<dyn Error>> {
-        self.request_close(
-            sugarsubstitute_application::workspace_session::close_save::CloseReason::RestartToApply,
-        )
+        if self.workflow_restart.request(self.child.workflow_queue()) {
+            self.restart_to_apply()
+        } else {
+            Ok(())
+        }
     }
 
     fn update_status(&self) -> Option<sugarsubstitute_contracts::update::status::UpdateStatus> {
-        self.child.update_status().cloned()
+        let status = self.child.update_status()?.clone();
+        Some(
+            self.workflow_restart.presented(status, self.locale_messages().updates.restart_dropped),
+        )
     }
 
     fn workflow_activity(&self) -> sugarsubstitute_desktop::WorkflowActivity {
-        if self.child.workflow_running() {
-            sugarsubstitute_desktop::WorkflowActivity::Running
-        } else {
-            sugarsubstitute_desktop::WorkflowActivity::Idle
+        match self.child.workflow_queue() {
+            sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue::Busy => {
+                sugarsubstitute_desktop::WorkflowActivity::Running
+            }
+            sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue::Idle
+            | sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue::Unobserved => {
+                sugarsubstitute_desktop::WorkflowActivity::Idle
+            }
         }
     }
 

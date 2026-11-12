@@ -93,15 +93,15 @@ pub(crate) trait EntryActivation {
     /// Borrow actual deliberate close intent only when current role and diagnostic custody permit it.
     /// This samples no clock and proves neither intake quiescence nor native settlement.
     fn normal_close_requested(&self) -> bool;
-    /// Send the coordinator's update status at `revision` to every live desktop child.
-    /// Older or repeated revisions are ignored.
+    /// Offer the coordinator's update status at `revision` to every live desktop child; each
+    /// keeps it when newer than its own, so the runner may offer it every turn.
+    /// The child also learns the backend's workflow queue from its parent.
     /// # Errors
     /// Returns the status's encoding failure.
     fn publish_update_status(
         &mut self,
         revision: u64,
         status: &sugarsubstitute_contracts::update::status::UpdateStatus,
-        workflow_running: bool,
     ) -> Result<(), Box<dyn Error>>;
     /// Whether a desktop child that asked to restart so an update applies has since completed
     /// a normal close. A crashed or failed child never counts.
@@ -335,8 +335,6 @@ pub(crate) struct EntryRunner<C: EntryActivation> {
     post_exit: Option<post_exit::Deadline>,
     /// The one restart-to-apply relaunch, after a normal close the child asked for.
     relaunch: relaunch::Relaunch,
-    /// Revision of the update status last sent to the desktop children.
-    update_status_sent: u64,
     command: Option<ProductionCommand>,
     executable: PathBuf,
     installation: PathBuf,
@@ -397,7 +395,6 @@ impl<C: EntryActivation> EntryRunner<C> {
             update_status_scope: None,
             post_exit: None,
             relaunch: relaunch::Relaunch::Idle,
-            update_status_sent: 0,
             command: Some(command),
             executable,
             installation,

@@ -64,7 +64,6 @@ impl EntryActivation for RetainedChild {
         &mut self,
         _: u64,
         _: &sugarsubstitute_contracts::update::status::UpdateStatus,
-        _: bool,
     ) -> Result<(), Box<dyn Error>> {
         Ok(())
     }

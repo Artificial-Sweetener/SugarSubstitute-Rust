@@ -53,6 +53,47 @@ fn missing_transport_reviews_report_every_source() -> Result<()> {
     Ok(())
 }
 
+/// Only execution's reviewed WebSocket source may hold the loopback client boundary, and an
+/// IPC boundary never admits an outbound connect.
+#[test]
+fn loopback_client_boundary_is_execution_websocket_only_and_ipc_cannot_connect() -> Result<()> {
+    let (repository, mut policy) = fixture()?;
+    let path = "tools/client.rs".to_owned();
+    fixtures::write(
+        repository.root(),
+        &path,
+        "use tokio::net::TcpStream; async fn f() { TcpStream::connect(a).await; }",
+    )?;
+    let record = |boundary| -> Result<Record> {
+        Ok(Record {
+            source_sha256: fingerprint(repository.root(), std::slice::from_ref(&path))?,
+            path: path.clone(),
+            owner: "host".into(),
+            boundary,
+            rationale: "Client".into(),
+        })
+    };
+    for (boundary, expected) in [
+        (Boundary::LoopbackClient, "foreign loopback client boundary"),
+        (Boundary::ExecutionIpc, "foreign authenticated IPC boundary"),
+    ] {
+        policy.records.truncate(1);
+        policy.records.push(record(boundary)?);
+        let failure =
+            check(repository.root(), &repository.architecture, &repository.workspace, &policy)
+                .err()
+                .ok_or_else(|| Failure::Policy("A foreign client boundary was accepted".into()))?
+                .to_string();
+        assert!(failure.contains(expected), "{failure}");
+    }
+    let ipc = Record { owner: "sugarsubstitute-execution".into(), ..record(Boundary::ExecutionIpc)? };
+    assert!(!category_admits(&ipc, &["TcpStream::connect".into(), "tokio::net::TcpStream".into()]));
+    let client = record(Boundary::LoopbackClient)?;
+    assert!(category_admits(&client, &["TcpStream::connect".into(), "tokio::net::TcpStream".into()]));
+    assert!(!category_admits(&client, &["reqwest".into()]));
+    Ok(())
+}
+
 /// Standard-library servers and renamed module imports remain real transport boundaries.
 #[test]
 fn python_servers_and_module_aliases_require_exact_qualification_reviews() -> Result<()> {

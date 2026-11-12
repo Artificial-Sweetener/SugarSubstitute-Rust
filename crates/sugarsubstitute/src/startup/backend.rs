@@ -215,8 +215,8 @@ pub trait StartupBackend {
     fn shutdown_budget(&self) -> Option<ShutdownBudget>;
     /// The coordinator's newest update status, once it sent one. Presentation only.
     fn update_status(&self) -> Option<&sugarsubstitute_contracts::update::status::UpdateStatus>;
-    /// Whether the backend's queue held a running or queued workflow at the newest status.
-    fn workflow_running(&self) -> bool;
+    /// The backend's workflow queue at the coordinator's newest status; unobserved before it.
+    fn workflow_queue(&self) -> sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue;
     /// Tell the coordinator this close restarts the application so a prepared update applies.
     /// Called once, after the close save's outcome exists and before `request_shutdown`.
     fn request_restart_to_apply(&mut self) -> BackendResult<()>;

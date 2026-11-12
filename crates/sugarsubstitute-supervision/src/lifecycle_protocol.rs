@@ -90,7 +90,7 @@
 //! the frontend owner. These copied wire facts grant no retry, current readiness,
 //! native adoption or teardown proof.
 //! Kind22 UpdateStatus, sent by the coordinator without a request, carries a positive u64
-//! revision, u8 workflow activity (1 idle, 2 running) and a u32-counted encoded status of at
+//! revision, u8 workflow queue (1 idle, 2 busy, 3 unobserved) and a u32-counted encoded status of at
 //! most `MAX_UPDATE_STATUS_BYTES`, whose content its contract owner decodes and bounds. Kind23
 //! RestartToApply is an empty child request, sent after the close save finished and before
 //! ExitIntent; it grants no process authority, and the coordinator relaunches only when the
@@ -118,7 +118,7 @@ pub use main_types::{
     BackendPeer, GrantedContext, MainFailureCode, MainStage, MainStageFailure, VersionLabel,
 };
 pub use output::OutputDelivery;
-pub use payload::{CapabilityRef, DecodedPayload, LeaseReference, WirePayload};
+pub use payload::{CapabilityRef, DecodedPayload, LeaseReference, WirePayload, WorkflowQueue};
 pub use raw_windows::{
     FolderFragment, MAX_FOLDER_FRAGMENT_UNITS, MAX_PROFILE_FOLDER_UNITS, RawWindowsUnits,
 };

@@ -63,6 +63,8 @@ mod types;
 mod update_status;
 #[path = "parent_lifecycle/watchdog.rs"]
 mod watchdog;
+#[path = "parent_lifecycle/workflow_watch.rs"]
+mod workflow_watch;
 #[path = "parent_lifecycle/write_receipt.rs"]
 mod write_receipt;
 
@@ -258,6 +260,7 @@ impl ParentLifecycle {
                 "Original role cleanup requested; physical retirement remains independently owned");
         }
         self.closed = true;
+        self.updates.stop_watch();
         // Retain the first semantic cause while releasing its immutable input loan
         // so the actual pipe worker can finish checked native retirement.
         self.rejected_frame = None;
@@ -383,6 +386,7 @@ impl ParentLifecycle {
             self.requests.next_deadline(),
             self.output_receive_until,
             self.frontend_refresh.as_ref().and_then(|refresh| refresh.deadline()),
+            self.updates.deadline(),
         ]
         .into_iter()
         .flatten()
