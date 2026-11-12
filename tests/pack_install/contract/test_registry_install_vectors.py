@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 from pathlib import Path
 from typing import cast
@@ -28,6 +29,10 @@ from sugarcubes.backend.pack_install.archive import (
     ArchiveLimits,
     extract_registry_archive,
     list_registry_archive,
+)
+from sugarcubes.backend.pack_install.digest_manifest import (
+    parse_digest_manifest,
+    read_digest_manifest,
 )
 from sugarcubes.backend.pack_install.entry_paths import parse_entry
 from sugarcubes.backend.pack_install.errors import PackInstallError
@@ -50,6 +55,7 @@ from tests.pack_install.support.install_vectors import (
     JsonObject,
     build_folder,
     folder_files,
+    load_vectors,
     vector_group,
     write_archive,
 )
@@ -197,9 +203,35 @@ def test_replacement_vectors(vector: JsonObject, tmp_path: Path) -> None:
     expected = _expect(vector)
     files = folder_files(pack)
     tracking = files.pop(".tracking")
+    recorded = read_digest_manifest(pack, version="1.1.0", entries=staged.entries)
+    assert recorded == staged.file_digests
+    files.pop(".tracking-digests.json")
     assert files == expected["files"]
     for absent in cast(list[str], expected["absent"]):
         assert not (pack / absent).exists()
     assert [line for line in tracking.splitlines() if line] == expected[
         "trackingEntries"
     ]
+
+
+DIGEST_MANIFESTS = cast(JsonObject, load_vectors()["digestManifests"])
+DIGEST_CASES = cast(list[JsonObject], DIGEST_MANIFESTS["cases"])
+
+
+@pytest.mark.parametrize("vector", DIGEST_CASES, ids=_ids(DIGEST_CASES))
+def test_digest_manifest_vectors(vector: JsonObject) -> None:
+    """The digest record is trusted only for the exact install it describes."""
+
+    tracking_text = str(DIGEST_MANIFESTS["trackingText"]).encode("utf-8")
+    entries = parse_tracking(tracking_text)
+    recorded = parse_digest_manifest(
+        json.dumps(vector["manifest"]).encode("utf-8"),
+        version=str(DIGEST_MANIFESTS["version"]),
+        tracking_sha256=hashlib.sha256(tracking_text).hexdigest(),
+        entries=entries,
+    )
+    expected = _expect(vector)
+    if expected["applies"]:
+        assert recorded == expected["files"]
+    else:
+        assert recorded is None

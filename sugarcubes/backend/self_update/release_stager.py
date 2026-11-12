@@ -16,11 +16,12 @@
 """Check for a newer SugarCubes and stage it, without touching the installed pack.
 
 Order of work: prove the folder is a registry install this updater owns; find the
-newest release (Registry first, GitHub release asset when the Registry lags);
-prove no tracked file was changed locally by comparing it with the published
-release of the installed version; then download, verify and stage the new
-release. Any failure leaves the installed pack and any earlier staged release as
-they were.
+newest release across the Registry's version list and the GitHub release assets
+(the Registry's copy when both have it); prove no tracked file was changed
+locally, offline from the pack's digest record or, for a pack ComfyUI Manager
+installed, against the published release of the installed version; then
+download, verify and stage the new release. Any failure leaves the installed
+pack and any earlier staged release as they were.
 """
 
 from __future__ import annotations
@@ -32,6 +33,10 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from ..pack_install.archive import extract_registry_archive
+from ..pack_install.digest_manifest import (
+    read_digest_manifest,
+    write_digest_manifest,
+)
 from ..pack_install.errors import PackInstallError
 from ..pack_install.file_lock import exclusive_update_lock
 from ..pack_install.filesystem import remove_tree
@@ -206,8 +211,7 @@ class ReleaseStager:
         installed = installed_file_digests(pack)
         if _already_staged(store, offer, current, installed):
             return Staged(str(current), str(offer.version))
-        published = self._published_digests(current, cancelled)
-        if changed_tracked_files(installed, published):
+        if changed_tracked_files(installed, self._expected_digests(pack, cancelled)):
             return NotManaged(str(current), NotOwnedReason.CHANGED_FILES)
         on_downloading(str(offer.version))
         work = self._root / f"download-{secrets.token_hex(6)}"
@@ -274,6 +278,39 @@ class ReleaseStager:
             return None
         newest = max(offer.version for offer in offers)
         return next(offer for offer in offers if offer.version == newest)
+
+    def _expected_digests(
+        self, pack: OwnedPack, cancelled: Cancelled
+    ) -> dict[str, str]:
+        """Return what each tracked file should hold, offline when possible.
+
+        A pack this format installed carries its digest record, so no network is
+        needed. A pack ComfyUI Manager installed has none yet: its files are
+        compared with the published release of the installed version once, and
+        the record is then written so later checks are offline too.
+        """
+
+        version = str(pack.identity.version)
+        recorded = read_digest_manifest(
+            pack.folder, version=version, entries=pack.entries
+        )
+        if recorded is not None:
+            return recorded
+        published = self._published_digests(pack.identity.version, cancelled)
+        installed = installed_file_digests(pack)
+        if all(
+            digest is not None and published.get(path) == digest
+            for path, digest in installed.items()
+        ):
+            write_digest_manifest(
+                pack.folder,
+                version=version,
+                files={path: published[path] for path in installed},
+            )
+            _logger.info(
+                "SugarCubes update event=digest_record_adopted version=%s", version
+            )
+        return published
 
     def _published_digests(
         self, version: ReleaseVersion, cancelled: Cancelled

@@ -1,74 +1,811 @@
 {
   "schema": 1,
-  "description": "Language-neutral vectors for the Comfy Registry install format of a node pack. Every implementation (SugarCubes in Python, the Substitute host in Rust) must consume this file unchanged. Entries are forward-slash relative paths; a trailing slash marks a directory. `.tracking` is the entries joined by the platform line separator (CRLF on Windows, LF elsewhere) with no trailing separator; readers accept LF or CRLF and skip blank lines. Error and reason codes are the format's typed outcomes. A member `kind` is file, directory or symlink; `text` is UTF-8 file content; `unixMode` is the octal Unix mode stored in the zip external attributes when given.",
+  "description": "Language-neutral vectors for the Comfy Registry install format of a node pack. Every implementation (SugarCubes in Python, the Substitute host in Rust) must consume this file unchanged. Entries are forward-slash relative paths; a trailing slash marks a directory. `.tracking` is the entries joined by the platform line separator (CRLF on Windows, LF elsewhere) with no trailing separator; readers accept LF or CRLF and skip blank lines. Error and reason codes are the format's typed outcomes. A member `kind` is file, directory or symlink; `text` is UTF-8 file content; `unixMode` is the octal Unix mode stored in the zip external attributes when given. `.tracking-digests.json` (schema 1) records the SHA-256 of every tracked file for offline local-edit detection; it applies only when its `tracking` equals the SHA-256 of the exact `.tracking` bytes, its `version` equals the installed version, and its `files` keys equal the tracked file paths exactly; otherwise it is ignored and the installed release is compared with the published one.",
   "trackingParse": [
-    {"name": "manager-crlf-no-trailing-separator", "text": "README.md\r\n.gitignore\r\npyproject.toml\r\n__init__.py\r\n.github/workflows/publish.yml", "expect": {"entries": ["README.md", ".gitignore", "pyproject.toml", "__init__.py", ".github/workflows/publish.yml"]}},
-    {"name": "lf-with-blank-lines-and-directory-entry", "text": "web/\n\nweb/app.js\n__init__.py\n", "expect": {"entries": ["web/", "web/app.js", "__init__.py"]}},
-    {"name": "empty-record-owns-nothing", "text": "", "expect": {"entries": []}},
-    {"name": "parent-escape", "text": "__init__.py\n../outside.py", "expect": {"error": "unsafe-path"}},
-    {"name": "absolute-posix", "text": "/etc/passwd", "expect": {"error": "unsafe-path"}},
-    {"name": "windows-drive", "text": "C:/Windows/win.ini", "expect": {"error": "unsafe-path"}},
-    {"name": "backslash-separator", "text": "sub\\file.py", "expect": {"error": "unsafe-path"}},
-    {"name": "alternate-data-stream", "text": "__init__.py:hidden", "expect": {"error": "unsafe-path"}},
-    {"name": "dot-segment", "text": "a/./b.py", "expect": {"error": "unsafe-path"}},
-    {"name": "empty-segment", "text": "a//b.py", "expect": {"error": "unsafe-path"}},
-    {"name": "trailing-dot-segment", "text": "folder./file.py", "expect": {"error": "unsafe-path"}},
-    {"name": "surrounding-whitespace-is-stripped-as-manager-does", "text": " __init__.py", "expect": {"entries": ["__init__.py"]}},
-    {"name": "windows-device-name", "text": "aux.py", "expect": {"error": "reserved-name"}},
-    {"name": "git-metadata", "text": ".git/config", "expect": {"error": "reserved-name"}},
-    {"name": "tracking-tracks-itself", "text": ".tracking", "expect": {"error": "reserved-name"}},
-    {"name": "case-insensitive-duplicate", "text": "Readme.md\nREADME.md", "expect": {"error": "duplicate-entry"}},
-    {"name": "file-used-as-directory", "text": "nodes.py\nnodes.py/inner.py", "expect": {"error": "entry-conflict"}}
+    {
+      "name": "manager-crlf-no-trailing-separator",
+      "text": "README.md\r\n.gitignore\r\npyproject.toml\r\n__init__.py\r\n.github/workflows/publish.yml",
+      "expect": {
+        "entries": [
+          "README.md",
+          ".gitignore",
+          "pyproject.toml",
+          "__init__.py",
+          ".github/workflows/publish.yml"
+        ]
+      }
+    },
+    {
+      "name": "lf-with-blank-lines-and-directory-entry",
+      "text": "web/\n\nweb/app.js\n__init__.py\n",
+      "expect": {
+        "entries": [
+          "web/",
+          "web/app.js",
+          "__init__.py"
+        ]
+      }
+    },
+    {
+      "name": "empty-record-owns-nothing",
+      "text": "",
+      "expect": {
+        "entries": []
+      }
+    },
+    {
+      "name": "parent-escape",
+      "text": "__init__.py\n../outside.py",
+      "expect": {
+        "error": "unsafe-path"
+      }
+    },
+    {
+      "name": "absolute-posix",
+      "text": "/etc/passwd",
+      "expect": {
+        "error": "unsafe-path"
+      }
+    },
+    {
+      "name": "windows-drive",
+      "text": "C:/Windows/win.ini",
+      "expect": {
+        "error": "unsafe-path"
+      }
+    },
+    {
+      "name": "backslash-separator",
+      "text": "sub\\file.py",
+      "expect": {
+        "error": "unsafe-path"
+      }
+    },
+    {
+      "name": "alternate-data-stream",
+      "text": "__init__.py:hidden",
+      "expect": {
+        "error": "unsafe-path"
+      }
+    },
+    {
+      "name": "dot-segment",
+      "text": "a/./b.py",
+      "expect": {
+        "error": "unsafe-path"
+      }
+    },
+    {
+      "name": "empty-segment",
+      "text": "a//b.py",
+      "expect": {
+        "error": "unsafe-path"
+      }
+    },
+    {
+      "name": "trailing-dot-segment",
+      "text": "folder./file.py",
+      "expect": {
+        "error": "unsafe-path"
+      }
+    },
+    {
+      "name": "surrounding-whitespace-is-stripped-as-manager-does",
+      "text": " __init__.py",
+      "expect": {
+        "entries": [
+          "__init__.py"
+        ]
+      }
+    },
+    {
+      "name": "windows-device-name",
+      "text": "aux.py",
+      "expect": {
+        "error": "reserved-name"
+      }
+    },
+    {
+      "name": "git-metadata",
+      "text": ".git/config",
+      "expect": {
+        "error": "reserved-name"
+      }
+    },
+    {
+      "name": "tracking-tracks-itself",
+      "text": ".tracking",
+      "expect": {
+        "error": "reserved-name"
+      }
+    },
+    {
+      "name": "case-insensitive-duplicate",
+      "text": "Readme.md\nREADME.md",
+      "expect": {
+        "error": "duplicate-entry"
+      }
+    },
+    {
+      "name": "file-used-as-directory",
+      "text": "nodes.py\nnodes.py/inner.py",
+      "expect": {
+        "error": "entry-conflict"
+      }
+    }
   ],
   "trackingRender": [
-    {"name": "archive-order-is-kept", "entries": ["pyproject.toml", "__init__.py", "web/", "web/app.js"], "lfText": "pyproject.toml\n__init__.py\nweb/\nweb/app.js", "crlfText": "pyproject.toml\r\n__init__.py\r\nweb/\r\nweb/app.js"}
+    {
+      "name": "archive-order-is-kept",
+      "entries": [
+        "pyproject.toml",
+        "__init__.py",
+        "web/",
+        "web/app.js"
+      ],
+      "lfText": "pyproject.toml\n__init__.py\nweb/\nweb/app.js",
+      "crlfText": "pyproject.toml\r\n__init__.py\r\nweb/\r\nweb/app.js"
+    }
   ],
   "archives": [
-    {"name": "flat-registry-layout", "members": [{"name": "pyproject.toml", "kind": "file", "text": "[project]\nname = \"SugarCubes\"\nversion = \"1.2.3\"\n"}, {"name": "__init__.py", "kind": "file", "text": "VERSION = '1.2.3'\n"}, {"name": "web/", "kind": "directory"}, {"name": "web/app.js", "kind": "file", "text": "export {};\n"}], "expect": {"entries": ["pyproject.toml", "__init__.py", "web/", "web/app.js"]}},
-    {"name": "empty-archive", "members": [], "expect": {"error": "empty-archive"}},
-    {"name": "directories-only", "members": [{"name": "web/", "kind": "directory"}], "expect": {"error": "empty-archive"}},
-    {"name": "zip-slip", "members": [{"name": "__init__.py", "kind": "file", "text": ""}, {"name": "../escape.py", "kind": "file", "text": "x"}], "expect": {"error": "unsafe-path"}},
-    {"name": "absolute-member", "members": [{"name": "/abs.py", "kind": "file", "text": "x"}], "expect": {"error": "unsafe-path"}},
-    {"name": "symlink-member", "members": [{"name": "__init__.py", "kind": "file", "text": ""}, {"name": "link.py", "kind": "symlink", "text": "__init__.py", "unixMode": "120777"}], "expect": {"error": "link-member"}},
-    {"name": "device-member", "members": [{"name": "fifo", "kind": "file", "text": "", "unixMode": "10644"}], "expect": {"error": "link-member"}},
-    {"name": "embedded-tracking", "members": [{"name": "__init__.py", "kind": "file", "text": ""}, {"name": ".tracking", "kind": "file", "text": "../../evil"}], "expect": {"error": "reserved-name"}},
-    {"name": "embedded-git", "members": [{"name": "__init__.py", "kind": "file", "text": ""}, {"name": ".git/HEAD", "kind": "file", "text": "ref"}], "expect": {"error": "reserved-name"}},
-    {"name": "case-collision", "members": [{"name": "Nodes.py", "kind": "file", "text": "a"}, {"name": "nodes.py", "kind": "file", "text": "b"}], "expect": {"error": "duplicate-entry"}}
+    {
+      "name": "flat-registry-layout",
+      "members": [
+        {
+          "name": "pyproject.toml",
+          "kind": "file",
+          "text": "[project]\nname = \"SugarCubes\"\nversion = \"1.2.3\"\n"
+        },
+        {
+          "name": "__init__.py",
+          "kind": "file",
+          "text": "VERSION = '1.2.3'\n"
+        },
+        {
+          "name": "web/",
+          "kind": "directory"
+        },
+        {
+          "name": "web/app.js",
+          "kind": "file",
+          "text": "export {};\n"
+        }
+      ],
+      "expect": {
+        "entries": [
+          "pyproject.toml",
+          "__init__.py",
+          "web/",
+          "web/app.js"
+        ]
+      }
+    },
+    {
+      "name": "empty-archive",
+      "members": [],
+      "expect": {
+        "error": "empty-archive"
+      }
+    },
+    {
+      "name": "directories-only",
+      "members": [
+        {
+          "name": "web/",
+          "kind": "directory"
+        }
+      ],
+      "expect": {
+        "error": "empty-archive"
+      }
+    },
+    {
+      "name": "zip-slip",
+      "members": [
+        {
+          "name": "__init__.py",
+          "kind": "file",
+          "text": ""
+        },
+        {
+          "name": "../escape.py",
+          "kind": "file",
+          "text": "x"
+        }
+      ],
+      "expect": {
+        "error": "unsafe-path"
+      }
+    },
+    {
+      "name": "absolute-member",
+      "members": [
+        {
+          "name": "/abs.py",
+          "kind": "file",
+          "text": "x"
+        }
+      ],
+      "expect": {
+        "error": "unsafe-path"
+      }
+    },
+    {
+      "name": "symlink-member",
+      "members": [
+        {
+          "name": "__init__.py",
+          "kind": "file",
+          "text": ""
+        },
+        {
+          "name": "link.py",
+          "kind": "symlink",
+          "text": "__init__.py",
+          "unixMode": "120777"
+        }
+      ],
+      "expect": {
+        "error": "link-member"
+      }
+    },
+    {
+      "name": "device-member",
+      "members": [
+        {
+          "name": "fifo",
+          "kind": "file",
+          "text": "",
+          "unixMode": "10644"
+        }
+      ],
+      "expect": {
+        "error": "link-member"
+      }
+    },
+    {
+      "name": "embedded-tracking",
+      "members": [
+        {
+          "name": "__init__.py",
+          "kind": "file",
+          "text": ""
+        },
+        {
+          "name": ".tracking",
+          "kind": "file",
+          "text": "../../evil"
+        }
+      ],
+      "expect": {
+        "error": "reserved-name"
+      }
+    },
+    {
+      "name": "embedded-git",
+      "members": [
+        {
+          "name": "__init__.py",
+          "kind": "file",
+          "text": ""
+        },
+        {
+          "name": ".git/HEAD",
+          "kind": "file",
+          "text": "ref"
+        }
+      ],
+      "expect": {
+        "error": "reserved-name"
+      }
+    },
+    {
+      "name": "case-collision",
+      "members": [
+        {
+          "name": "Nodes.py",
+          "kind": "file",
+          "text": "a"
+        },
+        {
+          "name": "nodes.py",
+          "kind": "file",
+          "text": "b"
+        }
+      ],
+      "expect": {
+        "error": "duplicate-entry"
+      }
+    },
+    {
+      "name": "embedded-digest-manifest",
+      "members": [
+        {
+          "name": "__init__.py",
+          "kind": "file",
+          "text": ""
+        },
+        {
+          "name": ".tracking-digests.json",
+          "kind": "file",
+          "text": "{}"
+        }
+      ],
+      "expect": {
+        "error": "reserved-name"
+      }
+    }
   ],
   "archiveLimits": [
-    {"name": "declared-size-over-file-limit", "limits": {"maxEntries": 10, "maxTotalBytes": 1000, "maxFileBytes": 8}, "members": [{"name": "big.bin", "kind": "file", "text": "0123456789"}], "expect": {"error": "too-large"}},
-    {"name": "too-many-members", "limits": {"maxEntries": 2, "maxTotalBytes": 1000, "maxFileBytes": 1000}, "members": [{"name": "a.py", "kind": "file", "text": ""}, {"name": "b.py", "kind": "file", "text": ""}, {"name": "c.py", "kind": "file", "text": ""}], "expect": {"error": "too-many-entries"}},
-    {"name": "total-over-limit", "limits": {"maxEntries": 10, "maxTotalBytes": 12, "maxFileBytes": 1000}, "members": [{"name": "a.txt", "kind": "file", "text": "12345678"}, {"name": "b.txt", "kind": "file", "text": "12345678"}], "expect": {"error": "too-large"}}
+    {
+      "name": "declared-size-over-file-limit",
+      "limits": {
+        "maxEntries": 10,
+        "maxTotalBytes": 1000,
+        "maxFileBytes": 8
+      },
+      "members": [
+        {
+          "name": "big.bin",
+          "kind": "file",
+          "text": "0123456789"
+        }
+      ],
+      "expect": {
+        "error": "too-large"
+      }
+    },
+    {
+      "name": "too-many-members",
+      "limits": {
+        "maxEntries": 2,
+        "maxTotalBytes": 1000,
+        "maxFileBytes": 1000
+      },
+      "members": [
+        {
+          "name": "a.py",
+          "kind": "file",
+          "text": ""
+        },
+        {
+          "name": "b.py",
+          "kind": "file",
+          "text": ""
+        },
+        {
+          "name": "c.py",
+          "kind": "file",
+          "text": ""
+        }
+      ],
+      "expect": {
+        "error": "too-many-entries"
+      }
+    },
+    {
+      "name": "total-over-limit",
+      "limits": {
+        "maxEntries": 10,
+        "maxTotalBytes": 12,
+        "maxFileBytes": 1000
+      },
+      "members": [
+        {
+          "name": "a.txt",
+          "kind": "file",
+          "text": "12345678"
+        },
+        {
+          "name": "b.txt",
+          "kind": "file",
+          "text": "12345678"
+        }
+      ],
+      "expect": {
+        "error": "too-large"
+      }
+    }
   ],
   "ownership": [
-    {"name": "registry-install", "folder": {"files": {"pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.2.3\"\n", "__init__.py": ""}, "tracking": "pyproject.toml\r\n__init__.py"}, "expect": {"owned": true, "version": "1.2.3"}},
-    {"name": "git-checkout-directory", "folder": {"git": "directory", "files": {"pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.2.3\"\n", "__init__.py": ""}, "tracking": "pyproject.toml\n__init__.py"}, "expect": {"owned": false, "reason": "git-checkout"}},
-    {"name": "git-worktree-file", "folder": {"git": "file", "files": {"pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.2.3\"\n", "__init__.py": ""}, "tracking": "pyproject.toml\n__init__.py"}, "expect": {"owned": false, "reason": "git-checkout"}},
-    {"name": "no-tracking", "folder": {"files": {"pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.2.3\"\n", "__init__.py": ""}, "tracking": null}, "expect": {"owned": false, "reason": "not-registry-install"}},
-    {"name": "tracking-without-pyproject", "folder": {"files": {"__init__.py": ""}, "tracking": "__init__.py"}, "expect": {"owned": false, "reason": "not-registry-install"}},
-    {"name": "unsafe-tracking", "folder": {"files": {"pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.2.3\"\n", "__init__.py": ""}, "tracking": "__init__.py\n../../custom_nodes/other/__init__.py"}, "expect": {"owned": false, "reason": "invalid-tracking"}},
-    {"name": "linked-pack-folder", "folder": {"link": true, "files": {"pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.2.3\"\n", "__init__.py": ""}, "tracking": "pyproject.toml\n__init__.py"}, "expect": {"owned": false, "reason": "linked-folder"}},
-    {"name": "tracked-directory-is-a-link", "folder": {"files": {"pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.2.3\"\n", "__init__.py": ""}, "linkedDirectories": ["web"], "tracking": "pyproject.toml\n__init__.py\nweb/app.js"}, "expect": {"owned": false, "reason": "linked-content"}},
-    {"name": "tracked-file-is-now-a-directory", "folder": {"files": {"pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.2.3\"\n", "__init__.py": "", "nodes.py/inner.py": ""}, "tracking": "pyproject.toml\n__init__.py\nnodes.py"}, "expect": {"owned": false, "reason": "linked-content"}}
+    {
+      "name": "registry-install",
+      "folder": {
+        "files": {
+          "pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.2.3\"\n",
+          "__init__.py": ""
+        },
+        "tracking": "pyproject.toml\r\n__init__.py"
+      },
+      "expect": {
+        "owned": true,
+        "version": "1.2.3"
+      }
+    },
+    {
+      "name": "git-checkout-directory",
+      "folder": {
+        "git": "directory",
+        "files": {
+          "pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.2.3\"\n",
+          "__init__.py": ""
+        },
+        "tracking": "pyproject.toml\n__init__.py"
+      },
+      "expect": {
+        "owned": false,
+        "reason": "git-checkout"
+      }
+    },
+    {
+      "name": "git-worktree-file",
+      "folder": {
+        "git": "file",
+        "files": {
+          "pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.2.3\"\n",
+          "__init__.py": ""
+        },
+        "tracking": "pyproject.toml\n__init__.py"
+      },
+      "expect": {
+        "owned": false,
+        "reason": "git-checkout"
+      }
+    },
+    {
+      "name": "no-tracking",
+      "folder": {
+        "files": {
+          "pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.2.3\"\n",
+          "__init__.py": ""
+        },
+        "tracking": null
+      },
+      "expect": {
+        "owned": false,
+        "reason": "not-registry-install"
+      }
+    },
+    {
+      "name": "tracking-without-pyproject",
+      "folder": {
+        "files": {
+          "__init__.py": ""
+        },
+        "tracking": "__init__.py"
+      },
+      "expect": {
+        "owned": false,
+        "reason": "not-registry-install"
+      }
+    },
+    {
+      "name": "unsafe-tracking",
+      "folder": {
+        "files": {
+          "pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.2.3\"\n",
+          "__init__.py": ""
+        },
+        "tracking": "__init__.py\n../../custom_nodes/other/__init__.py"
+      },
+      "expect": {
+        "owned": false,
+        "reason": "invalid-tracking"
+      }
+    },
+    {
+      "name": "linked-pack-folder",
+      "folder": {
+        "link": true,
+        "files": {
+          "pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.2.3\"\n",
+          "__init__.py": ""
+        },
+        "tracking": "pyproject.toml\n__init__.py"
+      },
+      "expect": {
+        "owned": false,
+        "reason": "linked-folder"
+      }
+    },
+    {
+      "name": "tracked-directory-is-a-link",
+      "folder": {
+        "files": {
+          "pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.2.3\"\n",
+          "__init__.py": ""
+        },
+        "linkedDirectories": [
+          "web"
+        ],
+        "tracking": "pyproject.toml\n__init__.py\nweb/app.js"
+      },
+      "expect": {
+        "owned": false,
+        "reason": "linked-content"
+      }
+    },
+    {
+      "name": "tracked-file-is-now-a-directory",
+      "folder": {
+        "files": {
+          "pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.2.3\"\n",
+          "__init__.py": "",
+          "nodes.py/inner.py": ""
+        },
+        "tracking": "pyproject.toml\n__init__.py\nnodes.py"
+      },
+      "expect": {
+        "owned": false,
+        "reason": "linked-content"
+      }
+    }
   ],
   "localEdits": [
-    {"name": "unchanged", "installed": {"__init__.py": "A", "nodes.py": "B"}, "published": {"__init__.py": "A", "nodes.py": "B"}, "expectChanged": []},
-    {"name": "edited-tracked-file", "installed": {"__init__.py": "A", "nodes.py": "B-edited"}, "published": {"__init__.py": "A", "nodes.py": "B"}, "expectChanged": ["nodes.py"]},
-    {"name": "deleted-tracked-file-holds-no-work", "installed": {"__init__.py": "A", "nodes.py": null}, "published": {"__init__.py": "A", "nodes.py": "B"}, "expectChanged": []},
-    {"name": "tracked-file-not-in-release", "installed": {"__init__.py": "A", "extra.py": "X"}, "published": {"__init__.py": "A"}, "expectChanged": ["extra.py"]}
+    {
+      "name": "unchanged",
+      "installed": {
+        "__init__.py": "A",
+        "nodes.py": "B"
+      },
+      "published": {
+        "__init__.py": "A",
+        "nodes.py": "B"
+      },
+      "expectChanged": []
+    },
+    {
+      "name": "edited-tracked-file",
+      "installed": {
+        "__init__.py": "A",
+        "nodes.py": "B-edited"
+      },
+      "published": {
+        "__init__.py": "A",
+        "nodes.py": "B"
+      },
+      "expectChanged": [
+        "nodes.py"
+      ]
+    },
+    {
+      "name": "deleted-tracked-file-holds-no-work",
+      "installed": {
+        "__init__.py": "A",
+        "nodes.py": null
+      },
+      "published": {
+        "__init__.py": "A",
+        "nodes.py": "B"
+      },
+      "expectChanged": []
+    },
+    {
+      "name": "tracked-file-not-in-release",
+      "installed": {
+        "__init__.py": "A",
+        "extra.py": "X"
+      },
+      "published": {
+        "__init__.py": "A"
+      },
+      "expectChanged": [
+        "extra.py"
+      ]
+    }
   ],
   "replacements": [
     {
       "name": "update-keeps-untracked-user-data",
-      "installed": {"files": {"pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.0.0\"\n", "__init__.py": "old", "removed.py": "gone in new", "web/old.js": "old js", ".sugarcubes/library.cube": "user cube", ".env": "SECRET=kept", "web/user-note.txt": "user note"}, "tracking": "pyproject.toml\n__init__.py\nremoved.py\nweb/old.js"},
-      "release": [{"name": "pyproject.toml", "kind": "file", "text": "[project]\nname = \"SugarCubes\"\nversion = \"1.1.0\"\n"}, {"name": "__init__.py", "kind": "file", "text": "new"}, {"name": "lib/", "kind": "directory"}, {"name": "lib/added.py", "kind": "file", "text": "added"}],
-      "expect": {"files": {"pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.1.0\"\n", "__init__.py": "new", "lib/added.py": "added", ".sugarcubes/library.cube": "user cube", ".env": "SECRET=kept", "web/user-note.txt": "user note"}, "absent": ["removed.py", "web/old.js"], "trackingEntries": ["pyproject.toml", "__init__.py", "lib/", "lib/added.py"]}
+      "installed": {
+        "files": {
+          "pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.0.0\"\n",
+          "__init__.py": "old",
+          "removed.py": "gone in new",
+          "web/old.js": "old js",
+          ".sugarcubes/library.cube": "user cube",
+          ".env": "SECRET=kept",
+          "web/user-note.txt": "user note"
+        },
+        "tracking": "pyproject.toml\n__init__.py\nremoved.py\nweb/old.js"
+      },
+      "release": [
+        {
+          "name": "pyproject.toml",
+          "kind": "file",
+          "text": "[project]\nname = \"SugarCubes\"\nversion = \"1.1.0\"\n"
+        },
+        {
+          "name": "__init__.py",
+          "kind": "file",
+          "text": "new"
+        },
+        {
+          "name": "lib/",
+          "kind": "directory"
+        },
+        {
+          "name": "lib/added.py",
+          "kind": "file",
+          "text": "added"
+        }
+      ],
+      "expect": {
+        "files": {
+          "pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.1.0\"\n",
+          "__init__.py": "new",
+          "lib/added.py": "added",
+          ".sugarcubes/library.cube": "user cube",
+          ".env": "SECRET=kept",
+          "web/user-note.txt": "user note"
+        },
+        "absent": [
+          "removed.py",
+          "web/old.js"
+        ],
+        "trackingEntries": [
+          "pyproject.toml",
+          "__init__.py",
+          "lib/",
+          "lib/added.py"
+        ]
+      }
     },
     {
       "name": "untracked-file-where-release-puts-one-is-restored-on-rollback",
-      "installed": {"files": {"pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.0.0\"\n", "__init__.py": "old", "config.json": "user settings"}, "tracking": "pyproject.toml\n__init__.py"},
-      "release": [{"name": "pyproject.toml", "kind": "file", "text": "[project]\nname = \"SugarCubes\"\nversion = \"1.1.0\"\n"}, {"name": "__init__.py", "kind": "file", "text": "new"}, {"name": "config.json", "kind": "file", "text": "{}"}],
-      "expect": {"files": {"pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.1.0\"\n", "__init__.py": "new", "config.json": "{}"}, "absent": [], "trackingEntries": ["pyproject.toml", "__init__.py", "config.json"]}
+      "installed": {
+        "files": {
+          "pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.0.0\"\n",
+          "__init__.py": "old",
+          "config.json": "user settings"
+        },
+        "tracking": "pyproject.toml\n__init__.py"
+      },
+      "release": [
+        {
+          "name": "pyproject.toml",
+          "kind": "file",
+          "text": "[project]\nname = \"SugarCubes\"\nversion = \"1.1.0\"\n"
+        },
+        {
+          "name": "__init__.py",
+          "kind": "file",
+          "text": "new"
+        },
+        {
+          "name": "config.json",
+          "kind": "file",
+          "text": "{}"
+        }
+      ],
+      "expect": {
+        "files": {
+          "pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.1.0\"\n",
+          "__init__.py": "new",
+          "config.json": "{}"
+        },
+        "absent": [],
+        "trackingEntries": [
+          "pyproject.toml",
+          "__init__.py",
+          "config.json"
+        ]
+      }
     }
-  ]
+  ],
+  "digestManifests": {
+    "trackingText": "pyproject.toml\r\n__init__.py",
+    "version": "1.2.3",
+    "cases": [
+      {
+        "name": "applies-to-its-tracking-and-version",
+        "manifest": {
+          "schema": 1,
+          "version": "1.2.3",
+          "tracking": "a1302b157c4255e69d61a85fda7401432f6bc9f312f57ec3e813febb9244aec0",
+          "files": {
+            "__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "pyproject.toml": "9db496674d490e553881abaea32031d2ce1b1636c60d33f6efac50161253faf4"
+          }
+        },
+        "expect": {
+          "applies": true,
+          "files": {
+            "__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "pyproject.toml": "9db496674d490e553881abaea32031d2ce1b1636c60d33f6efac50161253faf4"
+          }
+        }
+      },
+      {
+        "name": "another-installer-rewrote-tracking",
+        "manifest": {
+          "schema": 1,
+          "version": "1.2.3",
+          "tracking": "d9298a10d1b0735837dc4bd85dac641b0f3cef27a47e5d53a54f2f3f5b2fcffa",
+          "files": {
+            "__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "pyproject.toml": "9db496674d490e553881abaea32031d2ce1b1636c60d33f6efac50161253faf4"
+          }
+        },
+        "expect": {
+          "applies": false
+        }
+      },
+      {
+        "name": "installed-version-changed",
+        "manifest": {
+          "schema": 1,
+          "version": "1.2.4",
+          "tracking": "a1302b157c4255e69d61a85fda7401432f6bc9f312f57ec3e813febb9244aec0",
+          "files": {
+            "__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "pyproject.toml": "9db496674d490e553881abaea32031d2ce1b1636c60d33f6efac50161253faf4"
+          }
+        },
+        "expect": {
+          "applies": false
+        }
+      },
+      {
+        "name": "tracked-file-missing-from-record",
+        "manifest": {
+          "schema": 1,
+          "version": "1.2.3",
+          "tracking": "a1302b157c4255e69d61a85fda7401432f6bc9f312f57ec3e813febb9244aec0",
+          "files": {
+            "__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        },
+        "expect": {
+          "applies": false
+        }
+      },
+      {
+        "name": "untracked-file-in-record",
+        "manifest": {
+          "schema": 1,
+          "version": "1.2.3",
+          "tracking": "a1302b157c4255e69d61a85fda7401432f6bc9f312f57ec3e813febb9244aec0",
+          "files": {
+            "__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "pyproject.toml": "9db496674d490e553881abaea32031d2ce1b1636c60d33f6efac50161253faf4",
+            "extra.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        },
+        "expect": {
+          "applies": false
+        }
+      },
+      {
+        "name": "digest-not-sha256",
+        "manifest": {
+          "schema": 1,
+          "version": "1.2.3",
+          "tracking": "a1302b157c4255e69d61a85fda7401432f6bc9f312f57ec3e813febb9244aec0",
+          "files": {
+            "__init__.py": "ABC",
+            "pyproject.toml": "9db496674d490e553881abaea32031d2ce1b1636c60d33f6efac50161253faf4"
+          }
+        },
+        "expect": {
+          "applies": false
+        }
+      },
+      {
+        "name": "unknown-schema",
+        "manifest": {
+          "schema": 2,
+          "version": "1.2.3",
+          "tracking": "a1302b157c4255e69d61a85fda7401432f6bc9f312f57ec3e813febb9244aec0",
+          "files": {
+            "__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "pyproject.toml": "9db496674d490e553881abaea32031d2ce1b1636c60d33f6efac50161253faf4"
+          }
+        },
+        "expect": {
+          "applies": false
+        }
+      }
+    ]
+  }
 }

@@ -28,6 +28,8 @@ from dataclasses import dataclass
 from .errors import PackInstallError, PackInstallErrorCode
 
 TRACKING_FILE_NAME = ".tracking"
+DIGEST_MANIFEST_NAME = ".tracking-digests.json"
+_OWNERSHIP_RECORDS = frozenset({TRACKING_FILE_NAME, DIGEST_MANIFEST_NAME})
 MAX_ENTRY_LENGTH = 512
 _WINDOWS_RESERVED_STEM = re.compile(
     r"^(?:con|prn|aux|nul|com[0-9¹²³]|lpt[0-9¹²³])$", re.IGNORECASE
@@ -74,7 +76,7 @@ def parse_entry(raw: str) -> EntryName:
     segments = body.split("/")
     for segment in segments:
         _validate_segment(raw, segment)
-    if not is_directory and body == TRACKING_FILE_NAME:
+    if not is_directory and body in _OWNERSHIP_RECORDS:
         raise PackInstallError(
             PackInstallErrorCode.RESERVED_NAME,
             "An archive may not carry its own ownership record.",
@@ -149,6 +151,7 @@ def validate_entry_set(entries: tuple[EntryName, ...]) -> None:
 __all__ = [
     "EntryName",
     "MAX_ENTRY_LENGTH",
+    "DIGEST_MANIFEST_NAME",
     "TRACKING_FILE_NAME",
     "parse_entry",
     "validate_entry_set",

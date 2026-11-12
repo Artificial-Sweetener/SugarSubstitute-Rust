@@ -43,6 +43,7 @@ from tests.pack_install.support.pack_fixture import (
 from tests.self_update.support.fake_release_web import (
     FLAGGED,
     GITHUB_API,
+    REGISTRY_API,
     REGISTRY_VERSIONS,
     FakeReleaseWeb,
     InlineRunner,
@@ -408,3 +409,77 @@ def test_registry_version_list_for_another_pack_is_rejected(tmp_path: Path) -> N
     snapshot = service.snapshot()
     assert snapshot.phase is UpdatePhase.FAILED
     assert snapshot.unchecked_sources == ("registry",)
+
+
+def _baseline_requests(web: FakeReleaseWeb, version: str) -> list[str]:
+    return [
+        url
+        for url in web.requests
+        if f"version={version}" in url or url.endswith(f"/{version}/node.zip")
+    ]
+
+
+def test_manager_install_is_compared_once_then_checked_offline(tmp_path: Path) -> None:
+    """A Manager install gets a digest record after one release comparison."""
+
+    pack = install_registry_pack(tmp_path, OLD)
+    assert not (pack / ".tracking-digests.json").exists()
+    web = _registry_web()
+    service = _service(pack, web)
+    service.request_check(force=True)
+    assert _baseline_requests(web, "1.0.0")
+    assert (pack / ".tracking-digests.json").is_file()
+    offline = _registry_web()
+    offline.failures = {f"{REGISTRY_API}?version=1.0.0": HttpFailureKind.UNREACHABLE}
+    (pack / "sugarcubes" / "core.py").write_text("# edited later\n", encoding="utf-8")
+    edited = _service(pack, offline)
+    edited.request_check(force=True)
+    assert edited.snapshot().not_managed is NotOwnedReason.CHANGED_FILES
+    assert not _baseline_requests(offline, "1.0.0")
+
+
+def test_pack_installed_by_the_updater_needs_no_network_to_find_edits(
+    tmp_path: Path,
+) -> None:
+    """An install made by this format carries its record from the first start."""
+
+    pack = install_registry_pack(tmp_path, OLD)
+    web = _registry_web()
+    service = _service(pack, web)
+    service.request_check(force=True)
+    service.schedule_install("1.1.0")
+    run_startup_update(pack)
+    _service(pack, web, version="1.1.0").confirm_started()
+    newer = FakeReleaseWeb()
+    newer.publish_registry("1.2.0", pack_files("1.2.0"))
+    newer.publish_empty_github()
+    (pack / "sugarcubes" / "added.py").write_text("# my change\n", encoding="utf-8")
+    checker = _service(pack, newer, version="1.1.0")
+    checker.request_check(force=True)
+    assert checker.snapshot().not_managed is NotOwnedReason.CHANGED_FILES
+    assert not _baseline_requests(newer, "1.1.0")
+
+
+def test_record_left_by_an_earlier_install_is_ignored_after_manager_updates(
+    tmp_path: Path,
+) -> None:
+    """When another installer changes the pack, the stale record is not trusted."""
+
+    pack = install_registry_pack(tmp_path, OLD)
+    web = _registry_web()
+    _service(pack, web).request_check(force=True)
+    assert (pack / ".tracking-digests.json").is_file()
+    manager = install_registry_pack(tmp_path / "manager", pack_files("1.0.5"))
+    for name in (
+        "pyproject.toml",
+        "__init__.py",
+        "sugarcubes/core.py",
+        "web/app.js",
+        ".tracking",
+    ):
+        (pack / name).write_bytes((manager / name).read_bytes())
+    web.publish_registry("1.0.5", pack_files("1.0.5"))
+    checker = _service(pack, web, version="1.0.5")
+    checker.request_check(force=True)
+    assert checker.snapshot().phase is UpdatePhase.READY
+    assert _baseline_requests(web, "1.0.5")

@@ -62,6 +62,7 @@ def _prepare(tmp_path: Path, *, choose: bool = True) -> tuple[Path, StagedStore]
 def _expected_new(pack: Path) -> dict[str, bytes]:
     files = {path: text.encode("utf-8") for path, text in {**NEW, **USER_DATA}.items()}
     files[".tracking"] = (pack / ".tracking").read_bytes()
+    files[".tracking-digests.json"] = (pack / ".tracking-digests.json").read_bytes()
     return files
 
 

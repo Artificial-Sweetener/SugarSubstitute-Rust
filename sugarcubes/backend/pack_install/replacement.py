@@ -20,7 +20,8 @@ changed yet, so recovery only discards the backup. `replacing`: the pack may be
 half replaced, so recovery restores every backed-up file. `applied`: the new
 version is in place and waits for its first successful start; until that start
 confirms it, recovery treats the update as failed and restores the backup.
-Untracked files (user data, caches) are never touched, except that an untracked
+A completed replacement records `.tracking-digests.json`, so later local-edit
+checks need no network. Untracked files (user data, caches) are never touched, except that an untracked
 file sitting where the new release puts a file is backed up and restored too.
 """
 
@@ -36,12 +37,15 @@ from .entry_paths import TRACKING_FILE_NAME, EntryName, parse_entry
 from .errors import PackInstallError, PackInstallErrorCode
 from .filesystem import durable_copy, remove_file, remove_tree
 from .json_records import read_record, text_field, text_list_field, write_record
+from .digest_manifest import DIGEST_MANIFEST_NAME, write_digest_manifest
+from .filesystem import sha256_file
 from .tracking import write_tracking
 
 _logger = logging.getLogger("sugarcubes.pack_install")
 _JOURNAL_NAME = "journal.json"
 _BACKUP_FILES = "files"
 _BACKUP_TRACKING = "tracking"
+_BACKUP_MANIFEST = "digests"
 
 
 class JournalPhase(str, Enum):
@@ -59,6 +63,11 @@ class FileOperations:
     copy: Callable[[Path, Path], None] = durable_copy
     remove: Callable[[Path], None] = remove_file
     write_tracking: Callable[[Path, tuple[EntryName, ...]], None] = write_tracking
+    write_manifest: Callable[[Path, str, dict[str, str]], None] = (
+        lambda folder, version, files: write_digest_manifest(
+            folder, version=version, files=files
+        )
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,11 +176,15 @@ class TrackedReplacement:
             destination = _under(target, path)
             destination.parent.mkdir(parents=True, exist_ok=True)
             self.operations.copy(_under(backup, path), destination)
-        tracking_backup = self.transaction_root / _BACKUP_TRACKING
-        if tracking_backup.is_file():
-            self.operations.copy(tracking_backup, target / TRACKING_FILE_NAME)
-        else:
-            self.operations.remove(target / TRACKING_FILE_NAME)
+        for name, kept in (
+            (TRACKING_FILE_NAME, _BACKUP_TRACKING),
+            (DIGEST_MANIFEST_NAME, _BACKUP_MANIFEST),
+        ):
+            kept_copy = self.transaction_root / kept
+            if kept_copy.is_file():
+                self.operations.copy(kept_copy, target / name)
+            else:
+                self.operations.remove(target / name)
         _remove_empty_directories(target, new_entries, keep=old_entries)
         remove_tree(self.transaction_root)
 
@@ -205,9 +218,12 @@ class TrackedReplacement:
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 self.operations.copy(installed, destination)
                 backed_up.append(path)
-        tracking = plan.target / TRACKING_FILE_NAME
-        if tracking.is_file():
-            self.operations.copy(tracking, self.transaction_root / _BACKUP_TRACKING)
+        for name, kept in (
+            (TRACKING_FILE_NAME, _BACKUP_TRACKING),
+            (DIGEST_MANIFEST_NAME, _BACKUP_MANIFEST),
+        ):
+            if (plan.target / name).is_file():
+                self.operations.copy(plan.target / name, self.transaction_root / kept)
         return tuple(backed_up)
 
     def _replace(self, plan: ReplacementPlan) -> None:
@@ -226,6 +242,15 @@ class TrackedReplacement:
             destination.parent.mkdir(parents=True, exist_ok=True)
             self.operations.copy(_under(plan.source, entry.path), destination)
         self.operations.write_tracking(plan.target, plan.new_entries)
+        self.operations.write_manifest(
+            plan.target,
+            plan.to_version,
+            {
+                entry.path: sha256_file(_under(plan.target, entry.path))
+                for entry in plan.new_entries
+                if not entry.is_directory
+            },
+        )
 
     def _write_journal(
         self,
