@@ -28,6 +28,38 @@ pub(crate) fn accept_pending(root: &Path, context: &JobContext) -> TestResult {
     Ok(())
 }
 
+/// Judge `times` trials of the signed release `sequence` bad through the real native run owner,
+/// as a host crashing at startup would. The trials use inert generations that are never started.
+pub(crate) fn strike_release(
+    root: &Path,
+    sequence: u64,
+    times: u64,
+    context: &JobContext,
+) -> TestResult {
+    use sugarsubstitute_contracts::installation::{
+        BadTrial, Generation, GenerationId, PackageDigest, PreparationIntent, SignedRelease,
+        TrialVerdict,
+    };
+    let store = Arc::new(SelectionStore::open(root, context)?);
+    let mut record = store.load(context)?.ok_or("Selection missing")?;
+    for attempt in 1..=times {
+        let generation = Generation {
+            id: GenerationId::new(format!("{:032x}", 0xbad0 + attempt))?,
+            package: PackageDigest::new("d".repeat(64))?,
+            release: SignedRelease::new(format!("{sequence}.0.0"), sequence)?,
+        };
+        let now = crate::setup_storage::selection::unix_now()?;
+        let staging = record.prepare(generation.clone(), PreparationIntent::Repair, now)?;
+        store.compare_exchange(&record, &staging, context)?;
+        let prepared = staging.prepared(&generation)?;
+        store.compare_exchange(&staging, &prepared, context)?;
+        let mut run = InstallationRun::acquire(store.clone(), context)?;
+        let trial = run.begin_trial(&prepared, context)?;
+        record = run.finish_trial(&trial, TrialVerdict::Bad(BadTrial::Crashed), context)?;
+    }
+    Ok(())
+}
+
 /// Existing native choices and exact package bytes; no payload in this fixture is executed.
 pub(crate) struct Fixture {
     pub(crate) installation: tempfile::TempDir,

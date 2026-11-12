@@ -306,7 +306,7 @@ impl Session {
     }
 
     /// When the next automatic save is due.
-    pub(in crate::native_canvas::session) fn input_autosave_deadline(&self) -> Option<Moment> {
+    pub(crate) fn input_autosave_deadline(&self) -> Option<Moment> {
         self.inputs.persistence.as_ref()?.autosave.as_ref()?.deadline()
     }
 

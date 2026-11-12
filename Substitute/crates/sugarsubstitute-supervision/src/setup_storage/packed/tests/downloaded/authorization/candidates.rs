@@ -7,12 +7,14 @@ use sugarsubstitute_contracts::installation::{
     Candidate, Generation, GenerationId, InstallationRecord, PackageDigest, PreparationIntent,
 };
 
-/// Seed a prior domain observation at the storage boundary; this fixture launches no process.
+/// Seed two bad verdicts for the package at the storage boundary, which withholds it from
+/// automatic preparation; this fixture launches no process.
 fn rejected(
     case: &Case<'_>,
     store: &Arc<SelectionStore>,
 ) -> Result<InstallationRecord, Box<dyn std::error::Error + Send + Sync>> {
-    let empty = store.load(case.context)?.ok_or("Selection absent")?;
+    use sugarsubstitute_contracts::installation::{BadTrial, TrialVerdict};
+    let mut record = store.load(case.context)?.ok_or("Selection absent")?;
     let generation = Generation {
         id: GenerationId::new("1".repeat(32))?,
         package: PackageDigest::new(format!(
@@ -24,13 +26,18 @@ fn rejected(
             1,
         )?,
     };
-    let staging = empty.prepare(generation.clone(), PreparationIntent::Automatic)?;
-    store.compare_exchange(&empty, &staging, case.context)?;
-    let prepared = staging.prepared(&generation)?;
-    store.compare_exchange(&staging, &prepared, case.context)?;
-    let mut owner = InstallationRun::acquire(Arc::clone(store), case.context)?;
-    let attempt = owner.begin_trial(&prepared, case.context)?;
-    Ok(owner.reject(&attempt, case.context)?)
+    for _ in 0..2 {
+        let now = crate::setup_storage::selection::unix_now()?;
+        let staging = record.prepare(generation.clone(), PreparationIntent::Repair, now)?;
+        store.compare_exchange(&record, &staging, case.context)?;
+        let prepared = staging.prepared(&generation)?;
+        store.compare_exchange(&staging, &prepared, case.context)?;
+        let mut owner = InstallationRun::acquire(Arc::clone(store), case.context)?;
+        let attempt = owner.begin_trial(&prepared, case.context)?;
+        let verdict = TrialVerdict::Bad(BadTrial::StartupFailed);
+        record = owner.finish_trial(&attempt, verdict, case.context)?;
+    }
+    Ok(record)
 }
 
 #[test]
@@ -49,7 +56,7 @@ fn preparation_preserves_accepted_generation_and_coexists_with_installation_run(
         let after = reopened.load(case.context)?.ok_or("Selection absent")?;
         assert_eq!(after.accepted(), before.accepted());
         assert_eq!(after.retained(), before.retained());
-        assert_eq!(after.rejected(), before.rejected());
+        assert_eq!(after.strikes(), before.strikes());
         assert_eq!(after.revision(), before.revision() + 2);
         assert!(matches!(after.candidate(), Some(Candidate::Prepared { generation })
             if generation == candidate.generation()));
@@ -130,7 +137,7 @@ fn automatic_quarantine_requires_explicit_repair_before_candidate_publication() 
         let after = store.load(case.context)?.ok_or("Selection absent")?;
         assert!(matches!(after.candidate(), Some(Candidate::Prepared { generation })
             if generation == candidate.generation()));
-        assert_eq!(after.rejected(), before.rejected());
+        assert_eq!(after.strikes(), before.strikes());
         case.preserved()
     })
 }

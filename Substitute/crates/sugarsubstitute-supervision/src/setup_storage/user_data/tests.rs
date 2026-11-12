@@ -88,7 +88,11 @@ impl Fixture {
             .map_err(io::Error::other)?
             .ok_or_else(|| crate::durable_storage::invalid("Fixture selection absent"))?;
         let staging = before
-            .prepare(generation.clone(), PreparationIntent::Automatic)
+            .prepare(
+                generation.clone(),
+                PreparationIntent::Automatic,
+                crate::setup_storage::selection::unix_now().map_err(std::io::Error::other)?,
+            )
             .map_err(io::Error::other)?;
         store.compare_exchange(&before, &staging, context).map_err(io::Error::other)?;
         let after = staging.prepared(&generation).map_err(io::Error::other)?;

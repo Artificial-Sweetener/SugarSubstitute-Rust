@@ -154,9 +154,42 @@ fn helper_finalization_waits_for_observed_health_writer_even_when_result_is_disc
                 .installation
                 .consume(&CompletionBatch { notifications: vec![], remaining: 0 })?;
             assert!(!authority.installation_writers_retired());
-            let result = authority.installation.consume(&batch);
-            assert_eq!(result, if expire { Err(AuthorityIssue::Stopped) } else { Ok(()) });
+            // A discarded health result leaves acceptance unpublished without failing the app.
+            assert_eq!(authority.installation.consume(&batch), Ok(()));
             assert!(authority.installation_writers_retired());
+            Ok(())
+        })?;
+    }
+    Ok(())
+}
+
+#[test]
+fn a_failed_health_publication_keeps_the_app_open_and_the_trial_without_a_verdict()
+-> Result<(), Box<dyn Error>> {
+    for expire in [false, true] {
+        let result = if expire { Ok(()) } else { Err(io::Error::other("selection stayed locked")) };
+        super::super::test_completion::completed(result, expire, |job, batch, _scope| {
+            let mut authority =
+                CoordinatorAuthority::new(EntrySetupBudget::new(Moment::from_nanos(0))?, None)?;
+            authority.installation.observe_readiness();
+            authority.installation.health.job = Some(job);
+            authority.installation.consume(&batch)?;
+            assert!(!authority.closing);
+            assert!(authority.failure.is_none());
+            assert!(!authority.installation.pending());
+            assert!(!authority.installation.health.succeeded());
+            assert_eq!(
+                authority.installation.verdict(),
+                TrialVerdict::NoVerdict(
+                    sugarsubstitute_contracts::installation::Undecided::AcceptanceUnpublished,
+                )
+            );
+            if !expire {
+                assert_eq!(
+                    authority.installation.failure_source().ok_or("Cause lost")?.to_string(),
+                    "selection stayed locked"
+                );
+            }
             Ok(())
         })?;
     }

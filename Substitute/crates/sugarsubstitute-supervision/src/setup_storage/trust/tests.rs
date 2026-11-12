@@ -222,6 +222,7 @@ fn progressed_or_unknown_installations_cannot_start_new_trust_history() -> TestR
                 )?,
             },
             PreparationIntent::Automatic,
+            crate::setup_storage::selection::unix_now()?,
         )?;
         store.compare_exchange(&initial, &next, context)?;
         let root = root(&key(8)?, 1, None)?;

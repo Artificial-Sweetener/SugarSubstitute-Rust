@@ -134,7 +134,7 @@ migrations = []
 id = "native-installed-release-identity-v1"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/setup_storage/trust/installed.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/receipt.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/envelope.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/activation.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/candidate.rs", "crates/sugarsubstitute-supervision/src/setup_storage/inventory.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/installed/publication.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/candidate/reopen.rs"]
-source_sha256 = "sha256:b79fe284db08887af45b3c77b16679c0dfecfb73e4a578a6e07d0323f3ea3ea9"
+source_sha256 = "sha256:8ddabab760b14494788a97e7108ad4a728642e10548b978cebfb4882a623f7a6"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 1
@@ -168,13 +168,13 @@ accepted_versions = [1]
 compatibility = "reject"
 migrations = []
 
-# Accepted launch 3 (`--installed-launch-v3`) transfers selection schema 2 records, whose
+# Accepted launch 3 (`--installed-launch-v3`) transfers selection schema 3 records, whose
 # generations name their signed release. Protocol 1 carried schema 1 and is refused both ways.
 [[formats]]
 id = "native-launch-selection-transfer-v1"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/setup_storage/selection/inheritance.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/reservation.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/run/launch.rs", "crates/sugarsubstitute-supervision/src/setup_storage/running.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/identity.rs", "crates/sugarsubstitute-supervision/src/application_launch.rs", "crates/sugarsubstitute-supervision/src/application_launch/creation.rs", "crates/sugarsubstitute-supervision/src/setup_storage/disk_inheritance.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/reservation/forwarding.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/snapshot.rs"]
-source_sha256 = "sha256:f2697eb81dfc80fa0d520b38406169b4420ea883fe67cbd0f117d18931d70f0a"
+source_sha256 = "sha256:5e2375ebf903a9d1da3b8d547100bcca325713a9f4e6d6bda3063c9029231166"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 3
@@ -186,7 +186,7 @@ migrations = []
 id = "installed-application-package-inventory-v1"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/setup_storage/bundle.rs", "crates/sugarsubstitute-supervision/src/setup_storage/bundle/payload.rs", "crates/sugarsubstitute-supervision/src/setup_storage/bundle/prepared.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/run/launch.rs", "crates/sugarsubstitute-supervision/src/setup_storage/inventory.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/activation.rs", "crates/sugarsubstitute-supervision/src/setup_storage/application.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/reservation.rs", "crates/sugarsubstitute-supervision/src/durable_storage/record_read.rs", "crates/sugarsubstitute-supervision/src/durable_storage/record_read/tests.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/entries.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/entries/tests.rs", "crates/sugarsubstitute-supervision/src/durable_storage/control.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/ordinary.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/ordinary/tests.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/observations.rs", "crates/sugarsubstitute-supervision/src/setup_storage/bundle/source.rs", "crates/sugarsubstitute-supervision/src/setup_storage/bundle/manifest.rs"]
-source_sha256 = "sha256:81dfbfbd01e924fceecd66090822fbdb37e897f8196d5652dc2fa9962faca4b4"
+source_sha256 = "sha256:34df891eefee760499b7a71332f266568f15d5aaecb03e4cfaddc71ae993ce76"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 1
@@ -846,7 +846,7 @@ migrations = []
 id = "setup-installation-records"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/setup_storage/transaction/generation.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/reservation.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/session.rs", "crates/sugarsubstitute-supervision/src/setup_storage/existing.rs", "crates/sugarsubstitute-supervision/src/setup_storage/ownership.rs", "crates/sugarsubstitute-supervision/src/durable_storage/protection.rs", "crates/sugarsubstitute-supervision/src/durable_storage/staging.rs", "crates/sugarsubstitute-supervision/src/setup_storage/identity.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/admission.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/records.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/activation.rs", "crates/sugarsubstitute-supervision/src/setup_storage/existing/recovery.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/candidate.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/resume.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/trial.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files.rs", "crates/sugarsubstitute-supervision/src/setup_storage/existing/accepted.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/activation.rs", "crates/sugarsubstitute-supervision/src/durable_storage/protection/exclusion.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/installed/publication.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/candidate/reopen.rs", "crates/sugarsubstitute-supervision/src/durable_storage/record_read.rs", "crates/sugarsubstitute-supervision/src/durable_storage/record_read/tests.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/entries.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/entries/tests.rs", "crates/sugarsubstitute-supervision/src/durable_storage/control.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/ordinary.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/ordinary/tests.rs", "crates/sugarsubstitute-supervision/src/durable_storage/records/reusable.rs", "crates/sugarsubstitute-supervision/src/durable_storage/records/reusable/tests.rs", "crates/sugarsubstitute-supervision/src/durable_storage/protection/retirement.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/observations.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/configuration.rs", "crates/sugarsubstitute-supervision/src/setup_storage/runtime_record.rs", "crates/sugarsubstitute-supervision/src/setup_storage/backend_data.rs"]
-source_sha256 = "sha256:70f903229ce8338770a7f5ca9302b51dcdb8ce53cb4c07476a22e233584226f2"
+source_sha256 = "sha256:4166ed8412f22be3441b4225901a411f9cb472b638defdd27007a52346d56912"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 1
@@ -928,15 +928,19 @@ accepted_versions = [1]
 compatibility = "reject"
 migrations = []
 
+# Selection schema 3 replaces schema 2's `rejected` list with per-package strikes, an
+# abandoned-trial streak and a release under repair. That is incompatible, so the number
+# advances; Substitute is unreleased, so schema 2 records are refused, not migrated. Decoding
+# ignores unknown fields (except a trial's exact correlation), so later additive fields keep 3.
 [[formats]]
 id = "native-installation-selection-v1"
 owner = "sugarsubstitute-contracts"
 sources = ["crates/sugarsubstitute-contracts/src/installation.rs", "crates/sugarsubstitute-contracts/src/installation/identity.rs", "crates/sugarsubstitute-contracts/src/installation/record.rs", "crates/sugarsubstitute-contracts/src/installation/transition.rs"]
-source_sha256 = "sha256:02e051eb682bfb8b7980e1a95ebf7d7c5e297b46cb0d09e93994870231c36b44"
+source_sha256 = "sha256:cbf93ed9f045203105c2856d0fc97f2001018ec6b111b349aa85f272e2533c93"
 classification = "authoritative_state"
 preservation = "must_preserve"
-current_version = 2
-accepted_versions = [2]
+current_version = 3
+accepted_versions = [3]
 compatibility = "reject"
 migrations = []
 
@@ -944,7 +948,7 @@ migrations = []
 id = "native-installation-selection-storage-v1"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/setup_storage/transaction/generation.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/reservation.rs", "crates/sugarsubstitute-supervision/src/setup_storage/existing/initial.rs", "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer.rs", "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/downloaded.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/offered.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/session.rs", "crates/sugarsubstitute-supervision/src/durable_storage/protected/native_rename.rs", "crates/sugarsubstitute-supervision/src/durable_storage/protection/publication.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/initialize.rs", "crates/sugarsubstitute-supervision/src/setup_storage/ownership.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection.rs", "crates/sugarsubstitute-supervision/src/durable_storage/staging.rs", "crates/sugarsubstitute-supervision/src/setup_storage/identity.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/run.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/failure.rs", "crates/sugarsubstitute-supervision/src/durable_storage/protection.rs", "crates/sugarsubstitute-supervision/src/durable_storage/protection/outcome.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/candidate.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/resume.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/trial.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/run/launch.rs", "crates/sugarsubstitute-supervision/src/setup_storage/existing/accepted.rs", "crates/sugarsubstitute-supervision/src/setup_storage/running.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/namespace.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/publication.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/run/launch/entrypoint.rs", "crates/sugarsubstitute-supervision/src/setup_storage/application.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/reservation.rs", "crates/sugarsubstitute-supervision/src/durable_storage/protection/exclusion.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/run/transfer.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/run/unstarted.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/run/settlement.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/run/transfer/custody.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/run/transfer/witness.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/run/recovery.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/candidate/reopen.rs", "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/cached.rs", "crates/sugarsubstitute-supervision/src/durable_storage/control.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/ordinary.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/ordinary/tests.rs", "crates/sugarsubstitute-supervision/src/durable_storage/records/reusable.rs", "crates/sugarsubstitute-supervision/src/durable_storage/records/reusable/tests.rs", "crates/sugarsubstitute-supervision/src/durable_storage/protection/retirement.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/reservation/forwarding.rs"]
-source_sha256 = "sha256:3963347c8b96d2d0493f3d551dee6075bacd79876b6cb4027a60461a15ba423e"
+source_sha256 = "sha256:d28337d4d5944e3d8511ffe6612ade350a0c4504563fc8172e4b4175f1b6f0ad"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 1
@@ -956,7 +960,7 @@ migrations = []
 id = "native-update-offer-v1"
 owner = "sugarsubstitute-contracts"
 sources = ["crates/sugarsubstitute-contracts/src/update.rs"]
-source_sha256 = "sha256:c75b691027b47d9ad5a977124558f16a5dc5491ee5a986e6628774ec0637ce33"
+source_sha256 = "sha256:7957f0467403cfb83e4601cd62bf5dc19cb517ca6d6e73d5d41cb2dc7f71e556"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1
@@ -992,7 +996,7 @@ migrations = []
 id = "native-update-trust-storage-v1"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/setup_storage/transaction/generation.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/reservation.rs", "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer.rs", "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/downloaded.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/offered.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/session.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/continuity.rs", "crates/sugarsubstitute-supervision/src/durable_storage/protected/native_rename.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/initialize.rs", "crates/sugarsubstitute-supervision/src/durable_storage/protection/publication.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/discovery.rs", "crates/sugarsubstitute-supervision/src/durable_storage/protection.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/envelope.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/releases.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/failure.rs", "crates/sugarsubstitute-supervision/src/durable_storage/protection/outcome.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/activation.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/identity.rs", "crates/sugarsubstitute-supervision/src/durable_storage/protection/exclusion.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/installed/publication.rs", "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/cached.rs", "crates/sugarsubstitute-supervision/src/durable_storage/control.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/ordinary.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/ordinary/tests.rs", "crates/sugarsubstitute-supervision/src/durable_storage/records/reusable.rs", "crates/sugarsubstitute-supervision/src/durable_storage/records/reusable/tests.rs", "crates/sugarsubstitute-supervision/src/durable_storage/protection/retirement.rs", "crates/sugarsubstitute-supervision/src/durable_storage/records.rs", "crates/sugarsubstitute-supervision/src/durable_storage/records/commit.rs", "crates/sugarsubstitute-supervision/src/durable_storage/records/commit/tests.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/opening.rs"]
-source_sha256 = "sha256:499c30ed94b41942ec2cc6f5d02a6aa0ed3a641a6e9350de203972c7f7de7070"
+source_sha256 = "sha256:960823ad80f6d89e21e2f64936793180ca008c29bebbca142aabbddd50850869"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 1
@@ -1052,7 +1056,7 @@ migrations = []
 id = "native-installation-selection-continuity-v1"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/setup_storage/selection/initialize.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/namespace.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection.rs", "crates/sugarsubstitute-supervision/src/setup_storage/running.rs"]
-source_sha256 = "sha256:efaa4cf6cf05fd509b46de0f2c599ee3021ea0da5fd419004a97ef726cf62510"
+source_sha256 = "sha256:8c398c82621b8652e64752935dfcaa233c6ebfbcd793bf0dad176d52eb23930b"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 1
@@ -1076,7 +1080,7 @@ migrations = []
 id = "native-launcher-entry-contract-v1"
 owner = "sugarsubstitute-contracts"
 sources = ["crates/sugarsubstitute-contracts/src/application_launch.rs", "crates/sugarsubstitute-contracts/src/application_launch/launcher.rs", "crates/sugarsubstitute-contracts/src/application_launch/launcher.json"]
-source_sha256 = "sha256:5e87e5fc126a6f8c5439ba081d5ea2232d42b8947edc507d7d20e20021b4f802"
+source_sha256 = "sha256:8f71fcb6332c320962c0ad6849c8a4130b659bcf6cdfd42a6de5dadb6ff11ef4"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1
@@ -1088,7 +1092,7 @@ migrations = []
 id = "native-application-entry-compatibility-v1"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/setup_storage/compatibility.rs", "crates/sugarsubstitute-supervision/src/setup_storage/bundle.rs", "crates/sugarsubstitute-supervision/src/setup_storage/bundle/payload.rs", "crates/sugarsubstitute-supervision/src/setup_storage/bundle/prepared.rs", "crates/sugarsubstitute-supervision/src/setup_storage/application.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/inheritance.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/reservation.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/candidate.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/trial.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/candidate/reopen.rs", "crates/sugarsubstitute-supervision/src/setup_storage/disk_inheritance.rs", "crates/sugarsubstitute-supervision/src/setup_storage/bundle/source.rs", "crates/sugarsubstitute-supervision/src/setup_storage/bundle/manifest.rs"]
-source_sha256 = "sha256:7fac7ba6bd38def753d68cb3c2dc1da81c46f6503c346ddbde97170458268af7"
+source_sha256 = "sha256:143f2eeaac5bb03dcab06789bdca5bba6b30941cb5e1ae5d91d60632e182793b"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1
@@ -1096,7 +1100,7 @@ accepted_versions = [1]
 compatibility = "reject"
 migrations = []
 
-# Trial launch 4 (`--installed-launch-v4`) carries a schema 2 trial snapshot. Protocol 2 carried
+# Trial launch 4 (`--installed-launch-v4`) carries a schema 3 trial snapshot. Protocol 2 carried
 # schema 1; a launcher and candidate on opposite sides refuse each other before creation.
 [[formats]]
 id = "native-trial-entry-v2"
@@ -1135,7 +1139,7 @@ sources = [
     "crates/sugarsubstitute-supervision/src/durable_storage/protection/retirement.rs",
     "crates/sugarsubstitute-supervision/src/durable_storage/files/observations.rs",
 ]
-source_sha256 = "sha256:99d00969a7a3d0b61376961f57219ebf5a376ecedc54637232d31a24ecfa2188"
+source_sha256 = "sha256:f492002183a9457fef9652f2404ebff5bb33c8859fa1007e8d8649516fe14df4"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 4
@@ -1195,7 +1199,7 @@ migrations = []
 id = "native-updater-entry-contract-v1"
 owner = "sugarsubstitute-contracts"
 sources = ["crates/sugarsubstitute-contracts/src/application_launch/updater.rs", "crates/sugarsubstitute-contracts/src/application_launch/updater.json", "crates/sugarsubstitute-contracts/src/application_launch/updater/probe.rs"]
-source_sha256 = "sha256:f3c249d2031a1e2dd1c30a3ef9d48c2a9f5c24818eb5ac920793dd488a415331"
+source_sha256 = "sha256:d1f83ec6f6929e385ff90ea50e196eba981c2d7a3b3251225a57e389b2becf5a"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 3
@@ -1207,7 +1211,7 @@ migrations = ["1->2", "2->3"]
 id = "native-updater-selection-storage-v1"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/setup_storage/trust/updater/recovery.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/updater/custody.rs", "crates/sugarsubstitute-supervision/src/setup_storage/compatibility.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/updater.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/records.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/receipt.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/envelope.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/activation.rs", "crates/sugarsubstitute-supervision/src/setup_storage/updater_package/stage.rs", "crates/sugarsubstitute-supervision/src/setup_storage/bundle/payload.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/updater/trial.rs", "crates/sugarsubstitute-supervision/src/setup_storage/updater_package/stage/trial.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/updater/probe.rs", "crates/sugarsubstitute-supervision/src/setup_storage/updater_probe.rs", "crates/sugarsubstitute-supervision/src/setup_storage/updater_package/stage/trial/transfer.rs", "crates/sugarsubstitute-supervision/src/setup_storage/disk_inheritance.rs", "crates/sugarsubstitute-supervision/src/registry/updater_probe.rs", "crates/sugarsubstitute-supervision/src/registry_input/preparation.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/updater/request.rs", "crates/sugarsubstitute-supervision/src/setup_storage/image.rs", "crates/sugarsubstitute-supervision/src/update_preparation.rs", "crates/sugarsubstitute-supervision/src/update_preparation/state.rs", "crates/sugarsubstitute-supervision/src/update_preparation/worker.rs", "crates/sugarsubstitute-supervision/src/setup_storage/trust/updater/running.rs", "crates/sugarsubstitute-supervision/src/application_launch/updater.rs", "crates/sugarsubstitute-supervision/src/application_launch/updater/native.rs", "crates/sugarsubstitute-supervision/src/update_preparation/state/source.rs", "crates/sugarsubstitute-supervision/src/setup_storage/bundle/manifest.rs", "crates/sugarsubstitute-supervision/src/setup_storage/bundle/runtime.rs", "crates/sugarsubstitute-supervision/src/setup_storage/bundle/prepared.rs", "crates/sugarsubstitute-supervision/src/setup_storage/inventory.rs"]
-source_sha256 = "sha256:07bc3073303c32f6d0f1dc1fbd034af83b69a08e171b67e7cd31e105d24e3135"
+source_sha256 = "sha256:220f2e48e58ce2ca7bc6bfef3bab13bdac542b4119a2f44b499db9bc4b849650"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 1
@@ -1220,7 +1224,7 @@ migrations = []
 id = "native-updater-probe-v1"
 owner = "sugarsubstitute-contracts"
 sources = ["crates/sugarsubstitute-contracts/src/application_launch/updater/probe.rs", "crates/sugarsubstitute-contracts/src/installation/record.rs", "crates/sugarsubstitute-contracts/src/installation/identity.rs"]
-source_sha256 = "sha256:1e19cecaa60c4d38fd6c9f24fa3f817ddf125600311142d99604214d28f1d34b"
+source_sha256 = "sha256:b75d6832907ae78358e70df4af0eaee18e9904a70824db981fe252f69c9e5b81"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 3
@@ -1233,7 +1237,7 @@ migrations = []
 id = "native-updater-probe-custody-v2"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/setup_storage/updater_probe.rs", "crates/sugarsubstitute-supervision/src/setup_storage/updater_package/stage/trial/transfer.rs", "crates/sugarsubstitute-supervision/src/setup_storage/disk_inheritance.rs", "crates/sugarsubstitute-supervision/src/registry/updater_probe.rs", "crates/sugarsubstitute-supervision/src/registry_input/preparation.rs", "crates/sugarsubstitute-supervision/src/registry.rs", "crates/sugarsubstitute-supervision/src/registry/creation.rs", "crates/sugarsubstitute-supervision/src/registry/cleanup.rs", "crates/sugarsubstitute-supervision/src/registry/completion.rs", "crates/sugarsubstitute-supervision/src/registry/record.rs", "crates/sugarsubstitute-supervision/src/native_process/inheritance.rs", "crates/sugarsubstitute-supervision/src/registry/input_validation.rs"]
-source_sha256 = "sha256:0dcd4fafd1d941e1add596890f578c88ee147452fdc71aab173e0f5b26c59792"
+source_sha256 = "sha256:eb8400ecbf79bf8ad0c480e0a3c2dc18b088f486e2f3a7a8dc2aa01f83751b03"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 3
@@ -1391,7 +1395,7 @@ migrations = []
 id = "native-activation-launch-transfer-v1"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/application_launch.rs", "crates/sugarsubstitute-supervision/src/application_launch/creation.rs", "crates/sugarsubstitute-supervision/src/application_launch/updater.rs", "crates/sugarsubstitute-supervision/src/application_launch/broker.rs", "crates/sugarsubstitute-supervision/src/application_launch/broker/wire.rs", "crates/sugarsubstitute-supervision/src/application_launch/broker/source.rs", "crates/sugarsubstitute-supervision/src/application_launch/broker/receiver.rs", "crates/sugarsubstitute-supervision/src/application_launch/broker/receiver/native.rs", "crates/sugarsubstitute-supervision/src/setup_storage/bundle/prepared.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/inheritance.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/run/transfer.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/candidate.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/trial.rs"]
-source_sha256 = "sha256:d6fae0caa476f81f92d52ea7a2ad01a80f1b60d5e71c5a65d8a7f8a762707ace"
+source_sha256 = "sha256:8ba81959fbf978e4e61c078dda94e89814e9777e9fbbe433f418f9b046e9ce15"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1
