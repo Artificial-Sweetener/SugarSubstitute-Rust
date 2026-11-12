@@ -25,6 +25,7 @@ pub static JA: ReportMessages = ReportMessages {
     unexplained: "原因不明の終了",
     host_failed: "アプリケーションがエラーを報告しました",
     startup_failed: "起動失敗",
+    reinstall_needed: "SugarSubstitute を再インストールする必要があります。ファイルと設定はそのまま残ります。",
     panic: "Rust パニック",
     abort: "中止",
     native_fault: "ネイティブ例外",

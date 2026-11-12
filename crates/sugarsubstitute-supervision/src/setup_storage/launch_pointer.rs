@@ -36,7 +36,7 @@ pub const LAUNCH_POINTER_FILE: &str = "launch-pointer-v1.json";
 pub const LAUNCH_ENGINE: &str = "sugarsubstitute-launcher.exe";
 /// Reserve on the admitted worker that reads the pointer and pins one engine at a time.
 pub const POINTER_RESERVATION_BYTES: u64 = 2 * 1024 * 1024;
-const SCHEMA: u32 = 1;
+const SCHEMA: u32 = sugarsubstitute_contracts::application_launch::LAUNCH_POINTER_SCHEMA;
 const MAX_BYTES: usize = 4096;
 const MAX_ENGINE_BYTES: u64 = 1024 * 1024 * 1024;
 

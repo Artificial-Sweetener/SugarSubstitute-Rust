@@ -8,7 +8,14 @@
 //! target generation's payload, points the stable entry at its engine, starts it with hop 1 and
 //! exits once it takes over. An engine at hop 1 never redirects: it is the root's fallback, or it
 //! was redirected to. If the redirect target cannot take over, or this engine is the fallback,
-//! it starts only its own accepted release, never a trial.
+//! it starts only its own accepted release, never a trial. A fallback engine of the retained
+//! generation first makes that generation accepted again, recording the newer one for repair.
+//!
+//! Cross-generation reading: later releases change the selection record additively, and older
+//! readers ignore the added fields, so a fallback engine reads it in the normal case. Only an
+//! incompatible change bumps the schema; then the fallback refuses with a typed `Schema`
+//! rejection and the user is told to reinstall, keeping their files and settings. The accepted-only path reads no trust or update metadata at all, so a
+//! fallback never depends on those files' formats.
 use super::*;
 use crate::{
     application_launch::{ENGINE_TAKEOVER, MAX_ENGINE_HOPS, Takeover, start_engine},
@@ -81,6 +88,17 @@ pub fn route_launch(
     let record = store.load(context)?.ok_or(SelectionFailure::Missing)?;
     match decide(&record, own, hops)? {
         Decision::Run(route) => Ok(route),
+        Decision::FallBack { failed } => {
+            tracing::warn!(
+                operation = "launch_engine_fallback",
+                installation = %record.installation().as_str(),
+                failed = failed.id.as_str(),
+                "The accepted release's engine could not take over; returning to the previous release"
+            );
+            let run = InstallationRun::acquire(std::sync::Arc::new(store), context)?;
+            run.fall_back_to_retained(failed, context)?;
+            Ok(Route::AcceptedOnly)
+        }
         Decision::Redirect { target, fallback } => {
             match store.redirect(target, fallback, context) {
                 Ok(()) => return Ok(Route::Redirected),
@@ -104,7 +122,15 @@ pub fn route_launch(
 #[derive(Debug, Eq, PartialEq)]
 enum Decision<'a> {
     Run(Route),
-    Redirect { target: &'a Generation, fallback: &'a GenerationId },
+    Redirect {
+        target: &'a Generation,
+        fallback: &'a GenerationId,
+    },
+    /// This engine is the stable entry's fallback for a newer accepted generation whose engine
+    /// could not take over; make this retained generation accepted again.
+    FallBack {
+        failed: &'a Generation,
+    },
 }
 
 /// The generation that should run is a prepared or trial candidate, otherwise the accepted one.
@@ -130,6 +156,9 @@ fn decide<'a>(
     }
     if &accepted.id == own {
         return Ok(Decision::Run(Route::AcceptedOnly));
+    }
+    if record.retained().is_some_and(|retained| &retained.id == own) {
+        return Ok(Decision::FallBack { failed: accepted });
     }
     Err(RouteFailure::Foreign)
 }

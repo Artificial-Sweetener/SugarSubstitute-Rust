@@ -28,6 +28,8 @@ pub const TRIAL_LAUNCH_ARGUMENT: &str = "--installed-launch-v4";
 /// The engine signals the event as soon as it owns startup. This spelling is permanent
 /// cross-generation surface: a root of any age starts engines of any later generation with it.
 pub const ENGINE_LAUNCH_ARGUMENT: &str = "--launch-engine-v1";
+/// The one launch pointer format every stable entry reads; permanent, extended only additively.
+pub const LAUNCH_POINTER_SCHEMA: u32 = 1;
 /// Exact contract distributed with applications built from this source.
 pub const CURRENT_CONTRACT: &[u8] = include_bytes!("application_launch/current.json");
 /// Bound before decoding untrusted application compatibility metadata.

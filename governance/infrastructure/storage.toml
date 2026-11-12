@@ -1790,7 +1790,7 @@ consumer = "storage_entries"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/compatibility.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:df7ae2c4dbc73d74e27e85ae5dc512a7e17b3631bf09ba2d3c07266236cf247f"
+source_sha256 = "sha256:5da43c22e12d7d87f954f175d393c51ea327da1d320051d9144455c8801f4c63"
 capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Read application entry compatibility only from payload bytes already hashed and pinned. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
@@ -1932,7 +1932,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Rej
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/launch_pointer.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:fa9a85d9cdd008715eb333381f35f866c27a40ffff2253ad608a2b9d2c439888"
+source_sha256 = "sha256:ad68668d4bdc83d8d453654fbf66798b1ab3ea29e8db350693f14b679e91778c"
 capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: read the permanent protected launch pointer and pin only engine bytes that match it, denying writes and deletion until the engine exists. Private file values do not grant constructors or detach native ancestry."

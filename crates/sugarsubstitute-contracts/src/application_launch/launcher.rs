@@ -15,6 +15,7 @@ pub const CURRENT_LAUNCHER_CONTRACT: &[u8] = include_bytes!("launcher.json");
 pub struct LauncherContract {
     installation_schemas: Vec<u32>,
     installed_launch_protocol: u32,
+    launch_pointer_schemas: Vec<u32>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -22,24 +23,23 @@ struct Wire {
     schema_version: u32,
     installation_schemas: Vec<u32>,
     installed_launch_protocol: u32,
+    /// Absent for launchers that cannot serve as the thin stable entry.
+    #[serde(default)]
+    launch_pointer_schemas: Vec<u32>,
 }
 impl LauncherContract {
-    /// Preserve the installed launch protocol and selection reader during executable replacement.
-    /// This keeps previously accepted applications launchable without inspecting damaged files.
+    /// Admit this launcher as the installation's stable entry. The stable entry reads only the
+    /// launch pointer and starts each generation's own engine, so the one requirement is that
+    /// it reads the permanent pointer format; its selection reader and produced launch protocol
+    /// serve only its own generation.
     /// # Errors
-    /// Rejects a different produced protocol or an unsupported current installation schema.
-    pub fn require_replacement_of(
-        &self,
-        previous: &Self,
-        installation_schema: u32,
-    ) -> Result<(), Rejection> {
-        if !self.installation_schemas.contains(&installation_schema) {
-            return Err(Rejection::InstallationSchema);
+    /// Returns `Unsupported` when the launcher does not read `LAUNCH_POINTER_SCHEMA`.
+    pub fn require_stable_entry(&self) -> Result<(), Rejection> {
+        if self.launch_pointer_schemas.contains(&super::LAUNCH_POINTER_SCHEMA) {
+            Ok(())
+        } else {
+            Err(Rejection::Unsupported)
         }
-        if self.installed_launch_protocol != previous.installed_launch_protocol {
-            return Err(Rejection::Unsupported);
-        }
-        Ok(())
     }
 
     /// Decode a bounded declaration without interpreting release numbers as capabilities.
@@ -53,12 +53,15 @@ impl LauncherContract {
         if wire.schema_version != 1
             || !valid_versions(&wire.installation_schemas)
             || wire.installed_launch_protocol == 0
+            || (!wire.launch_pointer_schemas.is_empty()
+                && !valid_versions(&wire.launch_pointer_schemas))
         {
             return Err(Rejection::Format);
         }
         Ok(Self {
             installation_schemas: wire.installation_schemas,
             installed_launch_protocol: wire.installed_launch_protocol,
+            launch_pointer_schemas: wire.launch_pointer_schemas,
         })
     }
 

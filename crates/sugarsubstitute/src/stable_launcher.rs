@@ -45,7 +45,11 @@ pub fn run(
             if let Err(secondary) = sugarsubstitute_desktop::show_startup_failure(
                 copy,
                 crate::APPLICATION_NAME,
-                copy.report.startup_failed,
+                if needs_reinstall(cause.as_ref()) {
+                    copy.report.reinstall_needed
+                } else {
+                    copy.report.startup_failed
+                },
                 format_args!("{details}"),
             ) {
                 tracing::error!(operation="stable_launcher_failure_presentation",cause=?secondary,"Startup failure presentation failed");
@@ -106,6 +110,47 @@ fn engine_installation(executable: &Path, named: &Path) -> Result<PathBuf, Box<d
     Ok(installation.to_path_buf())
 }
 
+/// Whether startup stopped because the installation needs reinstalling rather than a retry: the
+/// launch pointer is missing, damaged or in a format this release cannot read, no pointed
+/// engine could take over, the installation has no accepted release, or the selection record
+/// uses an incompatible schema. Reinstalling keeps user files and settings.
+fn needs_reinstall(cause: &(dyn Error + 'static)) -> bool {
+    use sugarsubstitute_contracts::installation::Rejection;
+    use sugarsubstitute_supervision::{
+        application_launch::StartupRefused,
+        setup_storage::{PointerFailure, RouteFailure, SelectionFailure},
+    };
+    let mut next = Some(cause);
+    while let Some(current) = next {
+        if let Some(inner) =
+            current.downcast_ref::<std::io::Error>().and_then(std::io::Error::get_ref)
+            && needs_reinstall(inner)
+        {
+            return true;
+        }
+        if matches!(
+            current.downcast_ref::<StartupRefused>(),
+            Some(
+                StartupRefused::Pointer(
+                    PointerFailure::Missing
+                        | PointerFailure::Incompatible
+                        | PointerFailure::Damaged
+                ) | StartupRefused::NoEngine(_)
+            )
+        ) || matches!(
+            current.downcast_ref::<RouteFailure>(),
+            Some(
+                RouteFailure::NeedsInstallation
+                    | RouteFailure::Selection(SelectionFailure::Record(Rejection::Schema))
+            )
+        ) {
+            return true;
+        }
+        next = current.source();
+    }
+    false
+}
+
 /// The stable executable's parent is the installation identity; callers cannot redirect it.
 fn installation_root(
     executable: &Path,
@@ -146,6 +191,37 @@ mod tests {
             assert!(engine_installation(Path::new(misplaced), Path::new(r"E:\Sugar")).is_err());
         }
         Ok(())
+    }
+    #[test]
+    fn an_unreadable_installation_asks_for_a_reinstall_and_other_failures_do_not() {
+        use sugarsubstitute_contracts::installation::Rejection;
+        use sugarsubstitute_supervision::{
+            application_launch::StartupRefused,
+            setup_storage::{PointerFailure, RouteFailure, SelectionFailure},
+        };
+        let wrapped = |cause: Box<dyn Error + Send + Sync>| -> Box<dyn Error> {
+            Box::new(std::io::Error::other(cause))
+        };
+        for cause in [
+            wrapped(Box::new(StartupRefused::Pointer(PointerFailure::Incompatible))),
+            wrapped(Box::new(StartupRefused::Pointer(PointerFailure::Missing))),
+            wrapped(Box::new(StartupRefused::Pointer(PointerFailure::Damaged))),
+            wrapped(Box::new(StartupRefused::NoEngine(Vec::new()))),
+            wrapped(Box::new(RouteFailure::Selection(SelectionFailure::Record(Rejection::Schema)))),
+            wrapped(Box::new(RouteFailure::NeedsInstallation)),
+        ] {
+            assert!(needs_reinstall(cause.as_ref()), "{cause}");
+        }
+        for cause in [
+            wrapped(Box::new(StartupRefused::Pointer(PointerFailure::Storage(
+                std::io::Error::other("disk"),
+            )))),
+            wrapped(Box::new(RouteFailure::Foreign)),
+            wrapped(Box::new(RouteFailure::Selection(SelectionFailure::LockTimeout))),
+            Box::new(std::io::Error::other("storage failed")) as Box<dyn Error>,
+        ] {
+            assert!(!needs_reinstall(cause.as_ref()), "{cause}");
+        }
     }
     #[test]
     fn entry_cannot_redirect_to_a_foreign_installation_or_use_a_drive_root() {

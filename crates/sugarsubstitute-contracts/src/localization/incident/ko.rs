@@ -25,6 +25,7 @@ pub static KO: ReportMessages = ReportMessages {
     unexplained: "원인 불명의 종료",
     host_failed: "애플리케이션에서 오류를 보고했습니다",
     startup_failed: "시작 실패",
+    reinstall_needed: "SugarSubstitute를 다시 설치해야 합니다. 파일과 설정은 그대로 유지됩니다.",
     panic: "Rust 패닉",
     abort: "중단",
     native_fault: "네이티브 예외",

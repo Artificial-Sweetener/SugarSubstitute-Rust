@@ -72,3 +72,19 @@ fn an_installation_without_an_accepted_release_needs_setup() -> Result {
     assert!(matches!(decide(&empty, &generation(1)?.id, 0), Err(RouteFailure::NeedsInstallation)));
     Ok(())
 }
+
+#[test]
+fn the_previous_release_as_fallback_returns_to_being_accepted() -> Result {
+    let a = generation(1)?.id;
+    let b = generation(2)?;
+    let [_, _, _, on_trial] = records()?;
+    let Some(Candidate::Trial { attempt }) = on_trial.candidate() else {
+        return Err("Expected a trial".into());
+    };
+    let upgraded = on_trial.accept(&attempt.clone())?;
+    assert_eq!(upgraded.retained().map(|retained| &retained.id), Some(&a));
+    assert_eq!(decide(&upgraded, &a, MAX_ENGINE_HOPS)?, Decision::FallBack { failed: &b });
+    assert!(matches!(decide(&upgraded, &a, 0)?, Decision::Redirect { target, .. } if target == &b));
+    assert_eq!(decide(&upgraded, &b.id, MAX_ENGINE_HOPS)?, Decision::Run(Route::Own));
+    Ok(())
+}

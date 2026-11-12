@@ -16,7 +16,7 @@ use sugarsubstitute_contracts::application_launch::{
 #[derive(Default)]
 pub(super) struct Compatibility {
     application: Option<ApplicationContract>,
-    launcher: Option<LauncherContract>,
+    launcher: Option<Box<LauncherContract>>,
     updater: Option<Box<UpdaterContract>>,
     installation: Option<InstallationActivationContract>,
 }
@@ -39,7 +39,8 @@ impl Compatibility {
         if name == CONTRACT_FILE {
             self.application = Some(ApplicationContract::decode(&bytes).map_err(io::Error::other)?);
         } else if name == LAUNCHER_CONTRACT_FILE {
-            self.launcher = Some(LauncherContract::decode(&bytes).map_err(io::Error::other)?);
+            self.launcher =
+                Some(Box::new(LauncherContract::decode(&bytes).map_err(io::Error::other)?));
         } else if name == installation::CONTRACT_FILE {
             self.installation =
                 Some(InstallationActivationContract::decode(&bytes).map_err(io::Error::other)?);
