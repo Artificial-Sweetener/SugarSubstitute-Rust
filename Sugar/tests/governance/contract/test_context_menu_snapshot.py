@@ -49,9 +49,7 @@ hard_lines = 500
 """
     policy.write_text(contents, encoding="utf-8")
     for args in [("init",), ("add", ".")]:
-        subprocess.run(
-            ["git", *args], cwd=tmp_path, check=True, capture_output=True, timeout=10
-        )
+        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)
     policy.write_text(contents.replace("approved.ts", "feature.ts"), encoding="utf-8")
     source.write_text('document.body.setAttribute("role", "button");', encoding="utf-8")
     with repository_snapshot(tmp_path, staged=True) as snapshot:

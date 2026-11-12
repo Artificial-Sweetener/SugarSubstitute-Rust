@@ -44,6 +44,7 @@ from tests.model_library.support.provider_transport import (
     TransportSession,
 )
 from sugarcubes.model_library.infrastructure.artifact_files import ModelArtifactFile
+from tests.support.no_progress import wait_for_event
 
 
 class RedirectSession(TransportSession):
@@ -251,8 +252,7 @@ def test_cancellation_after_atomic_publication_returns_installed_file(
         """Pause the worker after publication so the cancellation race is deterministic."""
         name = original(file)
         published.set()
-        if not release.wait(3):
-            raise AssertionError("The publication proof was not released.")
+        wait_for_event(release, "The publication proof was not released.")
         return name
 
     monkeypatch.setattr(ModelArtifactFile, "publish", publish)
@@ -267,7 +267,7 @@ def test_cancellation_after_atomic_publication_returns_installed_file(
             FixtureFileRoots(tmp_path), lambda: None, fixture_download_authorization()
         )
         task = asyncio.create_task(downloads.install(fixture_offer()))
-        assert await asyncio.to_thread(published.wait, 3)
+        await asyncio.to_thread(wait_for_event, published)
         task.cancel()
         release.set()
         assert await task == "fixture.safetensors"

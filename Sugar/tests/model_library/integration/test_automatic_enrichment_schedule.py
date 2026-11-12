@@ -25,6 +25,7 @@ from sugarcubes.model_library.infrastructure.runtime import ModelLibraryRuntime
 from sugarcubes.model_library.domain.provider_models import ProviderModelVersion
 from tests.model_library.support.enrichment import ObservedProvider
 from tests.model_library.support.model_roots import FixtureFileRoots
+from tests.support.no_progress import await_outcome
 
 
 class PausedProvider(ObservedProvider):
@@ -60,14 +61,14 @@ def test_visible_priority_keeps_scans_fast_and_coalesces_explicit_refresh(
         )
         try:
             scan = runtime.start_initial_scan()
-            await asyncio.wait_for(runtime.jobs.wait(scan.job_id), timeout=3)
+            await await_outcome(runtime.jobs.wait(scan.job_id))
             assert scan.status == "completed"
             listed = (await runtime.list_models(None))["models"]
             assert isinstance(listed, list) and len(listed) == 3
             entries = runtime.repository.list_entries()
             first, second, third = entries
             assert (
-                await asyncio.wait_for(provider.started.get(), timeout=3)
+                await await_outcome(provider.started.get())
                 == hashlib.sha256(b"0").hexdigest()
             )
             runtime.automatic_enrichment.prioritize(
@@ -81,14 +82,14 @@ def test_visible_priority_keeps_scans_fast_and_coalesces_explicit_refresh(
             assert explicit.status == "running"
             assert len(provider.hashes) == 1
             provider.release.set()
-            await asyncio.wait_for(runtime.jobs.wait(explicit.job_id), timeout=3)
+            await await_outcome(runtime.jobs.wait(explicit.job_id))
             assert (
-                await asyncio.wait_for(provider.started.get(), timeout=3)
+                await await_outcome(provider.started.get())
                 == hashlib.sha256(b"2").hexdigest()
             )
             provider.release.set()
             assert (
-                await asyncio.wait_for(provider.started.get(), timeout=3)
+                await await_outcome(provider.started.get())
                 == hashlib.sha256(b"1").hexdigest()
             )
             provider.release.set()

@@ -42,6 +42,7 @@ from sugarcubes.model_library.infrastructure.runtime import ModelLibraryRuntime
 from tests.model_library.support.enrichment import ObservedProvider, ObservedPreviews
 from tests.model_library.support.model_roots import FixtureFileRoots
 from tests.model_library.support.thumbnail_freshness import fixture_provider_version
+from tests.support.no_progress import wait_for_event
 
 
 @pytest.mark.parametrize("cancel", (False, True))
@@ -69,8 +70,7 @@ def test_maintenance_waits_for_prior_publication_and_can_cancel_before_commit(
     ) -> None:
         """Hold the real catalog writer so maintenance must retain its exclusive wait."""
         started.set()
-        if not release.wait(5):
-            raise RuntimeError("Proof did not release prior publication.")
+        wait_for_event(release, "Proof did not release prior publication.")
         original(
             repository, sha256, records, prepared_assets_changed=prepared_assets_changed
         )
@@ -81,7 +81,7 @@ def test_maintenance_waits_for_prior_publication_and_can_cancel_before_commit(
         """Cancel only before irreversible maintenance begins, then prove a later action still succeeds."""
         prior = await runtime.refresh_metadata(entry.evidence.location_id)
         try:
-            assert await asyncio.to_thread(started.wait, 5)
+            await asyncio.to_thread(wait_for_event, started)
             clear = runtime.cache_actions.start("clear_metadata")
             await asyncio.sleep(0)
             assert clear.cancellable and clear.status == "running"
@@ -116,8 +116,7 @@ def test_committed_maintenance_finishes_despite_late_cancellation(
     def clear(storage: CivitaiCacheStorage) -> None:
         """Pause inside the physical maintenance writer while retaining its real behavior."""
         started.set()
-        if not release.wait(5):
-            raise RuntimeError("Proof did not release cache maintenance.")
+        wait_for_event(release, "Proof did not release cache maintenance.")
         original(storage)
 
     monkeypatch.setattr(CivitaiCacheStorage, "clear_metadata", clear)
@@ -126,7 +125,7 @@ def test_committed_maintenance_finishes_despite_late_cancellation(
         """Observe the shared job instead of relying on an HTTP request's lifetime."""
         job = runtime.cache_actions.start("clear_metadata")
         try:
-            assert await asyncio.to_thread(started.wait, 5)
+            await asyncio.to_thread(wait_for_event, started)
             assert not job.cancellable and job.status == "running"
             runtime.jobs.cancel(job.job_id)
             assert job.status == "running"

@@ -32,6 +32,7 @@ from tests.model_library.support.thumbnail_freshness import (
     PreparedFixturePreviews,
     fixture_provider_version,
 )
+from tests.support.no_progress import await_outcome
 
 
 @pytest.mark.parametrize("found", (False, True))
@@ -100,7 +101,7 @@ def test_cache_actions_preserve_file_evidence_and_reference_decision_states(
                 if active is not None:
                     await runtime.jobs.wait(active.job_id)
 
-            await asyncio.wait_for(refreshed(), 2)
+            await await_outcome(refreshed())
             assert len(provider.hashes) == 2
         await runtime.automatic_enrichment.close()
         await runtime.jobs.close()

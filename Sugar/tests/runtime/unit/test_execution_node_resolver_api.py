@@ -157,7 +157,6 @@ def _run_bootstrap(script: str) -> None:
         capture_output=True,
         text=True,
         check=False,
-        timeout=30,
     )
     assert result.returncode == 0, result.stderr
     assert result.stderr == "", result.stderr

@@ -27,6 +27,7 @@ from integrations.gimp.native.contract import fields
 from integrations.gimp.native.image_api import NativeImage
 from tests.gimp.support.native_requests import NativeRequestFixture
 from tests.gimp.support.native_session import native_session
+from tests.support.no_progress import join_thread
 
 
 def test_reader_admission_schedules_all_sdk_work_on_the_explicit_main_loop(
@@ -37,7 +38,7 @@ def test_reader_admission_schedules_all_sdk_work_on_the_explicit_main_loop(
     try:
         reader = Thread(target=fixture.receive, args=(1, {"type": "context"}))
         reader.start()
-        reader.join(timeout=2)
+        join_thread(reader)
         assert not reader.is_alive()
         assert fixture.session.image.width_reads == 0
         assert len(fixture.callbacks) == 1

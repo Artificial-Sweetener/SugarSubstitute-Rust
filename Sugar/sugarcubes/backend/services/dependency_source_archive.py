@@ -19,6 +19,10 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..pack_install.archive import extract_registry_archive
+from ..pack_install.entry_paths import EntryName, parse_entry
+from ..pack_install.replacement import ReplacementPlan, TrackedReplacement
+from ..pack_install.tracking import read_tracking
 from .dependency_acquisition_diagnostics import dependency_acquisition_phase
 from .dependency_registry_source import RegistrySource
 from .dependency_python_requirements import DependencyPythonRequirementsInstaller
@@ -67,7 +71,7 @@ class TrustedSourceArchiveInstaller:
         """Install verified source while retaining non-owned local data."""
 
         target_path = self._target_path(extension)
-        old_tracked_files = _owned_paths(target_path)
+        old_tracked_files = read_tracking(target_path)
         if target_path.exists() and old_tracked_files is None:
             raise RuntimeError(
                 f"Refusing to replace unowned custom-node folder: {target_path}"
@@ -81,9 +85,11 @@ class TrustedSourceArchiveInstaller:
                 extension=extension,
                 version=version,
             )
-            new_tracked_files = tracked_source_files(source_path)
+            new_tracked_files = tuple(
+                parse_entry(path.as_posix())
+                for path in tracked_source_files(source_path)
+            )
         with transaction:
-            backup_path = Path(transaction.name) / "previous"
             with dependency_acquisition_phase(
                 node_id=extension.node_id,
                 operation="requirements_install",
@@ -100,7 +106,8 @@ class TrustedSourceArchiveInstaller:
                     target_path=target_path,
                     old_tracked_files=old_tracked_files or (),
                     new_tracked_files=new_tracked_files,
-                    backup_path=backup_path,
+                    transaction_root=Path(transaction.name) / "transaction",
+                    version=extension.package_version or version,
                 )
         return SourceArchiveInstallResult(
             node_id=extension.node_id,
@@ -108,7 +115,9 @@ class TrustedSourceArchiveInstaller:
             repository_url=extension.repository_url,
             archive_url=archive_url,
             target_path=target_path,
-            tracked_file_count=len(new_tracked_files),
+            tracked_file_count=sum(
+                1 for entry in new_tracked_files if not entry.is_directory
+            ),
         )
 
     def _validated_registry_package(
@@ -118,7 +127,7 @@ class TrustedSourceArchiveInstaller:
     ) -> tuple[
         str,
         Path,
-        tuple[Path, ...],
+        tuple[EntryName, ...],
         tempfile.TemporaryDirectory[str],
     ]:
         """Download and validate the exact package published by Comfy Registry."""
@@ -139,10 +148,9 @@ class TrustedSourceArchiveInstaller:
                 operation="archive_extract",
                 source="registry_artifact",
             ):
-                tracked_files = extract_registry_package_archive(
-                    archive_path=archive_path,
-                    target_path=source_path,
-                )
+                tracked_files = extract_registry_archive(
+                    archive_path, source_path
+                ).entries
             with dependency_acquisition_phase(
                 node_id=extension.node_id,
                 operation="source_validate",
@@ -315,42 +323,6 @@ def extract_single_root_archive(*, archive_path: Path, target_path: Path) -> Pat
     return target_path / next(iter(roots))
 
 
-def extract_registry_package_archive(
-    *,
-    archive_path: Path,
-    target_path: Path,
-) -> tuple[Path, ...]:
-    """Extract a bounded flat Registry package and return Comfy tracking paths."""
-
-    target_path.mkdir(parents=True, exist_ok=True)
-    resolved_target = target_path.resolve()
-    extracted_bytes = 0
-    tracked_files: list[Path] = []
-    with zipfile.ZipFile(archive_path) as archive:
-        for member in archive.infolist():
-            member_path = Path(member.filename)
-            if not member_path.parts:
-                continue
-            if member_path.is_absolute() or _zip_member_is_symlink(member):
-                raise RuntimeError("Registry package contains an unsafe path.")
-            destination = (target_path / member_path).resolve()
-            if not _is_relative_to(destination, resolved_target):
-                raise RuntimeError("Registry package contains an unsafe path.")
-            extracted_bytes += member.file_size
-            if extracted_bytes > _MAX_EXTRACTED_BYTES:
-                raise RuntimeError("Registry package expands beyond the size limit.")
-            if member.is_dir():
-                destination.mkdir(parents=True, exist_ok=True)
-                continue
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            with archive.open(member) as source, destination.open("wb") as output:
-                shutil.copyfileobj(source, output)
-            tracked_files.append(member_path)
-    if not tracked_files:
-        raise RuntimeError("Registry package contains no files.")
-    return tuple(tracked_files)
-
-
 def validate_source_identity(
     *,
     source_path: Path,
@@ -425,120 +397,39 @@ def _apply_source_transaction(
     *,
     source_path: Path,
     target_path: Path,
-    old_tracked_files: tuple[Path, ...],
-    new_tracked_files: tuple[Path, ...],
-    backup_path: Path,
+    old_tracked_files: tuple[EntryName, ...],
+    new_tracked_files: tuple[EntryName, ...],
+    transaction_root: Path,
+    version: str,
 ) -> None:
-    """Replace owned source files and restore them after any copy failure."""
+    """Replace owned files through the install-format owner, rolling back on failure.
 
-    _validate_owned_paths(source_path, new_tracked_files)
-    _validate_owned_paths(target_path, old_tracked_files)
+    A dependency starts as soon as it is installed, so the replacement is settled at
+    once instead of waiting for the node pack's own first start.
+    """
+
     target_preexisted = target_path.exists()
-    backup_path.mkdir(parents=True)
-    for relative_path in old_tracked_files:
-        installed_path = target_path / relative_path
-        if installed_path.is_file():
-            backup_file = backup_path / relative_path
-            backup_file.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(installed_path, backup_file)
-    previous_tracking = (
-        (target_path / ".tracking").read_bytes()
-        if (target_path / ".tracking").is_file()
-        else None
-    )
+    replacement = TrackedReplacement(transaction_root)
     try:
-        target_path.mkdir(parents=True, exist_ok=True)
-        _remove_owned_files(target_path, old_tracked_files)
-        for relative_path in new_tracked_files:
-            destination = target_path / relative_path
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source_path / relative_path, destination)
-        _write_tracking(target_path, new_tracked_files)
+        replacement.apply(
+            ReplacementPlan(
+                target=target_path,
+                source=source_path,
+                old_entries=old_tracked_files,
+                new_entries=new_tracked_files,
+                from_version="installed",
+                to_version=version or "source",
+            )
+        )
     except (OSError, RuntimeError):
-        _remove_owned_files(target_path, new_tracked_files)
-        for backup_file in backup_path.rglob("*"):
-            if backup_file.is_file():
-                relative_path = backup_file.relative_to(backup_path)
-                destination = target_path / relative_path
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(backup_file, destination)
-        tracking_path = target_path / ".tracking"
-        if previous_tracking is None:
-            tracking_path.unlink(missing_ok=True)
-        else:
-            tracking_path.write_bytes(previous_tracking)
         if (
             not target_preexisted
-            and target_path.exists()
+            and target_path.is_dir()
             and not any(target_path.iterdir())
         ):
             target_path.rmdir()
         raise
-
-
-def _owned_paths(target_path: Path) -> tuple[Path, ...] | None:
-    """Read Comfy's tracked-file list or identify an unowned destination."""
-
-    tracking_path = target_path / ".tracking"
-    if not tracking_path.is_file():
-        return None
-    try:
-        paths = tuple(
-            Path(line.strip())
-            for line in tracking_path.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        )
-    except OSError as exc:
-        raise RuntimeError("Comfy ownership metadata is unreadable.") from exc
-    _validate_owned_paths(target_path, paths)
-    return paths
-
-
-def _write_tracking(target_path: Path, tracked_files: tuple[Path, ...]) -> None:
-    """Atomically write Comfy-compatible source ownership metadata."""
-
-    _validate_owned_paths(target_path, tracked_files)
-    temporary_path = target_path / ".tracking.tmp"
-    temporary_path.write_text(
-        "\n".join(path.as_posix() for path in tracked_files),
-        encoding="utf-8",
-    )
-    temporary_path.replace(target_path / ".tracking")
-
-
-def _validate_owned_paths(root: Path, paths: tuple[Path, ...]) -> None:
-    """Reject absolute and escaping paths before source mutation."""
-
-    resolved_root = root.resolve()
-    for relative_path in paths:
-        if relative_path.is_absolute() or not _is_relative_to(
-            (root / relative_path).resolve(), resolved_root
-        ):
-            raise RuntimeError(
-                f"Comfy ownership metadata contains an unsafe path: {relative_path}"
-            )
-
-
-def _remove_owned_files(root: Path, paths: tuple[Path, ...]) -> None:
-    """Remove owned files and resulting empty owned directories."""
-
-    for relative_path in paths:
-        installed_path = root / relative_path
-        if installed_path.is_file() or installed_path.is_symlink():
-            installed_path.unlink()
-    parents = sorted(
-        {
-            parent
-            for relative_path in paths
-            for parent in (root / relative_path).parents
-            if parent != root and _is_relative_to(parent, root)
-        },
-        key=lambda path: len(path.parts),
-        reverse=True,
-    )
-    for parent in parents:
-        if parent.is_dir() and not any(parent.iterdir()):
-            parent.rmdir()
+    replacement.confirm()
 
 
 def _zip_member_is_symlink(member: zipfile.ZipInfo) -> bool:
@@ -568,7 +459,6 @@ __all__ = [
     "TrustedSourceArchiveInstaller",
     "download_archive",
     "extract_single_root_archive",
-    "extract_registry_package_archive",
     "tracked_source_files",
     "validate_source_identity",
 ]

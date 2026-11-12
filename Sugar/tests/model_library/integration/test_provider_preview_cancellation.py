@@ -43,6 +43,7 @@ from sugarcubes.model_library.infrastructure.thumbnail_assets import (
 from sugarcubes.model_library.infrastructure.thumbnail_preparer import (
     ModelThumbnailPreparer,
 )
+from tests.support.no_progress import wait_for_event
 
 
 class PausedImages(ModelThumbnailPreparer):
@@ -59,8 +60,7 @@ class PausedImages(ModelThumbnailPreparer):
         """Publish real prepared files only after the proof releases the worker."""
         self.started.set()
         try:
-            if not self.release.wait(5):
-                raise RuntimeError("Preview proof did not release publication.")
+            wait_for_event(self.release, "Preview proof did not release publication.")
             return super().prepare(content)
         finally:
             self.finished.set()
@@ -93,7 +93,7 @@ def test_cancelled_preparation_remains_active_until_publication_finishes(
             preparer.prepare("https://image.civitai.com/fixture.jpg")
         )
         try:
-            assert await asyncio.to_thread(images.started.wait, 5)
+            await asyncio.to_thread(wait_for_event, images.started)
             task.cancel()
             await asyncio.sleep(0)
             task.cancel()
@@ -104,7 +104,7 @@ def test_cancelled_preparation_remains_active_until_publication_finishes(
         finally:
             images.release.set()
             await asyncio.gather(task, return_exceptions=True)
-            assert await asyncio.to_thread(images.finished.wait, 5)
+            await asyncio.to_thread(wait_for_event, images.finished)
         assert task.cancelled()
         assert assets.source_summary("civitai").source_count == 1
 
