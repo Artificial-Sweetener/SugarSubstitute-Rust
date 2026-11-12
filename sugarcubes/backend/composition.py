@@ -49,7 +49,13 @@ from ..library import (
     CapturedCubeRepository,
 )
 from ..payloads import retarget_cube_payload
+from ..package_identity import runtime_version
 from .comfy_node_registry import resolve_active_comfy_node_class_mappings
+from .self_update import (
+    SelfUpdateService,
+    build_self_update_service,
+    installed_pack_folder,
+)
 from .services import (
     CubeArtifactRepository,
     CubeDependencyService,
@@ -96,6 +102,7 @@ class BackendServices:
     workflow_source_sync: CubeSourceSyncService
     sugarscript_authoring: SugarScriptWorkflowAuthoringService
     legacy_workflow_authoring: LegacyWorkflowAuthoringService
+    self_update: SelfUpdateService
     execution: CubeExecutionCoordinator = field(
         default_factory=CubeExecutionCoordinator
     )
@@ -112,8 +119,13 @@ def build_backend_services(
     *,
     custom_nodes_root: Path | None = None,
     execution_port: ComfyExecutionPort | None = None,
+    pack_folder: Path | None = None,
 ) -> BackendServices:
-    """Build the repository-standard backend service graph."""
+    """Build the repository-standard backend service graph.
+
+    `pack_folder` is the folder the self-updater manages; it defaults to the
+    folder ComfyUI loaded this pack from, kept unresolved so links stay visible.
+    """
 
     identity = IdentityPolicyService(extension_root)
     tracked_repos = TrackedRepoService(
@@ -256,6 +268,10 @@ def build_backend_services(
         workflow_source_sync=workflow_source_sync,
         sugarscript_authoring=sugarscript_authoring,
         legacy_workflow_authoring=legacy_workflow_authoring,
+        self_update=build_self_update_service(
+            pack_folder=pack_folder or installed_pack_folder(),
+            running_version=runtime_version(),
+        ),
         execution=CubeExecutionCoordinator(
             comfy=execution_port,
             live_defaults=LiveNodeDefaultReconciler(resolve_definition_via_nodes),

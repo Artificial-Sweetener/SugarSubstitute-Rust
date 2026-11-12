@@ -42,6 +42,16 @@ DOCSTRING_TARGETS = (
 RUNTIME_ROOTS = ("sugarcubes", "sugarcubes_model_roots")
 ROOT_RUNTIME_FILES = ("__init__.py", "prestartup_script.py", "load_model_roots.py")
 OPTIONAL_FALLBACK_CONTEXTS = {
+    # Prestartup must never stop ComfyUI from starting; the journal keeps the pack recoverable.
+    (
+        "sugarcubes/backend/pack_install/__init__.py",
+        ("apply_pending_update",),
+    ),
+    # The updater's job supervisor ends every check with a visible failed state.
+    (
+        "sugarcubes/backend/self_update/service.py",
+        ("SelfUpdateService", "_run_check"),
+    ),
     (
         "sugarcubes/output_saving/infrastructure/native_prompt_hook.py",
         ("NativeSavingPromptHook", "__call__"),

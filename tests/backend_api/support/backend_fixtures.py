@@ -26,6 +26,12 @@ from typing import Any, cast
 import pytest
 
 from sugarcubes.backend.composition import BackendServices
+from sugarcubes.backend.self_update import SelfUpdateService, build_self_update_service
+from sugarcubes.backend.self_update.http_client import (
+    Cancelled,
+    HttpFailure,
+    HttpFailureKind,
+)
 from sugarcubes.authoring import (
     LegacyWorkflowAuthoringService,
     SugarScriptWorkflowAuthoringService,
@@ -50,6 +56,54 @@ from tests.support.command_repository import CommandRepository
 ROOT = Path(__file__).resolve().parents[3]
 
 collect_ignore = [str(ROOT / "__init__.py")]
+
+
+class OfflineHttp:
+    """Answer every updater request as if the computer were offline."""
+
+    def get_json(
+        self, url: str, *, allowed_hosts: frozenset[str], max_bytes: int
+    ) -> object:
+        """Fail like a missing connection."""
+
+        raise HttpFailure(HttpFailureKind.UNREACHABLE, "offline test fixture")
+
+    def download(
+        self,
+        url: str,
+        target: Path,
+        *,
+        allowed_hosts: frozenset[str],
+        max_bytes: int,
+        cancelled: Cancelled,
+    ) -> str:
+        """Fail like a missing connection."""
+
+        raise HttpFailure(HttpFailureKind.UNREACHABLE, "offline test fixture")
+
+
+class InlineJobs:
+    """Run updater jobs at once so route tests stay deterministic."""
+
+    def submit(self, job: Callable[[], None]) -> None:
+        """Run one job now."""
+
+        job()
+
+    def close(self) -> None:
+        """Nothing runs in the background."""
+
+
+def offline_self_update(pack_folder: Path) -> SelfUpdateService:
+    """Build an updater for a test folder that never reaches the network."""
+
+    return build_self_update_service(
+        pack_folder=pack_folder,
+        running_version="0.0.0",
+        http=OfflineHttp(),
+        clock=lambda: 0,
+        runner=InlineJobs(),
+    )
 
 
 class FakeRequest:
@@ -387,6 +441,7 @@ def backend_services_factory() -> BackendServicesFactory:
             workflow_source_sync=workflow_source_sync,
             sugarscript_authoring=sugarscript_authoring,
             legacy_workflow_authoring=legacy_workflow_authoring,
+            self_update=offline_self_update(extension_root),
         )
 
     return factory
