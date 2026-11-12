@@ -160,11 +160,11 @@ fn run_inner(
             .to_owned(),
     )?;
     let result = sugarsubstitute_desktop::installer::native::run(
-        sugarsubstitute_desktop::installer::native::Window {
-            visible: true,
-            title: sugarsubstitute_contracts::localization::installer::messages("en").title.into(),
-            close: presentation::Action::Close.id(),
-        },
+        sugarsubstitute_desktop::installer::native::Window::installer(
+            sugarsubstitute_contracts::localization::installer::messages("en").title.into(),
+            true,
+            presentation::Action::Close.id(),
+        ),
         &mut controller,
     );
     *locale = controller.locale().to_owned();

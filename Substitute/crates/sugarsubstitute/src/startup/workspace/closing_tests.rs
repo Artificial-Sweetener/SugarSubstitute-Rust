@@ -25,10 +25,10 @@ pub(super) struct Fixture {
     pub(super) checkpoint: SessionCheckpoint,
     pub(super) directory: tempfile::TempDir,
     pub(super) wake: Arc<Wake>,
-    store: WorkspaceStore,
+    pub(super) store: WorkspaceStore,
 }
 /// Deliver completions until the job has its typed terminal outcome, then take it.
-fn terminal<T, E>(
+pub(super) fn terminal<T, E>(
     client: &ExecutionClient,
     wake: &Wake,
     mut job: OwnedJob<T, E>,

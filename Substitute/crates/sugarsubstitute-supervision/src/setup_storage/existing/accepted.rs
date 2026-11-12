@@ -33,8 +33,13 @@ pub(super) fn read(
         )?;
         Directory::open(&path, false)
     })?;
-    let mut existing =
-        ExistingInstallation::from_directory(root, directory, marker, Some(generation), context)?;
+    let mut existing = ExistingInstallation::from_directory(
+        root,
+        directory,
+        marker,
+        Some(&generation.package),
+        context,
+    )?;
     existing.accepted = Some(generation.clone());
     // The stable root entry, or a historical installation's generation shortcut, opens the app.
     existing.summary.launch_entry_missing = true;

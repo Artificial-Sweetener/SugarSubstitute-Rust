@@ -12,6 +12,7 @@ pub mod cursors;
 pub mod form;
 pub mod icons;
 pub mod panel;
+pub mod report;
 pub mod scene;
 pub mod shapes;
 pub mod text;

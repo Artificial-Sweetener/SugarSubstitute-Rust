@@ -401,6 +401,17 @@ files = [
 ]
 
 [[components]]
+id = "report-severity-icons"
+source_url = "https://github.com/zhiyiYo/PyQt-Fluent-Widgets/tree/d90c008c534b2b0079ce7981d19b2bc957b354a5/qfluentwidgets/_rc/images/info_bar"
+license = "GPL-3.0-only"
+license_file = "third_party/licenses/qfluentwidgets.GPL-3.0.txt"
+files = [
+  "crates/sugarsubstitute-ui/assets/fluent/SeverityError.svg",
+  "crates/sugarsubstitute-ui/assets/fluent/SeverityInfo.svg",
+  "crates/sugarsubstitute-ui/assets/fluent/SeverityWarning.svg",
+]
+
+[[components]]
 id = "nodejs-provisioning-runtime"
 source_url = "https://nodejs.org/dist/v24.22.1/"
 license = "MIT AND LicenseRef-Nodejs-Bundled-Dependencies"

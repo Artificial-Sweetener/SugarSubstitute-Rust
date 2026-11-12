@@ -290,6 +290,8 @@ impl EmbeddedCanvas {
                 .join(INPUT_DOCUMENTS)
             });
 
+            self.surface.retained_bases =
+                Some(crate::input_documents::bases::RetainedBases::new(&directory));
             session.persist_inputs(
                 crate::input_documents::InputDocumentStore::new(directory)?,
                 self.input_plan.clone(),

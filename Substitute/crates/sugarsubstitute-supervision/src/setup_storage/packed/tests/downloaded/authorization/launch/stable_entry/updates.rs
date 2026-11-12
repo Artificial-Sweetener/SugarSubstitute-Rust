@@ -51,7 +51,7 @@ fn preparation_and_trial_admission_recheck_the_installed_launcher() -> TestResul
         let original = std::fs::read(&ownership)?;
         let mut changed: serde_json::Value = serde_json::from_slice(&original)?;
         changed["contract"] =
-            r#"{"schema_version":1,"installation_schemas":[1],"installed_launch_protocol":2}"#
+            r#"{"schema_version":1,"installation_schemas":[2],"installed_launch_protocol":2}"#
                 .into();
         let incompatible = serde_json::to_vec(&changed)?;
         let (prepared, signed, trust) = next_package(&root, workspace.path(), context)?;

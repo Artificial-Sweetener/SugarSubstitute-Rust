@@ -24,6 +24,7 @@ mod rejection;
 #[cfg(test)]
 #[path = "surface/replies_tests.rs"]
 mod replies_tests;
+mod retained_base;
 mod sources;
 mod viewport;
 mod workflow;
@@ -152,6 +153,9 @@ pub(super) type FixtureAcquisition = Box<
 pub(super) struct NativeSurface {
     backend: Option<crate::startup::CanvasBackend>,
     pub(in crate::startup::canvas) session_source: Option<super::session_source::SessionSource>,
+    /// Where originals of ComfyUI temporary files are retained for this session's documents.
+    pub(in crate::startup::canvas) retained_bases:
+        Option<crate::input_documents::bases::RetainedBases>,
     #[cfg(test)]
     fixture_output: Option<PathBuf>,
     #[cfg(test)]
@@ -191,6 +195,7 @@ impl NativeSurface {
         Self {
             backend: None,
             session_source: None,
+            retained_bases: None,
             #[cfg(test)]
             fixture_output: None,
             #[cfg(test)]

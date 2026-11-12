@@ -107,15 +107,10 @@ fn allocation_capacity_and_header_credit_are_checked_separately_from_length()
     Ok(())
 }
 #[test]
-fn native_options_reject_unbounded_geometry_and_insufficient_admission()
--> Result<(), Box<dyn Error>> {
-    for (width, height) in [(359, 280), (360, 279), (8193, 280), (360, 8193)] {
-        let (lease, _) = lease(ReportSurfaceOptions::KNOWN_STORAGE_BYTES);
-        assert!(ReportSurfaceOptions::new(view()?, "ja", false, width, height, lease).is_err());
-    }
+fn native_options_reject_insufficient_admission() -> Result<(), Box<dyn Error>> {
     let (short, _) = lease(ReportSurfaceOptions::KNOWN_STORAGE_BYTES - 1);
-    assert!(ReportSurfaceOptions::new(view()?, "en", false, 960, 740, short).is_err());
+    assert!(ReportSurfaceOptions::new(view()?, "en", short).is_err());
     let (lease, _) = lease(ReportSurfaceOptions::KNOWN_STORAGE_BYTES);
-    ReportSurfaceOptions::new(view()?, "unknown", true, 360, 280, lease)?;
+    ReportSurfaceOptions::new(view()?, "unknown", lease)?;
     Ok(())
 }

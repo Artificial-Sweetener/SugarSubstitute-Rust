@@ -24,9 +24,9 @@ fn historical_application_role_remains_launchable_without_inventing_an_updater()
 #[test]
 fn incompatible_or_malformed_updater_never_falls_back_to_the_application() -> TestResult {
     for declaration in [
-        br#"{"schema_version":1,"preparation_protocols":[2],"installation_schemas":[1]}"#.as_slice(),
-        br#"{"schema_version":1,"preparation_protocols":[1],"installation_schemas":[2]}"#,
-        br#"{"schema_version":1,"preparation_protocols":[1],"installation_schemas":[1],"command":"foreign.exe"}"#,
+        br#"{"schema_version":1,"preparation_protocols":[2],"installation_schemas":[2]}"#.as_slice(),
+        br#"{"schema_version":1,"preparation_protocols":[1],"installation_schemas":[3]}"#,
+        br#"{"schema_version":1,"preparation_protocols":[1],"installation_schemas":[2],"command":"foreign.exe"}"#,
     ] {
         let mut h = Harness::new()?;
         assert!(preparation_with(&mut h, Some(declaration)).is_err());

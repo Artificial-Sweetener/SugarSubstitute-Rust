@@ -71,11 +71,11 @@ fn qualify() -> TestResult {
     let mut fixture = Fixture::new(false)?;
     fixture.capture.enabled = true;
     run(
-        super::super::super::Window {
-            title: "Native installer loop qualification".into(),
-            visible: true,
-            close: ControlId::new(1)?,
-        },
+        super::super::super::Window::installer(
+            "Native installer loop qualification".into(),
+            true,
+            ControlId::new(1)?,
+        ),
         &mut fixture,
     )?;
     assert!(fixture.finished);

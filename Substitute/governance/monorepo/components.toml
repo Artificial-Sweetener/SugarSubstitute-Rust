@@ -66,6 +66,7 @@ consumers = [
   "crates/sugarsubstitute-desktop/src/windows_main_receivers/session_media/tests.rs",
   "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs",
   "crates/sugarsubstitute/src/input_documents/tests/storage/legacy.rs",
+  "crates/sugarsubstitute/src/startup/workspace/admission_tests.rs",
   "crates/sugarsubstitute/src/startup/workspace/closing_tests.rs",
   "crates/sugarsubstitute/src/workspace_session/driver/tests.rs",
   "crates/sugarsubstitute/src/workspace_session/tests.rs",

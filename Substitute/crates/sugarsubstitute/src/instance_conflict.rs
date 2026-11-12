@@ -8,11 +8,11 @@ use std::{
     time::{Duration, Instant},
 };
 use sugarsubstitute_application::instance_conflict::Phase;
+use sugarsubstitute_contracts::execution::*;
 use sugarsubstitute_contracts::instance_conflict::{
     ConflictAction, ConflictBackend, ConflictController, ConflictObservation as Observation,
     ConflictOperation as Op, ConflictView,
 };
-use sugarsubstitute_contracts::{execution::*, localization::messages};
 use sugarsubstitute_desktop::{HeadlessLifetime, HeadlessStep, StartupPreparationStep};
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner, MonotonicClock};
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
@@ -32,8 +32,7 @@ pub struct Service<B: ConflictBackend> {
     pending: Option<(Op, OwnedJob<Observation, B::Error>)>,
     wanted: Option<Op>,
     phase: Phase,
-    next_poll: Instant,
-    installation: Option<std::path::PathBuf>,
+    next_poll: Moment,
     stopping: bool,
     failure: Option<Box<dyn Error>>,
 }
@@ -53,8 +52,7 @@ impl<B: ConflictBackend> Service<B> {
             pending: None,
             wanted: Some(Op::Discover),
             phase: Phase::Checking,
-            next_poll: Instant::now(),
-            installation: None,
+            next_poll: Moment::from_nanos(0),
             stopping: false,
             failure: None,
         }
@@ -112,8 +110,7 @@ impl<B: ConflictBackend> Service<B> {
                 self.native_retired = true;
             } else if !matches!(self.phase, Phase::Retiring(_)) {
                 match observation {
-                    Observation::Owner(path) => {
-                        self.installation = Some(path);
+                    Observation::Owner(_) => {
                         self.phase = Phase::Ready;
                     }
                     Observation::Released => {
@@ -197,7 +194,7 @@ impl<B: ConflictBackend> Service<B> {
         }
         if self.wanted.is_none()
             && matches!(self.phase, Phase::Checking | Phase::Closing(_) | Phase::Forcing)
-            && Instant::now() >= self.next_poll
+            && self.clock.now() >= self.next_poll
         {
             self.wanted = Some(Op::Observe);
         }
@@ -221,7 +218,7 @@ impl<B: ConflictBackend> Service<B> {
                 move |context| session.execute(operation, &context),
             )?,
         ));
-        self.next_poll = Instant::now() + Duration::from_millis(250);
+        self.next_poll = self.clock.now().checked_add(Duration::from_millis(250))?;
         Ok(())
     }
 }
@@ -238,29 +235,10 @@ impl<B: ConflictBackend> ConflictController for Service<B> {
         if let Err(cause) = self.drive() {
             self.fail(cause);
         }
-        let labels = messages("en").conflict;
-        let force = self.phase.can_force(Instant::now());
-        let text = match self.phase {
-            Phase::Checking => labels.checking,
-            Phase::Ready => labels.prompt,
-            Phase::Closing(_) if force => labels.force_prompt,
-            Phase::Closing(_) => labels.waiting,
-            Phase::Failed => labels.failed,
-            _ => labels.cleanup,
-        };
-        let text = self
-            .installation
-            .as_ref()
-            .map_or_else(|| text.to_owned(), |path| format!("{text}\n\n{}", path.display()));
-        ConflictView {
-            text,
-            close_enabled: self.phase == Phase::Ready,
-            force_enabled: force,
-            done: matches!(self.phase, Phase::Done(_)),
-        }
+        self.phase.view(self.clock.now())
     }
     fn choose(&mut self, action: ConflictAction) {
-        if let Some(operation) = self.phase.choose(action, Instant::now()) {
+        if let Some(operation) = self.phase.choose(action, self.clock.now()) {
             if operation == Op::Retire && self.scope.is_none() {
                 if let (Some(owner), Some(client)) = (&mut self.owner, &self.client) {
                     let deadline: Result<_> =

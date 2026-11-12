@@ -96,6 +96,29 @@ impl Presenter {
         })
     }
 
+    /// Center the window on the work area under the cursor again, after a size change made
+    /// before the window was first shown.
+    pub(crate) fn recenter(&self) -> Result<(), DesktopError> {
+        center_on_cursor_work_area(&self.window)
+    }
+
+    /// Logical height of the work area of the monitor holding the window.
+    pub(crate) fn work_area_height(&self) -> Result<f64, DesktopError> {
+        use windows::Win32::Graphics::Gdi::{MONITOR_DEFAULTTONEAREST, MonitorFromWindow};
+        let hwnd = HWND(self.window.hwnd() as *mut c_void);
+        let mut info =
+            MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+        // SAFETY: The retained HWND is live on this thread; the output structure has its
+        // documented ABI and lives through the synchronous query.
+        unsafe {
+            let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+            GetMonitorInfoW(monitor, &raw mut info)
+                .ok()
+                .map_err(|error| DesktopError::new("query_window_work_area", error))?;
+        }
+        Ok(f64::from(info.rcWork.bottom - info.rcWork.top) / self.window.scale_factor())
+    }
+
     /// Update this retained window's normal material mode before preparing its next frame.
     /// Fallback pixels use the same resolved mode when DWM material is unavailable.
     pub(crate) fn set_theme(&mut self, dark: bool) -> Result<(), DesktopError> {

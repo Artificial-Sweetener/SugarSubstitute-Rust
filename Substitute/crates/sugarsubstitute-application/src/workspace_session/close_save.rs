@@ -22,27 +22,6 @@ pub enum SaveFailure {
     Protected,
 }
 
-impl SaveFailure {
-    /// Stable spelling used by the persisted close-save record.
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Storage => "storage",
-            Self::Capture => "capture",
-            Self::Protected => "protected",
-        }
-    }
-
-    /// Parse the persisted spelling.
-    pub fn parse(value: &str) -> Option<Self> {
-        match value {
-            "storage" => Some(Self::Storage),
-            "capture" => Some(Self::Capture),
-            "protected" => Some(Self::Protected),
-            _ => None,
-        }
-    }
-}
-
 /// What one owner of authored state kept at close.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SaveVerdict {
@@ -76,29 +55,6 @@ pub enum CloseReason {
         /// Whether the operating system will end the process without waiting.
         critical: bool,
     },
-}
-
-impl CloseReason {
-    /// Stable spelling used by the persisted close-save record.
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Close => "close",
-            Self::RestartToApply => "restart-to-apply",
-            Self::SessionEnding { critical: false } => "session-ending",
-            Self::SessionEnding { critical: true } => "session-ending-critical",
-        }
-    }
-
-    /// Parse the persisted spelling.
-    pub fn parse(value: &str) -> Option<Self> {
-        match value {
-            "close" => Some(Self::Close),
-            "restart-to-apply" => Some(Self::RestartToApply),
-            "session-ending" => Some(Self::SessionEnding { critical: false }),
-            "session-ending-critical" => Some(Self::SessionEnding { critical: true }),
-            _ => None,
-        }
-    }
 }
 
 /// What one close kept, per owner of authored state.
@@ -362,20 +318,5 @@ mod tests {
         let saved = CloseSaveOutcome { workspace: SaveVerdict::Saved, ..outcome };
         assert_eq!(NotSavedLastTime::from_outcome(&saved, at(7)), None);
         Ok(())
-    }
-
-    #[test]
-    fn persisted_spellings_round_trip() {
-        for reason in [
-            CloseReason::Close,
-            CloseReason::RestartToApply,
-            CloseReason::SessionEnding { critical: false },
-            CloseReason::SessionEnding { critical: true },
-        ] {
-            assert_eq!(CloseReason::parse(reason.as_str()), Some(reason));
-        }
-        for failure in [SaveFailure::Storage, SaveFailure::Capture, SaveFailure::Protected] {
-            assert_eq!(SaveFailure::parse(failure.as_str()), Some(failure));
-        }
     }
 }

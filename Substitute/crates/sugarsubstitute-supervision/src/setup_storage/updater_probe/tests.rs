@@ -5,7 +5,7 @@ use super::*;
 
 /// Serialize inert public correlation without opening an installation.
 fn encoded() -> String {
-    serde_json::json!({"installation":"1".repeat(32),"generation":{"id":"2".repeat(32),"package":"3".repeat(64)},"revision":7}).to_string()
+    serde_json::json!({"installation":"1".repeat(32),"generation":{"id":"2".repeat(32),"package":"3".repeat(64),"release":{"version":"1.0.0","sequence":1}},"revision":7}).to_string()
 }
 
 #[test]
@@ -52,7 +52,7 @@ fn incomplete_relative_oversized_and_authority_override_probe_arguments_fail() {
 
 #[test]
 fn unsupported_probe_versions_cannot_fall_back_to_an_ordinary_entry() -> io::Result<()> {
-    for version in ["--internal-updater-probe-v1", "--internal-updater-probe-v3"] {
+    for version in ["--internal-updater-probe-v2", "--internal-updater-probe-v4"] {
         assert!(parse([version.into()]).is_err());
     }
     for input in [vec![], vec!["--internal-updater-prepare-v1"], vec!["--setup"]] {

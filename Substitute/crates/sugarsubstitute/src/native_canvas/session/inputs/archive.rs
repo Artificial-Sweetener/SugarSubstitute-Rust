@@ -21,6 +21,7 @@
 //! leaves the previous archive intact and is reported stale; a failed write is reported failed.
 mod final_save;
 mod metadata;
+mod retirement;
 mod workspace;
 
 use super::*;
@@ -50,6 +51,8 @@ pub(in crate::native_canvas::session) struct Persistence {
     unsaved_since: Option<Moment>,
     /// The final save of the close save, once it began.
     final_save: Option<FinalSave>,
+    /// The decision which retained originals no document needs, after a durable save.
+    retirement: Option<OwnedJob<Vec<String>, StoreError>>,
 }
 
 enum Load {
@@ -64,12 +67,16 @@ impl Persistence {
     pub(super) fn in_flight(&self) -> bool {
         matches!(self.load, Load::Running(_))
             || self.autosave.as_ref().is_some_and(Autosave::saving)
+            || self.retirement.is_some()
     }
 
     /// Cancel the startup load; its outcome is still observed. A running save continues so the
     /// final save can follow it.
     pub(super) fn close(&mut self) {
         if let Load::Running(job) = &self.load {
+            job.cancel();
+        }
+        if let Some(job) = &self.retirement {
             job.cancel();
         }
     }
@@ -97,6 +104,7 @@ impl Session {
             signature: None,
             unsaved_since: None,
             final_save: None,
+            retirement: None,
         });
     }
     /// Resolve the existing host-association hold before admitting any workflow input sync.
@@ -194,6 +202,7 @@ impl Session {
             if durable && !dirty {
                 persistence.unsaved_since = None;
             }
+            let written = matches!(outcome, SaveOutcome::Saved(_));
             if let Some(final_save) = &mut persistence.final_save {
                 if matches!(final_save.stage, FinalStage::Running) {
                     let since = persistence.unsaved_since.unwrap_or(final_save.began);
@@ -206,7 +215,12 @@ impl Session {
                 self.submit_final_save();
                 return Ok(());
             }
+            if written {
+                self.plan_base_retirement()?;
+            }
         }
+        self.observe_base_retirement();
+        let Some(persistence) = self.inputs.persistence.as_mut() else { return Ok(()) };
         let Load::Running(job) = &mut persistence.load else { return Ok(()) };
         let Some(completion) = job.try_take_completion() else { return Ok(()) };
         persistence.load = Load::Done;

@@ -17,11 +17,12 @@ use windows::{
             Com::CoCreateGuid,
             StationsAndDesktops::{
                 CloseDesktop, CreateDesktopW, DESKTOP_CONTROL_FLAGS, DESKTOP_CREATEWINDOW,
-                DESKTOP_READOBJECTS, DESKTOP_WRITEOBJECTS, HDESK, OpenDesktopW, SetThreadDesktop,
+                DESKTOP_READOBJECTS, DESKTOP_WRITEOBJECTS, GetThreadDesktop,
+                GetUserObjectInformationW, HDESK, OpenDesktopW, SetThreadDesktop, UOI_NAME,
             },
             Threading::{
-                CREATE_NO_WINDOW, CreateEventW, EVENT_MODIFY_STATE, OpenEventW, SetEvent,
-                WaitForSingleObject,
+                CREATE_NO_WINDOW, CreateEventW, EVENT_MODIFY_STATE, GetCurrentThreadId, OpenEventW,
+                SetEvent, WaitForSingleObject,
             },
         },
     },
@@ -91,6 +92,11 @@ fn run_child(body: fn() -> TestResult) -> TestResult {
         // SAFETY: Failed attachment leaves the newly opened desktop handle unborrowed.
         unsafe { CloseDesktop(desktop) }?;
         return Err(cause.into());
+    }
+    // Every window the body creates belongs to this thread's desktop; prove it is the private one.
+    let attached = thread_desktop_name()?;
+    if attached != name {
+        return Err(format!("native qualification thread is on desktop {attached:?}").into());
     }
     // The child process owns this handle through its final native helper thread, rather than
     // attempting to close a desktop still used by Windows' process-scoped UIA/IME infrastructure.
@@ -197,6 +203,26 @@ impl Drop for Case {
         }
     }
 }
+/// Name of the desktop the calling thread creates its windows on.
+fn thread_desktop_name() -> Result<String, Box<dyn std::error::Error>> {
+    let mut units = [0u16; 256];
+    let mut needed = 0;
+    // SAFETY: The current thread's desktop handle is borrowed, not closed; the output buffer
+    // and its byte length describe the same live array.
+    unsafe {
+        let desktop = GetThreadDesktop(GetCurrentThreadId())?;
+        GetUserObjectInformationW(
+            windows::Win32::Foundation::HANDLE(desktop.0),
+            UOI_NAME,
+            Some(units.as_mut_ptr().cast()),
+            (units.len() * 2) as u32,
+            Some(&raw mut needed),
+        )?;
+    }
+    let length = units.iter().position(|unit| *unit == 0).unwrap_or(units.len());
+    Ok(String::from_utf16(&units[..length])?)
+}
+
 fn wide(value: &str) -> Vec<u16> {
     value.encode_utf16().chain([0]).collect()
 }

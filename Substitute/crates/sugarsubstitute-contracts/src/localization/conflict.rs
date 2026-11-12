@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Localized decisions for an occupied desktop profile.
+//! Localized words for starting while a previous SugarSubstitute window is still open.
 /// Complete copy for verified profile-conflict resolution.
 #[non_exhaustive]
 pub struct ConflictMessages {
@@ -44,66 +44,66 @@ impl ConflictMessages {
 }
 /// Complete EN conflict copy.
 pub static EN: ConflictMessages = ConflictMessages {
-    title: "Profile already in use",
-    checking: "Checking which copy is using this profile…",
-    prompt: "This copy of SugarSubstitute is using the profile. You can close it and continue launching:",
-    close: "Close other copy and continue",
-    cancel: "Cancel this launch",
-    waiting: "Waiting for the other copy to close…",
-    force_prompt: "The other copy has not finished closing. You can keep waiting or force quit it. Force quitting may lose unsaved work.",
-    force: "Force quit other copy",
-    cleanup: "Waiting for the other copy and its owned processes to exit…",
-    failed: "The conflicting copy could not be safely closed or its ownership could not be verified. Close it manually, then launch SugarSubstitute again.",
+    title: "SugarSubstitute isn't responding",
+    checking: "Checking the previous SugarSubstitute window…",
+    prompt: "The previous SugarSubstitute window isn't responding. Close it and start? Anything it hadn't saved may be lost.",
+    close: "Close it and start",
+    cancel: "Cancel",
+    waiting: "Closing the previous window…",
+    force_prompt: "The previous window still hasn't closed. Close it and start? Anything it hadn't saved may be lost.",
+    force: "Close it and start",
+    cleanup: "Finishing closing the previous window…",
+    failed: "The previous SugarSubstitute window couldn't be closed. Close it yourself, then start SugarSubstitute again.",
 };
 /// Complete ZH_HANS conflict copy.
 pub static ZH_HANS: ConflictMessages = ConflictMessages {
-    title: "配置文件正在使用中",
-    checking: "正在检查哪个副本使用此配置文件…",
-    prompt: "此 SugarSubstitute 副本正在使用该配置文件。您可以关闭它并继续启动：",
-    close: "关闭其他副本并继续",
-    cancel: "取消此次启动",
-    waiting: "正在等待其他副本关闭…",
-    force_prompt: "其他副本尚未完成关闭。您可以继续等待或强制退出。强制退出可能导致未保存的工作丢失。",
-    force: "强制退出其他副本",
-    cleanup: "正在等待其他副本及其所属进程退出…",
-    failed: "无法安全关闭冲突的副本或验证其所有权。请手动关闭它，然后重新启动 SugarSubstitute。",
+    title: "SugarSubstitute 未响应",
+    checking: "正在检查之前的 SugarSubstitute 窗口…",
+    prompt: "之前的 SugarSubstitute 窗口没有响应。要关闭它并启动吗？未保存的内容可能会丢失。",
+    close: "关闭并启动",
+    cancel: "取消",
+    waiting: "正在关闭之前的窗口…",
+    force_prompt: "之前的窗口仍未关闭。要关闭它并启动吗？未保存的内容可能会丢失。",
+    force: "关闭并启动",
+    cleanup: "正在完成关闭之前的窗口…",
+    failed: "无法关闭之前的 SugarSubstitute 窗口。请手动关闭它，然后重新启动 SugarSubstitute。",
 };
 /// Complete JA conflict copy.
 pub static JA: ConflictMessages = ConflictMessages {
-    title: "プロファイルは使用中です",
-    checking: "このプロファイルを使用しているコピーを確認しています…",
-    prompt: "この SugarSubstitute のコピーがプロファイルを使用しています。閉じて起動を続けられます：",
-    close: "別のコピーを閉じて続行",
-    cancel: "今回の起動をキャンセル",
-    waiting: "別のコピーの終了を待っています…",
-    force_prompt: "別のコピーの終了が完了していません。待機を続けるか、強制終了できます。強制終了すると未保存の作業が失われる可能性があります。",
-    force: "別のコピーを強制終了",
-    cleanup: "別のコピーとその管理下のプロセスの終了を待っています…",
-    failed: "競合するコピーを安全に終了できないか、所有関係を確認できませんでした。手動で閉じてから SugarSubstitute を起動し直してください。",
+    title: "SugarSubstitute が応答していません",
+    checking: "前の SugarSubstitute ウィンドウを確認しています…",
+    prompt: "前の SugarSubstitute ウィンドウが応答していません。閉じて起動しますか？保存されていない内容は失われる可能性があります。",
+    close: "閉じて起動",
+    cancel: "キャンセル",
+    waiting: "前のウィンドウを閉じています…",
+    force_prompt: "前のウィンドウがまだ閉じていません。閉じて起動しますか？保存されていない内容は失われる可能性があります。",
+    force: "閉じて起動",
+    cleanup: "前のウィンドウの終了を完了しています…",
+    failed: "前の SugarSubstitute ウィンドウを閉じられませんでした。手動で閉じてから、SugarSubstitute をもう一度起動してください。",
 };
 /// Complete KO conflict copy.
 pub static KO: ConflictMessages = ConflictMessages {
-    title: "프로필 사용 중",
-    checking: "이 프로필을 사용하는 복사본을 확인하는 중…",
-    prompt: "이 SugarSubstitute 복사본이 프로필을 사용 중입니다. 닫고 실행을 계속할 수 있습니다:",
-    close: "다른 복사본을 닫고 계속",
-    cancel: "이번 실행 취소",
-    waiting: "다른 복사본이 종료되기를 기다리는 중…",
-    force_prompt: "다른 복사본의 종료가 완료되지 않았습니다. 계속 기다리거나 강제로 종료할 수 있습니다. 강제 종료하면 저장하지 않은 작업이 손실될 수 있습니다.",
-    force: "다른 복사본 강제 종료",
-    cleanup: "다른 복사본과 해당 복사본이 관리하는 프로세스가 종료되기를 기다리는 중…",
-    failed: "충돌하는 복사본을 안전하게 종료하거나 소유 관계를 확인할 수 없습니다. 수동으로 닫은 다음 SugarSubstitute를 다시 실행하세요.",
+    title: "SugarSubstitute가 응답하지 않습니다",
+    checking: "이전 SugarSubstitute 창을 확인하는 중…",
+    prompt: "이전 SugarSubstitute 창이 응답하지 않습니다. 닫고 시작할까요? 저장하지 않은 내용은 사라질 수 있습니다.",
+    close: "닫고 시작",
+    cancel: "취소",
+    waiting: "이전 창을 닫는 중…",
+    force_prompt: "이전 창이 아직 닫히지 않았습니다. 닫고 시작할까요? 저장하지 않은 내용은 사라질 수 있습니다.",
+    force: "닫고 시작",
+    cleanup: "이전 창을 마저 닫는 중…",
+    failed: "이전 SugarSubstitute 창을 닫을 수 없습니다. 직접 닫은 다음 SugarSubstitute를 다시 시작하세요.",
 };
 /// Complete ES conflict copy.
 pub static ES: ConflictMessages = ConflictMessages {
-    title: "Perfil en uso",
-    checking: "Comprobando qué copia está usando este perfil…",
-    prompt: "Esta copia de SugarSubstitute está usando el perfil. Puedes cerrarla y continuar el inicio:",
-    close: "Cerrar la otra copia y continuar",
-    cancel: "Cancelar este inicio",
-    waiting: "Esperando a que se cierre la otra copia…",
-    force_prompt: "La otra copia no ha terminado de cerrarse. Puedes seguir esperando o forzar su cierre. Forzar el cierre puede perder el trabajo sin guardar.",
-    force: "Forzar el cierre de la otra copia",
-    cleanup: "Esperando a que salgan la otra copia y los procesos que administra…",
-    failed: "No se pudo cerrar de forma segura la copia en conflicto o verificar su propiedad. Ciérrala manualmente y vuelve a iniciar SugarSubstitute.",
+    title: "SugarSubstitute no responde",
+    checking: "Comprobando la ventana anterior de SugarSubstitute…",
+    prompt: "La ventana anterior de SugarSubstitute no responde. ¿Cerrarla e iniciar? Se puede perder lo que no se haya guardado.",
+    close: "Cerrarla e iniciar",
+    cancel: "Cancelar",
+    waiting: "Cerrando la ventana anterior…",
+    force_prompt: "La ventana anterior todavía no se ha cerrado. ¿Cerrarla e iniciar? Se puede perder lo que no se haya guardado.",
+    force: "Cerrarla e iniciar",
+    cleanup: "Terminando de cerrar la ventana anterior…",
+    failed: "No se pudo cerrar la ventana anterior de SugarSubstitute. Ciérrala tú y vuelve a iniciar SugarSubstitute.",
 };
