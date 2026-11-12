@@ -7,6 +7,13 @@ const REFUSALS = {
     'not-ready': 'No update is ready to apply yet.',
     unavailable: UNAVAILABLE,
 };
+/** Say why this copy of SugarCubes is left alone. */
+const UNMANAGED = {
+    'git-checkout': "This copy of SugarCubes is a git checkout, so it isn't updated here.",
+    'local-changes': "This copy of SugarCubes has local changes, so it isn't updated here.",
+    'linked-folder': "SugarCubes is installed from a linked folder, so it isn't updated here.",
+    'not-registry-install': "SugarCubes wasn't installed from ComfyUI Manager, so it isn't updated here. Reinstall it from ComfyUI Manager to get updates.",
+};
 /** Say where an update stands in one plain sentence. */
 export function updateStatusText(status, applies) {
     switch (status.state) {
@@ -25,11 +32,9 @@ export function updateStatusText(status, applies) {
                 ? "Couldn't check for updates."
                 : "The update couldn't be installed.";
         case 'restart-comfyui':
-            return `Version ${status.version} is installed. Restart ComfyUI to finish.`;
+            return `Version ${status.version} will be installed when you restart ComfyUI.`;
         case 'unmanaged':
-            return status.reason === 'git-checkout'
-                ? 'This copy of SugarCubes is a git checkout, so it is not updated here.'
-                : 'This copy of SugarCubes has local changes, so it is not updated here.';
+            return UNMANAGED[status.reason];
     }
 }
 /** Keep one stable page whose rows follow every snapshot the attached source reports. */

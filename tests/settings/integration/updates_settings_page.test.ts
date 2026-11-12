@@ -180,12 +180,26 @@ test("SugarCubes' own updater feeds the same entry and asks for a ComfyUI restar
   view.button('Apply update')?.click();
   expect(own.value.apply).toHaveBeenCalledWith('now');
   own.publish({ status: { state: 'restart-comfyui', version: '0.5.0' } });
-  expect(view.status()).toBe('Version 0.5.0 is installed. Restart ComfyUI to finish.');
+  expect(view.status()).toBe('Version 0.5.0 will be installed when you restart ComfyUI.');
   own.publish({ status: { state: 'unmanaged', reason: 'git-checkout' } });
   expect(view.button('Check for updates')).toBeUndefined();
   release();
   expect(view.status()).toBe('Updates are unavailable right now.');
   view.page.dispose();
+});
+
+test('a copy that is never updated in place says why', () => {
+  expect(updateStatusText({ state: 'unmanaged', reason: 'linked-folder' }, 'comfyui-restart')).toBe(
+    "SugarCubes is installed from a linked folder, so it isn't updated here.",
+  );
+  expect(
+    updateStatusText({ state: 'unmanaged', reason: 'not-registry-install' }, 'comfyui-restart'),
+  ).toBe(
+    "SugarCubes wasn't installed from ComfyUI Manager, so it isn't updated here. Reinstall it from ComfyUI Manager to get updates.",
+  );
+  expect(updateStatusText({ state: 'unmanaged', reason: 'git-checkout' }, 'comfyui-restart')).toBe(
+    "This copy of SugarCubes is a git checkout, so it isn't updated here.",
+  );
 });
 
 test('status words stay plain for every state', () => {
@@ -199,6 +213,8 @@ test('status words stay plain for every state', () => {
     { state: 'restart-comfyui', version: '1.0.0' },
     { state: 'unmanaged', reason: 'git-checkout' },
     { state: 'unmanaged', reason: 'local-changes' },
+    { state: 'unmanaged', reason: 'linked-folder' },
+    { state: 'unmanaged', reason: 'not-registry-install' },
   ];
   for (const status of states)
     for (const applies of ['host-restart', 'comfyui-restart'] as const)
