@@ -4,10 +4,11 @@
 use crate::DesktopError;
 use windows::{
     Win32::{
-        Foundation::{COLORREF, HWND, RECT},
+        Foundation::{COLORREF, HWND, RECT, SIZE},
         Graphics::Gdi::{
-            ANTIALIASED_QUALITY, CLIP_DEFAULT_PRECIS, CreateFontW, DEFAULT_CHARSET, DEFAULT_PITCH,
-            DT_END_ELLIPSIS, DT_LEFT, DT_SINGLELINE, DT_VCENTER, DeleteObject, HDC,
+            ANTIALIASED_QUALITY, CLIP_DEFAULT_PRECIS, CreateCompatibleDC, CreateFontW,
+            DEFAULT_CHARSET, DEFAULT_PITCH, DT_CENTER, DT_END_ELLIPSIS, DT_LEFT, DT_SINGLELINE,
+            DT_VCENTER, DeleteDC, DeleteObject, GetTextExtentPoint32W, HDC, HFONT,
             OUT_DEFAULT_PRECIS, SelectObject,
         },
         UI::Controls::{
@@ -22,6 +23,8 @@ use windows::{
 pub(super) struct Style {
     pub(super) light_foreground: bool,
     pub(super) disabled: bool,
+    /// Centre the words, for short action labels.
+    pub(super) centered: bool,
     pub(super) dpi: u32,
 }
 
@@ -33,32 +36,11 @@ pub(super) fn draw(
     text: &[u16],
     style: Style,
 ) -> Result<(), DesktopError> {
-    let Style { light_foreground, disabled, dpi } = style;
+    let Style { light_foreground, disabled, centered, dpi } = style;
     if text.is_empty() || rect.right <= rect.left {
         return Ok(());
     }
-    // SAFETY: The installed Windows font is selected only into this retained memory DC.
-    let font = unsafe {
-        CreateFontW(
-            -((12 * dpi / 96) as i32),
-            0,
-            0,
-            0,
-            400,
-            0,
-            0,
-            0,
-            DEFAULT_CHARSET,
-            OUT_DEFAULT_PRECIS,
-            CLIP_DEFAULT_PRECIS,
-            ANTIALIASED_QUALITY,
-            DEFAULT_PITCH.0 as u32,
-            w!("Segoe UI"),
-        )
-    };
-    if font.is_invalid() {
-        return Err(DesktopError::message("create_caption_font", "CreateFontW failed"));
-    }
+    let font = font(dpi)?;
     // SAFETY: Keep the original object and restore it before deleting this owned font.
     let previous = unsafe { SelectObject(dc, font.into()) };
     let mut failure = if previous.is_invalid() {
@@ -82,7 +64,10 @@ pub(super) fn draw(
                 crText: COLORREF(value * 0x010101),
                 ..Default::default()
             };
-            let format = DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_LEFT;
+            let format = DT_SINGLELINE
+                | DT_VCENTER
+                | DT_END_ELLIPSIS
+                | if centered { DT_CENTER } else { DT_LEFT };
             // SAFETY: Text, destination and options remain live for this synchronous alpha-aware draw.
             let mut failure = unsafe {
                 DrawThemeTextEx(
@@ -125,6 +110,80 @@ pub(super) fn draw(
         );
     }
     failure.map_or(Ok(()), Err)
+}
+
+/// The caption font, Segoe UI at 12 logical pixels, created for `dpi`. The caller deletes it.
+fn font(dpi: u32) -> Result<HFONT, DesktopError> {
+    // SAFETY: Creating a font object has no side effects beyond the returned owned handle.
+    let font = unsafe {
+        CreateFontW(
+            -((12 * dpi / 96) as i32),
+            0,
+            0,
+            0,
+            400,
+            0,
+            0,
+            0,
+            DEFAULT_CHARSET,
+            OUT_DEFAULT_PRECIS,
+            CLIP_DEFAULT_PRECIS,
+            ANTIALIASED_QUALITY,
+            DEFAULT_PITCH.0 as u32,
+            w!("Segoe UI"),
+        )
+    };
+    if font.is_invalid() {
+        return Err(DesktopError::message("create_caption_font", "CreateFontW failed"));
+    }
+    Ok(font)
+}
+
+/// Device-pixel width of `text` in the caption font at `dpi`, measured in an owned memory DC.
+pub(super) fn measure(text: &[u16], dpi: u32) -> Result<i32, DesktopError> {
+    if text.is_empty() {
+        return Ok(0);
+    }
+    let font = font(dpi)?;
+    // SAFETY: An owned memory DC displays nothing; it is deleted on every path below.
+    let dc = unsafe { CreateCompatibleDC(None) };
+    let mut failure = None;
+    let mut size = SIZE::default();
+    if dc.is_invalid() {
+        failure = Some(DesktopError::message("measure_caption_text", "CreateCompatibleDC failed"));
+    } else {
+        // SAFETY: The owned font is selected into the owned DC and restored before deletion.
+        let previous = unsafe { SelectObject(dc, font.into()) };
+        let measured = !previous.is_invalid()
+            // SAFETY: Text and output live for this synchronous measurement.
+            && unsafe { GetTextExtentPoint32W(dc, text, &raw mut size) }.as_bool();
+        if !measured {
+            failure =
+                Some(DesktopError::message("measure_caption_text", "GetTextExtentPoint32W failed"));
+        }
+        // SAFETY: Restore the DC's original font before either object is deleted.
+        if !previous.is_invalid() && unsafe { SelectObject(dc, previous) } != font.into() {
+            DesktopError::retain_first(
+                &mut failure,
+                DesktopError::message("restore_caption_font", "SelectObject failed"),
+            );
+        }
+        // SAFETY: Delete exactly the memory DC created above.
+        if !unsafe { DeleteDC(dc) }.as_bool() {
+            DesktopError::retain_first(
+                &mut failure,
+                DesktopError::message("measure_caption_text", "DeleteDC failed"),
+            );
+        }
+    }
+    // SAFETY: The font is no longer selected into any DC.
+    if !unsafe { DeleteObject(font.into()) }.as_bool() {
+        DesktopError::retain_first(
+            &mut failure,
+            DesktopError::message("delete_caption_font", "DeleteObject failed"),
+        );
+    }
+    failure.map_or(Ok(size.cx), Err)
 }
 
 /// An alpha-aware narrow focus ring remains visible on glass and does not XOR prior frames.

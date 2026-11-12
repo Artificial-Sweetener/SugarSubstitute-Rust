@@ -18,6 +18,7 @@ composition-qualification = ["k1-native-qualification", "native-composition"]
 [dependencies]
 sugarsubstitute-ui = { path = "../sugarsubstitute-ui" }
 sugarsubstitute-contracts = { path = "../sugarsubstitute-contracts" }
+sugarsubstitute-application = { path = "../sugarsubstitute-application" }
 sugarsubstitute-canvas = { path = "../sugarsubstitute-canvas" }
 sugarsubstitute-image-ops = { path = "../sugarsubstitute-image-ops" }
 sugarsubstitute-image-gpu = { path = "../sugarsubstitute-image-gpu" }
@@ -43,7 +44,6 @@ cairo-rs.workspace = true
 
 [dev-dependencies]
 sugarsubstitute-image-gpu = { path = "../sugarsubstitute-image-gpu", features = ["boundary-fixtures"] }
-sugarsubstitute-application = { path = "../sugarsubstitute-application" }
 sugarsubstitute-execution = { path = "../sugarsubstitute-execution" }
 
 [lints]

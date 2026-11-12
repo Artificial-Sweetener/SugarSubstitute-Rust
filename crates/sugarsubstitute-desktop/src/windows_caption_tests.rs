@@ -266,7 +266,11 @@ fn native_caption_pixels_match_original_qt_vectors_and_feedback()
                             background(
                                 buffer,
                                 rect,
-                                Caption { dark, material: NativeMaterial::Mica },
+                                Caption {
+                                    dark,
+                                    material: NativeMaterial::Mica,
+                                    update: Default::default(),
+                                },
                                 hot,
                                 pressed,
                                 id == 3,
@@ -303,7 +307,11 @@ fn native_caption_pixels_match_original_qt_vectors_and_feedback()
                 background(
                     buffer,
                     rect,
-                    Caption { dark: true, material: NativeMaterial::Mica },
+                    Caption {
+                        dark: true,
+                        material: NativeMaterial::Mica,
+                        update: Default::default(),
+                    },
                     hot,
                     pressed,
                     true,
@@ -315,6 +323,50 @@ fn native_caption_pixels_match_original_qt_vectors_and_feedback()
                     Ok(())
                 })
             })?;
+        }
+        Ok::<(), DesktopError>(())
+    })();
+    // SAFETY: Every native buffer has retired before its original memory DC is released.
+    assert!(unsafe { DeleteDC(dc) }.as_bool());
+    result.map_err(Into::into)
+}
+
+/// The update glyph is drawn wholly in its tint, ready and warning differ, and both themes keep
+/// it inside the caption's glyph box at every supported scale.
+#[test]
+fn update_glyph_is_tinted_for_ready_and_warning() -> Result<(), Box<dyn std::error::Error>> {
+    // SAFETY: An owned memory DC displays no window and cannot interact with the user's desktop.
+    let dc = unsafe { CreateCompatibleDC(None) };
+    assert!(!dc.is_invalid());
+    let result = (|| {
+        for dpi in [96, 120, 144, 192, 288] {
+            let rect = RECT {
+                left: 0,
+                top: 0,
+                right: ((46 * dpi + 48) / 96) as i32,
+                bottom: ((32 * dpi + 48) / 96) as i32,
+            };
+            for dark in [false, true] {
+                let mut inks = Vec::new();
+                for warning in [false, true] {
+                    let tint = glyphs::update_tint(warning, dark);
+                    buffered(dc, rect, |_target, buffer| {
+                        pixels::with_pixels(buffer, rect, |pixels| {
+                            pixels.fill([0; 4]);
+                            glyphs::update(pixels, dpi, tint);
+                            let (count, box_) = pixels.ink(tint);
+                            let scale = |v: usize| v * dpi as usize / 96;
+                            assert!(count > scale(20), "dpi={dpi} dark={dark}: {count} pixels");
+                            assert!(box_[0] >= scale(18) && box_[2] <= scale(29), "{box_:?}");
+                            assert!(box_[1] >= scale(11) && box_[3] <= scale(22), "{box_:?}");
+                            inks.push(count);
+                            Ok(())
+                        })
+                    })?;
+                }
+                assert_ne!(glyphs::update_tint(false, dark), glyphs::update_tint(true, dark));
+                assert_eq!(inks[0], inks[1], "the tint changes only the color");
+            }
         }
         Ok::<(), DesktopError>(())
     })();

@@ -6,7 +6,7 @@ use super::*;
 use sugarsubstitute_contracts::presentation::PreparedFrame;
 
 /// One kept capture: name, width, height and opaque BGRA pixels.
-pub(super) type Capture = (&'static str, u32, u32, Vec<u8>);
+pub(crate) type Capture = (&'static str, u32, u32, Vec<u8>);
 
 /// Captures requested by the script and taken by the host after its next presentation, and
 /// whether the report had nothing left to prepare after the last turn.
@@ -74,7 +74,7 @@ impl crate::pixel_capture::PixelCapture for Observer {
 }
 
 /// Keep captures as 32-bit bitmaps when a proof directory is configured.
-pub(super) fn keep(captures: &[Capture]) -> TestResult {
+pub(crate) fn keep(captures: &[Capture]) -> TestResult {
     let Some(directory) = std::env::var_os("SUGARSUBSTITUTE_REPORT_PROOF_DIR") else {
         return Ok(());
     };

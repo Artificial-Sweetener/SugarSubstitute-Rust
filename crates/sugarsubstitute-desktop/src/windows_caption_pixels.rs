@@ -93,6 +93,26 @@ impl Pixels<'_> {
         pixel.rgbReserved = alpha.saturating_add(divide255(u32::from(pixel.rgbReserved) * inverse));
     }
 
+    /// Count the opaque pixels of exactly `color` and their bounding box `[left, top, right,
+    /// bottom]`, inclusive.
+    #[cfg(test)]
+    pub(super) fn ink(&self, color: [u8; 3]) -> (usize, [usize; 4]) {
+        let mut count = 0;
+        let mut bounds = [usize::MAX, usize::MAX, 0, 0];
+        for (y, row) in self.rows.chunks_exact(self.stride).take(self.height).enumerate() {
+            for (x, pixel) in row[..self.width].iter().enumerate() {
+                if pixel.rgbReserved == 255
+                    && [pixel.rgbRed, pixel.rgbGreen, pixel.rgbBlue] == color
+                {
+                    count += 1;
+                    bounds =
+                        [bounds[0].min(x), bounds[1].min(y), bounds[2].max(x), bounds[3].max(y)];
+                }
+            }
+        }
+        (count, bounds)
+    }
+
     /// Stable complete-pixel regression digest over BGRA rows, excluding native padding.
     #[cfg(test)]
     pub(super) fn digest(&self) -> u64 {

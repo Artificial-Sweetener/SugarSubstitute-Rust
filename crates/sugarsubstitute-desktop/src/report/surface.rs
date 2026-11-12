@@ -15,10 +15,10 @@ use sugarsubstitute_ui::report::{
 
 mod conflict;
 mod crash;
-mod lifetime;
+pub(crate) mod lifetime;
 #[cfg(all(test, windows))]
 #[allow(unsafe_code)]
-mod native_tests;
+pub(crate) mod native_tests;
 mod startup;
 #[cfg(test)]
 mod tests;
@@ -109,6 +109,27 @@ impl ReportPresentation {
         )
     }
 
+    /// A failed update attempt as the update owner recorded it: its version and step as
+    /// summary facts, and a report naming them with the cause chain, outermost first.
+    pub fn update_attempt(
+        copy: &'static Messages,
+        window_title: &str,
+        attempt: &sugarsubstitute_contracts::update::attempt::UpdateReport,
+    ) -> Self {
+        let version = attempt.version.as_deref().unwrap_or(copy.report.unavailable);
+        let step = copy.updates.phase(attempt.phase);
+        let mut details = format!(
+            "{}\n{}: {version}\n{}: {step}\n",
+            copy.report.update_title, copy.report.version, copy.report.update_phase,
+        );
+        for cause in &attempt.causes {
+            details.push('\n');
+            details.push_str(cause);
+        }
+        details.push('\n');
+        Self::update_failure(copy, window_title, version, step, details)
+    }
+
     /// The question asked when the previous SugarSubstitute window has stopped responding.
     pub fn unresponsive_copy(copy: &'static Messages, window_title: &str) -> Self {
         Self::new(
@@ -153,7 +174,7 @@ pub struct ReportControl<'a> {
 
 /// Owner requests the report applies after the owner's turn.
 #[derive(Default)]
-pub(super) struct ControlRequests {
+pub(crate) struct ControlRequests {
     /// Replacement for the full report text.
     pub(super) details: Option<String>,
     /// Copy the full report text, optionally only before this counter deadline.
@@ -302,6 +323,61 @@ pub trait ReportOwner {
     }
 }
 
+/// A borrowed owner reports exactly as the owner itself.
+impl<T: ReportOwner + ?Sized> ReportOwner for &mut T {
+    fn start(&mut self, wake: Arc<dyn CompletionWake>) -> Result<(), Box<dyn Error>> {
+        (**self).start(wake)
+    }
+    fn command(
+        &mut self,
+        command: ReportCommand,
+        report: &mut ReportControl<'_>,
+    ) -> Result<(), Box<dyn Error>> {
+        (**self).command(command, report)
+    }
+    fn poll(&mut self, report: &mut ReportControl<'_>) -> Result<(), Box<dyn Error>> {
+        (**self).poll(report)
+    }
+    fn copy(&mut self, report: &mut ReportControl<'_>) -> Result<bool, Box<dyn Error>> {
+        (**self).copy(report)
+    }
+    fn copied(
+        &mut self,
+        outcome: Result<(), CopyFailure>,
+        report: &mut ReportControl<'_>,
+    ) -> Result<(), Box<dyn Error>> {
+        (**self).copied(outcome, report)
+    }
+    fn export_requested(
+        &mut self,
+        include_dump: bool,
+        report: &mut ReportControl<'_>,
+    ) -> Result<bool, Box<dyn Error>> {
+        (**self).export_requested(include_dump, report)
+    }
+    fn export_abandoned(&mut self, report: &mut ReportControl<'_>) -> Result<(), Box<dyn Error>> {
+        (**self).export_abandoned(report)
+    }
+    fn presented(&mut self, details_revision: u64) -> Result<(), Box<dyn Error>> {
+        (**self).presented(details_revision)
+    }
+    fn close(&mut self) -> Result<(), Box<dyn Error>> {
+        (**self).close()
+    }
+    fn window_releasable(&mut self) -> Result<bool, Box<dyn Error>> {
+        (**self).window_releasable()
+    }
+    fn window_retired(&mut self) -> Result<(), Box<dyn Error>> {
+        (**self).window_retired()
+    }
+    fn settled(&mut self) -> Result<bool, Box<dyn Error>> {
+        (**self).settled()
+    }
+    fn finish(&mut self) -> Result<(), Box<dyn Error>> {
+        (**self).finish()
+    }
+}
+
 /// Show `presentation` until its owner closes it and has settled.
 /// Must run on the main thread after any previous native window has retired, never from inside
 /// another window's event callback.
@@ -317,7 +393,7 @@ pub fn show_report(
 }
 
 /// The report's window: fixed width, sized to its content once the first frame is measured.
-fn report_window(title: String) -> crate::installer::native::Window {
+pub(crate) fn report_window(title: String) -> crate::installer::native::Window {
     crate::installer::native::Window {
         title,
         visible: true,
