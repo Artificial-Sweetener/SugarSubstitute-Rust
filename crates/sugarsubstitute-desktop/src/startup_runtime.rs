@@ -31,6 +31,8 @@ struct Session {
     activity: native_activity::NativeActivity,
     accent: crate::windows_system_accent::SystemAccent,
     observers: windows_activity::Observers,
+    /// Answers Windows shutdown and logoff from the close save; absent if Tao changed.
+    session_end: Option<crate::windows_session_end::SessionEndWatch>,
     splash: surface::Splash,
     main: Option<MainActor>,
     main_fence: main_fence::MainFence,
@@ -182,6 +184,7 @@ pub fn run_startup(
             wake_lifetime.clone(),
         ),
         observers: windows_activity::Observers::new(event_loop.create_proxy()),
+        session_end: session_end_watch(&content, event_loop.create_proxy()),
         splash,
         main: None,
         main_fence: main_fence::MainFence::new(),
@@ -217,6 +220,12 @@ pub fn run_startup(
             });
             if let Err(cause) = result {
                 session.fail(&mut content, cause);
+            }
+            if let Some(watch) = &mut session.session_end {
+                watch.set_outstanding(!content.close_save_settled());
+                if let Err(cause) = watch.track() {
+                    session.retain(cause);
+                }
             }
             if let Some(cause) =
                 timings.as_ref().and_then(crate::timing::TimingObserver::take_failure)
@@ -256,6 +265,11 @@ pub fn run_startup(
             drop(animation_period);
             bootstrap.retain_close_failure(&mut session.failure);
             session.accent.retire();
+            if let Some(watch) = session.session_end.take()
+                && let Err(cause) = watch.retire()
+            {
+                session.retain(cause);
+            }
             wake_lifetime.disconnect();
             if let Some(main) = session.main.take() {
                 session.navigations += main.navigations();
@@ -294,6 +308,28 @@ pub fn run_startup(
     })?;
     splash.timings = timing_receipt?;
     Ok(StartupDesktopReceipt { splash, main_material, navigations_started })
+}
+
+/// Answer session ends from the content's close save. Without the watch Tao would exit the
+/// process at session end, so its absence is logged as an error rather than ending startup.
+fn session_end_watch(
+    content: &impl StartupWindowContent,
+    proxy: tao::event_loop::EventLoopProxy<NativeAction>,
+) -> Option<crate::windows_session_end::SessionEndWatch> {
+    let wake = move || {
+        if let Err(cause) = proxy.send_event(NativeAction::SessionEnding) {
+            tracing::error!(operation = "session_end_wake", cause = %cause,
+                "A session end could not wake the event loop");
+        }
+    };
+    match crate::windows_session_end::SessionEndWatch::install(content.session_end_reason(), wake) {
+        Ok(watch) => Some(watch),
+        Err(cause) => {
+            tracing::error!(operation = "install_session_end", cause = %cause,
+                "Windows shutdown and logoff will not wait for the close save");
+            None
+        }
+    }
 }
 
 /// No Tao/window was admitted; actual settled content finalization still owns worker joins.

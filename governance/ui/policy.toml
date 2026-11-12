@@ -149,7 +149,7 @@ sources = [
     "crates/sugarsubstitute-desktop/src/windows_text/field_tests.rs",
     "crates/sugarsubstitute-desktop/src/windows_text/renderer.rs",
 ]
-source_sha256 = "sha256:b3c87229387cc46bfb5f09ca509e4737bc321fcf1d52b8e58ce4536adf95aa67"
+source_sha256 = "sha256:693b7fa2f72b8b71034b1bcf715f362d0bd710d8fed8531e3b7119e9179588ad"
 
 [[boundaries]]
 owner = "sugarsubstitute-image-gpu"
@@ -199,3 +199,12 @@ sources = [
     "crates/sugarsubstitute-desktop/src/startup_error_dialog.rs",
 ]
 source_sha256 = "sha256:5ee192ba43cbd91a51be4ac1889895a81a1824b5af78826afb3c16b843c83278"
+
+[[boundaries]]
+owner = "sugarsubstitute-desktop"
+concern = "Windows session-end qualification: a real hidden Tao loop and window prove shutdown and logoff wait for the close save and never reach Tao's exit"
+capabilities = ["window"]
+sources = [
+    "crates/sugarsubstitute-desktop/src/windows_session_end_tests.rs",
+]
+source_sha256 = "sha256:11760465366346786aef5d45621d70f16c78da882d2ba601a885a5e713dd714f"

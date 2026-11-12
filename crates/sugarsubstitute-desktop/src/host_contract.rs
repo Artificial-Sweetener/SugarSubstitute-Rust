@@ -692,6 +692,28 @@ pub trait StartupWindowContent: WindowContent {
         false
     }
 
+    /// Close because Windows is ending the session, keeping everything authored. A `critical`
+    /// session end does not wait for any answer, so the content saves on a short budget.
+    /// Content without a close save simply closes.
+    ///
+    /// # Errors
+    /// Preserves the close transaction's first measurement or cleanup failure.
+    fn request_session_close(&mut self, critical: bool) -> Result<(), Box<dyn Error>> {
+        let _ = critical;
+        self.request_shutdown()
+    }
+
+    /// Whether the close save has settled, so a session end may proceed. Content without a
+    /// close save holds nothing.
+    fn close_save_settled(&self) -> bool {
+        true
+    }
+
+    /// The localized reason Windows shows while a session end waits for the close save.
+    fn session_end_reason(&self) -> &'static str {
+        sugarsubstitute_contracts::localization::messages("en").closing.saving
+    }
+
     /// Hand over a prepared drag-out of the shown output, at most once per routed request.
     /// Called on every main-loop turn after routed gestures; the desktop discards an output for
     /// another lifetime or one whose primary press already ended.

@@ -132,7 +132,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/lib.rs"
-source_sha256 = "sha256:0088fd724b6e04b0e1aad63cef2fe01ff4b8d8566fd9ecc6e184a3a60a1f1791"
+source_sha256 = "sha256:fc752f1e7659c322f9786dcd69948f1956422c2568896b290e26d9e46f9168ed"
 kind = "native"
 rationale = "Native boundary: Own native window lifetime and CPU frame presentation independently of UI content.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -420,7 +420,7 @@ rationale = "Startup View binds output, cancel and retry accessible controls to 
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup.rs"
-source_sha256 = "sha256:510504064694e8a041198fc2936e5c9666cd8e941fff67371fc8cc76ec698982"
+source_sha256 = "sha256:8f00e8fe685c712e0729630e772c4253cf176bde57fb80192a846cb393dbfe16"
 kind = "presentation"
 rationale = "WindowContent returns the authoritative startup View accessible controls. This composing owner introduces no label literals."
 
@@ -450,7 +450,7 @@ rationale = "Validate existing control labels for emptiness/NUL and unique ident
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/host_contract.rs"
-source_sha256 = "sha256:36ad4a13760a327fb9857ede3412a2bd16c6bf221835b80ca70fcbd7b52eb0b4"
+source_sha256 = "sha256:f4918ef7bd1522246bb5007f21bc08c4f6b0aa156c03f52f1763edcd718e43fb"
 kind = "native"
 rationale = "Main caption/recovery contracts borrow localized labels from the host. They define presentation data and no catalog or fallback policy."
 
@@ -462,7 +462,7 @@ rationale = "Recovery and caption controls select supplied canonical labels acco
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/startup_runtime.rs"
-source_sha256 = "sha256:2cd20d2d73f38ac6e94f8a9075a59d4997d0e768f9cbff811df31edda447a8a7"
+source_sha256 = "sha256:5202edf6f6d03c12d638287f62dc482e1eed0a67d567d10859feaf75c5be5cfd"
 kind = "native"
 rationale = "The native startup session retains DesktopOptions from the host and passes them to the owned splash surface; it does not create product copy."
 

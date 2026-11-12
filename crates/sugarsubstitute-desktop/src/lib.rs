@@ -161,6 +161,9 @@ mod windows_move_state;
 mod windows_scroll;
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
+mod windows_session_end;
+#[cfg(target_os = "windows")]
+#[allow(unsafe_code)]
 mod windows_subclass;
 #[cfg(target_os = "windows")]
 mod windows_system_accent;

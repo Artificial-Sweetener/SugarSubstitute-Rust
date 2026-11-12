@@ -132,9 +132,11 @@ impl<B: StartupBackend> StartupHost<B> {
         if let Ok(budget) = self.shutdown.budget() {
             self.execution.retain_shutdown_cutoff(budget.settle_until);
             #[cfg(all(windows, feature = "native-composition"))]
+            let close_save_cutoff = self.close_save_cutoff(budget);
+            #[cfg(all(windows, feature = "native-composition"))]
             if let Some(workspace) = &mut self.workspace {
                 workspace.retain_retirement_until(budget.settle_until);
-                workspace.begin_close(self.clock.now(), budget.graceful_until)?;
+                workspace.begin_close(self.clock.now(), close_save_cutoff)?;
             }
             // The close save gates the exit intent: the input canvas's final save is submitted
             // and both owners answer before the child is asked to shut down.

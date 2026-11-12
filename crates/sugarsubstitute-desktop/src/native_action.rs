@@ -24,6 +24,9 @@ pub(crate) enum NativeAction {
     /// Request application-owned close.
     #[cfg(target_os = "windows")]
     Close,
+    /// Windows is ending the session or cancelled ending it; the session-end watch holds which.
+    #[cfg(target_os = "windows")]
+    SessionEnding,
     /// Traverse only current visible native splash peers, preserving Shift direction.
     #[cfg(target_os = "windows")]
     FocusNext(bool),
