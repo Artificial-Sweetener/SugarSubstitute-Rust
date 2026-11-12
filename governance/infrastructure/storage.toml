@@ -1128,7 +1128,7 @@ rationale = "Durable filesystem owner: Retain Windows artifact ancestry and obse
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/files.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:a75be709dc5c2e92f14f8c55b0aaf9ed261a7496b71533a7b8ce575a99c0f128"
+source_sha256 = "sha256:d83fedaf0747425cd83bb4cab88a826c58eb2ec445c0c0877544e98044560576"
 capabilities = ["assert! restricted capability fragments", "method metadata", "method sync_all", "std::fs::File", "std::fs::OpenOptions", "std::fs::OpenOptions::new", "std::fs::create_dir", "std::fs::read", "std::fs::rename", "std::fs::write", "tempfile::tempdir"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Pin each resolved directory against replacement and reject reparse-point traversal. Native access and its adversarial qualification remain within this owner."
@@ -1528,8 +1528,8 @@ rationale = "Durable filesystem owner: Exercise actual selected-folder custody t
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/retirement.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:b7d77ef9bbbcbb41e472c4683e0beec8afa09a51b487fbc33dd739af09dd7ab1"
-capabilities = ["DeleteFile", "SetFileInformationByHandle", "method metadata", "std::fs::OpenOptions", "std::fs::OpenOptions::new", "windows::Win32::Storage::FileSystem", "windows::Win32::Storage::FileSystem::SetFileInformationByHandle"]
+source_sha256 = "sha256:1587034402af16628013252b8671b4a9061aface24ccddad444cda772a734bf8"
+capabilities = ["DeleteFile", "NtSetInformationFile", "SetFileInformationByHandle", "method metadata", "std::fs::File", "std::fs::OpenOptions", "std::fs::OpenOptions::new", "windows::Wdk::Storage::FileSystem", "windows::Wdk::Storage::FileSystem::NtSetInformationFile", "windows::Win32::Storage::FileSystem", "windows::Win32::Storage::FileSystem::SetFileInformationByHandle"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Retire one exact regular file or empty directory under its retained parent. Native access and its adversarial qualification remain within this owner."
 
@@ -1761,7 +1761,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Aut
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/cache.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:fc618fa66b4403a2b56ddf957f6a33700e81ff5dd6e4a0cfc24505147693a23b"
+source_sha256 = "sha256:e77dba696659a55bc4c8c4b3012881e9915ef765e948dece513c0dd846dde3a4"
 capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Own disposable runtime storage, disk admission, retained pins and restart-safe reclamation. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
@@ -1770,7 +1770,7 @@ boundary = "native_custody"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/cache/consumers.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:f2adc0de874a400aa30e228d8466da203f9a079a889e059f365c720197e266c5"
+source_sha256 = "sha256:7fa85d323c9f6f07afc4924bcd069d292c2563f8635d19eaff9037e13274d60a"
 capabilities = ["method sync_all", "std::fs::read", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Retain immutable generations through actual native-family use, including host loss. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -1778,7 +1778,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Ret
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/cache/maintenance/retirement.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:fcce9f52d93bc18c2697f0a54a6e2c2cc75b9a224e6aae96f57b41692c4d4a42"
+source_sha256 = "sha256:75e110856b1fc19d050895eaece8202dbc74c586dee7320859659e8a97b87c08"
 capabilities = ["std::fs::read", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Recheck live access and journal exact native deletion custody before reclaiming an entry. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -1826,7 +1826,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Nat
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/cache/tests/recovery.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:c96f8f1f7e880c4ecde41e8fd7a32e053474d4e0669906a7e07a30462ddca9e8"
+source_sha256 = "sha256:500838eafd6ea61b53171136b51b16f29b27d23b86c6c81c043fac9c2549d6ac"
 capabilities = ["method sync_all", "std::fs::create_dir", "std::fs::create_dir_all", "std::fs::read", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Safe reclamation preserves authoritative and unknown bytes through interrupted deletion. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -1842,7 +1842,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Fea
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/cache/tree.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:a93bdb41d58dd35305173cc095f7c418a228ea05db5ef626eeacc508e308298d"
+source_sha256 = "sha256:1e68715f2f0668cdda3c37479339553d032db11691ab398d81f2ca55dfd371e8"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Borrow cached metadata from the durable-storage directory entry; original parent and job controls stay retained."
@@ -5035,3 +5035,27 @@ source_sha256 = "sha256:5717ca4c06f2cb8f264ddf5d771bdcb313eae78cd69560f989d4aac2
 capabilities = ["std::fs::create_dir_all", "std::fs::read", "std::fs::read_dir", "std::fs::write", "tempfile::tempdir"]
 rationale = "Native fixture setup, deliberate corruption or observation for: Earlier account history and input archives migrate into the user folder while every original stays byte-identical. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 disposition = "fixture"
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/durable_storage/owned_retirement.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:e724904b86bafe1031efd50e6fcda655bbc676e55fea51fb3b3528f22da6d64c"
+capabilities = ["method metadata", "std::fs::File"]
+disposition = "implementation"
+rationale = "Durable filesystem owner: Retire an owner's inventoried files and folders below an ownership-verified root through exclusive native handles and tombstone journals. Native access and its adversarial qualification remain within this owner."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/durable_storage/owned_retirement/tombstone.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:2ef0286c1aa8229f2724f4f818959250dd4c76f83189b883e9b287912a31cd60"
+capabilities = ["method metadata"]
+disposition = "implementation"
+rationale = "Durable filesystem owner: Name, find and empty retirement tombstones without following links, keeping unknown content. Native access and its adversarial qualification remain within this owner."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/durable_storage/owned_retirement/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:32929c6b6875f78f9251c66683f6af9810ff702be549df93b344bb11fda8c1af"
+capabilities = ["std::fs::File::open", "std::fs::create_dir", "std::fs::create_dir_all", "std::fs::hard_link", "std::fs::read", "std::fs::read_dir", "std::fs::remove_dir_all", "std::fs::remove_file", "std::fs::rename", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir"]
+disposition = "implementation"
+rationale = "Durable filesystem owner: Qualify ownership admission, exact deletion, preservation, junction refusal and tombstone resumption. Native access and its adversarial qualification remain within this owner."

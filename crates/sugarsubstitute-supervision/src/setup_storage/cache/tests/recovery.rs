@@ -63,7 +63,7 @@ fn deletion_journal_resumes_after_partial_payload_removal_without_touching_other
             file.write_all(&serde_json::to_vec(&record)?)?;
             file.sync_all()
         })?;
-        tree::remove_file(&lease.path().join("first"), context)?;
+        storage_tree::remove_file(&lease.path().join("first"), context)?;
         let path = lease.path();
         drop(lease);
         let report = cache.maintain(100, context)?;
