@@ -1005,7 +1005,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: An 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/application_launch/updater/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:ec62c530b4d4ded0e18873e2a75071c3de1efa4a183ca83d41e2c6517a4ecd50"
+source_sha256 = "sha256:84ee2fba6986370fb65d9455a1d30610f9dc572852c0db77529c7a598cb145d2"
 capabilities = ["assert! restricted capability fragments", "std::fs::OpenOptions::new", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Retained real engine custody survives failed creation without launching inert fixture bytes. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2178,7 +2178,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Rea
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded/authorization/trials/transfer.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:663e59ada4bc4ed246a2ca8bc185a5c0604b0d21436ce6ffc7fd534de8468500"
+source_sha256 = "sha256:3457465924ae5cc759768e47ad2b257ea6458eba58ad16cc9786ac6430464496"
 capabilities = ["assert! restricted capability fragments", "std::fs::File::from", "std::fs::read", "std::fs::read_dir", "std::fs::write", "tempfile::tempdir", "tempfile::tempfile"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Exercise transfer with real protected storage, duplicated handles and authenticated packages. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2261,7 +2261,7 @@ boundary = "native_custody"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/selection/inheritance/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:a07992b47729fccbaacc48a661ff1776f4f62c72c9a7ada830e15617404729ab"
+source_sha256 = "sha256:781829ed9b41d645480d0a897691f1d364d0c790db8a8130c837c6c1cd62ec99"
 capabilities = ["tempfile::tempfile"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Reject ambiguous entry modes before any native handle can be adopted. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

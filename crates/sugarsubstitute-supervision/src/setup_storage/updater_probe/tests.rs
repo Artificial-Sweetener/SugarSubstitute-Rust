@@ -52,7 +52,7 @@ fn incomplete_relative_oversized_and_authority_override_probe_arguments_fail() {
 
 #[test]
 fn unsupported_probe_versions_cannot_fall_back_to_an_ordinary_entry() -> io::Result<()> {
-    for version in ["--internal-updater-probe-v1", "--internal-updater-probe-v3"] {
+    for version in ["--internal-updater-probe-v2", "--internal-updater-probe-v4"] {
         assert!(parse([version.into()]).is_err());
     }
     for input in [vec![], vec!["--internal-updater-prepare-v1"], vec!["--setup"]] {

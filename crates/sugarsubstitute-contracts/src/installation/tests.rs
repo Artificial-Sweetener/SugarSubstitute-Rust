@@ -300,3 +300,28 @@ fn signed_release_labels_admit_only_what_a_signed_offer_carries() -> Result {
     assert!(InstallationRecord::decode(&serde_json::to_vec(&value)?).is_err());
     Ok(())
 }
+
+/// A record written by a release on either side of schema 2 is a typed `Schema` refusal, never
+/// damaged bytes and never a record read with fields silently missing or ignored.
+#[test]
+fn records_from_older_and_newer_schemas_are_refused_as_unsupported_schemas() -> Result {
+    let a = generation(1)?;
+    let record = install(&empty()?, &a)?;
+    let current: serde_json::Value = serde_json::from_slice(&record.encode()?)?;
+    let mut older = current.clone();
+    older["schema_version"] = 1.into();
+    older["accepted"].as_object_mut().ok_or("Accepted absent")?.remove("release");
+    older.as_object_mut().ok_or("Object absent")?.remove("rollback");
+    let mut newer = current;
+    newer["schema_version"] = 3.into();
+    newer["accepted"]["channel"] = "beta".into();
+    newer["future"] = serde_json::json!({"strikes": 2});
+    for skewed in [older, newer] {
+        assert_eq!(
+            InstallationRecord::decode(&serde_json::to_vec(&skewed)?),
+            Err(Rejection::Schema)
+        );
+    }
+    assert_eq!(InstallationRecord::decode(br#"{"revision":1}"#), Err(Rejection::Encoding));
+    Ok(())
+}

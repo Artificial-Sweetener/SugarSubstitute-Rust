@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Strict version-one selection records preserve the last accepted generation during trials.
+//! Strict schema-two selection records preserve the last accepted generation during trials.
 use super::*;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -137,6 +137,12 @@ struct Wire {
     #[serde(deserialize_with = "required_option")]
     rollback: Option<Generation>,
 }
+/// Read only the schema number first, so a record from another release is reported as an
+/// unsupported schema rather than as damaged bytes, whatever its other fields look like.
+#[derive(Deserialize)]
+struct SchemaProbe {
+    schema_version: u32,
+}
 fn required_option<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(
     input: D,
 ) -> Result<Option<T>, D::Error> {
@@ -158,10 +164,16 @@ impl InstallationRecord {
     }
     /// Decode bounded JSON and validate all references; never modifies the source bytes.
     /// # Errors
-    /// Rejects unknown schemas/fields, invalid identities and contradictory selection state.
+    /// Returns `Schema` for any other schema number, checked before the other fields are read.
+    /// Rejects unknown fields, invalid identities and contradictory selection state.
     pub fn decode(bytes: &[u8]) -> Result<Self, Rejection> {
         if bytes.len() > MAX_RECORD_BYTES {
             return Err(Rejection::Capacity);
+        }
+        let version: SchemaProbe =
+            serde_json::from_slice(bytes).map_err(|_| Rejection::Encoding)?;
+        if version.schema_version != SCHEMA_VERSION {
+            return Err(Rejection::Schema);
         }
         let wire: Wire = serde_json::from_slice(bytes).map_err(|_| Rejection::Encoding)?;
         let record = Self {

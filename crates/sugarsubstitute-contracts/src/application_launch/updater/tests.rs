@@ -45,7 +45,7 @@ fn historical_preparation_declarations_do_not_gain_probe_capability() -> Result<
     );
     let current = UpdaterContract::decode(CURRENT_UPDATER_CONTRACT)?;
     assert_eq!(current.require_probe(1, 2), Err(Rejection::Unsupported));
-    assert_eq!(current.require_probe(3, 2), Err(Rejection::Unsupported));
+    assert_eq!(current.require_probe(4, 2), Err(Rejection::Unsupported));
     assert_eq!(current.require_probe(1, 3), Err(Rejection::InstallationSchema));
     Ok(())
 }
@@ -171,4 +171,23 @@ fn malformed_metadata_never_claims_an_updater_entry() {
         UpdaterContract::decode(&vec![b' '; MAX_CONTRACT_BYTES + 1]).err(),
         Some(Rejection::Format)
     );
+}
+
+/// Probe version 2 carried generations without a signed release; neither side of that skew can
+/// start the other, so the sender refuses before publishing any trial.
+#[test]
+fn probe_senders_and_updaters_from_before_signed_release_labels_refuse_each_other()
+-> Result<(), Rejection> {
+    let previous = UpdaterContract::decode(
+        br#"{"schema_version":3,"installation_schemas":[2],"entry_protocols":{"prepare":[1],"probe":[2],"activate":[2]}}"#,
+    )?;
+    let schema = crate::installation::SCHEMA_VERSION;
+    assert_eq!(previous.require_probe(probe::PROBE_PROTOCOL, schema), Err(Rejection::Unsupported));
+    let current = UpdaterContract::decode(CURRENT_UPDATER_CONTRACT)?;
+    assert_eq!(current.require_probe(2, schema), Err(Rejection::Unsupported));
+    assert_eq!(
+        probe::PROBE_ARGUMENT,
+        format!("--internal-updater-probe-v{}", probe::PROBE_PROTOCOL)
+    );
+    Ok(())
 }

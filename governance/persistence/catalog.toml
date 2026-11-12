@@ -155,15 +155,17 @@ accepted_versions = [1]
 compatibility = "reject"
 migrations = []
 
+# Accepted launch 3 (`--installed-launch-v3`) transfers selection schema 2 records, whose
+# generations name their signed release. Protocol 1 carried schema 1 and is refused both ways.
 [[formats]]
 id = "native-launch-selection-transfer-v1"
 owner = "sugarsubstitute-supervision"
-sources = ["crates/sugarsubstitute-supervision/src/setup_storage/selection/inheritance.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/reservation.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/run/launch.rs", "crates/sugarsubstitute-supervision/src/setup_storage/running.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/identity.rs", "crates/sugarsubstitute-supervision/src/application_launch.rs", "crates/sugarsubstitute-supervision/src/application_launch/creation.rs", "crates/sugarsubstitute-supervision/src/setup_storage/disk_inheritance.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/reservation/forwarding.rs"]
-source_sha256 = "sha256:1164e3711e9d788fc3c8d9993ea3ef367ca2ab283ca66f4f46c564ac64dcc9db"
+sources = ["crates/sugarsubstitute-supervision/src/setup_storage/selection/inheritance.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/reservation.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/run/launch.rs", "crates/sugarsubstitute-supervision/src/setup_storage/running.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/identity.rs", "crates/sugarsubstitute-supervision/src/application_launch.rs", "crates/sugarsubstitute-supervision/src/application_launch/creation.rs", "crates/sugarsubstitute-supervision/src/setup_storage/disk_inheritance.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/reservation/forwarding.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/snapshot.rs"]
+source_sha256 = "sha256:f2697eb81dfc80fa0d520b38406169b4420ea883fe67cbd0f117d18931d70f0a"
 classification = "protocol"
 preservation = "must_preserve"
-current_version = 1
-accepted_versions = [1]
+current_version = 3
+accepted_versions = [3]
 compatibility = "reject"
 migrations = []
 
@@ -917,7 +919,7 @@ migrations = []
 id = "native-installation-selection-v1"
 owner = "sugarsubstitute-contracts"
 sources = ["crates/sugarsubstitute-contracts/src/installation.rs", "crates/sugarsubstitute-contracts/src/installation/identity.rs", "crates/sugarsubstitute-contracts/src/installation/record.rs", "crates/sugarsubstitute-contracts/src/installation/transition.rs"]
-source_sha256 = "sha256:653358b1ba03bb40ca74ff279feda9a8dc72b3be9b0f922d3d82a1f5437cee7c"
+source_sha256 = "sha256:02e051eb682bfb8b7980e1a95ebf7d7c5e297b46cb0d09e93994870231c36b44"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 2
@@ -1049,7 +1051,7 @@ migrations = []
 id = "native-application-entry-contract-v1"
 owner = "sugarsubstitute-contracts"
 sources = ["crates/sugarsubstitute-contracts/src/application_launch.rs", "crates/sugarsubstitute-contracts/src/application_launch/current.json"]
-source_sha256 = "sha256:87bbbbafdbc8af975cfd853357d06531a66776a5e146af93b09637952db19b3c"
+source_sha256 = "sha256:bc13bc4cce0cf8622236b9ed17c58d95e2a619b63c13ec822f7a88109482ed12"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1
@@ -1061,7 +1063,7 @@ migrations = []
 id = "native-launcher-entry-contract-v1"
 owner = "sugarsubstitute-contracts"
 sources = ["crates/sugarsubstitute-contracts/src/application_launch.rs", "crates/sugarsubstitute-contracts/src/application_launch/launcher.rs", "crates/sugarsubstitute-contracts/src/application_launch/launcher.json"]
-source_sha256 = "sha256:78a6c76d7a8a462ee5dea3922a2f609c297b712b3a3b69a539ba49dc5db7da30"
+source_sha256 = "sha256:5e87e5fc126a6f8c5439ba081d5ea2232d42b8947edc507d7d20e20021b4f802"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1
@@ -1081,6 +1083,8 @@ accepted_versions = [1]
 compatibility = "reject"
 migrations = []
 
+# Trial launch 4 (`--installed-launch-v4`) carries a schema 2 trial snapshot. Protocol 2 carried
+# schema 1; a launcher and candidate on opposite sides refuse each other before creation.
 [[formats]]
 id = "native-trial-entry-v2"
 owner = "sugarsubstitute-supervision"
@@ -1118,11 +1122,11 @@ sources = [
     "crates/sugarsubstitute-supervision/src/durable_storage/protection/retirement.rs",
     "crates/sugarsubstitute-supervision/src/durable_storage/files/observations.rs",
 ]
-source_sha256 = "sha256:a67ab66f28222e702bd0d527bc16d425056cd3ced4ca22041a8de9d9259f7910"
+source_sha256 = "sha256:99d00969a7a3d0b61376961f57219ebf5a376ecedc54637232d31a24ecfa2188"
 classification = "protocol"
 preservation = "must_preserve"
-current_version = 2
-accepted_versions = [2]
+current_version = 4
+accepted_versions = [4]
 compatibility = "reject"
 migrations = []
 
@@ -1178,7 +1182,7 @@ migrations = []
 id = "native-updater-entry-contract-v1"
 owner = "sugarsubstitute-contracts"
 sources = ["crates/sugarsubstitute-contracts/src/application_launch/updater.rs", "crates/sugarsubstitute-contracts/src/application_launch/updater.json", "crates/sugarsubstitute-contracts/src/application_launch/updater/probe.rs"]
-source_sha256 = "sha256:36fd3a8986a5988d468d596474343b586695f86838dc519e288985c1a596e51b"
+source_sha256 = "sha256:f3c249d2031a1e2dd1c30a3ef9d48c2a9f5c24818eb5ac920793dd488a415331"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 3
@@ -1198,18 +1202,20 @@ accepted_versions = [1]
 compatibility = "reject"
 migrations = []
 
+# Probe 3 carries a trial whose generation names its signed release; probe 2 did not.
 [[formats]]
 id = "native-updater-probe-v1"
 owner = "sugarsubstitute-contracts"
 sources = ["crates/sugarsubstitute-contracts/src/application_launch/updater/probe.rs", "crates/sugarsubstitute-contracts/src/installation/record.rs", "crates/sugarsubstitute-contracts/src/installation/identity.rs"]
-source_sha256 = "sha256:b6d41ade9984d7871a7ad4ef554a59f299513a9540ca678179b01c8d99850ad0"
+source_sha256 = "sha256:1e19cecaa60c4d38fd6c9f24fa3f817ddf125600311142d99604214d28f1d34b"
 classification = "protocol"
 preservation = "must_preserve"
-current_version = 2
-accepted_versions = [2]
+current_version = 3
+accepted_versions = [3]
 compatibility = "reject"
 migrations = []
 
+# Probe custody follows the probe argument (`--internal-updater-probe-v3`).
 [[formats]]
 id = "native-updater-probe-custody-v2"
 owner = "sugarsubstitute-supervision"
@@ -1217,8 +1223,8 @@ sources = ["crates/sugarsubstitute-supervision/src/setup_storage/updater_probe.r
 source_sha256 = "sha256:0dcd4fafd1d941e1add596890f578c88ee147452fdc71aab173e0f5b26c59792"
 classification = "protocol"
 preservation = "must_preserve"
-current_version = 2
-accepted_versions = [2]
+current_version = 3
+accepted_versions = [3]
 compatibility = "reject"
 migrations = []
 
