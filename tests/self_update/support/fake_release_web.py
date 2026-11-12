@@ -33,7 +33,9 @@ from sugarcubes.backend.self_update.http_client import (
 from sugarcubes.backend.self_update.release_config import load_release_config
 
 CONFIG = load_release_config()
-REGISTRY_API = f"{CONFIG.registry.api_root}/nodes/SugarCubes/install"
+REGISTRY_NODE = f"{CONFIG.registry.api_root}/nodes/SugarCubes"
+REGISTRY_API = f"{REGISTRY_NODE}/install"
+REGISTRY_VERSIONS = f"{REGISTRY_NODE}/versions"
 GITHUB_API = (
     f"{CONFIG.github_release.api_root}/repos/{CONFIG.github_release.repository}"
 )
@@ -108,7 +110,6 @@ class FakeReleaseWeb:
         files: Mapping[str, str],
         *,
         status: str = ACTIVE,
-        latest: bool = True,
     ) -> str:
         """Publish one Registry release and return its archive URL."""
 
@@ -120,8 +121,9 @@ class FakeReleaseWeb:
             "downloadUrl": url,
         }
         self.json[f"{REGISTRY_API}?version={version}"] = descriptor
-        if latest:
-            self.json[REGISTRY_API] = descriptor
+        listing = self.json.setdefault(REGISTRY_VERSIONS, [])
+        assert isinstance(listing, list)
+        listing.insert(0, descriptor)
         self.blobs[url] = zip_bytes(files)
         return url
 
@@ -164,6 +166,11 @@ class FakeReleaseWeb:
         self.blobs[url] = content
         return url
 
+    def publish_empty_registry(self) -> None:
+        """Publish a Registry entry with no versions."""
+
+        self.json.setdefault(REGISTRY_VERSIONS, [])
+
     def publish_empty_github(self) -> None:
         """Publish a repository with no SugarCubes releases."""
 
@@ -186,6 +193,7 @@ __all__ = [
     "ACTIVE",
     "CONFIG",
     "FLAGGED",
+    "REGISTRY_VERSIONS",
     "FakeReleaseWeb",
     "InlineRunner",
     "zip_bytes",

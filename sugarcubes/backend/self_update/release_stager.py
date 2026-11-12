@@ -28,7 +28,7 @@ from __future__ import annotations
 import logging
 import secrets
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from ..pack_install.archive import extract_registry_archive
@@ -53,6 +53,7 @@ from .release_sources import (
     RegistryReleases,
     ReleaseMetadataError,
     ReleaseOffer,
+    ReleaseSourceKind,
 )
 from .update_state import FailureStage
 
@@ -65,6 +66,7 @@ class NotManaged:
 
     current_version: str
     reason: NotOwnedReason
+    unchecked_sources: tuple[ReleaseSourceKind, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,6 +74,7 @@ class UpToDate:
     """No newer release is published."""
 
     current_version: str
+    unchecked_sources: tuple[ReleaseSourceKind, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +83,7 @@ class Staged:
 
     current_version: str
     version: str
+    unchecked_sources: tuple[ReleaseSourceKind, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +93,7 @@ class StageFailed:
     current_version: str
     stage: FailureStage
     cause: str
+    unchecked_sources: tuple[ReleaseSourceKind, ...] = ()
 
 
 StageResult = NotManaged | UpToDate | Staged | StageFailed
@@ -126,6 +131,7 @@ class ReleaseStager:
         self._github = github
         self._http = http
         self._root = updates_root(pack_folder)
+        self._unchecked: list[ReleaseSourceKind] = []
 
     def ownership(self) -> OwnedPack | NotOwnedPack:
         """Classify the installed folder without network access."""
@@ -154,6 +160,18 @@ class ReleaseStager:
         ownership = self.ownership()
         if isinstance(ownership, NotOwnedPack):
             return NotManaged(installed_version, ownership.reason)
+        self._unchecked.clear()
+        result = self._attempt(ownership, cancelled, on_downloading)
+        return replace(result, unchecked_sources=tuple(self._unchecked))
+
+    def _attempt(
+        self,
+        ownership: OwnedPack,
+        cancelled: Cancelled,
+        on_downloading: ProgressCallback,
+    ) -> StageResult:
+        """Run the locked attempt and translate step failures into results."""
+
         current = str(ownership.identity.version)
         try:
             with exclusive_update_lock(self._root):
@@ -222,33 +240,40 @@ class ReleaseStager:
         return Staged(str(current), str(offer.version))
 
     def _newest_offer(self, current: ReleaseVersion) -> ReleaseOffer | None:
-        """Return the newest release above `current`, preferring the Registry."""
+        """Return the newest release above `current` across both sources.
+
+        Both sources are always asked: the Registry's version list and the GitHub
+        release assets. When both publish the newest version, it comes from the
+        Registry. A source that cannot be reached is noted, and the other's answer
+        is used; the pack is called up to date only when both answered.
+        """
 
         offers: list[ReleaseOffer] = []
-        failures = 0
-        for name, find in (
-            ("registry", self._registry.latest),
-            ("github", self._github.latest),
-        ):
+        sources: tuple[
+            tuple[ReleaseSourceKind, Callable[[], ReleaseOffer | None]], ...
+        ] = (
+            (ReleaseSourceKind.REGISTRY, self._registry.latest),
+            (ReleaseSourceKind.GITHUB_RELEASE, self._github.latest),
+        )
+        for kind, find in sources:
             try:
                 offer = find()
             except (HttpFailure, ReleaseMetadataError) as exc:
-                failures += 1
+                self._unchecked.append(kind)
                 _logger.warning(
                     "SugarCubes update event=source_unavailable source=%s cause=%s",
-                    name,
+                    kind.value,
                     exc,
                 )
                 continue
             if offer is not None and offer.version > current:
                 offers.append(offer)
-        if not offers and failures:
-            # Only a check every source answered may call the pack up to date.
+        if not offers and self._unchecked:
             raise _StepFailure(FailureStage.CHECK, "A release source did not answer.")
         if not offers:
             return None
-        # `max` keeps the first of equal versions, and the Registry is listed first.
-        return max(offers, key=lambda offer: offer.version)
+        newest = max(offer.version for offer in offers)
+        return next(offer for offer in offers if offer.version == newest)
 
     def _published_digests(
         self, version: ReleaseVersion, cancelled: Cancelled
@@ -257,7 +282,7 @@ class ReleaseStager:
 
         offer: ReleaseOffer | None = None
         finders: tuple[Callable[[], ReleaseOffer | None], ...] = (
-            lambda: self._registry.exact(version, require_active=False),
+            lambda: self._registry.exact(version, installing=False),
             lambda: self._github.exact(version),
         )
         for find in finders:

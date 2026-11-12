@@ -39,6 +39,7 @@ function state(overrides: Record<string, unknown> = {}): Record<string, unknown>
     lastCheckedAt: 1762876800000,
     revision: 1,
     notice: null,
+    uncheckedSources: [],
     ...overrides,
   };
 }
@@ -248,4 +249,29 @@ test('adapts the ComfyUI api object and its websocket event detail', async () =>
   expect(received).toEqual([{ revision: 9 }]);
   release?.();
   expect(listeners.has('sugarcubes.self_update')).toBe(false);
+});
+
+test('names the release source a check could not reach in the report', () => {
+  const decoded = decodeSelfUpdateState(
+    state({
+      state: 'ready',
+      availableVersion: '0.16.0',
+      uncheckedSources: [
+        {
+          source: 'registry',
+          message: "Couldn't reach the Comfy Registry, so this check used GitHub releases only.",
+        },
+      ],
+    }),
+  );
+  const snapshot = decoded ? selfUpdateSnapshot(decoded) : null;
+  expect(snapshot?.status).toEqual({ state: 'ready', version: '0.16.0' });
+  expect(snapshot?.report).toEqual({
+    version: '0.15.3',
+    phase: 'check',
+    causes: [
+      { message: "Couldn't reach the Comfy Registry, so this check used GitHub releases only." },
+    ],
+  });
+  expect(decodeSelfUpdateState(state({ uncheckedSources: [{ source: 'registry' }] }))).toBeNull();
 });

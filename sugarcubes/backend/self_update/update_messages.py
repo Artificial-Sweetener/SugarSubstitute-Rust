@@ -13,7 +13,7 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Say in plain words what the last ComfyUI start did with a chosen update.
+"""Say in plain words what the last start or check could not do.
 
 The Updates entry owns the wording of every state; this sentence is the cause it
 shows in the report of a start that did not end on the new version. It names
@@ -46,4 +46,24 @@ def describe_notice(outcome: StartupOutcome) -> str:
     )
 
 
-__all__ = ["describe_notice"]
+_UNCHECKED_SOURCE = {
+    "registry": (
+        "Couldn't reach the Comfy Registry, so this check used GitHub releases only. "
+        "SugarCubes will try again later."
+    ),
+    "github-release": (
+        "Couldn't reach GitHub releases, so this check used the Comfy Registry only. "
+        "SugarCubes will try again later."
+    ),
+}
+
+
+def describe_unchecked_source(source: str) -> str:
+    """Return the report sentence for a release source a check could not reach."""
+
+    return _UNCHECKED_SOURCE.get(
+        source, "One place SugarCubes checks for updates couldn't be reached."
+    )
+
+
+__all__ = ["describe_notice", "describe_unchecked_source"]

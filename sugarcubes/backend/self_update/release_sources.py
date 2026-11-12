@@ -17,7 +17,7 @@
 
 The Registry is authoritative and comes first. It publishes no digest, so its
 archives are accepted only from its fixed CDN host over verified TLS, and only
-for releases it marks active. The GitHub fallback reads the registry-layout asset
+for releases it still offers (active or flagged). The GitHub fallback reads the registry-layout asset
 of a per-component release and requires the SHA-256 digest GitHub records for it.
 """
 
@@ -35,7 +35,12 @@ from .release_config import GitHubReleaseConfig, RegistrySourceConfig
 
 MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
 _MAX_METADATA_BYTES = 1024 * 1024
-_REGISTRY_ACTIVE = "NodeVersionStatusActive"
+# Flagged means the Registry's scanner raised a concern, not that the release was
+# withdrawn; the maintainer treats it like Active. Deleted, Banned and any other
+# status mean the release is not offered.
+INSTALLABLE_REGISTRY_STATUSES = frozenset(
+    {"NodeVersionStatusActive", "NodeVersionStatusFlagged"}
+)
 _SHA256_DIGEST = re.compile(r"^sha256:([0-9a-f]{64})$")
 
 
@@ -62,7 +67,7 @@ class ReleaseOffer:
 
 
 class RegistryReleases:
-    """Read SugarCubes' install descriptors from the Comfy Registry."""
+    """Read SugarCubes' releases from the Comfy Registry's full version list."""
 
     def __init__(
         self, *, pack_id: str, config: RegistrySourceConfig, http: HttpClient
@@ -75,50 +80,77 @@ class RegistryReleases:
         self._api_hosts = frozenset(
             {urllib.parse.urlsplit(config.api_root).hostname or ""}
         )
+        self._node_url = (
+            f"{config.api_root}/nodes/{urllib.parse.quote(pack_id, safe='')}"
+        )
 
     def latest(self) -> ReleaseOffer | None:
-        """Return the newest release when the Registry marks it active."""
+        """Return the newest installable release in the full version list.
 
-        return self._descriptor(version=None, require_active=True)
+        The list is read instead of a "latest" field, which can leave out a
+        version the Registry has flagged.
+        """
+
+        payload = self._get(f"{self._node_url}/versions")
+        if payload is None:
+            return None
+        if not isinstance(payload, list):
+            raise ReleaseMetadataError("The Registry version list is not a list.")
+        offers = [
+            offer
+            for item in payload
+            if (offer := self._offer(item, expected=None, installing=True)) is not None
+        ]
+        return max(offers, key=lambda offer: offer.version, default=None)
 
     def exact(
-        self, version: ReleaseVersion, *, require_active: bool
+        self, version: ReleaseVersion, *, installing: bool
     ) -> ReleaseOffer | None:
         """Return one exact release, or `None` when the Registry has none.
 
-        Installing requires an active release; comparing installed files with a
-        published release does not, because nothing from it is installed.
+        Installing skips a release the Registry has removed; comparing installed
+        files with a published release does not, because nothing from it is
+        installed.
         """
 
-        return self._descriptor(version=version, require_active=require_active)
+        query = urllib.parse.urlencode({"version": str(version)})
+        payload = self._get(f"{self._node_url}/install?{query}")
+        if payload is None:
+            return None
+        return self._offer(payload, expected=version, installing=installing)
 
-    def _descriptor(
-        self, *, version: ReleaseVersion | None, require_active: bool
-    ) -> ReleaseOffer | None:
-        """Fetch and validate one install descriptor."""
+    def _get(self, url: str) -> object | None:
+        """Fetch one Registry reply, treating a missing page as no release."""
 
-        query = (
-            ""
-            if version is None
-            else "?" + urllib.parse.urlencode({"version": str(version)})
-        )
-        url = f"{self._config.api_root}/nodes/{urllib.parse.quote(self._pack_id, safe='')}/install{query}"
         try:
-            payload = self._http.get_json(
-                url, allowed_hosts=self._api_hosts, max_bytes=_MAX_METADATA_BYTES
+            return self._http.get_json(
+                url, allowed_hosts=self._api_hosts, max_bytes=4 * _MAX_METADATA_BYTES
             )
         except HttpFailure as exc:
             if exc.kind is HttpFailureKind.NOT_FOUND:
                 return None
             raise
+
+    def _offer(
+        self, payload: object, *, expected: ReleaseVersion | None, installing: bool
+    ) -> ReleaseOffer | None:
+        """Validate one version record; a record for another pack is refused."""
+
         if not isinstance(payload, dict):
-            raise ReleaseMetadataError("The Registry reply is not an object.")
+            raise ReleaseMetadataError("A Registry version record is not an object.")
         if str(payload.get("node_id", "")).casefold() != self._pack_id.casefold():
             raise ReleaseMetadataError("The Registry reply names another pack.")
-        observed = _version(payload.get("version"))
-        if version is not None and observed != version:
+        try:
+            observed = parse_release_version(payload.get("version"))
+        except PackInstallError:
+            if expected is not None:
+                raise ReleaseMetadataError(
+                    "The Registry reply has no plain version."
+                ) from None
+            return None
+        if expected is not None and observed != expected:
             raise ReleaseMetadataError("The Registry reply names another version.")
-        if require_active and payload.get("status") != _REGISTRY_ACTIVE:
+        if installing and payload.get("status") not in INSTALLABLE_REGISTRY_STATUSES:
             return None
         archive_url = payload.get("downloadUrl")
         if not isinstance(archive_url, str) or not archive_url:
@@ -243,19 +275,9 @@ class GitHubReleases:
         )
 
 
-def _version(value: object) -> ReleaseVersion:
-    """Return a release version from metadata, failing as invalid metadata."""
-
-    try:
-        return parse_release_version(value)
-    except PackInstallError as exc:
-        raise ReleaseMetadataError(
-            "The release metadata has no plain version."
-        ) from exc
-
-
 __all__ = [
     "GitHubReleases",
+    "INSTALLABLE_REGISTRY_STATUSES",
     "MAX_ARCHIVE_BYTES",
     "RegistryReleases",
     "ReleaseMetadataError",

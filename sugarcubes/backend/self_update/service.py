@@ -290,6 +290,7 @@ class SelfUpdateService:
             available_version=None,
             failure=None,
             not_managed=None,
+            unchecked_sources=tuple(kind.value for kind in result.unchecked_sources),
         )
         if isinstance(result, NotManaged):
             return replace(
