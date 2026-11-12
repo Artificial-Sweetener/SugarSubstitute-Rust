@@ -1,1 +1,1 @@
-{"schema_version":3,"installation_schemas":[1],"entry_protocols":{"prepare":[1],"probe":[2],"activate":[2]}}
+{"schema_version":3,"installation_schemas":[1],"entry_protocols":{"prepare":[2],"probe":[2],"activate":[2]}}

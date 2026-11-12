@@ -118,6 +118,18 @@ compatibility = "reject"
 migrations = []
 
 [[formats]]
+id = "native-update-preparation-invocation-v2"
+owner = "sugarsubstitute-contracts"
+sources = ["crates/sugarsubstitute-contracts/src/application_launch/updater.rs", "crates/sugarsubstitute-contracts/src/application_launch/updater/preparation.rs"]
+source_sha256 = "sha256:36454f420a6b6e1e2b2c02744338ef591591df970d11db56abbb760a26aa04dc"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 2
+accepted_versions = [2]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
 id = "native-update-attempt-v1"
 owner = "sugarsubstitute-contracts"
 sources = ["crates/sugarsubstitute-contracts/src/update/attempt.rs", "crates/sugarsubstitute-contracts/src/update/attempt/codec.rs"]
@@ -1190,7 +1202,7 @@ migrations = []
 id = "native-updater-entry-contract-v1"
 owner = "sugarsubstitute-contracts"
 sources = ["crates/sugarsubstitute-contracts/src/application_launch/updater.rs", "crates/sugarsubstitute-contracts/src/application_launch/updater.json", "crates/sugarsubstitute-contracts/src/application_launch/updater/probe.rs"]
-source_sha256 = "sha256:b9ab5aba4087618d4e06454ec1199dc96c5ee5d51bb428a45f5995824e90a7f7"
+source_sha256 = "sha256:b4a1f50c79cacbc4fd33b51a9758a285a18ef8e9a3b9b8209b881c063ab3c733"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 3
@@ -1408,7 +1420,7 @@ migrations = []
 id = "native-updater-activation-entry-v2"
 owner = "sugarsubstitute-contracts"
 sources = ["crates/sugarsubstitute-contracts/src/application_launch/updater.rs", "crates/sugarsubstitute-contracts/src/application_launch/updater/activation.rs"]
-source_sha256 = "sha256:57a370bb5e734b7fada97620e770ee513821d759a2fd35a789106035c7967abe"
+source_sha256 = "sha256:067efaf0574b998c3ae9abe10fae3033bd41ed2205f880f9199ef0bca7ac1697"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 2

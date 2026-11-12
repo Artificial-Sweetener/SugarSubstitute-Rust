@@ -130,8 +130,8 @@ fn probe_declarations_require_the_exact_schema_and_nonempty_ordered_versions() {
 #[test]
 fn future_entries_and_installation_readers_require_explicit_support() -> Result<(), Rejection> {
     let contract = UpdaterContract::decode(CURRENT_UPDATER_CONTRACT)?;
-    assert_eq!(contract.require_preparation(2, 1), Err(Rejection::Unsupported));
-    assert_eq!(contract.require_preparation(1, 2), Err(Rejection::InstallationSchema));
+    assert_eq!(contract.require_preparation(3, 1), Err(Rejection::Unsupported));
+    assert_eq!(contract.require_preparation(2, 2), Err(Rejection::InstallationSchema));
     let transition = UpdaterContract::decode(
         br#"{"schema_version":1,"preparation_protocols":[1,2],"installation_schemas":[1,2]}"#,
     )?;
@@ -171,4 +171,24 @@ fn malformed_metadata_never_claims_an_updater_entry() {
         UpdaterContract::decode(&vec![b' '; MAX_CONTRACT_BYTES + 1]).err(),
         Some(Rejection::Format)
     );
+}
+
+#[test]
+fn engine_and_app_from_either_side_of_the_channel_change_refuse_each_other() -> Result<(), Rejection>
+{
+    // An older app (protocol 1) finds a newer engine that only speaks the channel grammar.
+    let newer = UpdaterContract::decode(CURRENT_UPDATER_CONTRACT)?;
+    assert_eq!(
+        newer.require_preparation(1, crate::installation::SCHEMA_VERSION),
+        Err(Rejection::Unsupported)
+    );
+    // A newer app finds an older engine that cannot inherit an update-attempt channel.
+    let older = UpdaterContract::decode(
+        br#"{"schema_version":3,"installation_schemas":[1],"entry_protocols":{"prepare":[1],"probe":[2],"activate":[2]}}"#,
+    )?;
+    assert_eq!(
+        older.require_preparation(PREPARATION_PROTOCOL, crate::installation::SCHEMA_VERSION),
+        Err(Rejection::Unsupported)
+    );
+    newer.require_preparation(PREPARATION_PROTOCOL, crate::installation::SCHEMA_VERSION)
 }

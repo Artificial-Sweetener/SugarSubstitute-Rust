@@ -37,12 +37,50 @@ fn abandoned_recovery_waits_for_the_last_actual_trial_handle_duplicate() -> Test
 }
 
 #[test]
+fn engine_speaking_only_the_previous_preparation_protocol_is_refused_before_staging() -> TestResult
+{
+    run(|context| {
+        let root = worker::installation(128, context)?;
+        let workspace = tempfile::tempdir()?;
+        let previous =
+            br#"{"schema_version":1,"preparation_protocols":[1],"installation_schemas":[1]}"#;
+        let (bytes, _) = archive(previous)?;
+        let (trust, offer, download) = evidence(root.path(), &bytes, Component::Updater, context)?;
+        // The engine is refused as soon as its declaration is read, before anything is staged.
+        let staged = UpdaterPackage::import(
+            root.path(),
+            trust,
+            offer,
+            download,
+            workspace.path(),
+            || NOW,
+            context,
+        )
+        .and_then(|package| package.stage(|| NOW, context));
+        let Err(crate::setup_storage::TrustFailure::Storage(cause)) = staged else {
+            return Err("An engine without the update-attempt channel was staged".into());
+        };
+        assert_eq!(
+            cause
+                .get_ref()
+                .and_then(|inner| inner
+                    .downcast_ref::<sugarsubstitute_contracts::application_launch::Rejection>()),
+            Some(&sugarsubstitute_contracts::application_launch::Rejection::Unsupported)
+        );
+        let observer = TrustStore::open(root.path(), [92; 32], context)?;
+        assert!(observer.updater_selection(context)?.candidate().is_none());
+        Ok(())
+    })
+}
+
+#[test]
 fn historical_preparation_only_engine_remains_staged_without_a_probe_trial() -> TestResult {
     run(|context| {
         let root = worker::installation(127, context)?;
         let workspace = tempfile::tempdir()?;
+        // Historical here means without a probe role; it speaks the current preparation entry.
         let historical =
-            br#"{"schema_version":1,"preparation_protocols":[1],"installation_schemas":[1]}"#;
+            br#"{"schema_version":1,"preparation_protocols":[2],"installation_schemas":[1]}"#;
         let (bytes, _) = archive(historical)?;
         let (trust, offer, download) = evidence(root.path(), &bytes, Component::Updater, context)?;
         let prepared = UpdaterPackage::import(
