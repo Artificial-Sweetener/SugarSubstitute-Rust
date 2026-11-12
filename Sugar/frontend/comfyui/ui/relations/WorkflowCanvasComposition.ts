@@ -114,6 +114,7 @@ export function createWorkflowCanvasComposition(
           memory: options.memory,
           execution: workflowExecution,
           route: canvasInputs.surfaces.route,
+          host: workflowFields.host,
           settingsRoute: workflowFields.settingsRoute,
           logger: options.logger,
         },

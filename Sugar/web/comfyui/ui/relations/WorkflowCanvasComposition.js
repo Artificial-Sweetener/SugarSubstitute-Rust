@@ -72,6 +72,7 @@ export function createWorkflowCanvasComposition(options) {
             memory: options.memory,
             execution: workflowExecution,
             route: canvasInputs.surfaces.route,
+            host: workflowFields.host,
             settingsRoute: workflowFields.settingsRoute,
             logger: options.logger,
         }, { ...masonry, app: options.app, document: options.document }, options.logger),

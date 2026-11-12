@@ -15,13 +15,18 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Carry only existing public editor envelopes between the local shell and its ComfyUI guest. */
 import type { PanelMessage } from '../../../contracts/PanelProtocol.generated.js';
+import type { HostDescriptionMessage } from '../../../contracts/HostDescription.js';
 import type { CanvasMessage } from '../../../contracts/CanvasProtocol.generated.js';
 import type { CanvasMaskMessage } from '../../../contracts/CanvasMasksProtocol.generated.js';
 import { MAX_CANVAS_ENCODED_CHARACTERS } from '../../../shared/CanvasImageEncoding.js';
 import { invokeTauri } from './TauriInvocation.js';
 
 /** Keep the viewer's public message port distinct from its private GIMP SDK port. */
-export type PublicPanelMessage = PanelMessage | CanvasMessage | CanvasMaskMessage;
+export type PublicPanelMessage =
+  | PanelMessage
+  | HostDescriptionMessage
+  | CanvasMessage
+  | CanvasMaskMessage;
 
 /** Describe Tauri's typed channel boundary without importing its declarations into other runtimes. */
 interface TauriChannel {

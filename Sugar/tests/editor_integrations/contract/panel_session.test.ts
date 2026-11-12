@@ -27,6 +27,11 @@ import type {
   PanelMessage,
   PanelPresentation,
 } from '../../../integrations/contracts/PanelProtocol.generated.js';
+import {
+  HOST_PROTOCOLS,
+  type HostDescriptionContent,
+  type HostDescriptionMessage,
+} from '../../../integrations/contracts/HostDescription.js';
 
 const session = '00000000-0000-4000-8000-000000000001';
 const presentation: PanelPresentation = {
@@ -35,6 +40,10 @@ const presentation: PanelPresentation = {
   photoProPalette: 'medium-gray',
   accentColor: null,
   resizeCornerSize: 0,
+};
+const description: HostDescriptionContent = {
+  protocols: [HOST_PROTOCOLS.panel],
+  capabilities: [],
 };
 
 /** Build a synchronous transport to exercise reentrant delivery as well as application capability limits. */
@@ -48,9 +57,10 @@ function application(supported: boolean): {
   const states: PanelState[] = [];
   const applied: PanelPresentation[] = [];
   let connected = true;
-  const toClient: PanelMessage[] = [];
+  const toClient: (PanelMessage | HostDescriptionMessage)[] = [];
   const host = new PanelHostSession(
     session,
+    description,
     presentation,
     { send: (message) => toClient.push(message), present: (state) => states.push(state) },
     0,
@@ -104,10 +114,11 @@ test('monitors disconnect and recovery without applying presentation or recreati
 });
 
 test('bounds missing frontend startup and rejects malformed, stale, and reversed messages', () => {
-  const sent: PanelMessage[] = [];
+  const sent: (PanelMessage | HostDescriptionMessage)[] = [];
   const states: PanelState[] = [];
   const host = new PanelHostSession(
     session,
+    description,
     presentation,
     { send: (message) => sent.push(message), present: (state) => states.push(state) },
     0,
@@ -151,6 +162,7 @@ test('schema validation rejects unsupported presentation and oversized session v
     ),
     { ...presentation, pluginMode: 'true' },
     { ...presentation, photoProPalette: 'unknown', accentColor: null },
+    { ...presentation, photoProPalette: null },
     { ...presentation, path: 'file:/secret' },
   ])
     expect(
@@ -172,8 +184,21 @@ test('schema validation rejects unsupported presentation and oversized session v
   ).toBe(false);
 });
 
+test('admits a presentation without a PhotoPro palette, which only PhotoPro hosts declare', () => {
+  const { photoProPalette: _omitted, ...withoutPalette } = presentation;
+  expect(
+    isPanelMessage({
+      protocol: 'sugarcubes.panel',
+      version: 3,
+      session,
+      type: 'configure',
+      presentation: withoutPalette,
+    }),
+  ).toBe(true);
+});
+
 test('reports presentation failure and returns an explicit rejection to every host', () => {
-  const sent: PanelMessage[] = [];
+  const sent: (PanelMessage | HostDescriptionMessage)[] = [];
   const errors: unknown[] = [];
   const error = new Error('Presentation unavailable');
   const client = new PanelClientSession(session, {
@@ -196,10 +221,11 @@ test('reports presentation failure and returns an explicit rejection to every ho
 });
 
 test('updates an active presentation without replacing its session or resetting connection state', () => {
-  const sent: PanelMessage[] = [];
+  const sent: (PanelMessage | HostDescriptionMessage)[] = [];
   const states: PanelState[] = [];
   const host = new PanelHostSession(
     session,
+    description,
     presentation,
     {
       send: (message) => sent.push(message),
@@ -283,9 +309,10 @@ test('accepts GIMP as an additive panel presentation style', () => {
 });
 
 test('retains responsive applied sessions while refusing stale, failed and uninitialized recovery', () => {
-  const sent: PanelMessage[] = [];
+  const sent: (PanelMessage | HostDescriptionMessage)[] = [];
   const host = new PanelHostSession(
     session,
+    description,
     presentation,
     { send: (message) => sent.push(message), present: () => undefined },
     0,
@@ -309,4 +336,36 @@ test('retains responsive applied sessions while refusing stale, failed and unini
   expect(host.retryConnection(15003)).toBe(true);
   host.fail();
   expect(host.retryConnection(15004)).toBe(false);
+});
+
+test('a host sends its fixed description before every configure it answers a ready with', () => {
+  const sent: (PanelMessage | HostDescriptionMessage)[] = [];
+  const host = new PanelHostSession(
+    session,
+    { protocols: [HOST_PROTOCOLS.panel, HOST_PROTOCOLS.canvas], capabilities: [] },
+    presentation,
+    { send: (message) => sent.push(message), present: () => undefined },
+    0,
+  );
+  const ready = { protocol: 'sugarcubes.panel', version: 3, session, type: 'ready' };
+  host.receive(ready, 0);
+  host.receive(ready, 1000);
+  expect(sent.map((message) => `${message.protocol}:${message.type}`)).toEqual([
+    'sugarcubes.host:description',
+    'sugarcubes.panel:configure',
+    'sugarcubes.host:description',
+    'sugarcubes.panel:configure',
+  ]);
+  expect(sent[0]).toEqual(sent[2]);
+  expect(sent[0]).toEqual({
+    protocol: 'sugarcubes.host',
+    version: 1,
+    session,
+    type: 'description',
+    protocols: [
+      { name: 'sugarcubes.panel', version: 3 },
+      { name: 'sugarcubes.canvas', version: 3 },
+    ],
+    capabilities: [],
+  });
 });

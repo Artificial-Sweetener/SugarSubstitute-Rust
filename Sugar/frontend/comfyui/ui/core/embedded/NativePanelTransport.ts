@@ -18,22 +18,6 @@ import { isRecord } from '../../types/common.js';
 import { panelNavigation, type BrowserPanelTransport } from './BrowserPanelTransport.js';
 import { NativePanelSendQueue } from './NativePanelSendQueue.js';
 
-/** Identify Substitute presentation from its validated native panel identity. */
-export function isSubstituteHost(windowRef: Window): boolean {
-  const bridge: unknown = Reflect.get(windowRef, 'sugarcubesPanelHost');
-  return (
-    isRecord(bridge) &&
-    bridge.host === 'ai.artificialsweetener.sugarsubstitute' &&
-    createNativePanelTransport(windowRef) !== null
-  );
-}
-
-/** Read only the host's presentation preference, which grants no canvas or transport authority. */
-export function prefersNativeOutputSurface(windowRef: Window): boolean {
-  const bridge: unknown = Reflect.get(windowRef, 'sugarcubesPanelHost');
-  return isRecord(bridge) && bridge.outputSurfacePreference === 'host';
-}
-
 /** Validate the injected identity; the native host independently authorizes every operation. */
 export function createNativePanelTransport(windowRef: Window): BrowserPanelTransport | null {
   const bridge: unknown = Reflect.get(windowRef, 'sugarcubesPanelHost');
@@ -61,11 +45,6 @@ export function createNativePanelTransport(windowRef: Window): BrowserPanelTrans
     typeof bridge.subscribe !== 'function'
   )
     return null;
-  const preferencePolicy: unknown = bridge.preferencePolicy;
-  if (preferencePolicy !== undefined && preferencePolicy !== 'host' && preferencePolicy !== 'saved')
-    return null;
-  const outputSurfacePreference: unknown = bridge.outputSurfacePreference;
-  if (outputSurfacePreference !== undefined && outputSurfacePreference !== 'host') return null;
   const send = bridge.send;
   const subscribe = bridge.subscribe;
   const outbound = new NativePanelSendQueue({
@@ -79,9 +58,6 @@ export function createNativePanelTransport(windowRef: Window): BrowserPanelTrans
   });
   return {
     session: identity.session,
-    preferencePolicy: preferencePolicy ?? 'host',
-    memoryBudget: true,
-    ...(outputSurfacePreference ? { outputSurfacePreference } : {}),
     send: (message) => {
       outbound.send(message);
     },

@@ -1,0 +1,1271 @@
+[
+  {
+    "label": "a host serving the panel and canvas with one capability",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.host",
+      "version": 1,
+      "session": "00000000-0000-4000-8000-000000000001",
+      "type": "description",
+      "protocols": [
+        {
+          "name": "sugarcubes.panel",
+          "version": 3
+        },
+        {
+          "name": "sugarcubes.canvas",
+          "version": 3
+        }
+      ],
+      "capabilities": [
+        {
+          "name": "presentation.host-styles"
+        }
+      ]
+    }
+  },
+  {
+    "label": "a host that declares nothing beyond its envelope",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.host",
+      "version": 1,
+      "session": "00000000-0000-4000-8000-000000000001",
+      "type": "description",
+      "protocols": [],
+      "capabilities": []
+    }
+  },
+  {
+    "label": "unknown protocol and capability names remain readable",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.host",
+      "version": 1,
+      "session": "00000000-0000-4000-8000-000000000001",
+      "type": "description",
+      "protocols": [
+        {
+          "name": "sugarcubes.panel",
+          "version": 3
+        },
+        {
+          "name": "sugarcubes.canvas",
+          "version": 3
+        },
+        {
+          "name": "sugarcubes.future",
+          "version": 9
+        }
+      ],
+      "capabilities": [
+        {
+          "name": "presentation.host-styles"
+        },
+        {
+          "name": "future.capability"
+        }
+      ]
+    }
+  },
+  {
+    "label": "the largest protocol version",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.host",
+      "version": 1,
+      "session": "00000000-0000-4000-8000-000000000001",
+      "type": "description",
+      "protocols": [
+        {
+          "name": "sugarcubes.panel",
+          "version": 3
+        },
+        {
+          "name": "sugarcubes.canvas",
+          "version": 3
+        },
+        {
+          "name": "sugarcubes.memory",
+          "version": 65535
+        }
+      ],
+      "capabilities": [
+        {
+          "name": "presentation.host-styles"
+        }
+      ]
+    }
+  },
+  {
+    "label": "thirty-two protocols",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.host",
+      "version": 1,
+      "session": "00000000-0000-4000-8000-000000000001",
+      "type": "description",
+      "protocols": [
+        {
+          "name": "p0",
+          "version": 1
+        },
+        {
+          "name": "p1",
+          "version": 1
+        },
+        {
+          "name": "p2",
+          "version": 1
+        },
+        {
+          "name": "p3",
+          "version": 1
+        },
+        {
+          "name": "p4",
+          "version": 1
+        },
+        {
+          "name": "p5",
+          "version": 1
+        },
+        {
+          "name": "p6",
+          "version": 1
+        },
+        {
+          "name": "p7",
+          "version": 1
+        },
+        {
+          "name": "p8",
+          "version": 1
+        },
+        {
+          "name": "p9",
+          "version": 1
+        },
+        {
+          "name": "p10",
+          "version": 1
+        },
+        {
+          "name": "p11",
+          "version": 1
+        },
+        {
+          "name": "p12",
+          "version": 1
+        },
+        {
+          "name": "p13",
+          "version": 1
+        },
+        {
+          "name": "p14",
+          "version": 1
+        },
+        {
+          "name": "p15",
+          "version": 1
+        },
+        {
+          "name": "p16",
+          "version": 1
+        },
+        {
+          "name": "p17",
+          "version": 1
+        },
+        {
+          "name": "p18",
+          "version": 1
+        },
+        {
+          "name": "p19",
+          "version": 1
+        },
+        {
+          "name": "p20",
+          "version": 1
+        },
+        {
+          "name": "p21",
+          "version": 1
+        },
+        {
+          "name": "p22",
+          "version": 1
+        },
+        {
+          "name": "p23",
+          "version": 1
+        },
+        {
+          "name": "p24",
+          "version": 1
+        },
+        {
+          "name": "p25",
+          "version": 1
+        },
+        {
+          "name": "p26",
+          "version": 1
+        },
+        {
+          "name": "p27",
+          "version": 1
+        },
+        {
+          "name": "p28",
+          "version": 1
+        },
+        {
+          "name": "p29",
+          "version": 1
+        },
+        {
+          "name": "p30",
+          "version": 1
+        },
+        {
+          "name": "p31",
+          "version": 1
+        }
+      ],
+      "capabilities": [
+        {
+          "name": "presentation.host-styles"
+        }
+      ]
+    }
+  },
+  {
+    "label": "sixty-four capabilities",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.host",
+      "version": 1,
+      "session": "00000000-0000-4000-8000-000000000001",
+      "type": "description",
+      "protocols": [
+        {
+          "name": "sugarcubes.panel",
+          "version": 3
+        },
+        {
+          "name": "sugarcubes.canvas",
+          "version": 3
+        }
+      ],
+      "capabilities": [
+        {
+          "name": "c0"
+        },
+        {
+          "name": "c1"
+        },
+        {
+          "name": "c2"
+        },
+        {
+          "name": "c3"
+        },
+        {
+          "name": "c4"
+        },
+        {
+          "name": "c5"
+        },
+        {
+          "name": "c6"
+        },
+        {
+          "name": "c7"
+        },
+        {
+          "name": "c8"
+        },
+        {
+          "name": "c9"
+        },
+        {
+          "name": "c10"
+        },
+        {
+          "name": "c11"
+        },
+        {
+          "name": "c12"
+        },
+        {
+          "name": "c13"
+        },
+        {
+          "name": "c14"
+        },
+        {
+          "name": "c15"
+        },
+        {
+          "name": "c16"
+        },
+        {
+          "name": "c17"
+        },
+        {
+          "name": "c18"
+        },
+        {
+          "name": "c19"
+        },
+        {
+          "name": "c20"
+        },
+        {
+          "name": "c21"
+        },
+        {
+          "name": "c22"
+        },
+        {
+          "name": "c23"
+        },
+        {
+          "name": "c24"
+        },
+        {
+          "name": "c25"
+        },
+        {
+          "name": "c26"
+        },
+        {
+          "name": "c27"
+        },
+        {
+          "name": "c28"
+        },
+        {
+          "name": "c29"
+        },
+        {
+          "name": "c30"
+        },
+        {
+          "name": "c31"
+        },
+        {
+          "name": "c32"
+        },
+        {
+          "name": "c33"
+        },
+        {
+          "name": "c34"
+        },
+        {
+          "name": "c35"
+        },
+        {
+          "name": "c36"
+        },
+        {
+          "name": "c37"
+        },
+        {
+          "name": "c38"
+        },
+        {
+          "name": "c39"
+        },
+        {
+          "name": "c40"
+        },
+        {
+          "name": "c41"
+        },
+        {
+          "name": "c42"
+        },
+        {
+          "name": "c43"
+        },
+        {
+          "name": "c44"
+        },
+        {
+          "name": "c45"
+        },
+        {
+          "name": "c46"
+        },
+        {
+          "name": "c47"
+        },
+        {
+          "name": "c48"
+        },
+        {
+          "name": "c49"
+        },
+        {
+          "name": "c50"
+        },
+        {
+          "name": "c51"
+        },
+        {
+          "name": "c52"
+        },
+        {
+          "name": "c53"
+        },
+        {
+          "name": "c54"
+        },
+        {
+          "name": "c55"
+        },
+        {
+          "name": "c56"
+        },
+        {
+          "name": "c57"
+        },
+        {
+          "name": "c58"
+        },
+        {
+          "name": "c59"
+        },
+        {
+          "name": "c60"
+        },
+        {
+          "name": "c61"
+        },
+        {
+          "name": "c62"
+        },
+        {
+          "name": "c63"
+        }
+      ]
+    }
+  },
+  {
+    "label": "a sixty-four character name",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.host",
+      "version": 1,
+      "session": "00000000-0000-4000-8000-000000000001",
+      "type": "description",
+      "protocols": [
+        {
+          "name": "sugarcubes.panel",
+          "version": 3
+        },
+        {
+          "name": "sugarcubes.canvas",
+          "version": 3
+        }
+      ],
+      "capabilities": [
+        {
+          "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ]
+    }
+  },
+  {
+    "label": "thirty-three protocols",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.host",
+      "version": 1,
+      "session": "00000000-0000-4000-8000-000000000001",
+      "type": "description",
+      "protocols": [
+        {
+          "name": "p0",
+          "version": 1
+        },
+        {
+          "name": "p1",
+          "version": 1
+        },
+        {
+          "name": "p2",
+          "version": 1
+        },
+        {
+          "name": "p3",
+          "version": 1
+        },
+        {
+          "name": "p4",
+          "version": 1
+        },
+        {
+          "name": "p5",
+          "version": 1
+        },
+        {
+          "name": "p6",
+          "version": 1
+        },
+        {
+          "name": "p7",
+          "version": 1
+        },
+        {
+          "name": "p8",
+          "version": 1
+        },
+        {
+          "name": "p9",
+          "version": 1
+        },
+        {
+          "name": "p10",
+          "version": 1
+        },
+        {
+          "name": "p11",
+          "version": 1
+        },
+        {
+          "name": "p12",
+          "version": 1
+        },
+        {
+          "name": "p13",
+          "version": 1
+        },
+        {
+          "name": "p14",
+          "version": 1
+        },
+        {
+          "name": "p15",
+          "version": 1
+        },
+        {
+          "name": "p16",
+          "version": 1
+        },
+        {
+          "name": "p17",
+          "version": 1
+        },
+        {
+          "name": "p18",
+          "version": 1
+        },
+        {
+          "name": "p19",
+          "version": 1
+        },
+        {
+          "name": "p20",
+          "version": 1
+        },
+        {
+          "name": "p21",
+          "version": 1
+        },
+        {
+          "name": "p22",
+          "version": 1
+        },
+        {
+          "name": "p23",
+          "version": 1
+        },
+        {
+          "name": "p24",
+          "version": 1
+        },
+        {
+          "name": "p25",
+          "version": 1
+        },
+        {
+          "name": "p26",
+          "version": 1
+        },
+        {
+          "name": "p27",
+          "version": 1
+        },
+        {
+          "name": "p28",
+          "version": 1
+        },
+        {
+          "name": "p29",
+          "version": 1
+        },
+        {
+          "name": "p30",
+          "version": 1
+        },
+        {
+          "name": "p31",
+          "version": 1
+        },
+        {
+          "name": "p32",
+          "version": 1
+        }
+      ],
+      "capabilities": [
+        {
+          "name": "presentation.host-styles"
+        }
+      ]
+    }
+  },
+  {
+    "label": "sixty-five capabilities",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.host",
+      "version": 1,
+      "session": "00000000-0000-4000-8000-000000000001",
+      "type": "description",
+      "protocols": [
+        {
+          "name": "sugarcubes.panel",
+          "version": 3
+        },
+        {
+          "name": "sugarcubes.canvas",
+          "version": 3
+        }
+      ],
+      "capabilities": [
+        {
+          "name": "c0"
+        },
+        {
+          "name": "c1"
+        },
+        {
+          "name": "c2"
+        },
+        {
+          "name": "c3"
+        },
+        {
+          "name": "c4"
+        },
+        {
+          "name": "c5"
+        },
+        {
+          "name": "c6"
+        },
+        {
+          "name": "c7"
+        },
+        {
+          "name": "c8"
+        },
+        {
+          "name": "c9"
+        },
+        {
+          "name": "c10"
+        },
+        {
+          "name": "c11"
+        },
+        {
+          "name": "c12"
+        },
+        {
+          "name": "c13"
+        },
+        {
+          "name": "c14"
+        },
+        {
+          "name": "c15"
+        },
+        {
+          "name": "c16"
+        },
+        {
+          "name": "c17"
+        },
+        {
+          "name": "c18"
+        },
+        {
+          "name": "c19"
+        },
+        {
+          "name": "c20"
+        },
+        {
+          "name": "c21"
+        },
+        {
+          "name": "c22"
+        },
+        {
+          "name": "c23"
+        },
+        {
+          "name": "c24"
+        },
+        {
+          "name": "c25"
+        },
+        {
+          "name": "c26"
+        },
+        {
+          "name": "c27"
+        },
+        {
+          "name": "c28"
+        },
+        {
+          "name": "c29"
+        },
+        {
+          "name": "c30"
+        },
+        {
+          "name": "c31"
+        },
+        {
+          "name": "c32"
+        },
+        {
+          "name": "c33"
+        },
+        {
+          "name": "c34"
+        },
+        {
+          "name": "c35"
+        },
+        {
+          "name": "c36"
+        },
+        {
+          "name": "c37"
+        },
+        {
+          "name": "c38"
+        },
+        {
+          "name": "c39"
+        },
+        {
+          "name": "c40"
+        },
+        {
+          "name": "c41"
+        },
+        {
+          "name": "c42"
+        },
+        {
+          "name": "c43"
+        },
+        {
+          "name": "c44"
+        },
+        {
+          "name": "c45"
+        },
+        {
+          "name": "c46"
+        },
+        {
+          "name": "c47"
+        },
+        {
+          "name": "c48"
+        },
+        {
+          "name": "c49"
+        },
+        {
+          "name": "c50"
+        },
+        {
+          "name": "c51"
+        },
+        {
+          "name": "c52"
+        },
+        {
+          "name": "c53"
+        },
+        {
+          "name": "c54"
+        },
+        {
+          "name": "c55"
+        },
+        {
+          "name": "c56"
+        },
+        {
+          "name": "c57"
+        },
+        {
+          "name": "c58"
+        },
+        {
+          "name": "c59"
+        },
+        {
+          "name": "c60"
+        },
+        {
+          "name": "c61"
+        },
+        {
+          "name": "c62"
+        },
+        {
+          "name": "c63"
+        },
+        {
+          "name": "c64"
+        }
+      ]
+    }
+  },
+  {
+    "label": "a sixty-five character name",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.host",
+      "version": 1,
+      "session": "00000000-0000-4000-8000-000000000001",
+      "type": "description",
+      "protocols": [
+        {
+          "name": "sugarcubes.panel",
+          "version": 3
+        },
+        {
+          "name": "sugarcubes.canvas",
+          "version": 3
+        }
+      ],
+      "capabilities": [
+        {
+          "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ]
+    }
+  },
+  {
+    "label": "an uppercase capability name",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.host",
+      "version": 1,
+      "session": "00000000-0000-4000-8000-000000000001",
+      "type": "description",
+      "protocols": [
+        {
+          "name": "sugarcubes.panel",
+          "version": 3
+        },
+        {
+          "name": "sugarcubes.canvas",
+          "version": 3
+        }
+      ],
+      "capabilities": [
+        {
+          "name": "Presentation.host-styles"
+        }
+      ]
+    }
+  },
+  {
+    "label": "an empty protocol name",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.host",
+      "version": 1,
+      "session": "00000000-0000-4000-8000-000000000001",
+      "type": "description",
+      "protocols": [
+        {
+          "name": "sugarcubes.panel",
+          "version": 3
+        },
+        {
+          "name": "sugarcubes.canvas",
+          "version": 3
+        },
+        {
+          "name": "",
+          "version": 1
+        }
+      ],
+      "capabilities": [
+        {
+          "name": "presentation.host-styles"
+        }
+      ]
+    }
+  },
+  {
+    "label": "a protocol version of zero",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.host",
+      "version": 1,
+      "session": "00000000-0000-4000-8000-000000000001",
+      "type": "description",
+      "protocols": [
+        {
+          "name": "sugarcubes.panel",
+          "version": 3
+        },
+        {
+          "name": "sugarcubes.canvas",
+          "version": 3
+        },
+        {
+          "name": "sugarcubes.memory",
+          "version": 0
+        }
+      ],
+      "capabilities": [
+        {
+          "name": "presentation.host-styles"
+        }
+      ]
+    }
+  },
+  {
+    "label": "a protocol version above the bound",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.host",
+      "version": 1,
+      "session": "00000000-0000-4000-8000-000000000001",
+      "type": "description",
+      "protocols": [
+        {
+          "name": "sugarcubes.panel",
+          "version": 3
+        },
+        {
+          "name": "sugarcubes.canvas",
+          "version": 3
+        },
+        {
+          "name": "sugarcubes.memory",
+          "version": 65536
+        }
+      ],
+      "capabilities": [
+        {
+          "name": "presentation.host-styles"
+        }
+      ]
+    }
+  },
+  {
+    "label": "a fractional protocol version",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.host",
+      "version": 1,
+      "session": "00000000-0000-4000-8000-000000000001",
+      "type": "description",
+      "protocols": [
+        {
+          "name": "sugarcubes.panel",
+          "version": 3
+        },
+        {
+          "name": "sugarcubes.canvas",
+          "version": 3
+        },
+        {
+          "name": "sugarcubes.memory",
+          "version": 1.5
+        }
+      ],
+      "capabilities": [
+        {
+          "name": "presentation.host-styles"
+        }
+      ]
+    }
+  },
+  {
+    "label": "a bare capability string",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.host",
+      "version": 1,
+      "session": "00000000-0000-4000-8000-000000000001",
+      "type": "description",
+      "protocols": [
+        {
+          "name": "sugarcubes.panel",
+          "version": 3
+        },
+        {
+          "name": "sugarcubes.canvas",
+          "version": 3
+        }
+      ],
+      "capabilities": ["presentation.host-styles"]
+    }
+  },
+  {
+    "label": "an extra capability member",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.host",
+      "version": 1,
+      "session": "00000000-0000-4000-8000-000000000001",
+      "type": "description",
+      "protocols": [
+        {
+          "name": "sugarcubes.panel",
+          "version": 3
+        },
+        {
+          "name": "sugarcubes.canvas",
+          "version": 3
+        }
+      ],
+      "capabilities": [
+        {
+          "name": "presentation.host-styles",
+          "enabled": true
+        }
+      ]
+    }
+  },
+  {
+    "label": "an extra protocol member",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.host",
+      "version": 1,
+      "session": "00000000-0000-4000-8000-000000000001",
+      "type": "description",
+      "protocols": [
+        {
+          "name": "sugarcubes.panel",
+          "version": 3,
+          "optional": true
+        }
+      ],
+      "capabilities": [
+        {
+          "name": "presentation.host-styles"
+        }
+      ]
+    }
+  },
+  {
+    "label": "an extra envelope member",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.host",
+      "version": 1,
+      "session": "00000000-0000-4000-8000-000000000001",
+      "type": "description",
+      "protocols": [
+        {
+          "name": "sugarcubes.panel",
+          "version": 3
+        },
+        {
+          "name": "sugarcubes.canvas",
+          "version": 3
+        }
+      ],
+      "capabilities": [
+        {
+          "name": "presentation.host-styles"
+        }
+      ],
+      "preferencePolicy": "saved"
+    }
+  },
+  {
+    "label": "a missing capability list",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.host",
+      "version": 1,
+      "session": "00000000-0000-4000-8000-000000000001",
+      "type": "description",
+      "protocols": [
+        {
+          "name": "sugarcubes.panel",
+          "version": 3
+        },
+        {
+          "name": "sugarcubes.canvas",
+          "version": 3
+        }
+      ]
+    }
+  },
+  {
+    "label": "a missing protocol list",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.host",
+      "version": 1,
+      "session": "00000000-0000-4000-8000-000000000001",
+      "type": "description",
+      "capabilities": [
+        {
+          "name": "presentation.host-styles"
+        }
+      ]
+    }
+  },
+  {
+    "label": "another protocol envelope",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.panel",
+      "version": 1,
+      "session": "00000000-0000-4000-8000-000000000001",
+      "type": "description",
+      "protocols": [
+        {
+          "name": "sugarcubes.panel",
+          "version": 3
+        },
+        {
+          "name": "sugarcubes.canvas",
+          "version": 3
+        }
+      ],
+      "capabilities": [
+        {
+          "name": "presentation.host-styles"
+        }
+      ]
+    }
+  },
+  {
+    "label": "another envelope version",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.host",
+      "version": 2,
+      "session": "00000000-0000-4000-8000-000000000001",
+      "type": "description",
+      "protocols": [
+        {
+          "name": "sugarcubes.panel",
+          "version": 3
+        },
+        {
+          "name": "sugarcubes.canvas",
+          "version": 3
+        }
+      ],
+      "capabilities": [
+        {
+          "name": "presentation.host-styles"
+        }
+      ]
+    }
+  },
+  {
+    "label": "another message type",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.host",
+      "version": 1,
+      "session": "00000000-0000-4000-8000-000000000001",
+      "type": "describe",
+      "protocols": [
+        {
+          "name": "sugarcubes.panel",
+          "version": 3
+        },
+        {
+          "name": "sugarcubes.canvas",
+          "version": 3
+        }
+      ],
+      "capabilities": [
+        {
+          "name": "presentation.host-styles"
+        }
+      ]
+    }
+  },
+  {
+    "label": "a short session",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.host",
+      "version": 1,
+      "session": "short",
+      "type": "description",
+      "protocols": [
+        {
+          "name": "sugarcubes.panel",
+          "version": 3
+        },
+        {
+          "name": "sugarcubes.canvas",
+          "version": 3
+        }
+      ],
+      "capabilities": [
+        {
+          "name": "presentation.host-styles"
+        }
+      ]
+    }
+  },
+  {
+    "label": "a session with an invalid character",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.host",
+      "version": 1,
+      "session": "00000000-0000-4000-8000-00000000000_",
+      "type": "description",
+      "protocols": [
+        {
+          "name": "sugarcubes.panel",
+          "version": 3
+        },
+        {
+          "name": "sugarcubes.canvas",
+          "version": 3
+        }
+      ],
+      "capabilities": [
+        {
+          "name": "presentation.host-styles"
+        }
+      ]
+    }
+  }
+]
