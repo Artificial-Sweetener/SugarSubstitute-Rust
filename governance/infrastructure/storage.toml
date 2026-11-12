@@ -2368,7 +2368,7 @@ boundary = "native_custody"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/selection/run/transfer/witness_tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:c8a97032d473beb92e48ecd6e83b748341c6a39a6e3d796ce1002906bcb09413"
+source_sha256 = "sha256:4cf2e6ba924b46cb71e99163f34308b8843686127c6c636946083f8341cb034a"
 capabilities = ["assert! restricted capability fragments", "std::fs::rename", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Native file-handle custody survives sender retirement without reconstructing a trial. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

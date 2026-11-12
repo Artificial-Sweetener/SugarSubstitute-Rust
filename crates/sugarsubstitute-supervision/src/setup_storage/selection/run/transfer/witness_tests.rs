@@ -86,6 +86,39 @@ fn witness_returns_a_trial_whose_coordinator_was_ended_from_outside_to_prepared(
     })
 }
 
+/// At a session end the coordinator settles its unaccepted trial at once. When Windows then
+/// ends the coordinator, whatever exit status the witness sees, the no verdict stands.
+#[test]
+fn a_session_end_settlement_survives_the_forced_end_that_follows() -> TestResult {
+    use sugarsubstitute_contracts::installation::{HostExit, TrialVerdict, Undecided};
+    worker::run_reserved(SIGNED_INSTALLER_RESERVATION_BYTES, |context, _| {
+        let root = tempfile::tempdir()?;
+        let application = shell_tests::trial(root.path(), context)?;
+        let store = Arc::new(SelectionStore::open(root.path(), context)?);
+        let transfer = application.prepare_witness(context)?;
+        let witness = TrialWitness::receive(
+            store.clone(),
+            inherited(&transfer)?,
+            application.directory(),
+            context,
+        )?;
+        let session_end = TrialVerdict::NoVerdict(Undecided::SessionEnd);
+        let released = application.finish_settled(session_end, context)?;
+        assert!(matches!(released.candidate(), Some(Candidate::Prepared { .. })));
+        drop(application);
+        drop(transfer);
+        for status in [1, 0xC000_013A, 0xC000_0005] {
+            assert_eq!(
+                witness.finish_settled(HostExit::Ended(status).verdict(), context)?,
+                released
+            );
+        }
+        assert!(released.strikes().is_empty());
+        assert_eq!(store.load(context)?, Some(released));
+        Ok(())
+    })
+}
+
 #[test]
 fn witness_preserves_coordinator_acceptance_after_sender_retirement() -> TestResult {
     worker::run_reserved(SIGNED_INSTALLER_RESERVATION_BYTES, |context, _| {

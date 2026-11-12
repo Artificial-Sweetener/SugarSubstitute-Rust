@@ -62,6 +62,12 @@ impl CoordinatorAuthority {
         self.installation.facts.observe_close(cause);
     }
 
+    /// Verdict an unaccepted trial would settle with now.
+    #[cfg(test)]
+    pub(in crate::production) fn trial_verdict(&self) -> TrialVerdict {
+        self.installation.verdict()
+    }
+
     /// Authenticated helper Finish may publish only after our installation workers retire.
     /// Observe actual terminals first, including failed/discarded health publication results.
     pub(in crate::production) fn installation_writers_retired(&self) -> bool {
@@ -76,6 +82,9 @@ pub(super) struct Ownership {
     completion: Option<Completion>,
     health: publication::Publication,
     settlement: publication::Publication,
+    /// Settles an unaccepted trial without a verdict as soon as Windows ends the session, so a
+    /// forced end that follows finds it settled. The ordinary settlement still runs at close.
+    session_end: publication::Publication,
     shell: shell::Shell,
     readiness_observed: bool,
     facts: TrialFacts,
@@ -94,6 +103,7 @@ impl Ownership {
             completion: None,
             health: publication::Publication::new(),
             settlement: publication::Publication::new(),
+            session_end: publication::Publication::new(),
             shell: shell::Shell::new(),
             readiness_observed: false,
             facts: TrialFacts::default(),
@@ -127,6 +137,14 @@ impl Ownership {
                 issue = ?issue,
                 cause = ?self.health.failure_source().map(ToString::to_string),
                 "Trial acceptance was not published; the app stays open and the trial ends without a verdict"
+            );
+        }
+        if let Err(issue) = self.session_end.consume(batch) {
+            tracing::warn!(
+                operation = "installation_trial_session_end_unsettled",
+                issue = ?issue,
+                cause = ?self.session_end.failure_source().map(ToString::to_string),
+                "The session-end settlement did not publish; the ordinary settlement still runs"
             );
         }
         self.settlement.consume(batch)?;
@@ -167,6 +185,7 @@ impl Ownership {
         self.job.is_some()
             || self.health.pending()
             || self.settlement.pending()
+            || self.session_end.pending()
             || self.shell.pending()
     }
 
