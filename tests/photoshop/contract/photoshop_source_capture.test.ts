@@ -20,6 +20,7 @@ import { build } from 'esbuild';
 import { runInNewContext } from 'node:vm';
 import type { CanvasSourceHost } from '../../../integrations/contracts/CanvasSources.js';
 import { decodeCanvasRaster } from '../../../integrations/shared/CanvasRasterEncoding.js';
+import { BUILD_FIXTURE_SETUP_TIMEOUT_MS } from '../../frontend_core/support/BuildFixtureBudget.js';
 
 let code = '';
 beforeAll(async () => {
@@ -35,7 +36,7 @@ beforeAll(async () => {
   const output = bundle.outputFiles[0];
   if (!output) throw new Error('Missing native source bundle.');
   code = output.text;
-});
+}, BUILD_FIXTURE_SETUP_TIMEOUT_MS);
 
 /** Supply only Photoshop's native boundary while executing the complete authored source adapter. */
 function fixture() {
