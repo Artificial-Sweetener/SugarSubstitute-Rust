@@ -25,7 +25,7 @@ tuf = { version = "=0.3.0-beta14", default-features = false }
 chrono = { version = "=0.4.42", default-features = false, features = ["std"] }
 flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
 syn = { version = "=2.0.114", features = ["full", "visit"] }
-tempfile = "=3.24.0"
+tempfile = "=3.27.0"
 time = { version = "=0.3.45", features = ["parsing", "formatting"] }
 toml = "=0.8.23"
 tokio = { version = "=1.53.2", features = ["rt-multi-thread", "sync", "time", "macros", "net"] }
