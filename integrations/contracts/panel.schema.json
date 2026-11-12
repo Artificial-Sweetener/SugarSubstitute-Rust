@@ -3,6 +3,9 @@
   "$id": "https://artificialsweetener.ai/schemas/sugarcubes/embedded-panel/v3",
   "title": "SugarCubes embedded panel protocol version 3",
   "$defs": {
+    "PanelPhotoProPalette": {
+      "enum": ["black", "dark-gray", "medium-gray", "light-gray"]
+    },
     "PanelPresentation": {
       "type": "object",
       "properties": {
@@ -13,7 +16,7 @@
           "enum": ["comfy", "fluent", "spectrum", "photopro", "gimp"]
         },
         "photoProPalette": {
-          "enum": ["black", "dark-gray", "medium-gray", "light-gray"]
+          "$ref": "#/$defs/PanelPhotoProPalette"
         },
         "accentColor": {
           "oneOf": [
@@ -33,13 +36,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "pluginMode",
-        "visualStyle",
-        "photoProPalette",
-        "accentColor",
-        "resizeCornerSize"
-      ],
+      "required": ["pluginMode", "visualStyle", "accentColor", "resizeCornerSize"],
       "additionalProperties": false
     },
     "PanelReady": {

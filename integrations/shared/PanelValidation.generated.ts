@@ -19,11 +19,17 @@ import type * as Contract from '../contracts/PanelProtocol.generated.js';
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
+/** Validate a bounded PanelPhotoProPalette payload before dispatch. */
+export function isPanelPhotoProPalette(value: unknown): value is Contract.PanelPhotoProPalette {
+  return (
+    value === 'black' || value === 'dark-gray' || value === 'medium-gray' || value === 'light-gray'
+  );
+}
 /** Validate a bounded PanelPresentation payload before dispatch. */
 export function isPanelPresentation(value: unknown): value is Contract.PanelPresentation {
   return (
     isRecord(value) &&
-    Object.keys(value).length === 5 &&
+    Object.keys(value).length === 4 + (Object.hasOwn(value, 'photoProPalette') ? 1 : 0) &&
     Object.hasOwn(value, 'pluginMode') &&
     typeof value['pluginMode'] === 'boolean' &&
     Object.hasOwn(value, 'visualStyle') &&
@@ -32,11 +38,8 @@ export function isPanelPresentation(value: unknown): value is Contract.PanelPres
       value['visualStyle'] === 'spectrum' ||
       value['visualStyle'] === 'photopro' ||
       value['visualStyle'] === 'gimp') &&
-    Object.hasOwn(value, 'photoProPalette') &&
-    (value['photoProPalette'] === 'black' ||
-      value['photoProPalette'] === 'dark-gray' ||
-      value['photoProPalette'] === 'medium-gray' ||
-      value['photoProPalette'] === 'light-gray') &&
+    (!Object.hasOwn(value, 'photoProPalette') ||
+      isPanelPhotoProPalette(value['photoProPalette'])) &&
     Object.hasOwn(value, 'accentColor') &&
     ((typeof value['accentColor'] === 'string' &&
       value['accentColor'].length <= 7 &&
