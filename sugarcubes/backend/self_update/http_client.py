@@ -15,8 +15,8 @@
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """Make the bounded HTTPS requests the self-updater needs, and nothing else.
 
-Every request is HTTPS to an allow-listed host, follows redirects only to
-allow-listed HTTPS hosts, has a per-read timeout and an overall deadline, and is
+Every request is HTTPS (or plain HTTP to the loopback address) to an
+allow-listed host, follows at most a few redirects and only to allowed hosts, has a per-read timeout and an overall deadline, and is
 cut off at a byte limit. Failures are typed so the updater can say plainly
 whether it could not reach the internet or the release was refused.
 """
@@ -94,8 +94,24 @@ class HttpClient(Protocol):
         """Write one response body to `target` and return its SHA-256."""
 
 
+LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
+MAX_REDIRECTS = 5
+
+
+def origin_is_allowed(scheme: str, host: str | None, port: int | None) -> bool:
+    """Return whether an origin may be contacted at all.
+
+    HTTPS on its standard port anywhere, or plain HTTP to this computer's own
+    loopback address, which nothing on the network can see or alter.
+    """
+
+    if host in LOOPBACK_HOSTS:
+        return scheme in {"https", "http"}
+    return scheme == "https" and port in {None, 443}
+
+
 def require_allowed_url(url: str, allowed_hosts: frozenset[str]) -> None:
-    """Reject any URL that is not plain HTTPS to an allow-listed host."""
+    """Reject any URL that is not an allowed origin on an allow-listed host."""
 
     parsed = urllib.parse.urlsplit(url)
     try:
@@ -105,9 +121,8 @@ def require_allowed_url(url: str, allowed_hosts: frozenset[str]) -> None:
             HttpFailureKind.UNTRUSTED, "The address has a bad port."
         ) from exc
     if (
-        parsed.scheme != "https"
+        not origin_is_allowed(parsed.scheme, parsed.hostname, port)
         or parsed.hostname not in allowed_hosts
-        or port not in {None, 443}
         or parsed.username is not None
         or parsed.password is not None
         or parsed.fragment
@@ -118,7 +133,9 @@ def require_allowed_url(url: str, allowed_hosts: frozenset[str]) -> None:
 
 
 class _AllowListRedirects(urllib.request.HTTPRedirectHandler):
-    """Follow a redirect only to an allow-listed HTTPS host."""
+    """Follow a redirect only to an allow-listed host, and only a few times."""
+
+    max_redirections = MAX_REDIRECTS
 
     def __init__(self, allowed_hosts: frozenset[str]) -> None:
         """Bind the redirect policy to one request's host list."""
@@ -227,7 +244,8 @@ class UrllibHttpClient:
         received = 0
         try:
             with opener.open(request, timeout=self.read_timeout_seconds) as response:
-                while chunk := response.read(_CHUNK_BYTES):
+                # read1 returns what has arrived, so a slow drip cannot outlast the deadline.
+                while chunk := response.read1(_CHUNK_BYTES):
                     received += len(chunk)
                     if received > max_bytes:
                         raise HttpFailure(
@@ -271,6 +289,9 @@ __all__ = [
     "HttpClient",
     "HttpFailure",
     "HttpFailureKind",
+    "LOOPBACK_HOSTS",
+    "MAX_REDIRECTS",
     "UrllibHttpClient",
+    "origin_is_allowed",
     "require_allowed_url",
 ]
