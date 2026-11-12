@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose in-memory hosts from the shared owners for the conformance kit's own proofs. */
 import { CanvasServer } from '../../../integrations/shared/CanvasServer.js';
+import { CanvasMaskServer } from '../../../integrations/shared/CanvasMaskServer.js';
 import type { InMemoryHostHandler } from '../../../integrations/shared/conformance/InMemoryHostChannel.js';
 import { isMemoryUsageMessage } from '../../../integrations/shared/MemoryValidation.generated.js';
 import { isUpdatesClientMessage } from '../../../integrations/shared/UpdatesValidation.generated.js';
@@ -26,6 +27,23 @@ export function canvasWithoutSurface(send: (message: unknown) => void): InMemory
   return new CanvasServer(conformanceSession, {
     context: () => Promise.reject(new Error('The conformance host has no document.')),
     insert: () => Promise.reject(new Error('The conformance host inserts nothing.')),
+    send,
+    report: (error) => {
+      throw error;
+    },
+  });
+}
+
+/** A mask owner with no document open, as an editor panel answers before one is opened. */
+export function masksWithoutDocument(send: (message: unknown) => void): InMemoryHostHandler {
+  return new CanvasMaskServer(conformanceSession, {
+    changes: null,
+    execute: (command) =>
+      Promise.resolve(
+        command.type === 'context'
+          ? { kind: 'context', supported: true, document: null, observesChanges: false }
+          : { kind: 'failure', status: 'unavailable', message: 'No document is open.' },
+      ),
     send,
     report: (error) => {
       throw error;
