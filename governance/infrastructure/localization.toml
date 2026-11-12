@@ -78,7 +78,7 @@ rationale = "Host composition of localized native startup/profile-conflict feedb
 
 [[records]]
 path = "crates/sugarsubstitute/src/stable_launcher.rs"
-source_sha256 = "sha256:3b5e8b7546a3ef458d25f1c7f39863bfbccd652fdceb8eda39f786adff406d78"
+source_sha256 = "sha256:cb9afbd9eacb66133aa31014379010614f7c9b9fb96ab398a88fccd28a2d6f91"
 kind = "presentation"
 rationale = "Host composition of localized native startup/profile-conflict feedback. Authenticated configuration/selected installer language is retained when available; failures before configuration use canonical English. Original causes remain diagnostic details. Stable installed entry point; the selected application owns the only visible startup window."
 

@@ -54,10 +54,24 @@ pub fn start_engine(
     hops: u8,
     context: &JobContext,
 ) -> Result<StartedEngine, ClaimError> {
+    start_engine_image(engine.executable(), engine.directory(), installation, hops, context)
+}
+
+/// Start an already verified, pinned engine image, such as a newer accepted updater, with the
+/// engine argument. The caller keeps the image's pins until this returns.
+/// # Errors
+/// Native event, command or creation failures; no process exists after an error.
+pub fn start_engine_image(
+    executable: &Path,
+    directory: &Path,
+    installation: &Path,
+    hops: u8,
+    context: &JobContext,
+) -> Result<StartedEngine, ClaimError> {
     if hops > MAX_ENGINE_HOPS {
         return Err(ClaimError::invalid("launch_engine_hops"));
     }
-    spawn(engine.executable(), engine.directory(), context, |event| {
+    spawn(executable, directory, context, |event| {
         vec![
             ENGINE_LAUNCH_ARGUMENT.into(),
             installation.as_os_str().to_owned(),

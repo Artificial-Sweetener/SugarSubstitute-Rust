@@ -5,13 +5,12 @@ use super::*;
 use serde_json::json;
 
 #[test]
-fn direct_launch_engines_do_not_gain_brokered_activation_capability() -> Result<(), Rejection> {
-    let old = UpdaterContract::decode(br#"{"schema_version":3,"installation_schemas":[1],"entry_protocols":{"prepare":[1],"probe":[2],"activate":[1]}}"#)?;
-    old.require_activation(1, 1)?;
-    assert_eq!(old.require_activation(ACTIVATION_PROTOCOL, 1), Err(Rejection::Unsupported));
+fn historical_activation_declarations_never_gain_the_launch_engine_role() -> Result<(), Rejection> {
+    let old = UpdaterContract::decode(br#"{"schema_version":3,"installation_schemas":[2],"entry_protocols":{"prepare":[1],"probe":[3],"activate":[2]}}"#)?;
+    assert_eq!(old.require_engine(ENGINE_PROTOCOL, 2), Err(Rejection::Unsupported));
     let current = UpdaterContract::decode(CURRENT_UPDATER_CONTRACT)?;
-    current.require_activation(ACTIVATION_PROTOCOL, 2)?;
-    assert_eq!(current.require_activation(1, 2), Err(Rejection::Unsupported));
+    current.require_engine(ENGINE_PROTOCOL, 2)?;
+    assert_eq!(current.require_engine(2, 2), Err(Rejection::Unsupported));
     Ok(())
 }
 
@@ -21,8 +20,8 @@ fn producing_updater_declares_exactly_the_implemented_entry_and_reader() -> Resu
     assert_eq!(contract.preparation_protocols, [PREPARATION_PROTOCOL]);
     assert_eq!(contract.installation_schemas, [crate::installation::SCHEMA_VERSION]);
     assert_eq!(contract.probe_protocols, [probe::PROBE_PROTOCOL]);
-    assert_eq!(contract.activation_protocols, [ACTIVATION_PROTOCOL]);
-    contract.require_activation(ACTIVATION_PROTOCOL, crate::installation::SCHEMA_VERSION)?;
+    assert_eq!(contract.engine_protocols, [ENGINE_PROTOCOL]);
+    contract.require_engine(ENGINE_PROTOCOL, crate::installation::SCHEMA_VERSION)?;
     contract.require_probe(probe::PROBE_PROTOCOL, crate::installation::SCHEMA_VERSION)?;
     contract.require_preparation(PREPARATION_PROTOCOL, crate::installation::SCHEMA_VERSION)
 }
@@ -31,14 +30,11 @@ fn producing_updater_declares_exactly_the_implemented_entry_and_reader() -> Resu
 fn historical_preparation_declarations_do_not_gain_probe_capability() -> Result<(), Rejection> {
     let bytes = br#"{"schema_version":1,"preparation_protocols":[1],"installation_schemas":[1]}"#;
     let old = UpdaterContract::decode(bytes)?;
-    assert_eq!(old.require_activation(ACTIVATION_PROTOCOL, 1), Err(Rejection::Unsupported));
+    assert_eq!(old.require_engine(ENGINE_PROTOCOL, 1), Err(Rejection::Unsupported));
     old.require_preparation(1, 1)?;
     assert_eq!(old.require_probe(probe::PROBE_PROTOCOL, 1), Err(Rejection::Unsupported));
     let historical_probe = UpdaterContract::decode(br#"{"schema_version":2,"preparation_protocols":[1],"installation_schemas":[1],"probe_protocols":[1]}"#)?;
-    assert_eq!(
-        historical_probe.require_activation(ACTIVATION_PROTOCOL, 1),
-        Err(Rejection::Unsupported)
-    );
+    assert_eq!(historical_probe.require_engine(ENGINE_PROTOCOL, 1), Err(Rejection::Unsupported));
     assert_eq!(
         historical_probe.require_probe(probe::PROBE_PROTOCOL, 1),
         Err(Rejection::Unsupported)
@@ -56,22 +52,19 @@ fn future_entry_names_remain_readable_without_granting_known_operations() -> Res
     let contract = UpdaterContract::decode(value)?;
     contract.require_preparation(1, 1)?;
     assert_eq!(contract.require_probe(2, 1), Err(Rejection::Unsupported));
-    assert_eq!(contract.require_activation(1, 1), Err(Rejection::Unsupported));
+    assert_eq!(contract.require_engine(1, 1), Err(Rejection::Unsupported));
     let contract = UpdaterContract::decode(CURRENT_UPDATER_CONTRACT)?;
-    assert_eq!(contract.require_activation(3, 2), Err(Rejection::Unsupported));
-    assert_eq!(
-        contract.require_activation(ACTIVATION_PROTOCOL, 3),
-        Err(Rejection::InstallationSchema)
-    );
+    assert_eq!(contract.require_engine(3, 2), Err(Rejection::Unsupported));
+    assert_eq!(contract.require_engine(ENGINE_PROTOCOL, 3), Err(Rejection::InstallationSchema));
     Ok(())
 }
 
 #[test]
 fn capability_maps_reject_duplicate_keys_and_unknown_top_level_fields() {
     for bytes in [
-        r#"{"schema_version":3,"installation_schemas":[1],"entry_protocols":{"prepare":[1],"activate":[1],"activate":[2]}}"#,
+        r#"{"schema_version":3,"installation_schemas":[1],"entry_protocols":{"prepare":[1],"engine":[1],"engine":[2]}}"#,
         r#"{"schema_version":3,"installation_schemas":[1],"entry_protocols":{"prepare":[1]},"command":"foreign.exe"}"#,
-        r#"{"schema_version":3,"installation_schemas":[1],"entry_protocols":{"activate":[1]}}"#,
+        r#"{"schema_version":3,"installation_schemas":[1],"entry_protocols":{"engine":[1]}}"#,
         r#"{"schema_version":2,"installation_schemas":[1],"entry_protocols":{"prepare":[1]}}"#,
     ] {
         assert_eq!(UpdaterContract::decode(bytes.as_bytes()).err(), Some(Rejection::Format));

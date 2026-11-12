@@ -143,13 +143,13 @@ impl Compatibility {
             .map_err(io::Error::other)
     }
 
-    /// Startup delegation requires the independently implemented activation entry.
-    pub(super) fn require_updater_activation(&self) -> io::Result<()> {
+    /// Startup handoff to a newer updater requires its launch engine role.
+    pub(super) fn require_updater_engine(&self) -> io::Result<()> {
         self.updater
             .as_ref()
             .ok_or_else(|| io::Error::other(Rejection::Missing))?
-            .require_activation(
-                sugarsubstitute_contracts::application_launch::updater::ACTIVATION_PROTOCOL,
+            .require_engine(
+                sugarsubstitute_contracts::application_launch::updater::ENGINE_PROTOCOL,
                 sugarsubstitute_contracts::installation::SCHEMA_VERSION,
             )
             .map_err(io::Error::other)

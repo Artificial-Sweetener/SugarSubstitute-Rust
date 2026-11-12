@@ -12,11 +12,6 @@ pub struct AdmittedCandidate {
     trial: OwnedTrial,
 }
 impl AdmittedCandidate {
-    /// Borrow destination custody without transferring repository locks or granting new authority.
-    pub(in crate::setup_storage) fn launch_pins(&self) -> impl Iterator<Item = &File> {
-        self.prepared.launch_pins()
-    }
-
     /// Require trial entry before a native adapter can prepare inherited launch handles.
     pub(in crate::setup_storage) fn require_trial_launch(&self) -> io::Result<()> {
         self.prepared.compatibility().require_trial_launch()

@@ -2,29 +2,28 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Dedicated updater process entry shares the admitted preparation session with historical hosts.
 use std::{error::Error, ffi::OsString, io, process::ExitCode, sync::Arc};
-use sugarsubstitute_contracts::application_launch::updater::{
-    ACTIVATION_ARGUMENT, PREPARATION_ARGUMENT, probe::PROBE_ARGUMENT,
+use sugarsubstitute_contracts::application_launch::{
+    ENGINE_LAUNCH_ARGUMENT,
+    updater::{PREPARATION_ARGUMENT, probe::PROBE_ARGUMENT},
 };
-use sugarsubstitute_supervision::application_launch::broker::ActivationSender;
+use sugarsubstitute_supervision::application_launch::EngineLaunch;
 use sugarsubstitute_supervision::setup_storage::InheritedUpdaterProbe;
 
 /// Run once on the native main thread, retiring owned jobs before returning process status.
 /// Each role reports status to its owning process; failed native work settles before return.
 pub fn entry(
     probe: io::Result<Option<InheritedUpdaterProbe>>,
-    activation: io::Result<Option<ActivationSender>>,
+    engine: io::Result<Option<EngineLaunch>>,
 ) -> ExitCode {
     let result = crate::diagnostics::Diagnostics::run(
         crate::diagnostics::RecordsBase::RunningImage,
         |_health| {
             let result = (|| {
                 let probe = probe?.map(Arc::new);
-                let activation = activation?.map(Arc::new);
+                let engine = engine?;
                 arguments(std::env::args_os().skip(1)).and_then(|(role, arguments)| {
-                    match (role, &probe, activation) {
-                        (Role::Activation, None, Some(activation)) => {
-                            super::activation::run(activation)
-                        }
+                    match (role, &probe, &engine) {
+                        (Role::Engine, None, Some(engine)) => super::activation::run(engine),
                         (Role::Preparation, None, None) => super::run(arguments),
                         (Role::Probe, Some(probe), None) => super::probe::run(Arc::clone(probe)),
                         _ => Err("Updater entry and inherited custody differ".into()),
@@ -46,7 +45,7 @@ pub fn entry(
 /// Exact public entry selection prevents desktop or installer modes in the updater executable.
 #[derive(Debug, PartialEq, Eq)]
 enum Role {
-    Activation,
+    Engine,
     Preparation,
     Probe,
 }
@@ -57,7 +56,7 @@ fn arguments(
 ) -> Result<(Role, impl Iterator<Item = OsString>), Box<dyn Error>> {
     let mut arguments = arguments.into_iter();
     let role = match arguments.next().as_deref() {
-        Some(value) if value == std::ffi::OsStr::new(ACTIVATION_ARGUMENT) => Role::Activation,
+        Some(value) if value == std::ffi::OsStr::new(ENGINE_LAUNCH_ARGUMENT) => Role::Engine,
         Some(value) if value == std::ffi::OsStr::new(PREPARATION_ARGUMENT) => Role::Preparation,
         Some(value) if value == std::ffi::OsStr::new(PROBE_ARGUMENT) => Role::Probe,
         _ => return Err("An explicit updater entry is required".into()),
@@ -77,7 +76,7 @@ mod tests {
         for (entry, expected) in [
             (PREPARATION_ARGUMENT, Role::Preparation),
             (PROBE_ARGUMENT, Role::Probe),
-            (ACTIVATION_ARGUMENT, Role::Activation),
+            (ENGINE_LAUNCH_ARGUMENT, Role::Engine),
         ] {
             let input = [OsString::from(entry)].into_iter().chain(paths.clone());
             let (role, values) = arguments(input)?;

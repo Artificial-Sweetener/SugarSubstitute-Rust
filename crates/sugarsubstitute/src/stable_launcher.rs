@@ -14,17 +14,17 @@ use std::{
     process::ExitCode,
 };
 
-/// Run the accepted engine's startup role once, authenticating its actual image before selection.
+/// Run a newer accepted updater as the launch engine once, authenticating its own image first.
 /// Called on the native main thread under the updater entry's diagnostics lifetime.
-pub(crate) fn activate(
-    source: std::sync::Arc<
-        sugarsubstitute_supervision::application_launch::broker::ActivationSender,
-    >,
+pub(crate) fn run_update_engine(
+    installation: PathBuf,
     executable: PathBuf,
     repository: [u8; 32],
 ) -> Result<(), Box<dyn Error>> {
-    sugarsubstitute_desktop::run_headless(&mut lifetime::Launcher::activation(
-        source, executable, repository,
+    sugarsubstitute_desktop::run_headless(&mut lifetime::Launcher::update_engine(
+        installation,
+        executable,
+        repository,
     ))?;
     Ok(())
 }

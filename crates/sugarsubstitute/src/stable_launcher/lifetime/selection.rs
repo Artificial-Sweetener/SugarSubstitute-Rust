@@ -30,9 +30,9 @@ impl Launcher {
                 self.choice = Choice::Trial;
             }
             cached::Outcome::Engine(image) => {
-                self.activation = Some(ActivationLaunch::new(image));
+                self.delegate = Some(Arc::new(std::sync::Mutex::new(Some(image))));
                 self.cached = None;
-                self.choice = Choice::PrepareEngine;
+                self.choice = Choice::Delegate;
             }
         }
         Ok(())
@@ -40,21 +40,12 @@ impl Launcher {
 
     /// Creation is admitted only after exact selection or trial transfer was observed successful.
     pub(super) fn select_next(&mut self) -> Result<()> {
-        if matches!(self.choice, Choice::ObserveEngine | Choice::StopEngine | Choice::ObserveOffer)
-            && !self.activation_due()
-        {
-            return Ok(());
-        }
         let task = match self.choice {
             Choice::Route => Task::Route,
             Choice::Installation => Task::Installation,
             Choice::OpenEngine => Task::OpenEngine,
             Choice::VerifyEngine => Task::VerifyEngine,
-            Choice::PrepareEngine => Task::PrepareEngine,
-            Choice::CreateEngine => Task::CreateEngine,
-            Choice::ObserveEngine => Task::ObserveEngine,
-            Choice::ObserveOffer => Task::ObserveOffer,
-            Choice::StopEngine => Task::StopEngine,
+            Choice::Delegate => Task::Delegate,
             Choice::Cache => Task::Cache,
             Choice::Accepted => Task::Select,
             Choice::Trial => Task::Trial,
@@ -88,23 +79,35 @@ impl Launcher {
                     Ok(Work::EngineVerified)
                 })
             }
-            Choice::PrepareEngine => {
-                let launch = self.activation.as_ref().ok_or("Engine creator absent")?.clone();
-                self.submit(Task::PrepareEngine, move |context| {
-                    launch.prepare(&context).map_err(io::Error::other)?;
-                    Ok(Work::EnginePrepared)
+            Choice::Delegate => {
+                let image = self.delegate.as_ref().ok_or("Newer updater image absent")?.clone();
+                let root = self.root.clone();
+                self.submit(Task::Delegate, move |context| {
+                    let image =
+                        image.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take();
+                    let image = image.ok_or_else(|| io::Error::other("Newer updater consumed"))?;
+                    let started =
+                        sugarsubstitute_supervision::application_launch::start_engine_image(
+                            &image.executable(),
+                            image.directory(),
+                            &root,
+                            sugarsubstitute_supervision::application_launch::MAX_ENGINE_HOPS,
+                            &context,
+                        )
+                        .map_err(io::Error::other)?;
+                    drop(image);
+                    let until = context
+                        .now()
+                        .checked_add(
+                            sugarsubstitute_supervision::application_launch::ENGINE_TAKEOVER,
+                        )
+                        .map_err(io::Error::other)?;
+                    started
+                        .await_takeover(&context, until)
+                        .map(Work::Delegated)
+                        .map_err(io::Error::other)
                 })
             }
-            Choice::CreateEngine => {
-                let launch = self.activation.as_ref().ok_or("Engine creator absent")?.clone();
-                self.submit(Task::CreateEngine, move |context| {
-                    launch.launch(&context).map_err(io::Error::other)?;
-                    Ok(Work::EngineStarted)
-                })
-            }
-            Choice::ObserveEngine => self.observe_activation(false),
-            Choice::ObserveOffer => self.observe_offer(),
-            Choice::StopEngine => self.observe_activation(true),
             Choice::Cache if self.cached.is_none() => {
                 let root = self.root.clone();
                 self.submit(Task::Cache, move |_| {
@@ -143,12 +146,7 @@ impl Launcher {
             }
             Choice::Create { optional } => {
                 let launch = self.launch.as_ref().ok_or("Application creator absent")?.clone();
-                let source = self.source.clone();
                 self.submit(Task::Create { optional }, move |context| {
-                    if let Some(source) = source {
-                        source.offer(&launch, &context)?;
-                        return Ok(Work::Offered);
-                    }
                     launch.launch(&context).map_err(io::Error::other)?;
                     Ok(Work::Launched)
                 })
@@ -179,11 +177,10 @@ impl Launcher {
         if self.closing {
             return Err(cause);
         }
-        if self.source.is_some() && matches!(task, Task::Create { .. } | Task::ObserveOffer) {
-            return Err(cause);
-        }
-        if matches!(task, Task::PrepareEngine | Task::CreateEngine | Task::ObserveEngine) {
-            return self.activation_failed(cause);
+        if matches!(task, Task::Delegate) {
+            self.delegated(Takeover::Exited);
+            self.update_failure = Some(cause);
+            return Ok(());
         }
         if !matches!(
             task,
@@ -214,12 +211,6 @@ impl Launcher {
         self.recovery_until = None;
         self.recovery_wake = None;
         match outcome {
-            CreationOutcome::NotCreated
-                if self.creator_reply == Some(CreationOutcome::NotCreated) =>
-            {
-                self.completed = true;
-                self.choice = Choice::Complete;
-            }
             CreationOutcome::NotCreated => self.choice = Choice::Accepted,
             CreationOutcome::Created => {
                 self.completed = true;

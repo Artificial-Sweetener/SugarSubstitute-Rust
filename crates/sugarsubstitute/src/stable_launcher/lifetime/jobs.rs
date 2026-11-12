@@ -10,17 +10,14 @@ impl Launcher {
         task: Task,
         body: impl FnOnce(JobContext) -> io::Result<Work> + Send + 'static,
     ) -> Result<()> {
-        let cleanup = matches!(task, Task::Retire | Task::Recover | Task::StopEngine);
-        if self.job.is_some() || (self.closing && !matches!(task, Task::Retire | Task::StopEngine))
-        {
+        let cleanup = matches!(task, Task::Retire | Task::Recover);
+        if self.job.is_some() || (self.closing && !matches!(task, Task::Retire)) {
             return Err("Launcher admission is closed or occupied".into());
         }
         let client = self.client.as_ref().ok_or("Launcher execution absent")?;
         let scope = if cleanup { self.cleanup_scope.as_ref() } else { self.work_scope.as_ref() }
             .ok_or("Launcher scope absent")?;
-        let deadline = if matches!(task, Task::Recover)
-            || (matches!(task, Task::StopEngine) && !self.closing)
-        {
+        let deadline = if matches!(task, Task::Recover) {
             self.recovery_until.ok_or("Launcher trial recovery cutoff absent")?
         } else if cleanup {
             self.cleanup_until.ok_or("Launcher cleanup cutoff absent")?
@@ -44,16 +41,10 @@ impl Launcher {
                         setup_storage::RESERVATION_BYTES
                             + setup_storage::TRUST_OPERATION_RESERVATION_BYTES
                     }
-                    Task::PrepareEngine | Task::ObserveEngine | Task::StopEngine => {
-                        sugarsubstitute_supervision::application_launch::ACTIVATION_RESERVATION_BYTES
-                    }
-                    Task::CreateEngine | Task::ObserveOffer => {
+                    Task::Delegate => {
                         sugarsubstitute_supervision::application_launch::CREATION_RESERVATION_BYTES
                     }
                     Task::Trial => setup_storage::SIGNED_TRANSFER_RESERVATION_BYTES,
-                    Task::Create { .. } if self.source.is_some() => {
-                        sugarsubstitute_supervision::application_launch::ACTIVATION_RESERVATION_BYTES
-                    }
                     Task::Create { .. } => {
                         sugarsubstitute_supervision::application_launch::CREATION_RESERVATION_BYTES
                     }
