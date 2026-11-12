@@ -90,6 +90,10 @@ pub enum Decoration {
     },
     /// The installation summary panel.
     Summary,
+    /// A Fluent card grouping read-only facts, such as a report's summary rows.
+    Card,
+    /// A dialog's command band: an opaque layer separated from content by its top edge.
+    Footer,
     /// Background around the native output control.
     Output,
     /// Installer body material wash.

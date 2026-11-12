@@ -91,11 +91,11 @@ fn qualify() -> Result<()> {
         finished: false,
     };
     native::run(
-        native::Window {
-            title: "Native installer composition qualification".into(),
-            visible: true,
-            close: Action::Close.id(),
-        },
+        native::Window::installer(
+            "Native installer composition qualification".into(),
+            true,
+            Action::Close.id(),
+        ),
         &mut fixture,
     )?;
     assert_eq!(fixture.phase, 3);

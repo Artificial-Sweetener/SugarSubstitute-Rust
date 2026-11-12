@@ -774,6 +774,18 @@ pub trait StartupWindowContent: WindowContent {
     fn take_command(&mut self) -> Result<Option<DesktopStartupCommand>, Box<dyn Error>>;
     /// Return the earliest actual application deadline, without renewing it.
     fn next_deadline(&self) -> Option<Instant>;
+
+    /// The user chose to restart so a prepared update applies. The application runs its
+    /// ordinary close, keeping everything authored, and relaunches once that close has an
+    /// outcome; a close already under way keeps its own reason. Called on the event-loop thread
+    /// between native callbacks; returns promptly. A host without an updater never offers it.
+    ///
+    /// # Errors
+    /// Preserves the close transaction's failure; this default refuses because the host offers
+    /// no update to apply.
+    fn request_restart_to_apply(&mut self) -> Result<(), Box<dyn Error>> {
+        Err("This host offers no update to apply".into())
+    }
 }
 
 /// Return presentation evidence only after native and composing-owner teardown.
