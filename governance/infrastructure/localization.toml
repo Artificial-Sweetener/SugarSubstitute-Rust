@@ -173,30 +173,6 @@ kind = "fixture"
 rationale = "Behavioral fixture explicitly exercises native presentation, input validation, or original dynamic text; it grants no production text route. Check bounded native-host input and exact origin admission without creating windows."
 
 [[records]]
-path = "crates/sugarsubstitute-desktop/src/report/windows/controls.rs"
-source_sha256 = "sha256:824d653192eb1535b598ff08b987fac3ebbc995a4a443351e35be0359763f530"
-kind = "native"
-rationale = "Native boundary: Own OS text, buttons, consent and every subclass borrow until checked teardown.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
-
-[[records]]
-path = "crates/sugarsubstitute-desktop/src/report/windows/save_dialog/consent.rs"
-source_sha256 = "sha256:9a73e0df502f3275cbcdcd03f32deebf1884ad479fee831521f737c4a68eda8e"
-kind = "native"
-rationale = "Native boundary: Observe explicit overwrite opt-in on the actual modal picker, without pathname probes.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
-
-[[records]]
-path = "crates/sugarsubstitute-desktop/src/report/windows/save_dialog.rs"
-source_sha256 = "sha256:420c68b15c2369c4bba722c0fd10fca358b04651786000e4dc8c8af255088fce"
-kind = "native"
-rationale = "Native boundary: Retain one modal HWND timer and one deferred update until checked hook retirement.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
-
-[[records]]
-path = "crates/sugarsubstitute-desktop/src/report/windows.rs"
-source_sha256 = "sha256:48f0fbdcfbb1d86a5ae0d5570e529bdd75a167e91e5581c439e42494af92d6ac"
-kind = "native"
-rationale = "Native boundary: Own the browser-independent Windows report loop and checked teardown.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
-
-[[records]]
 path = "crates/sugarsubstitute-desktop/src/runtime.rs"
 source_sha256 = "sha256:fc0a7bc158add83f23bea50f80728e14a5697b348f640a71686ed73531d8660d"
 kind = "native"
@@ -204,9 +180,9 @@ rationale = "Native boundary: Pump native callbacks while preparation and owned 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/file_dialog.rs"
-source_sha256 = "sha256:2e7d0ddd66eb82aae81020beaae6780f80301c497010ce03cb7b234a8c3bdcc0"
+source_sha256 = "sha256:c358901b3c8d344dca82ca653b76ee57e8daa2b59c18de9c191a3816b531cc76"
 kind = "native"
-rationale = "Native boundary: Queue shell selection between application callbacks on the desktop's existing UI STA. The save dialog's title, suggested file name and file type label arrive from the typed catalog; the *.txt pattern and txt extension are technical identities."
+rationale = "Native boundary: Queue shell selection between application callbacks on the desktop's existing UI STA. The save dialog's title, suggested file name and file type label arrive from the typed catalog; the file pattern and extension are technical identities supplied by the caller."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/startup_conflict.rs"
@@ -576,7 +552,7 @@ rationale = "Isolated native interaction or rendering qualification uses deliber
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/installer/native/windows.rs"
-source_sha256 = "sha256:aef64f11725dc637bc6717cdad243c9d89b0e68b50925e1c0065294279bb907b"
+source_sha256 = "sha256:d818f634815b22f06e1771f1a87d739156929fa17d570262af2d29788094cbd7"
 kind = "native"
 rationale = "Affine native text, control or window adapter consumes original bounded labels and shared widget specifications; the presenting owner supplies catalog copy, and external native references retain their checked lifetime."
 

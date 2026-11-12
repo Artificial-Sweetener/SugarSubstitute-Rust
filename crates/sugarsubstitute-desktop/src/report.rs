@@ -9,16 +9,12 @@ mod error;
 #[cfg(target_os = "windows")]
 mod preparation;
 mod state;
-/// One Fluent report window for startup failure, another copy running and update failure.
+/// One Fluent report window for crashes, startup failure, another copy running and update failure.
 pub mod surface;
 mod view;
-#[cfg(target_os = "windows")]
-#[allow(unsafe_code)]
-mod windows;
 pub use contract::*;
 pub use error::{ReportSurfaceError, ReportSurfaceFailure};
 #[cfg(target_os = "windows")]
 pub use preparation::{ReportSessionPreparation, run_prepared_report_surface};
+pub use surface::run_report_surface;
 pub use view::{NativeReportView, ReportSurfaceOptions};
-#[cfg(target_os = "windows")]
-pub use windows::run_report_surface;

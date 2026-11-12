@@ -133,8 +133,12 @@ fn startup_report_prepares_in_bounded_slices_and_offers_copy_and_close() -> Test
     assert!(!shown.contains(&ReportAction::Export) && !shown.contains(&ReportAction::Restart));
 
     invoke(&mut lifetime, ReportAction::Copy)?;
-    assert_eq!(lifetime.clipboard(), Some(report_text(40)), "Copy takes the whole report");
-    assert_eq!(lifetime.clipboard(), None);
+    assert_eq!(
+        lifetime.clipboard().map(|copy| copy.text),
+        Some(report_text(40)),
+        "Copy takes the whole report"
+    );
+    assert!(lifetime.clipboard().is_none());
     lifetime.copied(Ok(()))?;
     next_frame(&mut lifetime, Duration::ZERO)?;
 
@@ -266,6 +270,7 @@ fn update_export_outcome_becomes_the_footer_status() -> TestResult {
         state: &mut state,
         closed: &mut closed,
         changed: &mut changed,
+        requests: &mut ControlRequests::default(),
     };
     owner.command(
         ReportCommand::Export { destination: "a.txt".into(), include_dump: false },
@@ -424,6 +429,7 @@ fn every_conflict_phase_shows_its_own_words_in_the_surface_locale() -> TestResul
                 state: &mut state,
                 closed: &mut closed,
                 changed: &mut changed,
+                requests: &mut ControlRequests::default(),
             };
             owner.poll(&mut control)?;
             let view = ConflictView { phase };

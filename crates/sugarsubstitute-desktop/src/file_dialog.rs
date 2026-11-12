@@ -30,7 +30,7 @@ pub enum SelectionKind {
     Folder,
     /// Choose an existing regular filesystem file.
     File,
-    /// Choose where to save a text file; the shell confirms replacing an existing file.
+    /// Choose where to save a file; the shell confirms replacing an existing file.
     Save {
         /// Localized dialog title.
         title: &'static str,
@@ -38,6 +38,8 @@ pub enum SelectionKind {
         file_name: &'static str,
         /// Localized file type label, such as "Text report (*.txt)".
         filter: &'static str,
+        /// File extension without its dot, such as "txt".
+        extension: &'static str,
     },
 }
 
@@ -56,17 +58,17 @@ fn choose(
     // borrowed title, name and filter strings outlive the synchronous configuration calls.
     unsafe {
         let dialog: IFileDialog = match kind {
-            SelectionKind::Save { title, file_name, filter } => {
+            SelectionKind::Save { title, file_name, filter, extension } => {
                 let dialog: IFileSaveDialog =
                     CoCreateInstance(&FileSaveDialog, None, CLSCTX_INPROC_SERVER)?;
                 let (title, file_name, filter) =
                     (HSTRING::from(title), HSTRING::from(file_name), HSTRING::from(filter));
-                let pattern = HSTRING::from("*.txt");
+                let pattern = HSTRING::from(format!("*.{extension}"));
                 dialog.SetFileTypes(&[COMDLG_FILTERSPEC {
                     pszName: PCWSTR(filter.as_ptr()),
                     pszSpec: PCWSTR(pattern.as_ptr()),
                 }])?;
-                dialog.SetDefaultExtension(&HSTRING::from("txt"))?;
+                dialog.SetDefaultExtension(&HSTRING::from(extension))?;
                 dialog.SetTitle(&title)?;
                 dialog.SetFileName(&file_name)?;
                 dialog.SetOptions(FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | FOS_OVERWRITEPROMPT)?;

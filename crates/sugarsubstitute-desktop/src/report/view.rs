@@ -5,7 +5,7 @@ use super::ReportSurfaceError;
 use sugarsubstitute_contracts::{
     execution::{MemoryClaim, MemoryLease},
     incident::{MAX_TEXT_ATTACHMENT_BYTES, ReportBinding, ReportRestartAvailability},
-    localization::{incident::ReportMessages, messages},
+    localization::{Messages, messages},
 };
 /// Complete immutable redacted report text and the same transferred allocation claim.
 pub struct NativeReportView {
@@ -55,10 +55,7 @@ impl NativeReportView {
 /// Bound the native surface independently of browser, backend and failed desktop state.
 pub struct ReportSurfaceOptions {
     pub(super) view: NativeReportView,
-    pub(super) labels: &'static ReportMessages,
-    pub(super) dark: bool,
-    pub(super) width: u32,
-    pub(super) height: u32,
+    pub(super) copy: &'static Messages,
     pub(super) lease: MemoryLease,
     pub(super) dispatch_storage: sugarsubstitute_contracts::execution::MemoryClaim,
 }
@@ -67,37 +64,23 @@ impl ReportSurfaceOptions {
     pub const KNOWN_STORAGE_BYTES: u64 = 4 * 1024 * 1024;
     /// Fixed ceiling for the single native Session/content box and UI-only dispatch metadata.
     pub const DISPATCH_STORAGE_BYTES: u64 = 64 * 1024;
-    /// Select canonical localized copy and logical geometry before native effects.
+    /// Select canonical localized copy before native effects. The report window follows the
+    /// system theme and sizes itself to the report and the screen.
     ///
     /// # Errors
-    /// Rejects dimensions outside360..=8192 by280..=8192 or insufficient native credit,
-    /// including the fixed dispatch reservation within the same known storage ceiling.
-    /// The existing transferred view claim is retained separately through teardown.
+    /// Rejects insufficient native credit, including the fixed dispatch reservation within the
+    /// same known storage ceiling. The transferred view claim is retained through teardown.
     pub fn new(
         view: NativeReportView,
         locale: &str,
-        dark: bool,
-        width: u32,
-        height: u32,
         lease: MemoryLease,
     ) -> Result<Self, ReportSurfaceError> {
-        if !(360..=8192).contains(&width)
-            || !(280..=8192).contains(&height)
-            || lease.bytes() < Self::KNOWN_STORAGE_BYTES
-        {
+        if lease.bytes() < Self::KNOWN_STORAGE_BYTES {
             return Err(ReportSurfaceError::rejected("report_surface_options"));
         }
         let dispatch_storage = lease
             .claim(Self::DISPATCH_STORAGE_BYTES)
             .map_err(|cause| ReportSurfaceError::new("report_dispatch_credit", cause))?;
-        Ok(Self {
-            view,
-            labels: messages(locale).report,
-            dark,
-            width,
-            height,
-            lease,
-            dispatch_storage,
-        })
+        Ok(Self { view, copy: messages(locale), lease, dispatch_storage })
     }
 }

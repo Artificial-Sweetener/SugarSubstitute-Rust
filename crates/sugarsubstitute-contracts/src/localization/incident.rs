@@ -42,12 +42,6 @@ pub struct ReportMessages {
     pub text_filter: &'static str,
     /// Dump archive format label.
     pub archive_filter: &'static str,
-    /// Confirm destination selection action.
-    pub save: &'static str,
-    /// Explicit consent to replace a file at the final selected destination pathname.
-    pub overwrite_destination: &'static str,
-    /// Cancel destination selection action.
-    pub cancel: &'static str,
     /// Successful clipboard transfer status.
     pub copied: &'static str,
     /// Successful export status.
@@ -126,7 +120,7 @@ pub struct ReportMessages {
 
 impl ReportMessages {
     /// Borrow every owned label for complete-coverage validation.
-    pub fn labels(&self) -> [&'static str; 71] {
+    pub fn labels(&self) -> [&'static str; 68] {
         [
             self.title,
             self.explanation,
@@ -141,9 +135,6 @@ impl ReportMessages {
             self.save_title,
             self.text_filter,
             self.archive_filter,
-            self.save,
-            self.cancel,
-            self.overwrite_destination,
             self.copied,
             self.exported,
             self.copy_failed,

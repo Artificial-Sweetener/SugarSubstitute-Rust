@@ -875,9 +875,9 @@ capabilities = ["codec"]
 rationale = "Construct isolated malformed UI policy documents to verify unknown-schema, duplicate, stale-review and dependency-identity rejection through the real governance checker."
 
 [[records]]
-path = "crates/sugarsubstitute-desktop/src/report/surface/native_tests.rs"
+path = "crates/sugarsubstitute-desktop/src/report/surface/native_tests/evidence.rs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:84db8f2320ec860a2d9ef29a37de10682171dff000f65d6d260a74fc9dd53a5a"
+source_sha256 = "sha256:f149809abb75fb8c0c56d7f849f728d6354eb4fbdd688137fbce747bbc34e0ac"
 capabilities = ["environment"]
 rationale = "Read only the optional qualification evidence directory for report captures; tests write their own rendered frames there and read or write no product settings."
 

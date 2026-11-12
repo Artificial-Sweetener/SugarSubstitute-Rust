@@ -113,10 +113,6 @@ sources = [
     "crates/sugarsubstitute-desktop/src/main_actor/render_preview/capture.rs",
     "crates/sugarsubstitute-desktop/src/main_actor/render_preview/downloads.rs",
     "crates/sugarsubstitute-desktop/src/native_storage.rs",
-    "crates/sugarsubstitute-desktop/src/report/windows.rs",
-    "crates/sugarsubstitute-desktop/src/report/windows/callback.rs",
-    "crates/sugarsubstitute-desktop/src/report/windows/controls.rs",
-    "crates/sugarsubstitute-desktop/src/report/windows/save_dialog/consent.rs",
     "crates/sugarsubstitute-desktop/src/runtime.rs",
     "crates/sugarsubstitute-desktop/src/startup_admission.rs",
     "crates/sugarsubstitute-desktop/src/startup_preparation.rs",
@@ -149,7 +145,7 @@ sources = [
     "crates/sugarsubstitute-desktop/src/windows_text/field_tests.rs",
     "crates/sugarsubstitute-desktop/src/windows_text/renderer.rs",
 ]
-source_sha256 = "sha256:a570c2d99b3323c96aaa48bd3b808fb1f89ee436d7e571ce502a6a990d64517f"
+source_sha256 = "sha256:c06279b84ac3dd62adfd69054763cf5f8e71bbea7c87e4660efa67cbc1b46116"
 
 [[boundaries]]
 owner = "sugarsubstitute-image-gpu"
@@ -190,10 +186,9 @@ source_sha256 = "sha256:5428f611abbb8281c87b0cdfc505c68528eb5ebaaea3bb645d586ce9
 
 [[boundaries]]
 owner = "sugarsubstitute-desktop"
-concern = "Native modal operations: queued UI-STA shell selection from the pre-dispatch owner, reporter save selection from its retained modal loan"
+concern = "Native modal operations: queued UI-STA shell selection from the pre-dispatch owner"
 capabilities = ["modal"]
 sources = [
     "crates/sugarsubstitute-desktop/src/file_dialog.rs",
-    "crates/sugarsubstitute-desktop/src/report/windows/save_dialog/selection.rs",
 ]
-source_sha256 = "sha256:9ed283fdb46ead46d6024d34d149ac4e3a39f9115f843a7e0200e8b3236d58f1"
+source_sha256 = "sha256:c358901b3c8d344dca82ca653b76ee57e8daa2b59c18de9c191a3816b531cc76"

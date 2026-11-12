@@ -39,6 +39,10 @@ struct Fixture {
     scroll: f32,
     exercise_scroll: bool,
     capture: capture::Evidence,
+    /// Release the window at close and settle only after its retirement was observed.
+    release_early: bool,
+    retired: bool,
+    advanced_after_retirement: usize,
 }
 impl Fixture {
     fn new(fail_presentation: bool) -> Result<Self, Box<dyn Error>> {
@@ -68,6 +72,9 @@ impl Fixture {
             scroll: 10.0,
             exercise_scroll: false,
             capture: capture::Evidence::default(),
+            release_early: false,
+            retired: false,
+            advanced_after_retirement: 0,
         })
     }
     fn prepare(&mut self, shape: FrameShape) -> TestResult {
@@ -129,6 +136,9 @@ impl Lifetime for Fixture {
         Ok(())
     }
     fn advance(&mut self, _: Duration) -> TestResult {
+        if self.retired {
+            self.advanced_after_retirement += 1;
+        }
         Ok(())
     }
     fn page(&self) -> Option<Page<'_>> {
@@ -194,10 +204,21 @@ impl Lifetime for Fixture {
         Ok(())
     }
     fn settled(&mut self) -> Result<bool, Box<dyn Error>> {
-        Ok(self.closing)
+        Ok(self.closing && (!self.release_early || self.advanced_after_retirement > 0))
+    }
+    fn window_releasable(&mut self) -> Result<bool, Box<dyn Error>> {
+        if self.release_early { Ok(self.closing) } else { self.settled() }
+    }
+    fn window_retired(&mut self) -> TestResult {
+        assert!(!self.retired, "the window retires once");
+        // SAFETY: Search only this private-desktop fixture's unique window title.
+        assert!(unsafe { FindWindowW(None, w!("Native installer loop qualification")) }.is_err());
+        self.retired = true;
+        Ok(())
     }
     fn finish(&mut self) -> TestResult {
         assert!(self.closing);
+        assert!(self.retired, "the window's retirement is observed before finish");
         if let Some((window, field)) = self.original {
             // SAFETY: Passive validity queries prove original window/peer retirement after loop return.
             assert!(!unsafe { IsWindow(Some(window)) }.as_bool());
@@ -228,6 +249,7 @@ fn qualify() -> TestResult {
         &mut fixture,
     )?;
     assert!(fixture.finished);
+    assert_eq!(fixture.advanced_after_retirement, 0, "a settled lifetime finishes at once");
     assert_eq!(fixture.count, 2);
     assert_eq!(fixture.fields[0].role, Role::TextField(r"E:\Selected folder".into()));
     Ok(())
@@ -274,6 +296,30 @@ fn native_installer_failure_still_retires_original_window_and_field() -> TestRes
 }
 
 /// Pointer eligibility and original peer roles use the same clipped page inventory as native input.
+/// A lifetime that must observe its window's actual retirement settles afterwards: the event
+/// loop keeps advancing it with the window gone, and finish follows settlement.
+fn qualify_retirement_before_settlement() -> TestResult {
+    let mut fixture = Fixture::new(false)?;
+    fixture.release_early = true;
+    run(
+        super::super::Window::installer(
+            "Native installer loop qualification".into(),
+            true,
+            ControlId::new(1)?,
+        ),
+        &mut fixture,
+    )?;
+    assert!(fixture.retired && fixture.finished);
+    assert!(fixture.advanced_after_retirement > 0, "settlement continued without the window");
+    Ok(())
+}
+#[test]
+fn a_released_window_retires_before_its_lifetime_settles() -> TestResult {
+    crate::windows_test_desktop::run(
+        concat!(module_path!(), "::a_released_window_retires_before_its_lifetime_settles"),
+        qualify_retirement_before_settlement,
+    )
+}
 #[test]
 fn page_projection_rejects_duplicate_roles_and_clips_pointer_hits() -> TestResult {
     let mut fixture = Fixture::new(false)?;

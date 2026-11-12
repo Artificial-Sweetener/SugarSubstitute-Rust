@@ -3,6 +3,7 @@
 //! A startup failure report has nothing to decide: Close ends it.
 use super::{ReportCommand, ReportControl, ReportOwner};
 use std::error::Error;
+use sugarsubstitute_ui::report::ReportAction;
 
 /// Owner of a startup failure report.
 #[derive(Default)]
@@ -11,10 +12,12 @@ pub struct StartupReport;
 impl ReportOwner for StartupReport {
     fn command(
         &mut self,
-        _: ReportCommand,
+        command: ReportCommand,
         report: &mut ReportControl<'_>,
     ) -> Result<(), Box<dyn Error>> {
-        report.close();
+        if command == ReportCommand::Action(ReportAction::Close) {
+            report.close();
+        }
         Ok(())
     }
 }

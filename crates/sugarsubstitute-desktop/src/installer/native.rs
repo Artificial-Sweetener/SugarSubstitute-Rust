@@ -130,15 +130,23 @@ pub trait Lifetime {
         None
     }
     /// Take text the user asked to copy; the adapter owns the clipboard transfer.
-    fn clipboard(&mut self) -> Option<String> {
+    fn clipboard(&mut self) -> Option<ClipboardTransfer> {
         None
     }
     /// Observe the outcome of the last clipboard transfer.
     /// # Errors
     /// Preserves application failures; a failed transfer itself is a value, not an error.
-    fn copied(&mut self, result: Result<(), String>) -> Result<(), Box<dyn Error>> {
+    fn copied(&mut self, result: Result<(), CopyFailure>) -> Result<(), Box<dyn Error>> {
         let _ = result;
         Ok(())
+    }
+    /// The user asked to close the window with Escape or the operating system's close command.
+    /// Return true to close at once, or false when the lifetime decides and later reports
+    /// [`Lifetime::close_requested`].
+    /// # Errors
+    /// Preserves application failures; the window then closes.
+    fn close_request(&mut self) -> Result<bool, Box<dyn Error>> {
+        Ok(true)
     }
     /// Lend an optional offscreen observer after actual native presentation has completed.
     #[cfg(any(test, feature = "boundary-fixtures"))]
@@ -152,10 +160,31 @@ pub trait Lifetime {
     /// Retains partial ownership so subsequent advancement can settle it.
     fn close(&mut self) -> Result<(), Box<dyn Error>>;
     /// Actual worker/job settlement; cancellation alone is insufficient.
+    ///
+    /// Before the window retires an error is retained and settlement is asked again. After
+    /// [`Lifetime::window_retired`] an error ends settlement, and [`Lifetime::finish`] then
+    /// retains whatever has not retired.
     /// # Errors
     /// Preserves unresolved cleanup causes.
     fn settled(&mut self) -> Result<bool, Box<dyn Error>>;
-    /// Release final ownership after all native resources have retired on their creating thread.
+    /// Whether the closing window may retire now. By default the window stays until
+    /// [`Lifetime::settled`]; a lifetime whose work must observe the window's actual retirement
+    /// releases it earlier and settles afterwards.
+    /// # Errors
+    /// Preserves unresolved cleanup causes.
+    fn window_releasable(&mut self) -> Result<bool, Box<dyn Error>> {
+        self.settled()
+    }
+    /// The native window, its peers and its presentation buffers have actually been destroyed.
+    /// The event loop and the completion wake stay live until [`Lifetime::settled`] is true:
+    /// [`Lifetime::advance`] keeps being called, and no page, input or picker is consumed.
+    /// # Errors
+    /// Preserves application failures; settlement still continues.
+    fn window_retired(&mut self) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+    /// Release final ownership after all native resources have retired on their creating thread
+    /// and the completion wake has disconnected.
     /// # Errors
     /// Preserves original final cleanup failures.
     fn finish(&mut self) -> Result<(), Box<dyn Error>>;
@@ -199,6 +228,23 @@ pub fn run(options: Window, lifetime: &mut impl Lifetime) -> Result<(), Box<dyn 
     }
 }
 
+/// Text to place on the clipboard, optionally only before an original performance-counter
+/// deadline that the adapter checks immediately before native clipboard entry.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClipboardTransfer {
+    /// Complete text; text containing NUL is rejected by the transfer.
+    pub text: String,
+    /// Absolute counter cutoff on the window's thread; `None` copies unconditionally.
+    pub before: Option<sugarsubstitute_contracts::execution::CounterDeadline>,
+}
+/// Why a clipboard transfer did not happen.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum CopyFailure {
+    /// The transfer's counter deadline had passed when the clipboard would have been entered.
+    Expired,
+    /// The native transfer failed; the description is for diagnostics only.
+    Transfer(String),
+}
 /// Original modal picker request, independent of display strings and filesystem authority.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Picker {

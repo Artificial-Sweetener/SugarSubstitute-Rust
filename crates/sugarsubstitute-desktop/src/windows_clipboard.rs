@@ -95,13 +95,21 @@ impl<B: Boundary> Clipboard<B> {
     }
 }
 
-/// Copy `text` to the clipboard as the owner `window`, discharging every native obligation
-/// before returning. Text containing NUL is rejected.
+/// Copy `text` to the clipboard as the owner `window` when `admit`, asked after the text is
+/// prepared and immediately before the clipboard is entered, allows it. Every native obligation
+/// is discharged before returning. Text containing NUL is rejected.
 /// # Errors
-/// Preserves the first native failure; cleanup failures are logged after it.
-pub(crate) fn copy_text(window: HWND, text: &str) -> Result<(), DesktopError> {
+/// Preserves the first native or admission failure; cleanup failures are logged after it.
+pub(crate) fn copy_text_if(
+    window: HWND,
+    text: &str,
+    admit: impl FnOnce() -> Result<bool, DesktopError>,
+) -> Result<bool, DesktopError> {
     let mut units: Vec<u16> = text.encode_utf16().collect();
     units.push(0);
+    if !admit()? {
+        return Ok(false);
+    }
     let lease = MemoryLease::new((units.len() * 2) as u64, Box::new(Standalone));
     let mut clipboard = Clipboard::new(window);
     let copied = clipboard.copy(&units, &lease);
@@ -112,7 +120,7 @@ pub(crate) fn copy_text(window: HWND, text: &str) -> Result<(), DesktopError> {
             Err(cause)
         }
         (Err(cause), Ok(())) | (Ok(()), Err(cause)) => Err(cause),
-        (Ok(()), Ok(())) => Ok(()),
+        (Ok(()), Ok(())) => Ok(true),
     }
 }
 

@@ -2,9 +2,10 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Show one Fluent report through the shared native form window. The report owner decides what
 //! each command means; this surface owns layout, details, clipboard and export selection.
+use crate::installer::native::CopyFailure;
 use std::{error::Error, path::PathBuf, sync::Arc};
 use sugarsubstitute_contracts::{
-    execution::CompletionWake,
+    execution::{CompletionWake, CounterDeadline},
     localization::{Messages, incident::ReportMessages},
 };
 use sugarsubstitute_ui::report::{
@@ -13,6 +14,7 @@ use sugarsubstitute_ui::report::{
 };
 
 mod conflict;
+mod crash;
 mod lifetime;
 #[cfg(all(test, windows))]
 #[allow(unsafe_code)]
@@ -23,6 +25,8 @@ mod tests;
 mod update;
 
 pub use conflict::ConflictReport;
+pub use crash::run_report_surface;
+pub(super) use crash::validate_content_capacity;
 pub use startup::StartupReport;
 pub use update::{UpdateExport, UpdateReport};
 
@@ -137,13 +141,23 @@ pub enum ReportCommand {
     },
 }
 
-/// The owner's view of the open report: it may change the message, commands and status, and
-/// close the report. Every change repaints.
+/// The owner's view of the open report: it may change the message, commands, status and full
+/// report text, copy that text, and close the report. Every change repaints.
 pub struct ReportControl<'a> {
     pub(super) message: &'a mut String,
     pub(super) state: &'a mut ReportState,
     pub(super) closed: &'a mut bool,
     pub(super) changed: &'a mut bool,
+    pub(super) requests: &'a mut ControlRequests,
+}
+
+/// Owner requests the report applies after the owner's turn.
+#[derive(Default)]
+pub(super) struct ControlRequests {
+    /// Replacement for the full report text.
+    pub(super) details: Option<String>,
+    /// Copy the full report text, optionally only before this counter deadline.
+    pub(super) copy: Option<Option<CounterDeadline>>,
 }
 
 impl ReportControl<'_> {
@@ -172,6 +186,15 @@ impl ReportControl<'_> {
     pub fn close(&mut self) {
         *self.closed = true;
     }
+    /// Replace the full report text; dump consent resets with it.
+    pub fn replace_details(&mut self, details: String) {
+        self.requests.details = Some(details);
+        *self.changed = true;
+    }
+    /// Copy the full report text now, or only while `before` has not passed.
+    pub fn copy_details(&mut self, before: Option<CounterDeadline>) {
+        self.requests.copy = Some(before);
+    }
 }
 
 /// The application side of one report. Calls arrive on the window's thread between native
@@ -184,7 +207,8 @@ pub trait ReportOwner {
         let _ = wake;
         Ok(())
     }
-    /// Decide a user command. Copy, details and dump consent never reach the owner.
+    /// Decide a user command. Details and dump consent never reach the owner; Copy and Export
+    /// reach it through [`ReportOwner::copy`] and [`ReportOwner::export_requested`].
     /// # Errors
     /// Preserves the owner's failure; the report then closes.
     fn command(
@@ -199,10 +223,69 @@ pub trait ReportOwner {
         let _ = report;
         Ok(())
     }
-    /// The window is closing (close button, Escape, or the owner's own close). Seal new work.
+    /// The user chose Copy. `Ok(true)` copies the full report at once; an owner that must
+    /// authorize the copy first returns `Ok(false)` and later calls
+    /// [`ReportControl::copy_details`].
+    /// # Errors
+    /// Preserves the owner's failure; the report then closes.
+    fn copy(&mut self, report: &mut ReportControl<'_>) -> Result<bool, Box<dyn Error>> {
+        let _ = report;
+        Ok(true)
+    }
+    /// Observe a finished clipboard transfer; the report already shows its outcome.
+    /// # Errors
+    /// Preserves the owner's failure; the report then closes.
+    fn copied(
+        &mut self,
+        outcome: Result<(), CopyFailure>,
+        report: &mut ReportControl<'_>,
+    ) -> Result<(), Box<dyn Error>> {
+        let _ = (outcome, report);
+        Ok(())
+    }
+    /// The user chose Export with the current dump consent. `Ok(true)` asks for a destination.
+    /// # Errors
+    /// Preserves the owner's failure; the report then closes.
+    fn export_requested(
+        &mut self,
+        include_dump: bool,
+        report: &mut ReportControl<'_>,
+    ) -> Result<bool, Box<dyn Error>> {
+        let _ = (include_dump, report);
+        Ok(true)
+    }
+    /// The destination picker was dismissed or failed; no export started.
+    /// # Errors
+    /// Preserves the owner's failure; the report then closes.
+    fn export_abandoned(&mut self, report: &mut ReportControl<'_>) -> Result<(), Box<dyn Error>> {
+        let _ = report;
+        Ok(())
+    }
+    /// A frame showing full report text revision `details_revision` was presented natively.
+    /// The original text is revision zero; each [`ReportControl::replace_details`] adds one.
+    /// # Errors
+    /// Preserves the owner's failure; the report then closes.
+    fn presented(&mut self, details_revision: u64) -> Result<(), Box<dyn Error>> {
+        let _ = details_revision;
+        Ok(())
+    }
+    /// The window is closing (the owner's own close, or a native or rendering failure).
+    /// Seal new work.
     /// # Errors
     /// Preserves the failure while settlement continues.
     fn close(&mut self) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+    /// Whether the closing window may retire before [`ReportOwner::settled`].
+    /// # Errors
+    /// Preserves unresolved cleanup.
+    fn window_releasable(&mut self) -> Result<bool, Box<dyn Error>> {
+        self.settled()
+    }
+    /// The window has actually been destroyed; settlement continues without it.
+    /// # Errors
+    /// Preserves the owner's failure.
+    fn window_retired(&mut self) -> Result<(), Box<dyn Error>> {
         Ok(())
     }
     /// Whether the owner's work has actually retired.
@@ -210,6 +293,12 @@ pub trait ReportOwner {
     /// Preserves unresolved cleanup.
     fn settled(&mut self) -> Result<bool, Box<dyn Error>> {
         Ok(true)
+    }
+    /// Release final ownership after the window and the event loop have retired.
+    /// # Errors
+    /// Preserves final cleanup failures.
+    fn finish(&mut self) -> Result<(), Box<dyn Error>> {
+        Ok(())
     }
 }
 
