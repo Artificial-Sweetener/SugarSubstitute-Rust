@@ -140,6 +140,60 @@
         },
         "message": "This canvas does not provide an output surface."
       }
+    },
+    {
+      "from": "page",
+      "message": {
+        "protocol": "sugarcubes.canvas.masks",
+        "version": 2,
+        "session": "panel-0123456789abcdef",
+        "requestId": 1,
+        "command": {
+          "type": "context"
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "protocol": "sugarcubes.canvas.masks",
+        "version": 2,
+        "session": "panel-0123456789abcdef",
+        "requestId": 1,
+        "result": {
+          "kind": "context",
+          "supported": true,
+          "document": null,
+          "observesChanges": false
+        }
+      }
+    },
+    {
+      "from": "page",
+      "message": {
+        "protocol": "sugarcubes.canvas.masks",
+        "version": 2,
+        "session": "panel-0123456789abcdef",
+        "requestId": 1,
+        "command": {
+          "type": "watch",
+          "enabled": false
+        }
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "protocol": "sugarcubes.canvas.masks",
+        "version": 2,
+        "session": "panel-0123456789abcdef",
+        "requestId": 1,
+        "result": {
+          "kind": "failure",
+          "status": "stale",
+          "message": "Mask request identity was reused."
+        }
+      }
     }
   ]
 }

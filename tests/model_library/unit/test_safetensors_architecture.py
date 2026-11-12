@@ -18,12 +18,25 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 import struct
 
 import pytest
 
-from sugarcubes.model_library.domain.architecture import ModelArchitecture
+from sugarcubes.model_library.application.architecture_service import (
+    ModelArchitectureService,
+)
+from sugarcubes.model_library.domain.architecture import (
+    DamagedModelFile,
+    ModelArchitecture,
+)
+from sugarcubes.model_library.infrastructure.architecture_store import (
+    SqliteModelArchitectures,
+)
+from sugarcubes.model_library.infrastructure.catalog_store import (
+    SqliteModelCatalogRepository,
+)
 from sugarcubes.model_library.domain.models import ModelEvidence
 from sugarcubes.model_library.infrastructure.model_architecture_reader import (
     ApprovedModelArchitecture,
@@ -88,24 +101,86 @@ def test_reader_passes_shapes_without_metadata_or_weight_bytes(tmp_path: Path) -
 
 
 @pytest.mark.parametrize(
-    "content",
+    ("content", "reason"),
     [
-        b"",
-        struct.pack("<Q", 1000000000),
-        struct.pack("<Q", 10) + b"{}",
-        struct.pack("<Q", 2) + b"[]",
+        (b"", "the file is empty"),
+        (b"\x10\x00", "the header is incomplete"),
+        (struct.pack("<Q", 1000000000), "the header size is invalid"),
+        (struct.pack("<Q", 10) + b"{}", "the header is incomplete"),
+        (struct.pack("<Q", 2) + b"[]", "the header is not a JSON object"),
+        (struct.pack("<Q", 2) + b"{]", "the header is not valid JSON"),
     ],
 )
 def test_reader_rejects_malformed_and_oversized_headers(
-    tmp_path: Path, content: bytes
+    tmp_path: Path, content: bytes, reason: str
 ) -> None:
-    """Bound untrusted allocations and fail without invoking the host detector."""
+    """Bound untrusted allocations and name the damage without invoking the host detector."""
     (tmp_path / "broken.safetensors").write_bytes(content)
     roots = FixtureFileRoots(tmp_path, "checkpoints")
     detector = ObservedComfyDetector()
-    with pytest.raises(ValueError):
+    with pytest.raises(DamagedModelFile) as damage:
         ApprovedModelArchitecture(roots, detector).inspect(roots.list_files()[0])
+    assert damage.value.reason == reason
     assert detector.received is None
+
+
+def test_damaged_files_warn_by_name_and_inspection_continues(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Report empty and truncated user files as named warnings and still classify the rest."""
+    models = tmp_path / "models"
+    (models / "nested").mkdir(parents=True)
+    (models / "nested/empty.safetensors").write_bytes(b"")
+    (models / "nested/truncated.safetensors").write_bytes(
+        struct.pack("<Q", 64) + b'{"weight": {'
+    )
+    header = json.dumps(
+        {"weight": {"dtype": "F16", "shape": [4], "data_offsets": [0, 8]}}
+    ).encode()
+    (models / "valid.safetensors").write_bytes(
+        struct.pack("<Q", len(header)) + header + bytes(8)
+    )
+    roots = FixtureFileRoots(models, "checkpoints")
+    repository = SqliteModelCatalogRepository(tmp_path / "catalog")
+    repository.reconcile(roots.list_files(), None)
+    service = ModelArchitectureService(
+        repository,
+        SqliteModelArchitectures(repository.database),
+        ApprovedModelArchitecture(roots, ObservedComfyDetector()),
+    )
+
+    with caplog.at_level(logging.WARNING):
+        assert service.refresh(None) == 3
+
+    assert [(record.levelno, record.getMessage()) for record in caplog.records] == [
+        (
+            logging.WARNING,
+            "Model file nested/empty.safetensors cannot be inspected for its "
+            "architecture: the file is empty",
+        ),
+        (
+            logging.WARNING,
+            "Model file nested/truncated.safetensors cannot be inspected for its "
+            "architecture: the header is incomplete",
+        ),
+    ]
+    assert all(record.exc_info is None for record in caplog.records)
+    assert [getattr(record, "model_path") for record in caplog.records] == [
+        "nested/empty.safetensors",
+        "nested/truncated.safetensors",
+    ]
+    valid = next(
+        evidence
+        for evidence in roots.list_files()
+        if evidence.relative_path == "valid.safetensors"
+    )
+    entry = repository.find_entry(valid.location_id)
+    assert entry is not None
+    assert entry.to_payload()["architecture"] == {
+        "base": "SDXL",
+        "comfyClass": "SDXL",
+        "source": "comfy_tensor_shapes",
+    }
 
 
 def test_header_forwards_only_core_configuration_metadata(tmp_path: Path) -> None:

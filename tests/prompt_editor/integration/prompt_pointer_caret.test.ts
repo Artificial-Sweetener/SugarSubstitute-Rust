@@ -26,7 +26,6 @@ import {
   type PromptBrowserFixture,
 } from '../support/PromptBrowserServer.js';
 import { drawnCaret, expectDrawnCaretOnRow } from '../support/DrawnCaret.js';
-import { BROWSER_FIXTURE_SETUP_TIMEOUT_MS } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 
 let fixture: PromptBrowserFixture;
 const wrapped =
@@ -34,11 +33,11 @@ const wrapped =
 
 beforeAll(async () => {
   fixture = await startPromptBrowser();
-}, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
+});
 
 afterAll(async () => {
   await fixture.close();
-}, 30_000);
+});
 
 interface VisualRow {
   readonly top: number;
@@ -116,7 +115,6 @@ test.each([
       await page.close();
     }
   },
-  30_000,
 );
 
 test.each(['nodes-1', 'nodes-2'] as const)(
@@ -188,5 +186,4 @@ test.each(['nodes-1', 'nodes-2'] as const)(
       await page.close();
     }
   },
-  30_000,
 );

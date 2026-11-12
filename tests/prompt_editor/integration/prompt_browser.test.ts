@@ -20,7 +20,6 @@
  */
 import type { Browser, Page } from '@playwright/test';
 import { startPromptBrowser, type PromptBrowserFixture } from '../support/PromptBrowserServer.js';
-import { BROWSER_FIXTURE_SETUP_TIMEOUT_MS } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 
 let fixture: PromptBrowserFixture;
 let browser: Browser;
@@ -31,11 +30,11 @@ beforeAll(async () => {
   fixture = await startPromptBrowser();
   browser = fixture.browser;
   address = fixture.address;
-}, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
+});
 
 afterAll(async () => {
   await fixture.close();
-}, 30_000);
+});
 
 test.each(['nodes-1', 'nodes-2'] as const)(
   '%s paints rich syntax before focus and retains every visible weight through native scrolling',
@@ -99,7 +98,6 @@ test.each(['nodes-1', 'nodes-2'] as const)(
       await page.close();
     }
   },
-  30_000,
 );
 
 test.each(['nodes-1', 'nodes-2'] as const)(
@@ -135,7 +133,6 @@ test.each(['nodes-1', 'nodes-2'] as const)(
       await page.close();
     }
   },
-  30_000,
 );
 
 test.each(['nodes-1', 'nodes-2'] as const)(
@@ -204,14 +201,10 @@ test.each(['nodes-1', 'nodes-2'] as const)(
 
 /** Require the rich presentation rather than the native textarea's two-line fallback. */
 async function expectPromptRestored(page: Page): Promise<void> {
-  await page.waitForFunction(
-    () => {
-      const root = document.querySelector<HTMLElement>('[data-sc-prompt-editor]');
-      return root && root.offsetHeight >= 128 && getComputedStyle(root).display !== 'none';
-    },
-    null,
-    { timeout: 2000 },
-  );
+  await page.waitForFunction(() => {
+    const root = document.querySelector<HTMLElement>('[data-sc-prompt-editor]');
+    return root && root.offsetHeight >= 128 && getComputedStyle(root).display !== 'none';
+  }, null);
   expect(await page.locator('[data-sc-prompt-editor]').count()).toBe(1);
 }
 
@@ -226,7 +219,7 @@ test.each(['nodes-1', 'nodes-2'] as const)(
       await page.locator('.cm-content').focus();
       await page.keyboard.type('blue_ey');
       const option = page.getByRole('option', { name: /^blue eyes,/ });
-      await option.waitFor({ timeout: 10_000 });
+      await option.waitFor();
       await page.keyboard.press('Tab');
       await page.waitForFunction(() => window.promptBrowserProof.read().source === 'blue eyes, ');
       await page.keyboard.press('Control+z');
@@ -251,7 +244,6 @@ test.each(['nodes-1', 'nodes-2'] as const)(
       await page.close();
     }
   },
-  60_000,
 );
 
 test.each([
@@ -300,7 +292,6 @@ test.each([
       await page.close();
     }
   },
-  30_000,
 );
 
 test.each(
@@ -334,63 +325,57 @@ test.each(
       await page.locator('.cm-content').waitFor({ state: 'visible' });
       await page.locator('.cm-content').focus();
       await page.keyboard.press('Control+Home');
-      await page.waitForFunction(
-        () => {
-          const field = document.querySelector('[data-sc-editor-field]');
-          const slot = field?.shadowRoot?.querySelector('slot[name="editor"]') ?? field;
-          const input = field?.shadowRoot?.querySelector('textarea') ?? field;
-          const scroller = field?.querySelector('.cm-scroller');
-          const content = field?.querySelector('.cm-content');
-          if (!field || !slot || !input || !scroller || !content) return false;
-          const border = field.shadowRoot?.querySelector('[part="root"]') ?? slot;
-          if (!(border instanceof HTMLElement)) return false;
-          const reference = input === field ? document.createElement('div') : null;
-          if (reference) {
-            reference.className = field.className;
-            reference.style.cssText = 'position:absolute;visibility:hidden';
-            field.after(reference);
-          }
-          const frame = border.getBoundingClientRect(),
-            viewport = scroller.getBoundingClientRect(),
-            style = getComputedStyle(border),
-            provider = getComputedStyle(field),
-            native = getComputedStyle(reference ?? input),
-            text = getComputedStyle(content);
-          const expected = {
-            top: Number.parseFloat(native.paddingTop),
-            right: Number.parseFloat(native.paddingRight),
-            bottom: Number.parseFloat(native.paddingBottom),
-            left: Number.parseFloat(native.paddingLeft),
-          };
-          reference?.remove();
-          const scaleX = frame.width / border.offsetWidth;
-          const scaleY = frame.height / border.offsetHeight;
-          const block = Number.parseFloat(provider.getPropertyValue('--padding-block')) || 0;
-          const inline = Number.parseFloat(provider.getPropertyValue('--padding-inline')) || 0;
-          return (
-            getComputedStyle(slot).overflow === 'visible' &&
-            Math.abs(
-              viewport.right - (frame.right - Number.parseFloat(style.borderRightWidth) * scaleX),
-            ) < 1 &&
-            Math.abs(
-              viewport.left - (frame.left + Number.parseFloat(style.borderLeftWidth) * scaleX),
-            ) < 1 &&
-            Math.abs(
-              viewport.top - (frame.top + Number.parseFloat(style.borderTopWidth) * scaleY),
-            ) < 1 &&
-            Math.abs(
-              viewport.bottom -
-                (frame.bottom - Number.parseFloat(style.borderBottomWidth) * scaleY),
-            ) < 1 &&
-            Number.parseFloat(text.paddingTop) === expected.top + block &&
-            Number.parseFloat(text.paddingRight) === expected.right + inline &&
-            Number.parseFloat(text.paddingBottom) === expected.bottom + block &&
-            Number.parseFloat(text.paddingLeft) === expected.left + inline
-          );
-        },
-        undefined,
-        { timeout: 3000 },
-      );
+      await page.waitForFunction(() => {
+        const field = document.querySelector('[data-sc-editor-field]');
+        const slot = field?.shadowRoot?.querySelector('slot[name="editor"]') ?? field;
+        const input = field?.shadowRoot?.querySelector('textarea') ?? field;
+        const scroller = field?.querySelector('.cm-scroller');
+        const content = field?.querySelector('.cm-content');
+        if (!field || !slot || !input || !scroller || !content) return false;
+        const border = field.shadowRoot?.querySelector('[part="root"]') ?? slot;
+        if (!(border instanceof HTMLElement)) return false;
+        const reference = input === field ? document.createElement('div') : null;
+        if (reference) {
+          reference.className = field.className;
+          reference.style.cssText = 'position:absolute;visibility:hidden';
+          field.after(reference);
+        }
+        const frame = border.getBoundingClientRect(),
+          viewport = scroller.getBoundingClientRect(),
+          style = getComputedStyle(border),
+          provider = getComputedStyle(field),
+          native = getComputedStyle(reference ?? input),
+          text = getComputedStyle(content);
+        const expected = {
+          top: Number.parseFloat(native.paddingTop),
+          right: Number.parseFloat(native.paddingRight),
+          bottom: Number.parseFloat(native.paddingBottom),
+          left: Number.parseFloat(native.paddingLeft),
+        };
+        reference?.remove();
+        const scaleX = frame.width / border.offsetWidth;
+        const scaleY = frame.height / border.offsetHeight;
+        const block = Number.parseFloat(provider.getPropertyValue('--padding-block')) || 0;
+        const inline = Number.parseFloat(provider.getPropertyValue('--padding-inline')) || 0;
+        return (
+          getComputedStyle(slot).overflow === 'visible' &&
+          Math.abs(
+            viewport.right - (frame.right - Number.parseFloat(style.borderRightWidth) * scaleX),
+          ) < 1 &&
+          Math.abs(
+            viewport.left - (frame.left + Number.parseFloat(style.borderLeftWidth) * scaleX),
+          ) < 1 &&
+          Math.abs(viewport.top - (frame.top + Number.parseFloat(style.borderTopWidth) * scaleY)) <
+            1 &&
+          Math.abs(
+            viewport.bottom - (frame.bottom - Number.parseFloat(style.borderBottomWidth) * scaleY),
+          ) < 1 &&
+          Number.parseFloat(text.paddingTop) === expected.top + block &&
+          Number.parseFloat(text.paddingRight) === expected.right + inline &&
+          Number.parseFloat(text.paddingBottom) === expected.bottom + block &&
+          Number.parseFloat(text.paddingLeft) === expected.left + inline
+        );
+      }, undefined);
       await page.evaluate(() => {
         document.body.addEventListener(
           'wheel',
@@ -507,7 +492,6 @@ test.each(
         await page.waitForFunction(
           (source) => window.promptBrowserProof.read().source === source,
           expected,
-          { timeout: 3000 },
         );
       }
       await page.evaluate(() => window.promptBrowserProof.replace(''));
@@ -592,7 +576,6 @@ test.each(
       await page.waitForFunction(
         (source) => window.promptBrowserProof.read().source === source,
         source,
-        { timeout: 3000 },
       );
       expect(await page.evaluate(() => window.promptBrowserProof.read().errors)).toEqual([]);
     } finally {
@@ -670,7 +653,6 @@ test.each(['nodes-1', 'nodes-2'] as const)(
       await page.close();
     }
   },
-  60_000,
 );
 
 test('native typing retains unrelated wrapping DOM while semantic preparation is pending', async () => {
@@ -819,7 +801,6 @@ test.each([
       await page.close();
     }
   },
-  60_000,
 );
 
 test.each(['nodes-1', 'nodes-2'] as const)(
@@ -918,7 +899,6 @@ test.each(['nodes-1', 'nodes-2'] as const)(
       await page.close();
     }
   },
-  60_000,
 );
 
 test.each(['fluent', 'spectrum', 'comfy', 'gimp'] as const)(
@@ -1015,7 +995,6 @@ test.each(['fluent', 'spectrum', 'comfy', 'gimp'] as const)(
       await page.close();
     }
   },
-  30_000,
 );
 
 test.each(['nodes-1', 'nodes-2'] as const)(
@@ -1105,7 +1084,6 @@ test.each(['nodes-1', 'nodes-2'] as const)(
       await page.close();
     }
   },
-  30_000,
 );
 
 test('publish the minimum prompt allocation before native renderer sizing can feed back', async () => {
@@ -1163,7 +1141,7 @@ test('an empty prompt shows an insertion caret before typing and after undo', as
   } finally {
     await page.close();
   }
-}, 30_000);
+});
 
 test('wrapping keeps short tags whole and attaches decorations to the edge words of long segments', async () => {
   const page = await browser.newPage();
@@ -1243,7 +1221,7 @@ test('wrapping keeps short tags whole and attaches decorations to the edge words
   } finally {
     await page.close();
   }
-}, 30_000);
+});
 
 test('oversized tags wrap within the field and raw mode retires all grouping without editing source', async () => {
   const page = await browser.newPage();
@@ -1296,7 +1274,7 @@ test('oversized tags wrap within the field and raw mode retires all grouping wit
   } finally {
     await page.close();
   }
-}, 30_000);
+});
 
 test('caret tracks collapsed selection, typing and scrolled rich text across renderer changes', async () => {
   const page = await browser.newPage();
@@ -1358,7 +1336,7 @@ test('caret tracks collapsed selection, typing and scrolled rich text across ren
   } finally {
     await page.close();
   }
-}, 60_000);
+});
 
 /** Wait on semantic rendered output and actual decoded media rather than an arbitrary settling delay. */
 async function ready(page: Page): Promise<void> {
@@ -1443,7 +1421,6 @@ test.each([
       await page.close();
     }
   },
-  60_000,
 );
 
 /** Choose a painted fragment instead of the empty union between wrapped inline boxes. */
@@ -1544,7 +1521,6 @@ test.each([
       await page.close();
     }
   },
-  60_000,
 );
 
 test('fractional-scale heavy rich prompts retain decorated chip pickup, banner pixels, drop and undo', async () => {
@@ -1578,7 +1554,7 @@ test('fractional-scale heavy rich prompts retain decorated chip pickup, banner p
   } finally {
     await page.close();
   }
-}, 60_000);
+});
 
 test.each(['nodes-1', 'nodes-2'] as const)(
   '%s promoted prompts retain external values, permissions and clean teardown',
@@ -1622,7 +1598,6 @@ test.each(['nodes-1', 'nodes-2'] as const)(
       await page.close();
     }
   },
-  60_000,
 );
 
 test('native composition survives repeated host refresh and publishes only committed text', async () => {
@@ -1650,7 +1625,7 @@ test('native composition survives repeated host refresh and publishes only commi
   } finally {
     await page.close();
   }
-}, 60_000);
+});
 
 test('native field annotations preserve the focused editor and its editing identity', async () => {
   const page = await browser.newPage();
@@ -1667,7 +1642,7 @@ test('native field annotations preserve the focused editor and its editing ident
   } finally {
     await page.close();
   }
-}, 60_000);
+});
 
 test('catalog changes repaint installed LoRA metadata without editing the prompt', async () => {
   const page = await browser.newPage();
@@ -1686,11 +1661,10 @@ test('catalog changes repaint installed LoRA metadata without editing the prompt
   } finally {
     await page.close();
   }
-}, 60_000);
+});
 
 test('unchanged LoRA catalog coverage follows source edits through raw and rich rendering', async () => {
   const page = await browser.newPage();
-  page.setDefaultTimeout(5_000);
   let stage = 'initial banner';
   try {
     await page.goto(address);
@@ -1736,7 +1710,7 @@ test('unchanged LoRA catalog coverage follows source edits through raw and rich 
   } finally {
     await page.close();
   }
-}, 30_000);
+});
 
 test('native drag axes accept Comfy scale3d and reject rotated, reflected and perspective contexts', async () => {
   const page = await browser.newPage();
@@ -1755,7 +1729,7 @@ test('native drag axes accept Comfy scale3d and reject rotated, reflected and pe
   } finally {
     await page.close();
   }
-}, 60_000);
+});
 
 test('wrapped decorated prompts retain native LoRA pickup and drop in a narrow Cube card', async () => {
   const page = await browser.newPage();
@@ -1778,7 +1752,7 @@ test('wrapped decorated prompts retain native LoRA pickup and drop in a narrow C
   } finally {
     await page.close();
   }
-}, 60_000);
+});
 
 test('shared prompt menu toggles decoration without changing source and dismisses outside', async () => {
   const page = await browser.newPage();
@@ -1810,4 +1784,4 @@ test('shared prompt menu toggles decoration without changing source and dismisse
   } finally {
     await page.close();
   }
-}, 60_000);
+});

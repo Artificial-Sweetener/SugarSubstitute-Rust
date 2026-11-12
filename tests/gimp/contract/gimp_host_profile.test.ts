@@ -24,6 +24,7 @@ import { inMemoryHostChannel } from '../../../integrations/shared/conformance/In
 import { recordHostProfile } from '../../../integrations/shared/conformance/HostProfiles.js';
 import {
   canvasWithoutSurface,
+  masksWithoutDocument,
   conformanceSession as session,
 } from '../../editor_integrations/support/ConformanceHosts.js';
 import {
@@ -32,13 +33,14 @@ import {
 } from '../../editor_integrations/support/RecordedProfiles.js';
 
 test('the GIMP panel passes the conformance kit and matches its newest recorded profile', async () => {
-  // The panel's canvas server has no output surface, so discovery never reaches the document.
+  // The panel's canvas server has no output surface and no document is open, so no check
+  // reaches the native editor.
   const report = await runHostConformance(
     inMemoryHostChannel({
       session,
       description: GIMP_HOST_DESCRIPTION,
       presentation: GIMP_PANEL_PRESENTATION,
-      handlers: (send) => [canvasWithoutSurface(send)],
+      handlers: (send) => [canvasWithoutSurface(send), masksWithoutDocument(send)],
     }),
     { session },
   );

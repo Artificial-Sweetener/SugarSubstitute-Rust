@@ -25,7 +25,6 @@ import { nativeAdvancedFooterDom } from '../support/NativeAdvancedFooterDom.js';
 import {
   closeBrowserFixture,
   launchHeadlessBrowser,
-  BROWSER_FIXTURE_SETUP_TIMEOUT_MS,
 } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 
 let server: Server;
@@ -68,7 +67,7 @@ beforeAll(async () => {
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('Missing footer fixture endpoint.');
   origin = 'http://127.0.0.1:' + String(address.port);
-}, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
+});
 afterAll(async () => {
   await closeBrowserFixture(undefined, server);
 });
@@ -80,7 +79,7 @@ describe.each([
   let browser: Browser;
   beforeAll(async () => {
     browser = await launchHeadlessBrowser(engine);
-  }, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
+  });
   afterAll(async () => {
     await browser?.close();
   });

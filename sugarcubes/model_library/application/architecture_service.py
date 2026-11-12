@@ -22,7 +22,7 @@ import logging
 from typing import Protocol
 
 from .ports import ModelCatalogRepository
-from ..domain.architecture import ModelArchitecture
+from ..domain.architecture import DamagedModelFile, ModelArchitecture
 from ..domain.models import ModelEvidence
 
 _LOGGER = logging.getLogger(__name__)
@@ -99,6 +99,20 @@ class ModelArchitectureService:
                     exc_info=True,
                 )
                 continue
+            except DamagedModelFile as damage:
+                # A damaged user file is reported once and cached as unknown, not as a fault.
+                _LOGGER.warning(
+                    "Model file %s cannot be inspected for its architecture: %s",
+                    evidence.relative_path,
+                    damage.reason,
+                    extra={
+                        "model_id": evidence.location_id,
+                        "kind": evidence.kind,
+                        "model_path": evidence.relative_path,
+                        "reason": damage.reason,
+                    },
+                )
+                architecture = None
             except (
                 OSError,
                 ValueError,

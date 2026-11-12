@@ -16,10 +16,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Match the supplied Photoshop tab and scrollbar geometry without changing other styles. */
 import { chromium, type Browser, type Page } from '@playwright/test';
-import {
-  BROWSER_FIXTURE_SETUP_TIMEOUT_MS,
-  launchHeadlessBrowser,
-} from '../../frontend_core/support/BrowserFixtureLifetime.js';
+import { launchHeadlessBrowser } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 import { photoProControlCss } from '../../../frontend/comfyui/ui/surface/appearance/PhotoProAppearanceStyles.js';
 import {
   photoProTokenDeclarations,
@@ -35,7 +32,7 @@ let browser: Browser;
 let preparedPage: Page | null = null;
 beforeAll(async () => {
   browser = await launchHeadlessBrowser(chromium);
-}, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
+});
 afterAll(async () => {
   await browser.close();
 });
@@ -52,7 +49,7 @@ beforeEach(async () => {
   await page.addStyleTag({
     content: `body {margin:0;} :root {${photoProScrollbarTokenDeclarations('dark-gray')}} [data-sc-theme="photopro"] {${photoProTokenDeclarations('dark-gray')}} ${substituteFrameCss}${photoProControlCss()}${scrollbarPresentationCss()}${photoProScrollbarCss()}${photoProControlCss()}`,
   });
-}, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
+});
 
 /** Retire the exact prepared page even when fixture setup or an assertion fails. */
 afterEach(async () => {

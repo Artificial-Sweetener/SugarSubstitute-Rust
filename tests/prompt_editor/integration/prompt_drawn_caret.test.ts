@@ -26,7 +26,6 @@ import {
   type PromptBrowserFixture,
 } from '../support/PromptBrowserServer.js';
 import { drawnCaret } from '../support/DrawnCaret.js';
-import { BROWSER_FIXTURE_SETUP_TIMEOUT_MS } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 
 let fixture: PromptBrowserFixture;
 const source = 'best quality, (wind:2.00), petite\n\nlooking away';
@@ -34,11 +33,11 @@ const selectionColour = 'rgb(103, 179, 255)';
 
 beforeAll(async () => {
   fixture = await startPromptBrowser();
-}, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
+});
 
 afterAll(async () => {
   await fixture.close();
-}, 30_000);
+});
 
 /** Wait for queued measurement and the drawn layers to paint. */
 async function settle(page: Page): Promise<void> {
@@ -135,7 +134,6 @@ test.each(['nodes-1', 'nodes-2'] as const)(
       await page.close();
     }
   },
-  30_000,
 );
 
 test.each(
@@ -218,7 +216,6 @@ test.each(['nodes-1', 'nodes-2'] as const)(
       await page.close();
     }
   },
-  30_000,
 );
 
 test.each(['nodes-1', 'nodes-2'] as const)(
@@ -258,5 +255,4 @@ test.each(['nodes-1', 'nodes-2'] as const)(
       await page.close();
     }
   },
-  30_000,
 );

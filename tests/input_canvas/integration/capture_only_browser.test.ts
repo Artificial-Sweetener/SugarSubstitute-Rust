@@ -21,10 +21,7 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { build } from 'esbuild';
 import { chromium, firefox } from '@playwright/test';
-import {
-  BROWSER_FIXTURE_SETUP_TIMEOUT_MS,
-  launchHeadlessBrowser,
-} from '../../frontend_core/support/BrowserFixtureLifetime.js';
+import { launchHeadlessBrowser } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 import type {} from '../support/CaptureOnlyBrowserProof.js';
 
 let server: Server;
@@ -60,7 +57,7 @@ beforeAll(async () => {
   const endpoint = server.address();
   if (!endpoint || typeof endpoint === 'string') throw new Error('No browser fixture endpoint.');
   address = `http://127.0.0.1:${String(endpoint.port)}`;
-}, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
+});
 
 afterAll(async () => {
   server.closeAllConnections();
@@ -114,5 +111,4 @@ test.each(['chromium', 'firefox'] as const)(
       await browser.close();
     }
   },
-  60_000,
 );
