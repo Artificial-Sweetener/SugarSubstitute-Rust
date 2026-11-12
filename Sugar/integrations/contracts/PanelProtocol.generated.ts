@@ -14,11 +14,13 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Generated from panel.schema.json by scripts/integrations/generate-panel-contract.ts. */
+/** Describe the schema-defined PanelPhotoProPalette wire value. */
+export type PanelPhotoProPalette = 'black' | 'dark-gray' | 'medium-gray' | 'light-gray';
 /** Describe the schema-defined PanelPresentation wire value. */
 export type PanelPresentation = {
   readonly pluginMode: boolean;
   readonly visualStyle: 'comfy' | 'fluent' | 'spectrum' | 'photopro' | 'gimp';
-  readonly photoProPalette: 'black' | 'dark-gray' | 'medium-gray' | 'light-gray';
+  readonly photoProPalette?: PanelPhotoProPalette;
   readonly accentColor: string | null;
   readonly resizeCornerSize: number;
 };

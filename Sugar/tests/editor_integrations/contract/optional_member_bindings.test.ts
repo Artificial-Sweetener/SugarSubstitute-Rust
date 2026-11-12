@@ -123,6 +123,24 @@ test('emits a present-only Rust option that delegates to the referenced validato
   );
 });
 
+test('emits a present-only Rust option of a named string enum without a validator call', () => {
+  const values = {
+    ...definitions({
+      properties: {
+        primary: { $ref: '#/$defs/FixtureSize' },
+        tone: { $ref: '#/$defs/FixtureTone' },
+      },
+    }),
+    FixtureTone: { enum: ['dark', 'light'] },
+  };
+  const source = rustContractBindings(values, JSON.stringify(values), options);
+  expect(source).toContain('pub(super) enum FixtureTone {');
+  expect(source).toContain('pub(super) tone: Option<FixtureTone>,');
+  expect(source).toContain('deserialize_with = "deserialize_present_option"');
+  // Decoding already confines a string enum to its listed values; it has no valid() method.
+  expect(source).not.toContain('FixtureTone::valid');
+});
+
 test('emits present-only Rust lists of a named definition and present-only booleans', () => {
   const source = rust({
     properties: {

@@ -23,3 +23,10 @@ export type {
   PanelMessage,
   PanelPresentation,
 } from '../../../../../integrations/contracts/PanelProtocol.generated.js';
+export { DeclaredHost } from '../../../../../integrations/shared/HostDescription.js';
+export { isHostDescriptionMessage } from '../../../../../integrations/shared/HostValidation.generated.js';
+export {
+  HOST_CAPABILITIES,
+  HOST_PROTOCOLS,
+} from '../../../../../integrations/contracts/HostDescription.js';
+export type { HostCapabilityName } from '../../../../../integrations/contracts/HostDescription.js';

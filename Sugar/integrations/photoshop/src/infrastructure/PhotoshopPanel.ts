@@ -22,6 +22,8 @@ import manifest from '../../manifest.json' with { type: 'json' };
 import { PanelController } from '../application/PanelController.js';
 import { panelFeedback } from '../presentation/PanelFeedback.js';
 import type { PanelMessage } from '../../../contracts/PanelProtocol.generated.js';
+import type { HostDescriptionMessage } from '../../../contracts/HostDescription.js';
+import { PHOTOSHOP_HOST_DESCRIPTION } from '../application/PhotoshopHostDescription.js';
 import { PhotoshopCanvasBridge } from './PhotoshopCanvasBridge.js';
 import { PhotoshopMaskSession } from './PhotoshopMaskSession.js';
 
@@ -124,7 +126,7 @@ export function registerPhotoshopPanel(): void {
           expectedUrl = `${ORIGIN}/?sc-panel-host=${encodeURIComponent(PLUGIN_ID)}&sc-panel-session=${encodeURIComponent(session)}`;
           nativeWebView.src = expectedUrl;
         },
-        send: (value: PanelMessage) => {
+        send: (value: PanelMessage | HostDescriptionMessage) => {
           nativeWebView.postMessage(value, ORIGIN, undefined);
         },
         present: (state) => {
@@ -145,6 +147,7 @@ export function registerPhotoshopPanel(): void {
           reportPhotoshopError('SugarCubes Photoshop panel failed', error);
         },
       },
+      PHOTOSHOP_HOST_DESCRIPTION,
       readPhotoshopPresentation(),
     );
     const receive = (event: unknown): void => {

@@ -254,7 +254,8 @@ function optionalListHelper(
 /**
  * Compile an omitted-or-present member: a named definition, a bounded list of a named
  * definition, or a boolean. Validation delegates to the referenced type instead of
- * reinterpreting inline bounds for a wrapped value; other inline shapes stay refused.
+ * reinterpreting inline bounds for a wrapped value; a named string enum is already confined to
+ * its listed values by decoding. Other inline shapes stay refused.
  */
 export function rustOptionalProperty(
   value: unknown,
@@ -267,7 +268,9 @@ export function rustOptionalProperty(
   if (reference)
     return {
       type: `Option<${reference}>`,
-      valid: [`self.${field}.as_ref().is_none_or(${reference}::valid)`],
+      valid: definitions.enums.has(reference)
+        ? []
+        : [`self.${field}.as_ref().is_none_or(${reference}::valid)`],
       attribute: OPTIONAL_MEMBER_ATTRIBUTE,
     };
   if (node.type === 'boolean' && Object.keys(node).join() === 'type')

@@ -82,6 +82,36 @@ test('switches existing PhotoPro palettes live without changing other presentati
   stopMode();
 });
 
+test('keeps the saved PhotoPro palette when a host presentation omits one', () => {
+  const embedded = new EmbeddedPresentation();
+  const app = {
+    ui: {
+      settings: {
+        getSettingValue: (id: string): unknown =>
+          id === PHOTOPRO_PALETTE_SETTING ? 'light-gray' : false,
+        addSetting: jest.fn(),
+        setSettingValue: jest.fn(),
+      },
+    },
+  };
+  const report = jest.fn();
+  const stop = registerPhotoProPalettePreference(app, document, report, embedded);
+  embedded.set({ pluginMode: true, visualStyle: 'gimp', accentColor: null, resizeCornerSize: 0 });
+  expect(document.documentElement.dataset.scPhotoproPalette).toBe('light-gray');
+  embedded.set({
+    pluginMode: true,
+    visualStyle: 'photopro',
+    photoProPalette: 'black',
+    accentColor: null,
+    resizeCornerSize: 0,
+  });
+  expect(document.documentElement.dataset.scPhotoproPalette).toBe('black');
+  embedded.set({ pluginMode: true, visualStyle: 'gimp', accentColor: null, resizeCornerSize: 0 });
+  expect(document.documentElement.dataset.scPhotoproPalette).toBe('light-gray');
+  expect(report).not.toHaveBeenCalled();
+  stop();
+});
+
 test('applies one session and restores the latest saved preferences without persistence writes', () => {
   const embedded = new EmbeddedPresentation();
   const changes = new Map<string, (value: unknown) => void>();

@@ -14,7 +14,14 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Bind one browser document to negotiated host presentation and existing Comfy connectivity. */
-import { PanelClientSession } from './PanelRuntime.js';
+import {
+  DeclaredHost,
+  HOST_CAPABILITIES,
+  HOST_PROTOCOLS,
+  PanelClientSession,
+  isHostDescriptionMessage,
+} from './PanelRuntime.js';
+import type { HostDescriptionState } from './HostDescriptionState.js';
 import type { EmbeddedPresentation } from './EmbeddedPresentation.js';
 import type { HostAccent } from './HostAccent.js';
 import { createUxpPanelTransport } from './UxpPanelTransport.js';
@@ -28,6 +35,8 @@ import { MemoryHostLink, type MemoryPreferenceSource } from '../memory/MemoryHos
 /** Supply the browser lifetime without introducing another connection or preference owner. */
 export interface EmbeddedPanelOptions {
   readonly window: Window;
+  /** Settles on what the host declares; every host-dependent choice below reads it. */
+  readonly host: HostDescriptionState;
   readonly presentation: EmbeddedPresentation;
   /** Receives the host's offered default accent under every preference policy. */
   readonly hostAccent?: HostAccent;
@@ -48,6 +57,7 @@ export class EmbeddedPanelHost {
   #stop: (() => void) | null = null;
   #stopConnection: (() => void) | null = null;
   #memory: MemoryHostLink | null = null;
+  #stopHost: (() => void) | null = null;
   #timer: number | null = null;
 
   /** Receive an identified adapter transport after Comfy and presentation setup have succeeded. */
@@ -64,11 +74,15 @@ export class EmbeddedPanelHost {
     const client = new PanelClientSession(this.transport.session, {
       send: (message) => this.transport.send(message),
       apply: (presentation) => {
+        const host = this.#declared();
         this.#layout.apply(presentation.resizeCornerSize);
         this.options.hostAccent?.set(presentation.accentColor ?? null);
-        if (this.transport.preferencePolicy !== 'saved')
+        if (host.declares(HOST_CAPABILITIES.hostStyles))
           this.options.presentation.set(presentation);
-        this.options.canvas?.connect(this.transport, this.options.window, this.options.report);
+        if (host.serves(HOST_PROTOCOLS.canvas))
+          this.options.canvas?.connect(this.transport, this.options.window, this.options.report, {
+            masks: host.serves(HOST_PROTOCOLS.canvasMasks),
+          });
         return true;
       },
       connected: this.options.connected,
@@ -76,6 +90,7 @@ export class EmbeddedPanelHost {
     });
     this.#stop = this.transport.subscribe((value) => {
       try {
+        if (this.#describe(value)) return;
         client.receive(value);
       } catch (error: unknown) {
         this.options.report(error);
@@ -96,22 +111,54 @@ export class EmbeddedPanelHost {
         this.options.report(error);
       }
     };
-    if (this.transport.memoryBudget && this.options.memory) {
-      try {
-        this.#memory = new MemoryHostLink(
-          this.transport,
-          this.options.memory.registry,
-          this.options.memory.preferences(),
-          this.options.report,
-        );
-        this.#memory.start();
-      } catch (error: unknown) {
-        this.options.report(error);
-      }
-    }
+    this.#stopHost = this.options.host.subscribe(() => this.#joinMemoryBudget());
+    this.#joinMemoryBudget();
     this.#timer = this.options.window.setInterval(ready, 1000);
     this.options.window.addEventListener('pagehide', this.dispose);
     ready();
+  }
+
+  /**
+   * Settle this session's host description; report one that is ambiguous or contradicts the first.
+   *
+   * @returns Whether the value was a host description for this session.
+   */
+  #describe(value: unknown): boolean {
+    if (!isHostDescriptionMessage(value) || value.session !== this.transport.session) return false;
+    const declared = DeclaredHost.read(value);
+    if (!declared) {
+      this.options.report(
+        new Error('The host described itself with a repeated protocol or capability.'),
+      );
+      this.options.host.settle(DeclaredHost.undeclared);
+    } else if (!this.options.host.settle(declared))
+      this.options.report(new Error('The host changed its description during the panel session.'));
+    return true;
+  }
+
+  /** A configure without a prior description settles on a host that serves only the panel. */
+  #declared(): DeclaredHost {
+    const settled = this.options.host.read();
+    if (settled) return settled;
+    this.options.host.settle(DeclaredHost.undeclared);
+    return DeclaredHost.undeclared;
+  }
+
+  /** Join the desktop memory budget once the host declares that it serves it. */
+  #joinMemoryBudget(): void {
+    const host = this.options.host.read();
+    if (this.#memory || !this.options.memory || !host?.serves(HOST_PROTOCOLS.memory)) return;
+    try {
+      this.#memory = new MemoryHostLink(
+        this.transport,
+        this.options.memory.registry,
+        this.options.memory.preferences(),
+        this.options.report,
+      );
+      this.#memory.start();
+    } catch (error: unknown) {
+      this.options.report(error);
+    }
   }
 
   /** Retire subscriptions and restore saved preferences when the embedded document leaves. */
@@ -120,6 +167,8 @@ export class EmbeddedPanelHost {
     this.#stop = null;
     this.#stopConnection?.();
     this.#stopConnection = null;
+    this.#stopHost?.();
+    this.#stopHost = null;
     this.#memory?.dispose();
     this.#memory = null;
     if (this.#timer !== null) this.options.window.clearInterval(this.#timer);
@@ -132,17 +181,28 @@ export class EmbeddedPanelHost {
   };
 }
 
-/** Activate embedded presentation only for an identified application WebView. */
+/**
+ * Activate embedded presentation only for an identified application WebView.
+ *
+ * A page with no identified host settles on the standalone declaration at once.
+ */
 export function startEmbeddedPanel(options: EmbeddedPanelOptions): EmbeddedPanelHost | null {
-  const query = new URLSearchParams(options.window.location.search);
-  const kind = query.get('sc-panel-transport');
-  if (query.getAll('sc-panel-transport').length > 1 || (kind !== null && kind !== 'native'))
+  const transport = identifiedTransport(options.window);
+  if (!transport) {
+    options.host.settle(DeclaredHost.standalone);
     return null;
-  const native = createNativePanelTransport(options.window);
-  const transport =
-    kind === 'native' ? native : (native ?? createUxpPanelTransport(options.window));
-  if (!transport) return null;
+  }
   const host = new EmbeddedPanelHost(options, transport);
   host.setup();
   return host;
+}
+
+/** Find the one transport this navigation identifies, refusing an ambiguous transport choice. */
+function identifiedTransport(windowRef: Window): BrowserPanelTransport | null {
+  const query = new URLSearchParams(windowRef.location.search);
+  const kind = query.get('sc-panel-transport');
+  if (query.getAll('sc-panel-transport').length > 1 || (kind !== null && kind !== 'native'))
+    return null;
+  const native = createNativePanelTransport(windowRef);
+  return kind === 'native' ? native : (native ?? createUxpPanelTransport(windowRef));
 }
