@@ -21,26 +21,36 @@ import json
 from pathlib import Path
 import struct
 
+from ..domain.architecture import DamagedModelFile
 from .architecture_tensors import ArchitectureInputs, TensorDescriptor, tensor_shape
 
 _HEADER_LIMIT = 16 * 1024 * 1024
 
 
 def read_safetensors_architecture(path: Path, file_size: int) -> ArchitectureInputs:
-    """Read only the header and validate tensor offsets against the file observation."""
+    """
+    Read only the header and validate tensor offsets against the file observation.
+
+    Raises `DamagedModelFile` when the file's own content cannot be a safetensors model.
+    """
     with path.open("rb") as stream:
         size = stream.read(8)
+        if not size:
+            raise DamagedModelFile("the file is empty")
         if len(size) != 8:
-            raise ValueError("The safetensors header length is missing.")
+            raise DamagedModelFile("the header is incomplete")
         length = struct.unpack("<Q", size)[0]
-        if not 2 <= length <= _HEADER_LIMIT or length > file_size - 8:
-            raise ValueError("The safetensors header size is invalid.")
+        if not 2 <= length <= _HEADER_LIMIT:
+            raise DamagedModelFile("the header size is invalid")
         content = stream.read(length)
-        if len(content) != length:
-            raise ValueError("The safetensors header is truncated.")
-    payload: object = json.loads(content)
+        if len(content) != length or length > file_size - 8:
+            raise DamagedModelFile("the header is incomplete")
+    try:
+        payload: object = json.loads(content)
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as error:
+        raise DamagedModelFile("the header is not valid JSON") from error
     if not isinstance(payload, dict):
-        raise ValueError("The safetensors header must be an object.")
+        raise DamagedModelFile("the header is not a JSON object")
     tensors: dict[str, TensorDescriptor] = {}
     metadata: dict[str, str] = {}
     for key, value in payload.items():
@@ -49,13 +59,13 @@ def read_safetensors_architecture(path: Path, file_size: int) -> ArchitectureInp
                 not isinstance(name, str) or not isinstance(text, str)
                 for name, text in value.items()
             ):
-                raise ValueError("Invalid safetensors metadata.")
+                raise DamagedModelFile("the header metadata is invalid")
             # Comfy gates configuration overrides on recognized tensor structure.
             if isinstance(value.get("config"), str):
                 metadata["config"] = value["config"]
             continue
         if not isinstance(key, str) or not key or not isinstance(value, dict):
-            raise ValueError("Invalid tensor header entry.")
+            raise DamagedModelFile("a tensor entry in the header is invalid")
         offsets: object = value.get("data_offsets")
         if (
             not isinstance(offsets, list)
@@ -63,8 +73,8 @@ def read_safetensors_architecture(path: Path, file_size: int) -> ArchitectureInp
             or any(type(offset) is not int for offset in offsets)
             or not 0 <= offsets[0] <= offsets[1] <= file_size - 8 - length
         ):
-            raise ValueError("Invalid tensor data offsets.")
+            raise DamagedModelFile("a tensor's data lies outside the file")
         if not isinstance(value.get("dtype"), str):
-            raise ValueError("Invalid tensor dtype.")
+            raise DamagedModelFile("a tensor's data type is invalid")
         tensors[key] = TensorDescriptor(tensor_shape(value.get("shape")))
     return ArchitectureInputs(tensors, metadata)

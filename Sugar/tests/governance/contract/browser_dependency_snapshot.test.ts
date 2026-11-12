@@ -29,7 +29,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { build } from 'esbuild';
 import { browserDependencyResolution } from '../../../scripts/BrowserBuildEnvironment.js';
-import { BUILD_FIXTURE_SETUP_TIMEOUT_MS } from '../../frontend_core/support/BuildFixtureBudget.js';
 
 const fixture = mkdtempSync(path.join(os.tmpdir(), 'sc-browser-dependencies-'));
 const root = path.join(fixture, 'project');
@@ -64,7 +63,7 @@ beforeAll(async () => {
   symlinkSync(external, dependencies, process.platform === 'win32' ? 'junction' : 'dir');
   attached = true;
   snapshot = await compile();
-}, BUILD_FIXTURE_SETUP_TIMEOUT_MS);
+});
 
 afterAll(() => {
   if (attached) {

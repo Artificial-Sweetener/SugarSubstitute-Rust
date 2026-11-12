@@ -36,7 +36,6 @@ test('close an unfinished HTTP response instead of waiting for keep-alive or req
         response.once('data', () => resolve(response));
       });
       request.once('error', reject);
-      request.setTimeout(5_000, () => request?.destroy(new Error('Fixture request timed out')));
     });
     const closed = new Promise<void>((resolve) => response.once('close', () => resolve()));
     await closeBrowserFixture(

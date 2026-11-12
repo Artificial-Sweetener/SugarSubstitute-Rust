@@ -18,7 +18,6 @@
 import { jest } from '@jest/globals';
 import { build } from 'esbuild';
 import { runInNewContext } from 'node:vm';
-import { BUILD_FIXTURE_SETUP_TIMEOUT_MS } from '../../frontend_core/support/BuildFixtureBudget.js';
 interface Observer {
   start(): void;
   acceptCurrent(): void;
@@ -39,7 +38,7 @@ beforeAll(async () => {
   const file = bundle.outputFiles[0];
   if (!file) throw new Error('Missing observer bundle.');
   code = file.text;
-}, BUILD_FIXTURE_SETUP_TIMEOUT_MS);
+});
 
 test('reads metadata at a bounded cadence and captures once only when committed identity changes', async () => {
   let tick: () => void = () => {},

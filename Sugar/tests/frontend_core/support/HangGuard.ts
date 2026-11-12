@@ -14,11 +14,16 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Bound every setup hook that bundles or packages source before its tests run, such as the
- * Photoshop contract suites' esbuild of native modules and builds of the UXP package.
- *
- * Bundling is CPU-bound and stretches with machine-wide load in a way the tests' observations
- * do not, so build setup shares this budget, as browser setup shares its own, while test bodies
- * keep their own limits.
+ * The only elapsed-time bounds tests may use. They end a run that has truly hung; they are not
+ * budgets. Tests and gates pass or fail on the outcome they await, never on how long it took, so
+ * no test, hook, browser wait or child process carries a timeout of its own.
  */
-export const BUILD_FIXTURE_SETUP_TIMEOUT_MS = 60_000;
+
+/** Jest's default for every test and hook, as `testTimeout` in `jest.config.json`. */
+export const HANG_GUARD_MS = 600_000;
+
+/**
+ * Every Playwright launch, wait and action. It ends a minute before the Jest guard so a hung
+ * browser wait fails with its own diagnostics while teardown still runs.
+ */
+export const OPERATION_HANG_GUARD_MS = HANG_GUARD_MS - 60_000;

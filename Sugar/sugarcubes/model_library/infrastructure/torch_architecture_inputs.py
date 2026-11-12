@@ -20,6 +20,7 @@ from __future__ import annotations
 from pathlib import Path
 import pickle
 
+from ..domain.architecture import DamagedModelFile
 from .architecture_tensors import ArchitectureInputs, TensorDescriptor, tensor_shape
 
 
@@ -32,8 +33,8 @@ def read_torch_architecture(path: Path) -> ArchitectureInputs:
         with FakeTensorMode():
             payload: object = torch.load(path, map_location="cpu", weights_only=True)
     except (pickle.UnpicklingError, RuntimeError, EOFError) as error:
-        raise ValueError(
-            "The model cannot be inspected with PyTorch's restricted virtual loader."
+        raise DamagedModelFile(
+            "the checkpoint cannot be read by PyTorch's restricted loader"
         ) from error
     if isinstance(payload, dict):
         if "state_dict" in payload:
@@ -43,11 +44,11 @@ def read_torch_architecture(path: Path) -> ArchitectureInputs:
             if isinstance(nested, dict):
                 payload = nested
     if not isinstance(payload, dict):
-        raise ValueError("The model checkpoint must contain a tensor dictionary.")
+        raise DamagedModelFile("the checkpoint does not contain a tensor dictionary")
     tensors: dict[str, TensorDescriptor] = {}
     for name, value in payload.items():
         if not isinstance(name, str) or not name:
-            raise ValueError("Invalid checkpoint tensor name.")
+            raise DamagedModelFile("a checkpoint tensor name is invalid")
         if isinstance(value, torch.Tensor):
             tensors[name] = TensorDescriptor(tensor_shape(tuple(value.shape)))
     return ArchitectureInputs(tensors)

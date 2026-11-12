@@ -24,17 +24,16 @@ import {
   startPromptBrowser,
   type PromptBrowserFixture,
 } from '../support/PromptBrowserServer.js';
-import { BROWSER_FIXTURE_SETUP_TIMEOUT_MS } from '../../frontend_core/support/BrowserFixtureLifetime.js';
 
 let fixture: PromptBrowserFixture;
 
 beforeAll(async () => {
   fixture = await startPromptBrowser();
-}, BROWSER_FIXTURE_SETUP_TIMEOUT_MS);
+});
 
 afterAll(async () => {
   await fixture.close();
-}, 30_000);
+});
 
 test.each(['nodes-1', 'nodes-2'] as const)(
   '%s replaces a whole selection spanning empty lines with exactly the typed text',
@@ -61,7 +60,6 @@ test.each(['nodes-1', 'nodes-2'] as const)(
       }
     }
   },
-  30_000,
 );
 
 declare global {
