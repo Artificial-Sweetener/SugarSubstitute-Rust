@@ -24,6 +24,7 @@ from threading import Event
 import pytest
 
 from integrations.gimp.native.streams import NativePipe
+from tests.support.no_progress import wait_for_event
 
 
 def test_native_pipe_reads_and_writes_complete_frames_and_retires_on_eof() -> None:
@@ -49,11 +50,11 @@ def test_native_pipe_reads_and_writes_complete_frames_and_retires_on_eof() -> No
         pipe.start()
         try:
             peer_write.write(b'{"request":1}\n')
-            assert received.wait(timeout=2)
+            wait_for_event(received)
             assert frames == [b'{"request":1}\n']
             assert peer_read.readline(256) == b'{"reply":1}\n'
             peer_write.close()
-            assert closed.wait(timeout=2)
+            wait_for_event(closed)
             pipe.join()
             assert errors == []
         finally:
@@ -81,7 +82,7 @@ def test_invalid_peer_frames_close_the_channel_before_dispatch(frame: bytes) -> 
         pipe.start()
         peer_write.write(frame)
         peer_write.close()
-        assert closed.wait(timeout=2)
+        wait_for_event(closed)
         pipe.join()
         assert frames == []
         assert len(errors) == 1

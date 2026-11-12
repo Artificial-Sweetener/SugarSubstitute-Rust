@@ -29,6 +29,7 @@ from tests.model_library.support.thumbnail_freshness import (
     EnrichmentFreshnessFixture,
     fixture_provider_version,
 )
+from tests.support.no_progress import await_outcome
 
 
 def test_background_repair_wakes_catalog_consumers_and_serves_the_same_asset(
@@ -67,11 +68,10 @@ def test_background_repair_wakes_catalog_consumers_and_serves_the_same_asset(
                 await runtime.automatic_enrichment.refill()
                 assert runtime.automatic_enrichment.status()["queued"] == 1
                 runtime.automatic_enrichment.start()
-                changed = await asyncio.wait_for(
+                changed = await await_outcome(
                     client.get(
                         f"/sugarcubes/v1/models/changes?afterRevision={revision}"
-                    ),
-                    timeout=3,
+                    )
                 )
                 payload: object = await changed.json()
                 assert isinstance(payload, dict)

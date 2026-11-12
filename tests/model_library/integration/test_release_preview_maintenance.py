@@ -35,6 +35,7 @@ from sugarcubes.model_library.infrastructure.thumbnail_assets import (
 from tests.model_library.support.model_releases import release
 from tests.model_library.support.model_roots import FixtureFileRoots
 from tests.model_library.support.thumbnail_freshness import PreparedFixturePreviews
+from tests.support.no_progress import wait_for_event
 
 
 class HeldPreviewRead(PreparedFixturePreviews):
@@ -50,8 +51,9 @@ class HeldPreviewRead(PreparedFixturePreviews):
         """Capture real availability before holding the blocking adapter operation."""
         result = super().available(thumbnails)
         self.entered.set()
-        if not self.proceed.wait(5):
-            raise RuntimeError("Preview proof did not release the availability worker.")
+        wait_for_event(
+            self.proceed, "Preview proof did not release the availability worker."
+        )
         return result
 
 
@@ -130,7 +132,7 @@ def test_cached_preview_read_drains_before_maintenance(
             cached_read = asyncio.create_task(
                 runtime.release_previews.get(identity, "20")
             )
-            assert await asyncio.to_thread(images.entered.wait, 2)
+            await asyncio.to_thread(wait_for_event, images.entered)
             if close_previews:
                 shutdown = asyncio.create_task(runtime.release_previews.close())
                 await asyncio.sleep(0)
