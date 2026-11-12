@@ -23,6 +23,13 @@ pub const INSTALLED_LAUNCH_ARGUMENT: &str = "--installed-launch-v3";
 pub const TRIAL_LAUNCH_PROTOCOL: u32 = 4;
 /// Versioned trial entry argument followed by run and snapshot handle values, in that order.
 pub const TRIAL_LAUNCH_ARGUMENT: &str = "--installed-launch-v4";
+/// Stable entry and redirecting engines start a generation's launch engine with this argument,
+/// followed by the installation path, one inherited manual-reset event and a hop count (0 or 1).
+/// The engine signals the event as soon as it owns startup. This spelling is permanent
+/// cross-generation surface: a root of any age starts engines of any later generation with it.
+pub const ENGINE_LAUNCH_ARGUMENT: &str = "--launch-engine-v1";
+/// The one launch pointer format every stable entry reads; permanent, extended only additively.
+pub const LAUNCH_POINTER_SCHEMA: u32 = 1;
 /// Exact contract distributed with applications built from this source.
 pub const CURRENT_CONTRACT: &[u8] = include_bytes!("application_launch/current.json");
 /// Bound before decoding untrusted application compatibility metadata.

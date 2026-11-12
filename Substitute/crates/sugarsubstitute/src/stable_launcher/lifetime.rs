@@ -2,11 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain each launcher job through terminal consumption and execution shutdown.
 mod cached;
-mod delegation;
 mod engine;
 mod installation;
 mod jobs;
-mod publication;
 mod selection;
 mod shutdown;
 #[cfg(test)]
@@ -24,43 +22,36 @@ use sugarsubstitute_contracts::{
 use sugarsubstitute_desktop::{HeadlessLifetime, HeadlessStep, StartupPreparationStep};
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner, MonotonicClock};
 use sugarsubstitute_supervision::{
-    application_launch::{ActivationLaunch, ActivationOutcome, ApplicationLaunch, CreationOutcome},
+    application_launch::{ApplicationLaunch, CreationOutcome, Takeover},
     setup_storage::{self, ReservedLaunch},
     update_preparation::Worker,
 };
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 enum Work {
+    Routed(setup_storage::Route),
     Installation(Option<ApplicationLaunch>),
     Cache(Worker),
     Prepared(ApplicationLaunch),
     TrialPrepared,
     EngineOpened,
     EngineVerified,
-    EnginePrepared,
-    EngineStarted,
-    EngineObserved(ActivationOutcome),
-    Offered,
-    OfferObserved(Option<CreationOutcome>),
+    Delegated(Takeover),
     Launched,
     Recovered(CreationOutcome),
     Retired,
-    Retiring,
 }
 
 /// The exact admitted operation controls memory, cleanup scope and optional-update fallback.
 #[derive(Clone, Copy)]
 enum Task {
+    Route,
     Installation,
     Cache,
     Select,
     Trial,
     OpenEngine,
     VerifyEngine,
-    PrepareEngine,
-    CreateEngine,
-    ObserveEngine,
-    ObserveOffer,
-    StopEngine,
+    Delegate,
     Create { optional: bool },
     Recover,
     Retire,
@@ -72,14 +63,11 @@ struct Pending {
 
 /// One next action, changed only after an observed outcome or rejected admission.
 enum Choice {
+    Route,
     Installation,
     OpenEngine,
     VerifyEngine,
-    PrepareEngine,
-    CreateEngine,
-    ObserveEngine,
-    ObserveOffer,
-    StopEngine,
+    Delegate,
     Cache,
     Accepted,
     Trial,
@@ -90,6 +78,10 @@ enum Choice {
 
 pub(super) struct Launcher {
     root: PathBuf,
+    /// This engine's own generation and hop, present when it runs as a generation's engine.
+    route: Option<(sugarsubstitute_contracts::installation::GenerationId, u8)>,
+    /// Start only the accepted release; set when this engine is a fallback.
+    accepted_only: bool,
     clock: Arc<dyn Clock>,
     owner: Option<ExecutionOwner>,
     client: Option<ExecutionClient>,
@@ -100,11 +92,8 @@ pub(super) struct Launcher {
     launch: Option<ApplicationLaunch>,
     cached: Option<cached::Cached>,
     engine: Option<Arc<engine::Guard>>,
-    activation: Option<ActivationLaunch>,
-    source: Option<Arc<sugarsubstitute_supervision::application_launch::broker::ActivationSender>>,
-    creator_reply: Option<CreationOutcome>,
-    activation_after: Option<Moment>,
-    activation_wake: Option<Instant>,
+    /// Newer accepted updater that must own startup, held pinned until it takes over.
+    delegate: Option<Arc<std::sync::Mutex<Option<Box<setup_storage::PreparationImage>>>>>,
     choice: Choice,
     recovery_until: Option<Moment>,
     recovery_wake: Option<Instant>,
@@ -124,6 +113,8 @@ impl Launcher {
     pub(super) fn new(root: PathBuf) -> Self {
         Self {
             root,
+            route: None,
+            accepted_only: false,
             clock: MonotonicClock::new(),
             owner: None,
             client: None,
@@ -134,11 +125,7 @@ impl Launcher {
             launch: None,
             cached: None,
             engine: None,
-            activation: None,
-            source: None,
-            creator_reply: None,
-            activation_after: None,
-            activation_wake: None,
+            delegate: None,
             choice: Choice::Installation,
             recovery_until: None,
             recovery_wake: None,
@@ -154,6 +141,47 @@ impl Launcher {
             finished: false,
         }
     }
+    /// A generation's launch engine first hands startup to the generation that should run.
+    pub(super) fn engine(
+        root: PathBuf,
+        generation: sugarsubstitute_contracts::installation::GenerationId,
+        hops: u8,
+    ) -> Self {
+        let mut launcher = Self::new(root);
+        launcher.route = Some((generation, hops));
+        launcher.choice = Choice::Route;
+        launcher
+    }
+    /// A newer updater that took over owns startup; otherwise only the accepted release starts.
+    fn delegated(&mut self, takeover: Takeover) {
+        self.delegate = None;
+        if takeover == Takeover::TookOver {
+            self.completed = true;
+            self.choice = Choice::Complete;
+            return;
+        }
+        tracing::warn!(
+            operation = "startup_engine_refused",
+            ?takeover,
+            "The newer updater did not take over; starting the accepted release"
+        );
+        self.update_failure
+            .get_or_insert_with(|| "The newer updater did not take over startup".into());
+        self.choice = Choice::Accepted;
+    }
+    fn routed(&mut self, route: setup_storage::Route) {
+        match route {
+            setup_storage::Route::Own => self.choice = Choice::Installation,
+            setup_storage::Route::AcceptedOnly => {
+                self.accepted_only = true;
+                self.choice = Choice::Installation;
+            }
+            setup_storage::Route::Redirected => {
+                self.completed = true;
+                self.choice = Choice::Complete;
+            }
+        }
+    }
     fn advance(&mut self, max: NonZeroUsize) -> Result<HeadlessStep> {
         if let Some(client) = &self.client {
             client.drain_completions(max)?;
@@ -164,6 +192,7 @@ impl Launcher {
             let task = pending.task;
             self.job = None;
             match completion.outcome {
+                JobOutcome::Success(Work::Routed(route)) => self.routed(route),
                 JobOutcome::Success(Work::Installation(launch)) => {
                     self.installed(launch);
                 }
@@ -179,15 +208,7 @@ impl Launcher {
                 }
                 JobOutcome::Success(Work::EngineOpened) => self.choice = Choice::VerifyEngine,
                 JobOutcome::Success(Work::EngineVerified) => self.choice = Choice::Installation,
-                JobOutcome::Success(Work::EnginePrepared) => self.choice = Choice::CreateEngine,
-                JobOutcome::Success(Work::EngineStarted) => self.choice = Choice::ObserveEngine,
-                JobOutcome::Success(Work::EngineObserved(outcome)) => {
-                    self.activation_observed(outcome)?
-                }
-                JobOutcome::Success(Work::Offered) => self.choice = Choice::ObserveOffer,
-                JobOutcome::Success(Work::OfferObserved(outcome)) => {
-                    self.offer_observed(outcome)?
-                }
+                JobOutcome::Success(Work::Delegated(takeover)) => self.delegated(takeover),
                 JobOutcome::Success(Work::Launched) => {
                     self.completed = true;
                     self.choice = Choice::Complete;
@@ -196,9 +217,7 @@ impl Launcher {
                 JobOutcome::Success(Work::Retired) => {
                     self.launch = None;
                     self.engine = None;
-                    self.source = None;
                 }
-                JobOutcome::Success(Work::Retiring) => self.pace_activation()?,
                 JobOutcome::Cancelled if self.closing => {}
                 JobOutcome::Failure(cause) => self.failed(task, cause.into())?,
                 other => self.failed(
@@ -259,7 +278,6 @@ impl HeadlessLifetime for Launcher {
         [
             self.wake_at,
             self.recovery_wake,
-            self.activation_wake,
             self.cached.as_ref().and_then(cached::Cached::next_deadline),
         ]
         .into_iter()
@@ -283,8 +301,7 @@ impl HeadlessLifetime for Launcher {
             || self.launch.is_some()
             || self.cached.is_some()
             || self.engine.is_some()
-            || self.activation.is_some()
-            || self.source.is_some()
+            || self.delegate.is_some()
             || self.cutoff_reported
         {
             return Err("Launcher custody did not retire before its original cutoff".into());

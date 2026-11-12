@@ -27,11 +27,6 @@ pub struct TrialTransfer {
     custody: custody::Transfer,
 }
 impl TrialTransfer {
-    /// Native broker pins preserve the exact admitted candidate independently of engine lifetime.
-    pub(crate) fn launch_pins(&self) -> impl Iterator<Item = &std::fs::File> {
-        self.candidate.launch_pins()
-    }
-
     /// Exact pinned candidate directory used for process creation.
     pub fn directory(&self) -> &Path {
         self.candidate.directory()

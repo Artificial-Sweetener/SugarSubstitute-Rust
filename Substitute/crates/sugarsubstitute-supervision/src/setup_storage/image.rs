@@ -56,14 +56,14 @@ impl PreparationImage {
         self.directory().join(self.executable)
     }
 
-    /// Require startup activation from the accepted engine's already authenticated declaration.
-    /// This pure check performs no I/O and does not authorize a candidate or choose a command.
+    /// Require the launch engine role from the accepted updater's already authenticated
+    /// declaration. This pure check performs no I/O and does not authorize a candidate.
     /// # Errors
-    /// Rejects application-role helpers and engines without this activation entry.
-    pub fn require_activation(&self) -> io::Result<()> {
+    /// Rejects application-role helpers and updaters without the launch engine role.
+    pub fn require_engine(&self) -> io::Result<()> {
         match &self.source {
             ImageSource::Updater { payload, .. } => {
-                payload.runtime.compatibility.require_updater_activation()
+                payload.runtime.compatibility.require_updater_engine()
             }
             ImageSource::Application(_) => {
                 Err(invalid("Application helper is not an accepted update engine"))

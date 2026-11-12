@@ -25,42 +25,6 @@ fn native_entry_checks_installed_preparation_before_accepted_fallback() -> Resul
     Ok(())
 }
 
-#[test]
-fn negative_creator_reply_recovers_once_and_completes_without_another_offer() -> Result<()> {
-    let (mut launcher, _, wake) = fixture()?;
-    launcher.offer_observed(Some(CreationOutcome::NotCreated))?;
-    assert!(matches!(launcher.choice, Choice::Recover));
-    assert!(!launcher.completed);
-    launcher.recovered(CreationOutcome::NotCreated)?;
-    assert!(launcher.completed);
-    assert!(matches!(launcher.choice, Choice::Complete));
-    launcher.request_shutdown()?;
-    finish(&mut launcher, &wake)
-}
-
-#[test]
-fn actual_creation_survives_unsuccessful_engine_exit_without_accepted_fallback() -> Result<()> {
-    let (mut launcher, _, wake) = fixture()?;
-    launcher.activation_observed(ActivationOutcome::Stopped {
-        exit_code: Some(9),
-        creation: CreationOutcome::Created,
-    })?;
-    assert!(launcher.completed);
-    assert!(matches!(launcher.choice, Choice::Complete));
-    launcher.request_shutdown()?;
-    finish(&mut launcher, &wake)
-}
-
-#[test]
-fn uncertain_creator_reply_never_admits_source_recovery_or_accepted_fallback() -> Result<()> {
-    let (mut launcher, _, wake) = fixture()?;
-    launcher.choice = Choice::ObserveOffer;
-    assert!(launcher.offer_observed(Some(CreationOutcome::Indeterminate)).is_err());
-    assert!(!launcher.completed);
-    assert!(matches!(launcher.choice, Choice::ObserveOffer));
-    launcher.request_shutdown()?;
-    finish(&mut launcher, &wake)
-}
 use crate::updates::test_support::observe;
 use std::sync::atomic::{AtomicU64, Ordering};
 use sugarsubstitute_supervision::update_preparation::CachedConfiguration;
@@ -142,67 +106,36 @@ fn uncreated_trial_failure_observes_creator_recovery_before_fallback() -> Result
 }
 
 #[test]
-fn engine_failure_requires_containment_settlement_before_accepted_fallback() -> Result<()> {
+fn a_newer_updater_that_takes_over_completes_startup_without_any_local_launch() -> Result<()> {
     let (mut launcher, _, wake) = fixture()?;
-    launcher.launch = None;
-    launcher.failed(Task::PrepareEngine, "engine capability rejected".into())?;
-    assert!(matches!(launcher.choice, Choice::StopEngine));
-    let cutoff = launcher.recovery_until;
-    launcher.activation_observed(ActivationOutcome::Pending)?;
-    assert!(matches!(launcher.choice, Choice::StopEngine));
-    assert_eq!(launcher.recovery_until, cutoff);
-    launcher.activation_observed(ActivationOutcome::Stopped {
-        exit_code: None,
-        creation: CreationOutcome::NotCreated,
-    })?;
-    assert!(matches!(launcher.choice, Choice::Accepted));
-    assert!(launcher.launch.is_none());
-    assert!(!launcher.completed);
-    assert!(launcher.update_failure.is_some());
-    launcher.request_shutdown()?;
-    finish(&mut launcher, &wake)
-}
-
-#[test]
-fn committed_engine_transfer_never_falls_back_after_discarded_observation() -> Result<()> {
-    let (mut launcher, _, wake) = fixture()?;
-    launcher.launch = None;
-    launcher.failed(Task::ObserveEngine, "observation delivery was cancelled".into())?;
-    launcher.activation_observed(ActivationOutcome::Stopped {
-        exit_code: Some(0),
-        creation: CreationOutcome::Created,
-    })?;
+    launcher.choice = Choice::Delegate;
+    launcher.delegated(Takeover::TookOver);
     assert!(launcher.completed);
     assert!(matches!(launcher.choice, Choice::Complete));
-    assert!(launcher.recovery_until.is_none());
+    assert!(launcher.update_failure.is_none());
     launcher.request_shutdown()?;
     finish(&mut launcher, &wake)
 }
 
 #[test]
-fn engine_settlement_polls_keep_one_recovery_cutoff_and_close_never_launches_fallback() -> Result<()>
-{
-    let (mut launcher, clock, wake) = fixture()?;
-    launcher.launch = None;
-    launcher.choice = Choice::ObserveEngine;
-    launcher.activation_observed(ActivationOutcome::Settling { exit_code: Some(7) })?;
-    let cutoff = launcher.recovery_until;
-    assert!(matches!(launcher.choice, Choice::StopEngine));
-    assert!(!launcher.activation_due());
-    clock.0.store(1_000_000_000, Ordering::SeqCst);
-    assert!(launcher.activation_due());
-    launcher.activation_failed("repeated activation observation failure".into())?;
-    assert_eq!(launcher.recovery_until, cutoff);
-    launcher.activation_observed(ActivationOutcome::Settling { exit_code: Some(7) })?;
-    assert_eq!(launcher.recovery_until, cutoff);
-    launcher.request_shutdown()?;
-    assert_eq!(launcher.cleanup_until, cutoff);
-    launcher.activation_observed(ActivationOutcome::Stopped {
-        exit_code: Some(7),
-        creation: CreationOutcome::NotCreated,
-    })?;
-    assert!(!matches!(launcher.choice, Choice::Accepted));
+fn a_newer_updater_that_exits_stays_silent_or_fails_to_start_leaves_only_accepted_startup()
+-> Result<()> {
+    for takeover in [Takeover::Exited, Takeover::Silent] {
+        let (mut launcher, _, wake) = fixture()?;
+        launcher.choice = Choice::Delegate;
+        launcher.delegated(takeover);
+        assert!(!launcher.completed);
+        assert!(matches!(launcher.choice, Choice::Accepted));
+        assert!(launcher.update_failure.is_some());
+        launcher.request_shutdown()?;
+        finish(&mut launcher, &wake)?;
+    }
+    let (mut launcher, _, wake) = fixture()?;
+    launcher.choice = Choice::Delegate;
+    launcher.failed(Task::Delegate, "newer updater could not be created".into())?;
+    assert!(matches!(launcher.choice, Choice::Accepted));
     assert!(!launcher.completed);
+    launcher.request_shutdown()?;
     finish(&mut launcher, &wake)
 }
 

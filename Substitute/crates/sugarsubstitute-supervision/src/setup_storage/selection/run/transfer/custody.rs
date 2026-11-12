@@ -44,7 +44,7 @@ pub(super) fn receive(
 ) -> Result<(InstallationRun, OwnedTrial), SelectionFailure> {
     check(context)?;
     let snapshot = store.protected(context, |protection| {
-        protection.verify_exclusive_rendezvous(
+        protection.verify_transferable_rendezvous(
             &inherited.run,
             &store.root.path().join(LOCK),
             context,

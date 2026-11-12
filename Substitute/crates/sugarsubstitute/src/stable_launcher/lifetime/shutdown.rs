@@ -25,8 +25,6 @@ impl Launcher {
         self.wake_at =
             Instant::now().checked_add(until.checked_duration_since(now).unwrap_or_default());
         self.closing = true;
-        self.activation_after = None;
-        self.activation_wake = None;
         if let Some(job) = &self.job {
             job.job.cancel();
         }
@@ -55,25 +53,11 @@ impl Launcher {
         if self.job.is_some() || self.cached.is_some() {
             return Ok(false);
         }
-        if self.activation.is_some() {
-            if self.activation_due() {
-                self.observe_activation(true)?;
-            }
-            return Ok(false);
-        }
-        if self.launch.is_some() || self.engine.is_some() || self.source.is_some() {
-            if !self.activation_due() {
-                return Ok(false);
-            }
+        if self.launch.is_some() || self.engine.is_some() || self.delegate.is_some() {
             let launch = self.launch.clone();
             let engine = self.engine.clone();
-            let source = self.source.clone();
+            self.delegate = None;
             self.submit(Task::Retire, move |context| {
-                if let Some(source) = source
-                    && !source.retire(&context)?
-                {
-                    return Ok(Work::Retiring);
-                }
                 if let Some(launch) = launch {
                     launch.recover_and_retire(&context).map_err(io::Error::other)?;
                 }
@@ -103,9 +87,8 @@ impl Launcher {
         let uncertain = self.job.is_some()
             || self.launch.is_some()
             || self.cached.is_some()
-            || self.activation.is_some()
-            || self.engine.is_some();
-        let uncertain = uncertain || self.source.is_some();
+            || self.engine.is_some()
+            || self.delegate.is_some();
         if !self.cutoff_reported
             && ((expired && uncertain)
                 || (!settled && actual.is_some_and(|progress| progress.deadline_expired)))

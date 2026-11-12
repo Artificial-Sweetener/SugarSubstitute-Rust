@@ -4,7 +4,6 @@
 use super::{MAX_CONTRACT_BYTES, Rejection, valid_versions};
 use serde::Deserialize;
 use std::collections::BTreeMap;
-pub mod activation;
 pub mod probe;
 
 /// Authenticated declaration accompanying the independently executable updater.
@@ -15,10 +14,9 @@ pub const CURRENT_UPDATER_CONTRACT: &[u8] = include_bytes!("updater.json");
 pub const PREPARATION_PROTOCOL: u32 = 1;
 /// Public process-entry spelling retained for installed application-role compatibility.
 pub const PREPARATION_ARGUMENT: &str = "--internal-update-preparation";
-/// Startup activation offers verified launch custody to its separate native creator.
-pub const ACTIVATION_PROTOCOL: u32 = 2;
-/// Follow with an installation path and encoded `activation::ActivationRequest`.
-pub const ACTIVATION_ARGUMENT: &str = "--internal-update-activation-v2";
+/// The updater runs as a launch engine through `ENGINE_LAUNCH_ARGUMENT` when the selected release
+/// requires a newer updater; it then creates the application itself.
+pub const ENGINE_PROTOCOL: u32 = 1;
 
 /// Bounded capabilities from verified payload bytes; decoding grants no execution authority.
 #[derive(Debug)]
@@ -26,7 +24,7 @@ pub struct UpdaterContract {
     preparation_protocols: Vec<u32>,
     installation_schemas: Vec<u32>,
     probe_protocols: Vec<u32>,
-    activation_protocols: Vec<u32>,
+    engine_protocols: Vec<u32>,
 }
 
 #[derive(Deserialize)]
@@ -72,7 +70,7 @@ impl UpdaterContract {
                 preparation_protocols: value.preparation_protocols,
                 installation_schemas: value.installation_schemas,
                 probe_protocols: Vec::new(),
-                activation_protocols: Vec::new(),
+                engine_protocols: Vec::new(),
             },
             Wire::Probe(value)
                 if value.schema_version == 2 && valid_versions(&value.probe_protocols) =>
@@ -81,7 +79,7 @@ impl UpdaterContract {
                     preparation_protocols: value.preparation_protocols,
                     installation_schemas: value.installation_schemas,
                     probe_protocols: value.probe_protocols,
-                    activation_protocols: Vec::new(),
+                    engine_protocols: Vec::new(),
                 }
             }
             Wire::Entries(mut value)
@@ -94,10 +92,7 @@ impl UpdaterContract {
                         .ok_or(Rejection::Format)?,
                     installation_schemas: value.installation_schemas,
                     probe_protocols: value.entry_protocols.remove("probe").unwrap_or_default(),
-                    activation_protocols: value
-                        .entry_protocols
-                        .remove("activate")
-                        .unwrap_or_default(),
+                    engine_protocols: value.entry_protocols.remove("engine").unwrap_or_default(),
                 }
             }
             _ => return Err(Rejection::Format),
@@ -141,19 +136,15 @@ impl UpdaterContract {
         Ok(())
     }
 
-    /// Require explicit startup activation support. Historical preparation/probe declarations
+    /// Require the launch engine role. Historical preparation, probe and activation declarations
     /// never acquire this capability. Unknown entry names do not grant executable commands.
     /// # Errors
-    /// Rejects unsupported activation versions and installation schemas.
-    pub fn require_activation(
-        &self,
-        protocol: u32,
-        installation_schema: u32,
-    ) -> Result<(), Rejection> {
+    /// Rejects unsupported engine versions and installation schemas.
+    pub fn require_engine(&self, protocol: u32, installation_schema: u32) -> Result<(), Rejection> {
         if !self.installation_schemas.contains(&installation_schema) {
             return Err(Rejection::InstallationSchema);
         }
-        if !self.activation_protocols.contains(&protocol) {
+        if !self.engine_protocols.contains(&protocol) {
             return Err(Rejection::Unsupported);
         }
         Ok(())
