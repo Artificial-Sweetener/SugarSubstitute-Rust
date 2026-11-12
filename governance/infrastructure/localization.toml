@@ -432,7 +432,7 @@ rationale = "Validate existing control labels for emptiness/NUL and unique ident
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/host_contract.rs"
-source_sha256 = "sha256:36ad4a13760a327fb9857ede3412a2bd16c6bf221835b80ca70fcbd7b52eb0b4"
+source_sha256 = "sha256:dd70f22b55ce7d03fc0a8d064b1142c3722336390286a63f4630c4e6e2b39ac6"
 kind = "native"
 rationale = "Main caption/recovery contracts borrow localized labels from the host. They define presentation data and no catalog or fallback policy."
 
