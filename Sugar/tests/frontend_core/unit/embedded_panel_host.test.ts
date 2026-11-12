@@ -198,8 +198,14 @@ test('retries readiness, acknowledges applied presentation, reports connectivity
     {
       session,
       send: (value) => {
-        if (value.protocol === 'sugarcubes.canvas.masks' || value.protocol === 'sugarcubes.memory')
-          throw new Error('Unexpected mask or memory operation during presentation negotiation.');
+        if (
+          value.protocol === 'sugarcubes.canvas.masks' ||
+          value.protocol === 'sugarcubes.memory' ||
+          value.protocol === 'sugarcubes.updates'
+        )
+          throw new Error(
+            'Unexpected mask, memory or update operation during presentation negotiation.',
+          );
         messages.push(value);
       },
       subscribe: (listener) => {

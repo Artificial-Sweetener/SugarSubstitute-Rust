@@ -44,7 +44,8 @@ var HOST_PROTOCOLS = Object.freeze({
   panel: Object.freeze({ name: "sugarcubes.panel", version: 3 }),
   canvas: Object.freeze({ name: "sugarcubes.canvas", version: 3 }),
   canvasMasks: Object.freeze({ name: "sugarcubes.canvas.masks", version: 2 }),
-  memory: Object.freeze({ name: "sugarcubes.memory", version: 1 })
+  memory: Object.freeze({ name: "sugarcubes.memory", version: 1 }),
+  updates: Object.freeze({ name: "sugarcubes.updates", version: 1 })
 });
 var HOST_CAPABILITIES = Object.freeze({
   /** The host's configured presentation replaces the user's saved appearance while embedded. */

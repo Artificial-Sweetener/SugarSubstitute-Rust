@@ -20,6 +20,7 @@ import { ComfySettingsCatalog } from './ComfySettingsCatalog.js';
 import { SettingsWorkspaceSurface } from './SettingsWorkspaceSurface.js';
 import { settingsWorkspaceCss } from './SettingsWorkspaceStyles.js';
 import { AboutSettingsPage } from './AboutSettingsPage.js';
+import { UPDATES_SETTING_ID, UpdatesSettingsPage } from './UpdatesSettingsPage.js';
 import { ComfyAboutInformation } from './ComfyAboutInformation.js';
 import { SettingsPopupTheme } from './SettingsPopupTheme.js';
 import { AppearanceState } from '../surface/appearance/AppearanceState.js';
@@ -49,6 +50,8 @@ export class SettingsWorkspaceHost {
     #appearance = new AppearanceState();
     #observer = null;
     #about = null;
+    #updatesPage = null;
+    #updatesOffered = false;
     #queued = false;
     #started = false;
     #disposed = false;
@@ -80,6 +83,11 @@ export class SettingsWorkspaceHost {
                 return this.#about.element;
             },
         });
+        if (this.options.updates) {
+            const updates = this.options.updates;
+            this.#stops.push(updates.subscribe(() => this.#offerUpdates(updates)));
+            this.#offerUpdates(updates);
+        }
         this.options.document.head.append(this.#style);
         this.#stops.push(this.options.mode.subscribe(this.#queue), this.options.palette.subscribe(this.#queue), subscribeVisualStyle(this.options.document, this.#queue));
         this.#observer = new HostSurfaceObserver(this.options.document.body, '[data-testid="settings-dialog"], .p-select-overlay', (changes) => {
@@ -92,6 +100,28 @@ export class SettingsWorkspaceHost {
         }, { content: true, exclude: '.sc-settings-owned' });
         this.#reconcile();
         this.options.document.defaultView?.addEventListener('pagehide', this.dispose);
+    }
+    /**
+     * Add the Updates entry when an update source first attaches.
+     *
+     * Comfy settings cannot be withdrawn, so a source that later retires leaves the entry saying
+     * that updates are unavailable.
+     */
+    #offerUpdates(updates) {
+        if (this.#updatesOffered || this.#disposed || !updates.read())
+            return;
+        this.#updatesOffered = true;
+        this.#catalog.register({
+            id: UPDATES_SETTING_ID,
+            name: 'Updates',
+            category: ['SugarCubes', 'Updates', 'Status'],
+            tooltip: 'Current version, update channel, last check, and applying a ready update.',
+            defaultValue: '',
+            type: () => {
+                this.#updatesPage ??= new UpdatesSettingsPage(this.options.document, updates, this.options.report);
+                return this.#updatesPage.element;
+            },
+        });
     }
     /** Restore mounted native controls and release only this settings presentation lifetime. */
     dispose = () => {
@@ -106,6 +136,7 @@ export class SettingsWorkspaceHost {
         this.#surfaces.clear();
         this.#popups.dispose();
         this.#about?.dispose();
+        this.#updatesPage?.dispose();
         this.#appearance.dispose();
         this.#style.remove();
         this.#routeListeners.clear();

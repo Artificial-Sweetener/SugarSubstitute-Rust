@@ -27,11 +27,19 @@ declare const document: {
   };
 };
 
-/** Map Photoshop's interface levels while retaining Black as a manual PhotoPro choice. */
+/** Photoshop's four interface brightness levels. */
+export type PhotoshopInterfaceTheme = 'darkest' | 'dark' | 'light' | 'lightest';
+
+/** Read Photoshop's current interface level and present the panel to match it. */
 export function readPhotoshopPresentation(): PanelPresentation {
   const theme = document.theme.getCurrent();
   if (theme !== 'darkest' && theme !== 'dark' && theme !== 'light' && theme !== 'lightest')
     throw new Error('Photoshop returned an unsupported interface theme.');
+  return photoshopPresentation(theme);
+}
+
+/** Map Photoshop's interface levels while retaining Black as a manual PhotoPro choice. */
+export function photoshopPresentation(theme: PhotoshopInterfaceTheme): PanelPresentation {
   const palettes = {
     darkest: 'dark-gray',
     dark: 'medium-gray',
