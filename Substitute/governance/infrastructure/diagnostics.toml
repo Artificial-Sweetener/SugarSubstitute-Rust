@@ -1135,7 +1135,7 @@ rationale = "Capture only isolated formatter output to prove fixed native prepar
 [[records]]
 path = "installer/release/sign-release.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:fdff92faec74a9bcd328cfa6a1dd9854ba24ad49762e045a7a46428482a24ced"
+source_sha256 = "sha256:b0d7864db07cfd86dd0259ded68ecab9c18d7c1838e20b3e46178b3c555c02e3"
 disposition = "developer"
 rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
 

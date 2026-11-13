@@ -29,12 +29,16 @@ const manifestProducer = fileURLToPath(new URL('../../tools/local_k1/build_manif
 /** Manifest header: 16-byte magic, u32 schema, u8 identity, then the 32-byte key identity. */
 const keyIdOffset = 21
 
-/** Run the repository's PE/PDB manifest producer over the assembled directory. */
+/**
+ * Run the repository's PE/PDB manifest producer over the assembled directory. Python ignores its
+ * environment and user site packages but keeps the producer's own directory, which holds the
+ * manifest codec it imports.
+ */
 export function pythonManifestProducer(python) {
   return async ({ root, release, anchor }) => {
     const scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'release-manifest-'))
     try {
-      const result = spawnSync(python, ['-I', manifestProducer, '--release-root', root, '--host-image', hostImage,
+      const result = spawnSync(python, ['-E', '-s', manifestProducer, '--release-root', root, '--host-image', hostImage,
         '--release-build', release, '--public-anchor', anchor, '--output-root', scratch],
       { encoding: 'utf8', windowsHide: true, env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } })
       if (result.error) throw result.error

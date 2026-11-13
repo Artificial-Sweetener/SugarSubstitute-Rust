@@ -1065,7 +1065,7 @@ rationale = "Names an unused generation's installation-owned configuration docum
 [[records]]
 path = "installer/release/sign-release.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:fdff92faec74a9bcd328cfa6a1dd9854ba24ad49762e045a7a46428482a24ced"
+source_sha256 = "sha256:b0d7864db07cfd86dd0259ded68ecab9c18d7c1838e20b3e46178b3c555c02e3"
 capabilities = ["arguments", "environment", "external"]
 rationale = "Release tooling: its arguments name the build inputs, RELEASE_MANIFEST_KEY carries the release manifest private key from the release environment, and it runs the repository's manifest producer under the named Python; not product settings."
 
@@ -1082,6 +1082,13 @@ owner = "sugarsubstitute-xtask"
 source_sha256 = "sha256:098cebd2caec9b1f63ab717acb3617aa3b29e6917c3d56f0d6ee0d4b549ca195"
 capabilities = ["arguments"]
 rationale = "Release tooling: its generate command names the two new key files to write; not product settings."
+
+[[records]]
+path = "installer/release/release-signature.test.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:2996f4c014224c62950d4d8aff9416651098d18207f4b8d3edf5eb9c219eee25"
+capabilities = ["environment"]
+rationale = "The real manifest producer test runs the Python named by SUBSTITUTE_TEST_PYTHON, as the other installer tests do; not product settings."
 
 [[records]]
 path = "installer/release/update-distribution.mjs"

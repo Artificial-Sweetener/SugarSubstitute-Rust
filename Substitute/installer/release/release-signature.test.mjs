@@ -7,7 +7,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { createHash, createPublicKey, generateKeyPairSync } from 'node:crypto'
 import { anchorKey, generateReleaseKey, keyId, publicBlob, signManifest, verifyManifest, writeReleaseKey } from './release-signature.mjs'
-import { crashHandlerFiles, manifestFile, signRelease, signatureFile } from './sign-release.mjs'
+import { crashHandlerFiles, manifestFile, pythonManifestProducer, signRelease, signatureFile } from './sign-release.mjs'
 import { engineBuildFile } from './engine-identity.mjs'
 
 const key = generateReleaseKey()
@@ -116,5 +116,15 @@ test('a rotated key is written once: the private PEM and the anchor it names', a
     assert.deepEqual(publicBlob(await fs.readFile(privateFile, 'utf8')), anchor)
     assert.throws(() => writeReleaseKey(privateFile, path.join(root, 'other.bin')), /EEXIST/)
     assert.throws(() => writeReleaseKey('relative.pem', anchorFile), /absolute/)
+  } finally { await fs.rm(root, { recursive: true, force: true }) }
+})
+test('the real manifest producer runs and judges the actual images it is given', async () => {
+  const { root, anchor } = await fixture()
+  try {
+    await fs.writeFile(path.join(root, 'sugarsubstitute.exe'), 'not an image')
+    await fs.writeFile(path.join(root, 'sugarsubstitute.pdb'), 'not symbols')
+    const produce = pythonManifestProducer(process.env.SUBSTITUTE_TEST_PYTHON || 'python')
+    await assert.rejects(produce({ root, release: 'substitute-0_2_0', anchor }), error =>
+      /ManifestError/.test(error.message) && !/ModuleNotFoundError/.test(error.message))
   } finally { await fs.rm(root, { recursive: true, force: true }) }
 })
