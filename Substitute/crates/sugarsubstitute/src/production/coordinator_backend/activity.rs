@@ -177,9 +177,7 @@ impl CoordinatorBackend {
                         Self::merge(&mut transition, self.failed(key, Box::new(error), resources)?);
                     }
                     RegistryObservation::RootExited { process, code } => {
-                        if self.records[at].as_ref().is_some_and(|record| {
-                            record.shutdown.is_none() && record.readiness.is_none()
-                        }) {
+                        if self.records[at].as_ref().is_some_and(ended_before_ready) {
                             self.pack.backend_stopped(resources)?;
                         }
                         let next =
@@ -384,6 +382,15 @@ impl CoordinatorBackend {
             return Ok(ResourceTransition::default());
         }
         record.failure_published = true;
+        // A managed backend that fails before it is ready did not come up with the SugarCubes
+        // version being judged, exactly as if its process had ended: that version is restored
+        // before the next attempt starts the backend. A ComfyUI that is listening but never
+        // serves SugarCubes' extension (the new version failed to import) ends here.
+        let stopped =
+            matches!(record.target, BackendTarget::Managed(_)) && ended_before_ready(record);
+        if stopped {
+            self.pack.backend_stopped(resources)?;
+        }
         let failure = LifecycleFailure::new(LifecycleFailureCode::Preparation, cause);
         let mut transition =
             self.observe(ResourceObservation::Failed { resource: key, failure })?;
@@ -407,6 +414,11 @@ impl CoordinatorBackend {
         }
         Ok(transition)
     }
+}
+
+/// The backend ended or failed before it was ready, outside an intended shutdown.
+fn ended_before_ready(record: &Backend) -> bool {
+    record.shutdown.is_none() && record.readiness.is_none()
 }
 
 /// Consume only this generation's actual source jobs; terminal metadata never proves file closure.
