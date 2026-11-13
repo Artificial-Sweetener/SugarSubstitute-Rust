@@ -99,7 +99,7 @@ owner = "sugarsubstitute-supervision"
 identity = "libc"
 binding = "libc"
 kind = "normal"
-source_sha256 = "sha256:9d8f695e0a98ab248c7168abd4978c54a34a0def7e0f40a4fc2c914b52aa7a40"
+source_sha256 = "sha256:c605575acd607a1c991fc5ddf2b6db7b19cb547d136edcb5ca8c9644f23f9079"
 rationale = "Unix durable-storage descriptor acquisition, relative atomic publication and checked close; exact authored access remains governed."
 
 [[dependencies]]
@@ -107,7 +107,7 @@ owner = "sugarsubstitute-supervision"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:9d8f695e0a98ab248c7168abd4978c54a34a0def7e0f40a4fc2c914b52aa7a40"
+source_sha256 = "sha256:c605575acd607a1c991fc5ddf2b6db7b19cb547d136edcb5ca8c9644f23f9079"
 rationale = "Isolated test fixture directories for sugarsubstitute-supervision; each authored acquisition still requires an exact source review."
 
 [[dependencies]]
@@ -115,7 +115,7 @@ owner = "sugarsubstitute-supervision"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:9d8f695e0a98ab248c7168abd4978c54a34a0def7e0f40a4fc2c914b52aa7a40"
+source_sha256 = "sha256:c605575acd607a1c991fc5ddf2b6db7b19cb547d136edcb5ca8c9644f23f9079"
 rationale = "Native OS adapter bindings for sugarsubstitute-supervision; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -2834,7 +2834,7 @@ boundary = "native_custody"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/update_http.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:c0b867bd9c97cf58c89bb2777804d5eb4f84e5a5b885fd4fa702bc985a372e90"
+source_sha256 = "sha256:246d491a30ec83d1b1049381d2ea50d385d2679cb91712f629a150e736ece0ad"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Decode bounded HTTP metadata framing from the received response headers."
