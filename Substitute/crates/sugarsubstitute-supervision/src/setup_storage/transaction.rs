@@ -147,6 +147,7 @@ impl PreparedInstallation {
         }
         check(context)?;
         files::write_immutable(
+            crate::durable_storage::write_port::UpdateFile::Payload,
             &self.generation.join("installation-ready.json"),
             &serde_json::to_vec(&serde_json::json!({
                 "schema_version": 1, "bundle_sha256": self.bundle.digest(),

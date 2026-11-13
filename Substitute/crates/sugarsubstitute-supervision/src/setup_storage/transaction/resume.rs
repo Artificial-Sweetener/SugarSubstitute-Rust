@@ -40,7 +40,7 @@ impl InstallationSession {
             return Err(invalid("Resume package differs from the recorded candidate"));
         }
         let path = self.admission.root.path().join("releases").join(generation.id.as_str());
-        let (pinned, marker) = generation::open(&path, bundle.digest(), context)?;
+        let (pinned, marker) = generation::reopen(&path, bundle.digest(), context)?;
         check(context)?;
         Ok(PreparedInstallation {
             session: self,

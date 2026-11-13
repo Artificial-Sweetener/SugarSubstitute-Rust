@@ -14,20 +14,38 @@ fn stable_entry_stages_and_recovers_only_below_selection_state() -> TestResult {
         let root = Directory::open(temporary.path(), false)?;
         let state = Directory::open(&root.path().join("state/selection"), true)?;
         protection::with(context, |protection| {
-            let mut abandoned = Stage::create(&state, protection, context)?;
+            let mut abandoned = Stage::create(
+                &state,
+                UpdateFile::Payload,
+                &state.path().join("published"),
+                protection,
+                context,
+            )?;
             abandoned.file().write_all(b"partial entry")?;
             drop(abandoned);
             assert_eq!(std::fs::read_dir(root.path())?.count(), 1);
             recover(&state, protection, context)?;
             recover(&state, protection, context)?;
             assert_eq!(std::fs::read_dir(state.path())?.count(), 0);
-            let mut stage = Stage::create(&state, protection, context)?;
+            let mut stage = Stage::create(
+                &state,
+                UpdateFile::Payload,
+                &state.path().join("published"),
+                protection,
+                context,
+            )?;
             stage.file().write_all(b"accepted entry")?;
             stage.publish_entry(&root, false, protection, context)?;
             assert_eq!(std::fs::read(root.path().join("SugarSubstitute.exe"))?, b"accepted entry");
             assert_eq!(std::fs::read_dir(root.path())?.count(), 2);
             assert_eq!(std::fs::read_dir(state.path())?.count(), 0);
-            let stage = Stage::create(&root, protection, context)?;
+            let stage = Stage::create(
+                &root,
+                UpdateFile::Payload,
+                &root.path().join("published"),
+                protection,
+                context,
+            )?;
             assert!(stage.publish_entry(&root, false, protection, context).is_err());
             recover(&root, protection, context)
         })?;
@@ -41,7 +59,13 @@ fn successful_publication_remains_successful_when_journal_cleanup_is_busy() -> T
         let temporary = tempfile::tempdir()?;
         let parent = Directory::open(temporary.path(), false)?;
         protection::with(context, |protection| {
-            let mut stage = Stage::create(&parent, protection, context)?;
+            let mut stage = Stage::create(
+                &parent,
+                UpdateFile::Payload,
+                &parent.path().join("published"),
+                protection,
+                context,
+            )?;
             stage.file().write_all(b"complete")?;
             let journal = stage.record.journal_name();
             let reader = parent.read(&journal)?;
@@ -63,7 +87,13 @@ fn abandoned_payload_survives_handle_close_and_is_recovered_idempotently() -> Te
         let temporary = tempfile::tempdir()?;
         let parent = Directory::open(temporary.path(), false)?;
         let (source, journal) = protection::with(context, |protection| {
-            let mut stage = Stage::create(&parent, protection, context)?;
+            let mut stage = Stage::create(
+                &parent,
+                UpdateFile::Payload,
+                &parent.path().join("published"),
+                protection,
+                context,
+            )?;
             stage.file().write_all(b"partial owned bytes")?;
             let paths = (
                 parent.path().join(stage.record.stage()),
@@ -90,9 +120,33 @@ fn completed_publication_removes_journal_and_keeps_exact_payload() -> TestResult
         let temporary = tempfile::tempdir()?;
         let parent = Directory::open(temporary.path(), false)?;
         protection::with(context, |protection| {
-            write_immutable(&parent, "payload", b"complete", protection, context)?;
-            write_immutable(&parent, "payload", b"complete", protection, context)?;
-            assert!(write_immutable(&parent, "payload", b"changed", protection, context).is_err());
+            write_immutable(
+                &parent,
+                crate::durable_storage::write_port::UpdateFile::Payload,
+                "payload",
+                b"complete",
+                protection,
+                context,
+            )?;
+            write_immutable(
+                &parent,
+                crate::durable_storage::write_port::UpdateFile::Payload,
+                "payload",
+                b"complete",
+                protection,
+                context,
+            )?;
+            assert!(
+                write_immutable(
+                    &parent,
+                    crate::durable_storage::write_port::UpdateFile::Payload,
+                    "payload",
+                    b"changed",
+                    protection,
+                    context
+                )
+                .is_err()
+            );
             recover(&parent, protection, context)
         })?;
         assert_eq!(std::fs::read(parent.path().join("payload"))?, b"complete");
@@ -108,7 +162,13 @@ fn recovery_after_rename_retires_only_journal_never_published_destination() -> T
         let parent = Directory::open(temporary.path(), false)?;
         let destination = parent.path().join("payload");
         protection::with(context, |protection| {
-            let mut stage = Stage::create(&parent, protection, context)?;
+            let mut stage = Stage::create(
+                &parent,
+                UpdateFile::Payload,
+                &parent.path().join("published"),
+                protection,
+                context,
+            )?;
             stage.file().write_all(b"accepted")?;
             stage.file.sync_all()?;
             protection.close_file(stage.file)?;
@@ -137,7 +197,13 @@ fn failed_publication_preserves_destination_and_next_pass_cleans_owned_stage() -
         let destination = parent.path().join("user-file");
         std::fs::write(&destination, b"authored")?;
         protection::with(context, |protection| {
-            let mut stage = Stage::create(&parent, protection, context)?;
+            let mut stage = Stage::create(
+                &parent,
+                UpdateFile::Payload,
+                &parent.path().join("published"),
+                protection,
+                context,
+            )?;
             stage.file().write_all(b"candidate")?;
             assert!(stage.publish(&destination, false, protection, context).is_err());
             Ok(())
@@ -155,7 +221,13 @@ fn busy_stage_is_preserved_then_removed_when_external_reader_closes() -> TestRes
         let temporary = tempfile::tempdir()?;
         let parent = Directory::open(temporary.path(), false)?;
         protection::with(context, |protection| {
-            let stage = Stage::create(&parent, protection, context)?;
+            let stage = Stage::create(
+                &parent,
+                UpdateFile::Payload,
+                &parent.path().join("published"),
+                protection,
+                context,
+            )?;
             let name = stage.record.stage();
             let journal = parent.path().join(stage.record.journal_name());
             drop(stage);
@@ -179,7 +251,13 @@ fn expired_recovery_preserves_journal_for_another_admitted_operation() -> TestRe
         let temporary = tempfile::tempdir()?;
         let parent = Directory::open(temporary.path(), false)?;
         protection::with(context, |protection| {
-            let stage = Stage::create(&parent, protection, context)?;
+            let stage = Stage::create(
+                &parent,
+                UpdateFile::Payload,
+                &parent.path().join("published"),
+                protection,
+                context,
+            )?;
             let source = parent.path().join(stage.record.stage());
             let journal = parent.path().join(stage.record.journal_name());
             drop(stage);

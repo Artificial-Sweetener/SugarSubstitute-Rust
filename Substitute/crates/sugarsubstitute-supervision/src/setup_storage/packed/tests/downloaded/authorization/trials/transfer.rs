@@ -2,60 +2,14 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise transfer with real protected storage, duplicated handles and authenticated packages.
 use super::*;
-use crate::setup_storage::{InheritedLaunch, capture_launch, retain_running_generation};
-use crate::setup_storage::{InheritedTrial, TrialTransfer, UnadoptedEnding, capture_trial_custody};
-use std::os::windows::io::{AsRawHandle, BorrowedHandle, IntoRawHandle};
+use crate::setup_storage::test_package::inherit as capture;
+use crate::setup_storage::{InheritedLaunch, retain_running_generation};
+use crate::setup_storage::{TrialTransfer, UnadoptedEnding, capture_trial_custody};
+use std::os::windows::io::AsRawHandle;
 use windows::Win32::{
-    Foundation::{
-        GetHandleInformation, HANDLE, HANDLE_FLAG_INHERIT, SetHandleInformation, WAIT_OBJECT_0,
-    },
+    Foundation::{HANDLE, WAIT_OBJECT_0},
     System::Threading::WaitForSingleObject,
 };
-
-/// Model process inheritance by relinquishing unique native duplicates before initial capture.
-fn capture(
-    handles: [BorrowedHandle<'_>; 3],
-) -> Result<InheritedTrial, Box<dyn std::error::Error + Send + Sync>> {
-    let run = handles[0].try_clone_to_owned()?;
-    let selection = handles[1].try_clone_to_owned()?;
-    let adopted = handles[2].try_clone_to_owned()?;
-    for handle in [&run, &selection, &adopted] {
-        // SAFETY: every uniquely owned live duplicate is private to this test.
-        unsafe {
-            SetHandleInformation(
-                HANDLE(handle.as_raw_handle()),
-                HANDLE_FLAG_INHERIT.0,
-                HANDLE_FLAG_INHERIT,
-            )
-        }?;
-    }
-    let raw = [
-        run.into_raw_handle() as usize,
-        selection.into_raw_handle() as usize,
-        adopted.into_raw_handle() as usize,
-    ];
-    // SAFETY: the disjoint raw slots have just relinquished their owners; no other code can
-    // close or reuse them. This models the same once-only ownership available at child entry.
-    let captured = unsafe {
-        capture_launch([
-            sugarsubstitute_contracts::application_launch::TRIAL_LAUNCH_ARGUMENT.into(),
-            raw[0].to_string().into(),
-            raw[1].to_string().into(),
-            raw[2].to_string().into(),
-        ])
-    }?
-    .ok_or("Trial capture absent")?;
-    let InheritedLaunch::Trial(captured) = captured else {
-        return Err("Wrong inherited role".into());
-    };
-    for slot in raw {
-        let mut flags = 0;
-        // SAFETY: captured retains the live slot while this query only observes flags.
-        unsafe { GetHandleInformation(HANDLE(slot as *mut _), &mut flags) }?;
-        assert_eq!(flags & HANDLE_FLAG_INHERIT.0, 0);
-    }
-    Ok(captured)
-}
 
 fn transfer(
     case: &Case<'_>,

@@ -46,13 +46,15 @@ impl TrustStore {
             &self.repository,
             &payload,
         )?;
-        let staged = staging::unique_path(&self.root, "releases-pending")?;
+        let destination = self.root.path().join(RECORD);
+        let mut write = write_port::begin(UpdateFile::ReleaseHistory, &destination);
+        let staged = staging::unique_path(&self.root, RELEASES_STAGE)?;
         let mut file = protection.file(&staged, context)?;
         check(context)?;
-        file.write_all(&bytes)?;
+        write.bytes(&mut file, &bytes)?;
         files::sync(&file, context)?;
         drop(file);
-        staging::replace_record(&staged, &self.root.path().join(RECORD))?;
+        write.publish(|| staging::replace_record(&staged, &destination))?;
         check(context)?;
         Ok(())
     }

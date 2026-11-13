@@ -121,7 +121,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/existing.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:dc55d297eea4600eeae4c55e331fa88efa49a967dce2d3f9ba018ee4aa0a46e8"
+source_sha256 = "sha256:cfea10be2368653a4265d7d9893d1433c2aceb7212eb6282ddf7e3296b6b53d2"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -198,7 +198,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:50c1705ce2e171f4041518e4cef4e560734183537411bd982ae6f1ba3bcc1559"
+source_sha256 = "sha256:3a3261d00d4817f9187bc0e8872bdb841d68f5626c5d6f41124d939cdb8dadfc"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -226,7 +226,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/transaction/records.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:d65bcd054f6c59c1c7517a306713544c41dec0bc80eef052492ec83277c1379b"
+source_sha256 = "sha256:ff6e731db1ea32955531a6566d44a82de01b53e441c9ea9e41ee68cf64aaafd1"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 

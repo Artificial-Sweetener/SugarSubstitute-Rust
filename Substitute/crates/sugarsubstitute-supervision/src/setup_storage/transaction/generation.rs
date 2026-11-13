@@ -2,7 +2,11 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Publish complete initial generation custody before exposing its canonical directory.
 use super::*;
-use crate::durable_storage::{protected::directories::Mode, protection, staging};
+use crate::durable_storage::{
+    protected::directories::Mode,
+    protection, staging,
+    write_port::{self, UpdateFile},
+};
 use sugarsubstitute_contracts::installation::{GenerationId, PackageDigest};
 
 pub(in crate::setup_storage) const INITIAL_PREFIX: &str = ".generation-init-";
@@ -22,6 +26,21 @@ pub(super) fn open(
     context: &JobContext,
 ) -> io::Result<(Directory, File)> {
     let (directory, marker, _) = inspect(path, Some(digest), context)?;
+    Ok((directory, marker))
+}
+
+/// Reopen a staging generation to continue preparing it under installation custody, removing the
+/// record and payload stages an interrupted attempt left in it. A power cut can leave them; no
+/// other writer stages files in a generation while this custody is held.
+pub(super) fn reopen(
+    path: &Path,
+    digest: &str,
+    context: &JobContext,
+) -> io::Result<(Directory, File)> {
+    let (directory, marker) = open(path, digest, context)?;
+    for prefix in [files::IMMUTABLE_STAGE, super::super::bundle::PAYLOAD_STAGE] {
+        staging::reclaim_in_protected_folder(&directory, prefix, context)?;
+    }
     Ok((directory, marker))
 }
 
@@ -90,6 +109,7 @@ pub(super) fn create(
 ) -> io::Result<(Directory, File)> {
     let parent =
         Directory::open(path.parent().ok_or_else(|| invalid("Generation parent missing"))?, true)?;
+    let mut write = write_port::begin(UpdateFile::Payload, &path.join("setup-generation.json"));
     let (stage, identity) = protection::with(context, |protection| {
         let stage = staging::unique_path(&parent, INITIAL_PREFIX.trim_end_matches('-'))?;
         protection.directory(&stage, Mode::CreateNew, context)?;
@@ -99,14 +119,15 @@ pub(super) fn create(
         }))
         .map_err(io::Error::other)?;
         let mut file = protection.file(&stage.join("setup-generation.json"), context)?;
-        use std::io::Write;
-        file.write_all(&bytes)?;
+        write.bytes(&mut file, &bytes)?;
         files::sync(&file, context)?;
         check(context)?;
         Ok((stage, directory.identity()?))
     })?;
     protection::with(context, |protection| {
-        protection.publish(&stage, path, identity, protection::Publication::Directory, context)
+        write.publish(|| {
+            protection.publish(&stage, path, identity, protection::Publication::Directory, context)
+        })
     })?;
     let result = open(path, digest, context)?;
     if result.0.identity()? != identity {

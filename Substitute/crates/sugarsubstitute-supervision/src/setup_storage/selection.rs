@@ -38,6 +38,7 @@ use crate::durable_storage::{
     protected::directories::Mode,
     protection::{self, Protection},
     staging,
+    write_port::{self, UpdateFile},
 };
 pub(crate) use clock::StrikeClock;
 pub use failure::SelectionFailure;
@@ -48,11 +49,7 @@ pub use run::{
     TrialApplication, TrialTransfer, TrialWitness, TrialWitnessTransfer, UnadoptedEnding,
     capture_trial_custody,
 };
-use std::{
-    fs::File,
-    io::{self, Write},
-    path::Path,
-};
+use std::{fs::File, io, path::Path};
 use sugarsubstitute_contracts::{
     execution::{JobContext, MemoryClaim},
     installation::{Candidate, InstallationRecord, MAX_RECORD_BYTES},
@@ -61,6 +58,7 @@ use sugarsubstitute_contracts::{
 /// Protected selection namespace inside the installation state folder.
 pub(super) const DIRECTORY: &str = "selection";
 const RECORD: &str = ".substitute-selection.json";
+const RECORD_STAGE: &str = ".selection-stage";
 const LOCK: &str = ".selection-lock";
 pub(super) const NAMESPACE_MARKER: &str = "selection-enabled.json";
 /// Rendezvous serializing first selection enablement with earlier installer publication.
@@ -212,6 +210,8 @@ impl SelectionStore {
             if self.read(protection)?.as_ref() != Some(expected) {
                 return Err(SelectionFailure::Changed);
             }
+            // Only this writer stages the record, so no earlier stage is still live.
+            staging::reclaim(&self.root, RECORD_STAGE, &[], protection, context)?;
             self.publish(protection, replacement, context)
         })
     }
@@ -267,13 +267,15 @@ impl SelectionStore {
         context: &JobContext,
     ) -> Result<(), SelectionFailure> {
         let bytes = record.encode()?;
-        let staged = staging::unique_path(&self.root, ".selection-stage")?;
+        let destination = self.root.path().join(RECORD);
+        let mut write = write_port::begin(UpdateFile::Selection, &destination);
+        let staged = staging::unique_path(&self.root, RECORD_STAGE)?;
         let mut file = protection.file(&staged, context)?;
-        file.write_all(&bytes)?;
+        write.bytes(&mut file, &bytes)?;
         files::sync(&file, context)?;
         drop(file);
         check(context)?;
-        staging::replace_record(&staged, &self.root.path().join(RECORD))?;
+        write.publish(|| staging::replace_record(&staged, &destination))?;
         Ok(())
     }
 }

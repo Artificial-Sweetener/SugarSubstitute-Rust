@@ -2,7 +2,11 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Bootstrap trust by publishing a complete protected directory without replacing existing state.
 use super::*;
+use crate::durable_storage::write_port::FileWrite;
 use std::path::PathBuf;
+
+/// Prefix of the folder initial trust state is staged in.
+const INITIAL_STAGE: &str = ".update-trust-stage";
 
 impl TrustStore {
     /// Bootstrap exactly once while a native installation selection is still at revision zero.
@@ -62,7 +66,17 @@ impl TrustStore {
             )
             .into());
         }
-        let staged = InitialState::stage(&state, &bytes, &history, context)?;
+        // The selection's initial lock serializes initialization; earlier attempts are dead.
+        protection::with(context, |protection| {
+            staging::reclaim(
+                &state,
+                INITIAL_STAGE,
+                &[LOCK, releases::RECORD, RECORD],
+                protection,
+                context,
+            )
+        })?;
+        let staged = InitialState::stage(&state, &destination, &bytes, &history, context)?;
         let root = staged.publish(&destination, context)?;
         let mut store = Self {
             cache: std::sync::Mutex::new(None),
@@ -105,40 +119,46 @@ impl TrustStore {
 struct InitialState {
     path: PathBuf,
     identity: (u32, u32, u32),
+    write: FileWrite,
 }
 impl InitialState {
     /// Flush all initial records in a fresh namespace; abandoned staging is never reused.
+    /// The namespace is one trust write: both records land, then the folder is published.
     fn stage(
         parent: &Directory,
+        destination: &Path,
         checkpoint: &[u8],
         history: &[u8],
         context: &JobContext,
     ) -> io::Result<Self> {
+        let mut write = write_port::begin(UpdateFile::Trust, &destination.join(RECORD));
         protection::with(context, |protection| {
-            let path = staging::unique_path(parent, ".update-trust-stage")?;
+            let path = staging::unique_path(parent, INITIAL_STAGE)?;
             protection.directory(&path, Mode::CreateNew, context)?;
             let root = Directory::open(&path, false)?;
             files::sync(&protection.file(&path.join(LOCK), context)?, context)?;
             for (name, bytes) in [(releases::RECORD, history), (RECORD, checkpoint)] {
                 let mut file = protection.file(&path.join(name), context)?;
-                file.write_all(bytes)?;
+                write.bytes(&mut file, bytes)?;
                 files::sync(&file, context)?;
             }
             check(context)?;
-            Ok(Self { path, identity: root.identity()? })
+            Ok(Self { path, identity: root.identity()?, write })
         })
     }
 
     /// Rename the exact completed object while retaining the selected installation's parent.
-    fn publish(self, destination: &Path, context: &JobContext) -> io::Result<Directory> {
+    fn publish(mut self, destination: &Path, context: &JobContext) -> io::Result<Directory> {
         protection::with(context, |protection| {
-            protection.publish(
-                &self.path,
-                destination,
-                self.identity,
-                protection::Publication::Directory,
-                context,
-            )
+            self.write.publish(|| {
+                protection.publish(
+                    &self.path,
+                    destination,
+                    self.identity,
+                    protection::Publication::Directory,
+                    context,
+                )
+            })
         })?;
         let root = Directory::open(destination, false)?;
         if root.identity()? != self.identity {

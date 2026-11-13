@@ -11,7 +11,7 @@ mod record;
 mod transition;
 use super::*;
 use crate::{
-    durable_storage::protection::Protection,
+    durable_storage::{protection::Protection, write_port::UpdateFile},
     setup_storage::{application::VerifiedApplication, check, launch_pointer, publication},
 };
 use sugarsubstitute_contracts::application_launch::LauncherContract;

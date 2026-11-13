@@ -9,7 +9,13 @@ fn replaced_stage_is_preserved_even_with_identical_content() -> TestResult {
         let temporary = tempfile::tempdir()?;
         let parent = Directory::open(temporary.path(), false)?;
         protection::with(context, |protection| {
-            let mut stage = Stage::create(&parent, protection, context)?;
+            let mut stage = Stage::create(
+                &parent,
+                UpdateFile::Payload,
+                &parent.path().join("published"),
+                protection,
+                context,
+            )?;
             stage.file().write_all(b"same bytes")?;
             let source = parent.path().join(stage.record.stage());
             let journal = parent.path().join(stage.record.journal_name());
@@ -31,7 +37,13 @@ fn linked_stage_is_preserved_even_when_native_identity_matches() -> TestResult {
         let temporary = tempfile::tempdir()?;
         let parent = Directory::open(temporary.path(), false)?;
         protection::with(context, |protection| {
-            let mut stage = Stage::create(&parent, protection, context)?;
+            let mut stage = Stage::create(
+                &parent,
+                UpdateFile::Payload,
+                &parent.path().join("published"),
+                protection,
+                context,
+            )?;
             stage.file().write_all(b"linked")?;
             let source = parent.path().join(stage.record.stage());
             let journal = parent.path().join(stage.record.journal_name());
@@ -53,7 +65,13 @@ fn unknown_future_and_corrupt_journals_and_unjournaled_files_remain_intact() -> 
         let parent = Directory::open(temporary.path(), false)?;
         protection::with(context, |protection| {
             for mode in 0..4 {
-                let stage = Stage::create(&parent, protection, context)?;
+                let stage = Stage::create(
+                    &parent,
+                    UpdateFile::Payload,
+                    &parent.path().join("published"),
+                    protection,
+                    context,
+                )?;
                 let source = parent.path().join(stage.record.stage());
                 let journal = parent.path().join(stage.record.journal_name());
                 let mut value = serde_json::to_value(&stage.record)?;

@@ -49,6 +49,8 @@ pub(crate) mod streamed_record;
 pub(crate) mod tree;
 #[cfg(windows)]
 pub(crate) mod user_paths;
+#[cfg(windows)]
+pub(crate) mod write_port;
 
 use std::io;
 use sugarsubstitute_contracts::execution::JobContext;

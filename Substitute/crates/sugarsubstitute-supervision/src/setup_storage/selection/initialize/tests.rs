@@ -25,7 +25,8 @@ fn opening_absent_state_cannot_create_an_empty_authoritative_namespace() -> Test
 }
 
 #[test]
-fn interrupted_staging_leaves_no_authority_and_a_fresh_attempt_succeeds() -> TestResult {
+fn interrupted_staging_leaves_no_authority_and_a_fresh_attempt_succeeds_and_removes_it()
+-> TestResult {
     let root = root()?;
     let path = root.path().to_owned();
     worker::run_expiring(move |context, clock| {
@@ -53,8 +54,12 @@ fn interrupted_staging_leaves_no_authority_and_a_fresh_attempt_succeeds() -> Tes
         }));
         let store = SelectionStore::initialize(&path, &initial()?, context)?;
         assert_eq!(store.load(context)?, Some(initial()?));
+        // The fresh attempt removes the abandoned one and keeps everything else.
         for path in abandoned {
-            assert!(path.exists());
+            let staging = path
+                .file_name()
+                .is_some_and(|name| name.to_string_lossy().starts_with(".selection-init-"));
+            assert_eq!(path.exists(), !staging, "{}", path.display());
         }
         Ok(())
     })

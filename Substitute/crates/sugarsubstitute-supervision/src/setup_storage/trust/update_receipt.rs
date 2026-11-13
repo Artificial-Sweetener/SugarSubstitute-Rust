@@ -109,13 +109,23 @@ impl UpdateAuthorization<'_> {
             &payload,
         )?;
         protection::with(context, |protection| {
+            // Receipts are written only under the trust writer this hold retains.
+            staging::reclaim(
+                directory,
+                STAGE_PREFIX.trim_end_matches('-'),
+                &[],
+                protection,
+                context,
+            )?;
+            let destination = directory.path().join(FILE);
+            let mut write = write_port::begin(UpdateFile::Receipt, &destination);
             let staged = staging::unique_path(directory, STAGE_PREFIX.trim_end_matches('-'))?;
             let mut file = protection.file(&staged, context)?;
             check(context)?;
-            file.write_all(&bytes)?;
+            write.bytes(&mut file, &bytes)?;
             files::sync(&file, context)?;
             drop(file);
-            staging::replace_record(&staged, &directory.path().join(FILE))?;
+            write.publish(|| staging::replace_record(&staged, &destination))?;
             protection.verify_file(&directory.read(FILE)?)
         })
     }

@@ -28,7 +28,12 @@ pub(super) fn write(
         ),
         _ => return Err(super::invalid("Unsupported installer backend selection")),
     }?;
-    files::write_immutable(&configuration, startup.as_bytes(), files::create_new)?;
+    files::write_immutable(
+        crate::durable_storage::write_port::UpdateFile::Payload,
+        &configuration,
+        startup.as_bytes(),
+        files::create_new,
+    )?;
     let paths = sugarsubstitute_configuration::paths::StartupPaths::new([
         configuration,
         runtime.frontend.clone(),
@@ -40,6 +45,7 @@ pub(super) fn write(
     ])
     .map_err(io::Error::other)?;
     files::write_immutable(
+        crate::durable_storage::write_port::UpdateFile::Payload,
         &root.join("sugarsubstitute-launch.local.json"),
         &sugarsubstitute_configuration::descriptor::LaunchDescriptor::encode(paths)?,
         files::create_new,

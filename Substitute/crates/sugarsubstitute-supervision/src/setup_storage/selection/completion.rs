@@ -101,7 +101,12 @@ impl SelectionStore {
             super::super::publication::recover(directory, protection, context)?;
             recheck()?;
             super::super::publication::write_immutable(
-                directory, FILE, &bytes, protection, context,
+                directory,
+                crate::durable_storage::write_port::UpdateFile::Selection,
+                FILE,
+                &bytes,
+                protection,
+                context,
             )?;
             read(directory, protection)?.ok_or_else(|| {
                 SelectionFailure::from(super::super::invalid(

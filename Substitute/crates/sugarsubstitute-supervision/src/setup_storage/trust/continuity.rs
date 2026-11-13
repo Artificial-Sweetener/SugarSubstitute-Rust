@@ -5,6 +5,8 @@ use super::*;
 
 pub(super) const MARKER: &str = super::CONTINUITY_MARKER;
 const CONTENT: &[u8] = b".update-trust";
+/// Prefix of the continuity marker's stage in the installation state folder.
+const MARKER_STAGE: &str = ".update-trust-enable-stage";
 
 /// Establish continuity while retaining the trust writer and validated checkpoint/history.
 /// Newly initialized stores supply the complete records they just published; reopening stores
@@ -24,13 +26,17 @@ pub(super) fn ensure(
         CONTENT,
     )?;
     let state = ownership::state(&store._installation_root)?;
-    let staged = staging::unique_path(&state, ".update-trust-enable-stage")?;
+    let destination = state.path().join(MARKER);
+    let mut write = write_port::begin(UpdateFile::Trust, &destination);
+    // The caller holds the trust writer, which every marker publication takes.
+    protection::with(context, |owner| staging::reclaim(&state, MARKER_STAGE, &[], owner, context))?;
+    let staged = staging::unique_path(&state, MARKER_STAGE)?;
     let mut file = protection.file(&staged, context)?;
-    file.write_all(&bytes)?;
+    write.bytes(&mut file, &bytes)?;
     files::sync(&file, context)?;
     drop(file);
     check(context)?;
-    staging::publish(&staged, &state.path().join(MARKER))?;
+    write.publish(|| staging::publish(&staged, &destination))?;
     read(store, protection)?
         .ok_or_else(|| invalid("Published update trust continuity is absent").into())
 }
