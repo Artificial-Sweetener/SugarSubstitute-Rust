@@ -1100,7 +1100,7 @@ rationale = "Durable filesystem owner: Reach owned test directories through real
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/files/canonical.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:dfe68755bcf1671738fe019879fc6a000b7bf8b274965e3a4b618ff058e4dc24"
+source_sha256 = "sha256:501b8297bf76efa268f9fdc41683038efd2e8c0d15452310bb7d0907600559af"
 capabilities = ["std::fs::canonicalize"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Resolve drive aliases while native ancestry pins prevent directory replacement. Native access and its adversarial qualification remain within this owner."
@@ -1889,7 +1889,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Off
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/entrypoint.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:a45fd8f5ed68b1dbcfdb5ac9ec8a24110dcf9d2bb0496a664977f8bdc5b2c6bc"
+source_sha256 = "sha256:8438a15f5d61149995a8bb9de452c692db0a75c9ee4040348e672919231b1619"
 capabilities = ["std::fs::OpenOptions::new", "std::fs::read", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Publish a stable shell entry only after its complete desktop generation is ready. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -1897,7 +1897,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Pub
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/entrypoint/native.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:92e7bc5528ff9698649aad49dd9ed89b9a6c0cc03d59e4e2ca66c927870a5fda"
+source_sha256 = "sha256:98bf470372556600bd551c5c65c182ca340e30a7480551bdcf98f7dcd162fbec"
 capabilities = ["IPersistFile", "windows::Win32::System::Com::IPersistFile"]
 disposition = "boundary"
 rationale = "Load and publish an OS Shell Link through IPersistFile under the existing entrypoint ownership and authorization checks."
@@ -1906,7 +1906,7 @@ boundary = "external_runtime"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/entrypoint/native/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:ce833bb90db469ab018b0108fea52462c321ab03064daf66a89a1d32752dc8e4"
+source_sha256 = "sha256:31fce8c9d6aa338c787cd0a0c2571ee9b06a752b1ebdcc4450522732f622ec10"
 capabilities = ["IPersistFile", "assert! restricted capability fragments", "std::fs::read", "std::fs::read_dir", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Verify actual shell-link launch properties before reusing retained setup output. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

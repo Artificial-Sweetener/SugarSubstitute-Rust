@@ -293,7 +293,9 @@ fn retire_earlier_shortcut(
         Err(cause) => return Err(cause),
     };
     let owned = match native::target(&root.path().join(NAME)) {
-        Ok(target) if target == root.path().join(EARLIER_ENTRY) => {
+        Ok(target)
+            if launches(&target, &root.path().join(EARLIER_ENTRY)).is_ok_and(|ours| ours) =>
+        {
             let mut retained = match state.read(NAME) {
                 Ok(file) => file,
                 Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(()),

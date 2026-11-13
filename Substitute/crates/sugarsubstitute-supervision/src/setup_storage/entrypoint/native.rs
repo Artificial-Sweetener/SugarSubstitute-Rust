@@ -136,8 +136,12 @@ pub(in crate::setup_storage) fn target(source: &Path) -> io::Result<PathBuf> {
             ));
         }
     }
+    // The shell stores the target in its resolved long spelling but keeps the working directory
+    // as written, so a folder reached through 8.3 short names is spelled two ways.
     let target = bounded_path(&path)?;
-    if target.parent() != Some(bounded_path(&directory)?.as_path()) {
+    let directory = bounded_path(&directory)?;
+    let parent = target.parent().ok_or_else(|| super::invalid("Shell target parent absent"))?;
+    if !super::Directory::same_location(parent, &directory)? {
         return Err(super::invalid(
             "The existing shell entry has a different working directory; it has been preserved",
         ));

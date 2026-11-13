@@ -45,6 +45,18 @@ impl Directory {
         let objects = self._pins.iter().map(native_identity).collect::<io::Result<_>>()?;
         Ok(Location { drive, objects })
     }
+
+    /// Decide whether two spellings name one local directory by comparing their locations.
+    /// Identical spellings agree without opening anything, so an absent directory still matches
+    /// its own spelling; differently spelled directories must both exist to be compared.
+    /// # Errors
+    /// Preserves the native failure of opening either directory or observing its location.
+    pub(crate) fn same_location(first: &Path, second: &Path) -> io::Result<bool> {
+        if first == second {
+            return Ok(true);
+        }
+        Ok(Self::open(first, false)?.location()? == Self::open(second, false)?.location()?)
+    }
 }
 
 /// Read the drive letter of a DOS or verbatim drive path; other prefixes have none.
