@@ -22,6 +22,7 @@ enum Control {
     Release(LeaseReference),
     ExitIntent,
     RestartToApply,
+    CheckForUpdates,
     ExitCompleted,
 }
 #[derive(Clone, Copy)]
@@ -178,6 +179,13 @@ impl ChildShutdown {
         }
         Ok(())
     }
+    /// Whether a check request is queued or on its way to the coordinator.
+    fn check_outstanding(&self) -> bool {
+        self.queued.iter().flatten().any(|control| matches!(control, Control::CheckForUpdates))
+            || self
+                .pending
+                .is_some_and(|pending| matches!(pending.control, Control::CheckForUpdates))
+    }
     fn queue(&mut self, control: Control) -> Result<()> {
         let slot = self
             .queued
@@ -212,6 +220,20 @@ impl ProductionChild {
         }
         self.shutdown.queue(Control::RestartToApply)?;
         self.shutdown.restart_requested = true;
+        self.advance_control()
+    }
+    /// Ask the coordinator to check for updates now. A request still waiting to go out is
+    /// joined rather than repeated; the coordinator joins a check that is already running.
+    /// # Errors
+    /// Refuses while closing or before registration, when the coordinator cannot be asked, and
+    /// returns a full control queue or channel failure.
+    pub(in crate::production) fn request_update_check(&mut self) -> Result<()> {
+        if self.shutdown.closing() || !self.bootstrap.channel_mut().registered() {
+            return Err("The coordinator cannot be asked to check for updates now".into());
+        }
+        if !self.shutdown.check_outstanding() {
+            self.shutdown.queue(Control::CheckForUpdates)?;
+        }
         self.advance_control()
     }
     pub(in crate::production) fn begin_workspace_close(&mut self) -> Result<ShutdownInitiation> {

@@ -224,6 +224,9 @@ pub trait StartupBackend {
     /// Tell the coordinator this close restarts the application so a prepared update applies.
     /// Called once, after the close save's outcome exists and before `request_shutdown`.
     fn request_restart_to_apply(&mut self) -> BackendResult<()>;
+    /// Ask the coordinator to check for updates now; its progress and outcome arrive as later
+    /// update statuses. A request still on its way is joined rather than repeated.
+    fn request_update_check(&mut self) -> BackendResult<()>;
     /// Close admission and retain the original budget while cleanup remains pollable.
     fn request_shutdown(&mut self, budget: ShutdownBudget) -> BackendResult<()>;
     /// Report settlement only after actual native owners retire.

@@ -389,6 +389,17 @@ impl EntryActivation for ProductionActivation {
             .map(|retained| retained.backend.pack_update_status())
             .unwrap_or_default()
     }
+    fn take_update_check_request(&mut self) -> bool {
+        let mut requested = false;
+        for retained in self.records.iter_mut().flatten() {
+            if retained.record.retired.is_none()
+                && let Some(parent) = retained.record.parent.as_deref_mut()
+            {
+                requested |= parent.take_check_request();
+            }
+        }
+        requested
+    }
     fn restart_to_apply_requested(&self) -> bool {
         self.records.iter().flatten().any(|retained| {
             retained

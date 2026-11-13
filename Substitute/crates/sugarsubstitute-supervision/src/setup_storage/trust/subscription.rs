@@ -49,6 +49,56 @@ impl TrustStore {
         })
     }
 
+    /// Read the installation's local preference for presentation, without the trust writer.
+    ///
+    /// Trust records are replaced atomically, so this snapshot read neither waits for nor
+    /// blocks an update campaign's trust work, and it writes nothing: an installation whose
+    /// preference was never recorded follows releases until a campaign records it. Run on an
+    /// admitted storage worker.
+    /// Returns `None` for an installation without a selection or without update trust.
+    /// # Errors
+    /// Rejects damaged, foreign or unprotected records without changing them.
+    pub fn read_subscription(
+        installation_root: &Path,
+        context: &JobContext,
+    ) -> Result<Option<Subscription>, TrustFailure> {
+        check(context)?;
+        let Some(selection) = SelectionStore::existing(installation_root, context)
+            .map_err(io::Error::other)?
+            .map(|store| store.load(context))
+            .transpose()
+            .map_err(io::Error::other)?
+            .flatten()
+        else {
+            return Ok(None);
+        };
+        let _memory = context.memory().claim(1024 * 1024).map_err(io::Error::other)?;
+        let parent = Directory::open(installation_root, false)?;
+        let _ownership = ownership::read(&parent)?;
+        let root = match Directory::open(&ownership::state_path(&parent).join(DIRECTORY), false) {
+            Ok(root) => root,
+            Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(cause) => return Err(cause.into()),
+        };
+        let installation = selection.installation();
+        protection::with_domain(context, |protection| -> Result<_, TrustFailure> {
+            protection.directory(root.path(), Mode::Existing, context)?;
+            let mut file = root.read(super::RECORD)?;
+            protection.verify_file(&file)?;
+            let bytes = files::read_bounded(&mut file, envelope::Kind::Checkpoint.limit())?;
+            let (repository, _) =
+                envelope::decode_binding(envelope::Kind::Checkpoint, installation, &bytes)?;
+            let read = |name, kind| {
+                super::records::read_bound(&root, name, kind, installation, &repository, protection)
+            };
+            let marker = read(MARKER, envelope::Kind::SubscriptionMarker)?;
+            let record = read(RECORD, envelope::Kind::Subscription)?;
+            check(context)?;
+            Ok(Some(established(marker.as_deref(), record.as_deref())?.unwrap_or_default()))
+        })
+        .map_err(TrustFailure::from)
+    }
+
     /// Called only while holding the same trust writer used by final publication authorization.
     pub(super) fn subscription_locked(
         &self,
@@ -57,21 +107,15 @@ impl TrustStore {
     ) -> Result<Subscription, TrustFailure> {
         let marker =
             self.read_bound_record(MARKER, envelope::Kind::SubscriptionMarker, protection)?;
-        if marker.as_deref().is_some_and(|bytes| bytes != ESTABLISHED) {
-            return Err(invalid("Update subscription continuity marker is invalid").into());
-        }
-        let value =
-            match self.read_bound_record(RECORD, envelope::Kind::Subscription, protection)? {
-                Some(bytes) => Subscription::decode(&bytes).map_err(io::Error::other)?,
-                None if marker.is_some() => {
-                    return Err(invalid("Established update subscription is missing").into());
-                }
-                None => {
-                    let initial = Subscription::default();
-                    self.write_subscription(initial, protection, context)?;
-                    initial
-                }
-            };
+        let record = self.read_bound_record(RECORD, envelope::Kind::Subscription, protection)?;
+        let value = match established(marker.as_deref(), record.as_deref())? {
+            Some(value) => value,
+            None => {
+                let initial = Subscription::default();
+                self.write_subscription(initial, protection, context)?;
+                initial
+            }
+        };
         if marker.is_none() {
             let bytes = envelope::encode(
                 envelope::Kind::SubscriptionMarker,
@@ -118,6 +162,23 @@ impl TrustStore {
         )?;
         check(context)?;
         Ok(())
+    }
+}
+
+/// The preference the continuity marker and record state; `None` while it was never recorded.
+fn established(
+    marker: Option<&[u8]>,
+    record: Option<&[u8]>,
+) -> Result<Option<Subscription>, TrustFailure> {
+    if marker.is_some_and(|bytes| bytes != ESTABLISHED) {
+        return Err(invalid("Update subscription continuity marker is invalid").into());
+    }
+    match record {
+        Some(bytes) => Ok(Some(Subscription::decode(bytes).map_err(io::Error::other)?)),
+        None if marker.is_some() => {
+            Err(invalid("Established update subscription is missing").into())
+        }
+        None => Ok(None),
     }
 }
 

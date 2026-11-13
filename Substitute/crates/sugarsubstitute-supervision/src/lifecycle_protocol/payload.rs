@@ -149,6 +149,8 @@ pub enum WirePayload<'a> {
     },
     /// Tag23: the child's close save finished and it is exiting so the update applies.
     RestartToApply,
+    /// Tag24: the child asks the coordinator to check for updates now; joins a running check.
+    CheckForUpdates,
 }
 /// What the coordinator observes of the backend's workflow queue.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -186,6 +188,7 @@ impl WirePayload<'_> {
             Self::MainRevealed(_) => 21,
             Self::UpdateStatus { .. } => 22,
             Self::RestartToApply => 23,
+            Self::CheckForUpdates => 24,
         }
     }
 }
@@ -294,4 +297,6 @@ pub enum DecodedPayload<'a> {
     },
     /// Tag23: the child's close save finished and it is exiting so the update applies.
     RestartToApply,
+    /// Tag24: the child asks the coordinator to check for updates now; joins a running check.
+    CheckForUpdates,
 }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! The coordinator's update status and the child's restart-to-apply intent on the wire.
+//! The coordinator's update status and the child's restart-to-apply and check requests on the wire.
 use super::*;
 use std::num::NonZeroU64;
 
@@ -29,6 +29,16 @@ fn update_status_and_restart_intent_round_trip_with_their_identity_rules() -> Te
     let decoded = FrameCodec::decode(&source)?;
     assert!(decoded.header.request.is_some());
     assert!(matches!(decoded.payload, DecodedPayload::RestartToApply));
+
+    let source = encoded(WirePayload::CheckForUpdates)?;
+    assert_eq!(u16::from_le_bytes([source[12], source[13]]), 24);
+    let decoded = FrameCodec::decode(&source)?;
+    assert!(decoded.header.request.is_some());
+    assert!(matches!(decoded.payload, DecodedPayload::CheckForUpdates));
+    let mut unrequested = header(24)?;
+    unrequested.request = None;
+    let message = WireMessage { header: unrequested, payload: WirePayload::CheckForUpdates };
+    assert!(matches!(FrameCodec::encode(&message, &mut [0; 256]), Err(ProtocolError::Identity)));
 
     let mut with_request = header(22)?;
     with_request.request = Some(RequestId::new(13)?);
@@ -59,10 +69,12 @@ fn malformed_update_status_frames_reject() -> TestResult {
     overlong[payload + 9..payload + 13]
         .copy_from_slice(&(MAX_UPDATE_STATUS_BYTES as u32 + 1).to_le_bytes());
     assert!(matches!(FrameCodec::decode(&overlong), Err(ProtocolError::Length)));
-    let mut trailing = encoded(WirePayload::RestartToApply)?;
-    trailing.push(0);
-    set_length(&mut trailing);
-    assert!(matches!(FrameCodec::decode(&trailing), Err(ProtocolError::TrailingBytes)));
+    for payload in [WirePayload::RestartToApply, WirePayload::CheckForUpdates] {
+        let mut trailing = encoded(payload)?;
+        trailing.push(0);
+        set_length(&mut trailing);
+        assert!(matches!(FrameCodec::decode(&trailing), Err(ProtocolError::TrailingBytes)));
+    }
     let oversized = vec![b' '; MAX_UPDATE_STATUS_BYTES + 1];
     let message = WireMessage {
         header: header(22)?,

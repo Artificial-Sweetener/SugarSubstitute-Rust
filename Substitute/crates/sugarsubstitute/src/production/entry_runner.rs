@@ -111,6 +111,9 @@ pub(crate) trait EntryActivation {
     /// Whether a desktop child that asked to restart so an update applies has since completed
     /// a normal close. A crashed or failed child never counts.
     fn restart_to_apply_requested(&self) -> bool;
+    /// Take, once, whether a live desktop child asked for an update check now since the last
+    /// call. Requests from every child and repeats before this call count as one.
+    fn take_update_check_request(&mut self) -> bool;
     /// Borrow its original retained fatal failure without separating its custody.
     /// An exposed source closes runner admission even when the last turn returned Active.
     fn failure_source(&self) -> Option<&(dyn Error + 'static)>;

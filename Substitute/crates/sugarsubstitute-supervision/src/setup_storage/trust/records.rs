@@ -10,14 +10,7 @@ impl TrustStore {
         kind: envelope::Kind,
         protection: &Protection,
     ) -> Result<Option<Vec<u8>>, TrustFailure> {
-        let mut file = match self.root.read(name) {
-            Ok(file) => file,
-            Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(None),
-            Err(cause) => return Err(cause.into()),
-        };
-        protection.verify_file(&file)?;
-        let bytes = files::read_bounded(&mut file, kind.limit())?;
-        Ok(Some(envelope::decode(kind, &self.installation, &self.repository, &bytes)?.to_vec()))
+        read_bound(&self.root, name, kind, &self.installation, &self.repository, protection)
     }
 
     /// Publish a complete bound record under the caller's retained trust writer.
@@ -56,4 +49,24 @@ impl TrustStore {
         protection.verify_file(&self.root.read(name)?)?;
         Ok(())
     }
+}
+
+/// Read one record of `root` bound to `installation` and `repository`, verifying native
+/// protection before interpreting any bytes. An absent record reads as `None`.
+pub(super) fn read_bound(
+    root: &Directory,
+    name: &str,
+    kind: envelope::Kind,
+    installation: &InstallationId,
+    repository: &[u8; 32],
+    protection: &Protection,
+) -> Result<Option<Vec<u8>>, TrustFailure> {
+    let mut file = match root.read(name) {
+        Ok(file) => file,
+        Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(cause) => return Err(cause.into()),
+    };
+    protection.verify_file(&file)?;
+    let bytes = files::read_bounded(&mut file, kind.limit())?;
+    Ok(Some(envelope::decode(kind, installation, repository, &bytes)?.to_vec()))
 }

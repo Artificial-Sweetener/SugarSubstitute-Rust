@@ -398,3 +398,33 @@ fn first_whole_close_intent_survives_phase_failure_registration_and_queue_delay_
     }
     Ok(())
 }
+#[test]
+fn a_check_request_waiting_to_go_out_is_joined_not_repeated() -> Result<()> {
+    let mut state = ChildShutdown::new();
+    assert!(!state.check_outstanding());
+    state.queue(Control::CheckForUpdates)?;
+    assert!(state.check_outstanding(), "a queued request is joined");
+    let control = take_first(&mut state.queued).ok_or("Queued check disappeared")?;
+    state.pending = Some(Pending {
+        header: WireHeader {
+            run: sugarsubstitute_contracts::lifecycle::RunKey {
+                owner: sugarsubstitute_contracts::lifecycle::CoordinatorKey {
+                    namespace: sugarsubstitute_contracts::lifecycle::NamespaceId::new([1; 32]),
+                    epoch: sugarsubstitute_contracts::lifecycle::CoordinatorEpoch::new([2; 16])?,
+                },
+                instance: sugarsubstitute_contracts::lifecycle::InstanceId::new(3)?,
+                generation: sugarsubstitute_contracts::lifecycle::RunGeneration::new(4)?,
+            },
+            connection: None,
+            request: None,
+            deadline_qpc: 1,
+        },
+        original: Moment::from_nanos(1),
+        control,
+        admitted: true,
+    });
+    assert!(state.check_outstanding(), "a request on its way is joined");
+    state.pending = None;
+    assert!(!state.check_outstanding(), "an answered request leaves room for the next");
+    Ok(())
+}
