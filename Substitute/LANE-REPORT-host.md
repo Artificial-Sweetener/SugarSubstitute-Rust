@@ -2,11 +2,11 @@
 
 ## Unfinished
 
-- **E6, the Substitute profile, is not recorded.** The profile must be the real Rust host's answers, composed by the startup and production-child owners in `sugarsubstitute`. That crate builds only for Windows, and Windows tests cannot link in CI (lane/ci item 1, the crash parser library). `PENDING_HOST_PROFILES.substitute` and its `test.failing` therefore stay as they are; removing them without a recording would fabricate one. Recipe once Windows tests link: add a Windows test that feeds the kit's page messages through `panel_host`, `startup::updates_page`, the memory page link and the child's discovery answer, then save the transcript as `profiles/substitute/0.1.0.json`. Running the kit against it found and fixed one real defect (`4a63d3a5`).
+- **E6, the Substitute profile, is not recorded.** The profile must be the real Rust host's answers, composed by the startup and production-child owners in `sugarsubstitute`. That crate builds only for Windows, where tests cannot link yet (lane/ci item 1). `PENDING_HOST_PROFILES.substitute` and its `test.failing` therefore stay as they are; removing them without a recording would fabricate one. Once Windows tests link, a Windows test feeds the kit's page messages through those owners and saves the transcript as `profiles/substitute/0.1.0.json`. Checking against the kit found one real defect, fixed in `4a63d3a5`.
 
 ## Unproven
 
-- No Windows test of this lane has run: startup updates link, desktop ingress, delivery and messages, production panel and deliveries. Every Windows Clippy leg passes locally (Windows target, stub C headers).
+- No Windows test of this lane has run: startup updates link, desktop ingress, delivery and messages, production panel and deliveries. All Windows Clippy legs pass locally.
 - Native: the SugarCubes Updates entry, the description reaching the real page, and discovery before readiness.
 
 ## Decisions made
@@ -16,7 +16,7 @@
 - The bridge coalesced control messages by type alone, which would have dropped a queued update check. It now coalesces by protocol and type, never coalesces named check or restart requests, and caps that backlog at 16.
 - The draft's `UpdateControls` became an `UpdateStatusPort` plus a `WorkflowActivitySource`. The channel comes from the subscription in the snapshot.
 - Until coord2's sources land, the idle sources answer up to date, no workflow, check *unavailable*, restart *not ready*. The version shown is the workspace version.
-- No fingerprint tool existed. When asked, the user chose a reviewed `cargo xtask fingerprints`.
+- No fingerprint tool existed; the user chose a reviewed `cargo xtask fingerprints`.
 - I reverted my submodule and execution `cfg` fixes because the baseline belongs to lane/ci.
 
 ## Taken from `lane/host-d2w-draft`
