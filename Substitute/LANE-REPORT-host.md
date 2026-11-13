@@ -2,12 +2,14 @@
 
 ## Unfinished
 
-- **E6, the Substitute profile, is not recorded.** It must be the real host's answers, from Windows-only owners in `sugarsubstitute`, and Windows tests cannot link yet (lane/ci item 1). `PENDING_HOST_PROFILES.substitute` and its `test.failing` stay; removing them without a recording would fabricate one. Checking against the kit found one real defect, fixed in `138b247e`.
+- No CI job runs the Node harnesses (`host_conformance.mjs`, `panel_bridge.mjs`); that wiring belongs to lane/ci. SugarCubes CI replays the recorded profile.
+
+## E6: the Substitute conformance profile
+
+`production/child/panel/conformance_tests.rs` checks the production owners' answer to each kit message against `conformance_answers.json`. `crates/sugarsubstitute-desktop/tests/host_conformance.mjs` runs the real kit under Node over the real bridge, answering from that file, and recorded `profiles/substitute/0.1.0.json`. SugarCubes no longer lists Substitute as pending, and its profile test is a normal test. Both harness scripts have storage and cache records, and `sugarcubes-conformance` declares the kit files the harness consumes.
 
 ## Unproven
 
-- The integration Windows run failed `a_composition_hosted_page_hears_its_surface_is_unavailable_until_it_can_answer`: the test sent presentation schema 3, which the contract fixes at 1. The test is fixed; a new contract test pins schema 1 and passes on Linux. Unproven on Windows until lane/ci lands the parser build.
-- No Windows test of this lane has run: startup updates link, desktop ingress, delivery and messages, production panel and deliveries. All Windows Clippy legs pass locally.
 - Native: the SugarCubes Updates entry, the description reaching the real page, and discovery before readiness.
 
 ## Decisions made
@@ -19,6 +21,8 @@
 - Until coord2's sources land, the idle sources answer up to date, no workflow, check *unavailable*, restart *not ready*. The version shown is the workspace version.
 - No fingerprint tool existed; the user chose a reviewed `cargo xtask fingerprints`.
 - Baseline fixes (submodule, execution `cfg`) were reverted; lane/ci owns them.
+- The conformance recorder never compiled before its Windows run (it is Windows-only); it was missing the `SurfaceReply` import.
+- The harness reaches SugarCubes' kit through a new shared component, `sugarcubes-conformance`, rather than widening `sugarcubes-contracts`. The recorder's doc names the kit by its pack path so only the harness consumes that component.
 
 ## Taken from `lane/host-d2w-draft`
 
@@ -40,6 +44,7 @@ The coordinator rewrote this lane's early commits, which had been authored as Cl
 - Substitute verification [43343727996](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43343727996) and [43344721034](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43344721034): every OS stops at the known baseline (`download.ts` missing).
 - Sugar quality [43343727876](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43343727876): the known baseline only (ubuntu mypy, windows VS2022). No failure is new.
 - Local: governance, Windows-target Clippy (three legs), Linux tests (contracts, application, xtask) and 92 Node bridge tests pass.
+- Windows: `sugarsubstitute` `production::child::panel` 32/32 (the presentation schema test and the conformance recorder included); `startup::updates_page`, `startup::routing`, `startup::memory`, `panel_host` 18/18; `sugarsubstitute-desktop` `main_actor::panel`, `main_updates_contract`, `main_panel`, `main_native_delivery`, `main_memory_contract` 54/54; `sugarsubstitute-contracts` all pass. Node 22: `host_conformance.mjs` 1/1, `panel_bridge.mjs` 92/92. SugarCubes `recorded_host_profiles` 7/7.
 
 ## Next
 

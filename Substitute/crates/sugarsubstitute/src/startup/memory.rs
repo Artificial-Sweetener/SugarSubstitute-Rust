@@ -10,14 +10,18 @@
 mod page;
 
 use std::{error::Error, time::Instant};
-use sugarsubstitute_contracts::{execution::Moment, startup::MainIdentity};
-use sugarsubstitute_desktop::{DesktopStartupCommand, MemoryObservation};
+use sugarsubstitute_contracts::{
+    execution::{MemoryClaim, MemoryLease, Moment},
+    memory::MemoryMessage,
+    startup::MainIdentity,
+};
+use sugarsubstitute_desktop::DesktopStartupCommand;
 use sugarsubstitute_execution::memory_budget::{
     BudgetDecision, CacheCharge, MemoryBudget, MemoryPreference, SystemMemory,
 };
 
 /// One application-wide memory budget and the platform source it samples.
-pub(super) struct MemoryGovernor {
+pub(crate) struct MemoryGovernor {
     source: Box<dyn SystemMemory>,
     budget: MemoryBudget,
     browser_processes: Vec<u32>,
@@ -47,7 +51,7 @@ impl MemoryGovernor {
     }
 
     /// Govern with `preference`, sampling `source` on the first poll.
-    pub(super) fn new(source: Box<dyn SystemMemory>, preference: MemoryPreference) -> Self {
+    pub(crate) fn new(source: Box<dyn SystemMemory>, preference: MemoryPreference) -> Self {
         Self {
             source,
             budget: MemoryBudget::new(preference),
@@ -67,15 +71,18 @@ impl MemoryGovernor {
         Ok(self.source.sample(&[])?.total_bytes)
     }
 
-    /// Consume one page memory report; a reported preference applies at once.
+    /// Consume one page memory report from `identity`, admitted with `claim`; a reported
+    /// preference applies at once.
     ///
     /// # Errors
     /// Rejects an allocation too small for the control-lane receipt.
-    pub(super) fn observe_page(
+    pub(crate) fn observe_page(
         &mut self,
-        observation: MemoryObservation,
+        identity: MainIdentity,
+        message: MemoryMessage,
+        lease: MemoryLease,
+        claim: MemoryClaim,
     ) -> Result<(), Box<dyn Error>> {
-        let (identity, message, lease, claim) = observation.into_parts();
         if let Some(preference) = self.page.observe(identity, message, lease, claim)? {
             self.budget.set_preference(preference);
         }
@@ -95,7 +102,7 @@ impl MemoryGovernor {
     }
 
     /// Move the next host-direction memory command owed to the page or browser.
-    pub(super) fn take_command(&mut self) -> Option<DesktopStartupCommand> {
+    pub(crate) fn take_command(&mut self) -> Option<DesktopStartupCommand> {
         self.page.take_command()
     }
 
@@ -110,7 +117,7 @@ impl MemoryGovernor {
     /// Preserves the platform error when system memory cannot be read; the previous decision
     /// stays in force and the next sample is scheduled as usual.
     /// `native_bytes` is what retained native work holds; `hidden` whether the window is hidden.
-    pub(super) fn poll(
+    pub(crate) fn poll(
         &mut self,
         now: Instant,
         moment: Moment,

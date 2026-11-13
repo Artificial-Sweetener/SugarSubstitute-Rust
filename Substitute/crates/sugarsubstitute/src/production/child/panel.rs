@@ -277,5 +277,8 @@ impl PanelOwner {
 }
 
 #[cfg(test)]
+#[path = "panel/conformance_tests.rs"]
+mod conformance_tests;
+#[cfg(test)]
 #[path = "panel/tests.rs"]
 mod tests;

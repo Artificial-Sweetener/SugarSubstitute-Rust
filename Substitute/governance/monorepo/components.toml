@@ -104,3 +104,17 @@ python_suites = [
   "Sugar/tests/self_update/integration/test_update_decision_vectors.py",
 ]
 formats = { tracking = "sugarcubes-pack-tracking-v1", digestRecord = "sugarcubes-pack-digest-record-v1" }
+
+# The host conformance harness runs the SugarCubes conformance kit from its TypeScript sources
+# and records this host's profile beside the other hosts' recorded profiles.
+[[components]]
+id = "sugarcubes-conformance"
+root = "Sugar/integrations/shared/conformance"
+owner = "SugarCubes integrations/shared/conformance: the host conformance kit and every host's recorded profile"
+files = [
+  "Sugar/integrations/shared/conformance/HostConformance.ts",
+  "Sugar/integrations/shared/conformance/HostProfiles.ts",
+]
+consumers = [
+  "crates/sugarsubstitute-desktop/tests/host_conformance.mjs",
+]

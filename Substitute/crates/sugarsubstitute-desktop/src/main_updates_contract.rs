@@ -87,7 +87,7 @@ impl UpdatesCommand {
     }
 
     /// Borrow the encoded public message while its allocation claim remains retained.
-    pub(crate) fn payload(&self) -> &[u8] {
+    pub fn payload(&self) -> &[u8] {
         &self.payload
     }
 

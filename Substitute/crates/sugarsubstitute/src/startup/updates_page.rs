@@ -30,7 +30,7 @@ struct Page {
 }
 
 /// One host's updates answers for whichever navigation is current.
-pub(super) struct UpdatesPage {
+pub(crate) struct UpdatesPage {
     current_version: UpdatesVersion,
     status: Box<dyn UpdateStatusPort>,
     workflow: Box<dyn WorkflowActivitySource>,
@@ -44,7 +44,7 @@ impl UpdatesPage {
     ///
     /// # Errors
     /// Rejects a build version the updates schema cannot carry.
-    pub(super) fn new(
+    pub(crate) fn new(
         status: Box<dyn UpdateStatusPort>,
         workflow: Box<dyn WorkflowActivitySource>,
     ) -> Result<Self, Box<dyn Error>> {
@@ -64,7 +64,7 @@ impl UpdatesPage {
     /// # Errors
     /// Rejects an allocation too small for the control-lane receipt, or answer storage the
     /// page's lease cannot fund.
-    pub(super) fn observe(
+    pub(crate) fn observe(
         &mut self,
         identity: MainIdentity,
         message: UpdatesClientMessage,
@@ -95,7 +95,7 @@ impl UpdatesPage {
     ///
     /// # Errors
     /// Rejects state storage the page's lease cannot fund.
-    pub(super) fn refresh(&mut self) -> Result<(), Box<dyn Error>> {
+    pub(crate) fn refresh(&mut self) -> Result<(), Box<dyn Error>> {
         let Some(page) = &mut self.page else {
             return Ok(());
         };
@@ -106,7 +106,7 @@ impl UpdatesPage {
     }
 
     /// Forget a page whose navigation retired; its pending answers can no longer be delivered.
-    pub(super) fn retire(&mut self, identity: MainIdentity) {
+    pub(crate) fn retire(&mut self, identity: MainIdentity) {
         if self.page.as_ref().is_some_and(|page| page.identity == identity) {
             self.page = None;
         }
@@ -115,7 +115,7 @@ impl UpdatesPage {
 
     /// Move the next owed host-direction command: receipts first, then answers and states in
     /// the order they were decided.
-    pub(super) fn take_command(&mut self) -> Option<DesktopStartupCommand> {
+    pub(crate) fn take_command(&mut self) -> Option<DesktopStartupCommand> {
         if let Some(receipt) = self.receipts.pop_front() {
             return Some(DesktopStartupCommand::CompletePanelIngress(receipt));
         }
