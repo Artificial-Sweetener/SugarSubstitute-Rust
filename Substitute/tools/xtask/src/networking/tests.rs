@@ -86,10 +86,14 @@ fn loopback_client_boundary_is_execution_websocket_only_and_ipc_cannot_connect()
                 .to_string();
         assert!(failure.contains(expected), "{failure}");
     }
-    let ipc = Record { owner: "sugarsubstitute-execution".into(), ..record(Boundary::ExecutionIpc)? };
+    let ipc =
+        Record { owner: "sugarsubstitute-execution".into(), ..record(Boundary::ExecutionIpc)? };
     assert!(!category_admits(&ipc, &["TcpStream::connect".into(), "tokio::net::TcpStream".into()]));
     let client = record(Boundary::LoopbackClient)?;
-    assert!(category_admits(&client, &["TcpStream::connect".into(), "tokio::net::TcpStream".into()]));
+    assert!(category_admits(
+        &client,
+        &["TcpStream::connect".into(), "tokio::net::TcpStream".into()]
+    ));
     assert!(!category_admits(&client, &["reqwest".into()]));
     Ok(())
 }

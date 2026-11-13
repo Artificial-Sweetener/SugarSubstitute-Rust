@@ -165,7 +165,7 @@ rationale = "Parsed network capability classification data contains literal nati
 [[records]]
 path = "tools/xtask/src/networking/tests.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:c74dd6b82046b5f2483126a6b38bb97067e12e746f4a6b3896e92f6bab0e5c4e"
+source_sha256 = "sha256:da59f7f0a6039502d892faa7de5cb9ed9ce343383a77790c36dab504c21ce516"
 boundary = "fixture"
 rationale = "Deliberately invalid embedded JavaScript and native-symbol literals prove rejection across macro, wrapper, alias and inactive-target cases."
 

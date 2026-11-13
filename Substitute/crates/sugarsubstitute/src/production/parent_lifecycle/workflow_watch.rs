@@ -4,10 +4,14 @@
 //!
 //! One async job at a time holds ComfyUI's WebSocket for a bounded window and ends on the first
 //! queue change; the next job starts with what the last one learned. A connection that fails or
-//! closes makes the queue unobserved until a reconnect, after a backoff that doubles up to
-//! [`MAX_BACKOFF`] and resets once a status arrives. A new origin, or none, drops the old job
-//! and starts over. Nothing here can fail the parent: a watch that cannot run reads as
-//! unobserved, and the desktop decides what that means for a waiting restart.
+//! closes is retried after a backoff that doubles up to [`MAX_BACKOFF`] and resets once a status
+//! arrives. ComfyUI states its queue to every new socket, so a reconnect learns the current queue
+//! at once and a short outage loses no state change: the last observed queue stands while
+//! reconnecting, and only [`LOST_AFTER`] consecutive failed connections make the queue
+//! unobserved, the backend counting as lost. A new origin, or none (the backend stopped or its
+//! lease ended), drops the old job and reads as unobserved at once. Nothing here can fail the
+//! parent: a watch that cannot run reads as unobserved, and the desktop decides what that means
+//! for a waiting restart.
 use std::time::Duration;
 use sugarsubstitute_comfy::queue_watch::{self, QueueActivity, QueueObservation};
 use sugarsubstitute_contracts::{
@@ -26,6 +30,9 @@ const MARGIN: Duration = Duration::from_secs(15);
 const FIRST_BACKOFF: Duration = Duration::from_secs(1);
 /// Longest wait before reconnecting.
 const MAX_BACKOFF: Duration = Duration::from_secs(30);
+/// Consecutive failed or closed connections after which the backend counts as lost. With the
+/// backoff above the last attempt starts about fifteen seconds after the first failure.
+const LOST_AFTER: u32 = 4;
 
 /// The queue as last observed, and the job observing it.
 #[derive(Default)]
@@ -35,6 +42,8 @@ pub(super) struct WorkflowWatch {
     job: Option<OwnedJob<QueueObservation, std::io::Error>>,
     retry_at: Option<Moment>,
     backoff: Option<Duration>,
+    /// Consecutive connections that ended without a healthy window or a status.
+    failures: u32,
 }
 impl WorkflowWatch {
     /// What the desktop is told.
@@ -94,8 +103,12 @@ impl WorkflowWatch {
             JobOutcome::Success(QueueObservation::Changed(activity)) => {
                 self.queue = Some(activity);
                 self.backoff = None;
+                self.failures = 0;
             }
-            JobOutcome::Success(QueueObservation::Quiet) => {}
+            JobOutcome::Success(QueueObservation::Quiet) => {
+                self.backoff = None;
+                self.failures = 0;
+            }
             JobOutcome::Success(QueueObservation::Closed) => {
                 self.lost(now, "ComfyUI closed its queue connection");
             }
@@ -131,17 +144,24 @@ impl WorkflowWatch {
         Ok(())
     }
 
-    /// The queue is unknown until a reconnect after the next backoff. Without a clock reading
-    /// the reconnect waits for the next turn that has one.
+    /// Reconnect after the next backoff. The last observed queue stands until [`LOST_AFTER`]
+    /// consecutive connections failed; then the queue is unknown until a reconnect learns it.
+    /// Without a clock reading the reconnect waits for the next turn that has one.
     fn lost(&mut self, now: Option<Moment>, cause: &str) {
         let backoff = self.backoff.map_or(FIRST_BACKOFF, |last| (last * 2).min(MAX_BACKOFF));
+        self.failures = self.failures.saturating_add(1);
+        let lost = self.failures >= LOST_AFTER;
         tracing::warn!(
-            operation = "workflow_queue_unobserved",
+            operation = "workflow_queue_reconnect",
             cause,
+            failures = self.failures,
+            lost,
             retry_seconds = backoff.as_secs(),
-            "The backend's workflow queue is not observed; reconnecting"
+            "The backend's workflow queue connection ended; reconnecting"
         );
-        self.queue = None;
+        if lost {
+            self.queue = None;
+        }
         self.backoff = Some(backoff);
         self.retry_at = now.and_then(|now| now.checked_add(backoff).ok());
     }
