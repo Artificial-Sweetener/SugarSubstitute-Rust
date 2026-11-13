@@ -69,12 +69,12 @@ pub(super) fn create(
 ) -> Result<(), ClaimError> {
     let (handles, count) = match custody {
         Some(LaunchCustody::Selected(selection)) => {
-            ([selection.selection_handle().as_raw_handle() as usize, 0], 1)
+            ([selection.selection_handle().as_raw_handle() as usize, 0, 0], 1)
         }
         Some(LaunchCustody::Trial(trial)) => {
-            (trial.transfer()?.handles().map(|handle| handle.as_raw_handle() as usize), 2)
+            (trial.transfer()?.handles().map(|handle| handle.as_raw_handle() as usize), 3)
         }
-        None => ([0; 2], 0),
+        None => ([0; 3], 0),
     };
     create_native(command, &handles[..count], process)
 }

@@ -136,7 +136,11 @@ impl Controller {
                         self.worker_failed(Box::new(cause))
                     }
                 }
-                JobOutcome::Success(StorageResult::Retired(CreationOutcome::NotCreated)) => {
+                // A first start that never took over was resolved under setup's own run, so
+                // the installation can be opened again, exactly as when nothing was created.
+                JobOutcome::Success(StorageResult::Retired(
+                    CreationOutcome::NotCreated | CreationOutcome::Unadopted,
+                )) => {
                     self.relaunch = None;
                     if let Some(cause) = self.launch_failure.take()
                         && !self.closing

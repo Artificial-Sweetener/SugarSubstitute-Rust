@@ -29,7 +29,7 @@ pub unsafe fn capture_launch(
     };
     if prefix == TRIAL_LAUNCH_ARGUMENT {
         let handles = trial_handles(arguments)?;
-        // SAFETY: the caller guarantees the same initial-entry ownership for both slots.
+        // SAFETY: the caller guarantees the same initial-entry ownership for every slot.
         return unsafe { capture_trial_custody(handles) }
             .map(|trial| Some(InheritedLaunch::Trial(trial)));
     }
@@ -38,10 +38,11 @@ pub unsafe fn capture_launch(
         .map(|selection| selection.map(InheritedLaunch::Selection))
 }
 
-/// Decode exactly the two canonical handle slots before adopting either native object.
-fn trial_handles(arguments: impl IntoIterator<Item = OsString>) -> io::Result<[usize; 2]> {
+/// Decode exactly the three canonical handle slots (run witness, snapshot, slot-held event)
+/// before adopting any native object.
+fn trial_handles(arguments: impl IntoIterator<Item = OsString>) -> io::Result<[usize; 3]> {
     let mut arguments = arguments.into_iter();
-    let mut handles = [0; 2];
+    let mut handles = [0; 3];
     for handle in &mut handles {
         let value = arguments
             .next()
@@ -54,7 +55,11 @@ fn trial_handles(arguments: impl IntoIterator<Item = OsString>) -> io::Result<[u
             return Err(super::super::invalid("Trial launch handle is not canonical"));
         }
     }
-    if handles[0] == handles[1] || arguments.next().is_some() {
+    if handles[0] == handles[1]
+        || handles[0] == handles[2]
+        || handles[1] == handles[2]
+        || arguments.next().is_some()
+    {
         return Err(super::super::invalid("Trial launch handle roles are ambiguous"));
     }
     Ok(handles)
@@ -76,20 +81,26 @@ mod tests {
         }
     }
     #[test]
-    fn trial_protocol_requires_two_distinct_canonical_handles() -> io::Result<()> {
-        assert_eq!(trial_handles(["4", "8"].map(OsString::from))?, [4, 8]);
+    fn trial_protocol_requires_three_distinct_canonical_handles() -> io::Result<()> {
+        assert_eq!(trial_handles(["4", "8", "12"].map(OsString::from))?, [4, 8, 12]);
         for values in [
             vec![],
             vec!["4"],
-            vec!["4", "4"],
-            vec!["0", "8"],
-            vec!["04", "8"],
-            vec!["4", "+8"],
-            vec!["4", "8", "extra"],
+            vec!["4", "8"],
+            vec!["4", "4", "12"],
+            vec!["4", "8", "4"],
+            vec!["4", "8", "8"],
+            vec!["0", "8", "12"],
+            vec!["04", "8", "12"],
+            vec!["4", "+8", "12"],
+            vec!["4", "8", "12", "extra"],
         ] {
             assert!(trial_handles(values.into_iter().map(OsString::from)).is_err());
         }
-        assert!(trial_handles([OsString::from("4"), usize::MAX.to_string().into()]).is_err());
+        assert!(
+            trial_handles(["4".into(), "8".into(), OsString::from(usize::MAX.to_string())])
+                .is_err()
+        );
         Ok(())
     }
 }

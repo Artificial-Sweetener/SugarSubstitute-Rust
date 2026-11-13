@@ -83,7 +83,7 @@ fn a_handoff_keeps_exclusion_when_every_sender_handle_closes() -> TestResult {
         let path = parent.path().join("run");
         with(context, |protection| {
             let sender = protection.exclusion(&path, context)?;
-            sender.hold_handoff()?;
+            sender.hold_handoff(context, context.now())?;
             let receiver =
                 protection.adopt_exclusion(sender.witness().try_clone()?, &path, context)?;
             drop(sender);
@@ -112,6 +112,39 @@ fn adoption_is_refused_without_a_live_sender_handoff() -> TestResult {
             // After the sender is gone, its witness no longer proves live exclusion.
             drop(sender);
             assert!(protection.adopt_exclusion(witness, &path, context).is_err());
+            drop(protection.exclusion(&path, context)?);
+            Ok(())
+        })?;
+        Ok(())
+    })
+}
+
+#[test]
+fn a_released_handoff_refuses_adoption_while_the_sender_keeps_its_slot() -> TestResult {
+    test_worker::run(|context, _| {
+        let temporary = tempfile::tempdir()?;
+        let parent = Directory::open(temporary.path(), false)?;
+        let path = parent.path().join("run");
+        with(context, |protection| {
+            let sender = protection.exclusion(&path, context)?;
+            sender.hold_handoff(context, context.now())?;
+            // Holding again is idempotent; a second sender in the same chain cannot also hold it.
+            sender.hold_handoff(context, context.now())?;
+            let receiver =
+                protection.adopt_exclusion(sender.witness().try_clone()?, &path, context)?;
+            let second = receiver.hold_handoff(context, context.now());
+            assert!(matches!(second, Err(ref cause) if is_busy(cause)), "{second:?}");
+            sender.release_handoff();
+            receiver.hold_handoff(context, context.now())?;
+            receiver.release_handoff();
+            // Without a held handoff nobody can adopt, yet the sender's slot still excludes.
+            assert!(
+                protection.adopt_exclusion(sender.witness().try_clone()?, &path, context).is_err()
+            );
+            drop(receiver);
+            assert!(refused(protection.exclusion(&path, context)));
+            protection.verify_exclusive_rendezvous(sender.witness(), &path, context)?;
+            drop(sender);
             drop(protection.exclusion(&path, context)?);
             Ok(())
         })?;

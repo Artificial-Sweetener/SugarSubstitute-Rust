@@ -66,8 +66,9 @@ pub use selection::{
 };
 pub use selection::{InheritedLaunch, capture_launch};
 pub use selection::{
-    InheritedTrial, TRIAL_WITNESS_RESERVATION_BYTES, TrialApplication, TrialTransfer, TrialWitness,
-    TrialWitnessTransfer, capture_trial_custody,
+    InheritedTrial, TRIAL_ADOPTION, TRIAL_ADOPTION_GRACE, TRIAL_WITNESS_RESERVATION_BYTES,
+    TrialApplication, TrialTransfer, TrialWitness, TrialWitnessTransfer, UnadoptedEnding,
+    capture_trial_custody,
 };
 pub use selection::{
     InstalledRelease, PreparedUpdate, Rollback, UpdateSelection, read_update_selection,

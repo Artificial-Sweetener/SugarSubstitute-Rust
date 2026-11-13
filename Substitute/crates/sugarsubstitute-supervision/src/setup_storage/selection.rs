@@ -43,8 +43,9 @@ pub(crate) use run::UnstartedTrial;
 pub(in crate::setup_storage) use run::unix_now;
 pub use run::{AcceptedApplication, InstallationLaunch, InstallationRun, OwnedTrial};
 pub use run::{
-    InheritedTrial, TRIAL_WITNESS_RESERVATION_BYTES, TrialApplication, TrialTransfer, TrialWitness,
-    TrialWitnessTransfer, capture_trial_custody,
+    InheritedTrial, TRIAL_ADOPTION, TRIAL_ADOPTION_GRACE, TRIAL_WITNESS_RESERVATION_BYTES,
+    TrialApplication, TrialTransfer, TrialWitness, TrialWitnessTransfer, UnadoptedEnding,
+    capture_trial_custody,
 };
 use std::{
     fs::File,

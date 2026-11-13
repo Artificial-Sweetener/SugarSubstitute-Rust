@@ -11,15 +11,17 @@ pub(in crate::setup_storage) use settlement::unix_now;
 pub(crate) use unstarted::UnstartedTrial;
 #[allow(unsafe_code)]
 mod transfer;
+use crate::durable_storage::protection::{SlotExclusion, is_busy};
 pub use launch::{AcceptedApplication, InstallationLaunch};
-use std::{fs::File, sync::Arc};
+use std::sync::Arc;
 use sugarsubstitute_contracts::{
     execution::JobContext,
     installation::{Candidate, InstallationRecord, Trial},
 };
 pub use transfer::{
-    InheritedTrial, TRIAL_WITNESS_RESERVATION_BYTES, TrialApplication, TrialTransfer, TrialWitness,
-    TrialWitnessTransfer, capture_trial_custody,
+    InheritedTrial, TRIAL_ADOPTION, TRIAL_ADOPTION_GRACE, TRIAL_WITNESS_RESERVATION_BYTES,
+    TrialApplication, TrialTransfer, TrialWitness, TrialWitnessTransfer, UnadoptedEnding,
+    capture_trial_custody,
 };
 
 const LOCK: &str = ".installation-run-lock";
@@ -27,14 +29,16 @@ const LOCK: &str = ".installation-run-lock";
 /// Hold through the owning application's entire process-family teardown.
 /// This installation guard is separate from application/Comfy resource leases and brief
 /// selection writes. It never steals a lock using elapsed time, PID guesses or file age.
-/// Native file-sharing exclusion remains attached to every duplicate until final closure.
+/// Exclusion is a byte-range slot on a shared rendezvous (`native-exclusion-slots-v1`), so a
+/// foreign reader such as an indexer or antivirus scanner never makes it look held. It belongs to
+/// this process; another process receives it only by adopting it through a handoff.
 /// Acquiring it does not prove that descendants of an earlier owner have settled.
 pub struct InstallationRun {
     custody: Arc<Custody>,
     issued: bool,
 }
 struct Custody {
-    _lock: File,
+    lock: SlotExclusion,
     store: Arc<SelectionStore>,
 }
 
@@ -72,13 +76,13 @@ impl InstallationRun {
     ) -> Result<Self, SelectionFailure> {
         let lock = store.protected(context, |protection| {
             let lock = protection
-                .transferable_rendezvous(&store.root.path().join(LOCK), context)
+                .exclusion(&store.root.path().join(LOCK), context)
                 .map_err(classify_run_open)?;
             let _reader = super::reader(&store.root, protection, context)?;
             store.read(protection)?.ok_or(SelectionFailure::Missing)?;
             Ok(lock)
         })?;
-        Ok(Self { custody: Arc::new(Custody { _lock: lock, store }), issued: false })
+        Ok(Self { custody: Arc::new(Custody { lock, store }), issued: false })
     }
 
     /// Persist the prepared candidate's exact attempt before starting its process family.
@@ -142,17 +146,10 @@ impl InstallationRun {
     }
 }
 
-/// Classify sharing contention only at this exact run-rendezvous open. Protection retirement,
+/// Classify live contention only at this exact run-rendezvous acquisition. Protection retirement,
 /// malformed files, access denial and other storage failures preserve their original meaning.
 fn classify_run_open(cause: std::io::Error) -> SelectionFailure {
-    if cause.get_ref().and_then(|cause| cause.downcast_ref::<windows::core::Error>()).is_some_and(
-        |cause| {
-            cause.code()
-                == windows::core::HRESULT::from_win32(
-                    windows::Win32::Foundation::ERROR_SHARING_VIOLATION.0,
-                )
-        },
-    ) {
+    if is_busy(&cause) {
         SelectionFailure::RunBusy(cause)
     } else {
         SelectionFailure::Storage(cause)

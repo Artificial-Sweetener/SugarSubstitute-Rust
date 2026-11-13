@@ -54,6 +54,7 @@ pub(super) fn trial(root: &Path, context: &JobContext) -> Result<TrialApplicatio
     let inherited = InheritedTrial {
         run: File::from(transfer.handles()[0].try_clone_to_owned()?),
         snapshot: File::from(transfer.handles()[1].try_clone_to_owned()?),
+        adopted: None,
     };
     let store = Arc::new(SelectionStore::open(root, context)?);
     let application =

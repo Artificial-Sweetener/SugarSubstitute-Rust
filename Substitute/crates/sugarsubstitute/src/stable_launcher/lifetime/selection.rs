@@ -172,7 +172,8 @@ impl Launcher {
     }
 
     /// Optional authority/cache failures never substitute unverified bytes for accepted startup.
-    /// A trial may fall back only after recovery proves no native process was created.
+    /// A trial may fall back only after recovery proves no native process was created, or that
+    /// its child is gone without ever having taken over.
     pub(super) fn failed(&mut self, task: Task, cause: Box<dyn Error>) -> Result<()> {
         if self.closing {
             return Err(cause);
@@ -211,7 +212,11 @@ impl Launcher {
         self.recovery_until = None;
         self.recovery_wake = None;
         match outcome {
-            CreationOutcome::NotCreated => self.choice = Choice::Accepted,
+            // An updated release that never took over had its trial resolved under this
+            // launcher's run, so the accepted release starts now and the update is retried later.
+            CreationOutcome::NotCreated | CreationOutcome::Unadopted => {
+                self.choice = Choice::Accepted
+            }
             CreationOutcome::Created => {
                 self.completed = true;
                 self.choice = Choice::Complete;

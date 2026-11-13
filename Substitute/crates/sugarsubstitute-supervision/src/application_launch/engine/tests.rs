@@ -35,8 +35,12 @@ fn engine_fixture_child() -> TestResult {
     Ok(())
 }
 
-/// Start the test executable as a stand-in engine behaving as `mode`.
-fn stand_in(mode: &'static str, context: &JobContext) -> Result<StartedEngine, ClaimError> {
+/// Start the test executable as a stand-in child behaving as `mode` towards its one event:
+/// `signal` sets it, `hang` waits on it forever, anything else exits at once.
+pub(in crate::application_launch) fn stand_in(
+    mode: &'static str,
+    context: &JobContext,
+) -> Result<StartedEngine, ClaimError> {
     let executable =
         std::env::current_exe().map_err(|cause| ClaimError::new("fixture_executable", cause))?;
     let directory =
