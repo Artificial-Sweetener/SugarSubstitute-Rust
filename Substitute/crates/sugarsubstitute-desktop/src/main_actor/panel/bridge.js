@@ -72,8 +72,7 @@
       flush('x', true);
     }
     const bridge = Object.freeze({
-      host, session, preferencePolicy: 'saved',
-      ...(policy.outputSurfacePreference === 'host' ? { outputSurfacePreference: 'host' } : {}),
+      host, session,
       send(input) {
         const encoded = JSON.stringify(input);
         if (typeof encoded !== 'string') deny('bound');

@@ -4495,7 +4495,7 @@ rationale = "An owned temporary cache scope qualifies actual PNG/JPEG and author
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:545b83f7de9fb25f4d4ed4ed389cbc42122683aca24754a0219af4c1a3f05669"
+source_sha256 = "sha256:a7ba42f2c9fa994ddbff0a7a64cdcbd2d9b6065ad7ece3f75de8634d90c49370"
 capabilities = ["node:fs", "readFileSync"]
 disposition = "fixture"
 rationale = "Read the injected transport and protocol-policy bootstrap sources for executable envelope and custody regression tests."

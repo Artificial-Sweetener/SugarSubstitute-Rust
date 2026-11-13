@@ -86,9 +86,9 @@ impl MainActor {
         // bounded by their inline schema and release it here.
         let upload = upload.map(crate::main_bulk::Upload::into_claims).unwrap_or_default();
         Ok(Some(match message {
-            crate::main_panel_ingress::ClientMessage::Panel(message) => {
-                Ingress::Panel(crate::PanelObservation::new(self.identity(), message, lease, claim))
-            }
+            crate::main_panel_ingress::ClientMessage::Panel(message) => Ingress::Panel(
+                crate::PanelObservation::new(self.identity(), message, lease, claim, hosting),
+            ),
             crate::main_panel_ingress::ClientMessage::Surface(message) => Ingress::Surface(
                 crate::SurfaceObservation::new(self.identity(), message, lease, claim, hosting),
             ),

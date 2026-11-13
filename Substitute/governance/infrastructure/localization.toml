@@ -384,7 +384,7 @@ rationale = "Pure invalid-dimension qualification uses an empty title and unreac
 
 [[records]]
 path = "crates/sugarsubstitute/src/lib.rs"
-source_sha256 = "sha256:00c4a60f438f27f126dbbd2af663d01331f58918290d0810624c134cbbc71652"
+source_sha256 = "sha256:bb5070d02299aa6203fa5c60f795d96943ca00b41a2c2a825dcf96fe91bbd014"
 kind = "presentation"
 rationale = "The explicit splash demo composes DesktopOptions.title from messages(options.locale).loading; diagnostic and protocol values do not become UI labels."
 
@@ -690,13 +690,13 @@ rationale = "Hidden native picker lifecycle fixtures preserve original paths and
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge.js"
-source_sha256 = "sha256:30730fba471e04164fe48a76a50275232e97dd5f2a5bc6716acc0bcb241ec5a0"
+source_sha256 = "sha256:cc652b841066a5f0ff950fcfaa0a5ae8c520d88fd23de032a65929dd8c6b4287"
 kind = "native"
 rationale = "The bounded WebView transport defines technical JavaScript properties and error diagnostics; it does not construct product-facing text or select a locale."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge_protocol.js"
-source_sha256 = "sha256:dc5165ae53c9c501dd735d4d2a374d0f5aea175adc031772d8e7649c3695b16b"
+source_sha256 = "sha256:797ea233aa57890b5a23e13331bb21086932101631de1fe9f73a7b990e09fe5a"
 kind = "native"
 rationale = "The native bootstrap policy validates session query identities and routes technical canvas protocol reply, cancellation and notification shapes; its message fields are empty protocol data."
 
@@ -708,7 +708,7 @@ rationale = "The bulk channel transport helper moves exact JSON bytes through ho
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
-source_sha256 = "sha256:545b83f7de9fb25f4d4ed4ed389cbc42122683aca24754a0219af4c1a3f05669"
+source_sha256 = "sha256:a7ba42f2c9fa994ddbff0a7a64cdcbd2d9b6065ad7ece3f75de8634d90c49370"
 kind = "fixture"
 rationale = "The isolated JavaScript VM fixture supplies promptId and sourceId attribution fields to exercise the actual bounded native transport; these technical protocol identities are fixture data and never become product labels or a prompt editor route."
 

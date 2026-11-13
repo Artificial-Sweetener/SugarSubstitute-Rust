@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 // Match transport custody to the shared canvas protocol; payloads remain native-owned.
-// The host invokes this expression with 'host' only while its main browser is composition-hosted.
-((outputSurfacePreference) => {
+// What the host serves and declares travels in its host description, never on the bridge.
+(() => {
   const host = 'ai.artificialsweetener.sugarsubstitute';
   const controls = ['ready', 'applied', 'pong', 'rejected'];
   const memoryReports = ['usage', 'preference'];
@@ -11,9 +11,11 @@
     'surface.presentation.request', 'surface.prepare', 'surface.geometry', 'surface.select',
     'surface.commit', 'surface.release', 'surface.preview.begin', 'surface.preview.chunk',
     'surface.preview.end', 'surface.preview.withdraw', 'surface.overview'];
-  // The memory budget protocol versions independently of the version-three transport.
-  const version = value => value.protocol === 'sugarcubes.memory' ? 1 : 3;
+  // The host description and memory budget protocols version independently of the version-three
+  // transport.
+  const version = value => ['sugarcubes.host', 'sugarcubes.memory'].includes(value.protocol) ? 1 : 3;
   const notification = value => value.protocol === 'sugarcubes.panel' ||
+    value.protocol === 'sugarcubes.host' && value.type === 'description' ||
     value.protocol === 'sugarcubes.memory' && value.type === 'allowance' ||
     value.protocol === 'sugarcubes.canvas' && value.requestId === 0 &&
     ['surface.presentation.changed', 'surface.camera.changed', 'source.changed', 'edit.changed']
@@ -27,7 +29,6 @@
   }
   const policy = Object.freeze({
     host,
-    outputSurfacePreference: outputSurfacePreference === 'host' ? 'host' : undefined,
     session(search) {
       const query = new URLSearchParams(search);
       const session = query.get('sc-panel-session');
@@ -62,4 +63,4 @@
   });
   Object.defineProperty(globalThis, '__sugarcubes_substitute_policy_v3', { value: policy });
   globalThis.__sugarcubes_substitute_install_v3?.();
-})
+})();

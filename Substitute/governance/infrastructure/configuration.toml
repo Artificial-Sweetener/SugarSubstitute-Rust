@@ -282,7 +282,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute/src/lib.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:00c4a60f438f27f126dbbd2af663d01331f58918290d0810624c134cbbc71652"
+source_sha256 = "sha256:bb5070d02299aa6203fa5c60f795d96943ca00b41a2c2a825dcf96fe91bbd014"
 capabilities = ["arguments"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -975,7 +975,7 @@ rationale = "The developer composite check accepts one explicit Vulkan vendor/de
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:545b83f7de9fb25f4d4ed4ed389cbc42122683aca24754a0219af4c1a3f05669"
+source_sha256 = "sha256:a7ba42f2c9fa994ddbff0a7a64cdcbd2d9b6065ad7ece3f75de8634d90c49370"
 capabilities = ["arguments"]
 rationale = "Accept an optional source fixture path to prove regressions against the prior transport implementation."
 

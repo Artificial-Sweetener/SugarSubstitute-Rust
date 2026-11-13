@@ -6,6 +6,7 @@ use super::*;
 use std::error::Error;
 use sugarsubstitute_contracts::{
     execution::{Generation, MemoryLease, MemoryRelease},
+    host::{HostDescription, HostProtocol},
     lifecycle::{CoordinatorEpoch, CoordinatorKey, InstanceId, NamespaceId, RunGeneration, RunKey},
     panel::{PanelPalette, PanelPresentation, PanelSession, PanelStyle},
     startup::LaunchId,
@@ -44,18 +45,38 @@ fn configure(identity: MainIdentity, style: PanelStyle) -> Result<PanelMessage, 
     })
 }
 
+fn description() -> Result<HostDescription, Box<dyn Error>> {
+    Ok(HostDescription::new(vec![HostProtocol::PANEL, HostProtocol::CANVAS], Vec::new())?)
+}
+
+/// Configurations carry the host description; heartbeats carry none.
+fn described(value: &PanelMessage) -> Result<Option<HostDescription>, Box<dyn Error>> {
+    Ok(match value {
+        PanelMessage::Configure { .. } => Some(description()?),
+        _ => None,
+    })
+}
+
 fn message(
     identity: MainIdentity,
     value: PanelMessage,
     context: i64,
     lease: &MemoryLease,
 ) -> Result<HostMessage, Box<dyn Error>> {
-    let command = PanelCommand::new(identity, value, lease.claim(PanelCommand::STORAGE_BYTES)?)?;
+    let claim = lease.claim(PanelCommand::STORAGE_BYTES)?;
+    let command = PanelCommand::new(identity, described(&value)?, value, claim)?;
     Ok(HostMessage::new(command, context)?)
 }
 
 fn expected(value: &PanelMessage, context: i64) -> Result<String, Box<dyn Error>> {
-    Ok(delivery::encode(context, &value.encode()?)?)
+    Ok(match described(value)? {
+        Some(description) => delivery::encode_ordered(
+            context,
+            &description.encode(value.session())?,
+            &value.encode()?,
+        )?,
+        None => delivery::encode(context, &value.encode()?)?,
+    })
 }
 
 /// The browser's four-slot command table with the same tiered admission and fatal exhaustion.
@@ -194,6 +215,37 @@ fn sustained_heartbeats_during_a_stalled_renderer_never_exhaust_command_slots()
     }
     assert_eq!(browser.submitted.len(), 3);
     assert!(lease.claim(4 * PanelCommand::STORAGE_BYTES).is_ok());
+    Ok(())
+}
+
+#[test]
+fn a_configuration_delivers_the_host_description_first_in_the_same_evaluation()
+-> Result<(), Box<dyn Error>> {
+    let identity = identity()?;
+    let lease = MemoryLease::new(PanelCommand::STORAGE_BYTES, Box::new(Release));
+    let configuration = configure(identity, PanelStyle::Comfy)?;
+    let encoded = message(identity, configuration.clone(), CONTEXT, &lease)?;
+    let parameters: serde_json::Value = serde_json::from_str(encoded.parameters())?;
+    let expression = parameters["expression"].as_str().ok_or("Missing expression")?;
+    let session = PanelSession::for_main(identity)?;
+    let description = String::from_utf8(description()?.encode(&session)?)?;
+    let configure = String::from_utf8(configuration.encode()?)?;
+    let first = expression.find(&description).ok_or("Missing description")?;
+    let second = expression.find(&configure).ok_or("Missing configure")?;
+    assert!(first < second);
+    Ok(())
+}
+
+#[test]
+fn a_configuration_without_its_description_or_a_described_heartbeat_is_refused()
+-> Result<(), Box<dyn Error>> {
+    let identity = identity()?;
+    let lease = MemoryLease::new(2 * PanelCommand::STORAGE_BYTES, Box::new(Release));
+    let configuration = configure(identity, PanelStyle::Comfy)?;
+    let claim = lease.claim(PanelCommand::STORAGE_BYTES)?;
+    assert!(PanelCommand::new(identity, None, configuration, claim).is_err());
+    let claim = lease.claim(PanelCommand::STORAGE_BYTES)?;
+    assert!(PanelCommand::new(identity, Some(description()?), ping(identity)?, claim).is_err());
     Ok(())
 }
 
