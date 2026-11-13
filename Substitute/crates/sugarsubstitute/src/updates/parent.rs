@@ -45,6 +45,8 @@ pub(crate) struct Parent {
     work: Scope,
     cleanup: Scope,
     native: ScopeSpec,
+    /// The update-attempt channel's native scope, until the channel is opened.
+    channel: Option<ScopeSpec>,
     key: CoordinatorKey,
     retained: Option<Retained>,
     constructing: Option<OwnedJob<WindowsProcessRegistry, RegistryError>>,
@@ -79,12 +81,13 @@ impl Parent {
         work: Scope,
         cleanup: Scope,
         native: ScopeSpec,
+        channel: ScopeSpec,
         key: CoordinatorKey,
         source: Arc<RunningApplication>,
     ) -> Result<Self> {
         Ok(Self::owned(
             client,
-            LaunchScope { work, cleanup, native, key },
+            LaunchScope { work, cleanup, native, channel: Some(channel), key },
             Retained { source: Some(source), input: None, registry: None },
             None,
         ))

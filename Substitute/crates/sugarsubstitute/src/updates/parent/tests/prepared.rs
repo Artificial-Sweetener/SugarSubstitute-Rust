@@ -10,6 +10,7 @@ fn scope(client: &ExecutionClient) -> Result<LaunchScope> {
         work: client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?,
         cleanup: client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?,
         native: ScopeSpec { id: ScopeId::new(3)?, deadline: None },
+        channel: None,
         key: CoordinatorKey {
             namespace: NamespaceId::new([5; 32]),
             epoch: CoordinatorEpoch::new([8; 16])?,

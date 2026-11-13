@@ -35,6 +35,7 @@ impl Engine {
             work,
             cleanup,
             native: ScopeSpec { id: ScopeId::new(first + 2)?, deadline: None },
+            channel: None,
             key: key()?,
         };
         let mut state = observed_state(&self.state)?;

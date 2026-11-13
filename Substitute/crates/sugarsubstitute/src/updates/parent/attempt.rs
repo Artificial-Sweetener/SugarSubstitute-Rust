@@ -4,7 +4,7 @@
 //! validate and keep its progress and its one result. The parent sends only a cancel request.
 use std::{fmt, num::NonZeroUsize, time::Duration};
 use sugarsubstitute_contracts::{
-    execution::{JobCompletion, JobSpec, Moment, Scope},
+    execution::{JobCompletion, JobSpec, Moment, Scope, ScopeSpec},
     lifecycle::ProcessKey,
     update::attempt::{
         AttemptOutcome, AttemptProgress,
@@ -75,21 +75,30 @@ pub(in crate::updates) struct AttemptChannel {
     buffer: Option<LifecyclePipeWriteBuffer>,
     failure: Option<AttemptChannelError>,
     terminal: Option<JobCompletion<PurposePipeReport, LifecyclePipeFailure>>,
+    /// The native scope the pipe session is admitted in; declared last so the session it
+    /// charges is released first.
+    _scope: Scope,
 }
 impl AttemptChannel {
-    /// Admit the parent side of `channel` through the execution owner. The helper must
-    /// authenticate before `handshake`; the session itself has no deadline.
+    /// Admit the parent side of `channel` through the execution owner. A pipe is a native
+    /// observation, so it gets its own native scope `native`, owned by `cleanup` so cancelling
+    /// ordinary work never loses the result. The helper must authenticate before `handshake`;
+    /// the session itself has no deadline.
     /// # Errors
     /// Returns the execution owner's admission refusal.
     pub(in crate::updates) fn reserve(
         client: &ExecutionClient,
-        scope: &Scope,
+        cleanup: &Scope,
+        native: ScopeSpec,
         spec: JobSpec,
         channel: UpdateAttemptChannel,
         handshake: Moment,
     ) -> Result<Self, LifecyclePipeAdmissionError> {
+        let scope = client
+            .create_native_scope(native, Some(cleanup))
+            .map_err(LifecyclePipeAdmissionError::Admission)?;
         let session = client.reserve_purpose_pipe_server(
-            scope,
+            &scope,
             spec,
             PurposeKey::UpdateAttempt(channel),
             handshake,
@@ -109,6 +118,7 @@ impl AttemptChannel {
             buffer: None,
             failure: None,
             terminal: None,
+            _scope: scope,
         })
     }
 

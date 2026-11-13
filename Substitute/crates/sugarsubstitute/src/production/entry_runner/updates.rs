@@ -135,8 +135,11 @@ impl<C: EntryActivation> EntryRunner<C> {
             client.create_scope(ScopeSpec { id: self.scopes.allocate()?, deadline: None }, None)?;
         let cleanup =
             client.create_scope(ScopeSpec { id: self.scopes.allocate()?, deadline: None }, None)?;
+        // Scope identities advance in creation order: the attempt channel opens before the
+        // helper's native process scope.
+        let channel = ScopeSpec { id: self.scopes.allocate()?, deadline: None };
         let native = ScopeSpec { id: self.scopes.allocate()?, deadline: None };
-        Parent::new(client, work, cleanup, native, key, application)
+        Parent::new(client, work, cleanup, native, channel, key, application)
             .map_err(|cause| cause as Box<dyn Error>)
     }
 }
