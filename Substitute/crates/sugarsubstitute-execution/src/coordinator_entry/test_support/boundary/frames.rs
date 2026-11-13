@@ -63,12 +63,11 @@ impl Boundary {
             protocol::DecodedPayload::Launch(_) if !self.server => {
                 lock(&self.client_launches).push(frame.header);
                 if self.disconnect_after_launch.load(Ordering::Acquire) {
+                    // The coordinator closed its end after reading Launch, before any outcome.
                     *lock(&self.read_failure) =
-                        Some(EntryTransportError::native(NativeObservationError::new(
+                        Some(EntryTransportError::PeerDisconnected(NativeObservationError::new(
                             "pipe_completion",
-                            windows::core::Error::from_hresult(windows::core::HRESULT::from_win32(
-                                109,
-                            )),
+                            std::io::Error::other("coordinator closed after Launch"),
                         )));
                 } else if self.closing_after_launch.load(Ordering::Acquire) {
                     self.push(index, frame.header, protocol::Payload::Closing)?;
