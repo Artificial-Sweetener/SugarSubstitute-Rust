@@ -47,7 +47,7 @@ fn coordinator_death_before_challenge_returns_unsubmitted_source_after_checked_r
     let boundary = Boundary::new(&rig, false)?;
     *lock(&boundary.read_failure) = Some(EntryTransportError::native(NativeObservationError::new(
         "pipe_completion",
-        windows::core::Error::from_hresult(windows::core::HRESULT::from_win32(109)),
+        closed_pipe(),
     )));
     boundary.allow_retire.store(false, Ordering::Release);
     let release = ReleaseBoundary(boundary.clone());

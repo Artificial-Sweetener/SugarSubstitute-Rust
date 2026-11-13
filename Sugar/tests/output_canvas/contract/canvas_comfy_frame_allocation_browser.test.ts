@@ -277,7 +277,8 @@ test('keeps Comfy graph layers out of a transparent docked strip while chrome sp
     widgetTarget: 'sc-output-viewport sc-output-native',
     graphWidgetTarget: 'dom-widget',
   });
-  const image = UPNG.decode((await page.screenshot()).buffer as ArrayBuffer);
+  // A Buffer may view part of a larger pooled allocation; decode a copy of exactly its bytes.
+  const image = UPNG.decode(new Uint8Array(await page.screenshot()).buffer);
   // Graph layers render inside the allocated rectangle and never inside the transparent strip.
   expect(pixel(image, 700, 300)).toEqual([0, 0, 255]);
   expect(pixel(image, 600, 590)).toEqual([255, 0, 0]);

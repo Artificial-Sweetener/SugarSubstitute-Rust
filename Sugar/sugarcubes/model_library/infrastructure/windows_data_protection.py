@@ -53,41 +53,41 @@ def unprotect_user_data(data: bytes) -> bytes:
 
 def _transform(data: bytes, *, protect: bool) -> bytes:
     """Copy DPAPI results and release their Windows allocation on every completed call."""
-    if sys.platform != "win32":
-        raise OSError("Windows DPAPI is unavailable on this platform.")
-    if not data or len(data) > 64 * 1024:
-        raise ValueError("Credential encryption material is invalid.")
-    crypt32 = ctypes.WinDLL("crypt32", use_last_error=True)
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    function = crypt32.CryptProtectData if protect else crypt32.CryptUnprotectData
-    function.argtypes = [
-        ctypes.POINTER(_DataBlob),
-        ctypes.c_void_p,
-        ctypes.c_void_p,
-        ctypes.c_void_p,
-        ctypes.c_void_p,
-        wintypes.DWORD,
-        ctypes.POINTER(_DataBlob),
-    ]
-    function.restype = wintypes.BOOL
-    kernel32.LocalFree.argtypes = [ctypes.c_void_p]
-    kernel32.LocalFree.restype = ctypes.c_void_p
-    input_buffer = (ctypes.c_ubyte * len(data)).from_buffer_copy(data)
-    input_blob = _DataBlob(len(data), input_buffer)
-    output_blob = _DataBlob()
-    # ctypes exposes dynamic foreign functions; argtypes/restype fix the reviewed ABI above.
-    invoke = cast(_DpapiFunction, function)
-    if not invoke(
-        ctypes.byref(input_blob),
-        None,
-        None,
-        None,
-        None,
-        0x01,
-        ctypes.byref(output_blob),
-    ):
-        raise OSError("Windows credential encryption failed.")
-    try:
-        return ctypes.string_at(output_blob.pbData, output_blob.cbData)
-    finally:
-        kernel32.LocalFree(output_blob.pbData)
+    if sys.platform == "win32":
+        if not data or len(data) > 64 * 1024:
+            raise ValueError("Credential encryption material is invalid.")
+        crypt32 = ctypes.WinDLL("crypt32", use_last_error=True)
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        function = crypt32.CryptProtectData if protect else crypt32.CryptUnprotectData
+        function.argtypes = [
+            ctypes.POINTER(_DataBlob),
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+            wintypes.DWORD,
+            ctypes.POINTER(_DataBlob),
+        ]
+        function.restype = wintypes.BOOL
+        kernel32.LocalFree.argtypes = [ctypes.c_void_p]
+        kernel32.LocalFree.restype = ctypes.c_void_p
+        input_buffer = (ctypes.c_ubyte * len(data)).from_buffer_copy(data)
+        input_blob = _DataBlob(len(data), input_buffer)
+        output_blob = _DataBlob()
+        # ctypes exposes dynamic foreign functions; argtypes/restype fix the reviewed ABI above.
+        invoke = cast(_DpapiFunction, function)
+        if not invoke(
+            ctypes.byref(input_blob),
+            None,
+            None,
+            None,
+            None,
+            0x01,
+            ctypes.byref(output_blob),
+        ):
+            raise OSError("Windows credential encryption failed.")
+        try:
+            return ctypes.string_at(output_blob.pbData, output_blob.cbData)
+        finally:
+            kernel32.LocalFree(output_blob.pbData)
+    raise OSError("Windows DPAPI is unavailable on this platform.")

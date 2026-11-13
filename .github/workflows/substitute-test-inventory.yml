@@ -1,0 +1,77 @@
+name: Substitute Windows test inventory
+
+# Diagnostic only: runs every test leg of `cargo xtask verify` on Windows with --no-fail-fast, so one
+# failing crate cannot hide failures in the crates after it. It does not replace verification.
+on:
+  push:
+    branches:
+      - lane/ci
+    paths:
+      - '.github/workflows/substitute-test-inventory.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: inventory-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: Substitute
+
+jobs:
+  inventory:
+    name: Windows test inventory
+    runs-on: windows-2022
+    timeout-minutes: 120
+    env:
+      CARGO_TERM_COLOR: never
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+      - name: Prepare repository-pinned Rust
+        run: rustup show active-toolchain
+      - name: Run every Windows test leg without stopping at the first failure
+        shell: pwsh
+        run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $instance = & $vswhere -version '[17.0,18.0)' -products Microsoft.VisualStudio.Product.Enterprise -property installationPath
+          if (-not $instance -or @($instance).Count -ne 1) {
+            throw 'Expected one Visual Studio 2022 Enterprise instance on the Windows runner.'
+          }
+          Import-Module (Join-Path $instance 'Common7\Tools\Microsoft.VisualStudio.DevShell.dll')
+          Enter-VsDevShell -VsInstallPath $instance -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64' | Out-Null
+          $parser = Join-Path $env:GITHUB_WORKSPACE 'Substitute\tools\crashpad\prebuilt\x86_64-pc-windows-msvc'
+          $expected = (Get-Content -LiteralPath (Join-Path $parser 'committed_dump_parser.lib.sha256') -TotalCount 1).Split(' ')[0]
+          $actual = (Get-FileHash -LiteralPath (Join-Path $parser 'committed_dump_parser.lib') -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) {
+            throw "committed_dump_parser.lib is $actual, but its recorded SHA-256 is $expected."
+          }
+          $env:SUGAR_COMMITTED_PARSER_LIB = $parser
+          # The same three legs as tools/xtask/src/gates.rs TESTS, each run to completion.
+          $legs = @(
+            @('test', '--locked', '--workspace', '--all-features', '--no-fail-fast'),
+            @('test', '--locked', '-p', 'sugarsubstitute', '--no-fail-fast'),
+            @('test', '--locked', '-p', 'sugarsubstitute', '--no-default-features', '--lib', '--no-fail-fast')
+          )
+          $failed = 0
+          $log = Join-Path $env:RUNNER_TEMP 'test-inventory.log'
+          foreach ($leg in $legs) {
+            Write-Output "=== cargo $($leg -join ' ')"
+            & cargo @leg 2>&1 | Tee-Object -FilePath $log -Append
+            if ($LASTEXITCODE) { $failed++ ; Write-Output "=== leg failed with exit $LASTEXITCODE" }
+          }
+          Write-Output '=== Failed tests'
+          Select-String -LiteralPath $log -Pattern '^test .+ \.\.\. FAILED$', '^error: test failed', '^error: \d+ targets? failed' | ForEach-Object { $_.Line }
+          exit $failed
+      - name: Keep the complete test log
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-test-inventory
+          path: ${{ runner.temp }}/test-inventory.log

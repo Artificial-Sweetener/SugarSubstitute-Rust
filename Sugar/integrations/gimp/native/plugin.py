@@ -121,19 +121,19 @@ def create_plugin(
 
 def main(directory: Path, argv: Sequence[str]) -> int:
     """Enter GIMP's own Python plug-in protocol using only package-local companion resources."""
-    if sys.platform != "win32" or sys.maxsize <= 2**32:
-        raise RuntimeError("This SugarCubes companion package requires 64-bit Windows.")
-    sdk = load_sdk()
-    api = cast(PluginApi, import_module("gi.repository.Gimp"))
-    errors = cast(PluginErrors, import_module("gi.repository.GLib"))
-    executable = directory / "companion" / "sugarcubes-gimp-companion.exe"
+    if sys.platform == "win32" and sys.maxsize > 2**32:
+        sdk = load_sdk()
+        api = cast(PluginApi, import_module("gi.repository.Gimp"))
+        errors = cast(PluginErrors, import_module("gi.repository.GLib"))
+        executable = directory / "companion" / "sugarcubes-gimp-companion.exe"
 
-    def launch(image_id: int) -> None:
-        """Bind the packaged viewer to the explicit image for this native invocation."""
-        run_native_viewer(image_id, executable, sdk, load_event_loop())
+        def launch(image_id: int) -> None:
+            """Bind the packaged viewer to the explicit image for this native invocation."""
+            run_native_viewer(image_id, executable, sdk, load_event_loop())
 
-    plugin = create_plugin(api, errors, launch)
-    native_type: object = getattr(plugin, "__gtype__", None)
-    if native_type is None:
-        raise RuntimeError("GIMP did not register the SugarCubes plug-in type.")
-    return api.main(native_type, list(argv))
+        plugin = create_plugin(api, errors, launch)
+        native_type: object = getattr(plugin, "__gtype__", None)
+        if native_type is None:
+            raise RuntimeError("GIMP did not register the SugarCubes plug-in type.")
+        return api.main(native_type, list(argv))
+    raise RuntimeError("This SugarCubes companion package requires 64-bit Windows.")

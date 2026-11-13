@@ -25,6 +25,7 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fork, type ChildProcess } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
@@ -35,9 +36,7 @@ let generated: string;
 let runtime: string;
 
 beforeEach(() => {
-  root = mkdtempSync(
-    path.join(path.resolve('D:/devartifacts/SugarCubes/output-saving'), 'artifact-proof-'),
-  );
+  root = mkdtempSync(path.join(tmpdir(), 'artifact-proof-'));
   generated = path.join(root, 'generated');
   runtime = path.join(root, 'runtime');
   mkdirSync(generated);

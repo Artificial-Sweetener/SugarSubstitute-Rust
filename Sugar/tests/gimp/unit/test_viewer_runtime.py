@@ -23,6 +23,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from integrations.gimp.native.environment import COMPANION_CREATION_FLAGS
 from integrations.gimp.native.viewer_runtime import verify_viewer_runtime
 
 
@@ -45,7 +46,7 @@ def test_ready_runtime_uses_the_exact_viewer_environment(
         env=environment,
         timeout=10,
         check=False,
-        creationflags=subprocess.CREATE_NO_WINDOW,
+        creationflags=COMPANION_CREATION_FLAGS,
     )
 
 

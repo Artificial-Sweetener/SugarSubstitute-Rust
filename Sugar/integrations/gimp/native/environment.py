@@ -18,6 +18,16 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import subprocess
+import sys
+
+COMPANION_CREATION_FLAGS: int
+"""Process-creation flags for every companion child, so none opens a console window."""
+if sys.platform == "win32":
+    COMPANION_CREATION_FLAGS = subprocess.CREATE_NO_WINDOW
+else:
+    # The companion ships for Windows only; POSIX process creation accepts no flags.
+    COMPANION_CREATION_FLAGS = 0
 
 
 def companion_environment(source: Mapping[str, str]) -> dict[str, str]:

@@ -7,7 +7,7 @@ use crate::{
     mailbox::Mailbox,
     memory::Release,
     scope::{Cancellation, ScopeState, earliest, lock},
-    task::{ErasedJob, QueuedJob, Stop, stop_reason_at},
+    task::{ErasedJob, QueuedJob, Stop},
 };
 use std::{
     collections::{HashMap, VecDeque},

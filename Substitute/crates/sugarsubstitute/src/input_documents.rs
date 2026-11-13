@@ -17,7 +17,7 @@
 //! interrupted write, are never removed. All file work runs as owned jobs on the execution
 //! owner's blocking workers; [`Autosave`] coalesces bursts of document changes into one save.
 mod autosave;
-#[cfg(feature = "native-composition")]
+#[cfg(all(windows, feature = "native-composition"))]
 pub(crate) mod bases;
 mod files;
 #[cfg(all(windows, feature = "native-composition"))]
