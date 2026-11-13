@@ -33,9 +33,18 @@ pub fn root(
     version: u32,
     old: Option<&Ed25519PrivateKey>,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
+    root_until(key, version, old, EXPIRES)
+}
+/// Sign a test root valid until `expires`, optionally authorized by the preceding root key.
+pub fn root_until(
+    key: &Ed25519PrivateKey,
+    version: u32,
+    old: Option<&Ed25519PrivateKey>,
+    expires: i64,
+) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
     let mut root = RootMetadataBuilder::new()
         .version(version)
-        .expires(time(EXPIRES)?)
+        .expires(time(expires)?)
         .consistent_snapshot(true)
         .root_key(key.public().clone())
         .timestamp_key(key.public().clone())

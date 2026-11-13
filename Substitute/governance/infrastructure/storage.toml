@@ -2372,7 +2372,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Emb
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/distribution/tests/expiry.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:37756777455a9a92e08dc10320fb4be9a0aa3746001b136af1de9bb68e16835b"
+source_sha256 = "sha256:ddb9d43688883287208e70c512805606591a478ca23384a43c89392f12d1cab2"
 capabilities = ["assert_eq! restricted capability fragments", "std::fs::read", "std::fs::read_dir", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: A downloaded installer never expires: it refreshes online, or installs its exact included release offline after the user's explicit choice, and refuses tampered bytes either way. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
