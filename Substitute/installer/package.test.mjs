@@ -9,16 +9,15 @@ import os from 'node:os'
 import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { packageApplication } from './release/application-package.mjs'
+import { packageApplication, sugarcubesArchive } from './release/application-package.mjs'
 
 const script = fileURLToPath(new URL('./package.mjs', import.meta.url))
 const hash = bytes => createHash('sha256').update(bytes).digest('hex')
 async function fixture() {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'substitute-application-contract-'))
-  const app = path.join(root, 'app'), cubes = path.join(root, 'cubes'), build = path.join(root, 'build')
+  const app = path.join(root, 'app'), cubes = path.join(root, 'SugarCubes-1.2.3.zip'), build = path.join(root, 'build')
   for (const [base, files] of [
     [app, ['sugarsubstitute.exe', 'sugarsubstitute.pdb', 'sugarsubstitute_crashpad_client.dll', 'sugarsubstitute_crashpad_client.pdb', 'crashpad_handler.exe', 'crashpad_handler.pdb', 'sugarsubstitute-release-v1.manifest', 'sugarsubstitute-release-v1.sig', 'sugarsubstitute-launcher.exe', 'sugarsubstitute_launcher.pdb', 'sugarsubstitute-updater.exe', 'sugarsubstitute_updater.pdb']],
-    [cubes, ['__init__.py', 'prestartup_script.py', 'load_model_roots.py', 'pyproject.toml', 'requirements.txt', 'LICENSE', 'sugarcubes/module.py', 'sugarcubes_model_roots/module.py', 'web/module.js']],
     [build, ['worker/package.json', 'worker/out/main/index.cjs', 'worker/runtime/node.exe', 'worker/runtime/LICENSE']],
   ]) {
     for (const file of files) {
@@ -29,6 +28,8 @@ async function fixture() {
   await fs.writeFile(path.join(app, 'sugarsubstitute-updater.json'), '{"schema_version":1,"preparation_protocols":[1],"installation_schemas":[1]}\n')
   await fs.writeFile(path.join(app, 'sugarsubstitute-engine-build.json'), '{"schema_version":1,"release":"2","protocol":1}\n')
   await fs.writeFile(path.join(app, 'sugarsubstitute-installation-activation.json'), '{"schema_version":1,"authorization_schemas":[1],"engine_release":"1","engine_protocol":1}\n')
+  // A local file header followed by an empty central directory: setup validates members itself.
+  await fs.writeFile(cubes, Buffer.concat([Buffer.from([0x50, 0x4b, 0x03, 0x04]), Buffer.alloc(26), Buffer.from([0x50, 0x4b, 0x05, 0x06]), Buffer.alloc(18)]))
   const runtime = path.join(root, 'vcruntime140.dll')
   await fs.writeFile(runtime, 'inert runtime fixture')
   return { root, app, cubes, build, runtimeFiles: [runtime] }
@@ -72,6 +73,33 @@ test('packaging authenticates the producer declaration byte-for-byte, including 
     const item = manifest.files.find(file => file.path === `app/${name}`)
     assert.deepEqual(item, { path: `app/${name}`, bytes: bytes.length, sha256: hash(bytes) })
     assert.deepEqual(await fs.readFile(path.join(output, item.path)), bytes)
+  }
+})
+
+test('packaging carries the SugarCubes registry archive byte-for-byte where setup reads it', async () => {
+  const f = await fixture(), output = path.join(f.root, 'output')
+  await fs.writeFile(path.join(f.app, 'sugarsubstitute-application.json'), '{}')
+  await fs.writeFile(path.join(f.app, 'sugarsubstitute-launcher.json'), '{}')
+  await assemble(f, output)
+  const manifest = JSON.parse(await fs.readFile(path.join(output, 'setup-manifest.json'), 'utf8'))
+  const bytes = await fs.readFile(f.cubes)
+  assert.equal(sugarcubesArchive, 'sugarcubes/SugarCubes.zip')
+  assert.deepEqual(manifest.files.filter(file => file.path.startsWith('sugarcubes/')),
+    [{ path: sugarcubesArchive, bytes: bytes.length, sha256: hash(bytes) }])
+  assert.deepEqual(await fs.readFile(path.join(output, sugarcubesArchive)), bytes)
+})
+
+test('packaging refuses a SugarCubes source folder or a file that is not a registry archive', async () => {
+  for (const replace of [
+    async f => { await fs.rm(f.cubes); await fs.mkdir(f.cubes); await fs.writeFile(path.join(f.cubes, '__init__.py'), '') },
+    async f => fs.writeFile(f.cubes, 'not an archive, but long enough to pass the size bound'),
+  ]) {
+    const f = await fixture(), output = path.join(f.root, 'output')
+    await fs.writeFile(path.join(f.app, 'sugarsubstitute-application.json'), '{}')
+    await fs.writeFile(path.join(f.app, 'sugarsubstitute-launcher.json'), '{}')
+    await replace(f)
+    await assert.rejects(assemble(f, output))
+    await assert.rejects(fs.stat(output), { code: 'ENOENT' })
   }
 })
 

@@ -8,6 +8,9 @@ import { standalone } from '@upstream/sources/standalone/index'
 import { getActiveUvPath } from '@upstream/lib/pythonEnv'
 import { inspectProgram } from './dependency-inspection.mjs'
 import { configureModelRoot } from './model-root.mjs'
+import { bundledArchive, stageBundledPack } from './bundled-pack.mjs'
+import { path7za } from '7zip-bin'
+import { stateDir } from './paths'
 import type { ProgressSink } from './product-messages'
 
 type Runtime = { directory: string; python: string; frontend: string; metadata: string }
@@ -32,10 +35,20 @@ export async function integrate(input: Runtime & { version: 2; models: string; s
   const { version: _version, models, storageBase, ...runtime } = input
   const existing = path.join(runtime.directory, 'custom_nodes', 'SugarCubes', 'pyproject.toml')
   let project = existing
+  let staged: { folder: string; dispose: () => Promise<void> } | undefined
   try { await fs.access(existing) } catch (cause) {
     if ((cause as NodeJS.ErrnoException).code !== 'ENOENT') throw cause
-    project = path.join(__dirname, '..', '..', '..', 'sugarcubes', 'pyproject.toml')
+    staged = await stageBundledPack(path.join(__dirname, '..', '..', '..', bundledArchive), stateDir(), path7za, signal)
+    project = path.join(staged.folder, 'pyproject.toml')
   }
+  try {
+    return await integrateWith(project, runtime, models, storageBase, signal, send)
+  } finally {
+    await staged?.dispose()
+  }
+}
+
+async function integrateWith(project: string, runtime: Runtime, models: string, storageBase: string, signal: AbortSignal, send: Send): Promise<Runtime> {
   const inspect = async (): Promise<string[]> => {
     const result: unknown = JSON.parse(await run(runtime.python, ['-B', '-c', inspectProgram, project], runtime.directory, signal))
     if (!Array.isArray(result) || result.some(value => typeof value !== 'string')) {
