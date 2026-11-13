@@ -4511,10 +4511,10 @@ rationale = "Owned temporary PNG fixtures stand in for ComfyUI input files while
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/inputs/persistence.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:554d4a2e23c84c48681023518fcef948dd36b07454cae592436adb8dd68296e5"
-capabilities = ["std::fs::create_dir", "std::fs::create_dir_all", "std::fs::read", "std::fs::read_dir", "std::fs::remove_dir", "std::fs::remove_file", "std::fs::write"]
+source_sha256 = "sha256:69a4a4ddd609297b761809f1345c5403e40aa830b0006179a458fdd1132dc061"
+capabilities = ["std::fs::File::open", "std::fs::create_dir", "std::fs::create_dir_all", "std::fs::read", "std::fs::read_dir", "std::fs::remove_dir", "std::fs::remove_file", "std::fs::write"]
 disposition = "fixture"
-rationale = "An owned temporary session directory is inspected for saved archives, seeded with a corrupt one to qualify restore and rebuild, and has its archive leaf replaced by a directory to inject a failed final close-save write."
+rationale = "An owned temporary session directory is inspected for saved archives, seeded with a corrupt one to qualify restore and rebuild, has its archive leaf replaced by a directory to inject a failed final close-save write, and has its archive held open by a reader to qualify the retried automatic save."
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests.rs"
