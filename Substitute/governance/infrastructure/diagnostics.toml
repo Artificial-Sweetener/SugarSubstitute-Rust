@@ -302,6 +302,13 @@ disposition = "developer"
 rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
 
 [[records]]
+path = "tools/update-repository/src/main.rs"
+owner = "sugarsubstitute-update-repository"
+source_sha256 = "sha256:2d65c4e259f824cad7d7dac32bf9de5f8f3321b25cec6392cb3cb014d0f3bda6"
+disposition = "developer"
+rationale = "Release-CI signing tool output: the files it wrote and what the application's verifier accepted, read by the update repository workflow; never part of the runtime route."
+
+[[records]]
 path = "tools/xtask/src/main.rs"
 owner = "sugarsubstitute-xtask"
 source_sha256 = "sha256:75136c55921a618aeed0f03e439afd92a83642e156656924590cedc77969d6ef"

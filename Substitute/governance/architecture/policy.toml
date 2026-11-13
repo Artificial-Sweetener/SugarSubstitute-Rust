@@ -63,6 +63,12 @@ layer = "adapter"
 concern = "Application execution and task lifetime"
 
 [[owners]]
+package = "sugarsubstitute-update-repository"
+root = "tools/update-repository"
+layer = "tooling"
+concern = "Release-CI signing of the update repository: authenticates the published TUF state, signs the next roles with their scheduled lifetimes and verifies the result with the application's own update verifier"
+
+[[owners]]
 package = "sugarsubstitute-xtask"
 root = "tools/xtask"
 auxiliary_roots = ["installer/release", "installer/patches", "tools/crashpad", "tools/local_k1", "tools/splash_parity", "tools/native_dxgi"]
