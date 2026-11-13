@@ -11,13 +11,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const CONFIG: &str = r#"{"schema": 1, "packId": "SugarCubes",
+pub(super) const CONFIG: &str = r#"{"schema": 1, "packId": "SugarCubes",
   "registry": {"apiRoot": "https://api.comfy.org", "archiveHost": "cdn.comfy.org"},
   "githubRelease": {"apiRoot": "https://api.github.com", "repository": "Artificial-Sweetener/SugarCubes",
     "tagPrefix": "sugarcubes-v", "assetName": "SugarCubes-{version}.zip",
     "downloadHosts": ["github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com"]}}"#;
 
-fn config() -> std::result::Result<ReleaseSourceConfig, Failure> {
+pub(super) fn config() -> std::result::Result<ReleaseSourceConfig, Failure> {
     Ok(ReleaseSourceConfig::parse(CONFIG.as_bytes())?)
 }
 
@@ -36,10 +36,12 @@ pub(super) fn pack_files(version: &str) -> BTreeMap<String, String> {
 
 /// The Registry and GitHub endpoints, faked at the network boundary.
 #[derive(Default)]
-struct FakeSources {
+pub(super) struct FakeSources {
     replies: RefCell<BTreeMap<String, Value>>,
     archives: RefCell<BTreeMap<String, BTreeMap<String, String>>>,
-    down: RefCell<BTreeSet<String>>,
+    pub(super) down: RefCell<BTreeSet<String>>,
+    /// Archive URLs whose download arrives with one extra byte.
+    pub(super) corrupt: RefCell<BTreeSet<String>>,
 }
 
 impl ReleaseSources for FakeSources {
@@ -60,8 +62,27 @@ impl ReleaseSources for FakeSources {
     }
 }
 
+impl ReleaseDownloads for FakeSources {
+    fn download(
+        &self,
+        offer: &ReleaseOffer,
+        output: &mut dyn std::io::Write,
+    ) -> std::result::Result<(), SourceFailure> {
+        if self.down.borrow().iter().any(|prefix| offer.archive_url.starts_with(prefix)) {
+            return Err(SourceFailure::Unavailable);
+        }
+        let archives = self.archives.borrow();
+        let files = archives.get(&offer.archive_url).ok_or(SourceFailure::NotFound)?;
+        let mut bytes = zip_bytes(&file_members(files)).map_err(|_| SourceFailure::Unavailable)?;
+        if self.corrupt.borrow().contains(&offer.archive_url) {
+            bytes.push(0);
+        }
+        output.write_all(&bytes).map_err(|_| SourceFailure::Unavailable)
+    }
+}
+
 impl FakeSources {
-    fn publish_registry(
+    pub(super) fn publish_registry(
         &self,
         config: &ReleaseSourceConfig,
         version: &str,
@@ -80,7 +101,7 @@ impl FakeSources {
         Ok(())
     }
 
-    fn publish_github(
+    pub(super) fn publish_github(
         &self,
         config: &ReleaseSourceConfig,
         version: &str,
@@ -105,7 +126,7 @@ impl FakeSources {
         Ok(())
     }
 
-    fn empty(&self, url: String) {
+    pub(super) fn empty(&self, url: String) {
         self.replies.borrow_mut().entry(url).or_insert_with(|| json!([]));
     }
 }

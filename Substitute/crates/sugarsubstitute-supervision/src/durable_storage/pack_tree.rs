@@ -35,6 +35,11 @@ pub(crate) enum NodeKind {
     Link,
 }
 
+/// An exclusive lock on one file of a pack tree, held until dropped.
+pub(crate) struct PackLock {
+    _file: File,
+}
+
 /// A folder whose named children this owner reads and replaces.
 #[derive(Clone, Debug)]
 pub(crate) struct PackTree {
@@ -97,6 +102,41 @@ impl PackTree {
             return Err(invalid("Pack file exceeds its read bound"));
         }
         Ok(bytes)
+    }
+
+    /// Open a regular file for reading, refusing a link or folder.
+    pub(crate) fn open(&self, relative: &str) -> io::Result<File> {
+        self.open_regular(relative)
+    }
+
+    /// Return the length of a regular file in bytes.
+    pub(crate) fn length(&self, relative: &str) -> io::Result<u64> {
+        Ok(self.open_regular(relative)?.metadata()?.len())
+    }
+
+    /// Take the exclusive lock of the file at `relative`, creating it (and its folders) empty
+    /// when absent; `None` while another process holds it. The lock is released when the
+    /// returned handle closes. It is a whole-file `LockFileEx` lock, so it also excludes a
+    /// process that locks only the file's first byte, as Python's `msvcrt.locking` does.
+    pub(crate) fn try_lock(&self, relative: &str) -> io::Result<Option<PackLock>> {
+        if let Some((parent, _)) = relative.rsplit_once('/') {
+            self.create_directories(parent)?;
+        }
+        if matches!(self.kind(relative)?, NodeKind::Link | NodeKind::Directory) {
+            return Err(invalid("A lock file cannot be a link or folder"));
+        }
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .custom_flags(OPEN_REPARSE_POINT)
+            .open(self.path(relative)?)?;
+        match file.try_lock() {
+            Ok(()) => Ok(Some(PackLock { _file: file })),
+            Err(std::fs::TryLockError::WouldBlock) => Ok(None),
+            Err(std::fs::TryLockError::Error(cause)) => Err(cause),
+        }
     }
 
     /// Return the lowercase SHA-256 of a regular file.

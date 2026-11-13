@@ -18,6 +18,10 @@ pub struct FrontendInstallationInput {
     pub(crate) script: PathBuf,
 }
 impl FrontendInstallationInput {
+    /// The SugarCubes folder as ComfyUI reaches it, spelled exactly as selected.
+    pub fn cube_folder(&self) -> &std::path::Path {
+        &self.cube
+    }
     /// Select an installed frontend package, its METADATA file and SugarCubes root.
     /// Preserves exact spelling. Performs no filesystem discovery, import or effect.
     /// # Errors

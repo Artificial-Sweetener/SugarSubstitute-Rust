@@ -79,6 +79,9 @@ impl CoordinatorBackend {
                 "Original backend cleanup cutoff reached with retained owner state");
         }
         record.cleanup_failure.observe(now, budget);
+        if self.pack.gates(record.key) {
+            self.pack.cancel();
+        }
         if now >= budget.settle_until {
             return self.finish_cleanup(at, resources);
         }
@@ -230,6 +233,7 @@ impl CoordinatorBackend {
                 && record.output_fanout.current.is_none()
         });
         if record.source_closed
+            && !self.pack.gates(record.key)
             && record.campaign.settled()
             && output_settled
             && record.resolution.is_none()

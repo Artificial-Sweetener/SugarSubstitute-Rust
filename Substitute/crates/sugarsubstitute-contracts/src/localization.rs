@@ -11,9 +11,10 @@ pub mod conflict;
 pub mod incident;
 /// Localized installer screens and actions.
 pub mod installer;
+/// Localized update controls, update report steps and start-up update lines.
+pub mod pack_updates;
 /// Localized operation-specific startup feedback.
 pub mod startup;
-/// Localized update controls, update report steps and start-up update lines.
 pub mod updates;
 /// Localized standalone canvas viewer status.
 pub mod viewer;
@@ -72,6 +73,8 @@ pub struct Messages {
     pub closing: &'static closing::ClosingMessages,
     /// The window's update controls, the update report's steps and start-up update lines.
     pub updates: &'static updates::UpdateMessages,
+    /// The SugarCubes update during start-up: its one line and its report lines.
+    pub pack_updates: &'static pack_updates::PackUpdateMessages,
     /// Native canvas viewer title and image-opening feedback.
     pub viewer: &'static viewer::ViewerMessages,
 }
@@ -101,6 +104,7 @@ pub static LOCALES: &[Messages] = &[
         window: &window::EN,
         closing: &closing::EN,
         updates: &updates::EN,
+        pack_updates: &pack_updates::EN,
         viewer: &viewer::EN,
     },
     Messages {
@@ -126,6 +130,7 @@ pub static LOCALES: &[Messages] = &[
         window: &window::ZH_HANS,
         closing: &closing::ZH_HANS,
         updates: &updates::ZH_HANS,
+        pack_updates: &pack_updates::ZH_HANS,
         viewer: &viewer::ZH_HANS,
     },
     Messages {
@@ -151,6 +156,7 @@ pub static LOCALES: &[Messages] = &[
         window: &window::JA,
         closing: &closing::JA,
         updates: &updates::JA,
+        pack_updates: &pack_updates::JA,
         viewer: &viewer::JA,
     },
     Messages {
@@ -176,6 +182,7 @@ pub static LOCALES: &[Messages] = &[
         window: &window::KO,
         closing: &closing::KO,
         updates: &updates::KO,
+        pack_updates: &pack_updates::KO,
         viewer: &viewer::KO,
     },
     Messages {
@@ -201,6 +208,7 @@ pub static LOCALES: &[Messages] = &[
         window: &window::ES,
         closing: &closing::ES,
         updates: &updates::ES,
+        pack_updates: &pack_updates::ES,
         viewer: &viewer::ES,
     },
 ];
@@ -244,6 +252,7 @@ mod tests {
                 .chain(locale.window.labels())
                 .chain(locale.closing.labels())
                 .chain(locale.updates.labels())
+                .chain(locale.pack_updates.labels())
                 .chain(locale.viewer.labels())
                 .chain(locale.startup.labels())
                 .all(|text| !text.trim().is_empty() && !text.contains('\0'))

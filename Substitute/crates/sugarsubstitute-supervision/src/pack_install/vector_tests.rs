@@ -9,6 +9,7 @@ mod decisions;
 mod fixture;
 mod host;
 mod layout;
+mod startup;
 
 use super::*;
 use fixture::{Failure, field, list, text, texts};

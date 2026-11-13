@@ -152,7 +152,7 @@ migrations = []
 id = "native-update-distribution-v1"
 owner = "sugarsubstitute-update"
 sources = ["crates/sugarsubstitute-update/src/distribution.rs", "crates/sugarsubstitute-update/src/http.rs"]
-source_sha256 = "sha256:dc31160e2466feda85d3e93c3501d1e6c5d8267ea0cc59645384a6981ec13bad"
+source_sha256 = "sha256:a4ac5750aa02b1de51490a6933e709e90c6af1fa54b9297896c89a4ed95ad25e"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 2
@@ -1848,12 +1848,13 @@ accepted_versions = [1]
 compatibility = "reject"
 migrations = []
 
-# The host's own SugarCubes update journal, kept in the host's storage beside its backup.
+# The host's own SugarCubes update folder, kept in the installation's state: the replacement
+# journal beside its backup, the restored-version record and the update report (each schema 1).
 [[formats]]
 id = "sugarcubes-pack-update-journal-v1"
 owner = "sugarsubstitute-supervision"
-sources = ["crates/sugarsubstitute-supervision/src/pack_install/replacement.rs", "crates/sugarsubstitute-supervision/src/pack_install/trial.rs"]
-source_sha256 = "sha256:88bdfacc074f9e7f1c2d824c5eeca562bc6f9fd3f6213ce5c459a5d9fd539a06"
+sources = ["crates/sugarsubstitute-supervision/src/pack_install/replacement.rs", "crates/sugarsubstitute-supervision/src/pack_install/startup.rs", "crates/sugarsubstitute-supervision/src/pack_install/trial.rs"]
+source_sha256 = "sha256:8c4b23d811cd4d243895290a4052d2dfd4ce29c67a59f4bb673f67ee26895090"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 1

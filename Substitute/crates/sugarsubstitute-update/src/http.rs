@@ -82,6 +82,15 @@ impl Policy {
         }
         Ok(Endpoint(self.base.join(name).map_err(|_| Rejection::Address)?))
     }
+    /// Address one exact URL a caller derived from its own configuration, such as a release
+    /// API path with a query, on any of this policy's origins.
+    /// # Errors
+    /// Rejects malformed or credential-bearing URLs and every origin outside the allowlist.
+    pub fn endpoint(&self, url: &str) -> Result<Endpoint, Rejection> {
+        let endpoint = Endpoint(address(url)?);
+        self.admits(&endpoint)?;
+        Ok(endpoint)
+    }
     /// Resolve a redirect without inheriting native automatic-authentication or redirect policy.
     /// # Errors
     /// Rejects foreign origins, credentials, fragments and HTTPS downgrade.

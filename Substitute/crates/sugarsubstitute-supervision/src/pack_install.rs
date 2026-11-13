@@ -17,10 +17,12 @@ mod digest_record;
 mod entry;
 mod error;
 mod identity;
+mod network;
 mod ownership;
 mod replacement;
 mod selection;
 mod sources;
+mod startup;
 mod tracking;
 mod trial;
 #[cfg(test)]
@@ -36,12 +38,17 @@ pub use entry::{
 };
 pub use error::{ErrorCode, PackInstallError, Result};
 pub use identity::{MAX_PYPROJECT_BYTES, PackIdentity, ReleaseVersion};
+pub use network::{HttpReleaseSources, RELEASE_REQUEST_IDLE};
 pub use ownership::{InstalledDigests, NotOwnedReason, changed_tracked_files};
 pub use replacement::JournalPhase;
 pub use selection::{ReleaseSources, SourceFailure, UpdateDecision, newest_offer};
 pub use sources::{
     MAX_ARCHIVE_BYTES, MetadataError, ReleaseOffer, ReleaseSourceConfig, ReleaseSourceKind,
     github_exact, github_latest, registry_exact, registry_latest,
+};
+pub use startup::{
+    MAX_RELEASE_SOURCE_BYTES, RELEASE_SOURCE_FILE, REPORT_RECORD, ReleaseDownloads,
+    STARTUP_UPDATE_RESERVATION_BYTES, StartupOutcome, StartupStep, StartupUpdate, UPDATE_LOCK_FILE,
 };
 pub use tracking::{
     MAX_TRACKED_ENTRIES, MAX_TRACKING_BYTES, TRACKING_FORMAT_VERSION, parse_tracking,

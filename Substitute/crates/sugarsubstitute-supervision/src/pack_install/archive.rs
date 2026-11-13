@@ -127,6 +127,23 @@ pub(crate) fn extract_registry_source<R: Read + Seek>(
     Ok(ExtractedArchive { entries, file_digests })
 }
 
+/// Return each file's SHA-256 as `source` would extract, validating it exactly as extraction
+/// does but writing nothing.
+pub(crate) fn digest_registry_source<R: Read + Seek>(
+    source: R,
+    limits: ArchiveLimits,
+) -> Result<FileDigests> {
+    let mut archive = open(source)?;
+    let members = validated_members(&mut archive, limits)?;
+    let mut total = 0_u64;
+    let mut file_digests = FileDigests::new();
+    for (index, entry) in members.iter().filter(|(_, entry)| !entry.is_directory()) {
+        let digest = copy_member(&mut archive, *index, &mut std::io::sink(), &mut total, limits)?;
+        file_digests.insert(entry.path().to_owned(), digest);
+    }
+    Ok(file_digests)
+}
+
 fn validated_members<R: Read + Seek>(
     archive: &mut Archive<R>,
     limits: ArchiveLimits,

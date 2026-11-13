@@ -104,3 +104,23 @@ fn valid_metadata_and_package_fields_keep_separate_response_rules() -> TestResul
     assert_eq!(package.package_response().range, Some("bytes 4-7/8"));
     Ok(())
 }
+
+#[test]
+fn exact_endpoints_stay_on_the_configured_origins() -> TestResult {
+    let policy = Policy::https("https://api.example.test/", &["https://cdn.example.test/"])?;
+    let api = policy.endpoint("https://api.example.test/nodes/Pack/install?version=1.2.0")?;
+    assert_eq!(api.request_target(), "/nodes/Pack/install?version=1.2.0");
+    assert_eq!(policy.endpoint("https://cdn.example.test/a/node.zip")?.host()?, "cdn.example.test");
+    for url in [
+        "http://api.example.test/nodes",
+        "https://evil.test/nodes",
+        "https://api.example.test:8443/nodes",
+        "https://user@api.example.test/nodes",
+        "https://api.example.test/nodes#x",
+        "/nodes",
+        " https://api.example.test/nodes",
+    ] {
+        assert!(policy.endpoint(url).is_err(), "{url}");
+    }
+    Ok(())
+}

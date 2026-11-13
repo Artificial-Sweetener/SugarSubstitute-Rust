@@ -2779,7 +2779,7 @@ boundary = "native_custody"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/update_http.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:4099938646ba30ef53d8a3bda6e785a5d853c33da18ac030e7f79ff96651ccc4"
+source_sha256 = "sha256:c0b867bd9c97cf58c89bb2777804d5eb4f84e5a5b885fd4fa702bc985a372e90"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Decode bounded HTTP metadata framing from the received response headers."
@@ -2788,7 +2788,7 @@ consumer = "protocol_metadata"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/update_http/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:81fa002b54d99744d2161444003445a89277d536b4f31925f966aa119e210830"
+source_sha256 = "sha256:f26d6f46ec9e7a66de1d0c24c5c45a0966962e8ef9213e627c3170696bc69313"
 capabilities = ["method metadata"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Actual WinHTTP requests against isolated execution-owned loopback sockets. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2901,7 +2901,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Res
 [[records]]
 path = "crates/sugarsubstitute-update/src/http/tests.rs"
 owner = "sugarsubstitute-update"
-source_sha256 = "sha256:7c40b2a45e33dc486b06b319e7d9d6c9fcbdc7d206468c3589e9f6a07468d65a"
+source_sha256 = "sha256:0ecab8d77057add4ea3096799a9bd33d25afa0fcf6e60adbcf183d22ec9b67ef"
 capabilities = ["method metadata"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Destination and framing rejection precedes native I/O and cache mutation. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -4987,7 +4987,7 @@ disposition = "fixture"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/pack_tree.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:fe62fa24b27037235a55ec67b5ab8533be9d33cadea1aa0df8b0ec07f766cc15"
+source_sha256 = "sha256:9b65359bdaebfdf21db0a879beb97b2efeef2b6c803a20296ccf6b5899c91a5f"
 capabilities = ["method metadata", "method sync_all", "std::fs::File", "std::fs::OpenOptions", "std::fs::OpenOptions::new", "std::fs::create_dir", "std::fs::create_dir_all", "std::fs::read_dir", "std::fs::remove_dir", "std::fs::remove_file", "std::fs::rename", "std::fs::set_permissions", "std::fs::symlink_metadata"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Replace a shared node-pack folder's named files through flushed unique siblings, refusing links and junctions at each effect, for the registry install format."
@@ -5003,7 +5003,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: the
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/pack_install/vector_tests/decisions.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:51e96665e0ebf55673c5ee671c4339476545e2b77ee3a15f1628de25c560c6c0"
+source_sha256 = "sha256:1a2b1e91b5a758d09cd57edb7094324772898ffe000b569a17bdd46f9fb4122a"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: the shared SugarCubes registry-install vectors and the host's pack update faults. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -5023,3 +5023,11 @@ source_sha256 = "sha256:bf76374e7624492a137c98d88f8c3d3bd167b71b35b9833ea404fa9e
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: the shared SugarCubes registry-install vectors and the host's pack update faults. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/pack_install/vector_tests/startup.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:3cc6448b9706745ea195bdf4ccbd1b59df4b5d9bff8c57a32d87ff758b292fff"
+capabilities = ["std::fs::File::options", "std::fs::create_dir", "std::fs::create_dir_all", "std::fs::read", "std::fs::read_to_string", "std::fs::remove_dir", "std::fs::remove_file", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: the host's splash-time SugarCubes update against faked and loopback release sources. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
