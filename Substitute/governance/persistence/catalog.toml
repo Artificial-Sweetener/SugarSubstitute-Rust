@@ -1252,7 +1252,7 @@ sources = [
     "crates/sugarsubstitute-supervision/src/durable_storage/protection/retirement.rs",
     "crates/sugarsubstitute-supervision/src/durable_storage/files/observations.rs",
 ]
-source_sha256 = "sha256:da50b5502378c6cdbe5127a1b845ffaa2f842fc92fa040a088996c703ba71cba"
+source_sha256 = "sha256:028a672f9877156c05b322e548ad1706d5e5f8169a4fdf7017a6248863e83e49"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 4
@@ -1532,7 +1532,7 @@ migrations = []
 id = "native-installation-authorization-v1"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/setup_storage/selection/completion.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/candidate/installation.rs", "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/installed.rs", "crates/sugarsubstitute-supervision/src/setup_storage/transaction/trial.rs", "crates/sugarsubstitute-supervision/src/setup_storage/inventory.rs", "crates/sugarsubstitute-supervision/src/application_launch/trial.rs", "crates/sugarsubstitute-supervision/src/setup_storage/existing.rs", "crates/sugarsubstitute-supervision/src/setup_storage/selection/configuration.rs"]
-source_sha256 = "sha256:9ad7e1cd19cfb9e35e970b7b479e0bca9e9d4ea3328294d70acc1a09169217e9"
+source_sha256 = "sha256:f859564967c9d4fdf49d354ddb7bf9a6b79ca93365d8c95dc60be1c2ce1158f6"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 1

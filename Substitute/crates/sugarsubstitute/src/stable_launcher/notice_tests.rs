@@ -63,7 +63,7 @@ fn a_slow_launch_asks_for_the_splash_shaped_notice_until_it_hands_off() -> Resul
 fn the_notice_is_the_splash_saying_it_is_starting_without_controls() -> Result {
     let surface =
         NoticeSurface { shape: FrameShape::new(837, 837, 1.5)?, dark: false, accent: None };
-    let request = request(surface)?;
+    let request = request(surface, StartupStatus::Starting)?;
     assert_eq!(request.shape, surface.shape);
     assert_eq!(request.appearance.status, StartupStatus::Starting);
     assert!(!request.appearance.controls);
@@ -131,5 +131,27 @@ fn a_shown_notice_prepares_one_frame_for_the_reported_window() -> Result {
     owner.request_shutdown(clock.now().checked_add(LauncherBudget::EXIT_GRACE)?);
     observe(&wake, || Ok(owner.poll_shutdown()?.settled))?;
     owner.finish_shutdown()?;
+    Ok(())
+}
+
+/// While the launch starts a prepared update the notice names its version; when the accepted
+/// version starts instead it says it is starting again, and each change prepares a new frame.
+#[test]
+fn the_notice_says_updating_to_the_version_this_launch_starts() -> Result {
+    let surface =
+        NoticeSurface { shape: FrameShape::new(837, 837, 1.5)?, dark: false, accent: None };
+    let mut notice = notice()?;
+    let updating = UpdateVersion::new("2.4.1").map(StartupStatus::Updating);
+    notice.show_update(Some("2.4.1"));
+    assert_eq!(Some(notice.status), updating);
+    assert_eq!(Some(request(surface, notice.status)?.appearance.status), updating);
+    notice.prepared = true;
+    notice.show_update(Some("2.4.1"));
+    assert!(notice.prepared, "the same words keep the prepared frame");
+    notice.show_update(None);
+    assert_eq!(notice.status, StartupStatus::Starting);
+    assert!(!notice.prepared, "new words prepare a new frame");
+    notice.show_update(Some(&"9".repeat(40)));
+    assert_eq!(notice.status, StartupStatus::Starting, "an unshowable version never shows");
     Ok(())
 }

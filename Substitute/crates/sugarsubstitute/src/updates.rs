@@ -6,7 +6,7 @@ pub(crate) mod admission;
 mod attempt;
 mod engine;
 mod entry;
-pub mod launch;
+pub(crate) mod launch;
 mod options;
 mod probe;
 pub use entry::entry;

@@ -74,6 +74,17 @@ impl ApplicationLaunch {
         Self::authorized_trial(Authorization::Installed(candidate))
     }
 
+    /// The version this launch starts as a trial, so the launcher can say it is updating to it.
+    /// None for a launch of the accepted version.
+    pub fn trial_version(&self) -> Option<String> {
+        match &crate::native_claims::lock(&self.0).custody {
+            Some(LaunchCustody::Trial(trial)) => {
+                Some(trial.prepared.generation().release.version().to_owned())
+            }
+            _ => None,
+        }
+    }
+
     /// Establish creator custody before any worker can publish the chosen trial.
     fn authorized_trial(candidate: Authorization) -> Self {
         let launch = Self::empty();

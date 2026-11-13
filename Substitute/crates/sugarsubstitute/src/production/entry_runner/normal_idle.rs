@@ -45,7 +45,8 @@ impl<C: EntryActivation> EntryRunner<C> {
     /// Preserve live runner custody before asking its actual server to fence future entry admission.
     pub(super) fn try_normal_shutdown(&mut self) -> Result<(), Box<dyn Error>> {
         let admission = Admission {
-            requested: self.child.normal_close_requested(),
+            requested: self.child.normal_close_requested()
+                || self.launch_update.restart().is_some(),
             initial_completed: self.initial_completed,
             initial_retired: self.transport_completions[1]
                 .as_ref()

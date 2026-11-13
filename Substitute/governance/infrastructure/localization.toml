@@ -54,7 +54,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute/src/production/entry_runner.rs"
-source_sha256 = "sha256:5d036179bfbce2dd91dd08f888e833c6e2e418ff83c89fb5a4a0dea516e5fe02"
+source_sha256 = "sha256:9e2d820c2f72f0e60917196540a57ba2177bec5cf8a6f93d25378090ab7ef15f"
 kind = "presentation"
 rationale = "Host composition of localized native startup/profile-conflict feedback. Authenticated configuration/selected installer language is retained when available; failures before configuration use canonical English. Original causes remain diagnostic details. Retain real entry, authority, child and execution lifetimes through native pumping."
 
