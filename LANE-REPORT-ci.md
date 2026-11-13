@@ -21,12 +21,12 @@
 - `11f77ea9` ci(substitute): give verification the Linux windowing headers and room to finish
 - `4109716f` test(sugar): keep governance and canvas browser proofs off the maintainer's drive
 - `22ed884d` build(substitute): resolve non-Windows compile errors in platform-gated modules
+- `048029fa` build(gimp): judge the D-drive package output rule by Windows path syntax on every host
 
 ## Verification
 
-- `22ed884d`, in progress: [Sugar quality](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43343357886), [Substitute verification](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43343357866).
-- `97206aef`: Sugar passed mypy and VS2022 selection on both OSes and failed only the four Jest suites `4109716f` fixes. Substitute governance passed on all OSes.
-- Local: strict mypy in three platform views; changed Jest, pytest, ESLint and Prettier; `cargo xtask governance`; `cargo fmt --check`; Linux `cargo check` without hard errors; Windows-target Clippy clean for execution, ui and image-gpu.
+- `22ed884d`: [Sugar quality](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43343357886) is green on windows-2022 (full gate, no tracked-file mutation). Ubuntu passed typing, lint and the first 528 Jest suites, then failed `gimp/contract/package_layout`, which `048029fa` fixes; the rerun is pending. [Substitute verification](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43343357866): governance passes on all OSes; on Windows, formatting and the three Clippy legs pass and tests stop at blocker 1; Ubuntu and macOS stop at blocker 2's lint findings.
+- Local: strict mypy in three platform views; changed Jest, pytest, ESLint and Prettier; `cargo xtask governance`; `cargo fmt --check`; Linux `cargo check` without hard errors.
 
 ## Next
 
