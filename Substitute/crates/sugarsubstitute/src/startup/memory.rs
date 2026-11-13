@@ -107,7 +107,7 @@ impl MemoryGovernor {
     }
 
     /// When the next sample is due.
-    pub(super) const fn next_deadline(&self) -> Instant {
+    pub(crate) const fn next_deadline(&self) -> Instant {
         self.due
     }
 

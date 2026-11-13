@@ -160,7 +160,9 @@ impl Host {
             Some("sugarcubes.memory") => {
                 let message = MemoryMessage::decode(&bytes)?;
                 self.memory.observe_page(self.identity, message, self.lease.clone(), claim()?)?;
-                self.memory.poll(std::time::Instant::now(), self.now, 0, false)?;
+                // Sample exactly when due, so no real time decides the answer.
+                let due = self.memory.next_deadline();
+                self.memory.poll(due, self.now, 0, false)?;
                 while let Some(command) = self.memory.take_command() {
                     if let DesktopStartupCommand::SendMemory(allowance) = command {
                         answers.push(serde_json::from_slice(allowance.payload())?);
