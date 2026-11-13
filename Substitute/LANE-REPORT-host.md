@@ -17,7 +17,7 @@
 - The draft's `UpdateControls` became an `UpdateStatusPort` plus a `WorkflowActivitySource`. The channel comes from the subscription in the snapshot.
 - Until coord2's sources land, the idle sources answer up to date, no workflow, check *unavailable*, restart *not ready*. The version shown is the workspace version.
 - No fingerprint tool existed; the user chose a reviewed `cargo xtask fingerprints`.
-- I reverted my submodule and execution `cfg` fixes because the baseline belongs to lane/ci.
+- Baseline fixes (submodule, execution `cfg`) were reverted; lane/ci owns them.
 
 ## Taken from `lane/host-d2w-draft`
 
