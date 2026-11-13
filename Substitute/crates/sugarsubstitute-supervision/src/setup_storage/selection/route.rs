@@ -11,6 +11,10 @@
 //! it starts only its own accepted release, never a trial. A fallback engine of the retained
 //! generation first makes that generation accepted again, recording the newer one for repair.
 //!
+//! Before deciding, every engine reconciles the record (see `restoration`): a damaged or missing
+//! record is rebuilt from its last known good copy, and an accepted release whose files are gone
+//! is replaced by the retained release, so neither blocks the launch.
+//!
 //! Cross-generation reading: later releases change the selection record additively, and older
 //! readers ignore the added fields, so a fallback engine reads it in the normal case. Only an
 //! incompatible change bumps the schema; then the fallback refuses with a typed `Schema`
@@ -84,8 +88,26 @@ pub fn route_launch(
     hops: u8,
     context: &JobContext,
 ) -> Result<Route, RouteFailure> {
-    let store = SelectionStore::open(installation, context)?;
-    let record = store.load(context)?.ok_or(SelectionFailure::Missing)?;
+    if let Err(cause) = super::restoration::reconcile(installation, context) {
+        tracing::warn!(
+            operation = "installation_selection_reconcile_failed",
+            cause = %cause,
+            "The installation record could not be reconciled before routing"
+        );
+    }
+    let store = std::sync::Arc::new(SelectionStore::open(installation, context)?);
+    let loaded = store.load(context)?.ok_or(SelectionFailure::Missing)?;
+    let record = match store.fall_back_from_missing(loaded.clone(), context) {
+        Ok(record) => record,
+        Err(cause) => {
+            tracing::warn!(
+                operation = "installation_missing_release_fallback_failed",
+                cause = %cause,
+                "Could not return to the previous release for a missing accepted release"
+            );
+            loaded
+        }
+    };
     match decide(&record, own, hops)? {
         Decision::Run(route) => Ok(route),
         Decision::FallBack { failed } => {
@@ -95,7 +117,7 @@ pub fn route_launch(
                 failed = failed.id.as_str(),
                 "The accepted release's engine could not take over; returning to the previous release"
             );
-            let run = InstallationRun::acquire(std::sync::Arc::new(store), context)?;
+            let run = InstallationRun::acquire(std::sync::Arc::clone(&store), context)?;
             run.fall_back_to_retained(failed, context)?;
             Ok(Route::AcceptedOnly)
         }

@@ -1672,7 +1672,7 @@ rationale = "Native protected-storage fixtures verify stable source-host correla
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/application.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:be88668b9b3643d5be9030092b5d61d15845e702f45b337860ac37b6c0cf6cd4"
+source_sha256 = "sha256:88563cc98af81d96268d387cf64fe7e7163865ba6044f4504c45131b3a17fee3"
 capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Verify one protected generation's retained manifest and pin every executable payload. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
@@ -2247,7 +2247,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: For
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/selection.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:84ef16b296a27621eac202c4f40841d719d03ab7c6571cbd05ca16895db084aa"
+source_sha256 = "sha256:38b4bcfb72c56cc105211b221b8796f16f4c945c1f48f824245ce326f48d4177"
 capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Protected selection publication and independent OS-backed application-run ownership. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
@@ -2293,6 +2293,14 @@ source_sha256 = "sha256:528bcf2fc303fc499f993b24c240a16e3eec52b956717e097d91e9b6
 capabilities = ["std::fs::read", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Exercise first-enablement ordering with real native locks, without timing or spawned threads. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/selection/restoration/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:c0f5137f6d19e9e9b1d7a50831ff9d075f0ca70267cde9f9493e1534c2c4f24c"
+capabilities = ["std::fs::create_dir_all", "std::fs::read", "std::fs::remove_dir_all", "std::fs::remove_file", "std::fs::write"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: a damaged or missing selection record, or a missing accepted release, never blocks a launch, and only accepted releases start from a rebuilt record. The writes, reads and removals damage the record, place stand-in release inventories and remove a release folder deliberately; the exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/selection/run/recovery/tests.rs"

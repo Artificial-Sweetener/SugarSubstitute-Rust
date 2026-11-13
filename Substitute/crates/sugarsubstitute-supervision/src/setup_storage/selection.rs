@@ -24,6 +24,7 @@ pub use presentation::{
 };
 pub(super) mod publication;
 mod reservation;
+mod restoration;
 mod route;
 pub use route::{ROUTE_RESERVATION_BYTES, Route, RouteFailure, route_launch};
 mod snapshot;
