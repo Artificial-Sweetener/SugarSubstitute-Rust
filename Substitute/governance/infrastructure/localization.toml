@@ -768,6 +768,6 @@ rationale = "Caption peers show the caption owner's words, which come from the t
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/windows_controls_caption_tests.rs"
-source_sha256 = "sha256:791fff8688e5231704b0bac17a49d0a295dc6a8a2732631f4bd1d956445f02ea"
+source_sha256 = "sha256:a8cdc79509f677e12f68460d019ed1e7d5910ae8fff4394c42343ff3ca9704d7"
 kind = "fixture"
 rationale = "A private-desktop test uses stand-in window-button labels and its own window title; update words come from the catalog."

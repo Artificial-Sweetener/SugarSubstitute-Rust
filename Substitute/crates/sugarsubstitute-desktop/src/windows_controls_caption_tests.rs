@@ -34,6 +34,7 @@ use windows::Win32::{
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
+/// Logical client width the caption is laid out for, and the logical caption strip height.
 const WIDTH: i32 = 1100;
 const HEIGHT: i32 = 34;
 const LABELS: MainCaptionLabels = MainCaptionLabels {
@@ -163,30 +164,68 @@ impl Drop for Surface {
     }
 }
 
-/// Paint every visible caption peer through the owner-draw message the window would send, each
-/// into its own surface, and place the results in a caption strip flattened over the dark
-/// caption background as opaque BGRA.
-fn paint(parent: HWND) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let mut strip = vec![0_u8; (WIDTH * HEIGHT * 4) as usize];
-    for pixel in strip.chunks_exact_mut(4) {
-        pixel.copy_from_slice(&[32, 32, 32, 255]);
+/// The caption strip in physical pixels: the peers are placed at the window's device scale, so
+/// every check reads the pixels where each peer actually is, at any display scale.
+#[derive(Clone, Copy)]
+struct Strip {
+    width: i32,
+    height: i32,
+}
+
+impl Strip {
+    fn of(parent: HWND, scale: f64) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut client = RECT::default();
+        // SAFETY: Read-only client bounds of this test's own window.
+        unsafe { windows::Win32::UI::WindowsAndMessaging::GetClientRect(parent, &raw mut client) }?;
+        Ok(Self { width: client.right, height: (f64::from(HEIGHT) * scale).ceil() as i32 })
     }
+}
+
+/// Peer `id`'s rectangle in its parent's client pixels.
+fn peer_bounds(parent: HWND, id: u16) -> Result<RECT, Box<dyn std::error::Error>> {
+    // SAFETY: The peers belong to this test's window on its own private desktop.
+    let peer = unsafe { GetDlgItem(Some(parent), i32::from(id)) }?;
+    let mut bounds = RECT::default();
+    // SAFETY: Read-only bounds of the peer.
+    unsafe { GetWindowRect(peer, &raw mut bounds) }?;
     let mut client = windows::Win32::Foundation::POINT::default();
     // SAFETY: Map this test window's client origin to the screen; no input or paint occurs.
     if !unsafe { windows::Win32::Graphics::Gdi::ClientToScreen(parent, &raw mut client) }.as_bool()
     {
         return Err("client origin unavailable".into());
     }
-    for id in 1..=PEERS as i32 {
+    Ok(RECT {
+        left: bounds.left - client.x,
+        top: bounds.top - client.y,
+        right: bounds.right - client.x,
+        bottom: bounds.bottom - client.y,
+    })
+}
+
+/// Paint every visible caption peer through the owner-draw message the window would send, each
+/// into its own surface, and place the results in a caption strip flattened over the dark
+/// caption background as opaque BGRA. A visible peer outside the strip is an error, so no
+/// check can pass or fail on pixels it never looked at.
+fn paint(parent: HWND, strip: Strip) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let mut pixels = vec![0_u8; (strip.width * strip.height * 4) as usize];
+    for pixel in pixels.chunks_exact_mut(4) {
+        pixel.copy_from_slice(&[32, 32, 32, 255]);
+    }
+    for id in 1..=PEERS as u16 {
         // SAFETY: The peers belong to this test's window on its own private desktop.
-        let peer = unsafe { GetDlgItem(Some(parent), id) }?;
+        let peer = unsafe { GetDlgItem(Some(parent), i32::from(id)) }?;
         // SAFETY: Scalar visibility query.
         if !unsafe { IsWindowVisible(peer) }.as_bool() {
             continue;
         }
-        let mut bounds = RECT::default();
-        // SAFETY: Read-only bounds of the peer.
-        unsafe { GetWindowRect(peer, &raw mut bounds) }?;
+        let bounds = peer_bounds(parent, id)?;
+        if bounds.left < 0
+            || bounds.top < 0
+            || bounds.right > strip.width
+            || bounds.bottom > strip.height
+        {
+            return Err(format!("peer {id} at {bounds:?} lies outside the caption strip").into());
+        }
         let (width, height) = (bounds.right - bounds.left, bounds.bottom - bounds.top);
         let surface = Surface::new(width, height)?;
         let item = DRAWITEMSTRUCT {
@@ -209,37 +248,33 @@ fn paint(parent: HWND) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
                 Some(LPARAM(&raw const item as isize)),
             );
         }
-        let (left, top) = (bounds.left - client.x, bounds.top - client.y);
         for (row, line) in surface.pixels().chunks_exact(width as usize * 4).enumerate() {
             for (column, bgra) in line.chunks_exact(4).enumerate() {
-                let (x, y) = (left + column as i32, top + row as i32);
-                if !(0..WIDTH).contains(&x) || !(0..HEIGHT).contains(&y) {
-                    continue;
-                }
-                let at = ((y * WIDTH + x) * 4) as usize;
+                let (x, y) = (bounds.left + column as i32, bounds.top + row as i32);
+                let at = ((y * strip.width + x) * 4) as usize;
                 let inverse = 255 - u32::from(bgra[3]);
                 for channel in 0..3 {
-                    let below = u32::from(strip[at + channel]);
-                    strip[at + channel] = (u32::from(bgra[channel]) + below * inverse / 255) as u8;
+                    let below = u32::from(pixels[at + channel]);
+                    pixels[at + channel] = (u32::from(bgra[channel]) + below * inverse / 255) as u8;
                 }
             }
         }
     }
-    Ok(strip)
+    Ok(pixels)
+}
+
+/// Strip pixels inside `bounds` whose BGR channels satisfy `matches`.
+fn count(pixels: &[u8], strip: Strip, bounds: RECT, matches: impl Fn(&[u8]) -> bool) -> usize {
+    let columns = bounds.left.max(0)..bounds.right.min(strip.width);
+    (bounds.top.max(0)..bounds.bottom.min(strip.height))
+        .flat_map(|y| columns.clone().map(move |x| ((y * strip.width + x) * 4) as usize))
+        .filter(|at| matches(&pixels[*at..*at + 3]))
+        .count()
 }
 
 /// Pixels in the update button's area that carry `tint`.
-fn tinted(pixels: &[u8], x: f64, tint: [u8; 3]) -> usize {
-    let mut count = 0;
-    for y in 0..HEIGHT as usize {
-        for column in x as usize..x as usize + 46 {
-            let at = (y * WIDTH as usize + column) * 4;
-            if pixels[at..at + 3] == [tint[2], tint[1], tint[0]] {
-                count += 1;
-            }
-        }
-    }
-    count
+fn tinted(pixels: &[u8], strip: Strip, bounds: RECT, tint: [u8; 3]) -> usize {
+    count(pixels, strip, bounds, |bgr| bgr == [tint[2], tint[1], tint[0]])
 }
 
 fn caption_body() -> TestResult {
@@ -271,6 +306,7 @@ fn caption_body() -> TestResult {
     )?;
     controls.configure_caption(true, crate::NativeMaterial::ThemedFallback);
     controls.initialize()?;
+    let strip = Strip::of(parent, window.scale_factor())?;
     let mut captures = Vec::new();
     let mut problems = Vec::new();
     let result = (|| -> TestResult {
@@ -284,12 +320,20 @@ fn caption_body() -> TestResult {
                     unsafe { IsWindowVisible(GetDlgItem(Some(parent), i32::from(id))?).as_bool() };
                 assert_eq!(visible, state.shown.contains(&id), "{}: peer {id}", state.name);
             }
-            let pixels = paint(parent)?;
-            let update_x = layout[4].bounds.x;
-            let ready =
-                tinted(&pixels, update_x, crate::windows_callbacks::caption::update_tint(false));
-            let warning =
-                tinted(&pixels, update_x, crate::windows_callbacks::caption::update_tint(true));
+            let pixels = paint(parent, strip)?;
+            let update = peer_bounds(parent, crate::main_updates::UPDATE)?;
+            let ready = tinted(
+                &pixels,
+                strip,
+                update,
+                crate::windows_callbacks::caption::update_tint(false),
+            );
+            let warning = tinted(
+                &pixels,
+                strip,
+                update,
+                crate::windows_callbacks::caption::update_tint(true),
+            );
             let tints_right = match state.name {
                 "caption-update-warning" => warning > 20 && ready == 0,
                 _ if state.shown.contains(&5) => ready > 20 && warning == 0,
@@ -300,20 +344,14 @@ fn caption_body() -> TestResult {
             }
             for id in [6_u16, 7, 8, 9] {
                 if state.shown.contains(&id) {
-                    let bounds = layout[usize::from(id) - 1].bounds;
-                    let bright = (0..HEIGHT as usize)
-                        .flat_map(|y| {
-                            (bounds.x as usize..(bounds.x + bounds.width) as usize)
-                                .map(move |x| (y * WIDTH as usize + x) * 4)
-                        })
-                        .filter(|at| pixels[*at] > 180 && pixels[at + 1] > 180)
-                        .count();
+                    let bounds = peer_bounds(parent, id)?;
+                    let bright = count(&pixels, strip, bounds, |bgr| bgr[0] > 180 && bgr[1] > 180);
                     if bright <= 20 {
                         problems.push(format!("{}: peer {id} shows no words", state.name));
                     }
                 }
             }
-            captures.push((state.name, WIDTH as u32, HEIGHT as u32, pixels));
+            captures.push((state.name, strip.width as u32, strip.height as u32, pixels));
         }
         Ok(())
     })();
