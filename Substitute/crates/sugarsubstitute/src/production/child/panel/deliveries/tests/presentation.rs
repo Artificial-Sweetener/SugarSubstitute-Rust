@@ -61,7 +61,8 @@ fn a_composition_hosted_page_hears_its_surface_is_unavailable_until_it_can_answe
                 "surface.capabilities.reply",
             ),
             (
-                serde_json::json!({"type": "surface.presentation.request", "schema": 3, "enabled": true}),
+                // The presentation watch is fixed at schema 1; only discovery negotiates.
+                serde_json::json!({"type": "surface.presentation.request", "schema": 1, "enabled": true}),
                 "surface.presentation.reply",
             ),
         ] {
