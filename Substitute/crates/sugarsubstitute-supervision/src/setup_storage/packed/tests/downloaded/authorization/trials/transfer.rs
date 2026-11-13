@@ -144,6 +144,7 @@ fn received_trial_rejection_preserves_the_previous_accepted_generation() -> Test
         let application =
             InstallationRun::receive_trial(store.clone(), inherited, &directory, case.context)?;
         drop(transfer);
+        assert!(application.replaces_release(), "an update trial replaces the accepted release");
         // Storage-boundary settlement input; no native process is represented by this fixture.
         let rejected = application.finish_settled(BAD, case.context)?;
         assert_eq!(rejected.accepted(), before.accepted());

@@ -54,6 +54,12 @@ impl OwnedTrial {
     pub fn attempt(&self) -> &Trial {
         &self.attempt
     }
+
+    /// Whether this trial would replace an accepted release; a fresh installation's first
+    /// release replaces none.
+    pub fn replaces_release(&self) -> bool {
+        self.snapshot.accepted().is_some()
+    }
 }
 impl InstallationRun {
     /// Recheck retained launcher compatibility while run custody excludes its replacement.

@@ -200,6 +200,12 @@ impl TrialApplication {
         self.trial.attempt()
     }
 
+    /// Whether this trial would replace an accepted release; a fresh installation's first
+    /// release replaces none.
+    pub fn replaces_release(&self) -> bool {
+        self.trial.replaces_release()
+    }
+
     /// Verified generation directory; all payload files remain pinned by this owner.
     pub fn directory(&self) -> &Path {
         self.application.directory.path()

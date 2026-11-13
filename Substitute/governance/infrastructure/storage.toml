@@ -2182,7 +2182,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Rea
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded/authorization/trials/transfer.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:0b364dc28f9bfd3237c0507622534a48dcb8319c0721da613f42134c0020154e"
+source_sha256 = "sha256:bfd5d80947c3a1f2cbce01c488e48381941c1a62e8e4b5fc7651817d5a9c3430"
 capabilities = ["assert! restricted capability fragments", "std::fs::File::from", "std::fs::read", "std::fs::read_dir", "std::fs::write", "tempfile::tempdir", "tempfile::tempfile"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Exercise transfer with real protected storage, duplicated handles and authenticated packages. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2337,7 +2337,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Rea
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/selection/run/transfer.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:d281f0f705a4202208f4ef98078dd4e95075d522286fd84bdd1ee7f94a29bfef"
+source_sha256 = "sha256:135a75460dffa790465df0ca6ddfd9775589db56518b06e751940478c3be199c"
 capabilities = ["export public restricted capability std::os::windows::io::BorrowedHandle", "std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Transfer an admitted trial's live ownership, protected snapshot and slot-held event across native process entry. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
@@ -2468,7 +2468,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Dur
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/fresh/installed/forwarding.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:c963a77767488af470f6c24fedafe8494426707d9a4ddd9e741f2450377e4359"
+source_sha256 = "sha256:a11bbff34ea0c0dcc257df8856db0c7e8baf293d5f2c014c586d6ddbc2d55f23"
 capabilities = ["std::fs::read", "std::fs::read_dir", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: A duplicate trial invocation can forward without acquiring run authority or blocking health. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
