@@ -121,7 +121,7 @@ fn busy_entry_or_coordinator_keeps_live_candidate_without_recovery() -> TestResu
                 files.coordinator = None;
             }
             assert!(
-                matches!(decide(&mut files,NamespaceId::new([1;32]),context)?,Elected::Candidate(epoch) if epoch.bytes()==&[2;16])
+                matches!(decide(&mut files,NamespaceId::new([1;32]),context)?,Elected::Candidate{epoch,..} if epoch.bytes()==&[2;16])
             );
             assert_eq!(files.current, files.original);
             assert!(!files.coordinator_held);
@@ -257,14 +257,14 @@ fn retiring_coordinator_requires_a_new_exclusion_observation_before_released_ele
         files.entry = None;
         assert!(matches!(
             decide(&mut files, NamespaceId::new([1; 32]), context)?,
-            Elected::Candidate(_)
+            Elected::Candidate { .. }
         ));
         assert!(!files.entry_held && !files.coordinator_held);
         files.entry = Some([9; 24]);
         files.coordinator = None;
         assert!(matches!(
             decide(&mut files, NamespaceId::new([1; 32]), context)?,
-            Elected::Candidate(_)
+            Elected::Candidate { .. }
         ));
         assert!(files.entry_held && !files.coordinator_held);
         let mut released = Record::decode(&files.original)?;

@@ -61,7 +61,12 @@ pub(crate) fn initialize(
         )?;
     }
     let held = root.coordinator.as_ref().ok_or_else(|| ClaimError::invalid("missing_claim"))?;
-    let record = Record::coordinator(key);
+    let own = crate::native_process::current_identity(context)
+        .map_err(|cause| ClaimError::new("coordinator_holder_identity", cause))?;
+    let record = Record::coordinator(key).held_by(crate::coordinator_entry::EntryHolder {
+        process_id: own.pid,
+        creation_time_100ns: own.birth,
+    });
     if let Some(guard) = &guard {
         guard.check_record(&crate::durable_storage::protected::record_file::read_shape(
             held, context,

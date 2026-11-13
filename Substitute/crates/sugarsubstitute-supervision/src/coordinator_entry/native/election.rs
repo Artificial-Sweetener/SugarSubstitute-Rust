@@ -218,7 +218,7 @@ fn decide(
     {
         return recover_unreadable(boundary, original, inode, context);
     }
-    if !matches!(result, Elected::Candidate(_)) || inode.is_none() {
+    if !matches!(result, Elected::Candidate { .. }) || inode.is_none() {
         return Ok(result);
     }
     check(context)?;

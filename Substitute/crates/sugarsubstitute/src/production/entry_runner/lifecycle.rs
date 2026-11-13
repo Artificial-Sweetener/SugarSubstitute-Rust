@@ -14,7 +14,7 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
         self.drain(max)?;
         Ok(if self.closing {
             StartupPreparationStep::Closing
-        } else if self.intake_ready {
+        } else if self.intake_ready || self.forward_presentation_due() {
             StartupPreparationStep::Ready
         } else {
             StartupPreparationStep::Waiting
