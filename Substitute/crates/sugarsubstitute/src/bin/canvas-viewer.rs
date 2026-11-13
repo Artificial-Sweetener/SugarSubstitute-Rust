@@ -9,6 +9,6 @@ fn main() -> std::process::ExitCode {
     }
     #[cfg(not(windows))]
     {
-        std::process::ExitCode::from(78)
+        sugarsubstitute::unavailable_native_entry(sugarsubstitute::NativeEntry::Viewer)
     }
 }
