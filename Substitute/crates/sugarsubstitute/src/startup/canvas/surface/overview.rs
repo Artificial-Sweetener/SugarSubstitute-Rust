@@ -14,6 +14,11 @@ use crate::native_canvas::session::SelectedOriginals;
 use sugarsubstitute_contracts::canvas_surface::CanvasFileReference;
 use sugarsubstitute_image_ops::Extent;
 
+const OVERVIEW_CELL_NOT_OUTPUT: &str =
+    "An overview image is not a saved or temporary output image.";
+#[cfg(test)]
+const OVERVIEW_CELL_MISSING: &str = "An overview image was not found in its output folder.";
+
 /// One visible overview cell: its output and CSS-pixel `[x, y, width, height]` rectangle,
 /// relative to the surface geometry origin.
 pub(super) struct OverviewCell {
@@ -46,7 +51,7 @@ impl NativeSurface {
                 admitted_output(&cell.file)
             })?
         else {
-            return self.reply(identity, &request, CanvasSurfaceReplyStatus::Error, claim);
+            return self.reply_error(identity, &request, OVERVIEW_CELL_NOT_OUTPUT, claim);
         };
         self.fence_previews(session)?;
         #[cfg(test)]
@@ -56,7 +61,7 @@ impl NativeSurface {
                     fixture_file(output, &cell.file)
                 })?
             else {
-                return self.reply(identity, &request, CanvasSurfaceReplyStatus::Error, claim);
+                return self.reply_error(identity, &request, OVERVIEW_CELL_MISSING, claim);
             };
             if let Some(acquisition) = &self.fixture_acquisition {
                 if !Self::offer_acquired(acquisition(files), session)? {

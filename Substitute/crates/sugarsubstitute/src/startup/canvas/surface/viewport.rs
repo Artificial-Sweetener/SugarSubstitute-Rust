@@ -9,6 +9,8 @@ use sugarsubstitute_canvas::{NavigationCommand, Viewport, ZoomMode};
 use sugarsubstitute_contracts::canvas_surface::{
     CanvasViewportCommand, CanvasViewportMode, CanvasViewportState, CanvasWipeOrientation,
 };
+const WIPE_INVALID: &str = "The comparison split cannot be applied.";
+const CAMERA_UNREPRESENTABLE: &str = "The saved camera cannot be represented by the native canvas. Its preceding camera is retained.";
 
 impl NativeSurface {
     /// Admit commands only on the committed and visible attachment already authorized while it
@@ -48,7 +50,7 @@ impl NativeSurface {
                 CanvasWipeOrientation::Horizontal => WipeOrientation::Horizontal,
             };
             if session.set_wipe(orientation, split).is_err() {
-                return self.reply(identity, &request, CanvasSurfaceReplyStatus::Error, claim);
+                return self.reply_error(identity, &request, WIPE_INVALID, claim);
             }
         }
         let navigation = match command {
@@ -68,11 +70,7 @@ impl NativeSurface {
                 Err(cause) => {
                     tracing::warn!(operation = "canvas_viewport_rejected", request_id = request.request_id(), cause = %cause,
                         "The requested camera cannot be represented; the preceding camera is retained");
-                    super::lifecycle::replied(&request, CanvasSurfaceReplyStatus::Error);
-                    return self.enqueue(DesktopStartupCommand::SendSurface(SurfaceReply::new(
-                        identity, &request, CanvasSurfaceReplyStatus::Error,
-                        "The saved camera cannot be represented by the native canvas. Its preceding camera is retained.", claim,
-                    )?));
+                    return self.reply_error(identity, &request, CAMERA_UNREPRESENTABLE, claim);
                 }
             },
             None => session.camera_intent(),
@@ -111,10 +109,11 @@ impl NativeSurface {
             }
             CameraSettlement::Failed => {
                 let pending = self.pending.take().ok_or("Failed viewport request disappeared")?;
-                return self.reply(
+                let message = failure_message(session);
+                return self.reply_error(
                     pending.identity,
                     &pending.request,
-                    CanvasSurfaceReplyStatus::Error,
+                    &message,
                     pending.claim,
                 );
             }

@@ -73,6 +73,10 @@ fn selected_output_reply_retains_original_attachment_and_revision() -> Result<()
     assert_eq!(reply["requestId"], value["requestId"]);
     assert!(request.reply(CanvasSurfaceReplyStatus::Ready, "").is_err());
     assert!(request.reply(CanvasSurfaceReplyStatus::Error, &"x".repeat(513)).is_err());
+    // An error must say what happened.
+    assert!(request.reply(CanvasSurfaceReplyStatus::Error, "").is_err());
+    assert!(request.reply(CanvasSurfaceReplyStatus::Error, " \n").is_err());
+    assert!(request.reply(CanvasSurfaceReplyStatus::Error, "The file is missing").is_ok());
     Ok(())
 }
 

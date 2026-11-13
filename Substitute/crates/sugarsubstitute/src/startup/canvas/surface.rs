@@ -104,6 +104,23 @@ struct Binding {
     offered: Option<workflow::OfferedOutput>,
 }
 
+/// Longest reply message the surface protocol carries.
+const REPLY_MESSAGE_CHARS: usize = 512;
+
+/// Say what the session's retained failure was, with its redacted cause chain, within the reply
+/// message bound.
+fn failure_message(session: &Session) -> String {
+    const STOPPED: &str = "The canvas stopped after an earlier operation failed";
+    let cause = session
+        .source_failure()
+        .map(|cause| crate::diagnostics::CauseChain(cause).to_string())
+        .unwrap_or_default();
+    let cause = cause.trim();
+    let message =
+        if cause.is_empty() { format!("{STOPPED}.") } else { format!("{STOPPED}: {cause}") };
+    message.chars().take(REPLY_MESSAGE_CHARS).collect()
+}
+
 impl Binding {
     /// Whether this binding shows a document: its selected output, or the input document the
     /// Input route shows, which needs no output selection. Presentation, geometry waits, camera
@@ -479,6 +496,8 @@ impl NativeSurface {
         Ok(())
     }
 
+    /// Answer `request` with an outcome that needs no explanation; errors go through
+    /// [`Self::reply_error`], which says what happened.
     fn reply(
         &mut self,
         identity: MainIdentity,
@@ -486,7 +505,29 @@ impl NativeSurface {
         status: CanvasSurfaceReplyStatus,
         claim: MemoryClaim,
     ) -> Result<(), Box<dyn Error>> {
-        let reply = SurfaceReply::new(identity, request, status, "", claim)?;
+        self.reply_with(identity, request, status, "", claim)
+    }
+
+    /// Answer `request` with an error saying what happened.
+    fn reply_error(
+        &mut self,
+        identity: MainIdentity,
+        request: &CanvasSurfaceRequest,
+        message: &str,
+        claim: MemoryClaim,
+    ) -> Result<(), Box<dyn Error>> {
+        self.reply_with(identity, request, CanvasSurfaceReplyStatus::Error, message, claim)
+    }
+
+    fn reply_with(
+        &mut self,
+        identity: MainIdentity,
+        request: &CanvasSurfaceRequest,
+        status: CanvasSurfaceReplyStatus,
+        message: &str,
+        claim: MemoryClaim,
+    ) -> Result<(), Box<dyn Error>> {
+        let reply = SurfaceReply::new(identity, request, status, message, claim)?;
         lifecycle::replied(request, status);
         self.enqueue(DesktopStartupCommand::SendSurface(reply))
     }

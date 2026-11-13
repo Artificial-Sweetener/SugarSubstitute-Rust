@@ -56,11 +56,18 @@ impl Session {
     /// Report a retained failure without transferring its original cause or source custody.
     #[cfg(feature = "native-composition")]
     pub(crate) fn source_failed(&self) -> bool {
+        self.source_failure().is_some()
+    }
+
+    /// Borrow the retained failure, the session's own before a host graphics failure, so a
+    /// reply can say what happened.
+    #[cfg(feature = "native-composition")]
+    pub(crate) fn source_failure(&self) -> Option<&(dyn Error + 'static)> {
         #[cfg(windows)]
-        let graphics_failed = self.host_graphics_failure.is_some();
+        let graphics = self.host_graphics_failure.as_deref();
         #[cfg(not(windows))]
-        let graphics_failed = false;
-        self.failed.is_some() || graphics_failed
+        let graphics = None;
+        self.failed.as_deref().or(graphics)
     }
 }
 

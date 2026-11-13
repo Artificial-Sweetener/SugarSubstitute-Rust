@@ -11,15 +11,18 @@ impl CanvasSurfaceRequest {
     /// Encode an outcome bound to this exact session, request, attachment and revision.
     ///
     /// Successful viewport operations require [`Self::viewport_reply`] and their observed state.
+    /// An error reply must say what happened, so its message cannot be blank.
     /// # Errors
-    /// Rejects an invalid operation status, oversized text or serialization failure.
+    /// Rejects an invalid operation status, a blank error message, oversized text or
+    /// serialization failure.
     pub fn reply(
         &self,
         status: CanvasSurfaceReplyStatus,
         message: &str,
     ) -> Result<Vec<u8>, CanvasSurfaceMessageError> {
-        if (status == CanvasSurfaceReplyStatus::Ready
-            && !matches!(self.operation(), CanvasSurfaceOperation::Prepare))
+        if (status == CanvasSurfaceReplyStatus::Error && message.trim().is_empty())
+            || (status == CanvasSurfaceReplyStatus::Ready
+                && !matches!(self.operation(), CanvasSurfaceOperation::Prepare))
             || (status == CanvasSurfaceReplyStatus::Applied
                 && matches!(
                     self.operation(),
