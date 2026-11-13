@@ -28,35 +28,44 @@ pub(in crate::production) type ProbeProcess =
 /// desktop, and a forwarded launch probes a running copy that has not answered.
 #[derive(Default)]
 pub(in crate::production) struct ResponsivenessProbe {
+    /// The verified identity the job or answer belongs to.
+    target: Option<(u32, u64)>,
     job: Option<OwnedJob<ProcessResponsiveness, ProcessError>>,
     answer: Option<ProcessResponsiveness>,
 }
 impl ResponsivenessProbe {
-    /// Return the probe's answer once its blocking job has completed, submitting it first.
-    /// The job's completion wakes the coordinator, so no turn waits on the desktop.
+    /// Return the probe's answer for `target` once its blocking job has completed, submitting
+    /// it first. The job's completion wakes the coordinator, so no turn waits on the desktop.
+    /// An answer or a job in flight for another identity is never reported for `target`: the
+    /// stale job is left to finish under its own bound and its answer is discarded.
     pub(in crate::production) fn observe(
         &mut self,
-        (pid, birth): (u32, u64),
+        target: (u32, u64),
         client: &ExecutionClient,
         scope: &Scope,
         jobs: &crate::job_sequence::JobSequence,
         probe: ProbeProcess,
     ) -> Result<Option<ProcessResponsiveness>> {
+        if self.target != Some(target) {
+            self.answer = None;
+        }
         if let Some(answer) = self.answer {
             return Ok(Some(answer));
         }
         if let Some(job) = &mut self.job {
             let Some(completion) = job.try_take_completion() else { return Ok(None) };
             self.job = None;
-            return match completion.outcome {
-                JobOutcome::Success(answer) => {
-                    self.answer = Some(answer);
-                    Ok(Some(answer))
-                }
-                JobOutcome::Failure(cause) => Err(Box::new(cause)),
-                _ => Err("Desktop responsiveness probe did not complete".into()),
+            let answer = match completion.outcome {
+                JobOutcome::Success(answer) => answer,
+                JobOutcome::Failure(cause) => return Err(Box::new(cause)),
+                _ => return Err("Desktop responsiveness probe did not complete".into()),
             };
+            if self.target == Some(target) {
+                self.answer = Some(answer);
+                return Ok(Some(answer));
+            }
         }
+        let (pid, birth) = target;
         self.job = Some(client.submit_blocking(
             scope,
             JobSpec {
@@ -69,6 +78,7 @@ impl ResponsivenessProbe {
             },
             move |_| probe(pid, birth),
         )?);
+        self.target = Some(target);
         Ok(None)
     }
     /// Forget the answer so the next observation probes again.

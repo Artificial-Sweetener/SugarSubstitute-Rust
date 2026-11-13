@@ -170,7 +170,13 @@ impl ForwardWait {
             && !self.unresponsive
         {
             probed = self.probe.observe((copy.pid, copy.birth), client, scope, jobs, probe)?;
-            if probed == Some(ProcessResponsiveness::Responsive) {
+            // A responsive copy will answer; an exited one is replaced through re-election.
+            // Either way the copy is probed again after another delay, never from a cached
+            // answer.
+            if matches!(
+                probed,
+                Some(ProcessResponsiveness::Responsive | ProcessResponsiveness::Exited)
+            ) {
                 self.probe.reset();
                 self.next_probe_at = now.checked_add(PRESENTATION_DELAY)?;
             }

@@ -214,3 +214,54 @@ fn a_closing_copy_is_waited_for_then_the_launch_continues_by_itself() -> Result<
     );
     Ok(())
 }
+
+/// A previous copy that stopped responding and exits by itself once `exited` is set.
+#[derive(Clone, Default)]
+struct UnresponsiveCopy(ClosingCopy);
+impl ConflictBackend for UnresponsiveCopy {
+    type Error = std::io::Error;
+    fn execute(&self, operation: Op, context: &JobContext) -> std::io::Result<Observation> {
+        match operation {
+            Op::Discover => Ok(Observation::Unresponsive),
+            Op::Observe if !self.0.exited.load(std::sync::atomic::Ordering::Acquire) => {
+                Ok(Observation::Unresponsive)
+            }
+            _ => self.0.execute(operation, context),
+        }
+    }
+    fn relaunch(&self, context: &JobContext) -> std::io::Result<()> {
+        self.0.relaunch(context)
+    }
+    fn retire_relaunch(&self) -> std::io::Result<()> {
+        self.0.retire_relaunch()
+    }
+}
+/// While the question about an unresponsive copy is shown, that copy is still watched: if it
+/// exits by itself, this launch continues without the user choosing anything.
+#[test]
+fn an_unresponsive_copy_that_exits_during_the_question_lets_the_launch_continue() -> Result<()> {
+    let backend = UnresponsiveCopy::default();
+    let mut service = Service::new(backend.clone());
+    let clock = ManualClock::new();
+    service.clock = clock.clone();
+    let wake = Arc::new(Wake::default());
+    service.initialize(wake.clone())?;
+    advance(&mut service, &wake, |service| {
+        service.pending.is_none() && service.phase == Phase::Unresponsive
+    })?;
+    let asked = service.poll();
+    assert_eq!(asked.phase, ConflictPhase::AwaitingDecision);
+    assert!(asked.close_enabled());
+    clock.advance(Duration::from_millis(250))?;
+    advance(&mut service, &wake, |service| service.pending.is_none())?;
+    assert_eq!(service.phase, Phase::Unresponsive);
+    backend.0.exited.store(true, std::sync::atomic::Ordering::Release);
+    clock.advance(Duration::from_millis(250))?;
+    advance(&mut service, &wake, Service::finished)?;
+    assert!(service.continued());
+    assert_eq!(
+        *backend.0.boundary.0.lock().map_err(|_| "boundary poisoned")?,
+        ["retire", "relaunch"]
+    );
+    Ok(())
+}

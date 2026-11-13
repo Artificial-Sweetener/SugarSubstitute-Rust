@@ -90,3 +90,54 @@ fn a_hung_probe_answers_unresponsive_through_its_owned_job() -> Result<()> {
     drop(executor);
     Ok(())
 }
+
+fn exited(_: u32, _: u64) -> std::result::Result<ProcessResponsiveness, ProcessError> {
+    Ok(ProcessResponsiveness::Exited)
+}
+
+/// An answer about one verified identity is never reported for another: after the first copy
+/// exited, its successor is probed afresh and its own hung answer is what decides.
+#[test]
+fn a_cached_answer_never_speaks_for_a_different_copy() -> Result<()> {
+    let wake = Arc::new(Wake::default());
+    let executor = ExecutionOwner::new(Arc::new(ClockPort), wake.clone())?;
+    let client = executor.client();
+    let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
+    let jobs = crate::job_sequence::JobSequence::new();
+    let mut probe = ResponsivenessProbe::default();
+    let first = wake.until(|| {
+        client.drain_completions(std::num::NonZeroUsize::MIN).ok()?;
+        probe.observe((7, 11), &client, &scope, &jobs, exited).ok().flatten()
+    });
+    assert_eq!(first, ProcessResponsiveness::Exited);
+    assert_eq!(probe.observe((8, 12), &client, &scope, &jobs, hung)?, None);
+    let successor = wake.until(|| {
+        client.drain_completions(std::num::NonZeroUsize::MIN).ok()?;
+        probe.observe((8, 12), &client, &scope, &jobs, hung).ok().flatten()
+    });
+    assert_eq!(successor, ProcessResponsiveness::Unresponsive);
+    assert_eq!(probe.target, Some((8, 12)));
+    drop(scope);
+    drop(executor);
+    Ok(())
+}
+
+/// A job still running for a previous identity is never taken as the new identity's answer.
+#[test]
+fn a_stale_probe_in_flight_is_discarded_for_the_new_copy() -> Result<()> {
+    let wake = Arc::new(Wake::default());
+    let executor = ExecutionOwner::new(Arc::new(ClockPort), wake.clone())?;
+    let client = executor.client();
+    let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
+    let jobs = crate::job_sequence::JobSequence::new();
+    let mut probe = ResponsivenessProbe::default();
+    assert_eq!(probe.observe((7, 11), &client, &scope, &jobs, exited)?, None);
+    let successor = wake.until(|| {
+        client.drain_completions(std::num::NonZeroUsize::MIN).ok()?;
+        probe.observe((8, 12), &client, &scope, &jobs, hung).ok().flatten()
+    });
+    assert_eq!(successor, ProcessResponsiveness::Unresponsive);
+    drop(scope);
+    drop(executor);
+    Ok(())
+}

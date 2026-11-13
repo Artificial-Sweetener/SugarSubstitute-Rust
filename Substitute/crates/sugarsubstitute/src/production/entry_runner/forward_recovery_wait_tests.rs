@@ -141,3 +141,30 @@ fn a_silent_server_surfaces_at_two_seconds_on_the_manual_clock() -> Result {
     drop(executor);
     Ok(())
 }
+
+fn exited(_: u32, _: u64) -> std::result::Result<ProcessResponsiveness, ProcessError> {
+    Ok(ProcessResponsiveness::Exited)
+}
+
+/// A copy found exited is never trusted again from a cached answer: the launch keeps
+/// forwarding, and the copy it reaches next is probed after another delay.
+#[test]
+fn an_exited_copy_is_probed_again_after_another_delay() -> Result {
+    let clock = ManualClock::starting_at(at(2_000));
+    let wake = Arc::new(Wake::default());
+    let executor = ExecutionOwner::new(clock.clone(), wake.clone())?;
+    let client = executor.client();
+    let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
+    let jobs = crate::job_sequence::JobSequence::new();
+    let mut wait = forwarding()?;
+    let rescheduled = wake.until(|| {
+        client.drain_completions(std::num::NonZeroUsize::MIN).ok()?;
+        let shown = wait.advance(client.now().ok()?, (&client, &scope, &jobs), exited).ok()?;
+        assert_eq!(shown, None);
+        (wait.wake_at() > at(2_000)).then_some(wait.wake_at())
+    });
+    assert_eq!(rescheduled, at(4_000));
+    drop(scope);
+    drop(executor);
+    Ok(())
+}

@@ -21,7 +21,9 @@ use sugarsubstitute_desktop::{ProcessError, ProcessResponsiveness};
 use sugarsubstitute_supervision::{ClaimError, profile_conflict::Relaunch};
 
 /// The longest single wait on the running copy's exit; the controller observes again after it.
-const EXIT_WAIT_SLICE: Duration = Duration::from_secs(5);
+/// The wait returns the moment the copy exits; the bound only limits how long a choice the
+/// user makes meanwhile, such as "Close it and start", waits behind it.
+const EXIT_WAIT_SLICE: Duration = Duration::from_secs(1);
 
 /// The native operations on a verified running copy; tests substitute their own.
 #[derive(Clone, Copy)]

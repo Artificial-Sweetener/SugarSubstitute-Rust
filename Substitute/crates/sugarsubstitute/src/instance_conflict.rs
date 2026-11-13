@@ -204,7 +204,11 @@ impl<B: ConflictBackend> Service<B> {
         if self.wanted.is_none()
             && matches!(
                 self.phase,
-                Phase::Checking | Phase::Closing(_) | Phase::Forcing | Phase::AwaitingExit
+                Phase::Checking
+                    | Phase::Closing(_)
+                    | Phase::Forcing
+                    | Phase::AwaitingExit
+                    | Phase::Unresponsive
             )
             && self.clock.now() >= self.next_poll
         {
