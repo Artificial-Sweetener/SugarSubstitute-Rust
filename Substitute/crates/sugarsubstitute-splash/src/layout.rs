@@ -39,6 +39,8 @@ pub enum StartupStatus {
     CleanupFailed,
     /// A new version is being applied before the application opens.
     Updating(crate::UpdateVersion),
+    /// The host is updating SugarCubes before ComfyUI loads it.
+    UpdatingSugarCubes,
 }
 
 /// Supply portable appearance state; process and connection state stay elsewhere.

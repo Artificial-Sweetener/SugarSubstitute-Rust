@@ -48,3 +48,32 @@ fn updating_status_names_the_version_in_the_status_clip() -> Result<(), Box<dyn 
     }
     Ok(())
 }
+
+/// "Updating SugarCubes…" replaces the loading words in the same status clip, in every locale.
+#[test]
+fn updating_sugarcubes_replaces_the_loading_words_in_the_status_clip()
+-> Result<(), Box<dyn std::error::Error>> {
+    let feedback = ProgressFrame { completed: 0.0, activity: None };
+    for locale in
+        sugarsubstitute_contracts::localization::LOCALES.iter().map(|messages| messages.id)
+    {
+        let mut renderer = SplashRenderer::new(locale)?;
+        let mut appearance = Appearance { expanded: false, reveal: 0.0, ..Appearance::demo() };
+        let loading =
+            renderer.render(558, 558, 1.0, appearance, AnimationFrame::bootstrap(), feedback)?;
+        appearance.status = crate::StartupStatus::UpdatingSugarCubes;
+        let updating =
+            renderer.render(558, 558, 1.0, appearance, AnimationFrame::bootstrap(), feedback)?;
+        let differs =
+            (486..530).any(|y| (24..534).any(|x| loading.pixel(x, y) != updating.pixel(x, y)));
+        assert!(differs, "{locale}: words changed");
+        for y in 0..558 {
+            for x in 0..558 {
+                if !(24..534).contains(&x) || !(486..530).contains(&y) {
+                    assert_eq!(loading.pixel(x, y), updating.pixel(x, y));
+                }
+            }
+        }
+    }
+    Ok(())
+}

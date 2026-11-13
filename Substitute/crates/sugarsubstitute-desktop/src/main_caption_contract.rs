@@ -66,4 +66,7 @@ pub enum UpdateNotice {
     /// The newer version's files were damaged, so the one before it is running while the
     /// update is downloaded again.
     Repairing,
+    /// One line about this start's SugarCubes update, already in the user's language through
+    /// the host's localization owner.
+    SugarCubes(String),
 }

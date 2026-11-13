@@ -245,3 +245,17 @@ fn a_repair_is_one_plain_line_in_every_language() {
     assert_eq!(caption.activate(DISMISS), (true, None));
     assert_eq!(shown(&caption.view(en)), Vec::<u16>::new());
 }
+
+#[test]
+fn a_sugarcubes_line_is_shown_as_the_host_wrote_it_and_dismissed_like_the_others() {
+    let mut caption = CaptionUpdates::default();
+    caption.notify(Notice::update(crate::UpdateNotice::SugarCubes(
+        "Couldn't update SugarCubes. The version you have keeps working.".into(),
+    )));
+    let view = caption.view(messages("en"));
+    assert_eq!(shown(&view), vec![LINE, DISMISS]);
+    assert_eq!(view.line.text, "Couldn't update SugarCubes. The version you have keeps working.");
+    assert_eq!(caption.activate(LINK), (false, None), "it has no link");
+    assert_eq!(caption.activate(DISMISS), (true, None));
+    assert_eq!(shown(&caption.view(messages("en"))), Vec::<u16>::new());
+}

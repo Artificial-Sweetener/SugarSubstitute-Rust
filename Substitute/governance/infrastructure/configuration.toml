@@ -1031,7 +1031,7 @@ rationale = "Compiled only by the qualification-historical-root proof feature: a
 [[records]]
 path = "crates/sugarsubstitute-splash/src/render_update_tests.rs"
 owner = "sugarsubstitute-splash"
-source_sha256 = "sha256:540f08b5ebbe208f1f61ba94ee04a166604434b83fe26d97e20de2dc1492d8e1"
+source_sha256 = "sha256:f3fd637fd30e050d65b325865807935317f35de653f15732385a08643520f3cb"
 capabilities = ["environment"]
 rationale = "Read only the optional qualification evidence directory for splash captures; the test writes its own rendered frames there and reads or writes no product settings."
 

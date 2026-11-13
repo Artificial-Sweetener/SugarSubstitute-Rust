@@ -142,6 +142,11 @@ pub(super) fn frame(source: &[u8]) -> Result<DecodedFrame<'_>, ProtocolError> {
             DecodedPayload::UpdateStatus { revision, workflow, status: input.take(length)? }
         }
         23 => DecodedPayload::RestartToApply,
+        24 => DecodedPayload::PageFailed(match input.u8()? {
+            1 => super::PageFailure::Unavailable,
+            2 => super::PageFailure::SetupFailed,
+            _ => return Err(ProtocolError::UnsupportedTag),
+        }),
         _ => return Err(ProtocolError::UnsupportedTag),
     };
     input.finish()?;

@@ -48,6 +48,28 @@ pub enum LaunchVersion {
     Updated(String),
 }
 
+/// Longest one-line message about the SugarCubes update, in bytes.
+pub const MAX_PACK_LINE_BYTES: usize = 400;
+
+/// What the host's SugarCubes update did during this start, as the coordinator observed it.
+/// The coordinator updates SugarCubes before ComfyUI loads it; the splash says so meanwhile, and
+/// a start that needs it shows one line about the result, with a report the user can open.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum PackActivity {
+    /// The host is updating SugarCubes before ComfyUI loads it.
+    Updating,
+    /// The SugarCubes update of this start ended.
+    Finished {
+        /// The one line to show, already in the user's language through the localization
+        /// owner, when the result needs one: updated, couldn't check, couldn't update, or the
+        /// previous version running again.
+        line: Option<String>,
+        /// The report of an update that did not complete, for the user to read or hand over.
+        report: Option<UpdateReport>,
+    },
+}
+
 /// A one-time message about updates for the start of the application, in the order a window
 /// shows them. A window shows each at most once per launch.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -58,6 +80,8 @@ pub enum StartupNotice {
     Repairing,
     /// The newer version did not start, so the previous one is running.
     PreviousVersionRunning,
+    /// The one line about this start's SugarCubes update, already in the user's language.
+    SugarCubes(String),
 }
 
 /// One host's update status for its update surfaces. The coordinator owns it; the desktop child
@@ -72,6 +96,8 @@ pub struct UpdateStatus {
     failure: Option<UpdateReport>,
     #[serde(default)]
     launch: Option<LaunchVersion>,
+    #[serde(default)]
+    pack: Option<PackActivity>,
 }
 impl UpdateStatus {
     /// Current activity.
@@ -108,6 +134,17 @@ impl UpdateStatus {
             Some(LaunchVersion::Applying(_)) | None => None,
         }
     }
+    /// What this start's SugarCubes update is doing or did.
+    pub fn pack(&self) -> Option<&PackActivity> {
+        self.pack.as_ref()
+    }
+    /// The report of this start's SugarCubes update, when it did not complete.
+    pub fn pack_report(&self) -> Option<&UpdateReport> {
+        match &self.pack {
+            Some(PackActivity::Finished { report, .. }) => report.as_ref(),
+            Some(PackActivity::Updating) | None => None,
+        }
+    }
     /// The one-time start-up messages this status states, in the order a window shows them. A
     /// repair already says the previous version runs, so it replaces the rollback line.
     pub fn startup_notices(&self) -> Vec<StartupNotice> {
@@ -119,6 +156,9 @@ impl UpdateStatus {
             notices.push(StartupNotice::Repairing);
         } else if self.recorded.previous_version_running {
             notices.push(StartupNotice::PreviousVersionRunning);
+        }
+        if let Some(PackActivity::Finished { line: Some(line), .. }) = &self.pack {
+            notices.push(StartupNotice::SugarCubes(line.clone()));
         }
         notices
     }
@@ -167,6 +207,10 @@ impl UpdateStatus {
     pub fn reconcile(&mut self, recorded: RecordedUpdates) {
         self.recorded = recorded;
     }
+    /// Adopt what this start's SugarCubes update is doing or did.
+    pub fn observe_pack(&mut self, activity: PackActivity) {
+        self.pack = Some(activity);
+    }
     /// Adopt what this launch observed about a version it starts for the first time. A
     /// confirmed version is never taken back by a later `Applying`.
     pub fn observe_launch(&mut self, launch: LaunchVersion) {
@@ -211,6 +255,16 @@ impl UpdateStatus {
                 LaunchVersion::Applying(value) | LaunchVersion::Updated(value) => version(value),
             })
             && self.failure.as_ref().is_none_or(codec::valid_report)
+            && self.pack.as_ref().is_none_or(|pack| match pack {
+                PackActivity::Updating => true,
+                PackActivity::Finished { line, report } => {
+                    line.as_ref().is_none_or(|line| {
+                        !line.trim().is_empty()
+                            && line.len() <= MAX_PACK_LINE_BYTES
+                            && !line.chars().any(char::is_control)
+                    }) && report.as_ref().is_none_or(codec::valid_report)
+                }
+            })
     }
 }
 
@@ -359,5 +413,42 @@ mod tests {
             [StartupNotice::Updated("2.0.0".into()), StartupNotice::Repairing],
             "the repair line already says the previous version runs"
         );
+    }
+
+    #[test]
+    fn the_sugarcubes_update_is_shown_while_it_runs_and_its_line_follows_the_app_messages()
+    -> Result<(), StatusCodecError> {
+        let mut status = UpdateStatus::default();
+        status.observe_pack(PackActivity::Updating);
+        assert_eq!(status.pack(), Some(&PackActivity::Updating));
+        assert!(status.startup_notices().is_empty(), "nothing to say while it runs");
+        assert_eq!(UpdateStatus::decode(&status.encode()?)?, status);
+        let report = UpdateReport {
+            version: Some("0.16.0".into()),
+            phase: AttemptPhase::Downloading,
+            causes: vec!["source".into()],
+        };
+        status.observe_launch(LaunchVersion::Updated("2.0.0".into()));
+        status.observe_pack(PackActivity::Finished {
+            line: Some("Couldn't update SugarCubes.".into()),
+            report: Some(report.clone()),
+        });
+        assert_eq!(
+            status.startup_notices(),
+            [
+                StartupNotice::Updated("2.0.0".into()),
+                StartupNotice::SugarCubes("Couldn't update SugarCubes.".into())
+            ]
+        );
+        assert_eq!(status.pack_report(), Some(&report));
+        assert_eq!(UpdateStatus::decode(&status.encode()?)?, status);
+        for line in ["", "  ", "two\nlines", &"x".repeat(MAX_PACK_LINE_BYTES + 1)] {
+            status
+                .observe_pack(PackActivity::Finished { line: Some(line.to_owned()), report: None });
+            assert_eq!(status.encode(), Err(StatusCodecError::Bounds), "{line:?}");
+        }
+        status.observe_pack(PackActivity::Finished { line: None, report: None });
+        assert!(status.encode().is_ok(), "an up-to-date SugarCubes needs no line");
+        Ok(())
     }
 }

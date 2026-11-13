@@ -43,6 +43,9 @@ pub(super) struct Platform {
         std::collections::VecDeque<sugarsubstitute_contracts::update::status::StartupNotice>,
     /// Report texts the window asked this fake child to export.
     pub(in crate::startup) exported: Vec<String>,
+    /// SugarCubes page failures this fake child was asked to report.
+    pub(in crate::startup) page_failures:
+        Vec<sugarsubstitute_supervision::lifecycle_protocol::PageFailure>,
 }
 impl StartupBackend for Platform {
     type Prepared = Prepared;
@@ -171,6 +174,13 @@ impl StartupBackend for Platform {
         &mut self,
     ) -> Option<sugarsubstitute_contracts::update::status::StartupNotice> {
         self.notices.pop_front()
+    }
+    fn report_page_failure(
+        &mut self,
+        failure: sugarsubstitute_supervision::lifecycle_protocol::PageFailure,
+    ) -> BackendResult<()> {
+        self.page_failures.push(failure);
+        Ok(())
     }
     fn update_report_export(
         &mut self,

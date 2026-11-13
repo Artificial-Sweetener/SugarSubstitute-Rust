@@ -121,6 +121,10 @@ fn payload(
             writer.put(status)
         }
         WirePayload::RestartToApply => Ok(()),
+        WirePayload::PageFailed(failure) => writer.u8(match failure {
+            super::PageFailure::Unavailable => 1,
+            super::PageFailure::SetupFailed => 2,
+        }),
     }
 }
 fn encode_target(

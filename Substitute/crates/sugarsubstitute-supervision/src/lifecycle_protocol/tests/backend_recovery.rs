@@ -108,7 +108,7 @@ fn recovery_frames_reject_prior_future_schema_and_unknown_operation_or_reply_tag
         }
     }
     let [mut request, mut unavailable, mut replaced] = frames()?;
-    request[12..14].copy_from_slice(&24u16.to_le_bytes());
+    request[12..14].copy_from_slice(&25u16.to_le_bytes());
     assert!(matches!(FrameCodec::decode(&request), Err(ProtocolError::UnsupportedTag)));
     for source in [&mut unavailable, &mut replaced] {
         source[104] = 18;

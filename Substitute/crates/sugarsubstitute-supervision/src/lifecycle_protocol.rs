@@ -94,7 +94,10 @@
 //! most `MAX_UPDATE_STATUS_BYTES`, whose content its contract owner decodes and bounds. Kind23
 //! RestartToApply is an empty child request, sent after the close save finished and before
 //! ExitIntent; it grants no process authority, and the coordinator relaunches only when the
-//! child then exits normally.
+//! child then exits normally. Kind24 PageFailed is a child request carrying u8 1 (SugarCubes
+//! unavailable) or 2 (SugarCubes setup failed), sent once when the start's page readiness
+//! failed for SugarCubes and before the attempt settles; the coordinator only records it for
+//! the pack's trial verdict and it grants nothing.
 //! Only schema14 is accepted; parent and captured child deploy together.
 //! Unknown tags and trailing bytes reject; no future operation is implied.
 mod binary;
@@ -118,7 +121,9 @@ pub use main_types::{
     BackendPeer, GrantedContext, MainFailureCode, MainStage, MainStageFailure, VersionLabel,
 };
 pub use output::OutputDelivery;
-pub use payload::{CapabilityRef, DecodedPayload, LeaseReference, WirePayload, WorkflowQueue};
+pub use payload::{
+    CapabilityRef, DecodedPayload, LeaseReference, PageFailure, WirePayload, WorkflowQueue,
+};
 pub use raw_windows::{
     FolderFragment, MAX_FOLDER_FRAGMENT_UNITS, MAX_PROFILE_FOLDER_UNITS, RawWindowsUnits,
 };

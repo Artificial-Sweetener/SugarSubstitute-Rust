@@ -78,3 +78,29 @@ fn malformed_update_status_frames_reject() -> TestResult {
     ));
     Ok(())
 }
+
+#[test]
+fn a_sugarcubes_page_failure_round_trips_as_a_child_request_and_unknown_causes_reject() -> TestResult
+{
+    for failure in [PageFailure::Unavailable, PageFailure::SetupFailed] {
+        let source = encoded(WirePayload::PageFailed(failure))?;
+        let decoded = FrameCodec::decode(&source)?;
+        assert!(decoded.header.request.is_some(), "a page failure is a child request");
+        assert!(matches!(decoded.payload, DecodedPayload::PageFailed(read) if read == failure));
+    }
+    let mut unknown = encoded(WirePayload::PageFailed(PageFailure::Unavailable))?;
+    unknown[HEADER_BYTES] = 3;
+    assert!(matches!(FrameCodec::decode(&unknown), Err(ProtocolError::UnsupportedTag)));
+    let mut trailing = encoded(WirePayload::PageFailed(PageFailure::SetupFailed))?;
+    trailing.push(0);
+    set_length(&mut trailing);
+    assert!(matches!(FrameCodec::decode(&trailing), Err(ProtocolError::TrailingBytes)));
+    let mut without_request = header(24)?;
+    without_request.request = None;
+    let message = WireMessage {
+        header: without_request,
+        payload: WirePayload::PageFailed(PageFailure::Unavailable),
+    };
+    assert!(matches!(FrameCodec::encode(&message, &mut [0; 256]), Err(ProtocolError::Identity)));
+    Ok(())
+}

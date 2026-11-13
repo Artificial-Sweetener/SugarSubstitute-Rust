@@ -70,6 +70,11 @@ impl EntryActivation for RetainedChild {
     fn restart_to_apply_requested(&self) -> bool {
         false
     }
+    fn take_page_failure(
+        &mut self,
+    ) -> Option<sugarsubstitute_supervision::lifecycle_protocol::PageFailure> {
+        None
+    }
     fn normal_close_requested(&self) -> bool {
         false
     }

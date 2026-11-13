@@ -54,7 +54,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute/src/production/entry_runner.rs"
-source_sha256 = "sha256:5a304c308fd0fce98492a700362fcee2767e8a3033995dd5502d34836117b24a"
+source_sha256 = "sha256:495fce5b4bdac0fe860492dce13c23e95d1858a1e04c0f9291d2859f778d1d6d"
 kind = "presentation"
 rationale = "Host composition of localized native startup/profile-conflict feedback. Authenticated configuration/selected installer language is retained when available; failures before configuration use canonical English. Original causes remain diagnostic details. Retain real entry, authority, child and execution lifetimes through native pumping."
 
@@ -744,7 +744,7 @@ rationale = "Caption layout places the host's localized caption labels and the c
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_caption_contract.rs"
-source_sha256 = "sha256:0a9d41d1f49cbf919d88b65bb1675ed913ac3101ca3068586267cf5ba8acfa3e"
+source_sha256 = "sha256:68327858e84164f2211f26f387b438e6a0eb566ac1161fa1908d78f5a78d3b3d"
 kind = "native"
 rationale = "Main caption contracts borrow localized labels from the host. They define presentation data and no catalog or fallback policy."
 

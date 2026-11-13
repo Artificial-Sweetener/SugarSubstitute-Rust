@@ -3088,7 +3088,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: An 
 [[records]]
 path = "crates/sugarsubstitute/src/production/entry_runner/tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:8dc657a8adc4c704176c2146858ae755249deee9cac2b4024e0327ad9945bad5"
+source_sha256 = "sha256:c1c6e92677fd2c9ec9cc08b40a6d1261278a515eb43a6820fbff70ef11401bdc"
 capabilities = ["std::fs::create_dir", "std::fs::remove_dir", "std::fs::remove_file", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Fail configuration before any environment capture and observe real runner joins. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -4559,7 +4559,7 @@ rationale = "Owned temporary PNG outputs are read into the fixture cache as enco
 [[records]]
 path = "crates/sugarsubstitute/src/startup/platform_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:490072e12fe04f7a9fd282ff5d65fa96f0ccd69482f35f936346cb1326faab65"
+source_sha256 = "sha256:843e2f6306186325099ee0ce0fc080074f65b165a83b8ca23c6f00fdaab4278c"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
 rationale = "An owned temporary cache anchor verifies platform startup rejects invalid canvas scope and path configurations."
@@ -5091,7 +5091,7 @@ disposition = "fixture"
 [[records]]
 path = "crates/sugarsubstitute-splash/src/render_update_tests.rs"
 owner = "sugarsubstitute-splash"
-source_sha256 = "sha256:540f08b5ebbe208f1f61ba94ee04a166604434b83fe26d97e20de2dc1492d8e1"
+source_sha256 = "sha256:f3fd637fd30e050d65b325865807935317f35de653f15732385a08643520f3cb"
 capabilities = ["std::fs::write"]
 disposition = "fixture"
 rationale = "Splash fixture observation for the updating status. Writes only its own rendered frames to the optional qualification evidence directory, not runtime storage."

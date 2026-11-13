@@ -314,6 +314,12 @@ impl EntryActivation for ProfileComponent {
     fn restart_to_apply_requested(&self) -> bool {
         false
     }
+    /// The qualification child loads no SugarCubes page.
+    fn take_page_failure(
+        &mut self,
+    ) -> Option<sugarsubstitute_supervision::lifecycle_protocol::PageFailure> {
+        None
+    }
     fn normal_close_requested(&self) -> bool {
         self.complete && self.failure.is_none() && self.profile_retirement_ready()
     }

@@ -171,6 +171,12 @@ impl StartupBackend for ProductionChild {
     ) -> Option<sugarsubstitute_contracts::update::status::StartupNotice> {
         self.bootstrap.channel_mut().updates_mut().take_notice()
     }
+    fn report_page_failure(
+        &mut self,
+        failure: sugarsubstitute_supervision::lifecycle_protocol::PageFailure,
+    ) -> BackendResult<()> {
+        ProductionChild::report_page_failure(self, failure)
+    }
     fn update_report_export(
         &mut self,
         text: String,

@@ -52,3 +52,26 @@ fn the_splash_says_updating_only_while_the_new_version_is_unconfirmed() -> Backe
     assert_eq!(window_content::updating(&host.child, StartupStatus::Loading), None);
     Ok(())
 }
+
+#[test]
+fn the_splash_says_updating_sugarcubes_while_the_host_updates_it() -> BackendResult<()> {
+    use sugarsubstitute_contracts::update::status::PackActivity;
+    let mut host = host()?;
+    let mut status = UpdateStatus::default();
+    status.observe_pack(PackActivity::Updating);
+    host.child.update_status = Some(status.clone());
+    assert_eq!(
+        window_content::updating(&host.child, StartupStatus::Loading),
+        Some(StartupStatus::UpdatingSugarCubes)
+    );
+    assert_eq!(window_content::updating(&host.child, StartupStatus::RetryReady), None);
+    status.observe_pack(PackActivity::Finished { line: None, report: None });
+    host.child.update_status = Some(status);
+    assert_eq!(window_content::updating(&host.child, StartupStatus::Loading), None);
+    host.child.notices.push_back(StartupNotice::SugarCubes("Updated SugarCubes".into()));
+    assert_eq!(
+        host.take_update_notice(),
+        Some(UpdateNotice::SugarCubes("Updated SugarCubes".into()))
+    );
+    Ok(())
+}

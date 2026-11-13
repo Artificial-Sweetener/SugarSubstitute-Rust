@@ -32,6 +32,11 @@ impl<C: EntryActivation> EntryRunner<C> {
         if let Some(launch) = self.launch_version() {
             self.update_status.observe_launch(launch);
         }
+        if let Some(failure) = self.child.take_page_failure() {
+            // The pack's own trial judges this start by it once the pack updater is wired here.
+            tracing::warn!(operation = "sugarcubes_page_failed", failure = ?failure,
+                "The SugarCubes page failed during this start");
+        }
         let (revision, status) = self.update_status.snapshot();
         // Offered every turn, so a desktop child that starts later still receives it.
         self.child.publish_update_status(revision, status)?;

@@ -7,14 +7,17 @@
 //! next free write slot carries the newest status and queue under a fresh revision, so a revoked
 //! write is simply sent again with whatever is newest by then. Snapshots go out after replies
 //! and the UI watchdog's challenge. The child's RestartToApply only records intent: the entry
-//! runner relaunches when the child then exits normally, and never otherwise.
+//! runner relaunches when the child then exits normally, and never otherwise. The child's
+//! PageFailed only records how the SugarCubes page failed this start, for the pack's verdict.
 use super::{ParentLifecycle, ParentResources, Result, types::WritePurpose, workflow_watch};
 use std::{num::NonZeroU64, time::Duration};
 use sugarsubstitute_contracts::{
     execution::Moment,
     update::status::{MAX_STATUS_BYTES, UpdateStatus},
 };
-use sugarsubstitute_supervision::lifecycle_protocol::{WireHeader, WirePayload, WorkflowQueue};
+use sugarsubstitute_supervision::lifecycle_protocol::{
+    PageFailure, WireHeader, WirePayload, WorkflowQueue,
+};
 
 /// How long one snapshot write may wait for the child to read.
 const WRITE: Duration = Duration::from_secs(30);
@@ -29,6 +32,8 @@ pub(super) struct OutgoingUpdates {
     revision: u64,
     writing: bool,
     restart_to_apply: bool,
+    /// How the SugarCubes page failed this start, until the entry runner takes it.
+    page_failure: Option<PageFailure>,
     watch: workflow_watch::WorkflowWatch,
 }
 impl OutgoingUpdates {
@@ -52,6 +57,12 @@ impl OutgoingUpdates {
     /// The authenticated child finished its close save and is exiting so an update applies.
     pub(super) fn restart_to_apply(&mut self) {
         self.restart_to_apply = true;
+    }
+
+    /// The authenticated child reported that the SugarCubes page failed this start. The first
+    /// report stands; the child sends at most one.
+    pub(super) fn page_failed(&mut self, failure: PageFailure) {
+        self.page_failure.get_or_insert(failure);
     }
 
     /// When the workflow watch's reconnect is due.
@@ -113,6 +124,11 @@ impl ParentLifecycle {
         self.updates.observe_queue();
     }
 
+    /// Take, once, how the authenticated child said the SugarCubes page failed this start.
+    pub(crate) fn take_page_failure(&mut self) -> Option<PageFailure> {
+        self.updates.page_failure.take()
+    }
+
     /// Whether the authenticated child said it is exiting so a prepared update applies.
     /// This is intent only; the caller still requires the child's normal exit.
     pub(crate) fn restart_to_apply_requested(&self) -> bool {
@@ -165,6 +181,10 @@ mod tests {
         assert!(!updates.restart_to_apply);
         updates.restart_to_apply();
         assert!(updates.restart_to_apply);
+        updates.page_failed(PageFailure::SetupFailed);
+        updates.page_failed(PageFailure::Unavailable);
+        assert_eq!(updates.page_failure.take(), Some(PageFailure::SetupFailed), "first stands");
+        assert_eq!(updates.page_failure, None, "taken once");
         Ok(())
     }
 }

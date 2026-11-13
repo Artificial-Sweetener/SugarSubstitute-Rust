@@ -27,6 +27,8 @@ pub struct UpdateMessages {
     pub whats_new: &'static str,
     /// Splash line while the new version is being applied; contains [`VERSION`].
     pub applying: &'static str,
+    /// Splash line while the host updates SugarCubes before ComfyUI loads it.
+    pub updating_sugarcubes: &'static str,
     /// First start on a new version; contains [`VERSION`].
     pub updated: &'static str,
     /// The new version did not start, so the one before it runs.
@@ -39,7 +41,7 @@ pub struct UpdateMessages {
 
 impl UpdateMessages {
     /// Enumerate every owned label for complete registry coverage checks.
-    pub const fn labels(&self) -> [&'static str; 18] {
+    pub const fn labels(&self) -> [&'static str; 19] {
         let p = self.phases;
         [
             self.ready,
@@ -50,6 +52,7 @@ impl UpdateMessages {
             self.dismiss,
             self.whats_new,
             self.applying,
+            self.updating_sugarcubes,
             self.updated,
             self.previous_running,
             self.repairing,
@@ -92,6 +95,7 @@ pub static EN: UpdateMessages = UpdateMessages {
     dismiss: "Dismiss",
     whats_new: "What's new",
     applying: "Updating to version {version}…",
+    updating_sugarcubes: "Updating SugarCubes…",
     updated: "Updated to version {version}",
     previous_running: "The previous version is running.",
     repairing: "SugarSubstitute is running the previous version while it repairs the update.",
@@ -116,6 +120,7 @@ pub static ZH_HANS: UpdateMessages = UpdateMessages {
     dismiss: "关闭",
     whats_new: "新功能",
     applying: "正在更新到版本 {version}…",
+    updating_sugarcubes: "正在更新 SugarCubes…",
     updated: "已更新到版本 {version}",
     previous_running: "正在运行之前的版本。",
     repairing: "SugarSubstitute 正在运行之前的版本，同时修复这次更新。",
@@ -140,6 +145,7 @@ pub static JA: UpdateMessages = UpdateMessages {
     dismiss: "閉じる",
     whats_new: "新機能",
     applying: "バージョン {version} に更新しています…",
+    updating_sugarcubes: "SugarCubes を更新しています…",
     updated: "バージョン {version} に更新しました",
     previous_running: "以前のバージョンで動作しています。",
     repairing: "SugarSubstitute は更新を修復する間、以前のバージョンで動作しています。",
@@ -164,6 +170,7 @@ pub static KO: UpdateMessages = UpdateMessages {
     dismiss: "닫기",
     whats_new: "새로운 기능",
     applying: "버전 {version}(으)로 업데이트하는 중…",
+    updating_sugarcubes: "SugarCubes를 업데이트하는 중…",
     updated: "버전 {version}(으)로 업데이트됨",
     previous_running: "이전 버전이 실행 중입니다.",
     repairing: "SugarSubstitute가 업데이트를 복구하는 동안 이전 버전으로 실행 중입니다.",
@@ -188,6 +195,7 @@ pub static ES: UpdateMessages = UpdateMessages {
     dismiss: "Descartar",
     whats_new: "Novedades",
     applying: "Actualizando a la versión {version}…",
+    updating_sugarcubes: "Actualizando SugarCubes…",
     updated: "Actualizado a la versión {version}",
     previous_running: "Se está usando la versión anterior.",
     repairing: "SugarSubstitute está usando la versión anterior mientras repara la actualización.",

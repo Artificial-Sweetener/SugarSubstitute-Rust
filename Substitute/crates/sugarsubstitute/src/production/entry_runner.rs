@@ -106,6 +106,10 @@ pub(crate) trait EntryActivation {
     /// Whether a desktop child that asked to restart so an update applies has since completed
     /// a normal close. A crashed or failed child never counts.
     fn restart_to_apply_requested(&self) -> bool;
+    /// Take, once, how a live desktop child said the SugarCubes page failed during its start.
+    fn take_page_failure(
+        &mut self,
+    ) -> Option<sugarsubstitute_supervision::lifecycle_protocol::PageFailure>;
     /// Borrow its original retained fatal failure without separating its custody.
     /// An exposed source closes runner admission even when the last turn returned Active.
     fn failure_source(&self) -> Option<&(dyn Error + 'static)>;

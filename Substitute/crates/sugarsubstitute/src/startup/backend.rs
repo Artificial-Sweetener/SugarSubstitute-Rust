@@ -221,6 +221,11 @@ pub trait StartupBackend {
     fn take_update_notice(
         &mut self,
     ) -> Option<sugarsubstitute_contracts::update::status::StartupNotice>;
+    /// Tell the coordinator, once, how the SugarCubes page failed during this start.
+    fn report_page_failure(
+        &mut self,
+        failure: sugarsubstitute_supervision::lifecycle_protocol::PageFailure,
+    ) -> BackendResult<()>;
     /// A writer that exports the open update report, whose plain text is `text`, to the file
     /// the user chooses; `None` hides Export and keeps Copy.
     fn update_report_export(

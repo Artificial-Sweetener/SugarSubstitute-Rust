@@ -146,6 +146,16 @@ pub enum WirePayload<'a> {
     },
     /// Tag23: the child's close save finished and it is exiting so the update applies.
     RestartToApply,
+    /// Tag24: the SugarCubes page failed during this start; the coordinator judges the pack by it.
+    PageFailed(PageFailure),
+}
+/// How the SugarCubes page failed during a start, as the page's readiness probe reported it.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PageFailure {
+    /// Wire 1: the installed SugarCubes extension could not be observed on the page.
+    Unavailable,
+    /// Wire 2: SugarCubes reported that its extension setup failed.
+    SetupFailed,
 }
 /// What the coordinator observes of the backend's workflow queue.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -183,6 +193,7 @@ impl WirePayload<'_> {
             Self::MainRevealed(_) => 21,
             Self::UpdateStatus { .. } => 22,
             Self::RestartToApply => 23,
+            Self::PageFailed(_) => 24,
         }
     }
 }
@@ -288,4 +299,6 @@ pub enum DecodedPayload<'a> {
     },
     /// Tag23: the child's close save finished and it is exiting so the update applies.
     RestartToApply,
+    /// Tag24: how the SugarCubes page failed during this start, as the child claims it.
+    PageFailed(PageFailure),
 }

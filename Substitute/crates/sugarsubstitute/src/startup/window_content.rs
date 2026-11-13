@@ -100,6 +100,7 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
             }
             StartupNotice::Repairing => UpdateNotice::Repairing,
             StartupNotice::PreviousVersionRunning => UpdateNotice::PreviousVersionRunning,
+            StartupNotice::SugarCubes(line) => UpdateNotice::SugarCubes(line),
         })
     }
 
@@ -236,6 +237,7 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
         let session = self.startup.as_mut().map(PreparedStartup::session_mut);
         let route = self.policy.native(observation, session)?;
         self.route(route)?;
+        self.report_page_failure();
         if let Some(identity) = revealed
             && let Some(startup) = &self.startup
             && !self.policy.closing()
@@ -304,8 +306,9 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
 
 /// The splash line while this launch starts a new version for the first time: "Updating to
 /// version X…" in place of the ordinary loading lines, until the coordinator confirms the
-/// version. Failure, retry and cleanup lines always win, and a version label the splash cannot
-/// show leaves the ordinary line.
+/// version; and "Updating SugarCubes…" while the host updates SugarCubes before ComfyUI loads
+/// it. Failure, retry and cleanup lines always win, and a version label the splash cannot show
+/// leaves the ordinary line.
 pub(super) fn updating<B: StartupBackend>(
     child: &B,
     current: sugarsubstitute_splash::StartupStatus,
@@ -317,6 +320,35 @@ pub(super) fn updating<B: StartupBackend>(
     ) {
         return None;
     }
-    let version = child.update_status()?.applying()?;
-    sugarsubstitute_splash::UpdateVersion::new(version).map(StartupStatus::Updating)
+    let status = child.update_status()?;
+    if let Some(version) = status.applying() {
+        return sugarsubstitute_splash::UpdateVersion::new(version).map(StartupStatus::Updating);
+    }
+    matches!(status.pack(), Some(sugarsubstitute_contracts::update::status::PackActivity::Updating))
+        .then_some(StartupStatus::UpdatingSugarCubes)
+}
+
+impl<B: StartupBackend> StartupHost<B> {
+    /// When this start's page readiness failed because of SugarCubes, tell the coordinator how,
+    /// so the SugarCubes version just installed can be judged and restored. The child sends it
+    /// once; a report that cannot go out is logged, and the start's own failure stands.
+    fn report_page_failure(&mut self) {
+        use sugarsubstitute_application::startup::SessionFailure;
+        use sugarsubstitute_contracts::startup::ReadinessFailure;
+        use sugarsubstitute_supervision::lifecycle_protocol::PageFailure;
+        let failure = self.startup.as_ref().and_then(|startup| match startup.session().failure() {
+            Some(SessionFailure::Frontend(probe)) => match probe.code {
+                ReadinessFailure::SugarcubesUnavailable => Some(PageFailure::Unavailable),
+                ReadinessFailure::SugarcubesFailed => Some(PageFailure::SetupFailed),
+                ReadinessFailure::FrontendUnavailable | ReadinessFailure::TimedOut => None,
+            },
+            Some(SessionFailure::Adapter(_)) | None => None,
+        });
+        if let Some(failure) = failure
+            && let Err(cause) = self.child.report_page_failure(failure)
+        {
+            tracing::warn!(operation = "sugarcubes_page_failure_report", cause = %cause,
+                "The SugarCubes page failure could not be reported to the coordinator");
+        }
+    }
 }

@@ -381,6 +381,13 @@ impl EntryActivation for ProductionActivation {
         }
         Ok(())
     }
+    fn take_page_failure(
+        &mut self,
+    ) -> Option<sugarsubstitute_supervision::lifecycle_protocol::PageFailure> {
+        self.records.iter_mut().flatten().find_map(|retained| {
+            retained.record.parent.as_deref_mut().and_then(|parent| parent.take_page_failure())
+        })
+    }
     fn restart_to_apply_requested(&self) -> bool {
         self.records.iter().flatten().any(|retained| {
             retained

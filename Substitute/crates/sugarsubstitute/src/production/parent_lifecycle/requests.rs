@@ -36,6 +36,7 @@ impl ParentLifecycle {
             DecodedPayload::ExitIntent { .. } => Some("ExitIntent"),
             DecodedPayload::ExitCompleted(_) => Some("ExitCompleted"),
             DecodedPayload::RestartToApply => Some("RestartToApply"),
+            DecodedPayload::PageFailed(_) => Some("PageFailed"),
             _ => None,
         };
         if let Some(startup_operation) = startup_operation {
@@ -278,6 +279,10 @@ impl ParentLifecycle {
             }
             DecodedPayload::RestartToApply => {
                 self.updates.restart_to_apply();
+                self.requests.get_mut(index)?.reply = Some(Reply::Acknowledged);
+            }
+            DecodedPayload::PageFailed(failure) => {
+                self.updates.page_failed(failure);
                 self.requests.get_mut(index)?.reply = Some(Reply::Acknowledged);
             }
             DecodedPayload::ExitIntent { shutdown, intent, expected_code } => {

@@ -22,6 +22,7 @@ enum Control {
     Release(LeaseReference),
     ExitIntent,
     RestartToApply,
+    PageFailed(sugarsubstitute_supervision::lifecycle_protocol::PageFailure),
     ExitCompleted,
 }
 #[derive(Clone, Copy)]
@@ -48,8 +49,10 @@ pub(super) struct ChildShutdown {
     intent: Option<CompletionIntent>,
     intent_deadline: Option<Moment>,
     pending: Option<Pending>,
-    queued: [Option<Control>; 5],
+    queued: [Option<Control>; 6],
     restart_requested: bool,
+    /// The SugarCubes page failure of this start went out; the child reports at most one.
+    page_failure_reported: bool,
 }
 impl ChildShutdown {
     /// Accept only a requested current native absence fact after actual application
@@ -90,8 +93,9 @@ impl ChildShutdown {
             intent: None,
             intent_deadline: None,
             pending: None,
-            queued: [None; 5],
+            queued: [None; 6],
             restart_requested: false,
+            page_failure_reported: false,
         }
     }
     pub(super) fn closing(&self) -> bool {
@@ -212,6 +216,21 @@ impl ProductionChild {
         }
         self.shutdown.queue(Control::RestartToApply)?;
         self.shutdown.restart_requested = true;
+        self.advance_control()
+    }
+    /// Tell the coordinator, once, how the SugarCubes page failed during this start, so the
+    /// pack updater can judge the SugarCubes version it just installed.
+    /// # Errors
+    /// Returns a full control queue or channel failure.
+    pub(in crate::production) fn report_page_failure(
+        &mut self,
+        failure: sugarsubstitute_supervision::lifecycle_protocol::PageFailure,
+    ) -> Result<()> {
+        if self.shutdown.page_failure_reported || !self.bootstrap.channel_mut().registered() {
+            return Ok(());
+        }
+        self.shutdown.queue(Control::PageFailed(failure))?;
+        self.shutdown.page_failure_reported = true;
         self.advance_control()
     }
     pub(in crate::production) fn begin_workspace_close(&mut self) -> Result<ShutdownInitiation> {

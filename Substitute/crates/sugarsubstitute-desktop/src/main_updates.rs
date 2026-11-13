@@ -92,6 +92,8 @@ pub(crate) enum Notice {
     PreviousVersionRunning,
     /// The previous version is running while the newer one is repaired.
     Repairing,
+    /// A host-localized line about this start's SugarCubes update.
+    SugarCubes(String),
 }
 
 impl Notice {
@@ -112,6 +114,7 @@ impl Notice {
             }
             crate::UpdateNotice::PreviousVersionRunning => Self::PreviousVersionRunning,
             crate::UpdateNotice::Repairing => Self::Repairing,
+            crate::UpdateNotice::SugarCubes(line) => Self::SugarCubes(line),
         }
     }
 }
@@ -273,6 +276,9 @@ impl CaptionUpdates {
             },
             Some(Notice::PreviousVersionRunning) => PeerView::shown(true, updates.previous_running),
             Some(Notice::Repairing) => PeerView::shown(true, updates.repairing),
+            Some(Notice::SugarCubes(line)) => {
+                PeerView { visible: true, label: updates.dismiss, text: Cow::Owned(line.clone()) }
+            }
         };
         UpdateCaptionView {
             glyph,
