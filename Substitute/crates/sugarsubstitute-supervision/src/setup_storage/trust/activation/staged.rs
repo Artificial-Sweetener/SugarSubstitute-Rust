@@ -7,12 +7,14 @@
 //! bytes holding only its preparation and setup exclusions, so trust readers and other short
 //! trust operations proceed meanwhile. [`StagedDelivery::commit`] takes the writer again, rereads
 //! trust and release history, verifies the same evidence against them, authorizes the release
-//! history and runs the caller's publication in that one hold. A root rotation, subscription
+//! history and runs the caller's publication in that one hold, handing it the receipt facts
+//! ([`PreparedRelease`]) for exactly what that hold verified. A root rotation, subscription
 //! change or different authorized package in between fails the commit with
 //! [`TrustFailure::AuthorityChanged`] before anything is published.
 use super::*;
 use crate::setup_storage::AuthorityChange;
 use sugarsubstitute_contracts::update::subscription::Subscription;
+use sugarsubstitute_update::PreparedRelease;
 
 /// Local authority observed under the trust writer and required unchanged at commit.
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -144,7 +146,8 @@ impl<'a> UpdateAuthorization<'a> {
 }
 impl StagedDelivery<'_> {
     /// Reverify against current trust and release history, authorize the history and run
-    /// `publish` in one writer hold. `publish` receives a recheck for use between its writes.
+    /// `publish` in one writer hold. `publish` receives the verified offer, the receipt facts
+    /// that this hold's trust binds to it, and a recheck for use between its writes.
     /// # Errors
     /// Returns `AuthorityChanged` when the root rotated, the subscription changed or current
     /// trust authorizes a different package; verification, storage, lock and cancellation
@@ -153,7 +156,11 @@ impl StagedDelivery<'_> {
         self,
         mut now: impl FnMut() -> i64,
         context: &JobContext,
-        publish: impl FnOnce(&VerifiedOffer, &mut dyn FnMut() -> io::Result<()>) -> io::Result<T>,
+        publish: impl FnOnce(
+            &VerifiedOffer,
+            &PreparedRelease,
+            &mut dyn FnMut() -> io::Result<()>,
+        ) -> io::Result<T>,
     ) -> Result<T, TrustFailure> {
         let authorization = self.authorization;
         authorization.trust.protected(context, |protection| {
@@ -172,7 +179,20 @@ impl StagedDelivery<'_> {
             {
                 return Err(TrustFailure::AuthorityChanged(AuthorityChange::OfferChanged));
             }
-            held.publish(authorization, self.evidence, &mut now, protection, context, publish)
+            let release = held.trust.prepared_release(
+                authorization.request,
+                &held.offer,
+                authorization.descriptor,
+                held.time,
+            )?;
+            held.publish(
+                authorization,
+                self.evidence,
+                &mut now,
+                protection,
+                context,
+                |offer, recheck| publish(offer, &release, recheck),
+            )
         })
     }
 }

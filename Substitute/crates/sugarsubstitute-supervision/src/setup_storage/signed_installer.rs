@@ -220,7 +220,7 @@ impl SignedPreparation {
         Ok(SignedCandidate {
             candidate,
             trust: self.trust,
-            offer: self.offer,
+            authority: CandidateAuthority::Offer(Box::new(self.offer)),
             _custody: CandidateCustody::Imported { _prepared: Box::new(self.prepared) },
         })
     }
@@ -230,8 +230,15 @@ impl SignedPreparation {
 pub struct SignedCandidate {
     candidate: Arc<PreparedCandidate>,
     trust: TrustStore,
-    offer: AuthenticatedOffer,
+    authority: CandidateAuthority,
     _custody: CandidateCustody,
+}
+
+/// What each trial admission rechecks: current signed metadata, or the protected receipt
+/// written when this candidate was prepared (D22), used only when metadata is stale or absent.
+enum CandidateAuthority {
+    Offer(Box<AuthenticatedOffer>),
+    Receipt { receipt: Box<UpdateReceipt>, request: Request },
 }
 
 /// Keep installation mutation and saved configuration custody through either delivery path.
@@ -249,7 +256,11 @@ impl SignedCandidate {
     /// A rejected competing package must not replace the existing candidate's cached offer.
     /// Reserve offer-cache capacity alongside retained preparation and trust-operation capacity.
     pub(crate) fn save_restart_evidence(&self, context: &JobContext) -> Result<(), TrustFailure> {
-        self.trust.remember_offer(&self.offer, context)
+        match &self.authority {
+            CandidateAuthority::Offer(offer) => self.trust.remember_offer(offer, context),
+            // A receipt adds no signed bytes; the existing cache entry stays as it is.
+            CandidateAuthority::Receipt { .. } => Ok(()),
+        }
     }
 
     /// Exact verified candidate directory; no health or accepted-selection claim is implied.
@@ -288,12 +299,16 @@ impl SignedCandidate {
         let mut run = InstallationRun::acquire(store, context).map_err(io::Error::other)?;
         *recovery =
             Some(self.candidate.reserve_unstarted(&run, context).map_err(io::Error::other)?);
-        let admitted = Arc::clone(&self.candidate).begin_trial(
-            &mut run,
-            &self.offer.authorization(&self.trust),
-            now,
-            context,
-        )?;
+        let admitted = match &self.authority {
+            CandidateAuthority::Offer(offer) => Arc::clone(&self.candidate).begin_trial(
+                &mut run,
+                &offer.authorization(&self.trust),
+                now,
+                context,
+            )?,
+            CandidateAuthority::Receipt { receipt, request } => Arc::clone(&self.candidate)
+                .begin_received_trial(&mut run, &self.trust, receipt, request, now, context)?,
+        };
         Ok(run.transfer_candidate(admitted, context).map_err(io::Error::other)?)
     }
 }

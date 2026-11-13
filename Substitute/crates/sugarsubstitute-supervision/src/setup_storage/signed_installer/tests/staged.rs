@@ -26,6 +26,7 @@ fn unpublished(fixture: &Fixture, context: &JobContext) -> TestResult {
     };
     let directory = fixture.installation.path().join("releases").join(generation.id.as_str());
     assert!(!directory.join("application-update-v1.record").exists());
+    assert!(!directory.join(crate::setup_storage::UPDATE_RECEIPT_FILE).exists());
     Ok(())
 }
 
@@ -64,6 +65,12 @@ fn trust_readers_and_writers_proceed_while_the_payload_is_copied() -> TestResult
             Some(Candidate::Prepared { generation }) if generation == candidate.generation()
         ));
         assert!(candidate.directory().join("application-update-v1.record").is_file());
+        // D22: the commit hold wrote the receipt for exactly this prepared generation.
+        let receipt = other.update_receipt(context)?.ok_or("Update receipt absent")?;
+        assert_eq!(receipt.generation(), candidate.generation());
+        assert_eq!(receipt.release().sequence, 1);
+        assert_eq!(receipt.release().root_version, 1);
+        assert_eq!(receipt.release().received_at, NOW);
         fixture.preserved()
     })
 }

@@ -67,6 +67,11 @@ impl RepositoryTrust {
         self.checkpoint.encode()
     }
 
+    /// Accepted floors for crate-internal decisions that must not reread or mutate trust.
+    pub(crate) fn accepted(&self) -> &Checkpoint {
+        &self.checkpoint
+    }
+
     /// Versioned root filename to request next, including when the current root has expired.
     /// # Errors
     /// Rejects damaged trusted state or exhausted version space.

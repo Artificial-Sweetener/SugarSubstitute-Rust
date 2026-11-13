@@ -63,7 +63,7 @@ impl UpdaterPackage {
                     .map_err(io::Error::other)
             })?;
         let payload = self.stage_payload(&generation, context)?;
-        staged.commit(now, context, |_, recheck| {
+        staged.commit(now, context, |_, _, recheck| {
             recheck()?;
             self.trust.complete_updater(&generation, context).map_err(io::Error::other)
         })?;

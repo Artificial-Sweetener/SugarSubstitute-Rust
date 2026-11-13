@@ -82,6 +82,10 @@ impl Checkpoint {
         }
         Ok(value)
     }
+    /// Newest authenticated targets version and the SHA-256 of its exact signed bytes.
+    pub(crate) fn targets_floor(&self) -> (u32, [u8; 32]) {
+        (self.targets.version, self.targets.digest)
+    }
     /// Serialize the current accepted root and all verified role floors for atomic publication.
     pub(super) fn encode(&self) -> Result<Vec<u8>, Error> {
         let bytes = serde_json::to_vec(self)?;

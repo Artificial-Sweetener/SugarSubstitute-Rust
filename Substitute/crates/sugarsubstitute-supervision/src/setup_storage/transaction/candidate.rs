@@ -20,6 +20,11 @@ enum Evidence {
         _inventory: File,
         _marker: File,
     },
+    /// Reopened on its protected update receipt; trial admission rechecks that receipt.
+    Received {
+        _inventory: File,
+        _marker: File,
+    },
 }
 
 /// Prepared candidate runtime and its current durable selection identity.
@@ -30,7 +35,7 @@ enum Evidence {
 /// accepting a trial requires authenticated application health and the live installation owner.
 pub struct PreparedCandidate {
     generation: Generation,
-    directory: Directory,
+    pub(super) directory: Directory,
     pub(super) installation: Directory,
     pub(super) snapshot: std::sync::Mutex<InstallationRecord>,
     _payload: super::super::bundle::VerifiedRuntime,
@@ -74,6 +79,9 @@ impl PreparedCandidate {
             Evidence::Installed { .. } => {
                 Err(invalid("Installed authorization requires its retained installation choice")
                     .into())
+            }
+            Evidence::Received { .. } => {
+                Err(invalid("A received update is admitted through its update receipt").into())
             }
             Evidence::Archive(bundle) => {
                 let bytes = bundle
@@ -190,8 +198,10 @@ impl PreparedInstallation {
         let payload = stage()?;
         let directory = Directory::open(&self.generation, false)?;
         let installation = Directory::open(self.session.admission.root.path(), false)?;
-        staged.commit(now, context, |offer, recheck| {
+        staged.commit(now, context, |offer, release, recheck| {
             authorization.record_generation(offer, &generation, &directory, context)?;
+            // D22: the receipt is written in this same hold, before the prepared record exists.
+            authorization.record_receipt(release, &generation, &directory, context)?;
             recheck()?;
             let prepared = if matches!(staging.candidate(), Some(Candidate::Staging { .. })) {
                 let prepared = staging.prepared(&generation).map_err(io::Error::other)?;

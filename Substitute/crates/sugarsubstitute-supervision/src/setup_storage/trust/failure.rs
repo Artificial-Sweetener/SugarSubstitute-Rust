@@ -26,6 +26,9 @@ pub enum TrustFailure {
     /// Signing authority or the local subscription changed between authenticating an offer and
     /// committing its preparation. Nothing was published; the next check prepares again.
     AuthorityChanged(AuthorityChange),
+    /// A prepared update's receipt cannot stand in for expired or missing metadata now.
+    /// Nothing was started; the accepted version runs and the next online check prepares again.
+    ReceiptRefused(sugarsubstitute_update::ReceiptRefusal),
     /// Accepted trust could not be saved. No offer is returned; both failures are retained.
     Publication {
         /// Publication or serialization cause.
@@ -62,6 +65,7 @@ impl fmt::Display for TrustFailure {
             Self::AuthorityChanged(AuthorityChange::OfferChanged) => {
                 "Authorized update changed during preparation"
             }
+            Self::ReceiptRefused(_) => "Prepared update cannot start without a fresh check",
             Self::Publication { .. } => "Update trust could not be committed",
         })
     }
@@ -71,6 +75,7 @@ impl Error for TrustFailure {
         match self {
             Self::Storage(cause) | Self::Publication { storage: cause, .. } => Some(cause),
             Self::Verification(cause) => Some(cause),
+            Self::ReceiptRefused(cause) => Some(cause),
             Self::Retirement { operation, .. } => Some(operation.as_ref()),
             Self::LockTimeout | Self::LockCancelled | Self::AuthorityChanged(_) => None,
         }
