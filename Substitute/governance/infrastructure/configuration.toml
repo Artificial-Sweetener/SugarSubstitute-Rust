@@ -429,14 +429,14 @@ rationale = "Tooling reads governance policy TOML to record reviewed source fing
 [[records]]
 path = "tools/update-repository/src/main.rs"
 owner = "sugarsubstitute-update-repository"
-source_sha256 = "sha256:2d65c4e259f824cad7d7dac32bf9de5f8f3321b25cec6392cb3cb014d0f3bda6"
+source_sha256 = "sha256:42fe06efb5ef6212200e0040f97473e18438638111dd27aa713656a600fe51e3"
 capabilities = ["arguments"]
 rationale = "Release-CI signing tool command line; its options select a repository folder, keys and times, never product settings."
 
 [[records]]
 path = "tools/update-repository/src/storage.rs"
 owner = "sugarsubstitute-update-repository"
-source_sha256 = "sha256:31250bbfae3c27afe8583f03e7ec92e8f5e3d84fd4059a146c10b38d6ade562f"
+source_sha256 = "sha256:ab07795647c065d9d246e184b4c7ea95850d4628e238ff5f9aab50b1fb7447b8"
 capabilities = ["environment"]
 rationale = "Signing keys reach release CI only as secrets in the environment, named by an env:NAME key reference; never product settings."
 

@@ -13,6 +13,7 @@
 //! the filesystem except [storage], which the command line uses.
 pub mod keys;
 pub mod lifetimes;
+pub mod offer;
 mod repository;
 mod sign;
 pub mod storage;

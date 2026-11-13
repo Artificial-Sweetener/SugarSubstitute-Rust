@@ -4058,15 +4058,15 @@ rationale = "Repository tooling updater_qualification.py: updater qualification 
 [[records]]
 path = "tools/update-repository/src/storage.rs"
 owner = "sugarsubstitute-update-repository"
-source_sha256 = "sha256:31250bbfae3c27afe8583f03e7ec92e8f5e3d84fd4059a146c10b38d6ade562f"
-capabilities = ["method metadata", "method sync_all", "std::fs::File::create", "std::fs::File::open", "std::fs::OpenOptions::new", "std::fs::metadata", "std::fs::read", "std::fs::read_dir", "std::fs::read_to_string", "std::fs::rename", "std::fs::symlink_metadata", "std::fs::write"]
+source_sha256 = "sha256:ab07795647c065d9d246e184b4c7ea95850d4628e238ff5f9aab50b1fb7447b8"
+capabilities = ["method metadata", "method sync_all", "std::fs::File::create", "std::fs::File::open", "std::fs::OpenOptions::new", "std::fs::metadata", "std::fs::read", "std::fs::read_dir", "std::fs::read_to_string", "std::fs::remove_file", "std::fs::rename", "std::fs::symlink_metadata", "std::fs::write"]
 disposition = "tooling"
-rationale = "Release-CI signing tool: reads the downloaded repository folder, keys and release targets, creates new versioned metadata exclusively and replaces the timestamp and descriptors by rename; never product storage."
+rationale = "Release-CI signing tool: reads the downloaded repository folder, keys and release targets, creates new versioned metadata, release packages and their descriptors exclusively and replaces the timestamp and descriptors by rename; never product storage."
 
 [[records]]
 path = "tools/update-repository/tests/repository/cli.rs"
 owner = "sugarsubstitute-update-repository"
-source_sha256 = "sha256:85480255a88171f61a23e521427889fcb2cc453abc634e4df3b2122f768f7fb0"
+source_sha256 = "sha256:8c1ee1b0b10327c1004720396f24e9fe1bd78bb0eb879bbb3498571e09719cab"
 capabilities = ["std::fs::copy", "std::fs::create_dir", "std::fs::read", "std::fs::read_to_string", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Isolated temporary repository, key and target folders drive the signing command line end to end; never product storage."

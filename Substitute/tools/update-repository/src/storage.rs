@@ -6,7 +6,11 @@
 //! are created exclusively, so a published version is never rewritten; `timestamp.json` is
 //! replaced through a rename, after every other file is written.
 use crate::{
-    Error, Files, Published, invalid, keys::SigningKey, sign::NewTarget, verify::Payloads,
+    Error, Files, Published, invalid,
+    keys::SigningKey,
+    offer::{self, Descriptor, Route},
+    sign::NewTarget,
+    verify::Payloads,
 };
 use sha2::{Digest, Sha256};
 use std::{
@@ -243,4 +247,47 @@ fn stream_file(path: &Path, sink: &mut dyn FnMut(&[u8]) -> Result<(), Error>) ->
         }
         sink(buffer.get(..read).unwrap_or_default())?;
     }
+}
+
+/// Place a sealed package under its content-addressed name in `folder`, beside the descriptor
+/// that offers it on `route` as `version`, ready to pass to `release` as its two `--target`s.
+/// Both files are created exclusively; the package copy is described again after copying, so a
+/// package that changed while it was read is refused. Returns the descriptor and both paths.
+/// # Errors
+/// Refuses existing outputs, unreadable or oversized packages and descriptors installations
+/// would not admit.
+pub fn write_offer(
+    folder: &Path,
+    package: &Path,
+    route: Route,
+    version: &str,
+    minimum_updater_release: u64,
+) -> Result<(Descriptor, PathBuf, PathBuf), Error> {
+    let source = describe_target(package)?;
+    if source.descriptor.is_some() {
+        return Err(invalid(format!("{} is a descriptor, not a package", source.name)));
+    }
+    let descriptor =
+        offer::describe(route, version, minimum_updater_release, source.sha256, source.length)?;
+    let digest: String = source.sha256.iter().map(|byte| format!("{byte:02x}")).collect();
+    let package_path = folder.join(format!("{digest}.ssupdate"));
+    let descriptor_path = folder.join(&descriptor.name);
+    for path in [&package_path, &descriptor_path] {
+        if fs::symlink_metadata(path).is_ok() {
+            return Err(invalid(format!("{} already exists", path.display())));
+        }
+    }
+    let mut copy = fs::OpenOptions::new().write(true).create_new(true).open(&package_path)?;
+    io::copy(&mut fs::File::open(package)?, &mut copy)?;
+    copy.sync_all()?;
+    drop(copy);
+    let copied = describe_target(&package_path)?;
+    if copied.sha256 != source.sha256 || copied.length != source.length {
+        fs::remove_file(&package_path)?;
+        return Err(invalid(format!("{} changed while it was copied", package.display())));
+    }
+    let mut file = fs::OpenOptions::new().write(true).create_new(true).open(&descriptor_path)?;
+    file.write_all(&descriptor.bytes)?;
+    file.sync_all()?;
+    Ok((descriptor, package_path, descriptor_path))
 }
