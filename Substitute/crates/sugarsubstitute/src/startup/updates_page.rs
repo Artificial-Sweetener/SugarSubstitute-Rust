@@ -32,34 +32,28 @@ struct Page {
 /// One host's updates answers for whichever navigation is current.
 pub(crate) struct UpdatesPage {
     current_version: UpdatesVersion,
-    status: Box<dyn UpdateStatusPort>,
-    workflow: Box<dyn WorkflowActivitySource>,
     page: Option<Page>,
     receipts: VecDeque<PanelIngressReceipt>,
     outbox: VecDeque<UpdatesCommand>,
 }
 
 impl UpdatesPage {
-    /// Answer from `status` and `workflow`, reporting this build's version.
+    /// Answers reporting this build's version.
     ///
     /// # Errors
     /// Rejects a build version the updates schema cannot carry.
-    pub(crate) fn new(
-        status: Box<dyn UpdateStatusPort>,
-        workflow: Box<dyn WorkflowActivitySource>,
-    ) -> Result<Self, Box<dyn Error>> {
+    pub(crate) fn new() -> Result<Self, Box<dyn Error>> {
         Ok(Self {
             current_version: UpdatesVersion::new(CURRENT_VERSION)?,
-            status,
-            workflow,
             page: None,
             receipts: VecDeque::new(),
             outbox: VecDeque::new(),
         })
     }
 
-    /// Consume one page request, attributed to `identity` and admitted with `claim`, and queue
-    /// its answers in the order the page must see them.
+    /// Consume one page request, attributed to `identity` and admitted with `claim`, decide it
+    /// with the host's `updater` and `workflow`, and queue its answers in the order the page
+    /// must see them.
     ///
     /// # Errors
     /// Rejects an allocation too small for the control-lane receipt, or answer storage the
@@ -70,6 +64,8 @@ impl UpdatesPage {
         message: UpdatesClientMessage,
         lease: MemoryLease,
         claim: MemoryClaim,
+        updater: &mut dyn UpdateStatusPort,
+        workflow: &dyn WorkflowActivitySource,
     ) -> Result<(), Box<dyn Error>> {
         // Consuming the request returns its control-lane credit to the page.
         self.receipts.push_back(PanelIngressReceipt::control(identity, claim)?);
@@ -84,22 +80,27 @@ impl UpdatesPage {
         let Some(page) = &mut self.page else {
             return Ok(());
         };
-        let answers = page.session.receive(message, &mut *self.status, &*self.workflow);
+        let answers = page.session.receive(message, updater, workflow);
         for answer in answers {
             self.queue(&answer)?;
         }
         Ok(())
     }
 
-    /// Queue a newer state when what the current page shows has changed.
+    /// Queue a newer state when what the current page shows from `updater` and `workflow` has
+    /// changed.
     ///
     /// # Errors
     /// Rejects state storage the page's lease cannot fund.
-    pub(crate) fn refresh(&mut self) -> Result<(), Box<dyn Error>> {
+    pub(crate) fn refresh(
+        &mut self,
+        updater: &dyn UpdateStatusPort,
+        workflow: &dyn WorkflowActivitySource,
+    ) -> Result<(), Box<dyn Error>> {
         let Some(page) = &mut self.page else {
             return Ok(());
         };
-        if let Some(state) = page.session.refresh(&*self.status, &*self.workflow) {
+        if let Some(state) = page.session.refresh(updater, workflow) {
             self.queue(&state)?;
         }
         Ok(())

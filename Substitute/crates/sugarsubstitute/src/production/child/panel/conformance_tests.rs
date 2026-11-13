@@ -125,7 +125,7 @@ impl Host {
             panel,
             deliveries,
             memory: MemoryGovernor::new(Box::new(Machine), MemoryPreference::default()),
-            updates: UpdatesPage::new(Box::new(IdleUpdateStatus), Box::new(IdleWorkflowActivity))?,
+            updates: UpdatesPage::new()?,
             now: Moment::from_nanos(1),
         })
     }
@@ -171,7 +171,14 @@ impl Host {
             }
             Some("sugarcubes.updates") => {
                 let message = UpdatesClientMessage::decode(&bytes)?;
-                self.updates.observe(self.identity, message, self.lease.clone(), claim()?)?;
+                self.updates.observe(
+                    self.identity,
+                    message,
+                    self.lease.clone(),
+                    claim()?,
+                    &mut IdleUpdateStatus,
+                    &IdleWorkflowActivity,
+                )?;
                 while let Some(command) = self.updates.take_command() {
                     if let DesktopStartupCommand::SendUpdates(update) = command {
                         answers.push(serde_json::from_slice(update.payload())?);

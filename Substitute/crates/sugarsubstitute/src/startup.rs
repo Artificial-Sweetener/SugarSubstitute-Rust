@@ -24,6 +24,9 @@ mod consume_diagnostic;
 mod delivery;
 #[path = "startup/execution.rs"]
 mod execution;
+#[cfg(all(windows, any(feature = "windows-native-host", test)))]
+#[path = "startup/host_updates.rs"]
+mod host_updates;
 #[path = "startup/lifetime.rs"]
 mod lifetime;
 #[cfg(all(windows, any(feature = "windows-native-host", test)))]
@@ -188,13 +191,8 @@ impl<B: StartupBackend> StartupHost<B> {
             canvas: None,
             #[cfg(all(windows, any(feature = "windows-native-host", test)))]
             memory: None,
-            // Until the coordinator's update status reaches this host, the page is told the
-            // truth this host knows: up to date and idle, with no workflow to wait for.
             #[cfg(all(windows, any(feature = "windows-native-host", test)))]
-            updates: updates_page::UpdatesPage::new(
-                Box::new(sugarsubstitute_application::updates_panel::IdleUpdateStatus),
-                Box::new(sugarsubstitute_application::updates_panel::IdleWorkflowActivity),
-            )?,
+            updates: updates_page::UpdatesPage::new()?,
             #[cfg(all(windows, feature = "native-composition"))]
             composition: None,
             #[cfg(all(windows, feature = "native-composition"))]

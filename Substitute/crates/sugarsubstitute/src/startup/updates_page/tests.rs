@@ -3,8 +3,7 @@
 //! Prove that update answers reach the current navigation in order, funded by its own lease.
 
 use super::*;
-use std::{cell::Cell, rc::Rc};
-use sugarsubstitute_application::updates_panel::{IdleUpdateStatus, IdleWorkflowActivity};
+use sugarsubstitute_application::updates_panel::IdleUpdateStatus;
 use sugarsubstitute_contracts::{
     execution::{Generation, MemoryRelease},
     host_updates::UpdatesRequestName,
@@ -20,11 +19,11 @@ impl MemoryRelease for Release {
     fn release(&self, _: u64) {}
 }
 
-/// A workflow-activity source the test switches while the link owns it.
-struct SharedWorkflow(Rc<Cell<bool>>);
-impl WorkflowActivitySource for SharedWorkflow {
+/// Whether the backend runs a workflow, as the host reads it on each call.
+struct Workflow(bool);
+impl WorkflowActivitySource for Workflow {
     fn workflow_running(&self) -> bool {
-        self.0.get()
+        self.0
     }
 }
 
@@ -50,7 +49,7 @@ fn request(
 ) -> TestResult {
     let lease = MemoryLease::new(1024 * 1024, Box::new(Release));
     let claim = lease.claim(PanelIngressReceipt::STORAGE_BYTES)?;
-    link.observe(identity, message, lease, claim)
+    link.observe(identity, message, lease, claim, &mut IdleUpdateStatus, &Workflow(false))
 }
 
 fn watch(identity: MainIdentity) -> Result<UpdatesClientMessage, Box<dyn Error>> {
@@ -88,7 +87,12 @@ fn drain(link: &mut UpdatesPage) -> Result<Vec<Sent>, Box<dyn Error>> {
 }
 
 fn idle() -> Result<UpdatesPage, Box<dyn Error>> {
-    UpdatesPage::new(Box::new(IdleUpdateStatus), Box::new(IdleWorkflowActivity))
+    UpdatesPage::new()
+}
+
+/// Refresh the page's state with the backend running a workflow or not.
+fn refresh(link: &mut UpdatesPage, running: bool) -> TestResult {
+    link.refresh(&IdleUpdateStatus, &Workflow(running))
 }
 
 #[test]
@@ -97,7 +101,7 @@ fn a_watch_returns_its_credit_first_then_the_state_with_a_revision() -> TestResu
     let mut link = idle()?;
     request(&mut link, page, watch(page)?)?;
     assert_eq!(drain(&mut link)?, [Sent::Receipt(page), Sent::Updates(page, Some(1))]);
-    link.refresh()?;
+    refresh(&mut link, false)?;
     assert_eq!(drain(&mut link)?, []);
     Ok(())
 }
@@ -123,15 +127,11 @@ fn every_check_is_answered_even_before_the_page_watches() -> TestResult {
 #[test]
 fn an_undelivered_state_is_superseded_by_a_newer_one_and_answers_are_kept() -> TestResult {
     let page = identity(1)?;
-    let running = Rc::new(Cell::new(false));
-    let mut link =
-        UpdatesPage::new(Box::new(IdleUpdateStatus), Box::new(SharedWorkflow(running.clone())))?;
+    let mut link = idle()?;
     request(&mut link, page, watch(page)?)?;
-    running.set(true);
-    link.refresh()?;
+    refresh(&mut link, true)?;
     request(&mut link, page, check(page, "check-1")?)?;
-    running.set(false);
-    link.refresh()?;
+    refresh(&mut link, false)?;
     assert_eq!(
         drain(&mut link)?,
         [
@@ -160,13 +160,10 @@ fn a_new_navigation_starts_a_new_session_and_drops_the_old_pages_answers() -> Te
 #[test]
 fn a_retired_navigation_receives_nothing_more() -> TestResult {
     let page = identity(1)?;
-    let running = Rc::new(Cell::new(false));
-    let mut link =
-        UpdatesPage::new(Box::new(IdleUpdateStatus), Box::new(SharedWorkflow(running.clone())))?;
+    let mut link = idle()?;
     request(&mut link, page, watch(page)?)?;
     link.retire(page);
-    running.set(true);
-    link.refresh()?;
+    refresh(&mut link, true)?;
     assert_eq!(drain(&mut link)?, [Sent::Receipt(page)]);
     Ok(())
 }

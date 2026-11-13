@@ -46,6 +46,13 @@ impl WorkflowRestart {
         !self.waiting
     }
 
+    /// Whether a restart waits for the running workflow to finish, as the page's Updates entry
+    /// shows it.
+    #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+    pub(super) fn waiting(&self) -> bool {
+        self.waiting
+    }
+
     /// Adopt the newest queue. True once when a waiting restart may start the close.
     pub(super) fn advance(&mut self, queue: WorkflowQueue) -> bool {
         if !self.waiting {
