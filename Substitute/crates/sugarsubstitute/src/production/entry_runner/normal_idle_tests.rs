@@ -121,3 +121,98 @@ fn normal_idle_runner_requires_actual_atomic_empty_intake_and_preserves_first_fe
     assert!(cause.downcast_ref::<OriginalFenceError>().is_some());
     Ok(())
 }
+
+fn runner() -> Result<EntryRunner<super::super::tests::NoChild>, Box<dyn Error>> {
+    let path = PathBuf::from("unopened-relative-input");
+    let command = ProductionCommand {
+        launch_selection: None,
+        installation: path.clone(),
+        diagnostics: Default::default(),
+        options: super::super::tests::unopened_paths()?.into(),
+    };
+    let mut runner = EntryRunner::new(
+        command,
+        path,
+        Box::new(super::super::tests::NoChild(None)),
+        crate::diagnostics::DiagnosticHealth::fixture(),
+    );
+    super::super::tests::freeze_time(&mut runner);
+    runner.launch_update =
+        crate::updates::launch::LaunchUpdate::new(Some(crate::updates::UpdatePolicy::BetaEager));
+    Ok(runner)
+}
+
+/// The admission fence for the runner as it stands; the initial client's transport completion
+/// is a real job completion, so its observed success is supplied once the test reaches it.
+fn admission(
+    runner: &EntryRunner<super::super::tests::NoChild>,
+    initial_retired: bool,
+) -> Admission {
+    let mut admission = runner.normal_admission();
+    admission.initial_retired |= initial_retired;
+    admission
+}
+
+/// A beta-eager check that prepares an update before intake is ready owes a restart: it says
+/// which version it applies at once, waits for the close fence, never closes past an in-flight
+/// entry request, and then closes normally and relaunches into the update.
+#[test]
+fn a_restart_before_the_window_waits_for_the_close_fence_then_closes_normally_and_relaunches()
+-> Result<(), Box<dyn Error>> {
+    use sugarsubstitute_contracts::update::{attempt::AttemptOutcome, status::LaunchVersion};
+    let mut runner = runner()?;
+    runner.launch_update.finish(&AttemptOutcome::Prepared { version: "2.0.0".into() });
+    runner.publish_update_status()?;
+    assert_eq!(runner.update_status.snapshot().1.applying(), Some("2.0.0"));
+    assert_eq!(runner.launch_version(), Some(LaunchVersion::Applying("2.0.0".into())));
+
+    let fences = Cell::new(0);
+    let fence = |idle: bool| {
+        fences.set(fences.get() + 1);
+        Ok::<_, Box<dyn Error>>(idle)
+    };
+    let pending = admission(&runner, false);
+    assert!(pending.requested, "the restart is a requested close");
+    runner.close_after_fence(pending, |_| fence(true))?;
+    assert_eq!(fences.get(), 0, "intake not ready: the fence is not even asked");
+    assert!(!runner.closing && !runner.normal_shutdown);
+
+    runner.initial_completed = true;
+    runner.intake_ready = true;
+    runner.close_after_fence(admission(&runner, true), |_| fence(false))?;
+    assert_eq!(fences.get(), 1);
+    assert!(!runner.closing, "an in-flight entry request holds the close");
+
+    runner.close_after_fence(admission(&runner, true), |_| fence(true))?;
+    assert_eq!(fences.get(), 2);
+    assert!(runner.closing && runner.normal_shutdown);
+    assert!(runner.relaunch_wanted());
+    Ok(())
+}
+
+/// When the window opens before the check prepares its update, nothing restarts: no close is
+/// owed, the splash names no version, and a later close does not relaunch.
+#[test]
+fn an_update_prepared_after_the_window_opened_neither_closes_nor_relaunches()
+-> Result<(), Box<dyn Error>> {
+    use sugarsubstitute_contracts::update::attempt::AttemptOutcome;
+    let mut runner = runner()?;
+    runner.launch_update.window_opened();
+    runner.launch_update.finish(&AttemptOutcome::Prepared { version: "2.0.0".into() });
+    runner.publish_update_status()?;
+    assert_eq!(runner.update_status.snapshot().1.applying(), None);
+    runner.initial_completed = true;
+    runner.intake_ready = true;
+    let owed = admission(&runner, true);
+    assert!(!owed.requested);
+    let fences = Cell::new(0);
+    runner.close_after_fence(owed, |_| {
+        fences.set(fences.get() + 1);
+        Ok(true)
+    })?;
+    assert_eq!(fences.get(), 0);
+    assert!(!runner.closing);
+    runner.normal_shutdown = true;
+    assert!(!runner.relaunch_wanted());
+    Ok(())
+}

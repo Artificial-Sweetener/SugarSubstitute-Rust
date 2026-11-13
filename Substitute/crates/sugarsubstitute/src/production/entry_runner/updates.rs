@@ -122,7 +122,7 @@ impl<C: EntryActivation> EntryRunner<C> {
 
     /// Offer the coordinator's update status, with what this launch does about its version.
     /// Offered every turn, so a desktop child that starts later still receives it.
-    fn publish_update_status(&mut self) -> Result<(), Box<dyn Error>> {
+    pub(super) fn publish_update_status(&mut self) -> Result<(), Box<dyn Error>> {
         if let Some(launch) = self.launch_version() {
             self.update_status.observe_launch(launch);
         }
@@ -134,7 +134,9 @@ impl<C: EntryActivation> EntryRunner<C> {
     /// or, when it runs a trial, applying it until the trial's acceptance is published, then
     /// updated to it. An accepted launch, and a run without installation ownership, start no
     /// new version.
-    fn launch_version(&self) -> Option<sugarsubstitute_contracts::update::status::LaunchVersion> {
+    pub(super) fn launch_version(
+        &self,
+    ) -> Option<sugarsubstitute_contracts::update::status::LaunchVersion> {
         if let Some(version) = self.launch_update.restart() {
             return Some(sugarsubstitute_contracts::update::status::LaunchVersion::Applying(
                 version.to_owned(),
@@ -166,53 +168,5 @@ impl<C: EntryActivation> EntryRunner<C> {
         let native = ScopeSpec { id: self.scopes.allocate()?, deadline: None };
         Parent::new(client, work, cleanup, native, key, application)
             .map_err(|cause| cause as Box<dyn Error>)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::super::tests::{NoChild, unopened_paths};
-    use super::*;
-    use crate::updates::{UpdatePolicy, launch::LaunchUpdate};
-    use sugarsubstitute_contracts::update::{attempt::AttemptOutcome, status::LaunchVersion};
-
-    fn fixture() -> Result<EntryRunner<NoChild>, Box<dyn Error>> {
-        let path = PathBuf::from("unopened-relative-input");
-        let command = ProductionCommand {
-            launch_selection: None,
-            installation: path.clone(),
-            diagnostics: Default::default(),
-            options: unopened_paths()?.into(),
-        };
-        Ok(EntryRunner::new(
-            command,
-            path,
-            Box::new(NoChild(None)),
-            crate::diagnostics::DiagnosticHealth::fixture(),
-        ))
-    }
-
-    /// An update prepared before the window opened is what the splash names, and the close that
-    /// follows relaunches into it; one prepared after the window opened changes neither.
-    #[test]
-    fn an_update_prepared_before_the_window_opened_is_announced_and_owes_a_relaunch()
-    -> Result<(), Box<dyn Error>> {
-        let prepared = AttemptOutcome::Prepared { version: "2.0.0".into() };
-        let mut runner = fixture()?;
-        runner.launch_update = LaunchUpdate::new(Some(UpdatePolicy::BetaEager));
-        assert_eq!(runner.launch_version(), None);
-        runner.launch_update.finish(&prepared);
-        assert_eq!(runner.launch_version(), Some(LaunchVersion::Applying("2.0.0".into())));
-        runner.normal_shutdown = true;
-        assert!(runner.relaunch_wanted());
-
-        let mut opened = fixture()?;
-        opened.launch_update = LaunchUpdate::new(Some(UpdatePolicy::BetaEager));
-        opened.launch_update.window_opened();
-        opened.launch_update.finish(&prepared);
-        assert_eq!(opened.launch_version(), None);
-        opened.normal_shutdown = true;
-        assert!(!opened.relaunch_wanted());
-        Ok(())
     }
 }
