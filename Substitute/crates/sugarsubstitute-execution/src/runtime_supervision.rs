@@ -89,50 +89,13 @@ pub(super) async fn supervise(_exit: WorkerExit, core: Arc<Core>) {
         }
         let now = core.clock.retirement_now();
         let (stopping, deadline, expired_native, custody_notice) = {
-            let mut state = lock(&core.state);
-            let timers_enabled = !state.stopping;
-            let (mut deadline, mut expired_native) = deadlines(&state, now);
-            let mut custody_notice = false;
+            let state = &mut *lock(&core.state);
+            let (deadline, expired_native) = deadlines(state, now);
             #[cfg(any(windows, test))]
-            for record in state.jobs.values_mut() {
-                if record.phase == JobPhase::Running
-                    && let Some(slots) = &mut record.custody_deadlines
-                {
-                    let (next, changed) = slots.scan(now);
-                    expired_native |= changed;
-                    custody_notice |= changed;
-                    if let Some(next) = next {
-                        deadline = Some(deadline.map_or(next, |old| old.min(next)));
-                    }
-                }
-                let commands =
-                    timers_enabled && matches!(record.phase, JobPhase::Queued | JobPhase::Running);
-                let capture_cleanup = (record.native_custody.is_some() && record.held_native())
-                    || (record.process_creation && record.phase == JobPhase::Running);
-                if let Some(slots) = &mut record.native_deadlines {
-                    let (command_deadline, command_expired) =
-                        if commands { slots.scan(now) } else { (None, false) };
-                    let (cleanup_deadline, cleanup_expired) = if capture_cleanup {
-                        slots.scan_capture_cleanup(now)
-                    } else {
-                        (None, false)
-                    };
-                    expired_native |= cleanup_expired;
-                    if let Some(cleanup_deadline) = cleanup_deadline {
-                        deadline = Some(
-                            deadline
-                                .map_or(cleanup_deadline, |earlier| earlier.min(cleanup_deadline)),
-                        );
-                    }
-                    expired_native |= command_expired;
-                    if let Some(command_deadline) = command_deadline {
-                        deadline = Some(
-                            deadline
-                                .map_or(command_deadline, |earlier| earlier.min(command_deadline)),
-                        );
-                    }
-                }
-            }
+            let (deadline, expired_native, custody_notice) =
+                native_deadlines(state, now, deadline, expired_native);
+            #[cfg(not(any(windows, test)))]
+            let custody_notice = false;
             (state.stopping, deadline, expired_native, custody_notice)
         };
         if custody_notice && core.mailbox.signal_capacity() {
@@ -178,6 +141,56 @@ pub(super) async fn supervise(_exit: WorkerExit, core: Arc<Core>) {
     }
 }
 
+/// Fold running native custody and command/cleanup deadlines into the supervisor's next wake.
+///
+/// Returns the earliest deadline, whether any native owner expired, and whether a custody
+/// deadline changed so the mailbox must wake its consumer.
+#[cfg(any(windows, test))]
+fn native_deadlines(
+    state: &mut State,
+    now: Moment,
+    mut deadline: Option<Moment>,
+    mut expired_native: bool,
+) -> (Option<Moment>, bool, bool) {
+    let timers_enabled = !state.stopping;
+    let mut custody_notice = false;
+    for record in state.jobs.values_mut() {
+        if record.phase == JobPhase::Running
+            && let Some(slots) = &mut record.custody_deadlines
+        {
+            let (next, changed) = slots.scan(now);
+            expired_native |= changed;
+            custody_notice |= changed;
+            if let Some(next) = next {
+                deadline = Some(deadline.map_or(next, |old| old.min(next)));
+            }
+        }
+        let commands =
+            timers_enabled && matches!(record.phase, JobPhase::Queued | JobPhase::Running);
+        let capture_cleanup = (record.native_custody.is_some() && record.held_native())
+            || (record.process_creation && record.phase == JobPhase::Running);
+        if let Some(slots) = &mut record.native_deadlines {
+            let (command_deadline, command_expired) =
+                if commands { slots.scan(now) } else { (None, false) };
+            let (cleanup_deadline, cleanup_expired) =
+                if capture_cleanup { slots.scan_capture_cleanup(now) } else { (None, false) };
+            expired_native |= cleanup_expired;
+            if let Some(cleanup_deadline) = cleanup_deadline {
+                deadline = Some(
+                    deadline.map_or(cleanup_deadline, |earlier| earlier.min(cleanup_deadline)),
+                );
+            }
+            expired_native |= command_expired;
+            if let Some(command_deadline) = command_deadline {
+                deadline = Some(
+                    deadline.map_or(command_deadline, |earlier| earlier.min(command_deadline)),
+                );
+            }
+        }
+    }
+    (deadline, expired_native, custody_notice)
+}
+
 fn deadlines(state: &State, now: Moment) -> (Option<Moment>, bool) {
     // Shutdown already wakes/cancels every owner. Expiry cannot schedule retries
     // of retained native teardown, including unrelated unbound native permits.
@@ -187,9 +200,13 @@ fn deadlines(state: &State, now: Moment) -> (Option<Moment>, bool) {
     let mut future = None;
     let mut expired_native = false;
     for record in state.jobs.values() {
+        #[cfg(any(windows, test))]
+        let deadlined = record.native_deadlines.is_some();
+        #[cfg(not(any(windows, test)))]
+        let deadlined = false;
         let native = record.spec.class == JobClass::NativeObservation
             || record.desktop_capture_child()
-            || record.native_deadlines.is_some();
+            || deadlined;
         if record.phase != JobPhase::Queued && !(native && record.phase == JobPhase::Running) {
             continue;
         }
