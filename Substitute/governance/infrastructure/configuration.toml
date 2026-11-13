@@ -163,21 +163,21 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded/authorization.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:3e69cfb98f41ac377a08eda20326e0ecc3c0c606e62c96efd6ebae8da9af5b55"
+source_sha256 = "sha256:3b0e6ff4b67c6dbf4726a599c5ce73296a3d074f4ec480f0b546893eed74743f"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded/authorization/launch/maintenance.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:b75a998dfb9571e2ebf8c5388f49dd25a59c89b639027a28174bf70aa4738b33"
+source_sha256 = "sha256:b46d2125d30138fe7a13ccef3baf4305861aff546b92b1a2e0379fe2d98b9d9f"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded/authorization/launch/running/image.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:464c2ba9a27cc932921d125453ee8abfdf448b5bab3d2bf2af7411a76165e79c"
+source_sha256 = "sha256:98ef11469e5298bf3cefe72c512335d65b21bcb4ac8972d51ded2c79a1a6b8e0"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -219,7 +219,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/test_package/maintenance.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:1ca22fb83e63bd8c5d578b4c5fe70f8ac35f16db81ac4d6dc6a1fb9880742764"
+source_sha256 = "sha256:98bc5c02b8fd693ba39ef5e751793790a2390a85f003b317a5deb093c7f23187"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 

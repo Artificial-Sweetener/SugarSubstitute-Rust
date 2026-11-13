@@ -7,6 +7,7 @@ mod launch;
 mod recovery;
 mod settlement;
 mod unstarted;
+#[cfg(test)]
 pub(in crate::setup_storage) use settlement::unix_now;
 pub(crate) use unstarted::UnstartedTrial;
 #[allow(unsafe_code)]

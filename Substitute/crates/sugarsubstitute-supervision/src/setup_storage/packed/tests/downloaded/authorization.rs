@@ -6,6 +6,11 @@ use local::Delivery;
 use std::path::PathBuf;
 use sugarsubstitute_contracts::update::Component;
 
+/// The fixed UTC Unix time these fixtures prepare records at. Automatic preparation here never
+/// targets a package with strikes and repair preparation ignores strikes, so no outcome depends on
+/// the real clock.
+const PREPARED_AT: u64 = 1_800_000_000;
+
 struct Case<'a> {
     directory: &'a Directory,
     original: &'a Path,

@@ -25,7 +25,7 @@ impl InstallationRun {
             store.protected(context, |protection| {
                 let _writer = super::super::writer(&store.root, protection, context)?;
                 let current = store.read(protection)?.ok_or(SelectionFailure::Missing)?;
-                let resolutions = resolutions(trial, &current)?;
+                let resolutions = resolutions(trial, &current, store.strike_clock())?;
                 if current == trial.snapshot {
                     let settled = match verdict {
                         TrialVerdict::Bad(_) => &resolutions[1],
@@ -74,10 +74,11 @@ pub(super) fn through_contention<T>(
 
 /// Every way this attempt can have been settled: accepted, judged bad, or released without a
 /// verdict. A bad verdict already published keeps its own strike time, so a repeated settlement
-/// recognizes it however much later it runs.
+/// recognizes it however much later it runs. A new strike is dated by the store's `clock`.
 fn resolutions(
     trial: &OwnedTrial,
     current: &InstallationRecord,
+    clock: super::super::StrikeClock,
 ) -> Result<[InstallationRecord; 3], SelectionFailure> {
     let published = current
         .strikes()
@@ -87,7 +88,7 @@ fn resolutions(
         .filter(|_| current != &trial.snapshot);
     let at = match published {
         Some(at) => at,
-        None => unix_now()?,
+        None => clock.now()?,
     };
     Ok([
         trial.snapshot.accept(&trial.attempt)?,
@@ -96,14 +97,10 @@ fn resolutions(
     ])
 }
 
-/// UTC Unix seconds that date strikes and decide whether they still withhold a package. Strikes
-/// only expire, so a wrong clock at worst gives a release one more trial or withholds it for at
-/// most one strike lifetime.
+/// The system clock's UTC Unix seconds, for tests that own no selection store.
+#[cfg(test)]
 pub(in crate::setup_storage) fn unix_now() -> Result<u64, SelectionFailure> {
-    let elapsed = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_err(std::io::Error::other)?;
-    Ok(elapsed.as_secs())
+    super::super::StrikeClock::System.now()
 }
 
 /// Ordinary preparation may advance while this run still owns the same resolved activation.

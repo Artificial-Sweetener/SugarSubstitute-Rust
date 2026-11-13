@@ -145,7 +145,7 @@ impl PreparedInstallation {
                 };
                 let staging = match original.candidate() {
                     None => {
-                        let now = super::super::selection::unix_now().map_err(io::Error::other)?;
+                        let now = store.strike_clock().now().map_err(io::Error::other)?;
                         let staging = original
                             .prepare(generation.clone(), authorization.request.intent, now)
                             .map_err(io::Error::other)?;

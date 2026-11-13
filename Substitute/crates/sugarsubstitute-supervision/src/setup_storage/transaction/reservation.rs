@@ -56,8 +56,7 @@ impl InstallationSession {
                                 .map_err(io::Error::other)?,
                             release: crate::setup_storage::signed_release(offer)?,
                         };
-                        let now = crate::setup_storage::selection::unix_now()
-                            .map_err(io::Error::other)?;
+                        let now = store.strike_clock().now().map_err(io::Error::other)?;
                         let reserved = match before.candidate() {
                             None => before.prepare(
                                 generation.clone(),

@@ -62,6 +62,7 @@ impl TrustStore {
                 workspace: context.memory().clone(),
                 installation: selection.installation().clone(),
                 repository,
+                strike_clock: crate::setup_storage::selection::StrikeClock::System,
             };
             store.read_releases(protection)?;
             let marker = if expected.is_some() {

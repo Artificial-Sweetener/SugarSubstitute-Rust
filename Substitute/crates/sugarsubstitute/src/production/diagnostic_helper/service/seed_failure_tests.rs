@@ -8,43 +8,13 @@ use super::super::{
 };
 use super::*;
 use crate::completion_wake::Wake;
-use std::{
-    io::{self, Write},
-    num::NonZeroUsize,
-    sync::{Arc, Mutex},
-};
+use crate::production::incident_host::tests::constructor::diagnostics::Output;
+use std::{num::NonZeroUsize, sync::Arc};
 use sugarsubstitute_execution::ExecutionOwner;
 use sugarsubstitute_supervision::diagnostic_storage::fixture::{
     DiagnosticFixtureFailure, DiagnosticStorageFixture,
 };
 type TestError = Box<dyn Error + Send + Sync>;
-
-#[derive(Clone, Default)]
-struct Output(Arc<Mutex<Vec<u8>>>);
-impl Write for Output {
-    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-        self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner).extend_from_slice(bytes);
-        Ok(bytes.len())
-    }
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
-impl Output {
-    fn observe(&self) -> tracing::subscriber::DefaultGuard {
-        let output = self.clone();
-        tracing::subscriber::set_default(
-            tracing_subscriber::fmt()
-                .without_time()
-                .with_ansi(false)
-                .with_writer(move || output.clone())
-                .finish(),
-        )
-    }
-    fn text(&self) -> Result<String, std::string::FromUtf8Error> {
-        String::from_utf8(self.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone())
-    }
-}
 
 fn delivered(
     service: &mut SeedService,
