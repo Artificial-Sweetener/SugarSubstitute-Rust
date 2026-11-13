@@ -3,7 +3,7 @@
 //! Observe actual tracing output through an isolated external writer.
 use std::{
     io::{self, Write},
-    sync::{Arc, Mutex},
+    sync::{Arc, LazyLock, Mutex},
 };
 
 #[derive(Clone, Default)]
@@ -17,19 +17,30 @@ impl Write for Output {
         Ok(())
     }
 }
-/// Retain both registrations until the installed formatter has left this thread.
-/// The additional registry is never installed and receives no events or causes.
+/// Callsite interest registrars that live for the whole test process and are never installed.
+///
+/// tracing-core computes a callsite's interest from the registering thread's own default
+/// whenever at most one dispatcher is registered, and caches the result. A capture that is the
+/// only live dispatcher therefore loses every callsite another thread registers, or rebuilds,
+/// without a subscriber: the callsite caches `never` and the capture sees nothing. Two permanent
+/// registrars keep the dispatcher count above one, so interest is always the union over every
+/// live dispatcher, whichever thread registers. They receive no events or causes.
+static CALLSITE_REGISTRARS: LazyLock<[tracing::Dispatch; 2]> = LazyLock::new(|| {
+    [
+        tracing::Dispatch::new(tracing_subscriber::registry()),
+        tracing::Dispatch::new(tracing_subscriber::registry()),
+    ]
+});
+
+/// Retain the installed formatter until it has left this thread.
 pub(in crate::production) struct ScopedCapture {
     _subscriber: tracing::subscriber::DefaultGuard,
-    _callsite_registry: tracing::Dispatch,
 }
 impl Output {
     /// Install a thread-local formatter with independent output and stable callsite interest.
     pub(in crate::production) fn observe(&self) -> ScopedCapture {
-        // The pinned tracing-core single-registrar path samples the registering
-        // thread's default. Two live registrars keep unsubscribed threads from
-        // disabling this capture's shared callsites during first registration.
-        let callsite_registry = tracing::Dispatch::new(tracing_subscriber::registry());
+        // Registered before this formatter, so no registration ever samples a thread default.
+        LazyLock::force(&CALLSITE_REGISTRARS);
         let output = self.clone();
         let subscriber = tracing::subscriber::set_default(
             tracing_subscriber::fmt()
@@ -38,7 +49,7 @@ impl Output {
                 .with_writer(move || output.clone())
                 .finish(),
         );
-        ScopedCapture { _subscriber: subscriber, _callsite_registry: callsite_registry }
+        ScopedCapture { _subscriber: subscriber }
     }
     /// Borrow no runtime cause or custody while inspecting the external diagnostic bytes.
     pub(in crate::production) fn text(&self) -> Result<String, std::string::FromUtf8Error> {
@@ -76,5 +87,26 @@ fn unsubscribed_first_registration_preserves_scoped_capture_and_nested_sink_isol
     assert!(!nested_text.contains("outer-before"));
     assert!(!nested_text.contains("outer-after"));
     assert!(!nested_text.contains("unsubscribed-first"));
+    Ok(())
+}
+
+/// A capture that is the only subscriber anywhere keeps its callsites when another context
+/// without a subscriber rebuilds callsite interest, as a first registration on an unsubscribed
+/// thread does under parallel tests.
+#[test]
+fn a_lone_capture_keeps_interest_rebuilt_from_an_unsubscribed_context()
+-> Result<(), std::string::FromUtf8Error> {
+    let output = Output::default();
+    let _capture = output.observe();
+    capture_probe("before-rebuild");
+    tracing::dispatcher::with_default(&tracing::Dispatch::none(), || {
+        tracing::callsite::rebuild_interest_cache();
+        capture_probe("unsubscribed-rebuild");
+    });
+    capture_probe("after-rebuild");
+    let text = output.text()?;
+    assert!(text.contains("before-rebuild"));
+    assert!(text.contains("after-rebuild"), "{text}");
+    assert!(!text.contains("unsubscribed-rebuild"));
     Ok(())
 }
