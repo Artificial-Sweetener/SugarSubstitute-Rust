@@ -139,7 +139,7 @@ fn unchecked(kinds: &[ReleaseSourceKind]) -> Vec<String> {
 #[test]
 fn source_selection_vectors() -> TestResult {
     let config = config()?;
-    for vector in group("sourceSelection")? {
+    for vector in drive("sourceSelection")? {
         let name = text(&vector, "name")?;
         let temporary = tempfile::tempdir()?;
         let pack =
@@ -225,7 +225,7 @@ fn record_digests(pack: &Path, version: &str) -> TestResult {
 fn update_refusal_vectors() -> TestResult {
     test_worker::run(|context, _| {
         let config = config()?;
-        for vector in group("updateRefusals")? {
+        for vector in drive("updateRefusals")? {
             let name = text(&vector, "name")?;
             let temporary = tempfile::tempdir()?;
             let installed = field(&vector, "installed")?;
@@ -314,7 +314,7 @@ fn installed_version(pack: &Path) -> std::result::Result<String, Failure> {
 
 #[test]
 fn rollback_trigger_vectors() -> TestResult {
-    for vector in group("rollbackTriggers")? {
+    for vector in drive("rollbackTriggers")? {
         let name = text(&vector, "name")?;
         let temporary = tempfile::tempdir()?;
         let mut events = texts(&vector, "events")?;

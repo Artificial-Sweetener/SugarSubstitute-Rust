@@ -115,20 +115,17 @@ pub(crate) fn plan_update(
     Ok(UpdateDecision::Install { offer, from: current, installed, unchecked })
 }
 
+/// Read one source's release list into its newest installable offer.
+type ReadLatest =
+    fn(&ReleaseSourceConfig, &Value) -> std::result::Result<Option<ReleaseOffer>, MetadataError>;
+
 /// Return the newest offer above `current` and the sources that did not answer.
 pub fn newest_offer(
     config: &ReleaseSourceConfig,
     sources: &dyn ReleaseSources,
     current: ReleaseVersion,
 ) -> (Option<ReleaseOffer>, Vec<ReleaseSourceKind>) {
-    let asks: [(
-        ReleaseSourceKind,
-        String,
-        fn(
-            &ReleaseSourceConfig,
-            &Value,
-        ) -> std::result::Result<Option<ReleaseOffer>, MetadataError>,
-    ); 2] = [
+    let asks: [(ReleaseSourceKind, String, ReadLatest); 2] = [
         (ReleaseSourceKind::Registry, config.registry_versions_url(), registry_latest),
         (ReleaseSourceKind::GitHubRelease, config.github_releases_url(), github_latest),
     ];

@@ -422,7 +422,7 @@ rationale = "Crashpad owns native capture configuration; host startup settings d
 [[records]]
 path = "tools/xtask/src/shared_vectors_tests.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:657b4f8c14d936e5b4e0798e0bfe359900ca0be502e2108c5de18468de8018d9"
+source_sha256 = "sha256:2f4ac23ae3bbcd1753cdfceceab5f5a51dca1980a64346716f1b28bd53126013"
 capabilities = ["codec"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
 

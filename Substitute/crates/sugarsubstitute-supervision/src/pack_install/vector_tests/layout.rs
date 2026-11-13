@@ -8,7 +8,7 @@ use crate::setup_storage::test_worker;
 
 #[test]
 fn archive_vectors() -> TestResult {
-    for vector in group("archives")? {
+    for vector in drive("archives")? {
         let name = text(&vector, "name")?;
         let members = list(&vector, "members")?;
         let bytes = zip_bytes(members)?;
@@ -46,7 +46,7 @@ fn archive_vectors() -> TestResult {
 
 #[test]
 fn archive_limit_vectors() -> TestResult {
-    for vector in group("archiveLimits")? {
+    for vector in drive("archiveLimits")? {
         let name = text(&vector, "name")?;
         let limits = field(&vector, "limits")?;
         let number = |key: &str| {
@@ -71,7 +71,7 @@ fn archive_limit_vectors() -> TestResult {
 #[test]
 fn ownership_vectors() -> TestResult {
     test_worker::run(|context, _| {
-        for vector in group("ownership")? {
+        for vector in drive("ownership")? {
             let name = text(&vector, "name")?;
             let temporary = tempfile::tempdir()?;
             let pack = build_folder(temporary.path(), field(&vector, "folder")?, context)?;
@@ -95,7 +95,7 @@ fn ownership_vectors() -> TestResult {
 #[test]
 fn replacement_vectors() -> TestResult {
     test_worker::run(|context, _| {
-        for vector in group("replacements")? {
+        for vector in drive("replacements")? {
             let name = text(&vector, "name")?;
             let temporary = tempfile::tempdir()?;
             let pack = build_folder(temporary.path(), field(&vector, "installed")?, context)?;

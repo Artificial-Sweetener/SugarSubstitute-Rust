@@ -12,9 +12,9 @@ const PYTHON: &str = "Sugar/tests/x/test_x.py";
 const RUST: &str = "crates/host/src/vectors.rs";
 
 const GOOD_VECTORS: &str = r#"{"schema": 1, "formats": {"record": {"version": 2}}, "alpha": [{"name": "a"}, {"name": "b"}]}"#;
-const GOOD_LOADER: &str = "VECTORS_PATH = Path(__file__).with_name(\"vectors.json\")\n";
-const GOOD_PYTHON: &str = "from tests.x.support.loader import load\nGROUPS = {\n    \"formats\": \"test_formats\",\n    \"alpha\": \"test_alpha\",\n}\ndef test_formats() -> None: ...\ndef test_alpha() -> None: ...\n";
-const GOOD_RUST: &str = "const V: &str = include_str!(\"../../../../Sugar/tests/x/support/vectors.json\");\nconst GROUPS: [(&str, &str); 2] = [\n    (\"formats\", \"formats\"),\n    (\"alpha\", \"alpha\"),\n];\n#[test]\nfn formats() {}\n#[test]\nfn alpha() {}\n";
+const GOOD_LOADER: &str = "VECTORS_PATH = Path(__file__).with_name(\"vectors.json\")\n\ndef drive(group: str) -> Mark: ...\n";
+const GOOD_PYTHON: &str = "from tests.x.support.loader import load\nGROUPS = {\n    \"formats\": \"test_formats\",\n    \"alpha\": \"test_alpha\",\n}\n\n@drive(\"formats\")\ndef test_formats() -> None: ...\n\n@drive(\"alpha\")\ndef test_alpha() -> None: ...\n";
+const GOOD_RUST: &str = "const V: &str = include_str!(\"../../../../Sugar/tests/x/support/vectors.json\");\nconst GROUPS: [(&str, &str); 2] = [\n    (\"formats\", \"formats\"),\n    (\"alpha\", \"alpha\"),\n];\nfn drive(name: &str) -> Vec<V> { load(name) }\n#[test]\nfn formats() { for v in drive(\"formats\") {} }\n#[test]\nfn alpha() { for v in drive(\"alpha\") {} }\n";
 
 struct Case {
     fixture: Monorepo,
@@ -73,7 +73,7 @@ fn an_incomplete_rust_table_or_missing_rust_test_is_rejected() -> Result<()> {
     let case = Case::new()?;
     case.rust(&GOOD_RUST.replace("    (\"alpha\", \"alpha\"),\n", ""))?;
     assert!(case.check(2).is_err());
-    case.rust(&GOOD_RUST.replace("#[test]\nfn alpha() {}\n", ""))?;
+    case.rust(&GOOD_RUST.replace("#[test]\nfn alpha() { for v in drive(\"alpha\") {} }\n", ""))?;
     assert!(case.check(2).is_err());
     Ok(())
 }
@@ -84,6 +84,8 @@ fn a_missing_python_test_or_bypassed_loader_is_rejected() -> Result<()> {
     let case = Case::new()?;
     case.sugar(PYTHON, &GOOD_PYTHON.replace("def test_alpha() -> None: ...\n", ""))?;
     assert!(case.check(2).is_err());
+    case.sugar(PYTHON, GOOD_PYTHON)?;
+    case.check(2)?;
     case.sugar(PYTHON, &GOOD_PYTHON.replace("from tests.x.support.loader import load\n", ""))?;
     assert!(case.check(2).is_err());
     Ok(())
@@ -118,6 +120,31 @@ fn duplicate_vector_names_are_rejected() -> Result<()> {
         VECTORS,
         r#"{"schema": 1, "formats": {"record": {"version": 2}}, "alpha": [{"text": "unnamed"}]}"#,
     )?;
+    assert!(case.check(2).is_err());
+    Ok(())
+}
+
+/// Reject a driver that does not take its own group through the accessor in either suite, or a
+/// suite that does not define the accessor, since then a vector could go unexercised.
+#[test]
+fn a_driver_bypassing_the_accessor_is_rejected() -> Result<()> {
+    let case = Case::new()?;
+    case.rust(
+        &GOOD_RUST.replace("for v in drive(\"alpha\") {}", "for v in drive(\"formats\") {}"),
+    )?;
+    assert!(case.check(2).is_err());
+    case.rust(&GOOD_RUST.replace("for v in drive(\"alpha\") {}", "let v = load(\"alpha\")[0];"))?;
+    assert!(case.check(2).is_err());
+    case.rust(&GOOD_RUST.replace("fn drive(name: &str)", "fn all(name: &str)"))?;
+    assert!(case.check(2).is_err());
+    case.rust(GOOD_RUST)?;
+    case.check(2)?;
+    case.sugar(PYTHON, &GOOD_PYTHON.replace("@drive(\"alpha\")\n", ""))?;
+    assert!(case.check(2).is_err());
+    case.sugar(PYTHON, &GOOD_PYTHON.replace("@drive(\"alpha\")\n", "@drive(\"formats\")\n"))?;
+    assert!(case.check(2).is_err());
+    case.sugar(PYTHON, GOOD_PYTHON)?;
+    case.sugar(LOADER, "VECTORS_PATH = Path(__file__).with_name(\"vectors.json\")\n")?;
     assert!(case.check(2).is_err());
     Ok(())
 }

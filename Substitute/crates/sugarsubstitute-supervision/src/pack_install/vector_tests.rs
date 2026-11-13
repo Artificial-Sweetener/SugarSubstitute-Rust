@@ -40,8 +40,27 @@ fn vectors() -> std::result::Result<Value, Failure> {
     Ok(serde_json::from_str(VECTORS)?)
 }
 
-fn group(name: &str) -> std::result::Result<Vec<Value>, Failure> {
-    Ok(list(&vectors()?, name)?.clone())
+/// Return every vector of group `name`, the only way a driver reads its group.
+///
+/// A group is a list of named vectors, an object whose `cases` is one, or (for `formats`) an
+/// object of named entries, each returned with its key as `name`.
+fn drive(name: &str) -> std::result::Result<Vec<Value>, Failure> {
+    let document = vectors()?;
+    let group = field(&document, name)?;
+    if let Some(cases) = group.as_array().or_else(|| group.get("cases").and_then(Value::as_array)) {
+        return Ok(cases.clone());
+    }
+    let entries = group.as_object().ok_or_else(|| format!("{name} is not a vector group"))?;
+    Ok(entries
+        .iter()
+        .map(|(key, entry)| {
+            let mut entry = entry.clone();
+            if let Some(object) = entry.as_object_mut() {
+                object.insert("name".into(), Value::String(key.clone()));
+            }
+            entry
+        })
+        .collect())
 }
 
 fn code(error: &PackInstallError) -> &'static str {
@@ -79,20 +98,25 @@ fn every_vector_group_is_driven_and_every_name_is_unique() -> TestResult {
 
 #[test]
 fn format_versions_match_the_shared_catalog() -> TestResult {
-    let document = vectors()?;
-    let formats = field(&document, "formats")?;
-    let tracking = field(formats, "tracking")?;
-    let digests = field(formats, "digestRecord")?;
-    assert_eq!(text(tracking, "file")?, TRACKING_FILE_NAME);
-    assert_eq!(field(tracking, "version")?.as_u64(), Some(u64::from(TRACKING_FORMAT_VERSION)));
-    assert_eq!(text(digests, "file")?, DIGEST_RECORD_NAME);
-    assert_eq!(field(digests, "version")?.as_u64(), Some(DIGEST_RECORD_VERSION));
+    let mut seen = BTreeSet::new();
+    for format in drive("formats")? {
+        let name = text(&format, "name")?;
+        let (file, version) = match name {
+            "tracking" => (TRACKING_FILE_NAME, u64::from(TRACKING_FORMAT_VERSION)),
+            "digestRecord" => (DIGEST_RECORD_NAME, DIGEST_RECORD_VERSION),
+            other => return Err(format!("the host does not write format {other}").into()),
+        };
+        assert_eq!(text(&format, "file")?, file, "{name}");
+        assert_eq!(field(&format, "version")?.as_u64(), Some(version), "{name}");
+        seen.insert(name.to_owned());
+    }
+    assert_eq!(seen.len(), 2);
     Ok(())
 }
 
 #[test]
 fn tracking_parse_vectors() -> TestResult {
-    for vector in group("trackingParse")? {
+    for vector in drive("trackingParse")? {
         let name = text(&vector, "name")?;
         let expect = field(&vector, "expect")?;
         let parsed = parse_tracking(text(&vector, "text")?.as_bytes());
@@ -113,7 +137,7 @@ fn tracking_parse_vectors() -> TestResult {
 
 #[test]
 fn tracking_render_vectors() -> TestResult {
-    for vector in group("trackingRender")? {
+    for vector in drive("trackingRender")? {
         let entries = texts(&vector, "entries")?
             .iter()
             .map(|entry| parse_entry(entry))
@@ -128,7 +152,7 @@ fn tracking_render_vectors() -> TestResult {
 
 #[test]
 fn local_edit_vectors() -> TestResult {
-    for vector in group("localEdits")? {
+    for vector in drive("localEdits")? {
         let name = text(&vector, "name")?;
         let installed: BTreeMap<String, Option<String>> = field(&vector, "installed")?
             .as_object()
@@ -161,12 +185,12 @@ fn digest_manifest_vectors() -> TestResult {
     let tracking_text = text(&manifests, "trackingText")?;
     let entries = parse_tracking(tracking_text.as_bytes())?;
     let version = text(&manifests, "version")?;
-    for vector in list(&manifests, "cases")? {
-        let name = text(vector, "name")?;
-        let content = serde_json::to_vec(field(vector, "manifest")?)?;
+    for vector in drive("digestManifests")? {
+        let name = text(&vector, "name")?;
+        let content = serde_json::to_vec(field(&vector, "manifest")?)?;
         let recorded =
             parse_digest_record(&content, version, &sha256(tracking_text.as_bytes()), &entries);
-        let expect = field(vector, "expect")?;
+        let expect = field(&vector, "expect")?;
         if field(expect, "applies")?.as_bool() == Some(true) {
             let files: FileDigests = serde_json::from_value(field(expect, "files")?.clone())?;
             assert_eq!(recorded, Some(files), "{name}");

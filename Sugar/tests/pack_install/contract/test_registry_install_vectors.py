@@ -59,31 +59,18 @@ from sugarcubes.backend.pack_install.tracking import (
 from tests.pack_install.support.install_vectors import (
     JsonObject,
     build_folder,
+    drive,
     folder_files,
     load_vectors,
-    vector_group,
     write_archive,
 )
-
-
-def _ids(group: list[JsonObject]) -> list[str]:
-    return [str(vector["name"]) for vector in group]
 
 
 def _expect(vector: JsonObject) -> JsonObject:
     return cast(JsonObject, vector["expect"])
 
 
-TRACKING_PARSE = vector_group("trackingParse")
-TRACKING_RENDER = vector_group("trackingRender")
-ARCHIVES = vector_group("archives")
-ARCHIVE_LIMITS = vector_group("archiveLimits")
-OWNERSHIP = vector_group("ownership")
-LOCAL_EDITS = vector_group("localEdits")
-REPLACEMENTS = vector_group("replacements")
-
-
-@pytest.mark.parametrize("vector", TRACKING_PARSE, ids=_ids(TRACKING_PARSE))
+@drive("trackingParse")
 def test_tracking_parse_vectors(vector: JsonObject) -> None:
     """Each record either yields the listed entries or the listed typed error."""
 
@@ -97,7 +84,7 @@ def test_tracking_parse_vectors(vector: JsonObject) -> None:
     assert [entry.text for entry in parse_tracking(content)] == expected["entries"]
 
 
-@pytest.mark.parametrize("vector", TRACKING_RENDER, ids=_ids(TRACKING_RENDER))
+@drive("trackingRender")
 def test_tracking_render_vectors(vector: JsonObject, tmp_path: Path) -> None:
     """The record keeps archive order and uses the platform separator on disk."""
 
@@ -109,7 +96,7 @@ def test_tracking_render_vectors(vector: JsonObject, tmp_path: Path) -> None:
     assert read_tracking(tmp_path) == entries
 
 
-@pytest.mark.parametrize("vector", ARCHIVES, ids=_ids(ARCHIVES))
+@drive("archives")
 def test_archive_vectors(vector: JsonObject, tmp_path: Path) -> None:
     """Archives are listed in order or refused with the vector's typed error."""
 
@@ -133,7 +120,7 @@ def test_archive_vectors(vector: JsonObject, tmp_path: Path) -> None:
             )
 
 
-@pytest.mark.parametrize("vector", ARCHIVE_LIMITS, ids=_ids(ARCHIVE_LIMITS))
+@drive("archiveLimits")
 def test_archive_limit_vectors(vector: JsonObject, tmp_path: Path) -> None:
     """Size and count bounds refuse an archive before it can fill the disk."""
 
@@ -151,7 +138,7 @@ def test_archive_limit_vectors(vector: JsonObject, tmp_path: Path) -> None:
     assert raised.value.code.value == _expect(vector)["error"]
 
 
-@pytest.mark.parametrize("vector", OWNERSHIP, ids=_ids(OWNERSHIP))
+@drive("ownership")
 def test_ownership_vectors(vector: JsonObject, tmp_path: Path) -> None:
     """Only a plain registry install is owned; everything else says why not."""
 
@@ -166,7 +153,7 @@ def test_ownership_vectors(vector: JsonObject, tmp_path: Path) -> None:
     assert verdict.reason.value == expected["reason"]
 
 
-@pytest.mark.parametrize("vector", LOCAL_EDITS, ids=_ids(LOCAL_EDITS))
+@drive("localEdits")
 def test_local_edit_vectors(vector: JsonObject) -> None:
     """A tracked file differing from the published release is a local edit."""
 
@@ -184,7 +171,7 @@ def test_local_edit_vectors(vector: JsonObject) -> None:
     assert list(changed_tracked_files(installed, published)) == vector["expectChanged"]
 
 
-@pytest.mark.parametrize("vector", REPLACEMENTS, ids=_ids(REPLACEMENTS))
+@drive("replacements")
 def test_replacement_vectors(vector: JsonObject, tmp_path: Path) -> None:
     """Replacing tracked files leaves exactly the vector's resulting folder."""
 
@@ -223,7 +210,7 @@ DIGEST_MANIFESTS = cast(JsonObject, load_vectors()["digestManifests"])
 DIGEST_CASES = cast(list[JsonObject], DIGEST_MANIFESTS["cases"])
 
 
-@pytest.mark.parametrize("vector", DIGEST_CASES, ids=_ids(DIGEST_CASES))
+@drive("digestManifests")
 def test_digest_manifest_vectors(vector: JsonObject) -> None:
     """The digest record is trusted only for the exact install it describes."""
 
@@ -254,18 +241,15 @@ def test_digest_record_renders_exactly_the_shared_bytes() -> None:
     assert rendered == DIGEST_MANIFESTS["rendered"]
 
 
-def test_format_versions_match_the_shared_catalog() -> None:
+@drive("formats")
+def test_format_versions_match_the_shared_catalog(vector: JsonObject) -> None:
     """The record names and versions written here are the ones the vectors declare."""
 
-    formats = cast(dict[str, JsonObject], load_vectors()["formats"])
-    assert formats["tracking"] == {
-        "file": TRACKING_FILE_NAME,
-        "version": TRACKING_FORMAT_VERSION,
+    written = {
+        "tracking": (TRACKING_FILE_NAME, TRACKING_FORMAT_VERSION),
+        "digestRecord": (DIGEST_MANIFEST_NAME, DIGEST_RECORD_VERSION),
     }
-    assert formats["digestRecord"] == {
-        "file": DIGEST_MANIFEST_NAME,
-        "version": DIGEST_RECORD_VERSION,
-    }
+    assert (vector["file"], vector["version"]) == written[str(vector["name"])]
 
 
 # Every vector group and the Python suite that drives each of its vectors. The decision

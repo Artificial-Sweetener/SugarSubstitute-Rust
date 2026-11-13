@@ -212,10 +212,10 @@ pub fn registry_latest(
         payload.as_array().ok_or(MetadataError("The Registry version list is not a list."))?;
     let mut newest: Option<ReleaseOffer> = None;
     for item in list {
-        if let Some(offer) = registry_offer(config, item, None, true)? {
-            if newest.as_ref().is_none_or(|best| offer.version > best.version) {
-                newest = Some(offer);
-            }
+        if let Some(offer) = registry_offer(config, item, None, true)?
+            && newest.as_ref().is_none_or(|best| offer.version > best.version)
+        {
+            newest = Some(offer);
         }
     }
     Ok(newest)

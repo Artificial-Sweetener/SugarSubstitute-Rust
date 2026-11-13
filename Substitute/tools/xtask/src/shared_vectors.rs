@@ -78,17 +78,24 @@ fn check_one(
         reads_in_place && rust[0].1.contains("include_str!("),
         format!("{label}: the Rust suite must include the vector file by its declared path"),
     )?;
+    require(
+        rust[0].1.contains("fn drive(name: &str)"),
+        format!("{label}: the Rust suite must define the accessor drive(name: &str)"),
+    )?;
     let rust_table = table(&rust, |line| pair(line, "(\"", "\", \"", "\"),"));
-    require_driven(label, "Rust", &groups, &rust_table, &rust, |test| {
-        format!("#[test]\nfn {test}(")
-    })?;
+    require_driven(label, "Rust", &groups, &rust_table, &rust, rust_drives)?;
 
     let loader_path = resolve_sibling(root, &shared.python_loader)?;
+    let loader = read(&loader_path)?;
     let file_name = path.file_name().and_then(|name| name.to_str()).unwrap_or_default();
     require(
         loader_path.parent() == path.parent()
-            && read(&loader_path)?.contains(&format!("with_name(\"{file_name}\")")),
+            && loader.contains(&format!("with_name(\"{file_name}\")")),
         format!("{label}: the Python loader must open the vector file beside itself"),
+    )?;
+    require(
+        loader.contains("\ndef drive(group: str)"),
+        format!("{label}: the Python loader must define the decorator drive(group: str)"),
     )?;
     let module = python_module(&shared.python_loader)?;
     let python = shared
@@ -103,9 +110,7 @@ fn check_one(
         )?;
     }
     let python_table = table(&python, |line| pair(line, "\"", "\": \"", "\","));
-    require_driven(label, "Python", &groups, &python_table, &python, |test| {
-        format!("def {test}(")
-    })?;
+    require_driven(label, "Python", &groups, &python_table, &python, python_drives)?;
 
     for (key, format) in &shared.formats {
         let declared = document
@@ -166,28 +171,56 @@ fn pair(line: &str, open: &str, middle: &str, close: &str) -> Option<(String, St
     (plain(group) && plain(test)).then(|| (group.to_owned(), test.to_owned()))
 }
 
+/// Require the tables to cover exactly `groups` and each named test to drive its own group.
 fn require_driven(
     label: &str,
     language: &str,
     groups: &BTreeSet<String>,
     table: &BTreeMap<String, String>,
     sources: &[(&str, String)],
-    definition: impl Fn(&str) -> String,
+    drives: impl Fn(&str, &str, &str) -> Option<bool>,
 ) -> Result<()> {
     let driven: BTreeSet<String> = table.keys().cloned().collect();
     require(
         &driven == groups,
         format!("{label}: the {language} suites must drive exactly the vector groups {groups:?}"),
     )?;
-    for test in table.values() {
+    for (group, test) in table {
+        let found: Vec<bool> = sources
+            .iter()
+            .filter_map(|(_, source)| drives(&source.replace("\r\n", "\n"), test, group))
+            .collect();
         require(
-            sources
-                .iter()
-                .any(|(_, source)| source.replace("\r\n", "\n").contains(&definition(test))),
+            !found.is_empty(),
             format!("{label}: the {language} suites name a missing test {test}"),
+        )?;
+        require(
+            found.iter().all(|uses| *uses),
+            format!(
+                "{label}: the {language} test {test} must take every {group} vector through drive(\"{group}\")"
+            ),
         )?;
     }
     Ok(())
+}
+
+/// Whether the Rust test `test` defined in `source` reads `group` through the accessor; `None`
+/// when `source` does not define it. Its body runs to the next test or the end of the file.
+fn rust_drives(source: &str, test: &str, group: &str) -> Option<bool> {
+    let start = source.find(&format!("#[test]\nfn {test}("))?;
+    let body = &source[start + 1..];
+    let body = body.find("\n#[test]").map_or(body, |end| &body[..end]);
+    Some(body.contains(&format!("drive(\"{group}\")")))
+}
+
+/// Whether the Python test `test` defined in `source` is parametrized over `group` by the
+/// accessor; `None` when `source` does not define it. Its decorators are the lines directly
+/// above the definition.
+fn python_drives(source: &str, test: &str, group: &str) -> Option<bool> {
+    let start = source.find(&format!("\ndef {test}("))?;
+    let head = &source[..start];
+    let decorators = head.rfind("\n\n").map_or(head, |blank| &head[blank..]);
+    Some(decorators.lines().any(|line| line.trim() == format!("@drive(\"{group}\")")))
 }
 
 /// Return the dotted module name of a Python file relative to its component folder.

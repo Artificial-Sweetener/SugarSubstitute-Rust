@@ -57,7 +57,7 @@ from sugarcubes.backend.self_update.release_stager import (
 from tests.pack_install.support.install_vectors import (
     JsonObject,
     build_folder,
-    vector_group,
+    drive,
 )
 from tests.pack_install.support.pack_fixture import (
     SimulatedPowerCut,
@@ -73,14 +73,7 @@ from tests.self_update.support.fake_release_web import (
     InlineRunner,
 )
 
-SOURCE_SELECTION = vector_group("sourceSelection")
-UPDATE_REFUSALS = vector_group("updateRefusals")
-ROLLBACK_TRIGGERS = vector_group("rollbackTriggers")
 _GITHUB_LIST = f"{GITHUB_API}/releases?per_page=50"
-
-
-def _ids(group: list[JsonObject]) -> list[str]:
-    return [str(vector["name"]) for vector in group]
 
 
 def _expect(vector: JsonObject) -> JsonObject:
@@ -151,7 +144,7 @@ def _publish_answers(web: FakeReleaseWeb, vector: JsonObject) -> None:
         listing[-1]["prerelease"] = bool(item.get("prerelease", False))
 
 
-@pytest.mark.parametrize("vector", SOURCE_SELECTION, ids=_ids(SOURCE_SELECTION))
+@drive("sourceSelection")
 def test_source_selection_vectors(vector: JsonObject, tmp_path: Path) -> None:
     """Both sources are asked; the newest installable version wins, registry first."""
 
@@ -183,7 +176,7 @@ def _with_version(files: dict[str, str], version: str) -> dict[str, str]:
     }
 
 
-@pytest.mark.parametrize("vector", UPDATE_REFUSALS, ids=_ids(UPDATE_REFUSALS))
+@drive("updateRefusals")
 def test_update_refusal_vectors(vector: JsonObject, tmp_path: Path) -> None:
     """Only an unchanged registry install is updated; every refusal says why."""
 
@@ -225,7 +218,7 @@ def _power_cut_operations() -> FileOperations:
     return FileOperations(write_tracking=write)
 
 
-@pytest.mark.parametrize("vector", ROLLBACK_TRIGGERS, ids=_ids(ROLLBACK_TRIGGERS))
+@drive("rollbackTriggers")
 def test_rollback_trigger_vectors(vector: JsonObject, tmp_path: Path) -> None:
     """Only a failure of the new version itself restores the previous one."""
 

@@ -5003,7 +5003,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: the
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/pack_install/vector_tests/decisions.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:f7b06fb738bc0cdb8e5a4c0a89dc569e8c487d665ccfd236602427c870ae9105"
+source_sha256 = "sha256:b94ae8a30ce9248dea59fb7bc030d521c261e457431a933523928f8a1951186d"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: the shared SugarCubes registry-install vectors and the host's pack update faults. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -5019,7 +5019,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: the
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/pack_install/vector_tests/layout.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:28213b16781e3ce297b851360d8bc4783c568f9feca4e7a8caee6abeb2f9b962"
+source_sha256 = "sha256:bf76374e7624492a137c98d88f8c3d3bd167b71b35b9833ea404fa9e2f2ac1dd"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: the shared SugarCubes registry-install vectors and the host's pack update faults. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
