@@ -30,8 +30,8 @@
 - **Builds:** the whole workspace on Linux, all targets, with all features and with default features, warning-free.
 - **Tests on Linux:** every crate's suite, 61 test binaries with no failures, including all 668 execution tests. Windows-only tests stay Windows-only.
 - **Runs:** the splash host, launched under Xvfb in CI; the step requires the first presented frame.
-- **Local:** `cargo xtask verify` passes in the container.
-- **CI:** [43367808883](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43367808883) ran on `23b1971f`: ubuntu-24.04 green, including the Xvfb launch, and macOS-15 green. windows-2022 failed only on the minimal-host `job_deadline` gate, which `90f4320a` fixes; [43371208516](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43371208516) verifies it.
+- **Local:** `cargo xtask verify` passes in the container. Clippy `-D warnings` for `x86_64-pc-windows-gnu` (mingw-w64) is clean in all three `xtask verify` legs at `492fb7b8`: workspace all-features, `-p sugarsubstitute`, and `-p sugarsubstitute --no-default-features`.
+- **CI:** [43367808883](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43367808883) ran on `23b1971f`: ubuntu-24.04 green, including the Xvfb launch, and macOS-15 green. windows-2022 failed only on the minimal-host `job_deadline` gate, which `90f4320a` fixes. Dispatched run [43372999638](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43372999638) verifies the rewritten head.
 
 ## Next
 - Merge `lane/linux` after `lane/ci`. They overlap only in the files resolved above.
