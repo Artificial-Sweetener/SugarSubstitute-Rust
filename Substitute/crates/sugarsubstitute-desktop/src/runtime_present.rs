@@ -183,12 +183,7 @@ fn native_visibility(
     presenter: &Presenter,
 ) -> Result<(), DesktopError> {
     window.set_visible(visible);
-    if window.is_visible() != visible {
-        return Err(DesktopError::message(
-            "native_presentation_visibility",
-            "native visibility differs from the requested transition",
-        ));
-    }
+    confirm_visibility(window, visible)?;
     if visible {
         #[cfg(target_os = "windows")]
         presenter.expose_prepared()?;
@@ -200,6 +195,25 @@ fn native_visibility(
             crate::timing::NativeStartupStage::ShowFocusReturned,
         )?;
     }
+    Ok(())
+}
+
+/// Windows applies `ShowWindow` synchronously, so the native state must already match.
+#[cfg(target_os = "windows")]
+fn confirm_visibility(window: &Window, visible: bool) -> Result<(), DesktopError> {
+    if window.is_visible() != visible {
+        return Err(DesktopError::message(
+            "native_presentation_visibility",
+            "native visibility differs from the requested transition",
+        ));
+    }
+    Ok(())
+}
+
+/// GTK applies a visibility request on the event loop's next iteration, and tao reports the
+/// previous state until then, so a submitted transition has no synchronous confirmation.
+#[cfg(not(target_os = "windows"))]
+fn confirm_visibility(_window: &Window, _visible: bool) -> Result<(), DesktopError> {
     Ok(())
 }
 
