@@ -99,10 +99,14 @@ fn payload(
             writer.u64(acknowledged_delivery.map_or(0, std::num::NonZeroU64::get))
         }
         WirePayload::MainFailed(value) => main_fields::write_stage_failure(*value, run, writer),
-        WirePayload::SettleAttempt { identity, acquisition, sugarcubes_failed } => {
+        WirePayload::SettleAttempt { identity, acquisition, page_failure } => {
             main_fields::write_identity(*identity, run, writer)?;
             writer.u64(acquisition.get())?;
-            writer.u8(u8::from(*sugarcubes_failed))
+            writer.u8(match page_failure {
+                None => 0,
+                Some(sugarsubstitute_contracts::startup::PageFailure::Sugarcubes) => 1,
+                Some(sugarsubstitute_contracts::startup::PageFailure::Unattributed) => 2,
+            })
         }
         WirePayload::RetryBackend { identity, failed } => {
             main_fields::write_identity(*identity, run, writer)?;

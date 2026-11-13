@@ -130,6 +130,51 @@ impl ReportPresentation {
         Self::update_failure(copy, window_title, version, step, details)
     }
 
+    /// The window's update report: the latest failed attempt, followed by the start's
+    /// SugarCubes update when it has something to report. A SugarCubes report alone heads the
+    /// report with its own line. `None` when there is nothing to report.
+    pub fn updates(
+        copy: &'static Messages,
+        window_title: &str,
+        status: &sugarsubstitute_contracts::update::status::UpdateStatus,
+    ) -> Option<Self> {
+        let sugarcubes = status
+            .sugarcubes()
+            .report()
+            .filter(|report| report.needs_attention())
+            .map(|report| sugarcubes_section(copy, report));
+        let Some(attempt) = status.failure() else {
+            return sugarcubes.map(|section| Self::sugarcubes(copy, window_title, section));
+        };
+        let mut presentation = Self::update_attempt(copy, window_title, attempt);
+        if let (Some(section), Some(details)) = (sugarcubes, presentation.details.as_mut()) {
+            details.push('\n');
+            details.push_str(&section.details);
+        }
+        Some(presentation)
+    }
+
+    fn sugarcubes(copy: &'static Messages, window_title: &str, section: SugarcubesSection) -> Self {
+        let summary = section
+            .version
+            .map(|version| SummaryRow { label: copy.report.version.to_owned(), value: version })
+            .into_iter()
+            .collect();
+        Self::new(
+            ReportContent {
+                kind: ReportKind::UpdateFailure,
+                severity: ReportSeverity::Warning,
+                window_title: window_title.to_owned(),
+                title: section.headline,
+                message: copy.pack_updates.report_message.to_owned(),
+                summary,
+                has_details: true,
+            },
+            Some(section.details),
+            copy,
+        )
+    }
+
     /// The question asked when the previous SugarSubstitute window has stopped responding.
     pub fn unresponsive_copy(copy: &'static Messages, window_title: &str) -> Self {
         Self::new(
@@ -145,6 +190,33 @@ impl ReportPresentation {
             None,
             copy,
         )
+    }
+}
+
+/// The SugarCubes part of the window's update report, in the user's language.
+struct SugarcubesSection {
+    headline: String,
+    version: Option<String>,
+    details: String,
+}
+
+fn sugarcubes_section(
+    copy: &'static Messages,
+    report: &sugarsubstitute_contracts::update::pack::PackUpdateReport,
+) -> SugarcubesSection {
+    let words = copy.pack_updates;
+    let lines = report.lines(words);
+    let headline = lines.first().cloned().unwrap_or_else(|| words.report_title.to_owned());
+    let mut details = format!("{}\n", words.report_title);
+    for line in &lines {
+        details.push('\n');
+        details.push_str(line);
+    }
+    details.push('\n');
+    SugarcubesSection {
+        headline,
+        version: report.to.clone().or_else(|| report.from.clone()),
+        details,
     }
 }
 

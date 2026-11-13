@@ -39,6 +39,8 @@ pub enum StartupStatus {
     CleanupFailed,
     /// A new version is being applied before the application opens.
     Updating(crate::UpdateVersion),
+    /// SugarCubes is being updated before the backend loads it.
+    UpdatingSugarcubes,
 }
 
 /// Supply portable appearance state; process and connection state stay elsewhere.

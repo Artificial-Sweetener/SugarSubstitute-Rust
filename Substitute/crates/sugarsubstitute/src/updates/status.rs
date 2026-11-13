@@ -50,6 +50,16 @@ impl StatusSource {
         self.change(|status| status.observe(progress));
     }
 
+    /// Adopt the coordinator's SugarCubes update state.
+    pub(crate) fn observe_sugarcubes(
+        &mut self,
+        status: sugarsubstitute_contracts::update::pack::PackUpdateStatus,
+    ) {
+        if self.status.sugarcubes() != &status {
+            self.change(|current| current.observe_sugarcubes(status));
+        }
+    }
+
     /// Adopt what this launch observed about the version it starts for the first time.
     pub(crate) fn observe_launch(&mut self, launch: LaunchVersion) {
         self.change(|status| status.observe_launch(launch));
@@ -174,5 +184,17 @@ mod tests {
         assert_eq!(source.snapshot().0, 3);
         assert!(source.snapshot().1.failure().is_some());
         assert!(source.wants_read());
+    }
+
+    #[test]
+    fn the_sugarcubes_update_raises_the_revision_only_when_it_changes() {
+        use sugarsubstitute_contracts::update::pack::PackUpdateStatus;
+        let mut source = StatusSource::new();
+        source.observe_sugarcubes(PackUpdateStatus::Idle);
+        assert_eq!(source.snapshot().0, 0);
+        source.observe_sugarcubes(PackUpdateStatus::Updating);
+        source.observe_sugarcubes(PackUpdateStatus::Updating);
+        assert_eq!(source.snapshot().0, 1);
+        assert_eq!(source.snapshot().1.sugarcubes(), &PackUpdateStatus::Updating);
     }
 }

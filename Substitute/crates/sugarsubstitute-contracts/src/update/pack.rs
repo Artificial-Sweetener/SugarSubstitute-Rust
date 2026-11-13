@@ -6,7 +6,8 @@
 //! [`PackUpdateReport`] is the update report the coordinator keeps as
 //! `state/pack-updates/SugarCubes/report.json`; this module owns its bytes, so the writer and
 //! every reader (the window's update report) agree. [`PackUpdateStatus`] is the live state a
-//! coordinator publishes to its window while the update runs.
+//! coordinator publishes to its window while the update runs, carried inside the host's update
+//! status; it holds the same report the coordinator recorded.
 use crate::localization::{pack_updates::PackUpdateMessages, updates::UpdateMessages};
 use serde::{Deserialize, Serialize};
 
@@ -14,6 +15,10 @@ use serde::{Deserialize, Serialize};
 pub const PACK_REPORT_SCHEMA: u32 = 1;
 /// The largest report read.
 pub const MAX_PACK_REPORT_BYTES: usize = 16 * 1024;
+/// The longest version, source, reason, step or code a report carries.
+pub const MAX_PACK_REPORT_FIELD_BYTES: usize = 64;
+/// The most release sources a report lists as unchecked: the registry and GitHub.
+pub const MAX_PACK_REPORT_UNCHECKED: usize = 2;
 
 /// What one SugarCubes startup update ended with; spelled as in the report.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -103,13 +108,38 @@ impl PackUpdateReport {
     /// Read report bytes.
     ///
     /// # Errors
-    /// Refuses oversized, malformed or unknown-schema bytes.
+    /// Refuses oversized, malformed, unknown-schema or out-of-bounds bytes.
     pub fn parse(bytes: &[u8]) -> Result<Self, PackReportError> {
         if bytes.len() > MAX_PACK_REPORT_BYTES {
             return Err(PackReportError);
         }
         let report: Self = serde_json::from_slice(bytes).map_err(|_| PackReportError)?;
-        (report.schema == PACK_REPORT_SCHEMA).then_some(report).ok_or(PackReportError)
+        report.valid().then_some(report).ok_or(PackReportError)
+    }
+
+    /// Whether the report has the supported schema and every field is within its bound, as a
+    /// report from another process must be before it is shown.
+    pub fn valid(&self) -> bool {
+        let field =
+            |value: &String| !value.is_empty() && value.len() <= MAX_PACK_REPORT_FIELD_BYTES;
+        self.schema == PACK_REPORT_SCHEMA
+            && [&self.from, &self.to, &self.source, &self.reason, &self.step, &self.code]
+                .into_iter()
+                .all(|value| value.as_ref().is_none_or(field))
+            && self.unchecked.len() <= MAX_PACK_REPORT_UNCHECKED
+            && self.unchecked.iter().all(field)
+    }
+
+    /// Whether the user should be able to open this report from the window: the update could
+    /// not be checked or installed, or the previous version runs again.
+    pub fn needs_attention(&self) -> bool {
+        matches!(
+            self.outcome,
+            PackOutcome::Restored
+                | PackOutcome::CouldNotCheck
+                | PackOutcome::Failed
+                | PackOutcome::Stopped
+        )
     }
 
     /// The report's bytes.
@@ -124,16 +154,25 @@ impl PackUpdateReport {
     /// newer version available, a failure to check or update, or the previous version
     /// running again.
     pub fn notice(&self, words: &PackUpdateMessages) -> Option<String> {
-        let version = |text: &str| {
-            self.to.as_deref().map(|version| UpdateMessages::with_version(text, version))
-        };
+        let template = self.notice_template(words)?;
+        Some(match self.to.as_deref() {
+            Some(version) => UpdateMessages::with_version(template, version),
+            None => template.to_owned(),
+        })
+    }
+
+    /// The localized words of [`Self::notice`] before a version is filled in; a window names
+    /// the line by them.
+    pub fn notice_template(&self, words: &PackUpdateMessages) -> Option<&'static str> {
         match self.outcome {
-            PackOutcome::Updated => version(words.updated),
-            PackOutcome::Available => version(words.available),
-            PackOutcome::Restored => Some(words.previous_running.to_owned()),
-            PackOutcome::CouldNotCheck => Some(words.could_not_check.to_owned()),
-            PackOutcome::Failed => Some(words.could_not_update.to_owned()),
-            PackOutcome::UpToDate
+            PackOutcome::Updated if self.to.is_some() => Some(words.updated),
+            PackOutcome::Available if self.to.is_some() => Some(words.available),
+            PackOutcome::Restored => Some(words.previous_running),
+            PackOutcome::CouldNotCheck => Some(words.could_not_check),
+            PackOutcome::Failed => Some(words.could_not_update),
+            PackOutcome::Updated
+            | PackOutcome::Available
+            | PackOutcome::UpToDate
             | PackOutcome::Judging
             | PackOutcome::NotManaged
             | PackOutcome::Busy
@@ -188,7 +227,8 @@ impl PackUpdateReport {
 }
 
 /// The live SugarCubes update state a coordinator publishes to its window.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum PackUpdateStatus {
     /// No SugarCubes update ran in this start.
     #[default]
@@ -207,10 +247,20 @@ impl PackUpdateStatus {
 
     /// The one plain line to show once the update finished, if any.
     pub fn notice(&self, words: &PackUpdateMessages) -> Option<String> {
+        self.report().and_then(|report| report.notice(words))
+    }
+
+    /// The report of the finished update.
+    pub fn report(&self) -> Option<&PackUpdateReport> {
         match self {
-            Self::Finished(report) => report.notice(words),
+            Self::Finished(report) => Some(report),
             Self::Idle | Self::Updating => None,
         }
+    }
+
+    /// Whether a status from another process is within its bounds.
+    pub fn valid(&self) -> bool {
+        self.report().is_none_or(PackUpdateReport::valid)
     }
 }
 

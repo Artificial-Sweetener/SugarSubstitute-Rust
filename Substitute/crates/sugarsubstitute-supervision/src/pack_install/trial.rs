@@ -7,8 +7,11 @@
 //! A start the host did not witness (power cut, forced kill, the user closing the app first)
 //! is no verdict: the new version stays and is judged at the next start, except that three
 //! unwitnessed endings in a row count as one failed start, so a pack that takes the whole
-//! start down with it can never loop. A confirmed version drops its backup; a failed one is
-//! restored from it.
+//! start down with it can never loop. A host that always opens the page also reports a page
+//! that did not load for a cause it could not attribute: a later page of the same run still
+//! keeps the version, and otherwise the next start restores the previous one, so a version
+//! whose page never loads is never run a second time. A confirmed version drops its backup;
+//! a failed one is restored from it.
 
 use super::error::Result;
 use super::replacement::{JournalPhase, TrackedReplacement};
@@ -34,6 +37,9 @@ pub enum TrialEvent {
     },
     /// The first page reported a load failure or never established its session.
     PageFailed,
+    /// The page did not load, for a cause the host could not attribute to SugarCubes.
+    /// Host-only: a later page of the same run still decides.
+    PageUnconfirmed,
 }
 
 /// How the run that held a just-installed version ended.
@@ -67,7 +73,7 @@ impl RestoreReason {
     }
 }
 
-/// A previous version put back by [`TrackedReplacement::settle`].
+/// A previous version put back because the version installed after it failed its judgement.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Restored {
     /// The version that was removed.
@@ -96,7 +102,10 @@ impl TrackedReplacement {
                 self.advance(JournalPhase::Unobserved)
             }
             (JournalPhase::Started, TrialEvent::PageLoaded { .. })
-            | (JournalPhase::Unobserved, TrialEvent::PageLoaded { nodes_registered: true }) => {
+            | (
+                JournalPhase::Unobserved | JournalPhase::PageUnconfirmed,
+                TrialEvent::PageLoaded { nodes_registered: true },
+            ) => {
                 tracing::info!(
                     target: "sugarsubstitute::pack_install",
                     operation = "confirm_update",
@@ -105,9 +114,16 @@ impl TrackedReplacement {
                 );
                 self.confirm()
             }
-            (JournalPhase::Unobserved, TrialEvent::PageLoaded { nodes_registered: false })
-            | (JournalPhase::Started | JournalPhase::Unobserved, TrialEvent::PageFailed) => {
-                self.advance(JournalPhase::PageFailed)
+            (
+                JournalPhase::Unobserved | JournalPhase::PageUnconfirmed,
+                TrialEvent::PageLoaded { nodes_registered: false },
+            )
+            | (
+                JournalPhase::Started | JournalPhase::Unobserved | JournalPhase::PageUnconfirmed,
+                TrialEvent::PageFailed,
+            ) => self.advance(JournalPhase::PageFailed),
+            (JournalPhase::Started | JournalPhase::Unobserved, TrialEvent::PageUnconfirmed) => {
+                self.advance(JournalPhase::PageUnconfirmed)
             }
             _ => Ok(()),
         }
@@ -128,17 +144,30 @@ impl TrackedReplacement {
                 self.discard_unstarted()?;
                 return Ok(None);
             }
-            (JournalPhase::Started | JournalPhase::Unobserved, _) => return Ok(None),
+            (
+                JournalPhase::Started | JournalPhase::Unobserved | JournalPhase::PageUnconfirmed,
+                TrialEnding::BackendStopped,
+            ) => return Ok(None),
             (JournalPhase::Replacing, _) => RestoreReason::Interrupted,
-            (JournalPhase::PageFailed, _) => RestoreReason::PageDidNotLoad,
+            (JournalPhase::PageFailed, _)
+            | (JournalPhase::PageUnconfirmed, TrialEnding::Unwitnessed) => {
+                RestoreReason::PageDidNotLoad
+            }
             (JournalPhase::Applied, TrialEnding::BackendStopped) => RestoreReason::DidNotStart,
-            (JournalPhase::Applied, TrialEnding::Unwitnessed) => {
+            (
+                phase @ (JournalPhase::Applied | JournalPhase::Started | JournalPhase::Unobserved),
+                TrialEnding::Unwitnessed,
+            ) => {
                 journal.unwitnessed_endings += 1;
                 if journal.unwitnessed_endings < UNWITNESSED_ENDINGS_LIMIT {
                     self.store(&journal)?;
                     return Ok(None);
                 }
-                RestoreReason::DidNotStart
+                if phase == JournalPhase::Applied {
+                    RestoreReason::DidNotStart
+                } else {
+                    RestoreReason::PageDidNotLoad
+                }
             }
         };
         self.roll_back(target)?;

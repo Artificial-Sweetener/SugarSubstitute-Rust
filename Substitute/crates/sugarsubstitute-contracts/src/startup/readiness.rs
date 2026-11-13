@@ -63,6 +63,15 @@ pub enum ReadinessFailure {
     TimedOut,
 }
 
+/// How an attempt's page failed to load, as a just-installed SugarCubes is judged by it.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PageFailure {
+    /// The page reported SugarCubes itself unavailable or failed.
+    Sugarcubes,
+    /// The page never became usable for another reason, or the attempt failed before it did.
+    Unattributed,
+}
+
 /// Preserve a bounded untrusted probe diagnostic for explicit reporting.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(deny_unknown_fields)]

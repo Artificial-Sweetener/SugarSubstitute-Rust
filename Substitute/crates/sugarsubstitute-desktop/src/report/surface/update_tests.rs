@@ -142,3 +142,53 @@ fn an_update_attempt_report_names_its_version_step_and_causes_in_the_users_langu
     assert!(text.contains("Descargando la actualización"));
     assert_eq!(report.content.summary[0].value, es.report.unavailable);
 }
+
+/// The window's update report carries the start's SugarCubes report: alone it heads the
+/// report with its own line, and after a failed attempt it follows the attempt's details.
+#[test]
+fn the_update_report_carries_the_sugarcubes_report() {
+    use sugarsubstitute_contracts::update::{
+        attempt::{AttemptOutcome, AttemptPhase, UpdateReport as Attempt},
+        pack::{PackOutcome, PackUpdateReport, PackUpdateStatus},
+        status::UpdateStatus,
+    };
+    let en = messages("en");
+    let mut status = UpdateStatus::default();
+    assert!(ReportPresentation::updates(en, "SugarSubstitute", &status).is_none());
+    status.observe_sugarcubes(PackUpdateStatus::Finished(PackUpdateReport::new(
+        PackOutcome::UpToDate,
+    )));
+    assert!(ReportPresentation::updates(en, "SugarSubstitute", &status).is_none());
+    status.observe_sugarcubes(PackUpdateStatus::Finished(PackUpdateReport {
+        step: Some("downloading".into()),
+        code: Some("source".into()),
+        unchecked: vec!["registry".into()],
+        ..PackUpdateReport::new(PackOutcome::Failed)
+    }));
+    let alone = ReportPresentation::updates(en, "SugarSubstitute", &status);
+    let alone =
+        alone.as_ref().map(|report| (report.content.title.as_str(), report.details.as_deref()));
+    assert_eq!(
+        alone,
+        Some((
+            "Couldn't update SugarCubes. The installed version is running.",
+            Some(
+                "SugarCubes update\n\nCouldn't update SugarCubes. The installed version is \
+                 running.\nDownloading SugarCubes\nCouldn't check the Comfy Registry.\n"
+            )
+        ))
+    );
+    status.begin();
+    status.finish(
+        Some(AttemptOutcome::Failed(Attempt {
+            version: Some("2.0.0".into()),
+            phase: AttemptPhase::Downloading,
+            causes: vec!["The download stopped".into()],
+        })),
+        5,
+    );
+    let both = ReportPresentation::updates(en, "SugarSubstitute", &status).and_then(|r| r.details);
+    let both = both.unwrap_or_default();
+    assert!(both.starts_with("Update failed\nVersion: 2.0.0\n"), "{both}");
+    assert!(both.ends_with("SugarCubes update\n\nCouldn't update SugarCubes. The installed version is running.\nDownloading SugarCubes\nCouldn't check the Comfy Registry.\n"), "{both}");
+}

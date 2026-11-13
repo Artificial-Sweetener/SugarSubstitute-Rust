@@ -68,8 +68,8 @@
 //! ForeignOwner, StaleIdentity, ProfileContention, WrongPhase, ChangedDuplicate,
 //! StaleRequest, Overloaded, IdentityExhausted, InvalidClock and EndpointMismatch.
 //! Kind19 SettleAttempt carries the original positive u64 launch/navigation, the
-//! Acquire request ID and u8 SugarCubes page failure (0 no, 1 the page reported SugarCubes
-//! unavailable or failed). The authenticated parent retains the resource association
+//! Acquire request ID and u8 page failure (0 none, 1 the page reported SugarCubes
+//! unavailable or failed, 2 the page never loaded for another reason). The authenticated parent retains the resource association
 //! and acknowledges only real cleanup settlement. Kind20 RetryBackend carries the
 //! exact Main identity and failed lease reference (40 payload bytes). Reply tag15
 //! BackendUnavailable carries failed lease/u32 status/u16 affected clients/u8 retry

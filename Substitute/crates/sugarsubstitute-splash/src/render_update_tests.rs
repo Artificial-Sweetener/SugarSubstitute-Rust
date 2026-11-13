@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! The splash says which version it is updating to, in every locale. Set
+//! The splash says which version it is updating to, and that SugarCubes is being updated,
+//! in every locale. Set
 //! `SUGARSUBSTITUTE_REPORT_PROOF_DIR` to keep the rendered frames as PNG files.
 use super::SplashRenderer;
 use crate::{AnimationFrame, Appearance};
@@ -27,15 +28,21 @@ fn updating_status_names_the_version_in_the_status_clip() -> Result<(), Box<dyn 
         appearance.status = crate::StartupStatus::Updating(other);
         let later =
             renderer.render(558, 558, 1.0, appearance, AnimationFrame::bootstrap(), feedback)?;
+        appearance.status = crate::StartupStatus::UpdatingSugarcubes;
+        let sugarcubes =
+            renderer.render(558, 558, 1.0, appearance, AnimationFrame::bootstrap(), feedback)?;
         let differs = |a: &crate::Raster, b: &crate::Raster| {
             (486..530).any(|y| (24..534).any(|x| a.pixel(x, y) != b.pixel(x, y)))
         };
         assert!(differs(&loading, &updating), "{locale}: words changed");
         assert!(differs(&updating, &later), "{locale}: the version is shown");
+        assert!(differs(&loading, &sugarcubes), "{locale}: SugarCubes is being updated");
+        assert!(differs(&updating, &sugarcubes), "{locale}: SugarCubes has its own line");
         for y in 0..558 {
             for x in 0..558 {
                 if !(24..534).contains(&x) || !(486..530).contains(&y) {
                     assert_eq!(loading.pixel(x, y), updating.pixel(x, y));
+                    assert_eq!(loading.pixel(x, y), sugarcubes.pixel(x, y));
                 }
             }
         }
@@ -43,6 +50,11 @@ fn updating_status_names_the_version_in_the_status_clip() -> Result<(), Box<dyn 
             std::fs::write(
                 std::path::Path::new(&directory).join(format!("splash-updating-{locale}.png")),
                 updating.encode_png()?,
+            )?;
+            std::fs::write(
+                std::path::Path::new(&directory)
+                    .join(format!("splash-updating-sugarcubes-{locale}.png")),
+                sugarcubes.encode_png()?,
             )?;
         }
     }

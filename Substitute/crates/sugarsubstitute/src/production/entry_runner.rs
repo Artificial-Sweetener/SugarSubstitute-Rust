@@ -103,6 +103,11 @@ pub(crate) trait EntryActivation {
         revision: u64,
         status: &sugarsubstitute_contracts::update::status::UpdateStatus,
     ) -> Result<(), Box<dyn Error>>;
+    /// The live state of this start's SugarCubes update, which the runner carries in its
+    /// update status. A coordinator without a backend runs no SugarCubes update.
+    fn sugarcubes_update(&self) -> sugarsubstitute_contracts::update::pack::PackUpdateStatus {
+        sugarsubstitute_contracts::update::pack::PackUpdateStatus::Idle
+    }
     /// Whether a desktop child that asked to restart so an update applies has since completed
     /// a normal close. A crashed or failed child never counts.
     fn restart_to_apply_requested(&self) -> bool;

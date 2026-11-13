@@ -101,6 +101,7 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
             }
             StartupNotice::Repairing => UpdateNotice::Repairing,
             StartupNotice::PreviousVersionRunning => UpdateNotice::PreviousVersionRunning,
+            StartupNotice::Sugarcubes(report) => UpdateNotice::Sugarcubes(report),
         })
     }
 
@@ -290,10 +291,11 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
     }
 }
 
-/// The splash line while this launch starts a new version for the first time: "Updating to
-/// version X…" in place of the ordinary loading lines, until the coordinator confirms the
-/// version. Failure, retry and cleanup lines always win, and a version label the splash cannot
-/// show leaves the ordinary line.
+/// The splash line in place of the ordinary loading lines: "Updating SugarCubes…" while the
+/// coordinator's SugarCubes update holds the start, otherwise "Updating to version X…" while
+/// this launch starts a new version for the first time, until the coordinator confirms it.
+/// Failure, retry and cleanup lines always win, and a version label the splash cannot show
+/// leaves the ordinary line.
 pub(super) fn updating<B: StartupBackend>(
     child: &B,
     current: sugarsubstitute_splash::StartupStatus,
@@ -305,6 +307,12 @@ pub(super) fn updating<B: StartupBackend>(
     ) {
         return None;
     }
-    let version = child.update_status()?.applying()?;
-    sugarsubstitute_splash::UpdateVersion::new(version).map(StartupStatus::Updating)
+    let status = child.update_status()?;
+    if matches!(
+        status.sugarcubes(),
+        sugarsubstitute_contracts::update::pack::PackUpdateStatus::Updating
+    ) {
+        return Some(StartupStatus::UpdatingSugarcubes);
+    }
+    sugarsubstitute_splash::UpdateVersion::new(status.applying()?).map(StartupStatus::Updating)
 }

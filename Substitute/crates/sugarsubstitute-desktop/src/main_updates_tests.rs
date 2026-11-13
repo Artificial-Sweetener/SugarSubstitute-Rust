@@ -245,3 +245,42 @@ fn a_repair_is_one_plain_line_in_every_language() {
     assert_eq!(caption.activate(DISMISS), (true, None));
     assert_eq!(shown(&caption.view(en)), Vec::<u16>::new());
 }
+
+/// A SugarCubes update that couldn't check shows its one plain line in the user's language,
+/// and the update button opens the report that holds it; an update that went fine shows its
+/// line without a report.
+#[test]
+fn a_sugarcubes_update_shows_one_plain_line_and_opens_its_report() {
+    use sugarsubstitute_contracts::update::pack::{
+        PackOutcome, PackUpdateReport, PackUpdateStatus,
+    };
+    let could_not_check = PackUpdateReport::new(PackOutcome::CouldNotCheck);
+    let mut caption = CaptionUpdates::default();
+    caption.notify(Notice::update(crate::UpdateNotice::Sugarcubes(could_not_check.clone())));
+    let en = messages("en");
+    let view = caption.view(en);
+    assert_eq!(shown(&view), vec![LINE, DISMISS]);
+    assert_eq!(view.line.text, "Couldn't check for a SugarCubes update.");
+    for locale in sugarsubstitute_contracts::localization::LOCALES {
+        assert_eq!(
+            caption.view(locale).line.text,
+            locale.pack_updates.could_not_check,
+            "{}",
+            locale.id
+        );
+    }
+    let mut status = UpdateStatus::default();
+    status.observe_sugarcubes(PackUpdateStatus::Finished(could_not_check));
+    assert_eq!(feed(Some(&status)).glyph, UpdateGlyph::Warning);
+    caption.observe(feed(Some(&status)));
+    assert_eq!(caption.activate(UPDATE), (false, Some(UpdateIntent::OpenReport)));
+    let updated = PackUpdateReport {
+        to: Some("1.1.0".into()),
+        ..PackUpdateReport::new(PackOutcome::Updated)
+    };
+    status.observe_sugarcubes(PackUpdateStatus::Finished(updated.clone()));
+    assert_eq!(feed(Some(&status)).glyph, UpdateGlyph::Hidden, "nothing to report");
+    let mut caption = CaptionUpdates::default();
+    caption.notify(Notice::update(crate::UpdateNotice::Sugarcubes(updated)));
+    assert_eq!(caption.view(en).line.text, "SugarCubes updated to version 1.1.0");
+}

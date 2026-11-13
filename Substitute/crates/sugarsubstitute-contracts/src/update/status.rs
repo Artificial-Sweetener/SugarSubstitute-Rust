@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! What the host tells the user about application updates: checking, up to date, ready,
-//! couldn't check, or that the previous version is running.
+//! couldn't check, or that the previous version is running. The same status carries the
+//! start's SugarCubes update, so the splash, the caption and the report agree on it.
 //!
 //! Attempts report what happened; the selection record decides what is prepared. `reconcile`
 //! adopts the record's state, so a status survives helper crashes, repeated attempts and
@@ -9,6 +10,7 @@
 use super::attempt::{
     AttemptOutcome, AttemptPhase, AttemptProgress, MAX_VERSION_BYTES, UpdateReport, codec,
 };
+use super::pack::{PackUpdateReport, PackUpdateStatus};
 use serde::{Deserialize, Serialize};
 
 /// Largest encoded status: twelve bounded causes even when every byte needs escaping.
@@ -58,6 +60,8 @@ pub enum StartupNotice {
     Repairing,
     /// The newer version did not start, so the previous one is running.
     PreviousVersionRunning,
+    /// The start's SugarCubes update finished with a report that has a line to show.
+    Sugarcubes(PackUpdateReport),
 }
 
 /// One host's update status for its update surfaces. The coordinator owns it; the desktop child
@@ -72,6 +76,8 @@ pub struct UpdateStatus {
     failure: Option<UpdateReport>,
     #[serde(default)]
     launch: Option<LaunchVersion>,
+    #[serde(default)]
+    sugarcubes: PackUpdateStatus,
 }
 impl UpdateStatus {
     /// Current activity.
@@ -120,7 +126,16 @@ impl UpdateStatus {
         } else if self.recorded.previous_version_running {
             notices.push(StartupNotice::PreviousVersionRunning);
         }
+        if let Some(report) = self.sugarcubes.report()
+            && report.notice_template(&crate::localization::pack_updates::EN).is_some()
+        {
+            notices.push(StartupNotice::Sugarcubes(report.clone()));
+        }
         notices
+    }
+    /// The start's SugarCubes update: running, finished with its report, or not run.
+    pub fn sugarcubes(&self) -> &PackUpdateStatus {
+        &self.sugarcubes
     }
     /// The latest release needs the installer.
     pub fn needs_installer(&self) -> bool {
@@ -167,6 +182,10 @@ impl UpdateStatus {
     pub fn reconcile(&mut self, recorded: RecordedUpdates) {
         self.recorded = recorded;
     }
+    /// Adopt the coordinator's SugarCubes update state.
+    pub fn observe_sugarcubes(&mut self, status: PackUpdateStatus) {
+        self.sugarcubes = status;
+    }
     /// Adopt what this launch observed about a version it starts for the first time. A
     /// confirmed version is never taken back by a later `Applying`.
     pub fn observe_launch(&mut self, launch: LaunchVersion) {
@@ -211,6 +230,7 @@ impl UpdateStatus {
                 LaunchVersion::Applying(value) | LaunchVersion::Updated(value) => version(value),
             })
             && self.failure.as_ref().is_none_or(codec::valid_report)
+            && self.sugarcubes.valid()
     }
 }
 
@@ -330,6 +350,33 @@ mod tests {
         );
         let forged = br#"{"activity":{"phase":"downloading","bytes":[5,1]},"last_successful_check_utc":null,"recorded":{"prepared":null,"previous_version_running":false},"needs_installer":false,"failure":null}"#;
         assert_eq!(UpdateStatus::decode(forged), Err(StatusCodecError::Bounds));
+        Ok(())
+    }
+
+    #[test]
+    fn the_sugarcubes_update_crosses_processes_within_bounds_and_states_its_line_once()
+    -> Result<(), StatusCodecError> {
+        use crate::update::pack::{PackOutcome, PackUpdateReport};
+        let mut status = UpdateStatus::default();
+        status.observe_sugarcubes(PackUpdateStatus::Updating);
+        assert_eq!(UpdateStatus::decode(&status.encode()?)?, status);
+        assert!(status.startup_notices().is_empty(), "nothing to say while it runs");
+        let could_not_check = PackUpdateReport {
+            unchecked: vec!["registry".into(), "github-release".into()],
+            ..PackUpdateReport::new(PackOutcome::CouldNotCheck)
+        };
+        status.observe_sugarcubes(PackUpdateStatus::Finished(could_not_check.clone()));
+        assert_eq!(UpdateStatus::decode(&status.encode()?)?, status);
+        assert_eq!(status.startup_notices(), [StartupNotice::Sugarcubes(could_not_check)]);
+        status.observe_sugarcubes(PackUpdateStatus::Finished(PackUpdateReport::new(
+            PackOutcome::UpToDate,
+        )));
+        assert!(status.startup_notices().is_empty(), "up to date has no line");
+        status.observe_sugarcubes(PackUpdateStatus::Finished(PackUpdateReport {
+            to: Some("v".repeat(65)),
+            ..PackUpdateReport::new(PackOutcome::Updated)
+        }));
+        assert_eq!(status.encode(), Err(StatusCodecError::Bounds));
         Ok(())
     }
 

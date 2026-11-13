@@ -330,10 +330,11 @@ impl ProductionChild {
                 StartupEffect::CleanupConnection { launch, .. }
                     if launch == self.identity.launch =>
                 {
-                    let sugarcubes_failed = prepared.session().failure().is_some_and(
-                        sugarsubstitute_application::startup::SessionFailure::sugarcubes_failed,
-                    );
-                    self.begin_attempt_cleanup(sugarcubes_failed)?;
+                    let page_failure = prepared
+                        .session()
+                        .failure()
+                        .map(sugarsubstitute_application::startup::SessionFailure::page_failure);
+                    self.begin_attempt_cleanup(page_failure)?;
                     Ok(())
                 }
                 _ => Err("Effect belongs to native presentation or another attempt".into()),

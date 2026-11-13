@@ -381,6 +381,12 @@ impl EntryActivation for ProductionActivation {
         }
         Ok(())
     }
+    fn sugarcubes_update(&self) -> sugarsubstitute_contracts::update::pack::PackUpdateStatus {
+        self.backend
+            .as_ref()
+            .map(|retained| retained.backend.pack_update_status())
+            .unwrap_or_default()
+    }
     fn restart_to_apply_requested(&self) -> bool {
         self.records.iter().flatten().any(|retained| {
             retained

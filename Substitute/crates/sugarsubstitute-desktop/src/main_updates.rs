@@ -11,7 +11,7 @@ use sugarsubstitute_application::workspace_session::close_save::{
 };
 use sugarsubstitute_contracts::{
     localization::{Messages, updates::UpdateMessages},
-    update::status::UpdateStatus,
+    update::{pack::PackUpdateReport, status::UpdateStatus},
 };
 
 /// Caption peer showing the update button.
@@ -60,7 +60,7 @@ impl UpdateFeed {
     ) -> Self {
         let glyph = match status {
             Some(status) if status.ready().is_some() => UpdateGlyph::Ready,
-            Some(status) if status.failure().is_some() => UpdateGlyph::Warning,
+            Some(status) if has_report(status) => UpdateGlyph::Warning,
             _ => UpdateGlyph::Hidden,
         };
         let saving = matches!(
@@ -69,6 +69,13 @@ impl UpdateFeed {
         );
         Self { glyph, saving, workflow }
     }
+}
+
+/// Whether the window has an update report to open: the latest attempt failed, or the start's
+/// SugarCubes update could not check or install, or put the previous version back.
+pub(crate) fn has_report(status: &UpdateStatus) -> bool {
+    status.failure().is_some()
+        || status.sugarcubes().report().is_some_and(PackUpdateReport::needs_attention)
 }
 
 /// A one-time message shown as one line the user can dismiss.
@@ -92,6 +99,8 @@ pub(crate) enum Notice {
     PreviousVersionRunning,
     /// The previous version is running while the newer one is repaired.
     Repairing,
+    /// The start's SugarCubes update's one line.
+    Sugarcubes(PackUpdateReport),
 }
 
 impl Notice {
@@ -112,6 +121,7 @@ impl Notice {
             }
             crate::UpdateNotice::PreviousVersionRunning => Self::PreviousVersionRunning,
             crate::UpdateNotice::Repairing => Self::Repairing,
+            crate::UpdateNotice::Sugarcubes(report) => Self::Sugarcubes(report),
         }
     }
 }
@@ -273,6 +283,15 @@ impl CaptionUpdates {
             },
             Some(Notice::PreviousVersionRunning) => PeerView::shown(true, updates.previous_running),
             Some(Notice::Repairing) => PeerView::shown(true, updates.repairing),
+            Some(Notice::Sugarcubes(report)) => {
+                let words = words.pack_updates;
+                match (report.notice_template(words), report.notice(words)) {
+                    (Some(label), Some(text)) => {
+                        PeerView { visible: true, label, text: Cow::Owned(text) }
+                    }
+                    _ => PeerView::shown(true, words.report_title),
+                }
+            }
         };
         UpdateCaptionView {
             glyph,

@@ -55,7 +55,7 @@ pub struct PackSchedule<K> {
     checked: bool,
     judging: bool,
     page_failed: bool,
-    running: Option<Option<K>>,
+    running: Option<(PackWork, Option<K>)>,
     queued: VecDeque<(PackWork, Option<K>)>,
     status: PackUpdateStatus,
     revision: u64,
@@ -121,12 +121,12 @@ impl<K: Copy + Eq> PackSchedule<K> {
 
     /// Whether the running job is the one holding `key`, so stopping `key` may cancel it.
     pub fn running_holds(&self, key: K) -> bool {
-        self.running.is_some_and(|gates| gates == Some(key))
+        self.running.is_some_and(|(_, gates)| gates == Some(key))
     }
 
     /// Whether `key`'s inspection and launch still wait for SugarCubes work.
     pub fn gates(&self, key: K) -> bool {
-        self.running.is_some_and(|gates| gates == Some(key))
+        self.running.is_some_and(|(_, gates)| gates == Some(key))
             || self.queued.iter().any(|(_, gates)| *gates == Some(key))
     }
 
@@ -136,15 +136,18 @@ impl<K: Copy + Eq> PackSchedule<K> {
             return None;
         }
         let (work, gates) = self.queued.pop_front()?;
-        self.running = Some(gates);
+        self.running = Some((work, gates));
         Some((work, gates))
     }
 
     /// The running job ended; returns the preparation it released, once nothing else holds it.
+    /// The launch-time update or check publishes its report whether or not it held a start, so
+    /// an attached ComfyUI's check is shown too.
     pub fn ended(&mut self, ended: PackWorkEnded) -> Option<K> {
-        let released = self.running.take().flatten();
+        let (work, released) = self.running.take()?;
+        let update = matches!(work, PackWork::Update { .. });
         match ended {
-            PackWorkEnded::Updated(outcome) if released.is_some() => {
+            PackWorkEnded::Updated(outcome) => {
                 self.publish(PackUpdateStatus::Finished(outcome.report()));
             }
             PackWorkEnded::Restored(Some(restored)) => {
@@ -155,7 +158,7 @@ impl<K: Copy + Eq> PackSchedule<K> {
             PackWorkEnded::Restored(None) if released.is_some() => {
                 self.publish(PackUpdateStatus::Idle);
             }
-            PackWorkEnded::Unfinished { stopped } if released.is_some() => {
+            PackWorkEnded::Unfinished { stopped } if update || released.is_some() => {
                 let outcome = if stopped {
                     StartupOutcome::Stopped
                 } else {

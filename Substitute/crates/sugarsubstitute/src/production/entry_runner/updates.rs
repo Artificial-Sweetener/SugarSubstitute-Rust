@@ -29,6 +29,7 @@ impl<C: EntryActivation> EntryRunner<C> {
             }
         }
         self.update_status.poll();
+        self.update_status.observe_sugarcubes(self.child.sugarcubes_update());
         if let Some(launch) = self.launch_version() {
             self.update_status.observe_launch(launch);
         }

@@ -121,9 +121,10 @@ pub(super) fn frame(source: &[u8]) -> Result<DecodedFrame<'_>, ProtocolError> {
         19 => DecodedPayload::SettleAttempt {
             identity: main_fields::read_identity(&mut input, run)?,
             acquisition: RequestId::new(input.u64()?).map_err(|_| ProtocolError::Identity)?,
-            sugarcubes_failed: match input.u8()? {
-                0 => false,
-                1 => true,
+            page_failure: match input.u8()? {
+                0 => None,
+                1 => Some(sugarsubstitute_contracts::startup::PageFailure::Sugarcubes),
+                2 => Some(sugarsubstitute_contracts::startup::PageFailure::Unattributed),
                 _ => return Err(ProtocolError::UnsupportedTag),
             },
         },
