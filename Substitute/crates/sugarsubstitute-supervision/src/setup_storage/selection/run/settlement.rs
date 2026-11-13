@@ -97,12 +97,6 @@ fn resolutions(
     ])
 }
 
-/// The system clock's UTC Unix seconds, for tests that own no selection store.
-#[cfg(test)]
-pub(in crate::setup_storage) fn unix_now() -> Result<u64, SelectionFailure> {
-    super::super::StrikeClock::System.now()
-}
-
 /// Ordinary preparation may advance while this run still owns the same resolved activation.
 fn preparation_successor(current: &InstallationRecord, resolved: &InstallationRecord) -> bool {
     if current.revision() == resolved.revision() {

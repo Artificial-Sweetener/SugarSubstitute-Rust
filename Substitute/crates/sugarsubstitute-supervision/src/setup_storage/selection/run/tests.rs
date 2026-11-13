@@ -3,7 +3,10 @@
 //! Real OS exclusion, independent preparation and attempt-bound publication.
 use super::*;
 use crate::setup_storage::{
-    selection::tests::{TestResult, generation, initial, root},
+    selection::{
+        StrikeClock,
+        tests::{PREPARED_AT, TestResult, generation, initial, root},
+    },
     test_worker as worker,
 };
 use std::fs::File;
@@ -24,7 +27,7 @@ pub(super) fn prepare(
 ) -> Result<InstallationRecord, SelectionFailure> {
     let generation = generation(number)?;
     let staging =
-        expected.prepare(generation.clone(), PreparationIntent::Automatic, unix_now()?)?;
+        expected.prepare(generation.clone(), PreparationIntent::Automatic, PREPARED_AT)?;
     store.compare_exchange(expected, &staging, context)?;
     let prepared = staging.prepared(&generation)?;
     store.compare_exchange(&staging, &prepared, context)?;
@@ -168,7 +171,10 @@ fn rejected_trial_preserves_accepted_generation_and_foreign_tokens_have_no_autho
     worker::run(|context, _| {
         let a = root()?;
         let b = root()?;
-        let store = Arc::new(SelectionStore::initialize(a.path(), &initial()?, context)?);
+        let store = Arc::new(
+            SelectionStore::initialize(a.path(), &initial()?, context)?
+                .with_strike_clock(StrikeClock::Fixed(PREPARED_AT)),
+        );
         let foreign = Arc::new(SelectionStore::initialize(b.path(), &initial()?, context)?);
         let prepared = prepare(&store, &initial()?, 1, context)?;
         let mut run = InstallationRun::acquire(Arc::clone(&store), context)?;
@@ -190,7 +196,8 @@ fn rejected_trial_preserves_accepted_generation_and_foreign_tokens_have_no_autho
         assert_eq!(rejected.rollback(), Some(&generation(2)?));
         assert_eq!(rejected.strikes().len(), 1);
         assert_eq!(rejected.strikes()[0].package, generation(2)?.package);
-        assert!(!rejected.withheld(&generation(2)?.package, unix_now()?));
+        assert_eq!(rejected.strikes()[0].at, PREPARED_AT, "the store clock dates the strike");
+        assert!(!rejected.withheld(&generation(2)?.package, PREPARED_AT));
         assert!(matches!(run.accept(&token, context), Err(SelectionFailure::Changed)));
         Ok(())
     })

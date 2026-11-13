@@ -5,7 +5,7 @@ use super::*;
 use crate::setup_storage::{
     selection::{
         run::tests::prepare,
-        tests::{TestResult, generation, initial, root},
+        tests::{PREPARED_AT, TestResult, generation, initial, root},
     },
     test_worker as worker,
 };
@@ -46,7 +46,7 @@ fn a_damaged_release_falls_back_once_and_the_same_release_is_repaired_later() ->
         drop(run);
         // The next update check prepares the same release into a fresh directory.
         let again = Generation { id: generation(3)?.id, ..generation(2)? };
-        let staging = fallen.prepare(again.clone(), PreparationIntent::Automatic, unix_now()?)?;
+        let staging = fallen.prepare(again.clone(), PreparationIntent::Automatic, PREPARED_AT)?;
         store.compare_exchange(&fallen, &staging, context)?;
         let prepared = staging.prepared(&again)?;
         store.compare_exchange(&staging, &prepared, context)?;

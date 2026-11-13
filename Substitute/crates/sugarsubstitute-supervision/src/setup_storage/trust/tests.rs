@@ -10,6 +10,9 @@ use sugarsubstitute_contracts::installation::{
 use sugarsubstitute_update::{Error as Verification, fixture::*};
 mod publication;
 
+/// The fixed UTC Unix time records are prepared at here; no test reads it back.
+const PREPARED_AT: u64 = 1_800_000_000;
+
 #[test]
 fn restart_preserves_signature_floors_and_cannot_reinitialize_trust() -> TestResult {
     worker::run_reserved(TRUST_RESERVATION_BYTES, |context, _| {
@@ -222,7 +225,7 @@ fn progressed_or_unknown_installations_cannot_start_new_trust_history() -> TestR
                 )?,
             },
             PreparationIntent::Automatic,
-            crate::setup_storage::selection::unix_now()?,
+            PREPARED_AT,
         )?;
         store.compare_exchange(&initial, &next, context)?;
         let root = root(&key(8)?, 1, None)?;

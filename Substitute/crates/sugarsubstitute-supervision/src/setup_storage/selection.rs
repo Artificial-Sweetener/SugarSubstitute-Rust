@@ -42,8 +42,6 @@ use crate::durable_storage::{
 pub(crate) use clock::StrikeClock;
 pub use failure::SelectionFailure;
 pub(crate) use run::UnstartedTrial;
-#[cfg(test)]
-pub(in crate::setup_storage) use run::unix_now;
 pub use run::{AcceptedApplication, InstallationLaunch, InstallationRun, OwnedTrial};
 pub use run::{
     InheritedTrial, TRIAL_ADOPTION, TRIAL_ADOPTION_GRACE, TRIAL_WITNESS_RESERVATION_BYTES,
