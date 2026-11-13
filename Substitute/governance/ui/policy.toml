@@ -204,4 +204,4 @@ capabilities = ["window"]
 sources = [
     "crates/sugarsubstitute-desktop/src/windows_session_end_tests.rs",
 ]
-source_sha256 = "sha256:11760465366346786aef5d45621d70f16c78da882d2ba601a885a5e713dd714f"
+source_sha256 = "sha256:3b09d180c2e517064ff2497389dfafc90de64643df1ff3cbab6fc9e051536e98"
