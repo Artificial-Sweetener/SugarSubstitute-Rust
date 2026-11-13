@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Decide when the running application checks for an update: shortly after it is ready, then
-//! periodically while it stays open, and with growing backoff after a failed check.
+//! periodically while it stays open, with growing backoff after a failed check, and at once when
+//! the user asks to check now.
 //!
 //! The schedule is pure state over the execution owner's monotonic clock. It starts nothing and
 //! owns no timer: the coordinator turns `due` into its native event-loop wake and admits the
@@ -26,6 +27,15 @@ pub(crate) enum CheckOutcome {
     Completed,
     /// The check could not be admitted or ended with an error; it is retried with backoff.
     Failed,
+}
+
+/// What a request to check now did.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum CheckRequest {
+    /// The next check is due now.
+    Due,
+    /// A check is running; the request joins it instead of starting another.
+    Joined,
 }
 
 /// One application lifetime's check timing. At most one check runs at a time.
@@ -61,6 +71,16 @@ impl CheckSchedule {
         self.running = true;
         self.due = None;
         true
+    }
+
+    /// Ask for a check at `now`. While a check runs the request joins it; otherwise the next check
+    /// becomes due now, and its outcome plans the following one as usual.
+    pub(crate) fn request(&mut self, now: Moment) -> CheckRequest {
+        if self.running {
+            return CheckRequest::Joined;
+        }
+        self.due = Some(self.due.map_or(now, |due| due.min(now)));
+        CheckRequest::Due
     }
 
     /// Record a running check's outcome at `now` and plan the next one.
@@ -145,6 +165,22 @@ mod tests {
         assert!(!schedule.begin(at(150 + 4 * 60 * 60 - 1)));
         assert!(schedule.begin(next));
         assert_eq!(schedule.finish(CheckOutcome::Failed, next)?, next.checked_add(FIRST_RETRY)?);
+        Ok(())
+    }
+
+    #[test]
+    fn a_request_makes_the_check_due_now_or_joins_the_running_one() -> Result {
+        let mut schedule = CheckSchedule::new(at(0))?;
+        assert_eq!(schedule.request(at(5)), CheckRequest::Due);
+        assert_eq!(schedule.due(), Some(at(5)));
+        assert!(schedule.begin(at(5)), "the requested check starts at once");
+        assert_eq!(schedule.request(at(6)), CheckRequest::Joined);
+        assert_eq!(schedule.due(), None, "a joined request plans no second check");
+        assert!(!schedule.begin(at(6)));
+        let next = schedule.finish(CheckOutcome::Failed, at(7))?;
+        assert_eq!(next, at(7).checked_add(FIRST_RETRY)?);
+        assert_eq!(schedule.request(at(8)), CheckRequest::Due);
+        assert!(schedule.begin(at(8)), "a request does not wait out the retry backoff");
         Ok(())
     }
 

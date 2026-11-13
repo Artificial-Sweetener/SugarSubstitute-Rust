@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Tell the desktop child the coordinator's update status and the backend's workflow queue, and
-//! keep its restart-to-apply intent.
+//! keep its restart-to-apply intent and its requests to check now.
 //!
 //! Only the newest state matters. A status change or a queue change marks the snapshot due; the
 //! next free write slot carries the newest status and queue under a fresh revision, so a revoked
 //! write is simply sent again with whatever is newest by then. Snapshots go out after replies
 //! and the UI watchdog's challenge. The child's RestartToApply only records intent: the entry
-//! runner relaunches when the child then exits normally, and never otherwise.
+//! runner relaunches when the child then exits normally, and never otherwise. A CheckForUpdates
+//! request is kept until the entry runner takes it; repeated requests before then are one.
 use super::{ParentLifecycle, ParentResources, Result, types::WritePurpose, workflow_watch};
 use std::{num::NonZeroU64, time::Duration};
 use sugarsubstitute_contracts::{
@@ -29,6 +30,7 @@ pub(super) struct OutgoingUpdates {
     revision: u64,
     writing: bool,
     restart_to_apply: bool,
+    check_requested: bool,
     watch: workflow_watch::WorkflowWatch,
 }
 impl OutgoingUpdates {
@@ -52,6 +54,11 @@ impl OutgoingUpdates {
     /// The authenticated child finished its close save and is exiting so an update applies.
     pub(super) fn restart_to_apply(&mut self) {
         self.restart_to_apply = true;
+    }
+
+    /// The authenticated child asked for an update check now.
+    pub(super) fn check_requested(&mut self) {
+        self.check_requested = true;
     }
 
     /// When the workflow watch's reconnect is due.
@@ -119,6 +126,11 @@ impl ParentLifecycle {
         self.updates.restart_to_apply
     }
 
+    /// Take the child's request to check for updates now, once.
+    pub(crate) fn take_check_request(&mut self) -> bool {
+        std::mem::take(&mut self.updates.check_requested)
+    }
+
     /// Write the waiting snapshot when the shared write slot is free and the child is registered.
     pub(super) fn send_update_status(&mut self, resources: &ParentResources<'_, '_>) -> Result<()> {
         if self.write.is_some() || !self.registered || self.cleanup.is_some() {
@@ -166,5 +178,15 @@ mod tests {
         updates.restart_to_apply();
         assert!(updates.restart_to_apply);
         Ok(())
+    }
+
+    #[test]
+    fn repeated_check_requests_before_the_runner_takes_them_are_one() {
+        let mut updates = OutgoingUpdates::default();
+        assert!(!std::mem::take(&mut updates.check_requested));
+        updates.check_requested();
+        updates.check_requested();
+        assert!(std::mem::take(&mut updates.check_requested));
+        assert!(!std::mem::take(&mut updates.check_requested), "taken once");
     }
 }

@@ -28,11 +28,8 @@ mod tests;
 /// What the updater reports at one moment.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct UpdateSnapshot {
-    /// The coordinator's update status.
+    /// The coordinator's update status, including the channel its subscription follows.
     pub status: UpdateStatus,
-    /// The channel the installation's subscription follows; a new installation follows
-    /// releases.
-    pub channel: Channel,
     /// A restart is waiting for the running workflow to finish.
     pub restart_after_workflow: bool,
 }
@@ -45,11 +42,11 @@ pub trait UpdateStatusPort {
     /// The newest snapshot, or `None` while the host has none to report yet.
     fn snapshot(&self) -> Option<UpdateSnapshot>;
 
-    /// Ask the updater to check now.
+    /// Ask the updater to check now. A request while a check runs joins that check.
     ///
     /// # Errors
-    /// Returns why the host declines: `Busy` while it is already checking or closing,
-    /// `Unavailable` when it cannot check.
+    /// Returns why the host declines: `Busy` while it is closing, `Unavailable` when it cannot
+    /// check.
     fn check_now(&mut self) -> Result<(), UpdatesRejection>;
 
     /// Ask the host to apply the ready update by its normal close and relaunch, now or once the
@@ -196,7 +193,7 @@ pub fn page_state(
     };
     UpdatesState {
         current_version: current_version.clone(),
-        channel: match snapshot.channel {
+        channel: match status.channel() {
             Channel::Release => UpdatesChannel::Stable,
             Channel::Canary => UpdatesChannel::Beta,
         },

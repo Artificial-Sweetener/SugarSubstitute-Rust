@@ -174,6 +174,9 @@ impl StartupBackend for ProductionChild {
     fn request_restart_to_apply(&mut self) -> BackendResult<()> {
         ProductionChild::request_restart_to_apply(self)
     }
+    fn request_update_check(&mut self) -> BackendResult<()> {
+        ProductionChild::request_update_check(self)
+    }
     fn request_shutdown(&mut self, budget: ShutdownBudget) -> BackendResult<()> {
         ProductionChild::request_shutdown(self, budget)
     }

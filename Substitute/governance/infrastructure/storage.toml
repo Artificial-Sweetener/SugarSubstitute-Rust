@@ -2711,7 +2711,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Exe
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/trust/subscription/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:cee3f6ba17c6833c71e13c2513b87f7c93c6db05af985cc1bff793509913dd8c"
+source_sha256 = "sha256:2224a9fd5601a8377b455ae932a92e496c6b1e4e67e4804e418e072ea1f57dfb"
 capabilities = ["std::fs::OpenOptions::new", "std::fs::read", "std::fs::remove_file", "std::fs::write", "tempfile::TempDir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Exercise durable preferences through real protected storage and the shared execution owner. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -3104,7 +3104,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Own
 [[records]]
 path = "crates/sugarsubstitute/src/production/entry_runner/tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:2fb647982f74a4f88ae324dd9398dfa461bc7de4e729758e7992e0c3745b66e5"
+source_sha256 = "sha256:42b94bf14bb722fdfaf4e2683095d3c3990fb8141915d05ecf01494c2ff0c601"
 capabilities = ["std::fs::create_dir", "std::fs::remove_dir", "std::fs::remove_file", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Fail configuration before any environment capture and observe real runner joins. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -4575,7 +4575,7 @@ rationale = "Owned temporary PNG outputs are read into the fixture cache as enco
 [[records]]
 path = "crates/sugarsubstitute/src/startup/platform_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:c309c02706e2a40a246cca8cda794000b3b53595f1f4260f482c5e9dc9be91f9"
+source_sha256 = "sha256:5ea2b1d0adafcfb06f78ddd25a19c71020971c1433af8f6d64cbf65415dc6347"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
 rationale = "An owned temporary cache anchor verifies platform startup rejects invalid canvas scope and path configurations."

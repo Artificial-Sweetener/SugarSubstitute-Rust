@@ -314,6 +314,10 @@ impl EntryActivation for ProfileComponent {
     fn restart_to_apply_requested(&self) -> bool {
         false
     }
+    /// The qualification child has no update surfaces to ask for a check.
+    fn take_update_check_request(&mut self) -> bool {
+        false
+    }
     fn normal_close_requested(&self) -> bool {
         self.complete && self.failure.is_none() && self.profile_retirement_ready()
     }

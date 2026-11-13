@@ -7,6 +7,7 @@
 //! Attempts report what happened; the selection record decides what is prepared. `reconcile`
 //! adopts the record's state, so a status survives helper crashes, repeated attempts and
 //! restarts without trusting an attempt's claim alone.
+use super::Channel;
 use super::attempt::{
     AttemptOutcome, AttemptPhase, AttemptProgress, MAX_VERSION_BYTES, UpdateReport, codec,
 };
@@ -78,8 +79,22 @@ pub struct UpdateStatus {
     launch: Option<LaunchVersion>,
     #[serde(default)]
     sugarcubes: PackUpdateStatus,
+    #[serde(default)]
+    channel: Channel,
+    #[serde(default)]
+    checks: bool,
 }
 impl UpdateStatus {
+    /// The channel the installation's subscription follows; a new installation follows
+    /// releases.
+    pub fn channel(&self) -> Channel {
+        self.channel
+    }
+    /// Whether the coordinator checks for updates when asked now. A build without update
+    /// configuration, or a launch that does not own the installation, never checks.
+    pub fn checks(&self) -> bool {
+        self.checks
+    }
     /// Current activity.
     pub fn activity(&self) -> UpdateActivity {
         self.activity.map_or(UpdateActivity::Idle, UpdateActivity::Checking)
@@ -185,6 +200,14 @@ impl UpdateStatus {
     /// Adopt the coordinator's SugarCubes update state.
     pub fn observe_sugarcubes(&mut self, status: PackUpdateStatus) {
         self.sugarcubes = status;
+    }
+    /// Adopt the channel the installation's subscription follows.
+    pub fn observe_channel(&mut self, channel: Channel) {
+        self.channel = channel;
+    }
+    /// Adopt whether the coordinator checks for updates when asked now.
+    pub fn observe_checks(&mut self, checks: bool) {
+        self.checks = checks;
     }
     /// Adopt what this launch observed about a version it starts for the first time. A
     /// confirmed version is never taken back by a later `Applying`.
@@ -377,6 +400,19 @@ mod tests {
             ..PackUpdateReport::new(PackOutcome::Updated)
         }));
         assert_eq!(status.encode(), Err(StatusCodecError::Bounds));
+        Ok(())
+    }
+
+    #[test]
+    fn the_channel_and_whether_checks_run_cross_processes_with_the_status()
+    -> Result<(), StatusCodecError> {
+        let mut status = UpdateStatus::default();
+        assert_eq!((status.channel(), status.checks()), (Channel::Release, false));
+        status.observe_channel(Channel::Canary);
+        status.observe_checks(true);
+        let crossed = UpdateStatus::decode(&status.encode()?)?;
+        assert_eq!((crossed.channel(), crossed.checks()), (Channel::Canary, true));
+        assert_eq!(crossed, status);
         Ok(())
     }
 

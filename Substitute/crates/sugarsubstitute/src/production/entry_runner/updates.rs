@@ -1,17 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Check for updates on the schedule after readiness and retain each helper family through cleanup.
+//! Check for updates on the schedule after readiness, and at once when the window asks, and retain
+//! each helper family through cleanup.
 use super::*;
 use crate::updates::{
     parent::Parent,
-    schedule::{CheckOutcome, CheckSchedule},
+    schedule::{CheckOutcome, CheckRequest, CheckSchedule},
 };
 use sugarsubstitute_contracts::lifecycle::CoordinatorKey;
 use sugarsubstitute_supervision::setup_storage::RunningApplication;
 impl<C: EntryActivation> EntryRunner<C> {
     /// Every updater job uses this runner's actual executor and globally shared identity sequences.
     /// A check starts when the schedule is due; its settled outcome plans the next one. Closing
-    /// stops scheduling, and an already running helper follows the application's close.
+    /// stops scheduling, and an already running helper follows the application's close. A check
+    /// the window asks for runs the same check now, or joins the one running.
     pub(super) fn advance_updates(
         &mut self,
         batch: &CompletionBatch,
@@ -33,6 +35,10 @@ impl<C: EntryActivation> EntryRunner<C> {
         if let Some(launch) = self.launch_version() {
             self.update_status.observe_launch(launch);
         }
+        let check_requested = self.child.take_update_check_request();
+        let source = self.authority.as_ref().and_then(CoordinatorAuthority::update_source);
+        self.update_status
+            .observe_checks(!self.closing && crate::updates::configured() && source.is_some());
         let (revision, status) = self.update_status.snapshot();
         // Offered every turn, so a desktop child that starts later still receives it.
         self.child.publish_update_status(revision, status)?;
@@ -42,13 +48,18 @@ impl<C: EntryActivation> EntryRunner<C> {
             // A record read is advisory; closing never waits for one beyond its cancellation.
             scope.cancel();
         }
-        if self.closing || !crate::updates::configured() {
-            self.update_wake = None;
-            return Ok(());
-        }
         let Some((key, application)) =
-            self.authority.as_ref().and_then(CoordinatorAuthority::update_source)
+            source.filter(|_| !self.closing && crate::updates::configured())
         else {
+            if check_requested {
+                tracing::info!(
+                    operation = "update_check_request_declined",
+                    "The window asked to check for updates while this launch cannot check"
+                );
+            }
+            if self.closing || !crate::updates::configured() {
+                self.update_wake = None;
+            }
             return Ok(());
         };
         let installation =
@@ -70,6 +81,14 @@ impl<C: EntryActivation> EntryRunner<C> {
             schedule.finish(outcome, now)?;
             self.update_status.finish(attempt, crate::updates::status::now_utc());
         }
+        if check_requested {
+            let request = schedule.request(now);
+            tracing::info!(
+                operation = "update_check_requested",
+                joined = request == CheckRequest::Joined,
+                "The window asked to check for updates now"
+            );
+        }
         if self.updater.is_none() && schedule.begin(now) {
             match self.start_update_check(key, application) {
                 Ok(mut updater) => {
@@ -83,6 +102,7 @@ impl<C: EntryActivation> EntryRunner<C> {
                         .as_mut()
                         .ok_or("Update schedule absent")?
                         .finish(CheckOutcome::Failed, now)?;
+                    self.update_status.not_started(crate::updates::status::now_utc());
                 }
             }
         }

@@ -27,6 +27,8 @@ pub(super) struct Platform {
     pub(in crate::startup) budget: Option<ShutdownBudget>,
     pub(in crate::startup) shutdown_requests: Vec<ShutdownBudget>,
     pub(in crate::startup) restart_requests: usize,
+    /// Update checks the window asked this fake child to request from the coordinator.
+    pub(in crate::startup) check_requests: usize,
     pub(in crate::startup) shutdown_starts: usize,
     retired: bool,
     finished: bool,
@@ -172,6 +174,10 @@ impl StartupBackend for Platform {
     }
     fn request_restart_to_apply(&mut self) -> BackendResult<()> {
         self.restart_requests += 1;
+        Ok(())
+    }
+    fn request_update_check(&mut self) -> BackendResult<()> {
+        self.check_requests += 1;
         Ok(())
     }
     fn request_shutdown(&mut self, budget: ShutdownBudget) -> BackendResult<()> {
