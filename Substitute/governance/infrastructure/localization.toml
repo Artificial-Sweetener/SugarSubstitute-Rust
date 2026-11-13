@@ -132,7 +132,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/lib.rs"
-source_sha256 = "sha256:697dfeb70f1556095478978474e851158ff7a21216e8245d1597b5c68b8b7559"
+source_sha256 = "sha256:e7baa125ef1d8ae845cb26a28113ccb418bd920208b3f5c051d71a66e2f6f7fb"
 kind = "native"
 rationale = "Native boundary: Own native window lifetime and CPU frame presentation independently of UI content.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -432,7 +432,7 @@ rationale = "Validate existing control labels for emptiness/NUL and unique ident
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/host_contract.rs"
-source_sha256 = "sha256:6384a440b38a3628668a9b2f65f04e4da973364038c4d73698bf48de3d03372c"
+source_sha256 = "sha256:e1bba5289e4485906b565f80ab42593ba21c680061e46e206a2ab23ad303acf9"
 kind = "native"
 rationale = "Main caption/recovery contracts borrow localized labels from the host. They define presentation data and no catalog or fallback policy."
 
@@ -744,7 +744,7 @@ rationale = "Caption layout places the host's localized caption labels and the c
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_caption_contract.rs"
-source_sha256 = "sha256:13def5aa86b52cf9bcbcbd909273d24ffb5294b7dcf42e2e5b9d819245050fcc"
+source_sha256 = "sha256:be79e996ea88bc48c92782cfdfc2765c531335c5d9142122276e872f338f0e16"
 kind = "native"
 rationale = "Main caption contracts borrow localized labels from the host. They define presentation data and no catalog or fallback policy."
 
@@ -768,6 +768,6 @@ rationale = "Caption peers show the caption owner's words, which come from the t
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/windows_controls_caption_tests.rs"
-source_sha256 = "sha256:e9c3d207af84c4a1c9511b08316566224bef7fde6e29b2f6b1130bfc079a5184"
+source_sha256 = "sha256:791fff8688e5231704b0bac17a49d0a295dc6a8a2732631f4bd1d956445f02ea"
 kind = "fixture"
 rationale = "A private-desktop test uses stand-in window-button labels and its own window title; update words come from the catalog."
