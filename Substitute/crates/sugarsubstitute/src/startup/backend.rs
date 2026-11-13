@@ -221,6 +221,12 @@ pub trait StartupBackend {
     fn take_update_notice(
         &mut self,
     ) -> Option<sugarsubstitute_contracts::update::status::StartupNotice>;
+    /// A writer that exports the open update report, whose plain text is `text`, to the file
+    /// the user chooses; `None` hides Export and keeps Copy.
+    fn update_report_export(
+        &mut self,
+        text: String,
+    ) -> Option<Box<dyn sugarsubstitute_desktop::report::surface::UpdateExport>>;
     /// Tell the coordinator this close restarts the application so a prepared update applies.
     /// Called once, after the close save's outcome exists and before `request_shutdown`.
     fn request_restart_to_apply(&mut self) -> BackendResult<()>;

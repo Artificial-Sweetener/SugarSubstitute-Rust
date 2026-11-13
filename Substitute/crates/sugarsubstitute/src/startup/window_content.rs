@@ -103,6 +103,15 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
         })
     }
 
+    /// Export the report the window shows, the latest failed attempt as presented, through the
+    /// child's own export owner. The text is the report's plain text, as Copy uses.
+    fn update_report_export(
+        &mut self,
+    ) -> Option<Box<dyn sugarsubstitute_desktop::report::surface::UpdateExport>> {
+        let text = StartupWindowContent::update_status(self)?.failure()?.to_text();
+        self.child.update_report_export(text)
+    }
+
     fn workflow_activity(&self) -> sugarsubstitute_desktop::WorkflowActivity {
         match self.child.workflow_queue() {
             sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue::Busy => {

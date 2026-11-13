@@ -171,6 +171,22 @@ impl StartupBackend for ProductionChild {
     ) -> Option<sugarsubstitute_contracts::update::status::StartupNotice> {
         self.bootstrap.channel_mut().updates_mut().take_notice()
     }
+    fn update_report_export(
+        &mut self,
+        text: String,
+    ) -> Option<Box<dyn sugarsubstitute_desktop::report::surface::UpdateExport>> {
+        match super::update_export::UpdateReportExport::new(
+            text,
+            sugarsubstitute_execution::MonotonicClock::new(),
+        ) {
+            Ok(export) => Some(Box::new(export)),
+            Err(cause) => {
+                tracing::error!(operation = "update_report_export", cause = %cause,
+                    "The update report cannot be exported; Copy stays available");
+                None
+            }
+        }
+    }
     fn request_restart_to_apply(&mut self) -> BackendResult<()> {
         ProductionChild::request_restart_to_apply(self)
     }

@@ -45,6 +45,8 @@ mod requests;
 mod retirement;
 #[path = "child/startup_adapter.rs"]
 mod startup_adapter;
+#[path = "child/update_export.rs"]
+mod update_export;
 use crate::startup::ShutdownInitiation;
 #[cfg(test)]
 #[path = "child/test_support.rs"]

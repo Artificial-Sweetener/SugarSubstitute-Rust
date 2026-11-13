@@ -41,6 +41,8 @@ pub(super) struct Platform {
     /// Start-up messages this fake child still has for the window.
     pub(in crate::startup) notices:
         std::collections::VecDeque<sugarsubstitute_contracts::update::status::StartupNotice>,
+    /// Report texts the window asked this fake child to export.
+    pub(in crate::startup) exported: Vec<String>,
 }
 impl StartupBackend for Platform {
     type Prepared = Prepared;
@@ -169,6 +171,13 @@ impl StartupBackend for Platform {
         &mut self,
     ) -> Option<sugarsubstitute_contracts::update::status::StartupNotice> {
         self.notices.pop_front()
+    }
+    fn update_report_export(
+        &mut self,
+        text: String,
+    ) -> Option<Box<dyn sugarsubstitute_desktop::report::surface::UpdateExport>> {
+        self.exported.push(text);
+        None
     }
     fn request_restart_to_apply(&mut self) -> BackendResult<()> {
         self.restart_requests += 1;

@@ -3078,6 +3078,14 @@ disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Own isolated files and synchronize actual terminal publication without sleeps. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
+path = "crates/sugarsubstitute/src/production/child/update_export_tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:98e6d7b554447ca16a9a30441f56cf906b9e1a81f06c7ee5524f2d1bcc64a57f"
+capabilities = ["assert! restricted capability fragments", "std::fs::read", "std::fs::read_dir", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: An exported update report lands exactly at the selected path, replaces a confirmed file and leaves no stage or backup. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
 path = "crates/sugarsubstitute/src/production/entry_runner/tests.rs"
 owner = "sugarsubstitute"
 source_sha256 = "sha256:8dc657a8adc4c704176c2146858ae755249deee9cac2b4024e0327ad9945bad5"
@@ -4551,7 +4559,7 @@ rationale = "Owned temporary PNG outputs are read into the fixture cache as enco
 [[records]]
 path = "crates/sugarsubstitute/src/startup/platform_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:c309c02706e2a40a246cca8cda794000b3b53595f1f4260f482c5e9dc9be91f9"
+source_sha256 = "sha256:490072e12fe04f7a9fd282ff5d65fa96f0ccd69482f35f936346cb1326faab65"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
 rationale = "An owned temporary cache anchor verifies platform startup rejects invalid canvas scope and path configurations."
