@@ -149,6 +149,11 @@ pub enum WirePayload<'a> {
     },
     /// Tag23: the child's close save finished and it is exiting so the update applies.
     RestartToApply,
+    /// Tag24: the child asks the coordinator to check for updates now; joins a running check.
+    CheckForUpdates,
+    /// Tag25: the window applied the Kind22 status at this revision; a restarting status is
+    /// acknowledged only once the window committed to staying hidden.
+    UpdateStatusApplied(NonZeroU64),
 }
 /// What the coordinator observes of the backend's workflow queue.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -186,6 +191,8 @@ impl WirePayload<'_> {
             Self::MainRevealed(_) => 21,
             Self::UpdateStatus { .. } => 22,
             Self::RestartToApply => 23,
+            Self::CheckForUpdates => 24,
+            Self::UpdateStatusApplied(_) => 25,
         }
     }
 }
@@ -294,4 +301,9 @@ pub enum DecodedPayload<'a> {
     },
     /// Tag23: the child's close save finished and it is exiting so the update applies.
     RestartToApply,
+    /// Tag24: the child asks the coordinator to check for updates now; joins a running check.
+    CheckForUpdates,
+    /// Tag25: the window applied the Kind22 status at this revision; a restarting status is
+    /// acknowledged only once the window committed to staying hidden.
+    UpdateStatusApplied(NonZeroU64),
 }

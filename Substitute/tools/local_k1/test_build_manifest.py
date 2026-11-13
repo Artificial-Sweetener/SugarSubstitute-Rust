@@ -8,7 +8,7 @@ import struct
 import tempfile
 import unittest
 from unittest.mock import patch
-from build_manifest import Source, read_pe, read_pdb, produce, pair, build_identity, PDB_MAGIC
+from build_manifest import Source, read_pe, read_pdb, produce, produce_release, pair, build_identity, PDB_MAGIC, RELEASE_ANCHOR_HEADER
 from manifest import decode, ManifestError
 
 GUID = bytes(range(1, 17))
@@ -134,6 +134,35 @@ class ProducerTests(unittest.TestCase):
         self.assertEqual(value.schema,2)
         self.assertEqual([item.roles for item in value.pairs],[16,3,8])
         self.assertEqual([item.pe_label for item in value.pairs],sorted(item.pe_label for item in value.pairs))
+
+    def capture_pairs(self):
+        (self.root / "sugarsubstitute_crashpad_client.dll").write_bytes(pe(library=True))
+        (self.root / "sugarsubstitute_crashpad_client.pdb").write_bytes(pdb())
+        (self.root / "crashpad_handler.exe").write_bytes(pe())
+        (self.root / "crashpad_handler.pdb").write_bytes(pdb())
+
+    def test_release_manifest_names_its_anchor_key_and_release_identity(self):
+        blob = RELEASE_ANCHOR_HEADER + bytes(range(256)) + bytes(range(128))
+        anchor = self.root / "release-anchor.bin"
+        anchor.write_bytes(blob)
+        self.capture_pairs()
+        value = decode(produce_release(self.root, "host.exe", "substitute-0_2_0", anchor))
+        self.assertEqual(value.key_id, hashlib.sha256(blob).digest())
+        self.assertEqual(value.build, "substitute-0_2_0")
+        self.assertEqual(value.schema, 2)
+        self.assertEqual([item.roles for item in value.pairs], [16, 3, 8])
+
+    def test_release_manifest_rejects_foreign_anchor_shape_and_invalid_identity(self):
+        self.capture_pairs()
+        anchor = self.root / "release-anchor.bin"
+        for blob in (bytes(411), RELEASE_ANCHOR_HEADER + bytes(383), RELEASE_ANCHOR_HEADER + bytes(385)):
+            anchor.write_bytes(blob)
+            with self.assertRaises(ManifestError):
+                produce_release(self.root, "host.exe", "substitute-0_2_0", anchor)
+        anchor.write_bytes(RELEASE_ANCHOR_HEADER + bytes(384))
+        for build in ("", "substitute-0.2.0", "x" * 65):
+            with self.assertRaises(ManifestError):
+                produce_release(self.root, "host.exe", build, anchor)
 
 
 if __name__ == "__main__":

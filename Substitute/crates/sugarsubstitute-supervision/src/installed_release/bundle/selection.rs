@@ -98,7 +98,7 @@ pub(super) fn select(
                 )
             })
         })?;
-        if &manifest.key_id != anchor.key_id {
+        if manifest.key_id != anchor.key_id {
             return Err(missing());
         }
         #[cfg(feature = "local-k1-symbol-trust")]

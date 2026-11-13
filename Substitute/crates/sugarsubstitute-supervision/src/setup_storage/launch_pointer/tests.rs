@@ -106,9 +106,12 @@ pub(crate) fn overwrite(installation: &Path, bytes: &[u8], context: &JobContext)
     protection::with(context, |protection| {
         let root = Directory::open(installation, false)?;
         let state = Directory::open(&super::super::ownership::state_path(&root), false)?;
-        let mut stage = publication::Stage::create(&state, protection, context)?;
-        std::io::Write::write_all(stage.file(), bytes)?;
-        stage.publish(&state.path().join(LAUNCH_POINTER_FILE), true, protection, context)
+        let destination = state.path().join(LAUNCH_POINTER_FILE);
+        let kind = crate::durable_storage::write_port::UpdateFile::LaunchPointer;
+        let mut stage =
+            publication::Stage::create(&state, kind, &destination, protection, context)?;
+        stage.write(bytes)?;
+        stage.publish(&destination, true, protection, context)
     })
 }
 

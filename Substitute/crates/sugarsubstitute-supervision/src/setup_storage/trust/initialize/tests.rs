@@ -3,6 +3,7 @@
 //! Interrupted bootstrap never exposes partial trust or replaces a foreign native directory.
 use super::*;
 use crate::setup_storage::test_worker::{self as worker, TestResult, installation};
+use std::io::Write;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -174,6 +175,7 @@ fn cancellation_before_directory_publication_preserves_unpublished_state() -> Te
         let parent = Directory::open(installation.path(), false)?;
         let staged = InitialState::stage(
             &Directory::open(&parent.path().join("state"), false)?,
+            &parent.path().join("state").join(DIRECTORY),
             b"checkpoint",
             b"history",
             context,
@@ -195,6 +197,7 @@ fn replacing_a_staging_path_with_identical_bytes_cannot_publish_another_director
         let parent = Directory::open(installation.path(), false)?;
         let staged = InitialState::stage(
             &Directory::open(&parent.path().join("state"), false)?,
+            &parent.path().join("state").join(DIRECTORY),
             b"checkpoint",
             b"history",
             context,
@@ -230,6 +233,7 @@ fn publication_never_replaces_an_existing_directory_or_its_files() -> TestResult
         let parent = Directory::open(installation.path(), false)?;
         let staged = InitialState::stage(
             &Directory::open(&parent.path().join("state"), false)?,
+            &parent.path().join("state").join(DIRECTORY),
             b"checkpoint",
             b"history",
             context,
@@ -254,7 +258,8 @@ fn publication_rejects_unprotected_staging_and_releases_its_native_handle() -> T
         std::fs::create_dir(&path)?;
         std::fs::write(path.join("user-file"), b"preserve")?;
         let identity = Directory::open(&path, false)?.identity()?;
-        let staged = InitialState { path: path.clone(), identity };
+        let write = write_port::begin(UpdateFile::Trust, &path.join(RECORD));
+        let staged = InitialState { path: path.clone(), identity, write };
         let destination = installation.path().join("state").join(DIRECTORY);
         assert!(staged.publish(&destination, context).is_err());
         assert!(!destination.exists());
@@ -275,6 +280,7 @@ fn crash_after_publication_leaves_complete_trust_that_reopens_without_initializi
         let (checkpoint, history) = records(parent.path(), &trusted_root, context)?;
         let staged = InitialState::stage(
             &Directory::open(&parent.path().join("state"), false)?,
+            &parent.path().join("state").join(DIRECTORY),
             &checkpoint,
             &history,
             context,

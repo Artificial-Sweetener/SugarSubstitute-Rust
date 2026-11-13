@@ -27,11 +27,10 @@ struct FakeUpdater {
 
 impl FakeUpdater {
     fn new() -> Self {
+        let mut status = UpdateStatus::default();
+        status.observe_channel(Channel::Canary);
         Self {
-            snapshot: Some(UpdateSnapshot {
-                channel: Channel::Canary,
-                ..UpdateSnapshot::default()
-            }),
+            snapshot: Some(UpdateSnapshot { status, ..UpdateSnapshot::default() }),
             check: Ok(()),
             restart: Ok(()),
             checks: 0,
@@ -361,7 +360,9 @@ fn the_channel_shown_is_the_one_the_subscription_follows() -> TestResult {
     for (channel, shown) in
         [(Channel::Release, UpdatesChannel::Stable), (Channel::Canary, UpdatesChannel::Beta)]
     {
-        let snapshot = UpdateSnapshot { channel, ..UpdateSnapshot::default() };
+        let mut status = UpdateStatus::default();
+        status.observe_channel(channel);
+        let snapshot = UpdateSnapshot { status, ..UpdateSnapshot::default() };
         assert_eq!(page_state(&version, &snapshot, false).channel, shown);
     }
     Ok(())

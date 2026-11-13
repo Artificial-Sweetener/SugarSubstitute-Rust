@@ -5,7 +5,8 @@
 //! The desktop child asks for this only after its close save finished. The runner acts only when
 //! that child then completed a normal close and the coordinator released the installation, so
 //! the new process starts against a free installation and its own launch picks the prepared
-//! version. A crash, a failure or a close without that intent never relaunches.
+//! version. A beta-eager launch that prepared an update before its window opened closes and
+//! relaunches the same way, without asking. A crash, a failure or a close without that intent never relaunches.
 use super::*;
 use std::os::windows::ffi::OsStrExt;
 use sugarsubstitute_contracts::execution::{
@@ -28,21 +29,27 @@ pub(super) enum Relaunch {
     Done,
 }
 
-/// Whether the runner should relaunch: a normal shutdown with no failure, and a child that asked
-/// to restart to apply and then completed a normal close.
+/// Whether the runner should relaunch: a normal shutdown with no failure, and a restart owed to
+/// a child that asked to restart to apply, or to an update prepared before the window opened.
 pub(super) fn wanted(normal_shutdown: bool, failed: bool, restart_requested: bool) -> bool {
     normal_shutdown && !failed && restart_requested
 }
 
 impl<C: EntryActivation> EntryRunner<C> {
+    /// Whether this run's close owes a relaunch into a prepared update.
+    pub(super) fn relaunch_wanted(&self) -> bool {
+        let restart =
+            self.child.restart_to_apply_requested() || self.launch_update.restart().is_some();
+        wanted(self.normal_shutdown, self.failure_source().is_some(), restart)
+    }
+
     /// Advance the relaunch; true once nothing more is owed. Call only after the installation
     /// was released. A failed launch is logged and never retried.
     /// # Errors
     /// Returns admission and clock failures of the launch job.
     pub(super) fn advance_relaunch(&mut self, until: Moment) -> Result<bool, Box<dyn Error>> {
         if matches!(self.relaunch, Relaunch::Idle) {
-            let failed = self.failure_source().is_some();
-            if !wanted(self.normal_shutdown, failed, self.child.restart_to_apply_requested()) {
+            if !self.relaunch_wanted() {
                 return Ok(true);
             }
             let entry =

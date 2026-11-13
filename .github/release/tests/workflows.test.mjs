@@ -100,6 +100,8 @@ describe('release workflow', () => {
     const privilegedJobs = Object.entries(release.jobs).filter(([, job]) => privileged(job));
     assert.deepEqual(privilegedJobs.map(([name]) => name).sort(), [
       'substitute',
+      'substitute-update-repository',
+      'substitute-update-targets',
       'substitute-verify',
       'sugarcubes',
     ]);
@@ -121,6 +123,92 @@ describe('release workflow', () => {
       String(entry.run).includes('sugarcubes_registry.py publish'),
     );
     assert.match(registry.if, /vars\.RELEASES_ENABLED == 'true'/);
+  });
+
+  it('signs each SugarSubstitute release into the update repository, behind the root', () => {
+    const substitute = release.jobs.substitute;
+    const step = substitute.steps.find((entry) => entry.name === 'Release');
+    for (const output of ['released', 'version', 'tag']) {
+      assert.equal(substitute.outputs[output], `\${{ steps.${step.id}.outputs.${output} }}`);
+    }
+
+    const targets = release.jobs['substitute-update-targets'];
+    assert.deepEqual(targets.needs, ['authorize', 'substitute']);
+    assert.ok(String(targets.if).includes(PUBLISH));
+    assert.ok(String(targets.if).includes("needs.substitute.outputs.released == 'true'"));
+    assert.equal(targets.environment, 'release');
+    assert.deepEqual(targets.permissions, { contents: 'read' });
+    const names = targets.steps.map((entry) => entry.name);
+    const checkout = targets.steps[0];
+    assert.equal(checkout.with.ref, '${{ needs.substitute.outputs.tag }}');
+    assert.equal(checkout.with['persist-credentials'], false);
+    const root = targets.steps.find((entry) => entry.name.startsWith('Require the trusted root'));
+    assert.equal(names.indexOf(root.name), 1, 'the root is required before anything is built');
+    const gate = (...present) => {
+      const folder = mkdtempSync(join(tmpdir(), 'release-root-'));
+      try {
+        for (const name of present) {
+          writeFileSync(join(folder, name), '{}');
+        }
+        return spawnSync('bash', ['-e', '-c', root.run], {
+          cwd: folder,
+          env: { PATH: process.env.PATH, TRUSTED_ROOT: 'root.json', RELEASE_ANCHOR: 'anchor.bin' },
+          encoding: 'utf8',
+        }).status;
+      } finally {
+        rmSync(folder, { recursive: true, force: true });
+      }
+    };
+    assert.notEqual(gate(), 0);
+    assert.notEqual(gate('root.json'), 0);
+    assert.notEqual(gate('anchor.bin'), 0);
+    assert.equal(gate('root.json', 'anchor.bin'), 0);
+    assert.equal(targets.env.TRUSTED_ROOT, '.github/update-repository/root.json');
+    assert.equal(targets.env.RELEASE_ANCHOR, 'Substitute/installer/release/release-anchor.bin');
+
+    const distribution = targets.steps.find((entry) =>
+      String(entry.run).includes('release/update-distribution.mjs'),
+    );
+    assert.match(distribution.run, /SUGARSUBSTITUTE_UPDATE_DISTRIBUTION=\$distribution/);
+    const build = targets.steps.find((entry) =>
+      String(entry.run).includes('release/build-application.mjs'),
+    );
+    assert.equal(build.shell, 'pwsh');
+    assert.match(build.run, /build-application\.mjs \$application release windows-x86_64/);
+    assert.match(build.run, /SUGARSUBSTITUTE_RELEASE_ANCHOR/);
+    assert.match(build.run, /extract_source\.py[\s\S]*prepare_source\.py[\s\S]*build_native\.py/);
+    assert.match(build.run, /Microsoft\.VisualStudio\.Product\.Enterprise/);
+    const sign = targets.steps.find((entry) => String(entry.run).includes('sign-release.mjs'));
+    const assemble = targets.steps.find((entry) => String(entry.run).includes('package.mjs'));
+    assert.match(assemble.run, /RELEASE_BUNDLE=\$bundle/);
+    assert.match(assemble.run, />\s*"\$RUNNER_TEMP\/bundle\.json"/);
+    const describe = targets.steps.find((entry) => String(entry.run).includes('" offer '));
+    const order = [distribution, build, sign, assemble, describe].map((entry) =>
+      names.indexOf(entry.name),
+    );
+    assert.deepEqual(
+      [...order].sort((a, b) => a - b),
+      order,
+    );
+    // Only the signing step holds the release manifest key; build scripts never see it.
+    for (const entry of targets.steps) {
+      assert.equal(JSON.stringify(entry).includes('secrets.'), entry === sign, entry.name);
+    }
+    assert.deepEqual(sign.env, { RELEASE_MANIFEST_KEY: '${{ secrets.RELEASE_MANIFEST_KEY }}' });
+    assert.match(describe.run, /seal\.mjs --update "\$RELEASE_BUNDLE"/);
+    assert.match(describe.run, /--version "\$VERSION"/);
+    assert.equal(targets.env.VERSION, '${{ needs.substitute.outputs.version }}');
+    const upload = targets.steps.at(-1);
+    assert.match(upload.uses, /^actions\/upload-artifact@/);
+    assert.equal(upload.with['if-no-files-found'], 'error');
+
+    const signing = release.jobs['substitute-update-repository'];
+    assert.deepEqual(signing.needs, ['authorize', 'substitute-update-targets']);
+    assert.ok(String(signing.if).includes(PUBLISH));
+    assert.ok(String(signing.if).includes("needs.substitute-update-targets.result == 'success'"));
+    assert.equal(signing.uses, './.github/workflows/substitute-update-repository.yml');
+    assert.deepEqual(signing.with, { operation: 'release', targets_artifact: upload.with.name });
+    assert.equal(signing.secrets, 'inherit');
   });
 });
 
@@ -215,6 +303,8 @@ describe('update repository workflow', () => {
     );
     assert.equal(update.jobs.sign.needs, 'authorize');
     assert.equal(update.jobs.sign.if, PUBLISH);
+    // Every signing key lives in the one protected environment the key ceremony fills.
+    assert.equal(update.jobs.sign.environment, 'release');
   });
 
   it('verifies against the shipped root and uploads the timestamp last', () => {

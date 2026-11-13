@@ -199,6 +199,35 @@ fn a_scanner_holding_the_new_engine_starts_the_previous_release_and_keeps_the_up
 }
 
 #[test]
+fn a_scanner_holding_the_pointer_is_reported_and_the_next_launch_starts() -> TestResult {
+    use std::os::windows::fs::OpenOptionsExt;
+    worker::run_reserved(BYTES, |context, _| {
+        let root = installation(190, Fallback::Present, false, context)?;
+        let file = root.path().join("state").join(crate::setup_storage::LAUNCH_POINTER_FILE);
+        assert!(file.is_file());
+        // Scanners commonly open a file they inspect without sharing it.
+        let scanner = std::fs::OpenOptions::new().read(true).share_mode(0).open(&file)?;
+        let started = std::sync::Mutex::new(Vec::new());
+        let refused = start_pointed_with(root.path(), context, TAKEOVER, |_, hops| {
+            crate::registry::lock(&started).push(hops);
+            stand_in("signal", context)
+        });
+        // Nothing starts and the root reports a storage failure, never "reinstall".
+        assert!(
+            matches!(&refused, Err(StartupRefused::Pointer(PointerFailure::Storage(_)))),
+            "{refused:?}"
+        );
+        assert!(crate::registry::lock(&started).is_empty());
+        drop(scanner);
+        start_pointed_with(root.path(), context, TAKEOVER, |_, hops| {
+            crate::registry::lock(&started).push(hops);
+            stand_in("signal", context)
+        })?;
+        assert_eq!(*crate::registry::lock(&started), [0]);
+        Ok(())
+    })
+}
+#[test]
 fn without_a_working_fallback_every_refusal_is_reported() -> TestResult {
     worker::run_reserved(BYTES, |context, _| {
         let root = installation(184, Fallback::None, false, context)?;

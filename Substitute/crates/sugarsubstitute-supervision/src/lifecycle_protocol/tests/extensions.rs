@@ -321,7 +321,7 @@ fn settlement_wire_preserves_original_acquisition_and_rejects_zero_foreign_or_ch
     for page_failure in [None, Some(PageFailure::Sugarcubes), Some(PageFailure::Unattributed)] {
         let source = encoded(WirePayload::SettleAttempt { identity, acquisition, page_failure })?;
         assert_eq!(source.len(), HEADER_BYTES + 25);
-        assert_eq!(&source[4..6], &15u16.to_le_bytes());
+        assert_eq!(&source[4..6], &17u16.to_le_bytes());
         assert!(matches!(
             FrameCodec::decode(&source)?.payload,
             DecodedPayload::SettleAttempt { identity: actual, acquisition: original, page_failure: failed }

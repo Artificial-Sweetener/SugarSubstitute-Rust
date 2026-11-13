@@ -7,6 +7,7 @@
 //! Attempts report what happened; the selection record decides what is prepared. `reconcile`
 //! adopts the record's state, so a status survives helper crashes, repeated attempts and
 //! restarts without trusting an attempt's claim alone.
+use super::Channel;
 use super::attempt::{
     AttemptOutcome, AttemptPhase, AttemptProgress, MAX_VERSION_BYTES, UpdateReport, codec,
 };
@@ -48,6 +49,9 @@ pub enum LaunchVersion {
     Applying(String),
     /// This launch started this version for the first time and confirmed it.
     Updated(String),
+    /// This launch prepared this version before its window opened and restarts into it; the
+    /// window stays hidden and the splash says which version it updates to.
+    Restarting(String),
 }
 
 /// A one-time message about updates for the start of the application, in the order a window
@@ -78,8 +82,22 @@ pub struct UpdateStatus {
     launch: Option<LaunchVersion>,
     #[serde(default)]
     sugarcubes: PackUpdateStatus,
+    #[serde(default)]
+    channel: Channel,
+    #[serde(default)]
+    checks: bool,
 }
 impl UpdateStatus {
+    /// The channel the installation's subscription follows; a new installation follows
+    /// releases.
+    pub fn channel(&self) -> Channel {
+        self.channel
+    }
+    /// Whether the coordinator checks for updates when asked now. A build without update
+    /// configuration, or a launch that does not own the installation, never checks.
+    pub fn checks(&self) -> bool {
+        self.checks
+    }
     /// Current activity.
     pub fn activity(&self) -> UpdateActivity {
         self.activity.map_or(UpdateActivity::Idle, UpdateActivity::Checking)
@@ -100,18 +118,26 @@ impl UpdateStatus {
     pub fn repairing(&self) -> bool {
         self.recorded.repairing
     }
-    /// The version this launch is starting for the first time, until it is confirmed.
+    /// The version this launch is starting for the first time, until it is confirmed, or the
+    /// version it restarts into.
     pub fn applying(&self) -> Option<&str> {
         match &self.launch {
-            Some(LaunchVersion::Applying(version)) => Some(version),
+            Some(LaunchVersion::Applying(version) | LaunchVersion::Restarting(version)) => {
+                Some(version)
+            }
             Some(LaunchVersion::Updated(_)) | None => None,
         }
+    }
+    /// Whether this launch restarts into an update prepared before its window opened, so the
+    /// window must stay hidden.
+    pub fn restarting(&self) -> bool {
+        matches!(self.launch, Some(LaunchVersion::Restarting(_)))
     }
     /// The version this launch started for the first time and confirmed.
     pub fn updated_to(&self) -> Option<&str> {
         match &self.launch {
             Some(LaunchVersion::Updated(version)) => Some(version),
-            Some(LaunchVersion::Applying(_)) | None => None,
+            Some(LaunchVersion::Applying(_) | LaunchVersion::Restarting(_)) | None => None,
         }
     }
     /// The one-time start-up messages this status states, in the order a window shows them. A
@@ -186,11 +212,26 @@ impl UpdateStatus {
     pub fn observe_sugarcubes(&mut self, status: PackUpdateStatus) {
         self.sugarcubes = status;
     }
+    /// Adopt the channel the installation's subscription follows.
+    pub fn observe_channel(&mut self, channel: Channel) {
+        self.channel = channel;
+    }
+    /// Adopt whether the coordinator checks for updates when asked now.
+    pub fn observe_checks(&mut self, checks: bool) {
+        self.checks = checks;
+    }
     /// Adopt what this launch observed about a version it starts for the first time. A
     /// confirmed version is never taken back by a later `Applying`.
     pub fn observe_launch(&mut self, launch: LaunchVersion) {
         if !matches!(self.launch, Some(LaunchVersion::Updated(_))) {
             self.launch = Some(launch);
+        }
+    }
+    /// Take back a restart this launch no longer makes: its window opened first, so the update
+    /// starts on the next launch.
+    pub fn withdraw_restart(&mut self) {
+        if self.restarting() {
+            self.launch = None;
         }
     }
 
@@ -227,7 +268,9 @@ impl UpdateStatus {
             .is_none_or(|progress| progress.bytes.is_none_or(|(received, total)| received <= total))
             && self.recorded.prepared.as_ref().is_none_or(version)
             && self.launch.as_ref().is_none_or(|launch| match launch {
-                LaunchVersion::Applying(value) | LaunchVersion::Updated(value) => version(value),
+                LaunchVersion::Applying(value)
+                | LaunchVersion::Updated(value)
+                | LaunchVersion::Restarting(value) => version(value),
             })
             && self.failure.as_ref().is_none_or(codec::valid_report)
             && self.sugarcubes.valid()
@@ -381,6 +424,19 @@ mod tests {
     }
 
     #[test]
+    fn the_channel_and_whether_checks_run_cross_processes_with_the_status()
+    -> Result<(), StatusCodecError> {
+        let mut status = UpdateStatus::default();
+        assert_eq!((status.channel(), status.checks()), (Channel::Release, false));
+        status.observe_channel(Channel::Canary);
+        status.observe_checks(true);
+        let crossed = UpdateStatus::decode(&status.encode()?)?;
+        assert_eq!((crossed.channel(), crossed.checks()), (Channel::Canary, true));
+        assert_eq!(crossed, status);
+        Ok(())
+    }
+
+    #[test]
     fn a_launch_applies_then_confirms_a_version_and_states_its_notices_once_in_order() {
         let mut status = UpdateStatus::default();
         assert!(status.startup_notices().is_empty());
@@ -406,5 +462,23 @@ mod tests {
             [StartupNotice::Updated("2.0.0".into()), StartupNotice::Repairing],
             "the repair line already says the previous version runs"
         );
+    }
+
+    #[test]
+    fn a_restart_says_its_version_holds_the_window_and_can_be_withdrawn()
+    -> Result<(), StatusCodecError> {
+        let mut status = UpdateStatus::default();
+        status.observe_launch(LaunchVersion::Restarting("2.0.0".into()));
+        assert!(status.restarting());
+        assert_eq!((status.applying(), status.updated_to()), (Some("2.0.0"), None));
+        assert!(status.startup_notices().is_empty());
+        assert_eq!(UpdateStatus::decode(&status.encode()?)?, status);
+        status.withdraw_restart();
+        assert!(!status.restarting());
+        assert_eq!(status.applying(), None);
+        status.observe_launch(LaunchVersion::Applying("2.0.0".into()));
+        status.withdraw_restart();
+        assert_eq!(status.applying(), Some("2.0.0"), "only a restart is withdrawn");
+        Ok(())
     }
 }

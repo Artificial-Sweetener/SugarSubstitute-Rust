@@ -25,9 +25,8 @@ impl Launcher {
                 self.choice = Choice::Accepted;
             }
             cached::Outcome::Candidate(candidate) => {
-                self.launch = Some(ApplicationLaunch::trial(Arc::from(candidate)));
                 self.cached = None;
-                self.choice = Choice::Trial;
+                self.choose_update(ApplicationLaunch::trial(Arc::from(candidate)));
             }
             cached::Outcome::Engine(image) => {
                 self.delegate = Some(Arc::new(std::sync::Mutex::new(Some(image))));
@@ -36,6 +35,12 @@ impl Launcher {
             }
         }
         Ok(())
+    }
+
+    /// Start the update trial `launch`.
+    pub(super) fn choose_update(&mut self, launch: ApplicationLaunch) {
+        self.launch = Some(launch);
+        self.choice = Choice::Trial;
     }
 
     /// Creation is admitted only after exact selection or trial transfer was observed successful.

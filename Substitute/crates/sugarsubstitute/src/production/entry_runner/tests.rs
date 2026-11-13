@@ -5,7 +5,12 @@ use super::*;
 use crate::{completion_wake::Wake, paused_clock::PausedClock};
 use std::sync::atomic::{AtomicU64, Ordering};
 static NEXT: AtomicU64 = AtomicU64::new(1);
-pub(crate) struct NoChild(pub(crate) Option<sugarsubstitute_contracts::configuration::LocaleId>);
+/// A child without native activation. The second field is the newest update status revision
+/// its window acknowledged; `None` is a run without a window.
+pub(crate) struct NoChild(
+    pub(crate) Option<sugarsubstitute_contracts::configuration::LocaleId>,
+    pub(crate) Option<u64>,
+);
 
 /// The one native instant a frozen runner reports, so a cutoff expires only when a test says so.
 pub(super) fn frozen_native_now() -> Instant {
@@ -61,7 +66,7 @@ fn original_cleanup_wake_is_consumed_before_unsettled_owner_returns() -> Result<
     let mut owner = EntryRunner::new(
         command,
         installation.join("unopened.exe"),
-        Box::new(NoChild(None)),
+        Box::new(NoChild(None, None)),
         crate::diagnostics::DiagnosticHealth::fixture(),
     );
     let issued = ShutdownBudget::new(sugarsubstitute_contracts::execution::Moment::from_nanos(0))?;
@@ -207,6 +212,12 @@ impl EntryActivation for NoChild {
         Ok(())
     }
     fn restart_to_apply_requested(&self) -> bool {
+        false
+    }
+    fn update_status_applied(&self, revision: u64) -> bool {
+        self.1.is_none_or(|applied| applied >= revision)
+    }
+    fn take_update_check_request(&mut self) -> bool {
         false
     }
     fn normal_close_requested(&self) -> bool {

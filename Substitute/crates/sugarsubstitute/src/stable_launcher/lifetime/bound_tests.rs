@@ -201,3 +201,19 @@ fn a_slow_launch_shows_the_notice_after_two_seconds_until_it_hands_off() -> Resu
     assert!(launcher.notice().is_none(), "the hand-off closes it");
     close(&mut launcher, &wake)
 }
+
+/// An explicit installation choice starts as "Starting": only an update trial records the
+/// version the notice names, which the supervision tests prove for real candidates.
+#[test]
+fn an_installation_choice_starts_as_starting() -> Result<()> {
+    let (mut installing, clock, wake) = fixture()?;
+    let launch = installing.launch.take().ok_or("Fixture creator absent")?;
+    installing.installed(Some(launch));
+    assert!(matches!(installing.choice, Choice::Trial));
+    clock.0.store(seconds(2), Ordering::SeqCst);
+    installing.advance_notice();
+    let notice = installing.notice.as_ref().ok_or("notice absent")?;
+    assert_eq!(notice.status(), sugarsubstitute_splash::StartupStatus::Starting);
+    installing.request_shutdown()?;
+    finish(&mut installing, &wake)
+}

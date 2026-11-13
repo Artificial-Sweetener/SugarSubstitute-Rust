@@ -27,6 +27,8 @@ pub(super) struct Platform {
     pub(in crate::startup) budget: Option<ShutdownBudget>,
     pub(in crate::startup) shutdown_requests: Vec<ShutdownBudget>,
     pub(in crate::startup) restart_requests: usize,
+    /// Update checks the window asked this fake child to request from the coordinator.
+    pub(in crate::startup) check_requests: usize,
     pub(in crate::startup) shutdown_starts: usize,
     retired: bool,
     finished: bool,
@@ -38,6 +40,10 @@ pub(super) struct Platform {
     /// The coordinator status this fake child last received.
     pub(in crate::startup) update_status:
         Option<sugarsubstitute_contracts::update::status::UpdateStatus>,
+    /// The coordinator's revision of that status.
+    pub(in crate::startup) update_revision: u64,
+    /// Status revisions this fake child acknowledged to the coordinator, in order.
+    pub(in crate::startup) acknowledged: Vec<u64>,
     /// Start-up messages this fake child still has for the window.
     pub(in crate::startup) notices:
         std::collections::VecDeque<sugarsubstitute_contracts::update::status::StartupNotice>,
@@ -162,6 +168,13 @@ impl StartupBackend for Platform {
     fn update_status(&self) -> Option<&sugarsubstitute_contracts::update::status::UpdateStatus> {
         self.update_status.as_ref()
     }
+    fn update_status_revision(&self) -> u64 {
+        self.update_revision
+    }
+    fn acknowledge_update_status(&mut self, revision: u64) -> BackendResult<()> {
+        self.acknowledged.push(revision);
+        Ok(())
+    }
     fn workflow_queue(&self) -> sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue {
         sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue::Unobserved
     }
@@ -172,6 +185,10 @@ impl StartupBackend for Platform {
     }
     fn request_restart_to_apply(&mut self) -> BackendResult<()> {
         self.restart_requests += 1;
+        Ok(())
+    }
+    fn request_update_check(&mut self) -> BackendResult<()> {
+        self.check_requests += 1;
         Ok(())
     }
     fn request_shutdown(&mut self, budget: ShutdownBudget) -> BackendResult<()> {

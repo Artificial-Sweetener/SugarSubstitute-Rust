@@ -39,17 +39,26 @@ use crate::durable_storage::{
     protected::directories::Mode,
     protection::{self, Protection},
     staging,
+    write_port::{self, UpdateFile},
 };
 pub use failure::{AuthorityChange, TrustFailure};
-use std::{fs::File, io, io::Write, path::Path};
+
+/// Stage prefixes of the checkpoint, bound and immutable records and release history in the
+/// trust folder.
+const CHECKPOINT_STAGE: &str = "pending";
+const RECORD_STAGE: &str = "record-pending";
+const RELEASES_STAGE: &str = "releases-pending";
+const STAGES: [&str; 4] = [CHECKPOINT_STAGE, RECORD_STAGE, RELEASES_STAGE, files::IMMUTABLE_STAGE];
+use std::{fs::File, io, path::Path};
 use sugarsubstitute_contracts::{
     execution::{JobContext, MemoryClaim, MemoryLease},
     installation::InstallationId,
     update::Request,
 };
 use sugarsubstitute_update::{MetadataSet, RepositoryTrust, VerifiedOffer};
-#[cfg(test)]
-pub(crate) use update_receipt::FILE as UPDATE_RECEIPT_FILE;
+pub(crate) use update_receipt::{
+    FILE as UPDATE_RECEIPT_FILE, STAGE_PREFIX as UPDATE_RECEIPT_STAGE,
+};
 pub use update_receipt::{ReceiptAuthority, UpdateReceipt};
 
 /// Protected update trust inside the installation state folder.
@@ -199,10 +208,15 @@ impl TrustStore {
         context: &JobContext,
         operation: impl FnOnce(&mut RepositoryTrust) -> Result<T, sugarsubstitute_update::Error>,
     ) -> Result<T, TrustFailure> {
+        // Every trust record is staged under this writer, so no earlier stage is still live.
+        for prefix in STAGES {
+            staging::reclaim(&self.root, prefix, &[], protection, context)?;
+        }
         let commit = crate::durable_storage::records::PreparedCommit::new(
+            UpdateFile::Trust,
             &self.root,
             RECORD,
-            "pending",
+            CHECKPOINT_STAGE,
             envelope::Kind::Checkpoint.limit(),
             protection,
             context,

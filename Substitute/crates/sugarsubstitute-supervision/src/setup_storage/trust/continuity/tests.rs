@@ -3,6 +3,7 @@
 //! Native continuity survives missing mutable state and never grants authority to foreign markers.
 use super::*;
 use crate::setup_storage::test_worker::{self as worker, TestResult, installation};
+use std::io::Write;
 use sugarsubstitute_update::fixture::{key, root};
 
 #[test]

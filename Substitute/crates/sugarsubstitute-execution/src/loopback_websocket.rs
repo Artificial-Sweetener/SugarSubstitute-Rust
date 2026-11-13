@@ -2,11 +2,13 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Hold one client WebSocket to a loopback service inside an admitted async job.
 //!
-//! A consumer submits an async job whose body calls [`watch`]. The session upgrades a fresh
-//! loopback TCP connection, answers pings, masks every client frame, and hands each text message
-//! to the consumer's observer until the observer reports what it waited for, the watch window
-//! ends, or the server closes. Binary messages and text over [`MAX_MESSAGE_BYTES`] are skipped
-//! without buffering, logged, and passed to the observer as [`Incoming::Discarded`].
+//! A consumer submits an async job whose body calls [`watch`](crate::loopback_websocket::watch).
+//! The session upgrades a fresh loopback TCP connection, answers pings, masks every client frame,
+//! and hands each text message to the consumer's observer until the observer reports what it
+//! waited for, the watch window ends, or the server closes. Binary messages and text over
+//! [`MAX_MESSAGE_BYTES`](crate::loopback_websocket::MAX_MESSAGE_BYTES) are skipped without
+//! buffering, logged, and passed to the observer as
+//! [`Incoming::Discarded`](crate::loopback_websocket::Incoming::Discarded).
 //!
 //! Cancellation and the job deadline belong to the execution owner: when either arrives the
 //! session stops reading and leaves the outcome to the job's supervisor, which drops the socket.

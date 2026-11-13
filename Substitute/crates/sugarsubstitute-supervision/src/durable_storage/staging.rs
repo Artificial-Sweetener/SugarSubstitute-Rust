@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Allocate independent install attempts and publish complete directories without replacement.
-use super::invalid;
-use crate::durable_storage::files::{self, Directory};
+use super::{check, invalid};
+use crate::durable_storage::{
+    files::{self, Directory},
+    protection::Protection,
+};
 use std::{
     io,
     path::{Path, PathBuf},
 };
+use sugarsubstitute_contracts::execution::JobContext;
 use windows::Win32::{
     Storage::FileSystem::{MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH, MoveFileExW},
     System::Com::CoCreateGuid,
@@ -85,6 +89,112 @@ pub(crate) fn replace_record(source: &Path, destination: &Path) -> io::Result<()
     .map_err(io::Error::other)
 }
 
+/// Most interrupted attempts one reclaim removes; a later write removes the rest.
+const RECLAIM_LIMIT: usize = 64;
+
+/// Whether `name` is an attempt [`unique_path`] allocated for `prefix`.
+fn is_attempt(name: &str, prefix: &str) -> bool {
+    name.strip_prefix(prefix).and_then(|rest| rest.strip_prefix('-')).is_some_and(|guid| {
+        guid.len() == 36
+            && guid.char_indices().all(|(index, character)| {
+                if matches!(index, 8 | 13 | 18 | 23) {
+                    character == '-'
+                } else {
+                    character.is_ascii_hexdigit()
+                }
+            })
+    })
+}
+
+/// Remove the stage files `prefix` names in `parent`, a protected folder only this account can
+/// write, whatever protection the stages themselves carry. The caller holds the exclusion every
+/// writer of these stages takes. Folders, links and anything that cannot be removed now are kept.
+pub(crate) fn reclaim_in_protected_folder(
+    parent: &Directory,
+    prefix: &str,
+    context: &JobContext,
+) -> io::Result<()> {
+    use std::os::windows::fs::MetadataExt;
+    for attempt in attempts(parent, prefix, context)? {
+        check(context)?;
+        let removed = std::fs::symlink_metadata(&attempt).and_then(|metadata| {
+            if metadata.is_file() && metadata.file_attributes() & 0x400 == 0 {
+                std::fs::remove_file(&attempt)
+            } else {
+                Err(invalid("Stage is not a regular file"))
+            }
+        });
+        if let Err(cause) = removed {
+            check(context)?;
+            tracing::warn!(operation = "stage_reclaim_preserved", attempt = %attempt.display(),
+                error = %cause, "An interrupted write was kept for a later attempt");
+        }
+    }
+    Ok(())
+}
+
+/// The attempts `prefix` names in `parent`, at most [`RECLAIM_LIMIT`].
+fn attempts(parent: &Directory, prefix: &str, context: &JobContext) -> io::Result<Vec<PathBuf>> {
+    let mut attempts = Vec::new();
+    for entry in parent.entries(context)? {
+        check(context)?;
+        let Ok(entry) = entry else { continue };
+        let name = entry.file_name();
+        if name.to_str().is_some_and(|name| is_attempt(name, prefix)) {
+            attempts.push(parent.path().join(name));
+            if attempts.len() == RECLAIM_LIMIT {
+                break;
+            }
+        }
+    }
+    Ok(attempts)
+}
+
+/// Remove `path`, a protected regular single-link file, by its current identity.
+fn remove_file(path: &Path, protection: &mut Protection, context: &JobContext) -> io::Result<()> {
+    let parent =
+        Directory::open(path.parent().ok_or_else(|| invalid("Stage parent missing"))?, false)?;
+    let leaf =
+        path.file_name().and_then(|leaf| leaf.to_str()).ok_or_else(|| invalid("Stage leaf"))?;
+    let identity = match parent.read(leaf) {
+        Ok(file) => files::file_identity(&file)?,
+        Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(cause) => return Err(cause),
+    };
+    protection.remove_journaled(path, identity, context)
+}
+
+/// Remove the attempts `prefix` names in `parent` that ended before publication: stage files,
+/// or stage folders holding only the `children` the writer creates. The caller holds the
+/// exclusion every writer of these attempts takes, so none of them is still being written.
+/// Unknown, changed, linked or foreign content is kept, and so is an attempt that cannot be
+/// removed now, such as one a scanner holds; a later write retries it. Only cancellation fails.
+pub(crate) fn reclaim(
+    parent: &Directory,
+    prefix: &str,
+    children: &[&str],
+    protection: &mut Protection,
+    context: &JobContext,
+) -> io::Result<()> {
+    for attempt in attempts(parent, prefix, context)? {
+        check(context)?;
+        let removed = if children.is_empty() {
+            remove_file(&attempt, protection, context)
+        } else {
+            children
+                .iter()
+                .try_for_each(|child| remove_file(&attempt.join(child), protection, context))
+                .and_then(|()| std::fs::remove_dir(&attempt))
+        };
+        if let Err(cause) = removed {
+            check(context)?;
+            tracing::warn!(operation = "stage_reclaim_preserved", attempt = %attempt.display(),
+                error = %cause, "An interrupted write was kept for a later attempt");
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -109,6 +219,19 @@ mod tests {
         std::fs::create_dir(&empty)?;
         assert!(publish(&second, &empty).is_err());
         assert!(empty.exists());
+        Ok(())
+    }
+
+    #[test]
+    fn only_attempts_of_the_named_writer_are_recognised() -> io::Result<()> {
+        let temporary = tempfile::tempdir()?;
+        let parent = Directory::open(temporary.path(), false)?;
+        let attempt = unique_path(&parent, ".record-stage")?;
+        let name = attempt.file_name().and_then(|name| name.to_str()).unwrap_or_default();
+        assert!(is_attempt(name, ".record-stage"));
+        assert!(!is_attempt(name, ".record"));
+        assert!(!is_attempt(".record-stage-user-file", ".record-stage"));
+        assert!(!is_attempt(&format!("{name}.bak"), ".record-stage"));
         Ok(())
     }
 }

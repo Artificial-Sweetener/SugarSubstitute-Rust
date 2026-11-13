@@ -160,6 +160,7 @@ fn signed_preparation_rescues_missing_launcher_with_obsolete_pending_source() ->
         crate::durable_storage::protection::with(context, |protection| {
             crate::setup_storage::publication::write_immutable(
                 &state,
+                crate::durable_storage::write_port::UpdateFile::Launcher,
                 ".launcher-transition-v1.json",
                 &journal,
                 protection,

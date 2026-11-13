@@ -55,6 +55,7 @@ impl<B: StartupBackend> StartupHost<B> {
                 self.child.advance_reload(prepared),
             )?;
         }
+        self.advance_restart_hold()?;
         self.deliver_startup_events()?;
         self.advance_workflow_restart()?;
         #[cfg(all(windows, feature = "native-composition"))]
@@ -279,6 +280,9 @@ impl<B: StartupBackend> StartupHost<B> {
             }
             StartupRoute::Close => self.close_owned()?,
             StartupRoute::None => {}
+            StartupRoute::Effect(effect) if self.holds_reveal(&effect) => {
+                self.held_reveal = Some(effect)
+            }
             StartupRoute::Effect(effect) => match effect {
                 #[cfg(all(windows, feature = "native-composition"))]
                 effect @ StartupEffect::LoadFrontend { .. } if self.workspace.is_some() => {
@@ -370,8 +374,9 @@ impl<B: StartupBackend> StartupHost<B> {
         }
     }
 
-    /// Answer one page update request from the window's update status and workflow queue, and
-    /// start the close when the page asked to restart now.
+    /// Answer one page update request from the window's update status and workflow queue, ask
+    /// the coordinator to check when the page asked to, and start the close when the page asked
+    /// to restart now.
     #[cfg(all(windows, any(feature = "windows-native-host", test)))]
     fn answer_updates(
         &mut self,
@@ -383,8 +388,15 @@ impl<B: StartupBackend> StartupHost<B> {
         use sugarsubstitute_desktop::StartupWindowContent;
         let status = self.update_status();
         let queue = self.child.workflow_queue();
-        let mut updater =
-            host_updates::HostUpdates::new(status, queue, self.closing, &mut self.workflow_restart);
+        let child = &mut self.child;
+        let mut check = || child.request_update_check();
+        let mut updater = host_updates::HostUpdates::new(
+            status,
+            queue,
+            self.closing,
+            &mut self.workflow_restart,
+            &mut check,
+        );
         let activity = host_updates::QueueActivity(queue);
         self.updates.observe(identity, message, lease, claim, &mut updater, &activity)?;
         if updater.close_now() {
@@ -400,8 +412,15 @@ impl<B: StartupBackend> StartupHost<B> {
         use sugarsubstitute_desktop::StartupWindowContent;
         let status = self.update_status();
         let queue = self.child.workflow_queue();
-        let updater =
-            host_updates::HostUpdates::new(status, queue, self.closing, &mut self.workflow_restart);
+        // Refreshing never asks for a check.
+        let mut check = || Ok::<(), Box<dyn Error>>(());
+        let updater = host_updates::HostUpdates::new(
+            status,
+            queue,
+            self.closing,
+            &mut self.workflow_restart,
+            &mut check,
+        );
         self.updates.refresh(&updater, &host_updates::QueueActivity(queue))
     }
 

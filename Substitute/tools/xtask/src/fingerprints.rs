@@ -55,7 +55,8 @@ pub(crate) fn stale(root: &Path) -> Result<Vec<Stale>> {
 /// every policy file resolved.
 ///
 /// # Errors
-/// Rejects anything [`stale`] rejects, before any file is written, and write failures.
+/// Rejects unreadable or malformed policy files and sources the gates could not resolve, before
+/// any file is written, and write failures.
 pub(crate) fn record(root: &Path) -> Result<Vec<Stale>> {
     let reviewed = review(root)?;
     let mut changed = Vec::new();

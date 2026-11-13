@@ -18,6 +18,9 @@ use sugarsubstitute_update::PreparedRelease;
 
 /// Receipt file inside the prepared generation directory.
 pub(crate) const FILE: &str = "update-receipt.record";
+/// Prefix of the stage a receipt is written to before it replaces [FILE]. Dot-led, so the
+/// generation's retirement inventory can own a stage an interruption left behind.
+pub(crate) const STAGE_PREFIX: &str = ".update-receipt-stage-";
 /// Current receipt schema; bumped only for a change older readers cannot ignore.
 const SCHEMA: u32 = 1;
 /// Encoded payload bound before the installation/repository envelope.
@@ -106,13 +109,23 @@ impl UpdateAuthorization<'_> {
             &payload,
         )?;
         protection::with(context, |protection| {
-            let staged = staging::unique_path(directory, "update-receipt-pending")?;
+            // Receipts are written only under the trust writer this hold retains.
+            staging::reclaim(
+                directory,
+                STAGE_PREFIX.trim_end_matches('-'),
+                &[],
+                protection,
+                context,
+            )?;
+            let destination = directory.path().join(FILE);
+            let mut write = write_port::begin(UpdateFile::Receipt, &destination);
+            let staged = staging::unique_path(directory, STAGE_PREFIX.trim_end_matches('-'))?;
             let mut file = protection.file(&staged, context)?;
             check(context)?;
-            file.write_all(&bytes)?;
+            write.bytes(&mut file, &bytes)?;
             files::sync(&file, context)?;
             drop(file);
-            staging::replace_record(&staged, &directory.path().join(FILE))?;
+            write.publish(|| staging::replace_record(&staged, &destination))?;
             protection.verify_file(&directory.read(FILE)?)
         })
     }

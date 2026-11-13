@@ -44,8 +44,22 @@ impl<C: EntryActivation> EntryRunner<C> {
     }
     /// Preserve live runner custody before asking its actual server to fence future entry admission.
     pub(super) fn try_normal_shutdown(&mut self) -> Result<(), Box<dyn Error>> {
-        let admission = Admission {
-            requested: self.child.normal_close_requested(),
+        let admission = self.normal_admission();
+        self.close_after_fence(admission, |runner| {
+            runner
+                .intake
+                .as_mut()
+                .ok_or("Actual normal-close intake missing")?
+                .try_close_when_idle()
+                .map_err(|cause| Box::new(cause) as Box<dyn Error>)
+        })
+    }
+
+    /// What the runner owes before a normal close: the user's or the child's close, or a restart
+    /// into an update prepared before the window opened.
+    fn normal_admission(&self) -> Admission {
+        Admission {
+            requested: self.child.normal_close_requested() || self.restart_owed(),
             initial_completed: self.initial_completed,
             initial_retired: self.transport_completions[1]
                 .as_ref()
@@ -55,14 +69,16 @@ impl<C: EntryActivation> EntryRunner<C> {
             forwarding: self.forward.is_some(),
             closing: self.closing,
             failure: self.failure.is_some() || self.child.failure_source().is_some(),
-        };
-        let fenced = admission.try_fence(|| {
-            self.intake
-                .as_mut()
-                .ok_or("Actual normal-close intake missing")?
-                .try_close_when_idle()
-                .map_err(|cause| Box::new(cause) as Box<dyn Error>)
-        })?;
+        }
+    }
+
+    /// Close normally once `admission` permits and `fence` reports the intake idle.
+    fn close_after_fence(
+        &mut self,
+        admission: Admission,
+        fence: impl FnOnce(&mut Self) -> Result<bool, Box<dyn Error>>,
+    ) -> Result<(), Box<dyn Error>> {
+        let fenced = admission.try_fence(|| fence(self))?;
         if fenced {
             self.accept_user_close();
             self.request_shutdown()?;

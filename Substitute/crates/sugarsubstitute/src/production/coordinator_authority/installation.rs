@@ -37,12 +37,14 @@ impl CoordinatorAuthority {
         self.installation.application().cloned()
     }
 
-    /// Background preparation requires authenticated readiness and observed trial acceptance.
-    /// A cloned run owner is borrowed only by the finite executable-verification worker.
+    /// Background preparation requires observed trial acceptance, and authenticated readiness
+    /// unless the launch's policy checks `before_window`. A cloned run owner is borrowed only by
+    /// the finite executable-verification worker.
     pub(in crate::production) fn update_source(
         &self,
+        before_window: bool,
     ) -> Option<(CoordinatorKey, Arc<RunningApplication>)> {
-        if !self.serving() || !self.installation.readiness_observed {
+        if !self.serving() || !(before_window || self.installation.readiness_observed) {
             return None;
         }
         let application = self.installation.application()?;
@@ -50,6 +52,18 @@ impl CoordinatorAuthority {
             return None;
         }
         Some((self.key()?, application.clone()))
+    }
+
+    /// Whether authenticated main, browser and backend readiness was observed: the window opened.
+    pub(in crate::production) const fn window_opened(&self) -> bool {
+        self.installation.readiness_observed
+    }
+
+    /// Observe readiness as `accept_installation` does once the main reveal is authorized, for
+    /// runner tests that have no authenticated channel to carry MainRevealed.
+    #[cfg(test)]
+    pub(in crate::production) fn observe_window_opened(&mut self) {
+        self.installation.observe_readiness();
     }
 
     /// Record that `process` failed, for the verdict of an unaccepted trial. Call it where the

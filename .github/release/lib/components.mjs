@@ -56,7 +56,7 @@ export const COMPONENTS = Object.freeze({
     // imported. Its release commit is part of this history, so the first release continues it.
     baseline: {
       version: '0.15.3',
-      commit: 'a839f5935fd96ca3bbd707ef817943d1fa2a4e6a',
+      commit: 'ca07dce15162d379c7a94c9922ce9c60c72c8c62',
       versionFiles: ['pyproject.toml', 'Sugar/pyproject.toml'],
     },
     plugins: () => [
@@ -99,8 +99,13 @@ export const COMPONENTS = Object.freeze({
     directory: 'Substitute',
     standalone: ['Cargo.toml', 'crates', 'rust-toolchain.toml'],
     tagPrefix: 'substitute-v',
-    // SugarSubstitute has never been released; its first version is the maintainer's decision.
-    baseline: null,
+    // Every SugarSubstitute build so far declares 0.1.0, set by the commit that established the
+    // Rust workspace. The first release continues from there, so its notes cover the whole app.
+    baseline: {
+      version: '0.1.0',
+      commit: '6d9222af2aafabe3528b75df82561d112e983f9d',
+      versionFiles: ['Cargo.toml', 'Substitute/Cargo.toml'],
+    },
     plugins: () => [
       ['@semantic-release/changelog', { changelogFile: 'CHANGELOG.md' }],
       [

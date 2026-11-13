@@ -5,6 +5,8 @@
 This unsigned output contains reproducibility facts. The development signing
 owner retains no-write/no-delete file and ancestry pins during this operation;
 runtime trust requires the compiled anchor, signature and actual pinned files.
+A release build names its release identity instead of the development literal
+and any RSA-3072 release anchor it compiles in.
 """
 from __future__ import annotations
 import argparse
@@ -18,6 +20,8 @@ from derive_build import ANCHOR_ID, regular_path
 
 MAX_IMAGE = 1024 * 1024 * 1024
 PDB_MAGIC = b"Microsoft C/C++ MSF 7.00\r\n\x1aDS\0\0\0"
+# CNG BCRYPT_RSAPUBLIC_BLOB header for RSA-3072, exponent 65537, as release builds compile it.
+RELEASE_ANCHOR_HEADER = bytes.fromhex("52534131000c000003000000800100000000000000000000010001")
 
 
 class Source:
@@ -204,18 +208,36 @@ def build_identity(path: Path) -> str:
     return matches[0]
 
 
+def read_anchor(anchor: Path) -> bytes:
+    with Source(anchor) as source:
+        return source.read(0, min(source.length, 412))
+
+
 def produce(root: Path, host: str, literal: Path, anchor: Path) -> bytes:
     """Produce exactly host/helper3, capture-DLL8 and handler16 schema2 records."""
     root = regular_path(root, directory=True)
     _label(host, {"exe"})
-    with Source(anchor) as source:
-        blob = source.read(0, source.length)
+    blob = read_anchor(anchor)
     if len(blob) != 411 or hashlib.sha256(blob).hexdigest() != ANCHOR_ID:
         raise ManifestError("Reviewed development anchor mismatch")
+    return records(root, host, bytes.fromhex(ANCHOR_ID), build_identity(literal))
+
+
+def produce_release(root: Path, host: str, build: str, anchor: Path) -> bytes:
+    """Produce the same records for a release build, named by its release identity."""
+    root = regular_path(root, directory=True)
+    _label(host, {"exe"})
+    blob = read_anchor(anchor)
+    if len(blob) != 411 or not blob.startswith(RELEASE_ANCHOR_HEADER):
+        raise ManifestError("Release anchor is not an RSA-3072 CNG public blob")
+    return records(root, host, hashlib.sha256(blob).digest(), build)
+
+
+def records(root: Path, host: str, key_id: bytes, build: str) -> bytes:
     pairs = (pair(root, host, host[:-4] + ".pdb", 3, library=False),
              pair(root, "sugarsubstitute_crashpad_client.dll", "sugarsubstitute_crashpad_client.pdb", 8, library=True),
              pair(root, "crashpad_handler.exe", "crashpad_handler.pdb", 16, library=False))
-    value = Manifest(bytes.fromhex(ANCHOR_ID), build_identity(literal), tuple(sorted(pairs, key=lambda pair: pair.pe_label)), 2)
+    value = Manifest(key_id, build, tuple(sorted(pairs, key=lambda pair: pair.pe_label)), 2)
     encoded = encode(value)
     if decode(encoded) != value:
         raise ManifestError("Produced manifest roundtrip")
@@ -226,11 +248,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--release-root", type=Path, required=True)
     parser.add_argument("--host-image", required=True)
-    parser.add_argument("--build-literal", type=Path, required=True)
+    identity = parser.add_mutually_exclusive_group(required=True)
+    identity.add_argument("--build-literal", type=Path, help="Development: the compiled local K1 build literal source")
+    identity.add_argument("--release-build", help="Release: the release identity the bundle is packaged as")
     parser.add_argument("--public-anchor", type=Path, required=True)
     parser.add_argument("--output-root", type=Path, required=True)
     arguments = parser.parse_args()
-    data = produce(arguments.release_root, arguments.host_image, arguments.build_literal, arguments.public_anchor)
+    if arguments.release_build is not None:
+        data = produce_release(arguments.release_root, arguments.host_image, arguments.release_build, arguments.public_anchor)
+    else:
+        data = produce(arguments.release_root, arguments.host_image, arguments.build_literal, arguments.public_anchor)
     root = regular_path(arguments.output_root, directory=True)
     with (root / "sugarsubstitute-release-v1.manifest").open("xb") as stream:
         stream.write(data)
@@ -243,10 +270,12 @@ def main() -> None:
                "images": [{"image": p.pe_label, "pdb": p.pdb_label, "roles": p.roles,
                            "image_sha256": p.pe_sha256.hex(), "pdb_sha256": p.pdb_sha256.hex(),
                            "pdb_guid": p.pdb_guid.hex(), "pdb_age": p.pdb_age} for p in value.pairs]}
-    with (root / "local-k1-manifest-inputs.json").open("x", encoding="utf-8", newline="\n") as stream:
+    inputs = "release-manifest-inputs.json" if arguments.release_build is not None else "local-k1-manifest-inputs.json"
+    with (root / inputs).open("x", encoding="utf-8", newline="\n") as stream:
         json.dump(receipt, stream, indent=2)
         stream.write("\n")
-    print("Produced actual schema2 development manifest from three matched PE/PDB pairs")
+    kind = "release" if arguments.release_build is not None else "development"
+    print(f"Produced actual schema2 {kind} manifest from three matched PE/PDB pairs")
 
 
 if __name__ == "__main__":

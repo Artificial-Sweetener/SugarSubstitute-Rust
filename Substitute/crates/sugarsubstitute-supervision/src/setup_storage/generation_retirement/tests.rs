@@ -15,6 +15,8 @@ use sugarsubstitute_contracts::installation::{
     BadTrial, Generation, PackageDigest, PreparationIntent, SignedRelease, TrialVerdict,
 };
 
+mod cycles;
+
 type Failure = Box<dyn std::error::Error + Send + Sync>;
 
 /// The fixed UTC Unix time candidates are prepared at and bad trials are dated with; retirement

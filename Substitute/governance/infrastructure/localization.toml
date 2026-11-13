@@ -42,7 +42,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute/src/production/child/retirement/tests.rs"
-source_sha256 = "sha256:e575dbb972db277ed254db136356f9d27b6866a0d1a8c43c383ca432ee5e5f1a"
+source_sha256 = "sha256:3078c2aa4ea43075e01b2953838439ca4184838f72e9c1be9637c600a3fad3cd"
 kind = "fixture"
 rationale = "Behavioral fixture explicitly exercises native presentation, input validation, or original dynamic text; it grants no production text route. Verify the real transaction queue and immutable cleanup budget without native authority fakes."
 
@@ -60,7 +60,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute/src/production/entry_runner.rs"
-source_sha256 = "sha256:34a1b64ba8e1cc571abc2efa95c6fba7e2857d42ae0c83ffc69c95bfe9adcc1a"
+source_sha256 = "sha256:1a40e4a0b79114993b2f74f497fb25ff0b00ea30f363423427e34400c1027953"
 kind = "presentation"
 rationale = "Host composition of localized native startup/profile-conflict feedback. Authenticated configuration/selected installer language is retained when available; failures before configuration use canonical English. Original causes remain diagnostic details. Retain real entry, authority, child and execution lifetimes through native pumping."
 
@@ -408,7 +408,7 @@ rationale = "Startup View binds output, cancel and retry accessible controls to 
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup.rs"
-source_sha256 = "sha256:fab502e862464aa6663564d39e3356ea565ec9c82d1ac9293295f51746542fb7"
+source_sha256 = "sha256:9d53c25f26ecbb363eb348b40a9125d95dbc3d7c604bd17c6fc897aa9387691e"
 kind = "presentation"
 rationale = "WindowContent returns the authoritative startup View accessible controls. This composing owner introduces no label literals."
 

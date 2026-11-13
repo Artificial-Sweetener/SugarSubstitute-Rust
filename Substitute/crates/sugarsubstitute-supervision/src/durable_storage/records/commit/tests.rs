@@ -14,8 +14,15 @@ fn prepared_commit_completes_after_expiry_without_acquiring_another_job_or_grant
         let root = tempfile::tempdir()?;
         let parent = Directory::open(root.path(), false)?;
         protection::with(context, |protection| {
-            let commit =
-                PreparedCommit::new(&parent, "record", "pending", 32, protection, context)?;
+            let commit = PreparedCommit::new(
+                UpdateFile::Trust,
+                &parent,
+                "record",
+                "pending",
+                32,
+                protection,
+                context,
+            )?;
             clock.expire();
             commit.commit(b"accepted security progress")?;
             assert_eq!(
@@ -41,11 +48,27 @@ fn prepared_commit_rejects_invalid_bounds_and_preserves_existing_bytes() -> Test
         std::fs::write(root.path().join("record"), b"original")?;
         protection::with(context, |protection| {
             assert!(
-                PreparedCommit::new(&parent, "record", "pending", 0, protection, context).is_err()
+                PreparedCommit::new(
+                    UpdateFile::Trust,
+                    &parent,
+                    "record",
+                    "pending",
+                    0,
+                    protection,
+                    context
+                )
+                .is_err()
             );
             for bytes in [b"".as_slice(), b"oversized"] {
-                let commit =
-                    PreparedCommit::new(&parent, "record", "pending", 4, protection, context)?;
+                let commit = PreparedCommit::new(
+                    UpdateFile::Trust,
+                    &parent,
+                    "record",
+                    "pending",
+                    4,
+                    protection,
+                    context,
+                )?;
                 assert!(commit.commit(bytes).is_err());
                 assert_eq!(std::fs::read(root.path().join("record"))?, b"original");
             }

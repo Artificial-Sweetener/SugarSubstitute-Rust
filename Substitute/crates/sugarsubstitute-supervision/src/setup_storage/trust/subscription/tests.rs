@@ -141,3 +141,33 @@ fn preference_writes_wait_for_the_trust_writer_but_leave_application_run_availab
         },
     )
 }
+
+/// The presentation read follows the recorded choice while another owner holds the trust writer,
+/// writes nothing for a preference never recorded, and keeps damaged bytes an error.
+#[test]
+fn the_presentation_read_needs_no_writer_and_records_nothing() -> TestResult {
+    use std::os::windows::fs::OpenOptionsExt;
+    worker::run_reserved(TRUST_RESERVATION_BYTES, |context, _| {
+        let untrusted = installation(83, context)?;
+        assert_eq!(TrustStore::read_subscription(untrusted.path(), context)?, None);
+        let (installation, store) = fixture(context)?;
+        assert_eq!(
+            TrustStore::read_subscription(installation.path(), context)?,
+            Some(Subscription::default())
+        );
+        assert!(!store.root.path().join(RECORD).exists(), "the read records nothing");
+        let canary =
+            store.select_subscription(store.subscription(context)?, Channel::Canary, context)?;
+        let holder = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0x1)
+            .open(store.root.path().join(LOCK))?;
+        holder.try_lock()?;
+        assert_eq!(TrustStore::read_subscription(installation.path(), context)?, Some(canary));
+        drop(holder);
+        std::fs::write(store.root.path().join(RECORD), b"damaged preference")?;
+        assert!(TrustStore::read_subscription(installation.path(), context).is_err());
+        assert_eq!(std::fs::read(store.root.path().join(RECORD))?, b"damaged preference");
+        Ok(())
+    })
+}

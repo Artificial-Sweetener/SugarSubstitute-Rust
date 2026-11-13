@@ -398,3 +398,67 @@ fn first_whole_close_intent_survives_phase_failure_registration_and_queue_delay_
     }
     Ok(())
 }
+#[test]
+fn a_check_request_waiting_to_go_out_is_joined_not_repeated() -> Result<()> {
+    let mut state = ChildShutdown::new();
+    assert!(!state.check_outstanding());
+    state.queue(Control::CheckForUpdates)?;
+    assert!(state.check_outstanding(), "a queued request is joined");
+    let control = take_first(&mut state.queued).ok_or("Queued check disappeared")?;
+    state.pending = Some(Pending {
+        header: WireHeader {
+            run: sugarsubstitute_contracts::lifecycle::RunKey {
+                owner: sugarsubstitute_contracts::lifecycle::CoordinatorKey {
+                    namespace: sugarsubstitute_contracts::lifecycle::NamespaceId::new([1; 32]),
+                    epoch: sugarsubstitute_contracts::lifecycle::CoordinatorEpoch::new([2; 16])?,
+                },
+                instance: sugarsubstitute_contracts::lifecycle::InstanceId::new(3)?,
+                generation: sugarsubstitute_contracts::lifecycle::RunGeneration::new(4)?,
+            },
+            connection: None,
+            request: None,
+            deadline_qpc: 1,
+        },
+        original: Moment::from_nanos(1),
+        control,
+        admitted: true,
+    });
+    assert!(state.check_outstanding(), "a request on its way is joined");
+    state.pending = None;
+    assert!(!state.check_outstanding(), "an answered request leaves room for the next");
+    Ok(())
+}
+
+/// The window's request to check goes through the child's own request path: before
+/// registration, or once closing, the coordinator cannot be asked and nothing is queued. A
+/// registered channel needs a native peer, so queueing and joining are proven on the queue
+/// above.
+#[test]
+fn request_update_check_refuses_and_queues_nothing_unregistered_or_closing() -> Result<()> {
+    use crate::production::child::{configuration::tests::Rig, test_support::child};
+    let checks = |child: &ProductionChild| {
+        child
+            .shutdown
+            .queued
+            .iter()
+            .flatten()
+            .chain(child.shutdown.pending.as_ref().map(|pending| &pending.control))
+            .filter(|control| matches!(control, Control::CheckForUpdates))
+            .count()
+    };
+    let (mut child, previous, clock) = child()?;
+    drop(previous);
+    let rig = Rig::with_clock(clock).map_err(|cause| cause.to_string())?;
+    child.client = Some(rig.client.clone());
+    child.bootstrap.channel_mut().output_polling_fixture(
+        &rig.client,
+        sugarsubstitute_contracts::lifecycle::ConnectionId::new(1)?,
+    )?;
+    assert!(!child.bootstrap.channel_mut().registered(), "no native peer");
+    assert!(child.request_update_check().is_err());
+    assert_eq!(checks(&child), 0, "an unregistered window cannot ask");
+    child.shutdown.closing = true;
+    assert!(child.request_update_check().is_err(), "a closing window cannot ask");
+    assert_eq!(checks(&child), 0);
+    Ok(())
+}

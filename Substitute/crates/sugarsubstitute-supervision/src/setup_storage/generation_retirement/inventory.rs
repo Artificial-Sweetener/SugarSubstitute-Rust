@@ -7,7 +7,10 @@
 //! The package inventory and the generation marker are deleted last, so a resumed retirement
 //! reads the same inventory again. Without a readable package inventory only the
 //! installation-owned records are known; the rest of the folder is preserved.
-use super::super::{check, inventory::INSTALLED_MANIFEST, transaction::generation::INITIAL_PREFIX};
+use super::super::{
+    UPDATE_RECEIPT_FILE, UPDATE_RECEIPT_STAGE, check, inventory::INSTALLED_MANIFEST,
+    transaction::generation::INITIAL_PREFIX,
+};
 use crate::durable_storage::{
     files::{self, Directory},
     owned_retirement::{RetirementError, Tombstone, TreeInventory},
@@ -17,7 +20,7 @@ use sugarsubstitute_contracts::{execution::JobContext, installation::GenerationI
 use sugarsubstitute_update::package::{MAX_MANIFEST_BYTES, Manifest};
 
 /// Installation-owned records written beside a generation's package files.
-const RECORDS: [&str; 7] = [
+const RECORDS: [&str; 8] = [
     "setup-manifest.json",
     "installation-ready.json",
     "application-update-v1.record",
@@ -25,12 +28,18 @@ const RECORDS: [&str; 7] = [
     "startup.local.toml",
     "sugarsubstitute-launch.local.json",
     "SugarSubstitute.lnk",
+    UPDATE_RECEIPT_FILE,
 ];
 /// The generation marker, written first when a generation folder is created.
 const MARKER: &str = "setup-generation.json";
 /// Stage files the generation's writers leave when interrupted before publishing a file.
-const STAGES: [&str; 4] =
-    [".payload-stage-", ".record-stage-", ".setup-entry-stage-", ".substitute-publication-"];
+const STAGES: [&str; 5] = [
+    ".payload-stage-",
+    ".record-stage-",
+    ".setup-entry-stage-",
+    ".substitute-publication-",
+    UPDATE_RECEIPT_STAGE,
+];
 
 /// Whether `name` is an interrupted, never-published generation folder creation.
 pub(super) fn is_initializing(name: &str) -> bool {

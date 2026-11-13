@@ -8,6 +8,7 @@ use crate::setup_storage::{
 };
 use sugarsubstitute_update::fixture::{EXPIRES, NOW, Set, key, root};
 type Failure = Box<dyn std::error::Error + Send + Sync>;
+mod commit_interruption;
 mod creation_retry;
 mod entrypoint;
 mod fresh;
@@ -18,6 +19,7 @@ mod retry;
 mod staged;
 mod supersession;
 mod transfer_recovery;
+mod write_faults;
 
 #[test]
 fn composed_maintenance_preserves_configuration_and_transfers_only_an_unaccepted_trial()

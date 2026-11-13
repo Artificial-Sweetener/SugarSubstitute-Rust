@@ -44,7 +44,14 @@ pub(super) fn begin(
     if bytes.len() > LIMIT {
         return Err(invalid("Launcher transition exceeds its bound"));
     }
-    publication::write_immutable(state, JOURNAL, &bytes, protection, context)?;
+    publication::write_immutable(
+        state,
+        UpdateFile::Launcher,
+        JOURNAL,
+        &bytes,
+        protection,
+        context,
+    )?;
     recover(root, state, protection, context)?
         .ok_or_else(|| invalid("Published launcher transition is absent"))
 }

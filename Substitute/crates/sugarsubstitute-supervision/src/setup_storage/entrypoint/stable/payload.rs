@@ -4,7 +4,7 @@
 use super::*;
 use std::{
     fs::File,
-    io::{Read, Seek, SeekFrom, Write},
+    io::{Read, Seek, SeekFrom},
 };
 use sugarsubstitute_update::package::PayloadHasher;
 
@@ -44,8 +44,9 @@ pub(super) fn replace(
         Directory::open(&root.path().join("releases").join(record.source.id.as_str()), false)?;
     let mut input = source.read(SOURCE)?;
     verify(&mut input, record, context)?;
-    let mut stage = publication::Stage::create(state, protection, context)?;
-    let output = stage.file();
+    let destination = root.path().join(ENTRY);
+    let mut stage =
+        publication::Stage::create(state, UpdateFile::Launcher, &destination, protection, context)?;
     let mut buffer = [0; 65536];
     loop {
         check(context)?;
@@ -53,8 +54,9 @@ pub(super) fn replace(
         if count == 0 {
             break;
         }
-        output.write_all(&buffer[..count])?;
+        stage.write(&buffer[..count])?;
     }
+    let output = stage.file();
     files::sync(output, context)?;
     verify(output, record, context)?;
     check(context)?;

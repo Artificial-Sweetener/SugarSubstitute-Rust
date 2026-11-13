@@ -148,6 +148,8 @@ pub(super) fn frame(source: &[u8]) -> Result<DecodedFrame<'_>, ProtocolError> {
             DecodedPayload::UpdateStatus { revision, workflow, status: input.take(length)? }
         }
         23 => DecodedPayload::RestartToApply,
+        24 => DecodedPayload::CheckForUpdates,
+        25 => DecodedPayload::UpdateStatusApplied(main_fields::read_positive(&mut input)?),
         _ => return Err(ProtocolError::UnsupportedTag),
     };
     input.finish()?;

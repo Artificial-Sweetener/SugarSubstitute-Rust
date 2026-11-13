@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Tell the desktop child the coordinator's update status and the backend's workflow queue, and
-//! keep its restart-to-apply intent.
+//! keep its restart-to-apply intent and its requests to check now.
 //!
 //! Only the newest state matters. A status change or a queue change marks the snapshot due; the
 //! next free write slot carries the newest status and queue under a fresh revision, so a revoked
 //! write is simply sent again with whatever is newest by then. Snapshots go out after replies
 //! and the UI watchdog's challenge. The child's RestartToApply only records intent: the entry
-//! runner relaunches when the child then exits normally, and never otherwise.
+//! runner relaunches when the child then exits normally, and never otherwise. A CheckForUpdates
+//! request is kept until the entry runner takes it; repeated requests before then are one.
 use super::{ParentLifecycle, ParentResources, Result, types::WritePurpose, workflow_watch};
 use std::{num::NonZeroU64, time::Duration};
 use sugarsubstitute_contracts::{
@@ -29,6 +30,12 @@ pub(super) struct OutgoingUpdates {
     revision: u64,
     writing: bool,
     restart_to_apply: bool,
+    check_requested: bool,
+    /// The latest snapshots sent, as (wire revision, coordinator status revision), so the
+    /// child's acknowledgement of a wire revision names the status it applied.
+    sent: [Option<(u64, u64)>; 4],
+    /// The newest coordinator status revision the child acknowledged as applied.
+    applied_status: Option<u64>,
     watch: workflow_watch::WorkflowWatch,
 }
 impl OutgoingUpdates {
@@ -52,6 +59,20 @@ impl OutgoingUpdates {
     /// The authenticated child finished its close save and is exiting so an update applies.
     pub(super) fn restart_to_apply(&mut self) {
         self.restart_to_apply = true;
+    }
+
+    /// The authenticated child applied the snapshot it received as wire `revision`. An unknown
+    /// or older revision changes nothing.
+    pub(super) fn applied(&mut self, revision: u64) {
+        let status = self.sent.iter().flatten().find(|(wire, _)| *wire == revision);
+        if let Some(&(_, status)) = status {
+            self.applied_status = self.applied_status.max(Some(status));
+        }
+    }
+
+    /// The authenticated child asked for an update check now.
+    pub(super) fn check_requested(&mut self) {
+        self.check_requested = true;
     }
 
     /// When the workflow watch's reconnect is due.
@@ -82,6 +103,8 @@ impl OutgoingUpdates {
         let revision = NonZeroU64::new(self.revision.checked_add(1)?)?;
         self.revision = revision.get();
         self.due = false;
+        self.sent.rotate_right(1);
+        self.sent[0] = self.status_revision.map(|status| (revision.get(), status));
         Some((revision, self.sent_queue.unwrap_or(WorkflowQueue::Unobserved), status))
     }
 }
@@ -117,6 +140,17 @@ impl ParentLifecycle {
     /// This is intent only; the caller still requires the child's normal exit.
     pub(crate) fn restart_to_apply_requested(&self) -> bool {
         self.updates.restart_to_apply
+    }
+
+    /// Whether the child acknowledged applying the coordinator's status at `revision` or a
+    /// newer one.
+    pub(crate) fn update_status_applied(&self, revision: u64) -> bool {
+        self.updates.applied_status.is_some_and(|applied| applied >= revision)
+    }
+
+    /// Take the child's request to check for updates now, once.
+    pub(crate) fn take_check_request(&mut self) -> bool {
+        std::mem::take(&mut self.updates.check_requested)
     }
 
     /// Write the waiting snapshot when the shared write slot is free and the child is registered.
@@ -165,6 +199,64 @@ mod tests {
         assert!(!updates.restart_to_apply);
         updates.restart_to_apply();
         assert!(updates.restart_to_apply);
+        Ok(())
+    }
+
+    fn parent() -> std::result::Result<ParentLifecycle, Box<dyn std::error::Error + Send + Sync>> {
+        let identity = super::super::tests::identity().map_err(|cause| cause.to_string())?;
+        let mut storage = Some(super::super::causes::BackendCauses::new(
+            crate::production::coordinator_backend::tests::storage_tests::claim(
+                ParentLifecycle::storage_bytes(),
+            )?,
+        )?);
+        Ok(ParentLifecycle::new(
+            identity.run,
+            identity.launch,
+            sugarsubstitute_contracts::configuration::ProfileId::new("Updates_1".into())?,
+            sugarsubstitute_contracts::lifecycle::ConnectionId::new(1)?,
+            sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeDeadline::new(
+                100,
+                1_000_000_000,
+            )?,
+            &mut storage,
+        )?)
+    }
+
+    /// The child's check requests reach the runner through the parent's own take, once, however
+    /// many arrived before it was taken.
+    #[test]
+    fn repeated_check_requests_before_the_runner_takes_them_are_one()
+    -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let mut parent = parent()?;
+        assert!(!parent.take_check_request());
+        parent.updates.check_requested();
+        parent.updates.check_requested();
+        assert!(parent.take_check_request());
+        assert!(!parent.take_check_request(), "taken once");
+        Ok(())
+    }
+
+    /// A status counts as applied only when the child acknowledges the wire revision that
+    /// carried it: a finished write proves nothing, an unknown revision changes nothing, and an
+    /// older acknowledgement never takes back a newer one.
+    #[test]
+    fn a_status_counts_as_applied_only_when_the_child_acknowledges_it()
+    -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let mut parent = parent()?;
+        let status = UpdateStatus::default();
+        parent.publish_update_status(4, &status)?;
+        let (first, ..) = parent.updates.take_due().ok_or("status not due")?;
+        parent.updates.written();
+        assert!(!parent.update_status_applied(4), "a finished write is not an acknowledgement");
+        parent.publish_update_status(5, &status)?;
+        let (second, ..) = parent.updates.take_due().ok_or("status not due again")?;
+        parent.updates.applied(second.get() + 1);
+        assert!(!parent.update_status_applied(4), "an unknown revision changes nothing");
+        parent.updates.applied(second.get());
+        assert!(parent.update_status_applied(5));
+        parent.updates.applied(first.get());
+        assert!(parent.update_status_applied(5), "an older acknowledgement takes nothing back");
+        assert!(!parent.update_status_applied(6));
         Ok(())
     }
 }

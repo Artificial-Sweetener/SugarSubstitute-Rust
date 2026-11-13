@@ -3,13 +3,16 @@
 //! Publish complete revision-zero state before enabling its durable continuity marker.
 use super::*;
 
+/// Prefix of the folder a first selection record is staged in.
+const INITIAL_STAGE: &str = ".selection-init";
+
 impl SelectionStore {
     /// Initialize a previously absent selection with one atomic directory publication.
     /// The initial record must be revision zero. Staging is never read as authority or reused.
     /// If publication completed before interruption, reopen the store instead of initializing it.
     /// # Errors
     /// Rejects every occupied namespace or continuity marker, including incomplete state.
-    /// Preserves unknown files, abandoned staging and any already published selection.
+    /// Preserves unknown files and any already published selection; removes abandoned staging.
     pub fn initialize(
         installation_root: &Path,
         initial: &InstallationRecord,
@@ -31,26 +34,33 @@ impl SelectionStore {
                     Err(cause) => return Err(cause.into()),
                 }
             }
+            // Initialization runs only under this transition custody; earlier attempts are dead.
+            protection::with(context, |owner| {
+                staging::reclaim(&state, INITIAL_STAGE, &[LOCK, RECORD], owner, context)
+            })?;
+            let destination = state.path().join(DIRECTORY);
+            let mut write = write_port::begin(UpdateFile::Selection, &destination.join(RECORD));
             let (stage, identity) = protection::with(context, |owner| {
-                let path = staging::unique_path(&state, ".selection-init")?;
+                let path = staging::unique_path(&state, INITIAL_STAGE)?;
                 owner.directory(&path, Mode::CreateNew, context)?;
                 let root = Directory::open(&path, false)?;
                 files::sync(&owner.file(&path.join(LOCK), context)?, context)?;
                 let mut file = owner.file(&path.join(RECORD), context)?;
-                file.write_all(&bytes)?;
+                write.bytes(&mut file, &bytes)?;
                 files::sync(&file, context)?;
                 check(context)?;
                 Ok((path, root.identity()?))
             })?;
-            let destination = state.path().join(DIRECTORY);
             protection::with(context, |owner| {
-                owner.publish(
-                    &stage,
-                    &destination,
-                    identity,
-                    protection::Publication::Directory,
-                    context,
-                )
+                write.publish(|| {
+                    owner.publish(
+                        &stage,
+                        &destination,
+                        identity,
+                        protection::Publication::Directory,
+                        context,
+                    )
+                })
             })?;
             let root = Directory::open(&destination, false)?;
             if root.identity()? != identity {

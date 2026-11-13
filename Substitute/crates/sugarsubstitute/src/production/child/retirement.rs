@@ -22,6 +22,8 @@ enum Control {
     Release(LeaseReference),
     ExitIntent,
     RestartToApply,
+    CheckForUpdates,
+    UpdateStatusApplied(NonZeroU64),
     ExitCompleted,
 }
 #[derive(Clone, Copy)]
@@ -178,6 +180,25 @@ impl ChildShutdown {
         }
         Ok(())
     }
+    /// Whether a check request is queued or on its way to the coordinator.
+    fn check_outstanding(&self) -> bool {
+        self.queued.iter().flatten().any(|control| matches!(control, Control::CheckForUpdates))
+            || self
+                .pending
+                .is_some_and(|pending| matches!(pending.control, Control::CheckForUpdates))
+    }
+    /// Queue one acknowledgement of the newest applied status, replacing an older one that has
+    /// not gone out.
+    fn queue_status_applied(&mut self, revision: NonZeroU64) -> Result<()> {
+        if let Some(queued) = self.queued.iter_mut().flatten().find_map(|control| match control {
+            Control::UpdateStatusApplied(queued) => Some(queued),
+            _ => None,
+        }) {
+            *queued = (*queued).max(revision);
+            return Ok(());
+        }
+        self.queue(Control::UpdateStatusApplied(revision))
+    }
     fn queue(&mut self, control: Control) -> Result<()> {
         let slot = self
             .queued
@@ -212,6 +233,33 @@ impl ProductionChild {
         }
         self.shutdown.queue(Control::RestartToApply)?;
         self.shutdown.restart_requested = true;
+        self.advance_control()
+    }
+    /// Ask the coordinator to check for updates now. A request still waiting to go out is
+    /// joined rather than repeated; the coordinator joins a check that is already running.
+    /// # Errors
+    /// Refuses while closing or before registration, when the coordinator cannot be asked, and
+    /// returns a full control queue or channel failure.
+    pub(in crate::production) fn request_update_check(&mut self) -> Result<()> {
+        if self.shutdown.closing() || !self.bootstrap.channel_mut().registered() {
+            return Err("The coordinator cannot be asked to check for updates now".into());
+        }
+        if !self.shutdown.check_outstanding() {
+            self.shutdown.queue(Control::CheckForUpdates)?;
+        }
+        self.advance_control()
+    }
+    /// Tell the coordinator the window applied its update status at `revision`. An older
+    /// acknowledgement still waiting to go out is replaced; a closing or unregistered window has
+    /// nothing to acknowledge to.
+    /// # Errors
+    /// Returns a full control queue or channel failure.
+    pub(in crate::production) fn acknowledge_update_status(&mut self, revision: u64) -> Result<()> {
+        let Some(revision) = NonZeroU64::new(revision) else { return Ok(()) };
+        if self.shutdown.closing() || !self.bootstrap.channel_mut().registered() {
+            return Ok(());
+        }
+        self.shutdown.queue_status_applied(revision)?;
         self.advance_control()
     }
     pub(in crate::production) fn begin_workspace_close(&mut self) -> Result<ShutdownInitiation> {

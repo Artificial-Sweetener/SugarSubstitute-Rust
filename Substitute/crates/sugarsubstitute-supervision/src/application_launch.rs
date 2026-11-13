@@ -61,8 +61,9 @@ impl CreationOutcome {
 
 /// Keep creation outputs owned even if the admitted job's result is cancelled or discarded.
 /// The new Root owns its own lifetime from successful creation; this owner never terminates it.
+/// The version of an update trial is recorded beside the state, outside its lock.
 #[derive(Clone)]
-pub struct ApplicationLaunch(Arc<Mutex<State>>);
+pub struct ApplicationLaunch(Arc<Mutex<State>>, Option<Arc<str>>);
 /// Actual verified input retained through creation and native output retirement.
 enum LaunchCustody {
     Selected(Box<crate::setup_storage::LaunchInheritance>),
@@ -88,16 +89,25 @@ impl ApplicationLaunch {
     }
     /// Allocate creator state without doing native work or admitting a process.
     fn empty() -> Self {
-        Self(Arc::new(Mutex::new(State {
-            command: None,
-            issued: false,
-            creation: CreationOutcome::NotCreated,
-            trial_restored: false,
-            unadopted: None,
-            handles: Vec::new(),
-            memory: None,
-            custody: None,
-        })))
+        Self(
+            Arc::new(Mutex::new(State {
+                command: None,
+                issued: false,
+                creation: CreationOutcome::NotCreated,
+                trial_restored: false,
+                unadopted: None,
+                handles: Vec::new(),
+                memory: None,
+                custody: None,
+            })),
+            None,
+        )
+    }
+    /// The version of the update this launch starts, recorded when the update was chosen and
+    /// read without the launch's lock, so a reader never waits on a worker preparing the trial.
+    /// `None` for an explicit installation choice and for the accepted version.
+    pub fn update_version(&self) -> Option<&str> {
+        self.1.as_deref()
     }
     /// Keep verified installation custody until the exact inherited-handle launch is created.
     /// # Errors
