@@ -51,6 +51,14 @@ pub struct PreparedRelease {
     /// Unix UTC seconds from the preparation's injected clock when the receipt was written.
     pub received_at: i64,
 }
+impl PreparedRelease {
+    /// Whether this release was prepared for `request`'s channel, component and platform.
+    pub fn serves(&self, request: &Request) -> bool {
+        self.channel == request.channel
+            && self.component == request.component
+            && self.platform == request.platform
+    }
+}
 
 /// Why a receipt cannot start its prepared update; the accepted version starts instead.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -149,10 +157,7 @@ impl RepositoryTrust {
         newest_targets: Option<&[u8]>,
         now: i64,
     ) -> Result<(), ReceiptRefusal> {
-        if release.channel != request.channel
-            || release.component != request.component
-            || release.platform != request.platform
-        {
+        if !release.serves(request) {
             return Err(ReceiptRefusal::Route);
         }
         if self.root_version().map_err(|_| ReceiptRefusal::Inconsistent)? != release.root_version {

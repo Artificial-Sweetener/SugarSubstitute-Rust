@@ -330,7 +330,7 @@ pub struct SignedCandidate {
 /// written when this candidate was prepared (D22), used only when metadata is stale or absent.
 enum CandidateAuthority {
     Offer(Box<AuthenticatedOffer>),
-    Receipt { receipt: Box<UpdateReceipt>, request: Request },
+    Receipt(Box<ReceiptAuthority>),
 }
 
 /// Keep installation mutation and saved configuration custody through either delivery path.
@@ -351,7 +351,7 @@ impl SignedCandidate {
         match &self.authority {
             CandidateAuthority::Offer(offer) => self.trust.remember_offer(offer, context),
             // A receipt adds no signed bytes; the existing cache entry stays as it is.
-            CandidateAuthority::Receipt { .. } => Ok(()),
+            CandidateAuthority::Receipt(_) => Ok(()),
         }
     }
 
@@ -398,8 +398,8 @@ impl SignedCandidate {
                 now,
                 context,
             )?,
-            CandidateAuthority::Receipt { receipt, request } => Arc::clone(&self.candidate)
-                .begin_received_trial(&mut run, &self.trust, receipt, request, now, context)?,
+            CandidateAuthority::Receipt(authority) => Arc::clone(&self.candidate)
+                .begin_received_trial(&mut run, &self.trust, authority, now, context)?,
         };
         Ok(run.transfer_candidate(admitted, context).map_err(io::Error::other)?)
     }

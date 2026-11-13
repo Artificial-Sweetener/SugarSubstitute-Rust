@@ -4,13 +4,15 @@
 //! release offline after the user's explicit choice, and refuses tampered bytes either way.
 use super::*;
 use crate::update_repository::InstallerMetadata;
-use sugarsubstitute_update::fixture::{Set, key};
+use sugarsubstitute_update::fixture::{Set, key, root_until};
 
 const DAY: i64 = 24 * 60 * 60;
 /// Long after every compiled-in role expired.
 const LATER: i64 = EXPIRES + 30 * DAY;
 
-/// Freshly signed roles for `sequence`, valid at `LATER`, naming `package` as the release.
+/// Freshly signed roles for `sequence`, valid at `LATER`, naming `package` as the release. The
+/// compiled-in root expired with the other roles, so the repository serves its re-signed successor
+/// root, as it does in production (root lifetime one year with rotation, D5).
 fn fresh(sequence: u64, package: &[u8]) -> Result<InstallerMetadata, Failure> {
     let digest = format!("{:x}", Sha256::digest(package));
     let descriptor = serde_json::to_vec(&serde_json::json!({
@@ -27,7 +29,7 @@ fn fresh(sequence: u64, package: &[u8]) -> Result<InstallerMetadata, Failure> {
         LATER + DAY,
     )?;
     Ok(InstallerMetadata {
-        roots: Vec::new(),
+        roots: vec![(2, root_until(&key(92)?, 2, Some(&key(92)?), LATER + DAY)?)],
         timestamp: set.timestamp,
         snapshot: set.snapshot,
         targets: set.targets,

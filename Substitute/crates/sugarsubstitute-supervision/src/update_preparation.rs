@@ -125,11 +125,11 @@ impl Progress {
                 setup_storage::OFFER_LOOKUP_RESERVATION_BYTES
                     + setup_storage::TRUST_OPERATION_RESERVATION_BYTES
             }
-            // Covers reopening on a receipt too, which also reads the retained signed targets.
+            // Reopening on a cached offer; the offer and its claim were retained by `Restoring`.
+            // Reopening on a receipt is funded by `RECEIPT_REOPENING_RESERVATION_BYTES`.
             Self::Reopening => {
                 setup_storage::LAUNCH_RESERVATION_BYTES
                     + setup_storage::TRUST_OPERATION_RESERVATION_BYTES
-                    + setup_storage::OFFER_LOOKUP_RESERVATION_BYTES
             }
             Self::Remembering => {
                 setup_storage::TRUST_OPERATION_RESERVATION_BYTES
@@ -143,6 +143,21 @@ impl Progress {
         }
     }
 }
+
+/// Peak new admission for reopening a prepared update on its receipt (D22). The step first looks
+/// up the cached signed targets that judge the receipt (within `OFFER_LOOKUP_RESERVATION_BYTES`)
+/// and retains them under `OFFER_RESERVATION_BYTES`, as `Restoring` retains an offer, then does
+/// the launch work of reopening on an offer; the lookup's transient buffers are gone by then.
+const RECEIPT_REOPENING_RESERVATION_BYTES: u64 = {
+    let reopening = setup_storage::LAUNCH_RESERVATION_BYTES
+        + setup_storage::TRUST_OPERATION_RESERVATION_BYTES
+        + setup_storage::OFFER_RESERVATION_BYTES;
+    if reopening > setup_storage::OFFER_LOOKUP_RESERVATION_BYTES {
+        reopening
+    } else {
+        setup_storage::OFFER_LOOKUP_RESERVATION_BYTES
+    }
+};
 
 #[cfg(test)]
 mod tests;

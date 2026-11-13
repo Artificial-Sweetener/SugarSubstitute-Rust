@@ -2388,7 +2388,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Emb
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/distribution/tests/expiry.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:37756777455a9a92e08dc10320fb4be9a0aa3746001b136af1de9bb68e16835b"
+source_sha256 = "sha256:ddb9d43688883287208e70c512805606591a478ca23384a43c89392f12d1cab2"
 capabilities = ["assert_eq! restricted capability fragments", "std::fs::read", "std::fs::read_dir", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: A downloaded installer never expires: it refreshes online, or installs its exact included release offline after the user's explicit choice, and refuses tampered bytes either way. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2621,7 +2621,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Acq
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/trust.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:4d7d185d7d308f11c4d332346f96610b69fdc3f4256e482e587c1959db195f35"
+source_sha256 = "sha256:23c758192efd6e97a019459ab5f4ca56b84deabd0b9205c0a6d8925d72e0a68a"
 capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Persist update trust under independent exclusion before returning authenticated offers. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
@@ -2875,8 +2875,8 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Onl
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/update_preparation/tests/receipt.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:fb710addc5c515d4f0788f586a83f1b0b3937bf2c454048cdbd62f222616a68f"
-capabilities = ["std::fs::read", "std::fs::write"]
+source_sha256 = "sha256:81b3a683e6234275adfcccf332ea11c94b3bc6f52836c3d6f2bbd8da25338ff5"
+capabilities = ["std::fs::read", "std::fs::remove_dir_all", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: A prepared update starts offline on its receipt once cached metadata expired, and only then. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
@@ -2891,7 +2891,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Com
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/update_preparation/tests/restart.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:97734391116f86fedf9c4ceb001747b69c975fe09525d47a9eb191c4ff1e5503"
+source_sha256 = "sha256:ae1f28576fa61afb25b5d96b004891ecb2423114621492a99a64edaa43da02c7"
 capabilities = ["std::fs::read", "std::fs::remove_file", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Recreate the campaign and execution owner after all earlier preparation custody has retired. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

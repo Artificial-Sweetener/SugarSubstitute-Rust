@@ -97,8 +97,8 @@ pub use trust::{
     OFFER_RESERVATION_BYTES,
 };
 pub use trust::{
-    AuthorityChange, MetadataMode, TRUST_OPERATION_RESERVATION_BYTES, TRUST_RESERVATION_BYTES,
-    TrustFailure, TrustStore, UpdateAuthorization, UpdateReceipt,
+    AuthorityChange, MetadataMode, ReceiptAuthority, TRUST_OPERATION_RESERVATION_BYTES,
+    TRUST_RESERVATION_BYTES, TrustFailure, TrustStore, UpdateAuthorization, UpdateReceipt,
 };
 pub use updater_package::{
     PreparedUpdater, RejectedUpdaterProbe, UPDATER_STAGING_RESERVATION_BYTES,

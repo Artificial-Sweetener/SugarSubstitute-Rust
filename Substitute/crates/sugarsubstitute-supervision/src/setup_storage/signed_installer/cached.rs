@@ -59,22 +59,17 @@ impl SignedCandidate {
         context: &JobContext,
     ) -> Result<Option<Self>, TrustFailure> {
         let Some(receipt) = trust.update_receipt(context)? else { return Ok(None) };
+        let authority = trust.receipt_authority(receipt, request, context)?;
         let session = InstallationSession::maintain(installation, context)?;
-        let Some((candidate, configuration)) = PreparedCandidate::reopen_received(
-            &session,
-            &trust,
-            &receipt,
-            &request,
-            now(),
-            context,
-        )?
+        let Some((candidate, configuration)) =
+            PreparedCandidate::reopen_received(&session, &trust, &authority, now(), context)?
         else {
             return Ok(None);
         };
         Ok(Some(Self {
             candidate,
             trust,
-            authority: CandidateAuthority::Receipt { receipt: Box::new(receipt), request },
+            authority: CandidateAuthority::Receipt(Box::new(authority)),
             _custody: CandidateCustody::Reopened {
                 _session: Box::new(session),
                 _configuration: Box::new(configuration),

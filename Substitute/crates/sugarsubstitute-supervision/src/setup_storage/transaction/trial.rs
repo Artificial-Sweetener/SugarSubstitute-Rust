@@ -54,8 +54,7 @@ impl PreparedCandidate {
         self: Arc<Self>,
         run: &mut InstallationRun,
         trust: &crate::setup_storage::TrustStore,
-        receipt: &crate::setup_storage::UpdateReceipt,
-        request: &sugarsubstitute_contracts::update::Request,
+        authority: &crate::setup_storage::ReceiptAuthority,
         mut now: impl FnMut() -> i64,
         context: &JobContext,
     ) -> Result<AdmittedCandidate, TrustFailure> {
@@ -63,10 +62,10 @@ impl PreparedCandidate {
         self.compatibility().require_trial_launch()?;
         let trial = {
             let snapshot = crate::native_claims::lock(&self.snapshot);
-            receipt.require(&self.installation, &self.directory, &snapshot)?;
+            authority.receipt().require(&self.installation, &self.directory, &snapshot)?;
             run.validate_installation(&self.installation).map_err(io::Error::other)?;
             run.require_launcher(self.compatibility(), context).map_err(io::Error::other)?;
-            trust.admit_receipt(receipt, request, now(), context)?;
+            trust.admit_receipt(authority, now(), context)?;
             run.begin_trial(&snapshot, context).map_err(io::Error::other)?
         };
         Ok(AdmittedCandidate { prepared: self, trial })
