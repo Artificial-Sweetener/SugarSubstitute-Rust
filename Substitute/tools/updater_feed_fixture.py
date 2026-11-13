@@ -41,13 +41,16 @@ def asset(routes, request):
 
 
 class Feed(HTTPServer):
-    """One owned process serves a bounded campaign without background threads or a service."""
-    def __init__(self, routes, control, duration, port=0):
+    """One owned process serves a campaign without background threads or a service.
+
+    The campaign's owner ends it by creating ``stop`` in the control folder; elapsed time never
+    stops the feed.
+    """
+    def __init__(self, routes, control, port=0):
         if type(port) is not int or not 0 <= port <= 65535:
             raise ValueError('Fixture port is outside the native TCP range')
         self.routes = routes
         self.control = control
-        self.until = time.monotonic() + duration
         super().__init__(('127.0.0.1', port), Handler)
         self.timeout = 0.25
 
@@ -56,7 +59,7 @@ class Feed(HTTPServer):
             output.write(json.dumps({'time': time.time(), **event}) + '\n')
 
     def stopping(self):
-        return time.monotonic() >= self.until or (self.control / 'stop').exists()
+        return (self.control / 'stop').exists()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -127,16 +130,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--routes', required=True, type=Path)
     parser.add_argument('--control', required=True, type=Path)
-    parser.add_argument('--duration-seconds', type=int, default=1800)
     parser.add_argument('--port', type=int, default=0,
         help='Reuse a qualification build’s literal loopback port; fails if already occupied')
     args = parser.parse_args()
     if (not args.routes.is_absolute() or not args.routes.is_file()
-            or not args.control.is_absolute() or args.control.exists()
-            or not 1 <= args.duration_seconds <= 3600):
+            or not args.control.is_absolute() or args.control.exists()):
         raise ValueError('Use an existing absolute routes manifest and a new absolute control folder')
     args.control.mkdir()
-    with Feed(args.routes, args.control, args.duration_seconds, args.port) as server:
+    with Feed(args.routes, args.control, args.port) as server:
         (args.control / 'endpoint.json').write_text(json.dumps({
             'host': '127.0.0.1', 'port': server.server_port}), encoding='utf-8')
         while not server.stopping():

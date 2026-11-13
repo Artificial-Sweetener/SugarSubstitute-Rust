@@ -962,14 +962,14 @@ rationale = "Startup harness fixtures verify output-tail bounds, truncation and 
 [[records]]
 path = "tools/test_updater_qualification.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:cc23458d26a2a168e479720aa31e61d4ea93f3e116fab1d052646904ff1027af"
+source_sha256 = "sha256:4b0c48bd4ffa55421df6024ad8aa3f993d81c2cb12081899832e0d013b854ab9"
 disposition = "developer"
 rationale = "Updater harness tests model actual console visibility and assert failure evidence is read before native closure."
 
 [[records]]
 path = "tools/updater_feed_fixture.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:67b0ba2bd20011f376ecbfe7ac1977e05f49358baaf385e5ecf1641c8cc1f124"
+source_sha256 = "sha256:7f3ffd8a1ff7f405a9bbc80f7240f130dc97db2e52ee7319785f0edce360b57c"
 disposition = "developer"
 rationale = "The isolated HTTP feed overrides request logging to suppress incidental server output while preserving deterministic response accounting."
 
@@ -983,7 +983,7 @@ rationale = "Updater native qualification reads the actual failed application's 
 [[records]]
 path = "tools/updater_publication_qualification.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:0fc7b697eb5efa48924f8833063b3ef8703c53abf114de28673ecd2cd8ae198d"
+source_sha256 = "sha256:1922029df07c5a1d10cf88e1201d51ece4d77e70400d759c59ef2bc49608e8e1"
 disposition = "developer"
 rationale = "Publication qualification captures each owned phase's stdout and stderr to explicit case artifacts and prints its checked recovery report."
 
