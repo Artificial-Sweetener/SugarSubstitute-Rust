@@ -1006,3 +1006,10 @@ owner = "sugarsubstitute-supervision"
 source_sha256 = "sha256:340c6b65203d8f55dce02c7a781204914408589789be8f40df2404b70a57e3cd"
 capabilities = ["environment"]
 rationale = "Compiled only by the qualification-historical-root proof feature: a headless proof names an owned stand-in for the account profile folder through one environment variable, so a proof never reads the account own data. Production builds exclude it and never consult environment text for migration sources."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/generation_retirement/inventory.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:2e8c3088f26f79e522f1566f0626fa4bbc407e7d9b18ad60686973ec3dac8efa"
+capabilities = ["document"]
+rationale = "Names an unused generation's installation-owned configuration documents only so retirement can delete them; it never reads, parses or writes their contents."

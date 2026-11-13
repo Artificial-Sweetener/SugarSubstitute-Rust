@@ -21,6 +21,7 @@ pub(crate) mod offered;
 mod preparation;
 pub use offer_cache::{OFFER_LOOKUP_RESERVATION_BYTES, OFFER_PUBLICATION_RESERVATION_BYTES};
 pub use offered::{AuthenticatedOffer, OFFER_RESERVATION_BYTES};
+pub(in crate::setup_storage) use preparation::{PreparationAttempt, try_preparation};
 mod receipt;
 mod records;
 mod releases;

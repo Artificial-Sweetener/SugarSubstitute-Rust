@@ -2590,7 +2590,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Acq
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/trust.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:248e1d9e06c526002c112e24153bebe9733381d0400712e7a0969e6837a2df65"
+source_sha256 = "sha256:6b0547ef6809df9edec749009a84b2a620fe7835ed65c8aace31f37f0b036a29"
 capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Persist update trust under independent exclusion before returning authenticated offers. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
@@ -4987,7 +4987,7 @@ disposition = "fixture"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/owned_retirement.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:e724904b86bafe1031efd50e6fcda655bbc676e55fea51fb3b3528f22da6d64c"
+source_sha256 = "sha256:13a9d31a52014e6c7a7b72d5986d514e71111bb3b5d33d96ffaf7a3d99df0db8"
 capabilities = ["method metadata", "std::fs::File"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Retire an owner's inventoried files and folders below an ownership-verified root through exclusive native handles and tombstone journals. Native access and its adversarial qualification remain within this owner."
@@ -4995,7 +4995,7 @@ rationale = "Durable filesystem owner: Retire an owner's inventoried files and f
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/owned_retirement/tombstone.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:2ef0286c1aa8229f2724f4f818959250dd4c76f83189b883e9b287912a31cd60"
+source_sha256 = "sha256:a2b916d020146f9a144c9414503817748d77126ca57240f8b2266b4d3464690d"
 capabilities = ["method metadata"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Name, find and empty retirement tombstones without following links, keeping unknown content. Native access and its adversarial qualification remain within this owner."
@@ -5003,7 +5003,15 @@ rationale = "Durable filesystem owner: Name, find and empty retirement tombstone
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/owned_retirement/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:32929c6b6875f78f9251c66683f6af9810ff702be549df93b344bb11fda8c1af"
+source_sha256 = "sha256:e1bf6a1744ce09b478571e739fca811aacabf1a76b5eff0037f80c03832f4faa"
 capabilities = ["std::fs::File::open", "std::fs::create_dir", "std::fs::create_dir_all", "std::fs::hard_link", "std::fs::read", "std::fs::read_dir", "std::fs::remove_dir_all", "std::fs::remove_file", "std::fs::rename", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Qualify ownership admission, exact deletion, preservation, junction refusal and tombstone resumption. Native access and its adversarial qualification remain within this owner."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/generation_retirement/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:36f51249d3b187f0435969ff298d52a8e32671581570b56575445595bfe1aa7a"
+capabilities = ["method metadata", "std::fs::File::open", "std::fs::create_dir", "std::fs::create_dir_all", "std::fs::read", "std::fs::read_dir", "std::fs::remove_file", "std::fs::rename", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Old generations are retired under run and preparation custody while kept, open, pointed-to and unknown content survives. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

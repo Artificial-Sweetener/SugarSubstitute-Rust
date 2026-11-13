@@ -283,3 +283,32 @@ fn cancellation_stops_retirement_before_any_change() -> TestResult {
         Ok(())
     })
 }
+
+#[test]
+fn interrupted_stage_files_in_owned_folders_are_removed_and_lookalikes_are_kept() -> TestResult {
+    test_worker::run(|context, _| {
+        let (installation, folder) = owned(context)?;
+        let root = owned_retirement_root(installation.path(), &folder, context)?;
+        let generation = generation(&folder)?;
+        std::fs::write(generation.join("app").join(".payload-stage-0A1B"), b"partial")?;
+        std::fs::write(generation.join(".payload-stage-FFEE"), b"partial")?;
+        std::fs::write(generation.join("app").join(".payload-stage-"), b"bare prefix")?;
+        std::fs::write(generation.join("app").join("payload-stage-0A1B"), b"user")?;
+        let inventory = inventory()?.stages(".payload-stage-")?;
+        assert_eq!(
+            root.retire("generation", &RetirementUnit::Tree(inventory), context)?.outcome,
+            RetirementOutcome::Retained { preserved: 2, busy: 0 }
+        );
+        let names = entries(&folder)?;
+        let tombstone = folder.join(&names[0]);
+        assert_eq!(entries(&tombstone)?, ["app"]);
+        assert_eq!(entries(&tombstone.join("app"))?, [".payload-stage-", "payload-stage-0A1B"]);
+        for prefix in ["payload-stage-", ".stage", ".a/b-", ".payload-stage"] {
+            assert!(matches!(
+                TreeInventory::default().stages(prefix),
+                Err(RetirementError::Invalid(_))
+            ));
+        }
+        Ok(())
+    })
+}

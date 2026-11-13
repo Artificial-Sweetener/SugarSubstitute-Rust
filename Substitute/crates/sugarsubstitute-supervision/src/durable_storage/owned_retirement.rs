@@ -175,12 +175,14 @@ pub enum RetirementUnit {
 /// The files of a folder its owner wrote, by `/`-separated name below that folder.
 ///
 /// A folder is removed when it is an ancestor of an inventoried file and ends up empty.
+/// Stage files matching [`TreeInventory::stages`] are deleted like inventoried files.
 /// Files named by [`TreeInventory::finally`] are deleted last, and only once nothing in the
 /// folder is still in use, so a resumed retirement can read them to rebuild this inventory.
 #[derive(Clone, Debug, Default)]
 pub struct TreeInventory {
     files: BTreeSet<String>,
     finally: BTreeSet<String>,
+    stages: BTreeSet<String>,
 }
 
 impl TreeInventory {
@@ -196,7 +198,7 @@ impl TreeInventory {
                     .map_err(|_| RetirementError::Invalid("Inventory name is not a relative path"))
             })
             .collect::<Result<_, _>>()?;
-        Ok(Self { files, finally: BTreeSet::new() })
+        Ok(Self { files, finally: BTreeSet::new(), stages: BTreeSet::new() })
     }
 
     /// Also inventory the top-level files `names`, deleted after every other object.
@@ -215,9 +217,35 @@ impl TreeInventory {
         Ok(self)
     }
 
+    /// Also inventory the owner's interrupted stage files: regular files anywhere in an owned
+    /// folder whose name starts with `prefix`, such as a copy that never reached its final name.
+    /// # Errors
+    /// Returns [`RetirementError::Invalid`] unless `prefix` is one dot-led child name of at
+    /// least eight characters that ends with `-`, so it cannot match an ordinary file.
+    pub fn stages(mut self, prefix: &str) -> Result<Self, RetirementError> {
+        if files::flat_leaf(prefix).is_err()
+            || !prefix.starts_with('.')
+            || !prefix.ends_with('-')
+            || prefix.len() < 8
+        {
+            return Err(RetirementError::Invalid("A stage prefix must be a dot-led name part"));
+        }
+        self.stages.insert(prefix.to_owned());
+        Ok(self)
+    }
+
     /// Whether `relative` names an inventoried file.
     pub fn contains(&self, relative: &str) -> bool {
         self.files.contains(relative)
+    }
+
+    /// Whether `relative` names one of the owner's stage files. The walker only reaches files
+    /// inside owned folders, so the name's last component decides.
+    pub(crate) fn is_stage(&self, relative: &str) -> bool {
+        let leaf = relative.rsplit('/').next().unwrap_or(relative);
+        self.stages
+            .iter()
+            .any(|prefix| leaf.len() > prefix.len() && leaf.starts_with(prefix.as_str()))
     }
 
     pub(crate) fn files(&self) -> &BTreeSet<String> {

@@ -247,7 +247,9 @@ impl Visit for Retiring<'_> {
             self.preserved += 1;
             return Ok(Step::Skip);
         }
-        if metadata.is_file() && self.inventory.contains(relative) {
+        if metadata.is_file()
+            && (self.inventory.contains(relative) || self.inventory.is_stage(relative))
+        {
             if !self.inventory.is_final(relative) {
                 self.file(parent, &tree::leaf(entry)?, context)?;
             }

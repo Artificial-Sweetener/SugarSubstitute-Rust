@@ -48,6 +48,12 @@ pub use user_data::{
     PreparedStartup, PreservedDiagnosticEntry, PreservedDiagnosticSource, SourceLaunchSettlement,
     StartupDataCustody, prepare_launch_data,
 };
+mod generation_retirement;
+pub use generation_retirement::{
+    GENERATION_RETIREMENT_RESERVATION_BYTES, GenerationReclaim, GenerationReport,
+    GenerationRetirementError, GenerationTurn, LaunchPointerGenerations, PointedGenerations,
+    RunningGenerationReclaim, retire_generations,
+};
 mod owned_root;
 pub use owned_root::owned_retirement_root;
 mod ownership;
