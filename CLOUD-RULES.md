@@ -44,6 +44,13 @@ git diff --quiet "$main" HEAD -- Sugar && echo "Sugar/ matches main"
 ```
 Then run `cargo xtask check` from `Substitute/` and resync any governance fingerprint it reports, using the tooling the gate names. Never hand-edit fingerprints to pass.
 
+## Commit identity (maintainer rule)
+Only two authors are allowed in this repository:
+- `Artificial Sweetener <artificialsweetenerai@proton.me>` for all code work, including yours.
+- `Daisy <daisy@artificialsweetener.ai>` for automations (CI and release commits, semantic-release).
+
+Before your next commit, run `git config user.name "Artificial Sweetener"` and `git config user.email "artificialsweetenerai@proton.me"` in your checkout. Every commit's author and committer must be that identity. Never commit as Claude or any bot, and never configure semantic-release or a workflow to commit as `semantic-release-bot`; release automation commits as Daisy. Your earlier commits authored as Claude will be rewritten by the coordinator in one pass; don't rewrite them yourself.
+
 ## Commits
 - `type(scope): changelog-ready outcome`; `feat`/`fix`/`perf` for user-facing behaviour, `refactor`/`test`/`build`/`ci`/`chore`/`docs` otherwise. The message ends with its body: no Co-Authored-By or other attribution trailer.
 - Never `--no-verify`, never change git config globally, never install hooks, never `git stash`.
