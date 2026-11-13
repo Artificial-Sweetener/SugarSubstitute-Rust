@@ -1052,6 +1052,6 @@ rationale = "Read only the optional qualification evidence directory for splash 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/generation_retirement/inventory.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:2e8c3088f26f79e522f1566f0626fa4bbc407e7d9b18ad60686973ec3dac8efa"
+source_sha256 = "sha256:2a3f596beba9828b8aa60c1068aa80a02febcf402d9b3eafd4b3fc1402cc9cb8"
 capabilities = ["document"]
 rationale = "Names an unused generation's installation-owned configuration documents only so retirement can delete them; it never reads, parses or writes their contents."

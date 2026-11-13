@@ -90,8 +90,6 @@ pub use transaction::{
     AdmittedCandidate, InstallationSession, InstalledApplication, IntegrationRequest,
     IntegrationStorage, PreparedCandidate, PreparedInstallation, RuntimePaths, Selection,
 };
-#[cfg(test)]
-pub(crate) use trust::UPDATE_RECEIPT_FILE;
 pub(crate) use trust::offered::OfferInputs;
 pub use trust::{
     AuthenticatedOffer, OFFER_LOOKUP_RESERVATION_BYTES, OFFER_PUBLICATION_RESERVATION_BYTES,
@@ -101,6 +99,7 @@ pub use trust::{
     AuthorityChange, MetadataMode, ReceiptAuthority, TRUST_OPERATION_RESERVATION_BYTES,
     TRUST_RESERVATION_BYTES, TrustFailure, TrustStore, UpdateAuthorization, UpdateReceipt,
 };
+pub(crate) use trust::{UPDATE_RECEIPT_FILE, UPDATE_RECEIPT_STAGE};
 pub use updater_package::{
     PreparedUpdater, RejectedUpdaterProbe, UPDATER_STAGING_RESERVATION_BYTES,
     UnstartedUpdaterTrial, UpdaterPackage, UpdaterProbeTransfer,

@@ -18,6 +18,9 @@ use sugarsubstitute_update::PreparedRelease;
 
 /// Receipt file inside the prepared generation directory.
 pub(crate) const FILE: &str = "update-receipt.record";
+/// Prefix of the stage a receipt is written to before it replaces [FILE]. Dot-led, so the
+/// generation's retirement inventory can own a stage an interruption left behind.
+pub(crate) const STAGE_PREFIX: &str = ".update-receipt-stage-";
 /// Current receipt schema; bumped only for a change older readers cannot ignore.
 const SCHEMA: u32 = 1;
 /// Encoded payload bound before the installation/repository envelope.
@@ -106,7 +109,7 @@ impl UpdateAuthorization<'_> {
             &payload,
         )?;
         protection::with(context, |protection| {
-            let staged = staging::unique_path(directory, "update-receipt-pending")?;
+            let staged = staging::unique_path(directory, STAGE_PREFIX.trim_end_matches('-'))?;
             let mut file = protection.file(&staged, context)?;
             check(context)?;
             file.write_all(&bytes)?;

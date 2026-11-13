@@ -2645,7 +2645,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Acq
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/trust.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:23c758192efd6e97a019459ab5f4ca56b84deabd0b9205c0a6d8925d72e0a68a"
+source_sha256 = "sha256:ace826a961a3880bb61db1ef90155c015351a662fb1fde96827370f73828006b"
 capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Persist update trust under independent exclusion before returning authenticated offers. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
@@ -5163,10 +5163,18 @@ rationale = "Durable filesystem owner: Qualify ownership admission, exact deleti
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/generation_retirement/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:d7f2c8ccd21f31843d40c27253a2283d5b2fe5aef893e287e12bac46f5819048"
+source_sha256 = "sha256:cc8ae67893e143e0870680c21c6723ed94282921651ee20f75d1dbdc6323c482"
 capabilities = ["method metadata", "std::fs::File::open", "std::fs::create_dir", "std::fs::create_dir_all", "std::fs::read", "std::fs::read_dir", "std::fs::remove_file", "std::fs::rename", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Old generations are retired under run and preparation custody while kept, open, pointed-to and unknown content survives. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/generation_retirement/tests/cycles.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:d3c8012a4b2a4f017ac9a11a35f2731b51c412c13356dbb9a2f95a6f2e4b7318"
+capabilities = ["std::fs::File::open", "std::fs::remove_file", "std::fs::rename", "std::fs::write"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Disk use stays flat across many updates while rejected, superseded, scanner-held and power-cut retirements and update receipts are cleaned up. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/pack_tree.rs"
