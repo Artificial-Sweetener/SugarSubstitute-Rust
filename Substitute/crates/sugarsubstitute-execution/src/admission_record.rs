@@ -9,6 +9,9 @@ impl Record {
         kind: &RequestKind<'_>,
         work: Option<&crate::task::Work>,
     ) -> Self {
+        // Only Windows-native records retain work-derived custody and deadlines.
+        #[cfg(not(any(windows, test)))]
+        let _ = work;
         let spec = context.spec();
         let deadline = context.deadline();
         let memory =
