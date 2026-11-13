@@ -799,6 +799,13 @@ pub trait StartupWindowContent: WindowContent {
         None
     }
 
+    /// Take, once, the start-up update message: the first start on a new version, or the
+    /// previous version running after a new one failed to start. It is taken only once the
+    /// main window can show it.
+    fn take_update_notice(&mut self) -> Option<crate::UpdateNotice> {
+        None
+    }
+
     /// Whether a workflow is running, so the restart offer can say it waits for it.
     fn workflow_activity(&self) -> WorkflowActivity {
         WorkflowActivity::Idle

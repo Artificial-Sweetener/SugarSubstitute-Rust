@@ -98,6 +98,16 @@ fn states() -> Vec<State> {
     let mut caption = CaptionUpdates::default();
     caption.notify(Notice::NotSaved { workspace: true, inputs: false });
     states.push(State { name: "caption-not-saved-notice", caption, shown: &[7, 9] });
+    let mut caption = CaptionUpdates::default();
+    let notes = url::Url::parse("https://github.com/example/releases/tag/v2.4.1").ok();
+    caption.notify(Notice::update(crate::UpdateNotice::Updated {
+        version: "2.4.1".into(),
+        changelog: notes,
+    }));
+    states.push(State { name: "caption-updated-to-version", caption, shown: &[7, 8, 9] });
+    let mut caption = CaptionUpdates::default();
+    caption.notify(Notice::update(crate::UpdateNotice::PreviousVersionRunning));
+    states.push(State { name: "caption-previous-version-running", caption, shown: &[7, 9] });
     states
 }
 
@@ -288,7 +298,7 @@ fn caption_body() -> TestResult {
             if !tints_right {
                 problems.push(format!("{}: ready {ready}, warning {warning}", state.name));
             }
-            for id in [6_u16, 7, 9] {
+            for id in [6_u16, 7, 8, 9] {
                 if state.shown.contains(&id) {
                     let bounds = layout[usize::from(id) - 1].bounds;
                     let bright = (0..HEIGHT as usize)

@@ -1006,3 +1006,10 @@ owner = "sugarsubstitute-supervision"
 source_sha256 = "sha256:340c6b65203d8f55dce02c7a781204914408589789be8f40df2404b70a57e3cd"
 capabilities = ["environment"]
 rationale = "Compiled only by the qualification-historical-root proof feature: a headless proof names an owned stand-in for the account profile folder through one environment variable, so a proof never reads the account own data. Production builds exclude it and never consult environment text for migration sources."
+
+[[records]]
+path = "crates/sugarsubstitute-splash/src/render_update_tests.rs"
+owner = "sugarsubstitute-splash"
+source_sha256 = "sha256:540f08b5ebbe208f1f61ba94ee04a166604434b83fe26d97e20de2dc1492d8e1"
+capabilities = ["environment"]
+rationale = "Read only the optional qualification evidence directory for splash captures; the test writes its own rendered frames there and reads or writes no product settings."
