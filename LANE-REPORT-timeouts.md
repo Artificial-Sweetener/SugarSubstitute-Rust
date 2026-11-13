@@ -42,7 +42,7 @@ On the combined tree:
 - **xtask tests:** 192 pass.
 - **Windows-target clippy `-D warnings`, all three legs:** clean. This type-checks every test target; `ring` was built against stub C headers.
 - **Before the merge:** Windows Rustdoc clean; FamilySettlement Python tests pass.
-- **CI:** [run 43340327438](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43340327438) stopped at main's submodule baseline.
+- **CI:** combined-tree [run 43361365145](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43361365145) stops on all OSes at the submodule baseline, which integration still lacks. Nothing new.
 
 ## Next
 - **Integrator:** merge lane/timeouts. Gate 1 passes on integration plus this branch.
