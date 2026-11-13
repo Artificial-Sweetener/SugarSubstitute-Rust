@@ -2,6 +2,92 @@
 
 Branch `integration`, created from `origin/main` 0cd6362f. Updated by each cloud integration pass.
 
+## Pass 5 (2026-11-13)
+
+Tools that worked: git fetch/push over the proxy; rustup 1.93.1 with clippy, rustfmt and the
+`x86_64-pc-windows-gnu` target; apt for mingw-w64, `libgtk-3-dev`, `libdbus-1-dev` and
+`pkg-config`; Node 22 with `npm ci` in `Sugar/`; uv for a Python 3.12 venv (`pip install -e
+".[dev]"`); the public Actions REST API through curl; the GitHub MCP `get_job_logs`. Not working:
+`gh` (token rejected).
+
+Commit identity: passes 1–4 committed as the container's preset "Claude" identity, against
+CLOUD-RULES' maintainer rule. From this pass on, integration commits are authored and committed as
+the maintainer. The coordinator's authorship rewrite needs to cover integration's earlier commits
+too.
+
+History rewrite: while this pass ran, integration, main and every lane branch were rewritten
+under the maintainer identity (integration 2c55674d became ccccccc5 with the same tree). I rebuilt
+this pass's merges on the rewritten history. Their trees are identical to the ones checked below,
+apart from the host and entry reports, which now cite rewritten hashes. Hashes in this section are
+the rewritten ones; CI run links point at runs on the pre-rewrite commits with the same trees.
+Earlier passes' hashes are pre-rewrite, and their merge commits now have new hashes (timeouts merge
+a0e1b56b is d6311f04). The "Commit identity" note below is resolved by that rewrite.
+
+### Integration tip and CI
+
+- New merges: host at a83420b7 (f22025cd), entry at bb026c95 (a3d80408), packinstall at 62a5bae3
+  (8b542f46). No product fixes were needed.
+- Merge resolution: only governance records conflicted. I kept both sides' new records (storage:
+  owned_retirement and pack_tree/pack_install fixtures; configuration: fingerprints/update-repository
+  and shared_vectors_tests) and both `durable_storage` modules (`owned_retirement`, `pack_tree`).
+  I re-recorded source fingerprints with `cargo xtask fingerprints`. That tool doesn't cover
+  `[[dependencies]]` reviews, so I took their digests from `cargo xtask storage-inventory`, the
+  gate's own inventory: entry adds `Win32_UI_WindowsAndMessaging` to execution's `windows`
+  features (for the responsiveness probe), and packinstall's `Cargo.lock` changes every manifest
+  digest. All 18 reviewed dependencies still match 18 actual ones, with none added or removed.
+- Local checks on the merged tip: `cargo xtask governance` passed (submodule checked out);
+  `cargo fmt --check` passed; Windows-target Clippy (`-D warnings`) passed all three legs;
+  `cargo test --locked -p sugarsubstitute-contracts -p sugarsubstitute-application -p
+  sugarsubstitute-xtask` passed (host's new schema-one contract test included; xtask 200).
+  `Sugar/` changed (packinstall's shared install vectors, `digest_manifest.py`, `tracking.py`).
+  `npm run check:staged`, run with those changes staged on the previous tip, stops at the known
+  mypy baseline ("Found 22 errors in 11 files"). The 158 tests in `tests/pack_install` and
+  `tests/self_update` pass, and ruff and black pass on the changed areas. CI runs the full suite.
+- Previous tip 2c55674d, now ccccccc5: [Substitute verification](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43363849901) is baseline only (`download.ts`
+  on every OS).
+- CI for the new tip starts with this push:
+  [integration runs](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions?query=branch%3Aintegration).
+- Wiring: retire to storage was done in pass 1. Host `sugarcubes.updates` to coord is **still
+  pending, because coord isn't merged**. packinstall's splash line, one plain line and report
+  (`PackUpdateStatus`, `PackUpdateReport`) are also waiting on coord's kind-22 channel; both lanes
+  moved the lifecycle wire to 14, so the combined wire must become 15 when coord merges. Until
+  then integration has **two placeholders that must not ship**: host's idle update sources, and a
+  splash-time SugarCubes update of up to 300 s with nothing on screen (HANDOFF §7).
+
+### Lanes
+
+Moved since pass 4: ci, release, host, entry and packinstall. None is stalled: every tip has moved
+from its starting snapshot. coord, storage, trust, retire, timeouts and fixer haven't moved.
+
+Branches outside this pass's lane list, not reviewed or merged: `lane/linux` (492fb7b8;
+[run 43367808883](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43367808883): ubuntu and macOS **green**, Windows fails), `lane/ci-next`
+(00bacaf9, lane/ci plus lane/linux; [run 43367994736](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43367994736): ubuntu and macOS **green**,
+Windows fails Clippy `-p sugarsubstitute --no-default-features` because `crate::job_deadline` is
+gated behind `native-composition`), and `lane/launcher` (3d6f2f0b; [run 43368450801](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43368450801)
+fails on every OS). They need the coordinator to list them first.
+
+| Lane | Tip | State | Last reviewed | Merged | Stalled | Blocking reasons / unproven |
+|---|---|---|---|---|---|---|
+| ci | 5de2f01b | working | 5de2f01b | no | no | Report still doesn't say both workflows are green. [Substitute verification](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43365354840) on 7ddbc338, now f7d74163 (the parser link): Windows tests now **link and run**, and `sugarsubstitute` lib gives 1768 passed and 6 failed: two composition GPU tests (need a hardware GPU runner, **the maintainer's call**), three `setup::worker::records` tests ("Record parent must use its resolved local location") and `input_documents::tests::storage::bases::only_originals_no_kept_reference_names_are_selected_for_retirement`. Nobody has explained or assigned those four non-GPU failures yet. Ubuntu and macOS stop at the lints, which lane/linux / ci-next address. |
+| host (+ host-d2w-draft) | a83420b7 | items done except E6 | a83420b7 | **yes** (f22025cd) | no | CI: [43363594548](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43363594548) baseline only (`download.ts`). Review passed: the panel test now sends the presentation watch at schema 1, which the contract fixes (`presentation.rs`: "presentation schema one"). That corrects the test, it doesn't weaken it, and a new contract test refuses schemas 0, 2, 3 and 1003. Unfinished: E6. Unproven: every Windows test of the lane; native Updates entry. |
+| entry | bb026c95 | items done | bb026c95 | **yes** (a3d80408) | no | CI: [43363698336](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43363698336) baseline only. **Review now passes**: b61736d2 follows C-6. Every wait for another copy shows a surface at 2 s on the execution clock, and the launch keeps forwarding and re-electing behind it. "Close it and start" comes only after a hung owned probe or an Unresponsive answer, and ends only the verified copy. Re-election forgets the old copy, and a failed probe is retried. Seven manual-clock tests cover these, with no sleeps or real-clock reads. The two deleted `instance_conflict` tests belong to the removed end-the-pump-and-relaunch path; their behaviour is covered by `a_closing_copy_is_waited_for_then_the_launch_continues` and the probe tests. Words are plain ("Checking the previous SugarSubstitute window…", "Finishing closing the previous window…"). Open: a claim holder with no handshake gets the closing line and Cancel, never the question, until supervision supplies `ClaimHolder`. Unproven: real-Windows tests (Wine only), frozen-UI qualification, foreground from behind another window. Commits before b61736d2 carry the Claude identity. |
+| packinstall | 62a5bae3 | items done; display seam waits on coord | 62a5bae3 | **yes** (8b542f46) | no | CI: [43363809191](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43363809191) baseline only. **Review now passes** for the lane's own scope. Gap 1 is fixed: a SugarCubes page failure (wire 14) is a trial verdict, the retry is held behind a restore of the previous version, and a restored version isn't reinstalled. Tests: `a_failed_page_restores_the_previous_version_before_the_next_attempt` and `a_failed_page_holds_the_retry_behind_a_restore…`. Gap 2 (the splash line and the one plain line) is now a typed seam that coord must display (see Wiring). It blocks shipping, not integration. No sleeps or real-clock tests; the removed asserts are wire 13 → 14 updates. Unproven: headless real run with ComfyUI; junction vectors; WinHTTP loopback; every `sugarsubstitute` crate test on Windows. |
+| release | ee1ddcb3 | items done | ee1ddcb3 | content **yes** (b4ea9dc4) | no | The branch was rewritten for authorship: 3e05348e is no longer an ancestor, and its tree differs from 3e05348e only in `.github/release/LANE-REPORT.md` (new hashes). The code is already on integration, so I didn't merge the duplicate history. CI: [Release tooling](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43363221863) **success**; [Substitute](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43363221861) and [Sugar quality](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43363221913) are baseline only (mypy "22 errors in 11 files"). |
+| coord | 64b4c067 | items done except `update_report_export` | 64b4c067 | no | no | Unchanged. It contains non-green lane/ci (80c37dd3), and item 2 is unfinished. Now also holds back packinstall's display. |
+| timeouts | 483627df | items done | 483627df | **yes** (d6311f04) | no | Unchanged. |
+| canvas-flakes | b88bc3fa | finished | b88bc3fa | **yes** (e27622c5) | no | none |
+| ui | 0c68a2c7 | finished, converted | 0c68a2c7 | **yes** (d0ab3289) | no | Native: splash and caption images. |
+| retire | 6634fd32 | item done | 6634fd32 | **yes** (e8a83a7d) | no | Unchanged. |
+| fixer | f79c1f50 | items done | f79c1f50 | **yes** | no | Only its report moved (rewritten hashes). Integration doesn't carry `LANE-REPORT-fixer.md`, so I didn't merge the report-only commit. |
+| storage | 89a29380 | items done | 89a29380 | **yes** (d37b4821) | no | Unchanged. |
+| trust | 1d6adcd8 | items done | 1d6adcd8 | **yes** (138d1308) | no | Unchanged. |
+
+### Native Windows proofs (unproven here)
+
+Everything listed in earlier passes, plus entry's frozen-UI and foreground qualification, and
+packinstall's headless ComfyUI run. lane/ci now links Windows tests, but integration doesn't have
+that commit, so no Windows test of integration has run yet.
+
 ## Pass 4 (2026-11-13)
 
 Tools that worked: git fetch/push over the proxy; rustup 1.93.1 with clippy, rustfmt and the
