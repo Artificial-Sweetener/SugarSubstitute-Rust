@@ -47,17 +47,9 @@ const lineStarts = source
 const lineLengths = source.split('\n').map((line) => line.length);
 /**
  * The recorded card width: wide enough for the first paragraph on one row and narrow enough that
- * every other paragraph wraps. Another platform's default font may need a nearby width instead.
+ * every other paragraph wraps. Another platform's default font may need a different width.
  */
 const recordedWidth = 400;
-/** The recorded width first, then widths alternating outward from it in 8px steps. */
-const candidateWidths = [
-  recordedWidth,
-  ...Array.from(
-    { length: 40 },
-    (_, index) => recordedWidth + (index % 2 === 0 ? 8 : -8) * (Math.floor(index / 2) + 1),
-  ),
-];
 /** The visual rows each source line occupies at that width: paragraphs wrap, empty lines keep one row. */
 const rowsPerLine = [1, 1, 2, 1, 2, 1, 2, 1, 2];
 const lineOfRow = rowsPerLine.flatMap((rows, line) => Array.from({ length: rows }, () => line));
@@ -107,34 +99,73 @@ function rowsOf(boxes: readonly LineBox[]): number[] {
   return boxes.map((box) => Math.round((box.bottom - box.top) / row));
 }
 
+/** Force the editor's layout width, replacing any width an earlier attempt forced. */
+async function forceEditorWidth(page: Page, width: number): Promise<void> {
+  await page.evaluate((value) => {
+    const id = 'sc-test-prompt-width';
+    const style = document.getElementById(id) ?? document.createElement('style');
+    style.id = id;
+    style.textContent = `[data-sc-prompt-editor]{width:${String(value)}px!important;max-width:${String(value)}px!important}`;
+    document.head.append(style);
+  }, width);
+}
+
+/** Observe the settled rows at one forced width: three equal observations, or twenty attempts. */
+async function settledRows(page: Page, width: number): Promise<{ boxes: LineBox[]; rows: string }> {
+  await forceEditorWidth(page, width);
+  let previous = '';
+  let repeats = 0;
+  let boxes: LineBox[] = [];
+  for (let attempt = 0; attempt < 20 && repeats < 2; attempt++) {
+    await settle(page);
+    boxes = await lineBoxes(page);
+    const observed = JSON.stringify(rowsOf(boxes));
+    repeats = observed === previous ? repeats + 1 : 0;
+    previous = observed;
+  }
+  return { boxes, rows: previous };
+}
+
+/**
+ * Measure the editor width at which the first paragraph just fits one row under this platform's font.
+ *
+ * Every other paragraph is longer than the first and shorter than twice its length, so at this width
+ * each of them wraps into exactly two rows.
+ */
+async function fittedWidth(page: Page): Promise<number> {
+  await settledRows(page, 4000);
+  return page.evaluate(() => {
+    const editor = document.querySelector<HTMLElement>('[data-sc-prompt-editor]');
+    const line = document.querySelector<HTMLElement>('.cm-content .cm-line');
+    if (!editor || !line) throw new Error('The prompt editor has no painted first line');
+    // The presented card is scaled by a transform; layout widths stay unscaled.
+    const zoom = editor.getBoundingClientRect().width / editor.offsetWidth;
+    const text = document.createRange();
+    text.selectNodeContents(line);
+    const style = getComputedStyle(line);
+    const padding = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
+    const fitted = text.getBoundingClientRect().width / zoom + padding + 6;
+    return Math.ceil(editor.offsetWidth - line.clientWidth + fitted);
+  });
+}
+
 /**
  * Narrow the editor like the reported card and wait until every paragraph has its wrapped rows.
  *
- * Wrapping depends on the platform's default font, so a width whose settled layout differs is
- * replaced by the next candidate. A layout counts as settled after three equal observations.
+ * The recorded width is tried first. Wrapping depends on the platform's default font, so when it
+ * does not reproduce the recorded rows, the width measured to fit the first paragraph is used.
  */
 async function wrapLikeTheRecording(page: Page): Promise<LineBox[]> {
   const expected = JSON.stringify(rowsPerLine);
-  for (const width of candidateWidths) {
-    await page.evaluate((value) => {
-      const id = 'sc-test-prompt-width';
-      const style = document.getElementById(id) ?? document.createElement('style');
-      style.id = id;
-      style.textContent = `[data-sc-prompt-editor]{width:${String(value)}px!important;max-width:${String(value)}px!important}`;
-      document.head.append(style);
-    }, width);
-    let previous = '';
-    let repeats = 0;
-    for (let attempt = 0; attempt < 20 && repeats < 2; attempt++) {
-      await settle(page);
-      const boxes = await lineBoxes(page);
-      const observed = JSON.stringify(rowsOf(boxes));
-      if (observed === expected) return boxes;
-      repeats = observed === previous ? repeats + 1 : 0;
-      previous = observed;
-    }
-  }
-  throw new Error(`The prompt never wrapped into ${expected} rows`);
+  const observed: string[] = [];
+  const recorded = await settledRows(page, recordedWidth);
+  if (recorded.rows === expected) return recorded.boxes;
+  observed.push(`${String(recordedWidth)}px: ${recorded.rows}`);
+  const width = await fittedWidth(page);
+  const fitted = await settledRows(page, width);
+  if (fitted.rows === expected) return fitted.boxes;
+  observed.push(`${String(width)}px: ${fitted.rows}`);
+  throw new Error(`The prompt never wrapped into ${expected} rows (${observed.join('; ')})`);
 }
 
 /** Assert one value while naming where it was observed, because Jest's `expect` takes no message. */
