@@ -78,6 +78,12 @@ disposition = "fixture"
 rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/build.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:7d92734bd4c731c92b98e9d34cf8bf7e1cfda0d52c79a84085c390c380225577"
+disposition = "developer"
+rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
+[[records]]
 path = "crates/sugarsubstitute/build.rs"
 owner = "sugarsubstitute"
 source_sha256 = "sha256:04ce4d2b879b2059197a795ca52ca9de69370caad213f9c73e563537da825a81"
@@ -724,21 +730,21 @@ rationale = "The worker type-check command reports TypeScript compiler diagnosti
 [[records]]
 path = "tools/crashpad/build_native.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:05cbc7fecc5de69fbfb62ac0e76fc6812719fe40800832f0fc7f74dc6a053971"
+source_sha256 = "sha256:31702441cd2365eb54f550443ff104d1f73eb3d9f1b365a4b17c513740322dd8"
 disposition = "developer"
 rationale = "The selected native build redirects each compiler command's stdout and stderr into its explicit per-step build artifact log."
 
 [[records]]
 path = "tools/crashpad/prepare_source.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:3114bfd26ba10b4a1ca3c9702350f30471dacdf5c1793d78c57e0a967e415c7f"
+source_sha256 = "sha256:ce0d915ef1a9372e2c2e9b1e8f4c246e32f9db20a6a77bac6b13146b898677d6"
 disposition = "developer"
 rationale = "The registered source transformation preserves external Crashpad standard-handle setup only for the non-owned bootstrap branch and clears it for owned startup."
 
 [[records]]
 path = "tools/local_k1/build_manifest.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:5f6a980f4834257424a128dde9989f238be95e1a4da2bb869b471f772b140f5b"
+source_sha256 = "sha256:f97b8dc1b77ef38e671ba9208adb2c377706e4934b06f8576cea7938bc588a43"
 disposition = "developer"
 rationale = "The build-manifest tool prints completion after validating matched producing PE and PDB identities."
 
@@ -1125,6 +1131,20 @@ owner = "sugarsubstitute"
 source_sha256 = "sha256:f92568d0b7d01b75e8826e1fab14255cf2d6d85fb33c77eea2cb64b895e7ebd3"
 disposition = "fixture"
 rationale = "Capture only isolated formatter output to prove fixed native preparation fields, unknown-state rejection and the unchanged 512-byte relay boundary."
+
+[[records]]
+path = "installer/release/sign-release.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:fdff92faec74a9bcd328cfa6a1dd9854ba24ad49762e045a7a46428482a24ced"
+disposition = "developer"
+rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
+
+[[records]]
+path = "tools/crashpad/extract_source.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:c345a9713e0942c7a6e62ec3964aa231a5af96d1d6358a324177b81ba2349542"
+disposition = "developer"
+rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
 
 [[records]]
 path = "installer/release/update-distribution.mjs"
