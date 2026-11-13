@@ -36,7 +36,11 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
         let own = if self.closing {
             (!self.deadline_reported).then_some(self.cleanup_deadline).flatten()
         } else if !self.initial_completed {
-            self.setup_deadline
+            let forward = self
+                .forward_wait
+                .as_ref()
+                .and_then(forward_recovery::wait::ForwardWait::native_wake);
+            self.setup_deadline.into_iter().chain(forward).min()
         } else {
             None
         };
@@ -112,6 +116,9 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
             return Err(cause);
         }
         Ok(())
+    }
+    fn take_presentation(&mut self) -> Option<sugarsubstitute_desktop::HeadlessPresentation> {
+        self.take_forward_presentation()
     }
     fn poll_shutdown(&mut self) -> Result<bool, Box<dyn Error>> {
         if !self.closing {

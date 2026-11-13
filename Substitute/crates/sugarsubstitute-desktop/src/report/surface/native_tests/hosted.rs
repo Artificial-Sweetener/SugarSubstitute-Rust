@@ -96,7 +96,7 @@ fn hosted_body() -> TestResult {
                 target,
                 proxy.clone(),
                 picker.clone(),
-                FormOwner(owner),
+                Some(FormOwner(owner)),
                 window,
                 lifetime,
             ) {

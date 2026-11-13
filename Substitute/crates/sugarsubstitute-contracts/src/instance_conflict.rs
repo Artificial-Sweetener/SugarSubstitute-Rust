@@ -79,6 +79,8 @@ pub enum ConflictPhase {
     Closing,
     /// Ordinary close has stalled; ending the previous copy outright is offered.
     ForceOffered,
+    /// The previous copy is closing by itself; this launch starts once it has exited.
+    AwaitingExit,
     /// Ending the previous copy outright is in progress.
     Forcing,
     /// Resolution failed; only cancellation remains.
@@ -119,4 +121,16 @@ pub trait ConflictController {
     fn poll(&mut self) -> ConflictView;
     /// Admit an explicit user decision only when the policy permits it.
     fn choose(&mut self, action: ConflictAction);
+}
+/// A borrowed controller is driven exactly as the controller it borrows.
+impl<T: ConflictController + ?Sized> ConflictController for &mut T {
+    fn start(&mut self, wake: Arc<dyn CompletionWake>) {
+        (**self).start(wake);
+    }
+    fn poll(&mut self) -> ConflictView {
+        (**self).poll()
+    }
+    fn choose(&mut self, action: ConflictAction) {
+        (**self).choose(action);
+    }
 }

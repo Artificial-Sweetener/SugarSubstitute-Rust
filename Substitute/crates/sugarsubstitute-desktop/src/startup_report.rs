@@ -56,7 +56,7 @@ pub(super) fn open(
     let opened =
         lifetime(words, title, &failure, content.update_report_export()).and_then(|lifetime| {
             let window = crate::report::surface::report_window(title.to_owned());
-            HostedForm::open(target, proxy, picker.clone(), owner, window, lifetime)
+            HostedForm::open(target, proxy, picker.clone(), Some(owner), window, lifetime)
         });
     match opened {
         Ok(report) => session.report = Some(report),

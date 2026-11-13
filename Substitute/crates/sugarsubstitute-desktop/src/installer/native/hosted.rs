@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! A form window hosted on an event loop that another surface owns: the running application's
-//! loop, with the form owned by and centred on the main window. The host routes the form's
-//! events here from its own callbacks; nothing here pumps events or waits.
+//! loop, with the form owned by and centred on the main window, or a headless role's loop,
+//! where the form has no owner. The host routes the form's events here from its own callbacks;
+//! nothing here pumps events or waits.
 use super::*;
 use crate::{
     completion_wake::{ProxyWake, WakeLifetime},
@@ -47,15 +48,15 @@ pub(crate) struct HostedForm<L: Lifetime> {
 }
 
 impl<L: Lifetime> HostedForm<L> {
-    /// Open `lifetime` in a window owned by `owner` on the host's loop. `picker` is the loop's
-    /// shell picker, unbound; the form binds it until its window retires.
+    /// Open `lifetime` in a window owned by `owner`, or unowned, on the host's loop. `picker` is
+    /// the loop's shell picker, unbound; the form binds it until its window retires.
     /// # Errors
     /// Window creation failed; nothing was opened.
     pub(crate) fn open(
         target: &EventLoopWindowTarget<NativeAction>,
         proxy: EventLoopProxy<NativeAction>,
         picker: NativePicker,
-        owner: FormOwner,
+        owner: Option<FormOwner>,
         options: Window,
         mut lifetime: L,
     ) -> Result<Self, Box<dyn Error>> {
@@ -67,7 +68,7 @@ impl<L: Lifetime> HostedForm<L> {
             proxy,
             FormScope(next_scope()),
             picker,
-            Some(owner),
+            owner,
             options,
             crate::windows_system_accent::current(),
             &mut lifetime,

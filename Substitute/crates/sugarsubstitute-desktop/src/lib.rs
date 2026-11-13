@@ -10,7 +10,10 @@ pub mod bulk_channel_diagnostic;
 #[allow(unsafe_code)]
 mod windows_activation;
 #[cfg(target_os = "windows")]
-pub use windows_activation::activate_desktop_process;
+pub use windows_activation::{
+    ProcessError, ProcessResponsiveness, activate_desktop_process, end_process,
+    probe_process_responsiveness,
+};
 #[allow(unsafe_code)]
 mod file_dialog;
 pub use file_dialog::SelectionKind;
@@ -76,7 +79,7 @@ mod qualified_preview;
 #[cfg(target_os = "windows")]
 pub use headless::run_headless;
 mod headless_contract;
-pub use headless_contract::{HeadlessLifetime, HeadlessStep};
+pub use headless_contract::{HeadlessLifetime, HeadlessPresentation, HeadlessStep};
 #[cfg(all(target_os = "windows", feature = "k1-native-qualification"))]
 pub use qualified_preview::{
     CapturedMainPreview, MainDownloadFixture, MainPreviewSnapshot, MainPreviewViewport,

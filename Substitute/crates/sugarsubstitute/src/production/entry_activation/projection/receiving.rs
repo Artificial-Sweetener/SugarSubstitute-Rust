@@ -29,10 +29,15 @@ impl ProductionActivation {
         }
         for at in 0..self.pending.len() {
             if !self.closing
-                && let Some(pending) = &self.pending[at]
+                && let Some(pending) = &mut self.pending[at]
             {
-                match reactivation::reuse(&self.records, pending, resources)? {
-                    reactivation::Reuse::Accepted | reactivation::Reuse::Expired => {
+                match reactivation::reuse(
+                    &self.records,
+                    pending,
+                    resources,
+                    sugarsubstitute_desktop::probe_process_responsiveness,
+                )? {
+                    reactivation::Reuse::Replied | reactivation::Reuse::Expired => {
                         self.pending[at] = None;
                         continue;
                     }

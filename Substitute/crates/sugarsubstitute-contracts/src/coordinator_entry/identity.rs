@@ -95,10 +95,19 @@ pub enum EntryDiscoveryPhase {
     Serving(CoordinatorKey),
 }
 /// Describe a correlated request outcome independently of child startup readiness.
+///
+/// Only [`EntryOutcome::Accepted`] means the running copy took the launch. Every other
+/// outcome leaves the request unadmitted, so the launching process stays responsible for it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EntryOutcome {
     /// A contained child was admitted; this fact grants no backend lease.
     Accepted(RunKey),
+    /// The running copy's window failed its responsiveness probe, or its watchdog suspects
+    /// it; nothing was admitted or brought forward.
+    Unresponsive,
+    /// The running copy is closing and admits no new launch. The launching process waits
+    /// for it to exit and then starts by itself.
+    Closing,
     /// The original request was rejected with a closed reason.
     Rejected(EntryRejection),
 }

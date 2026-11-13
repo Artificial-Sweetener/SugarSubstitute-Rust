@@ -22,9 +22,9 @@ use sugarsubstitute_contracts::{
 };
 pub(super) const HEADER_BYTES: usize = 120;
 const MAGIC: &[u8; 4] = b"SSCE";
-/// Version 3 carries a fixed passive-originals commitment after the stored renderer preference.
+/// Version 4 adds the Unresponsive outcome and lets Closing answer an issued Launch.
 /// Earlier peers reject the envelope before decoding a changed body or invoking native effects.
-const VERSION: u16 = 3;
+const VERSION: u16 = 4;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum Kind {
@@ -35,6 +35,7 @@ pub(super) enum Kind {
     Rejected = 5,
     Closing = 6,
     Initializing = 7,
+    Unresponsive = 8,
 }
 impl Kind {
     fn from_raw(value: u16) -> Result<Self, EntryTransportError> {
@@ -46,6 +47,7 @@ impl Kind {
             5 => Ok(Self::Rejected),
             6 => Ok(Self::Closing),
             7 => Ok(Self::Initializing),
+            8 => Ok(Self::Unresponsive),
             _ => Err(EntryTransportError::Malformed),
         }
     }
@@ -87,7 +89,7 @@ pub(super) enum Payload<'a> {
     Launch(&'a EntryLaunchRequest),
     Accepted(RunKey),
     Rejected(EntryRejection),
-    #[cfg(test)]
+    Unresponsive,
     Closing,
     Initializing,
 }
@@ -99,7 +101,7 @@ impl Payload<'_> {
             Self::Launch(_) => Kind::Launch,
             Self::Accepted(_) => Kind::Accepted,
             Self::Rejected(_) => Kind::Rejected,
-            #[cfg(test)]
+            Self::Unresponsive => Kind::Unresponsive,
             Self::Closing => Kind::Closing,
             Self::Initializing => Kind::Initializing,
         }
@@ -111,6 +113,7 @@ pub(super) enum DecodedPayload<'a> {
     Launch(EntryLaunchRequestView<'a>),
     Accepted(RunKey),
     Rejected(EntryRejection),
+    Unresponsive,
     Closing,
     Initializing,
 }

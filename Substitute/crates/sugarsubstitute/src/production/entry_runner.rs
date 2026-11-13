@@ -355,6 +355,8 @@ pub(crate) struct EntryRunner<C: EntryActivation> {
     intake_settled: bool,
     intake_ready: bool,
     forward: Option<CoordinatorEntryClientSession>,
+    /// Puts something on screen when a launch forwarded to another copy waits.
+    forward_wait: Option<forward_recovery::wait::ForwardWait>,
     transport_completions: [Option<JobCompletion<EntryTransportReport, EntryTransportError>>; 3],
     deadline_reported: bool,
     execution_stopping: bool,
@@ -410,6 +412,7 @@ impl<C: EntryActivation> EntryRunner<C> {
             intake_settled: false,
             intake_ready: false,
             forward: None,
+            forward_wait: None,
             transport_completions: std::array::from_fn(|_| None),
             deadline_reported: false,
             execution_stopping: false,

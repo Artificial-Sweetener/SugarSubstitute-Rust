@@ -553,11 +553,11 @@ migrations = []
 id = "native-coordinator-entry"
 owner = "sugarsubstitute-execution"
 sources = ["crates/sugarsubstitute-execution/src/coordinator_entry/protocol.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/protocol/decode.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/protocol/encode.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/protocol/raw_windows.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/types.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/protocol/launch_payload.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/protocol/launch_payload/encode.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/protocol/launch_payload/decode.rs", "crates/sugarsubstitute-execution/src/coordinator_entry/protocol/launch_payload/profile.rs"]
-source_sha256 = "sha256:ab5f788d7ebe4734a05d69feb990ea9a8fc8027fb4c005897dcab6173edf0a34"
+source_sha256 = "sha256:44dd46abd8328967ac51f245000c3443657eb8a847e564fa43b7acb288f77961"
 classification = "protocol"
 preservation = "must_preserve"
-current_version = 3
-accepted_versions = [3]
+current_version = 4
+accepted_versions = [4]
 compatibility = "reject"
 migrations = []
 

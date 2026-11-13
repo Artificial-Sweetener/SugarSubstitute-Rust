@@ -55,6 +55,15 @@ impl Active {
                 protocol::DecodedPayload::Rejected(reason) => {
                     Received::Outcome(EntryOutcome::Rejected(reason))
                 }
+                protocol::DecodedPayload::Unresponsive => {
+                    Received::Outcome(EntryOutcome::Unresponsive)
+                }
+                protocol::DecodedPayload::Closing
+                    if !self.work.shared.server
+                        && self.connections[index].phase == Phase::Outcome =>
+                {
+                    Received::Outcome(EntryOutcome::Closing)
+                }
                 protocol::DecodedPayload::Closing => Received::Closing,
                 protocol::DecodedPayload::Initializing => Received::Initializing,
             };
@@ -109,6 +118,7 @@ impl Active {
                 {
                     return Err(EntryTransportError::Authentication);
                 }
+                self.settle_retained_source(core, index, outcome, received)?;
                 self.emit(
                     core,
                     Some(index),
@@ -214,6 +224,15 @@ impl Active {
             },
         )?;
         lock(&self.work.shared.state).connections[index].header = Some(header);
+        // The grant precedes Launch so the coordinator may bring its window forward at once.
+        if let Err(cause) = self.lease()?.allow_foreground(peer.pid) {
+            tracing::warn!(
+                operation = "entry_allow_foreground",
+                process_id = peer.pid,
+                cause = %cause,
+                "This launch holds no foreground rights to pass to the running copy"
+            );
+        }
         let buffer =
             self.connections[index].write.as_mut().ok_or(EntryTransportError::InvalidPhase)?;
         protocol::bind_staged_launch(

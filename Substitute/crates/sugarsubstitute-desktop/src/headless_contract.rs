@@ -3,7 +3,22 @@
 //! Application lifetime contract independent of native event-loop implementation.
 use crate::StartupPreparationStep;
 use std::{error::Error, num::NonZeroUsize, sync::Arc, time::Instant};
-use sugarsubstitute_contracts::execution::CompletionWake;
+use sugarsubstitute_contracts::{
+    execution::CompletionWake, instance_conflict::ConflictController, localization::Messages,
+};
+
+/// A surface a headless role shows beside its pump while its own work continues, such as a
+/// launch waiting on another copy. The controller owns every decision, the waiting and the
+/// surface's end: the surface closes once the controller reports done, and the role keeps
+/// pumping throughout. The surface never grants the role process or storage authority.
+pub struct HeadlessPresentation {
+    /// Localized words in the role's language.
+    pub copy: &'static Messages,
+    /// Operating-system window title.
+    pub title: String,
+    /// The role's state for this surface, polled on the pump's thread between callbacks.
+    pub controller: Box<dyn ConflictController>,
+}
 
 /// Request continued native pumping or begin the one owned shutdown transaction.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -53,6 +68,12 @@ pub trait HeadlessLifetime {
     /// and without waiting. The session end itself arrives through the role's ordinary close.
     /// Roles with nothing to publish keep this default.
     fn session_ending(&mut self) {}
+    /// Take a surface this role wants shown now, at most one at a time. The pump opens it on
+    /// its own loop, keeps calling [`HeadlessLifetime::activity`] while it is open, and closes
+    /// it before the role finishes. Roles that never show anything keep this default.
+    fn take_presentation(&mut self) -> Option<HeadlessPresentation> {
+        None
+    }
     /// Report true only after actual jobs, terminal disposal, notifications and workers settle.
     /// A deadline/cancellation/kill request cannot count as joined or native settlement.
     /// # Errors

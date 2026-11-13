@@ -113,6 +113,8 @@ impl Active {
             .ok_or(EntryTransportError::InvalidPhase)?;
         let payload = match outcome {
             EntryOutcome::Accepted(run) => protocol::Payload::Accepted(run),
+            EntryOutcome::Unresponsive => protocol::Payload::Unresponsive,
+            EntryOutcome::Closing => protocol::Payload::Closing,
             EntryOutcome::Rejected(reason) => protocol::Payload::Rejected(reason),
         };
         let length = protocol::encode(

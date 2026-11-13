@@ -59,7 +59,7 @@ owner = "sugarsubstitute-execution"
 identity = "tokio"
 binding = "tokio"
 kind = "normal"
-source_sha256 = "sha256:677750e760794c1cbbd668499460d348b5b11699be1d5f3632c1e1d063b82f25"
+source_sha256 = "sha256:d9e0ca8a21288e7b4f1bee70c94f2585d4695a2f2a18b2a7ea140fd22d18b212"
 rationale = "Execution-owned async runtime and network integration; filesystem APIs remain restricted by authored source reviews."
 
 [[dependencies]]
@@ -67,7 +67,7 @@ owner = "sugarsubstitute-execution"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:677750e760794c1cbbd668499460d348b5b11699be1d5f3632c1e1d063b82f25"
+source_sha256 = "sha256:d9e0ca8a21288e7b4f1bee70c94f2585d4695a2f2a18b2a7ea140fd22d18b212"
 rationale = "Native OS adapter bindings for sugarsubstitute-execution; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -409,7 +409,7 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute-execution/src/coordinator_entry/worker/source_staging.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:c236224f529acd2561691abbcc3899cc59e5ce2d20ba34f5d4226949516be7c6"
+source_sha256 = "sha256:133587f7f8a3daeff7d09d84f20adb9651bc7f43a370a72f9be22d7f8bdee7fd"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Execution clock, admitted memory or retained task metadata for: Adopt each encoder outcome before observing original preparation controls. This receiver does not inspect filesystem state."
@@ -418,7 +418,7 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute-execution/src/coordinator_entry/worker/source_staging/tests/support.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:5dbc164ad34eb44424d1c3cb1d6be94c793f7c88c9cc4d9d6b9f26501b91a337"
+source_sha256 = "sha256:242e247d61df0d4b3da2b1645aceb92b5862b3582d5536553ac92c5a4f1dace6"
 capabilities = ["method metadata"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Own actual admitted fixtures and fake only external native effects. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -787,7 +787,7 @@ boundary = "native_ipc"
 [[records]]
 path = "crates/sugarsubstitute-execution/src/windows_coordinator_entry/native.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:79b1ed1fc414f6685102855eb8c0cdd3400c4ffa64b5f43876db6f02c7a86d9d"
+source_sha256 = "sha256:b02d2582e93acb420bdd386cd112ee5438d251e7b716944f15a7bb196c5a711f"
 capabilities = ["CreateFileW", "ReadFile", "WriteFile", "windows::Win32::Storage::FileSystem::*"]
 disposition = "boundary"
 rationale = "Execution-owned native pipe, shared section, process or handle lifetime: Retain every entry pipe, operation and partial credential handle on the sole native worker. Native object custody and original queue, memory and shutdown limits remain with the execution owner."
