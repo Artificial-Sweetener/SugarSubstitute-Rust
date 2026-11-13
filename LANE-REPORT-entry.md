@@ -7,9 +7,9 @@
 
 ## Decisions made
 1. **A copy that answers its message queue but not the pipe gets no surface (departs from C-6's literal wording).** At 2 s, an owned probe decides: hung means the question, exited means re-election, responsive means keep forwarding and probe again after 2 s. A report window can't run behind an ongoing forward, so it would strand a "Checking…" window over a copy that is still starting.
-2. **No splash in forwarding processes** (FINDINGS-host Q5). The wait uses the D1w Fluent window: "Starting SugarSubstitute", "Finishing closing the previous window…", Cancel only.
+2. **No splash in forwarding processes** (FINDINGS-host Q5). The wait uses the D1w Fluent window: "Starting SugarSubstitute", "Finishing closing the previous window…", Cancel.
 3. **Continuing is a fresh launch.** It goes through supervision's shared `Relaunch`, which owns argument access, once the copy has exited.
-4. **Probe targets:** the coordinator probes its desktop's windows; the forwarding launch probes the coordinator's hidden pump windows.
+4. **Probe targets:** the coordinator probes its desktop; the forwarding launch probes the coordinator's pump windows.
 5. **No 15 s Force step (M-1).** "Close it and start" ends the verified coordinator at once; its kill-on-close job ends the desktop and backend.
 6. **Snapshot kept in history** (force-push refused).
 
@@ -24,9 +24,9 @@
 - `cargo xtask governance` and `cargo fmt --check`: passed.
 - Windows target (`x86_64-pc-windows-gnu`): `cargo clippy --workspace --all-targets --all-features -- -D warnings` passed. `cargo doc --no-deps` with `-D warnings` passed for the six touched crates.
 - Linux: application `instance_conflict` 5 passed; contracts all passed. Linux `cargo xtask check` and the `sugarsubstitute` tests stop on `sugarsubstitute-execution` clippy errors (`admission.rs`, `runtime_supervision.rs`) that `origin/main` also has: baseline.
-- CI run 43338293318: failed on all three OSes at the baseline only (`third_party/comfy-desktop` not checked out). No lane test ran yet.
+- CI run 43338293318: failed on all three OSes at the baseline only (`third_party/comfy-desktop` not checked out). No lane test ran.
 
 ## Next
 - Merge `origin/lane/ci` once it's green, re-run CI, and fix any test above that fails.
-- Baseline owner: fix Linux clippy in `sugarsubstitute-execution`.
+- `lane/ci`: Linux runners lack dbus/GTK dev packages; then Linux clippy fails in `sugarsubstitute-execution`.
 - Coordinator: rule on decision 1; assign claim-holder identity; run the native proofs.
