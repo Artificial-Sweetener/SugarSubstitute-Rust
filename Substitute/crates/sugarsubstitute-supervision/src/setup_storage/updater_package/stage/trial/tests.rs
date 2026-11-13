@@ -45,9 +45,13 @@ fn engine_speaking_only_the_previous_preparation_protocol_is_refused_before_stag
     run(|context| {
         let root = worker::installation(128, context)?;
         let workspace = tempfile::tempdir()?;
-        let previous =
-            br#"{"schema_version":1,"preparation_protocols":[1],"installation_schemas":[2]}"#;
-        let (bytes, _) = archive(previous)?;
+        // Only the preparation protocol is old: the engine supports the current installation
+        // schema, so the protocol alone is what refuses it.
+        let previous = format!(
+            r#"{{"schema_version":1,"preparation_protocols":[1],"installation_schemas":[{}]}}"#,
+            sugarsubstitute_contracts::installation::SCHEMA_VERSION
+        );
+        let (bytes, _) = archive(previous.as_bytes())?;
         let (trust, offer, download) = evidence(root.path(), &bytes, Component::Updater, context)?;
         // The engine is refused as soon as its declaration is read, before anything is staged.
         let staged = UpdaterPackage::import(
