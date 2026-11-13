@@ -48,6 +48,7 @@ impl IssuedDiagnosticRequest {
     /// This verifies key, request and SHA256; actual native origin remains with `received`.
     /// # Errors
     /// Changed bytes, foreign sessions or request numbers reject before native effects.
+    #[cfg(windows)]
     pub fn matches_received(
         &self,
         received: &ReceivedDiagnosticRequest,
