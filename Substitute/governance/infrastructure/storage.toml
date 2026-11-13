@@ -5043,7 +5043,7 @@ rationale = "Owned temporary checkpoint files qualify atomic publication, exact 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/workspace/closing_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:2a24b978d69867bdd862999346c598a6da6e5b8e79f50312ecb0bbfb1d3c5e77"
+source_sha256 = "sha256:4b2fa4c1def9b24dedc4c0261aa4011d9985f2dc5825accb4ffa3c308a3d3a5e"
 capabilities = ["tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "An owned temporary workspace drives actual missing-checkpoint load and durable publication through the execution owner, proving ordinary startup polling retains the native peer until final delivery or the unchanged capture cutoff."
