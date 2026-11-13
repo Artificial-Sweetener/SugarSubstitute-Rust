@@ -7,6 +7,9 @@
 //! copy: product words come from the localization owner.
 use serde::{Deserialize, Serialize};
 pub mod codec;
+mod redact;
+use redact::bounded;
+pub use redact::{ADDRESS, PATH, REDACTED, sanitize};
 
 /// Most causes retained in one report.
 pub const MAX_CAUSES: usize = 12;
@@ -102,75 +105,6 @@ impl UpdateReport {
             causes,
         }
     }
-
-    /// Plain text for Copy and Export: version, phase, then one cause per line.
-    pub fn to_text(&self) -> String {
-        let mut text = format!(
-            "Update to {}\nPhase: {}\n",
-            self.version.as_deref().unwrap_or("unknown version"),
-            serde_json::to_value(self.phase)
-                .ok()
-                .and_then(|value| value.as_str().map(str::to_owned))
-                .unwrap_or_default()
-        );
-        for cause in &self.causes {
-            text.push_str("Cause: ");
-            text.push_str(cause);
-            text.push('\n');
-        }
-        text
-    }
-}
-
-/// Replace local paths, network addresses and credential-looking tokens, collapse whitespace,
-/// and bound the result so a report can be handed over as it is.
-pub fn sanitize(text: &str) -> String {
-    let mut words = Vec::new();
-    for word in text.split_whitespace() {
-        let bare = word.trim_matches(|c: char| matches!(c, '"' | '\'' | '(' | ')' | ',' | ';'));
-        words.push(if bare.contains("://") {
-            "<address>"
-        } else if is_path(bare) {
-            "<path>"
-        } else if is_secret(bare) {
-            "<redacted>"
-        } else {
-            word
-        });
-    }
-    bounded(&words.join(" "), MAX_CAUSE_BYTES)
-}
-
-/// Drive-qualified, UNC, verbatim and rooted POSIX paths, including ones inside a token.
-fn is_path(word: &str) -> bool {
-    let bytes = word.as_bytes();
-    word.starts_with("\\\\")
-        || (word.starts_with('/') && word.len() > 1)
-        || bytes.windows(3).any(|window| {
-            window[0].is_ascii_alphabetic()
-                && window[1] == b':'
-                && matches!(window[2], b'\\' | b'/')
-        })
-}
-
-/// Key-value credentials and bearer-style tokens.
-fn is_secret(word: &str) -> bool {
-    let lower = word.to_ascii_lowercase();
-    ["token=", "password=", "secret=", "key=", "ticket=", "signature=", "authorization:"]
-        .iter()
-        .any(|marker| lower.contains(marker))
-}
-
-/// Truncate at a character boundary within `maximum` bytes.
-fn bounded(text: &str, maximum: usize) -> String {
-    if text.len() <= maximum {
-        return text.to_owned();
-    }
-    let mut end = maximum;
-    while !text.is_char_boundary(end) {
-        end -= 1;
-    }
-    text[..end].to_owned()
 }
 
 #[cfg(test)]
@@ -206,19 +140,22 @@ mod tests {
             report.causes,
             ["Update repository download failed", "Update package I/O failed"]
         );
-        assert_eq!(
-            report.to_text(),
-            "Update to 2.0.0\nPhase: downloading\nCause: Update repository download failed\nCause: Update package I/O failed\n"
-        );
     }
 
     #[test]
-    fn paths_addresses_and_credentials_never_reach_a_report() {
-        let text = sanitize(
-            r#"Cannot open "C:\Users\someone\SugarSubstitute\user\x.json" or \\server\share\f via https://updates.example.test/a?ticket=1 token=abc /home/someone/x"#,
+    fn every_cause_of_a_chain_is_redacted_before_it_reaches_the_report() {
+        let error = Layer(
+            r"Update package could not be staged in C:\Users\Jo Ann\SugarSubstitute\releases",
+            Some(Box::new(Layer(
+                "proxy 10.0.0.7:3128 refused Authorization: Bearer abc.def",
+                None,
+            ))),
         );
-        assert_eq!(text, "Cannot open <path> or <path> via <address> <redacted> <path>");
-        assert!(!text.contains("someone"));
+        let report = UpdateReport::from_error(None, AttemptPhase::Preparing, &error);
+        assert_eq!(
+            report.causes,
+            ["Update package could not be staged in <path>", "proxy <address> refused <redacted>"]
+        );
     }
 
     #[test]

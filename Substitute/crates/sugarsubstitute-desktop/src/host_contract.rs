@@ -789,6 +789,13 @@ pub trait StartupWindowContent: WindowContent {
         None
     }
 
+    /// The SugarCubes update that failed during this or an earlier start, until a later one
+    /// succeeds; `None` when the last one did not fail or the host does not update SugarCubes.
+    /// The caption's update button shows a warning for it, and the update report includes it.
+    fn pack_update_failure(&self) -> Option<&crate::PackUpdateFailure> {
+        None
+    }
+
     /// The close save's progress while the window stays up for it; `None` before close began.
     fn close_save_progress(
         &self,

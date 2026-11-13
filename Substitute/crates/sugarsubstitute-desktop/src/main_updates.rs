@@ -38,7 +38,8 @@ pub(crate) enum UpdateGlyph {
     Hidden,
     /// An update is ready; clicking offers the restart that applies it.
     Ready,
-    /// The latest attempt failed; clicking opens its report.
+    /// The latest application update attempt or SugarCubes update failed; clicking opens the
+    /// update report.
     Warning,
 }
 
@@ -51,16 +52,20 @@ pub(crate) struct UpdateFeed {
 }
 
 impl UpdateFeed {
-    /// Reduce the host's update status, close-save progress and workflow activity.
-    /// A ready update outranks a later failed check, because restarting still applies it.
+    /// Reduce the host's update status, whether a SugarCubes update failed, close-save
+    /// progress and workflow activity. A ready update outranks a later failed check or a
+    /// failed SugarCubes update, because restarting still applies it; either failure alone
+    /// shows the warning that opens the update report.
     pub(crate) fn read(
         status: Option<&UpdateStatus>,
+        pack_failed: bool,
         closing: Option<CloseSaveProgress>,
         workflow: WorkflowActivity,
     ) -> Self {
         let glyph = match status {
             Some(status) if status.ready().is_some() => UpdateGlyph::Ready,
             Some(status) if status.failure().is_some() => UpdateGlyph::Warning,
+            _ if pack_failed => UpdateGlyph::Warning,
             _ => UpdateGlyph::Hidden,
         };
         let saving = matches!(
@@ -116,7 +121,7 @@ impl Notice {
 /// What a click asks of the application.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum UpdateIntent {
-    /// Open the report of the failed update attempt.
+    /// Open the report of the failed application or SugarCubes update.
     OpenReport,
     /// Run the ordinary close and relaunch so the ready update applies.
     RestartToApply,

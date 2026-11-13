@@ -39,8 +39,18 @@ fn centre(rect: RECT) -> (i32, i32) {
 fn hosted_body() -> TestResult {
     let title = "SugarSubstitute update report";
     let copy = messages("en");
+    let failure = sugarsubstitute_contracts::update::attempt::UpdateReport {
+        version: Some("0.6.0".into()),
+        phase: sugarsubstitute_contracts::update::attempt::AttemptPhase::Downloading,
+        causes: vec![
+            "The download stopped before it finished".into(),
+            "The connection was reset".into(),
+        ],
+    };
+    let presentation = ReportPresentation::failed_updates(copy, title, Some(&failure), None)
+        .ok_or("a failed attempt has a report")?;
     let mut export = NoExport;
-    let mut inner = UpdateReport::new(Some(&mut export), copy.report);
+    let mut inner = UpdateReport::new(Some(&mut export), &presentation);
     let mut script = Script::new(
         title,
         &mut inner,
@@ -52,15 +62,6 @@ fn hosted_body() -> TestResult {
         ],
     );
     let shared = script.captures.clone();
-    let failure = sugarsubstitute_contracts::update::attempt::UpdateReport {
-        version: Some("0.6.0".into()),
-        phase: sugarsubstitute_contracts::update::attempt::AttemptPhase::Downloading,
-        causes: vec![
-            "The download stopped before it finished".into(),
-            "The connection was reset".into(),
-        ],
-    };
-    let presentation = ReportPresentation::update_attempt(copy, title, &failure);
     let inner_lifetime = lifetime::ReportLifetime::new(presentation, &mut script)?;
     let observer = Observer { shared: shared.clone(), width: 0, height: 0, pixels: Vec::new() };
     let mut observed = Some(Observed {

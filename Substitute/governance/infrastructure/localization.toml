@@ -132,7 +132,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/lib.rs"
-source_sha256 = "sha256:6bd549b045829427115a7cc1cad5b4f8e11b52a56e4f0b854303f660a11ad92d"
+source_sha256 = "sha256:4ffe69609c24e85e0ffdaaf314bd00df1f5f6519b576834a6da9a645a3bdb3e0"
 kind = "native"
 rationale = "Native boundary: Own native window lifetime and CPU frame presentation independently of UI content.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -432,7 +432,7 @@ rationale = "Validate existing control labels for emptiness/NUL and unique ident
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/host_contract.rs"
-source_sha256 = "sha256:f293d30711dfff47019eda397c9c6d2e43d6884ab28ca2f4a9533bef520c29f4"
+source_sha256 = "sha256:9b34e62ebfe91e0cba3e7c6368cd84a22b1a76e9e6d8c069380f4af19c063a0e"
 kind = "native"
 rationale = "Main caption/recovery contracts borrow localized labels from the host. They define presentation data and no catalog or fallback policy."
 
@@ -756,7 +756,7 @@ rationale = "Layout fixtures use short stand-in labels to check geometry; no pro
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/report/surface/native_tests/hosted.rs"
-source_sha256 = "sha256:27419198cdb5ef0c56ee9ade9218b28a72c86c184e93700730c36bb4423f6bf7"
+source_sha256 = "sha256:7040f681af4fbca10711f4aef310f47c8bdb6d20fa90bed4b9bb55818464b411"
 kind = "fixture"
 rationale = "A private-desktop test titles its stand-in main window and report to find them; the report's words come from the catalog."
 

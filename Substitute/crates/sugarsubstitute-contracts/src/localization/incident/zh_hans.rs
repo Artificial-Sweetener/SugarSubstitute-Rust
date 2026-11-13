@@ -52,6 +52,8 @@ pub static ZH_HANS: ReportMessages = ReportMessages {
     version: "版本",
     update_phase: "步骤",
     export_file_name: "SugarSubstitute 更新报告.txt",
+    pack_update_title: "SugarCubes 更新失败",
+    pack_update_message: "无法更新 SugarCubes。您当前的版本仍可继续使用，您可以复制或导出此报告。",
     startup_failure: [
         "连接准备失败",
         "连接不可用",

@@ -52,6 +52,8 @@ pub static JA: ReportMessages = ReportMessages {
     version: "バージョン",
     update_phase: "ステップ",
     export_file_name: "SugarSubstitute アップデートレポート.txt",
+    pack_update_title: "SugarCubes のアップデートに失敗しました",
+    pack_update_message: "SugarCubes をアップデートできませんでした。現在のバージョンは引き続き使用でき、このレポートをコピーまたはエクスポートできます。",
     startup_failure: [
         "接続準備失敗",
         "接続利用不可",
