@@ -22,6 +22,40 @@ pub struct Maintenance {
     /// Unrecognized or damaged entries preserved without adoption or deletion.
     pub preserved_entries: usize,
 }
+/// The runtime cache's own byte budget refused space; the disk itself may have plenty. Carried
+/// as the cause of an I/O error of kind `StorageFull`, so it is never mistaken for a full disk
+/// and never triggers disk-space reclaim or a disk-space report.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CacheBudgetExhausted(&'static str);
+impl std::fmt::Display for CacheBudgetExhausted {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.0)
+    }
+}
+impl std::error::Error for CacheBudgetExhausted {}
+impl CacheBudgetExhausted {
+    /// `reason` as an I/O error of kind `StorageFull` caused by the cache budget.
+    pub(in crate::setup_storage) fn io(reason: &'static str) -> io::Error {
+        io::Error::new(io::ErrorKind::StorageFull, Self(reason))
+    }
+
+    /// Whether `cause` is a cache budget refusal anywhere in its chain.
+    pub fn within(cause: &(dyn std::error::Error + 'static)) -> bool {
+        let mut current = Some(cause);
+        while let Some(error) = current {
+            if error.is::<Self>() {
+                return true;
+            }
+            if let Some(inner) = error.downcast_ref::<io::Error>().and_then(io::Error::get_ref) {
+                current = Some(inner);
+                continue;
+            }
+            current = error.source();
+        }
+        false
+    }
+}
+
 /// Keep deterministic eviction facts separate from live native deletion custody.
 enum Removal {
     Removed,
@@ -319,8 +353,7 @@ impl RuntimeCache {
                     .is_none_or(|used| used > namespace.budget())
                 || (bytes > 0 && occupied >= MAX_ENTRIES))
         {
-            return Err(io::Error::new(
-                io::ErrorKind::StorageFull,
+            return Err(CacheBudgetExhausted::io(
                 "Cache admission blocked by disk budget, pinned entries or unrecognized content",
             ));
         }

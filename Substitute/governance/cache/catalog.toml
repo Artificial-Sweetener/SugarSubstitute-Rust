@@ -35,7 +35,7 @@ sources = [
     "crates/sugarsubstitute-supervision/src/durable_storage/files/ordinary/tests.rs",
     "crates/sugarsubstitute-supervision/src/durable_storage/files/observations.rs",
 ]
-source_sha256 = "sha256:f27cf97176c13d4079c9d025342d1c14367ea5a59b2b89d10b2d59bcf5335c34"
+source_sha256 = "sha256:c107425d209cda118b11205c86f079689724c2f71312456953a2e97106bfa897"
 namespace = "update-downloads-v1"
 storage_schema = 1
 compatibility_epoch = 1
@@ -48,7 +48,7 @@ recovery = "Resume the actual length under shared entry custody; restart ignored
 id = "setup-browser-profile"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/setup_storage/cache/policy.rs", "crates/sugarsubstitute-supervision/src/setup_storage/cache.rs"]
-source_sha256 = "sha256:d0cc7bfb599a1e875af2c26de30e7f3766f676634a07325d35f622361b96ce65"
+source_sha256 = "sha256:8abe3a3a5d5bd293426d5c27109dcf378d64b517ea0cffd59f79f6be6c18e1a5"
 namespace = "setup-webview-v1"
 storage_schema = 1
 compatibility_epoch = 1
@@ -74,7 +74,7 @@ recovery = "Durable native family bindings preserve live and unknown output acro
 id = "setup-packed-payloads"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/setup_storage/bundle.rs", "crates/sugarsubstitute-supervision/src/setup_storage/bundle/payload.rs", "crates/sugarsubstitute-supervision/src/setup_storage/updater_package.rs", "crates/sugarsubstitute-supervision/src/setup_storage/inventory.rs", "crates/sugarsubstitute-supervision/src/setup_storage/packed.rs", "crates/sugarsubstitute-supervision/src/setup_storage/packed/footer.rs", "crates/sugarsubstitute-supervision/src/durable_storage/staging.rs", "crates/sugarsubstitute-supervision/src/setup_storage/packed/extract.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/identity.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/canonical.rs", "crates/sugarsubstitute-supervision/src/durable_storage/record_read.rs", "crates/sugarsubstitute-supervision/src/durable_storage/record_read/tests.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/entries.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/entries/tests.rs", "crates/sugarsubstitute-supervision/src/durable_storage/control.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/ordinary.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/ordinary/tests.rs", "crates/sugarsubstitute-supervision/src/durable_storage/files/observations.rs", "crates/sugarsubstitute-supervision/src/setup_storage/bundle/source.rs", "crates/sugarsubstitute-supervision/src/setup_storage/bundle/manifest.rs"]
-source_sha256 = "sha256:9d4e1579f6b90938502c73c88eaefac84f319c6ad89692911ca43bd585be791a"
+source_sha256 = "sha256:afebc831bf32b356ffdfeb75e617ceb295096abd068df7505f764175a57062bc"
 namespace = "payloads-v1"
 storage_schema = 1
 compatibility_epoch = 1
@@ -173,7 +173,7 @@ sources = [
     "crates/sugarsubstitute-supervision/src/durable_storage/files/observations.rs",
     "crates/sugarsubstitute-supervision/src/setup_storage/cache/tests/readers.rs",
 ]
-source_sha256 = "sha256:0f428d9838d51b590c2cf4a43dfae7d1043e0ef2f306c6a22413812113c33d64"
+source_sha256 = "sha256:c3de984ce5d8e3989d0b212dadb12fe1ec3ee926e3f31285d2807479eea56e5d"
 namespace = "runtime-cache-v1"
 storage_schema = 1
 compatibility_epoch = 1

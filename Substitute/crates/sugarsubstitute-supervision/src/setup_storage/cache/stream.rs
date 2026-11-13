@@ -21,8 +21,7 @@ pub(super) fn write(
     }
     let used = lease.inspect(context)?.bytes;
     if used.checked_add(length).is_none_or(|bytes| bytes > lease.record.reserved) {
-        return Err(io::Error::new(
-            io::ErrorKind::StorageFull,
+        return Err(super::maintenance::CacheBudgetExhausted::io(
             "Cache entry byte reservation exhausted",
         ));
     }

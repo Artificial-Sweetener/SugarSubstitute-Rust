@@ -21,6 +21,7 @@ mod disk_inheritance;
 mod download;
 #[allow(unsafe_code)]
 mod updater_probe;
+pub use download::space::{FreeSpace, HEADROOM_BYTES, Reclaim, SpaceShortage, VolumeSpace};
 pub use download::{DOWNLOAD_RESERVATION_BYTES, Download, DownloadFailure, VerifiedDownload};
 pub(crate) use updater_probe::UpdaterProbeDisposition;
 pub use updater_probe::{InheritedUpdaterProbe, capture_updater_probe};

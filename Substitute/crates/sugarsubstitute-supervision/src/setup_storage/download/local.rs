@@ -93,7 +93,13 @@ impl Download {
         let offset = download.offset()?;
         source.seek(SeekFrom::Start(range.start + offset))?;
         let mut remaining = (&mut source).take(length - offset);
-        download.custody.payload.receive_exact(offset, length - offset, &mut remaining, context)?;
+        let received = download.custody.payload.receive_exact(
+            offset,
+            length - offset,
+            &mut remaining,
+            context,
+        );
+        received.map_err(|failure| download.classify(failure.into()))?;
         download.finish(utc_seconds, context)
     }
 }

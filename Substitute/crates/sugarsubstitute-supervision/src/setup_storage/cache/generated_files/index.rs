@@ -71,7 +71,9 @@ impl Index {
             .and_then(|value| value.checked_add(bytes))
             .filter(|value| *value <= self.maximum)
             .ok_or_else(|| {
-                io::Error::new(io::ErrorKind::StorageFull, "Generated cache byte grant exhausted")
+                crate::setup_storage::cache::CacheBudgetExhausted::io(
+                    "Generated cache byte grant exhausted",
+                )
             })?;
         for (key, name, directory) in proposed {
             self.members.insert(key, Member { name, directory, bytes: 0 });
