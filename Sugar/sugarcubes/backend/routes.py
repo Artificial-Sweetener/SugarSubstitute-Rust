@@ -1,0 +1,280 @@
+#    SugarCubes - composable workflow units for ComfyUI
+#    Copyright (C) 2026  Artificial Sweetener and contributors
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU Affero General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU Affero General Public License for more details.
+#
+#    You should have received a copy of the GNU Affero General Public License
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""Compose and register SugarCubes backend HTTP route families."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+from .catalog_routes import build_catalog_route_handlers
+from .composition import BackendServices
+from .cube_routes import build_cube_route_handlers
+from .dependency_routes import build_dependency_route_handlers
+from .export_routes import build_export_route_handlers
+from .execution_routes import build_execution_route_handlers
+from .flavor_routes import build_flavor_route_handlers
+from .implementation_save_routes import build_implementation_save_route_handlers
+from .legacy_workflow_routes import build_legacy_workflow_route_handlers
+from .repository_routes import build_repository_route_handlers
+from .self_update_routes import (
+    accept_updates_on_full_start,
+    build_self_update_route_handlers,
+    publish_self_update_events,
+)
+from .route_types import RouteHandler
+from .sugarscript_routes import build_sugarscript_route_handlers
+from .workflow_library_routes import build_workflow_library_route_handlers
+from .workflow_analysis_routes import build_workflow_analysis_handler
+from .workflow_stack_routes import build_workflow_stack_handler
+from .workflow_mutation_routes import (
+    build_workflow_append_cube_handler,
+    build_workflow_create_cube_handler,
+    build_workflow_remove_cube_handler,
+    build_workflow_replace_cube_handler,
+    build_workflow_reorder_handler,
+)
+
+
+@dataclass(frozen=True)
+class RouteHandlers:
+    """Concrete route callables used for registration and tests."""
+
+    get_status: RouteHandler
+    list_cubes: RouteHandler
+    list_picker_catalog: RouteHandler
+    get_identity_policy: RouteHandler
+    update_identity_policy: RouteHandler
+    list_tracked_repos: RouteHandler
+    preflight_tracked_repo: RouteHandler
+    add_tracked_repo: RouteHandler
+    create_authoring_repo: RouteHandler
+    update_tracked_repo: RouteHandler
+    remove_tracked_repo: RouteHandler
+    sync_tracked_repo: RouteHandler
+    sync_all_tracked_repos: RouteHandler
+    check_tracked_repo: RouteHandler
+    check_all_tracked_repos: RouteHandler
+    list_revisions: RouteHandler
+    load_revision: RouteHandler
+    preview_cube: RouteHandler
+    serve_icon_asset: RouteHandler
+    load_cube: RouteHandler
+    update_metadata: RouteHandler
+    rename_cube: RouteHandler
+    promote_cube: RouteHandler
+    delete_cube: RouteHandler
+    import_cube_file: RouteHandler
+    save_many: RouteHandler
+    preview_implementation: RouteHandler
+    save_implementation: RouteHandler
+    save_authored_flavor: RouteHandler
+    get_local_flavors: RouteHandler
+    save_local_flavor: RouteHandler
+    delete_local_flavor: RouteHandler
+    select_local_flavor: RouteHandler
+    migrate_local_flavors: RouteHandler
+    reconcile_local_flavors: RouteHandler
+    get_dependency_readiness: RouteHandler
+    repair_dependencies: RouteHandler
+    sync_and_check_dependencies: RouteHandler
+    classify_workflow: RouteHandler
+    capture_workflow_cube: RouteHandler
+    fork_workflow_cube: RouteHandler
+    sync_workflow_cube_source: RouteHandler
+    compile_sugarscript: RouteHandler
+    compile_legacy_workflow: RouteHandler
+    get_execution_capabilities: RouteHandler
+    queue_execution: RouteHandler
+    analyze_workflow: RouteHandler
+    reorder_workflow: RouteHandler
+    append_workflow_cube: RouteHandler
+    create_cube_workflow: RouteHandler
+    remove_workflow_cube: RouteHandler
+    replace_workflow_cube: RouteHandler
+    apply_workflow_stack: RouteHandler
+    get_self_update: RouteHandler
+    check_self_update: RouteHandler
+    schedule_self_update: RouteHandler
+    cancel_self_update: RouteHandler
+    dismiss_self_update_notice: RouteHandler
+    report_self_update_page_load: RouteHandler
+
+
+def build_route_handlers(services: BackendServices) -> RouteHandlers:
+    """Compose endpoint-family handlers behind the stable route contract."""
+
+    catalog = build_catalog_route_handlers(services)
+    repositories = build_repository_route_handlers(services)
+    cubes = build_cube_route_handlers(services)
+    exports = build_export_route_handlers(services)
+    implementation_save = build_implementation_save_route_handlers(services)
+    flavors = build_flavor_route_handlers(services)
+    dependencies = build_dependency_route_handlers(services)
+    workflow_library = build_workflow_library_route_handlers(services)
+    sugarscript = build_sugarscript_route_handlers(services)
+    legacy_workflow = build_legacy_workflow_route_handlers(services)
+    execution = build_execution_route_handlers(services)
+    workflow_analysis = build_workflow_analysis_handler(services)
+    workflow_reorder = build_workflow_reorder_handler(services)
+    workflow_append_cube = build_workflow_append_cube_handler(services)
+    workflow_create_cube = build_workflow_create_cube_handler(services)
+    workflow_remove_cube = build_workflow_remove_cube_handler(services)
+    workflow_replace_cube = build_workflow_replace_cube_handler(services)
+    self_update = build_self_update_route_handlers(services)
+    return RouteHandlers(
+        get_status=catalog.get_status,
+        list_cubes=catalog.list_cubes,
+        list_picker_catalog=catalog.list_picker_catalog,
+        get_identity_policy=repositories.get_identity_policy,
+        update_identity_policy=repositories.update_identity_policy,
+        list_tracked_repos=repositories.list_tracked_repos,
+        preflight_tracked_repo=repositories.preflight_tracked_repo,
+        add_tracked_repo=repositories.add_tracked_repo,
+        create_authoring_repo=repositories.create_authoring_repo,
+        update_tracked_repo=repositories.update_tracked_repo,
+        remove_tracked_repo=repositories.remove_tracked_repo,
+        sync_tracked_repo=repositories.sync_tracked_repo,
+        sync_all_tracked_repos=repositories.sync_all_tracked_repos,
+        check_tracked_repo=repositories.check_tracked_repo,
+        check_all_tracked_repos=repositories.check_all_tracked_repos,
+        list_revisions=cubes.list_revisions,
+        load_revision=cubes.load_revision,
+        preview_cube=cubes.preview_cube,
+        serve_icon_asset=cubes.serve_icon_asset,
+        load_cube=cubes.load_cube,
+        update_metadata=cubes.update_metadata,
+        rename_cube=cubes.rename_cube,
+        promote_cube=cubes.promote_cube,
+        delete_cube=cubes.delete_cube,
+        import_cube_file=cubes.import_cube_file,
+        save_many=exports.save_many,
+        preview_implementation=implementation_save.preview,
+        save_implementation=implementation_save.save,
+        save_authored_flavor=exports.save_authored_flavor,
+        get_local_flavors=flavors.get_local_flavors,
+        save_local_flavor=flavors.save_local_flavor,
+        delete_local_flavor=flavors.delete_local_flavor,
+        select_local_flavor=flavors.select_local_flavor,
+        migrate_local_flavors=flavors.migrate_local_flavors,
+        reconcile_local_flavors=flavors.reconcile_local_flavors,
+        get_dependency_readiness=dependencies.get_dependency_readiness,
+        repair_dependencies=dependencies.repair_dependencies,
+        sync_and_check_dependencies=dependencies.sync_and_check_dependencies,
+        classify_workflow=workflow_library.classify_workflow,
+        capture_workflow_cube=workflow_library.capture_workflow_cube,
+        fork_workflow_cube=workflow_library.fork_workflow_cube,
+        sync_workflow_cube_source=workflow_library.sync_workflow_cube_source,
+        compile_sugarscript=sugarscript.compile_sugarscript,
+        compile_legacy_workflow=legacy_workflow.compile_legacy_workflow,
+        get_execution_capabilities=execution.get_capabilities,
+        queue_execution=execution.queue_execution,
+        analyze_workflow=workflow_analysis,
+        reorder_workflow=workflow_reorder,
+        append_workflow_cube=workflow_append_cube,
+        create_cube_workflow=workflow_create_cube,
+        remove_workflow_cube=workflow_remove_cube,
+        replace_workflow_cube=workflow_replace_cube,
+        apply_workflow_stack=build_workflow_stack_handler(services),
+        get_self_update=self_update.get_self_update,
+        check_self_update=self_update.check_self_update,
+        schedule_self_update=self_update.schedule_self_update,
+        cancel_self_update=self_update.cancel_self_update,
+        dismiss_self_update_notice=self_update.dismiss_self_update_notice,
+        report_self_update_page_load=self_update.report_self_update_page_load,
+    )
+
+
+def register_routes(prompt_server: Any, services: BackendServices) -> RouteHandlers:
+    """Register SugarCubes routes on a PromptServer instance."""
+
+    handlers = build_route_handlers(services)
+    server = getattr(prompt_server, "instance", prompt_server)
+    routes = server.routes
+    routes.get("/sugarcubes/status")(handlers.get_status)
+    routes.get("/sugarcubes/list")(handlers.list_cubes)
+    routes.get("/sugarcubes/picker_catalog")(handlers.list_picker_catalog)
+    routes.get("/sugarcubes/identity_policy")(handlers.get_identity_policy)
+    routes.patch("/sugarcubes/identity_policy")(handlers.update_identity_policy)
+    routes.get("/sugarcubes/repos")(handlers.list_tracked_repos)
+    routes.post("/sugarcubes/repos/preflight")(handlers.preflight_tracked_repo)
+    routes.post("/sugarcubes/repos")(handlers.add_tracked_repo)
+    routes.post("/sugarcubes/repos/authoring")(handlers.create_authoring_repo)
+    routes.patch("/sugarcubes/repos")(handlers.update_tracked_repo)
+    routes.delete("/sugarcubes/repos")(handlers.remove_tracked_repo)
+    routes.post("/sugarcubes/repos/sync")(handlers.sync_tracked_repo)
+    routes.post("/sugarcubes/repos/sync_all")(handlers.sync_all_tracked_repos)
+    routes.post("/sugarcubes/packs/check")(handlers.check_tracked_repo)
+    routes.post("/sugarcubes/packs/check_all")(handlers.check_all_tracked_repos)
+    routes.get("/sugarcubes/revisions")(handlers.list_revisions)
+    routes.post("/sugarcubes/load_revision")(handlers.load_revision)
+    routes.get("/sugarcubes/preview")(handlers.preview_cube)
+    routes.get("/sugarcubes/assets/icon")(handlers.serve_icon_asset)
+    routes.post("/sugarcubes/load")(handlers.load_cube)
+    routes.post("/sugarcubes/update_metadata")(handlers.update_metadata)
+    routes.post("/sugarcubes/rename")(handlers.rename_cube)
+    routes.post("/sugarcubes/promote")(handlers.promote_cube)
+    routes.delete("/sugarcubes")(handlers.delete_cube)
+    routes.post("/sugarcubes/import_file")(handlers.import_cube_file)
+    routes.post("/sugarcubes/save_many")(handlers.save_many)
+    routes.post("/sugarcubes/save_implementation/preview")(
+        handlers.preview_implementation
+    )
+    routes.post("/sugarcubes/save_implementation")(handlers.save_implementation)
+    routes.post("/sugarcubes/save_authored_flavor")(handlers.save_authored_flavor)
+    routes.get("/sugarcubes/local_flavors")(handlers.get_local_flavors)
+    routes.post("/sugarcubes/local_flavors")(handlers.save_local_flavor)
+    routes.delete("/sugarcubes/local_flavors")(handlers.delete_local_flavor)
+    routes.post("/sugarcubes/local_flavors/select")(handlers.select_local_flavor)
+    routes.post("/sugarcubes/local_flavors/migrate")(handlers.migrate_local_flavors)
+    routes.post("/sugarcubes/local_flavors/reconcile")(handlers.reconcile_local_flavors)
+    routes.get("/sugarcubes/dependencies/readiness")(handlers.get_dependency_readiness)
+    routes.post("/sugarcubes/dependencies/repair")(handlers.repair_dependencies)
+    routes.post("/sugarcubes/dependencies/sync-and-check")(
+        handlers.sync_and_check_dependencies
+    )
+    routes.post("/sugarcubes/v2/cubes/classify-workflow")(handlers.classify_workflow)
+    routes.post("/sugarcubes/v2/cubes/captured")(handlers.capture_workflow_cube)
+    routes.post("/sugarcubes/v2/cubes/forks")(handlers.fork_workflow_cube)
+    routes.post("/sugarcubes/v2/cubes/sync-source")(handlers.sync_workflow_cube_source)
+    routes.post("/sugarcubes/v2/sugarscript/compile")(handlers.compile_sugarscript)
+    routes.post("/sugarcubes/v2/workflows/compile-legacy")(
+        handlers.compile_legacy_workflow
+    )
+    routes.get("/sugarcubes/v2/executions/capabilities")(
+        handlers.get_execution_capabilities
+    )
+    routes.post("/sugarcubes/v2/executions/queue")(handlers.queue_execution)
+    routes.post("/sugarcubes/v2/workflows/analyze")(handlers.analyze_workflow)
+    routes.post("/sugarcubes/v2/workflows/reorder")(handlers.reorder_workflow)
+    routes.post("/sugarcubes/v2/workflows/stack")(handlers.apply_workflow_stack)
+    routes.post("/sugarcubes/v2/workflows/cubes/append")(handlers.append_workflow_cube)
+    routes.post("/sugarcubes/v2/workflows/cubes/create")(handlers.create_cube_workflow)
+    routes.post("/sugarcubes/v2/workflows/cubes/remove")(handlers.remove_workflow_cube)
+    routes.post("/sugarcubes/v2/workflows/cubes/replace")(
+        handlers.replace_workflow_cube
+    )
+    routes.get("/sugarcubes/self-update")(handlers.get_self_update)
+    routes.post("/sugarcubes/self-update/check")(handlers.check_self_update)
+    routes.post("/sugarcubes/self-update/install")(handlers.schedule_self_update)
+    routes.delete("/sugarcubes/self-update/install")(handlers.cancel_self_update)
+    routes.delete("/sugarcubes/self-update/notice")(handlers.dismiss_self_update_notice)
+    routes.post("/sugarcubes/self-update/page-load")(
+        handlers.report_self_update_page_load
+    )
+    publish_self_update_events(server, services)
+    accept_updates_on_full_start(server, services)
+    return handlers

@@ -1,0 +1,104 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Reconcile prompt autosizing within one renderer-owned DOM scope. */
+
+import { CubePromptTextareaAutosizer } from './CubePromptTextareaAutosizer.js';
+import { findCubeFacePromptWidget } from './CubeFacePromptPolicy.js';
+import type { ComfyNode } from '../types/graph.js';
+import {
+  mountPromptEditorSurface,
+  refreshPromptEditorSurface,
+} from '../prompt_editor/PromptEditorSurface.js';
+import type { PromptEditorSurface } from '../prompt_editor/PromptEditorSurface.js';
+import type { NativeNodeWidgetSource } from './NativeNodeCardRenderer.js';
+import { presentCubeCardNode } from './CubeCardWidgetSources.js';
+
+/** Own the set of prompt textareas currently rendered beneath one root. */
+export class CubePromptTextareaScope {
+  readonly #root: HTMLElement;
+  readonly #autosizer: CubePromptTextareaAutosizer;
+  readonly #bound = new Set<HTMLTextAreaElement>();
+  readonly #editors = new Map<
+    HTMLTextAreaElement,
+    { surface: PromptEditorSurface; release: () => void }
+  >();
+
+  /** Bind one independent native-card DOM scope. */
+  constructor(root: HTMLElement) {
+    this.#root = root;
+    this.#autosizer = new CubePromptTextareaAutosizer(root.ownerDocument);
+  }
+
+  /** Match autosizing ownership to the current semantic prompt presentation. */
+  reconcile(node: ComfyNode, sources: readonly NativeNodeWidgetSource[] = []): void {
+    const presented = findCubeFacePromptWidget(presentCubeCardNode(node, sources));
+    const source = sources.find((candidate) => candidate.targetName === presented?.name);
+    const owner = source?.node ?? node;
+    const widget = source
+      ? (owner.widgets?.find((candidate) => candidate.name === source.name) ?? null)
+      : presented;
+    const desired = new Set(
+      widget
+        ? this.#root.querySelectorAll<HTMLTextAreaElement>('textarea:not([data-sp-owned])')
+        : [],
+    );
+    for (const [textarea, mounted] of this.#editors) {
+      if (desired.has(textarea) && mounted.surface.widget === widget) continue;
+      mounted.release();
+      this.#editors.delete(textarea);
+    }
+    for (const textarea of [...this.#bound]) {
+      if (desired.has(textarea)) continue;
+      this.#autosizer.unbind(textarea);
+      this.#bound.delete(textarea);
+    }
+    for (const textarea of desired) {
+      const mounted = this.#editors.get(textarea);
+      if (mounted) {
+        if (refreshPromptEditorSurface(mounted.surface)) continue;
+        mounted.release();
+        this.#editors.delete(textarea);
+      }
+      if (widget && desired.size === 1) {
+        const surface: PromptEditorSurface = {
+          node: owner,
+          widget,
+          textarea,
+          geometryChanged: () => undefined,
+          hostReadOnly: () => false,
+        };
+        const release = mountPromptEditorSurface(surface);
+        if (release) {
+          this.#autosizer.unbind(textarea);
+          this.#bound.delete(textarea);
+          this.#editors.set(textarea, { surface, release });
+          continue;
+        }
+      }
+      if (this.#bound.has(textarea)) continue;
+      this.#autosizer.bind(textarea);
+      this.#bound.add(textarea);
+    }
+  }
+
+  /** Restore every textarea when its native card unmounts. */
+  dispose(): void {
+    for (const mounted of this.#editors.values()) mounted.release();
+    this.#editors.clear();
+    this.#autosizer.dispose();
+    this.#bound.clear();
+  }
+}

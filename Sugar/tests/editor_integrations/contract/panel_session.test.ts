@@ -1,0 +1,371 @@
+/** @jest-environment node */
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Prove one panel protocol across capable and deliberately limited in-memory applications. */
+import { readFileSync } from 'node:fs';
+import { panelBindings } from '../../../scripts/integrations/generate-panel-contract.js';
+import {
+  PanelClientSession,
+  PanelHostSession,
+  type PanelState,
+} from '../../../integrations/shared/PanelSession.js';
+import { isPanelMessage } from '../../../integrations/shared/PanelValidation.generated.js';
+import type {
+  PanelMessage,
+  PanelPresentation,
+} from '../../../integrations/contracts/PanelProtocol.generated.js';
+import {
+  HOST_PROTOCOLS,
+  type HostDescriptionContent,
+  type HostDescriptionMessage,
+} from '../../../integrations/contracts/HostDescription.js';
+
+const session = '00000000-0000-4000-8000-000000000001';
+const presentation: PanelPresentation = {
+  pluginMode: true,
+  visualStyle: 'photopro',
+  photoProPalette: 'medium-gray',
+  accentColor: null,
+  resizeCornerSize: 0,
+};
+const description: HostDescriptionContent = {
+  protocols: [HOST_PROTOCOLS.panel],
+  capabilities: [],
+};
+
+/** Build a synchronous transport to exercise reentrant delivery as well as application capability limits. */
+function application(supported: boolean): {
+  host: PanelHostSession;
+  client: PanelClientSession;
+  states: PanelState[];
+  applied: PanelPresentation[];
+  setConnected(value: boolean): void;
+} {
+  const states: PanelState[] = [];
+  const applied: PanelPresentation[] = [];
+  let connected = true;
+  const toClient: (PanelMessage | HostDescriptionMessage)[] = [];
+  const host = new PanelHostSession(
+    session,
+    description,
+    presentation,
+    { send: (message) => toClient.push(message), present: (state) => states.push(state) },
+    0,
+  );
+  const client = new PanelClientSession(session, {
+    send: (message) => {
+      host.receive(message, 0);
+      while (toClient.length) client.receive(toClient.shift());
+    },
+    apply: (value) => {
+      if (supported) applied.push(value);
+      return supported;
+    },
+    connected: () => connected,
+    report: (error) => {
+      throw error;
+    },
+  });
+  return {
+    host,
+    client,
+    states,
+    applied,
+    setConnected: (value) => {
+      connected = value;
+    },
+  };
+}
+
+test.each([true, false])('negotiates explicit presentation capability: %s', (supported) => {
+  const app = application(supported);
+  app.client.ready();
+  expect(app.states).toEqual(['loading', supported ? 'connected' : 'failed']);
+  expect(app.applied).toEqual(supported ? [presentation] : []);
+});
+
+test('monitors disconnect and recovery without applying presentation or recreating workflows', () => {
+  const app = application(true);
+  app.client.ready();
+  app.setConnected(false);
+  app.host.tick(5000);
+  // The native send port is deliberately queued; ready drains it through the same transport.
+  app.client.receive({ protocol: 'sugarcubes.panel', version: 3, session, type: 'ping' });
+  expect(app.states.at(-1)).toBe('disconnected');
+  app.setConnected(true);
+  app.client.receive({ protocol: 'sugarcubes.panel', version: 3, session, type: 'ping' });
+  expect(app.states.at(-1)).toBe('connected');
+  expect(app.applied).toHaveLength(1);
+  app.host.tick(20000);
+  expect(app.states.at(-1)).toBe('disconnected');
+});
+
+test('bounds missing frontend startup and rejects malformed, stale, and reversed messages', () => {
+  const sent: (PanelMessage | HostDescriptionMessage)[] = [];
+  const states: PanelState[] = [];
+  const host = new PanelHostSession(
+    session,
+    description,
+    presentation,
+    { send: (message) => sent.push(message), present: (state) => states.push(state) },
+    0,
+  );
+  for (const value of [
+    null,
+    [],
+    {},
+    { protocol: 'sugarcubes.panel', version: 4, session, type: 'ready' },
+    { protocol: 'sugarcubes.panel', version: 3, session: 'different-session-12345', type: 'ready' },
+    { protocol: 'sugarcubes.panel', version: 3, session, type: 'ready', extra: true },
+    { protocol: 'sugarcubes.panel', version: 3, session, type: 'configure', presentation },
+    { protocol: 'sugarcubes.panel', version: 3, session, type: 'applied' },
+    { protocol: 'sugarcubes.panel', version: 3, session, type: 'pong', connected: true },
+  ])
+    expect(host.receive(value, 0)).toBe(false);
+  expect(sent).toEqual([]);
+  host.tick(29999);
+  expect(states).toEqual(['loading']);
+  host.tick(30000);
+  expect(states).toEqual(['loading', 'failed']);
+});
+
+test('schema validation rejects unsupported presentation and oversized session values', () => {
+  expect(
+    isPanelMessage({
+      protocol: 'sugarcubes.panel',
+      version: 3,
+      session,
+      type: 'configure',
+      presentation,
+    }),
+  ).toBe(true);
+  for (const invalid of [
+    { ...presentation, visualStyle: '<script>' },
+    { ...presentation, accentColor: 'red;display:none' },
+    { ...presentation, accentColor: '#12345' },
+    { ...presentation, accentColor: 123 },
+    ...[-1, 65, 1.5, Number.NaN, Number.POSITIVE_INFINITY, '24', undefined].map(
+      (resizeCornerSize) => ({ ...presentation, resizeCornerSize }),
+    ),
+    { ...presentation, pluginMode: 'true' },
+    { ...presentation, photoProPalette: 'unknown', accentColor: null },
+    { ...presentation, photoProPalette: null },
+    { ...presentation, path: 'file:/secret' },
+  ])
+    expect(
+      isPanelMessage({
+        protocol: 'sugarcubes.panel',
+        version: 3,
+        session,
+        type: 'configure',
+        presentation: invalid,
+      }),
+    ).toBe(false);
+  expect(
+    isPanelMessage({
+      protocol: 'sugarcubes.panel',
+      version: 3,
+      session: 'a'.repeat(100000),
+      type: 'ready',
+    }),
+  ).toBe(false);
+});
+
+test('admits a presentation without a PhotoPro palette, which only PhotoPro hosts declare', () => {
+  const { photoProPalette: _omitted, ...withoutPalette } = presentation;
+  expect(
+    isPanelMessage({
+      protocol: 'sugarcubes.panel',
+      version: 3,
+      session,
+      type: 'configure',
+      presentation: withoutPalette,
+    }),
+  ).toBe(true);
+});
+
+test('reports presentation failure and returns an explicit rejection to every host', () => {
+  const sent: (PanelMessage | HostDescriptionMessage)[] = [];
+  const errors: unknown[] = [];
+  const error = new Error('Presentation unavailable');
+  const client = new PanelClientSession(session, {
+    send: (message) => sent.push(message),
+    apply: () => {
+      throw error;
+    },
+    connected: () => true,
+    report: (failure) => errors.push(failure),
+  });
+  client.receive({
+    protocol: 'sugarcubes.panel',
+    version: 3,
+    session,
+    type: 'configure',
+    presentation,
+  });
+  expect(errors).toEqual([error]);
+  expect(sent.at(-1)).toMatchObject({ type: 'rejected', reason: 'presentation-failed' });
+});
+
+test('updates an active presentation without replacing its session or resetting connection state', () => {
+  const sent: (PanelMessage | HostDescriptionMessage)[] = [];
+  const states: PanelState[] = [];
+  const host = new PanelHostSession(
+    session,
+    description,
+    presentation,
+    {
+      send: (message) => sent.push(message),
+      present: (state) => states.push(state),
+    },
+    0,
+  );
+  const updated: PanelPresentation = {
+    ...presentation,
+    photoProPalette: 'light-gray',
+    accentColor: null,
+    resizeCornerSize: 0,
+  };
+  host.updatePresentation(updated);
+  expect(sent).toEqual([]);
+  host.receive({ protocol: 'sugarcubes.panel', version: 3, session, type: 'ready' }, 1);
+  expect(sent.at(-1)).toMatchObject({ type: 'configure', presentation: updated });
+  host.receive({ protocol: 'sugarcubes.panel', version: 3, session, type: 'applied' }, 2);
+  host.receive(
+    { protocol: 'sugarcubes.panel', version: 3, session, type: 'pong', connected: true },
+    3,
+  );
+  host.updatePresentation(presentation);
+  expect(sent.at(-1)).toMatchObject({ type: 'configure', session, presentation });
+  expect(states).toEqual(['loading', 'connected']);
+  const count = sent.length;
+  host.updatePresentation({ ...presentation });
+  expect(sent).toHaveLength(count);
+  const resized = { ...presentation, resizeCornerSize: 24 };
+  host.updatePresentation(resized);
+  expect(sent.at(-1)).toMatchObject({ type: 'configure', presentation: resized });
+  const resizedCount = sent.length;
+  host.updatePresentation({ ...resized });
+  expect(sent).toHaveLength(resizedCount);
+  host.fail();
+  host.updatePresentation(updated);
+  expect(sent).toHaveLength(resizedCount);
+});
+
+test('generated language bindings and validators match the authoritative wire schema', async () => {
+  const bindings = await panelBindings(
+    readFileSync('integrations/contracts/panel.schema.json', 'utf8'),
+  );
+  for (const [file, source] of Object.entries(bindings))
+    expect(readFileSync(file, 'utf8').replaceAll('\r\n', '\n')).toBe(source);
+});
+
+test('shared panel vectors preserve the closed version-three wire contract', () => {
+  const vectors = JSON.parse(
+    readFileSync('integrations/contracts/panel_wire_vectors.json', 'utf8'),
+  ) as { label: string; valid: boolean; value: unknown }[];
+  for (const vector of vectors)
+    expect([vector.label, isPanelMessage(vector.value)]).toEqual([vector.label, vector.valid]);
+});
+
+test('Rust panel generation retains required nullability and rejects unsupported schema changes', async () => {
+  const text = readFileSync('integrations/contracts/panel.schema.json', 'utf8');
+  const bindings = await panelBindings(text);
+  const rust = bindings['integrations/contracts/PanelProtocol.generated.rs'];
+  expect(rust).toContain('#[serde(deserialize_with = "deserialize_required_option")]');
+  expect(rust).toContain('valid_panel_session(&self.session)');
+  const schema = JSON.parse(text) as {
+    $defs: { PanelReady: { properties: { session: { pattern: string } } } };
+  };
+  schema.$defs.PanelReady.properties.session.pattern = '.*';
+  await expect(panelBindings(JSON.stringify(schema))).rejects.toThrow(
+    'Rust contract strings require bounded, well-formed text',
+  );
+});
+
+test('accepts GIMP as an additive panel presentation style', () => {
+  expect(
+    isPanelMessage({
+      protocol: 'sugarcubes.panel',
+      version: 3,
+      session,
+      type: 'configure',
+      presentation: { ...presentation, visualStyle: 'gimp' },
+    }),
+  ).toBe(true);
+});
+
+test('retains responsive applied sessions while refusing stale, failed and uninitialized recovery', () => {
+  const sent: (PanelMessage | HostDescriptionMessage)[] = [];
+  const host = new PanelHostSession(
+    session,
+    description,
+    presentation,
+    { send: (message) => sent.push(message), present: () => undefined },
+    0,
+  );
+  expect(host.retryConnection(0)).toBe(false);
+  host.receive({ protocol: 'sugarcubes.panel', version: 3, session, type: 'ready' }, 0);
+  host.receive({ protocol: 'sugarcubes.panel', version: 3, session, type: 'applied' }, 0);
+  host.receive(
+    { protocol: 'sugarcubes.panel', version: 3, session, type: 'pong', connected: false },
+    1,
+  );
+  expect(host.retryConnection(15000)).toBe(true);
+  expect(sent.at(-1)).toMatchObject({ type: 'ping', session });
+  const count = sent.length;
+  expect(host.retryConnection(15001)).toBe(false);
+  expect(sent).toHaveLength(count);
+  host.receive(
+    { protocol: 'sugarcubes.panel', version: 3, session, type: 'pong', connected: true },
+    15002,
+  );
+  expect(host.retryConnection(15003)).toBe(true);
+  host.fail();
+  expect(host.retryConnection(15004)).toBe(false);
+});
+
+test('a host sends its fixed description before every configure it answers a ready with', () => {
+  const sent: (PanelMessage | HostDescriptionMessage)[] = [];
+  const host = new PanelHostSession(
+    session,
+    { protocols: [HOST_PROTOCOLS.panel, HOST_PROTOCOLS.canvas], capabilities: [] },
+    presentation,
+    { send: (message) => sent.push(message), present: () => undefined },
+    0,
+  );
+  const ready = { protocol: 'sugarcubes.panel', version: 3, session, type: 'ready' };
+  host.receive(ready, 0);
+  host.receive(ready, 1000);
+  expect(sent.map((message) => `${message.protocol}:${message.type}`)).toEqual([
+    'sugarcubes.host:description',
+    'sugarcubes.panel:configure',
+    'sugarcubes.host:description',
+    'sugarcubes.panel:configure',
+  ]);
+  expect(sent[0]).toEqual(sent[2]);
+  expect(sent[0]).toEqual({
+    protocol: 'sugarcubes.host',
+    version: 1,
+    session,
+    type: 'description',
+    protocols: [
+      { name: 'sugarcubes.panel', version: 3 },
+      { name: 'sugarcubes.canvas', version: 3 },
+    ],
+    capabilities: [],
+  });
+});

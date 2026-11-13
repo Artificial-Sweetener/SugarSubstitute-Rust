@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://artificialsweetener.ai/schemas/sugarcubes/host/v1",
+  "title": "SugarCubes host description protocol version 1",
+  "description": "A host answers every sugarcubes.panel ready by sending its description first and its configure second on the same ordered panel channel. The description lists the protocols the host serves on that channel and the capabilities it declares; anything absent is unsupported. A page that receives configure before any description treats the host as serving only the panel protocol and declaring no capabilities. Names are open lowercase tokens so a later protocol or capability never invalidates an older reader, which ignores names it does not know. A protocol or capability appears at most once. The description is fixed for the panel session. The desktop session protocol has its own bootstrap and is not described here.",
+  "$defs": {
+    "HostCapability": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z0-9.-]{1,64}$"
+        }
+      },
+      "required": ["name"],
+      "additionalProperties": false
+    },
+    "HostProtocol": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z0-9.-]{1,64}$"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        }
+      },
+      "required": ["name", "version"],
+      "additionalProperties": false
+    },
+    "HostDescriptionMessage": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.host"
+        },
+        "version": {
+          "const": 1
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "type": {
+          "const": "description"
+        },
+        "protocols": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HostProtocol"
+          },
+          "maxItems": 32
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/HostCapability"
+          },
+          "maxItems": 64
+        }
+      },
+      "required": ["protocol", "version", "session", "type", "protocols", "capabilities"],
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/HostDescriptionMessage"
+    }
+  ]
+}
