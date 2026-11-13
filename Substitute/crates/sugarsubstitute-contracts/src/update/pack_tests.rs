@@ -71,3 +71,43 @@ fn the_splash_names_the_update_only_while_it_runs() {
     assert_eq!(finished.splash_line(&EN), None);
     assert_eq!(finished.notice(&EN).as_deref(), Some(EN.could_not_check));
 }
+
+#[test]
+fn a_report_from_another_process_is_read_only_within_its_bounds() -> Result<(), PackReportError> {
+    let report = PackUpdateReport {
+        to: Some("1.1.0".into()),
+        unchecked: vec!["registry".into(), "github-release".into()],
+        ..PackUpdateReport::new(PackOutcome::Available)
+    };
+    assert!(report.valid());
+    assert_eq!(PackUpdateReport::parse(&report.render()?)?, report);
+    let long = PackUpdateReport { to: Some("9".repeat(65)), ..report.clone() };
+    assert_eq!(PackUpdateReport::parse(&long.render()?), Err(PackReportError));
+    let many = PackUpdateReport { unchecked: vec!["registry".into(); 3], ..report.clone() };
+    assert!(!many.valid());
+    let empty = PackUpdateReport { code: Some(String::new()), ..report };
+    assert!(!empty.valid());
+    Ok(())
+}
+
+#[test]
+fn the_window_names_the_one_line_by_its_words_and_offers_a_report_only_for_problems() {
+    let updated = PackUpdateReport {
+        to: Some("1.1.0".into()),
+        ..PackUpdateReport::new(PackOutcome::Updated)
+    };
+    assert_eq!(updated.notice_template(&EN), Some(EN.updated));
+    assert!(!updated.needs_attention());
+    assert_eq!(PackUpdateReport::new(PackOutcome::Updated).notice_template(&EN), None);
+    for outcome in [
+        PackOutcome::Restored,
+        PackOutcome::CouldNotCheck,
+        PackOutcome::Failed,
+        PackOutcome::Stopped,
+    ] {
+        assert!(PackUpdateReport::new(outcome).needs_attention(), "{outcome:?}");
+    }
+    for outcome in [PackOutcome::UpToDate, PackOutcome::Judging, PackOutcome::NotManaged] {
+        assert!(!PackUpdateReport::new(outcome).needs_attention(), "{outcome:?}");
+    }
+}

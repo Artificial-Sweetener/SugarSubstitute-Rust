@@ -9,7 +9,6 @@ use crate::{
     native_action::{FormAction, FormScope},
     report::surface::{ReportPresentation, UpdateExport, UpdateReport, lifetime::ReportLifetime},
 };
-use sugarsubstitute_contracts::update::status::UpdateStatus;
 use tao::{event::WindowEvent, window::WindowId};
 
 /// The hosted update report.
@@ -24,9 +23,9 @@ fn lifetime(
     ReportLifetime::new(presentation, owner)
 }
 
-/// Open the report of the latest failed application update and SugarCubes update over the
-/// main window, or bring an open one forward. Does nothing when nothing failed or the main
-/// window is not up.
+/// Open the update report over the main window, or bring an open one forward: the latest
+/// failed attempt and the start's SugarCubes update. Does nothing when neither has anything to
+/// report or the main window is not up.
 pub(super) fn open(
     session: &mut Session,
     content: &mut impl StartupWindowContent,
@@ -44,11 +43,12 @@ pub(super) fn open(
     use tao::platform::windows::WindowExtWindows;
     let owner = FormOwner(::windows::Win32::Foundation::HWND(window.hwnd() as *mut _));
     let words = content.locale_messages();
-    let status = content.update_status();
-    let app = status.as_ref().and_then(UpdateStatus::failure);
-    let failed =
-        ReportPresentation::failed_updates(words, title, app, content.pack_update_failure());
-    let Some(presentation) = failed else { return Ok(()) };
+    let Some(presentation) = content
+        .update_status()
+        .and_then(|status| ReportPresentation::updates(words, title, &status))
+    else {
+        return Ok(());
+    };
     let picker = session
         .picker
         .take()

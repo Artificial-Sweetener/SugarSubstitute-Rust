@@ -129,15 +129,16 @@ impl PipeLease for FiniteLease {
     }
 }
 fn binding() -> TestResult<PeerBinding> {
+    use crate::purpose_pipe::PurposeKey;
     use sugarsubstitute_contracts::{incident::*, lifecycle::*};
-    Ok(PeerBinding::Diagnostic(DiagnosticKey::new(
+    Ok(PeerBinding::Purpose(PurposeKey::Diagnostic(DiagnosticKey::new(
         CoordinatorKey {
             namespace: NamespaceId::new([1; 32]),
             epoch: CoordinatorEpoch::new([2; 16])?,
         },
         DiagnosticRole::Symbolize,
         DiagnosticSessionId::new(1)?,
-    )))
+    ))))
 }
 enum StopAtBoundary {
     MainCancel,
@@ -179,15 +180,17 @@ fn stopped_open(action: StopAtBoundary) -> TestResult {
         crate::lifecycle_pipe::PipeAdmission {
             binding: None,
             handshake: Moment::from_nanos(9_000_000_000),
-            owner: Owner::Diagnostic,
+            owner: Owner::Purpose,
         },
         kind,
         resources,
         |resources, _context| {
             Ok(crate::lifecycle_pipe::PreparedPipeLease {
                 lease: Box::new(FiniteLease {
-                    inner: Lease::diagnostic_client(
-                        DiagnosticRole::Symbolize,
+                    inner: Lease::purpose_client(
+                        crate::purpose_pipe::Purpose::Diagnostic(
+                            sugarsubstitute_contracts::incident::DiagnosticRole::Symbolize,
+                        ),
                         native_deadline,
                         Some(resources),
                     ),

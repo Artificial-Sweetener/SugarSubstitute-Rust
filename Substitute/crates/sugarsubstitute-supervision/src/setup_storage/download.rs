@@ -4,9 +4,11 @@
 mod custody;
 mod failure;
 mod local;
+pub(super) mod space;
 use super::{cache::RuntimeCache, check};
 use custody::Custody;
 pub use failure::DownloadFailure;
+use space::{CacheReclaim, FreeSpace, HEADROOM_BYTES, Reclaim, SpaceShortage, VolumeSpace};
 use std::{
     io::{self, Read, Seek, SeekFrom},
     path::Path,
@@ -26,24 +28,47 @@ pub struct Download {
     custody: Custody,
     target: Target,
     reset: bool,
+    space: Box<dyn FreeSpace + Send + Sync>,
 }
 impl Download {
     /// Open a protected content-addressed entry for a freshly authenticated target.
     /// Run on the execution owner's storage job. Missing payload bytes are a cache miss;
     /// ambiguous ownership is preserved and reported instead of adopting unknown files.
+    /// The volume must have the bytes still to download plus [`space::HEADROOM_BYTES`] free;
+    /// on a shortage runtime cache maintenance runs first.
     /// # Errors
-    /// Rejects unknown installations, busy writers, unsafe paths, damaged ownership and I/O.
+    /// Rejects unknown installations, busy writers, unsafe paths, damaged ownership and I/O;
+    /// [`DownloadFailure::InsufficientSpace`] when the disk is short after reclaiming, and
+    /// [`DownloadFailure::CacheBudget`] when the cache's own budget refuses the package.
     pub fn open(
         cache: RuntimeCache,
         target: Target,
         context: &JobContext,
     ) -> Result<Self, DownloadFailure> {
+        Self::open_with(cache, target, Box::new(VolumeSpace), &mut [], context)
+    }
+
+    /// [`Self::open`] with the free-space measure and reclaimers beyond cache maintenance
+    /// supplied by the caller, such as retirement of old installed versions.
+    /// # Errors
+    /// As [`Self::open`].
+    pub fn open_with(
+        cache: RuntimeCache,
+        target: Target,
+        space: Box<dyn FreeSpace + Send + Sync>,
+        reclaimers: &mut [&mut dyn Reclaim],
+        context: &JobContext,
+    ) -> Result<Self, DownloadFailure> {
+        let mut maintenance = CacheReclaim(cache.clone());
         let mut custody = Custody::open(cache, &target, context)?;
         let reset = custody.payload.length()? > target.length();
         if reset {
             custody.payload.reset(context)?;
         }
-        Ok(Self { custody, target, reset })
+        let remaining = target.length().saturating_sub(custody.payload.length()?);
+        let mut chain = Chain(&mut maintenance, reclaimers);
+        space::ensure(custody.directory(), remaining, space.as_ref(), &mut [&mut chain], context)?;
+        Ok(Self { custody, target, reset, space })
     }
     /// Actual retained prefix length; transport should request this byte offset.
     /// # Errors
@@ -69,10 +94,34 @@ impl Download {
     ) -> Result<(), DownloadFailure> {
         check(context)?;
         let plan = Transfer::accept(&self.target, self.offset()?, response)?;
-        self.custody
-            .payload
-            .receive_exact(plan.offset(), plan.length(), body, context)
-            .map_err(Into::into)
+        let received =
+            self.custody.payload.receive_exact(plan.offset(), plan.length(), body, context);
+        received.map_err(|failure| self.classify(failure.into()))
+    }
+
+    /// A write the disk refused is a shortage of the bytes still to download; the received
+    /// prefix was flushed and stays for a later attempt. The cache's own budget and every
+    /// other failure keep their meaning.
+    fn classify(&self, failure: DownloadFailure) -> DownloadFailure {
+        match failure {
+            DownloadFailure::Storage(cause) if cause.kind() == io::ErrorKind::StorageFull => {
+                match self.shortage() {
+                    Some(shortage) => DownloadFailure::InsufficientSpace(shortage),
+                    None => DownloadFailure::Storage(cause),
+                }
+            }
+            DownloadFailure::Flush { transfer, flush } => {
+                DownloadFailure::Flush { transfer: Box::new(self.classify(*transfer)), flush }
+            }
+            other => other,
+        }
+    }
+
+    /// The shortage now: what is still to download plus headroom, against what is free.
+    fn shortage(&self) -> Option<SpaceShortage> {
+        let remaining = self.target.length().saturating_sub(self.offset().ok()?);
+        let available = self.space.available(self.custody.directory()).ok()?;
+        Some(SpaceShortage { needed: remaining.saturating_add(HEADROOM_BYTES), available })
     }
 
     /// Verify every byte, including a resumed prefix, and retain the same exclusive file handle.
@@ -121,6 +170,25 @@ impl Download {
         };
         self.custody.payload.seek(SeekFrom::Start(0))?;
         Ok(VerifiedDownload { custody: self.custody, verified })
+    }
+}
+
+/// Cache maintenance first, then the caller's reclaimers; each one's failure is logged and the
+/// rest still run, so the shortage that remains is what gets measured.
+struct Chain<'a, 'b>(&'a mut CacheReclaim, &'a mut [&'b mut dyn Reclaim]);
+impl Reclaim for Chain<'_, '_> {
+    fn reclaim(&mut self, context: &JobContext) -> io::Result<()> {
+        let first = self.0.reclaim(context);
+        for reclaimer in
+            std::iter::once(first).chain(self.1.iter_mut().map(|next| next.reclaim(context)))
+        {
+            if let Err(cause) = reclaimer {
+                check(context)?;
+                tracing::warn!(operation = "update_space_reclaim_failed", cause = %cause,
+                    "Making room for an update failed; the next reclaimer still runs");
+            }
+        }
+        Ok(())
     }
 }
 

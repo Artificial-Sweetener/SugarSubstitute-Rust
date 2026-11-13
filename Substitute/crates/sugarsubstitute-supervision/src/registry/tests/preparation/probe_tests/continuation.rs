@@ -37,6 +37,7 @@ fn accepted_probe_continues_with_independent_files_and_releases_preparation_excl
                 image,
                 fixture._workspace.path(),
                 crate::LaunchEnvironment::from_snapshot_utf16(&[0, 0], &[])?,
+                None,
             )?;
             let mut trust = TrustStore::open(fixture.root.path(), [92; 32], &context)?;
             trust.acquire_preparation(&context)?;

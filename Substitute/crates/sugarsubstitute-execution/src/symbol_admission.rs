@@ -51,9 +51,9 @@ pub struct SymbolTransportReservation {
 }
 
 #[cfg(any(windows, test))]
-/// Select ordinary diagnostics or the unique actual original symbol transport share.
-pub enum DiagnosticPipeResources {
-    /// Ordinary diagnostic transport with its standard byte admission.
+/// Select ordinary helper transport or the unique actual original symbol transport share.
+pub enum PurposePipeResources {
+    /// Ordinary helper transport with its standard byte admission.
     Standard,
     /// Actual original symbol accounting, retained through native retirement.
     Symbol(SymbolTransportReservation),

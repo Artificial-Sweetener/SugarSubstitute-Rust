@@ -63,4 +63,9 @@ pub enum UpdateNotice {
     },
     /// The new version did not start, so the one before it is running.
     PreviousVersionRunning,
+    /// The newer version's files were damaged, so the one before it is running while the
+    /// update is downloaded again.
+    Repairing,
+    /// The start's SugarCubes update has one line to say, such as that it couldn't check.
+    Sugarcubes(sugarsubstitute_contracts::update::pack::PackUpdateReport),
 }

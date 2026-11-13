@@ -317,15 +317,15 @@ fn settlement_wire_preserves_original_acquisition_and_rejects_zero_foreign_or_ch
 -> TestResult {
     let identity = main()?;
     let acquisition = sugarsubstitute_contracts::lifecycle::RequestId::new(71)?;
-    for sugarcubes_failed in [false, true] {
-        let source =
-            encoded(WirePayload::SettleAttempt { identity, acquisition, sugarcubes_failed })?;
+    use sugarsubstitute_contracts::startup::PageFailure;
+    for page_failure in [None, Some(PageFailure::Sugarcubes), Some(PageFailure::Unattributed)] {
+        let source = encoded(WirePayload::SettleAttempt { identity, acquisition, page_failure })?;
         assert_eq!(source.len(), HEADER_BYTES + 25);
-        assert_eq!(&source[4..6], &14u16.to_le_bytes());
+        assert_eq!(&source[4..6], &15u16.to_le_bytes());
         assert!(matches!(
             FrameCodec::decode(&source)?.payload,
-            DecodedPayload::SettleAttempt { identity: actual, acquisition: original, sugarcubes_failed: failed }
-                if actual == identity && original == acquisition && failed == sugarcubes_failed
+            DecodedPayload::SettleAttempt { identity: actual, acquisition: original, page_failure: failed }
+                if actual == identity && original == acquisition && failed == page_failure
         ));
         assert_rejected_tail_and_prefix(&source)?;
         for offset in [104, 112, 120] {
@@ -334,7 +334,7 @@ fn settlement_wire_preserves_original_acquisition_and_rejects_zero_foreign_or_ch
             assert!(matches!(FrameCodec::decode(&invalid), Err(ProtocolError::Identity)));
         }
         let mut unknown = source.clone();
-        unknown[HEADER_BYTES + 24] = 2;
+        unknown[HEADER_BYTES + 24] = 3;
         assert!(FrameCodec::decode(&unknown).is_err());
     }
     let mut foreign = identity;
@@ -348,7 +348,7 @@ fn settlement_wire_preserves_original_acquisition_and_rejects_zero_foreign_or_ch
                 payload: WirePayload::SettleAttempt {
                     identity: foreign,
                     acquisition,
-                    sugarcubes_failed: false
+                    page_failure: None
                 }
             },
             &mut unchanged

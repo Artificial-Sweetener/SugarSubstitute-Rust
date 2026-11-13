@@ -26,6 +26,7 @@ fn the_input_final_save_is_submitted_before_the_exit_intent_and_its_failure_is_r
     let probe = fixture.host.input_probe.as_ref().ok_or("Probe")?;
     assert_eq!(probe.begun, Some(budget.graceful_until), "the input save began first");
     assert!(fixture.host.child.shutdown_requests.is_empty(), "no exit intent before its answer");
+    assert_eq!(fixture.host.child.restart_requests, 0, "no restart intent before the outcome");
     assert!(matches!(
         fixture.host.close_save_progress(),
         Some(CloseSaveProgress::Saving { reason: CloseReason::RestartToApply, .. })
@@ -35,6 +36,7 @@ fn the_input_final_save_is_submitted_before_the_exit_intent_and_its_failure_is_r
     fixture.host.input_probe.as_mut().ok_or("Probe")?.verdict =
         Some(SaveVerdict::Failed(SaveFailure::Storage));
     assert_eq!(fixture.exit_intent()?, budget);
+    assert!(fixture.host.child.restart_requests >= 1, "the outcome exists, so the intent went out");
     assert_eq!(
         fixture.host.close_save_outcome(),
         Some(CloseSaveOutcome {
@@ -61,6 +63,7 @@ fn a_saved_close_writes_no_record() -> TestResult {
     fixture.host.observe(DesktopStartupObservation::CloseRequested)?;
     fixture.exit_intent()?;
     assert!(fixture.host.close_save_outcome().is_some_and(|outcome| outcome.saved()));
+    assert_eq!(fixture.host.child.restart_requests, 0, "an ordinary close never restarts");
     assert_eq!(fixture.next_start_notice()?, None);
     let record = fixture.host.workspace.as_ref().and_then(|work| work.record_directory.clone());
     assert!(!record.ok_or("Record directory")?.join("close-save.json").exists());

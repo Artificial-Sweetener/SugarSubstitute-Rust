@@ -83,9 +83,22 @@ fn release_notes_link_each_version_to_its_published_notes() -> Result {
         notes.url("0.2.0")?.as_str(),
         "https://github.com/example/monorepo/releases/tag/substitute-v0.2.0"
     );
-    for version in
-        ["", "1", "1.2", "1.2.3.4", "01.2.3", "1.2.3-beta", "1.2.x", "../1.2.3", "1.2.3#x"]
-    {
+    let long = "9".repeat(65);
+    for version in [
+        "",
+        "1",
+        "1.2",
+        "1.2.3.4",
+        "01.2.3",
+        "1.2.3-beta",
+        "1.2.x",
+        "../1.2.3",
+        "1.2.3#x",
+        "2.4.1/../../x",
+        "2.4.1?x=1",
+        "2.4.1 beta",
+        &long,
+    ] {
         assert!(notes.url(version).is_err(), "{version}");
     }
     Ok(())
@@ -101,6 +114,7 @@ fn release_notes_locations_must_be_one_plain_https_template() -> Result {
         "https://example.test/{version}?ticket=1",
         "file:///notes/{version}",
         "{version}",
+        "not an address {version}",
     ] {
         let mut value = configuration();
         value["release_notes"] = location.into();

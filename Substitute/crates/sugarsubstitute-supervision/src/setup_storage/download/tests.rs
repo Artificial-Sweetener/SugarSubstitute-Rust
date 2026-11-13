@@ -8,6 +8,7 @@ use sugarsubstitute_update::{Error as Verification, RepositoryTrust, fixture::*}
 mod failures;
 mod installer;
 mod local;
+mod space;
 const PACKAGE: &[u8] = b"native update package fixture";
 
 fn target() -> Result<Target, Box<dyn std::error::Error + Send + Sync>> {

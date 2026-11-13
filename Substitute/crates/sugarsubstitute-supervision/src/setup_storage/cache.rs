@@ -37,7 +37,7 @@ use crate::durable_storage::{
     retirement, staging, tree as storage_tree,
 };
 pub use entry::CacheLease;
-pub use maintenance::Maintenance;
+pub use maintenance::{CacheBudgetExhausted, Maintenance};
 pub use policy::{CachePolicy, Namespace};
 use std::{
     fs::File,

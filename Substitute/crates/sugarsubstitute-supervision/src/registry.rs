@@ -40,6 +40,7 @@ use sugarsubstitute_contracts::{
     execution::{CompletionBatch, ExecutionPort, JobContext, JobId, JobSpec, OwnedJob, Scope},
     lifecycle::{CoordinatorKey, ProcessId, ProcessKey, ShutdownBudget, ShutdownId},
 };
+use sugarsubstitute_execution::purpose_pipe::PurposeKey;
 use sugarsubstitute_execution::{
     ExecutionClient,
     windows::{NativeObservationError, ProcessExit, ProcessWatchPermit},

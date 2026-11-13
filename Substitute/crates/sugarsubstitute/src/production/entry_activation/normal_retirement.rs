@@ -11,9 +11,15 @@ pub(super) struct CompletedNormal {
     identity: MainIdentity,
     connection: ConnectionId,
     original: ShutdownBudget,
+    restart_to_apply: bool,
 }
 
 impl CompletedNormal {
+    /// Whether the child asked, before this normal close, to restart so an update applies.
+    pub(super) fn restart_to_apply(&self) -> bool {
+        self.restart_to_apply
+    }
+
     /// Revalidate retained matching data without manufacturing native or policy authority.
     pub(super) fn budget(
         &self,
@@ -67,8 +73,10 @@ pub(super) fn retire(record: &mut Record) -> Result<()> {
     if record.retained_causes.is_some() {
         return Err("Completed normal role duplicated its historical cause owner".into());
     }
+    let mut restart_to_apply = false;
     if let Some(parent) = &mut record.parent {
         record.retained_causes = parent.take_retired_backend_causes()?;
+        restart_to_apply = parent.restart_to_apply_requested();
     }
     let completed = CompletedNormal {
         identity: MainIdentity {
@@ -78,6 +86,7 @@ pub(super) fn retire(record: &mut Record) -> Result<()> {
         },
         connection: record.connection,
         original,
+        restart_to_apply,
     };
     let output = record.start.as_mut().and_then(|start| start.output.take());
     complete(record, completed, output);

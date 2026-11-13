@@ -82,6 +82,7 @@ impl ParentLifecycle {
         }
         let Some(index) = self.next_live_reply(resources.execution.client.now()?)? else {
             self.send_challenge(resources)?;
+            self.send_update_status(resources)?;
             return Ok(());
         };
         resources.session.control.validate_current_admission()?;

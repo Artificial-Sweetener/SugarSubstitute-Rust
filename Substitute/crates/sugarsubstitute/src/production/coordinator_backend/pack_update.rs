@@ -7,14 +7,16 @@
 //! written); a managed update holds that preparation's SugarCubes inspection and launch until
 //! it settles, so nothing reads the pack while its files change. Trial observations follow in
 //! order: backend ready, the page established, the backend ending before ready, and the page
-//! reporting SugarCubes failing (carried by the child's attempt settlement). After a failed
-//! page the next managed preparation is held behind a restore of the previous version, so a
-//! version that failed never loads twice. This owner runs those jobs one at a time on the
+//! not loading (carried by the child's attempt settlement). After a page that reported
+//! SugarCubes failing, the next managed preparation is held behind a restore of the previous
+//! version, so a version that failed never loads twice; a page that did not load for another
+//! cause leaves a later page of the run to decide, and the next start restores otherwise. This owner runs those jobs one at a time on the
 //! execution owner. A failure of any of them never fails the backend.
 //!
 //! Each run records its update report in the host's storage, and the schedule publishes the
-//! live [`sugarsubstitute_contracts::update::pack::PackUpdateStatus`] with a revision, logged
-//! here on every change, for the splash line, the one plain line and the window's report.
+//! live [`sugarsubstitute_contracts::update::pack::PackUpdateStatus`], logged here on every
+//! change; the entry runner carries it in its update status to the window's splash line, one
+//! plain line and update report.
 use super::*;
 use std::{path::PathBuf, time::Duration};
 use sugarsubstitute_supervision::{
@@ -56,10 +58,30 @@ impl std::fmt::Display for PackJobError {
 impl std::error::Error for PackJobError {}
 
 impl CoordinatorBackend {
-    /// The attempt's page reported SugarCubes itself unavailable or failed: a SugarCubes
-    /// update being judged did not load its page, and is restored before the next attempt.
-    pub(crate) fn pack_page_failed(&mut self, resources: &BackendResources<'_>) -> Result<()> {
-        self.pack.page_failed(resources)
+    /// The attempt's page did not load. A SugarCubes update being judged is restored before
+    /// the next attempt when the page reported SugarCubes itself unavailable or failed;
+    /// otherwise a later page of this run may still keep it, and the next start restores it
+    /// if none does.
+    pub(crate) fn pack_page_failed(
+        &mut self,
+        failure: sugarsubstitute_contracts::startup::PageFailure,
+        resources: &BackendResources<'_>,
+    ) -> Result<()> {
+        match failure {
+            sugarsubstitute_contracts::startup::PageFailure::Sugarcubes => {
+                self.pack.page_failed(resources)
+            }
+            sugarsubstitute_contracts::startup::PageFailure::Unattributed => {
+                self.pack.observe(TrialEvent::PageUnconfirmed, resources)
+            }
+        }
+    }
+
+    /// The live SugarCubes update state of this coordinator, for its window.
+    pub(crate) fn pack_update_status(
+        &self,
+    ) -> sugarsubstitute_contracts::update::pack::PackUpdateStatus {
+        self.pack.schedule.status().0.clone()
     }
     /// The page established its session with every SugarCubes node registered; this keeps a
     /// SugarCubes update being judged. Only a managed backend's pack is ever judged.

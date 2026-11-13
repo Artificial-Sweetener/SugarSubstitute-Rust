@@ -59,8 +59,12 @@ mod tests;
 mod transport;
 #[path = "parent_lifecycle/types.rs"]
 mod types;
+#[path = "parent_lifecycle/update_status.rs"]
+mod update_status;
 #[path = "parent_lifecycle/watchdog.rs"]
 mod watchdog;
+#[path = "parent_lifecycle/workflow_watch.rs"]
+mod workflow_watch;
 #[path = "parent_lifecycle/write_receipt.rs"]
 mod write_receipt;
 
@@ -146,6 +150,7 @@ pub(crate) struct ParentLifecycle {
     disconnect_attempted: bool,
     close_after_reply: Option<usize>,
     backend_causes: Option<causes::BackendCauses>,
+    updates: update_status::OutgoingUpdates,
 }
 
 impl ParentLifecycle {
@@ -162,6 +167,7 @@ impl ParentLifecycle {
         (std::mem::size_of::<Self>() + history::SLOTS * 32768) as u64
             + causes::BackendCauses::heap_bytes()
             + crate::production::coordinator_backend::CoordinatorBackend::FRONTEND_RELOAD_TARGET_BYTES
+            + update_status::OutgoingUpdates::heap_bytes()
     }
 
     /// Preserve original run/connection/QPC facts after actual pipe preparation.
@@ -236,6 +242,7 @@ impl ParentLifecycle {
             disconnect_attempted: false,
             close_after_reply: None,
             backend_causes: Some(causes.take().ok_or(ParentError::Storage)?),
+            updates: update_status::OutgoingUpdates::default(),
         })
     }
 
@@ -253,6 +260,7 @@ impl ParentLifecycle {
                 "Original role cleanup requested; physical retirement remains independently owned");
         }
         self.closed = true;
+        self.updates.stop_watch();
         // Retain the first semantic cause while releasing its immutable input loan
         // so the actual pipe worker can finish checked native retirement.
         self.rejected_frame = None;
@@ -378,6 +386,7 @@ impl ParentLifecycle {
             self.requests.next_deadline(),
             self.output_receive_until,
             self.frontend_refresh.as_ref().and_then(|refresh| refresh.deadline()),
+            self.updates.deadline(),
         ]
         .into_iter()
         .flatten()

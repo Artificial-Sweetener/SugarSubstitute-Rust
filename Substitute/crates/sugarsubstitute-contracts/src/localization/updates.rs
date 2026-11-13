@@ -18,6 +18,9 @@ pub struct UpdateMessages {
     pub restart: &'static str,
     /// Restart once the running workflow finishes so the ready update applies.
     pub restart_after_workflow: &'static str,
+    /// A restart waiting for the running workflow was dropped because the application lost
+    /// track of the workflow queue.
+    pub restart_dropped: &'static str,
     /// Hide a one-time message.
     pub dismiss: &'static str,
     /// Open the release notes of the version now running.
@@ -28,24 +31,28 @@ pub struct UpdateMessages {
     pub updated: &'static str,
     /// The new version did not start, so the one before it runs.
     pub previous_running: &'static str,
+    /// The newer version's files were damaged, so the one before it runs while it is repaired.
+    pub repairing: &'static str,
     /// Update report step names in [`AttemptPhase`] declaration order.
     pub phases: [&'static str; 7],
 }
 
 impl UpdateMessages {
     /// Enumerate every owned label for complete registry coverage checks.
-    pub const fn labels(&self) -> [&'static str; 16] {
+    pub const fn labels(&self) -> [&'static str; 18] {
         let p = self.phases;
         [
             self.ready,
             self.failed,
             self.restart,
             self.restart_after_workflow,
+            self.restart_dropped,
             self.dismiss,
             self.whats_new,
             self.applying,
             self.updated,
             self.previous_running,
+            self.repairing,
             p[0],
             p[1],
             p[2],
@@ -81,11 +88,13 @@ pub static EN: UpdateMessages = UpdateMessages {
     failed: "Couldn't update. Show the report",
     restart: "Restart to apply",
     restart_after_workflow: "Restart after this finishes",
+    restart_dropped: "Couldn't tell whether your workflow finished, so nothing was restarted.",
     dismiss: "Dismiss",
     whats_new: "What's new",
     applying: "Updating to version {version}…",
     updated: "Updated to version {version}",
     previous_running: "The previous version is running.",
+    repairing: "SugarSubstitute is running the previous version while it repairs the update.",
     phases: [
         "Getting ready",
         "Checking for updates",
@@ -103,11 +112,13 @@ pub static ZH_HANS: UpdateMessages = UpdateMessages {
     failed: "无法更新。查看报告",
     restart: "重新启动以应用",
     restart_after_workflow: "完成后重新启动",
+    restart_dropped: "无法确定工作流是否已完成，因此没有重新启动。",
     dismiss: "关闭",
     whats_new: "新功能",
     applying: "正在更新到版本 {version}…",
     updated: "已更新到版本 {version}",
     previous_running: "正在运行之前的版本。",
+    repairing: "SugarSubstitute 正在运行之前的版本，同时修复这次更新。",
     phases: [
         "正在准备",
         "正在检查更新",
@@ -125,11 +136,13 @@ pub static JA: UpdateMessages = UpdateMessages {
     failed: "更新できませんでした。レポートを表示",
     restart: "再起動して適用",
     restart_after_workflow: "完了後に再起動",
+    restart_dropped: "ワークフローが完了したか確認できなかったため、再起動しませんでした。",
     dismiss: "閉じる",
     whats_new: "新機能",
     applying: "バージョン {version} に更新しています…",
     updated: "バージョン {version} に更新しました",
     previous_running: "以前のバージョンで動作しています。",
+    repairing: "SugarSubstitute は更新を修復する間、以前のバージョンで動作しています。",
     phases: [
         "準備中",
         "更新を確認中",
@@ -147,11 +160,13 @@ pub static KO: UpdateMessages = UpdateMessages {
     failed: "업데이트할 수 없습니다. 보고서 보기",
     restart: "다시 시작하여 적용",
     restart_after_workflow: "완료 후 다시 시작",
+    restart_dropped: "워크플로가 끝났는지 확인할 수 없어 다시 시작하지 않았습니다.",
     dismiss: "닫기",
     whats_new: "새로운 기능",
     applying: "버전 {version}(으)로 업데이트하는 중…",
     updated: "버전 {version}(으)로 업데이트됨",
     previous_running: "이전 버전이 실행 중입니다.",
+    repairing: "SugarSubstitute가 업데이트를 복구하는 동안 이전 버전으로 실행 중입니다.",
     phases: [
         "준비 중",
         "업데이트 확인 중",
@@ -169,11 +184,13 @@ pub static ES: UpdateMessages = UpdateMessages {
     failed: "No se pudo actualizar. Ver el informe",
     restart: "Reiniciar para aplicar",
     restart_after_workflow: "Reiniciar al terminar",
+    restart_dropped: "No se pudo saber si el flujo de trabajo terminó, así que no se reinició nada.",
     dismiss: "Descartar",
     whats_new: "Novedades",
     applying: "Actualizando a la versión {version}…",
     updated: "Actualizado a la versión {version}",
     previous_running: "Se está usando la versión anterior.",
+    repairing: "SugarSubstitute está usando la versión anterior mientras repara la actualización.",
     phases: [
         "Preparando",
         "Buscando actualizaciones",

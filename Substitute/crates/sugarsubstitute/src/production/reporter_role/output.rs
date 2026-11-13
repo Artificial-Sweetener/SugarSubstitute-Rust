@@ -4,7 +4,7 @@
 use sugarsubstitute_contracts::{execution::*, incident::*};
 use sugarsubstitute_crash::diagnostic_client::*;
 use sugarsubstitute_desktop::report::SaveSelection;
-use sugarsubstitute_execution::{ChargedBlockingInput, diagnostic_pipe::LifecyclePipeWriteBuffer};
+use sugarsubstitute_execution::{ChargedBlockingInput, purpose_pipe::LifecyclePipeWriteBuffer};
 pub(super) enum Intent {
     Presented,
     Replaced,

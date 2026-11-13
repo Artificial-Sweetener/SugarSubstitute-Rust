@@ -35,6 +35,7 @@ impl ParentLifecycle {
             DecodedPayload::Release(_) => Some("Release"),
             DecodedPayload::ExitIntent { .. } => Some("ExitIntent"),
             DecodedPayload::ExitCompleted(_) => Some("ExitCompleted"),
+            DecodedPayload::RestartToApply => Some("RestartToApply"),
             _ => None,
         };
         if let Some(startup_operation) = startup_operation {
@@ -184,17 +185,18 @@ impl ParentLifecycle {
                 )?;
                 self.advance_backend_commands(resources)?;
             }
-            DecodedPayload::SettleAttempt { identity, acquisition, sugarcubes_failed } => {
+            DecodedPayload::SettleAttempt { identity, acquisition, page_failure } => {
                 self.begin_attempt_cleanup(index, identity, acquisition, until, resources)?;
-                // The authenticated attempt's page reported SugarCubes itself failing: a
-                // SugarCubes update being judged did not load its page.
-                if sugarcubes_failed
+                // The authenticated attempt's page did not load: a SugarCubes update being
+                // judged is restored before the next attempt when the page named SugarCubes,
+                // and at the next start when no later page of this run loads.
+                if let Some(page_failure) = page_failure
                     && matches!(
                         resources.target,
                         sugarsubstitute_contracts::lifecycle::BackendTarget::Managed(_)
                     )
                 {
-                    resources.backend.pack_page_failed(resources.execution)?;
+                    resources.backend.pack_page_failed(page_failure, resources.execution)?;
                 }
             }
             DecodedPayload::Release(reference) => {
@@ -283,6 +285,10 @@ impl ParentLifecycle {
             }
             DecodedPayload::UiResponse(id) => {
                 self.ui_response(header, id, resources)?;
+                self.requests.get_mut(index)?.reply = Some(Reply::Acknowledged);
+            }
+            DecodedPayload::RestartToApply => {
+                self.updates.restart_to_apply();
                 self.requests.get_mut(index)?.reply = Some(Reply::Acknowledged);
             }
             DecodedPayload::ExitIntent { shutdown, intent, expected_code } => {

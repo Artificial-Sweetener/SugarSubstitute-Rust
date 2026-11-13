@@ -42,7 +42,7 @@ fn saving() -> CloseSaveProgress {
 }
 
 fn feed(status: Option<&UpdateStatus>) -> UpdateFeed {
-    UpdateFeed::read(status, false, None, WorkflowActivity::Idle)
+    UpdateFeed::read(status, None, WorkflowActivity::Idle)
 }
 
 fn shown(view: &UpdateCaptionView) -> Vec<u16> {
@@ -83,15 +83,20 @@ fn a_ready_update_outranks_a_later_failed_check() {
 
 #[test]
 fn a_failed_sugarcubes_update_shows_the_warning_that_opens_the_report() {
-    let pack_failed = |status: Option<&UpdateStatus>| {
-        UpdateFeed::read(status, true, None, WorkflowActivity::Idle)
+    use sugarsubstitute_contracts::update::pack::{
+        PackOutcome, PackUpdateReport, PackUpdateStatus,
+    };
+    let pack_failed = |mut status: UpdateStatus| {
+        let report = PackUpdateReport::new(PackOutcome::Failed);
+        status.observe_sugarcubes(PackUpdateStatus::Finished(report));
+        status
     };
     let mut current = UpdateStatus::default();
     current.begin();
     current.finish(Some(AttemptOutcome::Current), 5);
-    for status in [None, Some(&current), Some(&failed())] {
+    for status in [UpdateStatus::default(), current, failed()] {
         let mut caption = CaptionUpdates::default();
-        assert!(caption.observe(pack_failed(status)));
+        assert!(caption.observe(feed(Some(&pack_failed(status)))));
         let view = caption.view(messages("en"));
         assert_eq!((view.glyph, shown(&view)), (UpdateGlyph::Warning, vec![UPDATE]));
         assert_eq!(view.update.label, "Couldn't update. Show the report");
@@ -99,9 +104,10 @@ fn a_failed_sugarcubes_update_shows_the_warning_that_opens_the_report() {
         assert_eq!(caption.view(messages("ko")).update.label, messages("ko").updates.failed);
     }
     // A ready application update still outranks it, and saving still hides it.
-    assert_eq!(pack_failed(Some(&ready())).glyph, UpdateGlyph::Ready);
+    assert_eq!(feed(Some(&pack_failed(ready()))).glyph, UpdateGlyph::Ready);
     let mut caption = CaptionUpdates::default();
-    caption.observe(UpdateFeed::read(None, true, Some(saving()), WorkflowActivity::Idle));
+    let status = pack_failed(UpdateStatus::default());
+    caption.observe(UpdateFeed::read(Some(&status), Some(saving()), WorkflowActivity::Idle));
     assert_eq!(caption.activate(UPDATE), (false, None));
 }
 
@@ -115,7 +121,7 @@ fn ready_offers_the_restart_and_the_offer_waits_for_a_running_workflow() {
     assert_eq!(shown(&view), vec![UPDATE, OFFER]);
     assert_eq!(view.offer.text, "Restart to apply");
 
-    caption.observe(UpdateFeed::read(Some(&ready()), false, None, WorkflowActivity::Running));
+    caption.observe(UpdateFeed::read(Some(&ready()), None, WorkflowActivity::Running));
     assert_eq!(caption.view(en).offer.text, "Restart after this finishes");
     assert_eq!(caption.view(messages("es")).offer.text, "Reiniciar al terminar");
 
@@ -153,7 +159,6 @@ fn saving_replaces_everything_with_one_line_until_the_close_settles() {
     caption.notify(Notice::NotSaved { workspace: true, inputs: false });
     assert!(caption.observe(UpdateFeed::read(
         Some(&ready()),
-        false,
         Some(saving()),
         WorkflowActivity::Idle
     )));
@@ -169,9 +174,9 @@ fn saving_replaces_everything_with_one_line_until_the_close_settles() {
         inputs: SaveVerdict::Saved,
     };
     let recording = Some(CloseSaveProgress::Recording(outcome));
-    assert!(UpdateFeed::read(None, false, recording, WorkflowActivity::Idle).saving);
+    assert!(UpdateFeed::read(None, recording, WorkflowActivity::Idle).saving);
     let settled = Some(CloseSaveProgress::Settled(outcome));
-    assert!(!UpdateFeed::read(None, false, settled, WorkflowActivity::Idle).saving);
+    assert!(!UpdateFeed::read(None, settled, WorkflowActivity::Idle).saving);
 }
 
 #[test]
@@ -250,4 +255,62 @@ fn without_release_notes_the_update_line_has_no_link_and_a_rollback_is_one_plain
     assert_eq!(caption.view(en).line.text, "Saving your workspace…");
     caption.observe(UpdateFeed::default());
     assert_eq!(caption.view(en).line.text, "The previous version is running.");
+}
+
+#[test]
+fn a_repair_is_one_plain_line_in_every_language() {
+    let mut caption = CaptionUpdates::default();
+    caption.notify(Notice::update(crate::UpdateNotice::Repairing));
+    let en = messages("en");
+    let view = caption.view(en);
+    assert_eq!(shown(&view), vec![LINE, DISMISS]);
+    assert_eq!(
+        view.line.text,
+        "SugarSubstitute is running the previous version while it repairs the update."
+    );
+    for locale in sugarsubstitute_contracts::localization::LOCALES {
+        assert_eq!(caption.view(locale).line.text, locale.updates.repairing, "{}", locale.id);
+    }
+    assert_eq!(caption.activate(LINK), (false, None), "a repair line has no link");
+    assert_eq!(caption.activate(DISMISS), (true, None));
+    assert_eq!(shown(&caption.view(en)), Vec::<u16>::new());
+}
+
+/// A SugarCubes update that couldn't check shows its one plain line in the user's language,
+/// and the update button opens the report that holds it; an update that went fine shows its
+/// line without a report.
+#[test]
+fn a_sugarcubes_update_shows_one_plain_line_and_opens_its_report() {
+    use sugarsubstitute_contracts::update::pack::{
+        PackOutcome, PackUpdateReport, PackUpdateStatus,
+    };
+    let could_not_check = PackUpdateReport::new(PackOutcome::CouldNotCheck);
+    let mut caption = CaptionUpdates::default();
+    caption.notify(Notice::update(crate::UpdateNotice::Sugarcubes(could_not_check.clone())));
+    let en = messages("en");
+    let view = caption.view(en);
+    assert_eq!(shown(&view), vec![LINE, DISMISS]);
+    assert_eq!(view.line.text, "Couldn't check for a SugarCubes update.");
+    for locale in sugarsubstitute_contracts::localization::LOCALES {
+        assert_eq!(
+            caption.view(locale).line.text,
+            locale.pack_updates.could_not_check,
+            "{}",
+            locale.id
+        );
+    }
+    let mut status = UpdateStatus::default();
+    status.observe_sugarcubes(PackUpdateStatus::Finished(could_not_check));
+    assert_eq!(feed(Some(&status)).glyph, UpdateGlyph::Warning);
+    caption.observe(feed(Some(&status)));
+    assert_eq!(caption.activate(UPDATE), (false, Some(UpdateIntent::OpenReport)));
+    let updated = PackUpdateReport {
+        to: Some("1.1.0".into()),
+        ..PackUpdateReport::new(PackOutcome::Updated)
+    };
+    status.observe_sugarcubes(PackUpdateStatus::Finished(updated.clone()));
+    assert_eq!(feed(Some(&status)).glyph, UpdateGlyph::Hidden, "nothing to report");
+    let mut caption = CaptionUpdates::default();
+    caption.notify(Notice::update(crate::UpdateNotice::Sugarcubes(updated)));
+    assert_eq!(caption.view(en).line.text, "SugarCubes updated to version 1.1.0");
 }

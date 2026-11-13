@@ -7,7 +7,7 @@ use sugarsubstitute_execution::windows::NativeObservationError;
 use sugarsubstitute_supervision::{FamilyBinding, RegistryAdmissionError, RegistryInputError};
 /// Exact original Parent failure, including the whole failed native completion and its charge.
 pub(in crate::production) enum ReporterParentFailure {
-    Native(JobCompletion<DiagnosticPipeReport, LifecyclePipeFailure>),
+    Native(JobCompletion<PurposePipeReport, LifecyclePipeFailure>),
     Wire(DiagnosticWireError),
     Launch(RegistryAdmissionError),
     Input(RegistryInputError),

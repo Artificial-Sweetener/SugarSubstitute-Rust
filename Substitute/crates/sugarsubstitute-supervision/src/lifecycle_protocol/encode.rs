@@ -99,15 +99,33 @@ fn payload(
             writer.u64(acknowledged_delivery.map_or(0, std::num::NonZeroU64::get))
         }
         WirePayload::MainFailed(value) => main_fields::write_stage_failure(*value, run, writer),
-        WirePayload::SettleAttempt { identity, acquisition, sugarcubes_failed } => {
+        WirePayload::SettleAttempt { identity, acquisition, page_failure } => {
             main_fields::write_identity(*identity, run, writer)?;
             writer.u64(acquisition.get())?;
-            writer.u8(u8::from(*sugarcubes_failed))
+            writer.u8(match page_failure {
+                None => 0,
+                Some(sugarsubstitute_contracts::startup::PageFailure::Sugarcubes) => 1,
+                Some(sugarsubstitute_contracts::startup::PageFailure::Unattributed) => 2,
+            })
         }
         WirePayload::RetryBackend { identity, failed } => {
             main_fields::write_identity(*identity, run, writer)?;
             lease(*failed, writer)
         }
+        WirePayload::UpdateStatus { revision, workflow, status } => {
+            if status.len() > super::MAX_UPDATE_STATUS_BYTES {
+                return Err(ProtocolError::Length);
+            }
+            writer.u64(revision.get())?;
+            writer.u8(match workflow {
+                super::WorkflowQueue::Idle => 1,
+                super::WorkflowQueue::Busy => 2,
+                super::WorkflowQueue::Unobserved => 3,
+            })?;
+            writer.u32(u32::try_from(status.len()).map_err(|_| ProtocolError::Length)?)?;
+            writer.put(status)
+        }
+        WirePayload::RestartToApply => Ok(()),
     }
 }
 fn encode_target(

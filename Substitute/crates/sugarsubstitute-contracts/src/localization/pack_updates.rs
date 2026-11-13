@@ -39,11 +39,13 @@ pub struct PackUpdateMessages {
     pub busy: &'static str,
     /// Report step names: checking, downloading, installing.
     pub steps: [&'static str; 3],
+    /// Report heading of the SugarCubes section.
+    pub report_title: &'static str,
 }
 
 impl PackUpdateMessages {
     /// Enumerate every owned label for complete registry coverage checks.
-    pub const fn labels(&self) -> [&'static str; 17] {
+    pub const fn labels(&self) -> [&'static str; 18] {
         let s = self.steps;
         [
             self.updating,
@@ -63,6 +65,7 @@ impl PackUpdateMessages {
             s[0],
             s[1],
             s[2],
+            self.report_title,
         ]
     }
 }
@@ -84,6 +87,7 @@ pub static EN: PackUpdateMessages = PackUpdateMessages {
     kept_unregistered: "SugarCubes wasn't installed from the registry, so it isn't updated here.",
     busy: "SugarCubes was updating itself, so it was left as it is.",
     steps: ["Checking for a SugarCubes update", "Downloading SugarCubes", "Installing SugarCubes"],
+    report_title: "SugarCubes update",
 };
 
 /// Simplified Chinese words.
@@ -103,6 +107,7 @@ pub static ZH_HANS: PackUpdateMessages = PackUpdateMessages {
     kept_unregistered: "SugarCubes 不是从 Registry 安装的，因此不在此处更新。",
     busy: "SugarCubes 正在自行更新，因此保持原样。",
     steps: ["正在检查 SugarCubes 更新", "正在下载 SugarCubes", "正在安装 SugarCubes"],
+    report_title: "SugarCubes 更新",
 };
 
 /// Japanese words.
@@ -126,6 +131,7 @@ pub static JA: PackUpdateMessages = PackUpdateMessages {
         "SugarCubes をダウンロードしています",
         "SugarCubes をインストールしています",
     ],
+    report_title: "SugarCubes の更新",
 };
 
 /// Korean words.
@@ -145,6 +151,7 @@ pub static KO: PackUpdateMessages = PackUpdateMessages {
     kept_unregistered: "SugarCubes가 Registry에서 설치되지 않았으므로 여기서 업데이트하지 않습니다.",
     busy: "SugarCubes가 스스로 업데이트하는 중이어서 그대로 두었습니다.",
     steps: ["SugarCubes 업데이트 확인 중", "SugarCubes 다운로드 중", "SugarCubes 설치 중"],
+    report_title: "SugarCubes 업데이트",
 };
 
 /// Spanish words.
@@ -168,4 +175,5 @@ pub static ES: PackUpdateMessages = PackUpdateMessages {
         "Descargando SugarCubes",
         "Instalando SugarCubes",
     ],
+    report_title: "Actualización de SugarCubes",
 };

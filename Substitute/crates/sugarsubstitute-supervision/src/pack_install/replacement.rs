@@ -7,8 +7,11 @@
 //! restores every backed-up file. `applied`: the new version is in place and waits for its
 //! first complete start. `started`: the backend finished a full start and the backup waits
 //! for the first page. `unobserved`: the start could not be observed, so the page must also
-//! find every node registered. `page-failed`: the page reported a load failure. Any phase
-//! but `started` and `unobserved` is restored at the next start unless confirmed first.
+//! find every node registered. `page-failed`: the page reported a load failure.
+//! `page-unconfirmed`: a page did not load for a cause the host could not attribute, and no
+//! later page of that run has loaded yet. Any phase but `started` and `unobserved` is
+//! restored at the next start unless confirmed first; those two are restored once three
+//! starts in a row end without their page deciding.
 //! Untracked files are never touched, except that an untracked file where the new release
 //! puts a file is backed up and restored too. The journal lives wherever the caller keeps
 //! its transaction folder; the pack folder holds only the pack.
@@ -44,6 +47,8 @@ pub enum JournalPhase {
     Unobserved,
     /// The first page reported a load failure.
     PageFailed,
+    /// A page did not load for a cause the host could not attribute; a later page decides.
+    PageUnconfirmed,
 }
 
 /// One replacement of an owned pack by an extracted release.
@@ -74,7 +79,7 @@ pub(super) struct Journal {
     old_entries: Vec<String>,
     new_entries: Vec<String>,
     backed_up: Vec<String>,
-    /// Trial endings the host did not witness (power cut, kill) while the version was applied.
+    /// Trial endings the host did not witness (power cut, kill) before the page decided.
     #[serde(default)]
     pub(super) unwitnessed_endings: u32,
 }
@@ -195,7 +200,10 @@ impl TrackedReplacement {
             Some(pending)
                 if matches!(
                     pending.phase,
-                    JournalPhase::Applied | JournalPhase::Started | JournalPhase::Unobserved
+                    JournalPhase::Applied
+                        | JournalPhase::Started
+                        | JournalPhase::Unobserved
+                        | JournalPhase::PageUnconfirmed
                 ) =>
             {
                 self.root.remove_all().map_err(PackInstallError::from)

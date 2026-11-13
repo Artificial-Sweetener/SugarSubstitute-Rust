@@ -5,13 +5,8 @@ mod memory;
 mod native;
 mod socket;
 pub use native::DownloadPort;
-#[cfg(windows)]
-#[allow(unsafe_code)]
-mod random;
 mod wire;
 
-#[cfg(not(windows))]
-use std::io::Read;
 use std::{
     io,
     sync::mpsc::{self, Receiver, SyncSender},
@@ -184,10 +179,7 @@ fn send(commands: &Sender<String>, budget: &memory::Budget, command: String) -> 
 
 fn random_token() -> io::Result<String> {
     let mut bytes = [0; 32];
-    #[cfg(windows)]
-    random::fill(&mut bytes)?;
-    #[cfg(not(windows))]
-    std::fs::File::open("/dev/urandom")?.read_exact(&mut bytes)?;
+    crate::system_random::fill(&mut bytes)?;
     Ok(bytes.iter().map(|byte| format!("{byte:02x}")).collect())
 }
 

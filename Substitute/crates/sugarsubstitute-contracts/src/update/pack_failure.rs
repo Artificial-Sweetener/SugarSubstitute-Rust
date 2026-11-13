@@ -47,10 +47,11 @@ impl PackUpdateFailure {
         }
     }
 
-    /// The failure a SugarCubes update report describes, in `words`; `None` when the report's
-    /// outcome is not a failure. A failed update names the version it tried and its failed
-    /// step, a restore names the version it removed, and a check that reached no release source
-    /// names the checking step. The step's own report line is left out, since the step is
+    /// The failure a SugarCubes update report describes, in `words`; `None` exactly when the
+    /// report does not [need attention](PackUpdateReport::needs_attention). A failed update
+    /// names the version it tried and its failed step, a restore names the version it removed,
+    /// and a check that reached no release source, or stopped before it changed anything, names
+    /// the checking step. The step's own report line is left out, since the step is
     /// shown on its own.
     pub fn from_report(report: &PackUpdateReport, words: &PackUpdateMessages) -> Option<Self> {
         let (version, step, causes) = match report.outcome {
@@ -63,13 +64,14 @@ impl PackUpdateFailure {
                 (report.to.as_deref(), Some(words.steps[step]), vec![&report.code, &report.reason])
             }
             PackOutcome::Restored => (report.from.as_deref(), None, vec![&report.reason]),
-            PackOutcome::CouldNotCheck => (None, Some(words.steps[0]), Vec::new()),
+            PackOutcome::CouldNotCheck | PackOutcome::Stopped => {
+                (None, Some(words.steps[0]), Vec::new())
+            }
             PackOutcome::Updated
             | PackOutcome::UpToDate
             | PackOutcome::Judging
             | PackOutcome::NotManaged
             | PackOutcome::Busy
-            | PackOutcome::Stopped
             | PackOutcome::Available => return None,
         };
         let lines = report.lines(words).into_iter().filter(|line| Some(line.as_str()) != step);
@@ -194,13 +196,45 @@ mod tests {
             PackOutcome::Judging,
             PackOutcome::NotManaged,
             PackOutcome::Busy,
-            PackOutcome::Stopped,
             PackOutcome::Available,
         ] {
             let report =
                 PackUpdateReport { to: Some("0.16.0".into()), ..PackUpdateReport::new(outcome) };
             assert_eq!(PackUpdateFailure::from_report(&report, words), None, "{outcome:?}");
         }
+    }
+
+    /// The window's warning and its report agree: every report that needs attention becomes a
+    /// failure the report shows, and no other does. A stopped update tells the user it couldn't
+    /// check, at the checking step.
+    #[test]
+    fn exactly_the_reports_that_need_attention_become_failures() {
+        let words = &crate::localization::pack_updates::EN;
+        for outcome in [
+            PackOutcome::Updated,
+            PackOutcome::UpToDate,
+            PackOutcome::Restored,
+            PackOutcome::Judging,
+            PackOutcome::NotManaged,
+            PackOutcome::CouldNotCheck,
+            PackOutcome::Busy,
+            PackOutcome::Failed,
+            PackOutcome::Stopped,
+            PackOutcome::Available,
+        ] {
+            let report = PackUpdateReport::new(outcome);
+            let failure = PackUpdateFailure::from_report(&report, words);
+            assert_eq!(failure.is_some(), report.needs_attention(), "{outcome:?}");
+        }
+        assert_eq!(
+            PackUpdateFailure::from_report(&PackUpdateReport::new(PackOutcome::Stopped), words),
+            Some(PackUpdateFailure::new(
+                None,
+                Some(words.steps[0]),
+                [words.could_not_check],
+                [""; 0]
+            ))
+        );
     }
 
     #[test]

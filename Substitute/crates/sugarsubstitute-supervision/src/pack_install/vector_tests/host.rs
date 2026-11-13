@@ -121,6 +121,62 @@ fn unwitnessed_endings_keep_the_update_until_the_limit_counts_as_a_failed_start(
     Ok(())
 }
 
+/// A page that did not load for an unattributed cause keeps the version for a later page of
+/// the same run; with none, the next start restores the previous version, so the version
+/// whose page never loaded does not run a second time.
+#[test]
+fn an_unconfirmed_page_restores_at_the_next_start_unless_a_later_page_loads() -> TestResult {
+    let update = Update::new()?;
+    let transaction =
+        replacement::TrackedReplacement::new(PackTree::at(&update.transaction_root())?);
+    update.apply(&transaction)?;
+    let target = PackTree::at(&update.pack())?;
+    transaction.observe("1.1.0", TrialEvent::BackendStartUnobservable)?;
+    transaction.observe("1.1.0", TrialEvent::PageUnconfirmed)?;
+    let phase = transaction.pending()?.map(|pending| pending.phase);
+    assert_eq!(phase, Some(JournalPhase::PageUnconfirmed));
+    assert_eq!(transaction.settle(&target, TrialEnding::BackendStopped)?, None);
+    let restored = transaction.settle(&target, TrialEnding::Unwitnessed)?.ok_or("kept")?;
+    assert_eq!(restored.reason, RestoreReason::PageDidNotLoad);
+    assert_eq!(restored.restored_version, "1.0.0");
+    assert_eq!(folder_files(&update.pack())?, update.original);
+
+    let update = Update::new()?;
+    let transaction =
+        replacement::TrackedReplacement::new(PackTree::at(&update.transaction_root())?);
+    update.apply(&transaction)?;
+    transaction.observe("1.1.0", TrialEvent::BackendStartUnobservable)?;
+    transaction.observe("1.1.0", TrialEvent::PageUnconfirmed)?;
+    transaction.observe("1.1.0", TrialEvent::PageLoaded { nodes_registered: true })?;
+    assert!(!exists(&update.transaction_root()), "a later page keeps the version");
+    Ok(())
+}
+
+/// A start whose page never decides is pending at the next start, as the shared vectors
+/// say, but three in a row restore the previous version, so a judgement never stays open.
+#[test]
+fn starts_whose_page_never_decides_restore_at_the_unwitnessed_limit() -> TestResult {
+    for observed in
+        [TrialEvent::BackendStartUnobservable, TrialEvent::BackendReady { nodes_registered: true }]
+    {
+        let update = Update::new()?;
+        let transaction =
+            replacement::TrackedReplacement::new(PackTree::at(&update.transaction_root())?);
+        update.apply(&transaction)?;
+        let target = PackTree::at(&update.pack())?;
+        transaction.observe("1.1.0", observed)?;
+        for _ in 1..UNWITNESSED_ENDINGS_LIMIT {
+            assert_eq!(transaction.settle(&target, TrialEnding::Unwitnessed)?, None);
+            assert_eq!(ownership::read_identity(&target)?.version.to_string(), "1.1.0");
+        }
+        let restored =
+            transaction.settle(&target, TrialEnding::Unwitnessed)?.ok_or("never restored")?;
+        assert_eq!(restored.reason, RestoreReason::PageDidNotLoad, "{observed:?}");
+        assert_eq!(folder_files(&update.pack())?, update.original);
+    }
+    Ok(())
+}
+
 #[test]
 fn observations_of_another_version_or_after_the_verdict_change_nothing() -> TestResult {
     let update = Update::new()?;

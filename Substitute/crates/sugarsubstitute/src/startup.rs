@@ -42,6 +42,8 @@ pub(crate) mod updates_page;
 pub(crate) mod view;
 #[path = "startup/window_content.rs"]
 mod window_content;
+#[path = "startup/workflow_restart.rs"]
+mod workflow_restart;
 
 mod appearance;
 mod backend;
@@ -127,6 +129,8 @@ pub struct StartupHost<B: StartupBackend> {
     /// The close save, once the shutdown budget was measured.
     close_save: Option<sugarsubstitute_application::workspace_session::close_save::CloseSave>,
     close_record_submitted: bool,
+    /// A restart to apply that waits for the backend's running workflow.
+    workflow_restart: workflow_restart::WorkflowRestart,
     /// The short graceful cutoff of a critical session end, which waits for nothing.
     critical_until: Option<sugarsubstitute_contracts::execution::Moment>,
     #[cfg(all(test, windows, feature = "native-composition"))]
@@ -214,6 +218,7 @@ impl<B: StartupBackend> StartupHost<B> {
                 sugarsubstitute_application::workspace_session::close_save::CloseReason::Close,
             close_save: None,
             close_record_submitted: false,
+            workflow_restart: workflow_restart::WorkflowRestart::default(),
             critical_until: None,
             #[cfg(all(test, windows, feature = "native-composition"))]
             input_probe: None,
@@ -251,6 +256,8 @@ impl<B: StartupBackend> WindowContent for StartupHost<B> {
         view.sample(startup.session().phase(), elapsed, Instant::now());
         if self.child.cleanup_failed() {
             view.appearance.status = sugarsubstitute_splash::StartupStatus::CleanupFailed;
+        } else if let Some(status) = window_content::updating(&self.child, view.appearance.status) {
+            view.appearance.status = status;
         }
         view.animation.tick(elapsed);
         let progress = view.progress();

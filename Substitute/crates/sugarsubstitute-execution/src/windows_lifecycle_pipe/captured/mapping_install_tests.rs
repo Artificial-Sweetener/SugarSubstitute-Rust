@@ -60,7 +60,11 @@ fn desktop_and_diagnostic_sections_reject_backend_extent_before_taking_storage()
         .ok_or("Desktop accepted undersized backend mapping")?;
     assert_eq!(failure.native_cause().stage(), "captured_mapping_extent");
     drop(context.memory().claim(4096)?);
-    let mut diagnostic = native::Lease::diagnostic_client(DiagnosticRole::Storage, original, None);
+    let mut diagnostic = native::Lease::purpose_client(
+        crate::purpose_pipe::Purpose::Diagnostic(DiagnosticRole::Storage),
+        original,
+        None,
+    );
     let failure = diagnostic
         .install_captured_mapping(
             context.memory().claim(4096)?,

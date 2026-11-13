@@ -140,6 +140,33 @@ fn a_page_failure_restores_at_the_next_start() -> TestResult {
     Ok(())
 }
 
+/// A page that never loaded for an unattributed cause (a frontend that never became usable,
+/// a probe out of time) restores the previous version at the second launch, says so in the
+/// report, and the version whose page never loaded is not installed again.
+#[test]
+fn a_page_that_never_loaded_runs_the_previous_version_at_the_second_launch() -> TestResult {
+    use sugarsubstitute_contracts::localization::pack_updates::EN;
+    let host = Host::new()?;
+    host.publish("1.1.0")?;
+    assert!(matches!(host.run()?, StartupOutcome::Updated { .. }));
+    let update = host.update()?;
+    update.observe(TrialEvent::BackendStartUnobservable)?;
+    update.observe(TrialEvent::PageUnconfirmed)?;
+    let restored = match host.run()? {
+        StartupOutcome::Restored(restored) => restored,
+        other => return Err(format!("not restored: {other:?}").into()),
+    };
+    assert_eq!(restored.reason, RestoreReason::PageDidNotLoad);
+    assert_eq!(host.version()?, "1.0.0");
+    let report = sugarsubstitute_contracts::update::pack::PackUpdateReport::parse(&std::fs::read(
+        host.root.path().join("host-storage").join(REPORT_RECORD),
+    )?)?;
+    assert_eq!(report.notice(&EN).as_deref(), Some(EN.previous_running));
+    assert_eq!(host.run()?, StartupOutcome::UpToDate);
+    assert_eq!(host.version()?, "1.0.0");
+    Ok(())
+}
+
 #[test]
 fn starts_the_host_never_witnessed_keep_the_update_until_they_count_as_one_failure() -> TestResult {
     let host = Host::new()?;

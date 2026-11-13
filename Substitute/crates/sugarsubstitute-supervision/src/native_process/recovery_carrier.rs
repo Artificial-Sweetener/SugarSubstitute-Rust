@@ -74,7 +74,7 @@ impl Family {
                 || self.recovery_carrier.is_some()
                 || input.lifecycle.is_some()
                 || input.fixture_events.is_some()
-                || input.diagnostic.is_some()
+                || input.purpose.is_some()
                 || input.backend_custody.is_some()
                 || self.job.is_none()
             {

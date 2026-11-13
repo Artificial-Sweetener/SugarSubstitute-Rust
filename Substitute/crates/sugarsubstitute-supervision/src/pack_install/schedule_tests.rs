@@ -57,7 +57,12 @@ fn an_attached_comfyui_is_only_checked_and_never_waits_or_is_judged() -> TestRes
     assert!(!schedule.gates(1));
     assert_eq!(schedule.status().0, &PackUpdateStatus::Idle);
     assert_eq!(schedule.start_next(), Some((PackWork::Update { managed: false }, None)));
-    assert_eq!(schedule.ended(PackWorkEnded::Updated(StartupOutcome::UpToDate)), None);
+    let available = StartupOutcome::Available {
+        version: ReleaseVersion::parse("1.1.0")?,
+        unchecked: vec![ReleaseSourceKind::GitHubRelease],
+    };
+    assert_eq!(schedule.ended(PackWorkEnded::Updated(available)), None);
+    assert_eq!(outcome(&schedule), Some(PackOutcome::Available), "the check is shown");
     schedule.observe(TrialEvent::BackendStartUnobservable);
     schedule.backend_stopped();
     schedule.page_failed();
@@ -114,5 +119,29 @@ fn observations_run_in_order_and_an_unfinished_update_still_releases_the_start()
     assert_eq!(schedule.ended(PackWorkEnded::Restored(Some(restored()))), None);
     assert_eq!(outcome(&schedule), Some(PackOutcome::Restored));
     assert_eq!(schedule.start_next(), None);
+    Ok(())
+}
+
+#[test]
+fn an_unattributed_page_failure_is_recorded_without_holding_the_retry() -> TestResult {
+    let mut schedule = PackSchedule::default();
+    schedule.prepare(1, true);
+    schedule.start_next();
+    schedule.ended(PackWorkEnded::Updated(updated()?));
+    schedule.observe(TrialEvent::PageUnconfirmed);
+    assert!(!schedule.prepare(2, true), "the same version may still load its page");
+    assert_eq!(schedule.start_next(), Some((PackWork::Observe(TrialEvent::PageUnconfirmed), None)));
+    assert_eq!(schedule.ended(PackWorkEnded::Observed), None);
+    assert_eq!(outcome(&schedule), Some(PackOutcome::Updated));
+    Ok(())
+}
+
+#[test]
+fn an_attached_check_that_does_not_finish_says_so() -> TestResult {
+    let mut schedule = PackSchedule::default();
+    schedule.prepare(1, false);
+    schedule.start_next();
+    assert_eq!(schedule.ended(PackWorkEnded::Unfinished { stopped: true }), None);
+    assert_eq!(outcome(&schedule), Some(PackOutcome::Stopped));
     Ok(())
 }

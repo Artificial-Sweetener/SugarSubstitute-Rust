@@ -152,6 +152,21 @@ impl ReportPresentation {
         Some(Self::failure(copy, window_title, heading, &version, &step, details))
     }
 
+    /// The window's update report from the host's update status: its latest failed attempt and
+    /// the start's SugarCubes update when that couldn't check or install, stopped, or put the
+    /// previous version back. `None` when neither has anything to report.
+    pub fn updates(
+        copy: &'static Messages,
+        window_title: &str,
+        status: &sugarsubstitute_contracts::update::status::UpdateStatus,
+    ) -> Option<Self> {
+        let pack = status
+            .sugarcubes()
+            .report()
+            .and_then(|report| PackUpdateFailure::from_report(report, copy.pack_updates));
+        Self::failed_updates(copy, window_title, status.failure(), pack.as_ref())
+    }
+
     /// An update failure headed by `heading` (title and explanation), with version and step as
     /// summary facts and `details` as the full report.
     fn failure(

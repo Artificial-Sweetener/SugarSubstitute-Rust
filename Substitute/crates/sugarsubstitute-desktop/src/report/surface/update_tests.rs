@@ -272,3 +272,56 @@ fn a_report_from_any_source_shows_and_exports_no_path_address_or_credential() ->
     }
     Ok(())
 }
+
+/// The window's update report carries the start's SugarCubes report from the update status:
+/// alone it is a SugarCubes update failure, and after a failed attempt it follows the attempt's
+/// section.
+#[test]
+fn the_update_report_carries_the_sugarcubes_report() {
+    use sugarsubstitute_contracts::update::{
+        attempt::{AttemptOutcome, AttemptPhase, UpdateReport as Attempt},
+        pack::{PackOutcome, PackUpdateReport, PackUpdateStatus},
+        status::UpdateStatus,
+    };
+    let en = messages("en");
+    let mut status = UpdateStatus::default();
+    assert!(ReportPresentation::updates(en, "SugarSubstitute", &status).is_none());
+    status.observe_sugarcubes(PackUpdateStatus::Finished(PackUpdateReport::new(
+        PackOutcome::UpToDate,
+    )));
+    assert!(ReportPresentation::updates(en, "SugarSubstitute", &status).is_none());
+    status.observe_sugarcubes(PackUpdateStatus::Finished(PackUpdateReport {
+        step: Some("downloading".into()),
+        code: Some("source".into()),
+        unchecked: vec!["registry".into()],
+        ..PackUpdateReport::new(PackOutcome::Failed)
+    }));
+    let alone = ReportPresentation::updates(en, "SugarSubstitute", &status);
+    let alone =
+        alone.as_ref().map(|report| (report.content.title.as_str(), report.details.as_deref()));
+    let words = en.pack_updates;
+    let expected = format!(
+        "{}\n{}: {}\n{}: {}\n\n{}\n{}\nsource\n",
+        en.report.pack_update_title,
+        en.report.version,
+        en.report.unavailable,
+        en.report.update_phase,
+        words.steps[1],
+        words.could_not_update,
+        words.registry_unchecked,
+    );
+    assert_eq!(alone, Some((en.report.pack_update_title, Some(expected.as_str()))));
+    status.begin();
+    status.finish(
+        Some(AttemptOutcome::Failed(Attempt {
+            version: Some("2.0.0".into()),
+            phase: AttemptPhase::Downloading,
+            causes: vec!["The download stopped".into()],
+        })),
+        5,
+    );
+    let both = ReportPresentation::updates(en, "SugarSubstitute", &status).and_then(|r| r.details);
+    let both = both.unwrap_or_default();
+    assert!(both.starts_with("Update failed\nVersion: 2.0.0\n"), "{both}");
+    assert!(both.ends_with(&format!("\n\n{expected}")), "{both}");
+}

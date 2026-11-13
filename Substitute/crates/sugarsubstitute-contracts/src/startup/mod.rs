@@ -22,6 +22,6 @@ pub use intents::{ConnectionCleanup, SplashIntent, StartupEffect};
 pub use main_identity::MainIdentity;
 
 pub use readiness::{
-    FrontendEvidence, LaunchId, ProbeFailure, ReadinessError, ReadinessFailure, ReadinessOutcome,
-    ReadinessReceipt, validate_frontend_version,
+    FrontendEvidence, LaunchId, PageFailure, ProbeFailure, ReadinessError, ReadinessFailure,
+    ReadinessOutcome, ReadinessReceipt, validate_frontend_version,
 };
