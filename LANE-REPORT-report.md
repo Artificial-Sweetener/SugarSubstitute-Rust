@@ -11,7 +11,7 @@
   `lines` is `report.lines(w)` minus the step line, which the summary already shows. `new` redacts and bounds everything it is given.
 
 ## Unproven
-- 3 desktop report-lifetime tests can't run under Wine (DirectWrite returns `E_NOTIMPL`; untouched report tests fail the same way): Copy equals Export, nothing private copied or exported, and Export hidden without a writer. Windows CI can't link tests yet (baseline).
+- Baseline failure, not D4w: `windows_controls::caption::tests::every_update_caption_state_shows_on_the_real_caption_peers` fails on Windows the same way every run. The update button and restart offer paint nothing in any state (`ready 0, warning 0`, `peer 6 shows no words`). The integration lane fails identically at 2091d324. This lane doesn't touch caption painting; the caption owner should root-cause it.
 - Native capture of the combined report over the main window.
 
 ## Decisions made
@@ -20,6 +20,7 @@
 - Redaction lives in `attempt/redact.rs` and is a fixed point, so the attempt channel's `sanitize(cause) == cause` check holds. It's stricter now (paths with spaces, relative, home and `%VAR%` paths, host:port, IP and e-mail, credential values, tokens, control characters). No helper with the old rules has shipped, so the protocol version stays. After release, changing `sanitize` needs a protocol bump.
 - The surface redacts every cause again before showing it.
 - SugarCubes wording stays with its owner (`PackUpdateMessages`). I added only `pack_update_title` and `pack_update_message`, in all 5 locales.
+- Coord's branch (64b4c067) still has no export writer, and packinstall's `PackUpdateReport` isn't on this branch, so both stay seams (`UpdateExport` and `StartupHost::pack_update_failure`) as described under Unfinished. Building the writer would mean editing coord's `startup/window_content.rs`.
 - **Hazard:** `host_contract.rs` is at its 500-line limit; the next addition must extract code first.
 
 ## Commits
@@ -31,8 +32,9 @@
 - Windows-target Clippy (`-D warnings`), all three legs: pass.
 - `cargo test -p sugarsubstitute-contracts`: 324 passed, including 9 new redaction tests and 2 `PackUpdateFailure` tests.
 - Desktop tests under Wine: all 9 `main_updates` tests pass, including the new SugarCubes warning test. 5 of the 8 update report surface tests pass; the other 3 hit the Wine gap above.
+- Windows (local, 0c988590): `cargo xtask check` passes. `cargo test -p sugarsubstitute-contracts update`: 51 passed, including the redaction and `PackUpdateFailure` tests. `cargo test -p sugarsubstitute-desktop update`: 31 of 32 matched tests pass. All 8 update report surface tests pass, including the 3 Wine couldn't run (Copy equals Export, nothing private copied or exported, Export hidden without a writer), and all 10 `main_updates` caption-state tests pass. The one failure is the caption baseline under Unproven.
 - CI: [Substitute verification run 43369278225](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43369278225). Baseline only: all three OSes stop at "resolve third_party/comfy-desktop/src/main/lib/download.ts".
 
 ## Next
 - **coord:** both Unfinished items. Expect a small conflict in `main_updates.rs` (my hunk is only `UpdateFeed::read`) and a `catalog.toml` fingerprint resync.
-- **Integrator:** rerun the 3 desktop report tests once Windows test linking works.
+- **Caption owner:** the native caption paint failure under Unproven.
