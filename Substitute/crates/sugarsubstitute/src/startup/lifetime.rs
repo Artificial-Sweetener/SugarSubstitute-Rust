@@ -2,8 +2,6 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Keep actual child cleanup admission open until native/render ownership settles.
 use super::*;
-#[cfg(all(windows, feature = "native-composition"))]
-use sugarsubstitute_contracts::execution::Clock;
 use sugarsubstitute_desktop::StartupCloseStage;
 
 impl<B: StartupBackend> StartupHost<B> {
@@ -113,12 +111,7 @@ impl<B: StartupBackend> StartupHost<B> {
         };
         if let Some(origin) = origin {
             match self.shutdown.request(origin, || {
-                if self.execution.has_owner() {
-                    self.execution.now()
-                } else {
-                    use sugarsubstitute_contracts::execution::Clock;
-                    Ok(self.clock.now())
-                }
+                if self.execution.has_owner() { self.execution.now() } else { Ok(self.clock.now()) }
             }) {
                 Ok(Some(_)) => {}
                 Ok(None) => {}
@@ -192,7 +185,6 @@ impl<B: StartupBackend> StartupHost<B> {
         let canvas = true;
         #[cfg(all(windows, feature = "native-composition"))]
         let composition = {
-            use sugarsubstitute_contracts::execution::Clock;
             let now = if self.execution.has_owner() {
                 self.execution.now()
             } else {
@@ -248,7 +240,6 @@ impl<B: StartupBackend> StartupHost<B> {
         }
         #[cfg(all(windows, feature = "native-composition"))]
         if let Some(composition) = &mut self.composition {
-            use sugarsubstitute_contracts::execution::Clock;
             let now = if self.execution.has_owner() {
                 self.execution.now()
             } else {

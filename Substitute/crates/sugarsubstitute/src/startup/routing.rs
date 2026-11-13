@@ -4,11 +4,6 @@
 use super::consume_diagnostic::observe as observed_consume;
 use super::*;
 use policy::StartupRoute;
-#[cfg(all(
-    windows,
-    any(feature = "native-composition", feature = "windows-native-host", test)
-))]
-use sugarsubstitute_contracts::execution::Clock;
 use sugarsubstitute_contracts::startup::StartupEffect;
 use sugarsubstitute_desktop::StartupConsumeStage as ConsumeStage;
 

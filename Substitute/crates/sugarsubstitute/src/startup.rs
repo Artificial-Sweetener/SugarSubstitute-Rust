@@ -58,6 +58,8 @@ pub use backend::{BackendResult, PreparedStartup, StartupBackend};
 #[cfg(all(windows, feature = "native-composition"))]
 mod workspace;
 use execution::StartupExecution;
+mod host_clock;
+pub use host_clock::HostClock;
 use policy::StartupPolicy;
 pub use scopes::StartupScopes;
 pub use shutdown_origin::ShutdownInitiation;
@@ -78,7 +80,6 @@ use sugarsubstitute_desktop::{
     AccessibleControl, DesktopStartupCommand, DesktopStartupObservation, HitTarget, KeyAction,
     Pointer, PointerAction, StartupPreparationStep, StartupWindowContent, WindowContent,
 };
-use sugarsubstitute_execution::MonotonicClock;
 use view::StartupView;
 
 #[cfg(test)]
@@ -99,7 +100,7 @@ pub struct StartupHost<B: StartupBackend> {
     startup: Option<B::Prepared>,
     child: B,
     execution: StartupExecution,
-    clock: Arc<MonotonicClock>,
+    clock: Arc<dyn HostClock>,
     jobs: JobSequence,
     scopes: StartupScopes,
     preparation: Option<PreparationDriver>,
@@ -138,7 +139,7 @@ pub(crate) fn constructor_roundtrip<B: StartupBackend>(
         run,
         launch,
         child,
-        MonotonicClock::new(),
+        sugarsubstitute_execution::MonotonicClock::new(),
         jobs,
         StartupScopes {
             child: sugarsubstitute_contracts::execution::ScopeSpec {
@@ -162,7 +163,7 @@ impl<B: StartupBackend> StartupHost<B> {
         run: RunKey,
         launch: LaunchId,
         child: B,
-        clock: Arc<MonotonicClock>,
+        clock: Arc<dyn HostClock>,
         jobs: JobSequence,
         scopes: StartupScopes,
     ) -> Result<Self, Box<dyn Error>> {

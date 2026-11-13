@@ -4455,7 +4455,7 @@ rationale = "Owned temporary PNG outputs are read into the fixture cache as enco
 [[records]]
 path = "crates/sugarsubstitute/src/startup/platform_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:131b4f0bf9fa9e730d63c70c38f6fe6a66415047b308a5cb70b5a4834a9f6212"
+source_sha256 = "sha256:ba581a2b9e10137e2e8acc8ace36e1327d3fd3607560023bf90c98686d976d3b"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
 rationale = "An owned temporary cache anchor verifies platform startup rejects invalid canvas scope and path configurations."
@@ -4931,7 +4931,7 @@ rationale = "An owned temporary workspace is seeded with a previous run's checkp
 [[records]]
 path = "crates/sugarsubstitute/src/startup/workspace/close_save_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:ff774bc0e6210bf8931603cef496650e6f7170d9624e4eba9652ee1b2cad8f16"
+source_sha256 = "sha256:f97558ccadd42ca6cd340f3a209a41d76d369b8ebe27e561df208b2293b1683e"
 capabilities = ["std::fs::remove_dir_all", "std::fs::write"]
 disposition = "fixture"
 rationale = "The owned temporary workspace's checkpoint folder is replaced by a file to inject a failed final publication, which the close save must record before the exit intent."
@@ -4963,7 +4963,7 @@ rationale = "Owned temporary checkpoint files qualify atomic publication, exact 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/workspace/closing_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:096d53bf1c6ada645884710b5d323fa45e53edd0e8f2d09f426eb597c35f6564"
+source_sha256 = "sha256:2a24b978d69867bdd862999346c598a6da6e5b8e79f50312ecb0bbfb1d3c5e77"
 capabilities = ["tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "An owned temporary workspace drives actual missing-checkpoint load and durable publication through the execution owner, proving ordinary startup polling retains the native peer until final delivery or the unchanged capture cutoff."
