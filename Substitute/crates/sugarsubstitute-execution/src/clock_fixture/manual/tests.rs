@@ -59,6 +59,20 @@ fn a_deadline_already_reached_completes_on_the_first_poll() {
     assert_eq!(wakes.0.load(Ordering::SeqCst), 0);
 }
 
+/// A driver waiting for a sleeper learns that the timed work ended instead of waiting forever,
+/// and still sees a sleeper that was parked before the work ended.
+#[test]
+fn a_sleeper_wait_returns_when_the_timed_work_ends_without_parking() {
+    let clock = ManualClock::new();
+    let wakes = Arc::new(Wakes::default());
+    let mut wait = clock.sleep_until(moment(10));
+    assert_eq!(poll(&mut wait, &wakes), Poll::Pending);
+    assert!(clock.wait_for_sleeper_or_end(moment(10)));
+    clock.mark_work_ended();
+    assert!(clock.wait_for_sleeper_or_end(moment(10)));
+    assert!(!clock.wait_for_sleeper_or_end(moment(20)));
+}
+
 #[test]
 fn dropping_a_wait_releases_its_registration() {
     let clock = ManualClock::new();

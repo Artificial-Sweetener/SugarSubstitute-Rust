@@ -17,6 +17,8 @@ struct State {
     nanos: u64,
     next_sleeper: u64,
     sleepers: HashMap<u64, (Moment, Waker)>,
+    /// The work this clock times has ended; no further sleeper will be parked by it.
+    ended: bool,
 }
 
 #[derive(Default)]
@@ -110,6 +112,28 @@ impl ManualClock {
                 })
                 .unwrap_or_else(PoisonError::into_inner),
         );
+    }
+
+    /// Block until a wait for exactly `deadline` is parked, or until [`Self::mark_work_ended`]
+    /// reports that the timed work has ended without parking it. Returns whether the wait was
+    /// parked. A test driver uses this so a job that fails before it waits fails the test instead
+    /// of hanging it; like [`Self::wait_for_sleeper`] it has no wall-clock bound.
+    pub fn wait_for_sleeper_or_end(&self, deadline: Moment) -> bool {
+        let state = self
+            .shared
+            .registered
+            .wait_while(self.shared.locked(), |state| {
+                !state.ended && !state.sleepers.values().any(|(parked, _)| *parked == deadline)
+            })
+            .unwrap_or_else(PoisonError::into_inner);
+        state.sleepers.values().any(|(parked, _)| *parked == deadline)
+    }
+
+    /// Record that the work this clock times has ended, waking every
+    /// [`Self::wait_for_sleeper_or_end`] caller.
+    pub fn mark_work_ended(&self) {
+        self.shared.locked().ended = true;
+        self.shared.registered.notify_all();
     }
 }
 

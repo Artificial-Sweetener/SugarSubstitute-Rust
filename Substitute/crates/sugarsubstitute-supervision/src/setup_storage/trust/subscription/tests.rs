@@ -132,7 +132,7 @@ fn preference_writes_wait_for_the_trust_writer_but_leave_application_run_availab
             holder.try_lock()?;
             driver.handoff.reach(2);
             let bound = Moment::from_nanos(0).checked_add(WAIT)?;
-            driver.clock.wait_for_sleeper(bound);
+            driver.paused(bound)?;
             driver.clock.advance_to(bound)?;
             driver.handoff.wait(3);
             drop(holder);

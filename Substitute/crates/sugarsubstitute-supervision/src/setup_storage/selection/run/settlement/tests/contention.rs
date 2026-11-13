@@ -80,10 +80,10 @@ fn contended(
             let mut bound = Moment::from_nanos(0);
             for _ in 0..bounds {
                 bound = bound.checked_add(WAIT)?;
-                driver.clock.wait_for_sleeper(bound);
+                driver.paused(bound)?;
                 driver.clock.advance_to(bound)?;
             }
-            driver.clock.wait_for_sleeper(bound.checked_add(WAIT)?);
+            driver.paused(bound.checked_add(WAIT)?)?;
             match ending {
                 Ending::Release => drop(holder),
                 Ending::Cancel => {
