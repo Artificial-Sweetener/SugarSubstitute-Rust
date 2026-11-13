@@ -92,6 +92,13 @@ pub(crate) enum Notice {
     PreviousVersionRunning,
     /// The previous version is running while the newer one is repaired.
     Repairing,
+    /// A line the host composed.
+    Line {
+        /// The line's stable localized name.
+        label: &'static str,
+        /// What the line says.
+        text: String,
+    },
 }
 
 impl Notice {
@@ -112,6 +119,7 @@ impl Notice {
             }
             crate::UpdateNotice::PreviousVersionRunning => Self::PreviousVersionRunning,
             crate::UpdateNotice::Repairing => Self::Repairing,
+            crate::UpdateNotice::Line { label, text } => Self::Line { label, text },
         }
     }
 }
@@ -273,6 +281,9 @@ impl CaptionUpdates {
             },
             Some(Notice::PreviousVersionRunning) => PeerView::shown(true, updates.previous_running),
             Some(Notice::Repairing) => PeerView::shown(true, updates.repairing),
+            Some(Notice::Line { label, text }) => {
+                PeerView { visible: true, label: *label, text: Cow::Owned(text.clone()) }
+            }
         };
         UpdateCaptionView {
             glyph,

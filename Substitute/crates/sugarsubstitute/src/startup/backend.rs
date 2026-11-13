@@ -221,6 +221,32 @@ pub trait StartupBackend {
     fn take_update_notice(
         &mut self,
     ) -> Option<sugarsubstitute_contracts::update::status::StartupNotice>;
+    /// The splash line while a host step holds the start, such as "Updating SugarCubes…" while
+    /// the coordinator installs a SugarCubes update, in `words`' language. The application's
+    /// own "Updating to version X…" line wins over it.
+    fn startup_step(
+        &self,
+        words: &'static sugarsubstitute_contracts::localization::Messages,
+    ) -> Option<&'static str> {
+        let _ = words;
+        None
+    }
+    /// Take, once, the next plain line a host step left for the window, such as what the start's
+    /// SugarCubes update did: its stable localized name and what it says. The window shows it
+    /// after the application's own start-up update messages.
+    fn take_step_notice(
+        &mut self,
+        words: &'static sugarsubstitute_contracts::localization::Messages,
+    ) -> Option<(&'static str, String)> {
+        let _ = words;
+        None
+    }
+    /// The update report of a host step that failed, such as the start's SugarCubes update. The
+    /// window reports it through the update button and the update report, Copy and Export
+    /// included, whenever the application's own latest attempt has not failed.
+    fn step_failure(&self) -> Option<sugarsubstitute_contracts::update::attempt::UpdateReport> {
+        None
+    }
     /// Tell the coordinator this close restarts the application so a prepared update applies.
     /// Called once, after the close save's outcome exists and before `request_shutdown`.
     fn request_restart_to_apply(&mut self) -> BackendResult<()>;

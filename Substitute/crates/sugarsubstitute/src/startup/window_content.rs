@@ -77,8 +77,23 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
         }
     }
 
+    /// The coordinator's status, reporting a failed host step, such as the start's SugarCubes
+    /// update, while the application's own updater has no failure and no attempt running.
     fn update_status(&self) -> Option<sugarsubstitute_contracts::update::status::UpdateStatus> {
-        let status = self.child.update_status()?.clone();
+        use sugarsubstitute_contracts::update::{attempt::AttemptOutcome, status::UpdateActivity};
+        let step = self.child.step_failure();
+        let mut status = match (self.child.update_status(), &step) {
+            (Some(status), _) => status.clone(),
+            (None, Some(_)) => sugarsubstitute_contracts::update::status::UpdateStatus::default(),
+            (None, None) => return None,
+        };
+        if let Some(report) = step
+            && status.failure().is_none()
+            && status.activity() == UpdateActivity::Idle
+        {
+            let checked = status.last_successful_check_utc().unwrap_or_default();
+            status.finish(Some(AttemptOutcome::Failed(report)), checked);
+        }
         Some(
             self.workflow_restart.presented(status, self.locale_messages().updates.restart_dropped),
         )
@@ -89,18 +104,25 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
     fn take_update_notice(&mut self) -> Option<sugarsubstitute_desktop::UpdateNotice> {
         use sugarsubstitute_contracts::update::status::StartupNotice;
         use sugarsubstitute_desktop::UpdateNotice;
-        Some(match self.child.take_update_notice()? {
-            StartupNotice::Updated(version) => {
-                // Only a build with update configuration names its release notes.
-                #[cfg(all(windows, feature = "windows-native-host"))]
-                let changelog = crate::updates::release_notes(&version);
-                #[cfg(not(all(windows, feature = "windows-native-host")))]
-                let changelog = None;
-                UpdateNotice::Updated { version, changelog }
-            }
-            StartupNotice::Repairing => UpdateNotice::Repairing,
-            StartupNotice::PreviousVersionRunning => UpdateNotice::PreviousVersionRunning,
-        })
+        self.child
+            .take_update_notice()
+            .map(|notice| match notice {
+                StartupNotice::Updated(version) => {
+                    // Only a build with update configuration names its release notes.
+                    #[cfg(all(windows, feature = "windows-native-host"))]
+                    let changelog = crate::updates::release_notes(&version);
+                    #[cfg(not(all(windows, feature = "windows-native-host")))]
+                    let changelog = None;
+                    UpdateNotice::Updated { version, changelog }
+                }
+                StartupNotice::Repairing => UpdateNotice::Repairing,
+                StartupNotice::PreviousVersionRunning => UpdateNotice::PreviousVersionRunning,
+            })
+            .or_else(|| {
+                let words = self.locale_messages();
+                let (label, text) = self.child.take_step_notice(words)?;
+                Some(UpdateNotice::Line { label, text })
+            })
     }
 
     fn workflow_activity(&self) -> sugarsubstitute_desktop::WorkflowActivity {
@@ -291,11 +313,13 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
 
 /// The splash line while this launch starts a new version for the first time: "Updating to
 /// version X…" in place of the ordinary loading lines, until the coordinator confirms the
-/// version. Failure, retry and cleanup lines always win, and a version label the splash cannot
-/// show leaves the ordinary line.
+/// version, and otherwise the line of a host step that holds the start, such as "Updating
+/// SugarCubes…". Failure, retry and cleanup lines always win, and a version label the splash
+/// cannot show leaves the ordinary line.
 pub(super) fn updating<B: StartupBackend>(
     child: &B,
     current: sugarsubstitute_splash::StartupStatus,
+    words: &'static sugarsubstitute_contracts::localization::Messages,
 ) -> Option<sugarsubstitute_splash::StartupStatus> {
     use sugarsubstitute_splash::StartupStatus;
     if !matches!(
@@ -304,6 +328,8 @@ pub(super) fn updating<B: StartupBackend>(
     ) {
         return None;
     }
-    let version = child.update_status()?.applying()?;
-    sugarsubstitute_splash::UpdateVersion::new(version).map(StartupStatus::Updating)
+    if let Some(version) = child.update_status().and_then(|status| status.applying()) {
+        return sugarsubstitute_splash::UpdateVersion::new(version).map(StartupStatus::Updating);
+    }
+    child.startup_step(words).map(StartupStatus::Step)
 }

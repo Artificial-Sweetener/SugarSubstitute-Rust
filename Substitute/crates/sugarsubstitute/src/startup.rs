@@ -238,12 +238,15 @@ impl<B: StartupBackend> WindowContent for StartupHost<B> {
             .startup
             .as_ref()
             .ok_or_else(|| std::io::Error::other("Actual startup policy absent"))?;
+        let words = self.locale_messages();
         let view =
             self.view.as_mut().ok_or_else(|| std::io::Error::other("Startup view absent"))?;
         view.sample(startup.session().phase(), elapsed, Instant::now());
         if self.child.cleanup_failed() {
             view.appearance.status = sugarsubstitute_splash::StartupStatus::CleanupFailed;
-        } else if let Some(status) = window_content::updating(&self.child, view.appearance.status) {
+        } else if let Some(status) =
+            window_content::updating(&self.child, view.appearance.status, words)
+        {
             view.appearance.status = status;
         }
         view.animation.tick(elapsed);

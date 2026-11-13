@@ -219,6 +219,7 @@ impl RenderStages {
                         );
                         updating.as_str()
                     }
+                    crate::StartupStatus::Step(line) => line,
                     crate::StartupStatus::Loading => operation[0],
                     crate::StartupStatus::LoadingLong => operation[1],
                     crate::StartupStatus::LoadingExtended => operation[2],

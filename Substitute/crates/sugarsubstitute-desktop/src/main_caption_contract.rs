@@ -66,4 +66,12 @@ pub enum UpdateNotice {
     /// The newer version's files were damaged, so the one before it is running while the
     /// update is downloaded again.
     Repairing,
+    /// A line the host composed through the localization owner, such as what the start's
+    /// SugarCubes update did.
+    Line {
+        /// The line's stable localized name.
+        label: &'static str,
+        /// What the line says.
+        text: String,
+    },
 }

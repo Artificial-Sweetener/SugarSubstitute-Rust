@@ -39,6 +39,9 @@ pub enum StartupStatus {
     CleanupFailed,
     /// A new version is being applied before the application opens.
     Updating(crate::UpdateVersion),
+    /// A host step holds the start, in the host's words from the localization owner, such as
+    /// "Updating SugarCubes…" while the host installs a SugarCubes update.
+    Step(&'static str),
 }
 
 /// Supply portable appearance state; process and connection state stay elsewhere.

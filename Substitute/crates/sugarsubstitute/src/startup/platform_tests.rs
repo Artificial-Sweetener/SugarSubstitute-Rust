@@ -41,6 +41,13 @@ pub(super) struct Platform {
     /// Start-up messages this fake child still has for the window.
     pub(in crate::startup) notices:
         std::collections::VecDeque<sugarsubstitute_contracts::update::status::StartupNotice>,
+    /// The splash line of a host step this fake child reports.
+    pub(in crate::startup) step: Option<&'static str>,
+    /// Plain lines a host step left for the window.
+    pub(in crate::startup) step_notices: std::collections::VecDeque<(&'static str, String)>,
+    /// The report of a host step that failed.
+    pub(in crate::startup) step_failure:
+        Option<sugarsubstitute_contracts::update::attempt::UpdateReport>,
 }
 impl StartupBackend for Platform {
     type Prepared = Prepared;
@@ -169,6 +176,21 @@ impl StartupBackend for Platform {
         &mut self,
     ) -> Option<sugarsubstitute_contracts::update::status::StartupNotice> {
         self.notices.pop_front()
+    }
+    fn startup_step(
+        &self,
+        _: &'static sugarsubstitute_contracts::localization::Messages,
+    ) -> Option<&'static str> {
+        self.step
+    }
+    fn take_step_notice(
+        &mut self,
+        _: &'static sugarsubstitute_contracts::localization::Messages,
+    ) -> Option<(&'static str, String)> {
+        self.step_notices.pop_front()
+    }
+    fn step_failure(&self) -> Option<sugarsubstitute_contracts::update::attempt::UpdateReport> {
+        self.step_failure.clone()
     }
     fn request_restart_to_apply(&mut self) -> BackendResult<()> {
         self.restart_requests += 1;

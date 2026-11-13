@@ -245,3 +245,19 @@ fn a_repair_is_one_plain_line_in_every_language() {
     assert_eq!(caption.activate(DISMISS), (true, None));
     assert_eq!(shown(&caption.view(en)), Vec::<u16>::new());
 }
+
+#[test]
+fn a_host_line_shows_its_own_words_under_its_stable_name_with_no_link() {
+    let mut caption = CaptionUpdates::default();
+    caption.notify(Notice::update(crate::UpdateNotice::Line {
+        label: "SugarCubes update",
+        text: "SugarCubes was updated to version 3.1.0.".into(),
+    }));
+    let view = caption.view(messages("en"));
+    assert_eq!(shown(&view), vec![LINE, DISMISS]);
+    assert_eq!(view.line.label, "SugarCubes update");
+    assert_eq!(view.line.text, "SugarCubes was updated to version 3.1.0.");
+    assert_eq!(caption.activate(LINK), (false, None), "a host line has no link");
+    assert_eq!(caption.activate(DISMISS), (true, None));
+    assert_eq!(shown(&caption.view(messages("en"))), Vec::<u16>::new());
+}
