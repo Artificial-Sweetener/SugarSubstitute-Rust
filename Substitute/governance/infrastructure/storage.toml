@@ -698,7 +698,7 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute-execution/src/runtime.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:5b14d1d2386ea327a38cfb7458dad9ae559c33bb94fca9a970e2911d4ab1fd78"
+source_sha256 = "sha256:6e1a3bcf18cb1e4a0fd8cbc1d6fe92ffe3ddd0c8ad23ccd55ea2781c97aed376"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Execution clock, admitted memory or retained task metadata for: Compose the sole private scheduler and retain every worker through actual shutdown. This receiver does not inspect filesystem state."
@@ -4335,7 +4335,7 @@ rationale = "Owned temporary directories keep viewer document and refinement fix
 [[records]]
 path = "crates/sugarsubstitute/src/native_canvas/session/tests/display.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:a0bf481dae9db00ab176b23b4201ae7e2ecd45668745fd46b4c316344d04589c"
+source_sha256 = "sha256:2fc276f7998d780b2ce549d4b5fcb82cca3d66ee0394085723018cf5508bde85"
 capabilities = ["tempfile::TempDir"]
 disposition = "fixture"
 rationale = "The admitted document and display publication fixture retains its isolated temporary directory through the actual session and execution lifetime. Temporary directory construction remains in the shared viewer test helper."
@@ -4423,7 +4423,7 @@ rationale = "Corrupts unpinned reconstructed source archives inside the fixture'
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/input.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:09ab1f8bf493ae27808c4487363ddca3c41abe2c05f4e325aab1d3d3cd5ea6c7"
+source_sha256 = "sha256:9d03dcbbc43d53e550f4b8eed6504e730755061f01d736ddd4ef554ef23c9800"
 capabilities = ["std::fs::read"]
 disposition = "fixture"
 rationale = "Reads the staged drag-out copies inside the fixture's owned temporary cache to verify their exact bytes, name and bounded retention."

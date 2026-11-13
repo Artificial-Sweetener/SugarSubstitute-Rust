@@ -164,6 +164,13 @@ pub struct ShutdownProgress {
     pub queued: usize,
     /// Jobs executing work or supervised factory/result destruction.
     pub running: usize,
+    /// A capacity wake for a release this observation already reflects is still being delivered.
+    ///
+    /// Releasing a retired record or reserved capacity becomes observable under the admission
+    /// lock, but its completion wake is delivered after that lock is released. An observer that
+    /// finds no work while this is set must wait for that wake rather than conclude that nothing
+    /// will wake it. Always false once shutdown suppresses undelivered capacity wakes.
+    pub capacity_wake_pending: bool,
     /// Actual retained worker observations.
     pub workers: WorkerStatus,
 }
