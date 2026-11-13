@@ -1,0 +1,60 @@
+name: Substitute verification
+
+on:
+  push:
+    paths:
+      - 'Substitute/**'
+      - 'Sugar/integrations/contracts/**'
+      - '.github/workflows/substitute-verify.yml'
+      - '!**/*.md'
+  pull_request:
+    paths:
+      - 'Substitute/**'
+      - 'Sugar/integrations/contracts/**'
+      - '.github/workflows/substitute-verify.yml'
+      - '!**/*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: Substitute
+
+jobs:
+  verify:
+    name: Verify (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Prepare repository-pinned Rust
+        run: rustup show active-toolchain
+      - name: Verify governance, formatting, lints, tests and Rustdoc
+        shell: pwsh
+        run: |
+          if ($IsWindows) {
+            $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+            $instance = & $vswhere -version '[17.0,18.0)' -products Microsoft.VisualStudio.Product.Enterprise -property installationPath
+            if (-not $instance -or @($instance).Count -ne 1) {
+              throw 'Expected one Visual Studio 2022 Enterprise instance on the Windows runner.'
+            }
+            Import-Module (Join-Path $instance 'Common7\Tools\Microsoft.VisualStudio.DevShell.dll')
+            Enter-VsDevShell -VsInstallPath $instance -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64' | Out-Null
+          }
+          cargo xtask verify
+          exit $LASTEXITCODE

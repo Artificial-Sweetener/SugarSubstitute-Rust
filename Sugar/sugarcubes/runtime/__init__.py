@@ -1,0 +1,60 @@
+#    SugarCubes - composable workflow units for ComfyUI
+#    Copyright (C) 2026  Artificial Sweetener and contributors
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU Affero General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU Affero General Public License for more details.
+#
+#    You should have received a copy of the GNU Affero General Public License
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""Expose SugarCubes runtime hooks for optional host integrations."""
+
+from .cube_output_events import (
+    CUBE_OUTPUT_OBSERVER_API_VERSION,
+    CubeOutputArtifact,
+    CubeOutputEvent,
+    CubeOutputEventBus,
+    CubeOutputObserver,
+    MediaKind,
+    notify_cube_output_observers,
+    register_cube_output_observer,
+    unregister_cube_output_observer,
+)
+from .execution_nodes import (
+    EXECUTION_NODE_RESOLVER_API_VERSION,
+    execution_node_resolver_registry,
+    register_execution_node_resolver,
+    unregister_execution_node_resolver,
+)
+from .queue_observers import (
+    QUEUE_OBSERVER_API_VERSION,
+    queue_observer_registry,
+    register_validated_queue_observer,
+    unregister_validated_queue_observer,
+)
+
+__all__ = [
+    "CUBE_OUTPUT_OBSERVER_API_VERSION",
+    "EXECUTION_NODE_RESOLVER_API_VERSION",
+    "execution_node_resolver_registry",
+    "register_execution_node_resolver",
+    "unregister_execution_node_resolver",
+    "CubeOutputArtifact",
+    "CubeOutputEvent",
+    "CubeOutputEventBus",
+    "CubeOutputObserver",
+    "MediaKind",
+    "QUEUE_OBSERVER_API_VERSION",
+    "notify_cube_output_observers",
+    "register_cube_output_observer",
+    "queue_observer_registry",
+    "register_validated_queue_observer",
+    "unregister_cube_output_observer",
+    "unregister_validated_queue_observer",
+]
