@@ -131,3 +131,51 @@ fn a_damaged_receipt_is_refused_rather_than_ignored() -> TestResult {
     assert!(!names(&failure, ReceiptRefusal::Aged));
     fixture.preserved()
 }
+
+#[test]
+fn a_receipt_stage_torn_by_a_power_cut_never_replaces_the_receipt() -> TestResult {
+    let (fixture, original) = prepared()?;
+    let stage = format!("{}{:032x}", crate::setup_storage::UPDATE_RECEIPT_STAGE, 7);
+    std::fs::write(original.join(stage), b"torn")?;
+    let later = EXPIRES + DAY;
+    let mut pipeline = Pipeline::new()?;
+    let mut worker = Worker::resume_cached(cached_configuration(&fixture))?;
+    for expected in [Progress::Restoring, Progress::Reopening, Progress::Ready] {
+        assert_eq!(step_at(&mut pipeline, &mut worker, later)?.progress, expected);
+    }
+    let candidate = worker.take_candidate()?;
+    assert_eq!(candidate.directory(), original);
+    pipeline.run(0, move |_| {
+        drop(candidate);
+        Ok(())
+    })?;
+    fixture.preserved()
+}
+
+#[test]
+fn a_prepared_update_without_its_receipt_starts_the_accepted_version_offline() -> TestResult {
+    let (fixture, original) = prepared()?;
+    std::fs::remove_file(original.join(crate::setup_storage::UPDATE_RECEIPT_FILE))?;
+    let selection = fixture.installation.path().join("state/selection/.substitute-selection.json");
+    let before = std::fs::read(&selection)?;
+    let later = EXPIRES + DAY;
+    let mut pipeline = Pipeline::new()?;
+    let mut worker = Worker::resume_cached(cached_configuration(&fixture))?;
+    // Each step either moves on toward reopening or ends the attempt; it never reaches Ready.
+    loop {
+        submit_at(&mut pipeline, &mut worker, later)?;
+        let observed = pipeline.observe(|| worker.poll())?;
+        assert_ne!(observed.progress, Progress::Ready);
+        if observed.failure.is_some()
+            || matches!(observed.progress, Progress::Failed | Progress::Unavailable)
+        {
+            break;
+        }
+        assert!(matches!(observed.progress, Progress::Restoring | Progress::Reopening));
+    }
+    assert!(worker.take_candidate().is_err());
+    assert_eq!(std::fs::read(&selection)?, before);
+    retire(&mut pipeline, &mut worker)?;
+    assert_unlocked(&mut pipeline, &fixture)?;
+    fixture.preserved()
+}

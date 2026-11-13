@@ -48,8 +48,9 @@ use sugarsubstitute_contracts::{
     update::Request,
 };
 use sugarsubstitute_update::{MetadataSet, RepositoryTrust, VerifiedOffer};
-#[cfg(test)]
-pub(crate) use update_receipt::FILE as UPDATE_RECEIPT_FILE;
+pub(crate) use update_receipt::{
+    FILE as UPDATE_RECEIPT_FILE, STAGE_PREFIX as UPDATE_RECEIPT_STAGE,
+};
 pub use update_receipt::{ReceiptAuthority, UpdateReceipt};
 
 /// Protected update trust inside the installation state folder.

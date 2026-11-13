@@ -79,6 +79,19 @@ fn every_watched_window_answers_a_session_end_from_the_close_save() -> TestResul
     assert_eq!(end(main, false), LRESULT(0));
     assert_eq!(watch.take_signal(), Some(SessionEndSignal::Cancelled));
     assert!(watch.state.blocking.borrow().is_empty(), "a cancelled end removes the reason");
+
+    // The user chooses "Shut down anyway" while the save is still running: Windows sends
+    // WM_ENDSESSION(TRUE) after a FALSE answer. It never reaches Tao's exit, is not taken for a
+    // cancellation, and the reason stays until the close save itself settles.
+    assert_eq!(query(main, 0), LRESULT(0));
+    assert_eq!(watch.take_signal(), Some(SessionEndSignal::Ending { critical: false }));
+    for hwnd in [target, main] {
+        assert_eq!(end(hwnd, true), LRESULT(0));
+    }
+    assert_eq!(watch.take_signal(), None, "a forced end is not a cancellation");
+    assert_eq!(watch.state.blocking.borrow().as_slice(), &[main], "the save is still named");
+    watch.set_outstanding(false);
+    assert!(watch.state.blocking.borrow().is_empty(), "the settled save removes the reason");
     watch.retire()?;
     Ok(())
 }
