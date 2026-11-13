@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Pump a main-thread native lifetime without application windows, beside at most one
-//! surface the lifetime asks for.
+//! surface and at most one small notice window the lifetime asks for.
+#[cfg(target_os = "windows")]
+mod notice;
 mod state;
 #[cfg(target_os = "windows")]
 mod surface;
@@ -26,6 +28,10 @@ use crate::{HeadlessLifetime, HeadlessStep};
 /// pump hosts it as an unowned form on this same loop while the lifetime keeps working, and
 /// closes it before the lifetime finishes. The loop runs until both have settled.
 ///
+/// When the lifetime asks for a notice through [`HeadlessLifetime::notice`], the pump shows it
+/// as one small unfocused window on this same loop while the lifetime keeps working, and closes
+/// it once the lifetime stops asking, begins shutdown, or before the lifetime finishes.
+///
 /// A private native event exists before `start`; preparation completes before Tao.
 /// The same wake endpoint then retargets to the actual proxy under synchronization.
 /// Each activity call receives budget 32. Active and
@@ -39,7 +45,7 @@ use crate::{HeadlessLifetime, HeadlessStep};
 /// Return the first original startup/activity/cleanup/native-loop failure after
 /// settlement; secondary causes reach structured logging with their operation.
 /// This function must run on the native main thread. It performs no process launch, raw
-/// worker scheduling or blocking owner join, and creates no window except the requested form.
+/// worker scheduling or blocking owner join, and creates no window except the requested form and notice.
 pub fn run_headless(lifetime: &mut impl HeadlessLifetime) -> Result<(), DesktopError> {
     let bootstrap = Bootstrap::new()?;
     let mut state = state::HeadlessState::new();
@@ -76,6 +82,8 @@ pub fn run_headless(lifetime: &mut impl HeadlessLifetime) -> Result<(), DesktopE
         prepare_before_loop(&bootstrap, &mut state, lifetime);
     }
     let session_end = headless_session_end();
+    #[cfg(target_os = "windows")]
+    let mut notice = notice::Notice::new();
     while !state.settled() || surface.open() {
         let exit_code = event_loop.run_return(|event, _target, control| {
             match event {
@@ -88,9 +96,14 @@ pub fn run_headless(lifetime: &mut impl HeadlessLifetime) -> Result<(), DesktopE
                     state.poll_shutdown(lifetime);
                     #[cfg(target_os = "windows")]
                     surface.turn(lifetime, _target, &form_proxy, state.closing());
+                    #[cfg(target_os = "windows")]
+                    notice.turn(lifetime, _target, state.closing());
                 }
                 #[cfg(target_os = "windows")]
                 other => {
+                    if let Event::RedrawRequested(id) = &other {
+                        notice.redraw(*id);
+                    }
                     surface.route(&other);
                 }
                 #[cfg(not(target_os = "windows"))]
@@ -103,6 +116,9 @@ pub fn run_headless(lifetime: &mut impl HeadlessLifetime) -> Result<(), DesktopE
         });
         state.native_return(lifetime, exit_code);
     }
+    // The notice window belongs to this loop; it closes before the loop and the role retire.
+    #[cfg(target_os = "windows")]
+    notice.close();
     state.retire_bootstrap(&bootstrap);
     if let Some(watch) = session_end
         && let Err(cause) = watch.retire()

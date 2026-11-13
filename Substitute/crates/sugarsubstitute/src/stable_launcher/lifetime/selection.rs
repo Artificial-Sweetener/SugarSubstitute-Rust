@@ -53,6 +53,10 @@ impl Launcher {
             Choice::Recover => Task::Recover,
             Choice::Complete => return Ok(()),
         };
+        if self.late_update(task) {
+            self.failed(task, Box::new(LateUpdate))?;
+            return self.select_next();
+        }
         let submitted = match self.choice {
             Choice::Route => {
                 let root = self.root.clone();
@@ -183,6 +187,15 @@ impl Launcher {
             self.update_failure = Some(cause);
             return Ok(());
         }
+        if matches!(task, Task::Route) && route_lock_timed_out(cause.as_ref()) {
+            // Another process kept the record busy past its bounded wait. Optional work would
+            // wait on it again, so only the accepted release is attempted.
+            tracing::warn!(operation="startup_route_busy", cause=%crate::failure_details::Details(cause.as_ref()), "The installation record stayed busy; starting the accepted release");
+            self.update_failure.get_or_insert(cause);
+            self.accepted_only = true;
+            self.choice = Choice::Accepted;
+            return Ok(());
+        }
         if !matches!(
             task,
             Task::Installation | Task::Cache | Task::Trial | Task::Create { optional: true }
@@ -230,4 +243,27 @@ impl Launcher {
         }
         Ok(())
     }
+}
+
+/// Whether routing stopped only because another process held the installation record past
+/// its bounded wait.
+fn route_lock_timed_out(cause: &(dyn Error + 'static)) -> bool {
+    use sugarsubstitute_supervision::setup_storage::{RouteFailure, SelectionFailure};
+    let mut next = Some(cause);
+    while let Some(current) = next {
+        // `io::Error::source` skips the wrapped error itself, so look inside it first.
+        if let Some(inner) = current.downcast_ref::<io::Error>().and_then(io::Error::get_ref)
+            && route_lock_timed_out(inner)
+        {
+            return true;
+        }
+        if matches!(
+            current.downcast_ref::<RouteFailure>(),
+            Some(RouteFailure::Selection(SelectionFailure::LockTimeout))
+        ) {
+            return true;
+        }
+        next = current.source();
+    }
+    false
 }

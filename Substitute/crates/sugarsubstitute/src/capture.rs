@@ -163,6 +163,7 @@ fn export_admitted(
             reveal: f64::from(scenario.expanded),
             hovered: control(scenario.hovered.as_deref())?,
             pressed: control(scenario.pressed.as_deref())?,
+            controls: true,
         };
         let character = AnimationFrame {
             pose: if scenario.flip >= 0.5 { 1 } else { scenario.pose },

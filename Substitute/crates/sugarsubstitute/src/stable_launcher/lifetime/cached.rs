@@ -57,6 +57,16 @@ impl Cached {
         self.failure.get_or_insert(cause);
     }
 
+    /// Stop preparation that missed the update cutoff; its retirement leads to the accepted
+    /// version. Idempotent, and a no-op once retirement has begun.
+    pub(super) fn abandon(&mut self, now: Moment) -> Result<()> {
+        if self.cleanup_until.is_some() {
+            return Ok(());
+        }
+        self.record(Box::new(super::LateUpdate));
+        self.close(now, None)
+    }
+
     /// Stop preparation once; repeated shutdown can shorten but never renew retirement.
     fn close(&mut self, now: Moment, external: Option<Moment>) -> Result<()> {
         let until = self.cleanup_until.map(Ok).unwrap_or_else(|| {

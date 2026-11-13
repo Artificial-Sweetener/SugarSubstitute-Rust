@@ -22,7 +22,7 @@ pub(super) fn fixture() -> Result<Fixture> {
         Some(client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?);
     launcher.client = Some(client);
     launcher.owner = Some(owner);
-    launcher.until = Some(EntrySetupBudget::new(clock.now())?.until());
+    launcher.begin_budget(LauncherBudget::new(clock.now())?);
     let executable = std::env::current_exe()?;
     launcher.launch = Some(ApplicationLaunch::new(WindowsLaunchCommand::from_os(
         &executable,
@@ -90,8 +90,9 @@ fn expired_cleanup_joins_workers_but_never_claims_creator_retirement() -> Result
     assert!(launcher.cutoff_reported);
     assert!(launcher.launch.is_some());
     assert!(launcher.job.is_none());
-    assert!(launcher.next_deadline().is_none());
+    assert!(launcher.next_deadline().is_some(), "the exit grace wakes the pump");
     observe(&wake, || launcher.poll_shutdown())?;
+    assert!(!launcher.abandoned, "joined workers are not abandoned");
     assert!(launcher.finish_shutdown().is_err());
     assert!(launcher.launch.is_some());
     assert!(!launcher.finished);
