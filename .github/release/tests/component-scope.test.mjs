@@ -78,7 +78,7 @@ describe('component commit scope', () => {
 
   it('refuses to plan a component with no baseline tag', async () => {
     await assert.rejects(
-      plan(history.repository.root, COMPONENTS.substitute),
+      plan(history.repository.root, { ...COMPONENTS.substitute, baseline: null }),
       /no substitute-v<version> tag reachable from HEAD and declares no baseline/,
     );
   });

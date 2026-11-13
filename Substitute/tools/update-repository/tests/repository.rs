@@ -5,6 +5,8 @@
 mod cli;
 #[path = "repository/lifecycle.rs"]
 mod lifecycle;
+#[path = "repository/offer.rs"]
+mod offer;
 #[path = "repository/rejection.rs"]
 mod rejection;
 #[path = "repository/support.rs"]

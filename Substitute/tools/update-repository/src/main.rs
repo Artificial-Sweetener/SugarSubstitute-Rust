@@ -4,6 +4,8 @@
 //!
 //! ```text
 //! keygen            --output FILE
+//! offer             --package FILE --version VERSION --channel CHANNEL --platform PLATFORM
+//!                   --component COMPONENT --minimum-updater-release N --output DIR
 //! init              --repository DIR --now SECONDS --root-key KEY ONLINE
 //! refresh-timestamp --repository DIR --trusted-root FILE --now SECONDS --timestamp-key KEY
 //! resign            --repository DIR --trusted-root FILE --now SECONDS ONLINE
@@ -17,6 +19,8 @@
 //! Signing commands also take `--written FILE`, which receives the names they wrote, one per
 //! line, in the order to upload them: versioned metadata, channel descriptors, the timestamp.
 //! `release` reads the packages and channel descriptors it signs from its `--target` files.
+//! `offer` places a sealed package under its content-addressed name in `--output`, beside the
+//! descriptor that offers it, so both are the `--target`s of the release that publishes them.
 //!
 //! `ONLINE` is `--targets-key KEY --snapshot-key KEY --timestamp-key KEY`; a `KEY` is `env:NAME`
 //! or `file:PATH` holding a hexadecimal Ed25519 seed. `--now` is Unix UTC seconds. Every signing
@@ -26,6 +30,7 @@ use std::{collections::BTreeMap, path::PathBuf, process::ExitCode};
 use sugarsubstitute_update_repository::{
     Change, Error, OnlineKeys, Published, Report, initialize,
     keys::SigningKey,
+    offer::Route,
     prepare,
     storage::{self, PayloadFiles},
     verify,
@@ -117,6 +122,25 @@ fn run(arguments: Vec<String>) -> Result<(), Error> {
         let (key, seed) = SigningKey::generate()?;
         storage::write_key(&output, &seed)?;
         println!("{}", key.public().key_id());
+        return Ok(());
+    }
+    if command == "offer" {
+        let package = PathBuf::from(options.required("package")?);
+        let version = options.required("version")?;
+        let route = Route::parse(
+            &options.required("channel")?,
+            &options.required("platform")?,
+            &options.required("component")?,
+        )?;
+        let minimum = options.required("minimum-updater-release")?.parse().map_err(|_| {
+            Error::Invalid("--minimum-updater-release is an updater release number".into())
+        })?;
+        let output = PathBuf::from(options.required("output")?);
+        options.finish()?;
+        let (descriptor, package, _) =
+            storage::write_offer(&output, &package, route, &version, minimum)?;
+        println!("offer {} {version} {}", descriptor.name, descriptor.sequence);
+        println!("package {}", package.display());
         return Ok(());
     }
     let folder = PathBuf::from(options.required("repository")?);

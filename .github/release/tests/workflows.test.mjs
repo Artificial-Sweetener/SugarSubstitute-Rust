@@ -100,6 +100,7 @@ describe('release workflow', () => {
     const privilegedJobs = Object.entries(release.jobs).filter(([, job]) => privileged(job));
     assert.deepEqual(privilegedJobs.map(([name]) => name).sort(), [
       'substitute',
+      'substitute-update-repository',
       'substitute-verify',
       'sugarcubes',
     ]);
@@ -121,6 +122,66 @@ describe('release workflow', () => {
       String(entry.run).includes('sugarcubes_registry.py publish'),
     );
     assert.match(registry.if, /vars\.RELEASES_ENABLED == 'true'/);
+  });
+
+  it('signs each SugarSubstitute release into the update repository, behind the root', () => {
+    const substitute = release.jobs.substitute;
+    const step = substitute.steps.find((entry) => entry.name === 'Release');
+    for (const output of ['released', 'version', 'tag']) {
+      assert.equal(substitute.outputs[output], `\${{ steps.${step.id}.outputs.${output} }}`);
+    }
+
+    const targets = release.jobs['substitute-update-targets'];
+    assert.deepEqual(targets.needs, ['authorize', 'substitute']);
+    assert.ok(String(targets.if).includes(PUBLISH));
+    assert.ok(String(targets.if).includes("needs.substitute.outputs.released == 'true'"));
+    assert.equal(privileged(targets), false);
+    const names = targets.steps.map((entry) => entry.name);
+    const checkout = targets.steps[0];
+    assert.equal(checkout.with.ref, '${{ needs.substitute.outputs.tag }}');
+    assert.equal(checkout.with['persist-credentials'], false);
+    const root = targets.steps.find((entry) => entry.name.startsWith('Require the trusted root'));
+    assert.equal(names.indexOf(root.name), 1, 'the root is required before anything is built');
+    const gate = (present) => {
+      const folder = mkdtempSync(join(tmpdir(), 'release-root-'));
+      try {
+        if (present) {
+          writeFileSync(join(folder, 'root.json'), '{}');
+        }
+        return spawnSync('bash', ['-e', '-c', root.run], {
+          cwd: folder,
+          env: { PATH: process.env.PATH, TRUSTED_ROOT: 'root.json' },
+          encoding: 'utf8',
+        }).status;
+      } finally {
+        rmSync(folder, { recursive: true, force: true });
+      }
+    };
+    assert.notEqual(gate(false), 0);
+    assert.equal(gate(true), 0);
+
+    const distribution = targets.steps.find((entry) =>
+      String(entry.run).includes('release/update-distribution.mjs'),
+    );
+    assert.match(distribution.run, /SUGARSUBSTITUTE_UPDATE_DISTRIBUTION=\$distribution/);
+    const bundle = names.indexOf('Build the release bundle');
+    assert.ok(names.indexOf(distribution.name) < bundle);
+    const describe = targets.steps.find((entry) => String(entry.run).includes('" offer '));
+    assert.ok(bundle < names.indexOf(describe.name));
+    assert.match(describe.run, /seal\.mjs --update "\$RELEASE_BUNDLE"/);
+    assert.match(describe.run, /--version "\$VERSION"/);
+    assert.equal(targets.env.VERSION, '${{ needs.substitute.outputs.version }}');
+    const upload = targets.steps.at(-1);
+    assert.match(upload.uses, /^actions\/upload-artifact@/);
+    assert.equal(upload.with['if-no-files-found'], 'error');
+
+    const signing = release.jobs['substitute-update-repository'];
+    assert.deepEqual(signing.needs, ['authorize', 'substitute-update-targets']);
+    assert.ok(String(signing.if).includes(PUBLISH));
+    assert.ok(String(signing.if).includes("needs.substitute-update-targets.result == 'success'"));
+    assert.equal(signing.uses, './.github/workflows/substitute-update-repository.yml');
+    assert.deepEqual(signing.with, { operation: 'release', targets_artifact: upload.with.name });
+    assert.equal(signing.secrets, 'inherit');
   });
 });
 

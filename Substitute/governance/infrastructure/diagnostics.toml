@@ -297,7 +297,7 @@ rationale = "Repository build or verification diagnostics remain developer outpu
 [[records]]
 path = "tools/update-repository/src/main.rs"
 owner = "sugarsubstitute-update-repository"
-source_sha256 = "sha256:2d65c4e259f824cad7d7dac32bf9de5f8f3321b25cec6392cb3cb014d0f3bda6"
+source_sha256 = "sha256:42fe06efb5ef6212200e0040f97473e18438638111dd27aa713656a600fe51e3"
 disposition = "developer"
 rationale = "Release-CI signing tool output: the files it wrote and what the application's verifier accepted, read by the update repository workflow; never part of the runtime route."
 
@@ -1125,3 +1125,10 @@ owner = "sugarsubstitute"
 source_sha256 = "sha256:f92568d0b7d01b75e8826e1fab14255cf2d6d85fb33c77eea2cb64b895e7ebd3"
 disposition = "fixture"
 rationale = "Capture only isolated formatter output to prove fixed native preparation fields, unknown-state rejection and the unchanged 512-byte relay boundary."
+
+[[records]]
+path = "installer/release/update-distribution.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:e9dd8cb5c56039dbf9e23f2bfa7b8385288534075990688b2bb17d42f479edc9"
+disposition = "developer"
+rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."

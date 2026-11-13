@@ -89,10 +89,45 @@ fn the_workflow_commands_produce_a_repository_installations_accept() -> TestResu
     let trusted = trusted.to_string_lossy();
 
     let release = Release::new(1, "0.2.0")?;
+    let sealed = folder.path("sealed.ssupdate");
+    fs::write(&sealed, &release.package)?;
+    let (sealed_text, targets) = (sealed.to_string_lossy(), folder.path("targets"));
+    let targets_text = targets.to_string_lossy();
+    let offer = [
+        "offer",
+        "--package",
+        &sealed_text,
+        "--version",
+        "0.2.0",
+        "--channel",
+        "release",
+        "--platform",
+        "windows-x86_64",
+        "--component",
+        "application",
+        "--minimum-updater-release",
+        "1",
+        "--output",
+        &targets_text,
+    ];
+    let output = folder.run(&offer)?;
+    assert!(output.status.success(), "{}", text(&output));
+    let sequence = 2_u64 << 20;
+    assert!(
+        text(&output).contains(&format!("offer {} 0.2.0 {sequence}", request().target_name())),
+        "{}",
+        text(&output)
+    );
     let package = folder.path(&format!("targets/{}", release.package_name));
     let descriptor = folder.path(&format!("targets/{}", request().target_name()));
-    fs::write(&package, &release.package)?;
-    fs::write(&descriptor, &release.descriptor)?;
+    assert_eq!(fs::read(&package)?, release.package);
+    let refused = folder.run(&offer)?;
+    assert!(!refused.status.success(), "offer replaced published targets");
+    assert!(text(&refused).contains("already exists"), "{}", text(&refused));
+    let mut wrong = offer;
+    wrong[8] = "windows-x86";
+    let refused = folder.run(&wrong)?;
+    assert!(text(&refused).contains("windows-x86 is not a platform"), "{}", text(&refused));
     let manifest = folder.path("written.txt");
     let manifest_text = manifest.to_string_lossy();
     let released = (START + DAY).to_string();

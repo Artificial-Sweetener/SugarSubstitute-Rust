@@ -429,14 +429,14 @@ rationale = "Tooling reads governance policy TOML to record reviewed source fing
 [[records]]
 path = "tools/update-repository/src/main.rs"
 owner = "sugarsubstitute-update-repository"
-source_sha256 = "sha256:2d65c4e259f824cad7d7dac32bf9de5f8f3321b25cec6392cb3cb014d0f3bda6"
+source_sha256 = "sha256:42fe06efb5ef6212200e0040f97473e18438638111dd27aa713656a600fe51e3"
 capabilities = ["arguments"]
 rationale = "Release-CI signing tool command line; its options select a repository folder, keys and times, never product settings."
 
 [[records]]
 path = "tools/update-repository/src/storage.rs"
 owner = "sugarsubstitute-update-repository"
-source_sha256 = "sha256:31250bbfae3c27afe8583f03e7ec92e8f5e3d84fd4059a146c10b38d6ade562f"
+source_sha256 = "sha256:ab07795647c065d9d246e184b4c7ea95850d4628e238ff5f9aab50b1fb7447b8"
 capabilities = ["environment"]
 rationale = "Signing keys reach release CI only as secrets in the environment, named by an env:NAME key reference; never product settings."
 
@@ -1055,3 +1055,10 @@ owner = "sugarsubstitute-supervision"
 source_sha256 = "sha256:2a3f596beba9828b8aa60c1068aa80a02febcf402d9b3eafd4b3fc1402cc9cb8"
 capabilities = ["document"]
 rationale = "Names an unused generation's installation-owned configuration documents only so retirement can delete them; it never reads, parses or writes their contents."
+
+[[records]]
+path = "installer/release/update-distribution.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:e9dd8cb5c56039dbf9e23f2bfa7b8385288534075990688b2bb17d42f479edc9"
+capabilities = ["arguments"]
+rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
