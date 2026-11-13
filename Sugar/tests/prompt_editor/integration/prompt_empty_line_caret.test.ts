@@ -45,8 +45,19 @@ const lineStarts = source
     lines.slice(0, index).reduce((offset, line) => offset + line.length + 1, 0),
   );
 const lineLengths = source.split('\n').map((line) => line.length);
-/** Wide enough for the first paragraph on one row and narrow enough that every other paragraph wraps. */
-const editorWidth = 400;
+/**
+ * The recorded card width: wide enough for the first paragraph on one row and narrow enough that
+ * every other paragraph wraps. Another platform's default font may need a nearby width instead.
+ */
+const recordedWidth = 400;
+/** The recorded width first, then widths alternating outward from it in 8px steps. */
+const candidateWidths = [
+  recordedWidth,
+  ...Array.from(
+    { length: 40 },
+    (_, index) => recordedWidth + (index % 2 === 0 ? 8 : -8) * (Math.floor(index / 2) + 1),
+  ),
+];
 /** The visual rows each source line occupies at that width: paragraphs wrap, empty lines keep one row. */
 const rowsPerLine = [1, 1, 2, 1, 2, 1, 2, 1, 2];
 const lineOfRow = rowsPerLine.flatMap((rows, line) => Array.from({ length: rows }, () => line));
@@ -88,20 +99,42 @@ async function lineBoxes(page: Page): Promise<LineBox[]> {
   );
 }
 
-/** Narrow the editor like the reported card and wait until every paragraph has its wrapped rows. */
+/** Count each line's visual rows against the first empty line, which always holds exactly one. */
+function rowsOf(boxes: readonly LineBox[]): number[] {
+  const empty = boxes[1];
+  if (!empty) return [];
+  const row = empty.bottom - empty.top;
+  return boxes.map((box) => Math.round((box.bottom - box.top) / row));
+}
+
+/**
+ * Narrow the editor like the reported card and wait until every paragraph has its wrapped rows.
+ *
+ * Wrapping depends on the platform's default font, so a width whose settled layout differs is
+ * replaced by the next candidate. A layout counts as settled after three equal observations.
+ */
 async function wrapLikeTheRecording(page: Page): Promise<LineBox[]> {
-  await page.evaluate((width) => {
-    const style = document.createElement('style');
-    style.textContent = `[data-sc-prompt-editor]{width:${String(width)}px!important;max-width:${String(width)}px!important}`;
-    document.head.append(style);
-  }, editorWidth);
-  for (let attempt = 0; attempt < 20; attempt++) {
-    await settle(page);
-    const boxes = await lineBoxes(page);
-    const rows = boxes.map((box) => Math.round((box.bottom - box.top) / 19));
-    if (JSON.stringify(rows) === JSON.stringify(rowsPerLine)) return boxes;
+  const expected = JSON.stringify(rowsPerLine);
+  for (const width of candidateWidths) {
+    await page.evaluate((value) => {
+      const id = 'sc-test-prompt-width';
+      const style = document.getElementById(id) ?? document.createElement('style');
+      style.id = id;
+      style.textContent = `[data-sc-prompt-editor]{width:${String(value)}px!important;max-width:${String(value)}px!important}`;
+      document.head.append(style);
+    }, width);
+    let previous = '';
+    let repeats = 0;
+    for (let attempt = 0; attempt < 20 && repeats < 2; attempt++) {
+      await settle(page);
+      const boxes = await lineBoxes(page);
+      const observed = JSON.stringify(rowsOf(boxes));
+      if (observed === expected) return boxes;
+      repeats = observed === previous ? repeats + 1 : 0;
+      previous = observed;
+    }
   }
-  throw new Error(`The prompt never wrapped into ${JSON.stringify(rowsPerLine)} rows`);
+  throw new Error(`The prompt never wrapped into ${expected} rows`);
 }
 
 /** Assert one value while naming where it was observed, because Jest's `expect` takes no message. */
