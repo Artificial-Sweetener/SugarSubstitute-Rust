@@ -8,6 +8,13 @@ You are one lane of a coordinated project on the SugarSubstitute monorepo. The c
 
 Paths in these documents that start with `D:\`, `E:\` or `X:\` refer to the maintainer's PC, which is unreachable. Ignore instructions about local wrappers, build slots, sccache, hidden desktops, proof lanes, the live board and `notes.md`; this file replaces them.
 
+## Never stop to ask
+Nobody is watching your session: the maintainer is away and the coordinator is offline. Never end a turn with a question, a request for confirmation or a "should I…?".
+- Settled answers: HANDOFF.md, DECISIONS.md, this file and your brief.
+- Anything they don't settle: choose the most reliable professional design for ordinary home Windows PCs, record the choice and your reasons in your lane report under "Decisions made", and keep going.
+- An item genuinely blocked (it needs another lane's code, a native proof, or something only the maintainer can provide): do everything around it, record it under "Unfinished", and move to your next item.
+- Your session ends only when every item is done or recorded as blocked, and your lane report is committed and pushed.
+
 ## Design
 - Decisions D1–D22, C-n and M-n are settled. Do not reopen, swap or simplify them. If your work cannot meet one, stop that item and explain why in your lane report.
 - Build the most reliable professional design, not the minimum fix: remove root causes, prefer event-driven waits over polling, use typed errors, handle cancellation and teardown.
