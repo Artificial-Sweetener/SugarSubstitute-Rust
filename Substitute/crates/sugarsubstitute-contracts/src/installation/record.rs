@@ -212,7 +212,8 @@ impl InstallationRecord {
     /// Decode bounded JSON and validate all references; never modifies the source bytes.
     /// # Errors
     /// Returns `Schema` for any other schema number, checked before the other fields are read.
-    /// Rejects unknown fields, invalid identities and contradictory selection state.
+    /// Ignores fields a later release adds within this schema. Rejects missing fields, invalid
+    /// identities and contradictory selection state.
     pub fn decode(bytes: &[u8]) -> Result<Self, Rejection> {
         if bytes.len() > MAX_RECORD_BYTES {
             return Err(Rejection::Capacity);

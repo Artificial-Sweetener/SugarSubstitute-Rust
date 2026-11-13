@@ -937,10 +937,10 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/application_launch/engine/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:7ad66499cadb65150c6a35995ba846454e3d4e15127895a69f505aca4458afa4"
-capabilities = ["tempfile::TempDir"]
+source_sha256 = "sha256:cb9e2346ac848291c961724b3fbca1e37699cd0e80fb8555e330b20b51818964"
+capabilities = ["std::fs::OpenOptions::new", "tempfile::TempDir"]
 disposition = "fixture"
-rationale = "Launch engine owner tests: stand-in engines prove takeover, early exit, silent termination, changed bytes, missing fallback and corrupt pointers each end in a running engine or a typed refusal."
+rationale = "Launch engine owner tests: stand-in engines prove takeover, early exit, silent termination, changed bytes, a scanner holding the new engine, missing fallback and corrupt pointers each end in a running engine or a typed refusal. The unshared read-only open stands in for an antivirus scanner and never writes."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/application_launch/rejected_creation.rs"

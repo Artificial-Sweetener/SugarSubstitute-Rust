@@ -310,7 +310,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/application_launch/engine/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:7ad66499cadb65150c6a35995ba846454e3d4e15127895a69f505aca4458afa4"
+source_sha256 = "sha256:cb9e2346ac848291c961724b3fbca1e37699cd0e80fb8555e330b20b51818964"
 capabilities = ["arguments"]
 rationale = "Launch engine stand-in fixture: the child half reads its own fault mode from its arguments; no product configuration is acquired."
 

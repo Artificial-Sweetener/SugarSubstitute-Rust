@@ -159,6 +159,41 @@ fn a_changed_primary_engine_is_never_started_and_the_fallback_runs() -> TestResu
     })
 }
 
+/// An antivirus scanner holds the new release's engine while it inspects the update. Startup
+/// goes to the previous release, and nothing counts against the update: the pointer is untouched,
+/// so once the scanner lets go the next launch starts the new release's engine again.
+#[test]
+fn a_scanner_holding_the_new_engine_starts_the_previous_release_and_keeps_the_update() -> TestResult
+{
+    use std::os::windows::fs::OpenOptionsExt;
+    worker::run_reserved(BYTES, |context, _| {
+        let root = installation(189, Fallback::Present, false, context)?;
+        let pointer = crate::setup_storage::read_launch_pointer(root.path(), context)?;
+        let engine = root
+            .path()
+            .join("releases")
+            .join(pointer.primary().generation().as_str())
+            .join(crate::setup_storage::LAUNCH_ENGINE);
+        // Scanners commonly open a file they inspect without sharing it.
+        let scanner = std::fs::OpenOptions::new().read(true).share_mode(0).open(&engine)?;
+        let started = std::sync::Mutex::new(Vec::new());
+        start_pointed_with(root.path(), context, TAKEOVER, |_, hops| {
+            crate::registry::lock(&started).push(hops);
+            stand_in("signal", context)
+        })?;
+        assert_eq!(*crate::registry::lock(&started), [1]);
+        assert_eq!(crate::setup_storage::read_launch_pointer(root.path(), context)?, pointer);
+        drop(scanner);
+        crate::registry::lock(&started).clear();
+        start_pointed_with(root.path(), context, TAKEOVER, |_, hops| {
+            crate::registry::lock(&started).push(hops);
+            stand_in("signal", context)
+        })?;
+        assert_eq!(*crate::registry::lock(&started), [0]);
+        Ok(())
+    })
+}
+
 #[test]
 fn without_a_working_fallback_every_refusal_is_reported() -> TestResult {
     worker::run_reserved(BYTES, |context, _| {
