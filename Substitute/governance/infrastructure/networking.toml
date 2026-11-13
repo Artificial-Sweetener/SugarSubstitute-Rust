@@ -87,7 +87,7 @@ rationale = "The panel bridge fetches only the host-intercepted reserved path on
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:545b83f7de9fb25f4d4ed4ed389cbc42122683aca24754a0219af4c1a3f05669"
+source_sha256 = "sha256:113b2c25548f0203e07b5592f4c7783310ec4a17fdc82ba7130fcf0a01950e8f"
 boundary = "fixture"
 rationale = "The isolated JavaScript VM fixture fakes the browser fetch boundary to exercise the production bulk channel upload, download, same-origin URL construction, ordering and teardown without any network access."
 
@@ -181,7 +181,7 @@ rationale = "Pure external-source fixtures deliberately contain Electron HTTP ca
 [[records]]
 path = "tools/xtask/src/networking.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:cc29af3f4c346cc1facca4136ad94aed276bff18e14ef1222990eebca258ca5f"
+source_sha256 = "sha256:394d893eef1586a27f9d648e3459a3a7455257973e082c3975e9c7cad1fa64ee"
 boundary = "inspection"
 rationale = "Boundary-category classification data includes literal network module identifiers; direct transport construction remains forbidden in inspection sources."
 

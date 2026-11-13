@@ -15,7 +15,7 @@ fn deferred_phase_is_never_failed_by_elapsed_time_and_can_retire_on_cleanup() ->
         Ok(session.activity(NonZeroUsize::MIN.saturating_add(31))? == HeadlessStep::Shutdown)
     })?;
     let bytes = serde_json::to_vec(&serde_json::json!({
-        "schema_version":2,"update_policy":"standard","repository":vec![92;32],
+        "schema_version":3,"release_notes":"https://notes.example.test/{version}","update_policy":"standard","repository":vec![92;32],
         "feed":{"transport":"https","base":"https://updates.example.test/","redirects":[]}
     }))?;
     session.worker = crate::updates::configuration(

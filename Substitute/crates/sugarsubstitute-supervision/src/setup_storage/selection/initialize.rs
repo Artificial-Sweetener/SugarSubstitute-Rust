@@ -66,6 +66,7 @@ impl SelectionStore {
             _ownership: ownership,
             _namespace_marker: Some(marker),
             _memory: memory,
+            clock: StrikeClock::System,
         })
     }
 }

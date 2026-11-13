@@ -279,3 +279,39 @@ fn restart_to_apply_relaunches_only_once_the_close_save_has_its_outcome() -> Tes
     );
     fixture.retire()
 }
+
+/// The fixture's clock moves only when a test moves it, so a slow machine can never carry a
+/// close past its settle cutoff before the record of unsaved work is written.
+#[test]
+fn the_close_save_fixture_time_moves_only_when_the_test_moves_it() -> TestResult {
+    let mut fixture = Fixture::new(true)?;
+    let before = fixture.host.clock.now();
+    // Real durable work on the host's own executor takes measurable wall time.
+    assert_eq!(fixture.next_start_notice()?, None);
+    fixture.poll()?;
+    assert_eq!(fixture.host.clock.now(), before, "no time passed without the test");
+    fixture.clock.advance(Duration::from_secs(1));
+    assert_eq!(fixture.host.clock.now(), before.checked_add(Duration::from_secs(1))?);
+    fixture.host.workspace.as_mut().ok_or("Workspace")?.driver = None;
+    fixture.host.observe(DesktopStartupObservation::CloseRequested)?;
+    fixture.exit_intent()?;
+    fixture.retire()
+}
+
+/// What load did to the stale and failed publication tests on a real clock: time passed the
+/// settle cutoff before the record was written. The exit is not held, and no record exists.
+#[test]
+fn a_close_whose_settle_cutoff_passed_before_its_record_exits_without_one() -> TestResult {
+    let mut fixture = Fixture::new(true)?;
+    fixture.host.observe(DesktopStartupObservation::CloseRequested)?;
+    let budget = fixture.host.shutdown.budget()?;
+    fixture.sample()?;
+    fixture.poll()?;
+    assert!(matches!(fixture.host.take_command()?, Some(DesktopStartupCommand::SendSession(_))));
+    fixture.clock.advance(budget.settle_until.checked_duration_since(fixture.host.clock.now())?);
+    assert_eq!(fixture.exit_intent()?, budget);
+    let outcome = fixture.host.close_save_outcome().ok_or("Outcome")?;
+    assert!(matches!(outcome.workspace, SaveVerdict::Stale { .. }), "{outcome:?}");
+    assert_eq!(fixture.next_start_notice()?, None, "the record missed its cutoff");
+    fixture.retire()
+}

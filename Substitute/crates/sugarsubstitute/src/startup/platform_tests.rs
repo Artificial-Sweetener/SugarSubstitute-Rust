@@ -5,7 +5,7 @@ use super::*;
 use sugarsubstitute_application::startup::{StartupPhase, StartupSession};
 use sugarsubstitute_contracts::{configuration::*, execution::*, lifecycle::*, startup::*};
 use sugarsubstitute_desktop::{StartupCaptureState, StartupCauseCode};
-use sugarsubstitute_execution::ExecutionClient;
+use sugarsubstitute_execution::{ExecutionClient, MonotonicClock};
 
 pub(super) struct Prepared {
     pub(super) session: StartupSession,
@@ -276,12 +276,18 @@ fn host_reports_main_reveal_only_after_frontend_readiness_and_never_after_close(
     Ok(())
 }
 pub(super) fn host() -> BackendResult<StartupHost<Platform>> {
+    host_with_clock(MonotonicClock::new())
+}
+/// The same inert host on a caller-owned clock.
+pub(super) fn host_with_clock(
+    clock: Arc<dyn super::HostClock>,
+) -> BackendResult<StartupHost<Platform>> {
     let run = policy::tests::test_run()?;
     StartupHost::new(
         run,
         LaunchId::new(1)?,
         Platform::default(),
-        MonotonicClock::new(),
+        clock,
         JobSequence::new(),
         StartupScopes {
             child: ScopeSpec { id: ScopeId::new(1)?, deadline: None },

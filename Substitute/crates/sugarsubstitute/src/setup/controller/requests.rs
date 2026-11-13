@@ -3,6 +3,7 @@
 //! Admit explicit installer requests; rendering state grants no native authority.
 use super::*;
 mod input;
+pub(in crate::setup) mod metadata;
 use sugarsubstitute_application::setup_flow::{
     Choices, Operation as Command, OptionField, RuntimeMode,
 };
@@ -124,6 +125,8 @@ impl Controller {
                     Arc::clone(self.bundle.as_ref().ok_or("Installer package is not ready")?);
                 let source = self.bundle_root.clone();
                 let distribution = self.distribution;
+                // A retry after the included-version sentence is the user's explicit choice.
+                let offered = std::mem::take(&mut self.included_offered);
                 let (maintenance_root, selection) = match command {
                     Command::Maintain(root) => (Some(PathBuf::from(root)), None),
                     Command::Install(choices) => {
@@ -138,6 +141,9 @@ impl Controller {
                 self.prepared = None;
                 if let Err(cause) = self.submit(StorageWork::Import, move |context| {
                     let distribution = super::super::distribution::decode(distribution, &context)?;
+                    let choice = crate::authority_clock::authorize(|now| {
+                        metadata::select(&distribution, offered, now(), &context)
+                    })?;
                     let session = if let Some(root) = maintenance_root {
                         setup_storage::InstallationSession::maintain(&root, &context)?
                     } else {
@@ -148,10 +154,11 @@ impl Controller {
                         )?
                     };
                     crate::authority_clock::authorize(|now| {
-                        distribution.import(
+                        distribution.import_with(
                             session,
                             &source,
                             setup_storage::BundleSource::Retained(bundle),
+                            choice,
                             now,
                             &context,
                         )

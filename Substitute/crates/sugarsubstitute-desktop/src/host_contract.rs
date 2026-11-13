@@ -356,6 +356,9 @@ pub enum DesktopStartupCommand {
     SendSessionMedia(crate::SessionMediaReply),
     /// Deliver the latest memory allowance to the current top document; newer ones replace it.
     SendMemory(crate::MemoryCommand),
+    /// Deliver an update state or answer to the current top document; a newer state replaces
+    /// an unsent older one, and answers are never replaced.
+    SendUpdates(crate::UpdatesCommand),
     /// Report the current browser environment's processes as [`DesktopStartupObservation::BrowserProcesses`].
     MeasureBrowser(MainIdentity),
     /// Ask the current browser to trim its memory (`low`) or return to normal use.
@@ -532,6 +535,8 @@ pub enum DesktopStartupObservation {
     },
     /// A bounded memory report from the current native top-document context.
     MemoryMessage(crate::MemoryObservation),
+    /// A bounded update request from the current native top-document context.
+    UpdatesMessage(crate::UpdatesObservation),
     /// The processes the current browser environment runs, for the memory budget's footprint.
     BrowserProcesses {
         /// Exact current native document identity.

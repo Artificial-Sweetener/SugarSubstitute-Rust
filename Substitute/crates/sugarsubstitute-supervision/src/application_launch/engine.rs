@@ -325,5 +325,15 @@ fn parse(
     Ok(Some((EngineLaunch { installation, hops: parsed }, raw)))
 }
 
+/// Borrow the takeover event and process for observation in this module's own tests.
 #[cfg(test)]
-mod tests;
+impl StartedEngine {
+    pub(super) fn handles(
+        &self,
+    ) -> (std::os::windows::io::BorrowedHandle<'_>, std::os::windows::io::BorrowedHandle<'_>) {
+        (self.event.as_handle(), self.process.as_handle())
+    }
+}
+
+#[cfg(test)]
+pub(super) mod tests;

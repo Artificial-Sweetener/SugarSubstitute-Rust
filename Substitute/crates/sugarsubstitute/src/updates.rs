@@ -58,7 +58,7 @@ pub(crate) fn release_notes(version: &str) -> Option<url::Url> {
         return None;
     }
     match Distribution::decode(EMBEDDED) {
-        Ok(distribution) => distribution.release_notes(version),
+        Ok(distribution) => distribution.release_notes().url(version).ok(),
         Err(cause) => {
             tracing::warn!(operation = "release_notes_unavailable", cause = %cause,
                 "The build's update distribution could not be read; no release notes link");
@@ -80,6 +80,20 @@ pub fn preparation(
     idle: Duration,
 ) -> io::Result<Option<Worker>> {
     configuration(EMBEDDED, installation, workspace, idle)?.map(Worker::new).transpose()
+}
+
+/// Repository transport for an installer whose compiled-in metadata expired (C4), using this
+/// build's distribution origin policy; `None` when the build has no update configuration.
+/// # Errors
+/// Rejects malformed configured bytes.
+pub(crate) fn installer_repository(
+    idle: Duration,
+) -> io::Result<Option<sugarsubstitute_supervision::update_repository::Repository>> {
+    if EMBEDDED.is_empty() {
+        return Ok(None);
+    }
+    let (_, policy) = Distribution::decode(EMBEDDED)?.into_parts();
+    Ok(Some(sugarsubstitute_supervision::update_repository::Repository::new(policy, idle)))
 }
 
 /// Reauthenticate prepared bytes using established installation authority, without HTTP.
@@ -145,7 +159,7 @@ mod tests {
     #[test]
     fn compiled_policy_uses_the_actual_preparation_owner_without_reading_paths() -> Result {
         let bytes = serde_json::to_vec(&serde_json::json!({
-            "schema_version":2, "update_policy":"beta_eager", "repository":vec![92;32], "feed":{
+            "schema_version":3, "release_notes":"https://notes.example.test/{version}", "update_policy":"beta_eager", "repository":vec![92;32], "feed":{
                 "transport":"https", "base":"https://updates.example.test/", "redirects":[]
             }
         }))?;
@@ -181,7 +195,7 @@ mod tests {
     fn compiled_policy_comes_only_from_the_embedded_distribution() -> Result {
         assert_eq!(compiled_policy(b"")?, None);
         let bytes = serde_json::to_vec(&serde_json::json!({
-            "schema_version":2, "update_policy":"standard", "repository":vec![92;32], "feed":{
+            "schema_version":3, "release_notes":"https://notes.example.test/{version}", "update_policy":"standard", "repository":vec![92;32], "feed":{
                 "transport":"https", "base":"https://updates.example.test/", "redirects":[]
             }
         }))?;

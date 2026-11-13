@@ -14,6 +14,7 @@ use crate::{
 use sha2::{Digest, Sha256};
 use sugarsubstitute_update::fixture::{EXPIRES, NOW};
 type Failure = Box<dyn std::error::Error + Send + Sync>;
+mod expiry;
 mod reuse;
 
 #[test]
@@ -92,6 +93,7 @@ struct Fixture {
     workspace: tempfile::TempDir,
     executable: PathBuf,
     configuration: serde_json::Value,
+    archive: Vec<u8>,
 }
 impl Fixture {
     fn new(context: &JobContext) -> Result<Self, Failure> {
@@ -112,7 +114,7 @@ impl Fixture {
             "targets":String::from_utf8(signed.metadata.targets)?,
             "descriptor":String::from_utf8(signed.descriptor)?,
         });
-        Ok(Self { root, workspace, executable, configuration })
+        Ok(Self { root, workspace, executable, configuration, archive })
     }
     fn import(&self, now: i64, context: &JobContext) -> Result<SignedInstallation, Failure> {
         let distribution =

@@ -23,6 +23,8 @@ pub(super) enum Phase {
     DiscoverEngine(Box<TrustStore>, u64),
     Restore(Box<TrustStore>),
     Reopen(Box<TrustStore>, Box<AuthenticatedOffer>),
+    /// Cached metadata is expired or missing; try the prepared candidate's receipt (D22).
+    Receipt(Box<TrustStore>),
     RestoreArchive(Box<TrustStore>, Box<AuthenticatedOffer>),
     Download(Box<TrustStore>, Box<AuthenticatedOffer>),
     Import(Box<TrustStore>, Box<AuthenticatedOffer>, Box<VerifiedDownload>),
@@ -83,6 +85,7 @@ impl State {
         let phase = std::mem::replace(&mut self.phase, Phase::Empty);
         match &phase {
             Phase::Reopen(trust, _)
+            | Phase::Receipt(trust)
             | Phase::RestoreArchive(trust, _)
             | Phase::Download(trust, _)
             | Phase::Import(trust, _, _)
@@ -110,16 +113,39 @@ impl State {
             }
             Phase::Restore(trust) => {
                 let request = trust.application_request(self.channel(&trust, context)?, context)?;
-                match trust.cached_offer(request, now(), context)? {
-                    None => (Phase::Empty, Progress::Unavailable),
-                    Some(offer) if offer.offer().admission() == Admission::UpdateEngine => (
+                match trust.cached_offer(request, now(), context) {
+                    Ok(None) => (Phase::Receipt(trust), Progress::Reopening),
+                    Err(crate::setup_storage::TrustFailure::Verification(cause))
+                        if cause.is_expiry() =>
+                    {
+                        tracing::info!(
+                            operation = "update_cached_metadata_expired",
+                            "Cached update metadata expired; checking the prepared update receipt"
+                        );
+                        (Phase::Receipt(trust), Progress::Reopening)
+                    }
+                    Err(cause) => return Err(cause.into()),
+                    Ok(Some(offer)) if offer.offer().admission() == Admission::UpdateEngine => (
                         Phase::SelectEngine(trust, offer.offer().offer().minimum_updater_release()),
                         Progress::SelectingEngine,
                     ),
-                    Some(offer) if offer.offer().admission() != Admission::Prepare => {
+                    Ok(Some(offer)) if offer.offer().admission() != Admission::Prepare => {
                         (Phase::Empty, Progress::Decision(offer.offer().admission()))
                     }
-                    Some(offer) => (Phase::Reopen(trust, Box::new(offer)), Progress::Reopening),
+                    Ok(Some(offer)) => (Phase::Reopen(trust, Box::new(offer)), Progress::Reopening),
+                }
+            }
+            Phase::Receipt(trust) => {
+                let request = trust.application_request(self.channel(&trust, context)?, context)?;
+                match SignedCandidate::reopen_received(
+                    &self.installation,
+                    *trust,
+                    request,
+                    &mut now,
+                    context,
+                )? {
+                    Some(candidate) => (Phase::Ready(Box::new(candidate)), Progress::Ready),
+                    None => (Phase::Empty, Progress::Unavailable),
                 }
             }
             Phase::Reopen(trust, offer)

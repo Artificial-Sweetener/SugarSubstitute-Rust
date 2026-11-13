@@ -4,6 +4,7 @@
 
 use sugarsubstitute_contracts::{
     execution::{MemoryClaim, MemoryLease},
+    host::HostDescription,
     panel::{PanelError, PanelMessage, PanelSession},
     startup::MainIdentity,
 };
@@ -15,11 +16,13 @@ pub struct PanelObservation {
     message: PanelMessage,
     lease: MemoryLease,
     claim: MemoryClaim,
+    hosting: crate::MainHosting,
 }
 
 /// A host-direction panel message retained with its admitted allocation.
 pub struct PanelCommand {
     identity: MainIdentity,
+    description: Option<HostDescription>,
     message: PanelMessage,
     _claim: MemoryClaim,
 }
@@ -30,20 +33,35 @@ impl PanelCommand {
 
     /// Bind a configuration or heartbeat to the same complete main-navigation identity.
     ///
+    /// A configuration carries the host `description` the page receives immediately before it,
+    /// in the same native delivery; a heartbeat carries none.
+    ///
     /// # Errors
-    /// Rejects a client-direction or foreign-session message before any native effect.
+    /// Rejects a client-direction or foreign-session message, a configuration without its
+    /// description and a heartbeat with one, before any native effect.
     pub fn new(
         identity: MainIdentity,
+        description: Option<HostDescription>,
         message: PanelMessage,
         claim: MemoryClaim,
     ) -> Result<Self, PanelError> {
+        let paired = match message {
+            PanelMessage::Configure { .. } => description.is_some(),
+            PanelMessage::Ping(_) => description.is_none(),
+            _ => false,
+        };
         if claim.bytes() < Self::STORAGE_BYTES
             || message.session() != &PanelSession::for_main(identity)?
-            || !matches!(message, PanelMessage::Configure { .. } | PanelMessage::Ping(_))
+            || !paired
         {
             return Err(PanelError::Invalid);
         }
-        Ok(Self { identity, message, _claim: claim })
+        Ok(Self { identity, description, message, _claim: claim })
+    }
+
+    /// Borrow the host description delivered before a configuration.
+    pub fn description(&self) -> Option<&HostDescription> {
+        self.description.as_ref()
     }
 
     /// Borrow the addressed main-navigation identity.
@@ -65,8 +83,15 @@ impl PanelObservation {
         message: PanelMessage,
         lease: MemoryLease,
         claim: MemoryClaim,
+        hosting: crate::MainHosting,
     ) -> Self {
-        Self { identity, message, lease, claim }
+        Self { identity, message, lease, claim, hosting }
+    }
+
+    /// How the main browser that sent this message is hosted, which decides what the host
+    /// declares to it.
+    pub const fn hosting(&self) -> crate::MainHosting {
+        self.hosting
     }
 
     /// Borrow the native document identity that supplied the observation.

@@ -7,7 +7,7 @@
   },
   "githubRelease": {
     "apiRoot": "https://api.github.com",
-    "repository": "Artificial-Sweetener/SugarCubes",
+    "repository": "Artificial-Sweetener/SugarSubstitute-Rust",
     "tagPrefix": "sugarcubes-v",
     "assetName": "SugarCubes-{version}.zip",
     "downloadHosts": ["github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com"]

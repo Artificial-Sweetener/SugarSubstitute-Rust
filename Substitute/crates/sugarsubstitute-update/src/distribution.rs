@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Producing-build repository binding, transport policy and update policy, independent of signed
-//! remote offers.
+//! Producing-build repository binding, transport policy, update policy and release-notes location,
+//! independent of signed remote offers.
 use crate::http::Policy;
 use serde::Deserialize;
 use std::io;
 
 /// Maximum encoded producing-build configuration, in bytes.
 pub const MAX_BYTES: usize = 16 * 1024;
-/// Encoded schema this build accepts; version 2 added the required update policy.
-pub const SCHEMA_VERSION: u32 = 2;
+/// Encoded schema this build accepts; version 2 added the required update policy, version 3 the
+/// required release-notes location.
+pub const SCHEMA_VERSION: u32 = 3;
+/// Placeholder that a release-notes location replaces with the version it describes.
+pub const VERSION_PLACEHOLDER: &str = "{version}";
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -18,15 +21,8 @@ struct Configuration {
     repository: [u8; 32],
     feed: Feed,
     update_policy: UpdatePolicy,
-    /// Optional `https` address of a version's release notes, with one [`VERSION`] placeholder.
-    #[serde(default)]
-    release_notes: Option<String>,
+    release_notes: String,
 }
-
-/// Placeholder in a release-notes template that the running version replaces.
-pub const VERSION: &str = "{version}";
-/// Longest version label a release-notes address is built from, in bytes.
-const MAX_VERSION_BYTES: usize = 64;
 
 #[derive(Deserialize)]
 #[serde(tag = "transport", rename_all = "snake_case", deny_unknown_fields)]
@@ -63,15 +59,65 @@ pub struct Distribution {
     repository: [u8; 32],
     policy: Policy,
     update_policy: UpdatePolicy,
-    release_notes: Option<String>,
+    release_notes: ReleaseNotes,
+}
+
+/// Where a build's release notes are published: an https URL template containing
+/// [VERSION_PLACEHOLDER] once. Release CI publishes each version's generated changelog section
+/// at that address (for SugarSubstitute, the GitHub release substitute-v{version}), so the
+/// "What's new" link of a version opens exactly the notes semantic-release wrote for it.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ReleaseNotes {
+    template: String,
+}
+impl ReleaseNotes {
+    /// Validate a template at decode time, so a link for any valid version is a plain https URL.
+    fn new(template: String) -> io::Result<Self> {
+        let notes = Self { template };
+        if notes.template.matches(VERSION_PLACEHOLDER).count() != 1 {
+            return Err(invalid("Release notes location must contain one version placeholder"));
+        }
+        notes.url("0.0.0")?;
+        Ok(notes)
+    }
+
+    /// The release notes of `version`, a plain `major.minor.patch` release version.
+    /// # Errors
+    /// Rejects any other version text, and a location that is not plain https with a host and
+    /// without credentials or a query.
+    pub fn url(&self, version: &str) -> io::Result<url::Url> {
+        let mut parts = version.split('.');
+        let plain = (0..3).all(|_| {
+            parts.next().is_some_and(|part| {
+                !part.is_empty()
+                    && part.bytes().all(|byte| byte.is_ascii_digit())
+                    && (part == "0" || !part.starts_with('0'))
+            })
+        }) && parts.next().is_none();
+        if !plain {
+            return Err(invalid("Release notes need a plain release version"));
+        }
+        let url = url::Url::parse(&self.template.replace(VERSION_PLACEHOLDER, version))
+            .map_err(|cause| io::Error::new(io::ErrorKind::InvalidData, cause))?;
+        if url.scheme() != "https"
+            || url.host_str().is_none_or(str::is_empty)
+            || !url.username().is_empty()
+            || url.password().is_some()
+            || url.query().is_some()
+        {
+            return Err(invalid("Release notes location must be a plain https address"));
+        }
+        Ok(url)
+    }
 }
 impl Distribution {
     /// Decode bounded bytes compiled into the authenticated producing application. Call on an
     /// admitted preparation job. Never populate these inputs from downloaded metadata, runtime
     /// environment variables, neighboring files or the embedded web interface.
     /// # Errors
-    /// Rejects empty/oversized bytes, unknown schemas/fields, empty repository identities and
-    /// invalid origins. Ordinary builds accept only HTTPS; fixture HTTP is literal loopback only.
+    /// Rejects empty/oversized bytes, unknown schemas/fields, empty repository identities,
+    /// invalid origins and a release-notes location that is not one plain https template.
+    /// Ordinary builds accept only HTTPS; fixture HTTP is literal loopback only.
     pub fn decode(bytes: &[u8]) -> io::Result<Self> {
         if bytes.is_empty() || bytes.len() > MAX_BYTES {
             return Err(invalid("Update distribution exceeds its encoded bounds"));
@@ -89,25 +135,17 @@ impl Distribution {
             Feed::Loopback { port } => Policy::loopback(port),
         }
         .map_err(|cause| io::Error::new(io::ErrorKind::InvalidData, cause))?;
-        if let Some(template) = &configuration.release_notes
-            && (template.matches(VERSION).count() != 1
-                || notes_address(template, "1.0.0").is_none())
-        {
-            return Err(invalid("Update distribution release notes are not an https template"));
-        }
         Ok(Self {
             repository: configuration.repository,
             policy,
             update_policy: configuration.update_policy,
-            release_notes: configuration.release_notes,
+            release_notes: ReleaseNotes::new(configuration.release_notes)?,
         })
     }
 
-    /// Where the release notes of `version` are, when this build names them: an `https`
-    /// address without credentials. A version label that is empty, longer than 64 bytes or
-    /// contains anything but ASCII letters, digits, `.`, `-` and `+` has none.
-    pub fn release_notes(&self, version: &str) -> Option<url::Url> {
-        notes_address(self.release_notes.as_deref()?, version)
+    /// Where this build's release notes are published, for the "What's new" link.
+    pub fn release_notes(&self) -> &ReleaseNotes {
+        &self.release_notes
     }
 
     /// How this build applies application updates.
@@ -119,23 +157,6 @@ impl Distribution {
     pub fn into_parts(self) -> ([u8; 32], Policy) {
         (self.repository, self.policy)
     }
-}
-
-/// `template` with `version` in place of its placeholder, when the result is a plain `https`
-/// address with a host and no credentials.
-fn notes_address(template: &str, version: &str) -> Option<url::Url> {
-    let label = !version.is_empty()
-        && version.len() <= MAX_VERSION_BYTES
-        && version.bytes().all(|byte| byte.is_ascii_alphanumeric() || b".-+".contains(&byte));
-    if !label {
-        return None;
-    }
-    let address = url::Url::parse(&template.replacen(VERSION, version, 1)).ok()?;
-    let plain = address.scheme() == "https"
-        && address.host_str().is_some_and(|host| !host.is_empty())
-        && address.username().is_empty()
-        && address.password().is_none();
-    plain.then_some(address)
 }
 
 /// Keep malformed build input observable without treating it as disabled updates.

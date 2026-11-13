@@ -56,6 +56,12 @@ concern = "Original worker-transport admission through retained frames, ports an
 minimum_tests = 741
 
 [[owners]]
+package = "sugarsubstitute-update-repository"
+root = "tools/update-repository"
+concern = "A year and more of daily, monthly, release and root signing accepted every day by an installation running the application's verifier; each role failing closed at its lifetime; unauthorized keys, tampered or foreign state, rewritten or rolled-back versions and unrequested target names refused before publication; the command line end to end"
+minimum_tests = 11
+
+[[owners]]
 package = "sugarsubstitute-xtask"
 root = "tools/xtask"
 concern = "Architecture, execution, filesystem, cache, networking, diagnostics, configuration and localization owner boundaries; exact reviewed source and dependency identities across authored languages, alias-safe public contracts, adversarial rejection fixtures and verification orchestration."

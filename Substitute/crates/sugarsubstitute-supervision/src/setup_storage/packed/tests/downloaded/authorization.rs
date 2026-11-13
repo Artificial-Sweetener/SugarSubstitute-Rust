@@ -6,6 +6,11 @@ use local::Delivery;
 use std::path::PathBuf;
 use sugarsubstitute_contracts::update::Component;
 
+/// The fixed UTC Unix time these fixtures prepare records at. Automatic preparation here never
+/// targets a package with strikes and repair preparation ignores strikes, so no outcome depends on
+/// the real clock.
+const PREPARED_AT: u64 = 1_800_000_000;
+
 struct Case<'a> {
     directory: &'a Directory,
     original: &'a Path,
@@ -312,7 +317,7 @@ fn updater_payload_and_fabricated_engine_capabilities_cannot_reach_application_p
 }
 
 #[test]
-fn trust_writer_remains_held_through_final_check_and_candidate_preparation() -> TestResult {
+fn trust_writer_is_held_at_every_authority_check_and_released_after_publication() -> TestResult {
     run(1, |case| {
         let rotated = root(&key(94)?, 2, Some(&key(92)?))?;
         let directory = Directory::open(&case.directory.path().join("state/update-trust"), false)?;

@@ -8,7 +8,7 @@ use sugarsubstitute_update::VerifiedOffer;
 
 impl InstallationSession {
     /// Reserve, resume or supersede a signed candidate before materializing its generation.
-    /// Setup exclusion remains held throughout. A journaled staging generation may be absent
+    /// Setup exclusion remains held throughout; the trust writer only while journaling. A journaled staging generation may be absent
     /// after interruption; only this authenticated operation may initialize that exact location.
     /// A different authorized package or published release gets a fresh generation. Supersession
     /// atomically changes only pending selection and preserves every predecessor payload.
@@ -28,7 +28,9 @@ impl InstallationSession {
         let bytes = bundle
             .download_identity()
             .ok_or_else(|| invalid("Update archive custody is absent"))?;
-        let (path, pinned, marker) = authorization.publish(
+        // The reservation journal is the only write under the trust writer; the generation
+        // directory and user folders are created afterwards under setup exclusion alone.
+        let (_, (generation, initialize)) = authorization.authenticate(
             &self.admission.root,
             bytes,
             now,
@@ -56,8 +58,7 @@ impl InstallationSession {
                                 .map_err(io::Error::other)?,
                             release: crate::setup_storage::signed_release(offer)?,
                         };
-                        let now = crate::setup_storage::selection::unix_now()
-                            .map_err(io::Error::other)?;
+                        let now = store.strike_clock().now().map_err(io::Error::other)?;
                         let reserved = match before.candidate() {
                             None => before.prepare(
                                 generation.clone(),
@@ -83,20 +84,18 @@ impl InstallationSession {
                 if generation.package.as_str() != bundle.digest() {
                     return Err(invalid("Resume package differs from the recorded candidate"));
                 }
-                let path = self.directory().join("releases").join(generation.id.as_str());
-                let (pinned, marker) = match crate::durable_storage::files::inspect(&path, context)
-                {
-                    Ok(_) => generation::open(&path, bundle.digest(), context)?,
-                    Err(cause) if cause.kind() == io::ErrorKind::NotFound && initialize => {
-                        generation::create(&path, bundle.digest(), context)?
-                    }
-                    Err(cause) => return Err(cause),
-                };
-                self.provision_user_folders(context)?;
-                recheck()?;
-                Ok((path, pinned, marker))
+                Ok((generation, initialize))
             },
         )?;
+        let path = self.directory().join("releases").join(generation.id.as_str());
+        let (pinned, marker) = match crate::durable_storage::files::inspect(&path, context) {
+            Ok(_) => generation::open(&path, bundle.digest(), context)?,
+            Err(cause) if cause.kind() == io::ErrorKind::NotFound && initialize => {
+                generation::create(&path, bundle.digest(), context)?
+            }
+            Err(cause) => return Err(cause.into()),
+        };
+        self.provision_user_folders(context)?;
         Ok(PreparedInstallation {
             session: self,
             generation: path,

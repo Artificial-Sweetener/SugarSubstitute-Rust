@@ -59,6 +59,9 @@ pub enum Undecided {
     /// The host process was ended from outside, such as by Task Manager or a forced shutdown,
     /// without reporting a failure of its own.
     ProcessEnded,
+    /// The host process was created but never took over the installation from its creator: it
+    /// exited first, or stayed silent and was ended, for example while antivirus held its files.
+    Unadopted,
 }
 
 /// Facts a trial's coordinator observes in order. The first ending fact wins: a failure after a

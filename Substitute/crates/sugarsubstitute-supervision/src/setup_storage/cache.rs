@@ -34,7 +34,7 @@ use crate::durable_storage::{
     files::{self, Directory},
     protected::directories::Mode,
     protection::{self, Protection},
-    retirement, staging,
+    retirement, staging, tree as storage_tree,
 };
 pub use entry::CacheLease;
 pub use maintenance::{CacheBudgetExhausted, Maintenance};

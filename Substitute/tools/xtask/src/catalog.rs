@@ -126,7 +126,10 @@ pub(crate) fn reviewed_sources(
     }
     require(
         fingerprint(root, sources)? == expected,
-        format!("catalog: {owner} has stale reviewed source fingerprints"),
+        format!(
+            "catalog: {owner} has stale reviewed source fingerprints; {}",
+            crate::fingerprints::RESYNC
+        ),
     )
 }
 
@@ -222,7 +225,11 @@ fn reviewed_format_sources(
     )?;
     require(
         fingerprint_resolved(&format.sources, locate)? == format.source_sha256,
-        format!("catalog: {} has stale reviewed source fingerprints", format.owner),
+        format!(
+            "catalog: {} has stale reviewed source fingerprints; {}",
+            format.owner,
+            crate::fingerprints::RESYNC
+        ),
     )
 }
 /// Enforce unique contiguous versions and exact forward migration chains.

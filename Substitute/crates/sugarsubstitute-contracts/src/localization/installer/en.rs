@@ -44,6 +44,7 @@ pub(in super::super) const EN: InstallerMessages = InstallerMessages {
     step: "Step {current} of {total}",
     no_environment: "No compatible environment is available. Try again or select an existing ComfyUI installation.",
     retry: "Review and retry",
+    included_version_offer: "SugarSubstitute couldn't check online for a newer version, so if you retry, it will install the version included in this installer and update itself the next time you're online.",
     cancelled: "Setup was cancelled. Your existing files are preserved.",
     cancelling: "Finishing cleanup…",
     worker_stopped: "Setup could not continue. Close and reopen the installer to try again. Your existing files are preserved; details are available below.",

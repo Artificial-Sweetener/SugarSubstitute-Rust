@@ -130,6 +130,7 @@ fn published_pointers_read_back_and_a_missing_pointer_needs_setup() -> TestResul
     worker::run_reserved(4 * POINTER_RESERVATION_BYTES, |context, _| {
         let root = worker::installation(170, context)?;
         assert!(matches!(read_launch_pointer(root.path(), context), Err(PointerFailure::Missing)));
+        assert!(pointed_generations(root.path(), context)?.is_empty());
         let first = GenerationId::new("1".repeat(32))?;
         let second = GenerationId::new("2".repeat(32))?;
         let primary = engine(root.path(), &first, b"first engine", context)?;
@@ -137,6 +138,7 @@ fn published_pointers_read_back_and_a_missing_pointer_needs_setup() -> TestResul
         let pointer = LaunchPointer::new(primary.clone(), Some(fallback));
         point(root.path(), &pointer, context)?;
         assert_eq!(read_launch_pointer(root.path(), context)?, pointer);
+        assert_eq!(pointed_generations(root.path(), context)?, [first.clone(), second.clone()]);
         let replaced = LaunchPointer::new(primary.clone(), Some(primary));
         point(root.path(), &replaced, context)?;
         assert!(read_launch_pointer(root.path(), context)?.fallback().is_none());

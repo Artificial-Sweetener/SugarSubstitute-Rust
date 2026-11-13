@@ -9,6 +9,7 @@ use sugarsubstitute_canvas::{CursorIntent, NavigationCommand, Viewport, ZoomMode
 
 mod budget;
 mod camera_restore;
+mod parking;
 
 /// Enough retained-document storage for every 8x8 test document these tests park.
 const FUNDED: u64 = 8 * 1024 * 1024;

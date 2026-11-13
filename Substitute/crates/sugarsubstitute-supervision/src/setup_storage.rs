@@ -37,7 +37,7 @@ pub use image::PreparationImage;
 pub(crate) use launch_pointer::tests as launch_pointer_fixture;
 pub use launch_pointer::{
     EngineTarget, LAUNCH_ENGINE, LAUNCH_POINTER_FILE, LaunchPointer, POINTER_RESERVATION_BYTES,
-    PinnedEngine, PointerFailure, pin_engine, read_launch_pointer,
+    PinnedEngine, PointerFailure, pin_engine, pointed_generations, read_launch_pointer,
 };
 mod running;
 mod runtime_record;
@@ -49,6 +49,14 @@ pub use user_data::{
     PreparedStartup, PreservedDiagnosticEntry, PreservedDiagnosticSource, SourceLaunchSettlement,
     StartupDataCustody, prepare_launch_data,
 };
+mod generation_retirement;
+pub use generation_retirement::{
+    GENERATION_RETIREMENT_RESERVATION_BYTES, GenerationReclaim, GenerationReport,
+    GenerationRetirementError, GenerationTurn, LaunchPointerGenerations, PointedGenerations,
+    RunningGenerationReclaim, retire_generations,
+};
+mod owned_root;
+pub use owned_root::owned_retirement_root;
 mod ownership;
 mod packed;
 mod publication;
@@ -67,8 +75,9 @@ pub use selection::{
 };
 pub use selection::{InheritedLaunch, capture_launch};
 pub use selection::{
-    InheritedTrial, TRIAL_WITNESS_RESERVATION_BYTES, TrialApplication, TrialTransfer, TrialWitness,
-    TrialWitnessTransfer, capture_trial_custody,
+    InheritedTrial, TRIAL_ADOPTION, TRIAL_ADOPTION_GRACE, TRIAL_WITNESS_RESERVATION_BYTES,
+    TrialApplication, TrialTransfer, TrialWitness, TrialWitnessTransfer, UnadoptedEnding,
+    capture_trial_custody,
 };
 pub use selection::{
     InstalledRelease, PreparedUpdate, Rollback, UpdateSelection, read_update_selection,
@@ -81,14 +90,16 @@ pub use transaction::{
     AdmittedCandidate, InstallationSession, InstalledApplication, IntegrationRequest,
     IntegrationStorage, PreparedCandidate, PreparedInstallation, RuntimePaths, Selection,
 };
+#[cfg(test)]
+pub(crate) use trust::UPDATE_RECEIPT_FILE;
 pub(crate) use trust::offered::OfferInputs;
 pub use trust::{
     AuthenticatedOffer, OFFER_LOOKUP_RESERVATION_BYTES, OFFER_PUBLICATION_RESERVATION_BYTES,
     OFFER_RESERVATION_BYTES,
 };
 pub use trust::{
-    TRUST_OPERATION_RESERVATION_BYTES, TRUST_RESERVATION_BYTES, TrustFailure, TrustStore,
-    UpdateAuthorization,
+    AuthorityChange, MetadataMode, TRUST_OPERATION_RESERVATION_BYTES, TRUST_RESERVATION_BYTES,
+    TrustFailure, TrustStore, UpdateAuthorization, UpdateReceipt,
 };
 pub use updater_package::{
     PreparedUpdater, RejectedUpdaterProbe, UPDATER_STAGING_RESERVATION_BYTES,
@@ -97,10 +108,10 @@ pub use updater_package::{
 mod signed_installer;
 pub(crate) use signed_installer::CachedCandidate;
 pub use signed_installer::{
-    CompletedInstallation, InstalledCandidate, InstallerDistribution, InstallerSource,
-    MAX_DISTRIBUTION_BYTES, SIGNED_INSTALLER_RESERVATION_BYTES,
-    SIGNED_PREPARATION_RESERVATION_BYTES, SIGNED_TRANSFER_RESERVATION_BYTES, SignedCandidate,
-    SignedInstallation, SignedPreparation,
+    CompletedInstallation, IncludedInstallChoice, InstalledCandidate, InstallerAuthority,
+    InstallerDistribution, InstallerMetadataChoice, InstallerSource, MAX_DISTRIBUTION_BYTES,
+    SIGNED_INSTALLER_RESERVATION_BYTES, SIGNED_PREPARATION_RESERVATION_BYTES,
+    SIGNED_TRANSFER_RESERVATION_BYTES, SignedCandidate, SignedInstallation, SignedPreparation,
 };
 
 /// Memory reserved for bounded manifests, streaming copies and retained filesystem custody.

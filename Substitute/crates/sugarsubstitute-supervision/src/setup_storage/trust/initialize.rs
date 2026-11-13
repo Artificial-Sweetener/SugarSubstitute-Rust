@@ -75,6 +75,7 @@ impl TrustStore {
             workspace: context.memory().clone(),
             installation,
             repository,
+            strike_clock: crate::setup_storage::selection::StrikeClock::System,
         };
         let marker = protection::with_domain(context, |protection| {
             protection.directory(store.root.path(), Mode::Existing, context)?;

@@ -9,7 +9,7 @@
 mod activation;
 mod continuity;
 mod discovery;
-pub use activation::UpdateAuthorization;
+pub use activation::{MetadataMode, UpdateAuthorization};
 mod envelope;
 mod failure;
 mod initialize;
@@ -21,11 +21,13 @@ pub(crate) mod offered;
 mod preparation;
 pub use offer_cache::{OFFER_LOOKUP_RESERVATION_BYTES, OFFER_PUBLICATION_RESERVATION_BYTES};
 pub use offered::{AuthenticatedOffer, OFFER_RESERVATION_BYTES};
+pub(in crate::setup_storage) use preparation::{PreparationAttempt, try_preparation};
 mod receipt;
 mod records;
 mod releases;
 mod session;
 mod subscription;
+mod update_receipt;
 mod updater;
 use super::SelectionStore;
 use super::check;
@@ -38,7 +40,7 @@ use crate::durable_storage::{
     protection::{self, Protection},
     staging,
 };
-pub use failure::TrustFailure;
+pub use failure::{AuthorityChange, TrustFailure};
 use std::{fs::File, io, io::Write, path::Path};
 use sugarsubstitute_contracts::{
     execution::{JobContext, MemoryClaim, MemoryLease},
@@ -46,6 +48,9 @@ use sugarsubstitute_contracts::{
     update::Request,
 };
 use sugarsubstitute_update::{MetadataSet, RepositoryTrust, VerifiedOffer};
+#[cfg(test)]
+pub(crate) use update_receipt::FILE as UPDATE_RECEIPT_FILE;
+pub use update_receipt::UpdateReceipt;
 
 /// Protected update trust inside the installation state folder.
 pub(super) const DIRECTORY: &str = "update-trust";
@@ -74,8 +79,22 @@ pub struct TrustStore {
     cache: std::sync::Mutex<Option<super::cache::RuntimeCache>>,
     installation: InstallationId,
     repository: [u8; 32],
+    strike_clock: super::selection::StrikeClock,
 }
 impl TrustStore {
+    /// Date updater strikes and decide their withholding with `clock` instead of the system clock.
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) fn with_strike_clock(mut self, clock: super::selection::StrikeClock) -> Self {
+        self.strike_clock = clock;
+        self
+    }
+
+    /// The clock this store dates updater strikes with and checks their withholding against.
+    pub(in crate::setup_storage) fn strike_clock(&self) -> super::selection::StrikeClock {
+        self.strike_clock
+    }
+
     /// Open existing protected trust with the repository identity embedded in the distribution.
     /// All later distributions retain that identity across signing-key rotations.
     /// Complete earlier stores gain a protected continuity marker after checkpoint and history
@@ -132,6 +151,30 @@ impl TrustStore {
                 history.check(request, &offer)?;
                 Ok(offer)
             })
+        })
+    }
+
+    /// Authenticate an installer's included metadata and descriptor without a clock (C4).
+    /// Signatures must hold under this installation's current root and the release must pass
+    /// durable rollback history, but expiry is not enforced and nothing durable changes.
+    /// Use only after the user explicitly chose to install the included release offline.
+    /// # Errors
+    /// Rejects unsigned, foreign-key or inconsistent roles, routing or rollback failures,
+    /// lock contention, cancellation and storage errors.
+    pub fn pinned_offer(
+        &self,
+        metadata: MetadataSet<'_>,
+        request: &Request,
+        descriptor: &[u8],
+        context: &JobContext,
+    ) -> Result<VerifiedOffer, TrustFailure> {
+        self.protected(context, |protection| {
+            let _reader = self.reader(protection, context)?;
+            let history = self.read_releases(protection)?;
+            let offer = self.read(protection)?.pinned_offer(metadata, request, descriptor)?;
+            history.check(request, &offer)?;
+            check(context)?;
+            Ok(offer)
         })
     }
 

@@ -18,11 +18,7 @@ fn pending(
             1,
         )?,
     };
-    let staging = before.prepare(
-        generation.clone(),
-        PreparationIntent::Automatic,
-        crate::setup_storage::selection::unix_now()?,
-    )?;
+    let staging = before.prepare(generation.clone(), PreparationIntent::Automatic, PREPARED_AT)?;
     store.compare_exchange(&before, &staging, context)?;
     let prepared = staging.prepared(&generation)?;
     store.compare_exchange(&staging, &prepared, context)?;

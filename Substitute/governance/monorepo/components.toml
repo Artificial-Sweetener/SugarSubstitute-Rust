@@ -26,6 +26,8 @@ files = [
   "Sugar/integrations/contracts/canvas.schema.json",
   "Sugar/integrations/contracts/CanvasNativeProtocol.generated.rs",
   "Sugar/integrations/contracts/CanvasSurfaceProtocol.generated.rs",
+  "Sugar/integrations/contracts/host.schema.json",
+  "Sugar/integrations/contracts/HostProtocol.generated.rs",
   "Sugar/integrations/contracts/memory.schema.json",
   "Sugar/integrations/contracts/MemoryProtocol.generated.rs",
   "Sugar/integrations/contracts/panel_wire_vectors.json",
@@ -35,6 +37,8 @@ files = [
   "Sugar/integrations/contracts/session_vectors.json",
   "Sugar/integrations/contracts/session.schema.json",
   "Sugar/integrations/contracts/SessionProtocol.generated.rs",
+  "Sugar/integrations/contracts/updates.schema.json",
+  "Sugar/integrations/contracts/UpdatesProtocol.generated.rs",
 ]
 consumers = [
   "crates/sugarsubstitute-application/src/workspace_session/tests.rs",
@@ -53,6 +57,10 @@ consumers = [
   "crates/sugarsubstitute-contracts/src/canvas_surface/wire.rs",
   "crates/sugarsubstitute-contracts/src/desktop_session/tests.rs",
   "crates/sugarsubstitute-contracts/src/desktop_session/wire.rs",
+  "crates/sugarsubstitute-contracts/src/host/tests.rs",
+  "crates/sugarsubstitute-contracts/src/host/wire.rs",
+  "crates/sugarsubstitute-contracts/src/host_updates/tests.rs",
+  "crates/sugarsubstitute-contracts/src/host_updates/wire.rs",
   "crates/sugarsubstitute-contracts/src/memory/tests.rs",
   "crates/sugarsubstitute-contracts/src/memory/wire.rs",
   "crates/sugarsubstitute-contracts/src/panel/tests.rs",

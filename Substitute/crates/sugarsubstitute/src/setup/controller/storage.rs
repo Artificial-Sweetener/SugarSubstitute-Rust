@@ -136,7 +136,11 @@ impl Controller {
                         self.worker_failed(Box::new(cause))
                     }
                 }
-                JobOutcome::Success(StorageResult::Retired(CreationOutcome::NotCreated)) => {
+                // A first start that never took over was resolved under setup's own run, so
+                // the installation can be opened again, exactly as when nothing was created.
+                JobOutcome::Success(StorageResult::Retired(
+                    CreationOutcome::NotCreated | CreationOutcome::Unadopted,
+                )) => {
                     self.relaunch = None;
                     if let Some(cause) = self.launch_failure.take()
                         && !self.closing
@@ -276,6 +280,9 @@ impl Controller {
 
     /// Release the request for retry only after any creator recovery has completed.
     fn report_storage_failure(&mut self, cause: io::Error) -> Result<()> {
+        self.included_offered = cause
+            .get_ref()
+            .is_some_and(|cause| cause.is::<super::requests::metadata::IncludedVersionOffered>());
         let id = self.inspection_id.take().or_else(|| self.install_id.take());
         if id.is_none() && self.bundle.is_none() {
             self.worker_failed(Box::new(cause))?;

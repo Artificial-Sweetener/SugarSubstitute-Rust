@@ -164,7 +164,11 @@ pub(crate) fn check(
         )?;
         require(
             fingerprint(root, std::slice::from_ref(&record.path))? == record.source_sha256,
-            format!("networking: stale source boundary {}", record.path),
+            format!(
+                "networking: stale source boundary {}; {}",
+                record.path,
+                crate::fingerprints::RESYNC
+            ),
         )?;
         require(
             (record.boundary == Boundary::Implementation)

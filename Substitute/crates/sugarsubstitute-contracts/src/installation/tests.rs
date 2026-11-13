@@ -266,6 +266,27 @@ fn hostile_records_cannot_erase_selection_by_omitting_fields_or_exceed_capacity(
     Ok(())
 }
 
+/// A trial written by a later release that added fields still reads in an older engine, so a
+/// fallback engine can start the accepted release while the trial is in progress. The fields it
+/// cannot read grant nothing: the known correlation fields still bind the trial to its record.
+#[test]
+fn a_trial_from_a_later_release_reads_with_only_the_fields_this_reader_knows() -> Result {
+    let record = install(&empty()?, &generation(1)?)?;
+    let trial = reload(&prepare(&record, &generation(2)?)?.begin_trial()?)?;
+    let mut later: serde_json::Value = serde_json::from_slice(&trial.encode()?)?;
+    later["candidate"]["attempt"]["handoff"] = serde_json::json!({"slot": 3});
+    later["candidate"]["attempt"]["generation"]["channel"] = "beta".into();
+    let read = InstallationRecord::decode(&serde_json::to_vec(&later)?)?;
+    assert_eq!(read, trial);
+    let expected = attempt(&trial)?;
+    let attempt: Trial = serde_json::from_value(later["candidate"]["attempt"].clone())?;
+    assert_eq!(attempt, expected);
+    let mut renumbered = later;
+    renumbered["candidate"]["attempt"]["revision"] = (expected.revision + 1).into();
+    assert!(InstallationRecord::decode(&serde_json::to_vec(&renumbered)?).is_err());
+    Ok(())
+}
+
 #[test]
 fn record_validation_rejects_duplicate_selection_and_mismatched_trial_identity() -> Result {
     let a = generation(1)?;
