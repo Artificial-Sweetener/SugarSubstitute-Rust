@@ -34,6 +34,9 @@ fn abandoned_recovery_waits_for_the_trial_owner_and_not_for_witness_duplicates()
         // Recovery dates the strike with the injected clock, never the real one.
         assert_eq!(recovered, pending.reject(attempt, at)?);
         assert_eq!(recovered.strikes().iter().map(|strike| strike.at).collect::<Vec<_>>(), [at]);
+        // The strike's second is part of the record, so a reader whose clock has moved on by
+        // one second sees a different record: the old real-clock comparison failed exactly so.
+        assert_ne!(recovered, pending.reject(attempt, at + 1)?);
         drop(duplicate);
         Ok(())
     })
