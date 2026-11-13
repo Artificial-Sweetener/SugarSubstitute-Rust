@@ -304,7 +304,7 @@ rationale = "Repository build or verification diagnostics remain developer outpu
 [[records]]
 path = "tools/xtask/src/main.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:75136c55921a618aeed0f03e439afd92a83642e156656924590cedc77969d6ef"
+source_sha256 = "sha256:18466b683f64abb9aa1305dcf692a53a7e9ac57e8033203a4bae4a95c0c052cc"
 disposition = "developer"
 rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
 
@@ -318,7 +318,7 @@ rationale = "Repository build or verification diagnostics remain developer outpu
 [[records]]
 path = "tools/xtask/src/testing.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:2827118fea6b40dc1a5a76c9ce8ccb881dd35b62c3835cf8524d5944b005fb2b"
+source_sha256 = "sha256:c4add3e31ec1fd998c2490e7d5b8361bf2c0cc7e06138700ad86545e7725de55"
 disposition = "developer"
 rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
 

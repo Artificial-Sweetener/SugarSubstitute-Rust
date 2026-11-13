@@ -42,6 +42,8 @@ mod source;
 mod source_tokens;
 mod structure;
 mod testing;
+mod testing_scope;
+mod testing_time;
 mod ui;
 mod ui_source;
 mod vendor;

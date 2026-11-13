@@ -4114,7 +4114,7 @@ rationale = "Repository tooling tests.rs: Adversarial capability, copy-provenanc
 [[records]]
 path = "tools/xtask/src/main.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:75136c55921a618aeed0f03e439afd92a83642e156656924590cedc77969d6ef"
+source_sha256 = "sha256:18466b683f64abb9aa1305dcf692a53a7e9ac57e8033203a4bae4a95c0c052cc"
 capabilities = ["method canonicalize"]
 disposition = "tooling"
 rationale = "Repository tooling main.rs: Provide the same portable verification entry point for local work, hooks and CI. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -4130,7 +4130,7 @@ rationale = "Repository tooling external.rs binds upstream HTTP sources to the r
 [[records]]
 path = "tools/xtask/src/policy.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:c12e32b21a3d20fa2330fffcf4718efd13661069f019ca22618fc0cc0a54d848"
+source_sha256 = "sha256:93ec8c957b48f8fb8400ddc873632d79b73fd734f7ec703f931e059b0efa7083"
 capabilities = ["std::fs::write", "tempfile::tempdir"]
 disposition = "tooling"
 rationale = "Repository tooling policy.rs: Decode strict, versioned policy documents without accepting unknown fields. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."

@@ -114,3 +114,88 @@ package = "sugarsubstitute-image-io"
 root = "crates/sugarsubstitute-image-io"
 concern = "Bounded image decoding, archive integrity and seam-safe region reads with original storage and memory admission"
 minimum_tests = 24
+
+[[real_time]]
+path = "crates/sugarsubstitute/src/paused_clock.rs"
+source_sha256 = "sha256:c8091a496cb5567b481f4345e9de5b3d67152ec1c83c6bcb08b595da50fb2428"
+reason = "Product services poll on their injected clock; this test clock freezes logical time and lets only polling delays of at most one second elapse for real, so no deadline can expire from machine load."
+
+[[real_time]]
+path = "crates/sugarsubstitute/src/diagnostics/service/tests.rs"
+source_sha256 = "sha256:557a228cd86b6e35dd921bc3f734bac33543eb2f28afc644c25641be6983d311"
+reason = "The diagnostics execution owner sleeps on a real clock; the test jumps that clock past every former bound with an explicit offset, so the held writer outlasts each deadline by construction, not by load."
+
+[[real_time]]
+path = "crates/sugarsubstitute/src/production/entry_runner/tests.rs"
+source_sha256 = "sha256:52475273daee64218da334804c269cc71569be8d1880882f2338a59b432a110f"
+reason = "The entry runner's execution owner requires the real monotonic clock; these tests construct it only for that signature, read native time through the frozen anchor and wait for observed runner joins."
+
+[[real_time]]
+path = "crates/sugarsubstitute-execution/src/clock_tests.rs"
+source_sha256 = "sha256:0ed07fad50f3ce814708852330650da7d7c6245ec86a8ab2f0bf4d037e47beef"
+reason = "These are the real monotonic clock's own contract tests: they prove that an observed moment maps inside the real interval sampled around it, and they assert ordering, never an elapsed duration."
+
+[[real_time]]
+path = "crates/sugarsubstitute-execution/src/windows_fixture.rs"
+source_sha256 = "sha256:96f0fd386a4188935649c084bf4ae713747637af812a46ddb05e2b3fd1e7bbca"
+reason = "Fixture deadline conversion maps a native Instant chosen by its caller onto the performance counter for child processes; it samples the clock once to translate, and decides no outcome."
+
+[[real_time]]
+path = "crates/sugarsubstitute-execution/src/windows_fixture_forwarding/native_abi_tests.rs"
+source_sha256 = "sha256:d5a63f3ed48953bde7d49e2103e742b446bf5bbad24be5534e1c5d4e3ae479ea"
+reason = "The native forwarding worker requires a finite real deadline; the test grants one a day away, far beyond any loaded run, so the fixture's own events decide every outcome in the module."
+
+[[real_time]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/test_worker/trace.rs"
+source_sha256 = "sha256:bd53096f72bffe863627fe28d38002550a7646360e2875e692c0c0cc97aa74ab"
+reason = "The storage test worker records how long live storage spans have run, only to print in a failure message; no assertion, admission or operation clock ever reads those durations."
+
+[[real_time]]
+path = "crates/sugarsubstitute-desktop/src/main_actor/composition/canvas/tests/shared.rs"
+source_sha256 = "sha256:592e24d87ffb6fa571da562c728c4d0b397095b52a9d4c48948bc3fbed20f6fa"
+reason = "The hardware composition qualification measures steady-state draw and fence handoff times and prints them as evidence; every assertion compares pixels, and none reads a measured duration."
+
+[[real_time]]
+path = "crates/sugarsubstitute-desktop/src/report/surface/native_tests/hosted.rs"
+source_sha256 = "sha256:f5580661efcac07acee43d43e4130a226addac7b8384903ecba494c5411a69fd"
+reason = "The hosted report qualification drives a real tao event loop that must wake to re-examine the native form; its 20 ms wake only schedules the next look, and every assertion waits for observed events."
+
+[[real_time]]
+path = "crates/sugarsubstitute-desktop/src/windows_console/text/performance_tests.rs"
+source_sha256 = "sha256:2d7075180789a74b382491a4712c37d5fe435e0e2ae6ac3c377b13983fbb4fa6"
+reason = "The native console performance qualification prints publication, paint and exposure timings as evidence; its assertions check tail following and glyph draw counts, never a measured duration."
+
+[[real_time]]
+path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/reattached_overview.rs"
+source_sha256 = "sha256:b8f24a054c79af770987c57a4936455b544071eef5f6c3a277791d5f042648f8"
+reason = "The canvas reports its next wake as a native Instant; the test converts it back to the logical delay and advances its fake clock by that much, so real time only recovers the delay it reached."
+
+[[real_time]]
+path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/reattached_overview/comparison_exit.rs"
+source_sha256 = "sha256:facefedf23820140755780e4a551d6fdde78344c37bbc8ea87045954e8fab6d0"
+reason = "The canvas reports its next wake as a native Instant; the test converts it back to the logical delay and advances its fake clock by that much, so real time only recovers the delay it reached."
+
+[[real_time]]
+path = "crates/sugarsubstitute/src/startup.rs"
+source_sha256 = "sha256:c652828fe909237b728c933eaebf65d18f9fde3d2165b7d39a5d83a34a3e67dd"
+reason = "The test-only constructor round trip builds the startup host, whose constructor requires the real monotonic execution clock; the round trip asserts the constructed parts and never reads a duration."
+
+[[real_time]]
+path = "crates/sugarsubstitute/src/startup/platform_tests.rs"
+source_sha256 = "sha256:131b4f0bf9fa9e730d63c70c38f6fe6a66415047b308a5cb70b5a4834a9f6212"
+reason = "The startup host's constructor requires the real monotonic execution clock; these tests construct it only to satisfy that signature, and every assertion waits for observed startup outcomes."
+
+[[real_time]]
+path = "crates/sugarsubstitute/src/startup/policy/child_routing_tests.rs"
+source_sha256 = "sha256:79f35914472debe03d0b26c85afdba11bd9246082f39c2afcbf40ca114d104e3"
+reason = "The startup host's constructor requires the real monotonic execution clock; these tests construct it only to satisfy that signature, and every assertion waits for observed routing outcomes."
+
+[[real_time]]
+path = "crates/sugarsubstitute/src/startup/memory/tests.rs"
+source_sha256 = "sha256:e8cd764bd7474d06790887aa5d4b2ce60881694dbbfeb0c14a061a86d6b0dcae"
+reason = "The memory governor stamps its first sample with its own Instant::now(), so these tests pass a real instant at or after that stamp and then derive every later moment by adding durations."
+
+[[real_time]]
+path = "crates/sugarsubstitute/src/startup/memory/page/tests.rs"
+source_sha256 = "sha256:c16404b5ffd841843782630bbfe7894e82a364492b8b9f9f16e77abe93de6628"
+reason = "A page report stamps its measurement due time with the product's own Instant::now(), so these tests pass a real instant at or after that stamp and then derive later moments by adding durations."
