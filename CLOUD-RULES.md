@@ -51,6 +51,8 @@ Only two authors are allowed in this repository:
 
 Before your next commit, run `git config user.name "Artificial Sweetener"` and `git config user.email "artificialsweetenerai@proton.me"` in your checkout. Every commit's author and committer must be that identity. Never commit as Claude or any bot, and never configure semantic-release or a workflow to commit as `semantic-release-bot`; release automation commits as Daisy. Your earlier commits authored as Claude will be rewritten by the coordinator in one pass; don't rewrite them yourself.
 
+The integrator enforces this. Before merging a lane, it lists every new commit's author and committer (`git log --format='%ae %ce' origin/integration..origin/lane/<lane>`). The history has been rewritten (2026-11-13), so every legitimate commit now carries one of the two identities. Any commit by any other identity (Claude, semantic-release-bot, GitHub, dependabot) is old history coming back. Refuse it, and leave the lane unmerged until it rebases onto the rewritten branch. The integrator's own commits use the maintainer's identity.
+
 ## Commits
 - `type(scope): changelog-ready outcome`; `feat`/`fix`/`perf` for user-facing behaviour, `refactor`/`test`/`build`/`ci`/`chore`/`docs` otherwise. The message ends with its body: no Co-Authored-By or other attribution trailer.
 - Never `--no-verify`, never change git config globally, never install hooks, never `git stash`.
