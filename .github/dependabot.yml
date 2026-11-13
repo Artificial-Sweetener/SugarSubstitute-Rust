@@ -15,6 +15,16 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+  - package-ecosystem: npm
+    directory: /.github/release
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    ignore:
+      # Major 10 needs a newer changelog writer than @semantic-release/release-notes-generator
+      # ships; take it together with a generator that does.
+      - dependency-name: conventional-changelog-conventionalcommits
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
