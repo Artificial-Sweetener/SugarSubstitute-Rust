@@ -55,6 +55,7 @@ impl<B: StartupBackend> StartupHost<B> {
                 self.child.advance_reload(prepared),
             )?;
         }
+        self.release_held_reveal()?;
         self.deliver_startup_events()?;
         self.advance_workflow_restart()?;
         #[cfg(all(windows, feature = "native-composition"))]
@@ -279,6 +280,9 @@ impl<B: StartupBackend> StartupHost<B> {
             }
             StartupRoute::Close => self.close_owned()?,
             StartupRoute::None => {}
+            StartupRoute::Effect(effect) if self.holds_reveal(&effect) => {
+                self.held_reveal = Some(effect)
+            }
             StartupRoute::Effect(effect) => match effect {
                 #[cfg(all(windows, feature = "native-composition"))]
                 effect @ StartupEffect::LoadFrontend { .. } if self.workspace.is_some() => {

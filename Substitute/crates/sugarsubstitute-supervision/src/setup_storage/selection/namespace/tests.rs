@@ -4,6 +4,7 @@
 use super::*;
 use crate::setup_storage::selection::tests::{TestResult, initial, root};
 use crate::setup_storage::test_worker as worker;
+use std::io::Write;
 
 #[test]
 fn initialization_never_exposes_a_namespace_without_complete_initial_selection() -> TestResult {

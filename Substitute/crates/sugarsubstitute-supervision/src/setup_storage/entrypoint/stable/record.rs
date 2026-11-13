@@ -74,9 +74,11 @@ pub(super) fn replace(
     if bytes.len() > MAX_RECORD_BYTES {
         return Err(invalid("Stable launcher ownership exceeds its bound"));
     }
-    let mut stage = publication::Stage::create(state, protection, context)?;
-    std::io::Write::write_all(stage.file(), &bytes)?;
-    stage.publish(&state.path().join(RECORD), true, protection, context)
+    let destination = state.path().join(RECORD);
+    let mut stage =
+        publication::Stage::create(state, UpdateFile::Launcher, &destination, protection, context)?;
+    stage.write(&bytes)?;
+    stage.publish(&destination, true, protection, context)
 }
 
 /// Missing state permits first publication; invalid state is retained for explicit recovery.
@@ -119,5 +121,5 @@ pub(super) fn publish(
         return Err(invalid("Stable launcher ownership exceeds its bound"));
     }
     check(context)?;
-    publication::write_immutable(state, RECORD, &bytes, protection, context)
+    publication::write_immutable(state, UpdateFile::Launcher, RECORD, &bytes, protection, context)
 }

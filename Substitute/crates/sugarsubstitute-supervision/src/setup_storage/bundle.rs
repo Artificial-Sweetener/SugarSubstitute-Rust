@@ -12,7 +12,7 @@ pub use worker::ProvisioningWorker;
 #[cfg(test)]
 mod tests;
 use crate::durable_storage::files::{self, Directory};
-pub(super) use payload::Payload;
+pub(super) use payload::{PAYLOAD_STAGE, Payload};
 pub(super) use prepared::VerifiedRuntime;
 pub(super) use runtime::RuntimePackage;
 use std::{io, path::Path, sync::Arc};
@@ -88,6 +88,7 @@ impl VerifiedBundle {
     ) -> io::Result<()> {
         crate::durable_storage::protection::with(context, |protection| {
             files::write_immutable(
+                crate::durable_storage::write_port::UpdateFile::Payload,
                 &target.join(super::inventory::INSTALLED_MANIFEST),
                 &self.payload.manifest_bytes,
                 |path| protection.file(path, context),

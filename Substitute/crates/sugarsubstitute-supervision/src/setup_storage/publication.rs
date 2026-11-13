@@ -9,6 +9,7 @@ use crate::durable_storage::{
     files::{self, Directory},
     protection::{Protection, Publication},
     staging,
+    write_port::{self, FileWrite, UpdateFile},
 };
 use journal::Record;
 use std::{
@@ -25,15 +26,20 @@ pub(super) struct Stage<'a> {
     record: Record,
     journal_identity: (u32, u32, u32),
     file: File,
+    write: FileWrite,
 }
 impl<'a> Stage<'a> {
     /// Persist complete ownership before allowing a partial payload to survive process exit.
+    /// `destination` is the name the stage will be published as, a `kind` update file.
     pub(super) fn create(
         parent: &'a Directory,
+        kind: UpdateFile,
+        destination: &Path,
         protection: &mut Protection,
         context: &JobContext,
     ) -> io::Result<Self> {
         check(context)?;
+        let write = write_port::begin(kind, destination);
         let id = staging::identity()?;
         let source = parent.path().join(Record::stage_name(&id));
         let file = protection.transient_file(&source, context)?;
@@ -46,7 +52,12 @@ impl<'a> Stage<'a> {
         protection.retain_transient(&journal, context)?;
         protection.close_file(journal)?;
         protection.retain_transient(&file, context)?;
-        Ok(Self { parent, record, journal_identity, file })
+        Ok(Self { parent, record, journal_identity, file, write })
+    }
+
+    /// Append bytes to the unpublished stage.
+    pub(super) fn write(&mut self, bytes: &[u8]) -> io::Result<()> {
+        self.write.bytes(&mut self.file, bytes)
     }
 
     /// Borrow the original owned writer; callers verify complete bytes before publication.
@@ -95,7 +106,7 @@ impl<'a> Stage<'a> {
 
     /// Commit an already validated sibling or stable-entry destination under retained custody.
     fn commit(
-        self,
+        mut self,
         destination: &Path,
         entry_root: Option<&Directory>,
         replace: bool,
@@ -105,18 +116,17 @@ impl<'a> Stage<'a> {
         files::sync(&self.file, context)?;
         protection.close_file(self.file)?;
         let source = self.parent.path().join(self.record.stage());
-        match entry_root {
-            Some(root) => {
-                protection.publish_entry(&source, root, self.record.file, replace, context)?
-            }
+        let file = self.record.file;
+        self.write.publish(|| match entry_root {
+            Some(root) => protection.publish_entry(&source, root, file, replace, context),
             None => protection.publish(
                 &source,
                 destination,
-                self.record.file,
+                file,
                 Publication::File { replace },
                 context,
-            )?,
-        }
+            ),
+        })?;
         if let Err(cause) = protection.remove_journaled(
             &self.parent.path().join(self.record.journal_name()),
             self.journal_identity,
@@ -170,6 +180,7 @@ pub(super) fn recover(
 /// The caller holds mutation exclusion and runs recovery before creating this operation's files.
 pub(super) fn write_immutable(
     parent: &Directory,
+    kind: UpdateFile,
     leaf: &str,
     bytes: &[u8],
     protection: &mut Protection,
@@ -188,9 +199,10 @@ pub(super) fn write_immutable(
         Err(cause) if cause.kind() == io::ErrorKind::NotFound => {}
         Err(cause) => return Err(cause),
     }
-    let mut stage = Stage::create(parent, protection, context)?;
-    stage.file().write_all(bytes)?;
-    stage.publish(&parent.path().join(leaf), false, protection, context)
+    let destination = parent.path().join(leaf);
+    let mut stage = Stage::create(parent, kind, &destination, protection, context)?;
+    stage.write(bytes)?;
+    stage.publish(&destination, false, protection, context)
 }
 
 /// Decode protected ownership before requesting deletion of either exact native object.

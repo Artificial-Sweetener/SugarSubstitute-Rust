@@ -22,7 +22,7 @@ use sugarsubstitute_execution::ExecutionClient;
 use sugarsubstitute_splash::{
     AnimationFrame, Appearance, LOGICAL_SIZE, PreparationError, RenderError,
     SPLASH_CACHE_RESERVATION_BYTES, SplashPreparationResult, SplashRenderRequest, SplashRenderer,
-    StartupStatus, Theme,
+    StartupStatus, Theme, UpdateVersion,
 };
 use sugarsubstitute_ui::{accent::AccentPalette, progress::ProgressFrame};
 
@@ -43,6 +43,8 @@ pub(super) struct Resources<'a> {
 
 pub(super) struct Notice {
     policy: StartingNotice,
+    /// What the notice says: starting, or updating to the version this launch starts.
+    status: StartupStatus,
     /// Native wake at the notice moment while it is still waiting.
     wake: Option<Instant>,
     surface: Option<NoticeSurface>,
@@ -60,6 +62,7 @@ impl Notice {
     pub(super) fn new(budget: LauncherBudget) -> Self {
         Self {
             policy: StartingNotice::new(budget),
+            status: StartupStatus::Starting,
             wake: Instant::now().checked_add(LauncherBudget::NOTICE_DELAY),
             surface: None,
             initialization: None,
@@ -68,6 +71,25 @@ impl Notice {
             prepared: false,
             failed: false,
         }
+    }
+
+    /// Say `Updating to version X…` while this launch starts ersion as a trial, or starting
+    /// when it starts the accepted version. A change prepares the frame again.
+    pub(super) fn show_update(&mut self, version: Option<&str>) {
+        let status = version
+            .and_then(UpdateVersion::new)
+            .map_or(StartupStatus::Starting, StartupStatus::Updating);
+        if status != self.status {
+            self.status = status;
+            self.prepared = false;
+            self.frame = None;
+        }
+    }
+
+    /// What the notice says now.
+    #[cfg(test)]
+    pub(super) const fn status(&self) -> StartupStatus {
+        self.status
     }
 
     /// Observe the clock and whether the launcher still owns startup.
@@ -166,7 +188,7 @@ impl Notice {
                 return Ok(());
             }
         };
-        let request = request(surface)?;
+        let request = request(surface, self.status)?;
         let bytes = request.reservation_bytes();
         self.preparation = Some(resources.client.submit_cpu(
             resources.scope,
@@ -178,7 +200,10 @@ impl Notice {
 }
 
 /// The splash, as the launcher's notice, for `surface`.
-fn request(surface: NoticeSurface) -> Result<SplashRenderRequest, Box<dyn Error>> {
+fn request(
+    surface: NoticeSurface,
+    status: StartupStatus,
+) -> Result<SplashRenderRequest, Box<dyn Error>> {
     Ok(SplashRenderRequest {
         shape: surface.shape,
         identity: FrameIdentity {
@@ -189,7 +214,7 @@ fn request(surface: NoticeSurface) -> Result<SplashRenderRequest, Box<dyn Error>
         appearance: Appearance {
             theme: if surface.dark { Theme::Dark } else { Theme::Light },
             accent: AccentPalette::resolve(surface.accent),
-            status: StartupStatus::Starting,
+            status,
             operation: Default::default(),
             expanded: false,
             reveal: 0.0,

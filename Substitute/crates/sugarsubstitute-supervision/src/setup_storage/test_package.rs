@@ -2,12 +2,13 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Complete inert distributions for real extraction and maintenance boundary tests.
 pub(crate) mod maintenance;
+#[allow(unsafe_code)]
 mod trial;
 pub(crate) mod updater;
 use flate2::{Compression, write::GzEncoder};
 use sha2::{Digest, Sha256};
 use std::io::{self, Write};
-pub(crate) use trial::trial_transfer;
+pub(crate) use trial::{inherit, trial_transfer};
 
 /// Build all required distribution roles; none of these fixture bytes are executed.
 pub(crate) fn distribution() -> io::Result<(Vec<u8>, Vec<u8>)> {

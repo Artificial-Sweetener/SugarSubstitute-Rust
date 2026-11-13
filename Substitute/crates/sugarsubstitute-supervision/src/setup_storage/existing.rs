@@ -197,7 +197,12 @@ impl ExistingInstallation {
             return Err(invalid("Accepted installation changed before configuration preservation"));
         }
         let configuration = destination.join("startup.local.toml");
-        files::write_immutable(&configuration, &self.startup, files::create_new)?;
+        files::write_immutable(
+            crate::durable_storage::write_port::UpdateFile::Payload,
+            &configuration,
+            &self.startup,
+            files::create_new,
+        )?;
         let target = Directory::open(destination, false)?;
         let descriptor = if target.identity()? == self._directory.identity()? {
             // A resumed generation already owns these validated bytes, including JSON spelling.
@@ -206,6 +211,7 @@ impl ExistingInstallation {
             Cow::Owned(self.relocated_descriptor(destination)?.bytes()?)
         };
         files::write_immutable(
+            crate::durable_storage::write_port::UpdateFile::Payload,
             &destination.join("sugarsubstitute-launch.local.json"),
             &descriptor,
             files::create_new,

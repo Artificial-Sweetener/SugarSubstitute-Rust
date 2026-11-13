@@ -121,3 +121,152 @@ fn normal_idle_runner_requires_actual_atomic_empty_intake_and_preserves_first_fe
     assert!(cause.downcast_ref::<OriginalFenceError>().is_some());
     Ok(())
 }
+
+fn runner() -> Result<EntryRunner<super::super::tests::NoChild>, Box<dyn Error>> {
+    let path = PathBuf::from("unopened-relative-input");
+    let command = ProductionCommand {
+        launch_selection: None,
+        installation: path.clone(),
+        diagnostics: Default::default(),
+        options: super::super::tests::unopened_paths()?.into(),
+    };
+    let mut runner = EntryRunner::new(
+        command,
+        path,
+        Box::new(super::super::tests::NoChild(None)),
+        crate::diagnostics::DiagnosticHealth::fixture(),
+    );
+    super::super::tests::freeze_time(&mut runner);
+    runner.authority = Some(CoordinatorAuthority::new(
+        sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget::new(
+            sugarsubstitute_contracts::execution::Moment::from_nanos(0),
+        )?,
+        None,
+    )?);
+    runner.launch_update =
+        crate::updates::launch::LaunchUpdate::new(Some(crate::updates::UpdatePolicy::BetaEager));
+    Ok(runner)
+}
+
+/// The admission fence for the runner as it stands; the initial client's transport completion
+/// is a real job completion, so its observed success is supplied once the test reaches it.
+fn admission(
+    runner: &EntryRunner<super::super::tests::NoChild>,
+    initial_retired: bool,
+) -> Admission {
+    let mut admission = runner.normal_admission();
+    admission.initial_retired |= initial_retired;
+    admission
+}
+
+/// The coordinator's restart decision, as its update turn makes it.
+fn decide_restart(
+    runner: &mut EntryRunner<super::super::tests::NoChild>,
+) -> Result<(), Box<dyn Error>> {
+    use sugarsubstitute_contracts::update::attempt::AttemptOutcome;
+    runner.observe_window();
+    runner.launch_update.finish(&AttemptOutcome::Prepared { version: "2.0.0".into() });
+    runner.announce_restart()
+}
+
+/// The window opening, as the parent lifecycle reports MainRevealed to the authority.
+fn reveal(runner: &mut EntryRunner<super::super::tests::NoChild>) -> Result<(), Box<dyn Error>> {
+    runner.authority.as_mut().ok_or("authority absent")?.observe_window_opened();
+    Ok(())
+}
+
+/// A beta-eager check that prepares an update before intake is ready owes a restart: it says
+/// which version it restarts into at once, keeping the window hidden, waits for the close
+/// fence, never closes past an in-flight entry request, and then closes normally and
+/// relaunches into the update. The fence is supplied here: the real one is the entry intake's
+/// `try_close_when_idle`, which needs a live entry server.
+#[test]
+fn a_restart_before_the_window_waits_for_the_close_fence_then_closes_normally_and_relaunches()
+-> Result<(), Box<dyn Error>> {
+    use sugarsubstitute_contracts::update::status::LaunchVersion;
+    let mut runner = runner()?;
+    decide_restart(&mut runner)?;
+    let status = runner.update_status.snapshot().1;
+    assert!(status.restarting(), "the window is told to stay hidden");
+    assert_eq!(status.applying(), Some("2.0.0"));
+    assert_eq!(runner.launch_version(), Some(LaunchVersion::Restarting("2.0.0".into())));
+
+    let fences = Cell::new(0);
+    let fence = |idle: bool| {
+        fences.set(fences.get() + 1);
+        Ok::<_, Box<dyn Error>>(idle)
+    };
+    let pending = admission(&runner, false);
+    assert!(pending.requested, "the restart is a requested close");
+    runner.close_after_fence(pending, |_| fence(true))?;
+    assert_eq!(fences.get(), 0, "intake not ready: the fence is not even asked");
+    assert!(!runner.closing && !runner.normal_shutdown);
+
+    runner.initial_completed = true;
+    runner.intake_ready = true;
+    runner.close_after_fence(admission(&runner, true), |_| fence(false))?;
+    assert_eq!(fences.get(), 1);
+    assert!(!runner.closing, "an in-flight entry request holds the close");
+
+    runner.close_after_fence(admission(&runner, true), |_| fence(true))?;
+    assert_eq!(fences.get(), 2);
+    assert!(runner.closing && runner.normal_shutdown);
+    assert!(runner.relaunch_wanted());
+    Ok(())
+}
+
+/// The window reveals in the same turn the restart was decided, before it received the status
+/// that keeps it hidden: within that turn the update step runs before the child's MainRevealed
+/// and the close. The close is then never owed, the next update step withdraws the restart and
+/// tells the window, and the update waits for the next launch.
+#[test]
+fn a_window_revealed_after_the_restart_decision_is_never_closed() -> Result<(), Box<dyn Error>> {
+    let mut runner = runner()?;
+    runner.initial_completed = true;
+    runner.intake_ready = true;
+    decide_restart(&mut runner)?;
+    reveal(&mut runner)?;
+    let fences = Cell::new(0);
+    runner.close_after_fence(admission(&runner, true), |_| {
+        fences.set(fences.get() + 1);
+        Ok(true)
+    })?;
+    assert_eq!(fences.get(), 0, "a seen window owes no close");
+    assert!(!runner.closing);
+
+    runner.observe_window();
+    runner.publish_update_status()?;
+    let status = runner.update_status.snapshot().1;
+    assert!(!status.restarting(), "the window may open");
+    assert_eq!(status.applying(), None);
+    assert!(runner.launch_update.restart().is_none());
+    runner.normal_shutdown = true;
+    assert!(!runner.relaunch_wanted(), "the update waits for the next launch");
+    Ok(())
+}
+
+/// When the window opens before the check prepares its update, nothing restarts: no close is
+/// owed, the splash names no version, and a later close does not relaunch.
+#[test]
+fn an_update_prepared_after_the_window_opened_neither_closes_nor_relaunches()
+-> Result<(), Box<dyn Error>> {
+    let mut runner = runner()?;
+    reveal(&mut runner)?;
+    decide_restart(&mut runner)?;
+    assert!(!runner.update_status.snapshot().1.restarting());
+    assert_eq!(runner.update_status.snapshot().1.applying(), None);
+    runner.initial_completed = true;
+    runner.intake_ready = true;
+    let owed = admission(&runner, true);
+    assert!(!owed.requested);
+    let fences = Cell::new(0);
+    runner.close_after_fence(owed, |_| {
+        fences.set(fences.get() + 1);
+        Ok(true)
+    })?;
+    assert_eq!(fences.get(), 0);
+    assert!(!runner.closing);
+    runner.normal_shutdown = true;
+    assert!(!runner.relaunch_wanted());
+    Ok(())
+}

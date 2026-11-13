@@ -7,12 +7,9 @@ use crate::durable_storage::{
     invalid,
     protection::{DomainFailure, Protection},
     staging,
+    write_port::{self, FileWrite, UpdateFile},
 };
-use std::{
-    fs::File,
-    io::{self, Write},
-    path::PathBuf,
-};
+use std::{fs::File, io, path::PathBuf};
 use sugarsubstitute_contracts::execution::JobContext;
 
 /// One precreated protected record and its original parent/protection custody.
@@ -26,6 +23,7 @@ pub(crate) struct PreparedCommit<'a> {
     file: File,
     maximum: usize,
     protection: &'a mut Protection,
+    write: FileWrite,
 }
 
 impl<'a> PreparedCommit<'a> {
@@ -34,6 +32,7 @@ impl<'a> PreparedCommit<'a> {
     /// claim for that allocation; the current job funds native custody and supplies controls.
     /// The target and stage are distinct flat siblings; the caller establishes target ownership.
     pub(crate) fn new(
+        kind: UpdateFile,
         parent: &'a Directory,
         target: &'a str,
         prefix: &str,
@@ -46,9 +45,10 @@ impl<'a> PreparedCommit<'a> {
         if maximum == 0 {
             return Err(invalid("Prepared record requires a nonzero byte bound"));
         }
+        let write = write_port::begin(kind, &parent.path().join(target));
         let staged = staging::unique_path(parent, prefix)?;
         let file = protection.file(&staged, context)?;
-        Ok(Self { parent, target, staged, file, maximum, protection })
+        Ok(Self { parent, target, staged, file, maximum, protection, write })
     }
 
     /// Commit complete encoded bytes even if job controls ended after preparation.
@@ -57,15 +57,17 @@ impl<'a> PreparedCommit<'a> {
     /// Rejects oversized/empty bytes, native writes, flushes, checked closure and publication.
     /// Failed staging remains for feature-owned recovery; existing target bytes stay authoritative.
     pub(crate) fn commit(self, bytes: &[u8]) -> io::Result<()> {
-        let Self { parent, target, staged, mut file, maximum, protection } = self;
+        let Self { parent, target, staged, mut file, maximum, protection, mut write } = self;
         let written = if bytes.is_empty() || bytes.len() > maximum {
             Err(invalid("Prepared record bytes exceed their admitted bound"))
         } else {
-            file.write_all(bytes).and_then(|()| file.sync_all())
+            write.bytes(&mut file, bytes).and_then(|()| file.sync_all())
         };
         let closed = protection.close_file(file);
         match (written, closed) {
-            (Ok(()), Ok(())) => staging::replace_record(&staged, &parent.path().join(target)),
+            (Ok(()), Ok(())) => {
+                write.publish(|| staging::replace_record(&staged, &parent.path().join(target)))
+            }
             (Err(cause), Ok(())) | (Ok(()), Err(cause)) => Err(cause),
             (Err(operation), Err(cause)) => {
                 Err(io::Error::other(DomainFailure::Native { cause, operation: Some(operation) }))

@@ -19,6 +19,7 @@ impl Launcher {
     pub(super) fn advance_notice(&mut self) {
         let owns = !self.completed && !self.closing;
         let now = self.clock.now();
+        self.announce_launch();
         let Some(notice) = &mut self.notice else { return };
         notice.observe(now, owns);
         let (Some(client), Some(scope), Some(until)) = (&self.client, &self.work_scope, self.until)
@@ -29,6 +30,20 @@ impl Launcher {
             &crate::stable_launcher::notice::Resources { client, scope, jobs: &self.jobs, until },
             self.closing,
         );
+    }
+
+    /// Keep the notice's words in step with the version this launch starts: the update's version
+    /// while an update trial is chosen, starting for an installation choice or once the accepted
+    /// version is chosen instead. Reads only the version recorded when the update was chosen, so
+    /// it never waits on the launch a worker is preparing.
+    pub(super) fn announce_launch(&mut self) {
+        let version = match self.choice {
+            Choice::Trial | Choice::Create { optional: true } => self.update_version.as_deref(),
+            _ => None,
+        };
+        if let Some(notice) = &mut self.notice {
+            notice.show_update(version);
+        }
     }
 
     /// Whether the notice is on screen now.

@@ -4,16 +4,22 @@
 use super::super::check;
 use super::super::invalid;
 use super::manifest::AuthenticatedManifest;
-use crate::durable_storage::files::{self, Directory};
+use crate::durable_storage::{
+    files::{self, Directory},
+    write_port::{self, UpdateFile},
+};
 use std::os::windows::fs::FileExt;
 use std::{
     fs::File,
-    io::{self, Read, Seek, SeekFrom, Write},
+    io::{self, Read, Seek, SeekFrom},
     path::{Path, PathBuf},
 };
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
 
 use sugarsubstitute_update::package::Manifest;
+/// Prefix of the stage each payload file is copied into beside its final name.
+pub(in crate::setup_storage) const PAYLOAD_STAGE: &str = ".payload-stage";
+
 /// Retain a verified file together with all native directory handles needed to pin its path.
 pub(super) struct Input {
     pub(super) file: File,
@@ -239,7 +245,8 @@ impl Payload {
                 Err(cause) if cause.kind() == io::ErrorKind::NotFound => {}
                 Err(cause) => return Err(cause),
             }
-            let staged = crate::durable_storage::staging::unique_path(&parent, ".payload-stage")?;
+            let mut write = write_port::begin(UpdateFile::Payload, &output);
+            let staged = crate::durable_storage::staging::unique_path(&parent, PAYLOAD_STAGE)?;
             let mut stage = Stage::created(&parent, &staged, create(&staged)?)?;
             let destination = stage.file()?;
             let mut offset = 0;
@@ -250,7 +257,7 @@ impl Payload {
                 if count == 0 {
                     break;
                 }
-                destination.write_all(&buffer[..count])?;
+                write.bytes(destination, &buffer[..count])?;
                 offset += count as u64;
             }
             if offset != entry.bytes() {
@@ -259,7 +266,7 @@ impl Payload {
             files::sync(destination, context)?;
             stage.close();
             check(context)?;
-            crate::durable_storage::staging::publish(&staged, &output)?;
+            write.publish(|| crate::durable_storage::staging::publish(&staged, &output))?;
             stage.published();
         }
         Ok(())
@@ -292,7 +299,12 @@ impl Payload {
         target: &Path,
         create: impl Fn(&Path) -> io::Result<File>,
     ) -> io::Result<()> {
-        files::write_immutable(&target.join("setup-manifest.json"), &self.manifest_bytes, create)
+        files::write_immutable(
+            crate::durable_storage::write_port::UpdateFile::Payload,
+            &target.join("setup-manifest.json"),
+            &self.manifest_bytes,
+            create,
+        )
     }
 
     /// Require account protection on every retained installed file, including its inventory.

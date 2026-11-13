@@ -49,6 +49,9 @@ pub enum LaunchVersion {
     Applying(String),
     /// This launch started this version for the first time and confirmed it.
     Updated(String),
+    /// This launch prepared this version before its window opened and restarts into it; the
+    /// window stays hidden and the splash says which version it updates to.
+    Restarting(String),
 }
 
 /// A one-time message about updates for the start of the application, in the order a window
@@ -115,18 +118,26 @@ impl UpdateStatus {
     pub fn repairing(&self) -> bool {
         self.recorded.repairing
     }
-    /// The version this launch is starting for the first time, until it is confirmed.
+    /// The version this launch is starting for the first time, until it is confirmed, or the
+    /// version it restarts into.
     pub fn applying(&self) -> Option<&str> {
         match &self.launch {
-            Some(LaunchVersion::Applying(version)) => Some(version),
+            Some(LaunchVersion::Applying(version) | LaunchVersion::Restarting(version)) => {
+                Some(version)
+            }
             Some(LaunchVersion::Updated(_)) | None => None,
         }
+    }
+    /// Whether this launch restarts into an update prepared before its window opened, so the
+    /// window must stay hidden.
+    pub fn restarting(&self) -> bool {
+        matches!(self.launch, Some(LaunchVersion::Restarting(_)))
     }
     /// The version this launch started for the first time and confirmed.
     pub fn updated_to(&self) -> Option<&str> {
         match &self.launch {
             Some(LaunchVersion::Updated(version)) => Some(version),
-            Some(LaunchVersion::Applying(_)) | None => None,
+            Some(LaunchVersion::Applying(_) | LaunchVersion::Restarting(_)) | None => None,
         }
     }
     /// The one-time start-up messages this status states, in the order a window shows them. A
@@ -216,6 +227,13 @@ impl UpdateStatus {
             self.launch = Some(launch);
         }
     }
+    /// Take back a restart this launch no longer makes: its window opened first, so the update
+    /// starts on the next launch.
+    pub fn withdraw_restart(&mut self) {
+        if self.restarting() {
+            self.launch = None;
+        }
+    }
 
     /// Encode for another process after checking the bounds `decode` enforces.
     /// # Errors
@@ -250,7 +268,9 @@ impl UpdateStatus {
             .is_none_or(|progress| progress.bytes.is_none_or(|(received, total)| received <= total))
             && self.recorded.prepared.as_ref().is_none_or(version)
             && self.launch.as_ref().is_none_or(|launch| match launch {
-                LaunchVersion::Applying(value) | LaunchVersion::Updated(value) => version(value),
+                LaunchVersion::Applying(value)
+                | LaunchVersion::Updated(value)
+                | LaunchVersion::Restarting(value) => version(value),
             })
             && self.failure.as_ref().is_none_or(codec::valid_report)
             && self.sugarcubes.valid()
@@ -442,5 +462,23 @@ mod tests {
             [StartupNotice::Updated("2.0.0".into()), StartupNotice::Repairing],
             "the repair line already says the previous version runs"
         );
+    }
+
+    #[test]
+    fn a_restart_says_its_version_holds_the_window_and_can_be_withdrawn()
+    -> Result<(), StatusCodecError> {
+        let mut status = UpdateStatus::default();
+        status.observe_launch(LaunchVersion::Restarting("2.0.0".into()));
+        assert!(status.restarting());
+        assert_eq!((status.applying(), status.updated_to()), (Some("2.0.0"), None));
+        assert!(status.startup_notices().is_empty());
+        assert_eq!(UpdateStatus::decode(&status.encode()?)?, status);
+        status.withdraw_restart();
+        assert!(!status.restarting());
+        assert_eq!(status.applying(), None);
+        status.observe_launch(LaunchVersion::Applying("2.0.0".into()));
+        status.withdraw_restart();
+        assert_eq!(status.applying(), Some("2.0.0"), "only a restart is withdrawn");
+        Ok(())
     }
 }

@@ -10,7 +10,10 @@ name: Release
 # When publishing, each due component is verified, then released by semantic-release with its
 # own tags (sugarcubes-v<version>, substitute-v<version>), changelog and version files.
 # SugarCubes runs first; SugarSubstitute then releases from the updated branch tip, so the two
-# release commits never race each other.
+# release commits never race each other. A SugarSubstitute release then builds its update package
+# and channel descriptor from the released commit, with the update distribution written from that
+# version's changelog, and the update repository workflow signs them with the release lifetimes.
+# That signing is gated like the scheduled re-sign: RELEASES_ENABLED and the committed root.
 
 on:
   workflow_dispatch:
@@ -177,6 +180,10 @@ jobs:
     environment: release
     permissions:
       contents: write
+    outputs:
+      released: ${{ steps.release.outputs.released }}
+      version: ${{ steps.release.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
     steps:
       - name: Stop when the release has no baseline
         if: needs.tooling.outputs.substitute_blocked != ''
@@ -215,7 +222,102 @@ jobs:
         run: npm ci
 
       - name: Release
+        id: release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASES_ENABLED: ${{ vars.RELEASES_ENABLED }}
         run: node .github/release/release.mjs release substitute
+
+  substitute-update-targets:
+    name: Build SugarSubstitute's update package and channel descriptor
+    needs: [authorize, substitute]
+    if: >-
+      always() &&
+      needs.authorize.outputs.publish == 'true' &&
+      needs.substitute.result == 'success' &&
+      needs.substitute.outputs.released == 'true'
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: bash
+    env:
+      VERSION: ${{ needs.substitute.outputs.version }}
+      TRUSTED_ROOT: .github/update-repository/root.json
+    steps:
+      - name: Checkout the released commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.substitute.outputs.tag }}
+          persist-credentials: false
+
+      - name: Require the trusted root installations ship with
+        run: |
+          if [ ! -f "$TRUSTED_ROOT" ]; then
+            echo "::error::$TRUSTED_ROOT is missing, so no installation could trust this update. Create the update repository offline with the signing tool's init command first."
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: Substitute/installer/package-lock.json
+
+      - name: Install release build tooling
+        working-directory: Substitute/installer
+        run: npm ci
+
+      - name: Write the update distribution from this version's changelog
+        run: |
+          distribution="$RUNNER_TEMP/update-distribution.json"
+          node Substitute/installer/release/update-distribution.mjs "$distribution"
+          echo "SUGARSUBSTITUTE_UPDATE_DISTRIBUTION=$distribution" >> "$GITHUB_ENV"
+
+      # The bundle is the application build compiled with SUGARSUBSTITUTE_UPDATE_DISTRIBUTION,
+      # assembled by installer/package.mjs. That assembly needs the crash handler build and the
+      # signed release manifest, which no CI job produces yet; this step owns producing them.
+      - name: Build the release bundle
+        run: |
+          echo "::error::No CI job produces the signed release bundle yet (crash handler build and release manifest signature). Build it with installer/release/build-application.mjs and installer/package.mjs, set RELEASE_BUNDLE to the bundle and write the package receipt to \$RUNNER_TEMP/bundle.json."
+          exit 1
+
+      - name: Build the signing tool with the repository-pinned Rust
+        working-directory: Substitute
+        run: |
+          rustup show active-toolchain
+          cargo build --locked --release --package sugarsubstitute-update-repository
+          echo "TOOL=$PWD/target/release/sugarsubstitute-update-repository.exe" >> "$GITHUB_ENV"
+
+      - name: Seal the update package and describe it in its channel descriptor
+        run: |
+          sealed="$RUNNER_TEMP/sealed/package.ssupdate"
+          mkdir "$RUNNER_TEMP/sealed" "$RUNNER_TEMP/targets"
+          node Substitute/installer/seal.mjs --update "$RELEASE_BUNDLE" "$sealed"
+          minimum="$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).minimumUpdaterRelease" "$RUNNER_TEMP/bundle.json")"
+          "$TOOL" offer --package "$sealed" --version "$VERSION" --channel release \
+            --platform windows-x86_64 --component application \
+            --minimum-updater-release "$minimum" --output "$RUNNER_TEMP/targets"
+
+      - name: Hand the package and descriptor to the signing workflow
+        uses: actions/upload-artifact@v5
+        with:
+          name: substitute-update-targets
+          path: ${{ runner.temp }}/targets/
+          if-no-files-found: error
+          retention-days: 7
+
+  substitute-update-repository:
+    name: Sign SugarSubstitute's release into the update repository
+    needs: [authorize, substitute-update-targets]
+    if: >-
+      always() &&
+      needs.authorize.outputs.publish == 'true' &&
+      needs.substitute-update-targets.result == 'success'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/substitute-update-repository.yml
+    with:
+      operation: release
+      targets_artifact: substitute-update-targets
+    secrets: inherit

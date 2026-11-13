@@ -286,6 +286,7 @@ pub(crate) fn write_new(path: &Path, bytes: &[u8]) -> io::Result<()> {
 /// Complete a known immutable generation record, accepting only byte-identical earlier output.
 /// Flush a unique sibling before publication so interruption never exposes a partial final file.
 pub(crate) fn write_immutable(
+    kind: crate::durable_storage::write_port::UpdateFile,
     path: &Path,
     bytes: &[u8],
     create: impl FnOnce(&Path) -> io::Result<File>,
@@ -309,13 +310,24 @@ pub(crate) fn write_immutable(
         Err(cause) if cause.kind() == io::ErrorKind::NotFound => {}
         Err(cause) => return Err(cause),
     }
-    let staged = crate::durable_storage::staging::unique_path(&parent, ".record-stage")?;
+    let mut write = crate::durable_storage::write_port::begin(kind, path);
+    let staged = crate::durable_storage::staging::unique_path(&parent, IMMUTABLE_STAGE)?;
     let mut file = create(&staged)?;
-    file.write_all(bytes)?;
-    file.sync_all()?;
+    let written = write.bytes(&mut file, bytes).and_then(|()| file.sync_all());
     drop(file);
-    crate::durable_storage::staging::publish(&staged, path)
+    let published = written
+        .and_then(|()| write.publish(|| crate::durable_storage::staging::publish(&staged, path)));
+    if published.is_err()
+        && let Err(cause) = write.abandon(|| std::fs::remove_file(&staged))
+    {
+        tracing::warn!(operation = "record_stage_preserved", error = %cause,
+            "An unpublished record stage was kept for a later writer");
+    }
+    published
 }
+
+/// Prefix of the stage [`write_immutable`] publishes from, beside its record.
+pub(crate) const IMMUTABLE_STAGE: &str = ".record-stage";
 
 /// Create an ordinary output only when its name is absent.
 pub(crate) fn create_new(path: &Path) -> io::Result<File> {
@@ -414,9 +426,27 @@ mod tests {
         let path = temporary.path().join("record");
         let orphan = temporary.path().join(".record-stage-interrupted");
         write_new(&orphan, b"partial")?;
-        write_immutable(&path, b"complete", create_new)?;
-        write_immutable(&path, b"complete", create_new)?;
-        assert!(write_immutable(&path, b"different", create_new).is_err());
+        write_immutable(
+            crate::durable_storage::write_port::UpdateFile::Payload,
+            &path,
+            b"complete",
+            create_new,
+        )?;
+        write_immutable(
+            crate::durable_storage::write_port::UpdateFile::Payload,
+            &path,
+            b"complete",
+            create_new,
+        )?;
+        assert!(
+            write_immutable(
+                crate::durable_storage::write_port::UpdateFile::Payload,
+                &path,
+                b"different",
+                create_new
+            )
+            .is_err()
+        );
         assert_eq!(std::fs::read(&path)?, b"complete");
         assert_eq!(std::fs::read(orphan)?, b"partial");
         Ok(())

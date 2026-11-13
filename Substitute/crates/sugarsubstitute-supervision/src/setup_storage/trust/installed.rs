@@ -49,9 +49,12 @@ impl UpdateAuthorization<'_> {
             &bytes,
         )?;
         protection::with(context, |protection| {
-            files::write_immutable(&directory.path().join(RECORD), &bytes, |path| {
-                protection.file(path, context)
-            })?;
+            files::write_immutable(
+                crate::durable_storage::write_port::UpdateFile::Trust,
+                &directory.path().join(RECORD),
+                &bytes,
+                |path| protection.file(path, context),
+            )?;
             protection.verify_file(&directory.read(RECORD)?)
         })
     }
