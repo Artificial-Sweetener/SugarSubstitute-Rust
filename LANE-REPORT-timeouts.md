@@ -1,12 +1,12 @@
 # Lane report: timeouts
 
 ## Unfinished
-- **Gate 1 fails on 18 fixer-owned files.** Their allowlist entries stay empty, as the brief asked. All 18 are real stored-versus-fresh shapes. Example: `finish_trial` stamps `unix_now()` inside the product (`selection/run/settlement.rs:90`), then the test asserts `withheld(pkg, unix_now())`. Fixing them needs a wall clock injected into setup_storage. The files, under `crates/sugarsubstitute-supervision/src/setup_storage/`:
+- **Gate 1 fails on 18 fixer-owned files.** Their allowlist entries stay empty, as the brief asked. All are real stored-versus-fresh shapes (e.g. `finish_trial` stamps `unix_now()` at `selection/run/settlement.rs:90`; the test asserts `withheld(pkg, unix_now())`), so setup_storage needs an injected wall clock. Under `crates/sugarsubstitute-supervision/src/setup_storage/`:
   - `user_data/tests.rs`, `selection/tests.rs`, `selection/tests/locks.rs`, `selection/run/{tests,fallback/tests,settlement/tests}.rs`
   - `trust/tests.rs`, `trust/updater/recovery/tests.rs`, `updater_package/stage/trial/tests.rs`
   - `signed_installer/tests/fresh/installed/rescue.rs`, `test_package/maintenance.rs`
   - `packed/tests/downloaded/authorization/{candidates,launch}.rs` and `launch/{inheritance,maintenance,recovery,reservation,running/image}.rs`
-- **The crate test suites have not run.** CI stops at main's governance baseline. Main also doesn't build on Linux (see "Found").
+- **The crate test suites have not run:** CI stops at main's governance baseline, and main doesn't build on Linux (see "Found").
 
 ## Unproven
 Native qualification under the no-progress guard:
@@ -14,11 +14,9 @@ Native qualification under the no-progress guard:
 - both setup qualifications.
 
 ## Decisions made
-- **History.** Force-pushing was denied. Instead, `946b22e2` merges the old snapshot with a linear rebuild on main, and its tree equals the rebuild's.
-  - Each rebuilt commit passes `cargo xtask governance` on its own.
-  - The gate commit fails only on the 18 hits.
-- **Merge conflicts.** The three conflicting governance files come from a 3-way apply of the lane's delta. Fingerprints were then resynced with xtask's own algorithm.
-- **CI timeout.** `timeout-minutes: 240` is set in `substitute-verify.yml`, and the old `verify.yml` is dropped.
+- **History.** Force-pushing was denied, so `946b22e2` merges the snapshot with a linear rebuild on main (same tree). Each rebuilt commit passes governance on its own, except the gate commit's 18 hits.
+- **Conflicts.** The three governance files come from a 3-way apply of the lane's delta, with fingerprints resynced by xtask's algorithm.
+- **CI.** `timeout-minutes: 240` moved to `substitute-verify.yml`; old `verify.yml` dropped.
 
 ## Commits
 - 9f3e5c7c test(execution): give tests one frozen time anchor and a shared no-progress guard
@@ -34,15 +32,15 @@ Native qualification under the no-progress guard:
 
 ## Verification
 - **xtask tests:** 185 pass, including the 6 gate fixtures. These reject the stored-versus-fresh shape for both `unix_now()` and `SystemTime::now()`.
-- **Governance:** passes with the 18 registered as a probe, never committed. So there are no other hits and no unused registrations.
+- **Governance:** passes with the 18 registered by an uncommitted probe, so there are no other hits or unused registrations.
 - **fmt:** passes.
 - **Windows-target type checks** (`ring` built against stub C headers):
   - clippy `-D warnings`, all three legs: clean.
   - Rustdoc `-D warnings`: clean after 83ed0c46.
 - **Python:** the FamilySettlement tests pass with the Windows imports stubbed.
 - **CI:** [run 43340327438](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43340327438) fails on all three OSes at main's baseline (`resolve third_party/comfy-desktop/...download.ts`). Nothing new.
-  - The "Sugar quality" run on this branch was still running when I wrote this. `Sugar/` is identical to main.
-  - No load-only failures could be observed, because no tests ran.
+  - The "Sugar quality" run was still running; `Sugar/` is identical to main.
+  - No load-only failures could be observed: no tests ran.
 
 ## Found (not this lane)
 Main doesn't build on Linux or macOS:
