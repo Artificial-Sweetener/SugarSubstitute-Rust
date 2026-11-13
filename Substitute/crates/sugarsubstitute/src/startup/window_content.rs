@@ -78,6 +78,7 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
         }
     }
 
+    /// The coordinator's status, with its SugarCubes update, as the window shows it.
     fn update_status(&self) -> Option<sugarsubstitute_contracts::update::status::UpdateStatus> {
         let status = self.child.update_status()?.clone();
         Some(
@@ -113,6 +114,30 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
             sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue::Idle
             | sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue::Unobserved => {
                 sugarsubstitute_desktop::WorkflowActivity::Idle
+            }
+        }
+    }
+
+    /// A writer of the update report the window shows, its latest failed attempt and its
+    /// SugarCubes update, that writes on this host's execution owner. Export stays hidden before execution starts,
+    /// once the application is closing, and in a host composed without export scopes.
+    #[cfg(windows)]
+    fn update_report_export(
+        &mut self,
+    ) -> Option<Box<dyn sugarsubstitute_desktop::report::surface::UpdateExport>> {
+        if self.closing {
+            return None;
+        }
+        if !sugarsubstitute_desktop::report::surface::has_update_report(&self.update_status()?) {
+            return None;
+        }
+        let client = self.execution.client().ok()?;
+        match self.update_reports.as_mut()?.writer(client, self.jobs.clone()) {
+            Ok(writer) => Some(Box::new(writer)),
+            Err(cause) => {
+                tracing::error!(operation = "update_report_export", cause = %cause,
+                    "Update report export is unavailable");
+                None
             }
         }
     }

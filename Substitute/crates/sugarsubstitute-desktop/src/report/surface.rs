@@ -65,6 +65,11 @@ impl ReportPresentation {
         Self { content, details, labels, words, locale: copy.id }
     }
 
+    /// The full report text that Copy copies and Export writes, when the report has one.
+    pub fn details(&self) -> Option<&str> {
+        self.details.as_deref()
+    }
+
     /// A launch waiting on the previous SugarSubstitute window: a plain heading and the
     /// checking line, with no details. The conflict owner replaces the message as it waits,
     /// and only asks its question once that window has stopped responding.
@@ -130,25 +135,7 @@ impl ReportPresentation {
         app: Option<&UpdateAttempt>,
         pack: Option<&PackUpdateFailure>,
     ) -> Option<Self> {
-        let words = copy.report;
-        let mut details = String::new();
-        let mut first = None;
-        if let Some(app) = app {
-            let version = app.version.as_deref().map_or_else(|| words.unavailable.into(), sanitize);
-            let step = copy.updates.phase(app.phase);
-            let causes = app.causes.iter().map(|cause| sanitize(cause));
-            write_section(&mut details, copy, words.update_title, &version, step, causes);
-            first = Some(((words.update_title, words.update_message), version, step.to_owned()));
-        }
-        if let Some(pack) = pack {
-            let version = pack.version().unwrap_or(words.unavailable).to_owned();
-            let step = pack.step().unwrap_or(words.unavailable);
-            let causes = pack.lines().iter().chain(pack.causes()).cloned();
-            write_section(&mut details, copy, words.pack_update_title, &version, step, causes);
-            let heading = (words.pack_update_title, words.pack_update_message);
-            first.get_or_insert((heading, version, step.to_owned()));
-        }
-        let (heading, version, step) = first?;
+        let (heading, version, step, details) = failed_update_sections(copy, app, pack)?;
         Some(Self::failure(copy, window_title, heading, &version, &step, details))
     }
 
@@ -160,10 +147,7 @@ impl ReportPresentation {
         window_title: &str,
         status: &sugarsubstitute_contracts::update::status::UpdateStatus,
     ) -> Option<Self> {
-        let pack = status
-            .sugarcubes()
-            .report()
-            .and_then(|report| PackUpdateFailure::from_report(report, copy.pack_updates));
+        let pack = pack_failure(copy, status);
         Self::failed_updates(copy, window_title, status.failure(), pack.as_ref())
     }
 
@@ -212,6 +196,56 @@ impl ReportPresentation {
             copy,
         )
     }
+}
+
+/// The SugarCubes update `status` reports as a failure, in `copy`'s language.
+fn pack_failure(
+    copy: &'static Messages,
+    status: &sugarsubstitute_contracts::update::status::UpdateStatus,
+) -> Option<PackUpdateFailure> {
+    status
+        .sugarcubes()
+        .report()
+        .and_then(|report| PackUpdateFailure::from_report(report, copy.pack_updates))
+}
+
+/// Whether `status` has an update report to open: its latest attempt failed, or the start's
+/// SugarCubes update couldn't check or install, stopped, or put the previous version back.
+pub fn has_update_report(status: &sugarsubstitute_contracts::update::status::UpdateStatus) -> bool {
+    status.failure().is_some()
+        || status
+            .sugarcubes()
+            .report()
+            .is_some_and(sugarsubstitute_contracts::update::pack::PackUpdateReport::needs_attention)
+}
+
+/// The heading, version and step the report's summary shows, and the full report text: one
+/// section for the application's failed attempt, then one for the SugarCubes update.
+fn failed_update_sections(
+    copy: &'static Messages,
+    app: Option<&UpdateAttempt>,
+    pack: Option<&PackUpdateFailure>,
+) -> Option<((&'static str, &'static str), String, String, String)> {
+    let words = copy.report;
+    let mut details = String::new();
+    let mut first = None;
+    if let Some(app) = app {
+        let version = app.version.as_deref().map_or_else(|| words.unavailable.into(), sanitize);
+        let step = copy.updates.phase(app.phase);
+        let causes = app.causes.iter().map(|cause| sanitize(cause));
+        write_section(&mut details, copy, words.update_title, &version, step, causes);
+        first = Some(((words.update_title, words.update_message), version, step.to_owned()));
+    }
+    if let Some(pack) = pack {
+        let version = pack.version().unwrap_or(words.unavailable).to_owned();
+        let step = pack.step().unwrap_or(words.unavailable);
+        let causes = pack.lines().iter().chain(pack.causes()).cloned();
+        write_section(&mut details, copy, words.pack_update_title, &version, step, causes);
+        let heading = (words.pack_update_title, words.pack_update_message);
+        first.get_or_insert((heading, version, step.to_owned()));
+    }
+    let (heading, version, step) = first?;
+    Some((heading, version, step, details))
 }
 
 /// Append one failure's section to the full report text: its heading, version and step, then

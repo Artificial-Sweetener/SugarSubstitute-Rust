@@ -64,7 +64,9 @@ impl UpdateFeed {
     ) -> Self {
         let glyph = match status {
             Some(status) if status.ready().is_some() => UpdateGlyph::Ready,
-            Some(status) if has_report(status) => UpdateGlyph::Warning,
+            Some(status) if crate::report::surface::has_update_report(status) => {
+                UpdateGlyph::Warning
+            }
             _ => UpdateGlyph::Hidden,
         };
         let saving = matches!(
@@ -73,13 +75,6 @@ impl UpdateFeed {
         );
         Self { glyph, saving, workflow }
     }
-}
-
-/// Whether the window has an update report to open: the latest attempt failed, or the start's
-/// SugarCubes update could not check or install, or put the previous version back.
-pub(crate) fn has_report(status: &UpdateStatus) -> bool {
-    status.failure().is_some()
-        || status.sugarcubes().report().is_some_and(PackUpdateReport::needs_attention)
 }
 
 /// A one-time message shown as one line the user can dismiss.
