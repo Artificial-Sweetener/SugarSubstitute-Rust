@@ -74,8 +74,22 @@ pub struct TrustStore {
     cache: std::sync::Mutex<Option<super::cache::RuntimeCache>>,
     installation: InstallationId,
     repository: [u8; 32],
+    strike_clock: super::selection::StrikeClock,
 }
 impl TrustStore {
+    /// Date updater strikes and decide their withholding with `clock` instead of the system clock.
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) fn with_strike_clock(mut self, clock: super::selection::StrikeClock) -> Self {
+        self.strike_clock = clock;
+        self
+    }
+
+    /// The clock this store dates updater strikes with and checks their withholding against.
+    pub(in crate::setup_storage) fn strike_clock(&self) -> super::selection::StrikeClock {
+        self.strike_clock
+    }
+
     /// Open existing protected trust with the repository identity embedded in the distribution.
     /// All later distributions retain that identity across signing-key rotations.
     /// Complete earlier stores gain a protected continuity marker after checkpoint and history

@@ -31,7 +31,7 @@ impl InstallationRun {
             let Some(Candidate::Trial { attempt }) = current.candidate() else {
                 return Ok(current);
             };
-            let recovered = current.abandon_trial(attempt, super::settlement::unix_now()?)?;
+            let recovered = current.abandon_trial(attempt, store.strike_clock().now()?)?;
             store.publish(protection, &recovered, context)?;
             tracing::info!(
                 operation = "installation_abandoned_trial_recovered",

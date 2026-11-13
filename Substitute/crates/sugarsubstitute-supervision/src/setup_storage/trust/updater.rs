@@ -128,7 +128,7 @@ impl TrustStore {
                 package: PackageDigest::new(digest.to_owned()).map_err(io::Error::other)?,
                 release: crate::setup_storage::signed_release(offer)?,
             };
-            let now = crate::setup_storage::selection::unix_now().map_err(io::Error::other)?;
+            let now = self.strike_clock.now().map_err(io::Error::other)?;
             let next = match state.candidate() {
                 Some(candidate) => state.supersede_preparation(
                     candidate.generation(),

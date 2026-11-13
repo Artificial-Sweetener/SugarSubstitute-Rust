@@ -27,7 +27,7 @@ fn rejected(
         )?,
     };
     for _ in 0..2 {
-        let now = crate::setup_storage::selection::unix_now()?;
+        let now = PREPARED_AT;
         let staging = record.prepare(generation.clone(), PreparationIntent::Repair, now)?;
         store.compare_exchange(&record, &staging, case.context)?;
         let prepared = staging.prepared(&generation)?;
