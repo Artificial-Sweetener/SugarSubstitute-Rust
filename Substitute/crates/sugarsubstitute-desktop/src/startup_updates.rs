@@ -18,14 +18,14 @@ pub(super) fn turn(
         content.close_save_progress(),
         content.workflow_activity(),
     );
-    let notice = if main.shows_messages() {
-        content.take_unsaved_notice().map(|notice| Notice::not_saved(&notice))
-    } else {
-        None
-    };
+    let mut notices = Vec::new();
+    if main.shows_messages() {
+        notices.extend(content.take_update_notice().map(Notice::update));
+        notices.extend(content.take_unsaved_notice().map(|notice| Notice::not_saved(&notice)));
+    }
     let words = content.locale_messages();
     main_operation(session, content, |main| {
-        main.observe_updates(feed, words, notice).map(|()| None)
+        main.observe_updates(feed, words, notices).map(|()| None)
     })
 }
 
@@ -47,6 +47,14 @@ pub(super) fn activate(
         Some(UpdateIntent::RestartToApply) => content
             .request_restart_to_apply()
             .map_err(|cause| DesktopError::boxed("restart_to_apply", cause)),
+        Some(UpdateIntent::OpenChangelog(url)) => {
+            // The release notes are optional: a link the shell cannot open is logged only.
+            if let Err(cause) = crate::windows_open_link::open(&url) {
+                tracing::warn!(operation = "open_changelog", cause = %cause,
+                    "The release notes could not be opened");
+            }
+            Ok(())
+        }
         Some(UpdateIntent::OpenReport) => {
             super::report::open(session, content, target, proxy, title)
         }

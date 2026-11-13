@@ -2,14 +2,15 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Distinguish complete admitted transport bindings and actual kernel observations.
 use super::*;
+use crate::purpose_pipe::PurposeKey;
+use sugarsubstitute_contracts::lifecycle::CoordinatorKey;
 use sugarsubstitute_contracts::{
     backend_custody::BackendCustodyKey, recovery_supervisor::RecoveryGrantKey,
 };
-use sugarsubstitute_contracts::{incident::DiagnosticKey, lifecycle::CoordinatorKey};
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum PeerBinding {
     Desktop(RunKey),
-    Diagnostic(DiagnosticKey),
+    Purpose(PurposeKey),
     BackendCustody(BackendCustodyKey),
     Recovery(RecoveryGrantKey),
 }
@@ -19,14 +20,14 @@ impl PeerBinding {
         match self {
             Self::Desktop(run) => Some(CaptureTarget::Desktop(run)),
             Self::BackendCustody(key) => Some(CaptureTarget::BackendCustody(key)),
-            Self::Diagnostic(_) | Self::Recovery(_) => None,
+            Self::Purpose(_) | Self::Recovery(_) => None,
         }
     }
 
     pub(crate) fn owner(self) -> CoordinatorKey {
         match self {
             Self::Desktop(run) => run.owner,
-            Self::Diagnostic(key) => key.owner(),
+            Self::Purpose(key) => key.owner(),
             Self::BackendCustody(key) => key.owner(),
             Self::Recovery(key) => key.run().owner,
         }
@@ -34,12 +35,12 @@ impl PeerBinding {
     pub(crate) fn desktop(self) -> Option<RunKey> {
         match self {
             Self::Desktop(run) => Some(run),
-            Self::Diagnostic(_) | Self::BackendCustody(_) | Self::Recovery(_) => None,
+            Self::Purpose(_) | Self::BackendCustody(_) | Self::Recovery(_) => None,
         }
     }
-    pub(crate) fn diagnostic(self) -> Option<DiagnosticKey> {
+    pub(crate) fn purpose(self) -> Option<PurposeKey> {
         match self {
-            Self::Diagnostic(key) => Some(key),
+            Self::Purpose(key) => Some(key),
             Self::Desktop(_) | Self::BackendCustody(_) | Self::Recovery(_) => None,
         }
     }
@@ -54,7 +55,7 @@ impl PeerBinding {
     pub(crate) fn backend_custody(self) -> Option<BackendCustodyKey> {
         match self {
             Self::BackendCustody(key) => Some(key),
-            Self::Desktop(_) | Self::Diagnostic(_) | Self::Recovery(_) => None,
+            Self::Desktop(_) | Self::Purpose(_) | Self::Recovery(_) => None,
         }
     }
 }
@@ -109,13 +110,13 @@ impl Observation {
             }
         })
     }
-    pub(crate) fn diagnostic(self) -> Option<crate::diagnostic_pipe::DiagnosticPipeObservation> {
-        use crate::diagnostic_pipe::{DiagnosticPipeObservation as Out, VerifiedDiagnosticPeer};
+    pub(crate) fn purpose(self) -> Option<crate::purpose_pipe::PurposePipeObservation> {
+        use crate::purpose_pipe::{PurposePipeObservation as Out, VerifiedPurposePeer};
         Some(match self {
             Self::Prepared => Out::Prepared,
             Self::Connected => Out::Connected,
-            Self::Authenticated(peer) => Out::Authenticated(VerifiedDiagnosticPeer {
-                key: peer.binding.diagnostic()?,
+            Self::Authenticated(peer) => Out::Authenticated(VerifiedPurposePeer {
+                key: peer.binding.purpose()?,
                 process: peer.process,
                 pid: peer.pid,
                 birth: peer.birth,

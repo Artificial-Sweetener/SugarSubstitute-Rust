@@ -37,6 +37,8 @@ pub enum StartupStatus {
     RetryReady,
     /// Cleanup failed and original ownership remains retained.
     CleanupFailed,
+    /// A new version is being applied before the application opens.
+    Updating(crate::UpdateVersion),
 }
 
 /// Supply portable appearance state; process and connection state stay elsewhere.

@@ -41,6 +41,7 @@ pub struct Worker {
     state: Arc<Mutex<State>>,
     job: Option<OwnedJob<(), Arc<Failure>>>,
     owner: Option<ExecutionId>,
+    version: Option<String>,
     progress: Progress,
     closing: bool,
     halted: bool,
@@ -95,11 +96,13 @@ impl Worker {
             progress: Progress::Opening,
             failure: None,
             retirement_failure: None,
+            version: None,
         };
         Ok(Self {
             state: Arc::new(Mutex::new(state)),
             job: None,
             owner: None,
+            version: None,
             progress: Progress::Opening,
             closing: false,
             halted: false,
@@ -109,6 +112,11 @@ impl Worker {
     /// Last observed completed boundary; reading it never locks against running native work.
     pub fn progress(&self) -> Progress {
         self.progress
+    }
+
+    /// Version label of the authenticated offer, as of the last observed boundary.
+    pub fn version(&self) -> Option<&str> {
+        self.version.as_deref()
     }
 
     /// Whether an admitted step still requires its actual terminal observation.
@@ -203,6 +211,7 @@ impl Worker {
         let completion = self.job.as_mut()?.try_take_completion()?;
         self.job = None;
         let state = crate::registry::lock(&self.state);
+        self.version.clone_from(&state.version);
         let continues = !self.closing
             && matches!(completion.outcome, JobOutcome::TimedOut)
             && state.continues_download();

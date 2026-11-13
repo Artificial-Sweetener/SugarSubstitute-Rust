@@ -1,19 +1,28 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Supervise an optional preparation process independently of application and ComfyUI families.
+mod attempt;
 mod cleanup;
 mod continuation;
 mod launch;
 mod prepared;
+pub(super) use attempt::AttemptChannel;
+
+/// Time a helper has to start, connect and authenticate on its attempt channel.
+pub(super) const fn attempt_handshake() -> std::time::Duration {
+    attempt::HANDSHAKE
+}
 use crate::job_sequence::JobSequence;
 pub(super) use prepared::{LaunchScope, ProbeCustody};
 use std::{error::Error, io, sync::Arc, time::Instant};
 use sugarsubstitute_contracts::{
+    application_launch::updater::preparation::HelperExit,
     execution::{
         CompletionBatch, JobClass, JobOutcome, JobSpec, Moment, Operation, OwnedJob, Scope,
         ScopeSpec,
     },
     lifecycle::{CoordinatorKey, ProcessKey, ShutdownBudget, ShutdownId},
+    update::attempt::{AttemptOutcome, AttemptPhase, AttemptProgress, UpdateReport},
 };
 use sugarsubstitute_execution::ExecutionClient;
 use sugarsubstitute_supervision::{
@@ -58,6 +67,10 @@ pub(crate) struct Parent {
     probe_custody: Option<ProbeCustody>,
     successful_exit: bool,
     completion_taken: bool,
+    /// The update-attempt channel of a preparation helper; probes report by exit and custody.
+    attempt: Option<AttemptChannel>,
+    /// Coarse class of the helper's observed exit.
+    exit: Option<HelperExit>,
 }
 impl Parent {
     /// Construct inert ownership after authenticated application readiness; admission happens in advance.
@@ -91,6 +104,9 @@ impl Parent {
             self.record(cause);
         }
         if let Err(cause) = self.observe_retirement() {
+            self.record(cause);
+        }
+        if let Err(cause) = self.observe_attempt(now) {
             self.record(cause);
         }
         if self.shutdown.is_none() {
@@ -146,19 +162,84 @@ impl Parent {
             .or_else(|| self.settle_wake.filter(|deadline| *deadline > now))
     }
 
-    /// Complete only after native settlement and observed destruction of all preparation custody.
+    /// Complete only after native settlement, observed destruction of all preparation custody
+    /// and retirement of the attempt channel.
     pub(crate) fn settled(&self) -> bool {
-        self.retired && self.probe_custody.is_none()
+        self.retired
+            && self.probe_custody.is_none()
+            && self.attempt.as_ref().is_none_or(AttemptChannel::is_settled)
     }
 
-    /// Conclude a settled application-derived helper as one check outcome, exactly once.
+    /// Conclude a settled application-derived helper as one check, exactly once: what the
+    /// attempt reported, and whether the schedule counts it as completed or failed.
     /// Failures were already logged when recorded; a probe never reaches this owner.
-    pub(crate) fn take_check_outcome(&mut self) -> Option<super::schedule::CheckOutcome> {
+    pub(crate) fn take_check_outcome(
+        &mut self,
+    ) -> Option<(super::schedule::CheckOutcome, AttemptOutcome)> {
         let completion = self.take_completion()?;
-        Some(if completion.succeeded && completion.probe.is_none() {
-            super::schedule::CheckOutcome::Completed
-        } else {
+        let attempt = completion.attempt.unwrap_or_else(|| {
+            missing_result(AttemptPhase::Opening, "The update check produced no attempt")
+        });
+        let check = if matches!(attempt, AttemptOutcome::Failed(_)) {
             super::schedule::CheckOutcome::Failed
+        } else {
+            super::schedule::CheckOutcome::Completed
+        };
+        Some((check, attempt))
+    }
+
+    /// Latest validated progress of the running attempt.
+    pub(crate) fn attempt_progress(&self) -> Option<AttemptProgress> {
+        self.attempt.as_ref().and_then(AttemptChannel::progress)
+    }
+
+    /// Validate the channel's frames. Once the helper is gone, a channel with nothing more to
+    /// deliver closes so that it retires; an authenticated channel still owed a result first
+    /// drains what the helper wrote, ending when the pipe breaks.
+    fn observe_attempt(&mut self, now: Moment) -> Result<()> {
+        let helper_gone =
+            self.exit.is_some() || (self.shutdown.is_some() && self.process.is_none());
+        let Some(channel) = &mut self.attempt else { return Ok(()) };
+        let polled = channel.poll(now);
+        if helper_gone
+            && (channel.has_outcome() || !channel.authenticated() || channel.failure().is_some())
+        {
+            channel.close();
+        }
+        polled.map_err(Into::into)
+    }
+
+    /// The attempt's result: what the helper reported, or a typed failure when it reported
+    /// nothing before its observed exit or the channel broke its protocol.
+    fn conclude_attempt(&mut self) -> Option<AttemptOutcome> {
+        if self.probe {
+            return None;
+        }
+        let failure = self.failure.as_deref().map(|cause| cause as &(dyn Error + 'static));
+        let Some(channel) = &mut self.attempt else {
+            return Some(match failure {
+                Some(cause) => AttemptOutcome::Failed(UpdateReport::from_error(
+                    None,
+                    AttemptPhase::Opening,
+                    cause,
+                )),
+                None => missing_result(AttemptPhase::Opening, "The update helper never started"),
+            });
+        };
+        let phase = channel.progress().map_or(AttemptPhase::Opening, |progress| progress.phase);
+        if let Some(outcome) = channel.take_outcome() {
+            return Some(outcome);
+        }
+        Some(match (channel.failure(), failure) {
+            (Some(cause), _) => {
+                AttemptOutcome::Failed(UpdateReport::from_error(None, phase, &cause))
+            }
+            (None, Some(cause)) => {
+                AttemptOutcome::Failed(UpdateReport::from_error(None, phase, cause))
+            }
+            (None, None) => {
+                missing_result(phase, "The update helper ended without reporting a result")
+            }
         })
     }
 
@@ -253,6 +334,7 @@ impl Parent {
                         }
                         Some(RegistryObservation::RootExited { code, .. }) => {
                             exited = Some(code);
+                            self.exit = Some(HelperExit::from_code(code));
                             tracing::info!(
                                 operation = "update_helper_exit",
                                 code,
@@ -299,6 +381,11 @@ impl Parent {
         }
         Ok(())
     }
+}
+
+/// A typed failure for an attempt that ended without its result.
+fn missing_result(phase: AttemptPhase, cause: &'static str) -> AttemptOutcome {
+    AttemptOutcome::Failed(UpdateReport::from_error(None, phase, &io::Error::other(cause)))
 }
 
 #[cfg(test)]

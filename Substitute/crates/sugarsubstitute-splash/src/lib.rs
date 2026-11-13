@@ -16,6 +16,7 @@ mod projection;
 mod raster;
 mod render;
 mod text_layout;
+mod update_version;
 
 pub use animation::{AnimationFrame, FlipPhase, POSE_COUNT, PaperFlip};
 pub use caption_icons::IconError;
@@ -31,3 +32,4 @@ pub use sugarsubstitute_contracts::{
     configuration::Theme,
     localization::{LOCALES, Messages, messages},
 };
+pub use update_version::{MAX_VERSION_BYTES, UpdateVersion};

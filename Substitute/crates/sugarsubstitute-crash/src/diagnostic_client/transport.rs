@@ -3,9 +3,9 @@
 //! Adapt the sole execution-owned charged diagnostic transport without copying buffers.
 use super::*;
 use sugarsubstitute_contracts::execution::Moment;
-use sugarsubstitute_execution::diagnostic_pipe::{
-    DiagnosticPipeControl, LifecyclePipeError, LifecyclePipeOperationId, LifecyclePipeWriteBuffer,
-    NativeWriteAdmission, ReceivedLifecycleFrame, VerifiedDiagnosticPeer,
+use sugarsubstitute_execution::purpose_pipe::{
+    LifecyclePipeError, LifecyclePipeOperationId, LifecyclePipeWriteBuffer, NativeWriteAdmission,
+    PurposeKey, PurposePipeControl, ReceivedLifecycleFrame, VerifiedPurposePeer,
 };
 /// Preserve original charged output on codec or actual native admission rejection.
 pub struct DiagnosticSendRejection {
@@ -43,13 +43,13 @@ impl std::error::Error for DiagnosticSendError {
 /// Returns original guard on every encoding/admission rejection. Admission is not
 /// native issue, completion, peer processing or a durable repository effect.
 pub fn send_diagnostic(
-    control: &DiagnosticPipeControl,
+    control: &PurposePipeControl,
     operation: LifecyclePipeOperationId,
     original: Moment,
     buffer: LifecyclePipeWriteBuffer,
     frame: DiagnosticFrame<'_>,
 ) -> Result<NativeWriteAdmission, DiagnosticSendRejection> {
-    if control.prepared_key() != Some(frame.key) {
+    if control.prepared_key() != Some(PurposeKey::Diagnostic(frame.key)) {
         return Err(DiagnosticSendRejection {
             error: DiagnosticSendError::Wire(DiagnosticWireError::Identity),
             buffer,
@@ -87,11 +87,15 @@ impl ReceivedDiagnosticRequest {
     /// # Errors
     /// Foreign peer/session or malformed content returns the unchanged original loan.
     pub fn from_native(
-        peer: VerifiedDiagnosticPeer,
+        peer: VerifiedPurposePeer,
         expected: sugarsubstitute_contracts::incident::DiagnosticKey,
         frame: ReceivedLifecycleFrame,
     ) -> Result<Self, DiagnosticReceiveRejection> {
-        routing::receive(peer.key(), expected, frame, ReceivedLifecycleFrame::as_bytes)
+        // A peer on any other purpose's channel can never speak for a diagnostic session.
+        let Some(peer) = peer.key().diagnostic() else {
+            return Err(DiagnosticReceiveRejection { error: DiagnosticWireError::Identity, frame });
+        };
+        routing::receive(peer, expected, frame, ReceivedLifecycleFrame::as_bytes)
             .map(|frame| Self { frame, key: expected })
             .map_err(|(error, frame)| DiagnosticReceiveRejection { error, frame })
     }

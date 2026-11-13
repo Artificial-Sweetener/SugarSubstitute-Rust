@@ -8,6 +8,7 @@ pub(crate) enum Control {
     MainRetired,
     Release,
     ExitIntent,
+    RestartToApply,
     ExitCompleted,
 }
 /// Distinguish preparation, native admission and actual reply consumption.

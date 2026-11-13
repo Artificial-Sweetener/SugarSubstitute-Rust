@@ -321,7 +321,7 @@ fn settlement_wire_preserves_original_acquisition_and_rejects_zero_foreign_or_ch
         let source =
             encoded(WirePayload::SettleAttempt { identity, acquisition, sugarcubes_failed })?;
         assert_eq!(source.len(), HEADER_BYTES + 25);
-        assert_eq!(&source[4..6], &14u16.to_le_bytes());
+        assert_eq!(&source[4..6], &15u16.to_le_bytes());
         assert!(matches!(
             FrameCodec::decode(&source)?.payload,
             DecodedPayload::SettleAttempt { identity: actual, acquisition: original, sugarcubes_failed: failed }

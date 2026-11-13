@@ -9,9 +9,12 @@ mod blocking;
 #[cfg(any(test, feature = "boundary-fixtures"))]
 #[doc(hidden)]
 pub mod http_fixture;
+/// Bounded client WebSocket to a loopback service inside one admitted async job.
+pub mod loopback_websocket;
 mod owned_input;
 /// Bounded transport for the owned upstream provisioning worker.
 pub mod provisioning_transport;
+mod system_random;
 pub use owned_input::{ChargedBlockingInput, OwnedInputError};
 mod entry_preparation;
 #[cfg(windows)]
@@ -57,8 +60,6 @@ pub use registered_desktop_fault::RegisteredDesktopFaultError;
 #[cfg(any(windows, test))]
 pub mod backend_custody;
 #[cfg(any(windows, test))]
-pub mod diagnostic_pipe;
-#[cfg(any(windows, test))]
 mod fixture_forwarding;
 #[cfg(any(windows, test))]
 mod fixture_session;
@@ -70,6 +71,8 @@ pub mod memory_budget;
 mod native_resources;
 #[cfg(any(windows, test))]
 pub mod process_creation;
+#[cfg(any(windows, test))]
+pub mod purpose_pipe;
 #[cfg(any(windows, test))]
 pub mod recovery_supervisor;
 mod symbol_provider;
@@ -91,7 +94,7 @@ pub use report_export::{
 mod symbol_admission;
 mod symbol_cleanup;
 pub use symbol_admission::{
-    DiagnosticPipeResources, SymbolResourceRejection, SymbolSubmissionRejection,
+    PurposePipeResources, SymbolResourceRejection, SymbolSubmissionRejection,
     SymbolTransportReservation,
 };
 pub use symbol_cleanup::{CleanupDeadline, SymbolCleanupBeginRejection, SymbolCleanupPermit};
@@ -127,13 +130,13 @@ pub mod windows_backend_custody;
 #[allow(unsafe_code)]
 pub mod windows_capture_attach;
 #[cfg(windows)]
-pub mod windows_diagnostic_pipe;
-#[cfg(windows)]
 pub mod windows_fixture;
 #[cfg(windows)]
 pub mod windows_lifecycle_pipe;
 #[cfg(windows)]
 pub mod windows_output;
+#[cfg(windows)]
+pub mod windows_purpose_pipe;
 #[cfg(windows)]
 pub mod windows_recovery_supervisor;
 

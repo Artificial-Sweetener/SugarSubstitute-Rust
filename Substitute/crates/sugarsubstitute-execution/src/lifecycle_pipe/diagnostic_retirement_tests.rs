@@ -19,7 +19,7 @@ fn diagnostic_checked_retirement_waits_for_original_output_loan() -> TestResult 
     drop(output);
     let completion = terminal(&rig, &mut session)?;
     let proof = session.control.take_checked_retirement().ok_or("Missing checked proof")?;
-    assert!(proof.matches_diagnostic(&session.control));
+    assert!(proof.matches_purpose(&session.control));
     assert_eq!(proof.execution_id(), scope.owner_id());
     assert_eq!(proof.scope_id(), completion.scope_id);
     assert_eq!(proof.spec(), completion.spec);
@@ -44,8 +44,8 @@ fn diagnostic_checked_retirement_rejects_equal_numeric_foreign_session() -> Test
     assert_eq!(original.control.prepared_key(), other.control.prepared_key());
     assert_eq!(proof.scope_id(), other.completion.scope_id());
     assert_eq!(proof.spec(), other.completion.spec());
-    assert!(!proof.matches_diagnostic(&other.control));
-    assert!(proof.matches_diagnostic(&original.control));
+    assert!(!proof.matches_purpose(&other.control));
+    assert!(proof.matches_purpose(&original.control));
     assert_eq!(proof.spec(), completion.spec);
     other.control.close();
     assert!(matches!(terminal(&second, &mut other)?.outcome, JobOutcome::Cancelled));

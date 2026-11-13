@@ -50,6 +50,8 @@ struct Record {
 enum Boundary {
     Implementation,
     ExecutionIpc,
+    /// Execution's one async client socket to a validated loopback service.
+    LoopbackClient,
     Fixture,
     Upstream,
     Browser,
@@ -175,6 +177,11 @@ pub(crate) fn check(
                     || record.path == "installer/worker/main.ts",
                 "networking: foreign authenticated IPC boundary",
             )?,
+            Boundary::LoopbackClient => require(
+                record.owner == "sugarsubstitute-execution"
+                    && record.path == "crates/sugarsubstitute-execution/src/loopback_websocket.rs",
+                "networking: foreign loopback client boundary",
+            )?,
             Boundary::Upstream => require(
                 record.path.starts_with("installer/patches/")
                     || matches!(
@@ -280,6 +287,12 @@ fn category_admits(record: &Record, findings: &[String]) -> bool {
                 || finding.starts_with("std::net::")
                 || finding.starts_with("tokio::net::")
                 || matches!(finding.as_str(), "node:net" | "createConnection" | "electron")
+        }),
+        Boundary::LoopbackClient => findings.iter().all(|finding| {
+            finding == "TcpStream::connect"
+                || matches!(finding.as_str(), "std::net" | "tokio::net")
+                || finding.starts_with("std::net::")
+                || finding.starts_with("tokio::net::")
         }),
         Boundary::Upstream => findings.iter().all(|finding| match record.path.as_str() {
             "installer/worker/provision.ts" => {

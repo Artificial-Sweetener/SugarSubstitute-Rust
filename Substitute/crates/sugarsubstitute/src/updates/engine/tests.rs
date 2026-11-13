@@ -28,6 +28,7 @@ impl Harness {
             state: Arc::new(Mutex::new(State {
                 phase: Phase::Input(Some(untrusted_input()?)),
                 failure: None,
+                attempt: None,
             })),
             client,
             job: None,
@@ -35,6 +36,8 @@ impl Harness {
             closing: None,
             next_scope: 5,
             succeeded: false,
+            attempt: None,
+            attempt_outcome: None,
         };
         Ok(Self { engine, owner, clock, wake, jobs: JobSequence::new() })
     }

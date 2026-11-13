@@ -90,8 +90,7 @@ impl CacheLease {
         self.require_declared_writer()?;
         let inventory = self.inspect(context)?;
         if inventory.bytes > self.record.reserved {
-            return Err(io::Error::new(
-                io::ErrorKind::StorageFull,
+            return Err(super::maintenance::CacheBudgetExhausted::io(
                 "Cache publication exceeds admission",
             ));
         }
@@ -157,8 +156,7 @@ impl CacheLease {
         let _workspace = context.memory().claim(RESERVATION_BYTES).map_err(io::Error::other)?;
         let tree = self.inspect(context)?;
         if tree.bytes > self.record.reserved {
-            return Err(io::Error::new(
-                io::ErrorKind::StorageFull,
+            return Err(super::maintenance::CacheBudgetExhausted::io(
                 "Cache producer exceeded its byte reservation",
             ));
         }
@@ -187,8 +185,7 @@ impl CacheLease {
         record::save(&self.directory, &next, context)?;
         self.record = next;
         if inventory.bytes > self.record.reserved {
-            return Err(io::Error::new(
-                io::ErrorKind::StorageFull,
+            return Err(super::maintenance::CacheBudgetExhausted::io(
                 "Native cache producer exceeded its admitted disk capacity",
             ));
         }

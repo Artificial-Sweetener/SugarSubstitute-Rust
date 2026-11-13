@@ -324,7 +324,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute/src/updates/entry.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:7781d042cee2866fc8b5c1147e6ad17b10e76dfb6ec538497e55acce622f186c"
+source_sha256 = "sha256:2c335933910ebbb3960932d1e1975438810ec80a43c2598b61c78370c05c3a80"
 capabilities = ["arguments"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -877,7 +877,7 @@ rationale = "Repository tooling decodes the vendored-material TOML manifest to b
 [[records]]
 path = "tools/xtask/src/networking/tests.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:fc97f5e6bb44cf7f2bd384b28d30203c26859de4f008b3baf3541d48254c49f6"
+source_sha256 = "sha256:da59f7f0a6039502d892faa7de5cb9ed9ce343383a77790c36dab504c21ce516"
 capabilities = ["codec"]
 rationale = "Networking-governance rejection fixtures decode only their own TOML policy schema and malformed registrations."
 
@@ -1013,3 +1013,10 @@ owner = "sugarsubstitute-supervision"
 source_sha256 = "sha256:340c6b65203d8f55dce02c7a781204914408589789be8f40df2404b70a57e3cd"
 capabilities = ["environment"]
 rationale = "Compiled only by the qualification-historical-root proof feature: a headless proof names an owned stand-in for the account profile folder through one environment variable, so a proof never reads the account own data. Production builds exclude it and never consult environment text for migration sources."
+
+[[records]]
+path = "crates/sugarsubstitute-splash/src/render_update_tests.rs"
+owner = "sugarsubstitute-splash"
+source_sha256 = "sha256:540f08b5ebbe208f1f61ba94ee04a166604434b83fe26d97e20de2dc1492d8e1"
+capabilities = ["environment"]
+rationale = "Read only the optional qualification evidence directory for splash captures; the test writes its own rendered frames there and reads or writes no product settings."

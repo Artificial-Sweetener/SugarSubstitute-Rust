@@ -165,6 +165,9 @@ mod windows_drag;
 mod windows_move_state;
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
+mod windows_open_link;
+#[cfg(target_os = "windows")]
+#[allow(unsafe_code)]
 mod windows_scroll;
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
@@ -194,7 +197,7 @@ pub use host_contract::{
     ServedFrontendVersions, StartupDesktopReceipt, StartupPreparationStep, StartupWindowContent,
 };
 pub use main_caption_contract::{
-    MainBackendState, MainCaptionLabels, MainRecoveryLabels, WorkflowActivity,
+    MainBackendState, MainCaptionLabels, MainRecoveryLabels, UpdateNotice, WorkflowActivity,
 };
 
 pub use main_canvas_native::{

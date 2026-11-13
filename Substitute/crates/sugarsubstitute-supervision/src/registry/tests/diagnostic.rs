@@ -4,9 +4,9 @@
 use super::*;
 use std::os::windows::io::AsRawHandle;
 use sugarsubstitute_contracts::incident::{DiagnosticKey, DiagnosticRole, DiagnosticSessionId};
-use sugarsubstitute_execution::windows_diagnostic_pipe::{
-    DiagnosticEnrollment, DiagnosticPipeBootstrap, DiagnosticPipeObservation,
-    DiagnosticPipeSession, MIN_LIFECYCLE_PIPE_BYTES,
+use sugarsubstitute_execution::windows_purpose_pipe::{
+    MIN_LIFECYCLE_PIPE_BYTES, PurposeEnrollment, PurposePipeBootstrap, PurposePipeObservation,
+    PurposePipeSession,
 };
 /// Give concurrent actual Windows servers distinct process-owned session names.
 fn key(role: DiagnosticRole) -> Result<DiagnosticKey, Box<dyn Error>> {
@@ -20,12 +20,12 @@ fn key(role: DiagnosticRole) -> Result<DiagnosticKey, Box<dyn Error>> {
     Ok(DiagnosticKey::new(owner()?, role, DiagnosticSessionId::new(session)?))
 }
 /// Retain the actual native scope through all original inherited/session custody.
-struct PreparedSession {
-    session: DiagnosticPipeSession,
+pub(super) struct PreparedSession {
+    pub(super) session: PurposePipeSession,
     _scope: Arc<Scope>,
 }
 /// Retain one actual transport scope independently of the 131 contained-family scopes.
-fn pipe_scope(h: &mut Harness) -> Result<Arc<Scope>, Box<dyn Error>> {
+pub(super) fn pipe_scope(h: &mut Harness) -> Result<Arc<Scope>, Box<dyn Error>> {
     let scope = h
         .client
         .create_native_scope(ScopeSpec { id: ScopeId::new(h.next_scope)?, deadline: None }, None)?;
@@ -37,9 +37,17 @@ fn pins(
     h: &mut Harness,
     key: DiagnosticKey,
     scope: &Arc<Scope>,
-) -> Result<(PreparedSession, DiagnosticPipeBootstrap, DiagnosticEnrollment), Box<dyn Error>> {
+) -> Result<(PreparedSession, PurposePipeBootstrap, PurposeEnrollment), Box<dyn Error>> {
+    purpose_pins(h, PurposeKey::Diagnostic(key), scope)
+}
+/// The same original pins for any purpose's server.
+pub(super) fn purpose_pins(
+    h: &mut Harness,
+    key: PurposeKey,
+    scope: &Arc<Scope>,
+) -> Result<(PreparedSession, PurposePipeBootstrap, PurposeEnrollment), Box<dyn Error>> {
     let spec = h.spec(JobClass::NativeObservation, MIN_LIFECYCLE_PIPE_BYTES)?;
-    let mut session = h.client.reserve_diagnostic_pipe_server(
+    let mut session = h.client.reserve_purpose_pipe_server(
         scope,
         spec,
         key,
@@ -51,7 +59,7 @@ fn pins(
         if session
             .drain(std::num::NonZeroUsize::MIN)
             .into_iter()
-            .any(|fact| matches!(fact, DiagnosticPipeObservation::Prepared))
+            .any(|fact| matches!(fact, PurposePipeObservation::Prepared))
         {
             let (bootstrap, enrollment) =
                 session.take_bootstrap()?.ok_or("Actual Prepared lacks original pins")?;
@@ -72,13 +80,13 @@ fn pins(
     }
 }
 fn assembled(
-    bootstrap: DiagnosticPipeBootstrap,
-    enrollment: DiagnosticEnrollment,
+    bootstrap: PurposePipeBootstrap,
+    enrollment: PurposeEnrollment,
 ) -> Result<Option<WindowsLaunchInput>, Box<dyn Error>> {
     let mut value = input()?;
     let mut bootstrap = Some(bootstrap);
     let mut enrollment = Some(enrollment);
-    value.with_diagnostic_pipe(&mut bootstrap, &mut enrollment)?;
+    value.with_purpose_pipe(&mut bootstrap, &mut enrollment)?;
     assert!(bootstrap.is_none() && enrollment.is_none());
     Ok(Some(value))
 }
@@ -125,8 +133,8 @@ fn foreign_actual_session_rejection_preserves_both_original_pins() -> TestResult
     let mut enrollment = Some(b_enroll);
     let mut value = input()?;
     assert!(matches!(
-        value.with_diagnostic_pipe(&mut bootstrap, &mut enrollment),
-        Err(crate::RegistryInputError::DiagnosticProvenance)
+        value.with_purpose_pipe(&mut bootstrap, &mut enrollment),
+        Err(crate::RegistryInputError::PurposeProvenance)
     ));
     assert_eq!(
         bootstrap.as_ref().ok_or("Original pin lost")?.borrow_inheritance().section.as_raw_handle(),
@@ -134,7 +142,7 @@ fn foreign_actual_session_rejection_preserves_both_original_pins() -> TestResult
     );
     assert!(b_boot.matches_enrollment(enrollment.as_ref().ok_or("Original enrollment lost")?));
     assert!(bootstrap.as_ref().ok_or("Original pin lost")?.matches_enrollment(&a_enroll));
-    assert!(value.diagnostic.is_none());
+    assert!(value.purpose.is_none());
     assert_eq!(h.fake.creates.load(Ordering::Acquire), 0);
     Ok(())
 }
@@ -150,16 +158,16 @@ fn diagnostic_creation_rejection_returns_complete_original_input_and_observes_re
     h.scope.cancel();
     assert!(matches!(submit(&mut h, key, &mut input), Err(RegistryAdmissionError::Execution(_))));
     let launch =
-        input.as_ref().and_then(|value| value.diagnostic.as_ref()).ok_or("Original input lost")?;
+        input.as_ref().and_then(|value| value.purpose.as_ref()).ok_or("Original input lost")?;
     assert_eq!(launch.bootstrap.borrow_inheritance().section.as_raw_handle(), raw);
-    assert!(launch.validates(key));
+    assert!(launch.validates(PurposeKey::Diagnostic(key)));
     assert_eq!(h.fake.creates.load(Ordering::Acquire), 0);
     h.drain_until(WindowsProcessRegistry::is_empty)?;
     assert!(input.is_some());
     Ok(())
 }
 #[test]
-fn held_diagnostic_enrollment_retains_original_section_and_stop_fences_resume() -> TestResult {
+fn held_purpose_enrollment_retains_original_section_and_stop_fences_resume() -> TestResult {
     let mut h = Harness::new()?;
     let scope = pipe_scope(&mut h)?;
     let release = Release(h.fake.clone());
@@ -193,9 +201,9 @@ fn held_diagnostic_enrollment_retains_original_section_and_stop_fences_resume() 
         let family = state.family.as_ref().ok_or("Lost contained family")?;
         assert!(
             family
-                .diagnostic_bootstrap
+                .purpose_bootstrap
                 .as_ref()
-                .zip(family.diagnostic_enrollment.as_ref())
+                .zip(family.purpose_enrollment.as_ref())
                 .is_some_and(|(a, b)| a.matches_enrollment(b))
         );
     }

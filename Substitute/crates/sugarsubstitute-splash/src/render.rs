@@ -222,6 +222,10 @@ impl SplashRenderer {
 mod disclosure_tests;
 
 #[cfg(test)]
+#[path = "render_update_tests.rs"]
+mod update_tests;
+
+#[cfg(test)]
 mod tests {
     use super::SplashRenderer;
     use crate::{AnimationFrame, Appearance};
