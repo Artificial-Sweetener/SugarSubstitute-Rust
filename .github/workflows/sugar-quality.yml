@@ -1,6 +1,7 @@
 name: Sugar quality
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - 'Sugar/**'

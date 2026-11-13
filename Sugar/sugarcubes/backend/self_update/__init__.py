@@ -17,7 +17,7 @@
 
 from __future__ import annotations
 
-from .composition import build_self_update_service, installed_pack_folder
+from .composition import build_self_update_service
 from .service import SelfUpdateRejected, SelfUpdateService
 from .wire import snapshot_to_wire
 
@@ -25,6 +25,5 @@ __all__ = [
     "SelfUpdateRejected",
     "SelfUpdateService",
     "build_self_update_service",
-    "installed_pack_folder",
     "snapshot_to_wire",
 ]

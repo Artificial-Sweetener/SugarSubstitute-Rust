@@ -17,7 +17,6 @@
 
 from __future__ import annotations
 
-import os
 import time
 from pathlib import Path
 
@@ -30,16 +29,6 @@ from .release_config import (
 from .release_sources import GitHubReleases, RegistryReleases
 from .release_stager import ReleaseStager
 from .service import BackgroundRunner, Clock, SelfUpdateService, ThreadRunner
-
-
-def installed_pack_folder() -> Path:
-    """Return the pack folder as ComfyUI reached it, without resolving links.
-
-    Resolving would turn a junction or symbolic link into its target and hide
-    that the folder is linked, which the updater must leave alone.
-    """
-
-    return Path(os.path.abspath(__file__)).parents[3]
 
 
 def _wall_clock_ms() -> int:
@@ -79,4 +68,4 @@ def build_self_update_service(
     )
 
 
-__all__ = ["build_self_update_service", "installed_pack_folder"]
+__all__ = ["build_self_update_service"]
