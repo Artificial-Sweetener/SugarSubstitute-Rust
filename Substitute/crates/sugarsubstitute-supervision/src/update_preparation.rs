@@ -125,9 +125,11 @@ impl Progress {
                 setup_storage::OFFER_LOOKUP_RESERVATION_BYTES
                     + setup_storage::TRUST_OPERATION_RESERVATION_BYTES
             }
+            // Covers reopening on a receipt too, which also reads the retained signed targets.
             Self::Reopening => {
                 setup_storage::LAUNCH_RESERVATION_BYTES
                     + setup_storage::TRUST_OPERATION_RESERVATION_BYTES
+                    + setup_storage::OFFER_LOOKUP_RESERVATION_BYTES
             }
             Self::Remembering => {
                 setup_storage::TRUST_OPERATION_RESERVATION_BYTES

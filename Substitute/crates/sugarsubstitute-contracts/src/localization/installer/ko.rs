@@ -44,6 +44,7 @@ pub(in super::super) const KO: InstallerMessages = InstallerMessages {
     step: "{total}단계 중 {current}단계",
     no_environment: "호환되는 환경이 없습니다. 다시 시도하거나 기존 ComfyUI 설치를 선택하세요.",
     retry: "검토 후 다시 시도",
+    included_version_offer: "SugarSubstitute가 온라인에서 새 버전을 확인하지 못했으므로, 다시 시도하면 이 설치 프로그램에 포함된 버전을 설치하고 다음에 온라인 상태가 될 때 스스로 업데이트합니다.",
     cancelled: "설치가 취소되었습니다. 기존 파일은 유지됩니다.",
     cancelling: "정리 중…",
     worker_stopped: "설치를 계속할 수 없습니다. 설치 프로그램을 닫고 다시 열어 시도하세요. 기존 파일은 유지됩니다. 자세한 내용은 아래에서 확인하세요.",

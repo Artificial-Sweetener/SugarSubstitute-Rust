@@ -40,6 +40,11 @@ pub(super) fn report<E: Error + 'static>(
 pub(super) fn storage_message(cause: &std::io::Error, locale: &str) -> String {
     use sugarsubstitute_supervision::setup_storage::RecoveryFailure;
     let copy = sugarsubstitute_contracts::localization::installer::messages(locale);
+    if cause.get_ref().is_some_and(|cause| {
+        cause.is::<super::controller::requests::metadata::IncludedVersionOffered>()
+    }) {
+        return copy.included_version_offer.to_owned();
+    }
     match cause.get_ref().and_then(|cause| cause.downcast_ref::<RecoveryFailure>()) {
         Some(RecoveryFailure::ConflictingSettings) => copy.recovery_conflict,
         Some(RecoveryFailure::IncompleteSettings) => copy.recovery_incomplete,

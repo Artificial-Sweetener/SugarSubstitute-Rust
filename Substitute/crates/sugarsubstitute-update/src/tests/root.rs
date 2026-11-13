@@ -85,3 +85,13 @@ fn changing_signers_does_not_erase_previously_accepted_release_metadata_versions
     trust.refresh(Set::new(&b, [6; 3], b"new", EXPIRES)?.metadata(), NOW)?;
     Ok(())
 }
+
+#[test]
+fn root_version_reports_the_trusted_root_and_advances_with_each_rotation() -> TestResult {
+    let signing = key(45)?;
+    let mut trust = RepositoryTrust::bootstrap(&root(&signing, 1, None)?)?;
+    assert_eq!(trust.root_version()?, 1);
+    trust.rotate(&root(&signing, 2, Some(&signing))?)?;
+    assert_eq!(trust.root_version()?, 2);
+    Ok(())
+}

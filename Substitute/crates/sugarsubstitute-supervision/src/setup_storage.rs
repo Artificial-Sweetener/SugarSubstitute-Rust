@@ -89,14 +89,16 @@ pub use transaction::{
     AdmittedCandidate, InstallationSession, InstalledApplication, IntegrationRequest,
     IntegrationStorage, PreparedCandidate, PreparedInstallation, RuntimePaths, Selection,
 };
+#[cfg(test)]
+pub(crate) use trust::UPDATE_RECEIPT_FILE;
 pub(crate) use trust::offered::OfferInputs;
 pub use trust::{
     AuthenticatedOffer, OFFER_LOOKUP_RESERVATION_BYTES, OFFER_PUBLICATION_RESERVATION_BYTES,
     OFFER_RESERVATION_BYTES,
 };
 pub use trust::{
-    TRUST_OPERATION_RESERVATION_BYTES, TRUST_RESERVATION_BYTES, TrustFailure, TrustStore,
-    UpdateAuthorization,
+    AuthorityChange, MetadataMode, TRUST_OPERATION_RESERVATION_BYTES, TRUST_RESERVATION_BYTES,
+    TrustFailure, TrustStore, UpdateAuthorization, UpdateReceipt,
 };
 pub use updater_package::{
     PreparedUpdater, RejectedUpdaterProbe, UPDATER_STAGING_RESERVATION_BYTES,
@@ -105,10 +107,10 @@ pub use updater_package::{
 mod signed_installer;
 pub(crate) use signed_installer::CachedCandidate;
 pub use signed_installer::{
-    CompletedInstallation, InstalledCandidate, InstallerDistribution, InstallerSource,
-    MAX_DISTRIBUTION_BYTES, SIGNED_INSTALLER_RESERVATION_BYTES,
-    SIGNED_PREPARATION_RESERVATION_BYTES, SIGNED_TRANSFER_RESERVATION_BYTES, SignedCandidate,
-    SignedInstallation, SignedPreparation,
+    CompletedInstallation, IncludedInstallChoice, InstalledCandidate, InstallerAuthority,
+    InstallerDistribution, InstallerMetadataChoice, InstallerSource, MAX_DISTRIBUTION_BYTES,
+    SIGNED_INSTALLER_RESERVATION_BYTES, SIGNED_PREPARATION_RESERVATION_BYTES,
+    SIGNED_TRANSFER_RESERVATION_BYTES, SignedCandidate, SignedInstallation, SignedPreparation,
 };
 
 /// Memory reserved for bounded manifests, streaming copies and retained filesystem custody.

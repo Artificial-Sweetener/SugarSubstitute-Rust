@@ -19,7 +19,23 @@ pub struct UpdateAuthorization<'a> {
     pub request: &'a Request,
     /// Exact descriptor bytes authenticated as this subscription's signed target.
     pub descriptor: &'a [u8],
+    /// Whether `metadata` must be within its signed lifetime, or is an installer's included set.
+    pub mode: MetadataMode,
 }
+
+/// Which signed metadata an authorization rests on.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MetadataMode {
+    /// Metadata within its signed lifetime at the injected time; accepted floors advance durably.
+    Current,
+    /// An installer's compiled-in set, chosen explicitly by the user while offline (C4). Every
+    /// role must be validly signed under the trusted root and the package must match its signed
+    /// digest, but expiry is not enforced and durable floors are neither consulted nor advanced.
+    Included,
+}
+
+mod staged;
+use staged::{Authority, Held};
 
 /// Exact downloaded bytes or a protected publication whose application is independently pinned.
 #[derive(Clone, Copy)]
@@ -46,6 +62,11 @@ impl UpdateAuthorization<'_> {
             self.trust.require_subscription(self.request, protection, context)?;
             let history = self.trust.read_releases(protection)?;
             let mut trust = self.trust.read(protection)?;
+            if self.mode == MetadataMode::Included {
+                return Ok(self
+                    .verify(&trust, &history, Evidence::Archive(bytes), now)
+                    .map(|_| ())?);
+            }
             self.trust.apply(&mut trust, protection, context, |trust| {
                 trust.refresh(
                     MetadataSet {
@@ -153,6 +174,8 @@ impl UpdateAuthorization<'_> {
     }
 
     /// Both delivery forms share the same trust writer, clock checks and publication floors.
+    /// For short local publications only; long staging uses [`Self::authenticate`] and
+    /// [`staged::StagedDelivery::commit`] so no payload work runs under the trust writer.
     fn publish_evidence<T>(
         &self,
         installation: &Directory,
@@ -161,47 +184,90 @@ impl UpdateAuthorization<'_> {
         context: &JobContext,
         publish: impl FnOnce(&VerifiedOffer, &mut dyn FnMut() -> io::Result<()>) -> io::Result<T>,
     ) -> Result<T, TrustFailure> {
+        self.require_installation(installation)?;
+        self.trust.protected(context, |protection| {
+            let _writer = self.trust.writer(protection, context)?;
+            self.verify_held(evidence, None, &mut now, protection, context)?
+                .publish(self, evidence, &mut now, protection, context, publish)
+        })
+    }
+
+    /// Trust and its signed inputs must belong to this exact native installation and engine.
+    fn require_installation(&self, installation: &Directory) -> Result<(), TrustFailure> {
         if installation.identity()? != self.trust._installation_root.identity()? {
             return Err(invalid("Update trust belongs to another installation").into());
         }
         Self::require_native_request(self.request, self.request.component)?;
-        self.trust.protected(context, |protection| {
-            let _writer = self.trust.writer(protection, context)?;
-            self.trust.require_subscription(self.request, protection, context)?;
-            let history = self.trust.read_releases(protection)?;
-            let mut trust = self.trust.read(protection)?;
-            let mut last_time = i64::MIN;
-            let offer = self.trust.apply(&mut trust, protection, context, |trust| {
-                let time = now();
-                last_time = time;
-                trust.refresh(
-                    MetadataSet {
-                        timestamp: self.metadata.timestamp,
-                        snapshot: self.metadata.snapshot,
-                        targets: self.metadata.targets,
-                    },
-                    time,
-                )?;
-                self.verify(trust, &history, evidence, time)
-            })?;
-            let next_history = history.authorize(self.request, &offer)?;
-            self.trust.write_releases(&history, &next_history, protection, context)?;
-            let history = next_history;
-            let mut recheck = || {
-                check(context)?;
-                let time = now();
-                if time < last_time {
-                    return Err(io::Error::other(Verification::ClockRollback));
-                }
-                self.verify(&trust, &history, evidence, time).map_err(io::Error::other)?;
-                last_time = time;
-                check(context)
-            };
-            recheck()?;
-            publish(&offer, &mut recheck).map_err(TrustFailure::Storage)
-        })
+        Ok(())
     }
 
+    /// Reread trust, subscription and release history under the caller's held writer, then
+    /// refresh and verify the evidence. `expected` is the authority a staged delivery observed;
+    /// any change fails with a typed error before verification can report a weaker cause.
+    fn verify_held(
+        &self,
+        evidence: Evidence<'_>,
+        expected: Option<Authority>,
+        now: &mut dyn FnMut() -> i64,
+        protection: &mut Protection,
+        context: &JobContext,
+    ) -> Result<Held, TrustFailure> {
+        let mut trust = self.trust.read(protection)?;
+        let subscription = if self.request.intent
+            == sugarsubstitute_contracts::installation::PreparationIntent::Automatic
+        {
+            Some(self.trust.subscription_locked(protection, context)?)
+        } else {
+            None
+        };
+        let authority = Authority { root_version: trust.root_version()?, subscription };
+        if let Some(expected) = expected {
+            expected.require(authority)?;
+        }
+        if subscription.is_some_and(|value| value.channel() != self.request.channel) {
+            return Err(invalid("Update subscription changed during automatic preparation").into());
+        }
+        let history = self.trust.read_releases(protection)?;
+        let mut time = i64::MIN;
+        if self.mode == MetadataMode::Included {
+            time = now();
+            let offer = self.verify(&trust, &history, evidence, time)?;
+            return Ok(Held { trust, history, offer, authority, time });
+        }
+        let offer = self.trust.apply(&mut trust, protection, context, |trust| {
+            time = now();
+            trust.refresh(
+                MetadataSet {
+                    timestamp: self.metadata.timestamp,
+                    snapshot: self.metadata.snapshot,
+                    targets: self.metadata.targets,
+                },
+                time,
+            )?;
+            self.verify(trust, &history, evidence, time)
+        })?;
+        Ok(Held { trust, history, offer, authority, time })
+    }
+
+    /// Verify again inside the held writer; the injected clock may not move backwards.
+    fn recheck(
+        &self,
+        trust: &RepositoryTrust,
+        history: &ReleaseHistory,
+        evidence: Evidence<'_>,
+        last_time: &mut i64,
+        now: &mut dyn FnMut() -> i64,
+        context: &JobContext,
+    ) -> io::Result<()> {
+        check(context)?;
+        let time = now();
+        if time < *last_time {
+            return Err(io::Error::other(Verification::ClockRollback));
+        }
+        self.verify(trust, history, evidence, time).map_err(io::Error::other)?;
+        *last_time = time;
+        check(context)
+    }
     /// Match the current signed target to retained delivery or a protected publication receipt.
     fn verify(
         &self,
@@ -210,7 +276,12 @@ impl UpdateAuthorization<'_> {
         evidence: Evidence<'_>,
         now: i64,
     ) -> Result<VerifiedOffer, Verification> {
-        let offer = trust.offer(self.request, self.descriptor, now)?;
+        let offer = match self.mode {
+            MetadataMode::Current => trust.offer(self.request, self.descriptor, now)?,
+            MetadataMode::Included => {
+                trust.pinned_offer(self.metadata, self.request, self.descriptor)?
+            }
+        };
         history.check(self.request, &offer)?;
         if offer.admission() != sugarsubstitute_contracts::update::Admission::Prepare {
             return Err(Verification::Admission);

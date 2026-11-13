@@ -50,9 +50,8 @@ impl UpdaterPackage {
         let preparation = self.trust.claim_updater_preparation(context)?;
         let authorization = self.offer.authorization(&self.trust);
         let bytes = self.download.identity();
-        let generation =
-            authorization.publish_updater(bytes, &mut now, context, |offer, recheck| {
-                recheck()?;
+        let (staged, generation) =
+            authorization.authenticate_updater(bytes, &mut now, context, |offer, _| {
                 self.trust
                     .reserve_updater(
                         authorization.request,
@@ -64,7 +63,7 @@ impl UpdaterPackage {
                     .map_err(io::Error::other)
             })?;
         let payload = self.stage_payload(&generation, context)?;
-        authorization.publish_updater(bytes, now, context, |_, recheck| {
+        staged.commit(now, context, |_, _, recheck| {
             recheck()?;
             self.trust.complete_updater(&generation, context).map_err(io::Error::other)
         })?;

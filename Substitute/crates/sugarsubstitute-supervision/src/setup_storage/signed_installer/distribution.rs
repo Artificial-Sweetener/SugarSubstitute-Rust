@@ -86,6 +86,56 @@ impl InstallerDistribution {
         &self.configuration.manifest_sha256
     }
 
+    /// Whether the compiled-in metadata has outlived its shortest signed lifetime at `now`
+    /// (Unix UTC seconds). Decoding alone never checks this; signatures are not verified here.
+    /// # Errors
+    /// Rejects roles whose expiry cannot be read.
+    pub fn expired(&self, now: i64) -> io::Result<bool> {
+        let configuration = &self.configuration;
+        let root = configuration
+            .roots
+            .last()
+            .map_or(configuration.trusted_root.as_bytes(), |root| root.metadata.as_bytes());
+        let end = sugarsubstitute_update::signed_lifetime_end(self.compiled_roles(), root)
+            .map_err(io::Error::other)?;
+        Ok(now >= end)
+    }
+
+    /// First root version newer than every root compiled into this installer.
+    /// # Errors
+    /// Rejects a malformed trusted root or exhausted version space.
+    pub fn next_root(&self) -> io::Result<u32> {
+        match self.configuration.roots.last() {
+            Some(root) => {
+                root.version.checked_add(1).ok_or_else(|| invalid("Root version overflow"))
+            }
+            None => sugarsubstitute_update::RepositoryTrust::bootstrap(
+                self.configuration.trusted_root.as_bytes(),
+            )
+            .and_then(|trust| trust.next_root_version())
+            .map_err(io::Error::other),
+        }
+    }
+
+    /// Local request facts for this installer's channel, used to name the descriptor to fetch.
+    /// # Errors
+    /// Rejects hosts without a native package.
+    pub fn request(&self) -> io::Result<Request> {
+        Ok(Request {
+            intent: PreparationIntent::Repair,
+            ..UpdateAuthorization::local_request(self.configuration.channel)?
+        })
+    }
+
+    /// Compiled-in signed roles, exactly as embedded.
+    fn compiled_roles(&self) -> MetadataSet<'_> {
+        MetadataSet {
+            timestamp: self.configuration.timestamp.as_bytes(),
+            snapshot: self.configuration.snapshot.as_bytes(),
+            targets: self.configuration.targets.as_bytes(),
+        }
+    }
+
     /// Import this embedded distribution under the selected installation's retained setup custody.
     /// Uses the actual engine/platform and the installer's explicit channel; signed metadata
     /// supplies no local release floors or privilege. Installed trust supplies durable floors.
@@ -103,13 +153,58 @@ impl InstallerDistribution {
         now: impl FnMut() -> i64,
         context: &JobContext,
     ) -> Result<SignedInstallation, TrustFailure> {
+        self.import_with(
+            session,
+            executable,
+            payload,
+            InstallerMetadataChoice::Embedded,
+            now,
+            context,
+        )
+    }
+
+    /// [`Self::import`] resting on `choice` (C4): the compiled-in metadata, roles refreshed online
+    /// after it expired, or the user's explicit choice to install the included release offline.
+    /// See [`InstallationSession::import_installer_with`] for each mode's guarantees.
+    /// # Errors
+    /// As [`Self::import`], and rejects refreshed metadata that withdraws the included release.
+    pub fn import_with(
+        self,
+        session: InstallationSession,
+        executable: &Path,
+        payload: BundleSource<'_>,
+        choice: InstallerMetadataChoice,
+        now: impl FnMut() -> i64,
+        context: &JobContext,
+    ) -> Result<SignedInstallation, TrustFailure> {
         let configuration = &self.configuration;
         let roots = configuration
             .roots
             .iter()
             .map(|root| (root.version, root.metadata.as_bytes()))
             .collect::<Vec<_>>();
-        let imported = session.import_installer(
+        let (fresh, chosen) = match choice {
+            InstallerMetadataChoice::Embedded => (None, None),
+            InstallerMetadataChoice::Refreshed(fresh) => (Some(fresh), None),
+            InstallerMetadataChoice::Included(chosen) => (None, Some(chosen)),
+        };
+        let fresh_roots = fresh.as_ref().map_or_else(Vec::new, |fresh| {
+            fresh.roots.iter().map(|(version, bytes)| (*version, bytes.as_slice())).collect()
+        });
+        let authority = match (&fresh, chosen) {
+            (Some(fresh), _) => InstallerAuthority::Refreshed {
+                roots: &fresh_roots,
+                metadata: MetadataSet {
+                    timestamp: &fresh.timestamp,
+                    snapshot: &fresh.snapshot,
+                    targets: &fresh.targets,
+                },
+                descriptor: &fresh.descriptor,
+            },
+            (None, Some(chosen)) => InstallerAuthority::Included(chosen),
+            (None, None) => InstallerAuthority::Embedded,
+        };
+        let imported = session.import_installer_with(
             InstallerSource {
                 repository: configuration.repository,
                 trusted_root: configuration.trusted_root.as_bytes(),
@@ -127,6 +222,7 @@ impl InstallerDistribution {
                 ..UpdateAuthorization::local_request(configuration.channel)?
             },
             payload,
+            authority,
             now,
             context,
         )?;
@@ -137,6 +233,16 @@ impl InstallerDistribution {
         }
         Ok(imported)
     }
+}
+
+/// Signed metadata an embedded installer import rests on (C4).
+pub enum InstallerMetadataChoice {
+    /// The compiled-in metadata, within its signed lifetime.
+    Embedded,
+    /// Current roles fetched online after the compiled-in metadata expired.
+    Refreshed(crate::update_repository::InstallerMetadata),
+    /// The user's explicit choice to install the included release while offline.
+    Included(IncludedInstallChoice),
 }
 
 /// Role bounds apply to decoded bytes, not JSON escape spelling in the build configuration.

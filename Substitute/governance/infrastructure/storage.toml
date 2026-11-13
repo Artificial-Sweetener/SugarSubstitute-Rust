@@ -1990,7 +1990,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Aut
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded/authorization.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:3b0e6ff4b67c6dbf4726a599c5ce73296a3d074f4ec480f0b546893eed74743f"
+source_sha256 = "sha256:35f918a5ccd44376e9dcfea196e2740c9f4795eba614a4c1c0380bfd03dd8c8e"
 capabilities = ["method metadata", "std::fs::read", "std::fs::read_dir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Hostile authorization changes exercise the actual downloaded installation publication path. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2356,10 +2356,18 @@ boundary = "native_custody"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/distribution/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:a3aa9747b8fec21dc31c32e70c155419751e13dd9658f9961896a8833050de0d"
+source_sha256 = "sha256:4eb26c9845a1f357325cd3c5282fe07577be8ff73acf80a668329127004b891f"
 capabilities = ["assert_eq! restricted capability fragments", "std::fs::read", "std::fs::read_dir", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Embedded distribution parsing reaches the real signed installer verifier and native journal. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/distribution/tests/expiry.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:37756777455a9a92e08dc10320fb4be9a0aa3746001b136af1de9bb68e16835b"
+capabilities = ["assert_eq! restricted capability fragments", "std::fs::read", "std::fs::read_dir", "std::fs::write"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: A downloaded installer never expires: it refreshes online, or installs its exact included release offline after the user's explicit choice, and refuses tampered bytes either way. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/distribution/tests/reuse.rs"
@@ -2372,7 +2380,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Reu
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:d368dd7f86a090950969f77df5c303618a7841a1e260647998f2afab3117dd6d"
+source_sha256 = "sha256:9897d9c80eeb0eb886e0b364d6edb238a56e5f9d6d56917f20a895bfee6d50bd"
 capabilities = ["assert! restricted capability fragments", "assert_eq! restricted capability fragments", "method metadata", "std::fs::read", "std::fs::read_dir", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Qualify the composed offline path with real signatures, archive extraction and native custody. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2388,7 +2396,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Ret
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/entrypoint.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:a015ec6a6356e419add8927bd97f1302fe6d8e2d6b12d7e574bc7483df805c86"
+source_sha256 = "sha256:5ea807f760df533df7c6e602cdd532008bf52ee247e43fef59fd1ac20a5a75bd"
 capabilities = ["std::fs::read", "std::fs::read_dir", "std::fs::remove_file", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Signed maintenance restores established launcher ownership before an optional application run. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2508,7 +2516,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: A p
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/transfer_recovery.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:433298ec578fb5a0c2152e336433354c754480c0b4fad58542ffb9e72db72980"
+source_sha256 = "sha256:9813c345a688071f360c56e1e2b9cdf6accd0f3ea9b822882cb27ecfe4c2b70f"
 capabilities = ["std::fs::read", "std::fs::read_dir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Expire actual transfer workers at durable boundaries while keeping creator custody outside them. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2524,7 +2532,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Sha
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/test_package/repository.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:8353a076b112204f9615937090bf9f7a91c4782521384d0f97e40db4d3124495"
+source_sha256 = "sha256:37dd2cc8731e9bd9af4b734aebf796d2ea2e0fada4a70889e53f5c53e43d314d"
 capabilities = ["method metadata"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Genuine signed channel/package fixture shared by native publication qualification. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2589,7 +2597,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Acq
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/trust.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:07c583789e4f2513f547c66095997fbdac140fabd18a2398f9c469a064aff065"
+source_sha256 = "sha256:4d7d185d7d308f11c4d332346f96610b69fdc3f4256e482e587c1959db195f35"
 capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Persist update trust under independent exclusion before returning authenticated offers. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
@@ -2630,7 +2638,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Nat
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/trust/offered.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:2f63ded64341232df885a3a321b643330aa927611df3036e9ebd5b0d385311f4"
+source_sha256 = "sha256:364db167eb38459a529d0549f89141a84aff41235b347843a122652555c31684"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Borrow signed repository metadata bytes for feature-owned trust verification."
@@ -2727,7 +2735,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Qua
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/updater_package/stage.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:6b4220284cad1888f750761a014162d629d23e4b68a74eaf7e5c433e5523182f"
+source_sha256 = "sha256:763e6f3f1aa8c21c61e0ddade6a867f5635207db951e40d8ef651efaf1d3a6c0"
 capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Stage a complete updater generation before publishing preparation; application selection stays separate. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
@@ -2841,6 +2849,14 @@ disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Online reauthorization reuses completed native files and refreshes offline evidence. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/src/update_preparation/tests/receipt.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:fb710addc5c515d4f0788f586a83f1b0b3937bf2c454048cdbd62f222616a68f"
+capabilities = ["std::fs::read", "std::fs::write"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: A prepared update starts offline on its receipt once cached metadata expired, and only then. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
 path = "crates/sugarsubstitute-supervision/src/update_preparation/tests/reopen.rs"
 owner = "sugarsubstitute-supervision"
 source_sha256 = "sha256:99f8742d58741284998505c90cf18e209775768a49c613ce3fea758a6132b05a"
@@ -2867,10 +2883,19 @@ rationale = "Native fixture setup, deliberate corruption or observation for: New
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/update_repository.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:4e1b28a32422afaf52bcbfacbbd986d047fbc2046ddfa640d3319d4d3ef8d03a"
+source_sha256 = "sha256:a16ebdb3a5564dfd6facd8701484927a925fff30694f38c9cd672b7cdaea4d11"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Fetch bounded repository metadata through its owned HTTP transport; this method does not inspect files."
+consumer = "protocol_metadata"
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/update_repository/installer.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:6c084c533a4158f7f8ab85c6b121f3637055709535cfb0d095cfda36ba45a4a0"
+capabilities = ["method metadata"]
+disposition = "consumer"
+rationale = "Fetch bounded installer refresh metadata through the repository's owned HTTP transport; this method does not inspect files."
 consumer = "protocol_metadata"
 
 [[records]]
@@ -2904,6 +2929,22 @@ source_sha256 = "sha256:7c40b2a45e33dc486b06b319e7d9d6c9fcbdc7d206468c3589e9f6a0
 capabilities = ["method metadata"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Destination and framing rejection precedes native I/O and cache mutation. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
+path = "crates/sugarsubstitute-update/src/pinned/tests.rs"
+owner = "sugarsubstitute-update"
+source_sha256 = "sha256:529b9ec5cba9ae588ecbb449d353a1e4a7c8d8cc1e96e21adce4c38751c90257"
+capabilities = ["method metadata"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: An expired embedded release verifies only through genuine root-authorised signatures. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
+path = "crates/sugarsubstitute-update/src/prepared/tests.rs"
+owner = "sugarsubstitute-update"
+source_sha256 = "sha256:4b1b6cc5dfbf3c59f82a068ff84b2a338e35d90f64e0239ede8bf41058247c8c"
+capabilities = ["method metadata"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: Each D22 condition refuses on its own; a fresh receipt starts offline once metadata expired. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
 path = "crates/sugarsubstitute-update/src/releases/tests.rs"
@@ -2940,7 +2981,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Sig
 [[records]]
 path = "crates/sugarsubstitute-update/src/tests/root.rs"
 owner = "sugarsubstitute-update"
-source_sha256 = "sha256:a69b37220bc2994ea5cc30ad71219b1f0fb6419459d4895b39af39f8ac979ea6"
+source_sha256 = "sha256:843f2b305700b54bc07175a92f15042e580ad2a18fee61e462e26488ab010b09"
 capabilities = ["method metadata"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Threshold and expiry transitions use actual signing keys, including revoked-key attempts. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
