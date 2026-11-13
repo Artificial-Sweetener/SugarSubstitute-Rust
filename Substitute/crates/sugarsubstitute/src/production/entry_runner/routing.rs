@@ -98,7 +98,7 @@ impl<C: EntryActivation> EntryRunner<C> {
                     "Existing coordinator request advanced"
                 );
                 if let Some(wait) = &mut self.forward_wait {
-                    wait.observe(&observed, client.now()?)?;
+                    wait.observe(&observed);
                 }
                 if let EntryTransportObservation::OutcomeReceived { outcome: actual, .. } = observed
                 {

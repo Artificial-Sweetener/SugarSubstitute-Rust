@@ -86,14 +86,14 @@ impl<C: EntryActivation> EntryRunner<C> {
 
     /// Whether this launch must show the wait on the other copy now. The headless pump admits
     /// its native loop for it, since a forwarding launch never activates its own server.
-    pub(super) fn forward_presentation_due(&mut self) -> bool {
+    pub(super) fn forward_presentation_due(&self) -> bool {
         if self.closing || self.initial_completed {
             return false;
         }
         let Some(now) = self.client.as_ref().and_then(|client| client.now().ok()) else {
             return false;
         };
-        self.forward_wait.as_mut().is_some_and(|wait| wait.presentation_due(now))
+        self.forward_wait.as_ref().is_some_and(|wait| wait.presentation_due(now))
     }
 
     /// The waiting surface, once this launch has waited two seconds for the other copy.

@@ -111,21 +111,20 @@ fn phase(surface: &mut WaitSurface) -> ConflictPhase {
     surface.poll().phase
 }
 
-/// The copy verified itself on its pipe as serving launches, the way the transport reports it.
-fn serving(wait: &mut ForwardWait, copy: PreviousCopy, now: Moment) -> Result {
-    wait.discovered(copy);
+/// The copy verified itself on its pipe as serving launches and has not answered this launch.
+fn silent_server(wait: &mut ForwardWait) {
+    wait.discovered(COPY);
     wait.serving = true;
-    wait.await_answer(now)
 }
 
-/// A copy that verified itself on its pipe and then leaves this launch unanswered is asked
-/// about at two seconds on the manual execution clock, not before, even while its windows keep
-/// answering their message queue; "Close it and start" ends exactly that copy.
+/// A copy whose pipe stays silent while its windows answer the probe is responsive: at two
+/// seconds on the manual clock it gets the waiting line with Cancel, never the question, however
+/// long the silence lasts.
 #[test]
-fn a_silent_server_is_asked_about_at_two_seconds_whatever_its_windows_answer() -> Result {
+fn a_silent_pipe_with_answering_windows_shows_the_waiting_line_and_never_asks() -> Result {
     let rig = Rig::new()?;
     let mut wait = ForwardWait::new(rig.now())?;
-    serving(&mut wait, COPY, rig.now())?;
+    silent_server(&mut wait);
     rig.advance_to(1_999)?;
     assert_eq!(rig.step(&mut wait, port(responsive), None)?, WaitStep::Continue);
     assert!(!wait.presentation_due(rig.now()));
@@ -136,16 +135,20 @@ fn a_silent_server_is_asked_about_at_two_seconds_whatever_its_windows_answer() -
     let mut surface = wait.take_surface(rig.now()).ok_or("no surface at two seconds")?;
     assert!(wait.take_surface(rig.now()).is_none(), "a wait presents exactly once");
     assert!(!wait.presentation_due(rig.now()), "a taken surface is not due again");
-    rig.step(&mut wait, port(responsive), None)?;
-    let asked = surface.poll();
-    assert_eq!(asked.phase, ConflictPhase::AwaitingDecision);
-    assert!(asked.close_enabled());
+    for probed_until in [4_000, 6_000, 8_000] {
+        rig.until(&mut wait, port(responsive), None, |wait| {
+            wait.next_probe_at == at(probed_until)
+        })?;
+        let view = surface.poll();
+        assert_eq!(view.phase, ConflictPhase::Checking, "silence alone never asks");
+        assert!(!view.close_enabled() && !view.force_enabled() && !view.done());
+        rig.advance_to(probed_until)?;
+    }
     surface.choose(ConflictAction::Close);
-    let ends = ProcessPort { probe: responsive, end: ends_silent };
-    rig.until(&mut wait, ends, None, |wait| matches!(wait.ending, Some(Ending::Ended)))?;
-    assert_eq!(ENDED_SILENT.load(Ordering::Acquire), 1);
-    assert_eq!(phase(&mut surface), ConflictPhase::Forcing);
-    wait.resolve();
+    assert_eq!(rig.step(&mut wait, port(responsive), None)?, WaitStep::Continue);
+    assert!(wait.ending.is_none(), "a responsive copy is never offered for closing");
+    surface.choose(ConflictAction::Cancel);
+    assert_eq!(rig.step(&mut wait, port(responsive), None)?, WaitStep::Cancel);
     assert!(surface.poll().done());
     assert_eq!(wait.wake_at(), None);
     Ok(())
@@ -159,29 +162,28 @@ fn ends_silent(pid: u32, birth: u64) -> std::result::Result<bool, ProcessError> 
     Ok(true)
 }
 
-/// A copy that answers in time is never asked about: its answer clears the silence, and the
-/// checking line stays while its windows answer.
+/// A copy whose pipe stays silent shows the waiting line at two seconds; only when the probe
+/// finds its windows hung does the surface ask, and "Close it and start" ends exactly that copy.
 #[test]
-fn an_answer_in_time_keeps_the_checking_line() -> Result {
+fn a_silent_pipe_whose_probe_finds_it_hung_gets_the_question() -> Result {
     let rig = Rig::new()?;
     let mut wait = ForwardWait::new(rig.now())?;
-    serving(&mut wait, COPY, rig.now())?;
-    rig.advance_to(1_500)?;
-    wait.observe(
-        &received(EntryOutcome::Rejected(
-            sugarsubstitute_contracts::coordinator_entry::EntryRejection::Capacity,
-        ))?,
-        rig.now(),
-    )?;
+    silent_server(&mut wait);
     rig.advance_to(2_000)?;
     let mut surface = wait.take_surface(rig.now()).ok_or("no surface at two seconds")?;
-    rig.until(&mut wait, port(responsive), None, |wait| wait.next_probe_at == at(4_000))?;
-    assert_eq!(phase(&mut surface), ConflictPhase::Checking);
+    assert_eq!(phase(&mut surface), ConflictPhase::Checking, "the timer alone never asks");
+    let hung_port = ProcessPort { probe: hung, end: ends_silent };
+    rig.until(&mut wait, hung_port, None, |wait| wait.unresponsive)?;
+    let asked = surface.poll();
+    assert_eq!(asked.phase, ConflictPhase::AwaitingDecision);
+    assert!(asked.close_enabled());
     surface.choose(ConflictAction::Close);
-    assert_eq!(rig.step(&mut wait, port(responsive), None)?, WaitStep::Continue);
-    assert!(wait.ending.is_none(), "a copy that answered is never offered for closing");
+    rig.until(&mut wait, hung_port, None, |wait| matches!(wait.ending, Some(Ending::Ended)))?;
+    assert_eq!(ENDED_SILENT.load(Ordering::Acquire), 1);
+    assert_eq!(phase(&mut surface), ConflictPhase::Forcing);
     wait.resolve();
     assert!(surface.poll().done());
+    assert_eq!(wait.wake_at(), None);
     Ok(())
 }
 
@@ -265,7 +267,7 @@ fn an_unresponsive_answer_asks_at_once() -> Result {
     let rig = Rig::new()?;
     let mut wait = ForwardWait::new(rig.now())?;
     wait.peer = Some(COPY);
-    wait.observe(&received(EntryOutcome::Unresponsive)?, rig.now())?;
+    wait.observe(&received(EntryOutcome::Unresponsive)?);
     rig.advance_to(100)?;
     let mut surface = wait.take_surface(rig.now()).ok_or("no question for an unresponsive copy")?;
     assert_eq!(phase(&mut surface), ConflictPhase::AwaitingDecision);
@@ -279,7 +281,7 @@ fn a_closing_copy_is_waited_for_then_the_launch_continues() -> Result {
     let rig = Rig::new()?;
     let mut wait = ForwardWait::new(rig.now())?;
     wait.peer = Some(COPY);
-    wait.observe(&received(EntryOutcome::Closing)?, rig.now())?;
+    wait.observe(&received(EntryOutcome::Closing)?);
     rig.advance_to(500)?;
     assert!(wait.take_surface(rig.now()).is_none());
     rig.advance_to(2_000)?;
@@ -298,7 +300,7 @@ fn a_different_copy_after_reelection_starts_from_nothing() -> Result {
     let rig = Rig::new()?;
     let mut wait = ForwardWait::new(rig.now())?;
     wait.peer = Some(COPY);
-    wait.observe(&received(EntryOutcome::Unresponsive)?, rig.now())?;
+    wait.observe(&received(EntryOutcome::Unresponsive)?);
     assert!(wait.unresponsive);
     wait.peer = Some(COPY);
     wait.reelected();

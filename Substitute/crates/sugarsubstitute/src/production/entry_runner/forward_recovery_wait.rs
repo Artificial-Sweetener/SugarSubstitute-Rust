@@ -7,10 +7,11 @@
 //! waiting surface beside its own pump and keeps forwarding and re-electing behind it: an
 //! accepted launch or this launch winning election dismisses the surface. While it waits, a
 //! copy that is closing shows "Finishing closing the previous window…", any other wait shows
-//! the checking line, and only Cancel is offered. The surface becomes the question "Close it
-//! and start" / "Cancel" when the copy has stopped responding: it verified itself on its pipe
-//! and then left this launch unanswered for two seconds, it answered Unresponsive, or an owned
-//! probe of its windows found them hung. Only that choice ends the verified copy.
+//! the checking line, and only Cancel is offered. That includes a copy that verified itself on
+//! its pipe and has not answered yet: elapsed time alone never asks the user anything. Only an
+//! owned probe finding the copy's windows hung, or the copy's own Unresponsive answer, turns the
+//! surface into the question "Close it and start" / "Cancel", and only that choice ends the
+//! verified copy.
 use crate::production::entry_activation::{ProbeProcess, ResponsivenessProbe};
 use std::{
     error::Error,
@@ -104,10 +105,6 @@ pub(crate) struct ForwardWait {
     serving: bool,
     closing: bool,
     unresponsive: bool,
-    /// When the verified copy must have answered this launch; cleared by any answer.
-    answer_due: Option<Moment>,
-    /// The verified copy let `answer_due` pass without answering.
-    silent: bool,
     probe: ResponsivenessProbe,
     next_probe_at: Moment,
     /// The surface, once presented; `None` until then.
@@ -138,8 +135,6 @@ impl ForwardWait {
             serving: false,
             closing: false,
             unresponsive: false,
-            answer_due: None,
-            silent: false,
             probe: ResponsivenessProbe::default(),
             next_probe_at: present_at,
             shared: None,
@@ -148,40 +143,24 @@ impl ForwardWait {
             native_wake: None,
         })
     }
-    /// Record what the transport verified or received at `now`.
-    /// # Errors
-    /// Returns the clock's overflow cause.
-    pub(crate) fn observe(
-        &mut self,
-        observation: &EntryTransportObservation,
-        now: Moment,
-    ) -> Result<(), Box<dyn Error>> {
+    /// Record what the transport verified or received. A copy verified on its pipe, by a
+    /// connection or a discovery, becomes the copy whose windows are probed.
+    pub(crate) fn observe(&mut self, observation: &EntryTransportObservation) {
         match observation {
             EntryTransportObservation::ConnectionVerified { peer, .. } => {
                 self.discovered(copy_of(peer));
-                self.await_answer(now)?;
             }
             EntryTransportObservation::DiscoveryVerified { peer, phase, .. } => {
                 self.discovered(copy_of(peer));
-                if matches!(phase, EntryDiscoveryPhase::Serving(_)) {
-                    self.serving = true;
-                    self.await_answer(now)?;
-                } else {
-                    // A copy that is still starting answered; its windows are probed instead.
-                    self.answered();
-                }
+                self.serving |= matches!(phase, EntryDiscoveryPhase::Serving(_));
             }
-            EntryTransportObservation::OutcomeReceived { outcome, .. } => {
-                self.answered();
-                match outcome {
-                    EntryOutcome::Closing => self.closing = true,
-                    EntryOutcome::Unresponsive => self.unresponsive = true,
-                    EntryOutcome::Accepted(_) | EntryOutcome::Rejected(_) => {}
-                }
-            }
+            EntryTransportObservation::OutcomeReceived { outcome, .. } => match outcome {
+                EntryOutcome::Closing => self.closing = true,
+                EntryOutcome::Unresponsive => self.unresponsive = true,
+                EntryOutcome::Accepted(_) | EntryOutcome::Rejected(_) => {}
+            },
             _ => {}
         }
-        Ok(())
     }
     /// The transport verified `copy` on its pipe.
     fn discovered(&mut self, copy: PreviousCopy) {
@@ -191,40 +170,17 @@ impl ForwardWait {
             self.unresponsive = false;
             self.closing = false;
             self.serving = false;
-            self.answered();
             if matches!(self.ending, Some(Ending::Ended | Ending::Failed)) {
                 self.ending = None;
             }
         }
         self.peer = Some(copy);
     }
-    /// The verified copy now owes this launch an answer; reconnecting keeps the first moment.
-    fn await_answer(&mut self, now: Moment) -> Result<(), Box<dyn Error>> {
-        if self.answer_due.is_none() {
-            self.answer_due = Some(now.checked_add(PRESENTATION_DELAY)?);
-        }
-        Ok(())
-    }
-    fn answered(&mut self) {
-        self.answer_due = None;
-        self.silent = false;
-    }
-    /// Note whether the verified copy has let its answer fall due.
-    fn observe_silence(&mut self, now: Moment) {
-        if !self.silent && self.answer_due.is_some_and(|due| now >= due) {
-            tracing::warn!(
-                operation = "entry_forward_silent",
-                "The other copy verified itself and then did not answer this launch"
-            );
-            self.silent = true;
-        }
-    }
     /// The launch source came back for re-election. A copy that was serving, or one this
     /// launch never reached because its endpoint is gone while it still holds its claim, is
     /// closing.
     pub(crate) fn reelected(&mut self) {
         self.closing |= self.serving || self.peer.is_none();
-        self.answered();
     }
     /// The wait is over: the copy took this launch, or this launch won election. The surface
     /// closes on its next poll.
@@ -235,11 +191,8 @@ impl ForwardWait {
     }
     /// Whether the surface is due and not yet taken: the wait has lasted two seconds, or the
     /// copy is known not to respond.
-    pub(crate) fn presentation_due(&mut self, now: Moment) -> bool {
-        self.observe_silence(now);
-        !self.resolved
-            && self.shared.is_none()
-            && (now >= self.present_at || self.unresponsive || self.silent)
+    pub(crate) fn presentation_due(&self, now: Moment) -> bool {
+        !self.resolved && self.shared.is_none() && (now >= self.present_at || self.unresponsive)
     }
     /// Take the surface's controller once it is due. Returns it exactly once.
     pub(crate) fn take_surface(&mut self, now: Moment) -> Option<WaitSurface> {
@@ -260,7 +213,7 @@ impl ForwardWait {
             Some(Ending::Running(_) | Ending::Ended) => return ConflictPhase::Forcing,
             None => {}
         }
-        if self.unresponsive || self.silent {
+        if self.unresponsive {
             ConflictPhase::AwaitingDecision
         } else if self.closing {
             ConflictPhase::AwaitingExit
@@ -278,9 +231,8 @@ impl ForwardWait {
     fn target(&self, holder: Option<PreviousCopy>) -> Option<PreviousCopy> {
         self.peer.or(holder)
     }
-    /// Advance at `now`: act on the user's choice, collect an ending, note a verified copy that
-    /// let its answer fall due, probe a copy that has not answered, and update what the surface
-    /// shows. `holder` is the process the coordinator record names, for a copy this launch
+    /// Advance at `now`: act on the user's choice, collect an ending, probe a copy that has not
+    /// answered, and update what the surface shows. `holder` is the process the coordinator record names, for a copy this launch
     /// never reached. Probe failures are logged and the copy is probed again later; they never
     /// end the launch.
     /// # Errors
@@ -309,10 +261,8 @@ impl ForwardWait {
             _ => {}
         }
         self.collect_ending();
-        self.observe_silence(now);
         if self.ending.is_none()
             && !self.unresponsive
-            && !self.silent
             && now >= self.next_probe_at
             && let Some(copy) = self.target(holder)
         {
@@ -361,10 +311,8 @@ impl ForwardWait {
             return None;
         }
         let present = self.shared.is_none().then_some(self.present_at);
-        let asking = self.unresponsive || self.silent;
-        let probe = (self.ending.is_none() && !asking).then_some(self.next_probe_at);
-        let answer = self.answer_due.filter(|_| !self.silent);
-        present.into_iter().chain(probe).chain(answer).min()
+        let probe = (self.ending.is_none() && !self.unresponsive).then_some(self.next_probe_at);
+        present.into_iter().chain(probe).min()
     }
     /// Anchor the next consultation on the native pump's clock, sampled with `now`.
     pub(crate) fn schedule_native(&mut self, now: Moment, native_now: std::time::Instant) {
