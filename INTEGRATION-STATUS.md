@@ -2,6 +2,56 @@
 
 Branch `integration`, created from `origin/main` 0cd6362f. Updated by each cloud integration pass.
 
+## Pass 3 (2026-11-13)
+
+Tools that worked: git fetch/push over the proxy; the public Actions REST API through curl (runs,
+jobs, check-run annotations); the GitHub MCP `get_job_logs` with inline content. Not working: `gh`
+(token rejected) and direct download of job-log blobs (the proxy answers 403). I didn't install
+toolchains this pass: nothing merged, so integration is unchanged and had nothing new to check.
+
+### Integration tip and CI
+
+- Tip unchanged at ce549b3e (code tip 70129539). No merges this pass.
+- CI for 70129539 is baseline only:
+  - [Substitute verification](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43352365202)
+    failed on ubuntu, windows and macOS. I read the ubuntu log: it stops at "resolve
+    third_party/comfy-desktop/src/main/lib/download.ts". The windows and macOS failures are
+    in the same step.
+  - [Sugar quality](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43352365234):
+    ubuntu fails mypy with "Found 22 errors in 11 files"; windows-latest fails with "Select
+    exactly one installation of the declared VS2022 product".
+  - [Release tooling](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43352365179):
+    **success**.
+- Wiring: retire to storage was done in pass 1. Host `sugarcubes.updates` to coord is **still
+  pending, because coord isn't merged**. Host's idle placeholders must not ship.
+
+### Lanes
+
+Only ci and packinstall moved since pass 2. Every other lane's row from pass 2 still stands, with
+the same tip and the same reasons. No lane is stalled: each tip has moved from its starting
+snapshot.
+
+| Lane | Tip | State | Last reviewed | Merged | Stalled | Blocking reasons / unproven |
+|---|---|---|---|---|---|---|
+| ci | 13cc1c06 | working | 13cc1c06 | no | no | New commit: the caret proof's editor is now sized from the measured first paragraph (it targets the ubuntu `prompt_empty_line_caret` failures). Its [Sugar quality](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43355708262) was still running. The report hasn't changed and doesn't say both workflows are green: Windows tests still can't link `committed_dump_parser.lib` (**needs the maintainer or the crash owner**), and about 250 Linux/macOS lints remain. |
+| canvas-flakes | 4a709007 | finished | 4a709007 | **yes** (e27622c5) | no | none |
+| ui | 0c68a2c7 | finished, converted | 0c68a2c7 | **yes** (d0ab3289) | no | Native: splash and caption images. |
+| retire | 13ff72df | item done | 13ff72df | **yes** (e8a83a7d) | no | Unchanged. |
+| fixer | a2a51446 | items done | a2a51446 | **yes** (00d6be71) | no | Unchanged. |
+| storage | e0fb0c7b | items done | e0fb0c7b | **yes** (d37b4821) | no | Unchanged. |
+| trust | b1609462 | items done | b1609462 | **yes** (138d1308) | no | Unchanged. |
+| host (+ host-d2w-draft) | 94ef3807 | items done except E6 | 94ef3807 | **yes** (04811a38) | no | Unchanged. Wiring to coord is pending. |
+| release | 3e05348e | items done | 3e05348e | **yes** (b4ea9dc4) | no | Unchanged. |
+| entry | 640e8f55 | items reported done | 640e8f55 | no | no | Unchanged; **still fails review** for the pass 1/2 reasons (C-6 departure; silent waits of up to 15 s or 3600 s). |
+| timeouts | c79a5ab8 | gate added, 18 hits unresolved | c79a5ab8 | no | no | Unchanged; merging it would break governance on integration. |
+| coord | 19d3f15b | items done except `update_report_export` | 19d3f15b | no | no | Unchanged. It contains non-green lane/ci (80c37dd3), and item 2 is unfinished. |
+| packinstall | d18856b6 | items reported done, with open gaps | d18856b6 | no | no | CI is baseline only: [Substitute verification](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43350654846) (submodule); [Sugar quality](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43350654936) (mypy "22 errors in 11 files", VS2022). d18856b6 is a report-only commit after c255de41. **Fails review against F3w and HANDOFF §7:** (1) Nothing sends `TrialEvent::PageFailed`, so a new pack whose page fails stays in `Started`/`Unobserved`. `TrackedReplacement::settle` returns without a verdict for those phases (`pack_install/trial.rs`), so the broken pack is never restored and every later pack update stays blocked. F3w requires a restore when "the page does not establish its session", and §7 requires that a release is running within two launches or the user is told why. (2) The splash can wait up to `PACK_UPDATE_LIMIT` (300 s) for the pack update with no "Updating SugarCubes…" line. A failed check never shows its "one line", and `report.json` never reaches the window, which breaks F3w's "show one line" and §7's rule that every wait over two seconds has something on screen. The lane assigns both fixes to coord2/ui3. They need a page-failure path from the page to the coordinator and a splash line. The lane is fine otherwise: no sleeps or wall-clock tests in the diff, no attribution trailers, and the 300 s/30 s limits come from the injected client clock. Unproven: a headless real run with ComfyUI, the junction vectors, the registry-install setup test and WinHTTP loopback on Windows. |
+
+### Native Windows proofs (unproven here)
+
+Unchanged from pass 2. Every lane's native proofs and every Windows-only test on integration stay
+unproven until `committed_dump_parser.lib` builds in CI.
+
 ## Pass 2 (2026-11-13)
 
 Tools that worked: git fetch/push over the proxy (the clone was shallow, so I ran `git fetch --unshallow`;
