@@ -2,7 +2,7 @@
 
 ## Unfinished
 - **Setup-storage and crate tests haven't run anywhere.** They need real Windows files. lane/ci reports that Windows test binaries can't link yet (`committed_dump_parser.lib`), and that Ubuntu and macOS stop on lint. Linux can't build `sugarsubstitute-execution` here either (`runtime_supervision.rs:192`).
-- **lane/ci isn't merged.** CLOUD-RULES says to merge it once its report shows both workflows green, and it doesn't yet. When it is merged, keep this lane's 240-minute hang guard over lane/ci's 60 minutes.
+- **lane/ci isn't merged.** Its report doesn't yet show both workflows green, which CLOUD-RULES requires. When it is merged, keep this lane's 240-minute hang guard over lane/ci's 60 minutes.
 
 ## Unproven
 Native qualification under the no-progress guard:
@@ -15,7 +15,6 @@ Native qualification under the no-progress guard:
   - Tests that pass a time now use a fixed one.
   - The fixtures that own their stores take `StrikeClock::Fixed` and assert the strike's date.
   - Where the product opens its own stores on the system clock (updater staging, the first-install rescue), the test checks withholding at the strike's recorded date. A strike's `count` still decides whether it withholds.
-  - Passing a clock through `stage()` would have been a product API change, so I didn't.
   - The test-only `unix_now()` and its re-exports are gone.
   - The close-save `ManualClock` maps instants from the frozen anchor.
   - Nothing is allowlisted.
@@ -42,10 +41,10 @@ On the combined tree:
 - **fmt:** passes.
 - **xtask tests:** 192 pass.
 - **Windows-target clippy `-D warnings`, all three legs:** clean. This type-checks every test target; `ring` was built against stub C headers.
-- **Before the merge:** Windows Rustdoc was clean, and the FamilySettlement Python tests passed.
-- **CI:** [run 43340327438](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43340327438) stopped at main's submodule baseline. The run for this push is linked in the integration notes once it finishes.
+- **Before the merge:** Windows Rustdoc clean; FamilySettlement Python tests pass.
+- **CI:** [run 43340327438](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43340327438) stopped at main's submodule baseline.
 
 ## Next
 - **Integrator:** merge lane/timeouts. Gate 1 passes on integration plus this branch.
 - **lane/ci or a portability lane:** the Windows test link and the non-Windows build.
-- **After that:** run the setup_storage, sugarsubstitute, desktop, execution and supervision suites on Windows CI.
+- **Then:** run the setup_storage and crate suites on Windows CI.
