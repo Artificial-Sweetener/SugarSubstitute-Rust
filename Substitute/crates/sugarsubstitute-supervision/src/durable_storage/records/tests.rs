@@ -239,7 +239,7 @@ fn short_name_parents_open_at_their_resolved_long_location() -> TestResult {
 }
 
 /// A drive alias, as `subst` defines, reaches the same folder from another drive. Record custody
-/// still refuses that parent, whether it is the alias drive's root or a folder below it.
+/// still refuses a parent below it. (A parent that is a drive root is refused by lexical intake.)
 #[test]
 fn drive_alias_parents_stay_refused_without_creating_records() -> TestResult {
     worker::run_reserved(4 * 1024 * 1024, |context, _| {
@@ -247,12 +247,10 @@ fn drive_alias_parents_stay_refused_without_creating_records() -> TestResult {
         std::fs::create_dir(temporary.path().join("aliased"))?;
         let target = Directory::open(temporary.path(), false)?.resolved()?;
         let alias = files::alias_fixture::DriveAlias::define(target.path())?;
-        let refused = [alias.root().join("ComfyUI"), alias.root().join("aliased").join("ComfyUI")]
-            .iter()
-            .try_for_each(|selected| refuse_redirected_parent(selected, context));
+        let refused =
+            refuse_redirected_parent(&alias.root().join("aliased").join("ComfyUI"), context);
         alias.remove()?;
         refused?;
-        assert!(!temporary.path().join("ComfyUI").exists());
         assert!(!temporary.path().join("aliased").join("ComfyUI").exists());
         Ok(())
     })
