@@ -5267,10 +5267,18 @@ rationale = "Repository tooling sign-release.mjs: reads declared release build i
 [[records]]
 path = "installer/release/release-signature.test.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:fd203dc56c639c2878c9009c87bd5c2ddd2ba08e9fae215143fbb1317b41d706"
+source_sha256 = "sha256:db845aaf29ec2d38670b6fb8ecf2c6b3685eecae38e5adb4dec0410831321598"
 capabilities = ["fs", "mkdir", "mkdtemp", "node:fs/promises", "readFile", "writeFile"]
 disposition = "tooling"
 rationale = "Repository tooling release-signature.test.mjs: writes isolated build fixtures and checks the signed release directory; runtime crates do not depend on this source."
+
+[[records]]
+path = "installer/release/release-signature.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:098cebd2caec9b1f63ab717acb3617aa3b29e6917c3d56f0d6ee0d4b549ca195"
+capabilities = ["node:fs", "writeFileSync"]
+disposition = "tooling"
+rationale = "Repository tooling release-signature.mjs: writes a new release manifest key pair to two new files; runtime crates do not depend on this source."
 
 [[records]]
 path = "installer/release/update-distribution.mjs"

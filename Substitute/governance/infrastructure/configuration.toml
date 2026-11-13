@@ -1077,6 +1077,13 @@ capabilities = ["environment"]
 rationale = "Isolated extraction fixtures take their temporary root from the explicit TEMP the reviewed build tooling requires."
 
 [[records]]
+path = "installer/release/release-signature.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:098cebd2caec9b1f63ab717acb3617aa3b29e6917c3d56f0d6ee0d4b549ca195"
+capabilities = ["arguments"]
+rationale = "Release tooling: its generate command names the two new key files to write; not product settings."
+
+[[records]]
 path = "installer/release/update-distribution.mjs"
 owner = "sugarsubstitute-xtask"
 source_sha256 = "sha256:e9dd8cb5c56039dbf9e23f2bfa7b8385288534075990688b2bb17d42f479edc9"

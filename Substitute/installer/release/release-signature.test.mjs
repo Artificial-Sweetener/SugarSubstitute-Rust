@@ -6,7 +6,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { createHash, createPublicKey, generateKeyPairSync } from 'node:crypto'
-import { anchorKey, generateReleaseKey, keyId, publicBlob, signManifest, verifyManifest } from './release-signature.mjs'
+import { anchorKey, generateReleaseKey, keyId, publicBlob, signManifest, verifyManifest, writeReleaseKey } from './release-signature.mjs'
 import { crashHandlerFiles, manifestFile, signRelease, signatureFile } from './sign-release.mjs'
 import { engineBuildFile } from './engine-identity.mjs'
 
@@ -102,5 +102,19 @@ test('signing stops on a missing key, a foreign manifest key or a wrong private 
     for (const name of ['b', 'c']) {
       await assert.rejects(fs.stat(path.join(root, name, signatureFile)), /ENOENT/)
     }
+  } finally { await fs.rm(root, { recursive: true, force: true }) }
+})
+
+test('a rotated key is written once: the private PEM and the anchor it names', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'release-key-'))
+  try {
+    const privateFile = path.join(root, 'release-manifest.key.pem')
+    const anchorFile = path.join(root, 'release-anchor.bin')
+    const id = writeReleaseKey(privateFile, anchorFile)
+    const anchor = await fs.readFile(anchorFile)
+    assert.equal(id, keyId(anchor))
+    assert.deepEqual(publicBlob(await fs.readFile(privateFile, 'utf8')), anchor)
+    assert.throws(() => writeReleaseKey(privateFile, path.join(root, 'other.bin')), /EEXIST/)
+    assert.throws(() => writeReleaseKey('relative.pem', anchorFile), /absolute/)
   } finally { await fs.rm(root, { recursive: true, force: true }) }
 })

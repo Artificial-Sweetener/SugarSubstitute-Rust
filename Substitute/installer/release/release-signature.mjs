@@ -2,6 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 /** The release-manifest key: RSA-3072, signed as the application verifies it (CNG RSA-PSS). */
 import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify, constants } from 'node:crypto'
+import { writeFileSync } from 'node:fs'
+import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 const blobHeader = Buffer.from('52534131000c000003000000800100000000000000000000', 'hex')
 const exponent = Buffer.from('010001', 'hex')
@@ -64,4 +67,22 @@ export function signManifest(privatePem, manifest, anchor) {
 /** Verify as the application does: SHA-256, RSA-PSS with a 32-byte salt, under the anchor. */
 export function verifyManifest(manifest, signature, anchor) {
   return signature.length === signatureBytes && verify('sha256', manifest, { key: anchorKey(anchor), ...pss }, signature)
+}
+
+/**
+ * Write a new key pair: the private PEM (installed as the RELEASE_MANIFEST_KEY secret, never
+ * committed) and the public anchor a release build compiles in. Neither file may exist.
+ */
+export function writeReleaseKey(privateFile, anchorFile) {
+  if (![privateFile, anchorFile].every(file => path.isAbsolute(file ?? ''))) throw new Error('Both outputs must be absolute paths')
+  const key = generateReleaseKey()
+  writeFileSync(privateFile, key.privatePem, { flag: 'wx', mode: 0o600 })
+  writeFileSync(anchorFile, key.publicBlob, { flag: 'wx' })
+  return keyId(key.publicBlob)
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const [command, privateFile, anchorFile, ...extra] = process.argv.slice(2)
+  if (command !== 'generate' || extra.length) throw new Error('Usage: node installer/release/release-signature.mjs generate <new-private-pem> <new-anchor>')
+  console.log(writeReleaseKey(privateFile, anchorFile))
 }
