@@ -151,3 +151,33 @@ fn the_backend_retry_takes_the_left_over_a_message() -> TestResult {
     assert!(!controls[3].visible && controls[6].visible);
     Ok(())
 }
+
+#[test]
+fn the_page_leaves_the_caption_strip_only_while_a_peer_beyond_the_window_buttons_shows()
+-> TestResult {
+    let strip = |controls: &[AccessibleControl], scale| page_top(1280.0, controls, scale);
+    let quiet = layout(1280.0, &CaptionUpdates::default(), false)?;
+    assert_eq!(strip(&quiet, 1.75), 0, "the page's own title bar row is the caption");
+
+    let mut caption = CaptionUpdates::default();
+    caption.observe(UpdateFeed {
+        glyph: UpdateGlyph::Ready,
+        saving: false,
+        workflow: WorkflowActivity::Idle,
+    });
+    let update = layout(1280.0, &caption, false)?;
+    // The strip's edge rounds up so it covers every peer's rounded rectangle.
+    for (scale, top) in [(1.0, 34), (1.25, 43), (1.5, 51), (1.75, 60)] {
+        assert_eq!(strip(&update, scale), top, "at {scale}");
+    }
+
+    let retry = layout(1280.0, &CaptionUpdates::default(), true)?;
+    assert_eq!(strip(&retry, 1.0), 34);
+
+    let mut caption = CaptionUpdates::default();
+    caption.notify(Notice::NotSaved { workspace: true, inputs: true });
+    assert_eq!(strip(&layout(1280.0, &caption, false)?, 1.5), 51);
+    caption.activate(crate::main_updates::DISMISS);
+    assert_eq!(strip(&layout(1280.0, &caption, false)?, 1.5), 0, "dismiss gives it back");
+    Ok(())
+}

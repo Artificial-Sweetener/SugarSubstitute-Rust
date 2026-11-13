@@ -107,6 +107,10 @@ impl MainActor {
         if let Some(controls) = &mut self.controls {
             controls.present_retry(presentation)?;
         }
+        // The retry shares the caption strip, so the page moves clear of it and back.
+        if self.view.is_some() && !self.closing() {
+            self.resize()?;
+        }
         Ok(())
     }
 }

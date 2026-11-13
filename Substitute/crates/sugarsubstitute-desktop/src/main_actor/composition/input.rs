@@ -13,6 +13,7 @@ use super::cancellation::{self, Interruption};
 use super::cursor::{self, Hands, Pointer, Subscription};
 use super::drag_source;
 use super::drop_target::{DropTarget, Exporter};
+use super::page;
 use super::routing::{Button, ClickRule, Message, Published, Routing};
 use super::{modifiers, *};
 use crate::canvas::{MainCanvasDragOut, MainCanvasGesture};
@@ -22,7 +23,6 @@ use std::cell::{Cell, RefCell};
 use sugarsubstitute_canvas::PointerSample;
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_MOUSE_EVENT_KIND, COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS,
-    COREWEBVIEW2_NON_CLIENT_REGION_KIND, COREWEBVIEW2_NON_CLIENT_REGION_KIND_CAPTION,
     ICoreWebView2CompositionController4,
 };
 use windows::Win32::{
@@ -37,12 +37,12 @@ use windows::Win32::{
         },
         Shell::DefSubclassProc,
         WindowsAndMessaging::{
-            GetMessageTime, HTCAPTION, HTCLIENT, PostMessageW, SM_CXDOUBLECLK, SM_CXDRAG,
-            SM_CYDOUBLECLK, SM_CYDRAG, WM_APP, WM_DPICHANGED, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN,
-            WM_LBUTTONUP, WM_MBUTTONDBLCLK, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL,
-            WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_NCDESTROY, WM_NCHITTEST, WM_RBUTTONDBLCLK,
-            WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SETCURSOR, WM_SETFOCUS, WM_XBUTTONDBLCLK,
-            WM_XBUTTONDOWN, WM_XBUTTONUP,
+            GetMessageTime, HTCLIENT, PostMessageW, SM_CXDOUBLECLK, SM_CXDRAG, SM_CYDOUBLECLK,
+            SM_CYDRAG, WM_APP, WM_DPICHANGED, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP,
+            WM_MBUTTONDBLCLK, WM_MBUTTONDOWN, WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE,
+            WM_MOUSEWHEEL, WM_NCDESTROY, WM_NCHITTEST, WM_RBUTTONDBLCLK, WM_RBUTTONDOWN,
+            WM_RBUTTONUP, WM_SETCURSOR, WM_SETFOCUS, WM_XBUTTONDBLCLK, WM_XBUTTONDOWN,
+            WM_XBUTTONUP,
         },
     },
 };
@@ -115,13 +115,10 @@ fn mouse(message: u32, wparam: WPARAM, lparam: LPARAM) -> Option<Mouse> {
     })
 }
 
-/// Honor only the page's caption: the host draws its own window buttons and frame edges.
-fn caption_hit(kind: COREWEBVIEW2_NON_CLIENT_REGION_KIND) -> Option<LRESULT> {
-    (kind == COREWEBVIEW2_NON_CLIENT_REGION_KIND_CAPTION).then_some(LRESULT(HTCAPTION as isize))
-}
-
 struct State {
     window: HWND,
+    /// The controller's host window, whose client origin is the page's top-left.
+    host: HWND,
     controller: ICoreWebView2CompositionController,
     /// The page's `app-region` query, absent on a runtime without non-client region support.
     regions: Option<ICoreWebView2CompositionController4>,
@@ -131,7 +128,7 @@ struct State {
     routing: RefCell<Routing>,
     hands: Hands,
     focus: Focus,
-    /// Buttons WebView2 last saw held, with the client point of that forwarded message.
+    /// Buttons WebView2 last saw held, with the page point of that forwarded message.
     page: Cell<(u16, POINT)>,
     callbacks: CallbackFence,
     pen: pen::Pen,
@@ -140,8 +137,9 @@ struct State {
 }
 
 impl State {
-    /// Deliver in physical client pixels on the original UI apartment, without retaining a borrow.
-    /// A press first moves keyboard focus into a browser that lacks it.
+    /// Route in physical client pixels and deliver in page pixels on the original UI apartment,
+    /// without retaining a borrow. A press first moves keyboard focus into a browser that
+    /// lacks it.
     fn deliver(&self, message: Mouse) -> Result<(), DesktopError> {
         if focus::requests_focus(message.kind, self.focus.browser_focused()) {
             self.focus.enter();
@@ -176,6 +174,7 @@ impl State {
         if !forward {
             return Ok(());
         }
+        let point = page::page_point(point, page::client_origin(self.host, self.window)?);
         // SAFETY: The controller is retained on its creating UI apartment until subclass removal.
         unsafe {
             self.controller.SendMouseInput(
@@ -212,28 +211,6 @@ impl State {
             _ => Message::Other,
         };
         self.update_routing(|routing| routing.route(routed))
-    }
-
-    /// Answer a client-area hit test over the page's caption region with `HTCAPTION`, so
-    /// Windows moves, snaps and maximizes the window. A composition-hosted WebView2 owns no
-    /// HWND and cannot answer `WM_NCHITTEST` for its own `app-region: drag` elements.
-    fn caption(&self, lparam: LPARAM) -> Result<Option<LRESULT>, DesktopError> {
-        let Some(regions) = &self.regions else { return Ok(None) };
-        let mut point =
-            POINT { x: lparam.0 as u16 as i16 as i32, y: (lparam.0 >> 16) as u16 as i16 as i32 };
-        // SAFETY: The original live HWND and local POINT belong to this UI-thread callback.
-        if !unsafe { ScreenToClient(self.window, &raw mut point) }.as_bool() {
-            return Err(DesktopError::message(
-                "composed_browser_caption_coordinates",
-                "Native hit-test coordinates are unavailable",
-            ));
-        }
-        let mut kind = COREWEBVIEW2_NON_CLIENT_REGION_KIND::default();
-        // SAFETY: The controller is retained on its creating UI apartment and the query writes
-        // one scalar into live local storage.
-        unsafe { regions.GetNonClientRegionAtPoint(point, &raw mut kind) }
-            .map_err(|cause| DesktopError::new("query_composed_browser_caption", cause))?;
-        Ok(caption_hit(kind))
     }
 
     /// Mutate routing and wake the main loop when its gesture queue stops being empty.
@@ -400,8 +377,10 @@ impl Input {
             .map_err(|cause| DesktopError::new("query_composed_browser_controller", cause))?;
         let regions = controller.cast::<ICoreWebView2CompositionController4>().ok();
         let pen = pen::Pen::new(&browser);
+        let host = page::host(&browser)?;
         let state = Rc::new(State {
             window,
+            host,
             controller,
             regions,
             events,
@@ -431,6 +410,7 @@ impl Input {
         if self.drop_target.is_none() {
             self.drop_target = Some(DropTarget::register(
                 self.state.window,
+                self.state.host,
                 &self.state.controller,
                 self.state.events.clone(),
             )?);
@@ -556,7 +536,9 @@ unsafe extern "system" fn procedure(
         let mut caption = None;
         if hit.0 == HTCLIENT as isize {
             state.guarded(|| {
-                caption = state.caption(lparam)?;
+                if let Some(regions) = &state.regions {
+                    caption = page::caption(regions, state.host, lparam)?;
+                }
                 Ok(())
             });
         }

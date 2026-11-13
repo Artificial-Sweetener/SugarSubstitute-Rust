@@ -12,7 +12,12 @@ use crate::{
 /// Every caption peer, in identity order.
 pub(crate) const PEERS: usize = 9;
 /// Window and update buttons are 46 logical pixels wide, like the Windows caption buttons.
-const BUTTON: f64 = 46.0;
+const BUTTON_WIDTH: u16 = 46;
+const BUTTON: f64 = BUTTON_WIDTH as f64;
+/// The window buttons' width, which the page leaves free at the right of its title bar row.
+pub(crate) const CAPTION_WIDTH: u16 = 3 * BUTTON_WIDTH;
+/// The caption strip's height in logical pixels; the page's own title bar row matches it.
+pub(crate) const TITLEBAR_HEIGHT: u16 = 34;
 /// Caption row top and height in logical pixels.
 const TOP: f64 = 1.0;
 const HEIGHT: f64 = 32.0;
@@ -91,6 +96,22 @@ pub(crate) fn caption_controls<E>(
             line_fits && updates.dismiss.visible,
         ),
     ])
+}
+
+/// The client row, in physical pixels, where the page starts for caption `controls` laid out
+/// `width` logical pixels wide at device `scale`.
+///
+/// The page's title bar row shares the caption strip and leaves only the window buttons'
+/// area free. While any other peer shows (a message line, the update button or its offer, the
+/// backend retry), the page starts below the strip so no peer covers it; otherwise the page
+/// fills the client and has the strip back. The strip's edge rounds up, so it covers every
+/// peer's rounded physical rectangle at any scale.
+pub(crate) fn page_top(width: f64, controls: &[AccessibleControl], scale: f64) -> u32 {
+    let window_buttons = width - f64::from(CAPTION_WIDTH);
+    if !controls.iter().any(|control| control.visible && control.bounds.x < window_buttons) {
+        return 0;
+    }
+    (f64::from(TITLEBAR_HEIGHT) * scale).ceil() as u32
 }
 
 #[cfg(test)]

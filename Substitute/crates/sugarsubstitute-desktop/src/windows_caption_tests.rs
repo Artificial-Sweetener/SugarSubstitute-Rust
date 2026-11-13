@@ -270,6 +270,7 @@ fn native_caption_pixels_match_original_qt_vectors_and_feedback()
                                     dark,
                                     material: NativeMaterial::Mica,
                                     update: Default::default(),
+                                    page_top: 0,
                                 },
                                 hot,
                                 pressed,
@@ -311,6 +312,7 @@ fn native_caption_pixels_match_original_qt_vectors_and_feedback()
                         dark: true,
                         material: NativeMaterial::Mica,
                         update: Default::default(),
+                        page_top: 0,
                     },
                     hot,
                     pressed,
@@ -373,4 +375,12 @@ fn update_glyph_is_tinted_for_ready_and_warning() -> Result<(), Box<dyn std::err
     // SAFETY: Every native buffer has retired before its original memory DC is released.
     assert!(unsafe { DeleteDC(dc) }.as_bool());
     result.map_err(Into::into)
+}
+
+#[test]
+fn only_the_strip_above_the_page_moves_the_window() {
+    assert!(!in_strip(0, 0), "no strip while the page fills the client");
+    assert!(in_strip(0, 60) && in_strip(59, 60));
+    assert!(!in_strip(60, 60), "the page's first row is the page's");
+    assert!(!in_strip(-1, 60), "rows above the client are the frame's");
 }

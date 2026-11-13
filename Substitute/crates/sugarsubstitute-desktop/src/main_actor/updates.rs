@@ -73,16 +73,13 @@ impl MainActor {
         Ok(intent)
     }
 
-    /// Lay the caption out again with the current view.
+    /// Lay the caption out again with the current view, moving the page clear of the line
+    /// while it shows and back when it is dismissed.
     fn present_caption_updates(&mut self) -> Result<(), DesktopError> {
         if self.controls.is_none() || self.admission.closing() || self.retired {
             return Ok(());
         }
-        self.resize_caption()?;
-        match &self.controls {
-            Some(owner) => owner.raise_main(),
-            None => Ok(()),
-        }
+        self.resize()
     }
 
     /// Show the current caption without moving the browser.

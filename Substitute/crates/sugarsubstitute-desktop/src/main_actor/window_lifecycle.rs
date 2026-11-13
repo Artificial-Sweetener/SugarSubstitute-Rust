@@ -25,7 +25,7 @@ impl MainActor {
         self.window()?.set_focus();
         self.view()?.focus().map_err(|cause| DesktopError::new("focus_main_view", cause))?;
         // Native show/focus can resize the container before Tao delivers its queued resize event.
-        // Restore full-window browser bounds and raise retained caption peers before publication.
+        // Restore the browser bounds and raise retained caption peers before publication.
         self.resize()?;
         self.confirm_visible()?;
         self.receivers()?.reveal_navigation();

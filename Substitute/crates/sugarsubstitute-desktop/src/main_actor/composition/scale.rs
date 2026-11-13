@@ -15,7 +15,7 @@ use crate::canvas::placement::{PhysicalRect, WebViewAllocation};
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_BOUNDS_MODE_USE_RAW_PIXELS, ICoreWebView2Controller3,
 };
-use windows::Win32::Foundation::RECT;
+use windows::Win32::Foundation::{HWND, POINT, RECT};
 
 /// The browser controller's scale, zoom and bounds: the WebView2 adapter boundary.
 ///
@@ -72,11 +72,15 @@ pub(super) fn rescale(browser: &impl Browser, scale: f64) -> Result<(), DesktopE
         .map_err(|cause| DesktopError::new("rescale_composed_browser", cause))
 }
 
-/// Observe the browser's actual raw-pixel bounds and device pixel ratio.
+/// Observe the browser's actual raw-pixel bounds in the main window's client area, whose
+/// host window's client origin sits at `origin` there, and its device pixel ratio.
 ///
 /// # Errors
-/// Preserves controller getter failures and rejects inverted bounds.
-pub(super) fn allocation(browser: &impl Browser) -> Result<WebViewAllocation, DesktopError> {
+/// Preserves controller getter failures and rejects inverted or unrepresentable bounds.
+pub(super) fn allocation(
+    browser: &impl Browser,
+    origin: POINT,
+) -> Result<WebViewAllocation, DesktopError> {
     let observe = |cause| DesktopError::new("observe_composed_browser_allocation", cause);
     let bounds = browser.bounds().map_err(observe)?;
     let scale = browser.rasterization_scale().map_err(observe)?;
@@ -86,10 +90,15 @@ pub(super) fn allocation(browser: &impl Browser) -> Result<WebViewAllocation, De
             DesktopError::message("observe_composed_browser_allocation", "browser bounds inverted")
         })
     };
+    let place = |offset: i32, start: i32| {
+        offset.checked_add(start).ok_or_else(|| {
+            DesktopError::message("observe_composed_browser_allocation", "browser origin overflows")
+        })
+    };
     Ok(WebViewAllocation {
         bounds: PhysicalRect {
-            x: bounds.left,
-            y: bounds.top,
+            x: place(origin.x, bounds.left)?,
+            y: place(origin.y, bounds.top)?,
             width: extent(bounds.left, bounds.right)?,
             height: extent(bounds.top, bounds.bottom)?,
         },
@@ -133,6 +142,41 @@ impl super::Composition {
     fn scaled(&self) -> Result<&ICoreWebView2Controller3, DesktopError> {
         self.scale.as_ref().ok_or_else(|| missing("composition_browser_scale"))
     }
+
+    /// The page's top-left in the main window's client pixels.
+    fn page_origin(&self) -> Result<POINT, DesktopError> {
+        let controller = self.controller.as_ref().ok_or_else(|| missing("browser_controller"))?;
+        let window = self.window.as_ref().ok_or_else(|| missing("composition_window"))?;
+        super::page::client_origin(
+            super::page::host(controller)?,
+            HWND(window.hwnd() as *mut std::ffi::c_void),
+        )
+    }
+
+    /// Draw the bound browser where its host window now places the page: a composed browser
+    /// draws at its visual's origin, not at its bounds. Returns whether the page moved.
+    fn place_browser(&mut self) -> Result<bool, DesktopError> {
+        if self.stage != super::Stage::Ready || !self.ledger.browser_bound || self.retired {
+            return Ok(false);
+        }
+        let origin = self.page_origin()?;
+        if self.placed == Some(origin) {
+            return Ok(false);
+        }
+        let (browser, device) = (self.browser()?, self.device()?);
+        // SAFETY: The retained visual and device belong to this UI apartment; the commit is a
+        // synchronous request on the device that owns the visual.
+        #[allow(clippy::cast_precision_loss)]
+        let placed = unsafe {
+            browser
+                .SetOffsetX2(origin.x as f32)
+                .and_then(|()| browser.SetOffsetY2(origin.y as f32))
+                .and_then(|()| device.Commit())
+        };
+        placed.map_err(|cause| DesktopError::new("place_composed_browser", cause))?;
+        self.placed = Some(origin);
+        Ok(true)
+    }
 }
 
 impl super::MainActor {
@@ -147,11 +191,20 @@ impl super::MainActor {
         }
     }
 
+    /// Draw the composed browser where `resize` placed its host window, and tell the browser
+    /// its page moved so popups, IME candidates and accessibility bounds follow it.
+    pub(in crate::main_actor) fn place_composed_browser(&mut self) -> Result<(), DesktopError> {
+        let Some(tree) = self.composition.as_mut() else { return Ok(()) };
+        if tree.place_browser()? {
+            self.composition_moved()?;
+        }
+        Ok(())
+    }
+
     /// Observe the actual browser allocation the page lays out against.
     pub(crate) fn canvas_allocation(&self) -> Result<WebViewAllocation, DesktopError> {
-        allocation(
-            self.composition.as_ref().ok_or_else(|| missing("browser_composition"))?.scaled()?,
-        )
+        let tree = self.composition.as_ref().ok_or_else(|| missing("browser_composition"))?;
+        allocation(tree.scaled()?, tree.page_origin()?)
     }
 
     /// Withdraw native pixels and their input region once the browser's origin or density
