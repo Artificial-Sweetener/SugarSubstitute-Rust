@@ -133,23 +133,26 @@ enum Decision<'a> {
     },
 }
 
-/// The generation that should run is a prepared or trial candidate, otherwise the accepted one.
-/// A staging candidate is incomplete and never runs.
+/// The generation that should run is a prepared or trial candidate, otherwise the accepted one;
+/// a fresh installation has only its first prepared release. A staging candidate is incomplete
+/// and never runs.
 fn decide<'a>(
     record: &'a InstallationRecord,
     own: &'a GenerationId,
     hops: u8,
 ) -> Result<Decision<'a>, RouteFailure> {
-    let accepted = record.accepted().ok_or(RouteFailure::NeedsInstallation)?;
     let target = match record.candidate() {
         Some(candidate @ (Candidate::Prepared { .. } | Candidate::Trial { .. })) => {
             candidate.generation()
         }
-        _ => accepted,
+        _ => record.accepted().ok_or(RouteFailure::NeedsInstallation)?,
     };
     if &target.id == own {
         return Ok(Decision::Run(Route::Own));
     }
+    // A fresh installation's first release runs as its own trial before anything is accepted;
+    // another generation has nothing accepted to fall back to.
+    let accepted = record.accepted().ok_or(RouteFailure::Foreign)?;
     if hops < MAX_ENGINE_HOPS {
         let fallback = if accepted.id == target.id { own } else { &accepted.id };
         return Ok(Decision::Redirect { target, fallback });
