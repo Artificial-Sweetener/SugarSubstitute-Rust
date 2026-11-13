@@ -10,10 +10,14 @@ name: Release
 # When publishing, each due component is verified, then released by semantic-release with its
 # own tags (sugarcubes-v<version>, substitute-v<version>), changelog and version files.
 # SugarCubes runs first; SugarSubstitute then releases from the updated branch tip, so the two
-# release commits never race each other. A SugarSubstitute release then builds its update package
-# and channel descriptor from the released commit, with the update distribution written from that
-# version's changelog, and the update repository workflow signs them with the release lifetimes.
-# That signing is gated like the scheduled re-sign: RELEASES_ENABLED and the committed root.
+# release commits never race each other. A SugarSubstitute release then builds the application
+# and crash handler in release mode from the released commit, with the update distribution written
+# from that version's changelog and the committed release anchor compiled in, signs the release
+# manifest with the RELEASE_MANIFEST_KEY secret, assembles and seals the update package with its
+# channel descriptor, and the update repository workflow signs them with the release lifetimes.
+# Every signing key is a secret of the protected `release` environment, which only these jobs
+# use; .github/release/key-ceremony.mjs creates them once, offline. Signing is gated like the
+# scheduled re-sign: RELEASES_ENABLED, the committed root and the committed release anchor.
 
 on:
   workflow_dispatch:
@@ -229,7 +233,7 @@ jobs:
         run: node .github/release/release.mjs release substitute
 
   substitute-update-targets:
-    name: Build SugarSubstitute's update package and channel descriptor
+    name: Build, sign and package SugarSubstitute's release
     needs: [authorize, substitute]
     if: >-
       always() &&
@@ -237,25 +241,38 @@ jobs:
       needs.substitute.result == 'success' &&
       needs.substitute.outputs.released == 'true'
     runs-on: windows-2022
+    # A hang guard only: a cold release build of the application and crash handler must finish.
+    timeout-minutes: 240
+    # The release manifest key is an environment secret; only the signing step receives it.
+    environment: release
+    permissions:
+      contents: read
     defaults:
       run:
         shell: bash
     env:
       VERSION: ${{ needs.substitute.outputs.version }}
       TRUSTED_ROOT: .github/update-repository/root.json
+      RELEASE_ANCHOR: Substitute/installer/release/release-anchor.bin
+      BUILD_INPUTS_RELEASE: substitute-build-inputs
+      WINDOWS_SDK: "10.0.26100.0"
     steps:
       - name: Checkout the released commit
         uses: actions/checkout@v6
         with:
           ref: ${{ needs.substitute.outputs.tag }}
           persist-credentials: false
+          # The provisioning worker is built from the pinned Comfy Desktop sources.
+          submodules: true
 
-      - name: Require the trusted root installations ship with
+      - name: Require the trusted root and release anchor installations ship with
         run: |
-          if [ ! -f "$TRUSTED_ROOT" ]; then
-            echo "::error::$TRUSTED_ROOT is missing, so no installation could trust this update. Create the update repository offline with the signing tool's init command first."
-            exit 1
-          fi
+          for file in "$TRUSTED_ROOT" "$RELEASE_ANCHOR"; do
+            if [ ! -f "$file" ]; then
+              echo "::error::$file is missing, so no installation could trust this release. Run .github/release/key-ceremony.mjs offline first."
+              exit 1
+            fi
+          done
 
       - name: Setup Node
         uses: actions/setup-node@v6
@@ -263,6 +280,11 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
           cache-dependency-path: Substitute/installer/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install release build tooling
         working-directory: Substitute/installer
@@ -273,14 +295,90 @@ jobs:
           distribution="$RUNNER_TEMP/update-distribution.json"
           node Substitute/installer/release/update-distribution.mjs "$distribution"
           echo "SUGARSUBSTITUTE_UPDATE_DISTRIBUTION=$distribution" >> "$GITHUB_ENV"
+          echo "RELEASE_ID=substitute-${VERSION//./_}" >> "$GITHUB_ENV"
 
-      # The bundle is the application build compiled with SUGARSUBSTITUTE_UPDATE_DISTRIBUTION,
-      # assembled by installer/package.mjs. That assembly needs the crash handler build and the
-      # signed release manifest, which no CI job produces yet; this step owns producing them.
-      - name: Build the release bundle
+      # The crash handler builds from the reviewed, hash-pinned Crashpad source archives and
+      # GN/Ninja binaries; every file is checked against its pin before anything is built.
+      - name: Download the pinned crash handler build inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          echo "::error::No CI job produces the signed release bundle yet (crash handler build and release manifest signature). Build it with installer/release/build-application.mjs and installer/package.mjs, set RELEASE_BUNDLE to the bundle and write the package receipt to \$RUNNER_TEMP/bundle.json."
-          exit 1
+          crash="$RUNNER_TEMP/crashpad"
+          mkdir -p "$crash/native-build/downloads" "$crash/host-tools"
+          gh release download "$BUILD_INPUTS_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --dir "$crash/native-build/downloads" --pattern '*.tar.gz'
+          gh release download "$BUILD_INPUTS_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --dir "$crash/host-tools" --pattern 'gn.exe' --pattern 'ninja.exe'
+          echo "CRASHPAD_BUNDLE=$crash" >> "$GITHUB_ENV"
+
+      - name: Prepare the repository-pinned Rust
+        working-directory: Substitute
+        run: rustup show active-toolchain
+
+      - name: Build the application, crash handler and provisioning worker in release mode
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $instance = & $vswhere -version '[17.0,18.0)' -products Microsoft.VisualStudio.Product.Enterprise -property installationPath
+          if (-not $instance -or @($instance).Count -ne 1) {
+            throw 'Expected one Visual Studio 2022 Enterprise instance on the Windows runner.'
+          }
+          $version = & $vswhere -version '[17.0,18.0)' -products Microsoft.VisualStudio.Product.Enterprise -property catalog_productDisplayVersion
+          $msvc = (Get-Content -LiteralPath (Join-Path $instance 'VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt') -TotalCount 1).Trim()
+          $reader = Join-Path $instance 'VC\Tools\Llvm\x64\bin\llvm-readobj.exe'
+          if (-not (Test-Path -LiteralPath $reader -PathType Leaf)) { throw "The selected instance has no $reader." }
+
+          # Crash handler: extract and verify the pinned sources, apply the reviewed changes,
+          # then build with the selected instance's default toolset and the pinned SDK.
+          $crash = $env:CRASHPAD_BUNDLE
+          $tools = Join-Path $env:GITHUB_WORKSPACE 'Substitute\tools\crashpad'
+          python (Join-Path $tools 'extract_source.py') --bundle-root $crash
+          python (Join-Path $tools 'prepare_source.py') --source "$crash\prepared\crashpad" `
+            --authored (Join-Path $env:GITHUB_WORKSPACE 'Substitute\native\crashpad') `
+            --receipt "$crash\prepare-receipt.json" --downloads "$crash\native-build\downloads"
+          python (Join-Path $tools 'build_native.py') --source "$crash\prepared\crashpad" `
+            --artifacts "$crash\native-build" --tools "$crash\host-tools" --bundle-root $crash `
+            --visual-studio $instance --visual-studio-version $version --msvc $msvc `
+            --sdk $env:WINDOWS_SDK --jobs 4
+
+          Import-Module (Join-Path $instance 'Common7\Tools\Microsoft.VisualStudio.DevShell.dll')
+          Enter-VsDevShell -VsInstallPath $instance -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64 -winsdk=$env:WINDOWS_SDK" | Out-Null
+          $parser = Join-Path $env:GITHUB_WORKSPACE 'Substitute\tools\crashpad\prebuilt\x86_64-pc-windows-msvc'
+          $expected = (Get-Content -LiteralPath (Join-Path $parser 'committed_dump_parser.lib.sha256') -TotalCount 1).Split(' ')[0]
+          $actual = (Get-FileHash -LiteralPath (Join-Path $parser 'committed_dump_parser.lib') -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "committed_dump_parser.lib is $actual, but its recorded SHA-256 is $expected." }
+          $env:SUGAR_COMMITTED_PARSER_LIB = $parser
+          $env:CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER = (Get-Command link.exe).Source
+          $env:CARGO_TARGET_DIR = Join-Path $env:RUNNER_TEMP 'target'
+          $env:SUGARSUBSTITUTE_RELEASE_ANCHOR = Join-Path $env:GITHUB_WORKSPACE $env:RELEASE_ANCHOR
+          $application = Join-Path $env:RUNNER_TEMP 'application'
+          node Substitute/installer/release/build-application.mjs $application release windows-x86_64 $reader
+
+          $env:SUBSTITUTE_INSTALLER_BUILD = Join-Path $env:RUNNER_TEMP 'installer'
+          node Substitute/installer/build.mjs
+          node Substitute/installer/prepare-runtime.mjs
+
+          "APPLICATION_BUILD=$application" >> $env:GITHUB_ENV
+          "CRASH_HANDLER_BUILD=$crash\native-build\out-msvc-x64" >> $env:GITHUB_ENV
+          "SUBSTITUTE_INSTALLER_BUILD=$env:SUBSTITUTE_INSTALLER_BUILD" >> $env:GITHUB_ENV
+          "LLVM_READOBJ=$reader" >> $env:GITHUB_ENV
+
+      - name: Sign the release manifest
+        env:
+          RELEASE_MANIFEST_KEY: ${{ secrets.RELEASE_MANIFEST_KEY }}
+        run: |
+          node Substitute/installer/release/sign-release.mjs "$APPLICATION_BUILD" "$CRASH_HANDLER_BUILD" \
+            "$GITHUB_WORKSPACE/$RELEASE_ANCHOR" "$RELEASE_ID" "$(python -c 'import sys; print(sys.executable)')" \
+            "$RUNNER_TEMP/signed"
+
+      - name: Assemble the release bundle
+        run: |
+          bundle="$RUNNER_TEMP/bundle"
+          node Substitute/installer/package.mjs "$RUNNER_TEMP/signed" "$GITHUB_WORKSPACE/Sugar" "$bundle" \
+            "$RELEASE_ID" windows-x86_64 "$LLVM_READOBJ" > "$RUNNER_TEMP/bundle.json"
+          echo "RELEASE_BUNDLE=$bundle" >> "$GITHUB_ENV"
 
       - name: Build the signing tool with the repository-pinned Rust
         working-directory: Substitute
