@@ -26,7 +26,7 @@
 - Branch: governance and fmt pass. Windows-target workspace clippy (all targets and features, `-D warnings`) and rustdoc pass.
 - Merged with `origin/lane/ci` (local only): clean merge, no stale fingerprints, governance and Windows clippy pass. Linux check with lints capped has no hard errors, and none of `lane/ci`'s remaining Linux lints are in this lane's files.
 - Linux tests: application and contracts pass.
-- CI runs 43338293318 and 43340366209: failed on all OSes at the submodule baseline only.
+- CI runs 43338293318, 43340366209, 43345466481: failed on all OSes at the submodule baseline only.
 
 ## Next
 - Integrator: merge `lane/ci` here when green. Once Windows tests link, fix any failure.
