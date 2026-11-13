@@ -127,25 +127,36 @@ async function settledRows(page: Page, width: number): Promise<{ boxes: LineBox[
 }
 
 /**
- * Measure the editor width at which the first paragraph just fits one row under this platform's font.
+ * Measure an editor width at which only the first paragraph stays on one row under this font.
  *
- * Every other paragraph is longer than the first and shorter than twice its length, so at this width
- * each of them wraps into exactly two rows.
+ * Each paragraph is laid out on one row first. The chosen text width lies midway between the first
+ * paragraph and the narrowest other one, so the first fits and every other paragraph wraps; none is
+ * more than twice as wide as the first, so each wraps into exactly two rows.
  */
 async function fittedWidth(page: Page): Promise<number> {
   await settledRows(page, 4000);
   return page.evaluate(() => {
     const editor = document.querySelector<HTMLElement>('[data-sc-prompt-editor]');
-    const line = document.querySelector<HTMLElement>('.cm-content .cm-line');
-    if (!editor || !line) throw new Error('The prompt editor has no painted first line');
+    const lines = [...document.querySelectorAll<HTMLElement>('.cm-content .cm-line')];
+    const first = lines[0];
+    if (!editor || !first) throw new Error('The prompt editor has no painted first line');
     // The presented card is scaled by a transform; layout widths stay unscaled.
     const zoom = editor.getBoundingClientRect().width / editor.offsetWidth;
-    const text = document.createRange();
-    text.selectNodeContents(line);
-    const style = getComputedStyle(line);
+    const widths = lines.map((line) => {
+      const text = document.createRange();
+      text.selectNodeContents(line);
+      return text.getBoundingClientRect().width / zoom;
+    });
+    const [own = 0, ...rest] = widths;
+    const others = rest.filter((width) => width > 0);
+    const narrowest = Math.min(...others);
+    if (!(narrowest > own + 2))
+      throw new Error(
+        `No width wraps only the later paragraphs: first ${String(own)}px, narrowest other ${String(narrowest)}px`,
+      );
+    const style = getComputedStyle(first);
     const padding = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
-    const fitted = text.getBoundingClientRect().width / zoom + padding + 6;
-    return Math.ceil(editor.offsetWidth - line.clientWidth + fitted);
+    return Math.round(editor.offsetWidth - first.clientWidth + padding + (own + narrowest) / 2);
   });
 }
 
