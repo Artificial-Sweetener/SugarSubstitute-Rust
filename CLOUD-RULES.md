@@ -48,6 +48,11 @@ Then run `cargo xtask check` from `Substitute/` and resync any governance finger
 - Windows-only code and tests cannot run in your container. GitHub Actions is the verifier: push, then start "Substitute verification" (and "Sugar quality" for pack changes) on your branch with `workflow_dispatch` (`gh workflow run ... --ref <branch>`) if push did not trigger it, and read the results with `gh run view`. Fix every failure at its root.
 - Never weaken a test, gate, budget, waiver limit or assertion. Every fix lands with a regression test that fails before and passes after.
 - No wall-clock pass/fail: a test must never pass or fail because a fixed number of seconds elapsed. Use injected or fake clocks, or wait for the observed outcome. Product network operations still have bounded timeouts, tested with fake clocks.
+- **Main's CI is red before any lane change.** Runs 43327781938 and 43327786110 on main failed for reasons that aren't yours:
+  - Substitute verification on every OS: xtask cannot resolve `third_party/comfy-desktop/src/main/lib/download.ts` (the submodule isn't checked out in CI).
+  - Sugar quality on ubuntu: mypy flags Windows-only APIs in platform-guarded modules.
+  - Sugar quality on windows: "Select exactly one installation of the declared VS2022 product".
+  Don't fix these in a lane branch. One owner repairs the baseline (branch `lane/ci` if it exists, otherwise the integrator on `integration`). Until then, judge your work by your own local `cargo xtask check` and focused tests, plus any CI failure that is new compared with main's baseline. Once the baseline fix exists, merge it into your branch and get fully green.
 - Native proofs on a hidden Windows desktop cannot run in the cloud. List each one your items need under "Unproven" in your report.
 
 ## Lane report
