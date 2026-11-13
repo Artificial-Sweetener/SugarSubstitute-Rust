@@ -64,7 +64,13 @@ fn healthy_identity_advances_only_after_acceptance_and_survives_a_failed_newer_r
             let mut run = InstallationRun::acquire(store.clone(), context)?;
             let trial =
                 run.begin_trial(&store.load(context)?.ok_or("Selection missing")?, context)?;
-            run.reject(&trial, context)?;
+            run.finish_trial(
+                &trial,
+                sugarsubstitute_contracts::installation::TrialVerdict::Bad(
+                    sugarsubstitute_contracts::installation::BadTrial::StartupFailed,
+                ),
+                context,
+            )?;
         }
         drop(newer);
         let request = trust.application_request(Channel::Release, context)?;
@@ -82,7 +88,7 @@ fn healthy_identity_advances_only_after_acceptance_and_survives_a_failed_newer_r
                 .offer(older.metadata.metadata(), &request, &older.descriptor, NOW, context)
                 .is_err()
         );
-        assert_eq!(store.load(context)?.ok_or("Selection missing")?.rejected().len(), 1);
+        assert_eq!(store.load(context)?.ok_or("Selection missing")?.strikes().len(), 1);
         fixture.preserved()
     })
 }

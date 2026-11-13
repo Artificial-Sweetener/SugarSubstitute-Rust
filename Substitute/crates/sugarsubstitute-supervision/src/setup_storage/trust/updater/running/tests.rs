@@ -61,7 +61,7 @@ fn separately_admitted_running_image_leaves_capacity_for_cached_startup() -> Tes
         storage::RESERVATION_BYTES + storage::TRUST_OPERATION_RESERVATION_BYTES,
         move |context| {
             let image = trust.retain_running_updater(&executable, &context)?;
-            image.require_activation()?;
+            image.require_engine()?;
             Ok(image)
         },
     )?;

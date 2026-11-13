@@ -56,8 +56,12 @@ impl Lease {
         }
         // SAFETY: The authenticated parent duplicate remains owned and cannot be
         // substituted by PID reuse. Only the custody watchdog invokes this method.
-        let result =
-            unsafe { ::windows::Win32::System::Threading::TerminateProcess(process, 0x53535744) };
+        let result = unsafe {
+            ::windows::Win32::System::Threading::TerminateProcess(
+                process,
+                sugarsubstitute_contracts::installation::UNRESPONSIVE_EXIT_STATUS,
+            )
+        };
         // SAFETY: Natural exit can race termination; only an actual signaled
         // handle permits accepting that race. The wait owner still observes exit.
         if result.is_err() && unsafe { WaitForSingleObject(process, 0) } == WAIT_OBJECT_0 {

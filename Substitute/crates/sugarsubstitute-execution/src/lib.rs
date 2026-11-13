@@ -2,9 +2,6 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Own bounded application scheduling, cancellation, result delivery and worker teardown.
 
-#[cfg(windows)]
-#[allow(unsafe_code)]
-pub mod activation_channel;
 mod admission;
 mod admission_liveness;
 mod admission_timing;
@@ -119,6 +116,9 @@ mod windows_fixture_forwarding;
 /// Bounded, cancellable whole-file byte-range lock waits for blocking storage jobs.
 #[cfg(windows)]
 pub mod file_lock;
+/// Bounded, cancellable waits for the first of several signalled kernel objects.
+#[cfg(windows)]
+pub mod handle_wait;
 #[cfg(windows)]
 pub mod windows;
 #[cfg(windows)]

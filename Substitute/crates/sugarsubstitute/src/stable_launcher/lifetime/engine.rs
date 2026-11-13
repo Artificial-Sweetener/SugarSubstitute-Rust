@@ -46,7 +46,7 @@ impl Guard {
         };
         let image =
             trust.retain_running_updater(&self.executable, context).map_err(io::Error::other)?;
-        image.require_activation()?;
+        image.require_engine()?;
         *slot = Custody::Image { _image: image };
         Ok(())
     }
@@ -59,15 +59,14 @@ impl Guard {
 }
 
 impl Launcher {
-    /// This role may activate locally cached work, but cannot delegate to another engine.
-    pub(in crate::stable_launcher) fn activation(
-        source: Arc<sugarsubstitute_supervision::application_launch::broker::ActivationSender>,
+    /// A newer accepted updater running as the launch engine: it verifies its own image, may
+    /// start locally cached work and creates the application itself, but never delegates again.
+    pub(in crate::stable_launcher) fn update_engine(
+        root: PathBuf,
         executable: PathBuf,
         repository: [u8; 32],
     ) -> Self {
-        let root = source.installation().to_owned();
         let mut launcher = Self::new(root.clone());
-        launcher.source = Some(source);
         launcher.engine = Some(Guard::new(root, executable, repository));
         launcher.choice = Choice::OpenEngine;
         launcher

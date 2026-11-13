@@ -70,6 +70,9 @@ pub fn run_headless(lifetime: &mut impl HeadlessLifetime) -> Result<(), DesktopE
             match event {
                 Event::UserEvent(HeadlessAction::Completions) => state.activity(lifetime),
                 Event::MainEventsCleared => {
+                    if session_ending(session_end.as_ref()) {
+                        lifetime.session_ending();
+                    }
                     state.activity(lifetime);
                     state.poll_shutdown(lifetime);
                 }
@@ -112,6 +115,20 @@ fn headless_session_end() -> Option<crate::windows_session_end::SessionEndWatch>
 #[cfg(not(target_os = "windows"))]
 fn headless_session_end() -> Option<NoSessionEnd> {
     None
+}
+
+/// Take a waiting signal; only a session that is actually ending is reported.
+#[cfg(target_os = "windows")]
+fn session_ending(watch: Option<&crate::windows_session_end::SessionEndWatch>) -> bool {
+    matches!(
+        watch.and_then(crate::windows_session_end::SessionEndWatch::take_signal),
+        Some(crate::windows_session_end::SessionEndSignal::Ending { .. })
+    )
+}
+
+#[cfg(not(target_os = "windows"))]
+fn session_ending(_: Option<&NoSessionEnd>) -> bool {
+    false
 }
 
 /// Platforms without Tao's session-end exit need no watch.

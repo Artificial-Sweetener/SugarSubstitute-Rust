@@ -75,7 +75,11 @@ fn recovery_preserves_history_user_files_and_damaged_candidate_without_applicati
                 )?,
             };
             history = history
-                .prepare(generation.clone(), PreparationIntent::Automatic)?
+                .prepare(
+                    generation.clone(),
+                    PreparationIntent::Automatic,
+                    crate::setup_storage::selection::unix_now()?,
+                )?
                 .prepared(&generation)?
                 .begin_trial()?;
             let Some(Candidate::Trial { attempt }) = history.candidate() else {
@@ -120,15 +124,16 @@ fn recovery_preserves_history_user_files_and_damaged_candidate_without_applicati
 }
 
 #[test]
-fn automatic_retry_quarantines_abandoned_digest_and_explicit_repair_restages_it() -> TestResult {
+fn a_second_abandoned_trial_withholds_the_digest_and_explicit_repair_restages_it() -> TestResult {
     run(|context| {
         let root = worker::installation(151, context)?;
         let workspace = tempfile::tempdir()?;
+        // One abandoned engine trial is one strike; automatic staging still retries it.
+        drop(trial(root.path(), workspace.path(), context)?);
         let trial = trial(root.path(), workspace.path(), context)?;
         let attempt = trial.attempt().clone();
         drop(trial);
         let trust = TrustStore::open(root.path(), [92; 32], context)?;
-        let pending = trust.updater_selection(context)?;
         assert!(
             package(
                 root.path(),
@@ -141,7 +146,15 @@ fn automatic_retry_quarantines_abandoned_digest_and_explicit_repair_restages_it(
             .stage(|| NOW, context)
             .is_err()
         );
-        assert_eq!(trust.updater_selection(context)?, pending.reject(&attempt)?);
+        let withheld = trust.updater_selection(context)?;
+        assert!(withheld.candidate().is_none());
+        assert_eq!(withheld.rollback(), Some(&attempt.generation));
+        assert!(
+            withheld.withheld(
+                &attempt.generation.package,
+                crate::setup_storage::selection::unix_now()?
+            )
+        );
         let repaired = package(
             root.path(),
             workspace.path(),
@@ -169,7 +182,7 @@ fn newer_authenticated_payload_recovers_abandoned_trial_during_normal_staging() 
         let trial = trial(root.path(), workspace.path(), context)?;
         let previous = trial.attempt().generation.clone();
         drop(trial);
-        let newer = br#"{"schema_version":2,"preparation_protocols":[1,2],"installation_schemas":[2],"probe_protocols":[2]}"#;
+        let newer = br#"{"schema_version":2,"preparation_protocols":[1,2],"installation_schemas":[3],"probe_protocols":[2]}"#;
         let staged = package(
             root.path(),
             workspace.path(),
@@ -255,8 +268,10 @@ fn cancellation_after_fresh_exclusion_preserves_trial_and_releases_the_native_ha
             let before = std::fs::read(&selection_path)?;
             let rendezvous = trust.root.path().join("updater-preparation-v1");
             let observed = rendezvous.clone();
-            // Expire only once the real share-none acquisition denies another data reader.
-            clock.observe_checks(move || std::fs::read(&observed).is_err())?;
+            // Expire only once the real fresh acquisition holds its exclusion slot.
+            clock.observe_checks(move || {
+                crate::durable_storage::protection::exclusion_held(&observed).unwrap_or(false)
+            })?;
             assert!(trust.recover_updater_trial(context).is_err());
             assert_eq!(std::fs::read(selection_path)?, before);
             assert!(std::fs::read(rendezvous)?.is_empty());

@@ -21,11 +21,7 @@ pub(super) fn acquire(
     context: &JobContext,
 ) -> io::Result<File> {
     protection.exclusive_rendezvous(path, context).map_err(|cause| {
-        if cause
-            .get_ref()
-            .and_then(|cause| cause.downcast_ref::<windows::core::Error>())
-            .is_some_and(|cause| cause.code() == windows::core::HRESULT::from_win32(32))
-        {
+        if protection::is_busy(&cause) {
             io::Error::new(io::ErrorKind::WouldBlock, WriterBusy(cause))
         } else {
             cause

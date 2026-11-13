@@ -22,7 +22,13 @@ impl Launcher {
     /// Ordinary automatic preparation has no durable choice and keeps its live trust checks.
     pub(super) fn installed(&mut self, launch: Option<ApplicationLaunch>) {
         self.launch = launch;
-        self.choice = if self.launch.is_some() { Choice::Trial } else { Choice::Cache };
+        self.choice = if self.launch.is_some() {
+            Choice::Trial
+        } else if self.accepted_only {
+            Choice::Accepted
+        } else {
+            Choice::Cache
+        };
     }
 }
 

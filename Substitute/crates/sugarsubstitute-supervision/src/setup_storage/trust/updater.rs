@@ -101,11 +101,11 @@ impl TrustStore {
         request: &Request,
         offer: &VerifiedOffer,
         digest: &str,
-        preparation: &File,
+        preparation: &crate::durable_storage::protection::SlotExclusion,
         context: &JobContext,
     ) -> Result<Generation, TrustFailure> {
         protection::with_domain(context, |protection| -> Result<_, TrustFailure> {
-            self.verify_updater_preparation(preparation, protection, context)?;
+            self.verify_updater_preparation(preparation.witness(), protection, context)?;
             let state = self.updater_locked(protection, SelectionRead::Initialize, context)?;
             let state = self.recover_updater_locked(state, protection, context)?;
             if let Some(candidate) = state.candidate()
@@ -128,13 +128,15 @@ impl TrustStore {
                 package: PackageDigest::new(digest.to_owned()).map_err(io::Error::other)?,
                 release: crate::setup_storage::signed_release(offer)?,
             };
+            let now = crate::setup_storage::selection::unix_now().map_err(io::Error::other)?;
             let next = match state.candidate() {
                 Some(candidate) => state.supersede_preparation(
                     candidate.generation(),
                     generation.clone(),
                     request.intent,
+                    now,
                 ),
-                None => state.prepare(generation.clone(), request.intent),
+                None => state.prepare(generation.clone(), request.intent, now),
             }
             .map_err(io::Error::other)?;
             let receipt = Receipt {

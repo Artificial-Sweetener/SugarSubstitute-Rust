@@ -166,7 +166,7 @@ fn pending(
     Ok(Some(Pending { transition, identity, current, next_present }))
 }
 
-/// Current selection readers and previously accepted launch protocols must remain usable.
+/// A transition names two different launchers and the next one reads the launch pointer.
 fn validate(transition: &Transition) -> io::Result<()> {
     if transition.schema_version != 1 || transition.previous == transition.next {
         return Err(invalid("Unsupported or empty launcher transition"));
@@ -174,15 +174,12 @@ fn validate(transition: &Transition) -> io::Result<()> {
     require_replacement(&transition.previous, &transition.next)
 }
 
-/// A rescue candidate must preserve both sides of an interrupted launcher's supported contract.
+/// The next launcher must be able to serve as the thin stable entry; both records must be valid.
 fn require_replacement(previous: &record::Record, next: &record::Record) -> io::Result<()> {
     previous.validate()?;
     next.validate()?;
     LauncherContract::decode(next.contract.as_bytes())
         .map_err(io::Error::other)?
-        .require_replacement_of(
-            &LauncherContract::decode(previous.contract.as_bytes()).map_err(io::Error::other)?,
-            sugarsubstitute_contracts::installation::SCHEMA_VERSION,
-        )
+        .require_stable_entry()
         .map_err(io::Error::other)
 }

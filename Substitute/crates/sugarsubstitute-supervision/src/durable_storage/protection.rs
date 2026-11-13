@@ -31,9 +31,13 @@ mod outcome;
 mod publication;
 mod retirement;
 mod runtime_storage;
+mod slots;
 mod stage;
 pub(crate) use outcome::{DomainFailure, with_domain};
 pub(crate) use publication::Publication;
+#[cfg(test)]
+pub(crate) use slots::exclusion_held;
+pub(crate) use slots::{SlotExclusion, is_busy};
 
 /// Retain account and directory custody across one admitted installation preparation.
 pub(crate) struct Protection {
@@ -202,10 +206,29 @@ impl Protection {
         Ok(file)
     }
 
-    /// Acquire exclusion attached to the native file object until its last handle closes.
-    /// Duplicates retain this exclusion; opening an older shared rendezvous also conflicts.
-    /// The caller pins the parent and retains custody through its entire owned lifetime.
+    /// Acquire a whole-file byte-range lock on a shared rendezvous without waiting.
+    /// Foreign readers (indexers, antivirus, backup) never conflict. The lock belongs to this
+    /// process and this handle: never duplicate or transfer it; closing it releases the lock.
+    /// The caller pins the parent and retains the file through its entire owned lifetime.
+    /// # Errors
+    /// `is_busy` while another owner holds the lock; storage errors otherwise.
     pub(crate) fn exclusive_rendezvous(
+        &self,
+        path: &Path,
+        context: &JobContext,
+    ) -> io::Result<File> {
+        let file = self.rendezvous(path, context)?;
+        match file.try_lock() {
+            Ok(()) => Ok(file),
+            Err(std::fs::TryLockError::WouldBlock) => Err(slots::busy()),
+            Err(std::fs::TryLockError::Error(cause)) => Err(cause),
+        }
+    }
+
+    /// Acquire exclusion attached to the native file object until its last handle closes, so
+    /// duplicates in another process retain it. Only the installation run lock uses this, until
+    /// its trial handoff moves to slot exclusion.
+    pub(crate) fn transferable_rendezvous(
         &self,
         path: &Path,
         context: &JobContext,

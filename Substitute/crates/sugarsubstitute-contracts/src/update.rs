@@ -135,6 +135,9 @@ pub enum Admission {
     UpdateEngine,
     /// This engine cannot consume the package/protocol; use a compatible installer.
     Installer,
+    /// The installation withholds this package after repeated bad trials; nothing is downloaded
+    /// until the withholding expires or a newer release is published.
+    Withheld,
 }
 
 #[derive(Deserialize)]

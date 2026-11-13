@@ -128,9 +128,20 @@ impl State {
             return Ok(false);
         }
         let proof = self.control.cleanup(Moment::from_nanos(u64::MAX))?;
-        let authorized =
-            self.parent.as_ref().is_some_and(|parent| parent.signaled()) || self.finish_authorized;
-        if !self.trial.settle(proof.until(), authorized)? {
+        let exit = if self.finish_authorized {
+            Some(sugarsubstitute_contracts::installation::HostExit::Finished)
+        } else {
+            match self.parent.as_mut() {
+                Some(parent) if parent.signaled() => {
+                    let exit = parent
+                        .read_exit(&proof)
+                        .map_err(|cause| ClaimError::new("custody_parent_exit", cause))?;
+                    Some(sugarsubstitute_contracts::installation::HostExit::Ended(exit.exit_code))
+                }
+                _ => None,
+            }
+        };
+        if !self.trial.settle(proof.until(), exit)? {
             return Ok(false);
         }
         if let Some(parent) = &mut self.parent {

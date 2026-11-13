@@ -55,7 +55,7 @@ fn cached_startup_transfers_only_an_observed_accepted_activation_engine() -> Tes
     assert_eq!(worker.progress(), Progress::Closed);
     assert!(worker.take_activation().is_err());
     pipeline.run(4096, move |_| {
-        image.require_activation()?;
+        image.require_engine()?;
         assert!(std::fs::OpenOptions::new().write(true).open(image.executable()).is_err());
         drop(image);
         Ok(())

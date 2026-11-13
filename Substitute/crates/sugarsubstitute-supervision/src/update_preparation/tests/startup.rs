@@ -41,32 +41,21 @@ fn online_reopened_trial_retires_metadata_buffers_before_launch_admission() -> T
     assert_unlocked(&mut pipeline, &fixture)
 }
 
-/// Exercise launch and recovery while engine pins, candidate and channel share the real ledger.
+/// Exercise launch and recovery while engine pins and candidate share the real ledger.
 fn trial_with_engine_guard(
     pipeline: &mut Pipeline,
     worker: &mut Worker,
     guard: sugarsubstitute_contracts::execution::MemoryClaim,
 ) -> TestResult {
-    use sugarsubstitute_execution::activation_channel::PreparedChannel;
     let launch = ApplicationLaunch::trial(Arc::from(worker.take_candidate()?));
     let held = launch.clone();
     pipeline.run(SIGNED_TRANSFER_RESERVATION_BYTES, move |context| {
         held.prepare_trial(|| NOW, &context)?;
         Ok(())
     })?;
-    let held = launch.clone();
-    let (mut channel, offer) =
-        pipeline.run(crate::application_launch::ACTIVATION_RESERVATION_BYTES, move |context| {
-            let channel = PreparedChannel::prepare(&context)?;
-            let offer = held.offer(channel.identity(), &context)?;
-            Ok((channel, offer))
-        })?;
     pipeline.run(CREATION_RESERVATION_BYTES, |_| Ok(()))?;
     pipeline.run(RECOVERY_RESERVATION_BYTES, move |context| {
-        channel.retire_child()?;
-        assert!(channel.endpoint().retire(&context)?);
         assert_eq!(launch.recover_and_retire(&context)?, CreationOutcome::NotCreated);
-        drop(offer);
         drop(guard);
         Ok(())
     })?;

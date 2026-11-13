@@ -58,6 +58,9 @@ pub struct ReportMessages {
     pub host_failed: &'static str,
     /// Accepted startup failure mechanism.
     pub startup_failed: &'static str,
+    /// Startup cannot continue because the installation was changed by a newer release in a way
+    /// this release cannot read; plain words that reinstalling keeps the user's files.
+    pub reinstall_needed: &'static str,
     /// Observed Rust panic mechanism.
     pub panic: &'static str,
     /// Observed abort mechanism.
@@ -120,7 +123,7 @@ pub struct ReportMessages {
 
 impl ReportMessages {
     /// Borrow every owned label for complete-coverage validation.
-    pub fn labels(&self) -> [&'static str; 68] {
+    pub fn labels(&self) -> [&'static str; 69] {
         [
             self.title,
             self.explanation,
@@ -143,6 +146,7 @@ impl ReportMessages {
             self.unexplained,
             self.host_failed,
             self.startup_failed,
+            self.reinstall_needed,
             self.panic,
             self.abort,
             self.native_fault,

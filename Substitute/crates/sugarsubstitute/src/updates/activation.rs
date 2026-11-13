@@ -1,18 +1,23 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Enter authenticated cached preparation with the once-captured native creator channel.
-use std::{error::Error, sync::Arc};
-use sugarsubstitute_supervision::application_launch::broker::ActivationSender;
+//! Run this updater as the launch engine when the selected release needs a newer updater.
+use std::error::Error;
+use sugarsubstitute_supervision::application_launch::EngineLaunch;
 
-/// Compiled distribution configuration supplies repository authority; entry supplies local custody.
-pub(super) fn run(source: Arc<ActivationSender>) -> Result<(), Box<dyn Error>> {
-    let root = source.installation().to_owned();
+/// Compiled distribution configuration supplies repository authority; entry supplies the
+/// installation its creator named.
+pub(super) fn run(launch: &EngineLaunch) -> Result<(), Box<dyn Error>> {
+    let root = launch.installation().to_owned();
     let configuration = super::configuration(
         super::EMBEDDED,
         root.clone(),
         root.join(".update-workspace"),
         std::time::Duration::from_secs(30),
     )?
-    .ok_or("Startup activation requires a configured update engine")?;
-    crate::stable_launcher::activate(source, std::env::current_exe()?, configuration.repository)
+    .ok_or("The launch engine role requires a configured update engine")?;
+    crate::stable_launcher::run_update_engine(
+        root,
+        std::env::current_exe()?,
+        configuration.repository,
+    )
 }

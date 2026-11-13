@@ -27,11 +27,6 @@ pub struct TrialTransfer {
     custody: custody::Transfer,
 }
 impl TrialTransfer {
-    /// Native broker pins preserve the exact admitted candidate independently of engine lifetime.
-    pub(crate) fn launch_pins(&self) -> impl Iterator<Item = &std::fs::File> {
-        self.candidate.launch_pins()
-    }
-
     /// Exact pinned candidate directory used for process creation.
     pub fn directory(&self) -> &Path {
         self.candidate.directory()
@@ -122,22 +117,17 @@ impl TrialApplication {
         super::launch::entrypoint::repair(&self.run.custody, &self.application, context)
     }
 
-    /// Reject only after actual native custody proves the candidate's family has settled.
-    /// # Errors
-    /// Preserves changed state, cancellation and publication failures; acceptance cannot be undone.
-    pub fn reject(&self, context: &JobContext) -> Result<InstallationRecord, SelectionFailure> {
-        self.run.reject(&self.trial, context)
-    }
-
-    /// Resolve this attempt after actual native process-family settlement, retaining acceptance
-    /// that may have committed before a lost worker result. Repeated calls preserve preparation.
+    /// Resolve this attempt with the coordinator's classified `verdict`, retaining acceptance
+    /// that may have committed before a lost worker result and any earlier settlement of this
+    /// attempt. Repeated calls preserve preparation.
     /// # Errors
     /// Preserves changed activation history, cancellation and native publication failures.
     pub fn finish_settled(
         &self,
+        verdict: sugarsubstitute_contracts::installation::TrialVerdict,
         context: &JobContext,
     ) -> Result<InstallationRecord, SelectionFailure> {
-        self.run.finish_trial(&self.trial, context)
+        self.run.finish_trial(&self.trial, verdict, context)
     }
 }
 

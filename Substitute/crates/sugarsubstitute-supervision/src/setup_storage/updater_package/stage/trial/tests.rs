@@ -12,26 +12,28 @@ use sugarsubstitute_contracts::application_launch::updater::CURRENT_UPDATER_CONT
 use sugarsubstitute_update::fixture::{EXPIRES, NOW};
 
 #[test]
-fn abandoned_recovery_waits_for_the_last_actual_trial_handle_duplicate() -> TestResult {
+fn abandoned_recovery_waits_for_the_trial_owner_and_not_for_witness_duplicates() -> TestResult {
     run(|context| {
         let root = worker::installation(149, context)?;
         let workspace = tempfile::tempdir()?;
         let mut trial = prepare(root.path(), workspace.path(), context)?.reserve_trial(context)?;
         trial.publish(|| NOW, context)?;
-        let duplicate = trial.prepared._preparation.try_clone()?;
+        // A witness duplicate left in another holder proves custody only while the owner lives.
+        let duplicate = trial.prepared._preparation.witness().try_clone()?;
         let trust = TrustStore::open(root.path(), [92; 32], context)?;
         let pending = trust.updater_selection(context)?;
         assert!(trust.recover_updater_trial(context).is_err());
         assert_eq!(trust.updater_selection(context)?, pending);
         drop(trial);
-        assert!(trust.recover_updater_trial(context).is_err());
-        assert_eq!(trust.updater_selection(context)?, pending);
-        drop(duplicate);
         let recovered = trust.recover_updater_trial(context)?;
         let Some(Candidate::Trial { attempt }) = pending.candidate() else {
             return Err("Expected published trial".into());
         };
-        assert_eq!(recovered, pending.reject(attempt)?);
+        assert_eq!(
+            recovered,
+            pending.reject(attempt, crate::setup_storage::selection::unix_now()?)?
+        );
+        drop(duplicate);
         Ok(())
     })
 }
@@ -42,7 +44,7 @@ fn historical_preparation_only_engine_remains_staged_without_a_probe_trial() -> 
         let root = worker::installation(127, context)?;
         let workspace = tempfile::tempdir()?;
         let historical =
-            br#"{"schema_version":1,"preparation_protocols":[1],"installation_schemas":[2]}"#;
+            br#"{"schema_version":1,"preparation_protocols":[1],"installation_schemas":[3]}"#;
         let (bytes, _) = archive(historical)?;
         let (trust, offer, download) = evidence(root.path(), &bytes, Component::Updater, context)?;
         let prepared = UpdaterPackage::import(
