@@ -3043,6 +3043,14 @@ disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Threshold and expiry transitions use actual signing keys, including revoked-key attempts. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/build.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:7d92734bd4c731c92b98e9d34cf8bf7e1cfda0d52c79a84085c390c380225577"
+capabilities = ["std::fs::File::open", "std::fs::write", "method metadata"]
+disposition = "boundary"
+rationale = "Build-time release-manifest anchor input and its generated output for sugarsubstitute-supervision; execution occurs in the package build, before runtime composition."
+boundary = "build"
+[[records]]
 path = "crates/sugarsubstitute/build.rs"
 owner = "sugarsubstitute"
 source_sha256 = "sha256:04ce4d2b879b2059197a795ca52ca9de69370caad213f9c73e563537da825a81"
@@ -3546,15 +3554,31 @@ boundary = "native_custody"
 [[records]]
 path = "tools/crashpad/build_native.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:05cbc7fecc5de69fbfb62ac0e76fc6812719fe40800832f0fc7f74dc6a053971"
+source_sha256 = "sha256:31702441cd2365eb54f550443ff104d1f73eb3d9f1b365a4b17c513740322dd8"
 capabilities = ["open", "pathlib", "read_bytes", "read_text", "rglob", "stat", "write_text"]
 disposition = "tooling"
 rationale = "Repository tooling build_native.py: build native Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
 
 [[records]]
+path = "tools/crashpad/extract_source.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:c345a9713e0942c7a6e62ec3964aa231a5af96d1d6358a324177b81ba2349542"
+capabilities = ["open", "pathlib", "shutil"]
+disposition = "tooling"
+rationale = "Repository tooling extract_source.py: reads the pinned Crashpad archives and writes a fresh prepared source tree or isolated fixtures; runtime crates do not depend on this source."
+
+[[records]]
+path = "tools/crashpad/test_extract_source.py"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:19163248e3b71ac0868ae5321740296ee81ec9d447152beabf3608aec26311c0"
+capabilities = ["TemporaryDirectory", "open", "pathlib", "read_bytes", "tempfile"]
+disposition = "tooling"
+rationale = "Repository tooling test_extract_source.py: builds isolated archive fixtures and checks the extracted tree; runtime crates do not depend on this source."
+
+[[records]]
 path = "tools/crashpad/prepare_source.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:3114bfd26ba10b4a1ca3c9702350f30471dacdf5c1793d78c57e0a967e415c7f"
+source_sha256 = "sha256:ce0d915ef1a9372e2c2e9b1e8f4c246e32f9db20a6a77bac6b13146b898677d6"
 capabilities = ["iterdir", "open", "pathlib", "read_bytes", "read_text", "replace", "shutil", "write_bytes", "write_text"]
 disposition = "tooling"
 rationale = "Repository tooling prepare_source.py: prepare source Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -3570,8 +3594,8 @@ rationale = "Repository tooling repair_ninja.py: repair ninja Reads declared bui
 [[records]]
 path = "tools/crashpad/test_build_native.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:494efd26c51bd52d6e0b2c08e5c592388af91925a7eadd8dab2d2abea0a14c75"
-capabilities = ["TemporaryDirectory", "pathlib", "read_bytes", "read_text", "tempfile", "write_bytes"]
+source_sha256 = "sha256:fb3c3404ba7bb8e97b29d8113672cc99f1f8d7f694d0c1a1afa280c4b4ee12f8"
+capabilities = ["TemporaryDirectory", "pathlib", "read_bytes", "read_text", "tempfile", "write_bytes", "write_text"]
 disposition = "tooling"
 rationale = "Repository tooling test_build_native.py: test build native Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
 
@@ -3610,7 +3634,7 @@ rationale = "Repository tooling verify_source.py: verify source Reads declared b
 [[records]]
 path = "tools/local_k1/build_manifest.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:5f6a980f4834257424a128dde9989f238be95e1a4da2bb869b471f772b140f5b"
+source_sha256 = "sha256:f97b8dc1b77ef38e671ba9208adb2c377706e4934b06f8576cea7938bc588a43"
 capabilities = ["open", "pathlib"]
 disposition = "tooling"
 rationale = "Repository tooling build_manifest.py: build manifest Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -3674,7 +3698,7 @@ rationale = "Repository tooling signing.ps1: signing Reads declared build/check 
 [[records]]
 path = "tools/local_k1/test_build_manifest.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:53dab04d4551ae83c1e5f726eccb1cbc43daa28e33b0dbf33d848144aba26066"
+source_sha256 = "sha256:a6c6b6afe057a576c1e5fb94fd593b24eb3edee280dd89a06803c0e2162addda"
 capabilities = ["TemporaryDirectory", "open", "pathlib", "read_text", "tempfile", "write_bytes", "write_text"]
 disposition = "tooling"
 rationale = "Repository tooling test_build_manifest.py: test build manifest Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -5255,6 +5279,30 @@ source_sha256 = "sha256:76f7b41ec93d2f407a27e7cf2331873dc85d3dd989e468c5334dbdb4
 capabilities = ["method metadata", "std::fs::read_dir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Section 7 done criteria with a fault at every update write. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
+path = "installer/release/sign-release.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:b0d7864db07cfd86dd0259ded68ecab9c18d7c1838e20b3e46178b3c555c02e3"
+capabilities = ["fs", "mkdtemp", "node:fs/promises", "readFile", "writeFile"]
+disposition = "tooling"
+rationale = "Repository tooling sign-release.mjs: reads declared release build inputs and writes a new signed release directory or isolated fixtures; runtime crates do not depend on this source."
+
+[[records]]
+path = "installer/release/release-signature.test.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:2996f4c014224c62950d4d8aff9416651098d18207f4b8d3edf5eb9c219eee25"
+capabilities = ["fs", "mkdir", "mkdtemp", "node:fs/promises", "readFile", "writeFile"]
+disposition = "tooling"
+rationale = "Repository tooling release-signature.test.mjs: writes isolated build fixtures and checks the signed release directory; runtime crates do not depend on this source."
+
+[[records]]
+path = "installer/release/release-signature.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:098cebd2caec9b1f63ab717acb3617aa3b29e6917c3d56f0d6ee0d4b549ca195"
+capabilities = ["node:fs", "writeFileSync"]
+disposition = "tooling"
+rationale = "Repository tooling release-signature.mjs: writes a new release manifest key pair to two new files; runtime crates do not depend on this source."
 
 [[records]]
 path = "installer/release/update-distribution.mjs"

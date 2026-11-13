@@ -9,6 +9,8 @@ import unittest
 from unittest.mock import patch
 import build_native
 
+VERIFY_ENVIRONMENT = build_native.verify_environment
+
 
 class Source:
     def resolve(self):
@@ -120,7 +122,56 @@ class BuildTests(unittest.TestCase):
         self.assertIn("finished_owner_tests", self.runner.call_args_list[1].args[0])
         self.assertFalse((self.root / "build-receipt.json").exists())
 
-    def test_same_drive_output_preserves_bytes_and_rejects_relative_drive_defect(self):
+    def test_selected_toolchain_drives_instance_admission_environment_and_receipt(self):
+        self.inventory(False)
+        enterprise = Path(r"C:\Program Files\Microsoft Visual Studio\2022\Enterprise")
+        toolchain = build_native.Toolchain(enterprise, "17.14.2", "14.44.35207", "10.0.26100.0")
+        instances = [{"installationPath": str(enterprise), "catalog": {"productDisplayVersion": "17.14.2"}}]
+        self.enterContext(patch.object(build_native.subprocess, "check_output", return_value=json.dumps(instances)))
+        compiler = enterprise / "VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe"
+        original = Path.is_file
+        self.enterContext(patch.object(Path, "is_file", lambda path: path == compiler or original(path)))
+        build_native.run(Source(), self.root, self.tools, 1, toolchain=toolchain)
+        environment = self.runner.call_args_list[0].kwargs["env"]
+        self.assertEqual(environment["SUGAR_CRASHPAD_VS"], str(enterprise))
+        self.assertEqual(environment["SUGAR_CRASHPAD_SDK"], "10.0.26100.0")
+        self.assertEqual(environment["SUGAR_CRASHPAD_VCVARS"], "14.44")
+        self.assertIn('win_toolchain_path="' + enterprise.as_posix() + '"', self.runner.call_args_list[0].args[0][-1])
+        receipt = json.loads((self.root / "build-receipt.json").read_text())
+        self.assertEqual((receipt["visual_studio"], receipt["msvc"], receipt["sdk"]), ("17.14.2", "14.44.35207", "10.0.26100.0"))
+        self.assertEqual(receipt["visual_studio_path"], str(enterprise))
+
+    def test_selected_instance_must_have_the_named_version(self):
+        self.inventory(False)
+        toolchain = build_native.REVIEWED._replace(version="17.13.7")
+        with self.assertRaisesRegex(ValueError, "instance/version mismatch"):
+            build_native.run(Source(), self.root, self.tools, 1, toolchain=toolchain)
+        self.assertEqual(self.runner.call_count, 0)
+
+    def test_explicit_bundle_root_admits_only_its_own_prepared_source(self):
+        bundle = Path(r"D:\a\_temp\crashpad")
+        with patch.object(build_native, "regular"):
+            build_native.admitted_source(bundle / "prepared/crashpad", bundle / "native-build", bundle)
+            with self.assertRaisesRegex(ValueError, "authenticated bundle"):
+                build_native.admitted_source(bundle / "prepared/crashpad", bundle / "native-build")
+            with self.assertRaisesRegex(ValueError, "authenticated bundle"):
+                build_native.admitted_source(Path(r"D:\a\_temp\other\crashpad"), bundle / "native-build", bundle)
+
+    def test_selected_environment_must_carry_the_selected_versions(self):
+        toolchain = build_native.Toolchain(Path(r"C:\VS"), "17.14.2", "14.44.35207", "10.0.26100.0")
+        temporary = self.root / "temp"
+        temporary.mkdir()
+        bin_path = r"C:\VS\VC\Tools\MSVC\14.44.35207\bin\Hostx64\x64"
+
+        def write(include):
+            block = "\0".join([f"INCLUDE={include}", f"LIB={include}", f"TEMP={temporary}", f"TMP={temporary}", f"PATH={bin_path}"])
+            (self.output / "environment.amd64").write_text(block + "\0", encoding="utf-8")
+
+        write(r"C:\VS\VC\Tools\MSVC\14.44.35207\include;C:\Kits\10\Include\10.0.26100.0\ucrt")
+        VERIFY_ENVIRONMENT(self.output, temporary, toolchain)
+        write(r"C:\VS\VC\Tools\MSVC\14.43.34808\include;C:\Kits\10\Include\10.0.26100.0\ucrt")
+        with self.assertRaisesRegex(ValueError, "escaped the reviewed versions"):
+            VERIFY_ENVIRONMENT(self.output, temporary, toolchain)
         path = self.output / "test.ninja"
         raw = b"build obj: cxx ../../prepared/crashpad/a.cc\n"
         path.write_bytes(raw)

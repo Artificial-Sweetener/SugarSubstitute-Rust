@@ -134,7 +134,8 @@ def transform(name, text):
     if name.endswith("win_helper.py"):
         text = replace(text, "    archs = ('x86', 'amd64', 'arm64')", "    archs = ('amd64',) if os.environ.get('SUGAR_CRASHPAD_VS') else ('x86', 'amd64', 'arm64')")
         text = replace(text, "        args.extend((script_arch_name, '&&', 'set'))", """        if os.environ.get('SUGAR_CRASHPAD_VS'):
-            args.extend((script_arch_name, '10.0.26100.0', '-vcvars_ver=14.43', '&&', 'set'))
+            args.extend((script_arch_name, os.environ['SUGAR_CRASHPAD_SDK'],
+                         '-vcvars_ver=' + os.environ['SUGAR_CRASHPAD_VCVARS'], '&&', 'set'))
         else:
             args.extend((script_arch_name, '&&', 'set'))""")
         text = replace(text, "        install_dir, script_path = (explicit() or env() or autodetect() or\n                                    fail())", """        reviewed = os.environ.get('SUGAR_CRASHPAD_VS')
