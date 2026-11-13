@@ -126,7 +126,7 @@ fn watch_is_answered_with_a_state_and_changes_raise_the_revision() -> TestResult
     assert_eq!(panel.refresh(&updater, &workflow), None);
     updater.status()?.reconcile(RecordedUpdates {
         prepared: Some("0.5.0".into()),
-        previous_version_running: false,
+        ..RecordedUpdates::default()
     });
     let changed = panel.refresh(&updater, &workflow).ok_or("Changed state was not sent")?;
     assert_eq!(revision(&changed), Some(2));
@@ -265,7 +265,10 @@ fn the_page_state_follows_the_updater_status() -> TestResult {
 
     updater.status()?.begin();
     updater.status()?.finish(Some(AttemptOutcome::Current), 9);
-    updater.status()?.reconcile(RecordedUpdates { prepared: None, previous_version_running: true });
+    updater.status()?.reconcile(RecordedUpdates {
+        previous_version_running: true,
+        ..RecordedUpdates::default()
+    });
     let current = shown(&updater)?;
     assert_eq!(current.status, UpdatesStatus::UpToDate);
     assert_eq!(current.last_successful_check_ms, Some(9000));
