@@ -2,9 +2,7 @@
 
 ## Unproven
 
-- **Notice window**: `desktop/src/headless/notice.rs` only compiles here (Windows Clippy, all three legs). Native proof needed: it appears about 2 s into a slow launch, takes no focus, follows the theme, and closes on hand-off.
-- **Text tests**, which fail under Wine (no DirectWrite) like the existing splash text tests: `notice::tests::a_shown_notice_prepares_one_frame_for_the_reported_window` and `render::starting_tests::starting_status_replaces_the_loading_words_in_every_locale`.
-- Windows CI on afbd1291 was still running at stop: [Substitute verification](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43373105133).
+- **Notice window on screen**: the pump's notice window (`desktop/src/headless/notice.rs`) has passed tests and Clippy on Windows, but nobody has seen it in a native run. It still needs a proof-lane run on the hidden desktop showing that it appears about 2 s into a slow launch, takes no focus, follows the theme, and closes on hand-off.
 
 ## Commits
 
@@ -21,6 +19,16 @@
 
 ## Verification
 
+Native Windows 11 (local lane, at 07a97e75, nothing changed):
+
+- `cargo xtask check`: passed (fmt, governance, Clippy on every leg).
+- `sugarsubstitute` tests filtered `stable_launcher startup`: 377 passed, 0 failed. This includes all notice, bound, root and lifetime tests, and `notice::tests::a_shown_notice_prepares_one_frame_for_the_reported_window`, which could not run under Wine.
+- `sugarsubstitute-contracts` `startup localization`: 20 + 1 passed. `sugarsubstitute-desktop` `headless`: 14 passed. `sugarsubstitute-splash` `render`: 25 passed, including both `starting_tests`.
+- `cargo doc --no-deps` with `-D warnings` for contracts, desktop, splash and sugarsubstitute: clean.
+- Logs: `D:\SugarSubstitute-Rust\update-system\w-launcher\` (`check1.*`, `test-*.*`, `doc.*`).
+
+Cloud session (Linux):
+
 - Windows tests under Wine 9, with an uncommitted local stub for `committed_dump_parser`: `stable_launcher` 44 pass, plus the font case above; splash `a_notice_without_controls_draws_no_caption_buttons` passes.
 - Linux: contracts 317 pass; `cargo xtask governance` passed; fmt clean; `cargo xtask check` stops on `sugarsubstitute-execution` dead-code lints (Linux baseline; lane/linux fixes it). Windows Clippy is clean on all three legs.
 - Fingerprints recorded with `cargo xtask fingerprints`; new localization and UI-boundary records for `headless/notice.rs`.
@@ -32,6 +40,8 @@
 - Shown from 2 s until hand-off. The pump builds its Tao loop only when the notice is due, so a fast launch creates no window.
 - 60 s/120 s leave room for the longest admitted wait (adoption 32 s, recovery 15 s, selection 5 s). The cutoff never cancels a running trial; doing that mid-adoption could leave two apps.
 - Abandonment forgets the executor, because dropping it joins the stuck worker.
+- Local review against C5: no code changes. The notice stays in canonical English rather than the OS UI language. The thin root may read only the pointer (C-36), and the OS language could contradict the language the user chose in the app.
+- A lock timeout while selecting the accepted release (not an optional step) still ends in the visible startup report. The accepted release is the fallback, so no further fallback exists, and the process still exits within its bounds.
 
 ## For others
 
