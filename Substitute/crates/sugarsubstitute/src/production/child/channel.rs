@@ -138,6 +138,11 @@ impl ChildChannel {
         &self.updates
     }
 
+    /// The coordinator's update snapshot, for taking its one-time start-up messages.
+    pub(in crate::production) fn updates_mut(&mut self) -> &mut CoordinatorUpdates {
+        &mut self.updates
+    }
+
     /// Admit through the composing owner's scope before transferring the inherited input.
     /// Rejected reservation leaves the identical token here for parent-observed exit.
     pub(super) fn start(

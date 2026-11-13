@@ -29,6 +29,9 @@ impl<C: EntryActivation> EntryRunner<C> {
             }
         }
         self.update_status.poll();
+        if let Some(launch) = self.launch_version() {
+            self.update_status.observe_launch(launch);
+        }
         let (revision, status) = self.update_status.snapshot();
         // Offered every turn, so a desktop child that starts later still receives it.
         self.child.publish_update_status(revision, status)?;
@@ -102,6 +105,22 @@ impl<C: EntryActivation> EntryRunner<C> {
             None => None,
         };
         Ok(())
+    }
+
+    /// What this launch did about the version it runs, when it runs it as a trial: applying it
+    /// until the trial's acceptance is published, then updated to it. An accepted launch, and a
+    /// run without installation ownership, start no new version.
+    fn launch_version(&self) -> Option<sugarsubstitute_contracts::update::status::LaunchVersion> {
+        let authority = self.authority.as_ref()?;
+        let application = authority.running_installation()?;
+        application.trial()?;
+        let version = application.generation().release.version().to_owned();
+        // Only an accepted trial is an update source; an unaccepted one is still applying.
+        Some(if authority.update_source().is_some() {
+            sugarsubstitute_contracts::update::status::LaunchVersion::Updated(version)
+        } else {
+            sugarsubstitute_contracts::update::status::LaunchVersion::Applying(version)
+        })
     }
 
     /// Admit one helper family in fresh scopes; failure leaves no partial helper behind.

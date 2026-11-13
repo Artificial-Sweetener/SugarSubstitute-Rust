@@ -35,6 +35,12 @@ pub(super) struct Platform {
     accents: Vec<Option<sugarsubstitute_contracts::appearance::AccentColor>>,
     pub(in crate::startup) start_allowed: bool,
     reload_failure: Option<Box<dyn Error>>,
+    /// The coordinator status this fake child last received.
+    pub(in crate::startup) update_status:
+        Option<sugarsubstitute_contracts::update::status::UpdateStatus>,
+    /// Start-up messages this fake child still has for the window.
+    pub(in crate::startup) notices:
+        std::collections::VecDeque<sugarsubstitute_contracts::update::status::StartupNotice>,
 }
 impl StartupBackend for Platform {
     type Prepared = Prepared;
@@ -154,10 +160,15 @@ impl StartupBackend for Platform {
         self.budget
     }
     fn update_status(&self) -> Option<&sugarsubstitute_contracts::update::status::UpdateStatus> {
-        None
+        self.update_status.as_ref()
     }
     fn workflow_queue(&self) -> sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue {
         sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue::Unobserved
+    }
+    fn take_update_notice(
+        &mut self,
+    ) -> Option<sugarsubstitute_contracts::update::status::StartupNotice> {
+        self.notices.pop_front()
     }
     fn request_restart_to_apply(&mut self) -> BackendResult<()> {
         self.restart_requests += 1;
@@ -281,6 +292,8 @@ pub(super) fn host() -> BackendResult<StartupHost<Platform>> {
 
 #[path = "platform_tests/consume.rs"]
 pub(super) mod consume;
+#[path = "platform_tests/update_notices.rs"]
+mod update_notices;
 
 #[cfg(windows)]
 #[test]

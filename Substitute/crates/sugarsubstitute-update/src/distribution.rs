@@ -18,7 +18,15 @@ struct Configuration {
     repository: [u8; 32],
     feed: Feed,
     update_policy: UpdatePolicy,
+    /// Optional `https` address of a version's release notes, with one [`VERSION`] placeholder.
+    #[serde(default)]
+    release_notes: Option<String>,
 }
+
+/// Placeholder in a release-notes template that the running version replaces.
+pub const VERSION: &str = "{version}";
+/// Longest version label a release-notes address is built from, in bytes.
+const MAX_VERSION_BYTES: usize = 64;
 
 #[derive(Deserialize)]
 #[serde(tag = "transport", rename_all = "snake_case", deny_unknown_fields)]
@@ -55,6 +63,7 @@ pub struct Distribution {
     repository: [u8; 32],
     policy: Policy,
     update_policy: UpdatePolicy,
+    release_notes: Option<String>,
 }
 impl Distribution {
     /// Decode bounded bytes compiled into the authenticated producing application. Call on an
@@ -80,11 +89,25 @@ impl Distribution {
             Feed::Loopback { port } => Policy::loopback(port),
         }
         .map_err(|cause| io::Error::new(io::ErrorKind::InvalidData, cause))?;
+        if let Some(template) = &configuration.release_notes
+            && (template.matches(VERSION).count() != 1
+                || notes_address(template, "1.0.0").is_none())
+        {
+            return Err(invalid("Update distribution release notes are not an https template"));
+        }
         Ok(Self {
             repository: configuration.repository,
             policy,
             update_policy: configuration.update_policy,
+            release_notes: configuration.release_notes,
         })
+    }
+
+    /// Where the release notes of `version` are, when this build names them: an `https`
+    /// address without credentials. A version label that is empty, longer than 64 bytes or
+    /// contains anything but ASCII letters, digits, `.`, `-` and `+` has none.
+    pub fn release_notes(&self, version: &str) -> Option<url::Url> {
+        notes_address(self.release_notes.as_deref()?, version)
     }
 
     /// How this build applies application updates.
@@ -96,6 +119,23 @@ impl Distribution {
     pub fn into_parts(self) -> ([u8; 32], Policy) {
         (self.repository, self.policy)
     }
+}
+
+/// `template` with `version` in place of its placeholder, when the result is a plain `https`
+/// address with a host and no credentials.
+fn notes_address(template: &str, version: &str) -> Option<url::Url> {
+    let label = !version.is_empty()
+        && version.len() <= MAX_VERSION_BYTES
+        && version.bytes().all(|byte| byte.is_ascii_alphanumeric() || b".-+".contains(&byte));
+    if !label {
+        return None;
+    }
+    let address = url::Url::parse(&template.replacen(VERSION, version, 1)).ok()?;
+    let plain = address.scheme() == "https"
+        && address.host_str().is_some_and(|host| !host.is_empty())
+        && address.username().is_empty()
+        && address.password().is_none();
+    plain.then_some(address)
 }
 
 /// Keep malformed build input observable without treating it as disabled updates.

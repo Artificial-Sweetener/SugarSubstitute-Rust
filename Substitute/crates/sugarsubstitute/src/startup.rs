@@ -243,6 +243,8 @@ impl<B: StartupBackend> WindowContent for StartupHost<B> {
         view.sample(startup.session().phase(), elapsed, Instant::now());
         if self.child.cleanup_failed() {
             view.appearance.status = sugarsubstitute_splash::StartupStatus::CleanupFailed;
+        } else if let Some(status) = window_content::updating(&self.child, view.appearance.status) {
+            view.appearance.status = status;
         }
         view.animation.tick(elapsed);
         let progress = view.progress();

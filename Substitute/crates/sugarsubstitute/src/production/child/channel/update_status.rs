@@ -5,7 +5,11 @@
 //! The coordinator sends a snapshot after every change. Pipe order already delivers them in
 //! sequence; the revision still decides, so a replayed or reordered older snapshot never
 //! replaces a newer one. The status is presentation only and grants nothing.
-use sugarsubstitute_contracts::update::status::UpdateStatus;
+//!
+//! This is the child's one update-status source. The window reads it through `StartupHost`; the
+//! host side of SugarCubes' `sugarcubes.updates` protocol is meant to read the same snapshot, so
+//! both surfaces always agree.
+use sugarsubstitute_contracts::update::status::{StartupNotice, UpdateStatus};
 use sugarsubstitute_supervision::lifecycle_protocol::{DecodedPayload, WorkflowQueue};
 
 /// What the coordinator last said about updates and the backend's workflow queue.
@@ -14,13 +18,28 @@ pub(in crate::production) struct CoordinatorUpdates {
     revision: u64,
     status: Option<UpdateStatus>,
     workflow: WorkflowQueue,
+    /// Start-up messages the window already took during this launch.
+    taken: Vec<StartupNotice>,
 }
 impl Default for CoordinatorUpdates {
     fn default() -> Self {
-        Self { revision: 0, status: None, workflow: WorkflowQueue::Unobserved }
+        Self { revision: 0, status: None, workflow: WorkflowQueue::Unobserved, taken: Vec::new() }
     }
 }
 impl CoordinatorUpdates {
+    /// The next start-up message the newest status states that the window has not taken during
+    /// this launch. Each is taken at most once, however often the coordinator resends it.
+    pub(in crate::production) fn take_notice(&mut self) -> Option<StartupNotice> {
+        let next = self
+            .status
+            .as_ref()?
+            .startup_notices()
+            .into_iter()
+            .find(|notice| !self.taken.contains(notice))?;
+        self.taken.push(next.clone());
+        Some(next)
+    }
+
     /// The newest status, once the coordinator has sent one.
     pub(in crate::production) fn status(&self) -> Option<&UpdateStatus> {
         self.status.as_ref()
@@ -88,6 +107,28 @@ mod tests {
         updates.receive(&snapshot(3, WorkflowQueue::Idle, &idle_bytes)?)?;
         assert_eq!(updates.status(), Some(&UpdateStatus::default()));
         assert_eq!(updates.workflow(), WorkflowQueue::Idle);
+        Ok(())
+    }
+
+    #[test]
+    fn each_start_up_message_is_taken_once_in_order_however_often_it_is_resent()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use sugarsubstitute_contracts::update::status::{LaunchVersion, RecordedUpdates};
+        let mut updates = CoordinatorUpdates::default();
+        assert_eq!(updates.take_notice(), None, "nothing before the first snapshot");
+        let mut status = UpdateStatus::default();
+        status.observe_launch(LaunchVersion::Applying("2.0.0".into()));
+        updates.receive(&snapshot(1, WorkflowQueue::Idle, &status.encode()?)?)?;
+        assert_eq!(updates.take_notice(), None, "an unconfirmed version is not announced");
+        status.observe_launch(LaunchVersion::Updated("2.0.0".into()));
+        status.reconcile(RecordedUpdates { repairing: true, ..RecordedUpdates::default() });
+        for revision in [2, 3] {
+            updates.receive(&snapshot(revision, WorkflowQueue::Idle, &status.encode()?)?)?;
+        }
+        assert_eq!(updates.take_notice(), Some(StartupNotice::Updated("2.0.0".into())));
+        updates.receive(&snapshot(4, WorkflowQueue::Idle, &status.encode()?)?)?;
+        assert_eq!(updates.take_notice(), Some(StartupNotice::Repairing));
+        assert_eq!(updates.take_notice(), None);
         Ok(())
     }
 }

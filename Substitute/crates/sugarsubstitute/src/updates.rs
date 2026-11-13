@@ -51,6 +51,22 @@ fn compiled_policy(bytes: &[u8]) -> io::Result<Option<UpdatePolicy>> {
     Ok(Some(Distribution::decode(bytes)?.update_policy()))
 }
 
+/// Where this build says the release notes of `version` are: an `https` address, or `None`
+/// when the build names none or has no update configuration. Reads only compiled bytes.
+pub(crate) fn release_notes(version: &str) -> Option<url::Url> {
+    if EMBEDDED.is_empty() {
+        return None;
+    }
+    match Distribution::decode(EMBEDDED) {
+        Ok(distribution) => distribution.release_notes(version),
+        Err(cause) => {
+            tracing::warn!(operation = "release_notes_unavailable", cause = %cause,
+                "The build's update distribution could not be read; no release notes link");
+            None
+        }
+    }
+}
+
 /// Construct an inert worker on an admitted preparation job. Empty producing-build configuration
 /// disables automatic checking. The worker reads the protected local subscription; the distribution binds
 /// only repository and transport authority. No runtime environment or neighboring file is read.

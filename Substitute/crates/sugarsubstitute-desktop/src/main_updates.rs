@@ -90,6 +90,8 @@ pub(crate) enum Notice {
     },
     /// A new version did not start, so the one before it is running.
     PreviousVersionRunning,
+    /// The previous version is running while the newer one is repaired.
+    Repairing,
 }
 
 impl Notice {
@@ -109,6 +111,7 @@ impl Notice {
                 Self::Updated { version, changelog }
             }
             crate::UpdateNotice::PreviousVersionRunning => Self::PreviousVersionRunning,
+            crate::UpdateNotice::Repairing => Self::Repairing,
         }
     }
 }
@@ -269,6 +272,7 @@ impl CaptionUpdates {
                 text: Cow::Owned(UpdateMessages::with_version(updates.updated, version)),
             },
             Some(Notice::PreviousVersionRunning) => PeerView::shown(true, updates.previous_running),
+            Some(Notice::Repairing) => PeerView::shown(true, updates.repairing),
         };
         UpdateCaptionView {
             glyph,

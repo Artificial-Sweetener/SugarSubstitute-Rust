@@ -106,3 +106,34 @@ fn loopback_feed_exists_only_in_explicit_fixture_builds() -> Result {
     assert!(Distribution::decode(&serde_json::to_vec(&value)?).is_err());
     Ok(())
 }
+
+#[test]
+fn release_notes_are_an_optional_https_template_filled_only_with_a_plain_version() -> Result {
+    let without = Distribution::decode(&serde_json::to_vec(&configuration())?)?;
+    assert_eq!(without.release_notes("2.4.1"), None);
+    let mut value = configuration();
+    value["release_notes"] =
+        "https://github.example.test/owner/repo/releases/tag/v{version}".into();
+    let with = Distribution::decode(&serde_json::to_vec(&value)?)?;
+    assert_eq!(
+        with.release_notes("2.4.1").map(String::from),
+        Some("https://github.example.test/owner/repo/releases/tag/v2.4.1".to_owned())
+    );
+    for version in ["", "2.4.1/../../x", "2.4.1?x=1", "2.4.1#x", "2.4.1 beta", &"9".repeat(65)] {
+        assert_eq!(with.release_notes(version), None, "{version:?}");
+    }
+    assert!(with.release_notes("2.4.1-beta.3+build.7").is_some());
+    for template in [
+        "http://example.test/{version}",
+        "https://user:secret@example.test/{version}",
+        "https://example.test/notes",
+        "https://example.test/{version}/{version}",
+        "file:///C:/notes/{version}",
+        "not an address {version}",
+    ] {
+        let mut value = configuration();
+        value["release_notes"] = template.into();
+        assert!(Distribution::decode(&serde_json::to_vec(&value)?).is_err(), "{template}");
+    }
+    Ok(())
+}

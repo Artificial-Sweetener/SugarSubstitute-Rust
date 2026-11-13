@@ -31,6 +31,33 @@ pub struct RecordedUpdates {
     pub prepared: Option<String>,
     /// The accepted version was rolled back; the previous version is running.
     pub previous_version_running: bool,
+    /// The newer version's files were found damaged, so the previous version is running while
+    /// an update check downloads it again. This is not a rollback.
+    #[serde(default)]
+    pub repairing: bool,
+}
+
+/// What this launch did about a version it starts for the first time, as the coordinator
+/// observed it. Only the coordinator that started that version knows it; the record does not.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum LaunchVersion {
+    /// This launch is starting this version for the first time, and it is not yet confirmed.
+    Applying(String),
+    /// This launch started this version for the first time and confirmed it.
+    Updated(String),
+}
+
+/// A one-time message about updates for the start of the application, in the order a window
+/// shows them. A window shows each at most once per launch.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum StartupNotice {
+    /// This is the first start on this version.
+    Updated(String),
+    /// The previous version is running while the newer one's damaged files are downloaded again.
+    Repairing,
+    /// The newer version did not start, so the previous one is running.
+    PreviousVersionRunning,
 }
 
 /// One host's update status for its update surfaces. The coordinator owns it; the desktop child
@@ -43,6 +70,8 @@ pub struct UpdateStatus {
     recorded: RecordedUpdates,
     needs_installer: bool,
     failure: Option<UpdateReport>,
+    #[serde(default)]
+    launch: Option<LaunchVersion>,
 }
 impl UpdateStatus {
     /// Current activity.
@@ -60,6 +89,38 @@ impl UpdateStatus {
     /// The previous version is running after a rollback, per the selection record.
     pub fn previous_version_running(&self) -> bool {
         self.recorded.previous_version_running
+    }
+    /// The previous version is running while the newer one is repaired, per the selection record.
+    pub fn repairing(&self) -> bool {
+        self.recorded.repairing
+    }
+    /// The version this launch is starting for the first time, until it is confirmed.
+    pub fn applying(&self) -> Option<&str> {
+        match &self.launch {
+            Some(LaunchVersion::Applying(version)) => Some(version),
+            Some(LaunchVersion::Updated(_)) | None => None,
+        }
+    }
+    /// The version this launch started for the first time and confirmed.
+    pub fn updated_to(&self) -> Option<&str> {
+        match &self.launch {
+            Some(LaunchVersion::Updated(version)) => Some(version),
+            Some(LaunchVersion::Applying(_)) | None => None,
+        }
+    }
+    /// The one-time start-up messages this status states, in the order a window shows them. A
+    /// repair already says the previous version runs, so it replaces the rollback line.
+    pub fn startup_notices(&self) -> Vec<StartupNotice> {
+        let mut notices = Vec::new();
+        if let Some(version) = self.updated_to() {
+            notices.push(StartupNotice::Updated(version.to_owned()));
+        }
+        if self.recorded.repairing {
+            notices.push(StartupNotice::Repairing);
+        } else if self.recorded.previous_version_running {
+            notices.push(StartupNotice::PreviousVersionRunning);
+        }
+        notices
     }
     /// The latest release needs the installer.
     pub fn needs_installer(&self) -> bool {
@@ -106,6 +167,13 @@ impl UpdateStatus {
     pub fn reconcile(&mut self, recorded: RecordedUpdates) {
         self.recorded = recorded;
     }
+    /// Adopt what this launch observed about a version it starts for the first time. A
+    /// confirmed version is never taken back by a later `Applying`.
+    pub fn observe_launch(&mut self, launch: LaunchVersion) {
+        if !matches!(self.launch, Some(LaunchVersion::Updated(_))) {
+            self.launch = Some(launch);
+        }
+    }
 
     /// Encode for another process after checking the bounds `decode` enforces.
     /// # Errors
@@ -139,6 +207,9 @@ impl UpdateStatus {
         self.activity
             .is_none_or(|progress| progress.bytes.is_none_or(|(received, total)| received <= total))
             && self.recorded.prepared.as_ref().is_none_or(version)
+            && self.launch.as_ref().is_none_or(|launch| match launch {
+                LaunchVersion::Applying(value) | LaunchVersion::Updated(value) => version(value),
+            })
             && self.failure.as_ref().is_none_or(codec::valid_report)
     }
 }
@@ -194,10 +265,13 @@ mod tests {
         assert_eq!(status.ready(), None);
         status.reconcile(RecordedUpdates {
             prepared: Some("2.0.0".into()),
-            previous_version_running: false,
+            ..RecordedUpdates::default()
         });
         assert_eq!(status.ready(), Some("2.0.0"));
-        status.reconcile(RecordedUpdates { prepared: None, previous_version_running: true });
+        status.reconcile(RecordedUpdates {
+            previous_version_running: true,
+            ..RecordedUpdates::default()
+        });
         assert_eq!(status.ready(), None);
         assert!(status.previous_version_running());
     }
@@ -240,8 +314,13 @@ mod tests {
         status.reconcile(RecordedUpdates {
             prepared: Some("1.9.0".into()),
             previous_version_running: true,
+            repairing: true,
         });
+        status.observe_launch(LaunchVersion::Applying("1.8.0".into()));
         assert_eq!(UpdateStatus::decode(&status.encode()?)?, status);
+        status.observe_launch(LaunchVersion::Updated("v".repeat(MAX_VERSION_BYTES + 1)));
+        assert_eq!(status.encode(), Err(StatusCodecError::Bounds));
+        status.launch = None;
         status.recorded.prepared = Some("v".repeat(MAX_VERSION_BYTES + 1));
         assert_eq!(status.encode(), Err(StatusCodecError::Bounds));
         assert_eq!(UpdateStatus::decode(b"{\"unknown\":1}"), Err(StatusCodecError::Malformed));
@@ -252,5 +331,33 @@ mod tests {
         let forged = br#"{"activity":{"phase":"downloading","bytes":[5,1]},"last_successful_check_utc":null,"recorded":{"prepared":null,"previous_version_running":false},"needs_installer":false,"failure":null}"#;
         assert_eq!(UpdateStatus::decode(forged), Err(StatusCodecError::Bounds));
         Ok(())
+    }
+
+    #[test]
+    fn a_launch_applies_then_confirms_a_version_and_states_its_notices_once_in_order() {
+        let mut status = UpdateStatus::default();
+        assert!(status.startup_notices().is_empty());
+        status.observe_launch(LaunchVersion::Applying("2.0.0".into()));
+        assert_eq!((status.applying(), status.updated_to()), (Some("2.0.0"), None));
+        assert!(status.startup_notices().is_empty(), "an unconfirmed version is no update yet");
+        status.observe_launch(LaunchVersion::Updated("2.0.0".into()));
+        status.observe_launch(LaunchVersion::Applying("2.0.0".into()));
+        assert_eq!((status.applying(), status.updated_to()), (None, Some("2.0.0")));
+        assert_eq!(status.startup_notices(), [StartupNotice::Updated("2.0.0".into())]);
+        status.reconcile(RecordedUpdates {
+            previous_version_running: true,
+            ..RecordedUpdates::default()
+        });
+        assert_eq!(status.startup_notices()[1], StartupNotice::PreviousVersionRunning);
+        status.reconcile(RecordedUpdates {
+            previous_version_running: true,
+            repairing: true,
+            ..RecordedUpdates::default()
+        });
+        assert_eq!(
+            status.startup_notices(),
+            [StartupNotice::Updated("2.0.0".into()), StartupNotice::Repairing],
+            "the repair line already says the previous version runs"
+        );
     }
 }

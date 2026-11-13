@@ -402,7 +402,7 @@ rationale = "Startup View binds output, cancel and retry accessible controls to 
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup.rs"
-source_sha256 = "sha256:f043994094d2c2957dea9678ecbc2d41bb356132053f20c94a6878a0d29ca8bf"
+source_sha256 = "sha256:46cfb610791fef673117bb2093e9cc4be2adfd3ec8369fc45a7fd74214950b12"
 kind = "presentation"
 rationale = "WindowContent returns the authoritative startup View accessible controls. This composing owner introduces no label literals."
 
@@ -744,7 +744,7 @@ rationale = "Caption layout places the host's localized caption labels and the c
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_caption_contract.rs"
-source_sha256 = "sha256:be79e996ea88bc48c92782cfdfc2765c531335c5d9142122276e872f338f0e16"
+source_sha256 = "sha256:0a9d41d1f49cbf919d88b65bb1675ed913ac3101ca3068586267cf5ba8acfa3e"
 kind = "native"
 rationale = "Main caption contracts borrow localized labels from the host. They define presentation data and no catalog or fallback policy."
 

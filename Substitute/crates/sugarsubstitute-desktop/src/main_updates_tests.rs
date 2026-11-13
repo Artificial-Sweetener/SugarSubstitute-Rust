@@ -226,3 +226,22 @@ fn without_release_notes_the_update_line_has_no_link_and_a_rollback_is_one_plain
     caption.observe(UpdateFeed::default());
     assert_eq!(caption.view(en).line.text, "The previous version is running.");
 }
+
+#[test]
+fn a_repair_is_one_plain_line_in_every_language() {
+    let mut caption = CaptionUpdates::default();
+    caption.notify(Notice::update(crate::UpdateNotice::Repairing));
+    let en = messages("en");
+    let view = caption.view(en);
+    assert_eq!(shown(&view), vec![LINE, DISMISS]);
+    assert_eq!(
+        view.line.text,
+        "SugarSubstitute is running the previous version while it repairs the update."
+    );
+    for locale in sugarsubstitute_contracts::localization::LOCALES {
+        assert_eq!(caption.view(locale).line.text, locale.updates.repairing, "{}", locale.id);
+    }
+    assert_eq!(caption.activate(LINK), (false, None), "a repair line has no link");
+    assert_eq!(caption.activate(DISMISS), (true, None));
+    assert_eq!(shown(&caption.view(en)), Vec::<u16>::new());
+}

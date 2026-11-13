@@ -63,4 +63,7 @@ pub enum UpdateNotice {
     },
     /// The new version did not start, so the one before it is running.
     PreviousVersionRunning,
+    /// The newer version's files were damaged, so the one before it is running while the
+    /// update is downloaded again.
+    Repairing,
 }

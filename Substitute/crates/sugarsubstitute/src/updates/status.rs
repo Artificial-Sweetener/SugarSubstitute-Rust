@@ -11,7 +11,7 @@ use sugarsubstitute_contracts::{
     },
     update::{
         attempt::{AttemptOutcome, AttemptProgress},
-        status::{RecordedUpdates, UpdateStatus},
+        status::{LaunchVersion, RecordedUpdates, UpdateStatus},
     },
 };
 use sugarsubstitute_execution::ExecutionClient;
@@ -48,6 +48,11 @@ impl StatusSource {
     /// The running check reported progress.
     pub(crate) fn observe(&mut self, progress: AttemptProgress) {
         self.change(|status| status.observe(progress));
+    }
+
+    /// Adopt what this launch observed about the version it starts for the first time.
+    pub(crate) fn observe_launch(&mut self, launch: LaunchVersion) {
+        self.change(|status| status.observe_launch(launch));
     }
 
     /// A check ended with `outcome` at `now_utc` seconds. The record is read again, because a
@@ -122,6 +127,7 @@ fn recorded(selection: Result<UpdateSelection, SelectionFailure>) -> io::Result<
         Ok(selection) => Ok(RecordedUpdates {
             prepared: selection.prepared.map(|prepared| prepared.version),
             previous_version_running: selection.rollback.is_some(),
+            repairing: selection.repairing.is_some(),
         }),
         Err(SelectionFailure::Missing) => Ok(RecordedUpdates::default()),
         Err(cause) => Err(io::Error::other(cause)),

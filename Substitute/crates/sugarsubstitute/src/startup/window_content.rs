@@ -84,6 +84,25 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
         )
     }
 
+    /// The coordinator's next one-time start-up update message, with the running version's
+    /// release notes when this build names them.
+    fn take_update_notice(&mut self) -> Option<sugarsubstitute_desktop::UpdateNotice> {
+        use sugarsubstitute_contracts::update::status::StartupNotice;
+        use sugarsubstitute_desktop::UpdateNotice;
+        Some(match self.child.take_update_notice()? {
+            StartupNotice::Updated(version) => {
+                // Only a build with update configuration names its release notes.
+                #[cfg(all(windows, feature = "windows-native-host"))]
+                let changelog = crate::updates::release_notes(&version);
+                #[cfg(not(all(windows, feature = "windows-native-host")))]
+                let changelog = None;
+                UpdateNotice::Updated { version, changelog }
+            }
+            StartupNotice::Repairing => UpdateNotice::Repairing,
+            StartupNotice::PreviousVersionRunning => UpdateNotice::PreviousVersionRunning,
+        })
+    }
+
     fn workflow_activity(&self) -> sugarsubstitute_desktop::WorkflowActivity {
         match self.child.workflow_queue() {
             sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue::Busy => {
@@ -268,4 +287,23 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
             )
             .min()
     }
+}
+
+/// The splash line while this launch starts a new version for the first time: "Updating to
+/// version X…" in place of the ordinary loading lines, until the coordinator confirms the
+/// version. Failure, retry and cleanup lines always win, and a version label the splash cannot
+/// show leaves the ordinary line.
+pub(super) fn updating<B: StartupBackend>(
+    child: &B,
+    current: sugarsubstitute_splash::StartupStatus,
+) -> Option<sugarsubstitute_splash::StartupStatus> {
+    use sugarsubstitute_splash::StartupStatus;
+    if !matches!(
+        current,
+        StartupStatus::Loading | StartupStatus::LoadingLong | StartupStatus::LoadingExtended
+    ) {
+        return None;
+    }
+    let version = child.update_status()?.applying()?;
+    sugarsubstitute_splash::UpdateVersion::new(version).map(StartupStatus::Updating)
 }

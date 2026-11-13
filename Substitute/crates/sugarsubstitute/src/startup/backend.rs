@@ -217,6 +217,10 @@ pub trait StartupBackend {
     fn update_status(&self) -> Option<&sugarsubstitute_contracts::update::status::UpdateStatus>;
     /// The backend's workflow queue at the coordinator's newest status; unobserved before it.
     fn workflow_queue(&self) -> sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue;
+    /// Take, once per launch, the next start-up update message the coordinator's status states.
+    fn take_update_notice(
+        &mut self,
+    ) -> Option<sugarsubstitute_contracts::update::status::StartupNotice>;
     /// Tell the coordinator this close restarts the application so a prepared update applies.
     /// Called once, after the close save's outcome exists and before `request_shutdown`.
     fn request_restart_to_apply(&mut self) -> BackendResult<()>;
