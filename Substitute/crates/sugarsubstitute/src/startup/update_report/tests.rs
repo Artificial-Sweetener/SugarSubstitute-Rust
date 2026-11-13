@@ -60,10 +60,10 @@ fn outcome(
     writer: &mut dyn UpdateExport,
 ) -> TestResult<Result<(), Box<dyn Error>>> {
     let bound = NonZeroUsize::MIN.saturating_add(31);
-    Ok(wake.until(|| match host.execution.drain(bound) {
+    wake.until(|| match host.execution.drain(bound) {
         Err(cause) => Some(Err(cause)),
         Ok(_) => writer.finished().map(Ok),
-    })?)
+    })
 }
 
 #[test]

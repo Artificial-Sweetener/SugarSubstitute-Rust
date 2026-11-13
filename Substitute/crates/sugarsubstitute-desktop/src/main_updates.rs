@@ -282,7 +282,7 @@ impl CaptionUpdates {
             Some(Notice::PreviousVersionRunning) => PeerView::shown(true, updates.previous_running),
             Some(Notice::Repairing) => PeerView::shown(true, updates.repairing),
             Some(Notice::Line { label, text }) => {
-                PeerView { visible: true, label: *label, text: Cow::Owned(text.clone()) }
+                PeerView { visible: true, label, text: Cow::Owned(text.clone()) }
             }
         };
         UpdateCaptionView {

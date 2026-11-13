@@ -56,6 +56,7 @@ pub(super) struct UpdateReports {
 
 impl UpdateReports {
     /// Exports on the `main` and `cleanup` scopes, which process composition assigns.
+    #[cfg(any(feature = "windows-native-host", test))]
     pub(super) fn new(main: ScopeSpec, cleanup: ScopeSpec) -> Self {
         Self { main, cleanup, scopes: None, outstanding: Rc::default() }
     }

@@ -83,6 +83,7 @@ impl<B: StartupBackend> StartupHost<B> {
 
     /// Reserve the scopes that export the update report to files the user selects: one for each
     /// write and one, independent of it, for the cleanup that closes the write's files.
+    #[cfg(any(feature = "windows-native-host", test))]
     pub(crate) fn configure_update_reports(
         &mut self,
         main: sugarsubstitute_contracts::execution::ScopeSpec,
