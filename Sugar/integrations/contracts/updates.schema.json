@@ -1,0 +1,387 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://artificialsweetener.ai/schemas/sugarcubes/updates/v1",
+  "title": "SugarCubes update status protocol version 1",
+  "description": "An optional protocol for a host that updates itself. The page sends watch once the host description lists sugarcubes.updates; the host answers with its update state and sends a new state, with a higher revision, whenever it changes. check asks the host to check now; the result arrives as state. restart asks the host to apply a ready update by its normal close and relaunch, now or after the running workflow finishes; workflowRunning says whether there is one to wait for. The host answers every check and restart with accepted or rejected, naming its request. Versions are lowercase release tokens; causes are plain sentences without secrets or unnecessary paths; completedAt is milliseconds since the Unix epoch.",
+  "$defs": {
+    "UpdatesChannel": {
+      "enum": ["stable", "beta"]
+    },
+    "UpdatesFailure": {
+      "enum": ["check", "update"]
+    },
+    "UpdatesPhase": {
+      "enum": ["check", "download", "verify", "install", "start"]
+    },
+    "UpdatesScheduledRestart": {
+      "enum": ["none", "after-workflow"]
+    },
+    "UpdatesRestartTiming": {
+      "enum": ["now", "after-workflow"]
+    },
+    "UpdatesRejection": {
+      "enum": ["busy", "not-ready", "unavailable"]
+    },
+    "UpdatesCheck": {
+      "type": "object",
+      "properties": {
+        "completedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": ["completedAt"],
+      "additionalProperties": false
+    },
+    "UpdatesStatus": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "state": {
+              "const": "up-to-date"
+            }
+          },
+          "required": ["state"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "state": {
+              "const": "checking"
+            }
+          },
+          "required": ["state"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "state": {
+              "const": "available"
+            },
+            "version": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9.-]{1,64}$"
+            }
+          },
+          "required": ["state", "version"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "state": {
+              "const": "ready"
+            },
+            "version": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z0-9.-]{1,64}$"
+            }
+          },
+          "required": ["state", "version"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "state": {
+              "const": "failed"
+            },
+            "during": {
+              "$ref": "#/$defs/UpdatesFailure"
+            }
+          },
+          "required": ["state", "during"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "UpdatesCause": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string",
+          "maxLength": 1024,
+          "pattern": "^(?:[^\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])*$",
+          "x-length-unit": "unicode-codepoints"
+        }
+      },
+      "required": ["message"],
+      "additionalProperties": false
+    },
+    "UpdatesReport": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z0-9.-]{1,64}$"
+        },
+        "phase": {
+          "$ref": "#/$defs/UpdatesPhase"
+        },
+        "causes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/UpdatesCause"
+          },
+          "minItems": 1,
+          "maxItems": 8
+        }
+      },
+      "required": ["version", "phase", "causes"],
+      "additionalProperties": false
+    },
+    "UpdatesState": {
+      "type": "object",
+      "properties": {
+        "currentVersion": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z0-9.-]{1,64}$"
+        },
+        "channel": {
+          "$ref": "#/$defs/UpdatesChannel"
+        },
+        "lastSuccessfulCheck": {
+          "$ref": "#/$defs/UpdatesCheck"
+        },
+        "status": {
+          "$ref": "#/$defs/UpdatesStatus"
+        },
+        "report": {
+          "$ref": "#/$defs/UpdatesReport"
+        },
+        "previousVersionRunning": {
+          "type": "boolean"
+        },
+        "workflowRunning": {
+          "type": "boolean"
+        },
+        "scheduledRestart": {
+          "$ref": "#/$defs/UpdatesScheduledRestart"
+        }
+      },
+      "required": [
+        "currentVersion",
+        "channel",
+        "status",
+        "previousVersionRunning",
+        "workflowRunning",
+        "scheduledRestart"
+      ],
+      "additionalProperties": false
+    },
+    "UpdatesStateMessage": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.updates"
+        },
+        "version": {
+          "const": 1
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "type": {
+          "const": "state"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "update": {
+          "$ref": "#/$defs/UpdatesState"
+        }
+      },
+      "required": ["protocol", "version", "session", "type", "revision", "update"],
+      "additionalProperties": false
+    },
+    "UpdatesRejectedMessage": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.updates"
+        },
+        "version": {
+          "const": 1
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "type": {
+          "const": "rejected"
+        },
+        "request": {
+          "type": "string",
+          "maxLength": 48,
+          "pattern": "^[a-z0-9.-]{1,48}$"
+        },
+        "reason": {
+          "$ref": "#/$defs/UpdatesRejection"
+        }
+      },
+      "required": ["protocol", "version", "session", "type", "request", "reason"],
+      "additionalProperties": false
+    },
+    "UpdatesAcceptedMessage": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.updates"
+        },
+        "version": {
+          "const": 1
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "type": {
+          "const": "accepted"
+        },
+        "request": {
+          "type": "string",
+          "maxLength": 48,
+          "pattern": "^[a-z0-9.-]{1,48}$"
+        }
+      },
+      "required": ["protocol", "version", "session", "type", "request"],
+      "additionalProperties": false
+    },
+    "UpdatesWatchMessage": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.updates"
+        },
+        "version": {
+          "const": 1
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "type": {
+          "const": "watch"
+        }
+      },
+      "required": ["protocol", "version", "session", "type"],
+      "additionalProperties": false
+    },
+    "UpdatesCheckMessage": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.updates"
+        },
+        "version": {
+          "const": 1
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "type": {
+          "const": "check"
+        },
+        "request": {
+          "type": "string",
+          "maxLength": 48,
+          "pattern": "^[a-z0-9.-]{1,48}$"
+        }
+      },
+      "required": ["protocol", "version", "session", "type", "request"],
+      "additionalProperties": false
+    },
+    "UpdatesRestartMessage": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.updates"
+        },
+        "version": {
+          "const": 1
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "type": {
+          "const": "restart"
+        },
+        "request": {
+          "type": "string",
+          "maxLength": 48,
+          "pattern": "^[a-z0-9.-]{1,48}$"
+        },
+        "when": {
+          "$ref": "#/$defs/UpdatesRestartTiming"
+        }
+      },
+      "required": ["protocol", "version", "session", "type", "request", "when"],
+      "additionalProperties": false
+    },
+    "UpdatesHostMessage": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/UpdatesStateMessage"
+        },
+        {
+          "$ref": "#/$defs/UpdatesAcceptedMessage"
+        },
+        {
+          "$ref": "#/$defs/UpdatesRejectedMessage"
+        }
+      ]
+    },
+    "UpdatesClientMessage": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/UpdatesWatchMessage"
+        },
+        {
+          "$ref": "#/$defs/UpdatesCheckMessage"
+        },
+        {
+          "$ref": "#/$defs/UpdatesRestartMessage"
+        }
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/UpdatesStateMessage"
+    },
+    {
+      "$ref": "#/$defs/UpdatesAcceptedMessage"
+    },
+    {
+      "$ref": "#/$defs/UpdatesRejectedMessage"
+    },
+    {
+      "$ref": "#/$defs/UpdatesWatchMessage"
+    },
+    {
+      "$ref": "#/$defs/UpdatesCheckMessage"
+    },
+    {
+      "$ref": "#/$defs/UpdatesRestartMessage"
+    }
+  ]
+}

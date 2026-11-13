@@ -1,0 +1,219 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Dispatch an optional surface operation without coupling it to editable document layers. */
+
+import type { CanvasContext, CanvasMessage } from '../contracts/CanvasProtocol.generated.js';
+import type {
+  CanvasSurfaceReply,
+  CanvasSurfaceViewportReply,
+} from '../contracts/CanvasSurfaceProtocol.generated.js';
+import type { CanvasSurfaceHost, CanvasSurfaceResult } from '../contracts/CanvasSurface.js';
+import type { CanvasCancellationSource } from '../contracts/CanvasHost.js';
+import {
+  isCanvasSurfaceReply,
+  isCanvasSurfaceViewportReply,
+} from './CanvasSurfaceValidation.generated.js';
+import {
+  supportsCanvasSurfaceViewport,
+  snapshotCanvasSurfaceInspection,
+  snapshotCanvasSurfaceViewport,
+  snapshotCanvasSurfaceViewportCommand,
+} from './CanvasSurfaceViewport.js';
+import { supportsCanvasSurfaceComparison } from './CanvasSurfaceComparison.js';
+import {
+  supportsCanvasSurfaceOverview,
+  validCanvasSurfaceOverview,
+} from './CanvasSurfaceOverview.js';
+import { supportsCanvasSurfaceOcclusion } from './CanvasSurfaceOcclusion.js';
+import { supportsCanvasSurfaceBackdrop } from './CanvasSurfaceBackdrop.js';
+import {
+  isCanvasPreviewCommand,
+  supportsCanvasSurfacePreview,
+  validCanvasPreviewCommand,
+} from './CanvasSurfacePreview.js';
+
+/** The host receives only messages admitted by the shared canvas session and replay owner. */
+export type CanvasSurfaceRequest = Extract<
+  CanvasMessage,
+  {
+    type:
+      | 'surface.prepare'
+      | 'surface.geometry'
+      | 'surface.select'
+      | 'surface.overview'
+      | 'surface.commit'
+      | 'surface.viewport.request'
+      | 'surface.preview.begin'
+      | 'surface.preview.chunk'
+      | 'surface.preview.end'
+      | 'surface.preview.withdraw'
+      | 'surface.release';
+  }
+>;
+
+/** Retain the validated wire value while asynchronous host work is pending. */
+export function snapshotCanvasSurface(request: CanvasSurfaceRequest): CanvasSurfaceRequest {
+  const address = Object.freeze({ ...request.address });
+  if (request.type === 'surface.geometry') {
+    return Object.freeze({
+      ...request,
+      address,
+      geometry: Object.freeze({
+        ...request.geometry,
+        origin: Object.freeze({ ...request.geometry.origin }),
+        viewport: Object.freeze({ ...request.geometry.viewport }),
+        clip: Object.freeze({ ...request.geometry.clip }),
+        ...(request.geometry.occlusions
+          ? {
+              occlusions: Object.freeze(
+                request.geometry.occlusions.map((rect) => Object.freeze({ ...rect })),
+              ),
+            }
+          : {}),
+      }),
+    });
+  }
+  if (request.type === 'surface.select') {
+    const { comparison, inspection, ...selection } = request;
+    return Object.freeze({
+      ...selection,
+      address,
+      file: Object.freeze({ ...request.file }),
+      ...(comparison
+        ? {
+            comparison: Object.freeze({
+              ...comparison,
+              file: Object.freeze({ ...comparison.file }),
+            }),
+          }
+        : {}),
+      ...(inspection ? { inspection: snapshotCanvasSurfaceInspection(inspection) } : {}),
+    });
+  }
+  if (request.type === 'surface.overview')
+    return Object.freeze({
+      ...request,
+      address,
+      cells: Object.freeze(
+        request.cells.map((cell) =>
+          Object.freeze({
+            ...cell,
+            file: Object.freeze({ ...cell.file }),
+            rect: Object.freeze({ ...cell.rect }),
+          }),
+        ),
+      ),
+    });
+  if (request.type === 'surface.viewport.request')
+    return Object.freeze({
+      ...request,
+      address,
+      command: snapshotCanvasSurfaceViewportCommand(request.command),
+    });
+  if (request.type === 'surface.preview.begin')
+    return Object.freeze({ ...request, address, preview: Object.freeze({ ...request.preview }) });
+  return Object.freeze({ ...request, address });
+}
+
+/** Identify only the requests owned by the optional surface port. */
+export function isCanvasSurfaceRequest(message: CanvasMessage): message is CanvasSurfaceRequest {
+  return (
+    message.type === 'surface.prepare' ||
+    message.type === 'surface.geometry' ||
+    message.type === 'surface.select' ||
+    message.type === 'surface.overview' ||
+    message.type === 'surface.commit' ||
+    message.type === 'surface.viewport.request' ||
+    message.type === 'surface.preview.begin' ||
+    message.type === 'surface.preview.chunk' ||
+    message.type === 'surface.preview.end' ||
+    message.type === 'surface.preview.withdraw' ||
+    message.type === 'surface.release'
+  );
+}
+
+/** Preserve the current session's cancellation across asynchronous context and native work. */
+export async function dispatchCanvasSurface(
+  request: CanvasSurfaceRequest,
+  cancellation: CanvasCancellationSource,
+  port: {
+    readonly surface?: CanvasSurfaceHost | undefined;
+    context(): Promise<CanvasContext>;
+    report(error: unknown): void;
+  },
+): Promise<CanvasSurfaceReply | CanvasSurfaceViewportReply> {
+  const { protocol, version, session, requestId, ...command } = request;
+  const envelope = {
+    protocol,
+    version,
+    session,
+    requestId,
+    type: 'surface.reply',
+    address: request.address,
+    revision: request.revision,
+  } as const;
+  let result: CanvasSurfaceResult;
+  try {
+    const context = port.surface && !cancellation.cancelled() ? await port.context() : null;
+    result = cancellation.cancelled()
+      ? { status: 'cancelled', message: 'Canvas surface request cancelled.' }
+      : !port.surface ||
+          !context?.canvas.capabilities.displayOutput ||
+          !supportsCanvasSurfaceViewport(port.surface.capabilities, command) ||
+          !supportsCanvasSurfaceComparison(port.surface.capabilities, command) ||
+          !supportsCanvasSurfaceOverview(port.surface.capabilities, command) ||
+          !validCanvasSurfaceOverview(command) ||
+          !supportsCanvasSurfaceOcclusion(port.surface.capabilities, command) ||
+          !supportsCanvasSurfaceBackdrop(port.surface.capabilities, command) ||
+          !supportsCanvasSurfacePreview(port.surface.capabilities, command) ||
+          !validCanvasPreviewCommand(command) ||
+          (isCanvasPreviewCommand(command) &&
+            command.type !== 'surface.preview.withdraw' &&
+            !port.surface.presentation)
+        ? { status: 'unavailable', message: 'This canvas does not support an output surface.' }
+        : await port.surface.execute(command, cancellation);
+    if (cancellation.cancelled())
+      result = { status: 'cancelled', message: 'Canvas surface request cancelled.' };
+  } catch (error: unknown) {
+    if (cancellation.cancelled())
+      result = { status: 'cancelled', message: 'Canvas surface request cancelled.' };
+    else {
+      port.report(error);
+      result = { status: 'error', message: 'The canvas surface operation failed.' };
+    }
+  }
+  const reply = {
+    ...envelope,
+    ...result,
+    ...('viewport' in result ? { type: 'surface.viewport.reply' as const } : {}),
+  };
+  if (request.type === 'surface.viewport.request' && isCanvasSurfaceViewportReply(reply))
+    return { ...reply, viewport: snapshotCanvasSurfaceViewport(reply.viewport) };
+  if (
+    !isCanvasSurfaceReply(reply) ||
+    (reply.status === 'ready' && request.type !== 'surface.prepare') ||
+    (reply.status === 'applied' &&
+      (request.type === 'surface.prepare' || request.type === 'surface.viewport.request'))
+  ) {
+    port.report(new Error('Canvas surface returned an invalid result.'));
+    return {
+      ...envelope,
+      status: 'error',
+      message: 'The canvas surface returned an invalid result.',
+    };
+  }
+  return reply;
+}

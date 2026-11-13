@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "exactOptionalPropertyTypes": false,
+    "noUncheckedIndexedAccess": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  "include": ["frontend/**/*.ts", "tests/**/*.ts", "types/**/*.d.ts"],
+  "exclude": [
+    "scripts",
+    "scripts/integrations",
+    "scripts/photoshop",
+    "tests/editor_integrations",
+    "tests/photoshop"
+  ]
+}

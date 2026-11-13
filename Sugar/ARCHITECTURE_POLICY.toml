@@ -1,0 +1,451 @@
+schema = 1
+
+[integrations]
+contracts = "integrations/contracts"
+shared = "integrations/shared"
+
+[[integrations.editors]]
+name = "photoshop"
+root = "integrations/photoshop"
+infrastructure = "integrations/photoshop/src/infrastructure"
+modules = ["photoshop", "uxp"]
+
+[[integrations.editors]]
+name = "gimp"
+root = "integrations/gimp"
+infrastructure = "integrations/gimp/src/infrastructure"
+modules = ["@tauri-apps/api"]
+
+[menus]
+context_menu = "frontend/comfyui/ui/menus/ContextMenu.ts"
+floating_surface = "frontend/comfyui/ui/menus/FloatingSurface.ts"
+control_runtime = "frontend/comfyui/ui/menus/MenuControlRuntime.ts"
+# The Add Cube search dialog presents selectable search results, not context actions.
+search_dialogs = ["frontend/comfyui/ui/picker/ComfyCubeAddMenuPresenter.ts"]
+choice_controls = ["frontend/comfyui/ui/output_canvas/presentation/vue/CanvasAnchoredPicker.ts"]
+
+[invalidation]
+document_observer_owners = [
+  "frontend/comfyui/ui/core/HostSurfaceObserver.ts",
+  "frontend/comfyui/ui/surface/ComfyRendererPresenceObserver.ts",
+  "frontend/comfyui/ui/surface/appearance/OverlayScrollbarHost.ts",
+  # Invalidates native gesture-occlusion measurement only; it never discovers graphs or surfaces.
+  "frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasOverlayObserver.ts",
+]
+mutation_observer_owners = [
+  # Native editor-local drag copies and paint: these observers never discover host graphs or surfaces.
+  "frontend/sugarprompt/editor/src/reorder-motion-observation.ts",
+  "frontend/sugarprompt/editor/src/reorder-native-projection.ts",
+  "frontend/sugarprompt/editor/src/reorder-slot-layout-read.ts",
+  "frontend/comfyui/ui/surface/appearance/AccentThemeHost.ts",
+  "frontend/comfyui/ui/core/HostAncestryObserver.ts",
+  "frontend/comfyui/ui/core/HostSurfaceObserver.ts",
+  "frontend/comfyui/ui/dialogs/ModalAppearance.ts",
+  "frontend/comfyui/ui/picker/ComfyCubePickerResultPresenter.ts",
+  "frontend/comfyui/ui/relations/infrastructure/NativeLinkChoiceLabels.ts",
+  "frontend/comfyui/ui/relations/presentation/GlobalOverrideToolbar.ts",
+  "frontend/comfyui/ui/surface/ComfyRendererPresenceObserver.ts",
+  "frontend/comfyui/ui/surface/ComfyVueCubeColorScope.ts",
+  "frontend/comfyui/ui/surface/ComfyVueCubeNodeHost.ts",
+  "frontend/comfyui/ui/surface/ComfyVueNodeCardRenderer.ts",
+  "frontend/comfyui/ui/surface/NativeChoiceRestrictions.ts",
+  "frontend/comfyui/ui/surface/NodeCardIconHost.ts",
+  "frontend/comfyui/ui/surface/appearance/AppearanceHost.ts",
+  "frontend/comfyui/ui/surface/appearance/OverlayScrollbarHost.ts",
+  "frontend/comfyui/ui/surface/appearance/NativeToggleRows.ts",
+  "frontend/comfyui/ui/surface/appearance/NativeBooleanSegments.ts",
+  "frontend/comfyui/ui/model_library/ModelPickerAppearance.ts",
+  "frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasOverlayObserver.ts",
+]
+
+[structure]
+source_roots = [
+  "__init__.py",
+  "prestartup_script.py",
+  "load_model_roots.py",
+  "sugarcubes_model_roots",
+  "sugarcubes",
+  "frontend",
+  "integrations",
+  "scripts",
+  "tools",
+  "stubs",
+  "types",
+]
+extensions = [".py", ".pyi", ".ts", ".tsx", ".rs"]
+excluded_prefixes = [
+  ".generated/",
+  "artifacts/",
+  "node_modules/",
+  "web/",
+]
+soft_lines = 350
+hard_lines = 500
+
+[[dependency]]
+name = "TYPESCRIPT_WORKFLOW_DOMAIN"
+paths = ["frontend/comfyui/ui/workflow/domain/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/workflow/application",
+  "frontend/comfyui/ui/workflow/infrastructure",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/cube",
+  "frontend/comfyui/ui/picker",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_INPUT_CANVAS_DOMAIN"
+paths = ["frontend/comfyui/ui/input_canvas/domain/*.ts"]
+forbidden_typescript_paths = ["frontend/comfyui/ui/input_canvas/application", "frontend/comfyui/ui/input_canvas/infrastructure", "frontend/comfyui/ui/input_canvas/presentation", "frontend/comfyui/ui/surface", "frontend/comfyui/ui/types/graph", "types/comfyui", "/scripts", "node_modules"]
+
+[[dependency]]
+name = "TYPESCRIPT_INPUT_CANVAS_APPLICATION"
+paths = ["frontend/comfyui/ui/input_canvas/application/*.ts"]
+forbidden_typescript_paths = ["frontend/comfyui/ui/input_canvas/infrastructure", "frontend/comfyui/ui/input_canvas/presentation", "frontend/comfyui/ui/surface", "frontend/comfyui/ui/types/graph", "types/comfyui", "/scripts", "node_modules"]
+
+[[dependency]]
+name = "TYPESCRIPT_CANVAS_EDITING_DOMAIN"
+paths = ["frontend/comfyui/ui/canvas_editing/domain/*.ts"]
+forbidden_typescript_paths = ["frontend/comfyui/ui/canvas_editing/application", "frontend/comfyui/ui/canvas_editing/presentation", "frontend/comfyui/ui/output_canvas", "frontend/comfyui/ui/menus", "frontend/comfyui/ui/surface", "types/comfyui", "/scripts", "node_modules"]
+
+[[dependency]]
+name = "TYPESCRIPT_CANVAS_EDITING_APPLICATION"
+paths = ["frontend/comfyui/ui/canvas_editing/application/*.ts"]
+forbidden_typescript_paths = ["frontend/comfyui/ui/canvas_editing/presentation", "frontend/comfyui/ui/output_canvas", "frontend/comfyui/ui/menus", "frontend/comfyui/ui/surface", "types/comfyui", "/scripts", "node_modules"]
+
+[[dependency]]
+name = "TYPESCRIPT_CANVAS_EDITING_PRESENTATION"
+paths = ["frontend/comfyui/ui/canvas_editing/presentation/*.ts"]
+forbidden_typescript_paths = ["frontend/comfyui/ui/output_canvas", "frontend/comfyui/ui/execution", "frontend/comfyui/ui/surface", "types/comfyui", "/scripts"]
+
+[[dependency]]
+name = "TYPESCRIPT_EXECUTION_DOMAIN"
+paths = ["frontend/comfyui/ui/execution/domain/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/execution/application",
+  "frontend/comfyui/ui/execution/infrastructure",
+  "frontend/comfyui/ui/output_canvas",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/cube",
+  "types/comfyui",
+  "node_modules",
+  "/scripts",
+  "frontend/comfyui/ui/types/graph",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_EXECUTION_APPLICATION"
+paths = ["frontend/comfyui/ui/execution/application/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/execution/infrastructure",
+  "frontend/comfyui/ui/output_canvas",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/cube",
+  "types/comfyui",
+  "node_modules",
+  "/scripts",
+  "frontend/comfyui/ui/types/graph",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_CANVAS_DOMAIN"
+paths = ["frontend/comfyui/ui/output_canvas/domain/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/output_canvas/application",
+  "frontend/comfyui/ui/output_canvas/infrastructure",
+  "frontend/comfyui/ui/output_canvas/presentation",
+  "frontend/comfyui/ui/execution/application",
+  "frontend/comfyui/ui/execution/infrastructure",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/cube",
+  "types/comfyui",
+  "node_modules",
+  "/scripts",
+  "frontend/comfyui/ui/types/graph",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_CANVAS_APPLICATION"
+paths = ["frontend/comfyui/ui/output_canvas/application/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/output_canvas/infrastructure",
+  "frontend/comfyui/ui/output_canvas/presentation",
+  "frontend/comfyui/ui/execution/infrastructure",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/cube",
+  "types/comfyui",
+  "node_modules",
+  "/scripts",
+  "frontend/comfyui/ui/types/graph",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_CANVAS_OVERLAY"
+paths = ["frontend/comfyui/ui/output_canvas/presentation/vue/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/output_canvas/application",
+  "frontend/comfyui/ui/output_canvas/infrastructure",
+  "frontend/comfyui/ui/output_canvas/presentation/browser",
+  "frontend/comfyui/ui/execution/application",
+  "frontend/comfyui/ui/execution/infrastructure",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/cube",
+  "types/comfyui",
+  "/scripts",
+  "frontend/comfyui/ui/types/graph",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_WORKFLOW_APPLICATION"
+paths = ["frontend/comfyui/ui/workflow/application/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/workflow/infrastructure",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/cube",
+  "frontend/comfyui/ui/picker",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_PICKER_DOMAIN"
+paths = ["frontend/comfyui/ui/picker/domain/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/picker/*.ts",
+  "frontend/comfyui/ui/picker/application",
+  "frontend/comfyui/ui/picker/infrastructure",
+  "frontend/comfyui/ui/picker/vue",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/cube",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_SEARCH_DOMAIN"
+paths = ["frontend/comfyui/ui/search/domain/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/search/application",
+  "frontend/comfyui/ui/search/infrastructure",
+  "frontend/comfyui/ui/search/presentation",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/cube",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_SEARCH_APPLICATION"
+paths = ["frontend/comfyui/ui/search/application/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/search/infrastructure",
+  "frontend/comfyui/ui/search/presentation",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/cube",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_RELATION_DOMAIN"
+paths = ["frontend/comfyui/ui/relations/domain/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/relations/application",
+  "frontend/comfyui/ui/relations/infrastructure",
+  "frontend/comfyui/ui/relations/presentation",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/cube",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_RELATION_APPLICATION"
+paths = ["frontend/comfyui/ui/relations/application/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/relations/infrastructure",
+  "frontend/comfyui/ui/relations/presentation",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/cube",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_EDITOR_ACTION_DOMAIN"
+paths = ["frontend/comfyui/ui/editor_actions/domain/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/editor_actions/application",
+  "frontend/comfyui/ui/editor_actions/infrastructure",
+  "frontend/comfyui/ui/editor_actions/presentation",
+  "frontend/comfyui/ui/menus",
+  "frontend/comfyui/ui/dialogs",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/model_library",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_EDITOR_ACTION_APPLICATION"
+paths = ["frontend/comfyui/ui/editor_actions/application/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/editor_actions/infrastructure",
+  "frontend/comfyui/ui/editor_actions/presentation",
+  "frontend/comfyui/ui/menus",
+  "frontend/comfyui/ui/dialogs",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/model_library",
+]
+
+[[dependency]]
+name = "PYTHON_GIMP_ADAPTER"
+paths = ["integrations/gimp/native/*.py", "integrations/gimp/native/**/*.py", "integrations/gimp/entry/*.py"]
+forbidden_python_imports = [
+  "sugarcubes",
+  "frontend",
+  "integrations.photoshop",
+]
+
+[[dependency]]
+name = "PYTHON_MODEL_ROOT_DOMAIN"
+paths = ["sugarcubes_model_roots/domain.py", "sugarcubes_model_roots/service.py"]
+forbidden_python_imports = [
+  "sugarcubes_model_roots.store",
+  "sugarcubes_model_roots.startup",
+  "aiohttp",
+  "pathlib",
+]
+
+[[dependency]]
+name = "PYTHON_PACK_INSTALL"
+# Prestartup loads this package by file location before SugarCubes imports, so it
+# may use only the standard library and its own modules.
+paths = ["sugarcubes/backend/pack_install/*.py"]
+forbidden_python_imports = [
+  "sugarcubes.backend.self_update",
+  "sugarcubes.backend.services",
+  "sugarcubes.backend.composition",
+  "sugarcubes.instrumentation",
+  "sugarcubes.package_identity",
+  "aiohttp",
+  "urllib",
+  "pygit2",
+  "certifi",
+]
+
+[[dependency]]
+name = "PYTHON_DOMAIN"
+paths = ["sugarcubes/cube_model/**/*.py", "sugarcubes/cube_model/*.py"]
+forbidden_python_imports = [
+  "sugarcubes.backend",
+  "sugarcubes.exporter",
+  "sugarcubes.importer",
+  "sugarcubes.runtime",
+]
+
+[[dependency]]
+name = "PYTHON_OUTPUT_SAVING_DOMAIN"
+paths = ["sugarcubes/output_saving/domain/*.py"]
+forbidden_python_imports = [
+  "sugarcubes.output_saving.application",
+  "sugarcubes.output_saving.infrastructure",
+  "sugarcubes.backend",
+  "sugarcubes.runtime",
+  "aiohttp",
+  "pathlib",
+  "os",
+  "sqlite3",
+]
+
+[[dependency]]
+name = "PYTHON_OUTPUT_SAVING_APPLICATION"
+paths = ["sugarcubes/output_saving/application/*.py"]
+forbidden_python_imports = [
+  "sugarcubes.output_saving.infrastructure",
+  "sugarcubes.backend",
+  "sugarcubes.runtime",
+  "aiohttp",
+  "pathlib",
+  "os",
+  "sqlite3",
+]
+
+[[dependency]]
+name = "PYTHON_MODEL_LIBRARY_DOMAIN"
+paths = ["sugarcubes/model_library/domain/*.py"]
+forbidden_python_imports = [
+  "sugarcubes.model_library.application",
+  "sugarcubes.model_library.infrastructure",
+  "sugarcubes.backend",
+  "aiohttp",
+  "pathlib",
+  "sqlite3",
+]
+
+[[dependency]]
+name = "PYTHON_MODEL_LIBRARY_APPLICATION"
+paths = ["sugarcubes/model_library/application/*.py"]
+forbidden_python_imports = [
+  "sugarcubes.model_library.infrastructure",
+  "sugarcubes.backend",
+  "aiohttp",
+  "pathlib",
+  "sqlite3",
+]
+
+[[dependency]]
+name = "PYTHON_EXPORT"
+paths = ["sugarcubes/exporter/**/*.py", "sugarcubes/exporter/*.py"]
+forbidden_python_imports = [
+  "sugarcubes.backend",
+  "sugarcubes.importer",
+  "sugarcubes.runtime",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_CORE"
+paths = ["frontend/comfyui/ui/core/**/*.ts", "frontend/comfyui/ui/core/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/browser",
+  "frontend/comfyui/ui/dialogs",
+  "frontend/comfyui/ui/overlays",
+  "frontend/comfyui/ui/save",
+  "frontend/comfyui/ui/settings",
+  "frontend/comfyui/ui/surface",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_PICKER_APPLICATION"
+paths = ["frontend/comfyui/ui/picker/application/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/picker/infrastructure",
+  "frontend/comfyui/ui/picker/vue",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/cube",
+  "frontend/comfyui/ui/dialogs",
+  "frontend/comfyui/ui/core",
+  "frontend/comfyui/ui/import",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_GRAPH"
+paths = ["frontend/comfyui/ui/graph/**/*.ts", "frontend/comfyui/ui/graph/*.ts"]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/browser",
+  "frontend/comfyui/ui/dialogs",
+  "frontend/comfyui/ui/overlays",
+  "frontend/comfyui/ui/save",
+  "frontend/comfyui/ui/settings",
+]
+
+[[dependency]]
+name = "TYPESCRIPT_EXECUTION"
+paths = [
+  "frontend/comfyui/ui/cube/execution/**/*.ts",
+  "frontend/comfyui/ui/cube/execution/*.ts",
+]
+forbidden_typescript_paths = [
+  "frontend/comfyui/ui/browser",
+  "frontend/comfyui/ui/dialogs",
+  "frontend/comfyui/ui/overlays",
+  "frontend/comfyui/ui/save",
+  "frontend/comfyui/ui/settings",
+  "frontend/comfyui/ui/surface",
+]
+
+[[dependency]]
+name = "SUGARPROMPT_CORE"
+paths = ["frontend/sugarprompt/core/src/**/*.ts", "frontend/sugarprompt/core/src/*.ts"]
+forbidden_typescript_paths = ["frontend/sugarprompt/services", "frontend/sugarprompt/editor", "frontend/comfyui", "node_modules", "types/comfyui", "/scripts"]
+
+[[dependency]]
+name = "SUGARPROMPT_SERVICES"
+paths = ["frontend/sugarprompt/services/src/**/*.ts", "frontend/sugarprompt/services/src/*.ts"]
+forbidden_typescript_paths = ["frontend/sugarprompt/editor", "frontend/comfyui", "types/comfyui", "/scripts"]
