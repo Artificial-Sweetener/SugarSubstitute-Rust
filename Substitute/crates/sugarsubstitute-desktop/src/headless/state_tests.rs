@@ -12,6 +12,7 @@ use std::{
     time::{Duration, Instant},
 };
 use sugarsubstitute_contracts::execution::ExecutionError;
+use sugarsubstitute_execution::qualification_time::anchor;
 type TestResult = Result<(), Box<dyn Error>>;
 #[derive(Debug)]
 struct Cause(&'static str);
@@ -110,7 +111,7 @@ fn cause(error: &DesktopError) -> Option<&'static str> {
 
 #[test]
 fn active_wait_uses_only_owned_earliest_deadline_without_periodic_polling() {
-    let now = Instant::now();
+    let now = anchor();
     let mut lifetime = Lifetime::default();
     let state = HeadlessState::new();
     assert_eq!(state.control(&lifetime), ControlFlow::Wait);
@@ -137,7 +138,7 @@ fn activity_has_fixed_budget_and_start_accepts_early_boundary_wake() {
 }
 #[test]
 fn shutdown_requests_once_and_keeps_draining_until_actual_settlement() -> TestResult {
-    let now = Instant::now();
+    let now = anchor();
     let mut lifetime = Lifetime {
         steps: VecDeque::from([HeadlessStep::Shutdown, HeadlessStep::Shutdown]),
         ..Lifetime::default()

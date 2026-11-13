@@ -52,7 +52,7 @@ impl ReportSessionContent for ReporterSession {
             operation: Operation::NativeLifecycle,
             class: JobClass::NativeObservation,
             deadline: None,
-            reservation_bytes: sugarsubstitute_execution::diagnostic_pipe::MIN_LIFECYCLE_PIPE_BYTES,
+            reservation_bytes: sugarsubstitute_execution::purpose_pipe::MIN_LIFECYCLE_PIPE_BYTES,
             replacement: None,
         };
         self.channel

@@ -14,7 +14,7 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
         self.drain(max)?;
         Ok(if self.closing {
             StartupPreparationStep::Closing
-        } else if self.intake_ready {
+        } else if self.intake_ready || self.forward_presentation_due() {
             StartupPreparationStep::Ready
         } else {
             StartupPreparationStep::Waiting
@@ -36,7 +36,11 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
         let own = if self.closing {
             (!self.deadline_reported).then_some(self.cleanup_deadline).flatten()
         } else if !self.initial_completed {
-            self.setup_deadline
+            let forward = self
+                .forward_wait
+                .as_ref()
+                .and_then(forward_recovery::wait::ForwardWait::native_wake);
+            self.setup_deadline.into_iter().chain(forward).min()
         } else {
             None
         };
@@ -112,6 +116,9 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
             return Err(cause);
         }
         Ok(())
+    }
+    fn take_presentation(&mut self) -> Option<sugarsubstitute_desktop::HeadlessPresentation> {
+        self.take_forward_presentation()
     }
     fn poll_shutdown(&mut self) -> Result<bool, Box<dyn Error>> {
         if !self.closing {
@@ -202,6 +209,9 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
         if let Some(authority) = &mut self.authority
             && !authority.retire_installation(client, cleanup, &self.jobs)?
         {
+            return Ok(false);
+        }
+        if !self.advance_relaunch(budget.settle_until)? {
             return Ok(false);
         }
         if self.updater.as_ref().is_some_and(|updater| !updater.settled()) {

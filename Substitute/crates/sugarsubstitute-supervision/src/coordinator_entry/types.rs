@@ -120,6 +120,18 @@ pub struct EntrySnapshot {
     pub owner: Option<CoordinatorKey>,
     /// Exact outstanding finite operation.
     pub pending: Option<JobId>,
+    /// The coordinator process the last election found holding the record, when it named one.
+    pub holder: Option<EntryHolder>,
+}
+/// The process a coordinator record names as its holder. It grants no authority: it lets a
+/// launch that cannot reach that coordinator ask whether it responds, and every native use
+/// re-verifies the creation time so a reused process id never matches.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EntryHolder {
+    /// Process id of the coordinator that published the record.
+    pub process_id: u32,
+    /// Its creation time in 100 ns units.
+    pub creation_time_100ns: u64,
 }
 /// Transfer causal facts only after exact owned finite-job consumption.
 #[derive(Clone, Debug)]

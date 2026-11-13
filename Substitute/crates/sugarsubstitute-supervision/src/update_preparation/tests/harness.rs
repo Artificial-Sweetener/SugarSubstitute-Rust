@@ -133,13 +133,27 @@ pub(super) fn discovery(
 }
 
 pub(super) fn submit(pipeline: &mut Pipeline, worker: &mut Worker) -> TestResult {
+    submit_at(pipeline, worker, NOW)
+}
+
+/// Submit with the injected wall clock fixed at `now` Unix UTC seconds.
+pub(super) fn submit_at(pipeline: &mut Pipeline, worker: &mut Worker, now: i64) -> TestResult {
     pipeline.admit_available(|client, scope, id| {
-        worker.submit(client, scope, id, Moment::from_nanos(2_000_000_000), || NOW)
+        worker.submit(client, scope, id, Moment::from_nanos(2_000_000_000), move || now)
     })
 }
 
 pub(super) fn step(pipeline: &mut Pipeline, worker: &mut Worker) -> Result<Observation, Failure> {
-    submit(pipeline, worker)?;
+    step_at(pipeline, worker, NOW)
+}
+
+/// One successful step observed with the injected wall clock fixed at `now`.
+pub(super) fn step_at(
+    pipeline: &mut Pipeline,
+    worker: &mut Worker,
+    now: i64,
+) -> Result<Observation, Failure> {
+    submit_at(pipeline, worker, now)?;
     let observed = pipeline.observe(|| worker.poll())?;
     if let Some(cause) = &observed.failure {
         return Err(Box::new(std::io::Error::other(cause.clone())));

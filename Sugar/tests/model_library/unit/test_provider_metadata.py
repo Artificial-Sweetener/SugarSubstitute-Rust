@@ -204,7 +204,9 @@ class UnavailablePreviews:
 
     async def prepare(self, url: str) -> tuple[ThumbnailReference, ...]:
         """Reject preparation while retaining successful provider metadata evidence."""
-        raise ModelPreviewUnavailableError("Fixture image is unavailable.")
+        raise ModelPreviewUnavailableError(
+            "Fixture image is unavailable.", reason="fixture offline", expected=True
+        )
 
     def available(self, thumbnails: tuple[ThumbnailReference, ...]) -> bool:
         """Retain known fixture fallback assets while only new transport is unavailable."""

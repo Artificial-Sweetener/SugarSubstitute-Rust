@@ -125,6 +125,8 @@ fn run_desktop(
     #[cfg(feature = "native-composition")]
     let workspace_scope = ScopeSpec { id: scopes.allocate()?, deadline: None };
     let canvas_scope = ScopeSpec { id: scopes.allocate()?, deadline: None };
+    let report_scope = ScopeSpec { id: scopes.allocate()?, deadline: None };
+    let report_cleanup_scope = ScopeSpec { id: scopes.allocate()?, deadline: None };
     let canvas_health = diagnostics.clone();
     let child = ProductionChild::new(ChildInputs {
         diagnostics,
@@ -171,6 +173,7 @@ fn run_desktop(
     // The parent's installation root anchors the canvas's runtime cache scope, beside the
     // installation's other runtime cache consumers. The cache owner validates it on a worker.
     content.configure_canvas(role.installation, canvas_health, canvas_scope)?;
+    content.configure_update_reports(report_scope, report_cleanup_scope)?;
     let receipt = sugarsubstitute_desktop::run_startup(
         DesktopOptions {
             title: sugarsubstitute::APPLICATION_NAME.into(),

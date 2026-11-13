@@ -3,17 +3,13 @@
 //! Fail configuration before any environment capture and observe real runner joins.
 use super::*;
 use crate::{completion_wake::Wake, paused_clock::PausedClock};
-use std::sync::{
-    OnceLock,
-    atomic::{AtomicU64, Ordering},
-};
+use std::sync::atomic::{AtomicU64, Ordering};
 static NEXT: AtomicU64 = AtomicU64::new(1);
 pub(crate) struct NoChild(pub(crate) Option<sugarsubstitute_contracts::configuration::LocaleId>);
 
 /// The one native instant a frozen runner reports, so a cutoff expires only when a test says so.
 pub(super) fn frozen_native_now() -> Instant {
-    static ORIGIN: OnceLock<Instant> = OnceLock::new();
-    *ORIGIN.get_or_init(Instant::now)
+    sugarsubstitute_execution::qualification_time::anchor()
 }
 
 /// Freeze the runner's logical and native time before it starts. Execution timers still fire for
@@ -202,6 +198,16 @@ impl EntryActivation for NoChild {
     }
     fn shutdown_budget(&self) -> Option<ShutdownBudget> {
         None
+    }
+    fn publish_update_status(
+        &mut self,
+        _: u64,
+        _: &sugarsubstitute_contracts::update::status::UpdateStatus,
+    ) -> Result<(), Box<dyn Error>> {
+        Ok(())
+    }
+    fn restart_to_apply_requested(&self) -> bool {
+        false
     }
     fn normal_close_requested(&self) -> bool {
         false

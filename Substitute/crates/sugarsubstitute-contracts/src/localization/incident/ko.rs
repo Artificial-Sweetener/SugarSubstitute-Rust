@@ -52,6 +52,8 @@ pub static KO: ReportMessages = ReportMessages {
     version: "버전",
     update_phase: "단계",
     export_file_name: "SugarSubstitute 업데이트 보고서.txt",
+    pack_update_title: "SugarCubes 업데이트 실패",
+    pack_update_message: "SugarCubes를 업데이트할 수 없습니다. 현재 버전은 계속 작동하며 이 보고서를 복사하거나 내보낼 수 있습니다.",
     startup_failure: [
         "연결 준비 실패",
         "연결 사용 불가",

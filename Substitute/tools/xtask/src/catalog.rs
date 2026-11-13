@@ -23,6 +23,14 @@ pub(crate) struct Persistence {
     pub(crate) formats: Vec<Format>,
 }
 impl Persistence {
+    /// Return the current version of a format registered under the given shared component.
+    pub(crate) fn current_version(&self, id: &str, component: &str) -> Option<u32> {
+        self.formats
+            .iter()
+            .find(|format| format.id == id && format.shared_component.as_deref() == Some(component))
+            .map(|format| format.current_version)
+    }
+
     /// Require a preserved protocol's reviewed source before registering an external native boundary.
     pub(crate) fn preserves_source(&self, id: &str, owner: &str, path: &str) -> bool {
         self.schema_version == 1
@@ -126,7 +134,10 @@ pub(crate) fn reviewed_sources(
     }
     require(
         fingerprint(root, sources)? == expected,
-        format!("catalog: {owner} has stale reviewed source fingerprints"),
+        format!(
+            "catalog: {owner} has stale reviewed source fingerprints; {}",
+            crate::fingerprints::RESYNC
+        ),
     )
 }
 
@@ -222,7 +233,11 @@ fn reviewed_format_sources(
     )?;
     require(
         fingerprint_resolved(&format.sources, locate)? == format.source_sha256,
-        format!("catalog: {} has stale reviewed source fingerprints", format.owner),
+        format!(
+            "catalog: {} has stale reviewed source fingerprints; {}",
+            format.owner,
+            crate::fingerprints::RESYNC
+        ),
     )
 }
 /// Enforce unique contiguous versions and exact forward migration chains.

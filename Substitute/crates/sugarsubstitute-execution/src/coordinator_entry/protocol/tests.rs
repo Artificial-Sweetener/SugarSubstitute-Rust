@@ -85,6 +85,7 @@ fn all_closed_frames_preserve_correlation_and_exact_lengths() -> Result<(), Box<
         (bound, Payload::Challenge),
         (bound, Payload::Accepted(run)),
         (bound, Payload::Closing),
+        (bound, Payload::Unresponsive),
     ] {
         let mut output = [0u8; 256];
         let expected = encoded_length(&header, &payload)?;
@@ -97,11 +98,31 @@ fn all_closed_frames_preserve_correlation_and_exact_lengths() -> Result<(), Box<
             DecodedPayload::Hello
             | DecodedPayload::Initializing
             | DecodedPayload::Challenge
-            | DecodedPayload::Closing => {}
+            | DecodedPayload::Closing
+            | DecodedPayload::Unresponsive => {}
             _ => return Err("unexpected closed payload".into()),
         }
         assert!(decode(&output[..length + 1]).is_err());
     }
+    Ok(())
+}
+/// The unresponsive and closing outcomes are version 4 frames; a version 3 peer's envelope
+/// is refused before any body is read, and so is a version 4 outcome sent to it.
+#[test]
+fn unresponsive_outcome_is_a_bodyless_version_four_frame_and_version_three_is_refused()
+-> Result<(), Box<dyn Error>> {
+    let bound = header()?;
+    let mut output = [0u8; HEADER_BYTES];
+    let length = encode(&mut output, &bound, Payload::Unresponsive)?;
+    assert_eq!(length, HEADER_BYTES);
+    assert_eq!(&output[4..6], &4u16.to_le_bytes());
+    assert!(matches!(decode(&output)?.payload, DecodedPayload::Unresponsive));
+    output[4..6].copy_from_slice(&3u16.to_le_bytes());
+    assert!(decode(&output).is_err());
+    let mut unbound = bound;
+    unbound.epoch = None;
+    unbound.nonce = [0; 32];
+    assert!(encode(&mut [0u8; HEADER_BYTES], &unbound, Payload::Unresponsive).is_err());
     Ok(())
 }
 #[test]

@@ -185,7 +185,7 @@ pub(crate) fn check(
         )?;
         require(
             fingerprint(root, std::slice::from_ref(&record.path))? == record.source_sha256,
-            format!("diagnostics: stale boundary {}", record.path),
+            format!("diagnostics: stale boundary {}; {}", record.path, crate::fingerprints::RESYNC),
         )?;
         match record.disposition {
             Disposition::Routing => require(

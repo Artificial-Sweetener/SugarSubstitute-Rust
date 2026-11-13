@@ -50,6 +50,12 @@ impl Session {
         if self.deferred_retirement.is_none() {
             self.consume_display()?;
         }
+        // Retiring the outgoing document's last render or display above may release a finished
+        // load held for parking; no later completion would wake this owner to adopt it.
+        #[cfg(feature = "native-composition")]
+        if self.deferred_retirement.is_none() && !restoring_preview && self.parked_load_released() {
+            self.consume_load()?;
+        }
         if self.deferred_retirement.is_none() {
             self.submit_gpu_presentation()?;
         }

@@ -284,3 +284,69 @@ fn async_jobs_are_refused_without_blocking() -> TestResult {
     ));
     Ok(())
 }
+
+/// A file kept open by a range-lock job after it reports, so its lock stays held.
+type Kept = Arc<Mutex<Option<File>>>;
+
+impl Harness {
+    /// Start one blocking job that locks `range` exclusively until `until` and keeps its handle.
+    fn range_waiter(
+        &mut self,
+        range: Range,
+        until: Moment,
+    ) -> TestResult<(OwnedJob<(), ()>, Cell, Kept)> {
+        self.next += 1;
+        let observed = Arc::new(Mutex::new(None));
+        let kept = Arc::new(Mutex::new(None));
+        let (output, file_output) = (observed.clone(), kept.clone());
+        let path = self.path();
+        let job = self.client.submit_blocking(
+            &self.scope,
+            spec(self.next, JobClass::InfrastructureOrdinary, 0)?,
+            move |context| {
+                let result = open(&path, true).map_err(FileLockError::Io).and_then(|file| {
+                    lock_range(&context, file.as_handle(), LockKind::Exclusive, range, until)?;
+                    *file_output.lock().unwrap_or_else(std::sync::PoisonError::into_inner) =
+                        Some(file);
+                    Ok(())
+                });
+                *output.lock().unwrap_or_else(std::sync::PoisonError::into_inner) =
+                    Some(result.into());
+                Ok::<_, ()>(())
+            },
+        )?;
+        Ok((job, observed, kept))
+    }
+}
+
+/// Ranges past the end of an empty file lock independently: a disjoint range is granted at
+/// once, the same range waits in the kernel and wakes on release, a bound already reached
+/// refuses a held range without waiting, and an empty range is refused.
+#[test]
+fn byte_ranges_past_the_end_lock_independently_and_wait_only_on_overlap() -> TestResult {
+    let mut harness = Harness::new()?;
+    let held = Range { offset: 1 << 40, length: 1 };
+    let neighbour = Range { offset: (1 << 40) + 1, length: 1 };
+    let now = harness.clock.now();
+    let (mut job, result, holder) = harness.range_waiter(held, now)?;
+    assert_eq!(harness.settle(&mut job)?, TerminalKind::Success);
+    assert_eq!(observed(&result), Some(Observed::Granted));
+    let (mut job, result, _neighbour) = harness.range_waiter(neighbour, now)?;
+    assert_eq!(harness.settle(&mut job)?, TerminalKind::Success);
+    assert_eq!(observed(&result), Some(Observed::Granted));
+    let (mut job, result, _) = harness.range_waiter(held, now)?;
+    assert_eq!(harness.settle(&mut job)?, TerminalKind::Success);
+    assert_eq!(observed(&result), Some(Observed::Timeout));
+    let until = moment(5_000);
+    let (mut job, result, _waiter) = harness.range_waiter(held, until)?;
+    harness.clock.wait_for_sleeper(until);
+    assert_eq!(observed(&result), None);
+    drop(holder.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take());
+    assert_eq!(harness.settle(&mut job)?, TerminalKind::Success);
+    assert_eq!(observed(&result), Some(Observed::Granted));
+    assert_eq!(harness.clock.now(), Moment::from_nanos(0));
+    let (mut job, result, _) = harness.range_waiter(Range { offset: 0, length: 0 }, until)?;
+    assert_eq!(harness.settle(&mut job)?, TerminalKind::Success);
+    assert_eq!(observed(&result), Some(Observed::InvalidInput));
+    Ok(())
+}

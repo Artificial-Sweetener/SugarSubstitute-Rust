@@ -239,6 +239,12 @@ impl EntryLease for Lease {
         }
         Ok(nonce)
     }
+    fn allow_foreground(&mut self, pid: u32) -> Result<(), NativeObservationError> {
+        // SAFETY: the grant only lets this kernel-verified process take the foreground
+        // once; it reads no memory and changes no handle state.
+        unsafe { windows::Win32::UI::WindowsAndMessaging::AllowSetForegroundWindow(pid) }
+            .map_err(|cause| NativeObservationError::new("entry_allow_foreground", cause))
+    }
     fn retire_connection(
         &mut self,
         index: usize,

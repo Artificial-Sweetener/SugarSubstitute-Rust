@@ -87,6 +87,9 @@ impl EntryLease for CounterLease {
     fn nonce(&mut self) -> Result<[u8; 32], EntryTransportError> {
         Lease.nonce()
     }
+    fn allow_foreground(&mut self, pid: u32) -> Result<(), NativeObservationError> {
+        Lease.allow_foreground(pid)
+    }
     fn retire_connection(&mut self, i: usize, r: bool) -> Result<bool, EntryTransportError> {
         Lease.retire_connection(i, r)
     }

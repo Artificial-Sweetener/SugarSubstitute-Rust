@@ -202,3 +202,31 @@ fn presentation_changed_retains_closed_shapes_and_numeric_bounds() -> Result<(),
     }
     Ok(())
 }
+
+#[test]
+fn a_presentation_watch_is_accepted_only_at_its_fixed_schema_one() -> Result<(), Box<dyn Error>> {
+    let request = |schema: Value| -> Result<Vec<u8>, Box<dyn Error>> {
+        Ok(serde_json::to_vec(&json!({
+            "protocol": "sugarcubes.canvas", "version": 3, "session": "preview-contract-session",
+            "requestId": 7, "type": "surface.presentation.request", "schema": schema,
+            "enabled": true,
+        }))?)
+    };
+    let CanvasSurfaceMessage::Presentation(watch) =
+        CanvasSurfaceMessage::decode(&request(json!(1))?)?
+    else {
+        return Err("Expected watch request".into());
+    };
+    let reply: Value = serde_json::from_slice(&watch.reply(
+        CanvasSurfaceDiscoveryStatus::Unavailable,
+        false,
+        "",
+    )?)?;
+    assert_eq!(reply["schema"], 1);
+    assert_eq!(reply["status"], "unavailable");
+    // Unlike surface discovery, the watch does not negotiate: a newer schema is refused.
+    for schema in [json!(0), json!(2), json!(3), json!(1003)] {
+        assert!(CanvasSurfaceMessage::decode(&request(schema.clone())?).is_err(), "{schema}");
+    }
+    Ok(())
+}

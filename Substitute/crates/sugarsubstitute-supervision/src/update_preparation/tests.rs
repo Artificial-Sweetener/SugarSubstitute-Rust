@@ -7,6 +7,7 @@ mod engine;
 mod exclusion;
 mod harness;
 mod online_reopen;
+mod receipt;
 mod reopen;
 mod restart;
 mod resumption;

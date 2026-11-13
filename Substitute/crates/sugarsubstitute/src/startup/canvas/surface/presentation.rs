@@ -86,12 +86,8 @@ impl NativeSurface {
             if let Some(binding) = &mut self.binding {
                 binding.selected = false;
             }
-            return self.reply(
-                pending.identity,
-                &pending.request,
-                CanvasSurfaceReplyStatus::Error,
-                pending.claim,
-            );
+            let message = failure_message(session);
+            return self.reply_error(pending.identity, &pending.request, &message, pending.claim);
         }
         if matches!(pending.kind, PendingKind::Select)
             && self.binding.as_ref().is_some_and(|binding| {

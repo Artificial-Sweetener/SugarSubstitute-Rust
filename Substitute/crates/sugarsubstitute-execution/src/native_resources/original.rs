@@ -23,6 +23,7 @@ struct Control {
 }
 impl SymbolOriginalContext {
     /// Construct only after actual Core validates this context and partition.
+    #[cfg(any(windows, test))]
     pub(crate) fn new(context: &JobContext, guard: Arc<NativeHandleClaim>) -> Self {
         Self { value: Arc::new(context.clone()), _guard: guard }
     }

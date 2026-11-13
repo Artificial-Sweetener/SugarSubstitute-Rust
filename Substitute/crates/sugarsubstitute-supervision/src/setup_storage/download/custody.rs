@@ -24,13 +24,18 @@ use sugarsubstitute_update::Target;
 /// Verified download custody retains its shared-cache pin through extraction and native consumers.
 pub(super) struct Custody {
     pub(super) payload: Payload,
-    _entry: Directory,
+    entry: Directory,
     _parent: Directory,
     _installation_owner: File,
     _entry_owner: File,
     _cache: CacheLease,
 }
 impl Custody {
+    /// The entry directory, on the volume the payload is written to.
+    pub(super) fn directory(&self) -> &std::path::Path {
+        self.entry.path()
+    }
+
     /// Acquire shared disk admission before opening the feature-authenticated archive.
     pub(super) fn open(
         storage: RuntimeCache,
@@ -89,7 +94,7 @@ impl Custody {
         let payload = cache.payload("payload", target.length(), context)?;
         Ok(Self {
             payload,
-            _entry: entry,
+            entry,
             _cache: cache,
             _parent: parent,
             _installation_owner: installation_owner,

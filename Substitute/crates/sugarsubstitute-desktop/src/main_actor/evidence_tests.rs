@@ -3,6 +3,7 @@
 //! Characterize actual decoded frame/context/receipt failures with deterministic owner input.
 
 use super::*;
+use sugarsubstitute_execution::qualification_time::anchor;
 #[path = "console_tests.rs"]
 mod console;
 #[path = "exception_tests.rs"]
@@ -40,7 +41,7 @@ fn owner() -> Result<MainReadiness, Box<dyn Error>> {
     )?)
 }
 fn consume(owner: &mut MainReadiness, kind: Kind, payload: &str) -> Result<Effect, DesktopError> {
-    decode::consume(owner, Observation { kind, command: None, payload }, std::time::Instant::now())
+    decode::consume(owner, Observation { kind, command: None, payload }, anchor())
 }
 
 /// Admit actual decoded root/context/navigation facts for all evidence owner regressions.
@@ -80,7 +81,7 @@ fn duplicate_native_context_identity_is_rejected_by_typed_decoder() -> Result<()
 #[test]
 fn actual_decoded_setup_failure_remains_sticky_through_later_positive_inputs()
 -> Result<(), Box<dyn Error>> {
-    let now = std::time::Instant::now();
+    let now = anchor();
     let mut owner = owner()?;
     owner.navigation_started()?;
     consume(
@@ -120,7 +121,7 @@ fn malformed_frame_keeps_actual_observation_kind_and_original_decode_cause()
             command: None,
             payload: r#"{"frame":{"id":"root","url":"http://127.0.0.1:8188/"}}"#,
         },
-        std::time::Instant::now(),
+        anchor(),
     ) else {
         return Err("Missing actual native frame decoder failure".into());
     };

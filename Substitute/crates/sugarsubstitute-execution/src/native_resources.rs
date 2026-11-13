@@ -36,6 +36,7 @@ impl EffectContext {
         }
     }
     /// Bind the real native child context before its first finite native effect.
+    #[cfg(windows)]
     pub(crate) fn for_child(
         &self,
         context: &sugarsubstitute_contracts::execution::JobContext,

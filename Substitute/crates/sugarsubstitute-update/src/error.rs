@@ -29,6 +29,13 @@ pub enum Error {
     /// A target has no supported digest or its streamed bytes do not match.
     Digest,
 }
+impl Error {
+    /// Whether verification failed only because signed metadata outlived its lifetime, as
+    /// opposed to a signature, rollback, routing or storage problem.
+    pub fn is_expiry(&self) -> bool {
+        matches!(self, Self::Expired | Self::Trust(tuf::Error::ExpiredMetadata { .. }))
+    }
+}
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

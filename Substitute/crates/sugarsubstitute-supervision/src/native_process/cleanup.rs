@@ -82,7 +82,7 @@ impl WindowsPort {
         family.check_native()?;
         keep(close_slot(&mut family.watch_duplicate, "close_watch_duplicate"));
         drop(family.lifecycle_enrollment.take());
-        drop(family.diagnostic_enrollment.take());
+        drop(family.purpose_enrollment.take());
         if let Some(launch) = &mut family.backend_custody {
             drop(launch.enrollment.take());
         }
@@ -126,13 +126,13 @@ impl NativePort for WindowsPort {
     ) -> Result<(), RegistryError> {
         self.enroll_native(family, run, key)
     }
-    fn enroll_diagnostic(
+    fn enroll_purpose(
         &self,
         family: &mut Family,
-        binding: DiagnosticKey,
+        binding: PurposeKey,
         key: ProcessKey,
     ) -> Result<(), RegistryError> {
-        self.enroll_diagnostic_native(family, binding, key)
+        self.enroll_purpose_native(family, binding, key)
     }
     fn enroll_backend_custody(
         &self,

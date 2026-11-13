@@ -58,6 +58,7 @@ fn the_drag_cursor_puts_the_preview_ten_pixels_from_the_pointer_under_its_artwor
     Ok(())
 }
 
+#[cfg(target_os = "windows")]
 fn crc32(bytes: &[u8]) -> u32 {
     let mut crc = !0_u32;
     for byte in bytes {
@@ -70,6 +71,7 @@ fn crc32(bytes: &[u8]) -> u32 {
 }
 
 /// Encode straight RGBA rows as a PNG with stored (uncompressed) deflate blocks.
+#[cfg(target_os = "windows")]
 pub(crate) fn png([width, height]: [u32; 2], rgba: &[u8]) -> Vec<u8> {
     let mut raw = Vec::new();
     for row in rgba.chunks_exact(width as usize * 4) {

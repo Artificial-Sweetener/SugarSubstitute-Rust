@@ -50,6 +50,7 @@ impl EntryEnvironmentFailure {
         let observation = owner.capture_observation();
         Self { cause: Some(EntryEnvironmentCause::Shape { source }), observation, _owner: owner }
     }
+    #[cfg(any(windows, test))]
     pub(super) fn from_capture(capture: &mut NativeCapture, owner: EntryPreparationOwner) -> Self {
         let observation = Some(EntryEnvironmentObservation::from_capture(capture));
         owner.close_publication();

@@ -13,15 +13,13 @@ use std::{
     sync::Arc,
 };
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
-use sugarsubstitute_contracts::incident::DiagnosticKey;
 use sugarsubstitute_contracts::lifecycle::{ProcessKey, RunKey};
-use sugarsubstitute_execution::windows_diagnostic_pipe::{
-    DiagnosticEnrollment, DiagnosticPipeBootstrap,
-};
+use sugarsubstitute_execution::purpose_pipe::PurposeKey;
 use sugarsubstitute_execution::windows_fixture::FixtureChildEvents;
 use sugarsubstitute_execution::windows_lifecycle_pipe::{
     LifecycleDesktopEnrollment, LifecyclePipeBootstrap,
 };
+use sugarsubstitute_execution::windows_purpose_pipe::{PurposeEnrollment, PurposePipeBootstrap};
 use windows::Win32::Foundation::{CloseHandle, HANDLE};
 
 pub(crate) const MAX_MEMBERS: usize = 256;
@@ -56,9 +54,9 @@ pub(crate) struct Family {
     pub(crate) lifecycle_bootstrap: Option<LifecyclePipeBootstrap>,
     pub(crate) lifecycle_enrollment: Option<LifecycleDesktopEnrollment>,
     pub(crate) lifecycle_run: Option<RunKey>,
-    pub(crate) diagnostic_bootstrap: Option<DiagnosticPipeBootstrap>,
-    pub(crate) diagnostic_enrollment: Option<DiagnosticEnrollment>,
-    pub(crate) diagnostic_key: Option<DiagnosticKey>,
+    pub(crate) purpose_bootstrap: Option<PurposePipeBootstrap>,
+    pub(crate) purpose_enrollment: Option<PurposeEnrollment>,
+    pub(crate) purpose_key: Option<PurposeKey>,
     pub(crate) backend_custody: Option<crate::registry_input::backend_custody::CustodyLaunch>,
     pub(crate) output_pin: Option<OutputPin>,
     pub(crate) output_cancel: Option<OutputCancellation>,
@@ -140,9 +138,9 @@ impl Family {
                 lifecycle_bootstrap: None,
                 lifecycle_enrollment: None,
                 lifecycle_run: None,
-                diagnostic_bootstrap: None,
-                diagnostic_enrollment: None,
-                diagnostic_key: None,
+                purpose_bootstrap: None,
+                purpose_enrollment: None,
+                purpose_key: None,
                 backend_custody: None,
                 output_pin: None,
                 output_cancel: None,
@@ -252,10 +250,10 @@ pub(crate) trait NativePort: Send + Sync {
         run: RunKey,
         key: ProcessKey,
     ) -> Result<(), RegistryError>;
-    fn enroll_diagnostic(
+    fn enroll_purpose(
         &self,
         family: &mut Family,
-        binding: DiagnosticKey,
+        binding: PurposeKey,
         key: ProcessKey,
     ) -> Result<(), RegistryError>;
     fn enroll_backend_custody(
@@ -293,10 +291,10 @@ mod cleanup;
 mod creation;
 pub(crate) mod custody;
 pub(crate) mod custody_transfer;
-mod diagnostic;
 mod inheritance;
 mod lifecycle;
 mod membership;
+mod purpose;
 pub(crate) use membership::current_identity;
 mod recovery_carrier;
 

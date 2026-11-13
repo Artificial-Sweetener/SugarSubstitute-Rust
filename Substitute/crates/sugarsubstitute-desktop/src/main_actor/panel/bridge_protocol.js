@@ -1,20 +1,26 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 // Match transport custody to the shared canvas protocol; payloads remain native-owned.
-// The host invokes this expression with 'host' only while its main browser is composition-hosted.
-((outputSurfacePreference) => {
+// What the host serves and declares travels in its host description, never on the bridge.
+(() => {
   const host = 'ai.artificialsweetener.sugarsubstitute';
   const controls = ['ready', 'applied', 'pong', 'rejected'];
   const memoryReports = ['usage', 'preference'];
+  const updateRequests = ['watch', 'check', 'restart'];
+  const updateAnswers = ['state', 'accepted', 'rejected'];
   const requestTypes = ['context.request', 'source.request', 'geometry.request', 'edit.request',
     'workflow.request', 'surface.capabilities.request', 'surface.viewport.request',
     'surface.presentation.request', 'surface.prepare', 'surface.geometry', 'surface.select',
     'surface.commit', 'surface.release', 'surface.preview.begin', 'surface.preview.chunk',
     'surface.preview.end', 'surface.preview.withdraw', 'surface.overview'];
-  // The memory budget protocol versions independently of the version-three transport.
-  const version = value => value.protocol === 'sugarcubes.memory' ? 1 : 3;
+  // The host description, memory budget and updates protocols version independently of the
+  // version-three transport.
+  const version = value =>
+    ['sugarcubes.host', 'sugarcubes.memory', 'sugarcubes.updates'].includes(value.protocol) ? 1 : 3;
   const notification = value => value.protocol === 'sugarcubes.panel' ||
+    value.protocol === 'sugarcubes.host' && value.type === 'description' ||
     value.protocol === 'sugarcubes.memory' && value.type === 'allowance' ||
+    value.protocol === 'sugarcubes.updates' && updateAnswers.includes(value.type) ||
     value.protocol === 'sugarcubes.canvas' && value.requestId === 0 &&
     ['surface.presentation.changed', 'surface.camera.changed', 'source.changed', 'edit.changed']
       .includes(value.type);
@@ -27,7 +33,6 @@
   }
   const policy = Object.freeze({
     host,
-    outputSurfacePreference: outputSurfacePreference === 'host' ? 'host' : undefined,
     session(search) {
       const query = new URLSearchParams(search);
       const session = query.get('sc-panel-session');
@@ -38,8 +43,13 @@
       return session;
     },
     control: value => value.protocol === 'sugarcubes.panel' && controls.includes(value.type) ||
-      value.protocol === 'sugarcubes.memory' && memoryReports.includes(value.type),
+      value.protocol === 'sugarcubes.memory' && memoryReports.includes(value.type) ||
+      value.protocol === 'sugarcubes.updates' && updateRequests.includes(value.type),
     version,
+    // A newer control message replaces a queued one of the same protocol and type, except an
+    // update check or restart: the host answers each by its request name, so each one is kept.
+    replaces: (queued, value) => queued.protocol === value.protocol && queued.type === value.type &&
+      !(value.protocol === 'sugarcubes.updates' && ['check', 'restart'].includes(value.type)),
     request: type => requestTypes.includes(type),
     cancelled(value) {
       const envelope = { protocol: value.protocol, version: 3, session: value.session,
@@ -62,4 +72,4 @@
   });
   Object.defineProperty(globalThis, '__sugarcubes_substitute_policy_v3', { value: policy });
   globalThis.__sugarcubes_substitute_install_v3?.();
-})
+})();

@@ -3,7 +3,25 @@
 //! Acknowledge staged preview custody without occupying ordinary native presentation waiters.
 use super::*;
 
+const PREVIEW_CHUNK_REJECTED: &str =
+    "A preview part arrived out of order or does not fit its preview.";
+const PREVIEW_UNDECODABLE: &str = "The preview image could not be decoded.";
+const PREVIEW_INCOMPLETE: &str = "The preview could not be completed.";
+
 impl NativeSurface {
+    /// Refuse a preview request, saying what happened, then advance remaining preview custody.
+    fn reply_preview_error(
+        &mut self,
+        identity: MainIdentity,
+        request: &CanvasSurfaceRequest,
+        message: &str,
+        claim: MemoryClaim,
+        session: &mut Session,
+    ) -> Result<(), Box<dyn Error>> {
+        self.reply_error(identity, request, message, claim)?;
+        self.poll_previews(session)
+    }
+
     /// Qualify each request against the attachment while keeping lease revisions independent.
     pub(in crate::startup::canvas::surface) fn receive_preview(
         &mut self,
@@ -109,7 +127,13 @@ impl NativeSurface {
                     }
                     Some(Err(_)) => {
                         self.abort_preview_stage(session, CanvasSurfacePresentationStatus::Failed)?;
-                        CanvasSurfaceReplyStatus::Error
+                        return self.reply_preview_error(
+                            identity,
+                            &request,
+                            PREVIEW_CHUNK_REJECTED,
+                            claim,
+                            session,
+                        );
                     }
                 }
             }
@@ -153,7 +177,13 @@ impl NativeSurface {
                                         session,
                                         CanvasSurfacePresentationStatus::Failed,
                                     )?;
-                                    CanvasSurfaceReplyStatus::Error
+                                    return self.reply_preview_error(
+                                        identity,
+                                        &request,
+                                        PREVIEW_UNDECODABLE,
+                                        claim,
+                                        session,
+                                    );
                                 }
                             }
                         }
@@ -163,7 +193,13 @@ impl NativeSurface {
                     }
                     _ => {
                         self.abort_preview_stage(session, CanvasSurfacePresentationStatus::Failed)?;
-                        CanvasSurfaceReplyStatus::Error
+                        return self.reply_preview_error(
+                            identity,
+                            &request,
+                            PREVIEW_INCOMPLETE,
+                            claim,
+                            session,
+                        );
                     }
                 }
             }

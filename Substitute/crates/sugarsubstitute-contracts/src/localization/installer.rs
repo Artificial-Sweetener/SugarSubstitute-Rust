@@ -101,6 +101,9 @@ pub struct InstallerMessages {
     pub no_environment: &'static str,
     /// Installer retry copy.
     pub retry: &'static str,
+    /// One sentence shown when an expired installer could not check online: retrying installs
+    /// the version included in this installer, which then updates itself (C4).
+    pub included_version_offer: &'static str,
     /// Installer cancelled copy.
     pub cancelled: &'static str,
     /// Installer cancelling copy.
@@ -220,6 +223,7 @@ impl InstallerMessages {
             self.step,
             self.no_environment,
             self.retry,
+            self.included_version_offer,
             self.cancelled,
             self.cancelling,
             self.worker_stopped,

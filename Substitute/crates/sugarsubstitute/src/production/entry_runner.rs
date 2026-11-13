@@ -13,6 +13,8 @@ mod normal_idle;
 mod post_exit;
 #[path = "entry_runner/presentation.rs"]
 pub(super) mod presentation;
+#[path = "entry_runner/relaunch.rs"]
+mod relaunch;
 #[path = "entry_runner/routing.rs"]
 mod routing;
 #[cfg(test)]
@@ -91,6 +93,24 @@ pub(crate) trait EntryActivation {
     /// Borrow actual deliberate close intent only when current role and diagnostic custody permit it.
     /// This samples no clock and proves neither intake quiescence nor native settlement.
     fn normal_close_requested(&self) -> bool;
+    /// Offer the coordinator's update status at `revision` to every live desktop child; each
+    /// keeps it when newer than its own, so the runner may offer it every turn.
+    /// The child also learns the backend's workflow queue from its parent.
+    /// # Errors
+    /// Returns the status's encoding failure.
+    fn publish_update_status(
+        &mut self,
+        revision: u64,
+        status: &sugarsubstitute_contracts::update::status::UpdateStatus,
+    ) -> Result<(), Box<dyn Error>>;
+    /// The live state of this start's SugarCubes update, which the runner carries in its
+    /// update status. A coordinator without a backend runs no SugarCubes update.
+    fn sugarcubes_update(&self) -> sugarsubstitute_contracts::update::pack::PackUpdateStatus {
+        sugarsubstitute_contracts::update::pack::PackUpdateStatus::Idle
+    }
+    /// Whether a desktop child that asked to restart so an update applies has since completed
+    /// a normal close. A crashed or failed child never counts.
+    fn restart_to_apply_requested(&self) -> bool;
     /// Borrow its original retained fatal failure without separating its custody.
     /// An exposed source closes runner admission even when the last turn returned Active.
     fn failure_source(&self) -> Option<&(dyn Error + 'static)>;
@@ -322,7 +342,13 @@ pub(crate) struct EntryRunner<C: EntryActivation> {
     update_schedule: Option<crate::updates::schedule::CheckSchedule>,
     /// Native wake for the next due update check; the check itself runs on the executor.
     update_wake: Option<Instant>,
+    /// What the update control shows, from attempt results and the selection record.
+    update_status: crate::updates::status::StatusSource,
+    /// Scope of the selection-record reads behind `update_status`.
+    update_status_scope: Option<Scope>,
     post_exit: Option<post_exit::Deadline>,
+    /// The one restart-to-apply relaunch, after a normal close the child asked for.
+    relaunch: relaunch::Relaunch,
     command: Option<ProductionCommand>,
     executable: PathBuf,
     installation: PathBuf,
@@ -355,6 +381,8 @@ pub(crate) struct EntryRunner<C: EntryActivation> {
     intake_settled: bool,
     intake_ready: bool,
     forward: Option<CoordinatorEntryClientSession>,
+    /// Puts something on screen when a launch forwarded to another copy waits.
+    forward_wait: Option<forward_recovery::wait::ForwardWait>,
     transport_completions: [Option<JobCompletion<EntryTransportReport, EntryTransportError>>; 3],
     deadline_reported: bool,
     execution_stopping: bool,
@@ -379,7 +407,10 @@ impl<C: EntryActivation> EntryRunner<C> {
             updater: None,
             update_schedule: None,
             update_wake: None,
+            update_status: crate::updates::status::StatusSource::new(),
+            update_status_scope: None,
             post_exit: None,
+            relaunch: relaunch::Relaunch::Idle,
             command: Some(command),
             executable,
             installation,
@@ -410,6 +441,7 @@ impl<C: EntryActivation> EntryRunner<C> {
             intake_settled: false,
             intake_ready: false,
             forward: None,
+            forward_wait: None,
             transport_completions: std::array::from_fn(|_| None),
             deadline_reported: false,
             execution_stopping: false,

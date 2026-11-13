@@ -33,6 +33,13 @@ impl Floor {
     }
 }
 
+/// Highest authorised sequence and its package digest for one route.
+#[derive(Clone, Copy)]
+pub(crate) struct RouteFloor {
+    pub(crate) sequence: u64,
+    pub(crate) digest: [u8; 32],
+}
+
 /// Highest authorized package sequence for each route, including failed activation attempts.
 /// Native storage must bind this record to its installation/repository, serialize writers,
 /// and durably save a successor before publishing its package. This does not mark a version
@@ -105,6 +112,14 @@ impl ReleaseHistory {
             }
         }
         Ok(())
+    }
+
+    /// Durable floor for `request`'s route, if this installation ever authorised one.
+    pub(crate) fn floor(&self, request: &Request) -> Option<RouteFloor> {
+        self.floors
+            .iter()
+            .find(|floor| floor.matches(request))
+            .map(|floor| RouteFloor { sequence: floor.sequence, digest: floor.digest })
     }
 
     /// Propose history after current signature verification and exact archive matching.

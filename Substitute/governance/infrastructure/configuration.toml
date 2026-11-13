@@ -107,7 +107,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/installed_frontend/manifest.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:411a0bf729232d3d4c8b037ca768d6ad55d19a0d8a4a645448a9bf76b460f63f"
+source_sha256 = "sha256:d5181853d393de33814b3f1d5488490a7804ab10e87cebeea1c253f689130891"
 capabilities = ["codec"]
 rationale = "SugarCubes owns its package manifest. Read only its supported package identity/version; no host settings persistence."
 
@@ -149,7 +149,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/inventory.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:733b87bf95a51bb6137932fa0a19f4ec2b9eb83045ab8f2b55fd4b173c7b36a2"
+source_sha256 = "sha256:01df31054dbbc8d058ee8f3fa7ee4cdf1df474c50f62ca1ec74d3668b79762de"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -163,21 +163,21 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded/authorization.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:3e69cfb98f41ac377a08eda20326e0ecc3c0c606e62c96efd6ebae8da9af5b55"
+source_sha256 = "sha256:35f918a5ccd44376e9dcfea196e2740c9f4795eba614a4c1c0380bfd03dd8c8e"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded/authorization/launch/maintenance.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:b75a998dfb9571e2ebf8c5388f49dd25a59c89b639027a28174bf70aa4738b33"
+source_sha256 = "sha256:b46d2125d30138fe7a13ccef3baf4305861aff546b92b1a2e0379fe2d98b9d9f"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/packed/tests/downloaded/authorization/launch/running/image.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:464c2ba9a27cc932921d125453ee8abfdf448b5bab3d2bf2af7411a76165e79c"
+source_sha256 = "sha256:98ef11469e5298bf3cefe72c512335d65b21bcb4ac8972d51ded2c79a1a6b8e0"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -191,14 +191,14 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/distribution/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:a3aa9747b8fec21dc31c32e70c155419751e13dd9658f9961896a8833050de0d"
+source_sha256 = "sha256:4eb26c9845a1f357325cd3c5282fe07577be8ff73acf80a668329127004b891f"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:d368dd7f86a090950969f77df5c303618a7841a1e260647998f2afab3117dd6d"
+source_sha256 = "sha256:9897d9c80eeb0eb886e0b364d6edb238a56e5f9d6d56917f20a895bfee6d50bd"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -219,7 +219,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/test_package/maintenance.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:1ca22fb83e63bd8c5d578b4c5fe70f8ac35f16db81ac4d6dc6a1fb9880742764"
+source_sha256 = "sha256:98bc5c02b8fd693ba39ef5e751793790a2390a85f003b317a5deb093c7f23187"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -247,7 +247,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/update_preparation/tests/restart.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:97734391116f86fedf9c4ceb001747b69c975fe09525d47a9eb191c4ff1e5503"
+source_sha256 = "sha256:ae1f28576fa61afb25b5d96b004891ecb2423114621492a99a64edaa43da02c7"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -282,7 +282,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute/src/lib.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:00c4a60f438f27f126dbbd2af663d01331f58918290d0810624c134cbbc71652"
+source_sha256 = "sha256:f6c65654d84b75c89a7355371ecd7651db3a4015f56e43b8b04a409998df1d39"
 capabilities = ["arguments"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -310,21 +310,21 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/application_launch/engine/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:7ad66499cadb65150c6a35995ba846454e3d4e15127895a69f505aca4458afa4"
+source_sha256 = "sha256:82fbc63d96825780f390913d6630683e5e87e025d4e1951754a2d1d683f3782e"
 capabilities = ["arguments"]
 rationale = "Launch engine stand-in fixture: the child half reads its own fault mode from its arguments; no product configuration is acquired."
 
 [[records]]
 path = "crates/sugarsubstitute/src/stable_launcher.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:746ae3e835459f083f95ca5320082000e0f405cff2de2b491d7f43681f063f68"
+source_sha256 = "sha256:78ceb286f0a96e18b3a948ea0929cae4bf6a7822b57aebe44f47cf9119c8b57a"
 capabilities = ["arguments"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
 [[records]]
 path = "crates/sugarsubstitute/src/updates/entry.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:7781d042cee2866fc8b5c1147e6ad17b10e76dfb6ec538497e55acce622f186c"
+source_sha256 = "sha256:2c335933910ebbb3960932d1e1975438810ec80a43c2598b61c78370c05c3a80"
 capabilities = ["arguments"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -420,9 +420,37 @@ capabilities = ["arguments"]
 rationale = "Crashpad owns native capture configuration; host startup settings do not enter this API."
 
 [[records]]
+path = "tools/xtask/src/fingerprints.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:9efb26c34a0d63d91de253bf8a2e9244e9b1e90512e8b701384240f68c876e8e"
+capabilities = ["codec"]
+rationale = "Tooling reads governance policy TOML to record reviewed source fingerprints; not product settings."
+
+[[records]]
+path = "tools/update-repository/src/main.rs"
+owner = "sugarsubstitute-update-repository"
+source_sha256 = "sha256:2d65c4e259f824cad7d7dac32bf9de5f8f3321b25cec6392cb3cb014d0f3bda6"
+capabilities = ["arguments"]
+rationale = "Release-CI signing tool command line; its options select a repository folder, keys and times, never product settings."
+
+[[records]]
+path = "tools/update-repository/src/storage.rs"
+owner = "sugarsubstitute-update-repository"
+source_sha256 = "sha256:31250bbfae3c27afe8583f03e7ec92e8f5e3d84fd4059a146c10b38d6ade562f"
+capabilities = ["environment"]
+rationale = "Signing keys reach release CI only as secrets in the environment, named by an env:NAME key reference; never product settings."
+
+[[records]]
+path = "tools/xtask/src/shared_vectors_tests.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:2f4ac23ae3bbcd1753cdfceceab5f5a51dca1980a64346716f1b28bd53126013"
+capabilities = ["codec"]
+rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
+
+[[records]]
 path = "tools/xtask/src/catalog.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:80ed9ab7261a8b71ab8b433fc2587e6be211ce4488b911daf99f453480d26e84"
+source_sha256 = "sha256:ed2a97ccc5d0f6bac81368a9dc7ae186c0219754408b7df475b2ddb6c6a81a9e"
 capabilities = ["codec"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
 
@@ -464,21 +492,21 @@ rationale = "Tooling build, source inspection or isolated qualification input; n
 [[records]]
 path = "tools/xtask/src/governance.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:79899997dc08a0c38429be84592844ff724ed6c874ae4b3f003b80270705fa4b"
+source_sha256 = "sha256:a905a6d20af18ba89edfedc98c012c100eca88ad63326c4ad5a9a8bfd82a848e"
 capabilities = ["codec"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
 
 [[records]]
 path = "tools/xtask/src/main.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:75136c55921a618aeed0f03e439afd92a83642e156656924590cedc77969d6ef"
+source_sha256 = "sha256:6819bf400054ada7178b94b2b196dbf624679d01aad1657d8342c2520c1a7419"
 capabilities = ["arguments"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
 
 [[records]]
 path = "tools/xtask/src/policy.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:c12e32b21a3d20fa2330fffcf4718efd13661069f019ca22618fc0cc0a54d848"
+source_sha256 = "sha256:93ec8c957b48f8fb8400ddc873632d79b73fd734f7ec703f931e059b0efa7083"
 capabilities = ["codec"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
 
@@ -499,7 +527,7 @@ rationale = "Build-time Cargo OUT_DIR selects the generated immutable diagnostic
 [[records]]
 path = "crates/sugarsubstitute/src/setup/worker/downloads/native_tests/fixture.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:aa4d1971e6b7f9ad74d766710b983086f852d261cc794c181d8a2ad039db7c21"
+source_sha256 = "sha256:a886458a79ca6d5c9d9fa03678eb7b8a40fb0ebc7d17f6d0688323e520afa25f"
 capabilities = ["environment"]
 rationale = "Native junction qualification selects the Windows system command from SystemRoot and supplies isolated per-child fixture paths. It creates no product settings or application configuration defaults."
 
@@ -520,7 +548,7 @@ rationale = "Download qualification selects its explicit build-receipt directory
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/entrypoint/native/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:ce833bb90db469ab018b0108fea52462c321ab03064daf66a89a1d32752dc8e4"
+source_sha256 = "sha256:31fce8c9d6aa338c787cd0a0c2571ee9b06a752b1ebdcc4450522732f622ec10"
 capabilities = ["environment"]
 rationale = "Real Windows shell-link qualification selects the installed system icon through SystemRoot to exercise display-only environment metadata. Launch arguments, visibility, working-directory and elevation checks remain separately enforced."
 
@@ -534,7 +562,7 @@ rationale = "Native first-install publication fixtures observe saved startup doc
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/fresh/installed/rescue.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:a45707b1aa99d6f824a1a8a16938b5d3fb37a6e4b908a11f371aeb978761b6b5"
+source_sha256 = "sha256:99c85c740cc2ffa8bc5f880a5447fba05ffa9637ea425b06f1a8b3ff7aa5f049"
 capabilities = ["document"]
 rationale = "Lost-trial rescue fixtures preserve exact saved startup bytes and reject reauthorization of failed payloads."
 
@@ -863,21 +891,21 @@ rationale = "Localization-governance rejection fixtures decode only their own TO
 [[records]]
 path = "tools/xtask/src/networking/external.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:9ab8b806f1658d068c0ddd149dba7511f7d17bd106fa7d40238e75ea9b148f39"
+source_sha256 = "sha256:0c60041af87295031953e2200069aafe2bf10740fbbfddbb2741dbca5864cd0f"
 capabilities = ["codec"]
 rationale = "Repository tooling decodes the vendored-material TOML manifest to bind the consumed upstream HTTP sources to their registered component."
 
 [[records]]
 path = "tools/xtask/src/networking/tests.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:fc97f5e6bb44cf7f2bd384b28d30203c26859de4f008b3baf3541d48254c49f6"
+source_sha256 = "sha256:da59f7f0a6039502d892faa7de5cb9ed9ce343383a77790c36dab504c21ce516"
 capabilities = ["codec"]
 rationale = "Networking-governance rejection fixtures decode only their own TOML policy schema and malformed registrations."
 
 [[records]]
 path = "tools/updater_publication_qualification.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:0fc7b697eb5efa48924f8833063b3ef8703c53abf114de28673ecd2cd8ae198d"
+source_sha256 = "sha256:1922029df07c5a1d10cf88e1201d51ece4d77e70400d759c59ef2bc49608e8e1"
 capabilities = ["codec"]
 rationale = "Publication-recovery qualification reads the authoritative cache catalog to locate its shared payload namespace; it creates no application preferences or independent cache-path registry."
 
@@ -961,14 +989,21 @@ rationale = "Native frame qualification accepts explicit backend/vendor/device s
 [[records]]
 path = "crates/sugarsubstitute-image-gpu/examples/composite_qualification.rs"
 owner = "sugarsubstitute-image-gpu"
-source_sha256 = "sha256:1c7fbddc7a2c91541cd6ac6df49dfd1ad273b53de75079bd63c5d41610bd30b0"
+source_sha256 = "sha256:f21a0daed1b94804c954f925e8543e80e982f24436102e08dcd6ca00da8b49c0"
 capabilities = ["arguments"]
 rationale = "The developer composite check accepts one explicit Vulkan vendor/device selector and resolves it through the production adapter catalog."
 
 [[records]]
+path = "crates/sugarsubstitute-desktop/tests/host_conformance.mjs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:2c287ae21783689d83c7cc3ccdc75ff32eb06694b778eee4e9d68dbce0afa184"
+capabilities = ["arguments"]
+rationale = "Accept --record to save the conformance kit's transcript as this host's SugarCubes profile; without it the saved profile must match."
+
+[[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:545b83f7de9fb25f4d4ed4ed389cbc42122683aca24754a0219af4c1a3f05669"
+source_sha256 = "sha256:113b2c25548f0203e07b5592f4c7783310ec4a17fdc82ba7130fcf0a01950e8f"
 capabilities = ["arguments"]
 rationale = "Accept an optional source fixture path to prove regressions against the prior transport implementation."
 
@@ -989,7 +1024,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/user_data/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:054f04d3efe3e610e7d49bc9e2cbcd879e898655a5d229c71d072cf865314fc8"
+source_sha256 = "sha256:62bde03e6e008421794c1e07067f0614c1500df2e0f1b510a2479781d3d3d631"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -1006,3 +1041,17 @@ owner = "sugarsubstitute-supervision"
 source_sha256 = "sha256:340c6b65203d8f55dce02c7a781204914408589789be8f40df2404b70a57e3cd"
 capabilities = ["environment"]
 rationale = "Compiled only by the qualification-historical-root proof feature: a headless proof names an owned stand-in for the account profile folder through one environment variable, so a proof never reads the account own data. Production builds exclude it and never consult environment text for migration sources."
+
+[[records]]
+path = "crates/sugarsubstitute-splash/src/render_update_tests.rs"
+owner = "sugarsubstitute-splash"
+source_sha256 = "sha256:5eb9e012d8c1f4bee4e69ba88a966bc453f5d062a12145a83c01ecf34e891cd6"
+capabilities = ["environment"]
+rationale = "Read only the optional qualification evidence directory for splash captures; the test writes its own rendered frames there and reads or writes no product settings."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/generation_retirement/inventory.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:2e8c3088f26f79e522f1566f0626fa4bbc407e7d9b18ad60686973ec3dac8efa"
+capabilities = ["document"]
+rationale = "Names an unused generation's installation-owned configuration documents only so retirement can delete them; it never reads, parses or writes their contents."

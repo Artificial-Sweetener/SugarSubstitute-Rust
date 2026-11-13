@@ -164,6 +164,15 @@ pub struct ShutdownProgress {
     pub queued: usize,
     /// Jobs executing work or supervised factory/result destruction.
     pub running: usize,
+    /// A completion wake was signaled after the client's last completion drain.
+    ///
+    /// Releasing a retired record or reserved capacity becomes observable under the admission
+    /// lock, but its completion wake is delivered after that lock is released. That delivery
+    /// always follows the last drain, so an observer that counted wakes before draining and
+    /// finds this set will receive a wake newer than its count; one that finds it clear has
+    /// drained every change a delivered wake announced and must not wait for another. Always
+    /// false once shutdown suppresses undelivered capacity wakes.
+    pub wake_owed_since_drain: bool,
     /// Actual retained worker observations.
     pub workers: WorkerStatus,
 }

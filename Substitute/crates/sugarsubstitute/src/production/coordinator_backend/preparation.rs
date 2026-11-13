@@ -127,6 +127,7 @@ impl CoordinatorBackend {
             Some(resources.native),
         )?;
         let original = input.as_ref().ok_or(LifecycleRejection::WrongPhase)?;
+        let cube = original.source.cube_folder().to_owned();
         // The parent retains the original inert paths/environment. Every attempt
         // performs a new inspection; copied input is covered by its two-MiB actor claim.
         let input = BackendPreparation {
@@ -182,20 +183,13 @@ impl CoordinatorBackend {
             settled: false,
             cleanup_failure: cleanup_state::CleanupState::new(),
         });
-        let spec = Self::spec(
-            resources,
-            Operation::Readiness,
-            JobClass::InfrastructureLifecycle,
-            FRONTEND_SOURCE_BYTES,
-            Some(budget.until()),
-        )?;
         let record = self.records[at].as_mut().ok_or(LifecycleRejection::StaleIdentity)?;
-        record.source.submit_inspection(resources.client, &record.scope, spec)?;
-        record.source_job = true;
-        record.source_closed = false;
-        tracing::info!(operation="backend_preparation_transition",resource=?key,stage="SourceSubmitted",
-            job=?spec.id,scope=?record.scope.id(),original_until=?spec.deadline,
-            "Original backend preparation advanced");
+        // The pack must be final before its inspection pins and hashes it, and before launch.
+        let managed = matches!(record.target, BackendTarget::Managed(_));
+        let gated = self.pack.begin(key, &cube, managed, budget.until(), resources)?;
+        if !gated {
+            Self::submit_source_inspection(record, resources)?;
+        }
         if let BackendTarget::Managed(configuration) = &record.target {
             let spec = Self::spec(
                 resources,
@@ -214,6 +208,26 @@ impl CoordinatorBackend {
             tracing::info!(operation="backend_preparation_transition",resource=?key,stage="ResolutionSubmitted",
                 "Original backend preparation advanced");
         }
+        Ok(())
+    }
+    /// Inspect the installed SugarCubes and frontend sources of one preparation.
+    pub(super) fn submit_source_inspection(
+        record: &mut Backend,
+        resources: &BackendResources<'_>,
+    ) -> Result<()> {
+        let spec = Self::spec(
+            resources,
+            Operation::Readiness,
+            JobClass::InfrastructureLifecycle,
+            FRONTEND_SOURCE_BYTES,
+            Some(record.budget.until()),
+        )?;
+        record.source.submit_inspection(resources.client, &record.scope, spec)?;
+        record.source_job = true;
+        record.source_closed = false;
+        tracing::info!(operation="backend_preparation_transition",resource=?record.key,stage="SourceSubmitted",
+            job=?spec.id,scope=?record.scope.id(),original_until=?spec.deadline,
+            "Original backend preparation advanced");
         Ok(())
     }
     /// Submit the resolved generation only after actual configured custody is ready.
@@ -255,7 +269,11 @@ impl CoordinatorBackend {
     }
     pub(super) fn launch(&mut self, at: usize, resources: &mut BackendResources<'_>) -> Result<()> {
         let record = self.records[at].as_mut().ok_or(LifecycleRejection::StaleIdentity)?;
-        if !record.claimed || record.launch.is_some() || record.shutdown.is_some() {
+        if !record.claimed
+            || record.launch.is_some()
+            || record.shutdown.is_some()
+            || self.pack.gates(record.key)
+        {
             return Ok(());
         }
         record.budget.probe_until(resources.client.now()?)?;

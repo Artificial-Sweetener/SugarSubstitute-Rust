@@ -11,11 +11,20 @@ from tools.updater_feed_fixture import Feed, asset, interval
 class FeedBoundaries(unittest.TestCase):
     def test_restarted_fixture_preserves_literal_loopback_and_requested_port(self):
         with patch('tools.updater_feed_fixture.HTTPServer.__init__') as initialize:
-            Feed(Path('routes.json'), Path('control'), 10, 43210)
+            Feed(Path('routes.json'), Path('control'), 43210)
             self.assertEqual(initialize.call_args.args[0], ('127.0.0.1', 43210))
             for value in (-1, 65536, True, '43210'):
                 with self.subTest(value=value), self.assertRaises(ValueError):
-                    Feed(Path('routes.json'), Path('control'), 10, value)
+                    Feed(Path('routes.json'), Path('control'), value)
+
+    def test_only_the_control_file_stops_the_feed(self):
+        with tempfile.TemporaryDirectory() as directory, \
+                patch('tools.updater_feed_fixture.HTTPServer.__init__'):
+            control = Path(directory)
+            feed = Feed(Path('routes.json'), control)
+            self.assertFalse(feed.stopping())
+            (control / 'stop').write_bytes(b'')
+            self.assertTrue(feed.stopping())
 
     def test_full_and_partial_intervals_preserve_exact_byte_offsets(self):
         self.assertEqual(interval(None, 10), (0, 9, 200))

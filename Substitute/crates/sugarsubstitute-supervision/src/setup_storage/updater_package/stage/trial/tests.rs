@@ -20,7 +20,9 @@ fn abandoned_recovery_waits_for_the_trial_owner_and_not_for_witness_duplicates()
         trial.publish(|| NOW, context)?;
         // A witness duplicate left in another holder proves custody only while the owner lives.
         let duplicate = trial.prepared._preparation.witness().try_clone()?;
-        let trust = TrustStore::open(root.path(), [92; 32], context)?;
+        let at = u64::try_from(NOW)?;
+        let trust = TrustStore::open(root.path(), [92; 32], context)?
+            .with_strike_clock(crate::setup_storage::selection::StrikeClock::Fixed(at));
         let pending = trust.updater_selection(context)?;
         assert!(trust.recover_updater_trial(context).is_err());
         assert_eq!(trust.updater_selection(context)?, pending);
@@ -29,11 +31,54 @@ fn abandoned_recovery_waits_for_the_trial_owner_and_not_for_witness_duplicates()
         let Some(Candidate::Trial { attempt }) = pending.candidate() else {
             return Err("Expected published trial".into());
         };
-        assert_eq!(
-            recovered,
-            pending.reject(attempt, crate::setup_storage::selection::unix_now()?)?
-        );
+        // Recovery dates the strike with the injected clock, never the real one.
+        assert_eq!(recovered, pending.reject(attempt, at)?);
+        assert_eq!(recovered.strikes().iter().map(|strike| strike.at).collect::<Vec<_>>(), [at]);
+        // The strike's second is part of the record, so a reader whose clock has moved on by
+        // one second sees a different record: the old real-clock comparison failed exactly so.
+        assert_ne!(recovered, pending.reject(attempt, at + 1)?);
         drop(duplicate);
+        Ok(())
+    })
+}
+
+#[test]
+fn engine_speaking_only_the_previous_preparation_protocol_is_refused_before_staging() -> TestResult
+{
+    run(|context| {
+        let root = worker::installation(128, context)?;
+        let workspace = tempfile::tempdir()?;
+        // Only the preparation protocol is old: the engine supports the current installation
+        // schema, so the protocol alone is what refuses it.
+        let previous = format!(
+            r#"{{"schema_version":1,"preparation_protocols":[1],"installation_schemas":[{}]}}"#,
+            sugarsubstitute_contracts::installation::SCHEMA_VERSION
+        );
+        let (bytes, _) = archive(previous.as_bytes())?;
+        let (trust, offer, download) = evidence(root.path(), &bytes, Component::Updater, context)?;
+        // The engine is refused as soon as its declaration is read, before anything is staged.
+        let staged = UpdaterPackage::import(
+            root.path(),
+            trust,
+            offer,
+            download,
+            workspace.path(),
+            || NOW,
+            context,
+        )
+        .and_then(|package| package.stage(|| NOW, context));
+        let Err(crate::setup_storage::TrustFailure::Storage(cause)) = staged else {
+            return Err("An engine without the update-attempt channel was staged".into());
+        };
+        assert_eq!(
+            cause
+                .get_ref()
+                .and_then(|inner| inner
+                    .downcast_ref::<sugarsubstitute_contracts::application_launch::Rejection>()),
+            Some(&sugarsubstitute_contracts::application_launch::Rejection::Unsupported)
+        );
+        let observer = TrustStore::open(root.path(), [92; 32], context)?;
+        assert!(observer.updater_selection(context)?.candidate().is_none());
         Ok(())
     })
 }
@@ -43,8 +88,9 @@ fn historical_preparation_only_engine_remains_staged_without_a_probe_trial() -> 
     run(|context| {
         let root = worker::installation(127, context)?;
         let workspace = tempfile::tempdir()?;
+        // Historical here means without a probe role; it speaks the current preparation entry.
         let historical =
-            br#"{"schema_version":1,"preparation_protocols":[1],"installation_schemas":[3]}"#;
+            br#"{"schema_version":1,"preparation_protocols":[2],"installation_schemas":[3]}"#;
         let (bytes, _) = archive(historical)?;
         let (trust, offer, download) = evidence(root.path(), &bytes, Component::Updater, context)?;
         let prepared = UpdaterPackage::import(

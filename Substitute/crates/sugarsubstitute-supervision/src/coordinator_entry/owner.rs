@@ -64,6 +64,7 @@ pub struct CoordinatorEntryOwner {
     pending: Option<Pending>,
     discovered: Option<Discovered>,
     candidate: Option<CoordinatorEpoch>,
+    holder: Option<super::EntryHolder>,
     source_setup: Option<sugarsubstitute_contracts::execution::CounterDeadline>,
     election: Option<RetainedElectionProof>,
     coordinator: Option<RetainedCoordinatorProof>,
@@ -99,6 +100,7 @@ impl CoordinatorEntryOwner {
             pending: None,
             discovered: None,
             candidate: None,
+            holder: None,
             source_setup: None,
             election: None,
             coordinator: None,
@@ -126,6 +128,7 @@ impl CoordinatorEntryOwner {
             namespace: self.discovered.map(|known| known.facts.namespace()),
             owner: self.owner,
             pending: self.pending.as_ref().map(|pending| pending.job.spec().id),
+            holder: self.holder,
         }
     }
     /// Transfer the actual consumed namespace proof once; its shared custody remains retained.

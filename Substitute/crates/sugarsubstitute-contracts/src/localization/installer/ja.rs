@@ -44,6 +44,7 @@ pub(in super::super) const JA: InstallerMessages = InstallerMessages {
     step: "ステップ {current} / {total}",
     no_environment: "対応する環境が見つかりません。再試行するか既存の ComfyUI を選んでください。",
     retry: "確認して再試行",
+    included_version_offer: "SugarSubstitute はオンラインで新しいバージョンを確認できなかったため、再試行するとこのインストーラーに含まれるバージョンをインストールし、次にオンラインになったときに自動で更新します。",
     cancelled: "セットアップをキャンセルしました。既存のファイルは保持されています。",
     cancelling: "終了処理中…",
     worker_stopped: "セットアップを続行できません。インストーラーを閉じて開き直し、再試行してください。既存のファイルは保持されています。詳細は下に表示されます。",

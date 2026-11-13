@@ -51,22 +51,51 @@ class ModelProviderPreviewPreparer:
         return self._civitai_images.available(thumbnails)
 
     async def prepare(self, url: str) -> tuple[ThumbnailReference, ...]:
-        """Decode a bounded provider image away from the Comfy HTTP event loop."""
+        """Decode a bounded provider image away from the Comfy HTTP event loop.
+
+        Raises:
+            ModelPreviewUnavailableError: The provider image could not be downloaded, which is
+                an expected outcome, or could not be prepared, which is not.
+        """
+        provider, images = (
+            (self._openmodeldb, self._openmodeldb_images)
+            if approved_openmodeldb_preview(url)
+            else (self._civitai, self._civitai_images)
+        )
         try:
-            provider, images = (
-                (self._openmodeldb, self._openmodeldb_images)
-                if approved_openmodeldb_preview(url)
-                else (self._civitai, self._civitai_images)
-            )
             content = await provider.read_preview(url)
-            return await complete_blocking_model_work(images.prepare, content)
-        except (
-            aiohttp.ClientError,
-            TimeoutError,
-            OSError,
-            ValueError,
-            sqlite3.Error,
-        ) as error:
+        except (aiohttp.ClientError, TimeoutError, ValueError) as error:
             raise ModelPreviewUnavailableError(
-                "The provider preview could not be prepared."
+                "The provider preview could not be downloaded.",
+                reason=transport_failure_reason(error),
+                expected=True,
             ) from error
+        except OSError as error:
+            raise ModelPreviewUnavailableError(
+                "The provider preview could not be downloaded.",
+                reason=type(error).__name__,
+                expected=False,
+            ) from error
+        try:
+            return await complete_blocking_model_work(images.prepare, content)
+        except (OSError, ValueError, sqlite3.Error) as error:
+            raise ModelPreviewUnavailableError(
+                "The provider preview could not be prepared.",
+                reason=type(error).__name__,
+                expected=False,
+            ) from error
+
+
+def transport_failure_reason(error: Exception) -> str:
+    """Describe an expected provider transport failure in plain words, without a traceback."""
+    if isinstance(error, TimeoutError):
+        return "the provider did not answer in time"
+    if isinstance(error, aiohttp.ClientConnectorError):
+        return f"could not connect to {error.host}"
+    if isinstance(error, aiohttp.ClientResponseError):
+        return f"the provider answered HTTP {error.status}"
+    if isinstance(error, aiohttp.ClientPayloadError):
+        return "the provider response ended early"
+    if isinstance(error, aiohttp.ClientError):
+        return "the connection to the provider failed"
+    return str(error) or type(error).__name__

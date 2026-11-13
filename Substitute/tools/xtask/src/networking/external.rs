@@ -73,7 +73,10 @@ pub(super) fn check(root: &Path, records: &[Boundary]) -> Result<()> {
     }
     require(
         fingerprint(root, &record.sources)? == record.source_sha256,
-        "networking: stale upstream HTTP implementation review",
+        format!(
+            "networking: stale upstream HTTP implementation review; {}",
+            crate::fingerprints::RESYNC
+        ),
     )
 }
 #[cfg(test)]

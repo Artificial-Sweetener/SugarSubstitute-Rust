@@ -81,6 +81,31 @@ impl<B: StartupBackend> StartupHost<B> {
         Ok(())
     }
 
+    /// Reserve the scopes that export the update report to files the user selects: one for each
+    /// write and one, independent of it, for the cleanup that closes the write's files.
+    #[cfg(any(feature = "windows-native-host", test))]
+    pub(crate) fn configure_update_reports(
+        &mut self,
+        main: sugarsubstitute_contracts::execution::ScopeSpec,
+        cleanup: sugarsubstitute_contracts::execution::ScopeSpec,
+    ) -> Result<(), Box<dyn Error>> {
+        let ordered = |spec: sugarsubstitute_contracts::execution::ScopeSpec| {
+            spec.deadline.is_none()
+                && spec.id > self.scopes.child.id
+                && spec.id > self.scopes.render.id
+        };
+        if self.started
+            || self.update_reports.is_some()
+            || main.id == cleanup.id
+            || !ordered(main)
+            || !ordered(cleanup)
+        {
+            return Err("Update report scopes are invalid or already configured".into());
+        }
+        self.update_reports = Some(super::update_report::UpdateReports::new(main, cleanup));
+        Ok(())
+    }
+
     /// Reserve the composition-wait scope before native window construction begins.
     #[cfg(feature = "native-composition")]
     pub(crate) fn configure_composition(

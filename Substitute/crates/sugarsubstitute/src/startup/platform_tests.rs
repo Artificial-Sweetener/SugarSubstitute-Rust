@@ -5,7 +5,7 @@ use super::*;
 use sugarsubstitute_application::startup::{StartupPhase, StartupSession};
 use sugarsubstitute_contracts::{configuration::*, execution::*, lifecycle::*, startup::*};
 use sugarsubstitute_desktop::{StartupCaptureState, StartupCauseCode};
-use sugarsubstitute_execution::ExecutionClient;
+use sugarsubstitute_execution::{ExecutionClient, MonotonicClock};
 
 pub(super) struct Prepared {
     pub(super) session: StartupSession,
@@ -26,6 +26,7 @@ impl PreparedStartup for Prepared {
 pub(super) struct Platform {
     pub(in crate::startup) budget: Option<ShutdownBudget>,
     pub(in crate::startup) shutdown_requests: Vec<ShutdownBudget>,
+    pub(in crate::startup) restart_requests: usize,
     pub(in crate::startup) shutdown_starts: usize,
     retired: bool,
     finished: bool,
@@ -34,6 +35,12 @@ pub(super) struct Platform {
     accents: Vec<Option<sugarsubstitute_contracts::appearance::AccentColor>>,
     pub(in crate::startup) start_allowed: bool,
     reload_failure: Option<Box<dyn Error>>,
+    /// The coordinator status this fake child last received.
+    pub(in crate::startup) update_status:
+        Option<sugarsubstitute_contracts::update::status::UpdateStatus>,
+    /// Start-up messages this fake child still has for the window.
+    pub(in crate::startup) notices:
+        std::collections::VecDeque<sugarsubstitute_contracts::update::status::StartupNotice>,
 }
 impl StartupBackend for Platform {
     type Prepared = Prepared;
@@ -152,6 +159,21 @@ impl StartupBackend for Platform {
     fn shutdown_budget(&self) -> Option<ShutdownBudget> {
         self.budget
     }
+    fn update_status(&self) -> Option<&sugarsubstitute_contracts::update::status::UpdateStatus> {
+        self.update_status.as_ref()
+    }
+    fn workflow_queue(&self) -> sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue {
+        sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue::Unobserved
+    }
+    fn take_update_notice(
+        &mut self,
+    ) -> Option<sugarsubstitute_contracts::update::status::StartupNotice> {
+        self.notices.pop_front()
+    }
+    fn request_restart_to_apply(&mut self) -> BackendResult<()> {
+        self.restart_requests += 1;
+        Ok(())
+    }
     fn request_shutdown(&mut self, budget: ShutdownBudget) -> BackendResult<()> {
         if self.budget.is_some_and(|original| original != budget) {
             return Err("renewed shutdown budget".into());
@@ -254,12 +276,18 @@ fn host_reports_main_reveal_only_after_frontend_readiness_and_never_after_close(
     Ok(())
 }
 pub(super) fn host() -> BackendResult<StartupHost<Platform>> {
+    host_with_clock(MonotonicClock::new())
+}
+/// The same inert host on a caller-owned clock.
+pub(super) fn host_with_clock(
+    clock: Arc<dyn super::HostClock>,
+) -> BackendResult<StartupHost<Platform>> {
     let run = policy::tests::test_run()?;
     StartupHost::new(
         run,
         LaunchId::new(1)?,
         Platform::default(),
-        MonotonicClock::new(),
+        clock,
         JobSequence::new(),
         StartupScopes {
             child: ScopeSpec { id: ScopeId::new(1)?, deadline: None },
@@ -270,6 +298,8 @@ pub(super) fn host() -> BackendResult<StartupHost<Platform>> {
 
 #[path = "platform_tests/consume.rs"]
 pub(super) mod consume;
+#[path = "platform_tests/update_notices.rs"]
+mod update_notices;
 
 #[cfg(windows)]
 #[test]

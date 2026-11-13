@@ -60,6 +60,7 @@ pub(super) fn unadmitted_policy() -> Result<RetainedBackend> {
         output_clients: output::Subscribers::new()?,
         next_shutdown: 0,
         undelivered: None,
+        pack: Default::default(),
         policy_funding: funding,
     };
     Ok(RetainedBackend { backend: Box::new(backend), _storage: storage })

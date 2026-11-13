@@ -25,8 +25,7 @@ impl CacheLease {
         let _workspace = context.memory().claim(RESERVATION_BYTES).map_err(io::Error::other)?;
         let inventory = tree::generated_records(&self.directory, context)?;
         if inventory.bytes.checked_add(length).is_none_or(|bytes| bytes > self.record.reserved) {
-            return Err(io::Error::new(
-                io::ErrorKind::StorageFull,
+            return Err(super::maintenance::CacheBudgetExhausted::io(
                 "Metadata byte grant exhausted",
             ));
         }

@@ -110,7 +110,7 @@ rationale = "Registry parser rejection fixtures and exact expected scope-directo
 [[namespace_reviews]]
 path = "tools/test_updater_qualification.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:cc23458d26a2a168e479720aa31e61d4ea93f3e116fab1d052646904ff1027af"
+source_sha256 = "sha256:4b0c48bd4ffa55421df6024ad8aa3f993d81c2cb12081899832e0d013b854ab9"
 rationale = "The isolated publication observer regression deliberately creates legacy payload namespace bytes to prove that only registered shared generations count and unrelated original content is preserved."
 
 [[script_boundaries]]
@@ -121,10 +121,24 @@ rationale = "The isolated localization contract tests read the owned TypeScript 
 role = "fixture"
 
 [[script_boundaries]]
+path = "crates/sugarsubstitute-desktop/tests/host_conformance.mjs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:2c287ae21783689d83c7cc3ccdc75ff32eb06694b778eee4e9d68dbce0afa184"
+rationale = "Run the SugarCubes conformance kit over the actual panel bridge in an isolated JavaScript VM and compare or record this host's profile; it acquires no runtime cache."
+role = "fixture"
+
+[[script_boundaries]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:545b83f7de9fb25f4d4ed4ed389cbc42122683aca24754a0219af4c1a3f05669"
+source_sha256 = "sha256:113b2c25548f0203e07b5592f4c7783310ec4a17fdc82ba7130fcf0a01950e8f"
 rationale = "Exercise the actual bounded panel transport in an isolated JavaScript VM with native and browser boundary fixtures."
+role = "fixture"
+
+[[script_boundaries]]
+path = "crates/sugarsubstitute-desktop/tests/typescript_resolution.mjs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:35aaffd6ce8fd21f30943ab30afa3a714efc2dcfdaed9af869f5b112f41d98cf"
+rationale = "Resolve the SugarCubes kit's TypeScript sources for the conformance harness; it only checks that a source file exists and acquires no runtime cache."
 role = "fixture"
 
 [[script_boundaries]]

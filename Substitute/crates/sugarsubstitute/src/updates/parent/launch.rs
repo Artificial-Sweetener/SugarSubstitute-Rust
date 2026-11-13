@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Verify the installed executable before admitting its contained preparation role.
 use super::*;
+use sugarsubstitute_contracts::update::attempt::codec::{UpdateAttemptChannel, UpdateAttemptKey};
 impl Parent {
     /// Each phase retains actual partial admission; closing never starts a later phase.
     pub(super) fn launch(&mut self, jobs: &JobSequence) -> Result<()> {
@@ -16,9 +17,38 @@ impl Parent {
             self.constructing =
                 Some(WindowsProcessRegistry::submit_new(&self.client, &self.work, spec, self.key)?);
         }
-        if self.preparing.is_none()
+        if self.attempt.is_none()
+            && !self.probe
             && self.retained.as_ref().is_some_and(|held| held.source.is_some())
         {
+            let spec = self.spec(
+                jobs,
+                JobClass::NativeObservation,
+                sugarsubstitute_execution::purpose_pipe::MIN_LIFECYCLE_PIPE_BYTES,
+                None,
+            )?;
+            let attempt = std::num::NonZeroU64::new(spec.id.get()).ok_or("Attempt id absent")?;
+            let channel = UpdateAttemptChannel::new(self.key, UpdateAttemptKey::new(attempt));
+            let handshake = self.client.now()?.checked_add(super::attempt::HANDSHAKE)?;
+            // The channel lives in the cleanup scope, so cancelling work never loses the result.
+            self.attempt = Some(AttemptChannel::reserve(
+                &self.client,
+                &self.cleanup,
+                spec,
+                channel,
+                handshake,
+            )?);
+        }
+        // The helper is composed only once its channel's endpoint exists.
+        let pins = if self.preparing.is_none()
+            && self.retained.as_ref().is_some_and(|held| held.source.is_some())
+        {
+            self.attempt.as_mut().and_then(AttemptChannel::take_pins)
+        } else {
+            None
+        };
+        if let Some((bootstrap, enrollment)) = pins {
+            let pins = sugarsubstitute_supervision::UpdateAttemptPins { bootstrap, enrollment };
             let key = self.key;
             let spec = self.spec(
                 jobs,
@@ -36,7 +66,7 @@ impl Parent {
                     let workspace = image.installation().join(".update-workspace");
                     let environment =
                         crate::worker_environment::capture().map_err(io::Error::other)?;
-                    WindowsLaunchInput::preparation(key, image, &workspace, environment)
+                    WindowsLaunchInput::preparation(key, image, &workspace, environment, Some(pins))
                 },
             )?);
         }
@@ -63,6 +93,9 @@ impl Parent {
                     &mut held.input,
                 )?;
             self.process = Some(ticket.process());
+            if let Some(channel) = &mut self.attempt {
+                channel.bind(ticket.process())?;
+            }
         }
         Ok(())
     }

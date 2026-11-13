@@ -33,6 +33,11 @@ impl Target {
         }
         Ok(Self { name: name.into(), length: description.length(), digest, not_before, not_after })
     }
+    /// The same signed identity with no validity window, for a clock-independent verification.
+    /// Byte streams are still checked in full against the signed length and digest.
+    pub(crate) fn pinned(self) -> Self {
+        Self { not_before: i64::MIN, not_after: i64::MAX, ..self }
+    }
     /// Signed relative repository name; the transport must still enforce its origin policy.
     pub fn name(&self) -> &str {
         &self.name

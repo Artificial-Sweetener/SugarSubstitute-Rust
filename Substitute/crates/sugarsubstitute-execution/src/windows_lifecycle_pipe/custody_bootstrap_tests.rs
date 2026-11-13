@@ -38,9 +38,9 @@ fn custody_invocation_preserves_original_facts_and_rejects_other_purposes() -> T
     assert_eq!(decoded.deadline, original.deadline);
     for purpose in [
         Kind::Desktop,
-        Kind::Diagnostic(DiagnosticRole::Storage),
-        Kind::Diagnostic(DiagnosticRole::Symbolize),
-        Kind::Diagnostic(DiagnosticRole::Reporter),
+        Kind::Purpose(Purpose::Diagnostic(DiagnosticRole::Storage)),
+        Kind::Purpose(Purpose::Diagnostic(DiagnosticRole::Symbolize)),
+        Kind::Purpose(Purpose::Diagnostic(DiagnosticRole::Reporter)),
     ] {
         assert!(decode(&bytes, original.deadline, purpose).is_err());
     }

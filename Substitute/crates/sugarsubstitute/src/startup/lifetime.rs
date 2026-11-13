@@ -2,8 +2,6 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Keep actual child cleanup admission open until native/render ownership settles.
 use super::*;
-#[cfg(all(windows, feature = "native-composition"))]
-use sugarsubstitute_contracts::execution::Clock;
 use sugarsubstitute_desktop::StartupCloseStage;
 
 impl<B: StartupBackend> StartupHost<B> {
@@ -113,12 +111,7 @@ impl<B: StartupBackend> StartupHost<B> {
         };
         if let Some(origin) = origin {
             match self.shutdown.request(origin, || {
-                if self.execution.has_owner() {
-                    self.execution.now()
-                } else {
-                    use sugarsubstitute_contracts::execution::Clock;
-                    Ok(self.clock.now())
-                }
+                if self.execution.has_owner() { self.execution.now() } else { Ok(self.clock.now()) }
             }) {
                 Ok(Some(_)) => {}
                 Ok(None) => {}
@@ -143,6 +136,13 @@ impl<B: StartupBackend> StartupHost<B> {
             let now = sugarsubstitute_contracts::execution::Clock::now(&*self.clock);
             if !self.advance_close_save(budget, now)? {
                 return self.refresh_deadline();
+            }
+            if self.close_reason
+                == sugarsubstitute_application::workspace_session::close_save::CloseReason::RestartToApply
+                && self.close_save_outcome().is_some()
+            {
+                let requested = self.child.request_restart_to_apply();
+                retain(&mut failure, self.observed_close(StartupCloseStage::ExitIntent, requested));
             }
             let requested = self.child.request_shutdown(budget);
             retain(&mut failure, self.observed_close(StartupCloseStage::ExitIntent, requested));
@@ -192,7 +192,6 @@ impl<B: StartupBackend> StartupHost<B> {
         let canvas = true;
         #[cfg(all(windows, feature = "native-composition"))]
         let composition = {
-            use sugarsubstitute_contracts::execution::Clock;
             let now = if self.execution.has_owner() {
                 self.execution.now()
             } else {
@@ -221,11 +220,16 @@ impl<B: StartupBackend> StartupHost<B> {
         let workspace = self.workspace.as_ref().is_none_or(workspace::WorkspaceWork::settled);
         #[cfg(not(all(windows, feature = "native-composition")))]
         let workspace = true;
-        let execution = self
-            .execution
-            .poll_shutdown(render && child && canvas && composition && measured && workspace);
+        // An update report export closes its files before execution stops admitting its cleanup.
+        #[cfg(windows)]
+        let reports =
+            self.update_reports.as_ref().is_none_or(update_report::UpdateReports::settled);
+        #[cfg(not(windows))]
+        let reports = true;
+        let owners = render && child && canvas && composition && workspace && reports;
+        let execution = self.execution.poll_shutdown(owners && measured);
         let execution = observe_settlement(&mut failure, execution);
-        failure.map_or(Ok(render && child && canvas && composition && workspace && execution), Err)
+        failure.map_or(Ok(owners && execution), Err)
     }
     /// Called by Desktop only after its native controls/loop and wake lifetime disconnect.
     /// # Errors
@@ -248,7 +252,6 @@ impl<B: StartupBackend> StartupHost<B> {
         }
         #[cfg(all(windows, feature = "native-composition"))]
         if let Some(composition) = &mut self.composition {
-            use sugarsubstitute_contracts::execution::Clock;
             let now = if self.execution.has_owner() {
                 self.execution.now()
             } else {

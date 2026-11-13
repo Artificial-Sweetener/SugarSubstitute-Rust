@@ -13,6 +13,8 @@ pub mod viewer;
 
 #[cfg(all(windows, feature = "windows-native-host"))]
 mod authority_clock;
+#[cfg(all(windows, feature = "windows-native-host"))]
+mod campaign_watch;
 #[cfg(all(windows, any(feature = "native-composition", feature = "windows-native-host")))]
 mod canvas_preparation_diagnostic;
 #[cfg(all(windows, any(feature = "native-composition", feature = "windows-native-host")))]
@@ -31,6 +33,8 @@ mod demo;
 mod descendant_fixture;
 mod diagnostics;
 mod native_entry;
+#[cfg(any(all(windows, feature = "windows-native-host"), test))]
+mod panel_host;
 #[cfg(test)]
 mod paused_clock;
 pub use native_entry::{NativeEntry, unavailable_native_entry};
@@ -45,6 +49,7 @@ mod held_fixture;
 pub mod input_documents;
 pub mod instance_conflict;
 mod invocation;
+#[cfg(windows)]
 mod job_deadline;
 pub mod job_sequence;
 #[cfg(all(target_os = "windows", feature = "windows-native-host"))]

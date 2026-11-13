@@ -14,22 +14,9 @@ pub use crate::native::{
     NativeCorrelation, NativeObservationError, ProcessExit, ProcessWatchPermit,
 };
 use std::os::windows::io::OwnedHandle;
-use sugarsubstitute_contracts::execution::{AdmissionError, JobSpec, OwnedJob, Scope, ScopeSpec};
+use sugarsubstitute_contracts::execution::{AdmissionError, JobSpec, OwnedJob, Scope};
 
 impl ExecutionClient {
-    /// Admit one of 132 native scopes without consuming the 64 ordinary scope allowance.
-    ///
-    /// Parent cancellation and the earliest ancestor deadline remain effective.
-    /// Retained results/guards and children keep their scope charged until settled.
-    /// Native scopes accept typed native reservations; task factories require
-    /// ordinary scopes. An ordinary or native parent may own either scope kind.
-    pub fn create_native_scope(
-        &self,
-        spec: ScopeSpec,
-        parent: Option<&Scope>,
-    ) -> Result<Scope, AdmissionError> {
-        self.core.create_scope_kind(spec, parent, true)
-    }
     /// Reserve one native-ready slot, terminal credit and peak memory before binding.
     ///
     /// Requires NativeLifecycle/NativeObservation, a native scope and at least 4096

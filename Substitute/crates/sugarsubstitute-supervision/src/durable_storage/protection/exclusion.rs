@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Authenticate inherited exclusion against the pinned rendezvous without reopening its data.
 use super::*;
-use windows::Win32::Foundation::ERROR_SHARING_VIOLATION;
 
 impl Protection {
     /// Verify a transferred witness: actual identity, protection and empty contents of the
@@ -20,32 +19,6 @@ impl Protection {
         let probe = open_existing(path, FILE_GENERIC_READ.0).map_err(io::Error::other)?;
         if !super::slots::slots_held(&probe)? {
             return Err(super::super::invalid("Inherited exclusion is no longer held"));
-        }
-        check(context)
-    }
-
-    /// Verify actual file identity, protection, empty contents and all three sharing exclusions.
-    /// The caller pins the canonical parent and retains the supplied inherited file throughout.
-    /// Metadata-only access is permitted by Windows even when data/delete sharing is denied.
-    pub(crate) fn verify_transferable_rendezvous(
-        &self,
-        file: &File,
-        path: &Path,
-        context: &JobContext,
-    ) -> io::Result<()> {
-        self.verify_rendezvous_identity(file, path, context)?;
-        for access in [FILE_READ_DATA.0, FILE_WRITE_DATA.0, DELETE.0] {
-            match open_existing(path, access) {
-                Err(cause)
-                    if cause.code()
-                        == windows::core::HRESULT::from_win32(ERROR_SHARING_VIOLATION.0) => {}
-                Err(cause) => return Err(io::Error::other(cause)),
-                Ok(_) => {
-                    return Err(super::super::invalid(
-                        "Inherited run does not retain exclusive sharing",
-                    ));
-                }
-            }
         }
         check(context)
     }
@@ -101,54 +74,37 @@ mod tests {
     use std::io::Write;
 
     #[test]
-    fn inherited_exclusion_rejects_each_shared_access_even_with_a_byte_range_lock() -> TestResult {
+    fn a_witness_proves_exclusion_only_for_its_own_empty_protected_rendezvous() -> TestResult {
         test_worker::run(|context, _| {
             let temporary = tempfile::tempdir()?;
             let parent = Directory::open(temporary.path(), false)?;
             let path = parent.path().join("run");
             with(context, |protection| {
-                for sharing in [
-                    FILE_SHARE_READ,
-                    FILE_SHARE_WRITE,
-                    FILE_SHARE_DELETE,
-                    FILE_SHARE_READ | FILE_SHARE_WRITE,
-                ] {
-                    let file = protection.open_file(&path, OPEN_ALWAYS, sharing, context)?;
-                    file.try_lock().map_err(io::Error::from)?;
-                    assert!(
-                        protection.verify_transferable_rendezvous(&file, &path, context).is_err()
-                    );
-                }
-                let exclusive = protection.transferable_rendezvous(&path, context)?;
-                protection.verify_transferable_rendezvous(&exclusive, &path, context)?;
-                Ok(())
-            })?;
-            Ok(())
-        })
-    }
-
-    #[test]
-    fn inherited_exclusion_requires_the_same_native_empty_protected_object() -> TestResult {
-        test_worker::run(|context, _| {
-            let temporary = tempfile::tempdir()?;
-            let parent = Directory::open(temporary.path(), false)?;
-            let path = parent.path().join("run");
-            with(context, |protection| {
-                let original = protection.transferable_rendezvous(&path, context)?;
-                let duplicate = original.try_clone()?;
-                drop(original);
-                protection.verify_transferable_rendezvous(&duplicate, &path, context)?;
-                let foreign_path = parent.path().join("foreign");
-                let foreign = protection.transferable_rendezvous(&foreign_path, context)?;
+                let held = protection.exclusion(&path, context)?;
+                let duplicate = held.witness().try_clone()?;
+                protection.verify_exclusive_rendezvous(&duplicate, &path, context)?;
+                // A shared handle on the same file proves nothing once no slot is held.
+                let unheld = protection.rendezvous(&parent.path().join("unheld"), context)?;
                 assert!(
-                    protection.verify_transferable_rendezvous(&foreign, &path, context).is_err()
+                    protection
+                        .verify_exclusive_rendezvous(
+                            &unheld,
+                            &parent.path().join("unheld"),
+                            context
+                        )
+                        .is_err()
                 );
-                drop(duplicate);
+                let foreign = protection.exclusion(&parent.path().join("foreign"), context)?;
+                assert!(
+                    protection
+                        .verify_exclusive_rendezvous(foreign.witness(), &path, context)
+                        .is_err()
+                );
                 let mut nonempty = protection.file(&parent.path().join("nonempty"), context)?;
                 nonempty.write_all(b"unknown")?;
                 assert!(
                     protection
-                        .verify_transferable_rendezvous(
+                        .verify_exclusive_rendezvous(
                             &nonempty,
                             &parent.path().join("nonempty"),
                             context
@@ -157,6 +113,10 @@ mod tests {
                 );
                 drop(nonempty);
                 assert_eq!(std::fs::read(parent.path().join("nonempty"))?, b"unknown");
+                drop(held);
+                assert!(
+                    protection.verify_exclusive_rendezvous(&duplicate, &path, context).is_err()
+                );
                 Ok(())
             })?;
             Ok(())

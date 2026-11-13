@@ -59,7 +59,11 @@ pub(super) fn check(
         )?;
         require(
             fingerprint(root, std::slice::from_ref(&boundary.path))? == boundary.source_sha256,
-            format!("{}: stale cache script boundary", boundary.path),
+            format!(
+                "{}: stale cache script boundary; {}",
+                boundary.path,
+                crate::fingerprints::RESYNC
+            ),
         )?;
         let access = access(&read(&path)?);
         let valid = match boundary.role {

@@ -13,7 +13,7 @@
 #[doc(hidden)]
 pub mod boundary_fixture;
 mod manifest;
-pub(crate) use manifest::cube_version as validate_cube_metadata;
+pub(crate) use manifest::{cube_version as validate_cube_metadata, pack_project};
 #[allow(unsafe_code)]
 mod native;
 mod progress;

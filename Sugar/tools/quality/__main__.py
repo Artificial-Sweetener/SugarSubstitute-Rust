@@ -58,7 +58,10 @@ def main(argv: Sequence[str] | None = None, *, project_root: Path | None = None)
         with quality_snapshot(root, staged=staged) as snapshot:
             policy = load_test_policy(snapshot / "TEST_POLICY.toml")
             validate_inventory(snapshot, policy)
-            selection = select_paths(policy, paths)
+            removed = frozenset(
+                path for path in paths if not (snapshot / path).exists()
+            )
+            selection = select_paths(policy, paths, removed=removed)
             checks = select_checks(load_checks(snapshot, policy), selection)
             for check in checks:
                 sys.stdout.write(f"CHECK {check.name}: npm run {check.script}\n")

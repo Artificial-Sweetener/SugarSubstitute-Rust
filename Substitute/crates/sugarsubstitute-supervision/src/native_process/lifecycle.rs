@@ -14,7 +14,7 @@ impl Family {
             && (self.fixture_events.is_some()
                 || self.attributes_initialized
                 || self.lifecycle_bootstrap.is_some()
-                || self.diagnostic_bootstrap.is_some()
+                || self.purpose_bootstrap.is_some()
                 || self.backend_custody.is_some())
         {
             return Err(RegistryError::invalid("lifecycle_inheritance_owner"));

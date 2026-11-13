@@ -61,13 +61,26 @@ impl Active {
                     }
             })
     }
+    /// Identify Launch I/O whose retained source a lost peer returns to re-election.
+    /// The coordinator's replay cache answers a repeated request with its first outcome,
+    /// so a forward to the same live coordinator cannot launch twice.
+    pub(super) fn awaiting_retained_outcome(&self, index: usize) -> bool {
+        self.retains_issued_source()
+            && self.connections[index].phase == Phase::Outcome
+            && self.connections[index].pending.is_some_and(|io| io.role == Role::Read)
+            || self.retains_issued_source()
+                && self.connections[index].phase == Phase::Challenge
+                && self.connections[index]
+                    .pending
+                    .is_some_and(|io| io.role == Role::Write && io.next == Phase::Outcome)
+    }
     /// Classify only proven discovery loss or an already delivered final response.
     pub(super) fn connection_error(
         &self,
         index: usize,
         error: EntryTransportError,
     ) -> EntryTransportError {
-        let unsubmitted = self.awaiting_discovery(index);
+        let unsubmitted = self.awaiting_discovery(index) || self.awaiting_retained_outcome(index);
         let reply_delivered = self.work.shared.server
             && self.connections[index].phase == Phase::AwaitPeerRetirement
             && self.connections[index].pending.is_some_and(|io| {
@@ -83,14 +96,7 @@ impl Active {
         {
             if !cause.contains_owner_panic()
                 && matches!(cause.stage(), "pipe_issue" | "pipe_completion")
-                && cause
-                    .source()
-                    .and_then(|e| e.downcast_ref::<windows::core::Error>())
-                    .is_some_and(|e| {
-                        [109, 232, 233]
-                            .into_iter()
-                            .any(|code| e.code() == windows::core::HRESULT::from_win32(code))
-                    })
+                && peer_closed(cause.source())
             {
                 return EntryTransportError::PeerDisconnected(cause);
             }
@@ -98,4 +104,20 @@ impl Active {
         }
         error
     }
+}
+
+/// Broken, closing or absent pipe peers report these Win32 codes on the pipe operation.
+#[cfg(windows)]
+fn peer_closed(source: Option<&(dyn Error + 'static)>) -> bool {
+    source.and_then(|e| e.downcast_ref::<windows::core::Error>()).is_some_and(|e| {
+        [109, 232, 233].into_iter().any(|code| e.code() == windows::core::HRESULT::from_win32(code))
+    })
+}
+
+/// Portable pipes report a closed peer as a broken pipe.
+#[cfg(not(windows))]
+fn peer_closed(source: Option<&(dyn Error + 'static)>) -> bool {
+    source
+        .and_then(|e| e.downcast_ref::<std::io::Error>())
+        .is_some_and(|e| e.kind() == std::io::ErrorKind::BrokenPipe)
 }

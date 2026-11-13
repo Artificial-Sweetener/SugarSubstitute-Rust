@@ -2,10 +2,12 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Publish one versioned immutable unnamed section without secret argv/environment material.
 use super::*;
+use crate::purpose_pipe::{Purpose, PurposeKey};
 use sugarsubstitute_contracts::incident::{DiagnosticKey, DiagnosticRole, DiagnosticSessionId};
 use sugarsubstitute_contracts::lifecycle::{
     CoordinatorEpoch, CoordinatorKey, InstanceId, NamespaceId, RunGeneration,
 };
+use sugarsubstitute_contracts::update::attempt::codec::{UpdateAttemptChannel, UpdateAttemptKey};
 use sugarsubstitute_contracts::{
     backend_custody::{BackendCustodyKey, BackendCustodySession},
     recovery_supervisor::wire::{KEY_BYTES, decode_key, encode_key},
@@ -35,7 +37,7 @@ fn hex(bytes: &[u8]) -> String {
 #[derive(Clone, Copy)]
 pub(crate) enum Kind {
     Desktop,
-    Diagnostic(DiagnosticRole),
+    Purpose(Purpose),
     BackendCustody,
     Recovery,
 }
@@ -46,6 +48,9 @@ fn role_code(role: DiagnosticRole) -> u32 {
         DiagnosticRole::Reporter => 3,
     }
 }
+/// Purpose code at bytes 56..60 of a purpose bootstrap (schema version 2).
+const DIAGNOSTIC_PURPOSE: u32 = 2;
+const UPDATE_ATTEMPT_PURPOSE: u32 = 7;
 pub(crate) fn name(binding: PeerBinding) -> Vec<u16> {
     let value = match binding {
         PeerBinding::Desktop(run) => format!(
@@ -55,12 +60,18 @@ pub(crate) fn name(binding: PeerBinding) -> Vec<u16> {
             run.instance.get(),
             run.generation.get()
         ),
-        PeerBinding::Diagnostic(key) => format!(
+        PeerBinding::Purpose(PurposeKey::Diagnostic(key)) => format!(
             "\\\\.\\pipe\\SugarSubstitute.diagnostic.v2.{}.{}.{}.{}",
             hex(key.owner().namespace.bytes()),
             hex(key.owner().epoch.bytes()),
             role_code(key.role()),
             key.session().get()
+        ),
+        PeerBinding::Purpose(PurposeKey::UpdateAttempt(channel)) => format!(
+            "\\\\.\\pipe\\SugarSubstitute.update-attempt.v1.{}.{}.{}",
+            hex(channel.owner().namespace.bytes()),
+            hex(channel.owner().epoch.bytes()),
+            channel.attempt().get()
         ),
         PeerBinding::BackendCustody(key) => format!(
             "\\\\.\\pipe\\SugarSubstitute.backend-custody.v1.{}.{}.{}",
@@ -81,7 +92,7 @@ pub(crate) fn name(binding: PeerBinding) -> Vec<u16> {
 pub(crate) fn encode(data: &Data) -> Result<[u8; BOOTSTRAP_BYTES], LifecyclePipeFailure> {
     let version = match data.binding {
         PeerBinding::Desktop(_) => 1,
-        PeerBinding::Diagnostic(_) => 2,
+        PeerBinding::Purpose(_) => 2,
         PeerBinding::BackendCustody(_) => 4,
         PeerBinding::Recovery(_) => 6,
     };
@@ -92,7 +103,7 @@ pub(in crate::windows_lifecycle_pipe) fn encode_captured_base(
     data: &Data,
 ) -> Result<[u8; BOOTSTRAP_BYTES], LifecyclePipeFailure> {
     if data.capability == [0; 32]
-        || matches!(data.binding, PeerBinding::Diagnostic(_) | PeerBinding::Recovery(_))
+        || matches!(data.binding, PeerBinding::Purpose(_) | PeerBinding::Recovery(_))
     {
         return Err(failure("captured_bootstrap_kind"));
     }
@@ -122,10 +133,14 @@ fn encode_base(
             out[56..64].copy_from_slice(&run.instance.get().to_le_bytes());
             out[64..72].copy_from_slice(&run.generation.get().to_le_bytes());
         }
-        PeerBinding::Diagnostic(key) => {
-            out[56..60].copy_from_slice(&2u32.to_le_bytes());
+        PeerBinding::Purpose(PurposeKey::Diagnostic(key)) => {
+            out[56..60].copy_from_slice(&DIAGNOSTIC_PURPOSE.to_le_bytes());
             out[60..64].copy_from_slice(&role_code(key.role()).to_le_bytes());
             out[64..72].copy_from_slice(&key.session().get().to_le_bytes());
+        }
+        PeerBinding::Purpose(PurposeKey::UpdateAttempt(channel)) => {
+            out[56..60].copy_from_slice(&UPDATE_ATTEMPT_PURPOSE.to_le_bytes());
+            out[64..72].copy_from_slice(&channel.attempt().get().get().to_le_bytes());
         }
         PeerBinding::BackendCustody(key) => {
             out[56..60].copy_from_slice(&4u32.to_le_bytes());
@@ -164,7 +179,7 @@ pub(crate) fn decode(
 ) -> Result<Data, LifecyclePipeFailure> {
     let version = match kind {
         Kind::Desktop => 1,
-        Kind::Diagnostic(_) => 2,
+        Kind::Purpose(_) => 2,
         Kind::BackendCustody => 4,
         Kind::Recovery => 6,
     };
@@ -179,7 +194,7 @@ pub(in crate::windows_lifecycle_pipe) fn decode_captured_base(
     let version = match kind {
         Kind::Desktop => 3,
         Kind::BackendCustody => 5,
-        Kind::Diagnostic(_) | Kind::Recovery => return Err(failure("captured_bootstrap_kind")),
+        Kind::Purpose(_) | Kind::Recovery => return Err(failure("captured_bootstrap_kind")),
     };
     let data = decode_base(bytes, expected, kind, version, 2048)?;
     if data.capability == [0; 32] {
@@ -215,15 +230,28 @@ fn decode_base(
             generation: RunGeneration::new(u64::from_le_bytes(number(bytes, 64)?))
                 .map_err(|e| error("pipe_bootstrap_generation", e))?,
         }),
-        Kind::Diagnostic(role) => {
-            if number::<4>(bytes, 56)? != 2u32.to_le_bytes()
+        Kind::Purpose(Purpose::Diagnostic(role)) => {
+            if number::<4>(bytes, 56)? != DIAGNOSTIC_PURPOSE.to_le_bytes()
                 || number::<4>(bytes, 60)? != role_code(role).to_le_bytes()
             {
                 return Err(failure("pipe_bootstrap_diagnostic_role"));
             }
             let session = DiagnosticSessionId::new(u64::from_le_bytes(number(bytes, 64)?))
                 .map_err(|e| error("pipe_bootstrap_diagnostic_session", e))?;
-            PeerBinding::Diagnostic(DiagnosticKey::new(owner, role, session))
+            PeerBinding::Purpose(PurposeKey::Diagnostic(DiagnosticKey::new(owner, role, session)))
+        }
+        Kind::Purpose(Purpose::UpdateAttempt) => {
+            if number::<4>(bytes, 56)? != UPDATE_ATTEMPT_PURPOSE.to_le_bytes()
+                || number::<4>(bytes, 60)? != [0; 4]
+            {
+                return Err(failure("pipe_bootstrap_update_attempt_purpose"));
+            }
+            let attempt = std::num::NonZeroU64::new(u64::from_le_bytes(number(bytes, 64)?))
+                .ok_or_else(|| failure("pipe_bootstrap_update_attempt"))?;
+            PeerBinding::Purpose(PurposeKey::UpdateAttempt(UpdateAttemptChannel::new(
+                owner,
+                UpdateAttemptKey::new(attempt),
+            )))
         }
         Kind::BackendCustody => {
             if number::<4>(bytes, 56)? != 4u32.to_le_bytes() || number::<4>(bytes, 60)? != [0; 4] {
@@ -296,8 +324,8 @@ fn decode_base(
 #[path = "custody_bootstrap_tests.rs"]
 mod custody_tests;
 #[cfg(test)]
-#[path = "diagnostic_bootstrap_tests.rs"]
-mod diagnostic_tests;
+#[path = "purpose_bootstrap_tests.rs"]
+mod purpose_tests;
 #[cfg(test)]
 #[path = "bootstrap_tests.rs"]
 mod tests;

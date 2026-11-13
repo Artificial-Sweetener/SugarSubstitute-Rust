@@ -8,6 +8,8 @@ use sugarsubstitute_contracts::{
     installation::{CloseCause, FailedProcess, TrialFacts, TrialVerdict},
 };
 use sugarsubstitute_supervision::setup_storage::{self, RunningApplication};
+#[path = "installation/generations.rs"]
+mod generations;
 #[path = "installation/health.rs"]
 mod health;
 #[path = "installation/publication.rs"]
@@ -86,6 +88,8 @@ pub(super) struct Ownership {
     /// forced end that follows finds it settled. The ordinary settlement still runs at close.
     session_end: publication::Publication,
     shell: shell::Shell,
+    /// Retires versions nothing can start, once per lifetime after acceptance.
+    generations: generations::Generations,
     readiness_observed: bool,
     facts: TrialFacts,
     /// The health publication could not be admitted because execution capacity was full; the
@@ -105,6 +109,7 @@ impl Ownership {
             settlement: publication::Publication::new(),
             session_end: publication::Publication::new(),
             shell: shell::Shell::new(),
+            generations: generations::Generations::new(),
             readiness_observed: false,
             facts: TrialFacts::default(),
             health_waiting: false,
@@ -149,6 +154,7 @@ impl Ownership {
         }
         self.settlement.consume(batch)?;
         self.shell.consume(batch)?;
+        self.generations.consume(batch)?;
         let Some(job) = &mut self.job else { return Ok(()) };
         let Some(notice) = batch
             .notifications
@@ -187,6 +193,7 @@ impl Ownership {
             || self.settlement.pending()
             || self.session_end.pending()
             || self.shell.pending()
+            || self.generations.pending()
     }
 
     /// Preserve the original native/storage cause rather than reporting only a stopped job.
@@ -255,7 +262,9 @@ impl Ownership {
         }
     }
 
-    /// Publish shell access only after observed acceptance, with its own bounded worker lifetime.
+    /// Publish shell access only after observed acceptance, with its own bounded worker lifetime,
+    /// then retire the versions nothing can start any more under this run's custody. Both wait
+    /// for readiness of an accepted launch and for the published acceptance of a trial.
     pub(super) fn publish_shell(
         &mut self,
         client: &ExecutionClient,
@@ -269,6 +278,12 @@ impl Ownership {
             && let Some(application) = self.application().cloned()
         {
             self.shell.start(client, scope, jobs, application);
+        }
+        if (self.health.succeeded() || accepted_launch)
+            && self.generations.unissued()
+            && let Some(application) = self.application().cloned()
+        {
+            self.generations.start(client, scope, jobs, application);
         }
     }
 }

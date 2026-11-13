@@ -13,12 +13,12 @@ impl Fixture {
             .cleanup
             .iter()
             .filter_map(|cleanup| cleanup.stop.as_ref().and_then(StopPlan::next_deadline))
-            .any(|deadline| Instant::now() >= deadline);
+            .any(|deadline| campaign_watch::native_now() >= deadline);
         self.scan.begin(external, boundary_due);
-        if !self.deadline_observed && Instant::now() >= self.deadline {
-            self.deadline_observed = true;
-            return Err("Held campaign exceeded its original60-second deadline".into());
+        if progress || external {
+            self.watch.progressed();
         }
+        self.watch.check()?;
         if self.registry.is_none() {
             return Ok(if self.closing { HeadlessStep::Shutdown } else { HeadlessStep::Active });
         }
@@ -71,6 +71,9 @@ impl Fixture {
             progress |= phase_progress;
         }
         progress |= self.cleanup_step()?;
+        if progress {
+            self.watch.progressed();
+        }
         if progress || self.scan.pending() {
             self.notify()?;
         }

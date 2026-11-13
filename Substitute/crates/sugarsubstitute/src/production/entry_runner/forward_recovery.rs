@@ -1,8 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Return an unsubmitted launch source to election after checked transport retirement.
+//! Return a forwarded launch source to election after checked transport retirement, and
+//! decide when forwarding to a running copy needs something on screen.
 use super::*;
 use sugarsubstitute_contracts::execution::JobOutcome;
+use sugarsubstitute_supervision::coordinator_entry::EntryPhase;
+#[cfg(test)]
+#[path = "forward_presentation_tests.rs"]
+mod presentation_tests;
+#[path = "forward_recovery_wait.rs"]
+pub(crate) mod wait;
 impl<C: EntryActivation> EntryRunner<C> {
     pub(super) fn recover_unsubmitted_forward(&mut self) -> Result<(), Box<dyn Error>> {
         if self.closing
@@ -25,11 +32,88 @@ impl<C: EntryActivation> EntryRunner<C> {
         entry.recover_unsubmitted_client(&mut returned)?;
         self.forward = None;
         self.transport_completions[2] = None;
+        if let Some(wait) = &mut self.forward_wait {
+            wait.reelected();
+        }
         self.bootstrap.as_mut().ok_or("Original entry bootstrap missing")?.advance(&self.jobs)?;
         tracing::info!(
             operation = "production_entry_reelection",
             "Unsubmitted launch source returned after native retirement for checked re-election"
         );
         Ok(())
+    }
+
+    /// Advance the wait on another copy: dismiss its surface once the copy took this launch
+    /// or this launch won election, act on the user's choice, and probe a copy that has not
+    /// answered. Cancel ends this launch without starting it.
+    /// # Errors
+    /// Preserves job submission and clock failures.
+    pub(super) fn advance_forward_wait(&mut self) -> Result<(), Box<dyn Error>> {
+        if self.closing {
+            return Ok(());
+        }
+        let snapshot =
+            self.bootstrap.as_ref().and_then(EntryBootstrap::owner).map(|owner| owner.snapshot());
+        let won = self.forward.is_none()
+            && snapshot.is_some_and(|snapshot| {
+                matches!(snapshot.phase, EntryPhase::ElectionHeld | EntryPhase::Serving)
+            });
+        let holder = snapshot.and_then(|snapshot| snapshot.holder).map(|holder| {
+            wait::PreviousCopy { pid: holder.process_id, birth: holder.creation_time_100ns }
+        });
+        let (Some(wait), Some(client), Some(finite)) =
+            (&mut self.forward_wait, &self.client, &self.finite)
+        else {
+            return Ok(());
+        };
+        if self.initial_completed || won {
+            wait.resolve();
+            return Ok(());
+        }
+        let now = client.now()?;
+        let step = wait.advance(now, (client, finite, &self.jobs), wait::NATIVE_PROCESS, holder)?;
+        wait.schedule_native(now, (self.native_now)());
+        if step == wait::WaitStep::Cancel {
+            tracing::info!(
+                operation = "entry_forward_cancelled",
+                "The user cancelled this launch while it waited for the other copy"
+            );
+            self.initial_completed = true;
+            self.request_shutdown()?;
+        }
+        Ok(())
+    }
+
+    /// Whether this launch must show the wait on the other copy now. The headless pump admits
+    /// its native loop for it, since a forwarding launch never activates its own server.
+    pub(super) fn forward_presentation_due(&self) -> bool {
+        if self.closing || self.initial_completed {
+            return false;
+        }
+        let Some(now) = self.client.as_ref().and_then(|client| client.now().ok()) else {
+            return false;
+        };
+        self.forward_wait.as_ref().is_some_and(|wait| wait.presentation_due(now))
+    }
+
+    /// The waiting surface, once this launch has waited two seconds for the other copy.
+    pub(super) fn take_forward_presentation(
+        &mut self,
+    ) -> Option<sugarsubstitute_desktop::HeadlessPresentation> {
+        if self.closing {
+            return None;
+        }
+        let now = self.client.as_ref()?.now().ok()?;
+        let controller = self.forward_wait.as_mut()?.take_surface(now)?;
+        tracing::info!(
+            operation = "entry_forward_presented",
+            "This launch is still waiting for the other copy; showing why"
+        );
+        let locale = self.child.presentation_locale().map_or("en", |locale| locale.as_str());
+        Some(sugarsubstitute_desktop::HeadlessPresentation {
+            copy: sugarsubstitute_contracts::localization::messages(locale),
+            title: sugarsubstitute::APPLICATION_NAME.to_owned(),
+            controller: Box::new(controller),
+        })
     }
 }

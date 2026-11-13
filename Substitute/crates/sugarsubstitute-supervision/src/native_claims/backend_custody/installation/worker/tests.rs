@@ -31,6 +31,8 @@ struct Rig {
     clock: Arc<test_worker::TestClock>,
     wake: Arc<Wake>,
     _execution: ExecutionOwner,
+    /// The creator's live handoff, which the witness adopts from; kept for the rig's lifetime.
+    _sender: setup_storage::TrialTransfer,
     _root: tempfile::TempDir,
 }
 impl Rig {
@@ -50,13 +52,12 @@ impl Rig {
                 ];
                 let memory = Budget::Protected(Arc::new(context.memory().claim(2 * 1024 * 1024)?));
                 let control = Control::new(memory, transfer.directory().to_owned(), notified);
-                drop(transfer);
                 *output.lock().map_err(|_| "Fixture retention poisoned")? =
-                    Some((root, control, input));
+                    Some((root, control, input, transfer));
                 Ok(())
             },
         )?;
-        let (root, control, input) = retained
+        let (root, control, input, sender) = retained
             .lock()
             .map_err(|_| "Fixture retention poisoned")?
             .take()
@@ -76,6 +77,7 @@ impl Rig {
             clock,
             wake,
             _execution: execution,
+            _sender: sender,
             _root: root,
         })
     }

@@ -104,9 +104,12 @@ fn creator_recovery_is_idempotent_and_cannot_undo_health_acceptance() -> TestRes
         let store = Arc::new(SelectionStore::open(fixture.installation.path(), context)?);
         let mut run = InstallationRun::acquire(store.clone(), context)?;
         let recovery = candidate.candidate.reserve_unstarted(&run, context)?;
+        let CandidateAuthority::Offer(offer) = &candidate.authority else {
+            return Err("Prepared candidate lacks its signed offer".into());
+        };
         let admitted = Arc::clone(&candidate.candidate).begin_trial(
             &mut run,
-            &candidate.offer.authorization(&candidate.trust),
+            &offer.authorization(&candidate.trust),
             || NOW,
             context,
         )?;

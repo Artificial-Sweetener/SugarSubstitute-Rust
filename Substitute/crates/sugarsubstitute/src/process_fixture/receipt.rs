@@ -31,9 +31,9 @@ impl Fixture {
             })
         });
         Ok(serde_json::json!({
-            "schema_version": 1,
+            "schema_version": 2,
             "qualification": "same_executable_registry_exit",
-            "inner_deadline_seconds": 60,
+            "stall_seconds": sugarsubstitute_execution::qualification_time::STALL.as_secs(), "custody_seconds": crate::campaign_watch::CUSTODY.as_secs(),
             "grace_seconds": 10,
             "settle_seconds": 15,
             "explicit_empty_environment": true,

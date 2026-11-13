@@ -6,6 +6,9 @@ use sugarsubstitute_execution::windows_fixture::FixtureObservation;
 impl Fixture {
     pub(super) fn advance(&mut self, max: NonZeroUsize) -> Result<HeadlessStep> {
         let batch = self.client.as_ref().ok_or("Descendant client")?.drain_completions(max)?;
+        if !batch.notifications.is_empty() {
+            self.watch.progressed();
+        }
         let _table_changed = crate::process_fixture::registry::poll(
             &mut self.registry_creation,
             &mut self.registry,
@@ -15,10 +18,7 @@ impl Fixture {
             registry.consume(&batch)?;
         }
         if self.registry.is_none() {
-            if !self.deadline_observed && Instant::now() >= self.original {
-                self.deadline_observed = true;
-                return Err("Registry construction exceeded original qualifier deadline".into());
-            }
+            self.watch.check()?;
             return Ok(if self.closing {
                 sugarsubstitute_desktop::HeadlessStep::Shutdown
             } else {
@@ -69,6 +69,7 @@ impl Fixture {
                 else {
                     break;
                 };
+                self.watch.progressed();
                 match observation {
                     RegistryObservation::ContainedStarted { process } if process == key => {
                         self.evidence.started = true
@@ -114,6 +115,7 @@ impl Fixture {
         if let Some(session) = &self.session {
             for _ in 0..3 {
                 let Some(observed) = session.control.take_observation() else { break };
+                self.watch.progressed();
                 match observed {
                     FixtureObservation::Prepared => {}
                     FixtureObservation::Ready => self.evidence.ready = true,
@@ -156,10 +158,7 @@ impl Fixture {
                 }
             }
         }
-        if Instant::now() >= self.original && !self.deadline_observed {
-            self.deadline_observed = true;
-            return Err("Descendant campaign exceeded its original60-second deadline".into());
-        }
+        self.watch.check()?;
         Ok(if self.closing || (self.evidence.retired && self.session_retired) {
             HeadlessStep::Shutdown
         } else {

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 
-//! Wait for whole-file byte-range locks on a blocking job, bounded and cancellable.
+//! Wait for byte-range locks on a blocking job, bounded and cancellable.
 //!
 //! The wait blocks only the calling blocking-pool worker by driving one small future on the
 //! execution runtime that admitted the job. The lock request itself is a real overlapped
@@ -68,17 +68,51 @@ pub fn lock(
     kind: LockKind,
     until: Moment,
 ) -> Result<(), FileLockError> {
+    lock_range(context, file, kind, Range::WHOLE, until)
+}
+
+/// Bytes one lock covers. Ranges may lie past the end of the file; no data need exist there.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Range {
+    /// First byte covered.
+    pub offset: u64,
+    /// Number of bytes covered; never zero.
+    pub length: u64,
+}
+impl Range {
+    /// Every byte a file can address, as whole-file locks use.
+    pub const WHOLE: Self = Self { offset: 0, length: u64::MAX };
+}
+
+/// Acquire a lock of `kind` on exactly `range` of `file`, waiting no later than `until`, with
+/// the same job, handle and deadline rules as [`lock`]. A bound already reached still issues
+/// the request once, so an uncontended range is granted and a contended one is a `Timeout`.
+/// # Errors
+/// As [`lock`]; a zero-length range is `Io` with `InvalidInput`. No lock is held after an error.
+pub fn lock_range(
+    context: &JobContext,
+    file: BorrowedHandle<'_>,
+    kind: LockKind,
+    range: Range,
+    until: Moment,
+) -> Result<(), FileLockError> {
     if !matches!(
         context.spec().class,
         JobClass::InfrastructureOrdinary | JobClass::InfrastructureLifecycle
     ) {
         return Err(FileLockError::Unavailable);
     }
+    if range.length == 0 {
+        return Err(FileLockError::Io(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "A file lock covers at least one byte",
+        )));
+    }
     if context.cancellation_requested() {
         return Err(FileLockError::Cancelled);
     }
     let until = context.deadline().map_or(until, |deadline| deadline.min(until));
-    native::lock(context, file, kind, until)
+    native::lock(context, file, kind, range, until)
 }
 
 /// What ended one wait race on the execution runtime.

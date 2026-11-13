@@ -71,22 +71,25 @@ impl RuntimeCache {
             }
             consumers::remove(&directory, &record, context)?;
             for file in inventory.files {
-                tree::remove_file(&path.join("data").join(file), context)?;
+                storage_tree::remove_file(&path.join("data").join(file), context)?;
             }
             tree::remove_directories(&path.join("data"), &record, context)?;
-            tree::remove_directory(&path.join("data"), context)?;
-            tree::remove_file(&path.join("record.next"), context)?;
-            tree::remove_file(&path.join("record"), context)?;
+            storage_tree::remove_directory(&path.join("data"), context)?;
+            storage_tree::remove_file(&path.join("record.next"), context)?;
+            storage_tree::remove_file(&path.join("record"), context)?;
             drop(exclusion);
-            tree::remove_file(&path.join("lease"), context)?;
+            storage_tree::remove_file(&path.join("lease"), context)?;
             drop(directory);
-            tree::remove_directory(&path, context)?;
+            storage_tree::remove_directory(&path, context)?;
         }
-        tree::remove_file(
+        storage_tree::remove_file(
             &parent.path().join(format!("{}.retiring.next", candidate.key)),
             context,
         )?;
-        tree::remove_file(&parent.path().join(format!("{}.retiring", candidate.key)), context)?;
+        storage_tree::remove_file(
+            &parent.path().join(format!("{}.retiring", candidate.key)),
+            context,
+        )?;
         Ok(Removal::Removed)
     }
 }

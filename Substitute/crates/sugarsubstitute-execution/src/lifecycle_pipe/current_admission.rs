@@ -148,6 +148,7 @@ fn source_facts_locked(
 
 /// Validate an actual prepared Root server before child enrollment/authentication exists.
 /// This separate private stage never relaxes the authenticated current-session fence.
+#[cfg(windows)]
 pub(crate) fn prepared_bootstrap_locked(
     core: &Core,
     state: &crate::admission::State,

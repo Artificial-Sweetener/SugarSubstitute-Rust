@@ -4,6 +4,7 @@
 
 use super::*;
 use crate::main_readiness_types::ReadinessFault;
+use sugarsubstitute_execution::qualification_time::anchor;
 
 fn completion(
     owner: &mut MainReadiness,
@@ -13,7 +14,7 @@ fn completion(
     decode_observation(
         owner,
         Observation { kind: Kind::Command, command: Some(command), payload },
-        std::time::Instant::now(),
+        anchor(),
     )
 }
 
@@ -40,7 +41,7 @@ fn positive(target: ProbeTarget) -> Result<ReadinessReceipt, Box<dyn Error>> {
 #[test]
 fn exact_owned_probe_exception_rejects_and_keeps_issued_target_without_native_effect()
 -> Result<(), Box<dyn Error>> {
-    let now = std::time::Instant::now();
+    let now = anchor();
     let mut owner = loaded()?;
     let target = owner.poll_probe(now)?.ok_or("Missing owned evaluation")?;
     malformed(
@@ -65,7 +66,7 @@ fn exact_owned_probe_exception_rejects_and_keeps_issued_target_without_native_ef
 #[test]
 fn exact_owned_barrier_exception_cannot_transfer_a_positive_dom_receipt()
 -> Result<(), Box<dyn Error>> {
-    let now = std::time::Instant::now();
+    let now = anchor();
     let mut owner = loaded()?;
     let target = owner.poll_probe(now)?.ok_or("Missing owned evaluation")?;
     assert!(owner.dom_result(target, Some(positive(target)?), now)?);
@@ -85,7 +86,7 @@ fn exact_owned_barrier_exception_cannot_transfer_a_positive_dom_receipt()
 #[test]
 fn native_process_context_and_navigation_failures_stay_sticky_after_positive_dom()
 -> Result<(), Box<dyn Error>> {
-    let now = std::time::Instant::now();
+    let now = anchor();
     for (kind, payload, expected) in [
         (Kind::ProcessFailed { kind: 1 }, "", ReadinessFault::SetupFailed),
         (Kind::ContextDestroyed, r#"{"executionContextId":7}"#, ReadinessFault::ContextLost),
@@ -106,7 +107,7 @@ fn native_process_context_and_navigation_failures_stay_sticky_after_positive_dom
 #[test]
 fn malformed_or_foreign_owned_completions_cannot_replace_current_native_evidence()
 -> Result<(), Box<dyn Error>> {
-    let now = std::time::Instant::now();
+    let now = anchor();
     let mut owner = loaded()?;
     let target = owner.poll_probe(now)?.ok_or("Missing owned evaluation")?;
     let mut foreign = target;
@@ -146,7 +147,7 @@ fn malformed_or_foreign_owned_completions_cannot_replace_current_native_evidence
 #[test]
 fn typed_incomplete_result_retains_original_retry_and_cannot_publish_receipt()
 -> Result<(), Box<dyn Error>> {
-    let now = std::time::Instant::now();
+    let now = anchor();
     let mut owner = loaded()?;
     let target = owner.poll_probe(now)?.ok_or("Missing actual evaluation")?;
     let payload = r#"{"result":{"type":"string","value":"{\"incomplete\":6144}"}}"#;
@@ -181,7 +182,7 @@ fn incomplete_envelopes_reject_unknown_empty_or_unbounded_conditions_and_receipt
         r#"{"incomplete":"1"}"#,
         "null",
     ] {
-        let now = std::time::Instant::now();
+        let now = anchor();
         let mut owner = loaded()?;
         let target = owner.poll_probe(now)?.ok_or("Missing actual evaluation")?;
         let payload = serde_json::json!({"result":{"type":"string","value":text}}).to_string();
@@ -196,7 +197,7 @@ fn incomplete_envelopes_reject_unknown_empty_or_unbounded_conditions_and_receipt
 #[test]
 fn actual_receipt_still_requires_the_matching_native_barrier_after_diagnostics()
 -> Result<(), Box<dyn Error>> {
-    let now = std::time::Instant::now();
+    let now = anchor();
     let mut owner = loaded()?;
     let target = owner.poll_probe(now)?.ok_or("Missing actual evaluation")?;
     let receipt = positive(target)?;

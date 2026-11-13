@@ -162,7 +162,11 @@ fn reopening_cached_candidate_restores_launcher_without_changing_selection() -> 
     worker::run_reserved(SIGNED_INSTALLER_RESERVATION_BYTES, |context, _| {
         let fixture = installed(context)?;
         let root = fixture.installation.path();
-        let SignedCandidate { candidate, trust, offer, _custody } = prepare(&fixture, 2, context)?;
+        let SignedCandidate { candidate, trust, authority, _custody } =
+            prepare(&fixture, 2, context)?;
+        let CandidateAuthority::Offer(offer) = authority else {
+            return Err("Prepared candidate lacks its signed offer".into());
+        };
         let directory = candidate.directory().to_owned();
         drop(candidate);
         drop(_custody);
@@ -172,7 +176,7 @@ fn reopening_cached_candidate_restores_launcher_without_changing_selection() -> 
         let before = store.load(context)?;
         let _run = InstallationRun::acquire(store.clone(), context)?;
         let CachedCandidate::Ready(reopened) =
-            SignedCandidate::reopen_cached(root, trust, offer, || NOW, context)?
+            SignedCandidate::reopen_cached(root, trust, *offer, || NOW, context)?
         else {
             return Err("Cached candidate not restored".into());
         };

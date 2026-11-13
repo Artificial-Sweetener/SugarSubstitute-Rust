@@ -12,15 +12,11 @@ mod receipt;
 mod scan;
 mod session;
 
+use crate::campaign_watch::{self, CampaignWatch};
 use crate::process_fixture::progress::{CaseProgress, StopPlan};
 use evidence::Evidence;
 use scan::{ExternalWake, Scan};
-use std::{
-    error::Error,
-    num::NonZeroUsize,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{error::Error, num::NonZeroUsize, sync::Arc, time::Instant};
 use sugarsubstitute_contracts::{
     execution::{
         Clock, CompletionWake, ExecutionPort, JobClass, JobId, JobSpec, Moment, Operation, Scope,
@@ -79,10 +75,10 @@ struct Cleanup {
 /// Compose independent event sessions, contained families and a bounded native pump.
 struct Fixture {
     clock: Arc<MonotonicClock>,
-    deadline: Instant,
+    watch: CampaignWatch,
     execution_deadline: Moment,
     child_deadline: FixtureDeadline,
-    deadline_observed: bool,
+    custody_expired: bool,
     owner_key: CoordinatorKey,
     registry: Option<WindowsProcessRegistry>,
     registry_creation: Option<crate::process_fixture::registry::PendingRegistry>,
@@ -112,17 +108,11 @@ struct Fixture {
     finished: bool,
 }
 impl Fixture {
-    /// Fix both clock deadlines before creating any admitted native work.
+    /// Fix the custody bound on both clocks before creating any admitted native work.
     fn new() -> Result<Self> {
-        let started = Instant::now();
-        let clock = MonotonicClock::new();
-        let deadline =
-            started.checked_add(Duration::from_secs(60)).ok_or("Campaign deadline overflow")?;
-        let child_deadline = FixtureDeadline::until(deadline)?;
-        let local = clock.now();
-        let remaining =
-            deadline.checked_duration_since(Instant::now()).ok_or("Campaign expired")?;
-        let execution_deadline = local.checked_add(remaining)?;
+        let clock = campaign_watch::execution_clock();
+        let (custody, execution_deadline) = campaign_watch::custody(clock.as_ref())?;
+        let child_deadline = FixtureDeadline::until(custody)?;
         let owner_key = CoordinatorKey {
             namespace: NamespaceId::new([0x61; 32]),
             epoch: CoordinatorEpoch::new([0x62; 16])?,
@@ -143,10 +133,10 @@ impl Fixture {
         let cases = cases.try_into().map_err(|_| "Campaign case inventory differs from 64")?;
         Ok(Self {
             clock,
-            deadline,
+            watch: CampaignWatch::new("Held campaign"),
             execution_deadline,
             child_deadline,
-            deadline_observed: false,
+            custody_expired: false,
             owner_key,
             registry: None,
             registry_creation: None,

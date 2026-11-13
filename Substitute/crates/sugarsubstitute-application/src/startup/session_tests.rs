@@ -379,3 +379,19 @@ fn configured_retry_requires_settlement_and_waits_for_new_native_presentation() 
 
 #[path = "session_tests/reload.rs"]
 mod reload;
+
+/// Only a page that reported SugarCubes itself unavailable or failed names SugarCubes; a
+/// frontend that never became usable and a probe out of time leave the cause unattributed.
+#[test]
+fn only_sugarcubes_page_failures_name_sugarcubes() {
+    use sugarsubstitute_contracts::startup::{PageFailure, ProbeFailure, ReadinessFailure};
+    let frontend = |code| SessionFailure::Frontend(ProbeFailure { code, detail: String::new() });
+    for (code, expected) in [
+        (ReadinessFailure::SugarcubesUnavailable, PageFailure::Sugarcubes),
+        (ReadinessFailure::SugarcubesFailed, PageFailure::Sugarcubes),
+        (ReadinessFailure::FrontendUnavailable, PageFailure::Unattributed),
+        (ReadinessFailure::TimedOut, PageFailure::Unattributed),
+    ] {
+        assert_eq!(frontend(code).page_failure(), expected, "{code:?}");
+    }
+}

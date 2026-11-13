@@ -48,6 +48,10 @@ pub(crate) trait EntryLease: Send {
     fn quiesce(&mut self, index: usize, role: Role) -> Result<(), EntryTransportError>;
     fn verify(&mut self, index: usize, message: bool) -> Result<KernelPeer, EntryTransportError>;
     fn nonce(&mut self) -> Result<[u8; 32], EntryTransportError>;
+    /// Let the kernel-verified coordinator bring its window forward for this launch.
+    /// Windows refuses the grant when this process holds no foreground rights itself;
+    /// the refusal is returned for diagnostics and never blocks the Launch.
+    fn allow_foreground(&mut self, pid: u32) -> Result<(), NativeObservationError>;
     fn retire_connection(&mut self, index: usize, reuse: bool)
     -> Result<bool, EntryTransportError>;
     fn retire(&mut self) -> Result<bool, EntryTransportError>;

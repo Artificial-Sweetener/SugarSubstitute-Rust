@@ -4,6 +4,9 @@
 use super::*;
 use crate::setup_storage::{CompletedInstallation, ReservedLaunch, reserve_installed_launch};
 
+/// The fixed UTC Unix time the failed generation is prepared for repair at.
+const REPAIRED_AT: u64 = 1_800_000_000;
+
 /// Publish a real first installation whose trial is lost until the installation withholds the
 /// package: `UNWITNESSED_LIMIT` lost trials in a row make one strike, and a bad verdict for the
 /// same generation makes the second.
@@ -21,8 +24,8 @@ fn quarantine(path: &Path, context: &JobContext) -> Result<CompletedInstallation
     let store = Arc::new(SelectionStore::open(completed.root(), context)?);
     let struck = store.load(context)?.ok_or("State absent")?;
     let generation = struck.rollback().ok_or("Strike absent")?.clone();
-    let now = crate::setup_storage::selection::unix_now().map_err(std::io::Error::other)?;
-    let staging = struck.prepare(generation.clone(), PreparationIntent::Repair, now)?;
+    // Repair preparation ignores strikes, so the time it is given decides nothing.
+    let staging = struck.prepare(generation.clone(), PreparationIntent::Repair, REPAIRED_AT)?;
     store.compare_exchange(&struck, &staging, context)?;
     let prepared = staging.prepared(&generation)?;
     store.compare_exchange(&staging, &prepared, context)?;
@@ -30,8 +33,16 @@ fn quarantine(path: &Path, context: &JobContext) -> Result<CompletedInstallation
     let trial = run.begin_trial(&prepared, context)?;
     let record = run.finish_trial(&trial, TrialVerdict::Bad(BadTrial::Crashed), context)?;
     assert!(record.candidate().is_none());
-    let later = crate::setup_storage::selection::unix_now().map_err(std::io::Error::other)?;
-    assert!(record.withheld(&generation.package, later));
+    // The rescue below reads withholding on the real clock, so the strikes keep their real dates;
+    // at the latest of them the package is withheld.
+    let struck_at = record
+        .strikes()
+        .iter()
+        .filter(|strike| strike.package == generation.package)
+        .map(|strike| strike.at)
+        .max()
+        .ok_or("Strike absent")?;
+    assert!(record.withheld(&generation.package, struck_at));
     Ok(completed)
 }
 

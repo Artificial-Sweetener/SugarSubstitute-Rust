@@ -3,6 +3,7 @@
 //! Assert real view state follows acknowledgements and shared control geometry.
 use super::*;
 use std::error::Error;
+use sugarsubstitute_execution::qualification_time::anchor;
 fn view(reduced: bool) -> Result<StartupView, Box<dyn Error>> {
     Ok(StartupView::new(
         Presentation::new("en", RequestedTheme::Dark, reduced)?,
@@ -44,7 +45,7 @@ fn splash_body_is_draggable_except_published_console_and_live_controls()
 fn static_waiting_feedback_wakes_at_each_boundary_without_continuous_animation()
 -> Result<(), Box<dyn Error>> {
     let mut view = view(true)?;
-    let origin = Instant::now();
+    let origin = anchor();
     for (elapsed, next) in [(0, Some(120)), (119, Some(120)), (120, Some(300)), (300, None)] {
         let elapsed = Duration::from_secs(elapsed);
         view.sample(StartupPhase::PreparingConnection, elapsed, origin + elapsed);

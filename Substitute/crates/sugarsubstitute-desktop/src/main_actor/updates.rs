@@ -31,12 +31,12 @@ impl MainActor {
         &mut self,
         feed: UpdateFeed,
         words: &'static Messages,
-        notice: Option<Notice>,
+        notices: Vec<Notice>,
     ) -> Result<(), DesktopError> {
         let language = !std::ptr::eq(words, self.updates.words);
         self.updates.words = words;
         let mut changed = self.updates.owner.observe(feed) || language;
-        if let Some(notice) = notice {
+        for notice in notices {
             changed |= self.updates.owner.notify(notice);
         }
         if changed { self.present_caption_updates() } else { Ok(()) }

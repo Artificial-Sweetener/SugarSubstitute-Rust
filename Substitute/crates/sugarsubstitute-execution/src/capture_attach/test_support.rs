@@ -25,9 +25,10 @@ pub(crate) fn expected() -> TestResult<CaptureAttachExpectation> {
     )?)
 }
 pub(super) fn scope(rig: &Rig) -> TestResult<Scope> {
-    Ok(rig.client.create_native_scope(
+    Ok(rig.client.core.create_scope_kind(
         ScopeSpec { id: ScopeId::new(2)?, deadline: None },
         Some(&rig.scope),
+        true,
     )?)
 }
 pub(super) fn attach_spec(id: u64) -> TestResult<JobSpec> {
@@ -250,9 +251,10 @@ pub(crate) fn admitted_pin_for_creator(
     CaptureAttachLaunchPin,
     ReleaseBoundary,
 )> {
-    let scope = rig.client.create_native_scope(
+    let scope = rig.client.core.create_scope_kind(
         ScopeSpec { id: ScopeId::new(3)?, deadline: None },
         Some(&rig.scope),
+        true,
     )?;
     let boundary = Arc::new(Boundary::default());
     boundary.ready.store(true, Ordering::Release);

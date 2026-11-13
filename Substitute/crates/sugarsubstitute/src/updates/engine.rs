@@ -14,6 +14,10 @@ use std::{
     sync::{Arc, Mutex, MutexGuard, TryLockError},
     time::Instant,
 };
+use sugarsubstitute_contracts::update::attempt::{
+    AttemptOutcome, AttemptProgress,
+    codec::{UpdateAttemptChannel, UpdateAttemptKey},
+};
 use sugarsubstitute_contracts::{
     execution::*,
     lifecycle::{CoordinatorKey, ShutdownBudget},
@@ -34,6 +38,10 @@ pub(super) struct Engine {
     closing: Option<ShutdownBudget>,
     next_scope: u64,
     succeeded: bool,
+    /// The delegated preparation's channel until its helper's owner takes it.
+    attempt: Option<parent::AttemptChannel>,
+    /// What the delegated preparation reported.
+    attempt_outcome: Option<AttemptOutcome>,
 }
 impl Engine {
     /// Adopt observed storage custody without touching disk or launching a process.
@@ -48,7 +56,7 @@ impl Engine {
             EngineUpdate::Accepted(image) => Phase::Image(Some(image)),
         };
         Self {
-            state: Arc::new(Mutex::new(State { phase, failure: None })),
+            state: Arc::new(Mutex::new(State { phase, failure: None, attempt: None })),
             job: None,
             parent: None,
             client,
@@ -57,7 +65,56 @@ impl Engine {
             closing: None,
             next_scope: 5,
             succeeded: false,
+            attempt: None,
+            attempt_outcome: None,
         }
+    }
+
+    /// Latest progress the delegated preparation reported.
+    pub(super) fn attempt_progress(&self) -> Option<AttemptProgress> {
+        self.parent.as_ref().and_then(Parent::attempt_progress)
+    }
+
+    /// What the delegated preparation reported, once its helper settled.
+    pub(super) fn take_attempt_outcome(&mut self) -> Option<AttemptOutcome> {
+        self.attempt_outcome.take()
+    }
+
+    /// Reserve the delegated preparation's channel and hand its pins to the storage step that
+    /// composes the helper. Returns whether the step may run now.
+    fn prepare_attempt(&mut self, jobs: &JobSequence) -> Result<bool> {
+        if self.attempt.is_none() {
+            let spec = JobSpec {
+                id: jobs.allocate()?,
+                operation: Operation::NativeLifecycle,
+                class: JobClass::NativeObservation,
+                deadline: None,
+                reservation_bytes:
+                    sugarsubstitute_execution::purpose_pipe::MIN_LIFECYCLE_PIPE_BYTES,
+                replacement: None,
+            };
+            let attempt = std::num::NonZeroU64::new(spec.id.get()).ok_or("Attempt id absent")?;
+            let channel =
+                UpdateAttemptChannel::new(process::key()?, UpdateAttemptKey::new(attempt));
+            let handshake = self.client.now()?.checked_add(parent::attempt_handshake())?;
+            self.attempt = Some(parent::AttemptChannel::reserve(
+                &self.client,
+                &self.cleanup,
+                spec,
+                channel,
+                handshake,
+            )?);
+        }
+        let channel = self.attempt.as_mut().ok_or("Update attempt channel absent")?;
+        channel.poll(self.client.now()?)?;
+        let mut state = observed_state(&self.state)?;
+        if state.attempt.is_none()
+            && let Some((bootstrap, enrollment)) = channel.take_pins()
+        {
+            state.attempt =
+                Some(sugarsubstitute_supervision::UpdateAttemptPins { bootstrap, enrollment });
+        }
+        Ok(state.attempt.is_some())
     }
 
     /// Observe each terminal before advancing; the process table receives the same completion batch.
@@ -76,8 +133,12 @@ impl Engine {
             self.launch()?;
             return self.observe_process(batch, jobs);
         }
+        let composing = self.closing.is_none() && matches!(state.phase, Phase::Image(_));
         let bytes = state.reservation(self.closing.is_some());
         drop(state);
+        if composing && !self.prepare_attempt(jobs)? {
+            return Ok(());
+        }
         self.submit(jobs, bytes)
     }
 
@@ -89,6 +150,9 @@ impl Engine {
         self.closing = Some(budget);
         if let Some(job) = &self.job {
             job.cancel();
+        }
+        if let Some(channel) = &mut self.attempt {
+            channel.close();
         }
         if let Some(parent) = &mut self.parent {
             parent.close(Some(budget)).map_err(|cause| cause as Box<dyn Error>)?;
@@ -107,8 +171,10 @@ impl Engine {
     }
 
     /// Cleanup finishes only after actual jobs, processes and durable trial custody retire.
-    pub(super) fn settled(&self) -> Result<bool> {
-        Ok(self.job.is_none()
+    pub(super) fn settled(&mut self) -> Result<bool> {
+        let channel = self.attempt.as_mut().is_none_or(parent::AttemptChannel::settled);
+        Ok(channel
+            && self.job.is_none()
             && self.parent.is_none()
             && matches!(self.state()?.phase, Phase::Empty))
     }

@@ -21,6 +21,22 @@ use sugarsubstitute_contracts::execution::{
     AdmissionError, ExecutionError, ExecutionId, JobSpec, Moment, OwnedJob, Scope,
 };
 
+impl crate::ExecutionClient {
+    /// Admit one of 132 native scopes without consuming the 64 ordinary scope allowance.
+    ///
+    /// Parent cancellation and the earliest ancestor deadline remain effective.
+    /// Retained results/guards and children keep their scope charged until settled.
+    /// Native scopes accept typed native reservations; task factories require
+    /// ordinary scopes. An ordinary or native parent may own either scope kind.
+    pub fn create_native_scope(
+        &self,
+        spec: sugarsubstitute_contracts::execution::ScopeSpec,
+        parent: Option<&Scope>,
+    ) -> Result<Scope, AdmissionError> {
+        self.core.create_scope_kind(spec, parent, true)
+    }
+}
+
 /// Correlate one native observation with an application-assigned positive identity.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct NativeCorrelation(NonZeroU64);
@@ -71,6 +87,7 @@ pub(crate) struct Signal {
 }
 impl Signal {
     /// Compare actual original native owner without projecting its Weak Core.
+    #[cfg(windows)]
     pub(crate) fn matches_core(&self, core: &Weak<Core>) -> bool {
         self.core.ptr_eq(core)
     }
@@ -85,7 +102,7 @@ impl Signal {
         }
     }
     /// Opaque allocation identity of the already charged original mapping owner.
-    #[cfg(feature = "k1-native-qualification")]
+    #[cfg(all(windows, feature = "k1-native-qualification"))]
     pub(crate) fn core_identity(&self) -> usize {
         self.core.as_ptr() as usize
     }

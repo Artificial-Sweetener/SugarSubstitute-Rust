@@ -3,7 +3,52 @@
 //! Application lifetime contract independent of native event-loop implementation.
 use crate::StartupPreparationStep;
 use std::{error::Error, num::NonZeroUsize, sync::Arc, time::Instant};
-use sugarsubstitute_contracts::execution::CompletionWake;
+use sugarsubstitute_contracts::{
+    appearance::AccentColor,
+    execution::CompletionWake,
+    instance_conflict::ConflictController,
+    localization::Messages,
+    presentation::{FrameShape, PreparedFrame},
+};
+
+/// A surface a headless role shows beside its pump while its own work continues, such as a
+/// launch waiting on another copy. The controller owns every decision, the waiting and the
+/// surface's end: the surface closes once the controller reports done, and the role keeps
+/// pumping throughout. The surface never grants the role process or storage authority.
+pub struct HeadlessPresentation {
+    /// Localized words in the role's language.
+    pub copy: &'static Messages,
+    /// Operating-system window title.
+    pub title: String,
+    /// The role's state for this surface, polled on the pump's thread between callbacks.
+    pub controller: Box<dyn ConflictController>,
+}
+
+/// The small notice window a headless role may show while it waits, such as the launcher's
+/// "Starting…" notice. It is drawn only from prepared pixels, has no controls, never takes
+/// focus and grants the role no window authority. The pump opens it on its own loop, keeps
+/// the role pumping, and closes it once the role stops asking for it or begins shutdown.
+pub struct HeadlessNotice {
+    /// Operating-system window title, already localized.
+    pub title: &'static str,
+    /// Client size in logical pixels.
+    pub logical_size: [u32; 2],
+    /// A frame prepared for the surface last reported through
+    /// [`HeadlessLifetime::notice_surface`], handed over once. Until one arrives the window
+    /// stays hidden; a frame for another shape is discarded.
+    pub frame: Option<PreparedFrame>,
+}
+
+/// The notice window the pump created: its device shape and the system appearance it follows.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct NoticeSurface {
+    /// Device-pixel client shape and scale.
+    pub shape: FrameShape,
+    /// Whether the system uses dark app colours.
+    pub dark: bool,
+    /// The system accent, when Windows reports one.
+    pub accent: Option<AccentColor>,
+}
 
 /// Request continued native pumping or begin the one owned shutdown transaction.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -53,6 +98,22 @@ pub trait HeadlessLifetime {
     /// and without waiting. The session end itself arrives through the role's ordinary close.
     /// Roles with nothing to publish keep this default.
     fn session_ending(&mut self) {}
+    /// Take a surface this role wants shown now, at most one at a time. The pump opens it on
+    /// its own loop, keeps calling [`HeadlessLifetime::activity`] while it is open, and closes
+    /// it before the role finishes. Roles that never show anything keep this default.
+    fn take_presentation(&mut self) -> Option<HeadlessPresentation> {
+        None
+    }
+    /// The notice this role wants on screen now, or `None` to close any open one. Called on
+    /// the pump's thread once per turn; it must return promptly. A role reaches the pump's
+    /// loop only after its preparation reports ready, so a role that wants a notice reports
+    /// ready when the notice is due. Roles that never show one keep this default.
+    fn notice(&mut self) -> Option<HeadlessNotice> {
+        None
+    }
+    /// The pump created the notice window; prepare frames for this surface. Called at most
+    /// once per window.
+    fn notice_surface(&mut self, _surface: NoticeSurface) {}
     /// Report true only after actual jobs, terminal disposal, notifications and workers settle.
     /// A deadline/cancellation/kill request cannot count as joined or native settlement.
     /// # Errors

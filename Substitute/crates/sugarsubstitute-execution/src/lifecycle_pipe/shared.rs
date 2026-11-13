@@ -4,10 +4,9 @@
 //! Keep native metadata outside the actual shared state and its last Arc control.
 
 use super::{Shared, metadata::Metadata};
-use std::{
-    ops::Deref,
-    sync::{Arc, atomic::AtomicUsize},
-};
+#[cfg(windows)]
+use std::sync::atomic::AtomicUsize;
+use std::{ops::Deref, sync::Arc};
 
 /// Every private shared alias carries the same outside metadata guard.
 /// Field order frees the state/control allocation before the guard can return capacity.
@@ -19,6 +18,7 @@ pub(crate) struct SharedRef {
 
 // Pinned Rust 1.93.1 ArcInner is repr(C), including payload alignment/padding.
 #[repr(C)]
+#[cfg(windows)]
 struct ControlLayout {
     strong: AtomicUsize,
     weak: AtomicUsize,
@@ -37,6 +37,7 @@ impl SharedRef {
     }
 
     /// Report actual compiled state/control bytes for the fixed metadata preflight.
+    #[cfg(windows)]
     pub(crate) const fn control_storage_bytes() -> usize {
         size_of::<ControlLayout>()
     }

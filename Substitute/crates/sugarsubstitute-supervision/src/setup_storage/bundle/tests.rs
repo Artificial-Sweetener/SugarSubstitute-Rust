@@ -90,3 +90,85 @@ fn interrupted_copy_retains_only_temporary_bytes_and_retry_completes_exact_paylo
         },
     )
 }
+
+/// A bundle extracted from the test package, for copy tests.
+fn extracted(
+    temporary: &Path,
+    context: &JobContext,
+) -> Result<super::VerifiedBundle, Box<dyn std::error::Error + Send + Sync>> {
+    let (manifest, compressed) = test_package::distribution()?;
+    let digest = format!("{:x}", Sha256::digest(&manifest));
+    let source = temporary.join("setup.exe");
+    std::fs::write(&source, test_package::seal(&manifest, &compressed))?;
+    let cache = crate::setup_storage::cache::RuntimeCache::open(
+        temporary,
+        crate::setup_storage::cache::CachePolicy::default(),
+        context,
+    )?;
+    Ok(materialize(&source, &cache, &digest, context)?)
+}
+
+#[test]
+fn a_copy_that_fails_after_creating_its_stage_file_leaves_no_stage_file_behind()
+-> test_worker::TestResult {
+    test_worker::run_reserved(
+        crate::setup_storage::MATERIALIZATION_RESERVATION_BYTES
+            + crate::setup_storage::RESERVATION_BYTES,
+        |context, _| {
+            let temporary = tempfile::tempdir()?;
+            let bundle = extracted(temporary.path(), context)?;
+            let destination = temporary.path().join("candidate");
+            // The stage file exists, but its handle cannot write, so the copy fails mid-file.
+            let failed = bundle.payload.copy("app/", &destination, context, |path| {
+                drop(files::create_new(path)?);
+                std::fs::OpenOptions::new().read(true).open(path)
+            });
+            assert!(failed.is_err(), "a read-only stage handle cannot be written");
+            assert_eq!(std::fs::read_dir(&destination)?.count(), 0, "no stage file remains");
+            bundle.payload.copy("app/", &destination, context, files::create_new)?;
+            VerifiedRuntime::verify_copy(&bundle.payload.inventory, &destination, context)?;
+            Ok(())
+        },
+    )
+}
+
+#[test]
+fn a_short_disk_refuses_the_copy_before_writing_with_a_typed_shortage() -> test_worker::TestResult {
+    struct Full;
+    impl crate::setup_storage::FreeSpace for Full {
+        fn available(&self, _: &Path) -> io::Result<u64> {
+            Ok(0)
+        }
+    }
+    test_worker::run_reserved(
+        crate::setup_storage::MATERIALIZATION_RESERVATION_BYTES
+            + crate::setup_storage::RESERVATION_BYTES,
+        |context, _| {
+            let temporary = tempfile::tempdir()?;
+            let bundle = extracted(temporary.path(), context)?;
+            let destination = temporary.path().join("candidate");
+            let Err(refused) =
+                bundle.payload.copy_with("app/", &destination, context, files::create_new, &Full)
+            else {
+                return Err("a full disk admitted the copy".into());
+            };
+            let bytes: u64 = bundle
+                .payload
+                .inventory
+                .entries()
+                .iter()
+                .filter(|entry| entry.path().starts_with("app/"))
+                .map(|entry| entry.bytes())
+                .sum();
+            assert_eq!(
+                crate::setup_storage::SpaceShortage::find(&refused),
+                Some(crate::setup_storage::SpaceShortage {
+                    needed: bytes + crate::setup_storage::HEADROOM_BYTES,
+                    available: 0
+                })
+            );
+            assert_eq!(std::fs::read_dir(&destination)?.count(), 0, "nothing was written");
+            Ok(())
+        },
+    )
+}

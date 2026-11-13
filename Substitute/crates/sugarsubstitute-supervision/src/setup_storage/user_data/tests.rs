@@ -18,6 +18,10 @@ mod failure;
 mod migration;
 mod originals;
 
+/// The fixed UTC Unix time the fixture's candidate is prepared at; this installation has no
+/// strikes, so it decides nothing.
+const PREPARED_AT: u64 = 1_800_000_000;
+
 struct Fixture {
     _temporary: tempfile::TempDir,
     image: PathBuf,
@@ -88,11 +92,7 @@ impl Fixture {
             .map_err(io::Error::other)?
             .ok_or_else(|| crate::durable_storage::invalid("Fixture selection absent"))?;
         let staging = before
-            .prepare(
-                generation.clone(),
-                PreparationIntent::Automatic,
-                crate::setup_storage::selection::unix_now().map_err(std::io::Error::other)?,
-            )
+            .prepare(generation.clone(), PreparationIntent::Automatic, PREPARED_AT)
             .map_err(io::Error::other)?;
         store.compare_exchange(&before, &staging, context).map_err(io::Error::other)?;
         let after = staging.prepared(&generation).map_err(io::Error::other)?;

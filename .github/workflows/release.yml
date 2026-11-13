@@ -1,0 +1,221 @@
+name: Release
+
+# Releases each component from its own commits, and only when dispatched by hand. A run is a
+# dry run unless it asks to publish: `authorize` then requires the repository variable
+# RELEASES_ENABLED to be exactly "true" and the run to be on main, and fails otherwise. Without
+# both, no job here holds write access, so nothing can be tagged, released or uploaded.
+#
+# `tooling` tests the release tooling, plans which components have a release due, and dry-runs
+# each of them in a disposable clone with no credentials; a dry run is that and nothing more.
+# When publishing, each due component is verified, then released by semantic-release with its
+# own tags (sugarcubes-v<version>, substitute-v<version>), changelog and version files.
+# SugarCubes runs first; SugarSubstitute then releases from the updated branch tip, so the two
+# release commits never race each other.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Preview the releases without publishing anything"
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-publication
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "24"
+  PYTHON_VERSION: "3.12"
+  COMFY_CLI_VERSION: "1.26.0"
+
+jobs:
+  authorize:
+    name: Decide whether this run may publish
+    runs-on: ubuntu-24.04
+    outputs:
+      publish: ${{ steps.decide.outputs.publish }}
+    steps:
+      - name: Decide
+        id: decide
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          RELEASES_ENABLED: ${{ vars.RELEASES_ENABLED }}
+          REF: ${{ github.ref }}
+        run: |
+          if [ "$DRY_RUN" != "false" ]; then
+            echo "Dry run: nothing is published."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$RELEASES_ENABLED" != "true" ]; then
+            echo "::error::Publication is switched off: the repository variable RELEASES_ENABLED is not \"true\". Dispatch a dry run instead."
+            exit 1
+          fi
+          if [ "$REF" != "refs/heads/main" ]; then
+            echo "::error::Releases publish only from main, not $REF."
+            exit 1
+          fi
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+
+  tooling:
+    name: Release tooling
+    needs: authorize
+    uses: ./.github/workflows/release-tooling.yml
+
+  sugarcubes:
+    name: Release SugarCubes
+    needs: [authorize, tooling]
+    if: >-
+      needs.authorize.outputs.publish == 'true' &&
+      (needs.tooling.outputs.sugarcubes_release == 'true' || needs.tooling.outputs.sugarcubes_blocked != '')
+    runs-on: ubuntu-24.04
+    environment: release
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: Sugar
+    steps:
+      - name: Stop when the release has no baseline
+        if: needs.tooling.outputs.sugarcubes_blocked != ''
+        env:
+          REASON: ${{ needs.tooling.outputs.sugarcubes_blocked }}
+        working-directory: .
+        run: |
+          echo "::error::$REASON"
+          exit 1
+
+      - name: Checkout complete history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            Sugar/package-lock.json
+            .github/release/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Setup pinned Rust checks
+        run: rustup toolchain install 1.93.1 --profile minimal --component clippy,rustfmt
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install release tooling
+        working-directory: .github/release
+        run: npm ci
+
+      - name: Install Python dependencies and the pinned registry client
+        run: pip install -e ".[dev]" "comfy-cli==${{ env.COMFY_CLI_VERSION }}"
+
+      - name: Install headless browser runtimes
+        run: npx playwright install --with-deps chromium firefox
+
+      - name: Verify repository gate
+        run: npm run check
+
+      - name: Verify generated files are committed
+        run: git diff --exit-code
+
+      - name: Release
+        id: release
+        working-directory: .
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASES_ENABLED: ${{ vars.RELEASES_ENABLED }}
+        run: node .github/release/release.mjs release sugarcubes
+
+      - name: Publish the same archive to the Comfy Registry
+        if: steps.release.outputs.released == 'true' && vars.RELEASES_ENABLED == 'true'
+        env:
+          REGISTRY_ACCESS_TOKEN: ${{ secrets.REGISTRY_ACCESS_TOKEN }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          comfy --skip-prompt --no-enable-telemetry env
+          python ../.github/release/sugarcubes_registry.py publish \
+            --archive "../dist/sugarcubes/SugarCubes-${VERSION}.zip" \
+            --changelog-file ../dist/sugarcubes/notes.md
+
+  substitute-verify:
+    name: Verify SugarSubstitute
+    needs: [authorize, tooling]
+    if: >-
+      needs.authorize.outputs.publish == 'true' &&
+      needs.tooling.outputs.substitute_release == 'true'
+    uses: ./.github/workflows/substitute-verify.yml
+
+  substitute:
+    name: Release SugarSubstitute
+    needs: [authorize, tooling, sugarcubes, substitute-verify]
+    if: >-
+      always() &&
+      needs.authorize.outputs.publish == 'true' &&
+      needs.tooling.result == 'success' &&
+      (needs.tooling.outputs.substitute_release == 'true' || needs.tooling.outputs.substitute_blocked != '') &&
+      (needs.substitute-verify.result == 'success' || needs.tooling.outputs.substitute_blocked != '') &&
+      (needs.sugarcubes.result == 'success' || needs.sugarcubes.result == 'skipped')
+    runs-on: ubuntu-24.04
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - name: Stop when the release has no baseline
+        if: needs.tooling.outputs.substitute_blocked != ''
+        env:
+          REASON: ${{ needs.tooling.outputs.substitute_blocked }}
+        run: |
+          echo "::error::$REASON"
+          exit 1
+
+      - name: Checkout the branch tip, including a SugarCubes release commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - name: Require the verified SugarSubstitute sources
+        env:
+          VERIFIED: ${{ github.sha }}
+        run: |
+          if ! git diff --quiet "$VERIFIED" HEAD -- Substitute Sugar/integrations/contracts; then
+            echo "::error::SugarSubstitute changed after verification; the next run releases it."
+            exit 1
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: .github/release/package-lock.json
+
+      - name: Install release tooling
+        working-directory: .github/release
+        run: npm ci
+
+      - name: Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASES_ENABLED: ${{ vars.RELEASES_ENABLED }}
+        run: node .github/release/release.mjs release substitute

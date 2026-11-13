@@ -101,6 +101,13 @@ impl LaunchPointer {
         let fallback = fallback.filter(|target| target.generation != primary.generation);
         Self { primary, fallback }
     }
+    /// Generations named by this pointer, primary first.
+    pub fn generations(&self) -> Vec<GenerationId> {
+        std::iter::once(&self.primary)
+            .chain(self.fallback.as_ref())
+            .map(|target| target.generation.clone())
+            .collect()
+    }
     /// Engine started first.
     pub fn primary(&self) -> &EngineTarget {
         &self.primary
@@ -202,6 +209,23 @@ pub fn read_launch_pointer(
         read_bytes(&state, protection)
     })?;
     LaunchPointer::decode(&bytes.ok_or(PointerFailure::Missing)?)
+}
+
+/// Generations the stable entry may start: the pointer's primary and fallback, in that order.
+/// Retirement must keep both. A missing pointer names none.
+/// Run on an admitted storage worker with `POINTER_RESERVATION_BYTES`.
+/// # Errors
+/// `Incompatible`, `Damaged` or `Storage`: a pointer that cannot be read leaves every generation
+/// it might name in doubt, so callers keep all generations.
+pub fn pointed_generations(
+    installation: &Path,
+    context: &JobContext,
+) -> Result<Vec<GenerationId>, PointerFailure> {
+    match read_launch_pointer(installation, context) {
+        Ok(pointer) => Ok(pointer.generations()),
+        Err(PointerFailure::Missing) => Ok(Vec::new()),
+        Err(cause) => Err(cause),
+    }
 }
 
 /// Read the pointer under protection the caller already holds.

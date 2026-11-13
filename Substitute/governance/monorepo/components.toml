@@ -26,6 +26,8 @@ files = [
   "Sugar/integrations/contracts/canvas.schema.json",
   "Sugar/integrations/contracts/CanvasNativeProtocol.generated.rs",
   "Sugar/integrations/contracts/CanvasSurfaceProtocol.generated.rs",
+  "Sugar/integrations/contracts/host.schema.json",
+  "Sugar/integrations/contracts/HostProtocol.generated.rs",
   "Sugar/integrations/contracts/memory.schema.json",
   "Sugar/integrations/contracts/MemoryProtocol.generated.rs",
   "Sugar/integrations/contracts/panel_wire_vectors.json",
@@ -35,6 +37,8 @@ files = [
   "Sugar/integrations/contracts/session_vectors.json",
   "Sugar/integrations/contracts/session.schema.json",
   "Sugar/integrations/contracts/SessionProtocol.generated.rs",
+  "Sugar/integrations/contracts/updates.schema.json",
+  "Sugar/integrations/contracts/UpdatesProtocol.generated.rs",
 ]
 consumers = [
   "crates/sugarsubstitute-application/src/workspace_session/tests.rs",
@@ -53,6 +57,10 @@ consumers = [
   "crates/sugarsubstitute-contracts/src/canvas_surface/wire.rs",
   "crates/sugarsubstitute-contracts/src/desktop_session/tests.rs",
   "crates/sugarsubstitute-contracts/src/desktop_session/wire.rs",
+  "crates/sugarsubstitute-contracts/src/host/tests.rs",
+  "crates/sugarsubstitute-contracts/src/host/wire.rs",
+  "crates/sugarsubstitute-contracts/src/host_updates/tests.rs",
+  "crates/sugarsubstitute-contracts/src/host_updates/wire.rs",
   "crates/sugarsubstitute-contracts/src/memory/tests.rs",
   "crates/sugarsubstitute-contracts/src/memory/wire.rs",
   "crates/sugarsubstitute-contracts/src/panel/tests.rs",
@@ -70,4 +78,43 @@ consumers = [
   "crates/sugarsubstitute/src/startup/workspace/closing_tests.rs",
   "crates/sugarsubstitute/src/workspace_session/driver/tests.rs",
   "crates/sugarsubstitute/src/workspace_session/tests.rs",
+]
+
+# SugarCubes owns the Comfy Registry install format of its pack (sugarcubes.backend.pack_install)
+# and the language-neutral vectors that pin it. The host's installer is the second
+# implementation; it reads the vectors in place and both suites must drive every group.
+[[components]]
+id = "sugarcubes-pack-install"
+root = "Sugar/tests/pack_install/support"
+owner = "SugarCubes pack_install: the Comfy Registry install format, its digest record and its update decisions"
+files = ["Sugar/tests/pack_install/support/registry_install_vectors.json"]
+consumers = ["crates/sugarsubstitute-supervision/src/pack_install/vector_tests.rs"]
+
+[[shared_vectors]]
+file = "Sugar/tests/pack_install/support/registry_install_vectors.json"
+component = "sugarcubes-pack-install"
+rust_suites = [
+  "crates/sugarsubstitute-supervision/src/pack_install/vector_tests.rs",
+  "crates/sugarsubstitute-supervision/src/pack_install/vector_tests/layout.rs",
+  "crates/sugarsubstitute-supervision/src/pack_install/vector_tests/decisions.rs",
+]
+python_loader = "Sugar/tests/pack_install/support/install_vectors.py"
+python_suites = [
+  "Sugar/tests/pack_install/contract/test_registry_install_vectors.py",
+  "Sugar/tests/self_update/integration/test_update_decision_vectors.py",
+]
+formats = { tracking = "sugarcubes-pack-tracking-v1", digestRecord = "sugarcubes-pack-digest-record-v1" }
+
+# The host conformance harness runs the SugarCubes conformance kit from its TypeScript sources
+# and records this host's profile beside the other hosts' recorded profiles.
+[[components]]
+id = "sugarcubes-conformance"
+root = "Sugar/integrations/shared/conformance"
+owner = "SugarCubes integrations/shared/conformance: the host conformance kit and every host's recorded profile"
+files = [
+  "Sugar/integrations/shared/conformance/HostConformance.ts",
+  "Sugar/integrations/shared/conformance/HostProfiles.ts",
+]
+consumers = [
+  "crates/sugarsubstitute-desktop/tests/host_conformance.mjs",
 ]

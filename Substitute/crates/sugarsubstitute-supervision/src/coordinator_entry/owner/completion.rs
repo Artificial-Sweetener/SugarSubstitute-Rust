@@ -80,12 +80,14 @@ impl CoordinatorEntryOwner {
                             inode,
                         )?;
                     }
-                    Actual::Elected(Elected::Candidate(epoch)) => {
+                    Actual::Elected(Elected::Candidate { epoch, holder }) => {
                         self.candidate = Some(epoch);
+                        self.holder = holder;
                         self.phase = EntryPhase::Candidate;
                         self.push(EntryObservation::Candidate(epoch))?;
                     }
-                    Actual::Elected(Elected::Contended) => {
+                    Actual::Elected(Elected::Contended(holder)) => {
+                        self.holder = holder;
                         self.phase = EntryPhase::Contended;
                         self.push(EntryObservation::Contended)?;
                     }

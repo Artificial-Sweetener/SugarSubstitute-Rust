@@ -6,6 +6,7 @@ use crate::completion_wake::Wake;
 use crate::startup::platform_tests::{Platform, Prepared};
 use sha2::{Digest, Sha256};
 use std::num::NonZeroUsize;
+use std::sync::atomic::{AtomicU64, Ordering};
 use sugarsubstitute_application::startup::StartupSession;
 use sugarsubstitute_application::workspace_session::close_save::NotSavedLastTime;
 use sugarsubstitute_contracts::{
@@ -20,8 +21,46 @@ struct Release;
 impl MemoryRelease for Release {
     fn release(&self, _: u64) {}
 }
+/// A host clock that moves only when a test moves it, so no deadline in this fixture expires
+/// because the machine running it is slow. Native instants are offsets from the process's frozen
+/// test anchor; the fixture drives polling itself and never waits for them.
+pub(super) struct ManualClock {
+    nanos: AtomicU64,
+}
+impl ManualClock {
+    /// Start far enough from zero that budgets dated just before the start stay valid.
+    fn new() -> Arc<Self> {
+        Arc::new(Self { nanos: AtomicU64::new(1_000_000_000_000) })
+    }
+    /// Move this clock forward by `by`, as a slow machine does between two steps.
+    pub(super) fn advance(&self, by: Duration) {
+        let by = u64::try_from(by.as_nanos()).unwrap_or(u64::MAX);
+        self.nanos.fetch_add(by, Ordering::SeqCst);
+    }
+}
+impl sugarsubstitute_contracts::execution::Clock for ManualClock {
+    fn now(&self) -> Moment {
+        Moment::from_nanos(self.nanos.load(Ordering::SeqCst))
+    }
+    fn sleep_until(&self, deadline: Moment) -> sugarsubstitute_contracts::execution::WaitFuture {
+        let elapsed = deadline <= self.now();
+        Box::pin(async move {
+            if !elapsed {
+                std::future::pending::<()>().await;
+            }
+        })
+    }
+}
+impl crate::startup::HostClock for ManualClock {
+    fn instant_for(&self, moment: Moment) -> Result<std::time::Instant, TimeError> {
+        sugarsubstitute_execution::qualification_time::anchor()
+            .checked_add(Duration::from_nanos(moment.as_nanos()))
+            .ok_or(TimeError::Overflow)
+    }
+}
 pub(super) struct Fixture {
     pub(super) host: StartupHost<Platform>,
+    pub(super) clock: Arc<ManualClock>,
     pub(super) checkpoint: SessionCheckpoint,
     pub(super) directory: tempfile::TempDir,
     pub(super) wake: Arc<Wake>,
@@ -50,7 +89,8 @@ impl Fixture {
         fence.revision = 1;
         fence.bindings.clear();
         let directory = tempfile::tempdir()?;
-        let mut host = crate::startup::platform_tests::host()?;
+        let clock = ManualClock::new();
+        let mut host = crate::startup::platform_tests::host_with_clock(clock.clone())?;
         host.child.start_allowed = true;
         host.execution.reserve_workspace_capacity(CAPACITY)?;
         host.workspace = Some(WorkspaceWork::new(
@@ -157,7 +197,7 @@ impl Fixture {
         workspace.context = Some(context);
         workspace.bootstrap = Some(bootstrap);
         workspace.delivery = Some(MemoryLease::new(DELIVERY_BYTES, Box::new(Release)));
-        Ok(Self { host, checkpoint, directory, wake, store })
+        Ok(Self { host, clock, checkpoint, directory, wake, store })
     }
     pub(super) fn poll(&mut self) -> TestResult {
         assert!(self.host.poll_frame(NonZeroUsize::MIN.saturating_add(31))?.is_none());

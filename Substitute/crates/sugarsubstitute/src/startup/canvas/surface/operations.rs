@@ -11,6 +11,13 @@ use sugarsubstitute_contracts::canvas_surface::CanvasFileReference;
 #[path = "operations/session_originals.rs"]
 mod session_originals;
 
+const GEOMETRY_UNALLOCATED: &str = "The canvas has no view allocated for this geometry yet.";
+const GEOMETRY_UNPLACEABLE: &str = "The canvas cannot be placed at this geometry.";
+const SELECTION_NOT_OUTPUT: &str = "The selected file is not a saved or temporary output image.";
+const COMPARISON_NOT_OUTPUT: &str = "The compared file is not a saved or temporary output image.";
+const SELECTION_MISSING: &str = "The selected image was not found in its output folder.";
+const COMMIT_UNPLACED: &str = "The canvas cannot be shown before its geometry is placed.";
+
 impl NativeSurface {
     /// Apply an already-qualified operation through its authoritative session owner.
     pub(super) fn apply_operation(
@@ -47,7 +54,7 @@ impl NativeSurface {
             }
             CanvasSurfaceOperation::Geometry(geometry) => {
                 let Some(allocation) = allocation else {
-                    return self.reply(identity, &request, CanvasSurfaceReplyStatus::Error, claim);
+                    return self.reply_error(identity, &request, GEOMETRY_UNALLOCATED, claim);
                 };
                 let projected = match placement(&geometry, allocation).and_then(|projected| {
                     // Hidden geometry routes nothing, so only a shown viewport projects them.
@@ -60,12 +67,7 @@ impl NativeSurface {
                 }) {
                     Ok(value) => value,
                     Err(_) => {
-                        return self.reply(
-                            identity,
-                            &request,
-                            CanvasSurfaceReplyStatus::Error,
-                            claim,
-                        );
+                        return self.reply_error(identity, &request, GEOMETRY_UNPLACEABLE, claim);
                     }
                 };
                 let (projected, occlusions, backdrops) = projected;
@@ -88,10 +90,10 @@ impl NativeSurface {
                         Ok(viewport) if viewport.width > 0 && viewport.height > 0 => Some(viewport),
                         Ok(_) => None,
                         Err(_) => {
-                            return self.reply(
+                            return self.reply_error(
                                 identity,
                                 &request,
-                                CanvasSurfaceReplyStatus::Error,
+                                GEOMETRY_UNPLACEABLE,
                                 claim,
                             );
                         }
@@ -134,12 +136,12 @@ impl NativeSurface {
                 let compared = comparison.as_ref().map(|comparison| &comparison.file);
                 let drag_name = compared.is_none().then(|| output_leaf(&file));
                 let Some(target) = admitted_output(&file) else {
-                    return self.reply(identity, &request, CanvasSurfaceReplyStatus::Error, claim);
+                    return self.reply_error(identity, &request, SELECTION_NOT_OUTPUT, claim);
                 };
                 let Ok(compared_target) =
                     compared.map(|file| admitted_output(file).ok_or(())).transpose()
                 else {
-                    return self.reply(identity, &request, CanvasSurfaceReplyStatus::Error, claim);
+                    return self.reply_error(identity, &request, COMPARISON_NOT_OUTPUT, claim);
                 };
                 self.fence_previews(session)?;
                 // Verified keys also identify a comparison parked behind an input document;
@@ -193,10 +195,10 @@ impl NativeSurface {
                                 );
                             }
                             None => {
-                                return self.reply(
+                                return self.reply_error(
                                     identity,
                                     &request,
-                                    CanvasSurfaceReplyStatus::Error,
+                                    SELECTION_MISSING,
                                     claim,
                                 );
                             }
@@ -223,7 +225,7 @@ impl NativeSurface {
             CanvasSurfaceOperation::Commit => {
                 let binding = self.binding.as_mut().ok_or("Canvas binding disappeared")?;
                 if binding.placement.is_none() {
-                    return self.reply(identity, &request, CanvasSurfaceReplyStatus::Error, claim);
+                    return self.reply_error(identity, &request, COMMIT_UNPLACED, claim);
                 }
                 binding.committed = true;
                 let kind = if binding.shows_document(session) {

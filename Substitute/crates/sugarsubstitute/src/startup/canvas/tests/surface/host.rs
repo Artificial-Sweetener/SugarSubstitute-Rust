@@ -396,6 +396,7 @@ pub(super) fn surface_reply(
     if value["requestId"] != id {
         return Err(format!("Expected reply {id}, received {value}").into());
     }
+    says_what_happened(&value);
     Ok(value)
 }
 

@@ -11,9 +11,10 @@ pub mod conflict;
 pub mod incident;
 /// Localized installer screens and actions.
 pub mod installer;
+/// Localized update controls, update report steps and start-up update lines.
+pub mod pack_updates;
 /// Localized operation-specific startup feedback.
 pub mod startup;
-/// Localized update controls, update report steps and start-up update lines.
 pub mod updates;
 /// Localized standalone canvas viewer status.
 pub mod viewer;
@@ -40,6 +41,8 @@ pub struct Messages {
     pub id: &'static str,
     /// Initial status and native window title.
     pub loading: &'static str,
+    /// The installed launcher's own notice, shown only when starting takes more than a moment.
+    pub starting: &'static str,
     /// Feedback after two minutes of active startup.
     pub loading_long: &'static str,
     /// Feedback after five minutes of active startup.
@@ -72,6 +75,8 @@ pub struct Messages {
     pub closing: &'static closing::ClosingMessages,
     /// The window's update controls, the update report's steps and start-up update lines.
     pub updates: &'static updates::UpdateMessages,
+    /// The SugarCubes update during start-up: its one line and its report lines.
+    pub pack_updates: &'static pack_updates::PackUpdateMessages,
     /// Native canvas viewer title and image-opening feedback.
     pub viewer: &'static viewer::ViewerMessages,
 }
@@ -84,6 +89,7 @@ pub static LOCALES: &[Messages] = &[
         installer: &installer::EN,
         startup: &startup::EN,
         loading: "Loading...",
+        starting: "Starting SugarSubstitute…",
         loading_long: "This is taking longer than usual...",
         loading_extended: "Still waiting. Dependencies or custom nodes\nmay take several minutes...",
         show_output: "Show Comfy output",
@@ -101,6 +107,7 @@ pub static LOCALES: &[Messages] = &[
         window: &window::EN,
         closing: &closing::EN,
         updates: &updates::EN,
+        pack_updates: &pack_updates::EN,
         viewer: &viewer::EN,
     },
     Messages {
@@ -109,6 +116,7 @@ pub static LOCALES: &[Messages] = &[
         installer: &installer::ZH_HANS,
         startup: &startup::ZH_HANS,
         loading: "正在加载...",
+        starting: "正在启动 SugarSubstitute…",
         loading_long: "加载时间比平时稍长...",
         loading_extended: "仍在等待。依赖项或自定义节点\n可能需要几分钟...",
         show_output: "显示 Comfy 输出",
@@ -126,6 +134,7 @@ pub static LOCALES: &[Messages] = &[
         window: &window::ZH_HANS,
         closing: &closing::ZH_HANS,
         updates: &updates::ZH_HANS,
+        pack_updates: &pack_updates::ZH_HANS,
         viewer: &viewer::ZH_HANS,
     },
     Messages {
@@ -134,6 +143,7 @@ pub static LOCALES: &[Messages] = &[
         installer: &installer::JA,
         startup: &startup::JA,
         loading: "読み込み中...",
+        starting: "SugarSubstitute を起動しています…",
         loading_long: "通常より時間がかかっています...",
         loading_extended: "引き続き待機中です。依存関係やカスタムノードの\n準備には数分かかる場合があります...",
         show_output: "Comfy の出力を表示",
@@ -151,6 +161,7 @@ pub static LOCALES: &[Messages] = &[
         window: &window::JA,
         closing: &closing::JA,
         updates: &updates::JA,
+        pack_updates: &pack_updates::JA,
         viewer: &viewer::JA,
     },
     Messages {
@@ -159,6 +170,7 @@ pub static LOCALES: &[Messages] = &[
         installer: &installer::KO,
         startup: &startup::KO,
         loading: "불러오는 중...",
+        starting: "SugarSubstitute를 시작하는 중…",
         loading_long: "평소보다 시간이 오래 걸리고 있습니다...",
         loading_extended: "계속 기다리는 중입니다. 의존성이나 사용자 정의 노드\n준비에 몇 분이 걸릴 수 있습니다...",
         show_output: "Comfy 출력 표시",
@@ -176,6 +188,7 @@ pub static LOCALES: &[Messages] = &[
         window: &window::KO,
         closing: &closing::KO,
         updates: &updates::KO,
+        pack_updates: &pack_updates::KO,
         viewer: &viewer::KO,
     },
     Messages {
@@ -184,6 +197,7 @@ pub static LOCALES: &[Messages] = &[
         installer: &installer::ES,
         startup: &startup::ES,
         loading: "Cargando...",
+        starting: "Iniciando SugarSubstitute…",
         loading_long: "Esto está tardando más de lo habitual...",
         loading_extended: "Seguimos esperando. Las dependencias o los nodos\npersonalizados pueden tardar varios minutos...",
         show_output: "Mostrar la salida de Comfy",
@@ -201,6 +215,7 @@ pub static LOCALES: &[Messages] = &[
         window: &window::ES,
         closing: &closing::ES,
         updates: &updates::ES,
+        pack_updates: &pack_updates::ES,
         viewer: &viewer::ES,
     },
 ];
@@ -223,6 +238,7 @@ mod tests {
             assert!(
                 [
                     locale.loading,
+                    locale.starting,
                     locale.loading_long,
                     locale.loading_extended,
                     locale.show_output,
@@ -244,6 +260,7 @@ mod tests {
                 .chain(locale.window.labels())
                 .chain(locale.closing.labels())
                 .chain(locale.updates.labels())
+                .chain(locale.pack_updates.labels())
                 .chain(locale.viewer.labels())
                 .chain(locale.startup.labels())
                 .all(|text| !text.trim().is_empty() && !text.contains('\0'))

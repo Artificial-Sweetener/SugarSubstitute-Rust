@@ -28,6 +28,9 @@ impl Launcher {
         if let Some(job) = &self.job {
             job.job.cancel();
         }
+        if let Some(notice) = &self.notice {
+            notice.cancel();
+        }
         Ok(())
     }
 
@@ -36,6 +39,9 @@ impl Launcher {
     pub(super) fn poll_close(&mut self) -> Result<bool> {
         if !self.closing {
             return Ok(false);
+        }
+        if self.abandoned {
+            return Ok(true);
         }
         let until = self.cleanup_until.ok_or("Launcher cleanup cutoff absent")?;
         let expired = self.clock.now() >= until;
@@ -50,7 +56,7 @@ impl Launcher {
             return self.observe_join(expired);
         }
         advanced?;
-        if self.job.is_some() || self.cached.is_some() {
+        if self.job.is_some() || self.cached.is_some() || self.notice_busy() {
             return Ok(false);
         }
         if self.launch.is_some() || self.engine.is_some() || self.delegate.is_some() {
@@ -81,10 +87,13 @@ impl Launcher {
     }
 
     /// Logical retirement and actual worker joins are separate facts; report unsettled custody once.
+    /// The report starts a short exit grace; work still unsettled after it is abandoned, so the
+    /// headless pump always reaches its exit.
     fn observe_join(&mut self, expired: bool) -> Result<bool> {
         let actual = self.owner.as_ref().map(ExecutionOwner::poll_shutdown).transpose()?;
         let settled = actual.as_ref().is_none_or(|progress| progress.settled);
         let uncertain = self.job.is_some()
+            || self.notice_busy()
             || self.launch.is_some()
             || self.cached.is_some()
             || self.engine.is_some()
@@ -94,7 +103,12 @@ impl Launcher {
                 || (!settled && actual.is_some_and(|progress| progress.deadline_expired)))
         {
             self.cutoff_reported = true;
+            self.arm_exit()?;
             return Err("Launcher ownership remains unsettled after its original cutoff".into());
+        }
+        if !settled && self.exit_due() {
+            self.abandoned = true;
+            return Ok(true);
         }
         Ok(settled)
     }

@@ -1,0 +1,24 @@
+[package]
+name = "sugarsubstitute-update-repository"
+description = "Signs and verifies the SugarSubstitute update repository for release CI"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+sugarsubstitute-contracts = { path = "../../crates/sugarsubstitute-contracts" }
+sugarsubstitute-update = { path = "../../crates/sugarsubstitute-update" }
+tuf.workspace = true
+chrono.workspace = true
+ring.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

@@ -28,7 +28,7 @@ from .contract import NativeContract
 from .channels import NativeChannels
 from .channel_editing import NativeChannelEditing
 from .dispatch import NativeDispatch
-from .environment import companion_environment
+from .environment import COMPANION_CREATION_FLAGS, companion_environment
 from .files import NativePngFiles
 from .images import resolve_image
 from .identity import windows_process_identity
@@ -97,7 +97,7 @@ def run_native_viewer(
         stdout=subprocess.PIPE,
         stderr=sys.stderr,
         env=environment,
-        creationflags=subprocess.CREATE_NO_WINDOW,
+        creationflags=COMPANION_CREATION_FLAGS,
     )
     pipe: NativePipe | None = None
     try:

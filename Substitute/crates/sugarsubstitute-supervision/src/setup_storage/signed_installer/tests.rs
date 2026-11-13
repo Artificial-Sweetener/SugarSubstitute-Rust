@@ -15,6 +15,7 @@ mod launch_recovery;
 mod online;
 mod phases;
 mod retry;
+mod staged;
 mod supersession;
 mod transfer_recovery;
 

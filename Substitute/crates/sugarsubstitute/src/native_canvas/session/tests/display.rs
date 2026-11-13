@@ -6,6 +6,7 @@ mod activity;
 mod backdrops;
 mod composite;
 mod presentation;
+mod repair;
 mod source_fencing;
 mod surface;
 use super::refinement::Wake;

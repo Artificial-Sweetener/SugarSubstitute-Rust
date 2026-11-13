@@ -32,6 +32,9 @@ const LANGUAGES: &[&str] = &["rs", "mjs", "cjs", "js", "ts", "py", "ps1"];
 pub(crate) struct Components {
     pub(crate) schema_version: u32,
     pub(crate) components: Vec<Component>,
+    /// Vector files two implementations must both drive; see [crate::shared_vectors].
+    #[serde(default)]
+    pub(crate) shared_vectors: Vec<crate::shared_vectors::SharedVectors>,
 }
 
 /// Bind one sibling component folder to its owner, consumed files and consumers.
@@ -209,7 +212,11 @@ pub(crate) fn check(root: &Path, architecture: &Architecture, policy: &Component
 /// A literal starting with `../` is relative to the file's directory, as `include_str!`,
 /// `include!` and `new URL(..., import.meta.url)` resolve it. A literal starting with `/../` is
 /// appended to the owning crate directory, as `concat!(env!("CARGO_MANIFEST_DIR"), ...)` builds it.
-fn sibling_references(workspace: &Path, file: &Path, source: &str) -> Result<Vec<PathBuf>> {
+pub(crate) fn sibling_references(
+    workspace: &Path,
+    file: &Path,
+    source: &str,
+) -> Result<Vec<PathBuf>> {
     let file = lexical(file);
     let directory =
         file.parent().ok_or_else(|| Failure::Policy("authored file has no parent".into()))?;
@@ -292,7 +299,7 @@ fn crate_directory(workspace: &Path, start: &Path) -> Result<PathBuf> {
 }
 
 /// Absolute, lexically normalized form of a path; links are rejected elsewhere.
-fn lexical(path: &Path) -> PathBuf {
+pub(crate) fn lexical(path: &Path) -> PathBuf {
     normalize(&std::path::absolute(path).unwrap_or_else(|_| path.to_path_buf()))
 }
 
@@ -341,6 +348,7 @@ mod tests {
                 files: files.iter().map(|file| (*file).to_owned()).collect(),
                 consumers: consumers.iter().map(|file| (*file).to_owned()).collect(),
             }],
+            shared_vectors: Vec::new(),
         }
     }
 
@@ -479,6 +487,7 @@ mod tests {
                 files: vec!["Sugar/other/schema.json".into()],
                 consumers: vec![CONSUMER.into()],
             }],
+            shared_vectors: Vec::new(),
         };
         crate::fixtures::write(fixture.root(), CONSUMER, "// consumer\n")?;
         crate::fixtures::write(fixture.monorepo(), "Sugar/other/schema.json", "{}")?;

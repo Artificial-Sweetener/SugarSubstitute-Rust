@@ -169,13 +169,6 @@ disposition = "fixture"
 rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
 
 [[records]]
-path = "crates/sugarsubstitute/src/production/diagnostic_helper/service/seed_failure_tests.rs"
-owner = "sugarsubstitute"
-source_sha256 = "sha256:7d9aa3ba183c3d9e5467b6118e87f86732280df8ec7b00747e3fa09a0ce4b491"
-disposition = "fixture"
-rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
-
-[[records]]
 path = "crates/sugarsubstitute/src/production/entry_activation/desktop_output/diagnostic/bulk_tests.rs"
 owner = "sugarsubstitute"
 source_sha256 = "sha256:345ce233f8528fa98a8e5cf89136a7ab8d2c17b0f7929879fd343891de8debb0"
@@ -206,7 +199,7 @@ rationale = "Isolated behavioral or native qualification captures test output to
 [[records]]
 path = "crates/sugarsubstitute/src/production/incident_host/tests/diagnostics.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:1a2cd5b79d96c94977f8b148b57e96671c933ac563f86962a0b17b6d224a5529"
+source_sha256 = "sha256:d34582d27ddfa9f7a49d962df4db8e0ee466a18d3899608e211c5edb0fccd713"
 disposition = "fixture"
 rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
 
@@ -297,14 +290,21 @@ rationale = "Repository build or verification diagnostics remain developer outpu
 [[records]]
 path = "tools/xtask/src/governance.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:79899997dc08a0c38429be84592844ff724ed6c874ae4b3f003b80270705fa4b"
+source_sha256 = "sha256:a905a6d20af18ba89edfedc98c012c100eca88ad63326c4ad5a9a8bfd82a848e"
 disposition = "developer"
 rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
 
 [[records]]
+path = "tools/update-repository/src/main.rs"
+owner = "sugarsubstitute-update-repository"
+source_sha256 = "sha256:2d65c4e259f824cad7d7dac32bf9de5f8f3321b25cec6392cb3cb014d0f3bda6"
+disposition = "developer"
+rationale = "Release-CI signing tool output: the files it wrote and what the application's verifier accepted, read by the update repository workflow; never part of the runtime route."
+
+[[records]]
 path = "tools/xtask/src/main.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:75136c55921a618aeed0f03e439afd92a83642e156656924590cedc77969d6ef"
+source_sha256 = "sha256:6819bf400054ada7178b94b2b196dbf624679d01aad1657d8342c2520c1a7419"
 disposition = "developer"
 rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
 
@@ -318,7 +318,7 @@ rationale = "Repository build or verification diagnostics remain developer outpu
 [[records]]
 path = "tools/xtask/src/testing.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:2827118fea6b40dc1a5a76c9ce8ccb881dd35b62c3835cf8524d5944b005fb2b"
+source_sha256 = "sha256:c4add3e31ec1fd998c2490e7d5b8361bf2c0cc7e06138700ad86545e7725de55"
 disposition = "developer"
 rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
 
@@ -367,7 +367,7 @@ rationale = "Repository build or verification diagnostics remain developer outpu
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/command/directory.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:c2344092b1f7836944d536e9112a5696e22b54d711698a9b7ea2125317fcf3be"
+source_sha256 = "sha256:df4deca73fb429e00116c3347017c34521f6980e7bb1e5d52290265b2f23c3e6"
 disposition = "capture"
 rationale = "Child launch path validation recognizes DOS console-device names as forbidden normalization targets; it does not open them."
 
@@ -395,7 +395,7 @@ rationale = "Isolated behavioral or native qualification captures test output to
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/lifecycle_protocol/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:26d262171550fd4a64b6424126fdcb5df0c18fefa9acac8fae0067b628f98cac"
+source_sha256 = "sha256:05936cec1bbb884756f71fbcb43c91ae28184918817ad5614e07c88e1a78b9c0"
 disposition = "fixture"
 rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
 
@@ -416,7 +416,7 @@ rationale = "Isolated behavioral or native qualification captures test output to
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/disk_inheritance.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:c576d08916b84e457b01f0de2454fd3c713eed6ee9097ae240afc9187b5b93e2"
+source_sha256 = "sha256:54404021feff0eeb76c5470a497505f9537925623ff7ee63e577d4be2d5e86a1"
 disposition = "capture"
 rationale = "Inherited storage custody rejects aliasing with standard process handles; queried handles remain borrowed."
 
@@ -465,7 +465,7 @@ rationale = "Isolated behavioral or native qualification captures test output to
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_readiness_trace_tests.rs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:d2cd56421d83319ee25bc40947617b90b482a28296fbead252d13e1a3751b924"
+source_sha256 = "sha256:bb21f4f60eb1e1347ee4db6df98e8695fcd54d49ac3116450d167f1a97e11748"
 disposition = "fixture"
 rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
 
@@ -962,14 +962,14 @@ rationale = "Startup harness fixtures verify output-tail bounds, truncation and 
 [[records]]
 path = "tools/test_updater_qualification.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:cc23458d26a2a168e479720aa31e61d4ea93f3e116fab1d052646904ff1027af"
+source_sha256 = "sha256:4b0c48bd4ffa55421df6024ad8aa3f993d81c2cb12081899832e0d013b854ab9"
 disposition = "developer"
 rationale = "Updater harness tests model actual console visibility and assert failure evidence is read before native closure."
 
 [[records]]
 path = "tools/updater_feed_fixture.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:67b0ba2bd20011f376ecbfe7ac1977e05f49358baaf385e5ecf1641c8cc1f124"
+source_sha256 = "sha256:7f3ffd8a1ff7f405a9bbc80f7240f130dc97db2e52ee7319785f0edce360b57c"
 disposition = "developer"
 rationale = "The isolated HTTP feed overrides request logging to suppress incidental server output while preserving deterministic response accounting."
 
@@ -983,7 +983,7 @@ rationale = "Updater native qualification reads the actual failed application's 
 [[records]]
 path = "tools/updater_publication_qualification.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:0fc7b697eb5efa48924f8833063b3ef8703c53abf114de28673ecd2cd8ae198d"
+source_sha256 = "sha256:1922029df07c5a1d10cf88e1201d51ece4d77e70400d759c59ef2bc49608e8e1"
 disposition = "developer"
 rationale = "Publication qualification captures each owned phase's stdout and stderr to explicit case artifacts and prints its checked recovery report."
 
@@ -1081,7 +1081,7 @@ rationale = "Isolated finite CPU qualification reports physical 4K projection co
 [[records]]
 path = "crates/sugarsubstitute-image-gpu/examples/composite_qualification.rs"
 owner = "sugarsubstitute-image-gpu"
-source_sha256 = "sha256:1c7fbddc7a2c91541cd6ac6df49dfd1ad273b53de75079bd63c5d41610bd30b0"
+source_sha256 = "sha256:f21a0daed1b94804c954f925e8543e80e982f24436102e08dcd6ca00da8b49c0"
 disposition = "fixture"
 rationale = "The explicit single-device offscreen composite check reports native adapter identity, exact CPU/GPU pixel agreement including overlay pixels and execution retirement; it creates no window or runtime diagnostic sink."
 

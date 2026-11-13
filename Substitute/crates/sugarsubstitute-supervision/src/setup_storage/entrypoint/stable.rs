@@ -40,6 +40,18 @@ pub(in crate::setup_storage) fn owned_entry(
     validate_entry(root, state, protection, context).map(Some)
 }
 
+/// The generation the stable entry's ownership record names as its repair source, which
+/// retirement must keep, or `None` when no entry is owned yet. Reads only the protected record.
+/// # Errors
+/// Preserves native and protection causes; an unreadable record is never read as absent.
+pub(in crate::setup_storage) fn recovery_source(
+    state: &Directory,
+    protection: &Protection,
+    context: &JobContext,
+) -> io::Result<Option<sugarsubstitute_contracts::installation::GenerationId>> {
+    Ok(record::read(state, protection, context)?.map(|record| record.source.id))
+}
+
 /// Restore the independently selected launcher under accepted application, setup and writer custody.
 /// Application acceptance never rolls back a launcher selected by a newer authenticated update.
 /// Returns false for a historical installation with neither launcher ownership nor payload.
@@ -281,7 +293,9 @@ fn retire_earlier_shortcut(
         Err(cause) => return Err(cause),
     };
     let owned = match native::target(&root.path().join(NAME)) {
-        Ok(target) if target == root.path().join(EARLIER_ENTRY) => {
+        Ok(target)
+            if launches(&target, &root.path().join(EARLIER_ENTRY)).is_ok_and(|ours| ours) =>
+        {
             let mut retained = match state.read(NAME) {
                 Ok(file) => file,
                 Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(()),

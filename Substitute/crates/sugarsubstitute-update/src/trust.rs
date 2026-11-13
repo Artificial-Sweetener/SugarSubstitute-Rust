@@ -13,6 +13,7 @@ use tuf::{
 };
 
 /// Exact unmodified remote role bytes; URLs, filenames and HTTP headers grant no trust.
+#[derive(Clone, Copy)]
 pub struct MetadataSet<'a> {
     /// Timestamp metadata, verified first.
     pub timestamp: &'a [u8],
@@ -67,11 +68,24 @@ impl RepositoryTrust {
         self.checkpoint.encode()
     }
 
+    /// Accepted floors for crate-internal decisions that must not reread or mutate trust.
+    pub(crate) fn accepted(&self) -> &Checkpoint {
+        &self.checkpoint
+    }
+
     /// Versioned root filename to request next, including when the current root has expired.
     /// # Errors
     /// Rejects damaged trusted state or exhausted version space.
     pub fn next_root_version(&self) -> Result<u32, Error> {
         database(&self.checkpoint.root)?.trusted_root().version().checked_add(1).ok_or(Error::Bound)
+    }
+
+    /// Version of the currently trusted root. Any accepted rotation increases it, so callers
+    /// compare it across a transaction to detect a rotation that kept old signatures valid.
+    /// # Errors
+    /// Rejects damaged trusted state.
+    pub fn root_version(&self) -> Result<u32, Error> {
+        Ok(database(&self.checkpoint.root)?.trusted_root().version())
     }
 
     /// Verify exactly the next root, with both the old and new root signature thresholds.

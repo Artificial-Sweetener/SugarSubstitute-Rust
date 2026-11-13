@@ -13,6 +13,7 @@ use sugarsubstitute_contracts::{
     lifecycle::{CoordinatorEpoch, CoordinatorKey, NamespaceId},
     localization::messages,
 };
+use sugarsubstitute_execution::qualification_time::anchor;
 use sugarsubstitute_ui::report::ReportState;
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -139,7 +140,7 @@ fn fixture(restart: ReportRestartAvailability) -> Result<Fixture, Box<dyn Error>
     let committed = view(&lease, 2, restart)?;
     let options = ReportSurfaceOptions::new(view(&lease, 1, restart)?, "en", lease)?;
     let session = Shared::default();
-    let origin = Instant::now();
+    let origin = anchor();
     let now = Rc::new(Cell::new(origin));
     let clock = now.clone();
     let mut owner = CrashReport::new(options, session.clone(), Box::new(move || clock.get()));

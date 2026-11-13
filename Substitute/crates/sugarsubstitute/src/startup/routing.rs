@@ -4,11 +4,6 @@
 use super::consume_diagnostic::observe as observed_consume;
 use super::*;
 use policy::StartupRoute;
-#[cfg(all(
-    windows,
-    any(feature = "native-composition", feature = "windows-native-host", test)
-))]
-use sugarsubstitute_contracts::execution::Clock;
 use sugarsubstitute_contracts::startup::StartupEffect;
 use sugarsubstitute_desktop::StartupConsumeStage as ConsumeStage;
 
@@ -39,6 +34,11 @@ impl<B: StartupBackend> StartupHost<B> {
         let composition = Ok(());
         #[cfg(all(windows, any(feature = "windows-native-host", test)))]
         self.govern_memory();
+        #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+        if let Err(error) = self.refresh_updates() {
+            tracing::warn!(operation = "updates_state", %error,
+                "The page's update state could not be funded; it keeps the previous state");
+        }
         #[cfg(windows)]
         let canvas = self.canvas.as_mut().map_or(Ok(()), canvas::EmbeddedCanvas::poll);
         #[cfg(not(windows))]
@@ -56,6 +56,7 @@ impl<B: StartupBackend> StartupHost<B> {
             )?;
         }
         self.deliver_startup_events()?;
+        self.advance_workflow_restart()?;
         #[cfg(all(windows, feature = "native-composition"))]
         self.advance_workspace()?;
         if self.closing {
@@ -144,6 +145,10 @@ impl<B: StartupBackend> StartupHost<B> {
                 };
                 #[cfg(all(windows, any(feature = "windows-native-host", test)))]
                 let Some(observation) = self.observe_memory(observation)? else {
+                    return Ok(());
+                };
+                #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+                let Some(observation) = self.observe_updates(observation)? else {
                     return Ok(());
                 };
                 #[cfg(all(windows, feature = "native-composition"))]
@@ -365,6 +370,70 @@ impl<B: StartupBackend> StartupHost<B> {
         }
     }
 
+    /// Answer one page update request from the window's update status and workflow queue, and
+    /// start the close when the page asked to restart now.
+    #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+    fn answer_updates(
+        &mut self,
+        identity: sugarsubstitute_contracts::startup::MainIdentity,
+        message: sugarsubstitute_contracts::host_updates::UpdatesClientMessage,
+        lease: sugarsubstitute_contracts::execution::MemoryLease,
+        claim: sugarsubstitute_contracts::execution::MemoryClaim,
+    ) -> Result<(), Box<dyn Error>> {
+        use sugarsubstitute_desktop::StartupWindowContent;
+        let status = self.update_status();
+        let queue = self.child.workflow_queue();
+        let mut updater =
+            host_updates::HostUpdates::new(status, queue, self.closing, &mut self.workflow_restart);
+        let activity = host_updates::QueueActivity(queue);
+        self.updates.observe(identity, message, lease, claim, &mut updater, &activity)?;
+        if updater.close_now() {
+            self.restart_to_apply()?;
+        }
+        Ok(())
+    }
+
+    /// Send the page a newer update state when the window's update status or workflow queue
+    /// changed what it shows.
+    #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+    fn refresh_updates(&mut self) -> Result<(), Box<dyn Error>> {
+        use sugarsubstitute_desktop::StartupWindowContent;
+        let status = self.update_status();
+        let queue = self.child.workflow_queue();
+        let updater =
+            host_updates::HostUpdates::new(status, queue, self.closing, &mut self.workflow_restart);
+        self.updates.refresh(&updater, &host_updates::QueueActivity(queue))
+    }
+
+    /// Consume the page's update requests and retire its session with its navigation; returns
+    /// any other observation unchanged.
+    #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+    fn observe_updates(
+        &mut self,
+        observation: DesktopStartupObservation,
+    ) -> Result<Option<DesktopStartupObservation>, Box<dyn Error>> {
+        match observation {
+            DesktopStartupObservation::UpdatesMessage(observed) => {
+                let (identity, message, lease, claim) = observed.into_parts();
+                self.answer_updates(identity, message, lease, claim)?;
+                Ok(None)
+            }
+            DesktopStartupObservation::MainRetired(identity) => {
+                self.updates.retire(identity);
+                Ok(Some(DesktopStartupObservation::MainRetired(identity)))
+            }
+            DesktopStartupObservation::MainAbsent(identity) => {
+                self.updates.retire(identity);
+                Ok(Some(DesktopStartupObservation::MainAbsent(identity)))
+            }
+            DesktopStartupObservation::MainReloadRequested { identity, reason } => {
+                self.updates.retire(identity);
+                Ok(Some(DesktopStartupObservation::MainReloadRequested { identity, reason }))
+            }
+            other => Ok(Some(other)),
+        }
+    }
+
     /// Consume the memory budget's own observations; returns any other observation unchanged.
     #[cfg(all(windows, any(feature = "windows-native-host", test)))]
     fn observe_memory(
@@ -375,7 +444,10 @@ impl<B: StartupBackend> StartupHost<B> {
             return Ok(Some(observation));
         };
         match observation {
-            DesktopStartupObservation::MemoryMessage(observed) => memory.observe_page(observed)?,
+            DesktopStartupObservation::MemoryMessage(observed) => {
+                let (identity, message, lease, claim) = observed.into_parts();
+                memory.observe_page(identity, message, lease, claim)?;
+            }
             DesktopStartupObservation::BrowserProcesses { processes, .. } => {
                 memory.set_browser_processes(processes);
             }

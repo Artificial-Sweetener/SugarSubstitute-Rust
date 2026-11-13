@@ -49,9 +49,8 @@ impl HeadlessLifetime for Fixture {
         self.advance(max)
     }
     fn next_deadline(&self) -> Option<Instant> {
-        let original = (!self.deadline_observed).then_some(self.deadline);
         [
-            original,
+            self.watch.next_deadline(),
             self.managed.as_ref().and_then(|f| f.stop.as_ref()).and_then(StopPlan::next_deadline),
             self.child
                 .as_ref()
@@ -100,9 +99,9 @@ impl HeadlessLifetime for Fixture {
             owner.request_shutdown(self.execution_deadline);
         }
         let progress = owner.poll_shutdown()?;
-        if progress.deadline_expired && !self.deadline_observed {
-            self.deadline_observed = true;
-            return Err("Claim execution has not settled before original deadline".into());
+        if progress.deadline_expired && !self.custody_expired {
+            self.custody_expired = true;
+            return Err("Claim execution has not settled before its custody bound".into());
         }
         if progress.settled {
             self.workers = Some(progress.workers);

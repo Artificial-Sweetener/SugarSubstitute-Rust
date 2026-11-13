@@ -83,6 +83,7 @@ struct Report {
     /// The same projection over transparent black and without overlay, as the main-window
     /// composition presents it so the window backdrop shows through uncovered pixels.
     transparent: CompositeQualification,
+    #[cfg(windows)]
     video_memory: Option<sugarsubstitute_image_gpu::VideoMemoryBudget>,
 }
 
@@ -153,9 +154,13 @@ fn main() -> Result {
         drop(qualification);
         match outcome {
             JobOutcome::Success(report) => {
+                // Only Windows reports an adapter video-memory budget.
+                #[cfg(windows)]
                 let (budget, usage) = report
                     .video_memory
                     .map_or((0, 0), |memory| (memory.budget_bytes, memory.usage_bytes));
+                #[cfg(not(windows))]
+                let (budget, usage) = (0, 0);
                 println!(
                     "SUCCESS: adapter={} key={} pixels={} pixel_hash=fnv1a64:{:016x} transparent_matte_pixels={} transparent_matte_hash=fnv1a64:{:016x} video_budget_bytes={budget} video_usage_bytes={usage}",
                     report.adapter.name,
@@ -199,8 +204,13 @@ fn run(device: Arc<GpuDevice>, foreign: Arc<GpuDevice>, context: &JobContext) ->
     let qualification = composite(&device, [17, 29, 41, 255], true, &encoder, context)?;
     let transparent = composite(&device, [0; 4], false, &encoder, context)?;
     backdrop::qualify(device.clone(), foreign, context)?;
-    let video_memory = device.video_memory_budget();
-    Ok(Report { adapter: device.descriptor().clone(), qualification, transparent, video_memory })
+    Ok(Report {
+        adapter: device.descriptor().clone(),
+        qualification,
+        transparent,
+        #[cfg(windows)]
+        video_memory: device.video_memory_budget(),
+    })
 }
 
 /// Qualify one primary/fallback projection over `matte`, optionally beneath explicit overlay.

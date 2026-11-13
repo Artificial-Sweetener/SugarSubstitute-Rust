@@ -15,9 +15,12 @@ const CRASHED: sugarsubstitute_contracts::installation::TrialVerdict =
     );
 
 type Failure = Box<dyn std::error::Error + Send + Sync>;
-type Transfer = (tempfile::TempDir, PathBuf, [OwnedHandle; 2]);
+/// The coordinator and its witness transfer, holding the handoff the witness adopts from.
+type Sender = (TrialApplication, TrialWitnessTransfer);
+type Transfer = (tempfile::TempDir, PathBuf, [OwnedHandle; 2], Sender);
 
-/// Retire all creator objects while genuine independently owned destination handles remain live.
+/// Keep the creator objects only as the live sender, while genuine independently owned
+/// destination handles are the receiver's only inputs.
 fn transferred() -> Result<Transfer, Failure> {
     let retained = Arc::new(Mutex::new(None));
     let output = retained.clone();
@@ -41,10 +44,8 @@ fn transferred() -> Result<Transfer, Failure> {
             }?;
             assert_eq!(flags & windows::Win32::Foundation::HANDLE_FLAG_INHERIT.0, 0);
         }
-        drop(application);
-        drop(transfer);
         *output.lock().map_err(|_| "Transfer retention poisoned")? =
-            Some((root, generation, handles));
+            Some((root, generation, handles, (application, transfer)));
         Ok(())
     })?;
     let value = retained.lock().map_err(|_| "Transfer retention poisoned")?.take();
@@ -53,13 +54,15 @@ fn transferred() -> Result<Transfer, Failure> {
 
 #[test]
 fn authenticated_noninheritable_outputs_fit_the_independent_storage_reservation() -> TestResult {
-    let (root, generation, handles) = transferred()?;
+    let (root, generation, handles, sender) = transferred()?;
     worker::run_reserved(TRIAL_WITNESS_RESERVATION_BYTES, move |context, _| {
         let store = Arc::new(SelectionStore::open(root.path(), context)?);
         assert!(InstallationRun::acquire(store.clone(), context).is_err());
         let original = store.load(context)?.ok_or("Selection absent")?;
         let witness =
             TrialWitness::receive_transferred(store.clone(), handles, &generation, context)?;
+        // The coordinator exits; the witness keeps exclusion in its own adopted slot.
+        drop(sender);
         assert_eq!(store.load(context)?, Some(original.clone()));
         let rejected = witness.finish_settled(CRASHED, context)?;
         assert_eq!(
@@ -77,7 +80,7 @@ fn authenticated_noninheritable_outputs_fit_the_independent_storage_reservation(
 
 #[test]
 fn admission_job_expiry_does_not_destroy_transferred_witness_custody() -> TestResult {
-    let (root, generation, handles) = transferred()?;
+    let (root, generation, handles, sender) = transferred()?;
     let retained = Arc::new(Mutex::new(None));
     let output = retained.clone();
     worker::run_reserved_expiring(TRIAL_WITNESS_RESERVATION_BYTES, move |context, clock| {
@@ -85,6 +88,8 @@ fn admission_job_expiry_does_not_destroy_transferred_witness_custody() -> TestRe
         let original = store.load(context)?.ok_or("Selection absent")?;
         let witness =
             TrialWitness::receive_transferred(store.clone(), handles, &generation, context)?;
+        // The coordinator exits; the witness keeps exclusion in its own adopted slot.
+        drop(sender);
         clock.expire();
         match witness.finish_settled(CRASHED, context) {
             Err(SelectionFailure::Storage(cause)) => {

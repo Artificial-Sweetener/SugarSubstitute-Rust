@@ -38,11 +38,7 @@ impl Source {
             "electron/electron.exe",
             "worker/package.json",
             "worker/out/main/index.cjs",
-            "sugarcubes/__init__.py",
-            "sugarcubes/pyproject.toml",
-            "sugarcubes/prestartup_script.py",
-            "sugarcubes/load_model_roots.py",
-            "sugarcubes/sugarcubes_model_roots/__init__.py",
+            sugarsubstitute_supervision::pack_install::SUGARCUBES_PACKAGE_ARCHIVE,
         ] {
             let bytes = format!("Inert native download fixture: {name}").into_bytes();
             let path = bundle.join(name);

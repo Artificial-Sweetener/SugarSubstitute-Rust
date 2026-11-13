@@ -2,12 +2,15 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Qualify installer preparation and optional actual application creation on an offscreen desktop.
 use super::*;
+use crate::campaign_watch::CampaignWatch;
 use std::{
     num::NonZeroUsize,
     time::{Duration, Instant},
 };
 use sugarsubstitute_contracts::execution::CompletionWake;
-use sugarsubstitute_desktop::{HeadlessLifetime, HeadlessStep, StartupPreparationStep};
+use sugarsubstitute_desktop::{
+    ConsoleText, HeadlessLifetime, HeadlessStep, StartupPreparationStep,
+};
 
 pub(in crate::setup) fn run(
     bundle: PathBuf,
@@ -46,6 +49,8 @@ pub(in crate::setup) fn run(
         launch,
         launched: false,
         started: Instant::now(),
+        watch: CampaignWatch::new("Installer qualification"),
+        observed: Observed::default(),
     };
     sugarsubstitute_desktop::run_headless(&mut fixture)?;
     let passed = if fixture.native_installation.is_some() {
@@ -85,7 +90,21 @@ struct Fixture {
     installed: Option<PathBuf>,
     launch: bool,
     launched: bool,
+    /// Origin of the presentation clock the installer's own animations and waits read.
     started: Instant,
+    watch: CampaignWatch,
+    observed: Observed,
+}
+
+/// Installer facts whose change shows the qualification is still progressing.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+struct Observed {
+    page_revision: u64,
+    console_revision: u64,
+    busy: bool,
+    ready: bool,
+    rejected_invalid: bool,
+    inspected: bool,
 }
 impl Fixture {
     /// Use the native flow's commands and result correlation throughout the installation route.
@@ -94,12 +113,15 @@ impl Fixture {
             self.session.advance(&mut self.controller, self.started.elapsed())?;
             return Ok(HeadlessStep::Shutdown);
         }
-        if self.started.elapsed() >= Duration::from_secs(300) {
-            return Err("Installer qualification exceeded five minutes".into());
-        }
+        self.watch_progress();
+        self.watch.check()?;
         match self.phase {
             Phase::Preparing => {
-                for event in self.controller.advance_events()?.events {
+                let events = self.controller.advance_events()?.events;
+                if !events.is_empty() {
+                    self.watch.progressed();
+                }
+                for event in events {
                     if !matches!(event.kind, Kind::Diagnostic(_)) {
                         return Err("Installer preparation failed before native navigation".into());
                     }
@@ -126,7 +148,11 @@ impl Fixture {
                 }
             }
             Phase::Invalid => {
-                for event in self.controller.advance_events()?.events {
+                let events = self.controller.advance_events()?.events;
+                if !events.is_empty() {
+                    self.watch.progressed();
+                }
+                for event in events {
                     match event.kind {
                         Kind::Diagnostic(_) | Kind::Progress(_) => {}
                         Kind::Failed(_) if event.id.as_deref() == Some("invalid") => {
@@ -156,6 +182,24 @@ impl Fixture {
             }
         }
         Ok(HeadlessStep::Active)
+    }
+
+    /// Record progress whenever the page, console, busy state, frame or a qualified result moves.
+    /// A hung installer stops moving all of them; its own failures end the run directly.
+    fn watch_progress(&mut self) {
+        let flow = &self.session.navigation.flow;
+        let observed = Observed {
+            page_revision: flow.page_revision(),
+            console_revision: self.controller.console.as_ref().map_or(0, ConsoleText::revision),
+            busy: flow.busy(),
+            ready: self.session.ready(),
+            rejected_invalid: self.rejected_invalid,
+            inspected: self.inspected,
+        };
+        if observed != self.observed {
+            self.observed = observed;
+            self.watch.progressed();
+        }
     }
 
     /// Exercise page intent without native handles; backend storage/process ownership is real.

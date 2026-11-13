@@ -61,13 +61,13 @@ impl HeadlessLifetime for Parent {
         Parent::activity(self, max)
     }
     fn next_deadline(&self) -> Option<Instant> {
-        let original = (!self.deadline_observed).then_some(self.deadline);
+        let stall = self.watch.next_deadline();
         let stop = self
             .cases
             .get(self.current)
             .and_then(|case| case.stop.as_ref())
             .and_then(|stop| stop.next_deadline());
-        match (original, stop) {
+        match (stall, stop) {
             (Some(a), Some(b)) => Some(a.min(b)),
             (a, b) => a.or(b),
         }
@@ -108,9 +108,9 @@ impl HeadlessLifetime for Parent {
             owner.request_shutdown(self.execution_deadline);
         }
         let progress = owner.poll_shutdown()?;
-        if progress.deadline_expired && !self.deadline_observed {
-            self.deadline_observed = true;
-            return Err("Lifecycle execution remains owned after original campaign deadline".into());
+        if progress.deadline_expired && !self.custody_expired {
+            self.custody_expired = true;
+            return Err("Lifecycle execution remains owned after its custody bound".into());
         }
         if progress.settled {
             self.workers = Some(progress.workers);

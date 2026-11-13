@@ -14,8 +14,8 @@ impl Family {
             || self.recovery_carrier.is_some()
             || self.fixture_events.is_some()
             || self.lifecycle_bootstrap.is_some()
-            || self.diagnostic_bootstrap.is_some()
-            || self.diagnostic_enrollment.is_some()
+            || self.purpose_bootstrap.is_some()
+            || self.purpose_enrollment.is_some()
             || self.backend_custody.is_some()
             || self.output_pin.is_some()
     }
@@ -41,7 +41,7 @@ impl Family {
         if let Some(output) = &input.output
             && (!output.validates(binding)
                 || self.fixture_events.is_some()
-                || self.diagnostic_bootstrap.is_some()
+                || self.purpose_bootstrap.is_some()
                 || self.backend_custody.is_some())
         {
             return Err(RegistryError::invalid("output_inheritance_binding"));
@@ -61,7 +61,7 @@ impl Family {
             if !probe.can_launch()
                 || self.recovery_carrier.is_some()
                 || self.lifecycle_bootstrap.is_some()
-                || self.diagnostic_bootstrap.is_some()
+                || self.purpose_bootstrap.is_some()
                 || self.backend_custody.is_some()
                 || self.fixture_events.is_some()
                 || self.output_pin.is_some()
@@ -92,13 +92,13 @@ impl Family {
         };
         if self.backend_custody.is_some()
             && (self.lifecycle_bootstrap.is_some()
-                || self.diagnostic_bootstrap.is_some()
+                || self.purpose_bootstrap.is_some()
                 || self.fixture_events.is_some()
                 || self.output_pin.is_some())
         {
             return Err(RegistryError::invalid("custody_inheritance_conflict"));
         }
-        if self.diagnostic_bootstrap.is_some()
+        if self.purpose_bootstrap.is_some()
             && (self.lifecycle_bootstrap.is_some()
                 || self.fixture_events.is_some()
                 || self.output_pin.is_some())
@@ -114,7 +114,7 @@ impl Family {
             });
         let section =
             bootstrap.as_ref().map(|view| view.section.as_raw_handle() as usize).or_else(|| {
-                self.diagnostic_bootstrap.as_ref().map(|bootstrap| {
+                self.purpose_bootstrap.as_ref().map(|bootstrap| {
                     bootstrap.borrow_inheritance().section.as_raw_handle() as usize
                 })
             });
@@ -173,7 +173,7 @@ impl Family {
         drop(self.recovery_carrier.take());
         drop(self.fixture_events.take());
         drop(self.lifecycle_bootstrap.take());
-        drop(self.diagnostic_bootstrap.take());
+        drop(self.purpose_bootstrap.take());
         drop(self.backend_custody.take());
         if let Some(pin) = self.output_pin.take() {
             self.output_cancel = Some(pin.release());

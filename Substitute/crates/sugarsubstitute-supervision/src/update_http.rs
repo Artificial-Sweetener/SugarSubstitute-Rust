@@ -5,7 +5,7 @@ mod failure;
 use crate::setup_storage::Download;
 pub use failure::Failure;
 use std::{
-    io::{self, Read},
+    io::{self, Read, Write},
     time::Duration,
 };
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
@@ -66,6 +66,34 @@ impl Http {
                 return Err(invalid("Update metadata body length invalid").into());
             }
             Ok(bytes)
+        })
+    }
+    /// Stream one complete, unauthenticated response body of at most `maximum` bytes into
+    /// `output`, for a caller that verifies the bytes afterwards (a node-pack archive).
+    /// Returns the bytes written.
+    /// # Errors
+    /// Rejects destination/framing violations, a declared or actual body over `maximum`, a
+    /// truncated body, cancellation and I/O; `output` may then hold a prefix.
+    pub fn file(
+        &mut self,
+        policy: &Policy,
+        endpoint: Endpoint,
+        maximum: u64,
+        idle: Duration,
+        context: &JobContext,
+        output: &mut dyn Write,
+    ) -> Result<u64, Failure> {
+        let bound = usize::try_from(maximum).map_err(|_| invalid("Download bound invalid"))?;
+        if maximum == 0 {
+            return Err(invalid("Download bound invalid").into());
+        }
+        self.request(policy, endpoint, None, idle, context, |headers, body| {
+            headers.metadata(bound)?;
+            let written = io::copy(&mut body.take(maximum + 1), output)?;
+            if written > maximum || headers.length().is_some_and(|n| n != written) {
+                return Err(invalid("Download body length invalid").into());
+            }
+            Ok(written)
         })
     }
     /// Transfer one response into a retained resumable entry. A shorter valid range advances

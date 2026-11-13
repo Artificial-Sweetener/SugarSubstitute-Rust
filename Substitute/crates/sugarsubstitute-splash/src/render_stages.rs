@@ -210,7 +210,16 @@ impl RenderStages {
                 let text = renderer.text.as_mut().ok_or(RenderError::InvalidFrame)?;
                 let copy = messages(&renderer.locale);
                 let operation = copy.startup.operation(frame.appearance.operation);
+                let updating;
                 let message = match frame.appearance.status {
+                    crate::StartupStatus::Updating(version) => {
+                        updating = sugarsubstitute_contracts::localization::updates::UpdateMessages::with_version(
+                            copy.updates.applying,
+                            version.as_str(),
+                        );
+                        updating.as_str()
+                    }
+                    crate::StartupStatus::UpdatingSugarcubes => copy.pack_updates.updating,
                     crate::StartupStatus::Loading => operation[0],
                     crate::StartupStatus::LoadingLong => operation[1],
                     crate::StartupStatus::LoadingExtended => operation[2],
@@ -218,6 +227,7 @@ impl RenderStages {
                     crate::StartupStatus::Settling => copy.cleanup_pending,
                     crate::StartupStatus::RetryReady => copy.retry_ready,
                     crate::StartupStatus::CleanupFailed => copy.cleanup_failed,
+                    crate::StartupStatus::Starting => copy.starting,
                 };
                 let spec = crate::text_layout::status(
                     frame.appearance.theme,
@@ -246,9 +256,13 @@ impl RenderStages {
                 let cursor = self.progress.as_mut().ok_or(RenderError::InvalidFrame)?;
                 if cursor.step(target)? {
                     self.progress = None;
-                    self.controls =
-                        Some(crate::chrome::caption_buttons(frame.appearance).into_iter());
-                    self.stage = Stage::Controls;
+                    if frame.appearance.controls {
+                        self.controls =
+                            Some(crate::chrome::caption_buttons(frame.appearance).into_iter());
+                        self.stage = Stage::Controls;
+                    } else {
+                        self.stage = Stage::Done;
+                    }
                 }
             }
             Stage::Controls => {

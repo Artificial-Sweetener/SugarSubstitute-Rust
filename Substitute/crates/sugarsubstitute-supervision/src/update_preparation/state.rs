@@ -23,6 +23,8 @@ pub(super) enum Phase {
     DiscoverEngine(Box<TrustStore>, u64),
     Restore(Box<TrustStore>),
     Reopen(Box<TrustStore>, Box<AuthenticatedOffer>),
+    /// Cached metadata is expired or missing; try the prepared candidate's receipt (D22).
+    Receipt(Box<TrustStore>),
     RestoreArchive(Box<TrustStore>, Box<AuthenticatedOffer>),
     Download(Box<TrustStore>, Box<AuthenticatedOffer>),
     Import(Box<TrustStore>, Box<AuthenticatedOffer>, Box<VerifiedDownload>),
@@ -44,6 +46,8 @@ pub(super) struct State {
     pub(super) progress: Progress,
     pub(super) failure: Option<Arc<Failure>>,
     pub(super) retirement_failure: Option<Arc<Failure>>,
+    /// Version label of the offer this campaign authenticated, for its attempt report.
+    pub(super) version: Option<String>,
 }
 impl State {
     /// Advance a single admitted boundary. Failed custody retires on the same worker where possible.
@@ -52,7 +56,9 @@ impl State {
         now: impl FnMut() -> i64,
         context: &JobContext,
     ) -> Result<(), Arc<Failure>> {
-        self.step(now, context).map_err(|cause| {
+        let stepped = self.step(now, context);
+        self.note_version();
+        stepped.map_err(|cause| {
             let cause = Arc::new(cause);
             self.failure = Some(cause.clone());
             self.progress = Progress::Failed;
@@ -60,11 +66,26 @@ impl State {
         })
     }
 
+    /// Remember the authenticated offer's version once a phase holds it; it outlives the phase
+    /// so a later failure can still say which version the attempt was updating to.
+    fn note_version(&mut self) {
+        let offer = match &self.phase {
+            Phase::Reopen(_, offer)
+            | Phase::RestoreArchive(_, offer)
+            | Phase::Download(_, offer)
+            | Phase::Import(_, offer, _)
+            | Phase::ImportEngine(_, offer, _) => offer,
+            _ => return,
+        };
+        self.version = Some(offer.offer().offer().version().to_owned());
+    }
+
     /// Consume one phase; an interrupted phase never masquerades as a completed candidate.
     fn step(&mut self, mut now: impl FnMut() -> i64, context: &JobContext) -> Result<(), Failure> {
         let phase = std::mem::replace(&mut self.phase, Phase::Empty);
         match &phase {
             Phase::Reopen(trust, _)
+            | Phase::Receipt(trust)
             | Phase::RestoreArchive(trust, _)
             | Phase::Download(trust, _)
             | Phase::Import(trust, _, _)
@@ -92,16 +113,42 @@ impl State {
             }
             Phase::Restore(trust) => {
                 let request = trust.application_request(self.channel(&trust, context)?, context)?;
-                match trust.cached_offer(request, now(), context)? {
-                    None => (Phase::Empty, Progress::Unavailable),
-                    Some(offer) if offer.offer().admission() == Admission::UpdateEngine => (
+                match trust.cached_offer(request, now(), context) {
+                    Ok(None) if Self::receipt_serves(&trust, &request, context) => {
+                        (Phase::Receipt(trust), Progress::Reopening)
+                    }
+                    Ok(None) => (Phase::Empty, Progress::Unavailable),
+                    Err(crate::setup_storage::TrustFailure::Verification(cause))
+                        if cause.is_expiry() && Self::receipt_serves(&trust, &request, context) =>
+                    {
+                        tracing::info!(
+                            operation = "update_cached_metadata_expired",
+                            "Cached update metadata expired; checking the prepared update receipt"
+                        );
+                        (Phase::Receipt(trust), Progress::Reopening)
+                    }
+                    Err(cause) => return Err(cause.into()),
+                    Ok(Some(offer)) if offer.offer().admission() == Admission::UpdateEngine => (
                         Phase::SelectEngine(trust, offer.offer().offer().minimum_updater_release()),
                         Progress::SelectingEngine,
                     ),
-                    Some(offer) if offer.offer().admission() != Admission::Prepare => {
+                    Ok(Some(offer)) if offer.offer().admission() != Admission::Prepare => {
                         (Phase::Empty, Progress::Decision(offer.offer().admission()))
                     }
-                    Some(offer) => (Phase::Reopen(trust, Box::new(offer)), Progress::Reopening),
+                    Ok(Some(offer)) => (Phase::Reopen(trust, Box::new(offer)), Progress::Reopening),
+                }
+            }
+            Phase::Receipt(trust) => {
+                let request = trust.application_request(self.channel(&trust, context)?, context)?;
+                match SignedCandidate::reopen_received(
+                    &self.installation,
+                    *trust,
+                    request,
+                    &mut now,
+                    context,
+                )? {
+                    Some(candidate) => (Phase::Ready(Box::new(candidate)), Progress::Ready),
+                    None => (Phase::Empty, Progress::Unavailable),
                 }
             }
             Phase::Reopen(trust, offer)
@@ -311,6 +358,31 @@ impl State {
         self.failure.is_none()
             && matches!(self.phase, Phase::Download(..))
             && matches!(self.progress, Progress::Downloading { .. })
+    }
+
+    /// Peak new admission for the next step. Reopening on a receipt has no retained offer, so it
+    /// funds its own signed-targets lookup; reopening on a cached offer does not.
+    pub(super) fn reservation(&self) -> u64 {
+        match self.phase {
+            Phase::Receipt(_) => super::RECEIPT_REOPENING_RESERVATION_BYTES,
+            _ => self.progress.reservation(),
+        }
+    }
+
+    /// Whether a prepared update receipt may stand in for absent or expired cached metadata on
+    /// this subscription's route. A receipt for another route leaves the accepted version
+    /// current, as no receipt does. A receipt that cannot be read is never ignored: the
+    /// reopening step reads it again and reports why it is refused.
+    fn receipt_serves(
+        trust: &TrustStore,
+        request: &sugarsubstitute_contracts::update::Request,
+        context: &JobContext,
+    ) -> bool {
+        match trust.update_receipt(context) {
+            Ok(None) => false,
+            Ok(Some(receipt)) => receipt.release().serves(request),
+            Err(_) => true,
+        }
     }
 
     /// Close HTTP custody before dropping storage owners on this admitted cleanup worker.

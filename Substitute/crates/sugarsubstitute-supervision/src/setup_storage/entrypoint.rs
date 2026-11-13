@@ -21,7 +21,10 @@ pub(super) fn stage(generation: &Path) -> io::Result<()> {
     let destination = generation.join(NAME);
     match directory.read(NAME) {
         Ok(_original) => {
-            return if native::target(&destination)? == generation.join("sugarsubstitute.exe") {
+            return if launches(
+                &native::target(&destination)?,
+                &generation.join("sugarsubstitute.exe"),
+            )? {
                 Ok(())
             } else {
                 Err(invalid(
@@ -36,6 +39,17 @@ pub(super) fn stage(generation: &Path) -> io::Result<()> {
     files::write_immutable(&destination, &bytes, files::create_new)
 }
 
+/// Decide whether a shell entry's stored target is this executable. The shell stores targets in
+/// their resolved long spelling, so the folders are compared by location and the names exactly.
+fn launches(target: &Path, executable: &Path) -> io::Result<bool> {
+    match (target.parent(), executable.parent()) {
+        (Some(stored), Some(expected)) if target.file_name() == executable.file_name() => {
+            Directory::same_location(stored, expected)
+        }
+        _ => Ok(false),
+    }
+}
+
 /// Unknown or edited links are preserved; only exact retained setup output is replaceable.
 pub(super) fn selected(root: &Directory, context: &JobContext) -> io::Result<Option<Directory>> {
     super::check(context)?;
@@ -48,18 +62,22 @@ pub(super) fn selected(root: &Directory, context: &JobContext) -> io::Result<Opt
     let target = native::target(&root.path().join(NAME))?;
     files::lexical(&target)?;
     let generation = target.parent().ok_or_else(|| invalid("Shell entry target is absent"))?;
-    let directory = Directory::open(generation, false)?;
+    let name = generation.file_name().ok_or_else(|| invalid("Shell entry generation is absent"))?;
+    let targeted = Directory::open(generation, false)?;
+    // The shell stores the target in its resolved long spelling. The selected generation keeps
+    // the root's spelling and must be the very folder the entry targets.
+    let foreign = || invalid("The existing shell entry belongs to another installation");
+    let directory = match Directory::open(&root.path().join("releases").join(name), false) {
+        Ok(directory) => directory,
+        Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Err(foreign()),
+        Err(cause) => return Err(cause),
+    };
     if target.file_name().and_then(|name| name.to_str()) != Some("sugarsubstitute.exe")
-        || crate::durable_storage::files::canonical_path(
-            generation.parent().ok_or_else(|| invalid("Shell entry generation is absent"))?,
-            context,
-        )? != crate::durable_storage::files::canonical_path(
-            root.path().join("releases"),
-            context,
-        )?
+        || targeted.location()? != directory.location()?
     {
-        return Err(invalid("The existing shell entry belongs to another installation"));
+        return Err(foreign());
     }
+    drop(targeted);
     let original = files::read_bounded(&mut directory.read(NAME)?, 65536)?;
     if bytes != original {
         return Err(invalid("The existing shell entry was modified; it has been preserved"));
@@ -155,17 +173,20 @@ mod tests {
             assert!(!root.path().join(NAME).exists());
             complete(&first)?;
             publish(&root, &first, context)?;
-            assert_eq!(native::target(&root.path().join(NAME))?, first.join("sugarsubstitute.exe"));
+            assert!(launches(
+                &native::target(&root.path().join(NAME))?,
+                &first.join("sugarsubstitute.exe")
+            )?);
             let old = std::fs::read(root.path().join(NAME))?;
             let second = generation(&root, "第二 糖")?;
             assert!(publish(&root, &second, context).is_err());
             assert_eq!(std::fs::read(root.path().join(NAME))?, old);
             complete(&second)?;
             publish(&root, &second, context)?;
-            assert_eq!(
-                native::target(&root.path().join(NAME))?,
-                second.join("sugarsubstitute.exe")
-            );
+            assert!(launches(
+                &native::target(&root.path().join(NAME))?,
+                &second.join("sugarsubstitute.exe")
+            )?);
             assert_eq!(std::fs::read(first.join(NAME))?, old);
             assert!(selected(&root, context)?.is_some());
             Ok(())

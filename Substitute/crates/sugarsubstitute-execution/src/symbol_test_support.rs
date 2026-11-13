@@ -16,7 +16,11 @@ pub(crate) struct LiveSymbol {
     pub(crate) rig: Rig,
     pub(crate) context: JobContext,
     pub(crate) _cleanup: SymbolCleanupPermit<(), io::Error>,
+    #[cfg(windows)]
     pub(crate) cleanup_scope: Scope,
+    /// Portable tests keep the cleanup scope open without reading it.
+    #[cfg(not(windows))]
+    _cleanup_scope: Scope,
     pub(crate) main: OwnedJob<(), io::Error>,
     release: Arc<Gate>,
 }
@@ -54,7 +58,17 @@ impl LiveSymbol {
             return Err(cause);
         }
         let context = lock(&stored).take().ok_or("Actual admitted main context absent")?;
-        Ok(Self { rig, context, _cleanup: cleanup, cleanup_scope, main, release })
+        Ok(Self {
+            rig,
+            context,
+            _cleanup: cleanup,
+            #[cfg(windows)]
+            cleanup_scope,
+            #[cfg(not(windows))]
+            _cleanup_scope: cleanup_scope,
+            main,
+            release,
+        })
     }
     pub(crate) fn transport(&self) -> TestResult<crate::SymbolTransportReservation> {
         let partition = self

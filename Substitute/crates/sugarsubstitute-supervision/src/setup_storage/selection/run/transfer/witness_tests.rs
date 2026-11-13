@@ -19,6 +19,7 @@ fn inherited(transfer: &TrialWitnessTransfer) -> io::Result<InheritedTrial> {
     Ok(InheritedTrial {
         run: File::from(transfer.handles()[0].try_clone_to_owned()?),
         snapshot: File::from(transfer.handles()[1].try_clone_to_owned()?),
+        adopted: None,
     })
 }
 
@@ -33,10 +34,11 @@ fn witness_retains_native_exclusion_after_all_sender_custody_is_dropped() -> Tes
         let captured = inherited(&transfer)?;
         let generation = application.directory().to_owned();
         let attempt = application.attempt().clone();
+        let witness = TrialWitness::receive(store.clone(), captured, &generation, context)?;
+        // The witness adopted its own slot, so it keeps exclusion once the coordinator is gone.
         drop(application);
         drop(transfer);
         assert!(InstallationRun::acquire(store.clone(), context).is_err());
-        let witness = TrialWitness::receive(store.clone(), captured, &generation, context)?;
         assert_eq!(witness.attempt(), &attempt);
         assert_eq!(store.load(context)?, Some(original.clone()));
         assert!(std::fs::rename(&generation, generation.with_extension("moved")).is_err());
@@ -56,6 +58,27 @@ fn witness_retains_native_exclusion_after_all_sender_custody_is_dropped() -> Tes
 
 /// Task Manager or a forced shutdown ending the coordinator is not the release's fault: the
 /// witness returns the candidate to prepared, so the next launch tries it again.
+/// A witness that gets to receive only after the coordinator and its handoff are gone never
+/// takes the trial; the record is left for the next launch's abandoned-trial recovery.
+#[test]
+fn a_witness_receiving_after_its_coordinator_left_refuses_the_trial() -> TestResult {
+    worker::run_reserved(SIGNED_INSTALLER_RESERVATION_BYTES, |context, _| {
+        let root = tempfile::tempdir()?;
+        let application = shell_tests::trial(root.path(), context)?;
+        let store = Arc::new(SelectionStore::open(root.path(), context)?);
+        let original = store.load(context)?;
+        let transfer = application.prepare_witness(context)?;
+        let captured = inherited(&transfer)?;
+        let generation = application.directory().to_owned();
+        drop(application);
+        drop(transfer);
+        assert!(TrialWitness::receive(store.clone(), captured, &generation, context).is_err());
+        assert_eq!(store.load(context)?, original);
+        let _successor = InstallationRun::acquire(store, context)?;
+        Ok(())
+    })
+}
+
 #[test]
 fn witness_returns_a_trial_whose_coordinator_was_ended_from_outside_to_prepared() -> TestResult {
     worker::run_reserved(SIGNED_INSTALLER_RESERVATION_BYTES, |context, _| {
@@ -167,6 +190,7 @@ fn witness_rejects_cross_installation_mixed_handles_and_wrong_generation() -> Te
         let mixed = InheritedTrial {
             run: File::from(a_transfer.handles()[0].try_clone_to_owned()?),
             snapshot: File::from(b_transfer.handles()[1].try_clone_to_owned()?),
+            adopted: None,
         };
         assert!(TrialWitness::receive(a_store.clone(), mixed, &a_directory, context).is_err());
         assert!(
@@ -176,6 +200,7 @@ fn witness_rejects_cross_installation_mixed_handles_and_wrong_generation() -> Te
         let swapped = InheritedTrial {
             run: File::from(a_transfer.handles()[1].try_clone_to_owned()?),
             snapshot: File::from(a_transfer.handles()[0].try_clone_to_owned()?),
+            adopted: None,
         };
         assert!(TrialWitness::receive(a_store.clone(), swapped, &a_directory, context).is_err());
         assert_eq!(a_store.load(context)?, a_original);

@@ -1,14 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Own capture preparation, stop claims and native custody independently of results.
+#[cfg(windows)]
 pub(crate) mod admission;
+/// Portable test builds mount this publicly; Windows exports it through its adapter module.
+#[cfg(all(test, not(windows)))]
+pub mod admission;
 #[cfg(test)]
 mod cleanup_tests;
 #[cfg(test)]
 mod conflict_race_tests;
 #[cfg(test)]
 mod conflict_tests;
+#[cfg(windows)]
 pub(crate) mod control;
+/// Portable test builds mount this publicly; Windows exports it through its adapter module.
+#[cfg(all(test, not(windows)))]
+pub mod control;
 #[cfg(test)]
 mod custody_tests;
 pub(crate) mod issue;
@@ -22,7 +30,11 @@ pub(crate) mod test_support;
 mod tests;
 #[cfg(test)]
 mod transfer_tests;
+#[cfg(windows)]
 pub(crate) mod types;
+/// Portable test builds mount this publicly; Windows exports it through its adapter module.
+#[cfg(all(test, not(windows)))]
+pub mod types;
 pub(crate) mod worker;
 
 use crate::{

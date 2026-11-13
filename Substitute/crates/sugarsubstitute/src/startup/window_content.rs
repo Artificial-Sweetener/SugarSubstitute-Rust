@@ -55,6 +55,7 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
         canvas.granted(self.child.canvas_backend(region.identity)).then_some(region)
     }
 
+    #[cfg(windows)]
     fn main_canvas_animating(&self) -> bool {
         self.canvas.as_ref().is_some_and(|canvas| canvas.animating())
     }
@@ -67,11 +68,78 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
         )
     }
 
-    /// Restart to apply a prepared update through the same close save as every other close.
+    /// Restart to apply a prepared update through the same close save as every other close,
+    /// once the backend's running workflow finishes.
     fn request_restart_to_apply(&mut self) -> Result<(), Box<dyn Error>> {
-        self.request_close(
-            sugarsubstitute_application::workspace_session::close_save::CloseReason::RestartToApply,
+        if self.workflow_restart.request(self.child.workflow_queue()) {
+            self.restart_to_apply()
+        } else {
+            Ok(())
+        }
+    }
+
+    /// The coordinator's status, with its SugarCubes update, as the window shows it.
+    fn update_status(&self) -> Option<sugarsubstitute_contracts::update::status::UpdateStatus> {
+        let status = self.child.update_status()?.clone();
+        Some(
+            self.workflow_restart.presented(status, self.locale_messages().updates.restart_dropped),
         )
+    }
+
+    /// The coordinator's next one-time start-up update message, with the running version's
+    /// release notes when this build names them.
+    fn take_update_notice(&mut self) -> Option<sugarsubstitute_desktop::UpdateNotice> {
+        use sugarsubstitute_contracts::update::status::StartupNotice;
+        use sugarsubstitute_desktop::UpdateNotice;
+        Some(match self.child.take_update_notice()? {
+            StartupNotice::Updated(version) => {
+                // Only a build with update configuration names its release notes.
+                #[cfg(all(windows, feature = "windows-native-host"))]
+                let changelog = crate::updates::release_notes(&version);
+                #[cfg(not(all(windows, feature = "windows-native-host")))]
+                let changelog = None;
+                UpdateNotice::Updated { version, changelog }
+            }
+            StartupNotice::Repairing => UpdateNotice::Repairing,
+            StartupNotice::PreviousVersionRunning => UpdateNotice::PreviousVersionRunning,
+            StartupNotice::Sugarcubes(report) => UpdateNotice::Sugarcubes(report),
+        })
+    }
+
+    fn workflow_activity(&self) -> sugarsubstitute_desktop::WorkflowActivity {
+        match self.child.workflow_queue() {
+            sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue::Busy => {
+                sugarsubstitute_desktop::WorkflowActivity::Running
+            }
+            sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue::Idle
+            | sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue::Unobserved => {
+                sugarsubstitute_desktop::WorkflowActivity::Idle
+            }
+        }
+    }
+
+    /// A writer of the update report the window shows, its latest failed attempt and its
+    /// SugarCubes update, that writes on this host's execution owner. Export stays hidden before execution starts,
+    /// once the application is closing, and in a host composed without export scopes.
+    #[cfg(windows)]
+    fn update_report_export(
+        &mut self,
+    ) -> Option<Box<dyn sugarsubstitute_desktop::report::surface::UpdateExport>> {
+        if self.closing {
+            return None;
+        }
+        if !sugarsubstitute_desktop::report::surface::has_update_report(&self.update_status()?) {
+            return None;
+        }
+        let client = self.execution.client().ok()?;
+        match self.update_reports.as_mut()?.writer(client, self.jobs.clone()) {
+            Ok(writer) => Some(Box::new(writer)),
+            Err(cause) => {
+                tracing::error!(operation = "update_report_export", cause = %cause,
+                    "Update report export is unavailable");
+                None
+            }
+        }
     }
 
     fn close_save_settled(&self) -> bool {
@@ -222,6 +290,10 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
         if let Some(command) = self.memory.as_mut().and_then(memory::MemoryGovernor::take_command) {
             return Ok(Some(command));
         }
+        #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+        if let Some(command) = self.updates.take_command() {
+            return Ok(Some(command));
+        }
         #[cfg(all(windows, feature = "native-composition"))]
         if let Some(command) = self.canvas.as_mut().and_then(canvas::EmbeddedCanvas::take_command) {
             return Ok(Some(command));
@@ -246,4 +318,30 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
             )
             .min()
     }
+}
+
+/// The splash line in place of the ordinary loading lines: "Updating SugarCubes…" while the
+/// coordinator's SugarCubes update holds the start, otherwise "Updating to version X…" while
+/// this launch starts a new version for the first time, until the coordinator confirms it.
+/// Failure, retry and cleanup lines always win, and a version label the splash cannot show
+/// leaves the ordinary line.
+pub(super) fn updating<B: StartupBackend>(
+    child: &B,
+    current: sugarsubstitute_splash::StartupStatus,
+) -> Option<sugarsubstitute_splash::StartupStatus> {
+    use sugarsubstitute_splash::StartupStatus;
+    if !matches!(
+        current,
+        StartupStatus::Loading | StartupStatus::LoadingLong | StartupStatus::LoadingExtended
+    ) {
+        return None;
+    }
+    let status = child.update_status()?;
+    if matches!(
+        status.sugarcubes(),
+        sugarsubstitute_contracts::update::pack::PackUpdateStatus::Updating
+    ) {
+        return Some(StartupStatus::UpdatingSugarcubes);
+    }
+    sugarsubstitute_splash::UpdateVersion::new(status.applying()?).map(StartupStatus::Updating)
 }

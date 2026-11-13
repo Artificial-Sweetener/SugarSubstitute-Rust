@@ -1,9 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Replace bounded display rectangles with rounded mixtures of clean and filtered GPU pixels.
-use crate::{DisplayImage, GpuDevice, GpuError, buffer::Buffer};
+#[cfg(any(windows, feature = "boundary-fixtures"))]
+use crate::GpuError;
+use crate::{DisplayImage, GpuDevice, buffer::Buffer};
 use std::{borrow::Cow, sync::Arc};
-use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
+#[cfg(any(windows, feature = "boundary-fixtures"))]
+use sugarsubstitute_contracts::execution::JobContext;
+use sugarsubstitute_contracts::execution::MemoryClaim;
+#[cfg(any(windows, feature = "boundary-fixtures"))]
 use sugarsubstitute_image_ops::{Extent, Region};
 
 /// Borrow two complete same-device encoded images and exact geometric coverage.
@@ -27,6 +32,7 @@ pub(crate) struct StagedPatch {
     _staging: MemoryClaim,
 }
 impl StagedPatch {
+    #[cfg(any(windows, feature = "boundary-fixtures"))]
     pub(crate) fn upload(
         device: &Arc<GpuDevice>,
         patch: DisplayPatch<'_>,

@@ -5,14 +5,10 @@ mod activity;
 mod enrollment;
 mod evidence;
 mod lifetime;
+use crate::campaign_watch::{self, CampaignWatch};
 use crate::process_fixture::progress::StopPlan;
 use evidence::Evidence;
-use std::{
-    error::Error,
-    num::NonZeroUsize,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{error::Error, num::NonZeroUsize, sync::Arc, time::Instant};
 use sugarsubstitute_contracts::{execution::*, lifecycle::*};
 use sugarsubstitute_desktop::{HeadlessLifetime, HeadlessStep, run_headless};
 use sugarsubstitute_execution::{
@@ -32,7 +28,7 @@ pub(crate) fn run() -> Result<serde_json::Value> {
 }
 struct Fixture {
     clock: Arc<MonotonicClock>,
-    original: Instant,
+    watch: CampaignWatch,
     deadline: Moment,
     qpc_deadline: FixtureDeadline,
     owner_key: CoordinatorKey,
@@ -53,7 +49,7 @@ struct Fixture {
     closing: bool,
     stopping: bool,
     finished: bool,
-    deadline_observed: bool,
+    custody_expired: bool,
     evidence: Evidence,
     workers: Option<WorkerStatus>,
     descendant_exit: Option<sugarsubstitute_execution::windows::ProcessExit>,
@@ -61,19 +57,16 @@ struct Fixture {
 }
 impl Fixture {
     fn new() -> Result<Self> {
-        let clock = MonotonicClock::new();
-        let lifetime = Duration::from_secs(60);
-        let original =
-            Instant::now().checked_add(lifetime).ok_or("Descendant campaign deadline overflow")?;
-        let deadline = clock.now().checked_add(lifetime)?;
-        let qpc_deadline = FixtureDeadline::until(original)?;
+        let clock = campaign_watch::execution_clock();
+        let (custody, deadline) = campaign_watch::custody(clock.as_ref())?;
+        let qpc_deadline = FixtureDeadline::until(custody)?;
         let owner_key = CoordinatorKey {
             namespace: NamespaceId::new([7; 32]),
             epoch: CoordinatorEpoch::new([1; 16])?,
         };
         Ok(Self {
             clock,
-            original,
+            watch: CampaignWatch::new("Descendant campaign"),
             deadline,
             qpc_deadline,
             owner_key,
@@ -94,7 +87,7 @@ impl Fixture {
             closing: false,
             stopping: false,
             finished: false,
-            deadline_observed: false,
+            custody_expired: false,
             evidence: Evidence::default(),
             workers: None,
             descendant_exit: None,
@@ -118,7 +111,7 @@ impl Fixture {
             return Ok(());
         }
         let Some(key) = self.key else { return Ok(()) };
-        let plan = StopPlan::new(self.clock.now(), Instant::now())?;
+        let plan = StopPlan::new(self.clock.now(), campaign_watch::native_now())?;
         self.registry.as_mut().ok_or("Actual registry is not prepared")?.begin_stop(
             key,
             ShutdownId::new(1)?,
@@ -141,8 +134,8 @@ impl Fixture {
             return Err("Descendant workers unresolved".into());
         }
         let stop = self.stop.as_ref().ok_or("Descendant stop missing")?;
-        Ok(serde_json::json!({"schema_version":1,"fixture":"root_exit_surviving_descendant",
-            "original_lifetime_seconds":60,"root_exit_code":0,"ready_observed":self.evidence.ready,
+        Ok(serde_json::json!({"schema_version":2,"fixture":"root_exit_surviving_descendant",
+            "stall_seconds":sugarsubstitute_execution::qualification_time::STALL.as_secs(),"custody_seconds":campaign_watch::CUSTODY.as_secs(),"root_exit_code":0,"ready_observed":self.evidence.ready,
             "challenge_after_root_exit":self.evidence.challenge,"response_after_root_exit":self.evidence.response,
             "release_requested":false,"maximum_retained_members":self.evidence.retained,
             "forced":self.evidence.forced,"descendant_process_id":self.descendant_exit.map(|exit|exit.process_id),

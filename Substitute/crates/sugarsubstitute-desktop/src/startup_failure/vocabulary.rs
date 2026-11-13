@@ -118,6 +118,8 @@ pub enum StartupObservationKind {
     PanelMessage,
     /// A memory protocol message.
     MemoryMessage,
+    /// An updates protocol message.
+    UpdatesMessage,
     /// Browser process facts.
     BrowserProcesses,
     /// A canvas surface protocol message.
@@ -175,6 +177,7 @@ closed_tokens!(StartupObservationKind {
     MainRevealed,
     PanelMessage,
     MemoryMessage,
+    UpdatesMessage,
     BrowserProcesses,
     SurfaceMessage,
     CanvasInput,

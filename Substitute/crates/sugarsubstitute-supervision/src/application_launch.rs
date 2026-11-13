@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Transfer startup to a fresh, independently owned application Root.
+mod adoption;
 mod creation;
 mod engine;
 pub use engine::{
@@ -34,8 +35,13 @@ pub const RECOVERY_RESERVATION_BYTES: u64 =
 pub enum CreationOutcome {
     /// Native creation produced no process; an exact unstarted trial can be restored.
     NotCreated,
-    /// Windows confirmed creation. Never restore this attempt or automatically repeat it.
+    /// Windows confirmed creation, and a trial child also holds its own run slot. Never restore
+    /// this attempt or automatically repeat it.
     Created,
+    /// A trial child was created but is gone without ever holding its run slot. Recovery
+    /// resolves the trial under the creator's still-held run, so the accepted release can start;
+    /// the attempt is never repeated by this creator.
+    Unadopted,
     /// Partial native output leaves creation uncertain.
     /// Process absence has not been proved, so automatic fallback is prohibited.
     Indeterminate,
@@ -67,6 +73,8 @@ struct State {
     issued: bool,
     creation: CreationOutcome,
     trial_restored: bool,
+    /// How an unadopted trial child ended, until recovery has resolved its trial.
+    unadopted: Option<crate::setup_storage::UnadoptedEnding>,
     handles: Vec<Handle>,
     memory: Option<Arc<MemoryClaim>>,
     custody: Option<LaunchCustody>,
@@ -85,6 +93,7 @@ impl ApplicationLaunch {
             issued: false,
             creation: CreationOutcome::NotCreated,
             trial_restored: false,
+            unadopted: None,
             handles: Vec::new(),
             memory: None,
             custody: None,
@@ -108,11 +117,14 @@ impl ApplicationLaunch {
         Ok(launch)
     }
     /// Create the replacement exactly once in an admitted blocking job, then close creator handles.
-    /// Reserve `CREATION_RESERVATION_BYTES`. Replacement callers retire original application/conflict custody first. Stable launchers
+    /// A trial creator first keeps its run slot and handoff until the child signals that it holds
+    /// its own slot or is gone, within `TRIAL_ADOPTION` plus `TRIAL_ADOPTION_GRACE`; a silent
+    /// child loses the handoff and is ended. Reserve `CREATION_RESERVATION_BYTES`. Replacement callers retire original application/conflict custody first. Stable launchers
     /// retain only selection custody; an existing coordinator handles repeated-launch forwarding.
     /// # Errors
-    /// Returns original creation/cleanup failures. Trial callers use `recover_and_retire` on
-    /// their independent cleanup worker; other launches use `retire` for partial outputs.
+    /// Returns original creation/cleanup failures, and `application_launch_unadopted` when a trial
+    /// child never took over. Trial callers use `recover_and_retire` on their independent
+    /// cleanup worker; other launches use `retire` for partial outputs.
     pub fn launch(&self, context: &JobContext) -> Result<(), ClaimError> {
         self.launch_with(context, creation::create)
     }
@@ -169,6 +181,37 @@ impl ApplicationLaunch {
             pid = process.dwProcessId,
             "Transferred startup to a fresh application Root"
         );
+        if let Some(LaunchCustody::Trial(trial)) = &state.custody {
+            let transfer = trial.transfer()?;
+            // SAFETY: the process handle is owned by `state.handles` until retirement below.
+            let child =
+                unsafe { std::os::windows::io::BorrowedHandle::borrow_raw(process.hProcess.0) };
+            let adoption = adoption::await_adoption(
+                context,
+                transfer.adoption(),
+                child,
+                || transfer.release_handoff(),
+                adoption::Bounds::TRIAL,
+            );
+            match adoption {
+                adoption::Adoption::Adopted => {}
+                adoption::Adoption::Unadopted(ending) => {
+                    tracing::warn!(
+                        operation = "application_launch_trial_unadopted",
+                        pid = process.dwProcessId,
+                        ?ending,
+                        "The updated release never took over startup"
+                    );
+                    state.creation = CreationOutcome::Unadopted;
+                    state.unadopted = Some(ending);
+                    return Err(ClaimError::invalid("application_launch_unadopted"));
+                }
+                adoption::Adoption::Uncertain(cause) => {
+                    state.creation = CreationOutcome::Indeterminate;
+                    return Err(cause);
+                }
+            }
+        }
         state.retire()
     }
     /// Close only this creator's retained handles; never stop the independent replacement.
@@ -179,9 +222,10 @@ impl ApplicationLaunch {
         crate::native_claims::lock(&self.0).retire()
     }
 
-    /// Close creation admission and restore an unstarted trial before retiring creator custody.
+    /// Close creation admission and restore an unstarted trial, or resolve a trial whose child
+    /// never took over, before retiring creator custody.
     /// Reserve `RECOVERY_RESERVATION_BYTES` on an independent admitted cleanup worker after observing the creation job's terminal
-    /// outcome. Any successful native creation or partial native output excludes restoration.
+    /// outcome. Any adopted or uncertain native creation excludes restoration.
     /// Returns the retained native creation fact even if the original worker result was discarded.
     /// This never stops a created application or infers descendant settlement from a missing lock.
     /// # Errors
@@ -197,6 +241,14 @@ impl ApplicationLaunch {
             trial.restore(context)?;
             state.trial_restored = true;
         }
+        if let (Some(ending), Some(LaunchCustody::Trial(trial))) = (state.unadopted, &state.custody)
+        {
+            trial
+                .transfer()?
+                .release_unadopted(ending, context)
+                .map_err(|cause| ClaimError::new("application_launch_release_unadopted", cause))?;
+            state.unadopted = None;
+        }
         state.retire()?;
         Ok(state.creation)
     }
@@ -208,6 +260,9 @@ impl State {
             && matches!(self.custody, Some(LaunchCustody::Trial(_)))
         {
             return Err(ClaimError::invalid("application_launch_trial_requires_recovery"));
+        }
+        if self.unadopted.is_some() {
+            return Err(ClaimError::invalid("application_launch_unadopted_requires_recovery"));
         }
         files::close_all(&mut self.handles)?;
         self.memory = None;

@@ -193,7 +193,7 @@ impl Active {
     fn close_connection(&mut self, core: &Core, index: usize, error: Option<EntryTransportError>) {
         if let Some(error) = error {
             let error = self.connection_error(index, error);
-            let recover = self.awaiting_discovery(index)
+            let recover = (self.awaiting_discovery(index) || self.awaiting_retained_outcome(index))
                 && self.work.input.as_ref().is_some_and(|input| input.recover_unsubmitted)
                 && matches!(error, EntryTransportError::PeerDisconnected(_))
                 && !error.contains_owner_panic();

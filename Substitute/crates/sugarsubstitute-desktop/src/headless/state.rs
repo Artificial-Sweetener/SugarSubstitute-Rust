@@ -96,6 +96,11 @@ impl HeadlessState {
             ),
         }
     }
+    /// Shutdown has begun, so a hosted surface closes.
+    #[cfg(target_os = "windows")]
+    pub(super) const fn closing(&self) -> bool {
+        self.closing
+    }
     pub(super) const fn settled(&self) -> bool {
         self.settled
     }

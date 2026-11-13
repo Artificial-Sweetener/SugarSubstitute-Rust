@@ -1,0 +1,245 @@
+{
+  "schema": 1,
+  "host": "substitute",
+  "release": "0.1.0",
+  "channel": "panel",
+  "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+  "transcript": [
+    {
+      "from": "page",
+      "message": {
+        "protocol": "sugarcubes.panel",
+        "version": 3,
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "ready"
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "capabilities": [
+          {
+            "name": "presentation.system-accent"
+          },
+          {
+            "name": "output.host-surface"
+          }
+        ],
+        "protocol": "sugarcubes.host",
+        "protocols": [
+          {
+            "name": "sugarcubes.panel",
+            "version": 3
+          },
+          {
+            "name": "sugarcubes.canvas",
+            "version": 3
+          },
+          {
+            "name": "sugarcubes.memory",
+            "version": 1
+          },
+          {
+            "name": "sugarcubes.updates",
+            "version": 1
+          }
+        ],
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "description",
+        "version": 1
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "presentation": {
+          "accentColor": "#0078d4",
+          "pluginMode": false,
+          "resizeCornerSize": 0,
+          "visualStyle": "comfy"
+        },
+        "protocol": "sugarcubes.panel",
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "configure",
+        "version": 3
+      }
+    },
+    {
+      "from": "page",
+      "message": {
+        "protocol": "sugarcubes.panel",
+        "version": 3,
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "applied"
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "protocol": "sugarcubes.panel",
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "ping",
+        "version": 3
+      }
+    },
+    {
+      "from": "page",
+      "message": {
+        "protocol": "sugarcubes.canvas",
+        "version": 3,
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "requestId": 1,
+        "type": "surface.capabilities.request",
+        "schema": 3
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "capabilities": {
+          "comparison": false,
+          "imageFormats": [],
+          "input": false,
+          "overview": false,
+          "previewFormats": [],
+          "schema": 3,
+          "viewportCommands": [],
+          "viewportState": false
+        },
+        "message": "",
+        "protocol": "sugarcubes.canvas",
+        "requestId": 1,
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "status": "unavailable",
+        "type": "surface.capabilities.reply",
+        "version": 3
+      }
+    },
+    {
+      "from": "page",
+      "message": {
+        "protocol": "sugarcubes.canvas",
+        "version": 3,
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "requestId": 2,
+        "type": "surface.capabilities.request",
+        "schema": 1003
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "capabilities": {
+          "comparison": false,
+          "imageFormats": [],
+          "input": false,
+          "overview": false,
+          "previewFormats": [],
+          "schema": 3,
+          "viewportCommands": [],
+          "viewportState": false
+        },
+        "message": "",
+        "protocol": "sugarcubes.canvas",
+        "requestId": 2,
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "status": "unavailable",
+        "type": "surface.capabilities.reply",
+        "version": 3
+      }
+    },
+    {
+      "from": "page",
+      "message": {
+        "protocol": "sugarcubes.memory",
+        "version": 1,
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "preference",
+        "preference": {
+          "mode": "share",
+          "percent": 25
+        }
+      }
+    },
+    {
+      "from": "page",
+      "message": {
+        "protocol": "sugarcubes.memory",
+        "version": 1,
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "usage",
+        "usedBytes": 0,
+        "demandBytes": 0,
+        "consumers": []
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "allowanceBytes": 0,
+        "ceilingBytes": 4294967296,
+        "generation": 1,
+        "level": "normal",
+        "preference": {
+          "mode": "share",
+          "percent": 25
+        },
+        "protocol": "sugarcubes.memory",
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "totalBytes": 17179869184,
+        "type": "allowance",
+        "version": 1
+      }
+    },
+    {
+      "from": "page",
+      "message": {
+        "protocol": "sugarcubes.updates",
+        "version": 1,
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "watch"
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "protocol": "sugarcubes.updates",
+        "revision": 1,
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "state",
+        "update": {
+          "channel": "stable",
+          "currentVersion": "0.1.0",
+          "previousVersionRunning": false,
+          "scheduledRestart": "none",
+          "status": {
+            "state": "up-to-date"
+          },
+          "workflowRunning": false
+        },
+        "version": 1
+      }
+    },
+    {
+      "from": "page",
+      "message": {
+        "protocol": "sugarcubes.updates",
+        "version": 1,
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "check",
+        "request": "conformance-check"
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "protocol": "sugarcubes.updates",
+        "reason": "unavailable",
+        "request": "conformance-check",
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "rejected",
+        "version": 1
+      }
+    }
+  ]
+}

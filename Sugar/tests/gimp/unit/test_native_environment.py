@@ -17,7 +17,13 @@
 
 from __future__ import annotations
 
-from integrations.gimp.native.environment import companion_environment
+import subprocess
+import sys
+
+from integrations.gimp.native.environment import (
+    COMPANION_CREATION_FLAGS,
+    companion_environment,
+)
 
 
 def test_companion_does_not_inherit_gimps_high_dpi_compatibility_layer() -> None:
@@ -39,3 +45,11 @@ def test_companion_does_not_inherit_gimps_high_dpi_compatibility_layer() -> None
     assert actual["TEMP"] == source["TEMP"]
     assert source["__COMPAT_LAYER"] == "HighDpiAware"
     assert source["SUGARCUBES_GIMP_NATIVE"] == "0"
+
+
+def test_companion_children_never_open_a_console_window() -> None:
+    """Hide every companion child's console on Windows and pass POSIX no creation flags."""
+    if sys.platform == "win32":
+        assert COMPANION_CREATION_FLAGS == subprocess.CREATE_NO_WINDOW
+    else:
+        assert COMPANION_CREATION_FLAGS == 0

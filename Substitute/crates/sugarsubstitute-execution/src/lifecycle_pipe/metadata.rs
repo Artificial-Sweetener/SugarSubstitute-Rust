@@ -5,7 +5,9 @@
 
 use super::{LifecyclePipeFailure, failure};
 use crate::scope::lock;
-use std::sync::{Arc, Mutex, atomic::AtomicUsize};
+#[cfg(windows)]
+use std::sync::atomic::AtomicUsize;
+use std::sync::{Arc, Mutex};
 use sugarsubstitute_contracts::execution::MemoryClaim;
 
 /// Private aliases share one claim, with no exposed Arc or Weak constructor.
@@ -19,6 +21,7 @@ struct State {
 
 // Pinned Rust 1.93.1 ArcInner is repr(C): two atomic counters, then its payload.
 #[repr(C)]
+#[cfg(windows)]
 struct ControlLayout {
     strong: AtomicUsize,
     weak: AtomicUsize,
@@ -49,6 +52,7 @@ impl Metadata {
     }
 
     /// Return actual compiled control size for preflight, including both Arc counters.
+    #[cfg(windows)]
     pub(crate) const fn control_storage_bytes() -> usize {
         size_of::<ControlLayout>()
     }

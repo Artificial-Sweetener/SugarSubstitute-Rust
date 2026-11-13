@@ -35,11 +35,14 @@ fn malformed_oversized_duplicate_and_zero_revision_correlations_are_rejected()
         " ".repeat(MAX_PROBE_BYTES + 1),
         encoded.replace("\"revision\":7", "\"revision\":0"),
         encoded.replace("\"revision\":7", "\"revision\":7,\"revision\":8"),
-        encoded.replace("\"revision\":7", "\"revision\":7,\"repository\":\"foreign\""),
         encoded.replace(&"2".repeat(32), "../foreign"),
     ] {
         assert!(ProbeRequest::decode(text.as_bytes()).is_err());
     }
+    // A field this reader does not know grants nothing: only the known correlation is kept and
+    // the receiver still matches it against protected state.
+    let foreign = encoded.replace("\"revision\":7", "\"revision\":7,\"repository\":\"foreign\"");
+    assert_eq!(ProbeRequest::decode(foreign.as_bytes())?.attempt(), &attempt()?);
     let mut zero = attempt()?;
     zero.revision = 0;
     assert!(ProbeRequest::new(zero).is_err());

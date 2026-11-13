@@ -177,6 +177,18 @@ impl Core {
         }
     }
 
+    /// A completion wake was signaled after the client's last drain and shutdown has not
+    /// suppressed it.
+    ///
+    /// The signal is taken under the admission lock that makes its change observable, and the
+    /// mailbox clears it only when the client drains. Delivery therefore always follows the
+    /// drain the signal postdates, so the answer is exact relative to that drain. It does not
+    /// stay set while a published wake's callback is still returning, which would make an
+    /// observer wait for a wake it already received.
+    pub(crate) fn wake_owed_since_drain(&self, state: &State) -> bool {
+        !state.stopping && self.mailbox.signaled_since_drain()
+    }
+
     /// Deliver only the coalesced capacity edge after the admission lock is released.
     ///
     /// Shutdown suppresses a callback not yet started. A callback already entered

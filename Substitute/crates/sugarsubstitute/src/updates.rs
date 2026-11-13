@@ -3,6 +3,7 @@
 //! Compose preparation from producing-build feed bytes and locally selected installation paths.
 mod activation;
 pub(crate) mod admission;
+mod attempt;
 mod engine;
 mod entry;
 pub mod launch;
@@ -12,6 +13,7 @@ pub use entry::entry;
 pub(crate) mod parent;
 pub(crate) mod schedule;
 mod session;
+pub(crate) mod status;
 #[cfg(test)]
 pub(crate) mod test_support;
 use std::{io, path::PathBuf, time::Duration};
@@ -49,6 +51,23 @@ fn compiled_policy(bytes: &[u8]) -> io::Result<Option<UpdatePolicy>> {
     Ok(Some(Distribution::decode(bytes)?.update_policy()))
 }
 
+/// Where this build says the release notes of `version` are: an `https` address, or `None`
+/// when the build has no update configuration or `version` is not a plain release version.
+/// Reads only compiled bytes.
+pub(crate) fn release_notes(version: &str) -> Option<url::Url> {
+    if EMBEDDED.is_empty() {
+        return None;
+    }
+    match Distribution::decode(EMBEDDED) {
+        Ok(distribution) => distribution.release_notes().url(version).ok(),
+        Err(cause) => {
+            tracing::warn!(operation = "release_notes_unavailable", cause = %cause,
+                "The build's update distribution could not be read; no release notes link");
+            None
+        }
+    }
+}
+
 /// Construct an inert worker on an admitted preparation job. Empty producing-build configuration
 /// disables automatic checking. The worker reads the protected local subscription; the distribution binds
 /// only repository and transport authority. No runtime environment or neighboring file is read.
@@ -62,6 +81,20 @@ pub fn preparation(
     idle: Duration,
 ) -> io::Result<Option<Worker>> {
     configuration(EMBEDDED, installation, workspace, idle)?.map(Worker::new).transpose()
+}
+
+/// Repository transport for an installer whose compiled-in metadata expired (C4), using this
+/// build's distribution origin policy; `None` when the build has no update configuration.
+/// # Errors
+/// Rejects malformed configured bytes.
+pub(crate) fn installer_repository(
+    idle: Duration,
+) -> io::Result<Option<sugarsubstitute_supervision::update_repository::Repository>> {
+    if EMBEDDED.is_empty() {
+        return Ok(None);
+    }
+    let (_, policy) = Distribution::decode(EMBEDDED)?.into_parts();
+    Ok(Some(sugarsubstitute_supervision::update_repository::Repository::new(policy, idle)))
 }
 
 /// Reauthenticate prepared bytes using established installation authority, without HTTP.
@@ -93,12 +126,13 @@ pub(crate) fn run(
     arguments: impl IntoIterator<Item = std::ffi::OsString>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let options = options::Options::parse(arguments)?;
+    let (bootstrap, deadline) = options.attempt;
+    let (installation, workspace) = (options.installation, options.workspace);
     let mut session = session::Session::new(
         1024 * 1024,
-        Box::new(move |_| {
-            preparation(options.installation, options.workspace, Duration::from_secs(30))
-        }),
-    );
+        Box::new(move |_| preparation(installation, workspace, Duration::from_secs(30))),
+    )
+    .with_attempt(attempt::AttemptReporter::new(bootstrap, deadline));
     sugarsubstitute_desktop::run_headless(&mut session)?;
     tracing::info!(operation="update_preparation_retired",result=?session.result,"Update preparation process retired");
     Ok(())
@@ -126,7 +160,7 @@ mod tests {
     #[test]
     fn compiled_policy_uses_the_actual_preparation_owner_without_reading_paths() -> Result {
         let bytes = serde_json::to_vec(&serde_json::json!({
-            "schema_version":2, "update_policy":"beta_eager", "repository":vec![92;32], "feed":{
+            "schema_version":3, "release_notes":"https://notes.example.test/{version}", "update_policy":"beta_eager", "repository":vec![92;32], "feed":{
                 "transport":"https", "base":"https://updates.example.test/", "redirects":[]
             }
         }))?;
@@ -162,7 +196,7 @@ mod tests {
     fn compiled_policy_comes_only_from_the_embedded_distribution() -> Result {
         assert_eq!(compiled_policy(b"")?, None);
         let bytes = serde_json::to_vec(&serde_json::json!({
-            "schema_version":2, "update_policy":"standard", "repository":vec![92;32], "feed":{
+            "schema_version":3, "release_notes":"https://notes.example.test/{version}", "update_policy":"standard", "repository":vec![92;32], "feed":{
                 "transport":"https", "base":"https://updates.example.test/", "redirects":[]
             }
         }))?;

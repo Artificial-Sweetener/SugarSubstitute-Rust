@@ -18,7 +18,6 @@ pub struct CaptureCleanupCounterBudget {
     frequency: i64,
 }
 impl CaptureCleanupCounterBudget {
-    #[cfg(windows)]
     fn from_total(
         total: sugarsubstitute_contracts::execution::CounterDeadline,
     ) -> Result<Self, NativeObservationError> {
@@ -50,7 +49,6 @@ impl CaptureCleanupCounterBudget {
         self.frequency
     }
 }
-#[cfg(windows)]
 fn counter_overflow() -> NativeObservationError {
     NativeObservationError::new(
         "capture_cleanup_counter_arithmetic",
@@ -282,20 +280,9 @@ fn encode(
     core: &Arc<Core>,
     budget: ShutdownBudget,
 ) -> Result<CaptureCleanupCounterBudget, NativeObservationError> {
-    #[cfg(windows)]
-    {
-        crate::ExecutionClient { core: core.clone() }
-            .encode_counter_deadline(budget.settle_until)
-            .and_then(CaptureCleanupCounterBudget::from_total)
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = (core, budget);
-        Err(NativeObservationError::new(
-            "capture_cleanup_counter",
-            std::io::Error::other("Native capture counter is unavailable on this platform"),
-        ))
-    }
+    crate::ExecutionClient { core: core.clone() }
+        .encode_counter_deadline(budget.settle_until)
+        .and_then(CaptureCleanupCounterBudget::from_total)
 }
 
 /// Constructor-private proof of actual capture pin and temporary I/O retirement.

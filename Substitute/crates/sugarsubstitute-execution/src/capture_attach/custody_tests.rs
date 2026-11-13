@@ -170,8 +170,11 @@ fn first_cleanup_claim_retains_charge_and_cause_when_native_retirement_wins_samp
     let owner = crate::ExecutionOwner::new(clock.clone(), wake.clone())?;
     let client = owner.client();
     let ordinary = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
-    let native =
-        client.create_native_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?;
+    let native = client.core.create_scope_kind(
+        ScopeSpec { id: ScopeId::new(2)?, deadline: None },
+        None,
+        true,
+    )?;
     let boundary = Arc::new(Boundary::default());
     let _release_boundary = ReleaseBoundary::new(&client.core, &boundary);
     boundary.ready.store(true, Ordering::Release);

@@ -7,6 +7,7 @@
 //! scheduling primitive or installation activation is created here. Network calls never hold
 //! the trust writer. A failed check is an error, never evidence that the app is current.
 mod failure;
+mod installer;
 mod interruption;
 use crate::{
     setup_storage::{
@@ -15,6 +16,7 @@ use crate::{
     update_http::{self, Http},
 };
 pub use failure::Failure;
+pub use installer::InstallerMetadata;
 use std::{io, path::Path, time::Duration};
 use sugarsubstitute_contracts::{
     execution::JobContext,

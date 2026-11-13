@@ -107,16 +107,26 @@ def validate_inventory(root: Path, policy: TestPolicy) -> None:
 def select_paths(
     policy: TestPolicy,
     paths: tuple[str, ...],
+    *,
+    removed: frozenset[str] = frozenset(),
 ) -> TestSelection:
-    """Select deterministic proof groups for changed repository paths."""
+    """Select deterministic proof groups for changed repository paths.
+
+    ``removed`` names the changed paths that no longer exist in the validated tree. A removed
+    runtime file no area owns cannot gain an owner, and whatever depended on it is unknown, so it
+    selects every group instead of being refused.
+    """
 
     reasons: list[SelectionReason] = []
     selected: set[TestGroup] = set()
+    removed_paths = frozenset(
+        value.replace("\\", "/").removeprefix("./") for value in removed
+    )
     for raw_path in sorted(set(paths)):
         path = raw_path.replace("\\", "/").removeprefix("./")
         if not path:
             continue
-        groups = _groups_for_path(policy, path)
+        groups = _groups_for_path(policy, path, removed=path in removed_paths)
         for group, reason in groups:
             selected.add(group)
             reasons.append(SelectionReason(path=path, group=group, reason=reason))
@@ -131,6 +141,8 @@ def select_paths(
 def _groups_for_path(
     policy: TestPolicy,
     path: str,
+    *,
+    removed: bool,
 ) -> tuple[tuple[TestGroup, str], ...]:
     """Return direct and subscribed proof groups for one changed path."""
 
@@ -183,6 +195,14 @@ def _groups_for_path(
         )
     if not owners:
         if PurePosixPath(path).suffix.lower() in _RUNTIME_EXTENSIONS:
+            if removed:
+                return tuple(
+                    (
+                        group,
+                        "removed a runtime file no area owns; its dependants are unknown",
+                    )
+                    for group in policy.groups
+                )
             raise TestSelectionError(
                 f"runtime change is not allowed to select zero tests: {path}"
             )

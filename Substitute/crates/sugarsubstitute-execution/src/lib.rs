@@ -9,9 +9,12 @@ mod blocking;
 #[cfg(any(test, feature = "boundary-fixtures"))]
 #[doc(hidden)]
 pub mod http_fixture;
+/// Bounded client WebSocket to a loopback service inside one admitted async job.
+pub mod loopback_websocket;
 mod owned_input;
 /// Bounded transport for the owned upstream provisioning worker.
 pub mod provisioning_transport;
+mod system_random;
 pub use owned_input::{ChargedBlockingInput, OwnedInputError};
 mod entry_preparation;
 #[cfg(windows)]
@@ -26,20 +29,30 @@ pub use entry_preparation::{
 };
 mod capture_bundle;
 pub use capture_bundle::{CaptureBundleAdmission, CaptureBundleOrigin, CaptureBundleRetirement};
-#[cfg(any(windows, test))]
+#[cfg(windows)]
 mod capture_attach;
+/// Portable test builds mount this Windows adapter publicly; `windows_*` modules export it there.
+#[cfg(all(test, not(windows)))]
+pub mod capture_attach;
 mod clock;
 mod clock_retirement;
+#[cfg(any(windows, test))]
+mod counter_clock;
 #[cfg(any(windows, test))]
 mod counter_deadline;
 mod cpu;
 #[cfg(any(windows, test))]
 mod desktop_capture;
 mod fork_join;
+#[cfg(any(windows, test))]
+mod platform_counter;
 #[cfg(all(feature = "k1-native-qualification", any(windows, test)))]
 mod preview_arming;
 #[cfg(all(feature = "k1-native-qualification", any(windows, test)))]
 mod registered_desktop_fault;
+#[cfg(all(unix, test))]
+#[allow(unsafe_code)]
+mod unix_counter;
 #[cfg(all(feature = "k1-native-qualification", any(windows, test)))]
 pub use desktop_capture::desktop_capture_control_storage_bytes;
 #[cfg(any(windows, test))]
@@ -56,20 +69,29 @@ pub use preview_arming::{PreviewArmingError, PreviewArmingSeal, PreviewSourceLoa
 pub use registered_desktop_fault::RegisteredDesktopFaultError;
 #[cfg(any(windows, test))]
 pub mod backend_custody;
-#[cfg(any(windows, test))]
-pub mod diagnostic_pipe;
-#[cfg(any(windows, test))]
+#[cfg(windows)]
 mod fixture_forwarding;
-#[cfg(any(windows, test))]
+/// Portable test builds mount this Windows adapter publicly; `windows_*` modules export it there.
+#[cfg(all(test, not(windows)))]
+pub mod fixture_forwarding;
+#[cfg(windows)]
 mod fixture_session;
-#[cfg(any(windows, test))]
+/// Portable test builds mount this Windows adapter publicly; `windows_*` modules export it there.
+#[cfg(all(test, not(windows)))]
+pub mod fixture_session;
+#[cfg(windows)]
 mod lifecycle_pipe;
+/// Portable test builds mount this Windows adapter publicly; `windows_*` modules export it there.
+#[cfg(all(test, not(windows)))]
+pub mod lifecycle_pipe;
 mod mailbox;
 mod memory;
 pub mod memory_budget;
 mod native_resources;
 #[cfg(any(windows, test))]
 pub mod process_creation;
+#[cfg(any(windows, test))]
+pub mod purpose_pipe;
 #[cfg(any(windows, test))]
 pub mod recovery_supervisor;
 mod symbol_provider;
@@ -90,20 +112,27 @@ pub use report_export::{
 };
 mod symbol_admission;
 mod symbol_cleanup;
+pub use symbol_admission::SymbolSubmissionRejection;
+#[cfg(any(windows, test))]
 pub use symbol_admission::{
-    DiagnosticPipeResources, SymbolResourceRejection, SymbolSubmissionRejection,
-    SymbolTransportReservation,
+    PurposePipeResources, SymbolResourceRejection, SymbolTransportReservation,
 };
 pub use symbol_cleanup::{CleanupDeadline, SymbolCleanupBeginRejection, SymbolCleanupPermit};
-#[cfg(any(windows, test))]
+#[cfg(windows)]
 mod native;
+/// Portable test builds mount this Windows adapter publicly; `windows_*` modules export it there.
+#[cfg(all(test, not(windows)))]
+pub mod native;
 #[cfg(any(windows, test))]
 mod native_deadlines;
 #[cfg(any(windows, test))]
 #[allow(unsafe_code)]
 mod native_pipe;
-#[cfg(any(windows, test))]
+#[cfg(windows)]
 mod output;
+/// Portable test builds mount this Windows adapter publicly; `windows_*` modules export it there.
+#[cfg(all(test, not(windows)))]
+pub mod output;
 mod runtime;
 mod scope;
 mod task;
@@ -127,19 +156,21 @@ pub mod windows_backend_custody;
 #[allow(unsafe_code)]
 pub mod windows_capture_attach;
 #[cfg(windows)]
-pub mod windows_diagnostic_pipe;
-#[cfg(windows)]
 pub mod windows_fixture;
 #[cfg(windows)]
 pub mod windows_lifecycle_pipe;
 #[cfg(windows)]
 pub mod windows_output;
 #[cfg(windows)]
+pub mod windows_purpose_pipe;
+#[cfg(windows)]
 pub mod windows_recovery_supervisor;
 
 /// Deterministic external clock injection for tests using the real execution owner.
 #[cfg(any(test, feature = "boundary-fixtures"))]
 pub mod clock_fixture;
+
+pub mod qualification_time;
 
 pub use clock::MonotonicClock;
 pub use runtime::{

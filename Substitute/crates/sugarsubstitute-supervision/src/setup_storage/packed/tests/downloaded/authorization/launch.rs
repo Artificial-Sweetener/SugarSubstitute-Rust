@@ -106,7 +106,7 @@ fn accepted_launch_needs_no_extracted_cache_or_repository_and_retains_native_cus
                 )?,
             },
             PreparationIntent::Automatic,
-            crate::setup_storage::selection::unix_now()?,
+            PREPARED_AT,
         )?;
         store.compare_exchange(&before, &pending, context)?;
         assert_eq!(store.load(context)?.ok_or("Selection absent")?.accepted(), Some(&generation));
@@ -156,11 +156,8 @@ fn released_run_lock_recovers_previous_acceptance_without_accepting_the_interrup
                 1,
             )?,
         };
-        let staging = before.prepare(
-            generation.clone(),
-            PreparationIntent::Automatic,
-            crate::setup_storage::selection::unix_now()?,
-        )?;
+        let staging =
+            before.prepare(generation.clone(), PreparationIntent::Automatic, PREPARED_AT)?;
         store.compare_exchange(&before, &staging, context)?;
         let prepared = staging.prepared(&generation)?;
         store.compare_exchange(&staging, &prepared, context)?;

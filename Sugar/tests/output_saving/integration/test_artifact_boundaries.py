@@ -15,9 +15,9 @@
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """Prove work bounds and linked-path refusal at the real filesystem authority."""
 
-import os
 from pathlib import Path
 import subprocess
+import sys
 from threading import Event
 
 from PIL import Image
@@ -107,7 +107,7 @@ def test_in_root_junction_or_symlink_is_refused_before_read(tmp_path: Path) -> N
     with Image.new("RGB", (4, 3)) as image:
         image.save(path)
     link = tmp_path / "linked"
-    if os.name == "nt":
+    if sys.platform == "win32":
         subprocess.run(
             ["cmd.exe", "/c", "mklink", "/J", str(link), str(target)],
             check=True,
@@ -130,7 +130,7 @@ def test_in_root_junction_or_symlink_is_refused_before_read(tmp_path: Path) -> N
         ).receipt(OutputFileReference("file.png", "", "output"), ArtifactBudget())
         assert (admitted.width, admitted.height) == (4, 3)
     finally:
-        if os.name == "nt":
+        if sys.platform == "win32":
             link.rmdir()
         else:
             link.unlink()
@@ -162,7 +162,7 @@ def test_active_writer_cannot_be_confirmed_as_a_stable_final(tmp_path: Path) -> 
         ManagedArtifactRegistry(tmp_path / "state.sqlite"), {"output": tmp_path}
     )
     with path.open("r+b"):
-        if os.name == "nt":
+        if sys.platform == "win32":
             with pytest.raises(ArtifactUnavailable) as failure:
                 files.receipt(
                     OutputFileReference(path.name, "", "output"), ArtifactBudget()

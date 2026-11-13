@@ -20,6 +20,7 @@ from contextlib import contextmanager, nullcontext
 import os
 from pathlib import Path
 import stat
+import sys
 from typing import BinaryIO
 
 
@@ -61,7 +62,7 @@ def _regular_component(path: Path, *, directory: bool) -> None:
 def pinned_directory(directory: Path) -> Iterator[None]:
     """Retain checked directory ancestry while enumerating or opening files below an approved root."""
     approved_directory(directory)
-    if os.name == "nt":
+    if sys.platform == "win32":
         from .windows_file_handles import pin_directory_ancestry
 
         with pin_directory_ancestry(directory):
@@ -76,16 +77,16 @@ def pinned_directory(directory: Path) -> Iterator[None]:
 def scan_directory(directory: Path) -> Iterator[Iterator[os.DirEntry[str]]]:
     """Enumerate the actual owned directory handle without following an exchanged linked path."""
     approved_directory(directory)
-    if os.name == "nt":
+    if sys.platform == "win32":
         with pinned_directory(directory), os.scandir(directory) as entries:
             yield entries
-        return
-    descriptor = _directory_descriptor(directory)
-    try:
-        with os.scandir(descriptor) as entries:
-            yield entries
-    finally:
-        os.close(descriptor)
+    else:
+        descriptor = _directory_descriptor(directory)
+        try:
+            with os.scandir(descriptor) as entries:
+                yield entries
+        finally:
+            os.close(descriptor)
 
 
 def _directory_descriptor(directory: Path) -> int:
@@ -115,7 +116,7 @@ def _directory_descriptor(directory: Path) -> int:
 def open_contained(root: Path, path: Path) -> Iterator[BinaryIO]:
     """Pin one regular file and validate its actual handle under the same approved ancestry."""
     path = contained_file(root, path)
-    if os.name == "nt":
+    if sys.platform == "win32":
         import msvcrt
         from .windows_file_handles import final_handle_path, open_regular_original
 
@@ -130,20 +131,22 @@ def open_contained(root: Path, path: Path) -> Iterator[BinaryIO]:
                 )
             contained_file(root, actual)
             _same_open_file(stream, path)
-        return
-    # Keep each Unix directory descriptor while traversing it; no component can redirect an open.
-    directory = _directory_descriptor(path.parent)
-    try:
-        descriptor = os.open(
-            path.name, os.O_RDONLY | int(getattr(os, "O_NOFOLLOW")), dir_fd=directory
-        )
-    finally:
-        os.close(directory)
-    with os.fdopen(descriptor, "rb") as stream:
-        _same_open_file(stream, path)
-        yield stream
-        contained_file(root, path)
-        _same_open_file(stream, path)
+    else:
+        # Keep each Unix directory descriptor while traversing it; no component can redirect an open.
+        directory = _directory_descriptor(path.parent)
+        try:
+            descriptor = os.open(
+                path.name,
+                os.O_RDONLY | int(getattr(os, "O_NOFOLLOW")),
+                dir_fd=directory,
+            )
+        finally:
+            os.close(directory)
+        with os.fdopen(descriptor, "rb") as stream:
+            _same_open_file(stream, path)
+            yield stream
+            contained_file(root, path)
+            _same_open_file(stream, path)
 
 
 def _same_open_file(stream: BinaryIO, path: Path) -> None:

@@ -3,10 +3,11 @@
 //! Verify original deadline selection and cleanup wake cadence without an OS event loop.
 use super::*;
 use std::time::Duration;
+use sugarsubstitute_execution::qualification_time::anchor;
 
 #[test]
 fn preparation_preserves_the_earliest_original_deadline_including_expired_equality() {
-    let now = Instant::now();
+    let now = anchor();
     let later = now + Duration::from_secs(30);
     let earlier = now + Duration::from_secs(2);
     assert_eq!(
@@ -23,7 +24,7 @@ fn preparation_preserves_the_earliest_original_deadline_including_expired_equali
 
 #[test]
 fn closing_ignores_expired_wake_deadlines_without_renewing_future_owner_deadlines() {
-    let now = Instant::now();
+    let now = anchor();
     let original = now + Duration::from_millis(1);
     assert_eq!(preparation_wait(true, Some(original), None, now), ControlFlow::WaitUntil(original));
     assert_eq!(preparation_wait(true, Some(now), None, now), crate::cadence::closing_wait(now));

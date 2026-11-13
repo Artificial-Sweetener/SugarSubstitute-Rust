@@ -14,6 +14,9 @@ use sugarsubstitute_contracts::{
 };
 use sugarsubstitute_update::fixture::NOW;
 
+/// The fixed UTC Unix time the seeded historical selection is prepared at; it decides nothing.
+const HISTORY_PREPARED_AT: u64 = 1_800_000_000;
+
 /// Exercise the authenticated import/stage path rather than editing candidate records directly.
 fn package(
     root: &Path,
@@ -75,11 +78,7 @@ fn recovery_preserves_history_user_files_and_damaged_candidate_without_applicati
                 )?,
             };
             history = history
-                .prepare(
-                    generation.clone(),
-                    PreparationIntent::Automatic,
-                    crate::setup_storage::selection::unix_now()?,
-                )?
+                .prepare(generation.clone(), PreparationIntent::Automatic, HISTORY_PREPARED_AT)?
                 .prepared(&generation)?
                 .begin_trial()?;
             let Some(Candidate::Trial { attempt }) = history.candidate() else {
@@ -149,12 +148,14 @@ fn a_second_abandoned_trial_withholds_the_digest_and_explicit_repair_restages_it
         let withheld = trust.updater_selection(context)?;
         assert!(withheld.candidate().is_none());
         assert_eq!(withheld.rollback(), Some(&attempt.generation));
-        assert!(
-            withheld.withheld(
-                &attempt.generation.package,
-                crate::setup_storage::selection::unix_now()?
-            )
-        );
+        // Staging dates the strike itself; at that instant the digest is withheld.
+        let struck_at = withheld
+            .strikes()
+            .iter()
+            .find(|strike| strike.package == attempt.generation.package)
+            .map(|strike| strike.at)
+            .ok_or("Strike absent")?;
+        assert!(withheld.withheld(&attempt.generation.package, struck_at));
         let repaired = package(
             root.path(),
             workspace.path(),

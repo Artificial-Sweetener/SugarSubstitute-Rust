@@ -113,7 +113,8 @@ fn viewport_success_retains_correlation_and_requires_an_observed_snapshot()
         CanvasSurfaceReplyStatus::Unavailable,
         CanvasSurfaceReplyStatus::Error,
     ] {
-        let reply: Value = serde_json::from_slice(&request.reply(status, "")?)?;
+        let message = if status == CanvasSurfaceReplyStatus::Error { "Camera failed" } else { "" };
+        let reply: Value = serde_json::from_slice(&request.reply(status, message)?)?;
         assert_eq!(reply["type"], "surface.reply");
         assert!(reply.get("viewport").is_none());
     }

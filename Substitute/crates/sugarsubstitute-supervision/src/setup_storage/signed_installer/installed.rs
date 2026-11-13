@@ -44,8 +44,11 @@ impl SignedCandidate {
         now: impl FnMut() -> i64,
         context: &JobContext,
     ) -> Result<InstalledCandidate, TrustFailure> {
+        let CandidateAuthority::Offer(offer) = &self.authority else {
+            return Err(invalid("An explicit installation requires current signed metadata").into());
+        };
         let authorization = self.candidate.authorize_installation(
-            &self.offer.authorization(&self.trust),
+            &offer.authorization(&self.trust),
             now,
             context,
         )?;

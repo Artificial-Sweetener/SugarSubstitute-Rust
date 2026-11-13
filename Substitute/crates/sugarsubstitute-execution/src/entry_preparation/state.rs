@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain native state, copied allocations and first causes outside provider unwind.
 
-use super::{cause::EntryEnvironmentCause, port::EnvironmentPort};
+use super::cause::EntryEnvironmentCause;
+#[cfg(any(windows, test))]
+use super::port::EnvironmentPort;
 
 /// Observe the original capture's phase independently of its job's terminal state.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -30,6 +32,7 @@ pub enum EntryEnvironmentPhase {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg(any(windows, test))]
 pub(crate) enum CaptureDisposition {
     Copied,
     Failed,
@@ -40,16 +43,20 @@ pub(crate) enum CaptureDisposition {
 /// The admitted outer owner protects this allocation with its original full claim;
 /// Core receives passive metadata only, never this provider or a native pointer.
 pub(crate) struct NativeCapture {
+    #[cfg(any(windows, test))]
     pub(super) port: Box<dyn EnvironmentPort>,
     pub(super) phase: EntryEnvironmentPhase,
     pub(super) inspected: usize,
+    #[cfg(any(windows, test))]
     pub(super) units: Option<Vec<u16>>,
+    #[cfg(any(windows, test))]
     pub(super) first: Option<EntryEnvironmentCause>,
     pub(super) secondary: [Option<EntryEnvironmentCause>; 8],
     pub(super) omitted: u64,
     pub(super) native_settled: bool,
 }
 impl NativeCapture {
+    #[cfg(any(windows, test))]
     pub(crate) fn new(port: Box<dyn EnvironmentPort>) -> Self {
         Self {
             port,
@@ -69,6 +76,7 @@ impl NativeCapture {
     pub(crate) fn first_cause(&self) -> Option<&EntryEnvironmentCause> {
         self.first.as_ref()
     }
+    #[cfg(any(windows, test))]
     pub(super) fn record(&mut self, cause: EntryEnvironmentCause) {
         if self.first.is_none() {
             self.first = Some(cause);
@@ -78,6 +86,7 @@ impl NativeCapture {
             self.omitted = self.omitted.saturating_add(1);
         }
     }
+    #[cfg(any(windows, test))]
     pub(super) fn disposition(&self) -> CaptureDisposition {
         if self.phase == EntryEnvironmentPhase::RetirementUncertain {
             CaptureDisposition::RetirementUncertain
@@ -89,6 +98,7 @@ impl NativeCapture {
     }
     /// Move units only within the sealed owner implementation after checked release.
     /// This internal operation does not transfer or release the outer full claim.
+    #[cfg(any(windows, test))]
     pub(crate) fn take_units(&mut self) -> Option<Vec<u16>> {
         if self.phase != EntryEnvironmentPhase::Released || self.first.is_some() {
             return None;

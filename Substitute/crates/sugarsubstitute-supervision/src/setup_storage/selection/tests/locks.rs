@@ -100,7 +100,7 @@ fn exercise(
             let successor = initial.prepare(
                 generation(1)?,
                 PreparationIntent::Automatic,
-                crate::setup_storage::selection::unix_now()?,
+                super::PREPARED_AT,
             )?;
             handoff.reach(READY);
             handoff.wait(HELD);

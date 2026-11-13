@@ -5,6 +5,7 @@
 use sugarsubstitute_contracts::configuration::{LoopbackHost, LoopbackOrigin};
 
 /// Maximum untrusted native navigation URL length, in UTF-8 bytes.
+#[cfg(any(target_os = "windows", test))]
 pub(crate) const MAX_URL_BYTES: usize = 4096;
 
 /// Construct the sole initial served root URL from validated domain data.
@@ -34,6 +35,7 @@ pub(crate) fn panel_root_url(
 
 /// Validate raw authority before URL parsing can normalize alternate host spelling.
 /// Frame and top-document paths remain with the unchanged served frontend.
+#[cfg(any(target_os = "windows", test))]
 pub(crate) fn admits_url(origin: LoopbackOrigin, value: &str) -> bool {
     if value.len() > MAX_URL_BYTES || value.contains('\0') {
         return false;

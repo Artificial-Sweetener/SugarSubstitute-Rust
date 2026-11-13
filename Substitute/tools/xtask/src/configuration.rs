@@ -131,7 +131,7 @@ pub(crate) fn check(
         )?;
         require(
             fingerprint(root, std::slice::from_ref(&record.path))? == record.source_sha256,
-            format!("configuration: stale source {}", record.path),
+            format!("configuration: stale source {}; {}", record.path, crate::fingerprints::RESYNC),
         )?;
     }
     let mut used = BTreeMap::new();

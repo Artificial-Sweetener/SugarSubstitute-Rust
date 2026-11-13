@@ -10,7 +10,7 @@ use crate::{
     error::{Failure, Result, read, require},
     execution, infrastructure, localization, networking,
     policy::{self, Architecture, Debt, Records, Testing, Waiver},
-    shared_components, structure, testing, ui, vendor,
+    shared_components, shared_vectors, structure, testing, ui, vendor,
     workspace::Workspace,
 };
 
@@ -64,6 +64,7 @@ pub(crate) fn check(root: &Path) -> Result<()> {
     let persistence: catalog::Persistence =
         policy::load(root, "governance/persistence/catalog.toml")?;
     catalog::check_persistence(root, &architecture, &persistence, &vendors, &shared)?;
+    shared_vectors::check(root, &shared, &persistence)?;
     let caches: catalog::Caches = policy::load(root, "governance/cache/catalog.toml")?;
     catalog::check_caches(root, &architecture, &caches)?;
     let storage: cache_storage::Storage = policy::load(root, "governance/cache/storage.toml")?;

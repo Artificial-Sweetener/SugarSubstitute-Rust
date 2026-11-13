@@ -11,6 +11,7 @@ struct Sources {
     observed: u64,
 }
 impl PreparationSources {
+    #[cfg(any(windows, test))]
     pub(super) fn new() -> Self {
         Self(Mutex::new(Sources { retained: std::array::from_fn(|_| None), observed: 0 }))
     }

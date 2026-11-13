@@ -76,7 +76,7 @@ impl IncidentReporting {
             return Ok(());
         }
         if self.session.is_none() && !self.session_installed {
-            self.session = Some(resources.client.reserve_diagnostic_pipe_server(
+            self.session = Some(resources.client.reserve_purpose_pipe_server(
                 resources.native,
                 JobSpec {
                     id: resources.jobs.allocate()?,
@@ -86,7 +86,7 @@ impl IncidentReporting {
                     reservation_bytes: MIN_LIFECYCLE_PIPE_BYTES,
                     replacement: None,
                 },
-                self.key.ok_or("Actual diagnostic key missing")?,
+                PurposeKey::Diagnostic(self.key.ok_or("Actual diagnostic key missing")?),
                 until,
             )?);
         }

@@ -466,9 +466,10 @@ impl Fixture {
         };
         assert_eq!(reply.identity(), self.identity);
         let value: Value = serde_json::from_slice(reply.payload())?;
-        assert_eq!(value["requestId"], id);
-        assert_eq!(value["status"], status);
+        assert_eq!(value["requestId"], id, "{value}");
+        assert_eq!(value["status"], status, "{value}");
         assert_eq!(value["session"], self.panel.as_str());
+        super::super::says_what_happened(&value);
         Ok(value)
     }
 

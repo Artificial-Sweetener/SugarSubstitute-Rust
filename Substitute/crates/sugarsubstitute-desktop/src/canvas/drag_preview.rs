@@ -20,6 +20,7 @@ pub(crate) mod imaging;
 pub const DRAG_PREVIEW_CEILING: [u32; 2] = [1152, 1152];
 
 /// Share of the monitor's available area a drag preview fits, as CuteCanvas sized it.
+#[cfg(any(target_os = "windows", test))]
 pub(crate) const MONITOR_SHARE: f64 = 0.15;
 
 /// One output's drag preview: straight-alpha RGBA rows, top row first, and the output's own size
@@ -109,6 +110,7 @@ impl DragPreview {
 
 /// Scale `size` to fit `bound` keeping its aspect ratio, enlarging or shrinking, with the
 /// integer rounding of Qt's `QSize::scaled(bound, Qt::KeepAspectRatio)`.
+#[cfg(any(target_os = "windows", test))]
 pub(crate) fn keep_aspect(
     [width, height]: [u32; 2],
     [bound_width, bound_height]: [u32; 2],
@@ -127,12 +129,14 @@ pub(crate) fn keep_aspect(
 /// The preview size the drag shows on a monitor whose available area is `available` physical
 /// pixels: CuteCanvas's 15% share on each axis, rounded half to even as its Python sizing
 /// rounded, and at least one pixel.
+#[cfg(any(target_os = "windows", test))]
 pub(crate) fn monitor_bound(available: [u32; 2]) -> [u32; 2] {
     available.map(|edge| ((f64::from(edge) * MONITOR_SHARE).round_ties_even() as u32).max(1))
 }
 
 /// The size the worker keeps for an output of `source` pixels: the output itself when it fits
 /// `bound`, otherwise its aspect-preserving fit.
+#[cfg(any(target_os = "windows", test))]
 pub(crate) fn worker_size(source: [u32; 2], bound: [u32; 2]) -> [u32; 2] {
     if source[0] <= bound[0] && source[1] <= bound[1] {
         source
@@ -143,6 +147,7 @@ pub(crate) fn worker_size(source: [u32; 2], bound: [u32; 2]) -> [u32; 2] {
 
 /// Straight-alpha RGBA pixels of one drag image or cursor artwork, top row first.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg(any(target_os = "windows", test))]
 pub(crate) struct Rgba {
     pub(crate) size: [u32; 2],
     pub(crate) pixels: Vec<u8>,
@@ -150,6 +155,7 @@ pub(crate) struct Rgba {
 
 /// How far right and down of the pointer the preview starts: Qt's default drag hot spot is
 /// (-10, -10), which places the drag pixmap 10 pixels from the cursor's own hotspot.
+#[cfg(any(target_os = "windows", test))]
 pub(crate) const PREVIEW_OFFSET: u32 = 10;
 
 /// Compose the cursor a drag shows, as Qt's Windows drag source composes a drag pixmap with its
@@ -159,6 +165,7 @@ pub(crate) const PREVIEW_OFFSET: u32 = 10;
 ///
 /// # Errors
 /// Rejects pixel buffers that do not match their sizes.
+#[cfg(any(target_os = "windows", test))]
 pub(crate) fn drag_cursor(preview: &Rgba, cursor: &Rgba) -> Result<Rgba, DesktopError> {
     for image in [preview, cursor] {
         if image.pixels.len() as u64 != u64::from(image.size[0]) * u64::from(image.size[1]) * 4 {
@@ -189,6 +196,7 @@ pub(crate) fn drag_cursor(preview: &Rgba, cursor: &Rgba) -> Result<Rgba, Desktop
 }
 
 /// Draw one straight-alpha source pixel over a straight-alpha target pixel.
+#[cfg(any(target_os = "windows", test))]
 fn over((target, source): (&mut [u8], &[u8])) {
     let source_alpha = u32::from(source[3]);
     let target_alpha = u32::from(target[3]) * (255 - source_alpha) / 255;

@@ -1,0 +1,205 @@
+name: SugarSubstitute update repository
+
+# Keeps the signed update repository valid with the lifetimes installations expect: the
+# timestamp (14 days) is re-signed daily, targets and snapshot (90 days) monthly and at each
+# release, and root (1 year) is rotated on request. The repository is the flat set of assets on
+# the GitHub release named by UPDATE_REPOSITORY_RELEASE; TRUSTED_ROOT is the root installations
+# ship with. Every run builds the signing tool from this commit. The tool authenticates the
+# published state from that root, signs the next state, and has the application's own verifier
+# accept it as an installation that already trusted the published state, before anything is
+# written. Uploads follow the order the tool reports: new versioned metadata, then channel
+# descriptors, then timestamp.json, the file installations read first.
+#
+# Publishing to the repository is publication like any release: `authorize` lets it happen only
+# while the repository variable RELEASES_ENABLED is exactly "true". Until then scheduled runs end
+# there without doing anything, and a dispatched run fails with the reason.
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+    - cron: "41 4 1 * *"
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: "What to sign"
+        required: true
+        default: refresh-timestamp
+        type: choice
+        options:
+          - refresh-timestamp
+          - resign
+          - rotate-root
+  workflow_call:
+    inputs:
+      operation:
+        description: "release, resign or refresh-timestamp"
+        required: true
+        type: string
+      targets_artifact:
+        description: "Artifact holding the package and channel descriptor files of a release"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: substitute-update-repository
+  cancel-in-progress: false
+
+env:
+  UPDATE_REPOSITORY_RELEASE: substitute-updates
+  TRUSTED_ROOT: .github/update-repository/root.json
+  MONTHLY_SCHEDULE: "41 4 1 * *"
+  ROOT_WARNING_DAYS: "60"
+
+jobs:
+  authorize:
+    name: Decide whether this run may publish
+    runs-on: ubuntu-24.04
+    outputs:
+      publish: ${{ steps.decide.outputs.publish }}
+      operation: ${{ steps.decide.outputs.operation }}
+    steps:
+      - name: Decide
+        id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          REQUESTED: ${{ inputs.operation }}
+          SCHEDULE: ${{ github.event.schedule }}
+          RELEASES_ENABLED: ${{ vars.RELEASES_ENABLED }}
+        run: |
+          if [ -n "$REQUESTED" ]; then
+            operation="$REQUESTED"
+          elif [ "$SCHEDULE" = "$MONTHLY_SCHEDULE" ]; then
+            operation=resign
+          else
+            operation=refresh-timestamp
+          fi
+          case "$operation" in
+            refresh-timestamp|resign|release|rotate-root) ;;
+            *) echo "::error::Unknown operation $operation"; exit 1 ;;
+          esac
+          echo "operation=$operation" >> "$GITHUB_OUTPUT"
+          if [ "$RELEASES_ENABLED" = "true" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          elif [ "$EVENT" = "schedule" ]; then
+            echo "Publication is switched off (RELEASES_ENABLED is not \"true\"); nothing to sign."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Publication is switched off: the repository variable RELEASES_ENABLED is not \"true\"."
+            exit 1
+          fi
+
+  sign:
+    name: Sign the update repository
+    needs: authorize
+    if: needs.authorize.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: update-signing
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Require the trusted root installations ship with
+        run: |
+          if [ ! -f "$TRUSTED_ROOT" ]; then
+            echo "::error::$TRUSTED_ROOT is missing. Create the repository offline with the tool's init command, publish its files to the $UPDATE_REPOSITORY_RELEASE release and commit 1.root.json there."
+            exit 1
+          fi
+          echo "TRUSTED=$PWD/$TRUSTED_ROOT" >> "$GITHUB_ENV"
+
+      - name: Build the signing tool with the repository-pinned Rust
+        working-directory: Substitute
+        run: |
+          rustup show active-toolchain
+          cargo build --locked --release --package sugarsubstitute-update-repository
+          echo "TOOL=$PWD/target/release/sugarsubstitute-update-repository" >> "$GITHUB_ENV"
+
+      - name: Download the published metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          repository="$RUNNER_TEMP/update-repository"
+          previous="$RUNNER_TEMP/published"
+          mkdir "$repository" "$previous"
+          gh release download "$UPDATE_REPOSITORY_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --dir "$repository" --pattern '*.json'
+          cp "$repository"/*.json "$previous"/
+          echo "REPOSITORY=$repository" >> "$GITHUB_ENV"
+          echo "PREVIOUS=$previous" >> "$GITHUB_ENV"
+
+      - name: Download the release targets
+        if: needs.authorize.outputs.operation == 'release'
+        uses: actions/download-artifact@v5
+        with:
+          name: ${{ inputs.targets_artifact }}
+          path: ${{ runner.temp }}/targets
+
+      - name: Sign and verify
+        env:
+          OPERATION: ${{ needs.authorize.outputs.operation }}
+          UPDATE_TIMESTAMP_KEY: ${{ secrets.UPDATE_TIMESTAMP_KEY }}
+          UPDATE_SNAPSHOT_KEY: ${{ needs.authorize.outputs.operation != 'refresh-timestamp' && secrets.UPDATE_SNAPSHOT_KEY || '' }}
+          UPDATE_TARGETS_KEY: ${{ needs.authorize.outputs.operation != 'refresh-timestamp' && secrets.UPDATE_TARGETS_KEY || '' }}
+          UPDATE_ROOT_KEY: ${{ needs.authorize.outputs.operation == 'rotate-root' && secrets.UPDATE_ROOT_KEY || '' }}
+          UPDATE_NEXT_ROOT_KEY: ${{ needs.authorize.outputs.operation == 'rotate-root' && secrets.UPDATE_NEXT_ROOT_KEY || '' }}
+        run: |
+          now="$(date -u +%s)"
+          common=(--repository "$REPOSITORY" --trusted-root "$TRUSTED" --now "$now"
+            --written "$RUNNER_TEMP/written.txt")
+          online=(--targets-key env:UPDATE_TARGETS_KEY --snapshot-key env:UPDATE_SNAPSHOT_KEY
+            --timestamp-key env:UPDATE_TIMESTAMP_KEY)
+          case "$OPERATION" in
+            refresh-timestamp)
+              "$TOOL" refresh-timestamp "${common[@]}" --timestamp-key env:UPDATE_TIMESTAMP_KEY ;;
+            resign)
+              "$TOOL" resign "${common[@]}" "${online[@]}" ;;
+            release)
+              targets=()
+              for file in "$RUNNER_TEMP"/targets/*; do targets+=(--target "$file"); done
+              "$TOOL" release "${common[@]}" "${online[@]}" "${targets[@]}" ;;
+            rotate-root)
+              next=env:UPDATE_ROOT_KEY
+              if [ -n "$UPDATE_NEXT_ROOT_KEY" ]; then next=env:UPDATE_NEXT_ROOT_KEY; fi
+              "$TOOL" rotate-root "${common[@]}" --current-root-key env:UPDATE_ROOT_KEY \
+                --root-key "$next" "${online[@]}" ;;
+          esac
+          echo "SIGNED_AT=$now" >> "$GITHUB_ENV"
+
+      - name: Verify as an installation that trusted the published state
+        run: |
+          files=()
+          if [ -d "$RUNNER_TEMP/targets" ]; then files=(--files "$RUNNER_TEMP/targets"); fi
+          "$TOOL" verify --repository "$REPOSITORY" --trusted-root "$TRUSTED" --now "$SIGNED_AT" \
+            --previous "$PREVIOUS" "${files[@]}" | tee "$RUNNER_TEMP/report.txt"
+          read -r _ root_version root_expires < <(grep '^root ' "$RUNNER_TEMP/report.txt")
+          remaining=$(( (root_expires - SIGNED_AT) / 86400 ))
+          if [ "$remaining" -lt "$ROOT_WARNING_DAYS" ]; then
+            echo "::warning::Root $root_version expires in $remaining days; dispatch rotate-root with the root key."
+          fi
+
+      - name: Publish packages, then metadata, descriptors and the timestamp in signing order
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          upload() { gh release upload "$UPDATE_REPOSITORY_RELEASE" --repo "$GITHUB_REPOSITORY" "$@"; }
+          [ "$(tail -n 1 "$RUNNER_TEMP/written.txt")" = "timestamp.json" ]
+          # Packages are content-addressed and never replaced.
+          if [ -d "$RUNNER_TEMP/targets" ]; then
+            for file in "$RUNNER_TEMP"/targets/*.ssupdate; do if [ -e "$file" ]; then upload "$file"; fi; done
+          fi
+          # Versioned metadata is new and never replaced; descriptors keep fixed names and the
+          # timestamp that authorises them comes last.
+          while read -r name; do
+            case "$name" in
+              [0-9]*.json) upload "$REPOSITORY/$name" ;;
+              *) upload --clobber "$REPOSITORY/$name" ;;
+            esac
+          done < "$RUNNER_TEMP/written.txt"

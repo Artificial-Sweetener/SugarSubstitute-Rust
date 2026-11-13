@@ -1,0 +1,224 @@
+{
+  "exchanges": [
+    {
+      "host": [
+        {
+          "capabilities": [
+            {
+              "name": "presentation.system-accent"
+            },
+            {
+              "name": "output.host-surface"
+            }
+          ],
+          "protocol": "sugarcubes.host",
+          "protocols": [
+            {
+              "name": "sugarcubes.panel",
+              "version": 3
+            },
+            {
+              "name": "sugarcubes.canvas",
+              "version": 3
+            },
+            {
+              "name": "sugarcubes.memory",
+              "version": 1
+            },
+            {
+              "name": "sugarcubes.updates",
+              "version": 1
+            }
+          ],
+          "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+          "type": "description",
+          "version": 1
+        },
+        {
+          "presentation": {
+            "accentColor": "#0078d4",
+            "pluginMode": false,
+            "resizeCornerSize": 0,
+            "visualStyle": "comfy"
+          },
+          "protocol": "sugarcubes.panel",
+          "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+          "type": "configure",
+          "version": 3
+        }
+      ],
+      "page": {
+        "protocol": "sugarcubes.panel",
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "ready",
+        "version": 3
+      }
+    },
+    {
+      "host": [
+        {
+          "protocol": "sugarcubes.panel",
+          "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+          "type": "ping",
+          "version": 3
+        }
+      ],
+      "page": {
+        "protocol": "sugarcubes.panel",
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "applied",
+        "version": 3
+      }
+    },
+    {
+      "host": [
+        {
+          "capabilities": {
+            "comparison": false,
+            "imageFormats": [],
+            "input": false,
+            "overview": false,
+            "previewFormats": [],
+            "schema": 3,
+            "viewportCommands": [],
+            "viewportState": false
+          },
+          "message": "",
+          "protocol": "sugarcubes.canvas",
+          "requestId": 1,
+          "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+          "status": "unavailable",
+          "type": "surface.capabilities.reply",
+          "version": 3
+        }
+      ],
+      "page": {
+        "protocol": "sugarcubes.canvas",
+        "requestId": 1,
+        "schema": 3,
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "surface.capabilities.request",
+        "version": 3
+      }
+    },
+    {
+      "host": [
+        {
+          "capabilities": {
+            "comparison": false,
+            "imageFormats": [],
+            "input": false,
+            "overview": false,
+            "previewFormats": [],
+            "schema": 3,
+            "viewportCommands": [],
+            "viewportState": false
+          },
+          "message": "",
+          "protocol": "sugarcubes.canvas",
+          "requestId": 2,
+          "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+          "status": "unavailable",
+          "type": "surface.capabilities.reply",
+          "version": 3
+        }
+      ],
+      "page": {
+        "protocol": "sugarcubes.canvas",
+        "requestId": 2,
+        "schema": 1003,
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "surface.capabilities.request",
+        "version": 3
+      }
+    },
+    {
+      "host": [
+        {
+          "allowanceBytes": 0,
+          "ceilingBytes": 4294967296,
+          "generation": 1,
+          "level": "normal",
+          "preference": {
+            "mode": "share",
+            "percent": 25
+          },
+          "protocol": "sugarcubes.memory",
+          "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+          "totalBytes": 17179869184,
+          "type": "allowance",
+          "version": 1
+        }
+      ],
+      "page": {
+        "preference": {
+          "mode": "share",
+          "percent": 25
+        },
+        "protocol": "sugarcubes.memory",
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "preference",
+        "version": 1
+      }
+    },
+    {
+      "host": [],
+      "page": {
+        "consumers": [],
+        "demandBytes": 0,
+        "protocol": "sugarcubes.memory",
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "usage",
+        "usedBytes": 0,
+        "version": 1
+      }
+    },
+    {
+      "host": [
+        {
+          "protocol": "sugarcubes.updates",
+          "revision": 1,
+          "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+          "type": "state",
+          "update": {
+            "channel": "stable",
+            "currentVersion": "0.1.0",
+            "previousVersionRunning": false,
+            "scheduledRestart": "none",
+            "status": {
+              "state": "up-to-date"
+            },
+            "workflowRunning": false
+          },
+          "version": 1
+        }
+      ],
+      "page": {
+        "protocol": "sugarcubes.updates",
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "watch",
+        "version": 1
+      }
+    },
+    {
+      "host": [
+        {
+          "protocol": "sugarcubes.updates",
+          "reason": "unavailable",
+          "request": "conformance-check",
+          "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+          "type": "rejected",
+          "version": 1
+        }
+      ],
+      "page": {
+        "protocol": "sugarcubes.updates",
+        "request": "conformance-check",
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "check",
+        "version": 1
+      }
+    }
+  ],
+  "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb"
+}

@@ -2,10 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Verify pure invocation/codec/evidence decisions without claiming native authentication.
 use super::*;
-use std::{
-    ffi::OsString,
-    time::{Duration, Instant},
-};
+use std::{ffi::OsString, time::Duration};
 use sugarsubstitute_contracts::{
     execution::Moment,
     lifecycle::{
@@ -13,6 +10,7 @@ use sugarsubstitute_contracts::{
         ProcessKey, RequestId, RunGeneration, RunKey, ShutdownId,
     },
 };
+use sugarsubstitute_execution::qualification_time::anchor;
 use sugarsubstitute_supervision::{
     RegistryObservation,
     lifecycle_protocol::{CapabilityRef, DecodedPayload, FrameCodec, WirePayload},
@@ -167,7 +165,7 @@ fn negative_disconnect_is_exact_native_stage_code_without_fatal_facts() {
 
 #[test]
 fn stop_uses_canonical_ten_fifteen_budget_once_and_late_cleanup_is_not_success() -> Result<()> {
-    let native = Instant::now();
+    let native = anchor();
     let mut stop = evidence::Stop::new(ShutdownId::new(1)?, Moment::from_nanos(0), native)?;
     assert_eq!(stop.next_deadline(), native.checked_add(Duration::from_secs(10)));
     assert_eq!(stop.due(Moment::from_nanos(9_999_999_999), false), (false, false));

@@ -13,7 +13,7 @@ from unittest.mock import Mock, patch
 
 from tools import updater_native_support as native
 from tools.updater_publication_qualification import (
-    Qualification, validate_paths, require_selection_preserved,
+    Qualification, settle, validate_paths, require_selection_preserved,
     payload_cache_root, payload_generations, require_payload_reuse,
 )
 
@@ -298,6 +298,35 @@ class PublicationBoundaries(unittest.TestCase):
         launcher, backup, original = self.failed_attempt(replace_launcher=True)
         self.assertEqual(launcher.read_bytes(), b'unknown replacement')
         self.assertEqual(backup.read_bytes(), original)
+
+
+class FamilySettlement(unittest.TestCase):
+    """Settlement fails only on a family that stops changing, never on elapsed time alone."""
+
+    def owner(self, families):
+        owner = Mock(name='retained fixture owner')
+        owner.alive.side_effect = families
+        return owner
+
+    def test_a_slowly_retiring_family_settles_however_long_it_takes(self):
+        now = [0.0]
+        families = [[10, 11, 12], [10, 11], [10], []]
+
+        def pause(_):
+            now[0] += 500
+
+        settle(self.owner(families), {}, stall=600, clock=lambda: now[0], pause=pause)
+        self.assertEqual(now[0], 1500)
+
+    def test_an_unchanged_family_fails_after_the_whole_stall(self):
+        now = [0.0]
+
+        def pause(_):
+            now[0] += 100
+
+        with self.assertRaisesRegex(RuntimeError, r'\[10\] made no progress for 600 seconds'):
+            settle(self.owner([[10]] * 20), {}, stall=600, clock=lambda: now[0], pause=pause)
+        self.assertEqual(now[0], 600)
 
 
 class NativeRunObservation(unittest.TestCase):

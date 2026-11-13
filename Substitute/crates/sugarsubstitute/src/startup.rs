@@ -24,10 +24,13 @@ mod consume_diagnostic;
 mod delivery;
 #[path = "startup/execution.rs"]
 mod execution;
+#[cfg(all(windows, any(feature = "windows-native-host", test)))]
+#[path = "startup/host_updates.rs"]
+mod host_updates;
 #[path = "startup/lifetime.rs"]
 mod lifetime;
 #[cfg(all(windows, any(feature = "windows-native-host", test)))]
-mod memory;
+pub(crate) mod memory;
 #[path = "startup/policy.rs"]
 mod policy;
 #[path = "startup/routing.rs"]
@@ -36,10 +39,17 @@ mod routing;
 mod scopes;
 #[path = "startup/shutdown.rs"]
 mod shutdown;
+#[cfg(windows)]
+#[path = "startup/update_report.rs"]
+mod update_report;
+#[cfg(all(windows, any(feature = "windows-native-host", test)))]
+pub(crate) mod updates_page;
 #[path = "startup/view.rs"]
 pub(crate) mod view;
 #[path = "startup/window_content.rs"]
 mod window_content;
+#[path = "startup/workflow_restart.rs"]
+mod workflow_restart;
 
 mod appearance;
 mod backend;
@@ -58,6 +68,8 @@ pub use backend::{BackendResult, PreparedStartup, StartupBackend};
 #[cfg(all(windows, feature = "native-composition"))]
 mod workspace;
 use execution::StartupExecution;
+mod host_clock;
+pub use host_clock::HostClock;
 use policy::StartupPolicy;
 pub use scopes::StartupScopes;
 pub use shutdown_origin::ShutdownInitiation;
@@ -78,7 +90,6 @@ use sugarsubstitute_desktop::{
     AccessibleControl, DesktopStartupCommand, DesktopStartupObservation, HitTarget, KeyAction,
     Pointer, PointerAction, StartupPreparationStep, StartupWindowContent, WindowContent,
 };
-use sugarsubstitute_execution::MonotonicClock;
 use view::StartupView;
 
 #[cfg(test)]
@@ -91,6 +102,9 @@ pub struct StartupHost<B: StartupBackend> {
     /// The application memory budget, governing once a canvas exists.
     #[cfg(all(windows, any(feature = "windows-native-host", test)))]
     memory: Option<memory::MemoryGovernor>,
+    /// The page's update state and its check and restart answers.
+    #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+    updates: updates_page::UpdatesPage,
     #[cfg(all(windows, feature = "native-composition"))]
     composition: Option<composition::CompositionWork>,
     #[cfg(all(windows, feature = "native-composition"))]
@@ -99,7 +113,7 @@ pub struct StartupHost<B: StartupBackend> {
     startup: Option<B::Prepared>,
     child: B,
     execution: StartupExecution,
-    clock: Arc<MonotonicClock>,
+    clock: Arc<dyn HostClock>,
     jobs: JobSequence,
     scopes: StartupScopes,
     preparation: Option<PreparationDriver>,
@@ -121,6 +135,11 @@ pub struct StartupHost<B: StartupBackend> {
     /// The close save, once the shutdown budget was measured.
     close_save: Option<sugarsubstitute_application::workspace_session::close_save::CloseSave>,
     close_record_submitted: bool,
+    /// A restart to apply that waits for the backend's running workflow.
+    workflow_restart: workflow_restart::WorkflowRestart,
+    /// Exports of the update report to files the user selects.
+    #[cfg(windows)]
+    update_reports: Option<update_report::UpdateReports>,
     /// The short graceful cutoff of a critical session end, which waits for nothing.
     critical_until: Option<sugarsubstitute_contracts::execution::Moment>,
     #[cfg(all(test, windows, feature = "native-composition"))]
@@ -138,7 +157,7 @@ pub(crate) fn constructor_roundtrip<B: StartupBackend>(
         run,
         launch,
         child,
-        MonotonicClock::new(),
+        sugarsubstitute_execution::MonotonicClock::new(),
         jobs,
         StartupScopes {
             child: sugarsubstitute_contracts::execution::ScopeSpec {
@@ -162,7 +181,7 @@ impl<B: StartupBackend> StartupHost<B> {
         run: RunKey,
         launch: LaunchId,
         child: B,
-        clock: Arc<MonotonicClock>,
+        clock: Arc<dyn HostClock>,
         jobs: JobSequence,
         scopes: StartupScopes,
     ) -> Result<Self, Box<dyn Error>> {
@@ -172,6 +191,8 @@ impl<B: StartupBackend> StartupHost<B> {
             canvas: None,
             #[cfg(all(windows, any(feature = "windows-native-host", test)))]
             memory: None,
+            #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+            updates: updates_page::UpdatesPage::new()?,
             #[cfg(all(windows, feature = "native-composition"))]
             composition: None,
             #[cfg(all(windows, feature = "native-composition"))]
@@ -201,6 +222,9 @@ impl<B: StartupBackend> StartupHost<B> {
                 sugarsubstitute_application::workspace_session::close_save::CloseReason::Close,
             close_save: None,
             close_record_submitted: false,
+            workflow_restart: workflow_restart::WorkflowRestart::default(),
+            #[cfg(windows)]
+            update_reports: None,
             critical_until: None,
             #[cfg(all(test, windows, feature = "native-composition"))]
             input_probe: None,
@@ -238,6 +262,8 @@ impl<B: StartupBackend> WindowContent for StartupHost<B> {
         view.sample(startup.session().phase(), elapsed, Instant::now());
         if self.child.cleanup_failed() {
             view.appearance.status = sugarsubstitute_splash::StartupStatus::CleanupFailed;
+        } else if let Some(status) = window_content::updating(&self.child, view.appearance.status) {
+            view.appearance.status = status;
         }
         view.animation.tick(elapsed);
         let progress = view.progress();

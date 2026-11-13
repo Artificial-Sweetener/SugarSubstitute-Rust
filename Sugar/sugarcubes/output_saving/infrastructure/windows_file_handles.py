@@ -21,7 +21,11 @@ import ctypes
 from ctypes import wintypes
 import os
 from pathlib import Path
+import sys
 from typing import BinaryIO
+
+# Only Windows callers import this adapter; the assertion also scopes type checking to win32.
+assert sys.platform == "win32"
 
 
 def final_handle_path(handle: int) -> Path:

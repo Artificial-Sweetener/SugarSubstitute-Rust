@@ -26,3 +26,45 @@ impl TrustStore {
         Ok(())
     }
 }
+
+/// One fail-fast attempt at the installation-wide preparation owner, for work that must not
+/// overlap any preparation but must never wait for one.
+pub(in crate::setup_storage) enum PreparationAttempt {
+    /// This attempt holds preparation until the handle is dropped.
+    Held(File),
+    /// A live preparation holds it; nothing was changed.
+    Busy,
+    /// The installation has no update trust, so no updater can prepare anything.
+    Absent,
+}
+
+/// Try to take the preparation owner of the installation pinned at `installation` without
+/// opening its trust records, failing fast when another preparation holds it.
+/// Run on an admitted storage worker.
+/// # Errors
+/// Preserves native, protection and cancellation causes. Unsafe ownership never reads as busy.
+pub(in crate::setup_storage) fn try_preparation(
+    installation: &Directory,
+    context: &JobContext,
+) -> io::Result<PreparationAttempt> {
+    check(context)?;
+    let root = ownership::state_path(installation).join(DIRECTORY);
+    match files::inspect(&root, context) {
+        Ok(_) => {}
+        Err(cause) if cause.kind() == io::ErrorKind::NotFound => {
+            return Ok(PreparationAttempt::Absent);
+        }
+        Err(cause) => return Err(cause),
+    }
+    protection::with(context, |protection| {
+        protection.directory(&root, Mode::Existing, context)?;
+        let file = protection.rendezvous(&root.join(PREPARATION), context)?;
+        match file.try_lock() {
+            Ok(()) => {}
+            Err(std::fs::TryLockError::WouldBlock) => return Ok(PreparationAttempt::Busy),
+            Err(std::fs::TryLockError::Error(cause)) => return Err(cause),
+        }
+        check(context)?;
+        Ok(PreparationAttempt::Held(file))
+    })
+}

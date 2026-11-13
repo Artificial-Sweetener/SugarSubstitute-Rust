@@ -17,7 +17,9 @@ mod progress;
 pub use progress::StartupProgress;
 
 use std::{error::Error, fmt};
-use sugarsubstitute_contracts::startup::{ProbeFailure, StartupEvent, StartupFailure};
+use sugarsubstitute_contracts::startup::{
+    PageFailure, ProbeFailure, ReadinessFailure, StartupEvent, StartupFailure,
+};
 
 /// Identify the current acknowledged phase, independently of animation or log volume.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -119,6 +121,26 @@ pub enum SessionFailure {
     Adapter(StartupFailure),
     /// Bounded diagnostic transferred from a validated current frontend receipt.
     Frontend(ProbeFailure),
+}
+
+impl SessionFailure {
+    /// How this failure kept the attempt's page from loading, for judging a just-installed
+    /// SugarCubes. Only a page that reported SugarCubes itself unavailable or failed names
+    /// SugarCubes; every other failure (a frontend that never became usable, a probe that ran
+    /// out of time, an adapter failure) is unattributed.
+    pub fn page_failure(&self) -> PageFailure {
+        match self {
+            Self::Frontend(failure)
+                if matches!(
+                    failure.code,
+                    ReadinessFailure::SugarcubesUnavailable | ReadinessFailure::SugarcubesFailed
+                ) =>
+            {
+                PageFailure::Sugarcubes
+            }
+            Self::Frontend(_) | Self::Adapter(_) => PageFailure::Unattributed,
+        }
+    }
 }
 
 impl fmt::Display for SessionFailure {

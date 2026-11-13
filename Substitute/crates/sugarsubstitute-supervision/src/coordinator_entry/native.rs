@@ -37,8 +37,8 @@ pub(super) enum Elected {
     Fresh { origin: FreshRecordOrigin, inode: [u8; 24] },
     OrdinaryReleased { record: [u8; 128], inode: [u8; 24] },
     RecoveredHeld { record: [u8; 128], inode: [u8; 24], coordinator_inode: [u8; 24] },
-    Candidate(CoordinatorEpoch),
-    Contended,
+    Candidate { epoch: CoordinatorEpoch, holder: Option<super::EntryHolder> },
+    Contended(Option<super::EntryHolder>),
     Degraded(EntryOwnerDegradation),
 }
 pub(super) trait NativePort: Send + Sync {
@@ -345,14 +345,14 @@ pub(super) fn classify(
             origin: FreshRecordOrigin::Empty,
             inode: inode.ok_or_else(|| ClaimError::invalid("entry_missing_inode"))?,
         },
-        RecordRead::Missing | RecordRead::Empty => Elected::Contended,
+        RecordRead::Missing | RecordRead::Empty => Elected::Contended(None),
         RecordRead::Present(bytes) => match Record::decode(&bytes) {
             Ok(record)
                 if record.resource == 0
                     && record.owner.namespace == namespace
                     && record.state == RecordState::Held =>
             {
-                Elected::Candidate(record.owner.epoch)
+                Elected::Candidate { epoch: record.owner.epoch, holder: record.holder }
             }
             Ok(record)
                 if record.resource == 0
@@ -370,7 +370,7 @@ pub(super) fn classify(
                     && record.owner.namespace == namespace
                     && record.state == RecordState::Released =>
             {
-                Elected::Contended
+                Elected::Contended(record.holder)
             }
             _ => Elected::Degraded(EntryOwnerDegradation::RecordUnknown),
         },

@@ -26,6 +26,7 @@ fn the_input_final_save_is_submitted_before_the_exit_intent_and_its_failure_is_r
     let probe = fixture.host.input_probe.as_ref().ok_or("Probe")?;
     assert_eq!(probe.begun, Some(budget.graceful_until), "the input save began first");
     assert!(fixture.host.child.shutdown_requests.is_empty(), "no exit intent before its answer");
+    assert_eq!(fixture.host.child.restart_requests, 0, "no restart intent before the outcome");
     assert!(matches!(
         fixture.host.close_save_progress(),
         Some(CloseSaveProgress::Saving { reason: CloseReason::RestartToApply, .. })
@@ -35,6 +36,7 @@ fn the_input_final_save_is_submitted_before_the_exit_intent_and_its_failure_is_r
     fixture.host.input_probe.as_mut().ok_or("Probe")?.verdict =
         Some(SaveVerdict::Failed(SaveFailure::Storage));
     assert_eq!(fixture.exit_intent()?, budget);
+    assert!(fixture.host.child.restart_requests >= 1, "the outcome exists, so the intent went out");
     assert_eq!(
         fixture.host.close_save_outcome(),
         Some(CloseSaveOutcome {
@@ -61,6 +63,7 @@ fn a_saved_close_writes_no_record() -> TestResult {
     fixture.host.observe(DesktopStartupObservation::CloseRequested)?;
     fixture.exit_intent()?;
     assert!(fixture.host.close_save_outcome().is_some_and(|outcome| outcome.saved()));
+    assert_eq!(fixture.host.child.restart_requests, 0, "an ordinary close never restarts");
     assert_eq!(fixture.next_start_notice()?, None);
     let record = fixture.host.workspace.as_ref().and_then(|work| work.record_directory.clone());
     assert!(!record.ok_or("Record directory")?.join("close-save.json").exists());
@@ -274,5 +277,41 @@ fn restart_to_apply_relaunches_only_once_the_close_save_has_its_outcome() -> Tes
         Some(CloseReason::RestartToApply),
         "the relaunch signal is the settled outcome"
     );
+    fixture.retire()
+}
+
+/// The fixture's clock moves only when a test moves it, so a slow machine can never carry a
+/// close past its settle cutoff before the record of unsaved work is written.
+#[test]
+fn the_close_save_fixture_time_moves_only_when_the_test_moves_it() -> TestResult {
+    let mut fixture = Fixture::new(true)?;
+    let before = fixture.host.clock.now();
+    // Real durable work on the host's own executor takes measurable wall time.
+    assert_eq!(fixture.next_start_notice()?, None);
+    fixture.poll()?;
+    assert_eq!(fixture.host.clock.now(), before, "no time passed without the test");
+    fixture.clock.advance(Duration::from_secs(1));
+    assert_eq!(fixture.host.clock.now(), before.checked_add(Duration::from_secs(1))?);
+    fixture.host.workspace.as_mut().ok_or("Workspace")?.driver = None;
+    fixture.host.observe(DesktopStartupObservation::CloseRequested)?;
+    fixture.exit_intent()?;
+    fixture.retire()
+}
+
+/// What load did to the stale and failed publication tests on a real clock: time passed the
+/// settle cutoff before the record was written. The exit is not held, and no record exists.
+#[test]
+fn a_close_whose_settle_cutoff_passed_before_its_record_exits_without_one() -> TestResult {
+    let mut fixture = Fixture::new(true)?;
+    fixture.host.observe(DesktopStartupObservation::CloseRequested)?;
+    let budget = fixture.host.shutdown.budget()?;
+    fixture.sample()?;
+    fixture.poll()?;
+    assert!(matches!(fixture.host.take_command()?, Some(DesktopStartupCommand::SendSession(_))));
+    fixture.clock.advance(budget.settle_until.checked_duration_since(fixture.host.clock.now())?);
+    assert_eq!(fixture.exit_intent()?, budget);
+    let outcome = fixture.host.close_save_outcome().ok_or("Outcome")?;
+    assert!(matches!(outcome.workspace, SaveVerdict::Stale { .. }), "{outcome:?}");
+    assert_eq!(fixture.next_start_notice()?, None, "the record missed its cutoff");
     fixture.retire()
 }

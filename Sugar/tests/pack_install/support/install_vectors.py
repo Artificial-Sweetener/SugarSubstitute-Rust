@@ -26,6 +26,8 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import cast
 
+import pytest
+
 VECTORS_PATH = Path(__file__).with_name("registry_install_vectors.json")
 JsonObject = dict[str, object]
 
@@ -40,6 +42,31 @@ def vector_group(name: str) -> list[JsonObject]:
     """Return one named list of vectors."""
 
     return cast(list[JsonObject], load_vectors()[name])
+
+
+def drive(group: str) -> pytest.MarkDecorator:
+    """Parametrize a test over every vector of `group`, the only way a driver reads its group.
+
+    A group is a list of named vectors, an object whose `cases` is one, or (for `formats`)
+    an object of named entries, each given with its key as `name`. The Substitute host's
+    Rust suite reads the same group through its own `drive`, and a repository check requires
+    every group's driver in both suites to use it, so every vector runs in both.
+    """
+
+    value = load_vectors()[group]
+    if isinstance(value, dict) and "cases" not in value:
+        vectors = [
+            {**cast(JsonObject, entry), "name": key}
+            for key, entry in cast(JsonObject, value).items()
+        ]
+    else:
+        vectors = cast(
+            list[JsonObject],
+            value if isinstance(value, list) else cast(JsonObject, value)["cases"],
+        )
+    return pytest.mark.parametrize(
+        "vector", vectors, ids=[str(vector["name"]) for vector in vectors]
+    )
 
 
 def write_archive(path: Path, members: Sequence[Mapping[str, object]]) -> Path:
@@ -137,6 +164,7 @@ def folder_files(root: Path) -> dict[str, str]:
 __all__ = [
     "VECTORS_PATH",
     "build_folder",
+    "drive",
     "folder_files",
     "load_vectors",
     "make_directory_link",

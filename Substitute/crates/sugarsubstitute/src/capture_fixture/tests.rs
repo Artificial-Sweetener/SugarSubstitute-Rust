@@ -188,7 +188,7 @@ fn capacity_wakes_cannot_acknowledge_private_capture_work_before_its_terminal_no
 }
 #[test]
 fn original_alarm_conversion_and_shutdown_boundaries_never_reset_or_spin() -> Result {
-    let native = Instant::now();
+    let native = sugarsubstitute_execution::qualification_time::anchor();
     let start = Moment::from_nanos(17);
     let mut stop = StopPlan::new(start, Moment::from_nanos(19), native, Moment::from_nanos(23))?;
     assert_eq!(stop.budget.graceful_until.as_nanos(), 10_000_000_017);

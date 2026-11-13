@@ -114,6 +114,8 @@ pub(crate) struct Testing {
     pub(crate) schema_version: u32,
     pub(crate) platforms: Vec<String>,
     pub(crate) owners: Vec<TestOwner>,
+    /// Reviewed test-scope files whose real time decides no outcome.
+    pub(crate) real_time: Vec<crate::testing_time::RealTime>,
 }
 
 /// Assign one package's tests to its behavioral concern.

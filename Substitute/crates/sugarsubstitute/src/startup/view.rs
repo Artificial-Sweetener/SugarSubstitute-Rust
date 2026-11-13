@@ -55,6 +55,7 @@ impl StartupView {
                 reveal: 0.0,
                 hovered: None,
                 pressed: None,
+                controls: true,
             },
             animation,
             elapsed: Duration::ZERO,

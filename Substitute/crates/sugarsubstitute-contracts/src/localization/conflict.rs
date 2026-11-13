@@ -6,6 +6,8 @@
 pub struct ConflictMessages {
     /// Native dialog heading.
     pub title: &'static str,
+    /// Heading while this launch waits for the previous window to finish closing.
+    pub starting: &'static str,
     /// Ownership discovery in progress.
     pub checking: &'static str,
     /// Explain that the displayed installation owns the profile.
@@ -27,9 +29,10 @@ pub struct ConflictMessages {
 }
 impl ConflictMessages {
     /// Enumerate all labels for locale coverage validation.
-    pub fn labels(&self) -> [&'static str; 10] {
+    pub fn labels(&self) -> [&'static str; 11] {
         [
             self.title,
+            self.starting,
             self.checking,
             self.prompt,
             self.close,
@@ -45,6 +48,7 @@ impl ConflictMessages {
 /// Complete EN conflict copy.
 pub static EN: ConflictMessages = ConflictMessages {
     title: "SugarSubstitute isn't responding",
+    starting: "Starting SugarSubstitute",
     checking: "Checking the previous SugarSubstitute window…",
     prompt: "The previous SugarSubstitute window isn't responding. Close it and start? Anything it hadn't saved may be lost.",
     close: "Close it and start",
@@ -58,6 +62,7 @@ pub static EN: ConflictMessages = ConflictMessages {
 /// Complete ZH_HANS conflict copy.
 pub static ZH_HANS: ConflictMessages = ConflictMessages {
     title: "SugarSubstitute 未响应",
+    starting: "正在启动 SugarSubstitute",
     checking: "正在检查之前的 SugarSubstitute 窗口…",
     prompt: "之前的 SugarSubstitute 窗口没有响应。要关闭它并启动吗？未保存的内容可能会丢失。",
     close: "关闭并启动",
@@ -71,6 +76,7 @@ pub static ZH_HANS: ConflictMessages = ConflictMessages {
 /// Complete JA conflict copy.
 pub static JA: ConflictMessages = ConflictMessages {
     title: "SugarSubstitute が応答していません",
+    starting: "SugarSubstitute を起動しています",
     checking: "前の SugarSubstitute ウィンドウを確認しています…",
     prompt: "前の SugarSubstitute ウィンドウが応答していません。閉じて起動しますか？保存されていない内容は失われる可能性があります。",
     close: "閉じて起動",
@@ -84,6 +90,7 @@ pub static JA: ConflictMessages = ConflictMessages {
 /// Complete KO conflict copy.
 pub static KO: ConflictMessages = ConflictMessages {
     title: "SugarSubstitute가 응답하지 않습니다",
+    starting: "SugarSubstitute를 시작하는 중",
     checking: "이전 SugarSubstitute 창을 확인하는 중…",
     prompt: "이전 SugarSubstitute 창이 응답하지 않습니다. 닫고 시작할까요? 저장하지 않은 내용은 사라질 수 있습니다.",
     close: "닫고 시작",
@@ -97,6 +104,7 @@ pub static KO: ConflictMessages = ConflictMessages {
 /// Complete ES conflict copy.
 pub static ES: ConflictMessages = ConflictMessages {
     title: "SugarSubstitute no responde",
+    starting: "Iniciando SugarSubstitute",
     checking: "Comprobando la ventana anterior de SugarSubstitute…",
     prompt: "La ventana anterior de SugarSubstitute no responde. ¿Cerrarla e iniciar? Se puede perder lo que no se haya guardado.",
     close: "Cerrarla e iniciar",

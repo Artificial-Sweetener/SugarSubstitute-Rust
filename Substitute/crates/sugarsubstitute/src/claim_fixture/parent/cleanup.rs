@@ -23,7 +23,7 @@ impl Fixture {
             return Ok(false);
         }
         let key = family.ticket.process();
-        let plan = StopPlan::new(self.clock.now(), Instant::now())?;
+        let plan = StopPlan::new(self.clock.now(), campaign_watch::native_now())?;
         let shutdown = ShutdownId::new(key.id.get())?;
         self.registry.as_mut().ok_or("Claim campaign registry missing")?.begin_stop(
             key,

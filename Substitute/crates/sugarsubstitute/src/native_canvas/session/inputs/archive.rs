@@ -310,6 +310,16 @@ impl Session {
         self.inputs.persistence.as_ref()?.autosave.as_ref()?.deadline()
     }
 
+    /// Whether an automatic save job awaits its observed outcome, so its archive may be replaced.
+    #[cfg(test)]
+    pub(crate) fn input_autosave_saving(&self) -> bool {
+        self.inputs
+            .persistence
+            .as_ref()
+            .and_then(|persistence| persistence.autosave.as_ref())
+            .is_some_and(Autosave::saving)
+    }
+
     /// Every input document's current content, with the synced state that maps it.
     fn input_archive(&self) -> Result<InputDocumentArchive, ArchiveError> {
         let mut documents = Vec::new();

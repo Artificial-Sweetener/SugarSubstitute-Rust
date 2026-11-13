@@ -14,7 +14,7 @@ mod storage;
 use storage::{StorageJob, StorageResult, StorageWork};
 pub(super) mod managed_qualification;
 pub(super) mod qualification;
-mod requests;
+pub(super) mod requests;
 use super::worker::Worker;
 use crate::{job_sequence::JobSequence, scope_sequence::ScopeSequence};
 pub(super) use native::qualification as window_qualification;
@@ -78,6 +78,8 @@ pub(super) struct Controller {
     closing: bool,
     stopping: bool,
     unavailable: bool,
+    /// The user was told that retrying installs the version included in this installer (C4).
+    included_offered: bool,
     console: Option<super::console::Output>,
     locale: String,
 }
@@ -116,6 +118,7 @@ impl Controller {
             closing: false,
             stopping: false,
             unavailable: false,
+            included_offered: false,
             console: None,
             locale: "en".into(),
         }

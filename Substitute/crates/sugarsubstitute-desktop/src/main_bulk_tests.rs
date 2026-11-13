@@ -8,6 +8,7 @@ use std::{cell::Cell, error::Error};
 use sugarsubstitute_contracts::{
     canvas_surface::CanvasSurfaceMessage, execution::MemoryRelease, panel::PanelSession,
 };
+use sugarsubstitute_execution::qualification_time::anchor;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -120,7 +121,7 @@ fn envelopes_decode_only_the_exact_private_shape() -> TestResult {
 fn staged_messages_are_single_use_bounded_and_claimed_until_served() -> TestResult {
     let lease = partition();
     let transfers = transfers(&lease)?;
-    let now = Instant::now();
+    let now = anchor();
     let body = vec![b'x'; 40 * 1024 * 1024];
     let encoded =
         transfers.stage(CONTEXT, body.clone(), now).map_err(|cause| format!("{cause:?}"))?;
@@ -153,7 +154,7 @@ fn staged_messages_are_single_use_bounded_and_claimed_until_served() -> TestResu
 fn staged_messages_expire_and_in_flight_bytes_stay_within_the_partition() -> TestResult {
     let lease = partition();
     let transfers = transfers(&lease)?;
-    let now = Instant::now();
+    let now = anchor();
     let first = transfers
         .stage(CONTEXT, vec![b'a'; MAX_MESSAGE_BYTES], now)
         .map_err(|cause| format!("{cause:?}"))?;
@@ -172,7 +173,7 @@ fn staged_messages_expire_and_in_flight_bytes_stay_within_the_partition() -> Tes
 fn a_changed_document_or_closed_window_releases_every_token_and_body() -> TestResult {
     let lease = partition();
     let transfers = transfers(&lease)?;
-    let now = Instant::now();
+    let now = anchor();
     let staged = transfers.stage(CONTEXT, vec![b'a'; 1024], now).map_err(|c| format!("{c:?}"))?;
     let staged = Envelope::decode(std::str::from_utf8(&staged)?).ok_or("Missing envelope")?;
     let grant = transfers.grant(CONTEXT, Ticket(3))?;
@@ -199,7 +200,7 @@ fn uploads_reassemble_once_through_the_same_lane_framing_and_decode() -> TestRes
         " ".repeat(24 * 1024)
     );
     assert!(request.len() > 16384, "the message must exceed the inline lane");
-    let now = Instant::now();
+    let now = anchor();
     let token = transfers.grant(CONTEXT, Ticket(42))?;
     upload(&transfers, token, request.as_bytes(), now).map_err(|cause| format!("{cause:?}"))?;
     assert!(lease.claim(SESSION_BYTES).is_err(), "the received body holds no claim");
@@ -239,7 +240,7 @@ fn an_uploaded_workflow_sync_decodes_and_keeps_its_body_storage() -> TestResult 
         "command": {"type": "sync", "workflow": "workflow-1", "surfaces": surfaces}})
     .to_string();
     assert!(request.len() > 16384, "the message must exceed the inline lane");
-    let now = Instant::now();
+    let now = anchor();
     let token = transfers.grant(CONTEXT, Ticket(8))?;
     upload(&transfers, token, request.as_bytes(), now).map_err(|cause| format!("{cause:?}"))?;
     let named = envelope(token, request.len());
@@ -262,7 +263,7 @@ fn an_uploaded_workflow_sync_decodes_and_keeps_its_body_storage() -> TestResult 
 fn upload_tokens_are_single_use_and_bound_to_their_document_ticket_and_size() -> TestResult {
     let lease = partition();
     let transfers = transfers(&lease)?;
-    let now = Instant::now();
+    let now = anchor();
     let body = vec![b'{'; 20 * 1024 * 1024];
     let token = transfers.grant(CONTEXT, Ticket(7))?;
     upload(&transfers, token, &body, now).map_err(|cause| format!("{cause:?}"))?;
@@ -305,7 +306,7 @@ fn upload_tokens_are_single_use_and_bound_to_their_document_ticket_and_size() ->
 fn upload_storage_enforces_the_message_bound_partition_and_utf8_while_reading() -> TestResult {
     let lease = partition();
     let transfers = transfers(&lease)?;
-    let now = Instant::now();
+    let now = anchor();
     let token = transfers.grant(CONTEXT, Ticket(1))?;
     let oversized = vec![b' '; MAX_MESSAGE_BYTES + 1];
     assert!(matches!(upload(&transfers, token, &oversized, now), Err(Refusal::Size)));
@@ -349,9 +350,6 @@ fn generator_failure_refuses_without_issuing_a_token() -> TestResult {
     })?;
     transfers.synchronize(Some(CONTEXT));
     assert!(transfers.grant(CONTEXT, Ticket(1)).is_err());
-    assert!(matches!(
-        transfers.stage(CONTEXT, vec![b'x'; 8], Instant::now()),
-        Err(Refusal::Native(_))
-    ));
+    assert!(matches!(transfers.stage(CONTEXT, vec![b'x'; 8], anchor()), Err(Refusal::Native(_))));
     Ok(())
 }

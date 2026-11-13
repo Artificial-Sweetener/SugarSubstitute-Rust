@@ -117,13 +117,17 @@ pub struct ReportMessages {
     pub update_phase: &'static str,
     /// Suggested file name when exporting an update report.
     pub export_file_name: &'static str,
+    /// Heading of a report on a SugarCubes update that failed during start-up.
+    pub pack_update_title: &'static str,
+    /// Explain that SugarCubes was not updated while the version installed keeps working.
+    pub pack_update_message: &'static str,
     /// Accepted startup failure categories in the explicit StartupFailureCode order.
     pub startup_failure: [&'static str; 5],
 }
 
 impl ReportMessages {
     /// Borrow every owned label for complete-coverage validation.
-    pub fn labels(&self) -> [&'static str; 69] {
+    pub fn labels(&self) -> [&'static str; 71] {
         [
             self.title,
             self.explanation,
@@ -189,6 +193,8 @@ impl ReportMessages {
             self.version,
             self.update_phase,
             self.export_file_name,
+            self.pack_update_title,
+            self.pack_update_message,
             self.startup_failure[0],
             self.startup_failure[1],
             self.startup_failure[2],

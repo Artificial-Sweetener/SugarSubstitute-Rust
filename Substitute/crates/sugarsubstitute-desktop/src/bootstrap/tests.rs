@@ -10,6 +10,7 @@ use std::{
     },
 };
 use sugarsubstitute_contracts::execution::Operation;
+use sugarsubstitute_execution::qualification_time::anchor;
 type TestResult = Result<(), Box<dyn Error>>;
 #[derive(Default)]
 struct Facts {
@@ -219,7 +220,7 @@ fn failed_reset_keeps_original_deadline_and_uses_message_only_closing_wait() -> 
     bootstrap.wake().wake()?;
     event.0.lock().map_err(|_| "lock")?.fail_reset = true;
     assert!(bootstrap.begin_turn().is_err());
-    let original = Instant::now() + std::time::Duration::from_secs(5);
+    let original = anchor() + std::time::Duration::from_secs(5);
     assert_eq!(bootstrap.wait(Some(original))?, WaitOutcome::Deadline);
     assert_eq!(event.0.lock().map_err(|_| "lock")?.waits, [(Some(original), false)]);
     bootstrap.begin_turn()?;
@@ -230,7 +231,7 @@ fn failed_reset_keeps_original_deadline_and_uses_message_only_closing_wait() -> 
 fn failed_wait_switches_only_native_wait_input_without_renewing_deadline() -> TestResult {
     let (bootstrap, event) = event();
     event.0.lock().map_err(|_| "lock")?.fail_wait = true;
-    let original = Instant::now();
+    let original = anchor();
     assert!(bootstrap.wait(Some(original)).is_err());
     assert_eq!(bootstrap.wait(Some(original))?, WaitOutcome::Deadline);
     assert_eq!(

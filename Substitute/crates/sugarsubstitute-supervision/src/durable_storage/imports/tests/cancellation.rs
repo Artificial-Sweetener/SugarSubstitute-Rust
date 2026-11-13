@@ -3,10 +3,11 @@
 //! Observe actual job cancellation independently of deterministic durable-phase expiration.
 use super::*;
 use crate::setup_storage::test_worker::pipeline::Pipeline;
-use std::{sync::Condvar, time::Duration};
+use std::sync::Condvar;
 use sugarsubstitute_contracts::execution::{
     ExecutionPort, JobClass, JobOutcome, JobSpec, Moment, Operation,
 };
+use sugarsubstitute_execution::qualification_time::ProgressGuard;
 
 #[derive(Default)]
 struct Checkpoint {
@@ -41,13 +42,14 @@ fn actual_cancellation_keeps_originals_and_admits_restart_only_under_a_fresh_own
                     let mut state = crate::registry::lock(lock);
                     state.ready = true;
                     wake.notify_all();
-                    let (state, timeout) = wake
-                        .wait_timeout_while(state, Duration::from_secs(20), |state| !state.release)
-                        .map_err(|_| "Cancellation checkpoint poisoned")?;
-                    if timeout.timed_out() {
-                        return Err("Cancellation boundary was not released".into());
+                    let released =
+                        ProgressGuard::process().wait_while(wake, state, |state| !state.release);
+                    if let Some(stall) = released.stalled {
+                        return Err(
+                            format!("Cancellation boundary was never released: {stall}").into()
+                        );
                     }
-                    drop(state);
+                    drop(released);
                     assert!(context.cancellation_requested());
                     let cause = fixture.copy(&context).err().ok_or("Cancelled import succeeded")?;
                     assert_eq!(cause.kind(), io::ErrorKind::Interrupted);
@@ -66,12 +68,11 @@ fn actual_cancellation_keeps_originals_and_admits_restart_only_under_a_fresh_own
         )?)
     })?;
     let (lock, wake) = &*checkpoint;
-    let state = crate::registry::lock(lock);
-    let (state, timeout) = wake
-        .wait_timeout_while(state, Duration::from_secs(20), |state| !state.ready)
-        .map_err(|_| "Cancellation checkpoint poisoned")?;
-    let reached = state.ready && !timeout.timed_out();
-    drop(state);
+    let prepared =
+        ProgressGuard::process()
+            .wait_while(wake, crate::registry::lock(lock), |state| !state.ready);
+    let reached = prepared.stalled.is_none();
+    drop(prepared);
     job.cancel();
     crate::registry::lock(lock).release = true;
     wake.notify_all();

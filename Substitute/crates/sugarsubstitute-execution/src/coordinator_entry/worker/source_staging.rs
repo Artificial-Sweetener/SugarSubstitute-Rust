@@ -39,7 +39,14 @@ impl Active {
         {
             return issued;
         }
-        // An issued write or uncertain native failure permanently consumes handback.
+        if issued.is_ok() && self.retains_issued_source() {
+            // The coordinator answers a repeated request identity from its replay cache,
+            // so a re-elected forward cannot launch twice. The source stays retained until
+            // an outcome or a lost peer settles it.
+            return issued;
+        }
+        // An uncertain native failure, or an issued write without recovery, permanently
+        // consumes handback.
         // Keep that exact native result before observing fallible original controls.
         let Some(client) = self.client.as_mut() else {
             return issued.and(Err(EntryTransportError::InvalidPhase));
@@ -60,6 +67,34 @@ impl Active {
             (Ok(_), Err(after)) => Err(after),
             (Ok(actual), Ok(())) => Ok(actual),
         }
+    }
+
+    /// A recoverable forward keeps its source through an issued Launch.
+    pub(super) fn retains_issued_source(&self) -> bool {
+        !self.work.shared.server
+            && self.work.input.as_ref().is_some_and(|input| input.recover_unsubmitted)
+    }
+
+    /// Settle a source retained through an issued Launch once its outcome is authenticated.
+    /// Closing admitted nothing, so the source returns for re-election once this connection
+    /// has retired; every other outcome ends the source obligation.
+    pub(super) fn settle_retained_source(
+        &mut self,
+        core: &Core,
+        index: usize,
+        outcome: EntryOutcome,
+        received: Moment,
+    ) -> Result<(), EntryTransportError> {
+        if !self.retains_issued_source() {
+            return Ok(());
+        }
+        if outcome == EntryOutcome::Closing {
+            self.return_unsubmitted = true;
+            self.connections[index].retry_at =
+                Some(schedule::probe(received, self.work.shared.original_preparation)?);
+            return Ok(());
+        }
+        self.release_staged_source(core)
     }
 
     pub(super) fn source_fence_for_return(

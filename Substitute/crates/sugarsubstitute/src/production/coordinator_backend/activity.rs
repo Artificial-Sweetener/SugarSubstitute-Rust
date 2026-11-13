@@ -177,6 +177,11 @@ impl CoordinatorBackend {
                         Self::merge(&mut transition, self.failed(key, Box::new(error), resources)?);
                     }
                     RegistryObservation::RootExited { process, code } => {
+                        if self.records[at].as_ref().is_some_and(|record| {
+                            record.shutdown.is_none() && record.readiness.is_none()
+                        }) {
+                            self.pack.backend_stopped(resources)?;
+                        }
                         let next =
                             self.managed_exit_observation(key, ticket.process(), process, code)?;
                         Self::merge(&mut transition, next);
@@ -220,6 +225,13 @@ impl CoordinatorBackend {
         batch: &CompletionBatch,
         resources: &mut BackendResources<'_>,
     ) -> Result<ResourceTransition> {
+        if let Some(released) = self.pack.advance(resources)?
+            && let Ok(index) = self.index(released)
+            && let Some(record) = self.records[index].as_mut()
+            && record.shutdown.is_none()
+        {
+            Self::submit_source_inspection(record, resources)?;
+        }
         let custody = match &mut self.custody {
             Some(custody) => custody.advance(resources),
             None => Ok(self.custody_options.is_none()),
@@ -259,6 +271,13 @@ impl CoordinatorBackend {
             let context = BackendReadyMetadata::capture(record.key, origin, &proof)?;
             record.readiness = Some(proof);
             let key = record.key;
+            if matches!(record.target, BackendTarget::Managed(_)) {
+                // Readiness does not see node registration; the page's session decides.
+                self.pack.observe(
+                    sugarsubstitute_supervision::pack_install::TrialEvent::BackendStartUnobservable,
+                    resources,
+                )?;
+            }
             let transition = self.observe(ResourceObservation::Ready { resource: key, origin })?;
             let record = self.records[at].as_mut().ok_or(LifecycleRejection::StaleIdentity)?;
             record.ready_origin = Some(origin);

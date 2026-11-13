@@ -12,6 +12,7 @@ use sugarsubstitute_contracts::{
     lifecycle::{CoordinatorEpoch, CoordinatorKey, InstanceId, NamespaceId, RunGeneration, RunKey},
     startup::LaunchId,
 };
+use sugarsubstitute_execution::qualification_time::anchor;
 type Result<T = ()> = std::result::Result<T, Box<dyn Error>>;
 struct Release;
 impl MemoryRelease for Release {
@@ -92,7 +93,7 @@ impl Fixture {
 #[test]
 fn two_active_eight_queued_and_original_cutoff_are_enforced_by_the_real_registry() -> Result {
     let fixture = Fixture::new()?;
-    let now = Instant::now();
+    let now = anchor();
     assert!(fixture.defer(now, true, Rc::new(Witness::default()))?);
     for _ in 1..CAPACITY {
         assert!(fixture.defer(now, false, Rc::new(Witness::default()))?);
@@ -123,7 +124,7 @@ fn two_active_eight_queued_and_original_cutoff_are_enforced_by_the_real_registry
 #[test]
 fn held_get_keeps_later_head_progress_without_spinning_or_dispatching_another_get() -> Result {
     let fixture = Fixture::new()?;
-    let now = Instant::now();
+    let now = anchor();
     assert!(fixture.defer(now, false, Rc::new(Witness::default()))?);
     let held = fixture.request(now)?;
     assert!(!held.head());
@@ -165,7 +166,7 @@ fn held_get_keeps_later_head_progress_without_spinning_or_dispatching_another_ge
 #[test]
 fn saturated_get_deferrals_preserve_metadata_admission_within_original_total_credit() -> Result {
     let fixture = Fixture::new()?;
-    let now = Instant::now();
+    let now = anchor();
     for _ in 0..GET_CAPACITY {
         assert!(fixture.defer(now, false, Rc::new(Witness::default()))?);
     }
@@ -183,7 +184,7 @@ fn saturated_get_deferrals_preserve_metadata_admission_within_original_total_cre
 #[test]
 fn failed_complete_keeps_exact_deferral_and_does_not_assign_response_twice() -> Result {
     let fixture = Fixture::new()?;
-    let now = Instant::now();
+    let now = anchor();
     let witness = Rc::new(Witness::default());
     witness.fail_complete.set(true);
     assert!(fixture.defer(now, true, witness.clone())?);

@@ -13,6 +13,8 @@ pub mod installed_frontend;
 #[cfg(windows)]
 pub mod installed_release;
 #[cfg(windows)]
+pub mod pack_install;
+#[cfg(windows)]
 pub mod session_identity;
 #[cfg(windows)]
 pub mod setup_storage;
@@ -84,6 +86,11 @@ pub mod profiles;
 #[cfg(windows)]
 pub use durable_storage::input::{PreparationFileError, read_preparation_file};
 #[cfg(windows)]
+pub use durable_storage::owned_retirement::{
+    OwnedRoot, RETIREMENT_RESERVATION_BYTES, Retired, RetirementError, RetirementOutcome,
+    RetirementReport, RetirementUnit, Tombstone, TreeInventory,
+};
+#[cfg(windows)]
 pub use durable_storage::protected::{ProtectedStorageGeneration, ProtectedStorageRoot};
 #[cfg(windows)]
 pub use durable_storage::receiving::{
@@ -141,7 +148,7 @@ pub use registry::{SettledRegistryFailure, SettledUpdaterProbe, WindowsProcessRe
 #[cfg(windows)]
 pub use registry_error::{RegistryAdmissionError, RegistryError, RegistryInputError};
 #[cfg(windows)]
-pub use registry_input::{RejectedOutputLaunch, WindowsLaunchInput};
+pub use registry_input::{RejectedOutputLaunch, UpdateAttemptPins, WindowsLaunchInput};
 #[cfg(windows)]
 pub use registry_types::{
     FamilyBinding, LaunchTicket, RegistryObservation, RegistrySnapshot, RootObservationOutcome,

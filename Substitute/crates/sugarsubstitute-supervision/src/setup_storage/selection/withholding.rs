@@ -30,5 +30,5 @@ pub fn release_withheld(
     let Some(record) = store.load(context)? else {
         return Ok(false);
     };
-    Ok(record.withheld_release(offer.offer().offer().sequence(), unix_now()?))
+    Ok(record.withheld_release(offer.offer().offer().sequence(), store.strike_clock().now()?))
 }

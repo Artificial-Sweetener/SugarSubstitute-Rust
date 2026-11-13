@@ -131,7 +131,7 @@ impl ProcessCreationDriver for Driver {
                 || input.recovery_carrier.is_some()
                 || input.profile_custody.is_some()
                 || input.managed_custody.is_some()
-                || input.diagnostic.is_some()
+                || input.purpose.is_some()
                 || input.backend_custody.is_some()
                 || input.fixture_events.is_some()
                 || input.output.is_some()

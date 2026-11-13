@@ -188,7 +188,7 @@ pub(super) fn remove(
     for value in control.references {
         retirement::file(&control.directory, &value.name, value.identity)?;
     }
-    tree::remove_file(&control.directory.path().join("owner"), context)?;
+    storage_tree::remove_file(&control.directory.path().join("owner"), context)?;
     let identity = control.directory.identity()?;
     drop(control.directory);
     retirement::directory(directory, "consumers", identity)

@@ -12,4 +12,5 @@ pub mod setup_flow;
 pub mod startup;
 pub mod supervision;
 pub mod transcript;
+pub mod updates_panel;
 pub mod workspace_session;

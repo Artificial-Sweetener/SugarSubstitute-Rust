@@ -77,7 +77,7 @@ impl ReporterParent {
     }
     pub(in crate::production) fn take_written(
         &mut self,
-    ) -> Option<sugarsubstitute_execution::diagnostic_pipe::LifecyclePipeOperationId> {
+    ) -> Option<sugarsubstitute_execution::purpose_pipe::LifecyclePipeOperationId> {
         self.channel.written.take()
     }
 }

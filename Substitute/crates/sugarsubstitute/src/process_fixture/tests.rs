@@ -5,6 +5,7 @@ use super::*;
 mod construction;
 use sugarsubstitute_contracts::lifecycle::{ProcessId, ProcessKey, ShutdownBudget};
 use sugarsubstitute_desktop::HeadlessLifetime;
+use sugarsubstitute_execution::qualification_time::anchor;
 use sugarsubstitute_supervision::RegistryObservation;
 
 fn key(fixture: &Fixture, id: u64) -> Result<ProcessKey> {
@@ -88,7 +89,7 @@ fn observation_retirement_cannot_replace_immediate_fixture_exit_evidence() -> Re
 
 #[test]
 fn grace_and_total_are_consumed_once_without_resetting_original_budget() -> Result<()> {
-    let origin = Instant::now();
+    let origin = anchor();
     let mut plan = StopPlan::new(Moment::from_nanos(17), origin)?;
     let budget = plan.budget;
     assert_eq!(plan.next_deadline(), origin.checked_add(Duration::from_secs(10)));
@@ -112,7 +113,7 @@ fn unsettled_total_expiry_is_one_failure_and_still_allows_late_actual_cleanup() 
     case.bind(process)?;
     case.observe(RegistryObservation::ContainedStarted { process })?;
     case.observe(RegistryObservation::RootExited { process, code: 0 })?;
-    let mut plan = StopPlan::new(Moment::from_nanos(0), Instant::now())?;
+    let mut plan = StopPlan::new(Moment::from_nanos(0), anchor())?;
     let shutdown = ShutdownId::new(1)?;
     case.stop = Some((shutdown, plan.budget));
     let due = plan.due(plan.budget.settle_until, case.settled);
@@ -125,21 +126,25 @@ fn unsettled_total_expiry_is_one_failure_and_still_allows_late_actual_cleanup() 
     assert!(case.settled);
     assert_eq!(case.stop.map(|(_, budget)| budget), Some(plan.budget));
     assert!(!plan.due(Moment::from_nanos(20_000_000_000), true).expired);
-    let mut settled_on_observation = StopPlan::new(Moment::from_nanos(0), Instant::now())?;
+    let mut settled_on_observation = StopPlan::new(Moment::from_nanos(0), anchor())?;
     assert!(!settled_on_observation.due(Moment::from_nanos(20_000_000_000), true).expired);
     Ok(())
 }
 
 #[test]
-fn original_deadline_wins_and_closure_does_not_reset_or_launch() -> Result<()> {
+fn the_earlier_wake_wins_and_closure_does_not_reset_or_launch() -> Result<()> {
     let mut fixture = Fixture::new()?;
-    let original = fixture.deadline;
-    fixture.stop = Some(StopPlan::new(Moment::from_nanos(0), original)?);
-    assert_eq!(fixture.next_deadline(), Some(original));
+    let custody = fixture.execution_deadline;
+    let stall = fixture.watch.next_deadline().ok_or("Stall wake missing")?;
+    let earlier = anchor();
+    let stop = StopPlan::new(Moment::from_nanos(0), earlier)?;
+    let grace = stop.next_deadline().ok_or("Grace wake missing")?;
+    fixture.stop = Some(stop);
+    assert_eq!(fixture.next_deadline(), Some(grace.min(stall)));
     fixture.request_shutdown()?;
     fixture.request_shutdown()?;
     fixture.launch_next()?;
-    assert_eq!(fixture.deadline, original);
+    assert_eq!(fixture.execution_deadline, custody);
     assert!(fixture.cases.iter().all(|case| case.process.is_none()));
     assert_eq!(fixture.current, 0);
     assert!(fixture.owner.is_none());
@@ -171,11 +176,11 @@ fn receipt_refuses_requested_shutdown_without_actual_case_and_worker_evidence() 
 }
 
 #[test]
-fn expired_original_deadline_reports_once_and_does_not_create_new_cases() -> Result<()> {
+fn a_stalled_campaign_reports_once_and_does_not_create_new_cases() -> Result<()> {
     let mut fixture = Fixture::new()?;
-    fixture.deadline = Instant::now();
+    fixture.watch = crate::campaign_watch::CampaignWatch::silent("Registry qualification");
     assert!(fixture.advance(NonZeroUsize::MIN).is_err());
-    assert!(fixture.deadline_observed);
+    assert!(fixture.watch.reported());
     fixture.request_shutdown()?;
     assert_eq!(fixture.next_deadline(), None);
     assert_eq!(

@@ -27,6 +27,7 @@ pub(crate) struct ActiveState {
 }
 impl ActiveState {
     /// Count the actual boxed worker and outside private shared/control metadata.
+    #[cfg(windows)]
     pub(crate) const fn storage_bytes() -> usize {
         size_of::<Self>()
             + shared::SharedRef::control_storage_bytes()
@@ -315,13 +316,23 @@ impl ActiveState {
                 retain_failure(&mut self.outcome, failure("pipe_partial_write"));
             }
         }
-        if lock(&self.work.shared.state).loans != 0 || pinned {
+        // Sessions whose owners order their work by holding loans (recovery's Stop frame,
+        // diagnostic reporting until family closure) retire only after every loan returns.
+        // Other sessions never wait on a buffer a caller still holds: each keeps its own memory
+        // claim, so the reservation stays charged until that guard drops, and a guard dropped
+        // after retirement frees its storage instead of returning it to this session.
+        let fenced = {
+            let s = lock(&self.work.shared.state);
+            s.loans_fence_retirement && s.loans != 0
+        };
+        if fenced || pinned {
             return;
         }
         self.read = None;
         self.write = None;
         let (queued_read, queued_write, available_read, available_write) = {
             let mut s = lock(&self.work.shared.state);
+            s.retired = true;
             (s.read.take(), s.write.take(), s.read_buffer.take(), s.write_buffer.take())
         };
         drop((queued_read, queued_write, available_read, available_write));

@@ -193,7 +193,7 @@ mod tests {
     use std::time::Duration;
     #[test]
     fn timeout_rounding_preserves_expired_equality_and_never_uses_infinite_for_finite_deadline() {
-        let now = Instant::now();
+        let now = sugarsubstitute_execution::qualification_time::anchor();
         assert_eq!(milliseconds(None, now), u32::MAX);
         assert_eq!(milliseconds(Some(now), now), 0);
         assert_eq!(milliseconds(Some(now + Duration::from_nanos(1)), now), 1);
@@ -208,9 +208,15 @@ mod tests {
     -> Result<(), Box<dyn std::error::Error>> {
         let event = NativeEvent::new()?;
         event.signal()?;
-        assert_eq!(event.wait(Some(Instant::now()), true)?, WaitOutcome::Woken);
+        assert_eq!(
+            event.wait(Some(sugarsubstitute_execution::qualification_time::anchor()), true)?,
+            WaitOutcome::Woken
+        );
         event.reset()?;
-        assert_eq!(event.wait(Some(Instant::now()), true)?, WaitOutcome::Deadline);
+        assert_eq!(
+            event.wait(Some(sugarsubstitute_execution::qualification_time::anchor()), true)?,
+            WaitOutcome::Deadline
+        );
         event.close()?;
         event.close()?;
         assert!(event.signal().is_err());

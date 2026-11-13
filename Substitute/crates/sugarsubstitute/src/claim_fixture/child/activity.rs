@@ -255,7 +255,9 @@ impl Child {
     pub(super) fn advance(&mut self, max: NonZeroUsize) -> Result<HeadlessStep> {
         let mut changed = self.drain(max)?;
         if !self.deadline_reported
-            && self.native_deadline.is_some_and(|deadline| std::time::Instant::now() >= deadline)
+            && self
+                .native_deadline
+                .is_some_and(|deadline| crate::campaign_watch::native_now() >= deadline)
         {
             self.deadline_reported = true;
             return Err(

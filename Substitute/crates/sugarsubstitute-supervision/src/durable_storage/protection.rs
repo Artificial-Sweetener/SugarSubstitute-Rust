@@ -225,17 +225,6 @@ impl Protection {
         }
     }
 
-    /// Acquire exclusion attached to the native file object until its last handle closes, so
-    /// duplicates in another process retain it. Only the installation run lock uses this, until
-    /// its trial handoff moves to slot exclusion.
-    pub(crate) fn transferable_rendezvous(
-        &self,
-        path: &Path,
-        context: &JobContext,
-    ) -> io::Result<File> {
-        self.open_rendezvous(path, FILE_SHARE_MODE(0), context)
-    }
-
     /// Validate the empty rendezvous on the same protected handle that owns its sharing mode.
     fn open_rendezvous(
         &self,

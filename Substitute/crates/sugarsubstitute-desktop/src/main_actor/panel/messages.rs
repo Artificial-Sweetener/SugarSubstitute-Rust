@@ -4,7 +4,7 @@
 
 use super::delivery;
 use crate::{DesktopError, MainIdentity, PanelCommand};
-use sugarsubstitute_contracts::panel::PanelMessage;
+use sugarsubstitute_contracts::panel::{PanelMessage, PanelSession};
 
 /// Supersession retains at most one unsent message per [`Kind`].
 const CAPACITY: usize = 2;
@@ -12,7 +12,7 @@ const CAPACITY: usize = 2;
 /// Host message kinds; a newer message supersedes an unsent one of the same kind.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Kind {
-    /// Each configuration carries the complete current presentation.
+    /// Each configuration carries the host description and the complete current presentation.
     Configure,
     /// Every heartbeat requests the same connectivity observation.
     Ping,
@@ -47,11 +47,16 @@ impl HostMessage {
                 ));
             }
         };
-        let payload = command
-            .message()
-            .encode()
-            .map_err(|cause| DesktopError::new("encode_panel_message", cause))?;
-        let parameters = delivery::encode(context, &payload)?;
+        let encoding = |cause| DesktopError::new("encode_panel_message", cause);
+        let payload = command.message().encode().map_err(encoding)?;
+        let parameters = match command.description() {
+            Some(description) => {
+                let session = PanelSession::for_main(command.identity()).map_err(encoding)?;
+                let description = description.encode(&session).map_err(encoding)?;
+                delivery::encode_ordered(context, &description, &payload)?
+            }
+            None => delivery::encode(context, &payload)?,
+        };
         Ok(Self { identity: command.identity(), context, kind, parameters, _command: command })
     }
 

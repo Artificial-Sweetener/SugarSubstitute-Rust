@@ -106,7 +106,7 @@ pub(crate) fn check(root: &Path, policy: &Testing, architecture: &Architecture) 
         )?;
         eprintln!("test inventory: {} ({count} functions)", owner.package);
     }
-    Ok(())
+    crate::testing_time::check(root, &policy.real_time, architecture)
 }
 
 #[cfg(test)]
@@ -126,6 +126,7 @@ mod tests {
                 concern: "fixture".into(),
                 minimum_tests: 1,
             }],
+            real_time: Vec::new(),
         };
         check(fixture.root(), &policy, &fixture.architecture)?;
         policy.owners[0].minimum_tests = 0;

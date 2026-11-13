@@ -202,7 +202,10 @@ fn missing_and_partial_offline_evidence_never_asserts_current_or_downloads() -> 
 
 #[test]
 fn offline_restart_rejects_expired_authority_and_corrupt_repair_archive() -> TestResult {
-    let (fixture, _) = prepared()?;
+    let (fixture, generation) = prepared()?;
+    // A valid receipt stands in for expired metadata (D22, tests/receipt.rs); without one,
+    // expired authority is refused.
+    std::fs::remove_file(generation.join(crate::setup_storage::UPDATE_RECEIPT_FILE))?;
     let mut pipeline = Pipeline::new()?;
     let mut expired = Worker::resume_cached(cached_configuration(&fixture))?;
     step(&mut pipeline, &mut expired)?;

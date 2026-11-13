@@ -29,7 +29,9 @@ pub(super) struct Glyph {
 pub struct GlyphPaint {
     fonts: Arc<Mutex<FontSystem>>,
     plans: Vec<Glyph>,
-    cache: SwashCache,
+    // The library scaler state is opaque like its font allocations; boxing it keeps
+    // this cursor's inline size close to the other scene paint variants.
+    cache: Box<SwashCache>,
     image: Option<Image>,
     glyph: usize,
     scale: f32,
@@ -93,7 +95,7 @@ impl GlyphPaint {
         Self {
             fonts,
             plans,
-            cache: SwashCache::new(),
+            cache: Box::new(SwashCache::new()),
             image: None,
             glyph: 0,
             scale,

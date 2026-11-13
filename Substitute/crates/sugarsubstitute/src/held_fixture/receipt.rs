@@ -35,8 +35,8 @@ impl Fixture {
                     "settle_until":stop.budget.settle_until.as_nanos() })),
                 "family_settled": evidence.settled, "retired": evidence.retired })
         }).collect::<Vec<_>>();
-        Ok(serde_json::json!({ "schema_version":1, "qualification":"same_executable_held64_cancel",
-            "held_count":HELD, "inner_deadline_seconds":60, "grace_seconds":10, "settle_seconds":15,
+        Ok(serde_json::json!({ "schema_version":2, "qualification":"same_executable_held64_cancel",
+            "held_count":HELD, "stall_seconds":sugarsubstitute_execution::qualification_time::STALL.as_secs(), "custody_seconds":crate::campaign_watch::CUSTODY.as_secs(), "grace_seconds":10, "settle_seconds":15,
             "unchanged_child_deadline_qpc":self.child_deadline.ticks(),
             "qpc_frequency":self.child_deadline.frequency(), "explicit_empty_environment":true,
             "explicit_fixture_handle_count":4, "cases":cases,

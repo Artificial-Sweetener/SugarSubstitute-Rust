@@ -150,3 +150,15 @@ pub(super) fn rejected_connection(
         rig.wake.wait_after(observed)?;
     }
 }
+
+/// The failure a pipe operation reports once its peer closed.
+#[cfg(windows)]
+pub(super) fn broken_pipe() -> windows::core::Error {
+    windows::core::Error::from_hresult(windows::core::HRESULT::from_win32(109))
+}
+
+/// The portable failure a pipe operation reports once its peer closed.
+#[cfg(not(windows))]
+pub(super) fn broken_pipe() -> std::io::Error {
+    std::io::ErrorKind::BrokenPipe.into()
+}

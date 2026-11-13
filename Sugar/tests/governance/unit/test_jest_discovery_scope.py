@@ -44,6 +44,10 @@ def test_jest_ignores_nested_generated_packages_and_their_tests(tmp_path: Path) 
         )
     node = shutil.which("node")
     assert node is not None, "Jest discovery requires the repository's Node runtime."
+    if sys.platform == "win32":
+        creation_flags = subprocess.CREATE_NO_WINDOW
+    else:
+        creation_flags = 0
     result = subprocess.run(
         [
             node,
@@ -58,7 +62,7 @@ def test_jest_ignores_nested_generated_packages_and_their_tests(tmp_path: Path) 
         capture_output=True,
         text=True,
         check=True,
-        creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+        creationflags=creation_flags,
     )
     discovered: list[str] = json.loads(result.stdout)
     assert [Path(name).resolve() for name in discovered] == [authored.resolve()]

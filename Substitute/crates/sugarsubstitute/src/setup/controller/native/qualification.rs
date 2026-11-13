@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise the native fresh-install route and the shared console with a provisioning boundary fixture.
 use super::*;
+use crate::campaign_watch::CampaignWatch;
 use crate::setup::presentation::Action;
 use std::time::Duration;
 use sugarsubstitute_application::setup_flow::{self as flow, Page};
@@ -9,16 +10,13 @@ use sugarsubstitute_contracts::{execution::CompletionWake, presentation::FrameSh
 use sugarsubstitute_desktop::installer::native::{self as window, Lifetime};
 use sugarsubstitute_ui::form::Control;
 
-/// Real time a qualification process may spend in its native loop before it is declared hung.
-const WATCHDOG: Duration = Duration::from_secs(90);
-
 pub(in crate::setup) fn run(
     bundle: PathBuf,
     workspace: PathBuf,
     distribution: &'static [u8],
 ) -> Result<Value> {
     let mut fixture = Fixture::new(bundle, workspace, distribution)?;
-    fixture.watchdog = Some(WATCHDOG);
+    fixture.watch = Some(CampaignWatch::new("Native installer qualification"));
     window::run(
         window::Window::installer(
             "SugarSubstitute installer qualification".into(),
@@ -44,8 +42,10 @@ struct Fixture {
     lines: usize,
     passed: bool,
     native_console: bool,
-    /// Only the standalone qualification process is bounded by real time; in-process tests are not.
-    watchdog: Option<Duration>,
+    /// Only the standalone qualification process watches for a stall; in-process tests are bounded
+    /// by their own completion.
+    watch: Option<CampaignWatch>,
+    observed: (usize, Option<Page>, bool),
 }
 impl Lifetime for Fixture {
     fn inventory(&self) -> &[Control] {
@@ -68,9 +68,14 @@ impl Lifetime for Fixture {
     }
     fn advance(&mut self, elapsed: Duration) -> Result<()> {
         if !self.owner.controller.closing {
-            if self.watchdog.is_some_and(|limit| elapsed >= limit) {
-                return Err("Native installer qualification exceeded its test watchdog".into());
+            let observed = (self.lines, self.shown, self.native_console);
+            if let Some(watch) = &mut self.watch {
+                if observed != self.observed {
+                    watch.progressed();
+                }
+                watch.check()?;
             }
+            self.observed = observed;
             if let Some(id) = self.install {
                 if self.lines < 60 {
                     self.lines += 1;
@@ -151,7 +156,8 @@ impl Fixture {
             lines: 0,
             passed: false,
             native_console: false,
-            watchdog: None,
+            watch: None,
+            observed: (0, None, false),
         })
     }
 

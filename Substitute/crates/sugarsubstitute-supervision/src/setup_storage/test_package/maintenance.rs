@@ -48,7 +48,7 @@ pub(crate) fn strike_release(
             package: PackageDigest::new("d".repeat(64))?,
             release: SignedRelease::new(format!("{sequence}.0.0"), sequence)?,
         };
-        let now = crate::setup_storage::selection::unix_now()?;
+        let now = store.strike_clock().now()?;
         let staging = record.prepare(generation.clone(), PreparationIntent::Repair, now)?;
         store.compare_exchange(&record, &staging, context)?;
         let prepared = staging.prepared(&generation)?;

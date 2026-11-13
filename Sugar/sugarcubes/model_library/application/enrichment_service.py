@@ -40,7 +40,18 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class ModelPreviewUnavailableError(RuntimeError):
-    """Report a recoverable preview failure without discarding verified provider labels."""
+    """Report a recoverable preview failure without discarding verified provider labels.
+
+    ``reason`` is a plain cause that is safe to log. ``expected`` marks an ordinary provider
+    or network outcome, such as being offline, a timeout or a refused response, which is
+    reported without a traceback; every other cause keeps its traceback.
+    """
+
+    def __init__(self, message: str, *, reason: str, expected: bool) -> None:
+        """Keep the plain cause and its classification beside the chained original error."""
+        super().__init__(message)
+        self.reason = reason
+        self.expected = expected
 
 
 class ModelProvider(Protocol):
@@ -129,12 +140,17 @@ class ModelEnrichmentService:
             except ModelPreviewUnavailableError as error:
                 preview_warning = "Metadata refreshed; the previous preview was kept."
                 _LOGGER.warning(
-                    "Model preview refresh failed; retaining prepared fallback",
+                    "Model preview refresh failed; keeping the previous preview. "
+                    "operation=model_preview_refresh provider=%s cause=%s",
+                    image_version.provider,
+                    error.reason,
                     extra={
+                        "operation": "model_preview_refresh",
                         "model_id": entry.evidence.location_id,
-                        "provider": version.provider,
+                        "provider": image_version.provider,
+                        "cause": error.reason,
                     },
-                    exc_info=error,
+                    exc_info=None if error.expected else error,
                 )
         records = tuple(
             ProviderMetadataRecord(

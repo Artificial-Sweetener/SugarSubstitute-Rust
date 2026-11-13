@@ -10,6 +10,8 @@ const LEGACY_PATH_UNITS: usize = 260;
 
 /// Prepare the same operational spelling for explicit child environment paths.
 /// Lexical validation precedes normalization; this establishes no filesystem identity.
+/// Only the Windows launch environment spells explicit child paths.
+#[cfg(windows)]
 pub(crate) fn operational(units: &[u16]) -> Result<Vec<u16>, LaunchCommandError> {
     if units.len() >= super::MAX_UNITS || units.contains(&0) || !super::paths::valid(units, false) {
         return Err(LaunchCommandError::InvalidWorkingDirectory);

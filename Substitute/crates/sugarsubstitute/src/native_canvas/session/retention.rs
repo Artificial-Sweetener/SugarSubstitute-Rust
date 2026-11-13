@@ -458,6 +458,17 @@ impl Session {
         Ok(true)
     }
 
+    /// Whether a finished new-output load is waiting only for the outgoing document to become
+    /// parkable, and it now is. The retirement that made it parkable is the event that releases
+    /// the load, because the load's own completion was already delivered.
+    pub(super) fn parked_load_released(&self) -> bool {
+        self.loading.as_ref().is_some_and(|loading| {
+            loading.expected.is_none()
+                && matches!(loading.job.status().phase, JobPhase::Terminal(_))
+        }) && self.retains(&self.document)
+            && self.document_parkable()
+    }
+
     /// Cancel the current document's rendering and display work and withdraw its unpresented
     /// frames, so its custody can move once their cancellations are observed.
     ///

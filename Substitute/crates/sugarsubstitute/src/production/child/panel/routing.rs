@@ -22,10 +22,11 @@ impl ProductionChild {
         observation: PanelObservation,
         prepared: Option<&PreparedChildStartup>,
     ) -> Result<()> {
+        let hosting = observation.hosting();
         let (identity, message, lease, claim) = observation.into_parts();
         let running =
             prepared.is_some_and(|prepared| prepared.session().phase() == StartupPhase::Running);
-        self.receive_panel_control(identity, message, lease, claim, running)
+        self.receive_panel_control(identity, message, lease, claim, hosting, running)
     }
 
     /// Couple synchronous policy processing to its consumption receipt, including refusals.
@@ -35,6 +36,7 @@ impl ProductionChild {
         message: PanelMessage,
         lease: MemoryLease,
         claim: MemoryClaim,
+        hosting: MainHosting,
         running: bool,
     ) -> Result<()> {
         if !self.accepts_panel_ingress(identity) {
@@ -43,7 +45,7 @@ impl ProductionChild {
         self.bind_panel_delivery(identity, &lease)?;
         self.panel_deliveries.check_control()?;
         let receipt = PanelIngressReceipt::control(identity, claim)?;
-        let consumed = self.consume_panel(identity, message, lease, running);
+        let consumed = self.consume_panel(identity, message, lease, hosting, running);
         self.panel_deliveries.complete_control(receipt)?;
         consumed
     }
@@ -54,6 +56,7 @@ impl ProductionChild {
         identity: MainIdentity,
         message: PanelMessage,
         lease: MemoryLease,
+        hosting: MainHosting,
         running: bool,
     ) -> Result<()> {
         if self.shutdown.closing()
@@ -64,7 +67,8 @@ impl ProductionChild {
         }
         let now = self.client()?.now()?;
         if self.panel.is_none() {
-            let Some(panel) = PanelOwner::new(identity, lease, now, self.system_accent)? else {
+            let Some(panel) = PanelOwner::new(identity, lease, now, self.system_accent, hosting)?
+            else {
                 if !self.panel_owner_admission_warned {
                     tracing::warn!(
                         operation = "panel_owner_admission",
@@ -86,8 +90,9 @@ impl ProductionChild {
         observation: SurfaceObservation,
         _prepared: Option<&PreparedChildStartup>,
     ) -> Result<()> {
+        let hosting = observation.hosting();
         let (identity, message, lease, claim) = observation.into_parts();
-        self.receive_surface_message(identity, message, lease, claim)
+        self.receive_surface_message(identity, message, lease, claim, hosting)
     }
 
     /// Consume the attributed surface data after the native observation transfers its custody.
@@ -97,12 +102,13 @@ impl ProductionChild {
         message: CanvasSurfaceMessage,
         lease: MemoryLease,
         claim: MemoryClaim,
+        hosting: MainHosting,
     ) -> Result<()> {
         if !self.accepts_panel_ingress(identity) {
             return Ok(());
         }
         self.bind_panel_delivery(identity, &lease)?;
-        self.panel_deliveries.surface(identity, message, &lease, claim)
+        self.panel_deliveries.surface(identity, message, &lease, claim, hosting)
     }
 
     /// Return an explicit unavailable answer through the same current native delivery owner.

@@ -33,9 +33,9 @@ impl Fixture {
             );
         }
         Ok(serde_json::json!({
-            "schema_version":1,"qualification":"windows_resource_claims",
+            "schema_version":2,"qualification":"windows_resource_claims",
             "namespace":hex_text(key.namespace.bytes()),"epoch":hex_text(key.epoch.bytes()),
-            "original_campaign_seconds":60,"original_family_grace_seconds":10,"original_family_settlement_seconds":15,
+            "stall_seconds":sugarsubstitute_execution::qualification_time::STALL.as_secs(),"custody_seconds":crate::campaign_watch::CUSTODY.as_secs(),"original_family_grace_seconds":10,"original_family_settlement_seconds":15,
             "original_execution_deadline_nanoseconds":self.execution_deadline.as_nanos(),
             "original_child_deadline_qpc":self.child_deadline.ticks(),"qpc_frequency":self.child_deadline.frequency(),
             "managed_root_exit_observed_before_release":self.root_exit_before_release,"premature_backend_release_rejected_busy":self.premature_release_rejected,

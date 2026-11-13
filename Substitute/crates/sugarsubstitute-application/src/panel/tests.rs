@@ -3,7 +3,10 @@
 //! Exercise panel handshake decisions without a browser or native transport.
 
 use super::*;
-use sugarsubstitute_contracts::panel::{PanelPalette, PanelRejection, PanelStyle};
+use sugarsubstitute_contracts::{
+    host::{HostCapability, HostProtocol},
+    panel::{PanelPalette, PanelRejection, PanelStyle},
+};
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
@@ -11,11 +14,19 @@ fn moment(seconds: u64) -> Moment {
     Moment::from_nanos(seconds * 1_000_000_000)
 }
 
+fn description() -> Result<HostDescription> {
+    Ok(HostDescription::new(
+        vec![HostProtocol::PANEL, HostProtocol::CANVAS],
+        vec![HostCapability::SYSTEM_ACCENT],
+    )?)
+}
+
 fn fixture() -> Result<(PanelHostSession, PanelSession, PanelPresentation)> {
     let session = PanelSession::new("session-12345678".into())?;
     let presentation =
         PanelPresentation::new(false, PanelStyle::Comfy, Some(PanelPalette::DarkGray), None, 0)?;
-    let host = PanelHostSession::new(session.clone(), presentation.clone(), moment(0))?;
+    let host =
+        PanelHostSession::new(session.clone(), description()?, presentation.clone(), moment(0))?;
     Ok((host, session, presentation))
 }
 
@@ -23,6 +34,7 @@ fn fixture() -> Result<(PanelHostSession, PanelSession, PanelPresentation)> {
 fn current_session_handshake_preserves_presentation_and_connection_state() -> Result<()> {
     let (mut host, session, presentation) = fixture()?;
     let ready = host.receive(PanelMessage::Ready(session.clone()), moment(1))?;
+    assert_eq!(ready.description, Some(description()?));
     assert_eq!(
         ready.send,
         Some(PanelMessage::Configure {
@@ -33,6 +45,7 @@ fn current_session_handshake_preserves_presentation_and_connection_state() -> Re
     assert_eq!(ready.state, None);
     let applied = host.receive(PanelMessage::Applied(session.clone()), moment(2))?;
     assert_eq!(applied.send, Some(PanelMessage::Ping(session.clone())));
+    assert_eq!(applied.description, None);
     assert_eq!(host.next_deadline()?, Some(moment(7)));
     let pong =
         host.receive(PanelMessage::Pong { session: session.clone(), connected: true }, moment(3))?;
@@ -46,10 +59,10 @@ fn current_session_handshake_preserves_presentation_and_connection_state() -> Re
     assert_eq!(host.update_presentation(presentation).send, None);
     let changed =
         PanelPresentation::new(false, PanelStyle::Fluent, Some(PanelPalette::Black), None, 0)?;
-    assert_eq!(
-        host.update_presentation(changed.clone()).send,
-        Some(PanelMessage::Configure { session, presentation: changed })
-    );
+    let reconfigured = host.update_presentation(changed.clone());
+    assert_eq!(reconfigured.send, Some(PanelMessage::Configure { session, presentation: changed }));
+    // A configure that supersedes an unsent one must not lose the description before it.
+    assert_eq!(reconfigured.description, Some(description()?));
     Ok(())
 }
 
@@ -124,7 +137,8 @@ fn backward_time_and_unrepresentable_deadlines_never_mutate_the_session() -> Res
     assert_eq!(host.state(), PanelState::Loading);
     assert_eq!(host.next_deadline()?, Some(moment(30)));
     assert_eq!(
-        PanelHostSession::new(session, presentation, Moment::from_nanos(u64::MAX)).err(),
+        PanelHostSession::new(session, description()?, presentation, Moment::from_nanos(u64::MAX))
+            .err(),
         Some(PanelClockError::DeadlineOverflow)
     );
     Ok(())

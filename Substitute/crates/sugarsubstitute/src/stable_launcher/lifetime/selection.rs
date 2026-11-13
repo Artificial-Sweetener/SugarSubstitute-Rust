@@ -53,6 +53,10 @@ impl Launcher {
             Choice::Recover => Task::Recover,
             Choice::Complete => return Ok(()),
         };
+        if self.late_update(task) {
+            self.failed(task, Box::new(LateUpdate))?;
+            return self.select_next();
+        }
         let submitted = match self.choice {
             Choice::Route => {
                 let root = self.root.clone();
@@ -172,7 +176,8 @@ impl Launcher {
     }
 
     /// Optional authority/cache failures never substitute unverified bytes for accepted startup.
-    /// A trial may fall back only after recovery proves no native process was created.
+    /// A trial may fall back only after recovery proves no native process was created, or that
+    /// its child is gone without ever having taken over.
     pub(super) fn failed(&mut self, task: Task, cause: Box<dyn Error>) -> Result<()> {
         if self.closing {
             return Err(cause);
@@ -180,6 +185,15 @@ impl Launcher {
         if matches!(task, Task::Delegate) {
             self.delegated(Takeover::Exited);
             self.update_failure = Some(cause);
+            return Ok(());
+        }
+        if matches!(task, Task::Route) && route_lock_timed_out(cause.as_ref()) {
+            // Another process kept the record busy past its bounded wait. Optional work would
+            // wait on it again, so only the accepted release is attempted.
+            tracing::warn!(operation="startup_route_busy", cause=%crate::failure_details::Details(cause.as_ref()), "The installation record stayed busy; starting the accepted release");
+            self.update_failure.get_or_insert(cause);
+            self.accepted_only = true;
+            self.choice = Choice::Accepted;
             return Ok(());
         }
         if !matches!(
@@ -211,7 +225,11 @@ impl Launcher {
         self.recovery_until = None;
         self.recovery_wake = None;
         match outcome {
-            CreationOutcome::NotCreated => self.choice = Choice::Accepted,
+            // An updated release that never took over had its trial resolved under this
+            // launcher's run, so the accepted release starts now and the update is retried later.
+            CreationOutcome::NotCreated | CreationOutcome::Unadopted => {
+                self.choice = Choice::Accepted
+            }
             CreationOutcome::Created => {
                 self.completed = true;
                 self.choice = Choice::Complete;
@@ -225,4 +243,27 @@ impl Launcher {
         }
         Ok(())
     }
+}
+
+/// Whether routing stopped only because another process held the installation record past
+/// its bounded wait.
+fn route_lock_timed_out(cause: &(dyn Error + 'static)) -> bool {
+    use sugarsubstitute_supervision::setup_storage::{RouteFailure, SelectionFailure};
+    let mut next = Some(cause);
+    while let Some(current) = next {
+        // `io::Error::source` skips the wrapped error itself, so look inside it first.
+        if let Some(inner) = current.downcast_ref::<io::Error>().and_then(io::Error::get_ref)
+            && route_lock_timed_out(inner)
+        {
+            return true;
+        }
+        if matches!(
+            current.downcast_ref::<RouteFailure>(),
+            Some(RouteFailure::Selection(SelectionFailure::LockTimeout))
+        ) {
+            return true;
+        }
+        next = current.source();
+    }
+    false
 }

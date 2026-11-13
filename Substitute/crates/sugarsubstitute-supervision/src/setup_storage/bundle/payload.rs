@@ -157,8 +157,32 @@ impl Payload {
         self.inventory.release()
     }
 
+    /// Read one verified retained file in place, for a consumer that streams it.
+    ///
+    /// The reader uses positioned reads on the retained handle, so it never moves a shared
+    /// file pointer, and it reads only the authenticated length.
+    /// # Errors
+    /// Rejects a path the authenticated inventory does not list.
+    pub(in crate::setup_storage) fn reader(&self, path: &str) -> io::Result<PayloadReader<'_>> {
+        let (entry, input) = self
+            .inventory
+            .entries()
+            .iter()
+            .zip(&self.inputs)
+            .find(|(entry, _)| entry.path() == path)
+            .ok_or_else(|| invalid("The package does not hold the requested file"))?;
+        Ok(PayloadReader { file: &input.file, offset: 0, length: entry.bytes() })
+    }
+
     /// Copy retained source bytes using create-only publication; existing exact files resume.
     /// The caller supplies the destination's protection policy on the admitted storage worker.
+    /// Before writing, the volume must hold every byte still to copy plus
+    /// [`crate::setup_storage::HEADROOM_BYTES`]. A stage file that is not published, because the
+    /// copy failed or was cancelled, is removed again; only a power loss can leave one, and
+    /// then it is preserved as unknown content.
+    /// # Errors
+    /// A `StorageFull` error caused by [`crate::setup_storage::SpaceShortage`] when the disk is
+    /// short, and every native, verification and cancellation failure.
     pub(in crate::setup_storage) fn copy(
         &self,
         prefix: &str,
@@ -166,9 +190,29 @@ impl Payload {
         context: &JobContext,
         create: impl Fn(&Path) -> io::Result<File>,
     ) -> io::Result<()> {
+        self.copy_with(prefix, target, context, create, &crate::setup_storage::VolumeSpace)
+    }
+
+    /// [`Self::copy`] measuring free space through `space`.
+    pub(in crate::setup_storage) fn copy_with(
+        &self,
+        prefix: &str,
+        target: &Path,
+        context: &JobContext,
+        create: impl Fn(&Path) -> io::Result<File>,
+        space: &dyn crate::setup_storage::FreeSpace,
+    ) -> io::Result<()> {
         let _operation =
             tracing::trace_span!(target: "sugarsubstitute::storage", "bundle_copy").entered();
-        let _directory = Directory::open(target, true)?;
+        let directory = Directory::open(target, true)?;
+        let remaining = self.uncopied_bytes(prefix, target)?;
+        crate::setup_storage::download::space::ensure(
+            directory.path(),
+            remaining,
+            space,
+            &mut [],
+            context,
+        )?;
         for (entry, input) in self.inventory.entries().iter().zip(&self.inputs) {
             let Some(relative) = entry.path().strip_prefix(prefix) else {
                 continue;
@@ -196,7 +240,8 @@ impl Payload {
                 Err(cause) => return Err(cause),
             }
             let staged = crate::durable_storage::staging::unique_path(&parent, ".payload-stage")?;
-            let mut destination = create(&staged)?;
+            let mut stage = Stage::created(&parent, &staged, create(&staged)?)?;
+            let destination = stage.file()?;
             let mut offset = 0;
             let mut buffer = [0_u8; 65536];
             loop {
@@ -211,12 +256,34 @@ impl Payload {
             if offset != entry.bytes() {
                 return Err(invalid("Payload length changed while copying"));
             }
-            files::sync(&destination, context)?;
-            drop(destination);
+            files::sync(destination, context)?;
+            stage.close();
             check(context)?;
             crate::durable_storage::staging::publish(&staged, &output)?;
+            stage.published();
         }
         Ok(())
+    }
+
+    /// Bytes of the entries below `prefix` whose output does not exist yet. An existing output
+    /// is verified by the copy itself, so it counts as copied here.
+    fn uncopied_bytes(&self, prefix: &str, target: &Path) -> io::Result<u64> {
+        let mut bytes = 0_u64;
+        for entry in self.inventory.entries() {
+            let Some(relative) = entry.path().strip_prefix(prefix) else { continue };
+            let output = target.join(relative);
+            let present = match output.parent().map(|parent| Directory::open(parent, false)) {
+                Some(Ok(parent)) => {
+                    let leaf = output.file_name().and_then(|value| value.to_str());
+                    leaf.is_some_and(|leaf| parent.read(leaf).is_ok())
+                }
+                Some(Err(_)) | None => false,
+            };
+            if !present {
+                bytes = bytes.saturating_add(entry.bytes());
+            }
+        }
+        Ok(bytes)
     }
 
     /// Retain the exact authenticated manifest beside a copied complete package tree.
@@ -258,6 +325,39 @@ pub(super) fn hash(file: &mut File, context: &JobContext) -> io::Result<String> 
     Ok(digest.finish_hex())
 }
 
+/// A seekable view of one verified retained payload file, bounded to its authenticated length.
+pub(in crate::setup_storage) struct PayloadReader<'a> {
+    file: &'a File,
+    offset: u64,
+    length: u64,
+}
+
+impl Read for PayloadReader<'_> {
+    fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
+        let remaining = self.length.saturating_sub(self.offset);
+        let wanted = bytes.len().min(usize::try_from(remaining).unwrap_or(usize::MAX));
+        if wanted == 0 {
+            return Ok(0);
+        }
+        let count = self.file.seek_read(&mut bytes[..wanted], self.offset)?;
+        self.offset += count as u64;
+        Ok(count)
+    }
+}
+
+impl Seek for PayloadReader<'_> {
+    fn seek(&mut self, position: SeekFrom) -> io::Result<u64> {
+        let next = match position {
+            SeekFrom::Start(offset) => Some(offset),
+            SeekFrom::End(delta) => self.length.checked_add_signed(delta),
+            SeekFrom::Current(delta) => self.offset.checked_add_signed(delta),
+        };
+        let next = next.ok_or_else(|| invalid("Payload seek outside the file"))?;
+        self.offset = next;
+        Ok(next)
+    }
+}
+
 /// Require the cache owner's original lease even when a payload arrived through a drive alias.
 fn unmanaged_payload(directory: Directory) -> io::Result<Directory> {
     let resolved = directory.resolved()?;
@@ -272,4 +372,54 @@ fn unmanaged_payload(directory: Directory) -> io::Result<Directory> {
         }
     }
     Ok(resolved)
+}
+
+/// A stage file this copy created, with its writable handle. Unless it was published under its
+/// final name, dropping the guard closes the handle and then removes exactly that file again,
+/// by its native identity.
+struct Stage<'a> {
+    parent: &'a Directory,
+    file: Option<File>,
+    leaf: Option<String>,
+    identity: (u32, u32, u32),
+}
+impl<'a> Stage<'a> {
+    fn created(parent: &'a Directory, staged: &Path, file: File) -> io::Result<Self> {
+        let leaf = staged
+            .file_name()
+            .and_then(|value| value.to_str())
+            .ok_or_else(|| invalid("Stage leaf absent"))?
+            .to_owned();
+        let identity = files::file_identity(&file);
+        let mut stage = Self { parent, file: Some(file), leaf: Some(leaf), identity: (0, 0, 0) };
+        stage.identity = identity?;
+        Ok(stage)
+    }
+
+    /// The writable stage handle until [`Self::close`].
+    fn file(&mut self) -> io::Result<&mut File> {
+        self.file.as_mut().ok_or_else(|| invalid("Stage file already closed"))
+    }
+
+    /// Close the stage handle before the stage is renamed into place.
+    fn close(&mut self) {
+        self.file = None;
+    }
+
+    /// The stage file is now the published output and must stay.
+    fn published(&mut self) {
+        self.leaf = None;
+    }
+}
+impl Drop for Stage<'_> {
+    fn drop(&mut self) {
+        self.file = None;
+        let Some(leaf) = self.leaf.take() else { return };
+        if let Err(cause) =
+            crate::durable_storage::retirement::file(self.parent, &leaf, self.identity)
+        {
+            tracing::warn!(operation = "bundle_stage_cleanup", cause = %cause,
+                "An unpublished stage file could not be removed; it is preserved");
+        }
+    }
 }

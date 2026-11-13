@@ -8,7 +8,7 @@ use sugarsubstitute_supervision::coordinator_entry::{
     self, CoordinatorEntryOwner, EntryObservation,
 };
 #[path = "diagnostics.rs"]
-mod diagnostics;
+pub(in crate::production) mod diagnostics;
 #[path = "policy_loan.rs"]
 mod policy_loan;
 #[path = "readiness.rs"]

@@ -1,0 +1,27 @@
+{
+  "name": "sugar-monorepo-release",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Per-component semantic-release for SugarCubes and SugarSubstitute from one repository",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test --test-concurrency=1 tests/*.test.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@semantic-release/changelog": "6.0.3",
+    "@semantic-release/commit-analyzer": "13.0.1",
+    "@semantic-release/exec": "7.1.0",
+    "@semantic-release/git": "10.0.1",
+    "@semantic-release/release-notes-generator": "14.1.1",
+    "conventional-changelog-conventionalcommits": "9.3.1",
+    "prettier": "3.6.2",
+    "semantic-release": "25.0.3",
+    "yaml": "2.8.1"
+  }
+}

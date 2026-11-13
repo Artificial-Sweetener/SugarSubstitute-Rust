@@ -29,8 +29,9 @@
       record.done = true;
     }
     function queueControl(record, first = false) {
-      const index = queues.c.findIndex(item => item.value.type === record.value.type);
+      const index = queues.c.findIndex(item => policy.replaces(item.value, record.value));
       if (index >= 0) { if (!first) queues.c[index] = record; }
+      else if (!first && queues.c.length >= 16) deny('capacity');
       else if (first) queues.c.unshift(record);
       else queues.c.push(record);
     }
@@ -72,8 +73,7 @@
       flush('x', true);
     }
     const bridge = Object.freeze({
-      host, session, preferencePolicy: 'saved',
-      ...(policy.outputSurfacePreference === 'host' ? { outputSurfacePreference: 'host' } : {}),
+      host, session,
       send(input) {
         const encoded = JSON.stringify(input);
         if (typeof encoded !== 'string') deny('bound');

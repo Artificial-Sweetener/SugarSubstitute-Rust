@@ -120,7 +120,7 @@ pub(crate) fn check(
         )?;
         require(
             fingerprint(root, std::slice::from_ref(&record.path))? == record.source_sha256,
-            format!("localization: stale review {}", record.path),
+            format!("localization: stale review {}; {}", record.path, crate::fingerprints::RESYNC),
         )?;
     }
     let roots = ["crates", "tools", "native", "installer"].map(String::from);

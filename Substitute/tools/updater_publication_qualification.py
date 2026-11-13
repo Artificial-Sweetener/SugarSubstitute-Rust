@@ -45,16 +45,27 @@ def validate_paths(workspace, installation, setup, output):
         raise ValueError('Setup executable is absent')
 
 
-def settle(owner, seconds, report):
-    """Observe natural retirement before any fixture cleanup, retaining descendant evidence."""
-    deadline = time.monotonic() + seconds
-    while time.monotonic() < deadline:
+STALL_SECONDS = 600
+
+
+def settle(owner, report, stall=STALL_SECONDS, clock=time.monotonic, pause=time.sleep):
+    """Observe natural retirement before any fixture cleanup, retaining descendant evidence.
+
+    A family whose live members keep changing is still retiring, however slowly. Only a family
+    that stays exactly the same for the whole stall interval is reported as hung.
+    """
+    members, unchanged_since = None, clock()
+    while True:
         owner.discover()
         owner.observe_images(report)
-        if not owner.alive():
+        alive = sorted(owner.alive())
+        if not alive:
             return
-        time.sleep(0.02)
-    raise RuntimeError('Owned process family did not settle naturally')
+        if alive != members:
+            members, unchanged_since = alive, clock()
+        elif clock() - unchanged_since >= stall:
+            raise RuntimeError(f'Owned process family {alive} made no progress for {stall} seconds')
+        pause(0.02)
 
 
 def require_selection_preserved(before, after):
@@ -199,7 +210,7 @@ class Qualification:
         try:
             self.launcher.rename(backup)
             source, journal = self.interrupt(owner, report)
-            settle(owner, 60, report)
+            settle(owner, report)
             report['after_fault_alive'] = owner.alive()
             fault_extractions = payload_generations(payload_root)
             report['extractions_after_fault'] = require_payload_reuse(prior_extractions, fault_extractions)
@@ -210,7 +221,7 @@ class Qualification:
             if not report['run_available_after_fault']:
                 raise RuntimeError('Installer interruption left an application lock held')
             self.launch(owner, 'rescue')
-            settle(owner, 360, report)
+            settle(owner, report)
             receipt = json.loads((self.case / 'rescue-receipt.json').read_text())
             if not receipt.get('passed') or receipt.get('application_creation_observed') is not False:
                 raise RuntimeError('Real installer rescue did not succeed without opening the app')

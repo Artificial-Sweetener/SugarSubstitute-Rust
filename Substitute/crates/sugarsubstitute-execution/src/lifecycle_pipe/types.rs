@@ -41,6 +41,8 @@ pub enum LifecyclePipeError {
     InvalidMessage,
     /// This single-transfer native artifact was already taken.
     AlreadyTransferred,
+    /// The channel's purpose forbids this side from sending this message.
+    Direction,
 }
 impl fmt::Display for LifecyclePipeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

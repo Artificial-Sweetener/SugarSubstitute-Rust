@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Encode bounded, untrusted lifecycle messages independently of native authentication.
 //!
-//! Wire version 13 uses little-endian integers and a fixed 104-byte header. Kind21
+//! Wire version 15 uses little-endian integers and a fixed 104-byte header. Kind21
 //! reports the policy-accepted native main reveal after frontend readiness. The parent
 //! rechecks its retained profile/browser authorization before accepting that observation.
 //! Registration reply tag17 carries explicit parent-derived backend execution policy before
@@ -67,8 +67,9 @@
 //! Preparation, Cleanup, UnexpectedExit and Deadline. Rejection codes 1..10 mean
 //! ForeignOwner, StaleIdentity, ProfileContention, WrongPhase, ChangedDuplicate,
 //! StaleRequest, Overloaded, IdentityExhausted, InvalidClock and EndpointMismatch.
-//! Kind19 SettleAttempt carries the original positive u64 launch/navigation and
-//! Acquire request ID. The authenticated parent retains the resource association
+//! Kind19 SettleAttempt carries the original positive u64 launch/navigation, the
+//! Acquire request ID and u8 page failure (0 none, 1 the page reported SugarCubes
+//! unavailable or failed, 2 the page never loaded for another reason). The authenticated parent retains the resource association
 //! and acknowledges only real cleanup settlement. Kind20 RetryBackend carries the
 //! exact Main identity and failed lease reference (40 payload bytes). Reply tag15
 //! BackendUnavailable carries failed lease/u32 status/u16 affected clients/u8 retry
@@ -89,7 +90,13 @@
 //! a stale original lease gains no release or reload authority. Web reload remains with
 //! the frontend owner. These copied wire facts grant no retry, current readiness,
 //! native adoption or teardown proof.
-//! Only schema13 is accepted; parent and captured child deploy together.
+//! Kind22 UpdateStatus, sent by the coordinator without a request, carries a positive u64
+//! revision, u8 workflow queue (1 idle, 2 busy, 3 unobserved) and a u32-counted encoded status of at
+//! most `MAX_UPDATE_STATUS_BYTES`, whose content its contract owner decodes and bounds. Kind23
+//! RestartToApply is an empty child request, sent after the close save finished and before
+//! ExitIntent; it grants no process authority, and the coordinator relaunches only when the
+//! child then exits normally.
+//! Only schema15 is accepted; parent and captured child deploy together.
 //! Unknown tags and trailing bytes reject; no future operation is implied.
 mod binary;
 mod decode;
@@ -112,7 +119,7 @@ pub use main_types::{
     BackendPeer, GrantedContext, MainFailureCode, MainStage, MainStageFailure, VersionLabel,
 };
 pub use output::OutputDelivery;
-pub use payload::{CapabilityRef, DecodedPayload, LeaseReference, WirePayload};
+pub use payload::{CapabilityRef, DecodedPayload, LeaseReference, WirePayload, WorkflowQueue};
 pub use raw_windows::{
     FolderFragment, MAX_FOLDER_FRAGMENT_UNITS, MAX_PROFILE_FOLDER_UNITS, RawWindowsUnits,
 };
@@ -121,11 +128,13 @@ pub use target::{BorrowedBackendTarget, DecodedTarget, ManagedTargetRef};
 pub use utf16::{ArgumentRefs, Utf16Text};
 
 /// Exact supported wire version; unknown versions reject without negotiation.
-pub const WIRE_VERSION: u16 = 13;
+pub const WIRE_VERSION: u16 = 15;
 /// Exact header byte count, including the whole claimed run and deadline.
 pub const HEADER_BYTES: usize = 104;
 /// Maximum complete control frame, including header and payload.
 pub const MAX_FRAME_BYTES: usize = 65_536;
+/// Largest encoded update status a Kind22 frame carries.
+pub const MAX_UPDATE_STATUS_BYTES: usize = 32_768;
 
 #[cfg(test)]
 mod tests;

@@ -21,7 +21,8 @@ import type { GimpPackageContents } from './PackageContents.js';
 
 /** Keep native package output on the workstation's artifact drive. */
 export function admitPackageOutput(output: string): void {
-  if (!path.isAbsolute(output) || path.parse(output).root.toLowerCase() !== 'd:\\')
+  // Drive letters exist only in Windows path syntax, so judge the output by it on every host.
+  if (!path.win32.isAbsolute(output) || path.win32.parse(output).root.toLowerCase() !== 'd:\\')
     throw new Error('Choose an absolute D-drive directory for GIMP package artifacts.');
 }
 

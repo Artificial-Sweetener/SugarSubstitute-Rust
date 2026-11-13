@@ -2,7 +2,6 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Admit finite owned cleanup only at actual completion or immutable stop boundaries.
 use super::{Result, evidence::Stop, parent::Parent};
-use std::time::Instant;
 use sugarsubstitute_contracts::{
     execution::{Clock, JobClass},
     lifecycle::{ProcessKey, ShutdownId},
@@ -26,7 +25,7 @@ impl Parent {
         let stop = Stop::new(
             ShutdownId::new(u64::try_from(self.current)? + 1)?,
             self.clock.now(),
-            Instant::now(),
+            crate::campaign_watch::native_now(),
         )?;
         self.registry.as_mut().ok_or("Actual registry is not prepared")?.begin_stop(
             key,

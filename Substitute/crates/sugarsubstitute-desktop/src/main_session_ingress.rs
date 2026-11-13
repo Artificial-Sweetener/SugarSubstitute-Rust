@@ -25,6 +25,7 @@ struct Header {
     _message: serde::de::IgnoredAny,
 }
 pub(crate) struct Received {
+    #[cfg(target_os = "windows")]
     pub(crate) ticket: u64,
     pub(crate) observation: Option<SessionObservation>,
 }
@@ -60,7 +61,13 @@ pub(crate) fn decode(
     }
     let envelope = match serde_json::from_str::<Envelope>(payload) {
         Ok(value) => value,
-        Err(_) => return Ok(Some(Received { ticket: header.ticket, observation: None })),
+        Err(_) => {
+            return Ok(Some(Received {
+                #[cfg(target_os = "windows")]
+                ticket: header.ticket,
+                observation: None,
+            }));
+        }
     };
     if envelope.session_transport != header.session_transport
         || envelope.webview != header.webview
@@ -72,9 +79,14 @@ pub(crate) fn decode(
     let encoded = serde_json::to_vec(&message)
         .map_err(|cause| DesktopError::new("measure_session_message", cause))?;
     if encoded.len() > MAX_MESSAGE_BYTES || bootstrap.validate(&message).is_err() {
-        return Ok(Some(Received { ticket: header.ticket, observation: None }));
+        return Ok(Some(Received {
+            #[cfg(target_os = "windows")]
+            ticket: header.ticket,
+            observation: None,
+        }));
     }
     Ok(Some(Received {
+        #[cfg(target_os = "windows")]
         ticket: header.ticket,
         observation: Some(SessionObservation::new(identity, message, source_lease.clone(), claim)),
     }))

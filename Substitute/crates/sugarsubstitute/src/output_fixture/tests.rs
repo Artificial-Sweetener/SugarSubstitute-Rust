@@ -84,7 +84,7 @@ fn original_cleanup_budget_is_fixed_ten_and_fifteen_seconds_without_reset() -> R
     let stop = evidence::Stop::new(
         ShutdownId::new(1)?,
         Moment::from_nanos(100),
-        std::time::Instant::now(),
+        sugarsubstitute_execution::qualification_time::anchor(),
     )?;
     assert_eq!(stop.budget.graceful_until.as_nanos(), 10_000_000_100);
     assert_eq!(stop.budget.settle_until.as_nanos(), 15_000_000_100);

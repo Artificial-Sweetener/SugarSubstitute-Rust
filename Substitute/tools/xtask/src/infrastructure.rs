@@ -131,7 +131,11 @@ pub(crate) fn check(
         )?;
         require(
             fingerprint(root, std::slice::from_ref(&record.path))? == record.source_sha256,
-            format!("infrastructure: stale source disposition {}", record.path),
+            format!(
+                "infrastructure: stale source disposition {}; {}",
+                record.path,
+                crate::fingerprints::RESYNC
+            ),
         )?;
         require(
             (record.disposition == Disposition::Implementation)

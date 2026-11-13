@@ -193,3 +193,36 @@ fn shared_readiness_transport_observes_the_connected_tuple_before_and_after_body
         server.finish()
     })
 }
+
+#[test]
+fn file_downloads_stream_a_bounded_complete_body() -> TestResult {
+    worker::run_reserved(RESERVATION, |context, _| {
+        let (server, policy) = Running::start(
+            vec![
+                complete("archive", b"zip bytes"),
+                complete("large", b"more than the bound"),
+                exchange("short", None, 200, "Content-Length: 50\r\n", b"truncated"),
+                exchange("gone", None, 404, "Content-Length: 0\r\n", b""),
+            ],
+            context,
+        )?;
+        let mut http = Http::new();
+        let mut output = Vec::new();
+        assert_eq!(http.file(&policy, policy.asset("archive")?, 9, IDLE, context, &mut output)?, 9);
+        assert_eq!(output, b"zip bytes");
+        for name in ["large", "short"] {
+            let mut output = Vec::new();
+            assert!(
+                http.file(&policy, policy.asset(name)?, 10, IDLE, context, &mut output).is_err(),
+                "{name}"
+            );
+            assert!(http.settled());
+        }
+        assert!(matches!(
+            http.file(&policy, policy.asset("gone")?, 10, IDLE, context, &mut Vec::new()),
+            Err(Failure::Policy(sugarsubstitute_update::http::Rejection::Status(404)))
+        ));
+        assert!(http.settled());
+        server.finish()
+    })
+}

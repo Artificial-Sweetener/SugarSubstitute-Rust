@@ -44,6 +44,7 @@ pub(in super::super) const ZH_HANS: InstallerMessages = InstallerMessages {
     step: "第 {current} 步，共 {total} 步",
     no_environment: "没有可用的兼容环境。请重试或选择现有的 ComfyUI 安装。",
     retry: "检查并重试",
+    included_version_offer: "SugarSubstitute 无法在线检查是否有更新的版本，因此重试时会安装此安装程序中包含的版本，并在下次联网时自动更新。",
     cancelled: "安装已取消。现有文件已保留。",
     cancelling: "正在完成清理…",
     worker_stopped: "安装无法继续。请关闭并重新打开安装程序后重试。现有文件已保留，详细信息见下方。",

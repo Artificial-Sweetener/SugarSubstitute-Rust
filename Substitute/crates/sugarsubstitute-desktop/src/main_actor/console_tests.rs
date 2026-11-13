@@ -3,6 +3,7 @@
 //! Exercise the actual console projection against bounded protocol envelopes and readiness.
 
 use super::*;
+use sugarsubstitute_execution::qualification_time::anchor;
 
 fn metadata() -> serde_json::Value {
     let frames: Vec<_> = (0..48).map(|index| serde_json::json!({
@@ -61,7 +62,7 @@ fn long_and_nul_console_primitives_preserve_actual_positive_dom_and_barrier()
         ("error", "Error calling extension 'SugarCubes.UI' method 'setup'\0other".into()),
         ("warning", "Extension SugarCubes.UI is disabled. additional diagnostic".into()),
     ] {
-        let now = std::time::Instant::now();
+        let now = anchor();
         let mut owner = loaded()?;
         let target = owner.poll_probe(now)?.ok_or("Missing genuine probe")?;
         let payload = event(kind, serde_json::json!([{"type":"string","value":value}]));
@@ -90,7 +91,7 @@ fn long_and_nul_console_primitives_preserve_actual_positive_dom_and_barrier()
 #[test]
 fn valid_console_stack_and_remote_preview_preserve_pending_probe_without_readiness()
 -> Result<(), Box<dyn Error>> {
-    let now = std::time::Instant::now();
+    let now = anchor();
     let preview: Vec<_> = (0..48)
         .map(|index| {
             serde_json::json!({
@@ -123,7 +124,7 @@ fn valid_console_stack_and_remote_preview_preserve_pending_probe_without_readine
 #[test]
 fn projected_console_keeps_exact_primitive_setup_failures_and_ignores_object_descriptions()
 -> Result<(), Box<dyn Error>> {
-    let now = std::time::Instant::now();
+    let now = anchor();
     for (kind, message, fault) in [
         (
             "error",

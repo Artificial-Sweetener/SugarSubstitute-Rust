@@ -15,9 +15,9 @@ pub enum RegistryInputError {
     /// Bootstrap and enrollment do not belong to the exact same admitted session.
     LifecycleProvenance,
     /// Diagnostic pins are missing or belong to different actual sessions/bindings.
-    DiagnosticProvenance,
+    PurposeProvenance,
     /// Diagnostic channel ownership conflicts with another inherited native role.
-    DiagnosticConflict,
+    PurposeConflict,
     /// Custody bootstrap/enrollment is absent or belongs to another actual session.
     BackendCustodyProvenance,
     /// Custody helper inheritance conflicts with another native role.
@@ -39,8 +39,8 @@ impl Error for RegistryInputError {
         match self {
             Self::Capacity
             | Self::LifecycleProvenance
-            | Self::DiagnosticProvenance
-            | Self::DiagnosticConflict
+            | Self::PurposeProvenance
+            | Self::PurposeConflict
             | Self::BackendCustodyProvenance
             | Self::BackendCustodyConflict
             | Self::OutputBinding

@@ -23,6 +23,8 @@ import logging
 from pathlib import Path
 import subprocess
 
+from .environment import COMPANION_CREATION_FLAGS
+
 _logger = logging.getLogger(__name__)
 
 
@@ -39,7 +41,7 @@ def verify_viewer_runtime(executable: Path, environment: Mapping[str, str]) -> N
             env=dict(environment),
             timeout=10,
             check=False,
-            creationflags=subprocess.CREATE_NO_WINDOW,
+            creationflags=COMPANION_CREATION_FLAGS,
         )
     except (OSError, subprocess.TimeoutExpired) as error:
         raise RuntimeError(

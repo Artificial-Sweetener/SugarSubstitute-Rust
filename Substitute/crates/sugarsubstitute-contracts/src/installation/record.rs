@@ -68,10 +68,11 @@ impl TryFrom<SignedReleaseWire> for SignedRelease {
 }
 
 /// Correlate readiness or rejection to an exact persisted launch attempt.
-/// This record is correlation data; native authenticated transport supplies authority. Unlike the
-/// rest of the record it refuses unknown fields, because native IPC correlates it exactly.
+/// This record is correlation data; native authenticated transport supplies authority, and IPC
+/// compares the known fields with the protected record, never with fields it cannot read. Like
+/// the rest of the record it ignores fields a later release adds, so an older fallback engine
+/// still reads a trial in progress when the candidate's own engine cannot start.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Trial {
     /// Installation whose accepted selection can change.
     pub installation: InstallationId,
@@ -211,7 +212,8 @@ impl InstallationRecord {
     /// Decode bounded JSON and validate all references; never modifies the source bytes.
     /// # Errors
     /// Returns `Schema` for any other schema number, checked before the other fields are read.
-    /// Rejects unknown fields, invalid identities and contradictory selection state.
+    /// Ignores fields a later release adds within this schema. Rejects missing fields, invalid
+    /// identities and contradictory selection state.
     pub fn decode(bytes: &[u8]) -> Result<Self, Rejection> {
         if bytes.len() > MAX_RECORD_BYTES {
             return Err(Rejection::Capacity);

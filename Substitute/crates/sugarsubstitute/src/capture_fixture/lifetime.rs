@@ -92,7 +92,7 @@ impl HeadlessLifetime for Fixture {
         // A real timestamp is mandatory; failed clock metadata cannot renew a budget.
         let started =
             self.client.as_ref().map_or_else(|| Ok(self.clock.now()), ExecutionClient::now)?;
-        let native = Instant::now();
+        let native = crate::campaign_watch::native_now();
         let after =
             self.client.as_ref().map_or_else(|| Ok(self.clock.now()), ExecutionClient::now)?;
         self.stop = Some(StopPlan::new(started, started, native, after)?);

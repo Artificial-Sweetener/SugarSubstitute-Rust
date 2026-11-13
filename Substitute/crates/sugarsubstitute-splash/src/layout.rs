@@ -37,6 +37,12 @@ pub enum StartupStatus {
     RetryReady,
     /// Cleanup failed and original ownership remains retained.
     CleanupFailed,
+    /// A new version is being applied before the application opens.
+    Updating(crate::UpdateVersion),
+    /// The installed launcher is still handing startup to the application.
+    Starting,
+    /// SugarCubes is being updated before the backend loads it.
+    UpdatingSugarcubes,
 }
 
 /// Supply portable appearance state; process and connection state stay elsewhere.
@@ -58,6 +64,9 @@ pub struct Appearance {
     pub hovered: Option<Control>,
     /// Currently pressed control.
     pub pressed: Option<Control>,
+    /// Whether the console and close controls are drawn. The launcher's notice has neither:
+    /// it has no output to show and ends by itself within seconds.
+    pub controls: bool,
 }
 
 impl Appearance {
@@ -72,6 +81,7 @@ impl Appearance {
             reveal: 1.0,
             hovered: None,
             pressed: None,
+            controls: true,
         }
     }
 

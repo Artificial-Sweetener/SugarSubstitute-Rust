@@ -34,7 +34,7 @@ impl HeadlessLifetime for Child {
         self.permit = Some(permit);
         // Sample Instant before the local Moment. This maps the already admitted
         // budget conservatively; it does not translate or renew the QPC deadline.
-        let native_now = std::time::Instant::now();
+        let native_now = crate::campaign_watch::native_now();
         let local_now = self.clock.now();
         self.native_deadline =
             Some(super::super::specification::native_deadline(native_now, local_now, deadline)?);

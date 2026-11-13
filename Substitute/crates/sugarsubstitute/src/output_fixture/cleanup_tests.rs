@@ -87,8 +87,11 @@ fn partial_settlement_remains_retirable_without_admitting_a_new_stop() -> Result
 }
 #[test]
 fn settled_family_consumes_total_boundary_while_independent_output_is_held() -> Result<()> {
-    let mut stop =
-        Stop::new(ShutdownId::new(1)?, Moment::from_nanos(100), std::time::Instant::now())?;
+    let mut stop = Stop::new(
+        ShutdownId::new(1)?,
+        Moment::from_nanos(100),
+        sugarsubstitute_execution::qualification_time::anchor(),
+    )?;
     assert_eq!(stop.due(stop.budget.graceful_until), (true, false));
     assert_eq!(stop.next(), Some(stop.total));
     assert_eq!(stop.due(stop.budget.settle_until), (false, true));
@@ -103,10 +106,14 @@ fn retired_family_does_not_schedule_past_cleanup_timers_for_held_output() -> Res
     let case = &mut parent.cases[0];
     case.retired = true;
     case.drained = false;
-    case.stop =
-        Some(Stop::new(ShutdownId::new(1)?, Moment::from_nanos(0), std::time::Instant::now())?);
-    assert_eq!(parent.next_deadline(), Some(parent.deadline));
-    parent.deadline_observed = true;
+    case.stop = Some(Stop::new(
+        ShutdownId::new(1)?,
+        Moment::from_nanos(0),
+        sugarsubstitute_execution::qualification_time::anchor(),
+    )?);
+    assert_eq!(parent.next_deadline(), parent.watch.next_deadline());
+    parent.watch = crate::campaign_watch::CampaignWatch::silent("Output qualification");
+    assert!(parent.watch.check().is_err());
     assert_eq!(parent.next_deadline(), None);
     Ok(())
 }
@@ -116,8 +123,11 @@ fn pending_descendant_watch_allows_due_finite_cleanup_without_duplicate_admissio
     let mut state = snapshot(&parent)?;
     state.cleanup_pending = true;
     let case = &mut parent.cases[0];
-    case.stop =
-        Some(Stop::new(ShutdownId::new(1)?, Moment::from_nanos(100), std::time::Instant::now())?);
+    case.stop = Some(Stop::new(
+        ShutdownId::new(1)?,
+        Moment::from_nanos(100),
+        sugarsubstitute_execution::qualification_time::anchor(),
+    )?);
     case.member_job = Some(JobId::new(9)?);
     case.cleanup_requested = true;
     assert!(case.can_submit_cleanup(state));

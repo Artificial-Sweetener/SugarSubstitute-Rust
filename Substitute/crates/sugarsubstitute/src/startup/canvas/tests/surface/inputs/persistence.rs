@@ -287,22 +287,45 @@ fn advance_to(inputs: &Inputs, moment: Moment) {
     inputs.clock.0.fetch_max(moment.as_nanos(), Ordering::SeqCst);
 }
 
-#[test]
-fn a_hard_kill_loses_at_most_one_autosave_window_of_strokes() -> Result<(), Box<dyn Error>> {
+/// Whether an automatic save job is running, replacing the archive file.
+fn autosave_saving(inputs: &Inputs) -> bool {
+    inputs.canvas.session.as_ref().is_some_and(|session| session.input_autosave_saving())
+}
+
+/// Start the save due at `due` on the fixture clock and observe its outcome. Returns the next
+/// deadline: `None` when the save landed, or its retry after a failure.
+fn save_due(inputs: &mut Inputs, due: Moment) -> Result<Option<Moment>, Box<dyn Error>> {
+    advance_to(inputs, due);
+    inputs.until("The due save did not start", |inputs| autosave_due(inputs) != Some(due))?;
+    inputs.until("The due save did not finish", |inputs| !autosave_saving(inputs))?;
+    Ok(autosave_due(inputs))
+}
+
+/// Land every scheduled save, so nothing replaces the archive until the next change. Files of
+/// a running save are never opened here: on Windows a reader holding the archive fails its
+/// replacement.
+fn settle_saves(inputs: &mut Inputs) -> Result<(), Box<dyn Error>> {
+    inputs.until("A running save did not finish", |inputs| !autosave_saving(inputs))?;
+    for _ in 0..SAVE_PERIODS {
+        let Some(due) = autosave_due(inputs) else { return Ok(()) };
+        save_due(inputs, due)?;
+    }
+    Err("The scheduled saves never landed".into())
+}
+
+/// A canvas whose archive holds every change, with its saved bytes, a brush stroke made after
+/// it, and the stroke's scheduled save, checked against one autosave window.
+fn stroke_after_a_save(
+    directory: &std::path::Path,
+) -> Result<(Inputs, Vec<u8>, Moment), Box<dyn Error>> {
     let longest = crate::native_canvas::session::inputs::AUTOSAVE.longest;
-    let directory = anchor()?;
-    let archive = session_directory(directory.path()).join("input-documents.ssdoc");
-    let mut first = Inputs::start(directory.path())?;
+    let archive = session_directory(directory).join("input-documents.ssdoc");
+    let mut first = Inputs::start(directory)?;
     let image = synced(&first.workflow(sync(None))?, "image")?.clone();
     first.workflow(activate(Some("image"), Some("empty"), "input"))?;
     first.context_until(|document| document["id"] == image["document"]["id"])?;
     first.save_until(|| archive.is_file())?;
-    // Save every earlier change first, so the next scheduled save is the stroke's own.
-    while let Some(due) = autosave_due(&first) {
-        advance_to(&first, due);
-        first.until("An earlier save did not start", |inputs| autosave_due(inputs) != Some(due))?;
-    }
-    first.until("An earlier save did not finish", |inputs| autosave_due(inputs).is_none())?;
+    settle_saves(&mut first)?;
     let saved = std::fs::read(&archive)?;
     first.ask("edit.request", Some(json!({"type":"tool", "tool":"brush"})))?;
     first.drag(&[[2.0, 3.0], [6.0, 3.0]])?;
@@ -312,11 +335,37 @@ fn a_hard_kill_loses_at_most_one_autosave_window_of_strokes() -> Result<(), Box<
     let ended = Moment::from_nanos(first.clock.0.load(Ordering::SeqCst));
     let due = autosave_due(&first).ok_or("The stroke's save vanished")?;
     assert!(due <= ended.checked_add(longest)?, "the save waits at most one autosave window");
+    Ok((first, saved, due))
+}
+
+#[test]
+fn a_hard_kill_loses_at_most_one_autosave_window_of_strokes() -> Result<(), Box<dyn Error>> {
+    let directory = anchor()?;
+    let archive = session_directory(directory.path()).join("input-documents.ssdoc");
+    let (mut first, saved, due) = stroke_after_a_save(directory.path())?;
     // A hard kill now would lose only what this save is about to write.
-    advance_to(&first, due);
-    first.until("The stroke was not saved within one autosave window", |_| {
-        std::fs::read(&archive).is_ok_and(|bytes| bytes != saved)
-    })?;
+    assert_eq!(save_due(&mut first, due)?, None, "the stroke's save landed at its deadline");
+    assert_ne!(std::fs::read(&archive)?, saved, "the archive holds the stroke");
+    first.close()
+}
+
+/// A reader holding the archive open, such as a scanner, fails the replacement on Windows; the
+/// save is retried after the quiet period and lands once the reader lets go.
+#[cfg(windows)]
+#[test]
+fn a_save_blocked_by_a_reader_of_the_archive_retries_after_the_quiet_period()
+-> Result<(), Box<dyn Error>> {
+    let quiet = crate::native_canvas::session::inputs::AUTOSAVE.quiet;
+    let directory = anchor()?;
+    let archive = session_directory(directory.path()).join("input-documents.ssdoc");
+    let (mut first, saved, due) = stroke_after_a_save(directory.path())?;
+    let reader = std::fs::File::open(&archive)?;
+    let retry = save_due(&mut first, due)?.ok_or("the save landed past an open reader")?;
+    assert_eq!(retry, due.checked_add(quiet)?, "the failed save retries after the quiet period");
+    drop(reader);
+    assert_eq!(std::fs::read(&archive)?, saved, "the failed save kept the previous archive");
+    assert_eq!(save_due(&mut first, retry)?, None, "the retried save landed");
+    assert_ne!(std::fs::read(&archive)?, saved, "the archive holds the stroke");
     first.close()
 }
 /// A surface whose base is a ComfyUI temporary file, which ComfyUI deletes when it starts.

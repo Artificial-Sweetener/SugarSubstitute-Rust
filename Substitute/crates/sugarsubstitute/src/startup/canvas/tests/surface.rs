@@ -135,9 +135,18 @@ fn check_reply(
         return Err("Surface reply is missing".into());
     };
     let value: Value = serde_json::from_slice(reply.payload())?;
-    assert_eq!(value["requestId"], id);
-    assert_eq!(value["status"], status);
+    assert_eq!(value["requestId"], id, "{value}");
+    assert_eq!(value["status"], status, "{value}");
+    says_what_happened(&value);
     Ok(())
+}
+
+/// Require an error reply to say what happened.
+fn says_what_happened(reply: &Value) {
+    if reply["status"] == "error" {
+        let message = reply["message"].as_str().unwrap_or_default();
+        assert!(!message.trim().is_empty(), "An error reply did not say what happened: {reply}");
+    }
 }
 
 /// Inspect upload readiness independently of retained native pixels.

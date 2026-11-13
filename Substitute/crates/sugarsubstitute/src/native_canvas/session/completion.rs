@@ -192,13 +192,17 @@ impl Session {
                     .as_ref()
                     .is_some_and(|front| Arc::strong_count(front) > 1),
             });
-        if !self.gpu_document()
-            && current_source
-            && !self.closing
+        let cpu_publishable =
+            !self.gpu_document() && current_source && !self.closing && self.pending_open.is_none();
+        // A CPU repair mutates the canonical backing in place, so it waits for exclusive custody
+        // even after presentation is revoked. Display work drops its clone before publishing its
+        // terminal, and that completion wakes this owner to consume the held frame.
+        if cpu_publishable && backing_borrowed {
+            return Ok(());
+        }
+        if cpu_publishable
             && self.drawable
-            && self.pending_open.is_none()
             && (self.document.cpu_pending.is_some()
-                || backing_borrowed
                 || (self.presentation.attached()
                     && self.pacing.readiness(self.navigation_time())?
                         != PresentationReadiness::Ready))

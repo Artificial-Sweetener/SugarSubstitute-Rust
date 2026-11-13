@@ -11,19 +11,22 @@
 //! The gate serializes fresh acquisition: a fresh acquirer takes the gate, proves every slot
 //! free, takes the first slot and releases the gate. A sender holds the handoff byte while a
 //! receiver adopts; the receiver takes any free slot and then requires the handoff byte to still
-//! be held, so the sender's slot was held continuously until the receiver held its own.
+//! be held, so the sender's slot was held continuously until the receiver held its own. The
+//! handoff byte is locked through a third, overlapped file object of the holder, so a sender can
+//! wait in the kernel for an earlier sender's handoff to end and can release its own handoff
+//! while keeping its slot. That object always closes before the slot's object, so a held handoff
+//! byte always means its holder still holds a slot.
 //!
 //! The byte layout is frozen surface: engines and applications of every generation contend on
 //! the same rendezvous files, so these offsets never change (`native-exclusion-slots-v1`).
 use super::*;
-use std::{
-    fmt,
-    sync::atomic::{AtomicBool, Ordering},
-};
+use std::{fmt, os::windows::io::AsHandle, sync::Mutex};
+use sugarsubstitute_contracts::execution::Moment;
+use sugarsubstitute_execution::file_lock::{self, FileLockError, LockKind};
 use windows::Win32::{
     Foundation::{ERROR_LOCK_VIOLATION, HANDLE},
     Storage::FileSystem::{
-        LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY, LockFileEx, UnlockFileEx,
+        LOCKFILE_EXCLUSIVE_LOCK, LOCKFILE_FAIL_IMMEDIATELY, LockFileEx, ReOpenFile, UnlockFileEx,
     },
     System::IO::OVERLAPPED,
 };
@@ -56,31 +59,86 @@ pub(super) fn busy() -> io::Error {
 }
 
 /// Live exclusion held through a private lock object; only the witness may cross processes.
-/// Dropping it closes the private object, which releases the slot.
+/// Dropping it closes the handoff object first and then the private object, which releases the
+/// slot, so the handoff byte is never held without a slot.
 pub(crate) struct SlotExclusion {
+    handoff: Mutex<Option<File>>,
     lock: File,
     witness: File,
-    handoff: AtomicBool,
 }
 impl SlotExclusion {
+    fn new(lock: File, witness: File) -> Self {
+        Self { handoff: Mutex::new(None), lock, witness }
+    }
+
     /// Separate handle on the same rendezvous for duplication into a receiving process. Closing
     /// any duplicate of it never releases this exclusion.
     pub(crate) fn witness(&self) -> &File {
         &self.witness
     }
 
-    /// Hold the handoff byte so a receiver may adopt this exclusion. Keep it until the receiver
-    /// holds its own slot or is known to be gone; dropping this owner also releases it.
-    /// Repeated holds are idempotent.
+    /// Hold the handoff byte so a receiver may adopt this exclusion, waiting in the kernel until
+    /// `until` on the job's clock while an earlier sender in this chain still holds it; pass the
+    /// job's current time to refuse at once instead. Keep it until the receiver holds its own
+    /// slot or is known to be gone, then `release_handoff`; dropping this owner also releases
+    /// it. Repeated holds are idempotent. Run on a blocking infrastructure job.
     /// # Errors
-    /// `is_busy` while another holder's handoff on this rendezvous is in progress.
-    pub(crate) fn hold_handoff(&self) -> io::Result<()> {
-        if !self.handoff.load(Ordering::Acquire) {
-            Range::try_lock(&self.lock, HANDOFF, 1)?.keep();
-            self.handoff.store(true, Ordering::Release);
+    /// `is_busy` while another holder's handoff lasts past `until`; `Interrupted` on
+    /// cancellation; storage errors otherwise.
+    pub(crate) fn hold_handoff(&self, context: &JobContext, until: Moment) -> io::Result<()> {
+        let mut handoff = crate::native_claims::lock(&self.handoff);
+        if handoff.is_some() {
+            return Ok(());
         }
+        let object = reopen_overlapped(&self.lock)?;
+        file_lock::lock_range(
+            context,
+            object.as_handle(),
+            LockKind::Exclusive,
+            file_lock::Range { offset: HANDOFF, length: 1 },
+            until,
+        )
+        .map_err(|cause| match cause {
+            FileLockError::Timeout => busy(),
+            FileLockError::Cancelled => io::Error::new(io::ErrorKind::Interrupted, cause),
+            FileLockError::Io(cause) => cause,
+            FileLockError::Unavailable => io::Error::other(cause),
+        })?;
+        *handoff = Some(object);
         Ok(())
     }
+
+    /// End this holder's handoff: a receiver that has not yet confirmed it now refuses, while
+    /// this holder keeps its own slot. Releasing a handoff that is not held does nothing.
+    pub(crate) fn release_handoff(&self) {
+        drop(crate::native_claims::lock(&self.handoff).take());
+    }
+}
+impl Drop for SlotExclusion {
+    fn drop(&mut self) {
+        // Field order already closes the handoff object first; keep it explicit.
+        self.release_handoff();
+    }
+}
+
+/// A new file object on the same file for overlapped locking only. It requests read access,
+/// which a lock needs, and shares reading and writing like every rendezvous handle.
+fn reopen_overlapped(file: &File) -> io::Result<File> {
+    // SAFETY: the borrowed handle is live for this call; the returned handle is unique and
+    // adopted immediately.
+    let raw = unsafe {
+        ReOpenFile(
+            HANDLE(file.as_raw_handle()),
+            FILE_GENERIC_READ.0,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            FILE_FLAG_OVERLAPPED,
+        )
+    }
+    .map_err(io::Error::other)?;
+    // SAFETY: ReOpenFile returned this unique valid handle.
+    let reopened = unsafe { File::from_raw_handle(raw.0) };
+    same_file(file, &reopened)?;
+    Ok(reopened)
 }
 
 /// One exclusively locked byte range on a synchronous handle, unlocked when dropped unless kept.
@@ -184,7 +242,7 @@ impl Protection {
             Range::try_lock(&lock, FIRST_SLOT, 1)?.keep();
         }
         check(context)?;
-        Ok(SlotExclusion { lock, witness, handoff: AtomicBool::new(false) })
+        Ok(SlotExclusion::new(lock, witness))
     }
 }
 
@@ -230,7 +288,7 @@ impl Protection {
             Err(cause) => return Err(cause),
         }
         check(context)?;
-        Ok(SlotExclusion { lock, witness: inherited, handoff: AtomicBool::new(false) })
+        Ok(SlotExclusion::new(lock, inherited))
     }
 }
 
