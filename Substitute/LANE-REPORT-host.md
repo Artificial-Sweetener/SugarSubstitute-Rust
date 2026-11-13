@@ -2,7 +2,7 @@
 
 ## Unfinished
 
-- **E6, the Substitute profile, is not recorded.** It must be the real host's answers, from Windows-only owners in `sugarsubstitute`, and Windows tests cannot link yet (lane/ci item 1). `PENDING_HOST_PROFILES.substitute` and its `test.failing` stay; removing them without a recording would fabricate one. Checking against the kit found one real defect, fixed in `138b247e`.
+- **E6, handed over unfinished.** A Windows recorder (`production/child/panel/conformance_tests.rs`) checks the production owners' answer to each kit message against `conformance_answers.json`. `crates/sugarsubstitute-desktop/tests/host_conformance.mjs` runs the real kit under Node over the real bridge, answering from that file, and recorded `profiles/substitute/0.1.0.json`; SugarCubes' pending entry and `test.failing` are retired, and its 15 profile tests pass. Still to do: storage-inventory records for the two new `.mjs` files (governance fails on that now); a Windows run to confirm the answers, computed on Linux from the same owner logic; CI wiring for the Node harness.
 
 ## Unproven
 

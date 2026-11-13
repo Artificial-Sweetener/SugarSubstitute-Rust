@@ -27,7 +27,7 @@ mod execution;
 #[path = "startup/lifetime.rs"]
 mod lifetime;
 #[cfg(all(windows, any(feature = "windows-native-host", test)))]
-mod memory;
+pub(crate) mod memory;
 #[path = "startup/policy.rs"]
 mod policy;
 #[path = "startup/routing.rs"]
@@ -37,7 +37,7 @@ mod scopes;
 #[path = "startup/shutdown.rs"]
 mod shutdown;
 #[cfg(all(windows, any(feature = "windows-native-host", test)))]
-mod updates_page;
+pub(crate) mod updates_page;
 #[path = "startup/view.rs"]
 pub(crate) mod view;
 #[path = "startup/window_content.rs"]

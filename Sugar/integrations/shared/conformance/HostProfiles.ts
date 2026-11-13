@@ -51,10 +51,7 @@ export type HostProfileSlot = (typeof HOST_PROFILE_SLOTS)[number];
  * A slot listed here has no fixture; recording its profile means removing it from this list.
  */
 export const PENDING_HOST_PROFILES: Readonly<Partial<Record<HostProfileSlot, string>>> =
-  Object.freeze({
-    substitute:
-      'SugarSubstitute records its profile from its Rust host with this kit and adds it as profiles/substitute/<release>.json.',
-  });
+  Object.freeze({});
 
 /** A host release's recorded answers; `none` is a page with no host channel, such as plain ComfyUI. */
 export interface RecordedHostProfile {

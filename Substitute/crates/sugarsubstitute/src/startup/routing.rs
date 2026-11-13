@@ -413,7 +413,10 @@ impl<B: StartupBackend> StartupHost<B> {
             return Ok(Some(observation));
         };
         match observation {
-            DesktopStartupObservation::MemoryMessage(observed) => memory.observe_page(observed)?,
+            DesktopStartupObservation::MemoryMessage(observed) => {
+                let (identity, message, lease, claim) = observed.into_parts();
+                memory.observe_page(identity, message, lease, claim)?;
+            }
             DesktopStartupObservation::BrowserProcesses { processes, .. } => {
                 memory.set_browser_processes(processes);
             }

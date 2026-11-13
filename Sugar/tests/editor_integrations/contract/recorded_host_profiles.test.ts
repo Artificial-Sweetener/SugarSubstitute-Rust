@@ -35,10 +35,11 @@ test('every host has a recorded profile unless it is listed as pending, and only
   }
 });
 
-// Known pending item: the Substitute profile is recorded on the Rust side. This test passes while
-// that profile is missing and fails the moment it lands, until the pending entry is removed.
-test.failing('the Substitute host profile is recorded', () => {
+// SugarSubstitute records its profile from its Rust host's answers with this kit, over its own
+// page-channel codec, and adds it as profiles/substitute/<release>.json.
+test('the Substitute host profile is recorded', () => {
   expect(PENDING_HOST_PROFILES.substitute).toBeUndefined();
+  expect(recordedProfiles('substitute').length).toBeGreaterThan(0);
 });
 
 test.each(recorded.map((profile) => [`${profile.host} ${profile.release}`, profile] as const))(

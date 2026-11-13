@@ -973,6 +973,13 @@ capabilities = ["arguments"]
 rationale = "The developer composite check accepts one explicit Vulkan vendor/device selector and resolves it through the production adapter catalog."
 
 [[records]]
+path = "crates/sugarsubstitute-desktop/tests/host_conformance.mjs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:2c287ae21783689d83c7cc3ccdc75ff32eb06694b778eee4e9d68dbce0afa184"
+capabilities = ["arguments"]
+rationale = "Accept --record to save the conformance kit's transcript as this host's SugarCubes profile; without it the saved profile must match."
+
+[[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
 source_sha256 = "sha256:113b2c25548f0203e07b5592f4c7783310ec4a17fdc82ba7130fcf0a01950e8f"
