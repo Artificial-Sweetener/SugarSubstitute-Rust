@@ -68,7 +68,7 @@ impl UnstartedUpdaterTrial {
             self.publish(now, context)?;
             let exclusion = {
                 // The child adopts while this creator still holds its slot and handoff byte.
-                self.prepared._preparation.hold_handoff()?;
+                self.prepared._preparation.hold_handoff(context, context.now())?;
                 duplicate_inheritable(self.prepared._preparation.witness())?
             };
             check(context)?;
@@ -154,7 +154,7 @@ impl UpdaterProbeTransfer {
             UpdaterProbeDisposition::Accepted => trial.accept(&self.trial.attempt),
             UpdaterProbeDisposition::Rejected => trial.reject(
                 &self.trial.attempt,
-                crate::setup_storage::selection::unix_now().map_err(io::Error::other)?,
+                self.trial.prepared.source.trust.strike_clock().now().map_err(io::Error::other)?,
             ),
             UpdaterProbeDisposition::Unstarted => trial.cancel_unstarted_trial(&self.trial.attempt),
         }

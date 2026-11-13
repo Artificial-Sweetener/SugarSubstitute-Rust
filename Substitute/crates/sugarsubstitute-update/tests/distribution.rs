@@ -5,7 +5,8 @@ use sugarsubstitute_update::distribution::{Distribution, MAX_BYTES, UpdatePolicy
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 
 fn configuration() -> serde_json::Value {
-    serde_json::json!({"schema_version":2, "update_policy":"beta_eager", "repository":vec![92;32], "feed": {
+    serde_json::json!({"schema_version":3, "update_policy":"beta_eager", "repository":vec![92;32],
+        "release_notes":"https://github.com/example/monorepo/releases/tag/substitute-v{version}", "feed": {
         "transport":"https", "base":"https://updates.example.test/releases/",
         "redirects":["https://assets.example.test/"]
     }})
@@ -47,11 +48,17 @@ fn malformed_schema_fields_and_empty_identity_never_disable_or_reset_updates() -
         "missing_channel_override",
         "missing_policy",
         "unknown_policy",
+        "missing_release_notes",
     ] {
         let mut value = configuration();
         match field {
-            "schema" => value["schema_version"] = 3.into(),
-            "previous_schema" => value["schema_version"] = 1.into(),
+            "schema" => value["schema_version"] = 4.into(),
+            "previous_schema" => value["schema_version"] = 2.into(),
+            "missing_release_notes" => {
+                if let Some(fields) = value.as_object_mut() {
+                    fields.remove("release_notes");
+                }
+            }
             "missing_policy" => {
                 if let Some(fields) = value.as_object_mut() {
                     fields.remove("update_policy");
@@ -64,6 +71,40 @@ fn malformed_schema_fields_and_empty_identity_never_disable_or_reset_updates() -
             _ => value["channel"] = "canary".into(),
         }
         assert!(Distribution::decode(&serde_json::to_vec(&value)?).is_err(), "{field}");
+    }
+    Ok(())
+}
+
+#[test]
+fn release_notes_link_each_version_to_its_published_notes() -> Result {
+    let distribution = Distribution::decode(&serde_json::to_vec(&configuration())?)?;
+    let notes = distribution.release_notes();
+    assert_eq!(
+        notes.url("0.2.0")?.as_str(),
+        "https://github.com/example/monorepo/releases/tag/substitute-v0.2.0"
+    );
+    for version in
+        ["", "1", "1.2", "1.2.3.4", "01.2.3", "1.2.3-beta", "1.2.x", "../1.2.3", "1.2.3#x"]
+    {
+        assert!(notes.url(version).is_err(), "{version}");
+    }
+    Ok(())
+}
+
+#[test]
+fn release_notes_locations_must_be_one_plain_https_template() -> Result {
+    for location in [
+        "https://example.test/notes",
+        "https://example.test/{version}/{version}",
+        "http://example.test/{version}",
+        "https://user:secret@example.test/{version}",
+        "https://example.test/{version}?ticket=1",
+        "file:///notes/{version}",
+        "{version}",
+    ] {
+        let mut value = configuration();
+        value["release_notes"] = location.into();
+        assert!(Distribution::decode(&serde_json::to_vec(&value)?).is_err(), "{location}");
     }
     Ok(())
 }

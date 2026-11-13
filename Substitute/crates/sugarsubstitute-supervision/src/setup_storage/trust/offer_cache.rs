@@ -69,29 +69,37 @@ impl TrustStore {
     ) -> Result<Option<AuthenticatedOffer>, TrustFailure> {
         check(context)?;
         let memory = context.memory().claim(OFFER_RESERVATION_BYTES).map_err(io::Error::other)?;
-        let inputs = {
-            // A bounded read may grow its allocation geometrically; decoded inputs are already
-            // covered by the retained offer claim, and the read allocation retires before parsing.
-            let _buffer = context.memory().claim(8 * 1024 * 1024).map_err(io::Error::other)?;
-            let Some(lease) = self.runtime_cache(context)?.find(
-                Namespace::UpdateOffers,
-                &self.offer_key(&request),
-                cache::utc_seconds()?,
-                context,
-            )?
-            else {
-                return Ok(None);
-            };
-            let bytes = lease.read(RECORD, context)?.read_bounded(envelope::Kind::Offer.limit())?;
-            let payload = envelope::decode(
-                envelope::Kind::Offer,
-                &self.installation,
-                &self.repository,
-                &bytes,
-            )?;
-            codec::decode(payload, request)?
-        };
+        let Some(inputs) = self.cached_inputs(request, context)? else { return Ok(None) };
         AuthenticatedOffer::from_parts(self, inputs, memory, now, context).map(Some)
+    }
+
+    /// Exact retained signed bytes for `request`, bound to this installation and repository but
+    /// not authenticated against any clock. The caller funds the decoded inputs with
+    /// `OFFER_RESERVATION_BYTES` and must authenticate them, or match them to a protected digest,
+    /// before relying on any of their content. Missing storage returns `None`.
+    /// # Errors
+    /// Preserves corrupt/foreign bytes, cancellation and storage failures.
+    pub(super) fn cached_inputs(
+        &self,
+        request: Request,
+        context: &JobContext,
+    ) -> Result<Option<OfferInputs>, TrustFailure> {
+        // A bounded read may grow its allocation geometrically; decoded inputs are covered by the
+        // caller's retained offer claim, and the read allocation retires before parsing.
+        let _buffer = context.memory().claim(8 * 1024 * 1024).map_err(io::Error::other)?;
+        let Some(lease) = self.runtime_cache(context)?.find(
+            Namespace::UpdateOffers,
+            &self.offer_key(&request),
+            cache::utc_seconds()?,
+            context,
+        )?
+        else {
+            return Ok(None);
+        };
+        let bytes = lease.read(RECORD, context)?.read_bounded(envelope::Kind::Offer.limit())?;
+        let payload =
+            envelope::decode(envelope::Kind::Offer, &self.installation, &self.repository, &bytes)?;
+        Ok(Some(codec::decode(payload, request)?))
     }
 
     /// Route and physical installation identities partition disposable generations independently

@@ -169,13 +169,6 @@ disposition = "fixture"
 rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
 
 [[records]]
-path = "crates/sugarsubstitute/src/production/diagnostic_helper/service/seed_failure_tests.rs"
-owner = "sugarsubstitute"
-source_sha256 = "sha256:7d9aa3ba183c3d9e5467b6118e87f86732280df8ec7b00747e3fa09a0ce4b491"
-disposition = "fixture"
-rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
-
-[[records]]
 path = "crates/sugarsubstitute/src/production/entry_activation/desktop_output/diagnostic/bulk_tests.rs"
 owner = "sugarsubstitute"
 source_sha256 = "sha256:345ce233f8528fa98a8e5cf89136a7ab8d2c17b0f7929879fd343891de8debb0"
@@ -206,7 +199,7 @@ rationale = "Isolated behavioral or native qualification captures test output to
 [[records]]
 path = "crates/sugarsubstitute/src/production/incident_host/tests/diagnostics.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:1a2cd5b79d96c94977f8b148b57e96671c933ac563f86962a0b17b6d224a5529"
+source_sha256 = "sha256:d34582d27ddfa9f7a49d962df4db8e0ee466a18d3899608e211c5edb0fccd713"
 disposition = "fixture"
 rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
 
@@ -302,9 +295,16 @@ disposition = "developer"
 rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
 
 [[records]]
+path = "tools/update-repository/src/main.rs"
+owner = "sugarsubstitute-update-repository"
+source_sha256 = "sha256:2d65c4e259f824cad7d7dac32bf9de5f8f3321b25cec6392cb3cb014d0f3bda6"
+disposition = "developer"
+rationale = "Release-CI signing tool output: the files it wrote and what the application's verifier accepted, read by the update repository workflow; never part of the runtime route."
+
+[[records]]
 path = "tools/xtask/src/main.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:18466b683f64abb9aa1305dcf692a53a7e9ac57e8033203a4bae4a95c0c052cc"
+source_sha256 = "sha256:f51bcdb6293887ae84afea84b42bbd5c550e02eaf9fa9233c4299c6969ee5871"
 disposition = "developer"
 rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
 
@@ -416,7 +416,7 @@ rationale = "Isolated behavioral or native qualification captures test output to
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/disk_inheritance.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:c576d08916b84e457b01f0de2454fd3c713eed6ee9097ae240afc9187b5b93e2"
+source_sha256 = "sha256:54404021feff0eeb76c5470a497505f9537925623ff7ee63e577d4be2d5e86a1"
 disposition = "capture"
 rationale = "Inherited storage custody rejects aliasing with standard process handles; queried handles remain borrowed."
 

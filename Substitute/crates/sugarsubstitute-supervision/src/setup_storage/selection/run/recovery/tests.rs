@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise abandoned-selection recovery through real exclusion and atomic protected storage.
 use super::*;
+use crate::setup_storage::selection::StrikeClock;
 use crate::setup_storage::{
     selection::{
         run::tests::prepare,
@@ -10,6 +11,9 @@ use crate::setup_storage::{
     test_worker as worker,
 };
 use sugarsubstitute_contracts::installation::{UNWITNESSED_LIMIT, Unwitnessed};
+
+/// The injected time an abandoned trial that counts as a strike is dated with.
+const AT: u64 = 1_800_000_123;
 
 /// Begin a trial of `prepared`, then lose every owner without settling it, as a power cut does.
 fn abandon(
@@ -56,7 +60,10 @@ fn admitted_run_cannot_recover_its_own_trial() -> TestResult {
 fn an_abandoned_trial_activates_again_until_the_third_in_a_row_counts_as_a_strike() -> TestResult {
     worker::run(|context, _| {
         let root = root()?;
-        let store = Arc::new(SelectionStore::initialize(root.path(), &initial()?, context)?);
+        let store = Arc::new(
+            SelectionStore::initialize(root.path(), &initial()?, context)?
+                .with_strike_clock(StrikeClock::Fixed(AT)),
+        );
         let mut prepared = prepare(&store, &initial()?, 1, context)?;
         for count in 1..UNWITNESSED_LIMIT {
             abandon(&store, &prepared, context)?;
@@ -80,6 +87,7 @@ fn an_abandoned_trial_activates_again_until_the_third_in_a_row_counts_as_a_strik
         assert!(struck.candidate().is_none());
         assert_eq!(struck.rollback(), Some(&generation(1)?));
         assert_eq!(struck.strikes().len(), 1);
+        assert_eq!(struck.strikes()[0].at, AT, "recovery dates the strike with the store clock");
         assert!(struck.unwitnessed().is_none());
         Ok(())
     })

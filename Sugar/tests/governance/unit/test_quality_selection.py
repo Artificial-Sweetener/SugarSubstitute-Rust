@@ -177,6 +177,63 @@ def test_unregistered_editor_cannot_select_zero_proofs() -> None:
         select_paths(policy, ("integrations/new_editor/src/index.ts",))
 
 
+def test_removed_unowned_runtime_file_selects_every_proof() -> None:
+    """Recheck everything when a file no area owns is removed, since its dependants are unknown."""
+
+    policy: _TestPolicy = load_test_policy(ROOT / "TEST_POLICY.toml")
+    path = "integrations/new_editor/src/index.ts"
+    selection = select_paths(policy, (path,), removed=frozenset({path}))
+    assert set(selection.groups) == set(policy.groups)
+    with pytest.raises(ValueError, match="not allowed to select zero tests"):
+        select_paths(policy, (path,), removed=frozenset({"some/other/file.ts"}))
+
+
+def test_staged_plan_accepts_removing_an_unowned_runtime_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Plan a staged removal of an unowned configuration file as a full recheck."""
+
+    _git(tmp_path, "init", "--quiet")
+    files = {
+        "value.py": "value: int = 1\n",
+        ".releaserc.json": "{}\n",
+        "package.json": '{"scripts":{"verify":"node verify.cjs"}}',
+        "QUALITY_POLICY.toml": 'schema=1\n[[check]]\nname="fixture"\nscript="verify"\nareas=["*"]\nexclude_areas=[]\n',
+        "TEST_POLICY.toml": 'schema=1\ntest_root="tests"\nboundary=[]\nsubscription=[]\n[[area]]\nname="fixture"\nsources=["value.py"]\nproofs=["unit"]\n',
+        "ARCHITECTURE_POLICY.toml": 'schema=1\ndependency=[]\n[structure]\nsource_roots=["value.py"]\nextensions=[".py"]\nexcluded_prefixes=["node_modules/"]\nsoft_lines=350\nhard_lines=500\n',
+        "ARCHITECTURE_DEBT.toml": "schema=1\ndebt=[]\n",
+        "ARCHITECTURE_WAIVERS.toml": "schema=1\nwaiver=[]\n",
+        "tests/fixture/unit/test_value.py": "from value import value\n\ndef test_value() -> None:\n    assert value == 1\n",
+    }
+    for relative, content in files.items():
+        target = tmp_path / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+    _git(tmp_path, "add", ".")
+    _git(
+        tmp_path,
+        "-c",
+        "user.name=Fixture",
+        "-c",
+        "user.email=fixture@example.invalid",
+        "commit",
+        "--quiet",
+        "-m",
+        "fixture",
+    )
+    _git(tmp_path, "rm", "--quiet", ".releaserc.json")
+    (tmp_path / "node_modules").mkdir()
+    monkeypatch.setenv("GIT_INDEX_FILE", str(tmp_path / ".git/index"))
+    assert quality_main(("staged", "--plan"), project_root=tmp_path) == 0
+    output = capsys.readouterr().out
+    assert (
+        "SELECT fixture/unit: .releaserc.json: removed a runtime file no area owns"
+        in output
+    )
+
+
 def test_staged_gate_executes_indexed_checks_and_tests(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

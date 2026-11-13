@@ -18,9 +18,21 @@ fn ordinary_control_and_cancellation_have_independent_slots_and_bounded_service(
     let identity = identity()?;
     let session = PanelSession::for_main(identity)?;
     let mut deliveries = Deliveries::new();
-    deliveries.surface(identity, surface_request(&session, 1)?, &lease, lease.claim(bytes)?)?;
+    deliveries.surface(
+        identity,
+        surface_request(&session, 1)?,
+        &lease,
+        lease.claim(bytes)?,
+        MainHosting::Windowed,
+    )?;
     deliveries.complete_control(PanelIngressReceipt::control(identity, lease.claim(bytes)?)?)?;
-    deliveries.surface(identity, cancellation(&session, 1)?, &lease, lease.claim(bytes)?)?;
+    deliveries.surface(
+        identity,
+        cancellation(&session, 1)?,
+        &lease,
+        lease.claim(bytes)?,
+        MainHosting::Windowed,
+    )?;
 
     assert!(
         deliveries
@@ -40,7 +52,13 @@ fn ordinary_control_and_cancellation_have_independent_slots_and_bounded_service(
     );
     assert!(
         deliveries
-            .surface(identity, cancellation(&session, 2)?, &lease, lease.claim(bytes)?)
+            .surface(
+                identity,
+                cancellation(&session, 2)?,
+                &lease,
+                lease.claim(bytes)?,
+                MainHosting::Windowed
+            )
             .is_err()
     );
     let Some(DesktopStartupCommand::SendSurface(reply)) = deliveries.take_command(identity) else {
@@ -49,7 +67,13 @@ fn ordinary_control_and_cancellation_have_independent_slots_and_bounded_service(
     let value: serde_json::Value = serde_json::from_slice(reply.payload())?;
     assert_eq!(value["requestId"], 1);
     drop(reply);
-    deliveries.surface(identity, surface_request(&session, 2)?, &lease, lease.claim(bytes)?)?;
+    deliveries.surface(
+        identity,
+        surface_request(&session, 2)?,
+        &lease,
+        lease.claim(bytes)?,
+        MainHosting::Windowed,
+    )?;
     assert!(matches!(
         deliveries.take_command(identity),
         Some(DesktopStartupCommand::CompletePanelIngress(_))
@@ -108,7 +132,13 @@ fn clear_releases_every_lane_and_rebinding_requires_the_explicit_fence() -> Resu
         &unavailable(),
     )?;
     deliveries.complete_control(PanelIngressReceipt::control(identity, lease.claim(bytes)?)?)?;
-    deliveries.surface(identity, cancellation(&session, 9)?, &lease, lease.claim(bytes)?)?;
+    deliveries.surface(
+        identity,
+        cancellation(&session, 9)?,
+        &lease,
+        lease.claim(bytes)?,
+        MainHosting::Windowed,
+    )?;
     let next = MainIdentity { navigation: Generation::new(2)?, ..identity };
     let other = MemoryLease::new(bytes, Box::new(Release(Arc::default())));
     assert!(deliveries.bind(next, &other).is_err());
@@ -129,9 +159,21 @@ fn a_foreign_current_navigation_cannot_receive_predecessor_replies_or_receipts()
     let identity = identity()?;
     let session = PanelSession::for_main(identity)?;
     let mut deliveries = Deliveries::new();
-    deliveries.surface(identity, surface_request(&session, 1)?, &lease, lease.claim(bytes)?)?;
+    deliveries.surface(
+        identity,
+        surface_request(&session, 1)?,
+        &lease,
+        lease.claim(bytes)?,
+        MainHosting::Windowed,
+    )?;
     deliveries.complete_control(PanelIngressReceipt::control(identity, lease.claim(bytes)?)?)?;
-    deliveries.surface(identity, cancellation(&session, 1)?, &lease, lease.claim(bytes)?)?;
+    deliveries.surface(
+        identity,
+        cancellation(&session, 1)?,
+        &lease,
+        lease.claim(bytes)?,
+        MainHosting::Windowed,
+    )?;
     let next = MainIdentity { navigation: Generation::new(2)?, ..identity };
     assert!(deliveries.take_command(next).is_none());
     assert!(deliveries.take_command(identity).is_none());

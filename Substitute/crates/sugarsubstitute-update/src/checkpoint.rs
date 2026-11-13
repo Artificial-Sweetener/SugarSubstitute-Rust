@@ -47,7 +47,7 @@ pub(super) struct Checkpoint {
 }
 impl Checkpoint {
     /// Bootstrap only from a root delivered through an already trusted distribution channel.
-    pub(super) fn new(root: Vec<u8>) -> Self {
+    pub(crate) fn new(root: Vec<u8>) -> Self {
         Self {
             schema_version: 1,
             root,
@@ -82,8 +82,12 @@ impl Checkpoint {
         }
         Ok(value)
     }
+    /// Newest authenticated targets version and the SHA-256 of its exact signed bytes.
+    pub(crate) fn targets_floor(&self) -> (u32, [u8; 32]) {
+        (self.targets.version, self.targets.digest)
+    }
     /// Serialize the current accepted root and all verified role floors for atomic publication.
-    pub(super) fn encode(&self) -> Result<Vec<u8>, Error> {
+    pub(crate) fn encode(&self) -> Result<Vec<u8>, Error> {
         let bytes = serde_json::to_vec(self)?;
         if bytes.len() > MAX_CHECKPOINT_BYTES {
             return Err(Error::Bound);

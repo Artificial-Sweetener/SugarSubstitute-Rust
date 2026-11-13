@@ -33,7 +33,8 @@ impl TrialApplication {
     }
 }
 
-/// Cleanup-only ownership of the exact trial, continuously retaining native run exclusion.
+/// Cleanup-only ownership of the exact trial, continuously retaining native run exclusion in
+/// this process's own adopted slot, so it outlives the coordinator that handed it over.
 /// The witness does not verify executable payloads or offer launch/health acceptance operations.
 /// Retain through actual family settlement and authenticated coordinator closing or exit.
 pub struct TrialWitness {
@@ -61,7 +62,7 @@ impl TrialWitness {
         let [run, snapshot] = handles;
         Self::receive(
             store,
-            InheritedTrial { run: File::from(run), snapshot: File::from(snapshot) },
+            InheritedTrial { run: File::from(run), snapshot: File::from(snapshot), adopted: None },
             running_generation,
             context,
         )

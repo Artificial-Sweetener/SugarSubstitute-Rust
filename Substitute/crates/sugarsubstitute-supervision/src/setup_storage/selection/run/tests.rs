@@ -6,6 +6,7 @@ use crate::setup_storage::{
     selection::tests::{TestResult, generation, initial, root},
     test_worker as worker,
 };
+use std::fs::File;
 use sugarsubstitute_contracts::installation::{
     BadTrial, PreparationIntent, TrialVerdict, Undecided,
 };
@@ -211,55 +212,48 @@ fn nonempty_run_rendezvous_is_preserved_and_never_stolen() -> TestResult {
     })
 }
 
+/// An indexer, backup tool or antivirus scanner reading the run lock never makes the
+/// installation look owned, and a second owner is still refused while the first holds it.
 #[test]
-fn duplicated_run_handle_retains_exclusion_until_its_last_owner_closes() -> TestResult {
+fn run_lock_tolerates_a_foreign_shared_reader_and_still_excludes_a_second_owner() -> TestResult {
     worker::run(|context, _| {
         let root = root()?;
         let store = Arc::new(SelectionStore::initialize(root.path(), &initial()?, context)?);
-        let run = InstallationRun::acquire(Arc::clone(&store), context)?;
-        let duplicate = run.custody._lock.try_clone()?;
+        drop(InstallationRun::acquire(Arc::clone(&store), context)?);
         let lock = store.root.path().join(LOCK);
-        assert!(File::open(&lock).is_err());
+        let foreign = File::open(&lock)?;
+        let run = InstallationRun::acquire(Arc::clone(&store), context)?;
+        assert!(matches!(
+            InstallationRun::acquire(Arc::clone(&store), context),
+            Err(SelectionFailure::RunBusy(_))
+        ));
+        drop(foreign);
+        assert!(matches!(
+            InstallationRun::acquire(Arc::clone(&store), context),
+            Err(SelectionFailure::RunBusy(_))
+        ));
         drop(run);
-        assert!(InstallationRun::acquire(Arc::clone(&store), context).is_err());
-        assert!(File::open(&lock).is_err());
-        assert!(std::fs::write(&lock, b"changed").is_err());
-        assert!(std::fs::remove_file(&lock).is_err());
-        assert!(std::fs::rename(&lock, lock.with_extension("moved")).is_err());
-        assert_eq!(duplicate.metadata()?.len(), 0);
-        assert_eq!(store.load(context)?, Some(initial()?));
-        drop(duplicate);
-        let reopened = InstallationRun::acquire(store, context)?;
-        drop(reopened);
+        drop(InstallationRun::acquire(Arc::clone(&store), context)?);
         assert!(std::fs::read(lock)?.is_empty());
+        assert_eq!(store.load(context)?, Some(initial()?));
         Ok(())
     })
 }
 
+/// Exclusion belongs to the holder's own lock object: a duplicated witness, the only handle that
+/// ever crosses processes, keeps nothing once the holder drops its run.
 #[test]
-fn run_exclusion_interoperates_with_existing_byte_range_lock_owners() -> TestResult {
+fn a_duplicated_run_witness_never_retains_exclusion_after_its_holder_closes() -> TestResult {
     worker::run(|context, _| {
         let root = root()?;
         let store = Arc::new(SelectionStore::initialize(root.path(), &initial()?, context)?);
-        let legacy = store.protected(context, |protection| {
-            Ok(protection.rendezvous(&store.root.path().join(LOCK), context)?)
-        })?;
-        legacy.try_lock()?;
-        assert!(InstallationRun::acquire(Arc::clone(&store), context).is_err());
-        drop(legacy);
         let run = InstallationRun::acquire(Arc::clone(&store), context)?;
-        assert!(
-            store
-                .protected(context, |protection| {
-                    Ok(protection.rendezvous(&store.root.path().join(LOCK), context)?)
-                })
-                .is_err()
-        );
+        let duplicate = run.custody.lock.witness().try_clone()?;
+        assert!(InstallationRun::acquire(Arc::clone(&store), context).is_err());
         drop(run);
-        let legacy = store.protected(context, |protection| {
-            Ok(protection.rendezvous(&store.root.path().join(LOCK), context)?)
-        })?;
-        legacy.try_lock()?;
+        assert_eq!(duplicate.metadata()?.len(), 0);
+        drop(InstallationRun::acquire(Arc::clone(&store), context)?);
+        drop(duplicate);
         Ok(())
     })
 }

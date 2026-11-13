@@ -13,7 +13,7 @@ mod distribution;
 mod downloaded;
 mod installed;
 pub(crate) use cached::CachedCandidate;
-pub use distribution::{InstallerDistribution, MAX_DISTRIBUTION_BYTES};
+pub use distribution::{InstallerDistribution, InstallerMetadataChoice, MAX_DISTRIBUTION_BYTES};
 pub use installed::{CompletedInstallation, InstalledCandidate};
 
 /// Storage-job budget covering trust verification, metadata, download and both source/destination
@@ -52,6 +52,37 @@ pub struct InstallerSource<'a> {
     pub executable: &'a Path,
 }
 
+/// Signed metadata an installer import rests on (C4).
+pub enum InstallerAuthority<'a> {
+    /// The compiled-in metadata, which must still be within its signed lifetime.
+    Embedded,
+    /// Roles fetched online because the compiled-in metadata expired; not trusted until verified.
+    Refreshed {
+        /// Successor roots after those compiled in, ascending.
+        roots: &'a [(u32, &'a [u8])],
+        /// Fetched timestamp, snapshot and targets roles.
+        metadata: MetadataSet<'a>,
+        /// Fetched channel descriptor for the same subscription.
+        descriptor: &'a [u8],
+    },
+    /// The user chose to install the included release while offline.
+    Included(IncludedInstallChoice),
+}
+
+/// The user's explicit answer to install an installer's included release while offline (C4).
+/// Construct it only from that answer; no timer, default or retry may stand in for it.
+#[derive(Debug)]
+pub struct IncludedInstallChoice {
+    _confirmed: (),
+}
+impl IncludedInstallChoice {
+    /// Record that the user chose "install the included version" after being told it could not
+    /// be checked for a newer one.
+    pub fn confirmed_by_user() -> Self {
+        Self { _confirmed: () }
+    }
+}
+
 /// Imported signed package retaining setup exclusion before provisioning or generation allocation.
 pub struct SignedInstallation {
     session: InstallationSession,
@@ -73,46 +104,107 @@ impl InstallationSession {
         source: InstallerSource<'_>,
         request: Request,
         payload: BundleSource<'_>,
+        now: impl FnMut() -> i64,
+        context: &JobContext,
+    ) -> Result<SignedInstallation, TrustFailure> {
+        self.import_installer_with(
+            source,
+            request,
+            payload,
+            InstallerAuthority::Embedded,
+            now,
+            context,
+        )
+    }
+
+    /// Import a signed installer resting on `authority` (C4). `Embedded` is
+    /// [`Self::import_installer`]. `Refreshed` supplies roles fetched online for an installer
+    /// whose compiled-in metadata expired: they are verified exactly like compiled-in ones, and
+    /// when they name a newer release than the included one, the exact included release is
+    /// installed through its signatures alone and the updater then brings it current. A release
+    /// they no longer offer, or name below the included one, is refused. `Included` installs the
+    /// exact included release after the user explicitly chose to do so while offline.
+    /// In every mode the package bytes must match their signed and compiled-in digest.
+    /// # Errors
+    /// As [`Self::import_installer`], and rejects a refreshed set that withdraws the release.
+    pub fn import_installer_with(
+        self,
+        source: InstallerSource<'_>,
+        request: Request,
+        payload: BundleSource<'_>,
+        authority: InstallerAuthority<'_>,
         mut now: impl FnMut() -> i64,
         context: &JobContext,
     ) -> Result<SignedInstallation, TrustFailure> {
         check(context)?;
         UpdateAuthorization::require_application_request(&request)?;
-        if source.roots.len() > 1024
-            || source.roots.iter().any(|(_, bytes)| bytes.len() > MAX_METADATA_BYTES)
-            || source.roots.windows(2).any(|pair| pair[0].0 >= pair[1].0)
-        {
-            return Err(sugarsubstitute_update::Error::Bound.into());
-        }
+        let refreshed: &[(u32, &[u8])] = match &authority {
+            InstallerAuthority::Refreshed { roots, .. } => roots,
+            _ => &[],
+        };
         let trust = self.update_trust(source.repository, source.trusted_root, context)?;
-        for (version, root) in source.roots {
-            let next = trust.next_root_version(context)?;
-            if *version < next {
-                continue;
+        for roots in [source.roots, refreshed] {
+            if roots.len() > 1024
+                || roots.iter().any(|(_, bytes)| bytes.len() > MAX_METADATA_BYTES)
+                || roots.windows(2).any(|pair| pair[0].0 >= pair[1].0)
+            {
+                return Err(sugarsubstitute_update::Error::Bound.into());
             }
-            if *version != next {
-                return Err(invalid("Installer signing-root history has a gap").into());
+            for (version, root) in roots {
+                let next = trust.next_root_version(context)?;
+                if *version < next {
+                    continue;
+                }
+                if *version != next {
+                    return Err(invalid("Installer signing-root history has a gap").into());
+                }
+                trust.rotate(root, context)?;
             }
-            trust.rotate(root, context)?;
         }
-        let offer = AuthenticatedOffer::authenticate(
-            &trust,
-            request,
-            source.metadata,
-            source.descriptor,
-            now(),
-            context,
-        )?;
-        let authorization = offer.authorization(&trust);
-        let target = trust
-            .offer(
-                authorization.metadata,
-                authorization.request,
-                authorization.descriptor,
+        let included = |trust: &TrustStore| {
+            AuthenticatedOffer::included(
+                trust,
+                request,
+                source.metadata,
+                source.descriptor,
+                context,
+            )
+        };
+        let offer = match authority {
+            InstallerAuthority::Embedded => AuthenticatedOffer::authenticate(
+                &trust,
+                request,
+                source.metadata,
+                source.descriptor,
                 now(),
                 context,
-            )?
-            .into_package()?;
+            )?,
+            InstallerAuthority::Refreshed { metadata, descriptor, .. } => {
+                let current = AuthenticatedOffer::authenticate(
+                    &trust,
+                    request,
+                    metadata,
+                    descriptor,
+                    now(),
+                    context,
+                )?;
+                let embedded = sugarsubstitute_contracts::update::Offer::decode(source.descriptor)
+                    .map_err(sugarsubstitute_update::Error::Offer)?;
+                let signed = current.offer().offer();
+                if signed.package_digest() == embedded.package_digest() {
+                    current
+                } else if signed.sequence() > embedded.sequence() {
+                    included(&trust)?
+                } else {
+                    return Err(sugarsubstitute_update::Error::Offer(
+                        sugarsubstitute_contracts::update::Rejection::Rollback,
+                    )
+                    .into());
+                }
+            }
+            InstallerAuthority::Included(_) => included(&trust)?,
+        };
+        let target = offer.package_target(&trust, now(), context)?;
         let download = Download::import_installer(
             trust.runtime_cache(context)?,
             target,
@@ -220,7 +312,7 @@ impl SignedPreparation {
         Ok(SignedCandidate {
             candidate,
             trust: self.trust,
-            offer: self.offer,
+            authority: CandidateAuthority::Offer(Box::new(self.offer)),
             _custody: CandidateCustody::Imported { _prepared: Box::new(self.prepared) },
         })
     }
@@ -230,8 +322,15 @@ impl SignedPreparation {
 pub struct SignedCandidate {
     candidate: Arc<PreparedCandidate>,
     trust: TrustStore,
-    offer: AuthenticatedOffer,
+    authority: CandidateAuthority,
     _custody: CandidateCustody,
+}
+
+/// What each trial admission rechecks: current signed metadata, or the protected receipt
+/// written when this candidate was prepared (D22), used only when metadata is stale or absent.
+enum CandidateAuthority {
+    Offer(Box<AuthenticatedOffer>),
+    Receipt { receipt: Box<UpdateReceipt>, request: Request },
 }
 
 /// Keep installation mutation and saved configuration custody through either delivery path.
@@ -249,7 +348,11 @@ impl SignedCandidate {
     /// A rejected competing package must not replace the existing candidate's cached offer.
     /// Reserve offer-cache capacity alongside retained preparation and trust-operation capacity.
     pub(crate) fn save_restart_evidence(&self, context: &JobContext) -> Result<(), TrustFailure> {
-        self.trust.remember_offer(&self.offer, context)
+        match &self.authority {
+            CandidateAuthority::Offer(offer) => self.trust.remember_offer(offer, context),
+            // A receipt adds no signed bytes; the existing cache entry stays as it is.
+            CandidateAuthority::Receipt { .. } => Ok(()),
+        }
     }
 
     /// Exact verified candidate directory; no health or accepted-selection claim is implied.
@@ -288,12 +391,16 @@ impl SignedCandidate {
         let mut run = InstallationRun::acquire(store, context).map_err(io::Error::other)?;
         *recovery =
             Some(self.candidate.reserve_unstarted(&run, context).map_err(io::Error::other)?);
-        let admitted = Arc::clone(&self.candidate).begin_trial(
-            &mut run,
-            &self.offer.authorization(&self.trust),
-            now,
-            context,
-        )?;
+        let admitted = match &self.authority {
+            CandidateAuthority::Offer(offer) => Arc::clone(&self.candidate).begin_trial(
+                &mut run,
+                &offer.authorization(&self.trust),
+                now,
+                context,
+            )?,
+            CandidateAuthority::Receipt { receipt, request } => Arc::clone(&self.candidate)
+                .begin_received_trial(&mut run, &self.trust, receipt, request, now, context)?,
+        };
         Ok(run.transfer_candidate(admitted, context).map_err(io::Error::other)?)
     }
 }

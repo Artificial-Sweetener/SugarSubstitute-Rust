@@ -64,7 +64,7 @@ fn inherited_reservation_survives_parent_drop_and_a_candidate_replacement_before
                 )?,
             },
             PreparationIntent::Automatic,
-            crate::setup_storage::selection::unix_now()?,
+            PREPARED_AT,
         )?;
         // The reservation travels as a value, so a replacement landing before the child uses it
         // is not blocked; it changed only the candidate, so the launch re-resolves and proceeds.

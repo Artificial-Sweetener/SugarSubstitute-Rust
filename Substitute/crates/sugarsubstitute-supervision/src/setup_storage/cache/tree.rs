@@ -3,12 +3,18 @@
 //! Validate exact inventories while pinning each ancestor; unknown files never become deletion input.
 mod usage;
 use super::*;
-use crate::durable_storage::payload::Payload;
+use crate::durable_storage::{
+    payload::Payload,
+    tree::{self as storage_tree, Limits, REPARSE_POINT, Step, Visit},
+};
 use std::{
     collections::{BTreeMap, BTreeSet},
     os::windows::fs::MetadataExt,
 };
 pub(super) use usage::{preserved_charge, scope_charge};
+
+/// Traversal bounds of an ordinary cache entry.
+const ENTRY_LIMITS: Limits = Limits { objects: MAX_OBJECTS, depth: MAX_DEPTH };
 
 /// Bound physical usage and exact deletion inputs without authenticating content.
 pub(super) struct Inventory {
@@ -30,6 +36,23 @@ impl Inventory {
         }
         Ok(())
     }
+    fn new(worker_records: bool) -> Self {
+        Self {
+            bytes: 0,
+            files: Vec::new(),
+            directories: Vec::new(),
+            name_bytes: 0,
+            objects: 0,
+            worker_records,
+        }
+    }
+    /// Delegated worker records keep their 8,192-object ceiling; other entries use the tree bound.
+    fn limits(&self) -> Limits {
+        Limits {
+            objects: if self.worker_records { MAX_FILES } else { MAX_OBJECTS },
+            depth: MAX_DEPTH,
+        }
+    }
 }
 /// Compare current contents to declared ownership before returning deletion inputs.
 pub(super) fn inspect(
@@ -44,7 +67,7 @@ pub(super) fn inspect(
             let metadata = entry.current_metadata()?;
             let maximum = if entry.file_name() == "lease" { 0 } else { MAX_RECORD as u64 };
             if !metadata.is_file()
-                || metadata.file_attributes() & 0x400 != 0
+                || metadata.file_attributes() & REPARSE_POINT != 0
                 || metadata.len() > maximum
             {
                 return Err(invalid("Cache control exceeds its schema bound"));
@@ -59,43 +82,43 @@ pub(super) fn inspect(
         }
     }
     let allowed = record.inventory_names()?;
-    let mut inventory = Inventory {
-        bytes: 0,
-        files: Vec::new(),
-        directories: Vec::new(),
-        name_bytes: 0,
-        objects: 0,
-        worker_records: false,
-    };
+    let mut inventory = Inventory::new(false);
     let path = directory.path().join("data");
     match Directory::open(&path, false) {
-        Ok(root) => visit(&root, &path, Some(&allowed), None, &mut inventory, context)?,
+        Ok(root) => walk(&root, Some(&allowed), None, &mut inventory, context)?,
         Err(cause) if record.deleting && cause.kind() == io::ErrorKind::NotFound => {}
         Err(cause) => return Err(cause),
     }
     Ok(inventory)
 }
 /// Bound traversal and pin each ancestor without following reparse points.
-fn visit(
-    directory: &Directory,
-    root: &Path,
+fn walk(
+    root: &Directory,
     allowed: Option<&BTreeSet<String>>,
     active: Option<&BTreeMap<String, Payload>>,
     output: &mut Inventory,
     context: &JobContext,
 ) -> io::Result<()> {
-    let mut children = 0usize;
-    for entry in directory.entries(context)? {
-        check(context)?;
-        let entry = entry?;
-        children += 1;
+    let limits = output.limits();
+    storage_tree::walk(root, limits, &mut Accounting { allowed, active, output }, context)
+}
+
+/// Accounts declared cache content; anything undeclared, linked or unsupported is an error.
+struct Accounting<'a> {
+    allowed: Option<&'a BTreeSet<String>>,
+    active: Option<&'a BTreeMap<String, Payload>>,
+    output: &'a mut Inventory,
+}
+impl Visit for Accounting<'_> {
+    fn entry(
+        &mut self,
+        parent: &Directory,
+        entry: &crate::durable_storage::files::Entry<'_>,
+        relative: &str,
+        context: &JobContext,
+    ) -> io::Result<Step> {
+        let output = &mut *self.output;
         output.objects += 1;
-        if output.objects > if output.worker_records { MAX_FILES } else { MAX_OBJECTS } {
-            return Err(invalid("Cache tree exceeds inspection capacity"));
-        }
-        let path = entry.path();
-        let relative =
-            path.strip_prefix(root).map_err(io::Error::other)?.to_string_lossy().replace('\\', "/");
         if output.worker_records {
             output.name_bytes = output
                 .name_bytes
@@ -105,69 +128,58 @@ fn visit(
                 return Err(invalid("Metadata inventory names exceed their bound"));
             }
         }
-        files::relative(&relative)
-            .map_err(|cause| io::Error::new(io::ErrorKind::InvalidInput, cause))?;
-        if relative.split('/').count() > MAX_DEPTH {
-            return Err(invalid("Cache tree exceeds its directory-depth limit"));
-        }
-        let metadata = if active.is_some_and(|active| active.contains_key(&relative)) {
+        let metadata = if self.active.is_some_and(|active| active.contains_key(relative)) {
             entry.metadata()?
         } else {
             entry.current_metadata()?
         };
-        if metadata.file_attributes() & 0x400 != 0 {
+        if metadata.file_attributes() & REPARSE_POINT != 0 {
             return Err(invalid("Cache tree contains a link or junction"));
         }
         if metadata.is_dir() {
-            if allowed.is_some_and(|allowed| !owns_directory(allowed, &relative)) {
+            if self.allowed.is_some_and(|allowed| !storage_tree::owns_directory(allowed, relative))
+            {
                 return Err(invalid("Cache contains an undeclared directory"));
             }
-            let child = directory.child(
-                entry
-                    .file_name()
-                    .to_str()
-                    .ok_or_else(|| invalid("Cache directory name is not Unicode"))?,
-            )?;
-            visit(&child, root, allowed, active, output, context)?;
-        } else if metadata.is_file() {
-            if allowed.is_some_and(|allowed| !allowed.contains(&relative)) {
-                return Err(invalid("Cache contains an undeclared file"));
-            }
-            account_name(output, &relative)?;
-            let length = if let Some(payload) = active.and_then(|active| active.get(&relative)) {
-                payload.length()?
-            } else {
-                let file = directory.read(
-                    entry
-                        .file_name()
-                        .to_str()
-                        .ok_or_else(|| invalid("Cache filename is not Unicode"))?,
-                )?;
-                if output.worker_records {
-                    files::single_link(&file)?;
-                }
-                files::length(&file, context)?
-            };
-            output.bytes = output
-                .bytes
-                .checked_add(length)
-                .ok_or_else(|| invalid("Cache byte accounting overflowed"))?;
-            output.files.push(relative.into_boxed_str().into_string());
-        } else {
+            return Ok(Step::Descend);
+        }
+        if !metadata.is_file() {
             return Err(invalid("Cache tree contains an unsupported object"));
         }
+        if self.allowed.is_some_and(|allowed| !allowed.contains(relative)) {
+            return Err(invalid("Cache contains an undeclared file"));
+        }
+        account_name(output, relative)?;
+        let length = if let Some(payload) = self.active.and_then(|active| active.get(relative)) {
+            payload.length()?
+        } else {
+            let file = parent.read(&storage_tree::leaf(entry)?)?;
+            if output.worker_records {
+                files::single_link(&file)?;
+            }
+            files::length(&file, context)?
+        };
+        output.bytes = output
+            .bytes
+            .checked_add(length)
+            .ok_or_else(|| invalid("Cache byte accounting overflowed"))?;
+        output.files.push(relative.to_owned());
+        Ok(Step::Skip)
     }
-    if children == 0 && directory.path() != root {
-        let relative = directory
-            .path()
-            .strip_prefix(root)
-            .map_err(io::Error::other)?
-            .to_string_lossy()
-            .replace('\\', "/");
-        account_name(output, &relative)?;
-        output.directories.push(relative.into_boxed_str().into_string());
+    fn leave(
+        &mut self,
+        _parent: &Directory,
+        _leaf: &str,
+        relative: &str,
+        children: usize,
+        _context: &JobContext,
+    ) -> io::Result<()> {
+        if children == 0 {
+            account_name(self.output, relative)?;
+            self.output.directories.push(relative.to_owned());
+        }
+        Ok(())
     }
-    Ok(())
 }
 
 /// Bound retained leaf names while walking implicit ancestors without duplicating them.
@@ -185,12 +197,6 @@ fn account_name(output: &mut Inventory, relative: &str) -> io::Result<()> {
     }
     Ok(())
 }
-/// A directory is owned when declared empty or an ancestor of an exact declared leaf.
-fn owns_directory(allowed: &BTreeSet<String>, relative: &str) -> bool {
-    let prefix = format!("{relative}/");
-    allowed.contains(relative)
-        || allowed.range(prefix.clone()..).next().is_some_and(|name| name.starts_with(&prefix))
-}
 
 /// Remove now-empty owned ancestors without retaining duplicate long paths in memory.
 pub(super) fn remove_directories(
@@ -198,93 +204,8 @@ pub(super) fn remove_directories(
     record: &record::Record,
     context: &JobContext,
 ) -> io::Result<()> {
-    let directory = match Directory::open(root, false) {
-        Ok(directory) => directory,
-        Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(()),
-        Err(cause) => return Err(cause),
-    };
     let allowed = record.inventory_names()?;
-    remove_children(&directory, root, &allowed, context, &mut 0)
-}
-/// Recheck every remaining child before removing only empty owned directories, from leaves up.
-fn remove_children(
-    directory: &Directory,
-    root: &Path,
-    allowed: &BTreeSet<String>,
-    context: &JobContext,
-    count: &mut usize,
-) -> io::Result<()> {
-    for entry in directory.entries(context)? {
-        check(context)?;
-        let entry = entry?;
-        let path = entry.path();
-        *count += 1;
-        let relative =
-            path.strip_prefix(root).map_err(io::Error::other)?.to_string_lossy().replace('\\', "/");
-        let metadata = entry.current_metadata()?;
-        if *count > MAX_OBJECTS
-            || relative.split('/').count() > MAX_DEPTH
-            || !metadata.is_dir()
-            || metadata.file_attributes() & 0x400 != 0
-            || !owns_directory(allowed, &relative)
-        {
-            return Err(invalid("Cache directory retirement found changed content"));
-        }
-        let child = directory.child(
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .ok_or_else(|| invalid("Cache directory name is not Unicode"))?,
-        )?;
-        remove_children(&child, root, allowed, context, count)?;
-        drop(child);
-        remove_directory(&path, context)?;
-    }
-    Ok(())
-}
-
-/// Delete one prevalidated file while its exact parent remains pinned against replacement.
-pub(super) fn remove_file(path: &Path, context: &JobContext) -> io::Result<()> {
-    check(context)?;
-    let parent = Directory::open(
-        path.parent().ok_or_else(|| invalid("Cache deletion parent absent"))?,
-        false,
-    )?;
-    let leaf = path
-        .file_name()
-        .and_then(|value| value.to_str())
-        .ok_or_else(|| invalid("Cache deletion leaf absent"))?;
-    let file = match parent.read(leaf) {
-        Ok(file) => file,
-        Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(()),
-        Err(cause) => return Err(cause),
-    };
-    let identity = files::file_identity(&file)?;
-    drop(file);
-    // The parent remains pinned. Reopen with DELETE rights and compare the exact native object.
-    retirement::file(&parent, leaf, identity)
-}
-
-/// Verify an empty directory under its pinned parent before native deletion.
-pub(super) fn remove_directory(path: &Path, context: &JobContext) -> io::Result<()> {
-    check(context)?;
-    let parent = Directory::open(
-        path.parent().ok_or_else(|| invalid("Cache deletion parent absent"))?,
-        false,
-    )?;
-    let child = match Directory::open(path, false) {
-        Ok(child) => child,
-        Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(()),
-        Err(cause) => return Err(cause),
-    };
-    let identity = child.identity()?;
-    drop(child);
-    retirement::directory(
-        &parent,
-        path.file_name()
-            .and_then(|name| name.to_str())
-            .ok_or_else(|| invalid("Cache directory leaf absent"))?,
-        identity,
-    )
+    storage_tree::remove_owned_directories(root, &allowed, ENTRY_LIMITS, context)
 }
 
 /// Inventory a fully settled native producer's private output before declaring cleanup ownership.
@@ -314,14 +235,7 @@ fn generated_with(
 ) -> io::Result<Inventory> {
     let path = directory.path().join("data");
     let root = Directory::open(&path, false)?;
-    let mut inventory = Inventory {
-        bytes: 0,
-        files: Vec::new(),
-        directories: Vec::new(),
-        name_bytes: 0,
-        objects: 0,
-        worker_records,
-    };
-    visit(&root, &path, None, active, &mut inventory, context)?;
+    let mut inventory = Inventory::new(worker_records);
+    walk(&root, None, active, &mut inventory, context)?;
     Ok(inventory)
 }

@@ -27,6 +27,7 @@ mod execution_exports_tests;
 mod execution_source;
 #[cfg(test)]
 mod execution_tests;
+mod fingerprints;
 #[cfg(test)]
 mod fixtures;
 mod gates;
@@ -73,7 +74,7 @@ fn run() -> Result<()> {
     let task = select_task(&arguments)?;
     if task == "help" {
         eprintln!(
-            "cargo xtask governance | ui | check | verify | storage-inventory | help\ngovernance: repository policies\nui: native UI ownership policy only\ncheck: policies, formatting and strict Clippy\nverify: check plus tests and warning-free Rustdoc"
+            "cargo xtask governance | ui | check | verify | storage-inventory | fingerprints | help\ngovernance: repository policies\nui: native UI ownership policy only\nfingerprints: record reviewed source fingerprints the gates report stale\ncheck: policies, formatting and strict Clippy\nverify: check plus tests and warning-free Rustdoc"
         );
         return Ok(());
     }
@@ -93,6 +94,12 @@ fn run() -> Result<()> {
         let json = serde_json::to_string_pretty(&inventory)
             .map_err(|cause| Failure::external("encode storage inventory", cause))?;
         println!("{json}");
+        return Ok(());
+    }
+    if task == "fingerprints" {
+        for stale in fingerprints::record(root)? {
+            println!("{}: {} -> {}", stale.policy, stale.sources.join(", "), stale.actual);
+        }
         return Ok(());
     }
     if task == "ui" {
@@ -139,9 +146,12 @@ fn select_task(arguments: &[String]) -> Result<&str> {
     match arguments {
         [] => Ok("help"),
         [task] if matches!(task.as_str(), "help" | "--help" | "-h") => Ok("help"),
-        [task] if matches!(task.as_str(), "governance" | "ui" | "check" | "verify" | "storage-inventory") => Ok(task),
+        [task] if matches!(
+                task.as_str(),
+                "governance" | "ui" | "check" | "verify" | "storage-inventory" | "fingerprints"
+            ) => Ok(task),
         _ => Err(Failure::Policy(
-            "use cargo xtask governance, ui, check, verify, storage-inventory or help; extra arguments are rejected"
+            "use cargo xtask governance, ui, check, verify, storage-inventory, fingerprints or help; extra arguments are rejected"
                 .into(),
         )),
     }
@@ -174,6 +184,8 @@ mod tests {
         assert_eq!(select_task(&["verify".into()])?, "verify");
         assert_eq!(select_task(&[])?, "help");
         assert_eq!(select_task(&["ui".into()])?, "ui");
+        assert_eq!(select_task(&["fingerprints".into()])?, "fingerprints");
+        assert!(select_task(&["fingerprints".into(), "--all".into()]).is_err());
         assert!(select_task(&["ui".into(), "--skip-modal".into()]).is_err());
         assert!(select_task(&["verfy".into()]).is_err());
         assert!(select_task(&["verify".into(), "--skip-tests".into()]).is_err());

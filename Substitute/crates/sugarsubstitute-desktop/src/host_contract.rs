@@ -356,6 +356,9 @@ pub enum DesktopStartupCommand {
     SendSessionMedia(crate::SessionMediaReply),
     /// Deliver the latest memory allowance to the current top document; newer ones replace it.
     SendMemory(crate::MemoryCommand),
+    /// Deliver an update state or answer to the current top document; a newer state replaces
+    /// an unsent older one, and answers are never replaced.
+    SendUpdates(crate::UpdatesCommand),
     /// Report the current browser environment's processes as [`DesktopStartupObservation::BrowserProcesses`].
     MeasureBrowser(MainIdentity),
     /// Ask the current browser to trim its memory (`low`) or return to normal use.
@@ -532,6 +535,8 @@ pub enum DesktopStartupObservation {
     },
     /// A bounded memory report from the current native top-document context.
     MemoryMessage(crate::MemoryObservation),
+    /// A bounded update request from the current native top-document context.
+    UpdatesMessage(crate::UpdatesObservation),
     /// The processes the current browser environment runs, for the memory budget's footprint.
     BrowserProcesses {
         /// Exact current native document identity.
@@ -796,6 +801,13 @@ pub trait StartupWindowContent: WindowContent {
     fn take_unsaved_notice(
         &mut self,
     ) -> Option<sugarsubstitute_application::workspace_session::close_save::NotSavedLastTime> {
+        None
+    }
+
+    /// Take, once, the start-up update message: the first start on a new version, or the
+    /// previous version running after a new one failed to start. It is taken only once the
+    /// main window can show it.
+    fn take_update_notice(&mut self) -> Option<crate::UpdateNotice> {
         None
     }
 

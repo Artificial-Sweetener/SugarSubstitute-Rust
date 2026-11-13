@@ -56,6 +56,12 @@ concern = "Original worker-transport admission through retained frames, ports an
 minimum_tests = 741
 
 [[owners]]
+package = "sugarsubstitute-update-repository"
+root = "tools/update-repository"
+concern = "A year and more of daily, monthly, release and root signing accepted every day by an installation running the application's verifier; each role failing closed at its lifetime; unauthorized keys, tampered or foreign state, rewritten or rolled-back versions and unrequested target names refused before publication; the command line end to end"
+minimum_tests = 11
+
+[[owners]]
 package = "sugarsubstitute-xtask"
 root = "tools/xtask"
 concern = "Architecture, execution, filesystem, cache, networking, diagnostics, configuration and localization owner boundaries; exact reviewed source and dependency identities across authored languages, alias-safe public contracts, adversarial rejection fixtures and verification orchestration."
@@ -177,12 +183,12 @@ reason = "The canvas reports its next wake as a native Instant; the test convert
 
 [[real_time]]
 path = "crates/sugarsubstitute/src/startup.rs"
-source_sha256 = "sha256:c652828fe909237b728c933eaebf65d18f9fde3d2165b7d39a5d83a34a3e67dd"
+source_sha256 = "sha256:2701d1826f6ffa13d94272fbf496fbcfd481f05ad853c9e0b780e7dc49ea8c32"
 reason = "The test-only constructor round trip builds the startup host, whose constructor requires the real monotonic execution clock; the round trip asserts the constructed parts and never reads a duration."
 
 [[real_time]]
 path = "crates/sugarsubstitute/src/startup/platform_tests.rs"
-source_sha256 = "sha256:131b4f0bf9fa9e730d63c70c38f6fe6a66415047b308a5cb70b5a4834a9f6212"
+source_sha256 = "sha256:ba581a2b9e10137e2e8acc8ace36e1327d3fd3607560023bf90c98686d976d3b"
 reason = "The startup host's constructor requires the real monotonic execution clock; these tests construct it only to satisfy that signature, and every assertion waits for observed startup outcomes."
 
 [[real_time]]

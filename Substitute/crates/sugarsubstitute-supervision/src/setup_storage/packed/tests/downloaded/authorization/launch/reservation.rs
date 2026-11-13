@@ -36,11 +36,7 @@ fn launch_reservation_coexists_with_a_running_app_and_never_blocks_selection_wri
         assert_eq!(reserved.executable(), running.executable());
         assert_eq!(reserved.directory(), running.directory());
         assert!(InstallationRun::acquire(store.clone(), context).is_err());
-        let next = before.prepare(
-            next_generation()?,
-            PreparationIntent::Automatic,
-            crate::setup_storage::selection::unix_now()?,
-        )?;
+        let next = before.prepare(next_generation()?, PreparationIntent::Automatic, PREPARED_AT)?;
         // The reservation is a value, never a held record handle, so writes proceed.
         store.compare_exchange(&before, &next, context)?;
         assert_eq!(store.load(context)?, Some(next));
@@ -70,11 +66,7 @@ fn coordinator_can_acquire_its_run_and_publish_while_concurrent_launches_hold_re
         };
         let mut run = InstallationRun::acquire(store.clone(), context)?;
         let running = run.adopt_reserved(first, context)?;
-        let next = before.prepare(
-            next_generation()?,
-            PreparationIntent::Automatic,
-            crate::setup_storage::selection::unix_now()?,
-        )?;
+        let next = before.prepare(next_generation()?, PreparationIntent::Automatic, PREPARED_AT)?;
         store.compare_exchange(&before, &next, context)?;
         drop(second);
         assert_eq!(running.generation(), before.accepted().ok_or("Accepted generation absent")?);
@@ -98,11 +90,8 @@ fn failed_payload_verification_releases_selection_custody_without_creating_a_run
             let before = store.load(context)?.ok_or("Selection absent")?;
             assert!(store.reserve_launch(context).is_err());
             assert_eq!(store.load(context)?, Some(before.clone()));
-            let next = before.prepare(
-                next_generation()?,
-                PreparationIntent::Automatic,
-                crate::setup_storage::selection::unix_now()?,
-            )?;
+            let next =
+                before.prepare(next_generation()?, PreparationIntent::Automatic, PREPARED_AT)?;
             store.compare_exchange(&before, &next, context)?;
             assert!(InstallationRun::acquire(store, context).is_ok());
             assert_eq!(std::fs::read(path)?, edited);
@@ -121,11 +110,8 @@ fn reservation_preserves_trials_and_empty_installations_as_explicit_nonlaunch_re
         assert!(!temporary.path().join("state/selection/.installation-run-lock").exists());
         let before = store.load(context)?.ok_or("Selection absent")?;
         let generation = next_generation()?;
-        let staging = before.prepare(
-            generation.clone(),
-            PreparationIntent::Automatic,
-            crate::setup_storage::selection::unix_now()?,
-        )?;
+        let staging =
+            before.prepare(generation.clone(), PreparationIntent::Automatic, PREPARED_AT)?;
         store.compare_exchange(&before, &staging, context)?;
         let prepared = staging.prepared(&generation)?;
         store.compare_exchange(&staging, &prepared, context)?;
@@ -179,11 +165,8 @@ fn reservation_cannot_be_adopted_by_a_foreign_native_installation_with_matching_
         fixture::installed(&foreign_directory, context)?;
         let initial = InstallationRecord::empty(before.installation().clone());
         let foreign = Arc::new(SelectionStore::initialize(foreign_root.path(), &initial, context)?);
-        let staging = initial.prepare(
-            generation.clone(),
-            PreparationIntent::Automatic,
-            crate::setup_storage::selection::unix_now()?,
-        )?;
+        let staging =
+            initial.prepare(generation.clone(), PreparationIntent::Automatic, PREPARED_AT)?;
         foreign.compare_exchange(&initial, &staging, context)?;
         let prepared = staging.prepared(&generation)?;
         foreign.compare_exchange(&staging, &prepared, context)?;
@@ -200,11 +183,7 @@ fn reservation_cannot_be_adopted_by_a_foreign_native_installation_with_matching_
         assert!(foreign_run.adopt_reserved(reserved, context).is_err());
         assert_eq!(foreign.load(context)?, foreign_before);
         assert_eq!(store.load(context)?, Some(before.clone()));
-        let next = before.prepare(
-            next_generation()?,
-            PreparationIntent::Automatic,
-            crate::setup_storage::selection::unix_now()?,
-        )?;
+        let next = before.prepare(next_generation()?, PreparationIntent::Automatic, PREPARED_AT)?;
         store.compare_exchange(&before, &next, context)?;
         Ok(())
     })
@@ -227,11 +206,7 @@ fn repeated_adoption_is_rejected_without_leaking_selection_custody() -> TestResu
             return Err("Repeated launch reservation absent".into());
         };
         assert!(run.adopt_reserved(second, context).is_err());
-        let next = before.prepare(
-            next_generation()?,
-            PreparationIntent::Automatic,
-            crate::setup_storage::selection::unix_now()?,
-        )?;
+        let next = before.prepare(next_generation()?, PreparationIntent::Automatic, PREPARED_AT)?;
         store.compare_exchange(&before, &next, context)?;
         assert_eq!(running.generation(), before.accepted().ok_or("Accepted generation absent")?);
         Ok(())

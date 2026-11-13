@@ -15,6 +15,7 @@ mod ordinary;
 pub(crate) mod reparse_fixture;
 mod retirement;
 use super::invalid;
+pub(crate) use entries::Entry;
 pub(crate) use identity::{file_identity, native_identity, single_link};
 pub(crate) use observations::{canonical_path, exists, inspect};
 pub(crate) use ordinary::{

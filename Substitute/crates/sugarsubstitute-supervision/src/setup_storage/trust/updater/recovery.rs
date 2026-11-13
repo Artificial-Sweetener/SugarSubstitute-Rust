@@ -35,7 +35,7 @@ impl TrustStore {
             return Ok(state);
         };
         let recovered = state
-            .reject(attempt, crate::setup_storage::selection::unix_now().map_err(io::Error::other)?)
+            .reject(attempt, self.strike_clock.now().map_err(io::Error::other)?)
             .map_err(io::Error::other)?;
         self.write_updater(&recovered, protection, context)?;
         tracing::info!(

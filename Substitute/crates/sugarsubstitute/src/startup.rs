@@ -36,6 +36,8 @@ mod routing;
 mod scopes;
 #[path = "startup/shutdown.rs"]
 mod shutdown;
+#[cfg(all(windows, any(feature = "windows-native-host", test)))]
+mod updates_page;
 #[path = "startup/view.rs"]
 pub(crate) mod view;
 #[path = "startup/window_content.rs"]
@@ -58,6 +60,8 @@ pub use backend::{BackendResult, PreparedStartup, StartupBackend};
 #[cfg(all(windows, feature = "native-composition"))]
 mod workspace;
 use execution::StartupExecution;
+mod host_clock;
+pub use host_clock::HostClock;
 use policy::StartupPolicy;
 pub use scopes::StartupScopes;
 pub use shutdown_origin::ShutdownInitiation;
@@ -78,7 +82,6 @@ use sugarsubstitute_desktop::{
     AccessibleControl, DesktopStartupCommand, DesktopStartupObservation, HitTarget, KeyAction,
     Pointer, PointerAction, StartupPreparationStep, StartupWindowContent, WindowContent,
 };
-use sugarsubstitute_execution::MonotonicClock;
 use view::StartupView;
 
 #[cfg(test)]
@@ -91,6 +94,9 @@ pub struct StartupHost<B: StartupBackend> {
     /// The application memory budget, governing once a canvas exists.
     #[cfg(all(windows, any(feature = "windows-native-host", test)))]
     memory: Option<memory::MemoryGovernor>,
+    /// The page's update state and its check and restart answers.
+    #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+    updates: updates_page::UpdatesPage,
     #[cfg(all(windows, feature = "native-composition"))]
     composition: Option<composition::CompositionWork>,
     #[cfg(all(windows, feature = "native-composition"))]
@@ -99,7 +105,7 @@ pub struct StartupHost<B: StartupBackend> {
     startup: Option<B::Prepared>,
     child: B,
     execution: StartupExecution,
-    clock: Arc<MonotonicClock>,
+    clock: Arc<dyn HostClock>,
     jobs: JobSequence,
     scopes: StartupScopes,
     preparation: Option<PreparationDriver>,
@@ -138,7 +144,7 @@ pub(crate) fn constructor_roundtrip<B: StartupBackend>(
         run,
         launch,
         child,
-        MonotonicClock::new(),
+        sugarsubstitute_execution::MonotonicClock::new(),
         jobs,
         StartupScopes {
             child: sugarsubstitute_contracts::execution::ScopeSpec {
@@ -162,7 +168,7 @@ impl<B: StartupBackend> StartupHost<B> {
         run: RunKey,
         launch: LaunchId,
         child: B,
-        clock: Arc<MonotonicClock>,
+        clock: Arc<dyn HostClock>,
         jobs: JobSequence,
         scopes: StartupScopes,
     ) -> Result<Self, Box<dyn Error>> {
@@ -172,6 +178,13 @@ impl<B: StartupBackend> StartupHost<B> {
             canvas: None,
             #[cfg(all(windows, any(feature = "windows-native-host", test)))]
             memory: None,
+            // Until the coordinator's update status reaches this host, the page is told the
+            // truth this host knows: up to date and idle, with no workflow to wait for.
+            #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+            updates: updates_page::UpdatesPage::new(
+                Box::new(sugarsubstitute_application::updates_panel::IdleUpdateStatus),
+                Box::new(sugarsubstitute_application::updates_panel::IdleWorkflowActivity),
+            )?,
             #[cfg(all(windows, feature = "native-composition"))]
             composition: None,
             #[cfg(all(windows, feature = "native-composition"))]

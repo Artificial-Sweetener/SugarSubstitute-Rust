@@ -260,6 +260,7 @@ impl ExecutionOwner {
         let queued = state.jobs.values().filter(|record| record.phase == JobPhase::Queued).count();
         let running =
             state.jobs.values().filter(|record| record.phase == JobPhase::Running).count();
+        let capacity_wake_pending = state.capacity_wake_pending();
         let workers = self.core.workers.status();
         let entry_environment_custody = state
             .jobs
@@ -316,6 +317,7 @@ impl ExecutionOwner {
             unresolved_job_ids,
             queued,
             running,
+            capacity_wake_pending,
             workers,
         })
     }

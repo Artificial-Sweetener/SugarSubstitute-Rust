@@ -4,6 +4,7 @@
 //!
 //! Storage operations run on the execution owner's worker. A selection proposal proves
 //! neither package trust nor process health. Unpublished staging is never recovery authority.
+mod clock;
 #[allow(unsafe_code)]
 mod entry;
 mod failure;
@@ -38,13 +39,16 @@ use crate::durable_storage::{
     protection::{self, Protection},
     staging,
 };
+pub(crate) use clock::StrikeClock;
 pub use failure::SelectionFailure;
 pub(crate) use run::UnstartedTrial;
+#[cfg(test)]
 pub(in crate::setup_storage) use run::unix_now;
 pub use run::{AcceptedApplication, InstallationLaunch, InstallationRun, OwnedTrial};
 pub use run::{
-    InheritedTrial, TRIAL_WITNESS_RESERVATION_BYTES, TrialApplication, TrialTransfer, TrialWitness,
-    TrialWitnessTransfer, capture_trial_custody,
+    InheritedTrial, TRIAL_ADOPTION, TRIAL_ADOPTION_GRACE, TRIAL_WITNESS_RESERVATION_BYTES,
+    TrialApplication, TrialTransfer, TrialWitness, TrialWitnessTransfer, UnadoptedEnding,
+    capture_trial_custody,
 };
 use std::{
     fs::File,
@@ -72,6 +76,7 @@ pub struct SelectionStore {
     _ownership: File,
     _namespace_marker: Option<File>,
     _memory: MemoryClaim,
+    clock: StrikeClock,
 }
 impl SelectionStore {
     /// Open an initialized owned namespace and enable continuity for an earlier valid record.
@@ -81,6 +86,19 @@ impl SelectionStore {
     /// Earlier state is preserved for explicit verified installer recovery.
     pub fn open(root: &Path, context: &JobContext) -> Result<Self, SelectionFailure> {
         Self::open_namespace(root, context, true)?.ok_or(SelectionFailure::Missing)
+    }
+
+    /// Date strikes and decide withholding with `clock` instead of the system clock.
+    #[cfg(test)]
+    #[must_use]
+    pub(crate) fn with_strike_clock(mut self, clock: StrikeClock) -> Self {
+        self.clock = clock;
+        self
+    }
+
+    /// The clock this store dates strikes with and checks withholding against.
+    pub(in crate::setup_storage) fn strike_clock(&self) -> StrikeClock {
+        self.clock
     }
 
     /// Inspect an existing namespace without creating one for an earlier installation.
@@ -109,6 +127,7 @@ impl SelectionStore {
             _ownership: ownership,
             _namespace_marker: marker,
             _memory: memory,
+            clock: StrikeClock::System,
         }))
     }
 

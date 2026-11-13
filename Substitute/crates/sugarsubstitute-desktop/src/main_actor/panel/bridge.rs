@@ -5,7 +5,7 @@
 mod callback;
 mod ledger;
 
-use crate::{DesktopError, MainHosting, main_events::Events};
+use crate::{DesktopError, main_events::Events};
 use ledger::{Action, Ledger, Next};
 use std::rc::Rc;
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
@@ -18,21 +18,15 @@ const SCRIPT_COUNT: usize = 3;
 
 /// Compose the document-start scripts for one browser lifetime.
 ///
-/// The protocol script is a function expression invoked with the page's output surface
-/// preference. Only a composition-hosted browser advertises host presentation; a windowed
-/// browser leaves the preference absent so the page presents its canvas itself. The bulk script
-/// is a function expression invoked with the endpoint's absolute reserved path, which it appends
-/// to the document's own `location.origin`. It installs before the transport, which requires
-/// both the policy and the bulk channel helper.
-fn scripts(
-    hosting: MainHosting,
-    endpoint: &crate::main_bulk::Endpoint,
-) -> Result<[String; SCRIPT_COUNT], DesktopError> {
-    let preference = if hosting.presents_native_canvas() { "'host'" } else { "undefined" };
+/// The protocol script installs the transport policy. The bulk script is a function expression
+/// invoked with the endpoint's absolute reserved path, which it appends to the document's own
+/// `location.origin`. Both install before the transport, which requires the policy and the bulk
+/// channel helper. What the host serves reaches the page in its host description.
+fn scripts(endpoint: &crate::main_bulk::Endpoint) -> Result<[String; SCRIPT_COUNT], DesktopError> {
     let path = serde_json::to_string(endpoint.path())
         .map_err(|cause| DesktopError::new("compose_panel_bridge", cause))?;
     Ok([
-        format!("{}({preference});\n", PROTOCOL_SCRIPT.trim_end()),
+        PROTOCOL_SCRIPT.to_owned(),
         format!("{}({path});\n", BULK_SCRIPT.trim_end()),
         TRANSPORT_SCRIPT.to_owned(),
     ])
@@ -54,7 +48,6 @@ impl Bridge {
         core: ICoreWebView2,
         events: Rc<Events>,
         lease: &MemoryLease,
-        hosting: MainHosting,
         endpoint: &crate::main_bulk::Endpoint,
     ) -> Result<Self, DesktopError> {
         let claim = lease
@@ -64,7 +57,7 @@ impl Bridge {
             core,
             shared: callback::Shared::new(events)?,
             ledger: Ledger::new(SCRIPT_COUNT),
-            sources: scripts(hosting, endpoint)?,
+            sources: scripts(endpoint)?,
             scripts: std::array::from_fn(|_| None),
             _claim: claim,
         })

@@ -19,6 +19,10 @@ impl VerifiedOffer {
     pub fn offer(&self) -> &Offer {
         &self.offer
     }
+    /// Drop the package target's validity window after a clock-independent verification.
+    pub(crate) fn pinned(self) -> Self {
+        Self { package: self.package.pinned(), ..self }
+    }
     /// Consume an admitted offer to begin verification of its exact immutable package.
     /// # Errors
     /// Rejects preparation when the package requires a newer engine/installer or is current.

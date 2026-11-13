@@ -331,10 +331,19 @@ fn a_routed_pan_admits_its_frame_without_another_main_loop_turn() -> Result<(), 
     fixture.commit(4)?;
     fixture.viewport(5, json!({"type":"zoom","factor":4}))?;
     fixture.complete(5)?;
+    // The zoom's own display and refinement must have retired: while they hold the sole display
+    // slot, a routed pan's frame waits for them by design, however many turns it gets.
+    fixture.settle()?;
     fixture.advance(100);
     fixture.pump()?;
     let scope = ScopeId::new(1)?;
+    let idle = fixture.scope_work(scope)?;
     let before = fixture.scope_jobs(scope)?;
+    assert_eq!(
+        idle.queued + idle.running + idle.undelivered,
+        0,
+        "The zoom's work had not retired before the pan: [{before}]"
+    );
     route(&mut fixture, &[pointer([50.0, 40.0]), button(true), pointer([70.0, 48.0])])?;
     let after = fixture.scope_jobs(scope)?;
     assert_ne!(before, after, "The routed pan admitted no frame: [{before}]");

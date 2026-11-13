@@ -72,6 +72,25 @@ impl Replies {
                 }
             }
         }
+        // A newer update state replaces an unsent older one for the same page; the page shows
+        // only the newest revision. Accepted and rejected answers carry no revision and are
+        // never replaced, so every page request keeps its answer.
+        if let NativeDelivery::Updates(incoming) = &reply
+            && let Some(revision) = incoming.revision()
+        {
+            for offset in 0..self.len {
+                let index = (self.first + offset) % CAPACITY;
+                if let Some(NativeDelivery::Updates(pending)) = &self.slots[index]
+                    && pending.identity() == incoming.identity()
+                    && let Some(retained) = pending.revision()
+                {
+                    if revision > retained {
+                        self.slots[index] = Some(reply);
+                    }
+                    return Ok(());
+                }
+            }
+        }
         if self.len == CAPACITY {
             return Err(DesktopError::message("canvas_reply_queue", "reply capacity exhausted"));
         }
@@ -96,6 +115,7 @@ impl Replies {
             self.len -= 1;
             if matches!(&delivery, NativeDelivery::Presentation(value) if current != Some(value.identity()))
                 || matches!(&delivery, NativeDelivery::Memory(value) if current != Some(value.identity()))
+                || matches!(&delivery, NativeDelivery::Updates(value) if current != Some(value.identity()))
                 || matches!(&delivery, NativeDelivery::CanvasNotification(value) if current != Some(value.identity()))
             {
                 retired = true;

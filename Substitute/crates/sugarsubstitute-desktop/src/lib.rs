@@ -67,6 +67,7 @@ mod main_session_media;
 mod main_surface_contract;
 #[cfg(any(target_os = "windows", test))]
 mod main_updates;
+mod main_updates_contract;
 /// Bounded observational development trace records; feature-off builds expose none.
 #[cfg(feature = "k1-native-qualification")]
 pub mod qualification_trace;
@@ -165,6 +166,9 @@ mod windows_drag;
 mod windows_move_state;
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
+mod windows_open_link;
+#[cfg(target_os = "windows")]
+#[allow(unsafe_code)]
 mod windows_scroll;
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
@@ -194,7 +198,7 @@ pub use host_contract::{
     ServedFrontendVersions, StartupDesktopReceipt, StartupPreparationStep, StartupWindowContent,
 };
 pub use main_caption_contract::{
-    MainBackendState, MainCaptionLabels, MainRecoveryLabels, WorkflowActivity,
+    MainBackendState, MainCaptionLabels, MainRecoveryLabels, UpdateNotice, WorkflowActivity,
 };
 
 pub use main_canvas_native::{
@@ -214,6 +218,7 @@ pub use main_session_media::{
 pub use main_surface_contract::{
     SurfaceObservation, SurfacePresentation, SurfaceReply, SurfaceReplyError,
 };
+pub use main_updates_contract::{UpdatesCommand, UpdatesObservation};
 
 #[cfg(target_os = "windows")]
 mod startup_conflict;

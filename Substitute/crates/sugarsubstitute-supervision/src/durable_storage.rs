@@ -17,6 +17,8 @@ pub(crate) mod imports;
 #[cfg(windows)]
 pub(crate) mod input;
 #[cfg(windows)]
+pub(crate) mod owned_retirement;
+#[cfg(windows)]
 pub(crate) mod payload;
 #[cfg(windows)]
 #[allow(unsafe_code)]
@@ -41,6 +43,8 @@ pub(crate) mod retirement;
 pub(crate) mod staging;
 #[cfg(windows)]
 pub(crate) mod streamed_record;
+#[cfg(windows)]
+pub(crate) mod tree;
 #[cfg(windows)]
 pub(crate) mod user_paths;
 

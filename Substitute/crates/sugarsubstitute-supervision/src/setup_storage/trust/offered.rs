@@ -29,9 +29,68 @@ pub struct AuthenticatedOffer {
     offer: VerifiedOffer,
     installation: InstallationId,
     repository: [u8; 32],
+    mode: super::MetadataMode,
     _memory: MemoryClaim,
 }
 impl AuthenticatedOffer {
+    /// Authenticate an installer's included metadata without a clock, after the user explicitly
+    /// chose to install it offline (C4). Signatures, rollback history and descriptor binding are
+    /// checked as for current metadata; later rechecks of this offer use the same mode.
+    /// # Errors
+    /// Returns no owner on signature, rollback, routing, bound, storage or admission failure.
+    pub(crate) fn included(
+        trust: &TrustStore,
+        request: Request,
+        metadata: MetadataSet<'_>,
+        descriptor: &[u8],
+        context: &JobContext,
+    ) -> Result<Self, TrustFailure> {
+        check(context)?;
+        validate_bounds(&metadata, descriptor)?;
+        let memory = context.memory().claim(OFFER_RESERVATION_BYTES).map_err(io::Error::other)?;
+        let offer = trust.pinned_offer(metadata, &request, descriptor, context)?;
+        Ok(Self {
+            inputs: OfferInputs {
+                request,
+                timestamp: metadata.timestamp.to_vec(),
+                snapshot: metadata.snapshot.to_vec(),
+                targets: metadata.targets.to_vec(),
+                descriptor: descriptor.to_vec(),
+            },
+            offer,
+            installation: trust.installation.clone(),
+            repository: trust.repository,
+            mode: super::MetadataMode::Included,
+            _memory: memory,
+        })
+    }
+
+    /// Package target to deliver, reauthenticated now under this offer's metadata mode.
+    /// # Errors
+    /// As [`TrustStore::offer`] or [`TrustStore::pinned_offer`], and rejects inadmissible offers.
+    pub(crate) fn package_target(
+        &self,
+        trust: &TrustStore,
+        now: i64,
+        context: &JobContext,
+    ) -> Result<sugarsubstitute_update::Target, TrustFailure> {
+        let offer = match self.mode {
+            super::MetadataMode::Current => trust.offer(
+                self.inputs.metadata(),
+                &self.inputs.request,
+                &self.inputs.descriptor,
+                now,
+                context,
+            )?,
+            super::MetadataMode::Included => trust.pinned_offer(
+                self.inputs.metadata(),
+                &self.inputs.request,
+                &self.inputs.descriptor,
+                context,
+            )?,
+        };
+        Ok(offer.into_package()?)
+    }
     /// Authenticate bounded embedded metadata and retain its exact bytes under memory admission.
     /// The caller supplies local subscription facts; metadata never supplies those facts.
     /// `now` is Unix UTC seconds. Reserve this owner's budget alongside trust operations.
@@ -79,6 +138,7 @@ impl AuthenticatedOffer {
             offer,
             installation: trust.installation.clone(),
             repository: trust.repository,
+            mode: super::MetadataMode::Current,
             _memory: memory,
         })
     }
@@ -100,6 +160,7 @@ impl AuthenticatedOffer {
             metadata: self.inputs.metadata(),
             request: &self.inputs.request,
             descriptor: &self.inputs.descriptor,
+            mode: self.mode,
         }
     }
 }

@@ -77,7 +77,11 @@ class PreparedFixturePreviews:
         """Prepare a small image or an intentional recoverable transport failure."""
         self.urls.append(url)
         if self.unavailable:
-            raise ModelPreviewUnavailableError("Fixture preview is unavailable.")
+            raise ModelPreviewUnavailableError(
+                "Fixture preview is unavailable.",
+                reason="fixture offline",
+                expected=True,
+            )
         stream = BytesIO()
         Image.new("RGB", (96, 144), "navy").save(stream, "PNG")
         return ModelThumbnailPreparer(self.assets, origin="civitai").prepare(

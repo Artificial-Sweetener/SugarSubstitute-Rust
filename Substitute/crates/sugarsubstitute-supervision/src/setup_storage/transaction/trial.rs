@@ -46,6 +46,32 @@ impl PreparedCandidate {
         };
         Ok(AdmittedCandidate { prepared: self, trial })
     }
+    /// Admit a candidate reopened on its update receipt (D22): the receipt must still name this
+    /// exact prepared revision and directories, and every receipt condition must hold at `now`
+    /// (Unix UTC seconds, injected clock) while run custody is held. Nothing is published on
+    /// any failure; the caller starts the accepted version.
+    pub(in crate::setup_storage) fn begin_received_trial(
+        self: Arc<Self>,
+        run: &mut InstallationRun,
+        trust: &crate::setup_storage::TrustStore,
+        receipt: &crate::setup_storage::UpdateReceipt,
+        request: &sugarsubstitute_contracts::update::Request,
+        mut now: impl FnMut() -> i64,
+        context: &JobContext,
+    ) -> Result<AdmittedCandidate, TrustFailure> {
+        self.compatibility().require_installed_launch()?;
+        self.compatibility().require_trial_launch()?;
+        let trial = {
+            let snapshot = crate::native_claims::lock(&self.snapshot);
+            receipt.require(&self.installation, &self.directory, &snapshot)?;
+            run.validate_installation(&self.installation).map_err(io::Error::other)?;
+            run.require_launcher(self.compatibility(), context).map_err(io::Error::other)?;
+            trust.admit_receipt(receipt, request, now(), context)?;
+            run.begin_trial(&snapshot, context).map_err(io::Error::other)?
+        };
+        Ok(AdmittedCandidate { prepared: self, trial })
+    }
+
     /// Retain the prepared snapshot and original run before trial publication can occur.
     pub(in crate::setup_storage) fn reserve_unstarted(
         &self,

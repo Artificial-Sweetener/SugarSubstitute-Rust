@@ -77,7 +77,10 @@ pub(crate) fn check(
         )?;
         require(
             fingerprint(root, &boundary.sources)? == boundary.source_sha256,
-            "UI: boundary source changed; review its UI ownership",
+            format!(
+                "UI: boundary source changed; review its UI ownership; {}",
+                crate::fingerprints::RESYNC
+            ),
         )?;
         let package = workspace.packages.iter().find(|p| p.name == boundary.owner);
         require(package.is_some(), "UI: boundary has no Cargo package")?;

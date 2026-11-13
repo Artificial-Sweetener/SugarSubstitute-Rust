@@ -210,7 +210,15 @@ impl RenderStages {
                 let text = renderer.text.as_mut().ok_or(RenderError::InvalidFrame)?;
                 let copy = messages(&renderer.locale);
                 let operation = copy.startup.operation(frame.appearance.operation);
+                let updating;
                 let message = match frame.appearance.status {
+                    crate::StartupStatus::Updating(version) => {
+                        updating = sugarsubstitute_contracts::localization::updates::UpdateMessages::with_version(
+                            copy.updates.applying,
+                            version.as_str(),
+                        );
+                        updating.as_str()
+                    }
                     crate::StartupStatus::Loading => operation[0],
                     crate::StartupStatus::LoadingLong => operation[1],
                     crate::StartupStatus::LoadingExtended => operation[2],

@@ -2893,6 +2893,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "sugarsubstitute-update-repository"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "ring",
+ "serde_json",
+ "sha2",
+ "sugarsubstitute-contracts",
+ "sugarsubstitute-update",
+ "tempfile",
+ "tuf",
+]
+
+[[package]]
 name = "sugarsubstitute-xtask"
 version = "0.1.0"
 dependencies = [
