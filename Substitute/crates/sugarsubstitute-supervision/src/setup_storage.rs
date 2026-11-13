@@ -48,6 +48,8 @@ pub use user_data::{
     PreparedStartup, PreservedDiagnosticEntry, PreservedDiagnosticSource, SourceLaunchSettlement,
     StartupDataCustody, prepare_launch_data,
 };
+mod owned_root;
+pub use owned_root::owned_retirement_root;
 mod ownership;
 mod packed;
 mod publication;
