@@ -165,14 +165,14 @@ pub struct WorkspaceStore {
     scope: SessionScope,
 }
 impl WorkspaceStore {
-    #[cfg(feature = "native-composition")]
+    #[cfg(all(windows, feature = "native-composition"))]
     pub(crate) fn load_worker(
         &self,
         context: &sugarsubstitute_contracts::execution::JobContext,
     ) -> Result<RestoredWorkspace, StoreError> {
         files::load(self, context)
     }
-    #[cfg(feature = "native-composition")]
+    #[cfg(all(windows, feature = "native-composition"))]
     pub(crate) fn save_worker(
         &self,
         checkpoint: &SessionCheckpoint,
@@ -210,7 +210,7 @@ impl WorkspaceStore {
         }
         Ok(Self { directory, assets, scope })
     }
-    #[cfg(feature = "native-composition")]
+    #[cfg(all(windows, feature = "native-composition"))]
     pub(crate) fn verify_asset(
         &self,
         asset: &sugarsubstitute_contracts::desktop_session::wire::SessionAsset,
@@ -222,7 +222,7 @@ impl WorkspaceStore {
             Err(cause) => Err(cause),
         }
     }
-    #[cfg(any(feature = "native-composition", test))]
+    #[cfg(all(windows, any(feature = "native-composition", test)))]
     pub(crate) fn asset_path(
         &self,
         asset: &sugarsubstitute_contracts::desktop_session::wire::SessionAsset,

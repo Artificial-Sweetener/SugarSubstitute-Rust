@@ -73,7 +73,7 @@ impl Error for SurfaceReplyError {
 
 impl SurfaceObservation {
     /// Retain the native ingress claim and the sending lifetime's hosting alongside the message.
-    #[cfg(any(target_os = "windows", test))]
+    #[cfg(target_os = "windows")]
     pub(crate) fn new(
         identity: MainIdentity,
         message: CanvasSurfaceMessage,
@@ -109,7 +109,7 @@ impl SurfaceObservation {
     }
 
     /// Attach only the creating apartment's current WebView bounds and scale.
-    #[cfg(feature = "native-composition")]
+    #[cfg(all(feature = "native-composition", target_os = "windows"))]
     pub(crate) fn set_allocation(
         &mut self,
         allocation: crate::canvas::placement::WebViewAllocation,

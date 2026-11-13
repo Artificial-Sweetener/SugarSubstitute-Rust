@@ -82,7 +82,7 @@ impl ExecutionClient {
         &self,
         scope: &Scope,
         spec: JobSpec,
-        kind: RequestKind<'_>,
+        kind: RequestKind,
         work: impl FnOnce(Arc<Job<T, E>>) -> Work,
     ) -> Result<OwnedJob<T, E>, AdmissionError> {
         self.core.admit(scope, spec, kind, |context, cancel, timing| {

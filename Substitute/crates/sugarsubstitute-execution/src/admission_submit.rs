@@ -10,7 +10,7 @@ impl Core {
         self: &Arc<Self>,
         scope: &Scope,
         spec: JobSpec,
-        kind: RequestKind<'_>,
+        kind: RequestKind,
         build: impl FnOnce(
             JobContext,
             Arc<Cancellation>,
@@ -31,7 +31,7 @@ impl Core {
         self: &Arc<Self>,
         scope: &Scope,
         spec: JobSpec,
-        kind: RequestKind<'_>,
+        kind: RequestKind,
         input: M,
         build: impl FnOnce(
             M,
@@ -51,8 +51,7 @@ impl Core {
         let fresh_metadata = fresh_metadata
             || matches!(
                 &kind,
-                RequestKind::SymbolNative { .. }
-                    | RequestKind::DesktopCapture(_)
+                RequestKind::DesktopCapture(_)
                     | RequestKind::CapturedLifecycle(_)
                     | RequestKind::BackendCustody { .. }
                     | RequestKind::ProcessCreation(_)
@@ -61,7 +60,11 @@ impl Core {
         #[cfg(all(feature = "k1-native-qualification", any(windows, test)))]
         let fresh_metadata =
             fresh_metadata || matches!(&kind, RequestKind::RegisteredDesktopFault { .. });
-        let now = if fresh_metadata || matches!(&kind, RequestKind::EntryPreparation(_)) {
+        #[cfg(windows)]
+        let fresh_metadata = fresh_metadata || matches!(&kind, RequestKind::SymbolNative { .. });
+        #[cfg(any(windows, test))]
+        let fresh_metadata = fresh_metadata || matches!(&kind, RequestKind::EntryPreparation(_));
+        let now = if fresh_metadata {
             match self.clock.metadata() {
                 Ok(now) => now,
                 Err(cause) => return Err((AdmissionError::Unexpected(cause), input)),
@@ -112,19 +115,26 @@ impl Core {
                             | RequestKind::RecoveryPipe(_)
                             | RequestKind::BackendCustody { .. }
                             | RequestKind::CapturedLifecycle(_)
-                            | RequestKind::CaptureAttach(_)
-                            | RequestKind::SymbolNative { .. },
+                            | RequestKind::CaptureAttach(_),
                         JobClass::NativeObservation
                     ) | (
                         RequestKind::DesktopCapture(_) | RequestKind::ProcessCreation(_),
                         JobClass::InfrastructureLifecycle
                     )
                 );
+            #[cfg(any(windows, test))]
             let valid_method = valid_method
                 || matches!(
                     (&kind, spec.class),
                     (RequestKind::EntryPreparation(_), JobClass::InfrastructureLifecycle)
-                )
+                );
+            #[cfg(windows)]
+            let valid_method = valid_method
+                || matches!(
+                    (&kind, spec.class),
+                    (RequestKind::SymbolNative { .. }, JobClass::NativeObservation)
+                );
+            let valid_method = valid_method
                 || matches!(
                     (&kind, spec.class),
                     (RequestKind::SymbolCleanup { .. }, JobClass::InfrastructureLifecycle)
@@ -226,6 +236,7 @@ impl Core {
                             .is_some_and(|pending| pending.surface == key.surface)
                 })
             });
+            #[cfg(any(windows, test))]
             if let RequestKind::EntryPreparation(setup) = &kind
                 && (spec.operation
                     != sugarsubstitute_contracts::execution::Operation::NativeLifecycle

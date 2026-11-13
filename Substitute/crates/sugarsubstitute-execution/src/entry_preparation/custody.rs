@@ -5,12 +5,14 @@
 use super::{core_binding::OriginalPreparation, slot::PreparationSlot, state::NativeCapture};
 use crate::{admission::Core, scope::lock};
 use std::sync::{Arc, Mutex, OnceLock};
+#[cfg(any(windows, test))]
 use sugarsubstitute_contracts::execution::MemoryClaim;
 
 pub(super) struct NativeOwnership {
     pub(super) capture: Option<Box<NativeCapture>>,
     pub(super) borrowed: bool,
     pub(super) callbacks: u16,
+    #[cfg(any(windows, test))]
     pub(super) acquisition_open: bool,
 }
 pub(super) struct PreparationPayload {
@@ -20,9 +22,11 @@ pub(super) struct PreparationPayload {
     pub(super) slot: OnceLock<Arc<PreparationSlot>>,
     pub(super) binding: OriginalPreparation,
     pub(super) core: Arc<Core>,
+    #[cfg(any(windows, test))]
     memory: MemoryClaim,
 }
 impl PreparationPayload {
+    #[cfg(any(windows, test))]
     pub(super) fn new(core: Arc<Core>, binding: OriginalPreparation, memory: MemoryClaim) -> Self {
         Self {
             sources: super::source_cache::PreparationSources::new(),
@@ -39,9 +43,11 @@ impl PreparationPayload {
             memory,
         }
     }
+    #[cfg(any(windows, test))]
     pub(super) fn claimed_bytes(&self) -> u64 {
         self.memory.bytes()
     }
+    #[cfg(any(windows, test))]
     pub(super) fn publish_quiescence(&self) {
         let native = lock(&self.native);
         if let Some(slot) = self.slot.get() {
@@ -68,6 +74,7 @@ impl Drop for PreparationPayload {
 /// This closed guard exposes neither an Arc projection nor a separate claim.
 pub(super) struct WholePreparation(Option<Arc<PreparationPayload>>);
 impl WholePreparation {
+    #[cfg(any(windows, test))]
     pub(super) fn new(payload: PreparationPayload) -> Self {
         Self(Some(Arc::new(payload)))
     }

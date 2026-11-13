@@ -26,6 +26,7 @@ mod update;
 
 pub use conflict::ConflictReport;
 pub use crash::run_report_surface;
+#[cfg(target_os = "windows")]
 pub(super) use crash::validate_content_capacity;
 pub use startup::StartupReport;
 pub use update::{UpdateExport, UpdateReport};

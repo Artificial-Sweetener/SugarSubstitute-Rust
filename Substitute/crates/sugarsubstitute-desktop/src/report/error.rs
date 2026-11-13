@@ -59,24 +59,29 @@ impl From<crate::DesktopError> for ReportSurfaceError {
     }
 }
 /// Retain an actual unwound payload without formatting private panic text in product copy.
+#[cfg(target_os = "windows")]
 pub(super) struct PanicCause {
     _payload: Box<dyn std::any::Any + Send>,
 }
+#[cfg(target_os = "windows")]
 impl PanicCause {
     pub(super) fn new(payload: Box<dyn std::any::Any + Send>) -> Self {
         Self { _payload: payload }
     }
 }
+#[cfg(target_os = "windows")]
 impl fmt::Debug for PanicCause {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("NativeReportContentPanic")
     }
 }
+#[cfg(target_os = "windows")]
 impl fmt::Display for PanicCause {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("Native report content unwound")
     }
 }
+#[cfg(target_os = "windows")]
 impl Error for PanicCause {}
 
 #[cfg(windows)]

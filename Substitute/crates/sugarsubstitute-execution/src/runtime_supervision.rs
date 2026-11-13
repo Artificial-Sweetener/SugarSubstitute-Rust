@@ -89,13 +89,8 @@ pub(super) async fn supervise(_exit: WorkerExit, core: Arc<Core>) {
         }
         let now = core.clock.retirement_now();
         let (stopping, deadline, expired_native, custody_notice) = {
-            let state = &mut *lock(&core.state);
-            let (deadline, expired_native) = deadlines(state, now);
-            #[cfg(any(windows, test))]
-            let (deadline, expired_native, custody_notice) =
-                native_deadlines(state, now, deadline, expired_native);
-            #[cfg(not(any(windows, test)))]
-            let custody_notice = false;
+            let mut state = lock(&core.state);
+            let (deadline, expired_native, custody_notice) = timers(&mut state, now);
             (state.stopping, deadline, expired_native, custody_notice)
         };
         if custody_notice && core.mailbox.signal_capacity() {
@@ -141,12 +136,24 @@ pub(super) async fn supervise(_exit: WorkerExit, core: Arc<Core>) {
     }
 }
 
-/// Fold running native custody and command/cleanup deadlines into the supervisor's next wake.
+/// Fold job deadlines and native timer slots into the supervisor's next wake.
 ///
-/// Returns the earliest deadline, whether any native owner expired, and whether a custody
-/// deadline changed so the mailbox must wake its consumer.
+/// Returns the earliest future deadline, whether native work expired, and
+/// whether a backend custody slot changed and owes the mailbox a wake.
+fn timers(state: &mut State, now: Moment) -> (Option<Moment>, bool, bool) {
+    let (deadline, expired_native) = deadlines(state, now);
+    #[cfg(any(windows, test))]
+    {
+        native_timers(state, now, deadline, expired_native)
+    }
+    #[cfg(not(any(windows, test)))]
+    {
+        (deadline, expired_native, false)
+    }
+}
+
 #[cfg(any(windows, test))]
-fn native_deadlines(
+fn native_timers(
     state: &mut State,
     now: Moment,
     mut deadline: Option<Moment>,
@@ -200,13 +207,9 @@ fn deadlines(state: &State, now: Moment) -> (Option<Moment>, bool) {
     let mut future = None;
     let mut expired_native = false;
     for record in state.jobs.values() {
-        #[cfg(any(windows, test))]
-        let deadlined = record.native_deadlines.is_some();
-        #[cfg(not(any(windows, test)))]
-        let deadlined = false;
         let native = record.spec.class == JobClass::NativeObservation
             || record.desktop_capture_child()
-            || deadlined;
+            || record.has_native_deadlines();
         if record.phase != JobPhase::Queued && !(native && record.phase == JobPhase::Running) {
             continue;
         }

@@ -24,7 +24,7 @@ use tokio::sync::Notify;
 /// Identify construction without extending source ownership beyond synchronous admission.
 /// Captured and symbol inputs retain genuine original bindings outside Core while this request borrows them;
 /// validation and the factory share those original allocations without a new control.
-pub(crate) enum RequestKind<'a> {
+pub(crate) enum RequestKind<#[cfg(any(windows, test))] 'a> {
     #[cfg(all(feature = "k1-native-qualification", any(windows, test)))]
     RegisteredDesktopFault {
         custody: &'a crate::desktop_capture::metadata::DesktopCaptureCustodyRef,
@@ -33,6 +33,7 @@ pub(crate) enum RequestKind<'a> {
     Async,
     Blocking,
     Cpu,
+    #[cfg(any(windows, test))]
     EntryPreparation(sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget),
     SymbolCleanup {
         main_scope: sugarsubstitute_contracts::execution::ScopeSpec,
@@ -48,6 +49,7 @@ pub(crate) enum RequestKind<'a> {
     ReportExportMain {
         cleanup: JobId,
     },
+    #[cfg(windows)]
     SymbolNative {
         original: &'a JobContext,
         handles: Arc<sugarsubstitute_contracts::execution::NativeHandleClaim>,
@@ -77,15 +79,19 @@ pub(crate) struct Record {
     #[cfg(any(windows, test))]
     pub(crate) custody_deadlines: Option<Box<crate::backend_custody::deadlines::Deadlines>>,
     pub(crate) memory: Option<sugarsubstitute_contracts::execution::MemoryLeaseObservation>,
+    #[cfg(any(windows, test))]
     pub(crate) entry_setup: Option<sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget>,
+    #[cfg(any(windows, test))]
     pub(crate) preparation_issued: bool,
     pub(crate) preparation: Option<Arc<crate::entry_preparation::slot::PreparationSlot>>,
+    #[cfg(any(windows, test))]
     pub(crate) registered_startup_issued: bool,
     pub(crate) capture_bundle_issued: bool,
     #[cfg(any(windows, test))]
     pub(crate) capture_event_issued: bool,
     #[cfg(any(windows, test))]
     pub(crate) capture_event_identity: Option<usize>,
+    #[cfg(any(windows, test))]
     pub(crate) symbol_original: Option<JobId>,
     pub(crate) report_pair: Option<crate::report_export::pair::Association>,
     pub(crate) report_export: bool,
@@ -124,6 +130,17 @@ impl Record {
                 self.desktop_capture_custody.as_ref(),
             )
         })
+    }
+    /// Native deadline slots exist only for Windows native work.
+    pub(crate) fn has_native_deadlines(&self) -> bool {
+        #[cfg(any(windows, test))]
+        {
+            self.native_deadlines.is_some()
+        }
+        #[cfg(not(any(windows, test)))]
+        {
+            false
+        }
     }
     pub(crate) fn desktop_capture_child(&self) -> bool {
         #[cfg(any(windows, test))]

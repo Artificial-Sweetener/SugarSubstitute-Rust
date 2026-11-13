@@ -20,7 +20,7 @@ pub struct MemoryObservation {
 
 impl MemoryObservation {
     /// Retain the parse's actual admission alongside the attributed message.
-    #[cfg(any(target_os = "windows", test))]
+    #[cfg(target_os = "windows")]
     pub(crate) fn new(
         identity: MainIdentity,
         message: MemoryMessage,
@@ -44,9 +44,15 @@ impl MemoryObservation {
 /// One host-direction memory allowance, encoded and retained with its admitted allocation.
 pub struct MemoryCommand {
     identity: MainIdentity,
+    #[cfg(target_os = "windows")]
     generation: u64,
+    #[cfg(target_os = "windows")]
     payload: Vec<u8>,
+    #[cfg(target_os = "windows")]
     claim: MemoryClaim,
+    /// Only the Windows host delivers the command; elsewhere it keeps its admission until drop.
+    #[cfg(not(target_os = "windows"))]
+    _claim: MemoryClaim,
 }
 
 impl MemoryCommand {
@@ -67,7 +73,14 @@ impl MemoryCommand {
         }
         let session = PanelSession::for_main(identity).map_err(MemoryError::Session)?;
         let payload = allowance.encode(&session)?;
-        Ok(Self { identity, generation: allowance.generation, payload, claim })
+        #[cfg(target_os = "windows")]
+        let command = Self { identity, generation: allowance.generation, payload, claim };
+        #[cfg(not(target_os = "windows"))]
+        let command = {
+            drop(payload);
+            Self { identity, _claim: claim }
+        };
+        Ok(command)
     }
 
     /// Borrow the addressed main-navigation identity.
@@ -75,11 +88,13 @@ impl MemoryCommand {
         self.identity
     }
 
+    #[cfg(target_os = "windows")]
     /// The allowance generation; a newer pending allowance replaces an older one.
     pub(crate) const fn generation(&self) -> u64 {
         self.generation
     }
 
+    #[cfg(target_os = "windows")]
     /// Borrow the encoded public message while its allocation claim remains retained.
     pub(crate) fn payload(&self) -> &[u8] {
         &self.payload
@@ -91,6 +106,7 @@ impl MemoryCommand {
         std::mem::take(&mut self.payload)
     }
 
+    #[cfg(target_os = "windows")]
     /// Drop encoded storage before recovering its original noncloneable allocation claim.
     pub(crate) fn into_claim(self) -> MemoryClaim {
         drop(self.payload);

@@ -42,6 +42,7 @@ impl StagedDraw {
         let overlay = OverlayBatches::upload(device, overlay, output, context)?;
         Ok(Self { upload, overlay, staging, patches: Vec::new() })
     }
+    #[cfg(any(windows, feature = "boundary-fixtures"))]
     pub(crate) fn with_patches(
         mut self,
         device: &Arc<GpuDevice>,

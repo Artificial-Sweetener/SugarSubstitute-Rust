@@ -43,7 +43,7 @@ impl CanvasNativeRequestStorage {
 
 impl CanvasNativeObservation {
     /// Retain the attributed request, its credit, any upload storage and the lifetime's hosting.
-    #[cfg(any(target_os = "windows", test))]
+    #[cfg(target_os = "windows")]
     pub(crate) fn new(
         identity: MainIdentity,
         request: CanvasNativeRequest,
@@ -290,7 +290,7 @@ impl CanvasNativeNotification {
     }
 
     /// Drop encoded bytes before returning the independently admitted claim.
-    #[cfg(any(target_os = "windows", test))]
+    #[cfg(target_os = "windows")]
     pub(crate) fn into_claim(self) -> MemoryClaim {
         let Self { payload, _claim, .. } = self;
         drop(payload);

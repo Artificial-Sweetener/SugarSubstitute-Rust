@@ -14,6 +14,7 @@ pub(crate) enum PeerBinding {
     Recovery(RecoveryGrantKey),
 }
 impl PeerBinding {
+    #[cfg(windows)]
     pub(crate) fn capture_target(self) -> Option<sugarsubstitute_contracts::crash::CaptureTarget> {
         use sugarsubstitute_contracts::crash::CaptureTarget;
         match self {

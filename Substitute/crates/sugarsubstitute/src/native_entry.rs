@@ -11,6 +11,8 @@ pub enum NativeEntry {
     Launcher,
     /// Independent updater executable.
     Updater,
+    /// Standalone native canvas image viewer.
+    Viewer,
 }
 impl NativeEntry {
     /// Select a closed diagnostic code without accepting caller-provided text.
@@ -19,6 +21,7 @@ impl NativeEntry {
             Self::Installer => "installer",
             Self::Launcher => "launcher",
             Self::Updater => "updater",
+            Self::Viewer => "viewer",
         }
     }
 }

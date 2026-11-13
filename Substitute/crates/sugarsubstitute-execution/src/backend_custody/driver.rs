@@ -11,6 +11,7 @@ use sugarsubstitute_contracts::execution::{JobContext, Moment};
 #[derive(Clone)]
 pub struct BackendCustodyWake {
     pub(crate) signal: Arc<Signal>,
+    #[cfg(windows)]
     pub(crate) job: sugarsubstitute_contracts::execution::JobId,
 }
 impl BackendCustodyWake {
