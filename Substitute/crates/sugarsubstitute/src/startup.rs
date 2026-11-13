@@ -36,6 +36,9 @@ mod routing;
 mod scopes;
 #[path = "startup/shutdown.rs"]
 mod shutdown;
+#[cfg(windows)]
+#[path = "startup/update_report.rs"]
+mod update_report;
 #[path = "startup/view.rs"]
 pub(crate) mod view;
 #[path = "startup/window_content.rs"]
@@ -125,6 +128,9 @@ pub struct StartupHost<B: StartupBackend> {
     close_record_submitted: bool,
     /// A restart to apply that waits for the backend's running workflow.
     workflow_restart: workflow_restart::WorkflowRestart,
+    /// Exports of the update report to files the user selects.
+    #[cfg(windows)]
+    update_reports: Option<update_report::UpdateReports>,
     /// The short graceful cutoff of a critical session end, which waits for nothing.
     critical_until: Option<sugarsubstitute_contracts::execution::Moment>,
     #[cfg(all(test, windows, feature = "native-composition"))]
@@ -206,6 +212,8 @@ impl<B: StartupBackend> StartupHost<B> {
             close_save: None,
             close_record_submitted: false,
             workflow_restart: workflow_restart::WorkflowRestart::default(),
+            #[cfg(windows)]
+            update_reports: None,
             critical_until: None,
             #[cfg(all(test, windows, feature = "native-composition"))]
             input_probe: None,

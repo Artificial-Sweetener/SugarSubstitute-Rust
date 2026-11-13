@@ -118,16 +118,13 @@ impl ReportPresentation {
     ) -> Self {
         let version = attempt.version.as_deref().unwrap_or(copy.report.unavailable);
         let step = copy.updates.phase(attempt.phase);
-        let mut details = format!(
-            "{}\n{}: {version}\n{}: {step}\n",
-            copy.report.update_title, copy.report.version, copy.report.update_phase,
-        );
-        for cause in &attempt.causes {
-            details.push('\n');
-            details.push_str(cause);
-        }
-        details.push('\n');
-        Self::update_failure(copy, window_title, version, step, details)
+        Self::update_failure(
+            copy,
+            window_title,
+            version,
+            step,
+            update_attempt_report(copy, attempt),
+        )
     }
 
     /// The question asked when the previous SugarSubstitute window has stopped responding.
@@ -146,6 +143,26 @@ impl ReportPresentation {
             copy,
         )
     }
+}
+
+/// The full report of a failed update attempt in `copy`'s language: its version and step, then
+/// the cause chain, outermost first. Copy and Export both write exactly this text.
+pub fn update_attempt_report(
+    copy: &'static Messages,
+    attempt: &sugarsubstitute_contracts::update::attempt::UpdateReport,
+) -> String {
+    let version = attempt.version.as_deref().unwrap_or(copy.report.unavailable);
+    let step = copy.updates.phase(attempt.phase);
+    let mut details = format!(
+        "{}\n{}: {version}\n{}: {step}\n",
+        copy.report.update_title, copy.report.version, copy.report.update_phase,
+    );
+    for cause in &attempt.causes {
+        details.push('\n');
+        details.push_str(cause);
+    }
+    details.push('\n');
+    details
 }
 
 /// A command the user chose that the report's owner decides.
