@@ -296,6 +296,10 @@ impl ParentLifecycle {
                 self.updates.check_requested();
                 self.requests.get_mut(index)?.reply = Some(Reply::Acknowledged);
             }
+            DecodedPayload::UpdateStatusApplied(revision) => {
+                self.updates.applied(revision.get());
+                self.requests.get_mut(index)?.reply = Some(Reply::Acknowledged);
+            }
             DecodedPayload::ExitIntent { shutdown, intent, expected_code } => {
                 let budget = self.exit.as_mut().ok_or(ParentError::WrongPhase)?.begin(
                     self.run,

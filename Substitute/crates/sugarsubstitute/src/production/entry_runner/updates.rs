@@ -142,7 +142,7 @@ impl<C: EntryActivation> EntryRunner<C> {
     }
 
     /// Tell the window this launch restarts into its prepared update, so it keeps the splash and
-    /// stays hidden. The close waits until the window has received this status.
+    /// stays hidden. The close waits until every window acknowledged it had committed to that.
     pub(super) fn announce_restart(&mut self) -> Result<(), Box<dyn Error>> {
         self.publish_update_status()?;
         self.restart_announced = Some(self.update_status.snapshot().0);
@@ -150,13 +150,14 @@ impl<C: EntryActivation> EntryRunner<C> {
     }
 
     /// Whether this run owes its restart close now: a restart is decided, the window has not
-    /// opened, and every window has received the status that keeps it hidden.
+    /// opened, and every window acknowledged the status that keeps it hidden. A window that
+    /// revealed before applying it never acknowledges it; its MainRevealed withdraws the restart.
     pub(super) fn restart_owed(&self) -> bool {
         self.launch_update.restart().is_some()
             && !self.authority.as_ref().is_some_and(CoordinatorAuthority::window_opened)
             && self
                 .restart_announced
-                .is_some_and(|revision| self.child.update_status_delivered(revision))
+                .is_some_and(|revision| self.child.update_status_applied(revision))
     }
 
     /// Read this installation's update record and channel when they may have changed and no read
@@ -248,7 +249,7 @@ mod tests {
         let mut runner = EntryRunner::new(
             command,
             path,
-            Box::new(NoChild(None)),
+            Box::new(NoChild(None, None)),
             crate::diagnostics::DiagnosticHealth::fixture(),
         );
         freeze_time(&mut runner);

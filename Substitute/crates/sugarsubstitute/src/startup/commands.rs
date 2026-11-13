@@ -8,11 +8,13 @@ use sugarsubstitute_desktop::DesktopStartupCommand;
 pub(super) struct StartupCommands {
     pending: Option<DesktopStartupCommand>,
     closing: bool,
+    /// A main reveal was issued; the window may be on screen.
+    revealed: bool,
 }
 impl StartupCommands {
     /// Start with no queued positive UI work or close request.
     pub(super) const fn new() -> Self {
-        Self { pending: None, closing: false }
+        Self { pending: None, closing: false, revealed: false }
     }
     /// Retain the requested splash identity without replacing an outstanding effect.
     pub(super) fn retire_splash(&mut self, launch: LaunchId) -> Result<(), Box<dyn Error>> {
@@ -24,7 +26,12 @@ impl StartupCommands {
     pub(super) fn reveal_main(&mut self, identity: MainIdentity) -> Result<(), Box<dyn Error>> {
         self.admit()?;
         self.pending = Some(DesktopStartupCommand::RevealMain(identity));
+        self.revealed = true;
         Ok(())
+    }
+    /// Whether a main reveal was ever issued, so the window may have been seen.
+    pub(super) const fn revealed(&self) -> bool {
+        self.revealed
     }
     fn admit(&self) -> Result<(), Box<dyn Error>> {
         if self.closing {

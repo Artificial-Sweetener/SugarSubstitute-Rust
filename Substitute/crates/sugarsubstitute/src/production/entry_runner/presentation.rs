@@ -49,9 +49,10 @@ mod tests {
                 diagnostics: Default::default(),
                 options: unopened_paths()?.into(),
             };
-            let child = NoChild(Some(sugarsubstitute_contracts::configuration::LocaleId::new(
-                selected.id,
-            )?));
+            let child = NoChild(
+                Some(sugarsubstitute_contracts::configuration::LocaleId::new(selected.id)?),
+                None,
+            );
             let lifetime = Box::new(EntryRunner::new(
                 command,
                 path,

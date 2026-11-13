@@ -41,7 +41,7 @@ fn only_accepted_normal_shutdown_suppresses_a_nested_failure_dialog() -> Result<
         let mut lifetime = Box::new(EntryRunner::new(
             command,
             path,
-            Box::new(super::super::tests::NoChild(None)),
+            Box::new(super::super::tests::NoChild(None, None)),
             crate::diagnostics::DiagnosticHealth::fixture(),
         ));
         lifetime.normal_shutdown = normal;
@@ -133,7 +133,7 @@ fn runner() -> Result<EntryRunner<super::super::tests::NoChild>, Box<dyn Error>>
     let mut runner = EntryRunner::new(
         command,
         path,
-        Box::new(super::super::tests::NoChild(None)),
+        Box::new(super::super::tests::NoChild(None, Some(0))),
         crate::diagnostics::DiagnosticHealth::fixture(),
     );
     super::super::tests::freeze_time(&mut runner);
@@ -176,8 +176,8 @@ fn reveal(runner: &mut EntryRunner<super::super::tests::NoChild>) -> Result<(), 
 }
 
 /// A beta-eager check that prepares an update before intake is ready owes a restart: it says
-/// which version it restarts into at once, keeping the window hidden, waits for the close
-/// fence, never closes past an in-flight entry request, and then closes normally and
+/// which version it restarts into at once, keeping the window hidden, waits until the window
+/// acknowledges staying hidden and for the close fence, never closes past an in-flight entry request, and then closes normally and
 /// relaunches into the update. The fence is supplied here: the real one is the entry intake's
 /// `try_close_when_idle`, which needs a live entry server.
 #[test]
@@ -196,8 +196,17 @@ fn a_restart_before_the_window_waits_for_the_close_fence_then_closes_normally_an
         fences.set(fences.get() + 1);
         Ok::<_, Box<dyn Error>>(idle)
     };
+    let announced = runner.restart_announced.ok_or("restart not announced")?;
+    runner.initial_completed = true;
+    runner.intake_ready = true;
+    runner.close_after_fence(admission(&runner, true), |_| fence(true))?;
+    assert_eq!(fences.get(), 0, "the window has not acknowledged staying hidden");
+    assert!(!runner.closing);
+    runner.child.1 = Some(announced);
+    runner.initial_completed = false;
+    runner.intake_ready = false;
     let pending = admission(&runner, false);
-    assert!(pending.requested, "the restart is a requested close");
+    assert!(pending.requested, "the acknowledged restart is a requested close");
     runner.close_after_fence(pending, |_| fence(true))?;
     assert_eq!(fences.get(), 0, "intake not ready: the fence is not even asked");
     assert!(!runner.closing && !runner.normal_shutdown);
@@ -215,23 +224,29 @@ fn a_restart_before_the_window_waits_for_the_close_fence_then_closes_normally_an
     Ok(())
 }
 
-/// The window reveals in the same turn the restart was decided, before it received the status
-/// that keeps it hidden: within that turn the update step runs before the child's MainRevealed
-/// and the close. The close is then never owed, the next update step withdraws the restart and
-/// tells the window, and the update waits for the next launch.
+/// The window reveals before it processed the status that keeps it hidden, so it never
+/// acknowledges it: no close is owed while its MainRevealed is on its way, none once it arrives,
+/// even with a stray acknowledgement, the next update step withdraws the restart and tells the
+/// window, and the update waits for the next launch.
 #[test]
-fn a_window_revealed_after_the_restart_decision_is_never_closed() -> Result<(), Box<dyn Error>> {
+fn a_window_revealed_before_processing_the_restart_is_never_closed() -> Result<(), Box<dyn Error>> {
     let mut runner = runner()?;
     runner.initial_completed = true;
     runner.intake_ready = true;
     decide_restart(&mut runner)?;
-    reveal(&mut runner)?;
     let fences = Cell::new(0);
     runner.close_after_fence(admission(&runner, true), |_| {
         fences.set(fences.get() + 1);
         Ok(true)
     })?;
-    assert_eq!(fences.get(), 0, "a seen window owes no close");
+    assert_eq!(fences.get(), 0, "no acknowledgement: the window may already be on screen");
+    reveal(&mut runner)?;
+    runner.child.1 = runner.restart_announced;
+    runner.close_after_fence(admission(&runner, true), |_| {
+        fences.set(fences.get() + 1);
+        Ok(true)
+    })?;
+    assert_eq!(fences.get(), 0, "a seen window owes no close, even acknowledged");
     assert!(!runner.closing);
 
     runner.observe_window();

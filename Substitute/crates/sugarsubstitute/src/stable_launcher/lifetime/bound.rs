@@ -34,11 +34,13 @@ impl Launcher {
 
     /// Keep the notice's words in step with the version this launch starts: the update's version
     /// while an update trial is chosen, starting for an installation choice or once the accepted
-    /// version is chosen instead. Reads only the version recorded when the update was chosen, so
-    /// it never waits on the launch a worker is preparing.
+    /// version is chosen instead. Reads only the version the launch recorded outside its lock, so
+    /// it never waits on a worker preparing the trial.
     pub(super) fn announce_launch(&mut self) {
         let version = match self.choice {
-            Choice::Trial | Choice::Create { optional: true } => self.update_version.as_deref(),
+            Choice::Trial | Choice::Create { optional: true } => {
+                self.launch.as_ref().and_then(ApplicationLaunch::update_version)
+            }
             _ => None,
         };
         if let Some(notice) = &mut self.notice {

@@ -97,9 +97,6 @@ pub(super) struct Launcher {
     jobs: crate::job_sequence::JobSequence,
     job: Option<Pending>,
     launch: Option<ApplicationLaunch>,
-    /// Version of the update trial in `launch`, recorded when the update was chosen; absent for
-    /// an installation choice and for the accepted version.
-    update_version: Option<String>,
     cached: Option<cached::Cached>,
     engine: Option<Arc<engine::Guard>>,
     /// Newer accepted updater that must own startup, held pinned until it takes over.
@@ -153,7 +150,6 @@ impl Launcher {
             jobs: crate::job_sequence::JobSequence::new(),
             job: None,
             launch: None,
-            update_version: None,
             cached: None,
             engine: None,
             delegate: None,
