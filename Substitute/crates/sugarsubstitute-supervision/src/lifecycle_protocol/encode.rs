@@ -126,6 +126,7 @@ fn payload(
             writer.put(status)
         }
         WirePayload::RestartToApply | WirePayload::CheckForUpdates => Ok(()),
+        WirePayload::UpdateStatusApplied(revision) => writer.u64(revision.get()),
     }
 }
 fn encode_target(

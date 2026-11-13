@@ -76,7 +76,11 @@ impl ApplicationLaunch {
 
     /// Establish creator custody before any worker can publish the chosen trial.
     fn authorized_trial(candidate: Authorization) -> Self {
-        let launch = Self::empty();
+        let mut launch = Self::empty();
+        launch.1 = match &candidate {
+            Authorization::Signed(signed) => Some(Arc::from(signed.version())),
+            Authorization::Installed(_) => None,
+        };
         let prepared = Arc::clone(candidate.prepared());
         crate::native_claims::lock(&launch.0).custody =
             Some(LaunchCustody::Trial(Box::new(TrialLaunch {

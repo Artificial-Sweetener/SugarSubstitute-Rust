@@ -391,8 +391,8 @@ impl EntryActivation for ProductionActivation {
         self.live_parents_mut()
             .fold(false, |requested, parent| parent.take_check_request() | requested)
     }
-    fn update_status_delivered(&self, revision: u64) -> bool {
-        self.live_parents().all(|parent| parent.update_status_delivered(revision))
+    fn update_status_applied(&self, revision: u64) -> bool {
+        self.live_parents().all(|parent| parent.update_status_applied(revision))
     }
     fn restart_to_apply_requested(&self) -> bool {
         self.records.iter().flatten().any(|retained| {

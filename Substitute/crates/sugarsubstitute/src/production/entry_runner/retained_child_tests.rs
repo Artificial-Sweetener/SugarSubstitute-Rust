@@ -70,7 +70,7 @@ impl EntryActivation for RetainedChild {
     fn restart_to_apply_requested(&self) -> bool {
         false
     }
-    fn update_status_delivered(&self, _: u64) -> bool {
+    fn update_status_applied(&self, _: u64) -> bool {
         true
     }
     fn take_update_check_request(&mut self) -> bool {
