@@ -98,17 +98,17 @@ class ComPhotoshopAutomation:
     @property
     def available(self) -> bool:
         """Require pywin32 and a registered `Photoshop.Application` class without starting Photoshop."""
-        if sys.platform != "win32" or importlib.util.find_spec("win32com") is None:
-            return False
-        import winreg
+        if sys.platform == "win32" and importlib.util.find_spec("win32com") is not None:
+            import winreg
 
-        try:
-            with winreg.OpenKey(
-                winreg.HKEY_CLASSES_ROOT, r"Photoshop.Application\CLSID"
-            ):
-                return True
-        except OSError:
-            return False
+            try:
+                with winreg.OpenKey(
+                    winreg.HKEY_CLASSES_ROOT, r"Photoshop.Application\CLSID"
+                ):
+                    return True
+            except OSError:
+                return False
+        return False
 
     def run(self, script: str, arguments: Sequence[str]) -> None:
         """Dispatch on this worker thread's own COM apartment and translate COM failures."""
