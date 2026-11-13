@@ -15,12 +15,16 @@ struct HeldState {
     job_entered: bool,
     job_released: bool,
     armed: bool,
+    /// Count the held delivery before holding it, as a wake already published but whose
+    /// callback has not returned.
+    publish_first: bool,
     wake_entered: bool,
     wake_released: bool,
     delivered: u64,
 }
 
-/// A completion wake that holds the first delivery after arming inside its callback.
+/// A completion wake that holds the first delivery after arming inside its callback, before or
+/// after counting it.
 #[derive(Default)]
 struct HeldWake {
     state: Mutex<HeldState>,
@@ -60,8 +64,13 @@ impl Drop for ReleaseOnDrop {
 impl CompletionWake for HeldWake {
     fn wake(&self) -> Result<(), ExecutionError> {
         let mut state = self.state.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut published = false;
         if state.armed {
             state.armed = false;
+            if state.publish_first {
+                state.delivered += 1;
+                published = true;
+            }
             state.wake_entered = true;
             self.changed.notify_all();
             state = crate::completion_wake::wait_while_watched(
@@ -71,7 +80,9 @@ impl CompletionWake for HeldWake {
                 |state| !state.wake_released,
             );
         }
-        state.delivered += 1;
+        if !published {
+            state.delivered += 1;
+        }
         drop(state);
         self.changed.notify_all();
         Ok(())
@@ -83,6 +94,37 @@ impl CompletionWake for HeldWake {
 /// the instant between removal and delivery.
 #[test]
 fn a_capacity_wake_still_being_delivered_is_running_work() -> Result<(), Box<dyn Error>> {
+    retire_with_held_wake(false, |owner, _| {
+        let progress = owner.poll_shutdown()?;
+        assert!(progress.unresolved_jobs.is_empty(), "{:?}", progress.unresolved_jobs);
+        assert_eq!(classify(owner)?, Execution::Running);
+        Ok(())
+    })
+}
+
+/// A capacity wake already published is not awaited again while its callback is still
+/// returning. A turn that snapshots the wake count after that publication and then drains has
+/// seen everything the wake announced, so classifying it as running work would block the turn
+/// on a wake that never comes.
+#[test]
+fn a_capacity_wake_published_before_the_snapshot_is_not_awaited_again() -> Result<(), Box<dyn Error>>
+{
+    retire_with_held_wake(true, |owner, client| {
+        client.drain_completions(NonZeroUsize::MIN.saturating_add(31))?;
+        assert_eq!(classify(owner)?, Execution::Idle);
+        Ok(())
+    })
+}
+
+/// Retire an abandoned record and run `observe` while its capacity wake is held inside the
+/// callback, counted already when `publish_first`; then shut the owner down.
+fn retire_with_held_wake(
+    publish_first: bool,
+    observe: impl FnOnce(
+        &sugarsubstitute_execution::ExecutionOwner,
+        &ExecutionClient,
+    ) -> Result<(), Box<dyn Error>>,
+) -> Result<(), Box<dyn Error>> {
     let wake = Arc::new(HeldWake::default());
     let mut owner = sugarsubstitute_execution::ExecutionOwner::new(
         Arc::new(super::super::TestClock),
@@ -105,13 +147,12 @@ fn a_capacity_wake_still_being_delivered_is_running_work() -> Result<(), Box<dyn
     drop(job);
     wake.update(|state| {
         state.armed = true;
+        state.publish_first = publish_first;
         state.job_released = true;
     });
     // The worker that retired the abandoned record is now delivering its capacity wake.
     wake.wait(|state| state.wake_entered);
-    let progress = owner.poll_shutdown()?;
-    assert!(progress.unresolved_jobs.is_empty(), "{:?}", progress.unresolved_jobs);
-    assert_eq!(classify(&owner)?, Execution::Running);
+    observe(&owner, &client)?;
     drop(release);
     drop(scope);
     owner.request_shutdown(Moment::from_nanos(0));

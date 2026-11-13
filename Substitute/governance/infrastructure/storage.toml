@@ -714,7 +714,7 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute-execution/src/runtime.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:6e1a3bcf18cb1e4a0fd8cbc1d6fe92ffe3ddd0c8ad23ccd55ea2781c97aed376"
+source_sha256 = "sha256:6ab972a15cde0fcc901a2123a76e561e3d8c9bb260de1e9899b654beea6ad528"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Execution clock, admitted memory or retained task metadata for: Compose the sole private scheduler and retain every worker through actual shutdown. This receiver does not inspect filesystem state."

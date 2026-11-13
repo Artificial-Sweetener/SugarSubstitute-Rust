@@ -29,10 +29,14 @@ pub(super) enum Execution {
 }
 
 /// Classify the admitted work of `owner` that can still publish a completion wake.
+///
+/// Callers classify after draining completions that followed their wake-count snapshot, so a
+/// wake signaled since that drain is always newer than the snapshot.
 pub(super) fn classify(owner: &ExecutionOwner) -> Result<Execution, Box<dyn Error>> {
     let progress = owner.poll_shutdown()?;
-    // A retirement is observable before its capacity wake is delivered; that wake is still owed.
-    if progress.running + progress.queued > 0 || progress.capacity_wake_pending {
+    // A retirement is observable before its capacity wake is delivered; that wake is still owed
+    // until the next drain, and never after it.
+    if progress.running + progress.queued > 0 || progress.wake_owed_since_drain {
         return Ok(Execution::Running);
     }
     // An acknowledged record stays registered only while cancellation or native custody defers

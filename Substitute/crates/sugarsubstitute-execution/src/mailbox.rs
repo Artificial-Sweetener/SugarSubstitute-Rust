@@ -65,6 +65,11 @@ impl Mailbox {
         should_wake
     }
 
+    /// A wake was signaled after the last drain, so its delivery follows that drain.
+    pub(crate) fn signaled_since_drain(&self) -> bool {
+        lock(&self.pending).wake_pending
+    }
+
     pub(crate) fn deliver_wake(&self) {
         if lock(&self.suppressed_thread).is_some_and(|thread| thread == std::thread::current().id())
         {

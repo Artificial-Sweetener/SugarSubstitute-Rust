@@ -131,10 +131,12 @@ fn abandoned_result_retirement_is_announced<J>(
     Ok(())
 }
 
-/// Hold the first wake delivered after arming inside its callback until the test releases it.
+/// Hold the first wake delivered after arming inside its callback until the test releases it,
+/// before publishing it or, with `publish_first`, after.
 #[derive(Default)]
 struct HeldWake {
     armed: std::sync::atomic::AtomicBool,
+    publish_first: std::sync::atomic::AtomicBool,
     entered: Gate,
     release: Gate,
     delivered: crate::runtime_test_support::Wake,
@@ -149,26 +151,31 @@ impl Drop for ReleaseOnDrop {
 }
 impl CompletionWake for HeldWake {
     fn wake(&self) -> Result<(), ExecutionError> {
-        if self.armed.swap(false, std::sync::atomic::Ordering::AcqRel) {
-            self.entered.open();
-            self.release.wait().map_err(|cause| {
-                ExecutionError::new(
-                    sugarsubstitute_contracts::execution::Operation::Infrastructure,
-                    Box::new(std::io::Error::other(cause.to_string())),
-                )
-            })?;
+        if !self.armed.swap(false, std::sync::atomic::Ordering::AcqRel) {
+            return self.delivered.wake();
         }
-        self.delivered.wake()
+        let publish_first = self.publish_first.load(std::sync::atomic::Ordering::Acquire);
+        if publish_first {
+            self.delivered.wake()?;
+        }
+        self.entered.open();
+        self.release.wait().map_err(|cause| {
+            ExecutionError::new(
+                sugarsubstitute_contracts::execution::Operation::Infrastructure,
+                Box::new(std::io::Error::other(cause.to_string())),
+            )
+        })?;
+        if publish_first { Ok(()) } else { self.delivered.wake() }
     }
 }
 
 /// A retired record leaves the observable job set before its capacity wake reaches the owner;
-/// progress reports that wake as owed for exactly that window, so an observer that finds no
+/// progress reports that wake as owed until the observer drains, so an observer that finds no
 /// work waits for it instead of concluding that nothing will ever wake it.
 #[test]
-fn retirement_reports_its_capacity_wake_as_pending_until_delivery() -> TestResult {
+fn retirement_reports_its_capacity_wake_as_owed_until_delivery() -> TestResult {
     let wake = Arc::new(HeldWake::default());
-    let mut owner = ExecutionOwner::with_cpu_workers(
+    let owner = ExecutionOwner::with_cpu_workers(
         Arc::new(ClockPort(Arc::new(ManualClock::default()))),
         wake.clone(),
         2,
@@ -179,7 +186,7 @@ fn retirement_reports_its_capacity_wake_as_pending_until_delivery() -> TestResul
     let job = held_blocking(&client, &scope, 4096, entered.clone(), release.clone())?;
     let released = ReleaseOnDrop(wake.clone(), release.clone());
     entered.wait()?;
-    assert!(!owner.poll_shutdown()?.capacity_wake_pending);
+    assert!(!owner.poll_shutdown()?.wake_owed_since_drain);
     drop(job);
     wake.armed.store(true, std::sync::atomic::Ordering::Release);
     release.open();
@@ -188,8 +195,13 @@ fn retirement_reports_its_capacity_wake_as_pending_until_delivery() -> TestResul
     let progress = owner.poll_shutdown()?;
     assert!(progress.unresolved_jobs.is_empty(), "{:?}", progress.unresolved_jobs);
     assert_eq!(progress.running + progress.queued, 0);
-    assert!(progress.capacity_wake_pending, "an owed wake looked like quiescence");
+    assert!(progress.wake_owed_since_drain, "an owed wake looked like quiescence");
     drop(released);
+    finish(owner, &wake, scope)
+}
+
+/// Shut `owner` down, following its wakes until every worker has returned.
+fn finish(mut owner: ExecutionOwner, wake: &HeldWake, scope: Scope) -> TestResult {
     drop(scope);
     owner.request_shutdown(Moment::from_nanos(0));
     loop {
@@ -201,6 +213,44 @@ fn retirement_reports_its_capacity_wake_as_pending_until_delivery() -> TestResul
     }
     owner.finish_shutdown()?;
     Ok(())
+}
+
+/// A capacity wake already published is not owed again while its callback is still returning.
+/// An observer that counted wakes after that publication and then drained has seen every change
+/// the wake announced; reporting the wake as still owed would make it wait for one that never
+/// comes.
+#[test]
+fn a_published_capacity_wake_is_not_owed_once_the_observer_drains() -> TestResult {
+    let wake = Arc::new(HeldWake::default());
+    let owner = ExecutionOwner::with_cpu_workers(
+        Arc::new(ClockPort(Arc::new(ManualClock::default()))),
+        wake.clone(),
+        2,
+    )?;
+    let client = owner.client();
+    let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
+    let (entered, release) = (Arc::new(Gate::default()), Arc::new(Gate::default()));
+    let job = held_blocking(&client, &scope, 4096, entered.clone(), release.clone())?;
+    let released = ReleaseOnDrop(wake.clone(), release.clone());
+    entered.wait()?;
+    drop(job);
+    wake.publish_first.store(true, std::sync::atomic::Ordering::Release);
+    wake.armed.store(true, std::sync::atomic::Ordering::Release);
+    release.open();
+    // The retirement's capacity wake is published; its callback has not yet returned.
+    wake.entered.wait()?;
+    let observed = wake.delivered.count();
+    assert!(owner.poll_shutdown()?.wake_owed_since_drain, "the undrained signal was lost");
+    client.drain_completions(std::num::NonZeroUsize::MIN)?;
+    let progress = owner.poll_shutdown()?;
+    assert!(progress.unresolved_jobs.is_empty(), "{:?}", progress.unresolved_jobs);
+    assert_eq!(progress.running + progress.queued, 0);
+    assert!(
+        !progress.wake_owed_since_drain,
+        "a wake published before count {observed} was reported as still owed"
+    );
+    drop(released);
+    finish(owner, &wake, scope)
 }
 
 #[test]
