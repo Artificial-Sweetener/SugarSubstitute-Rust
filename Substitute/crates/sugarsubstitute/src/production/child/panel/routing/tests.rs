@@ -56,6 +56,7 @@ fn current_unready_and_failed_policies_both_return_correlated_ordinary_refusals(
             surface(identity, 7, false)?,
             lease.clone(),
             lease.claim(SurfaceReply::STORAGE_BYTES)?,
+            MainHosting::Windowed,
         )?;
         let Some(DesktopStartupCommand::SendSurface(reply)) = child.take_command()? else {
             return Err("Current unavailable surface request was silently dropped".into());
@@ -93,6 +94,7 @@ fn consumed_control_and_cancel_return_receipts_without_ordinary_or_lifecycle_cap
         surface(identity, 3, false)?,
         lease.clone(),
         lease.claim(bytes)?,
+        MainHosting::Windowed,
     )?;
     child.receive_panel_control(
         identity,
@@ -107,6 +109,7 @@ fn consumed_control_and_cancel_return_receipts_without_ordinary_or_lifecycle_cap
         surface(identity, 3, true)?,
         lease.clone(),
         lease.claim(bytes)?,
+        MainHosting::Windowed,
     )?;
     assert!(child.panel.is_none());
     assert!(child.commands.iter().all(Option::is_none));
@@ -140,6 +143,7 @@ fn foreign_and_retired_ingress_cannot_bind_the_current_child_delivery_owner() ->
             surface(observed, 4, false)?,
             lease.clone(),
             lease.claim(bytes)?,
+            MainHosting::Windowed,
         )?;
         child.receive_panel_control(
             observed,

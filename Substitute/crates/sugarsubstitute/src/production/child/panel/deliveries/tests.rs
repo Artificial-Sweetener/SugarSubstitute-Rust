@@ -62,6 +62,7 @@ fn handshake_failure_preserves_an_already_queued_surface_refusal() -> Result<()>
         surface_request(&session, 23)?,
         &lease,
         lease.claim(SurfaceReply::STORAGE_BYTES)?,
+        MainHosting::Windowed,
     )?;
     let mut panel = PanelOwner::new(
         identity,
@@ -100,6 +101,7 @@ fn limited_panel_discovery_is_explicit_and_keeps_native_custody() -> Result<()> 
         message.clone(),
         &lease,
         lease.claim(SurfaceReply::STORAGE_BYTES)?,
+        MainHosting::Windowed,
     )?;
     let Some(DesktopStartupCommand::SendSurface(reply)) = deliveries.take_command(identity) else {
         return Err("Surface discovery response missing".into());
@@ -119,13 +121,25 @@ fn limited_panel_discovery_is_explicit_and_keeps_native_custody() -> Result<()> 
     let other = MemoryLease::new(reserved, Box::new(Release(Arc::default())));
     assert!(
         deliveries
-            .surface(identity, message.clone(), &other, other.claim(SurfaceReply::STORAGE_BYTES)?)
+            .surface(
+                identity,
+                message.clone(),
+                &other,
+                other.claim(SurfaceReply::STORAGE_BYTES)?,
+                MainHosting::Windowed
+            )
             .is_err()
     );
     let foreign = MainIdentity { navigation: Generation::new(2)?, ..identity };
     assert!(
         deliveries
-            .surface(foreign, message, &lease, other.claim(SurfaceReply::STORAGE_BYTES)?)
+            .surface(
+                foreign,
+                message,
+                &lease,
+                other.claim(SurfaceReply::STORAGE_BYTES)?,
+                MainHosting::Windowed
+            )
             .is_err()
     );
     assert!(deliveries.take_command(identity).is_none());
@@ -187,7 +201,13 @@ fn surface_negotiation_reports_unavailable_and_retains_the_ingress_claim() -> Re
     let mut deliveries = Deliveries::new();
     deliveries.bind(identity, &lease)?;
     let claim = lease.claim(SurfaceReply::STORAGE_BYTES)?;
-    deliveries.surface(identity, surface_request(&session, 7)?, &lease, claim)?;
+    deliveries.surface(
+        identity,
+        surface_request(&session, 7)?,
+        &lease,
+        claim,
+        MainHosting::Windowed,
+    )?;
     let Some(DesktopStartupCommand::SendSurface(reply)) = deliveries.take_command(identity) else {
         return Err("Surface reply missing".into());
     };
@@ -221,6 +241,7 @@ fn surface_negotiation_rejects_foreign_navigation_and_memory_custody() -> Result
                 surface_request(&session, 1)?,
                 &lease,
                 lease.claim(SurfaceReply::STORAGE_BYTES)?,
+                MainHosting::Windowed
             )
             .is_err()
     );
@@ -231,6 +252,7 @@ fn surface_negotiation_rejects_foreign_navigation_and_memory_custody() -> Result
                 surface_request(&session, 2)?,
                 &other,
                 other.claim(SurfaceReply::STORAGE_BYTES)?,
+                MainHosting::Windowed
             )
             .is_err()
     );
@@ -242,6 +264,7 @@ fn surface_negotiation_rejects_foreign_navigation_and_memory_custody() -> Result
                 surface_request(&foreign_session, 3)?,
                 &lease,
                 lease.claim(SurfaceReply::STORAGE_BYTES)?,
+                MainHosting::Windowed
             )
             .is_err()
     );

@@ -90,8 +90,9 @@ impl ProductionChild {
         observation: SurfaceObservation,
         _prepared: Option<&PreparedChildStartup>,
     ) -> Result<()> {
+        let hosting = observation.hosting();
         let (identity, message, lease, claim) = observation.into_parts();
-        self.receive_surface_message(identity, message, lease, claim)
+        self.receive_surface_message(identity, message, lease, claim, hosting)
     }
 
     /// Consume the attributed surface data after the native observation transfers its custody.
@@ -101,12 +102,13 @@ impl ProductionChild {
         message: CanvasSurfaceMessage,
         lease: MemoryLease,
         claim: MemoryClaim,
+        hosting: MainHosting,
     ) -> Result<()> {
         if !self.accepts_panel_ingress(identity) {
             return Ok(());
         }
         self.bind_panel_delivery(identity, &lease)?;
-        self.panel_deliveries.surface(identity, message, &lease, claim)
+        self.panel_deliveries.surface(identity, message, &lease, claim, hosting)
     }
 
     /// Return an explicit unavailable answer through the same current native delivery owner.
