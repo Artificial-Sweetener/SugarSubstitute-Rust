@@ -250,14 +250,18 @@ impl RecordDirectory {
     }
 }
 /// Preserve canonical-parent selection while allowing a separate read-only final-folder probe.
+/// The requested parent must reach its resolved location from the same drive through the same
+/// native objects, so a drive alias is rejected. Spelling is not location: an 8.3 short name
+/// (as in a `TEMP` of `C:\Users\RUNNER~1\...`), letter case or the verbatim prefix is accepted,
+/// and the returned parent always carries the resolved long spelling.
 fn selected_parent(path: &Path) -> io::Result<Directory> {
     files::lexical(path)?;
     let requested_parent: PathBuf =
         path.parent().ok_or_else(|| invalid("Record parent absent"))?.components().collect();
-    let parent = Directory::open(&requested_parent, false)?.resolved()?;
-    if parent.path().to_string_lossy().to_lowercase()
-        != requested_parent.to_string_lossy().to_lowercase()
-    {
+    let requested = Directory::open(&requested_parent, false)?;
+    let location = requested.location()?;
+    let parent = requested.resolved()?;
+    if parent.location()? != location {
         return Err(invalid("Record parent must use its resolved local location"));
     }
     Ok(parent)

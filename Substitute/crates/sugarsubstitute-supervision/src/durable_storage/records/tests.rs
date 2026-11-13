@@ -211,3 +211,63 @@ fn identical_bytes_at_another_native_identity_cannot_replace_the_original_record
         Ok(())
     })
 }
+
+/// A `TEMP` such as `C:\Users\RUNNER~1\AppData\Local\Temp` spells record parents with 8.3 short
+/// names. Those are the same folders, so custody opens there and keeps the resolved long spelling.
+#[test]
+fn short_name_parents_open_at_their_resolved_long_location() -> TestResult {
+    worker::run_reserved(4 * 1024 * 1024, |context, _| {
+        let temporary = tempfile::tempdir()?;
+        let long = temporary.path().join("Record parent with a long name");
+        std::fs::create_dir(&long)?;
+        let short = files::alias_fixture::short_spelling(&long)?;
+        assert_ne!(short.file_name(), long.file_name(), "volume generates no 8.3 short names");
+        let expected = Directory::open(&long, false)?.resolved()?.path().join("ComfyUI");
+        let verbatim = PathBuf::from(format!(r"\\?\{}", short.display()));
+        assert!(RecordDirectory::record_absent(&short.join("ComfyUI"), "record", context)?);
+        let directory = RecordDirectory::open(&short.join("ComfyUI"), true, true, context)?;
+        assert_eq!(directory.path(), expected);
+        directory.create(None, "record", b"through the short name", context)?;
+        drop(directory);
+        assert!(!RecordDirectory::record_absent(&verbatim.join("ComfyUI"), "record", context)?);
+        let directory = RecordDirectory::open(&verbatim.join("ComfyUI"), false, false, context)?;
+        assert_eq!(directory.path(), expected);
+        assert_eq!(directory.read(None, "record", context)?.as_slice(), b"through the short name");
+        assert_eq!(std::fs::read(long.join("ComfyUI").join("record"))?, b"through the short name");
+        Ok(())
+    })
+}
+
+/// A drive alias, as `subst` defines, reaches the same folder from another drive. Record custody
+/// still refuses that parent, whether it is the alias drive's root or a folder below it.
+#[test]
+fn drive_alias_parents_stay_refused_without_creating_records() -> TestResult {
+    worker::run_reserved(4 * 1024 * 1024, |context, _| {
+        let temporary = tempfile::tempdir()?;
+        std::fs::create_dir(temporary.path().join("aliased"))?;
+        let target = Directory::open(temporary.path(), false)?.resolved()?;
+        let alias = files::alias_fixture::DriveAlias::define(target.path())?;
+        let refused = [alias.root().join("ComfyUI"), alias.root().join("aliased").join("ComfyUI")]
+            .iter()
+            .try_for_each(|selected| refuse_redirected_parent(selected, context));
+        alias.remove()?;
+        refused?;
+        assert!(!temporary.path().join("ComfyUI").exists());
+        assert!(!temporary.path().join("aliased").join("ComfyUI").exists());
+        Ok(())
+    })
+}
+
+/// The alias parent itself opens and pins, so only the location comparison can refuse custody.
+fn refuse_redirected_parent(selected: &Path, context: &JobContext) -> TestResult {
+    Directory::open(selected.parent().ok_or("Selected parent absent")?, false)?;
+    for outcome in [
+        RecordDirectory::open(selected, true, true, context).map(drop),
+        RecordDirectory::record_absent(selected, "record", context).map(drop),
+    ] {
+        let refusal = outcome.err().ok_or("Redirected record parent was accepted")?;
+        assert_eq!(refusal.kind(), io::ErrorKind::InvalidInput);
+        assert_eq!(refusal.to_string(), "Record parent must use its resolved local location");
+    }
+    Ok(())
+}

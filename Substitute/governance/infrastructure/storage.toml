@@ -1076,15 +1076,23 @@ rationale = "Durable filesystem owner: Retain Windows artifact ancestry and obse
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/files.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:a75be709dc5c2e92f14f8c55b0aaf9ed261a7496b71533a7b8ce575a99c0f128"
+source_sha256 = "sha256:cf7f3bb2808c601485464e338d7102ebab6c295ade28ab6211f2bb83e9073574"
 capabilities = ["assert! restricted capability fragments", "method metadata", "method sync_all", "std::fs::File", "std::fs::OpenOptions", "std::fs::OpenOptions::new", "std::fs::create_dir", "std::fs::read", "std::fs::rename", "std::fs::write", "tempfile::tempdir"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Pin each resolved directory against replacement and reject reparse-point traversal. Native access and its adversarial qualification remain within this owner."
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/src/durable_storage/files/alias_fixture.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:f7376ce491e5cb4a5bf4054eafd69660863ee1c4871da33b777bd8708966f08f"
+capabilities = ["windows::Win32::Storage::FileSystem"]
+disposition = "implementation"
+rationale = "Durable filesystem owner: Reach owned test directories through real Windows path aliases without changing their objects. Native access and its adversarial qualification remain within this owner."
+
+[[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/files/canonical.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:0bbdeb7255dc3a1cf4280ddb1b67d5861478a64f10dc787a6d60b72e5a5f739b"
+source_sha256 = "sha256:dfe68755bcf1671738fe019879fc6a000b7bf8b274965e3a4b618ff058e4dc24"
 capabilities = ["std::fs::canonicalize"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Resolve drive aliases while native ancestry pins prevent directory replacement. Native access and its adversarial qualification remain within this owner."
@@ -1444,7 +1452,7 @@ rationale = "Durable filesystem owner: Activate held files without truncating an
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/records.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:3fe26a3d6cf1df3b2b9db51f709d90838c7183df8b529bb75843187e17163fa4"
+source_sha256 = "sha256:c92861a71a6517054c6744fbf03dc898c2223a66ae1c904b05e22c9e51e454ad"
 capabilities = ["std::fs::create_dir", "std::fs::read_dir", "std::fs::symlink_metadata"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Retain selected ordinary record ancestry without granting raw handles or cleanup authority. Native access and its adversarial qualification remain within this owner."
@@ -1484,8 +1492,8 @@ rationale = "Durable filesystem owner: Preserve original records and unknown ali
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/records/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:27b53613c71442a6cc41f106dfb314f431030773a2e89452df468c8dc8ba15b0"
-capabilities = ["assert! restricted capability fragments", "assert_eq! restricted capability fragments", "std::fs::create_dir_all", "std::fs::hard_link", "std::fs::read", "std::fs::read_dir", "std::fs::remove_file", "std::fs::rename", "std::fs::write", "tempfile::tempdir"]
+source_sha256 = "sha256:79f96d2132b3c46a7d19cd91254565ebde0d8094167259ec59a9f4b5e25005ca"
+capabilities = ["assert! restricted capability fragments", "assert_eq! restricted capability fragments", "std::fs::create_dir", "std::fs::create_dir_all", "std::fs::hard_link", "std::fs::read", "std::fs::read_dir", "std::fs::remove_file", "std::fs::rename", "std::fs::write", "tempfile::tempdir"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Exercise actual selected-folder custody through the existing execution owner. Native access and its adversarial qualification remain within this owner."
 
