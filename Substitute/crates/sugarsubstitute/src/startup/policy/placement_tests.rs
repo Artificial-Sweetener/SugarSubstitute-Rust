@@ -5,7 +5,9 @@
 use super::*;
 use std::num::NonZeroU64;
 use sugarsubstitute_contracts::desktop_session::wire::{SessionPlacement, SessionRect};
-use sugarsubstitute_desktop::{DesktopError, MainPlacementObservation};
+#[cfg(windows)]
+use sugarsubstitute_desktop::DesktopError;
+use sugarsubstitute_desktop::MainPlacementObservation;
 
 fn placement(identity: MainIdentity, failed: bool) -> DesktopStartupObservation {
     #[cfg(windows)]

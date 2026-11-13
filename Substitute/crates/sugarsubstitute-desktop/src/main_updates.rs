@@ -23,6 +23,7 @@ pub(crate) const LINK: u16 = 8;
 pub(crate) const DISMISS: u16 = 9;
 
 /// Whether caption peer `id` belongs to this owner.
+#[cfg(target_os = "windows")]
 pub(crate) const fn owns(id: u16) -> bool {
     UPDATE <= id && id <= DISMISS
 }

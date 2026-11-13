@@ -71,6 +71,7 @@ pub(crate) struct Signal {
 }
 impl Signal {
     /// Compare actual original native owner without projecting its Weak Core.
+    #[cfg(windows)]
     pub(crate) fn matches_core(&self, core: &Weak<Core>) -> bool {
         self.core.ptr_eq(core)
     }
@@ -85,7 +86,7 @@ impl Signal {
         }
     }
     /// Opaque allocation identity of the already charged original mapping owner.
-    #[cfg(feature = "k1-native-qualification")]
+    #[cfg(all(windows, feature = "k1-native-qualification"))]
     pub(crate) fn core_identity(&self) -> usize {
         self.core.as_ptr() as usize
     }

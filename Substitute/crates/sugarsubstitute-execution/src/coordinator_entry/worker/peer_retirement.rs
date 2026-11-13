@@ -83,14 +83,7 @@ impl Active {
         {
             if !cause.contains_owner_panic()
                 && matches!(cause.stage(), "pipe_issue" | "pipe_completion")
-                && cause
-                    .source()
-                    .and_then(|e| e.downcast_ref::<windows::core::Error>())
-                    .is_some_and(|e| {
-                        [109, 232, 233]
-                            .into_iter()
-                            .any(|code| e.code() == windows::core::HRESULT::from_win32(code))
-                    })
+                && peer_closed(cause.source())
             {
                 return EntryTransportError::PeerDisconnected(cause);
             }
@@ -98,4 +91,20 @@ impl Active {
         }
         error
     }
+}
+
+/// Broken, closing or absent pipe peers report these Win32 codes on the pipe operation.
+#[cfg(windows)]
+fn peer_closed(source: Option<&(dyn Error + 'static)>) -> bool {
+    source.and_then(|e| e.downcast_ref::<windows::core::Error>()).is_some_and(|e| {
+        [109, 232, 233].into_iter().any(|code| e.code() == windows::core::HRESULT::from_win32(code))
+    })
+}
+
+/// Portable pipes report a closed peer as a broken pipe.
+#[cfg(not(windows))]
+fn peer_closed(source: Option<&(dyn Error + 'static)>) -> bool {
+    source
+        .and_then(|e| e.downcast_ref::<std::io::Error>())
+        .is_some_and(|e| e.kind() == std::io::ErrorKind::BrokenPipe)
 }

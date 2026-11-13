@@ -33,6 +33,7 @@ use crate::{
     task::{Job, JobHandle, QueuedJob, Work},
 };
 pub use admission::{NativeWriteAdmission, NativeWriteRevocation};
+#[cfg(windows)]
 pub(crate) use buffers::CAPTURED_METADATA_BYTES;
 pub use buffers::{
     LifecyclePipeWriteBuffer, MIN_CAPTURED_LIFECYCLE_PIPE_BYTES, ReceivedLifecycleFrame,
@@ -50,7 +51,9 @@ use sugarsubstitute_contracts::{
     lifecycle::{ProcessKey, RunKey},
 };
 pub use types::*;
+#[cfg(windows)]
 mod startup_snapshot;
+#[cfg(windows)]
 pub use startup_snapshot::AuthenticatedStartupSnapshot;
 
 pub(crate) use crate::native_pipe::Progress;

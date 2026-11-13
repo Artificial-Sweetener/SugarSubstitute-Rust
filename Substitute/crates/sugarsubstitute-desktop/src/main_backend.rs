@@ -14,6 +14,7 @@ pub(crate) struct RetryAction {
 /// Preallocated button state; labels stay borrowed from the canonical localization owner.
 #[derive(Clone, Copy)]
 pub(crate) struct RetryPresentation {
+    #[cfg(target_os = "windows")]
     pub(crate) identity: MainIdentity,
     pub(crate) visible: bool,
     pub(crate) label: &'static str,
@@ -150,6 +151,7 @@ impl Recovery {
                 matches!(state, MainBackendState::RetryReady | MainBackendState::Retrying)
             });
         RetryPresentation {
+            #[cfg(target_os = "windows")]
             identity: self.identity,
             visible,
             label: if self.action().is_some() { labels.retry_ready } else { labels.retry },

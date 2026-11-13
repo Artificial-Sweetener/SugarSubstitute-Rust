@@ -15,10 +15,9 @@ use crate::{
     scope::lock,
     task::{Job, JobHandle, QueuedJob, Work},
 };
-pub use control::{
-    AdmittedOutputBatch, WindowsChildStdio, WindowsOutputCancellation, WindowsOutputControl,
-    WindowsOutputSession,
-};
+#[cfg(windows)]
+pub use control::{AdmittedOutputBatch, WindowsChildStdio, WindowsOutputCancellation};
+pub use control::{WindowsOutputControl, WindowsOutputSession};
 use std::{
     collections::VecDeque,
     sync::{Arc, Mutex, Weak},

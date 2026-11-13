@@ -115,6 +115,7 @@ impl Active {
                         &self.metadata,
                         BackendCustodyWake {
                             signal: self.signal.clone(),
+                            #[cfg(windows)]
                             job: self.context.job_id(),
                         },
                     )

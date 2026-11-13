@@ -5,23 +5,33 @@
 
 use crate::scope::lock;
 use std::sync::{Arc, Mutex};
-use sugarsubstitute_contracts::execution::{ExecutionId, JobId, ScopeId};
+#[cfg(any(windows, test))]
+use sugarsubstitute_contracts::execution::ExecutionId;
+use sugarsubstitute_contracts::execution::{JobId, ScopeId};
 
 /// Closed observations published by the actual outer environment owner.
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub(crate) enum PreparationPhase {
+    #[cfg(any(windows, test))]
     Prepared,
+    #[cfg(any(windows, test))]
     GetterInFlight,
+    #[cfg(any(windows, test))]
     Held,
+    #[cfg(any(windows, test))]
     CopyInFlight,
+    #[cfg(any(windows, test))]
     FreeInFlight,
+    #[cfg(any(windows, test))]
     Released,
+    #[cfg(any(windows, test))]
     Delivered,
     Uncertain,
 }
 
 /// Passive metadata only: no pointer, port, context, claim or provider callback.
 pub(crate) struct PreparationSlot {
+    #[cfg(any(windows, test))]
     pub(crate) execution: ExecutionId,
     pub(crate) scope: ScopeId,
     pub(crate) job: JobId,
@@ -39,6 +49,7 @@ pub(crate) struct PreparationState {
 
 impl PreparationSlot {
     /// Construct only after the genuine original full claim is adopted.
+    #[cfg(any(windows, test))]
     pub(crate) fn new(execution: ExecutionId, scope: ScopeId, job: JobId) -> Self {
         Self {
             execution,
@@ -60,14 +71,20 @@ impl PreparationSlot {
         !state.callback_quiescent
             || state.native_handoff
             || state.native_retirement_active
-            || matches!(
-                state.phase,
-                PreparationPhase::GetterInFlight
-                    | PreparationPhase::Held
-                    | PreparationPhase::CopyInFlight
-                    | PreparationPhase::FreeInFlight
-                    | PreparationPhase::Uncertain
-            )
+            || state.phase.held()
+    }
+}
+
+impl PreparationPhase {
+    /// Native work or an original allocation remains outstanding in this phase.
+    fn held(self) -> bool {
+        match self {
+            #[cfg(any(windows, test))]
+            Self::GetterInFlight | Self::Held | Self::CopyInFlight | Self::FreeInFlight => true,
+            Self::Uncertain => true,
+            #[cfg(any(windows, test))]
+            Self::Prepared | Self::Released | Self::Delivered => false,
+        }
     }
 }
 

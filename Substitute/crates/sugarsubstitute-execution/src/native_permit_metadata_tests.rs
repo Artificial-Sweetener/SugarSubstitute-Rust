@@ -10,9 +10,10 @@ fn process_permit_metadata_retains_inherited_deadline_and_actual_owner_on_cancel
         ScopeSpec { id: ScopeId::new(2)?, deadline: Some(Moment::from_nanos(100)) },
         Some(&rig.scope),
     )?;
-    let child = rig.client.create_native_scope(
+    let child = rig.client.core.create_scope_kind(
         ScopeSpec { id: ScopeId::new(3)?, deadline: Some(Moment::from_nanos(200)) },
         Some(&ancestor),
+        true,
     )?;
     let mut request = spec(1, JobClass::NativeObservation, 4096)?;
     request.operation = Operation::NativeLifecycle;
@@ -31,9 +32,10 @@ fn process_permit_metadata_retains_inherited_deadline_and_actual_owner_on_cancel
 fn process_permit_foreign_owner_is_distinct_and_bind_preserves_original_deadline() -> TestResult {
     let rig = Rig::new()?;
     let foreign = Rig::new()?;
-    let scope = rig.client.create_native_scope(
+    let scope = rig.client.core.create_scope_kind(
         ScopeSpec { id: ScopeId::new(2)?, deadline: Some(Moment::from_nanos(500)) },
         None,
+        true,
     )?;
     let mut request = spec(1, JobClass::NativeObservation, 4096)?;
     request.operation = Operation::NativeLifecycle;

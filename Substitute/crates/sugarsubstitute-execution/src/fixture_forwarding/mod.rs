@@ -13,6 +13,7 @@ use crate::{
     scope::lock,
     task::{Job, QueuedJob, Work},
 };
+#[cfg(windows)]
 pub use control::FixtureForwardingControl;
 pub use control::{FixtureForwardingEvents, FixtureForwardingPermit, FixtureForwardingSession};
 use std::sync::{Arc, Mutex, Weak};

@@ -175,7 +175,7 @@ impl ExecutionClient {
         &self,
         scope: &Scope,
         spec: JobSpec,
-        kind: RequestKind<'_>,
+        kind: RequestKind,
         input: &mut Option<I>,
         mut construct: impl FnMut(
             &mut Option<I>,

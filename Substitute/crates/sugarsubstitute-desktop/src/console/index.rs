@@ -194,6 +194,7 @@ impl<'a> TextStream<'a> {
         Self { units: &document.text, offset: 0 }
     }
     /// Stream an already validated native edit slice, including an empty deletion.
+    #[cfg(target_os = "windows")]
     pub(crate) fn slice(units: &'a [u16]) -> Self {
         Self { units, offset: 0 }
     }

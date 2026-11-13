@@ -21,6 +21,7 @@ impl Visibility {
         !self.prepared
     }
     /// Query actual successful native show/hide transitions owned by this lifetime.
+    #[cfg(any(target_os = "windows", test))]
     pub(crate) fn shown(&self) -> bool {
         self.shown
     }

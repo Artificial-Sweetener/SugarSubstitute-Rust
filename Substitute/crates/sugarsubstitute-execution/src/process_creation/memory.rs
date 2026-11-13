@@ -15,7 +15,9 @@ struct Memory {
     context: JobContext,
     core: Weak<crate::admission::Core>,
     cleanup: std::sync::Mutex<Cleanup>,
+    #[cfg(windows)]
     section_outputs: std::sync::atomic::AtomicUsize,
+    #[cfg(windows)]
     section_issued: std::sync::atomic::AtomicBool,
     _claim: MemoryClaim,
 }
@@ -31,7 +33,9 @@ impl ProcessCreationMemory {
             context,
             core,
             cleanup: std::sync::Mutex::new(Cleanup::Fresh),
+            #[cfg(windows)]
             section_outputs: std::sync::atomic::AtomicUsize::new(0),
+            #[cfg(windows)]
             section_issued: std::sync::atomic::AtomicBool::new(false),
             _claim: claim,
         })))

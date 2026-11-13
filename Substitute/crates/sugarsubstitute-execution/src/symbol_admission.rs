@@ -3,17 +3,22 @@
 
 //! Admit fixed symbol work and transfer original output accounting through the sole execution owner.
 
+#[cfg(any(windows, test))]
+use crate::scope::lock;
 use crate::{
     ExecutionClient,
     admission::{Core, RequestKind, State},
-    scope::lock,
     symbol_cleanup::SymbolCleanupPermit,
     task::{Job, JobHandle, QueuedJob, Work},
 };
 use std::sync::Arc;
 use sugarsubstitute_contracts::execution::{
-    AdmissionError, CancelControl, JobClass, JobContext, JobPhase, JobSpec, Moment,
-    NativeHandleClaim, NativeResourceError, Operation, OwnedJob, Scope, SymbolNativePartition,
+    AdmissionError, CancelControl, JobClass, JobContext, JobPhase, JobSpec, Moment, Operation,
+    OwnedJob, Scope,
+};
+#[cfg(any(windows, test))]
+use sugarsubstitute_contracts::execution::{
+    NativeHandleClaim, NativeResourceError, SymbolNativePartition,
 };
 
 pub(crate) const MAIN_BYTES: u64 = 8_159_232;
@@ -27,6 +32,7 @@ pub struct SymbolSubmissionRejection<M> {
     pub factory: M,
 }
 
+#[cfg(any(windows, test))]
 /// Return original partition custody when its actual Core provenance is rejected.
 pub struct SymbolResourceRejection {
     /// Actual admission decision or preserved owner failure.
@@ -35,6 +41,7 @@ pub struct SymbolResourceRejection {
     pub handles: NativeHandleClaim,
 }
 
+#[cfg(any(windows, test))]
 /// Retain the unique transport share of an actual original symbol admission.
 /// Construction validates actual Core ledger identity; accounting grants no OS privilege.
 pub struct SymbolTransportReservation {
@@ -43,6 +50,7 @@ pub struct SymbolTransportReservation {
     pub(crate) core: std::sync::Weak<Core>,
 }
 
+#[cfg(any(windows, test))]
 /// Select ordinary diagnostics or the unique actual original symbol transport share.
 pub enum DiagnosticPipeResources {
     /// Ordinary diagnostic transport with its standard byte admission.
@@ -51,6 +59,7 @@ pub enum DiagnosticPipeResources {
     Symbol(SymbolTransportReservation),
 }
 
+#[cfg(any(windows, test))]
 pub(crate) fn original_stop(
     state: &State,
     native_job: sugarsubstitute_contracts::execution::JobId,
@@ -106,9 +115,12 @@ pub(crate) fn validate(
     state: &State,
     scope: &Scope,
     spec: JobSpec,
-    kind: &RequestKind<'_>,
+    kind: &RequestKind,
     now: Moment,
 ) -> Result<(), AdmissionError> {
+    // Only Windows symbol transport validates against the original Core ledger.
+    #[cfg(not(windows))]
+    let _ = core;
     match kind {
         RequestKind::SymbolCleanup { main_scope, main_spec } => {
             let main = state
@@ -174,6 +186,7 @@ pub(crate) fn validate(
                 return Err(AdmissionError::InvalidSymbolAdmission);
             }
         }
+        #[cfg(windows)]
         RequestKind::SymbolNative { original, handles } => {
             validate_context(core, state, original, handles, now)?;
             if scope.spec().deadline.is_some()
@@ -241,6 +254,7 @@ impl ExecutionClient {
             .map_err(|(error, factory)| SymbolSubmissionRejection { error, factory })
     }
 
+    #[cfg(any(windows, test))]
     /// Consume the unique transport partition of the actual currently running symbol job.
     ///
     /// # Errors
@@ -273,6 +287,7 @@ impl ExecutionClient {
     }
 }
 
+#[cfg(any(windows, test))]
 pub(crate) fn validate_context(
     core: &Core,
     state: &State,

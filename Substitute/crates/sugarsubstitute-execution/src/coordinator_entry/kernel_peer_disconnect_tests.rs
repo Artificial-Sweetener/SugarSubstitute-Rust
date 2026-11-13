@@ -7,8 +7,11 @@ use crate::{
     runtime_test_support::{Rig, TestResult},
     scope::lock,
 };
-use std::{error::Error, num::NonZeroUsize, sync::atomic::Ordering};
+use std::sync::atomic::Ordering;
+#[cfg(windows)]
+use std::{error::Error, num::NonZeroUsize};
 use sugarsubstitute_contracts::{coordinator_entry::*, execution::*};
+#[cfg(windows)]
 fn query_error(code: u32) -> EntryTransportError {
     let cause = NativeObservationError::new(
         "entry_query_kernel_peer",
@@ -20,7 +23,9 @@ fn query_error(code: u32) -> EntryTransportError {
         EntryTransportError::native(cause)
     }
 }
+// These two tests classify exact Win32 kernel peer-query codes.
 #[test]
+#[cfg(windows)]
 fn kernel_peer_loss_after_verified_connect_preserves_cached_run_and_serves_next_clients()
 -> TestResult {
     let rig = Rig::new()?;
@@ -125,6 +130,7 @@ fn kernel_peer_loss_after_verified_connect_preserves_cached_run_and_serves_next_
     Ok(())
 }
 #[test]
+#[cfg(windows)]
 fn unexpected_kernel_peer_query_preserves_fatal_mailbox_cause_and_requires_composing_cleanup()
 -> TestResult {
     let rig = Rig::new()?;

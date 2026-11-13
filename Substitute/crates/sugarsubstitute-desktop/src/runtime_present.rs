@@ -103,6 +103,7 @@ impl Presentations {
     }
 
     /// Report visibility acknowledged by this exact native presentation owner.
+    #[cfg(target_os = "windows")]
     pub(crate) fn shown(&self) -> bool {
         self.visibility.shown()
     }

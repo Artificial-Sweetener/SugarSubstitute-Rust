@@ -6,6 +6,7 @@
 //! unmeasured extent; its lifetime never proves a physical memory peak bound.
 
 mod access;
+#[cfg(any(windows, test))]
 mod capture;
 pub(crate) mod cause;
 mod context;
@@ -15,11 +16,15 @@ mod custody;
 mod environment;
 pub(crate) mod error;
 mod input_error;
+#[cfg(any(windows, test))]
 mod layout;
+#[cfg(any(windows, test))]
 mod memory;
 mod outcome;
 pub(crate) mod owner;
+#[cfg(any(windows, test))]
 mod pending;
+#[cfg(any(windows, test))]
 pub(crate) mod port;
 mod request;
 #[cfg(any(windows, test))]

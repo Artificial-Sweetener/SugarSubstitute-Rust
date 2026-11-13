@@ -11,7 +11,7 @@ owner = "sugarsubstitute"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:2ba3ef26f7ebd605fc148cd152948353c879db117cc6de9ca63adf99de7428ec"
+source_sha256 = "sha256:3c6588e2c66983f423cdc6c529c764282328de3497f6e68d897c971cf1be658c"
 rationale = "Isolated test fixture directories for sugarsubstitute; each authored acquisition still requires an exact source review."
 
 [[dependencies]]
@@ -241,7 +241,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: fro
 [[records]]
 path = "crates/sugarsubstitute-execution/src/admission_submit.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:be809eeb348fb867c24e0ac5cb97b424efb024af43f0383f36684a5df040a2e8"
+source_sha256 = "sha256:c6e632a98219f7411c43f9542fcdbca374148c36cfb3bedbbb0675f70a85c551"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Execution clock, admitted memory or retained task metadata for: Admit factories and native permits atomically before ownership or external effects transfer. This receiver does not inspect filesystem state."
@@ -250,7 +250,7 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute-execution/src/backend_custody/memory.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:8fcdaac273dd3e9c251d547362624a32b020a008893827bb0d757c3fe392dfb0"
+source_sha256 = "sha256:f87807776cb404032e25f2566c27cf7911de81e964dd41d968406b8ee2d08a53"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Execution clock, admitted memory or retained task metadata for: Keep the original fixed custody metadata charge through final control deallocation. This receiver does not inspect filesystem state."
@@ -477,7 +477,7 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute-execution/src/entry_preparation/core_binding.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:57c5360eb83b6c1b161977bd647af8e3812441b0dfeb8c70b9dab516107832bd"
+source_sha256 = "sha256:680082190fde6e984e2b872122e2c4467e8c7b665f70103293422ba501d9f2f2"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Execution clock, admitted memory or retained task metadata for: Seal actual original preparation identity and preserve its controls after terminal ACK. This receiver does not inspect filesystem state."
@@ -545,7 +545,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Iss
 [[records]]
 path = "crates/sugarsubstitute-execution/src/lifecycle_pipe/current_admission.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:fbe39bfd0ec612f7ea5882662bcb2289eb2f18d3ba2702a7bcc0049a067e1e43"
+source_sha256 = "sha256:b50b153334a67209fec248723ec0944364a210473b51ad17a01d61022b36a89c"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Execution clock, admitted memory or retained task metadata for: Revalidate current authenticated transport independently of historical peer observations. This receiver does not inspect filesystem state."
@@ -554,7 +554,7 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute-execution/src/lifecycle_pipe/submission.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:01a700c41b89befb3c9b7877d2b441ee7b0d596cb066927b9518962df6f69c53"
+source_sha256 = "sha256:42abcf8aa23a13d2cb682498b82d128b3a5b359f573b5bb34ae9b240bab9d01f"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Execution clock, admitted memory or retained task metadata for: Atomically transfer native lease inputs only after actual central pipe admission. This receiver does not inspect filesystem state."
@@ -572,7 +572,7 @@ boundary = "native_ipc"
 [[records]]
 path = "crates/sugarsubstitute-execution/src/native_resources.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:3d9a5547298ab118776788e0abead96f84fceb106b7000a147b2626e39bc42d5"
+source_sha256 = "sha256:f1014ee9db646f3ff95e2c2d448c5e492000895fbb2c701dc8e1f11edc8084ce"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Execution clock, admitted memory or retained task metadata for: Retain original admitted symbol counter provenance independently of terminal delivery. This receiver does not inspect filesystem state."
@@ -599,7 +599,7 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute-execution/src/process_creation/memory.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:fd8341a58d2136845110f03713ba611a7eaa6bd142850de8d711fa3986bd7051"
+source_sha256 = "sha256:b5b57afcb39822d5faa531f0169b4e5a2cc081049c7d4a5673ac9b7bc0e0b4ab"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Execution clock, admitted memory or retained task metadata for: Free original control storage before releasing its one family claim. This receiver does not inspect filesystem state."
@@ -626,7 +626,7 @@ boundary = "entropy"
 [[records]]
 path = "crates/sugarsubstitute-execution/src/recovery_supervisor/startup/source.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:6099c069fd992955f043302723619450a42a5fc453c7eda9267a5defa3ab4a77"
+source_sha256 = "sha256:38099d365066eb1c1e1fbb1ad2f4dc0f396a40c40009874c9611990dcb576e71"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Execution clock, admitted memory or retained task metadata for: Retain actual execution/session/issuer custody outside the fixed receiver claim. This receiver does not inspect filesystem state."
@@ -644,7 +644,7 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute-execution/src/report_export/admission.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:bbd97154e11d29f85ff2ac29d2e67a3ad32267768408dc07eb24d6c8b763b342"
+source_sha256 = "sha256:52d57ae1528a53d15f29d27446c0a850bde9615335ef8224aa80ccd4081bb898"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Execution clock, admitted memory or retained task metadata for: Validate and submit genuine finite export work through the existing central pool. This receiver does not inspect filesystem state."
@@ -707,7 +707,7 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute-execution/src/symbol_admission.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:53cb626fdfa91e01af5fa01bd5fab94cdd8aea60b02739647432dad008e85f49"
+source_sha256 = "sha256:905db557ac27864d874928b8902ec07dbe6d3cb7bd5dadd321e40cc3cdeb2eb2"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Execution clock, admitted memory or retained task metadata for: Admit fixed symbol work and transfer original output accounting through the sole execution owner. This receiver does not inspect filesystem state."
@@ -4559,7 +4559,7 @@ rationale = "An isolated temporary cache root and explicit target-existence chec
 [[records]]
 path = "crates/sugarsubstitute/src/input_documents/tests/storage.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:e9f5bc95d1ad2a54782ced3cf21a9db6aea8a10b2d37b68b1192ff0e909adfa3"
+source_sha256 = "sha256:9de48a192ac6a385a627d3259f584adff9669cb697b9425df87e143bd2676841"
 capabilities = ["std::fs::OpenOptions::new", "std::fs::read", "std::fs::read_dir", "std::fs::remove_file", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary session directories let real execution jobs save, damage, hold and reload input-document archives, proving atomic replacement, recovery copies, rejection evidence and preserved unknown files without user data."

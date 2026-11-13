@@ -27,6 +27,7 @@ pub(crate) struct ActiveState {
 }
 impl ActiveState {
     /// Count the actual boxed worker and outside private shared/control metadata.
+    #[cfg(windows)]
     pub(crate) const fn storage_bytes() -> usize {
         size_of::<Self>()
             + shared::SharedRef::control_storage_bytes()

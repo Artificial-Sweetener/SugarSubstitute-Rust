@@ -39,6 +39,7 @@ fn snapshot(
 
 /// The ordinary allocation cannot admit the genuine captured pair or consume its identity.
 #[test]
+#[cfg(windows)]
 fn captured_parent_requires_its_actual_allocation_before_factory_and_preserves_pair() -> TestResult
 {
     use crate::windows_lifecycle_pipe::{
