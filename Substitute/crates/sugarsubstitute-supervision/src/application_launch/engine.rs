@@ -194,44 +194,57 @@ impl std::error::Error for StartupRefused {}
 
 /// Start the pointer's primary engine, then its fallback, returning once one takes over.
 /// The primary runs with hop 0; the fallback runs with hop 1 so it never redirects. Each engine
-/// gets `ENGINE_TAKEOVER`; a silent one is terminated before the next starts. Run on one admitted
+/// gets `ENGINE_TAKEOVER`; a silent one is terminated before the next starts. A pointer another
+/// process holds without sharing is read again for at most `POINTER_HOLD_BOUND`. Run on one admitted
 /// blocking infrastructure job reserving `setup_storage::POINTER_RESERVATION_BYTES`.
 /// # Errors
 /// The pointer's failure, or every engine's refusal.
 pub fn start_pointed(installation: &Path, context: &JobContext) -> Result<(), StartupRefused> {
-    start_pointed_with(installation, context, ENGINE_TAKEOVER, |engine, hops| {
+    let image = std::env::current_exe()
+        .map_err(|cause| StartupRefused::Pointer(PointerFailure::Storage(cause)))?;
+    start_pointed_with(installation, &image, context, ENGINE_TAKEOVER, |engine, hops| {
         start_engine(engine, installation, hops, context)
     })
 }
 
 /// Share the real pointer, pinning and takeover policy with tests that substitute the child.
+/// `image` is the stable entry's own executable, used only when the pointer cannot be read.
 pub(super) fn start_pointed_with(
     installation: &Path,
+    image: &Path,
     context: &JobContext,
     takeover: std::time::Duration,
     start: impl Fn(&PinnedEngine, u8) -> Result<StartedEngine, ClaimError>,
 ) -> Result<(), StartupRefused> {
-    let pointer = crate::setup_storage::read_launch_pointer(installation, context)
-        .map_err(StartupRefused::Pointer)?;
+    let attempt = |engine: PinnedEngine, hops: u8| {
+        let started = start(&engine, hops)?;
+        drop(engine);
+        let until = context
+            .now()
+            .checked_add(takeover)
+            .map_err(|cause| ClaimError::new("launch_engine_takeover_bound", cause))?;
+        match started.await_takeover(context, until)? {
+            Takeover::TookOver => Ok(()),
+            Takeover::Exited => Err(ClaimError::invalid("launch_engine_exited")),
+            Takeover::Silent => Err(ClaimError::invalid("launch_engine_silent")),
+        }
+    };
+    let pointer = match crate::setup_storage::await_launch_pointer(installation, context) {
+        Ok(pointer) => pointer,
+        Err(
+            failure @ (PointerFailure::Missing
+            | PointerFailure::Damaged
+            | PointerFailure::Incompatible),
+        ) => return start_matching(installation, image, context, failure, attempt),
+        Err(failure) => return Err(StartupRefused::Pointer(failure)),
+    };
     let mut refused = Vec::new();
     let targets = std::iter::once((pointer.primary(), 0))
         .chain(pointer.fallback().map(|target| (target, MAX_ENGINE_HOPS)));
     for (target, hops) in targets {
-        let attempt = (|| {
-            let engine = crate::setup_storage::pin_engine(installation, target, context)
-                .map_err(|cause| ClaimError::new("launch_engine_pin", cause))?;
-            let started = start(&engine, hops)?;
-            drop(engine);
-            let until = context
-                .now()
-                .checked_add(takeover)
-                .map_err(|cause| ClaimError::new("launch_engine_takeover_bound", cause))?;
-            match started.await_takeover(context, until)? {
-                Takeover::TookOver => Ok(()),
-                Takeover::Exited => Err(ClaimError::invalid("launch_engine_exited")),
-                Takeover::Silent => Err(ClaimError::invalid("launch_engine_silent")),
-            }
-        })();
+        let attempt = crate::setup_storage::pin_engine(installation, target, context)
+            .map_err(|cause| ClaimError::new("launch_engine_pin", cause))
+            .and_then(|engine| attempt(engine, hops));
         match attempt {
             Ok(()) => return Ok(()),
             Err(cause) => {
@@ -247,6 +260,39 @@ pub(super) fn start_pointed_with(
         }
     }
     Err(StartupRefused::NoEngine(refused))
+}
+
+/// Start the generation engine identical to the stable entry itself when the pointer is missing
+/// or unreadable. It starts with hop 0, so it routes startup to the generation that should run
+/// and, when that is another generation, writes a fresh pointer; otherwise the running
+/// application repairs the pointer once it is ready. When no engine matches or it does not take
+/// over, the pointer's own failure is reported, as before.
+fn start_matching(
+    installation: &Path,
+    image: &Path,
+    context: &JobContext,
+    failure: PointerFailure,
+    attempt: impl FnOnce(PinnedEngine, u8) -> Result<(), ClaimError>,
+) -> Result<(), StartupRefused> {
+    tracing::warn!(
+        operation = "stable_entry_pointer_unusable",
+        cause = %failure,
+        "Starting the launch engine identical to the stable entry"
+    );
+    let recovered = crate::setup_storage::pin_matching_engine(installation, image, context)
+        .map_err(|cause| ClaimError::new("launch_engine_match", cause))
+        .and_then(|engine| attempt(engine, 0));
+    match recovered {
+        Ok(()) => Ok(()),
+        Err(cause) => {
+            tracing::warn!(
+                operation = "stable_entry_matching_engine_refused",
+                cause = %cause,
+                "No launch engine identical to the stable entry took over"
+            );
+            Err(StartupRefused::Pointer(failure))
+        }
+    }
 }
 
 /// Startup handed to this process by a stable entry or a redirecting engine.

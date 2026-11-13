@@ -11,6 +11,12 @@ fn seconds(value: u64) -> u64 {
     value * 1_000_000_000
 }
 
+/// The root job's own deadline, and the moment the process exits without it.
+fn deadline_and_exit() -> (u64, u64) {
+    let budget = BUDGET.as_nanos() as u64;
+    (budget, budget + LauncherBudget::EXIT_GRACE.as_nanos() as u64)
+}
+
 /// A root, its manual clock and wake, and the hold on its one job.
 type Stuck = (Root, Arc<Manual>, Arc<Wake>, Released);
 
@@ -53,12 +59,13 @@ fn a_root_job_that_never_returns_is_abandoned_after_its_grace() -> Result<()> {
     let (mut root, clock, _wake, hold) = stuck()?;
     let wake_at = root.exit_at.and_then(|(_, wake)| wake);
     assert!(wake_at.is_some());
-    clock.0.store(seconds(40), Ordering::SeqCst);
+    let (deadline, exit) = deadline_and_exit();
+    clock.0.store(deadline, Ordering::SeqCst);
     assert_eq!(root.advance(NonZeroUsize::MIN)?, HeadlessStep::Active, "the job's own deadline");
-    clock.0.store(seconds(45) - 1, Ordering::SeqCst);
+    clock.0.store(exit - 1, Ordering::SeqCst);
     assert_eq!(root.advance(NonZeroUsize::MIN)?, HeadlessStep::Active);
     assert_eq!(root.next_deadline(), wake_at, "only the unchanged exit moment remains");
-    clock.0.store(seconds(45), Ordering::SeqCst);
+    clock.0.store(exit, Ordering::SeqCst);
     assert_eq!(root.advance(NonZeroUsize::MIN)?, HeadlessStep::Shutdown);
     assert!(root.abandoned);
     assert!(root.next_deadline().is_none());
@@ -74,7 +81,7 @@ fn closing_a_root_whose_job_never_returns_still_exits_at_its_grace() -> Result<(
     let (mut root, clock, _wake, hold) = stuck()?;
     root.request_shutdown()?;
     assert!(!root.poll_shutdown()?, "cancellation is not proof that work stopped");
-    clock.0.store(seconds(45), Ordering::SeqCst);
+    clock.0.store(deadline_and_exit().1, Ordering::SeqCst);
     assert!(root.poll_shutdown()?);
     assert!(root.abandoned);
     assert!(root.finish_shutdown().is_err());

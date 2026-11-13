@@ -62,6 +62,22 @@ fn incompatible_damaged_and_ambiguous_pointers_are_typed_refusals() {
     }
 }
 
+/// The protected read wraps the native failure; only a sharing or lock violation is waited out.
+#[test]
+fn only_a_wrapped_sharing_or_lock_violation_counts_as_a_held_pointer() {
+    let wrapped = |code: i32| {
+        io::Error::other(crate::ClaimError::new(
+            "setup_protected_payload",
+            io::Error::from_raw_os_error(code),
+        ))
+    };
+    assert!(held(&wrapped(32)));
+    assert!(held(&wrapped(33)));
+    assert!(held(&io::Error::from_raw_os_error(32)));
+    assert!(!held(&wrapped(5)));
+    assert!(!held(&io::Error::from(io::ErrorKind::NotFound)));
+}
+
 /// Write `bytes` as a protected generation engine and return its target.
 pub(crate) fn engine(
     installation: &Path,
@@ -113,6 +129,20 @@ pub(crate) fn overwrite(installation: &Path, bytes: &[u8], context: &JobContext)
         stage.write(bytes)?;
         stage.publish(&destination, true, protection, context)
     })
+}
+
+/// Every moment a read of a held pointer pauses until, measured from the first read at zero.
+pub(crate) fn hold_retries() -> Vec<sugarsubstitute_contracts::execution::Moment> {
+    let mut retries = Vec::new();
+    let (mut at, mut pause) = (std::time::Duration::ZERO, FIRST_HOLD_RETRY);
+    while at < POINTER_HOLD_BOUND {
+        at = (at + pause).min(POINTER_HOLD_BOUND);
+        retries.push(sugarsubstitute_contracts::execution::Moment::from_nanos(
+            u64::try_from(at.as_nanos()).unwrap_or(u64::MAX),
+        ));
+        pause = (pause * 2).min(LONGEST_HOLD_RETRY);
+    }
+    retries
 }
 
 /// Publish `pointer` into the fixture's protected state folder.

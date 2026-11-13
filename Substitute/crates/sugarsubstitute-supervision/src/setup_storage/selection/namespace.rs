@@ -42,6 +42,25 @@ pub(super) fn open(
     })
 }
 
+/// Pin an existing protected selection folder without decoding its record, for the owner that
+/// rebuilds a damaged or missing record. `None` when no selection folder exists. This never
+/// creates state or publishes the continuity marker.
+pub(super) fn open_established(
+    installation: &Directory,
+    context: &JobContext,
+) -> io::Result<Option<Directory>> {
+    protection::with(context, |protection| {
+        let path = super::super::ownership::state_path(installation).join(DIRECTORY);
+        let root = match Directory::open(&path, false) {
+            Ok(directory) => directory,
+            Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(cause) => return Err(cause),
+        };
+        protection.directory(&path, Mode::Existing, context)?;
+        Ok(Some(root))
+    })
+}
+
 /// Prefix of the continuity marker's stage in the selection folder.
 const MARKER_STAGE: &str = ".selection-enable-stage";
 

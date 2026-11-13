@@ -97,13 +97,15 @@ fn modes(primary: &'static str, fallback: &'static str) -> impl Fn(u8) -> &'stat
 
 const BYTES: u64 = 4 * crate::setup_storage::POINTER_RESERVATION_BYTES;
 const TAKEOVER: std::time::Duration = std::time::Duration::from_secs(10);
+/// A stable entry image that does not exist, for tests whose pointer is readable.
+const NO_IMAGE: &str = "absent-stable-entry.exe";
 
 #[test]
 fn the_primary_engine_takes_over_without_starting_the_fallback() -> TestResult {
     worker::run_reserved(BYTES, |context, _| {
         let root = installation(180, Fallback::Present, false, context)?;
         let started = std::sync::Mutex::new(Vec::new());
-        start_pointed_with(root.path(), context, TAKEOVER, |_, hops| {
+        start_pointed_with(root.path(), Path::new(NO_IMAGE), context, TAKEOVER, |_, hops| {
             crate::registry::lock(&started).push(hops);
             stand_in(modes("signal", "signal")(hops), context)
         })?;
@@ -117,7 +119,7 @@ fn an_engine_that_exits_early_hands_startup_to_the_fallback() -> TestResult {
     worker::run_reserved(BYTES, |context, _| {
         let root = installation(181, Fallback::Present, false, context)?;
         let started = std::sync::Mutex::new(Vec::new());
-        start_pointed_with(root.path(), context, TAKEOVER, |_, hops| {
+        start_pointed_with(root.path(), Path::new(NO_IMAGE), context, TAKEOVER, |_, hops| {
             crate::registry::lock(&started).push(hops);
             stand_in(modes("exit", "signal")(hops), context)
         })?;
@@ -133,7 +135,7 @@ fn a_silent_engine_is_stopped_at_its_bound_and_the_fallback_takes_over() -> Test
         |context, handoff| {
             let root = installation(182, Fallback::Present, false, context)?;
             handoff.reach(1);
-            start_pointed_with(root.path(), context, TAKEOVER, |_, hops| {
+            start_pointed_with(root.path(), Path::new(NO_IMAGE), context, TAKEOVER, |_, hops| {
                 stand_in(modes("hang", "signal")(hops), context)
             })?;
             Ok(())
@@ -154,7 +156,7 @@ fn a_changed_primary_engine_is_never_started_and_the_fallback_runs() -> TestResu
         // Antivirus or a damaged disk changed the primary engine's bytes.
         let root = installation(183, Fallback::Present, true, context)?;
         let started = std::sync::Mutex::new(Vec::new());
-        start_pointed_with(root.path(), context, TAKEOVER, |_, hops| {
+        start_pointed_with(root.path(), Path::new(NO_IMAGE), context, TAKEOVER, |_, hops| {
             crate::registry::lock(&started).push(hops);
             stand_in("signal", context)
         })?;
@@ -181,7 +183,7 @@ fn a_scanner_holding_the_new_engine_starts_the_previous_release_and_keeps_the_up
         // Scanners commonly open a file they inspect without sharing it.
         let scanner = std::fs::OpenOptions::new().read(true).share_mode(0).open(&engine)?;
         let started = std::sync::Mutex::new(Vec::new());
-        start_pointed_with(root.path(), context, TAKEOVER, |_, hops| {
+        start_pointed_with(root.path(), Path::new(NO_IMAGE), context, TAKEOVER, |_, hops| {
             crate::registry::lock(&started).push(hops);
             stand_in("signal", context)
         })?;
@@ -189,7 +191,7 @@ fn a_scanner_holding_the_new_engine_starts_the_previous_release_and_keeps_the_up
         assert_eq!(crate::setup_storage::read_launch_pointer(root.path(), context)?, pointer);
         drop(scanner);
         crate::registry::lock(&started).clear();
-        start_pointed_with(root.path(), context, TAKEOVER, |_, hops| {
+        start_pointed_with(root.path(), Path::new(NO_IMAGE), context, TAKEOVER, |_, hops| {
             crate::registry::lock(&started).push(hops);
             stand_in("signal", context)
         })?;
@@ -198,48 +200,122 @@ fn a_scanner_holding_the_new_engine_starts_the_previous_release_and_keeps_the_up
     })
 }
 
-#[test]
-fn a_scanner_holding_the_pointer_is_reported_and_the_next_launch_starts() -> TestResult {
+/// A scanner's handle on the fixture pointer, opened without sharing as scanners commonly do,
+/// shared between the job and the test thread that releases it.
+type Scanner = std::sync::Arc<std::sync::Mutex<Option<std::fs::File>>>;
+
+fn hold_pointer(root: &Path, scanner: &Scanner) -> io::Result<()> {
     use std::os::windows::fs::OpenOptionsExt;
-    worker::run_reserved(BYTES, |context, _| {
-        let root = installation(190, Fallback::Present, false, context)?;
-        let file = root.path().join("state").join(crate::setup_storage::LAUNCH_POINTER_FILE);
-        assert!(file.is_file());
-        // Scanners commonly open a file they inspect without sharing it.
-        let scanner = std::fs::OpenOptions::new().read(true).share_mode(0).open(&file)?;
-        let started = std::sync::Mutex::new(Vec::new());
-        let refused = start_pointed_with(root.path(), context, TAKEOVER, |_, hops| {
-            crate::registry::lock(&started).push(hops);
-            stand_in("signal", context)
-        });
-        // Nothing starts and the root reports a storage failure, never "reinstall".
-        assert!(
-            matches!(&refused, Err(StartupRefused::Pointer(PointerFailure::Storage(_)))),
-            "{refused:?}"
-        );
-        assert!(crate::registry::lock(&started).is_empty());
-        drop(scanner);
-        start_pointed_with(root.path(), context, TAKEOVER, |_, hops| {
-            crate::registry::lock(&started).push(hops);
-            stand_in("signal", context)
-        })?;
-        assert_eq!(*crate::registry::lock(&started), [0]);
-        Ok(())
-    })
+    let file = root.join("state").join(crate::setup_storage::LAUNCH_POINTER_FILE);
+    let held = std::fs::OpenOptions::new().read(true).share_mode(0).open(file)?;
+    *crate::registry::lock(scanner) = Some(held);
+    Ok(())
+}
+
+/// The scanner lets go of the pointer while the root is still waiting for it, so the root
+/// starts the primary engine as if nothing had held it.
+#[test]
+fn a_scanner_releasing_the_pointer_within_the_bound_starts_the_primary_engine() -> TestResult {
+    let scanner = Scanner::default();
+    let held = scanner.clone();
+    run_driven(
+        BYTES,
+        move |context, handoff| {
+            let root = installation(190, Fallback::Present, false, context)?;
+            hold_pointer(root.path(), &held)?;
+            handoff.reach(1);
+            let started = std::sync::Mutex::new(Vec::new());
+            start_pointed_with(root.path(), Path::new(NO_IMAGE), context, TAKEOVER, |_, hops| {
+                crate::registry::lock(&started).push(hops);
+                stand_in("signal", context)
+            })?;
+            assert_eq!(*crate::registry::lock(&started), [0]);
+            assert!(context.now() < Moment::from_nanos(1_000_000_000), "{:?}", context.now());
+            Ok(())
+        },
+        |driver| {
+            driver.handoff.wait(1);
+            let retries = fixture::hold_retries();
+            for retry in &retries[..3] {
+                driver.clock.wait_for_sleeper(*retry);
+                driver.clock.advance_to(*retry)?;
+            }
+            driver.clock.wait_for_sleeper(retries[3]);
+            drop(crate::registry::lock(&scanner).take());
+            driver.clock.advance_to(retries[3])?;
+            Ok(())
+        },
+    )
+}
+
+/// A scanner keeps the pointer past the bound: the root stops waiting at exactly ten seconds of
+/// its own clock, starts nothing and reports a storage failure, never "reinstall". Once the
+/// scanner lets go, the next launch starts the primary engine.
+#[test]
+fn a_scanner_holding_the_pointer_past_the_bound_is_reported_and_the_next_launch_starts()
+-> TestResult {
+    let scanner = Scanner::default();
+    let held = scanner.clone();
+    run_driven(
+        BYTES,
+        move |context, handoff| {
+            let root = installation(191, Fallback::Present, false, context)?;
+            hold_pointer(root.path(), &held)?;
+            handoff.reach(1);
+            let started = std::sync::Mutex::new(Vec::new());
+            let refused = start_pointed_with(
+                root.path(),
+                Path::new(NO_IMAGE),
+                context,
+                TAKEOVER,
+                |_, hops| {
+                    crate::registry::lock(&started).push(hops);
+                    stand_in("signal", context)
+                },
+            );
+            assert!(
+                matches!(&refused, Err(StartupRefused::Pointer(PointerFailure::Storage(_)))),
+                "{refused:?}"
+            );
+            assert!(crate::registry::lock(&started).is_empty());
+            let bound = crate::setup_storage::POINTER_HOLD_BOUND;
+            assert_eq!(context.now(), Moment::from_nanos(u64::try_from(bound.as_nanos())?));
+            drop(crate::registry::lock(&held).take());
+            start_pointed_with(root.path(), Path::new(NO_IMAGE), context, TAKEOVER, |_, hops| {
+                crate::registry::lock(&started).push(hops);
+                stand_in("signal", context)
+            })?;
+            assert_eq!(*crate::registry::lock(&started), [0]);
+            Ok(())
+        },
+        |driver| {
+            driver.handoff.wait(1);
+            for retry in fixture::hold_retries() {
+                driver.clock.wait_for_sleeper(retry);
+                driver.clock.advance_to(retry)?;
+            }
+            drop(scanner);
+            Ok(())
+        },
+    )
 }
 #[test]
 fn without_a_working_fallback_every_refusal_is_reported() -> TestResult {
     worker::run_reserved(BYTES, |context, _| {
         let root = installation(184, Fallback::None, false, context)?;
         let refused =
-            start_pointed_with(root.path(), context, TAKEOVER, |_, _| stand_in("exit", context));
+            start_pointed_with(root.path(), Path::new(NO_IMAGE), context, TAKEOVER, |_, _| {
+                stand_in("exit", context)
+            });
         assert!(
             matches!(&refused, Err(StartupRefused::NoEngine(engines)) if engines.len() == 1),
             "{refused:?}"
         );
         let root = installation(185, Fallback::Missing, false, context)?;
         let refused =
-            start_pointed_with(root.path(), context, TAKEOVER, |_, _| stand_in("exit", context));
+            start_pointed_with(root.path(), Path::new(NO_IMAGE), context, TAKEOVER, |_, _| {
+                stand_in("exit", context)
+            });
         assert!(
             matches!(&refused, Err(StartupRefused::NoEngine(engines)) if engines.len() == 2),
             "{refused:?}"
@@ -248,21 +324,98 @@ fn without_a_working_fallback_every_refusal_is_reported() -> TestResult {
     })
 }
 
+/// Write the stable entry's own executable image beside the fixture's releases.
+fn stable_entry(root: &Path, bytes: &[u8]) -> io::Result<PathBuf> {
+    let image = root.join("SugarSubstitute.exe");
+    std::fs::write(&image, bytes)?;
+    Ok(image)
+}
+
+/// How a test damages the fixture's pointer.
+fn damage(root: &Path, case: &str, context: &JobContext) -> TestResult {
+    let file = root.join("state").join(crate::setup_storage::LAUNCH_POINTER_FILE);
+    let valid = std::fs::read(&file)?;
+    match case {
+        "missing" => std::fs::remove_file(&file)?,
+        "empty" => fixture::overwrite(root, b"", context)?,
+        "truncated" => fixture::overwrite(root, &valid[..valid.len() / 2], context)?,
+        "garbled" => {
+            let garbled = valid.iter().map(|byte| byte ^ 0x5a).collect::<Vec<_>>();
+            fixture::overwrite(root, &garbled, context)?;
+        }
+        "incompatible" => {
+            fixture::overwrite(root, br#"{"schema_version":7,"primary":{}}"#, context)?;
+        }
+        _ => return Err(format!("Unknown damage {case}").into()),
+    }
+    Ok(())
+}
+const DAMAGE: [&str; 5] = ["missing", "empty", "truncated", "garbled", "incompatible"];
+
+/// With the pointer missing or unreadable, the stable entry starts the generation engine that is
+/// byte-identical to itself, at hop 0, so that engine routes startup as the record says. The
+/// root itself never writes the pointer.
 #[test]
-fn missing_and_corrupt_pointers_are_typed_refusals_that_start_nothing() -> TestResult {
+fn a_missing_or_damaged_pointer_starts_the_engine_identical_to_the_stable_entry() -> TestResult {
     worker::run_reserved(BYTES, |context, _| {
-        let root = worker::installation(186, context)?;
+        for (number, case) in (192..).zip(DAMAGE) {
+            let root = installation(number, Fallback::Present, false, context)?;
+            // The stable entry is a copy of the second generation's engine.
+            let image = stable_entry(root.path(), b"two")?;
+            damage(root.path(), case, context)?;
+            let pointer = std::fs::read(
+                root.path().join("state").join(crate::setup_storage::LAUNCH_POINTER_FILE),
+            )
+            .ok();
+            let started = std::sync::Mutex::new(Vec::new());
+            start_pointed_with(root.path(), &image, context, TAKEOVER, |engine, hops| {
+                let generation = engine.directory().file_name().map(|name| name.to_owned());
+                crate::registry::lock(&started).push((hops, generation));
+                stand_in("signal", context)
+            })
+            .map_err(|cause| format!("{case}: {cause}"))?;
+            assert_eq!(
+                *crate::registry::lock(&started),
+                [(0, Some(OsString::from("2".repeat(32))))],
+                "{case}"
+            );
+            let after = std::fs::read(
+                root.path().join("state").join(crate::setup_storage::LAUNCH_POINTER_FILE),
+            )
+            .ok();
+            assert_eq!(after, pointer, "{case}");
+        }
+        Ok(())
+    })
+}
+
+/// Without an engine identical to the stable entry, a missing or damaged pointer is the same
+/// typed refusal as before and nothing starts.
+#[test]
+fn without_an_identical_engine_missing_and_corrupt_pointers_start_nothing() -> TestResult {
+    worker::run_reserved(BYTES, |context, _| {
         let never = |_: &PinnedEngine, _: u8| -> Result<StartedEngine, ClaimError> {
             Err(ClaimError::invalid("fixture_unexpected_start"))
         };
+        let root = worker::installation(186, context)?;
+        let image = stable_entry(root.path(), b"two")?;
         assert!(matches!(
-            start_pointed_with(root.path(), context, TAKEOVER, never),
+            start_pointed_with(root.path(), &image, context, TAKEOVER, never),
             Err(StartupRefused::Pointer(PointerFailure::Missing))
         ));
         let root = installation(187, Fallback::Present, false, context)?;
+        let image = stable_entry(root.path(), b"another release")?;
         fixture::overwrite(root.path(), br#"{"schema_version":1,"primary":"#, context)?;
         assert!(matches!(
-            start_pointed_with(root.path(), context, TAKEOVER, never),
+            start_pointed_with(root.path(), &image, context, TAKEOVER, never),
+            Err(StartupRefused::Pointer(PointerFailure::Damaged))
+        ));
+        // An identical engine that exits without taking over leaves the pointer's own refusal.
+        let image = stable_entry(root.path(), b"one")?;
+        assert!(matches!(
+            start_pointed_with(root.path(), &image, context, TAKEOVER, |_, _| stand_in(
+                "exit", context
+            )),
             Err(StartupRefused::Pointer(PointerFailure::Damaged))
         ));
         Ok(())
