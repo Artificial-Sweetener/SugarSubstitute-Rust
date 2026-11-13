@@ -2,9 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Record what this host answers the SugarCubes conformance kit, from its production owners.
 //!
-//! The kit (`Sugar/integrations/shared/conformance/HostConformance.ts`) plays the page. For a
-//! host serving the panel, canvas, memory and updates protocols it sends the fixed sequence in
-//! [`page_script`]. Each message goes to the owner that answers it in production: the panel owner
+//! The kit (the pack's `integrations/shared/conformance/HostConformance.ts`) plays the page.
+//! For a host serving the panel, canvas, memory and updates protocols it sends the fixed sequence
+//! in [`page_script`]. Each message goes to the owner that answers it in production: the panel owner
 //! (description, configure and heartbeat), the desktop child's surface answer before the native
 //! surface can answer, the memory governor and the updates link. What they answer to each page
 //! message must equal the recorded answers in `conformance_answers.json`.
@@ -25,7 +25,7 @@ use sugarsubstitute_contracts::{
     memory::MemoryMessage,
     startup::LaunchId,
 };
-use sugarsubstitute_desktop::{DesktopStartupCommand, PanelIngressReceipt};
+use sugarsubstitute_desktop::{DesktopStartupCommand, PanelIngressReceipt, SurfaceReply};
 use sugarsubstitute_execution::memory_budget::{
     MemoryPreference, OsPressure, SystemMemory, SystemMemorySample,
 };

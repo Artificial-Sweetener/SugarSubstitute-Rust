@@ -121,10 +121,24 @@ rationale = "The isolated localization contract tests read the owned TypeScript 
 role = "fixture"
 
 [[script_boundaries]]
+path = "crates/sugarsubstitute-desktop/tests/host_conformance.mjs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:2c287ae21783689d83c7cc3ccdc75ff32eb06694b778eee4e9d68dbce0afa184"
+rationale = "Run the SugarCubes conformance kit over the actual panel bridge in an isolated JavaScript VM and compare or record this host's profile; it acquires no runtime cache."
+role = "fixture"
+
+[[script_boundaries]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
 source_sha256 = "sha256:113b2c25548f0203e07b5592f4c7783310ec4a17fdc82ba7130fcf0a01950e8f"
 rationale = "Exercise the actual bounded panel transport in an isolated JavaScript VM with native and browser boundary fixtures."
+role = "fixture"
+
+[[script_boundaries]]
+path = "crates/sugarsubstitute-desktop/tests/typescript_resolution.mjs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:35aaffd6ce8fd21f30943ab30afa3a714efc2dcfdaed9af869f5b112f41d98cf"
+rationale = "Resolve the SugarCubes kit's TypeScript sources for the conformance harness; it only checks that a source file exists and acquires no runtime cache."
 role = "fixture"
 
 [[script_boundaries]]

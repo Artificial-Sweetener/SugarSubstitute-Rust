@@ -4493,12 +4493,28 @@ disposition = "fixture"
 rationale = "An owned temporary cache scope qualifies actual PNG/JPEG and authored GIF original transfers, current-peer custody, recorded SHA-256 rejection and observed worker retirement without accessing user data."
 
 [[records]]
+path = "crates/sugarsubstitute-desktop/tests/host_conformance.mjs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:2c287ae21783689d83c7cc3ccdc75ff32eb06694b778eee4e9d68dbce0afa184"
+capabilities = ["node:fs", "readFileSync", "writeFileSync"]
+disposition = "fixture"
+rationale = "Read the bridge scripts, the host's recorded conformance answers and the saved SugarCubes profile, and write that profile only when asked to record it."
+
+[[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
 source_sha256 = "sha256:113b2c25548f0203e07b5592f4c7783310ec4a17fdc82ba7130fcf0a01950e8f"
 capabilities = ["node:fs", "readFileSync"]
 disposition = "fixture"
 rationale = "Read the injected transport and protocol-policy bootstrap sources for executable envelope and custody regression tests."
+
+[[records]]
+path = "crates/sugarsubstitute-desktop/tests/typescript_resolution.mjs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:35aaffd6ce8fd21f30943ab30afa3a714efc2dcfdaed9af869f5b112f41d98cf"
+capabilities = ["existsSync", "node:fs"]
+disposition = "fixture"
+rationale = "Check whether a TypeScript sibling exists so the conformance harness loads the SugarCubes kit from its sources."
 
 [[records]]
 path = "crates/sugarsubstitute-image-io/src/source/tests/memory.rs"
