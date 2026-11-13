@@ -30,12 +30,10 @@ impl<C: EntryActivation> EntryRunner<C> {
         }
         self.update_status.poll();
         self.update_status.observe_sugarcubes(self.child.sugarcubes_update());
-        if let Some(launch) = self.launch_version() {
-            self.update_status.observe_launch(launch);
+        if self.authority.as_ref().is_some_and(CoordinatorAuthority::window_opened) {
+            self.launch_update.window_opened();
         }
-        let (revision, status) = self.update_status.snapshot();
-        // Offered every turn, so a desktop child that starts later still receives it.
-        self.child.publish_update_status(revision, status)?;
+        self.publish_update_status()?;
         if self.closing
             && let Some(scope) = &self.update_status_scope
         {
@@ -46,8 +44,9 @@ impl<C: EntryActivation> EntryRunner<C> {
             self.update_wake = None;
             return Ok(());
         }
+        let before_window = self.launch_update.checks_before_window();
         let Some((key, application)) =
-            self.authority.as_ref().and_then(CoordinatorAuthority::update_source)
+            self.authority.as_ref().and_then(|authority| authority.update_source(before_window))
         else {
             return Ok(());
         };
@@ -60,17 +59,22 @@ impl<C: EntryActivation> EntryRunner<C> {
         let now = self.client()?.now()?;
         let schedule = match &mut self.update_schedule {
             Some(schedule) => schedule,
-            None => self.update_schedule.insert(CheckSchedule::new(now)?),
+            None => self
+                .update_schedule
+                .insert(CheckSchedule::new(now, self.launch_update.first_check())?),
         };
+        let mut restarting = false;
         if let Some((outcome, attempt)) = self.updater.as_mut().and_then(Parent::take_check_outcome)
         {
             self.updater = None;
             tracing::info!(operation = "update_check_finished", outcome = ?attempt,
                 "Update check finished");
             schedule.finish(outcome, now)?;
+            self.launch_update.finish(&attempt);
             self.update_status.finish(attempt, crate::updates::status::now_utc());
+            restarting = self.launch_update.restart().is_some();
         }
-        if self.updater.is_none() && schedule.begin(now) {
+        if !restarting && self.updater.is_none() && schedule.begin(now) {
             match self.start_update_check(key, application) {
                 Ok(mut updater) => {
                     updater.advance(batch, &self.jobs).map_err(|cause| cause as Box<dyn Error>)?;
@@ -85,6 +89,14 @@ impl<C: EntryActivation> EntryRunner<C> {
                         .finish(CheckOutcome::Failed, now)?;
                 }
             }
+        }
+        if restarting {
+            tracing::info!(
+                operation = "update_restart_before_window",
+                "An update was prepared before the window opened; restarting into it"
+            );
+            // The splash says which version it updates to before the close begins.
+            self.publish_update_status()?;
         }
         if self.update_status.wants_read() {
             let client = self.client()?.clone();
@@ -108,16 +120,32 @@ impl<C: EntryActivation> EntryRunner<C> {
         Ok(())
     }
 
-    /// What this launch did about the version it runs, when it runs it as a trial: applying it
-    /// until the trial's acceptance is published, then updated to it. An accepted launch, and a
-    /// run without installation ownership, start no new version.
+    /// Offer the coordinator's update status, with what this launch does about its version.
+    /// Offered every turn, so a desktop child that starts later still receives it.
+    fn publish_update_status(&mut self) -> Result<(), Box<dyn Error>> {
+        if let Some(launch) = self.launch_version() {
+            self.update_status.observe_launch(launch);
+        }
+        let (revision, status) = self.update_status.snapshot();
+        self.child.publish_update_status(revision, status)
+    }
+
+    /// What this launch did about the version it runs: applying the update it restarts into,
+    /// or, when it runs a trial, applying it until the trial's acceptance is published, then
+    /// updated to it. An accepted launch, and a run without installation ownership, start no
+    /// new version.
     fn launch_version(&self) -> Option<sugarsubstitute_contracts::update::status::LaunchVersion> {
+        if let Some(version) = self.launch_update.restart() {
+            return Some(sugarsubstitute_contracts::update::status::LaunchVersion::Applying(
+                version.to_owned(),
+            ));
+        }
         let authority = self.authority.as_ref()?;
         let application = authority.running_installation()?;
         application.trial()?;
         let version = application.generation().release.version().to_owned();
         // Only an accepted trial is an update source; an unaccepted one is still applying.
-        Some(if authority.update_source().is_some() {
+        Some(if authority.update_source(false).is_some() {
             sugarsubstitute_contracts::update::status::LaunchVersion::Updated(version)
         } else {
             sugarsubstitute_contracts::update::status::LaunchVersion::Applying(version)
@@ -138,5 +166,53 @@ impl<C: EntryActivation> EntryRunner<C> {
         let native = ScopeSpec { id: self.scopes.allocate()?, deadline: None };
         Parent::new(client, work, cleanup, native, key, application)
             .map_err(|cause| cause as Box<dyn Error>)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::tests::{NoChild, unopened_paths};
+    use super::*;
+    use crate::updates::{UpdatePolicy, launch::LaunchUpdate};
+    use sugarsubstitute_contracts::update::{attempt::AttemptOutcome, status::LaunchVersion};
+
+    fn fixture() -> Result<EntryRunner<NoChild>, Box<dyn Error>> {
+        let path = PathBuf::from("unopened-relative-input");
+        let command = ProductionCommand {
+            launch_selection: None,
+            installation: path.clone(),
+            diagnostics: Default::default(),
+            options: unopened_paths()?.into(),
+        };
+        Ok(EntryRunner::new(
+            command,
+            path,
+            Box::new(NoChild(None)),
+            crate::diagnostics::DiagnosticHealth::fixture(),
+        ))
+    }
+
+    /// An update prepared before the window opened is what the splash names, and the close that
+    /// follows relaunches into it; one prepared after the window opened changes neither.
+    #[test]
+    fn an_update_prepared_before_the_window_opened_is_announced_and_owes_a_relaunch()
+    -> Result<(), Box<dyn Error>> {
+        let prepared = AttemptOutcome::Prepared { version: "2.0.0".into() };
+        let mut runner = fixture()?;
+        runner.launch_update = LaunchUpdate::new(Some(UpdatePolicy::BetaEager));
+        assert_eq!(runner.launch_version(), None);
+        runner.launch_update.finish(&prepared);
+        assert_eq!(runner.launch_version(), Some(LaunchVersion::Applying("2.0.0".into())));
+        runner.normal_shutdown = true;
+        assert!(runner.relaunch_wanted());
+
+        let mut opened = fixture()?;
+        opened.launch_update = LaunchUpdate::new(Some(UpdatePolicy::BetaEager));
+        opened.launch_update.window_opened();
+        opened.launch_update.finish(&prepared);
+        assert_eq!(opened.launch_version(), None);
+        opened.normal_shutdown = true;
+        assert!(!opened.relaunch_wanted());
+        Ok(())
     }
 }

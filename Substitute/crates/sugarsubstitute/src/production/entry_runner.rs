@@ -340,6 +340,9 @@ pub(crate) struct EntryRunner<C: EntryActivation> {
     bootstrap: Option<EntryBootstrap>,
     updater: Option<crate::updates::parent::Parent>,
     update_schedule: Option<crate::updates::schedule::CheckSchedule>,
+    /// When this launch checks, and whether it restarts into an update prepared before the
+    /// window opened.
+    launch_update: crate::updates::launch::LaunchUpdate,
     /// Native wake for the next due update check; the check itself runs on the executor.
     update_wake: Option<Instant>,
     /// What the update control shows, from attempt results and the selection record.
@@ -406,6 +409,13 @@ impl<C: EntryActivation> EntryRunner<C> {
             bootstrap: None,
             updater: None,
             update_schedule: None,
+            launch_update: crate::updates::launch::LaunchUpdate::new(
+                crate::updates::policy().unwrap_or_else(|cause| {
+                    tracing::warn!(operation = "update_policy_unreadable", cause = %cause,
+                        "The build's update policy could not be read; updates check after the window opens");
+                    None
+                }),
+            ),
             update_wake: None,
             update_status: crate::updates::status::StatusSource::new(),
             update_status_scope: None,

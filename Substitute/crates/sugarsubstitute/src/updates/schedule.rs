@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Decide when the running application checks for an update: shortly after it is ready, then
+//! Decide when the running application checks for an update: at a first moment its launch chooses, then
 //! periodically while it stays open, and with growing backoff after a failed check.
 //!
 //! The schedule is pure state over the execution owner's monotonic clock. It starts nothing and
@@ -9,7 +9,7 @@
 use std::{error::Error, time::Duration};
 use sugarsubstitute_contracts::execution::Moment;
 
-/// Delay from application readiness to the first check, so startup work settles first.
+/// Delay from application readiness to a standard build's first check, so startup work settles.
 pub(crate) const FIRST_CHECK: Duration = Duration::from_secs(30);
 /// Interval between checks after a check completes, while the application stays open.
 pub(crate) const PERIOD: Duration = Duration::from_secs(4 * 60 * 60);
@@ -36,15 +36,11 @@ pub(crate) struct CheckSchedule {
     running: bool,
 }
 impl CheckSchedule {
-    /// Plan the first check `FIRST_CHECK` after the application became ready at `ready`.
+    /// Plan the first check `first` after `start`, the moment checking became possible.
     /// # Errors
     /// Rejects a moment that cannot represent the first due time.
-    pub(crate) fn new(ready: Moment) -> Result<Self, Box<dyn Error>> {
-        Ok(Self {
-            due: Some(ready.checked_add(FIRST_CHECK)?),
-            consecutive_failures: 0,
-            running: false,
-        })
+    pub(crate) fn new(start: Moment, first: Duration) -> Result<Self, Box<dyn Error>> {
+        Ok(Self { due: Some(start.checked_add(first)?), consecutive_failures: 0, running: false })
     }
 
     /// Moment at which the next check is due; `None` while a check is running.
@@ -108,7 +104,7 @@ mod tests {
 
     #[test]
     fn first_check_is_due_shortly_after_readiness_and_runs_once() -> Result {
-        let mut schedule = CheckSchedule::new(at(100))?;
+        let mut schedule = CheckSchedule::new(at(100), FIRST_CHECK)?;
         assert_eq!(schedule.due(), Some(at(130)));
         assert!(!schedule.begin(at(129)));
         assert!(schedule.begin(at(130)));
@@ -118,8 +114,16 @@ mod tests {
     }
 
     #[test]
+    fn a_first_check_without_delay_is_due_at_once() -> Result {
+        let mut schedule = CheckSchedule::new(at(5), Duration::ZERO)?;
+        assert_eq!(schedule.due(), Some(at(5)));
+        assert!(schedule.begin(at(5)));
+        Ok(())
+    }
+
+    #[test]
     fn failed_checks_retry_on_a_doubling_backoff_capped_at_an_hour() -> Result {
-        let mut schedule = CheckSchedule::new(at(0))?;
+        let mut schedule = CheckSchedule::new(at(0), FIRST_CHECK)?;
         let mut now = at(30);
         let mut delays = Vec::new();
         for _ in 0..9 {
@@ -135,7 +139,7 @@ mod tests {
 
     #[test]
     fn a_completed_check_resets_backoff_and_the_next_check_follows_a_period_later() -> Result {
-        let mut schedule = CheckSchedule::new(at(0))?;
+        let mut schedule = CheckSchedule::new(at(0), FIRST_CHECK)?;
         assert!(schedule.begin(at(30)));
         let retry = schedule.finish(CheckOutcome::Failed, at(40))?;
         assert_eq!(retry, at(100));
@@ -150,7 +154,7 @@ mod tests {
 
     #[test]
     fn an_outcome_without_a_running_check_is_rejected() -> Result {
-        let mut schedule = CheckSchedule::new(at(0))?;
+        let mut schedule = CheckSchedule::new(at(0), FIRST_CHECK)?;
         assert!(schedule.finish(CheckOutcome::Completed, at(1)).is_err());
         assert_eq!(schedule.due(), Some(at(30)));
         Ok(())
