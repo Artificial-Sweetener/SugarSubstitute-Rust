@@ -4666,7 +4666,7 @@ rationale = "Canonical recovery/original pairs retain exact native row bytes and
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/imports/tests/cancellation.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:f5b07f4fb9b65620952855c1afa1252e251372a095d28a1c0b79eed620affe0f"
+source_sha256 = "sha256:d29e137005eecb49718bafc8d61927df33a84b9e62504d214f90aa69b1475faf"
 capabilities = ["std::fs::read", "tempfile::TempDir"]
 disposition = "implementation"
 rationale = "An admitted real job reaches a fixture-input checkpoint before actual cancellation; terminal observation and a fresh execution owner prove preserved originals and successful restart without a process actor or native window."
