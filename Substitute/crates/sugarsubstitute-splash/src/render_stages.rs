@@ -226,6 +226,7 @@ impl RenderStages {
                     crate::StartupStatus::Settling => copy.cleanup_pending,
                     crate::StartupStatus::RetryReady => copy.retry_ready,
                     crate::StartupStatus::CleanupFailed => copy.cleanup_failed,
+                    crate::StartupStatus::Starting => copy.starting,
                 };
                 let spec = crate::text_layout::status(
                     frame.appearance.theme,
@@ -254,9 +255,13 @@ impl RenderStages {
                 let cursor = self.progress.as_mut().ok_or(RenderError::InvalidFrame)?;
                 if cursor.step(target)? {
                     self.progress = None;
-                    self.controls =
-                        Some(crate::chrome::caption_buttons(frame.appearance).into_iter());
-                    self.stage = Stage::Controls;
+                    if frame.appearance.controls {
+                        self.controls =
+                            Some(crate::chrome::caption_buttons(frame.appearance).into_iter());
+                        self.stage = Stage::Controls;
+                    } else {
+                        self.stage = Stage::Done;
+                    }
                 }
             }
             Stage::Controls => {

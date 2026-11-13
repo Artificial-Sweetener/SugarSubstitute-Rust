@@ -28,6 +28,9 @@ impl Launcher {
         if let Some(job) = &self.job {
             job.job.cancel();
         }
+        if let Some(notice) = &self.notice {
+            notice.cancel();
+        }
         Ok(())
     }
 
@@ -53,7 +56,7 @@ impl Launcher {
             return self.observe_join(expired);
         }
         advanced?;
-        if self.job.is_some() || self.cached.is_some() {
+        if self.job.is_some() || self.cached.is_some() || self.notice_busy() {
             return Ok(false);
         }
         if self.launch.is_some() || self.engine.is_some() || self.delegate.is_some() {
@@ -90,6 +93,7 @@ impl Launcher {
         let actual = self.owner.as_ref().map(ExecutionOwner::poll_shutdown).transpose()?;
         let settled = actual.as_ref().is_none_or(|progress| progress.settled);
         let uncertain = self.job.is_some()
+            || self.notice_busy()
             || self.launch.is_some()
             || self.cached.is_some()
             || self.engine.is_some()

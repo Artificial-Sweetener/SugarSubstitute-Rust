@@ -6,6 +6,7 @@
 //! launch engine the launch pointer names and exits. Run from a generation folder with the
 //! engine argument, it is that generation's launch engine and owns the rest of startup.
 mod lifetime;
+mod notice;
 mod root;
 #[cfg(test)]
 mod test_support;

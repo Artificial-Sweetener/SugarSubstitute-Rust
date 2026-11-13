@@ -106,6 +106,8 @@ pub(super) struct Launcher {
     recovery_wake: Option<Instant>,
     update_failure: Option<Box<dyn Error>>,
     budget: Option<LauncherBudget>,
+    /// The "Starting…" notice shown while this launch takes more than a moment.
+    notice: Option<super::notice::Notice>,
     /// Native wake at the update cutoff, until that cutoff has been observed.
     update_wake: Option<Instant>,
     until: Option<Moment>,
@@ -156,6 +158,7 @@ impl Launcher {
             recovery_wake: None,
             update_failure: None,
             budget: None,
+            notice: None,
             update_wake: None,
             until: None,
             cleanup_until: None,
@@ -215,6 +218,7 @@ impl Launcher {
         if let Some(client) = &self.client {
             client.drain_completions(max)?;
         }
+        self.advance_notice();
         if let Some(pending) = &mut self.job
             && let Some(completion) = pending.job.try_take_completion()
         {
@@ -291,11 +295,24 @@ impl HeadlessLifetime for Launcher {
         self.client = Some(client);
         self.select_next()
     }
+    /// Startup needs no native loop of its own; the pump builds one only once the notice is
+    /// due, so a fast launch never creates any window.
     fn prepare_native_runtime(&mut self, max: NonZeroUsize) -> Result<StartupPreparationStep> {
         Ok(match self.advance(max)? {
+            HeadlessStep::Active if self.notice_shown() => StartupPreparationStep::Ready,
             HeadlessStep::Active => StartupPreparationStep::Waiting,
             HeadlessStep::Shutdown => StartupPreparationStep::Closing,
         })
+    }
+    fn notice(&mut self) -> Option<sugarsubstitute_desktop::HeadlessNotice> {
+        self.notice.as_mut().and_then(super::notice::Notice::wanted)
+    }
+    fn notice_surface(&mut self, surface: sugarsubstitute_desktop::NoticeSurface) {
+        if let Some(notice) = &mut self.notice {
+            notice.surface(surface);
+        }
+        // Admit its first preparation now; the pump reports the surface between wakes.
+        self.advance_notice();
     }
     fn activity(&mut self, max: NonZeroUsize) -> Result<HeadlessStep> {
         self.advance(max)
@@ -307,6 +324,7 @@ impl HeadlessLifetime for Launcher {
         [
             self.wake_at,
             self.update_wake,
+            self.notice.as_ref().and_then(super::notice::Notice::next_wake),
             self.recovery_wake,
             self.cached.as_ref().and_then(cached::Cached::next_deadline),
         ]
@@ -335,6 +353,7 @@ impl HeadlessLifetime for Launcher {
             || self.cached.is_some()
             || self.engine.is_some()
             || self.delegate.is_some()
+            || self.notice_busy()
             || self.cutoff_reported
         {
             return Err("Launcher custody did not retire before its original cutoff".into());

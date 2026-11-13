@@ -78,7 +78,7 @@ rationale = "Host composition of localized native startup/profile-conflict feedb
 
 [[records]]
 path = "crates/sugarsubstitute/src/stable_launcher.rs"
-source_sha256 = "sha256:613e329e6e9c145ae55598e0f1a1ccdbae71aea81dea47e95957b05eb614b26c"
+source_sha256 = "sha256:78ceb286f0a96e18b3a948ea0929cae4bf6a7822b57aebe44f47cf9119c8b57a"
 kind = "presentation"
 rationale = "Host composition of localized native startup/profile-conflict feedback. Authenticated configuration/selected installer language is retained when available; failures before configuration use canonical English. Original causes remain diagnostic details. Stable installed entry point; the selected application owns the only visible startup window."
 
@@ -132,7 +132,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/lib.rs"
-source_sha256 = "sha256:bca7034139d4334ae38178476bafd0cf60eb9d9f17d062afd4c679557fe73bfa"
+source_sha256 = "sha256:62a5f1e64988334dfbcc993af7c13fb4d006183ad1d7fded48fe3741649f6336"
 kind = "native"
 rationale = "Native boundary: Own native window lifetime and CPU frame presentation independently of UI content.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -396,7 +396,7 @@ rationale = "Reapply caption/recovery labels from the authenticated configuratio
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/view.rs"
-source_sha256 = "sha256:c954d0af5868777f48fd91f215d1dd8e7a42fe89159f5644b8f309da9d3035c0"
+source_sha256 = "sha256:0171e3cd3df8ec00da186c861afb95ae2dd6035693e262cf2dac21415ff7104b"
 kind = "presentation"
 rationale = "Startup View binds output, cancel and retry accessible controls to its existing Messages record; state changes select fields without authoring copy."
 
@@ -729,6 +729,12 @@ path = "crates/sugarsubstitute-desktop/src/main_actor/session/bridge.js"
 source_sha256 = "sha256:25759f4b72a15062373d43643ffadf6d9b3248fd387d0cfbb2c84acf69ae2899"
 kind = "native"
 rationale = "The bounded dedicated WebView session transport defines technical JavaScript properties and error diagnostics; it constructs no product copy or locale selection."
+
+[[records]]
+path = "crates/sugarsubstitute-desktop/src/headless/notice.rs"
+source_sha256 = "sha256:c02da5306be11140d51b87ef3cd3c65a5264b91abe3b61f6965f45133c948261"
+kind = "native"
+rationale = "The headless notice window takes its title from the role's HeadlessNotice; the launcher passes the product name. Its words are drawn from the typed catalog into prepared pixels; it adds no product text."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/installer/native/form_window.rs"

@@ -43,3 +43,12 @@ impl Hold {
         self.changed.notify_all();
     }
 }
+
+/// Releases its hold when dropped, so a failing assertion cannot leave the worker blocked and
+/// the executor's teardown waiting for it.
+pub(super) struct Released(pub(super) Arc<Hold>);
+impl Drop for Released {
+    fn drop(&mut self) {
+        self.0.release();
+    }
+}

@@ -10,7 +10,35 @@ impl Launcher {
         self.until = Some(budget.until());
         self.wake_at = native_wake(now, budget.until());
         self.update_wake = native_wake(now, budget.update_until());
+        self.notice = Some(crate::stable_launcher::notice::Notice::new(budget));
         self.budget = Some(budget);
+    }
+
+    /// Show the notice while this launcher still owns startup, and drain its jobs. Closing
+    /// withdraws it and only drains.
+    pub(super) fn advance_notice(&mut self) {
+        let owns = !self.completed && !self.closing;
+        let now = self.clock.now();
+        let Some(notice) = &mut self.notice else { return };
+        notice.observe(now, owns);
+        let (Some(client), Some(scope), Some(until)) = (&self.client, &self.work_scope, self.until)
+        else {
+            return;
+        };
+        notice.advance(
+            &crate::stable_launcher::notice::Resources { client, scope, jobs: &self.jobs, until },
+            self.closing,
+        );
+    }
+
+    /// Whether the notice is on screen now.
+    pub(super) fn notice_shown(&self) -> bool {
+        self.notice.as_ref().is_some_and(crate::stable_launcher::notice::Notice::shown)
+    }
+
+    /// Whether a notice job still runs.
+    pub(super) fn notice_busy(&self) -> bool {
+        self.notice.as_ref().is_some_and(crate::stable_launcher::notice::Notice::busy)
     }
 
     /// Whether `task` would begin optional update work that may no longer begin. A refused step
@@ -80,6 +108,7 @@ impl Launcher {
         std::mem::forget(self.cached.take());
         std::mem::forget(self.engine.take());
         std::mem::forget(self.delegate.take());
+        std::mem::forget(self.notice.take());
         std::mem::forget(self.work_scope.take());
         std::mem::forget(self.cleanup_scope.take());
         std::mem::forget(self.client.take());

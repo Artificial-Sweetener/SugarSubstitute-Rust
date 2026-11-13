@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Pump a main-thread native lifetime without application windows or presentation.
+//! Pump a main-thread native lifetime without application windows, beside at most one small
+//! notice window the lifetime asks for while it waits.
+#[cfg(target_os = "windows")]
+mod notice;
 mod state;
 use crate::{
     DesktopError, StartupPreparationStep,
@@ -19,6 +22,10 @@ enum HeadlessAction {
 }
 
 /// Run one main-thread native pump with no application window, frame or focus work.
+///
+/// When the lifetime asks for a notice through [`HeadlessLifetime::notice`], the pump shows it
+/// as one small unfocused window on this same loop while the lifetime keeps working, and closes
+/// it once the lifetime stops asking, begins shutdown, or before the lifetime finishes.
 ///
 /// A private native event exists before `start`; preparation completes before Tao.
 /// The same wake endpoint then retargets to the actual proxy under synchronization.
@@ -65,8 +72,10 @@ pub fn run_headless(lifetime: &mut impl HeadlessLifetime) -> Result<(), DesktopE
         prepare_before_loop(&bootstrap, &mut state, lifetime);
     }
     let session_end = headless_session_end();
+    #[cfg(target_os = "windows")]
+    let mut notice = notice::Notice::new();
     while !state.settled() {
-        let exit_code = event_loop.run_return(|event, _, control| {
+        let exit_code = event_loop.run_return(|event, _target, control| {
             match event {
                 Event::UserEvent(HeadlessAction::Completions) => state.activity(lifetime),
                 Event::MainEventsCleared => {
@@ -75,13 +84,20 @@ pub fn run_headless(lifetime: &mut impl HeadlessLifetime) -> Result<(), DesktopE
                     }
                     state.activity(lifetime);
                     state.poll_shutdown(lifetime);
+                    #[cfg(target_os = "windows")]
+                    notice.turn(lifetime, _target, state.closing());
                 }
+                #[cfg(target_os = "windows")]
+                Event::RedrawRequested(id) => notice.redraw(id),
                 _ => {}
             }
             *control = state.control(lifetime);
         });
         state.native_return(lifetime, exit_code);
     }
+    // The notice window belongs to this loop; it closes before the loop and the role retire.
+    #[cfg(target_os = "windows")]
+    notice.close();
     state.retire_bootstrap(&bootstrap);
     if let Some(watch) = session_end
         && let Err(cause) = watch.retire()

@@ -5,7 +5,7 @@
 use super::startup_tests::absent_cache;
 use super::tests::{finish, fixture};
 use super::*;
-use crate::stable_launcher::test_support::Hold;
+use crate::stable_launcher::test_support::{Hold, Released};
 use crate::updates::test_support::observe;
 use std::sync::atomic::Ordering;
 use sugarsubstitute_supervision::setup_storage::{RouteFailure, SelectionFailure};
@@ -124,7 +124,7 @@ fn close(launcher: &mut Launcher, wake: &crate::updates::test_support::Wake) -> 
 
 /// Admit a cleanup-scope job that blocks until released, ignoring cancellation, like a native
 /// call that never returns.
-fn stuck(launcher: &mut Launcher) -> Result<Arc<Hold>> {
+fn stuck(launcher: &mut Launcher) -> Result<Released> {
     let hold = Hold::new();
     let held = hold.clone();
     launcher.submit(Task::Recover, move |_| {
@@ -132,7 +132,7 @@ fn stuck(launcher: &mut Launcher) -> Result<Arc<Hold>> {
         Ok(Work::Retired)
     })?;
     hold.entered();
-    Ok(hold)
+    Ok(Released(hold))
 }
 
 #[test]
@@ -158,6 +158,46 @@ fn a_worker_that_never_returns_cannot_keep_the_launcher_from_exiting() -> Result
     assert!(launcher.finish_shutdown().is_err(), "the unsettled cleanup is still reported");
     assert!(launcher.finished);
     assert!(launcher.owner.is_none());
-    hold.release();
+    drop(hold);
     Ok(())
+}
+
+#[test]
+fn a_fast_launch_never_builds_a_window_loop() -> Result<()> {
+    let (mut launcher, clock, wake) = fixture()?;
+    launcher.choice = Choice::Complete;
+    clock.0.store(seconds(2) - 1, Ordering::SeqCst);
+    assert!(matches!(
+        launcher.prepare_native_runtime(NonZeroUsize::MIN)?,
+        StartupPreparationStep::Waiting
+    ));
+    assert!(launcher.notice().is_none());
+    launcher.completed = true;
+    clock.0.store(seconds(3), Ordering::SeqCst);
+    assert!(matches!(
+        launcher.prepare_native_runtime(NonZeroUsize::MIN)?,
+        StartupPreparationStep::Closing
+    ));
+    assert!(launcher.notice().is_none(), "a handed-off launch shows nothing");
+    close(&mut launcher, &wake)
+}
+
+#[test]
+fn a_slow_launch_shows_the_notice_after_two_seconds_until_it_hands_off() -> Result<()> {
+    let (mut launcher, clock, wake) = fixture()?;
+    launcher.choice = Choice::Complete;
+    clock.0.store(seconds(2), Ordering::SeqCst);
+    assert!(
+        matches!(
+            launcher.prepare_native_runtime(NonZeroUsize::MIN)?,
+            StartupPreparationStep::Ready
+        ),
+        "the pump builds its loop for the notice"
+    );
+    let notice = launcher.notice().ok_or("notice not wanted")?;
+    assert_eq!(notice.title, crate::APPLICATION_NAME);
+    launcher.completed = true;
+    assert_eq!(launcher.activity(NonZeroUsize::MIN)?, HeadlessStep::Shutdown);
+    assert!(launcher.notice().is_none(), "the hand-off closes it");
+    close(&mut launcher, &wake)
 }

@@ -76,7 +76,7 @@ mod qualified_preview;
 #[cfg(target_os = "windows")]
 pub use headless::run_headless;
 mod headless_contract;
-pub use headless_contract::{HeadlessLifetime, HeadlessStep};
+pub use headless_contract::{HeadlessLifetime, HeadlessNotice, HeadlessStep, NoticeSurface};
 #[cfg(all(target_os = "windows", feature = "k1-native-qualification"))]
 pub use qualified_preview::{
     CapturedMainPreview, MainDownloadFixture, MainPreviewSnapshot, MainPreviewViewport,

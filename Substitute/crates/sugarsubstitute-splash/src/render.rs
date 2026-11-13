@@ -226,6 +226,10 @@ mod disclosure_tests;
 mod update_tests;
 
 #[cfg(test)]
+#[path = "render_starting_tests.rs"]
+mod starting_tests;
+
+#[cfg(test)]
 mod tests {
     use super::SplashRenderer;
     use crate::{AnimationFrame, Appearance};

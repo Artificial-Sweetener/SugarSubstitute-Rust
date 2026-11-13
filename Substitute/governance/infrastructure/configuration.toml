@@ -317,7 +317,7 @@ rationale = "Launch engine stand-in fixture: the child half reads its own fault 
 [[records]]
 path = "crates/sugarsubstitute/src/stable_launcher.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:613e329e6e9c145ae55598e0f1a1ccdbae71aea81dea47e95957b05eb614b26c"
+source_sha256 = "sha256:78ceb286f0a96e18b3a948ea0929cae4bf6a7822b57aebe44f47cf9119c8b57a"
 capabilities = ["arguments"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
