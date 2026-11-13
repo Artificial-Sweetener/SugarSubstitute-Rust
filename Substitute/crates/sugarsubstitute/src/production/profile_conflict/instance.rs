@@ -18,7 +18,7 @@ use sugarsubstitute_contracts::{
     instance_conflict::{ConflictBackend, ConflictObservation, ConflictOperation},
 };
 use sugarsubstitute_desktop::{ProcessError, ProcessResponsiveness};
-use sugarsubstitute_supervision::{ClaimError, application_launch::ApplicationLaunch};
+use sugarsubstitute_supervision::{ClaimError, profile_conflict::Relaunch};
 
 /// The longest single wait on the running copy's exit; the controller observes again after it.
 const EXIT_WAIT_SLICE: Duration = Duration::from_secs(5);
@@ -36,13 +36,27 @@ const NATIVE: ProcessPort = ProcessPort {
     wait: sugarsubstitute_desktop::wait_for_process_exit,
 };
 
+/// Starts this application afresh once the running copy has gone; tests count instead.
+pub(super) trait FreshLaunch: Send + Sync {
+    /// Start the fresh launch inside an admitted blocking job.
+    fn launch(&self, context: &JobContext) -> Result<(), ClaimError>;
+    /// Retire the fresh launch's custody, if one was started.
+    fn retire(&self) -> Result<(), ClaimError>;
+}
+impl FreshLaunch for Relaunch {
+    fn launch(&self, context: &JobContext) -> Result<(), ClaimError> {
+        Relaunch::launch(self, context)
+    }
+    fn retire(&self) -> Result<(), ClaimError> {
+        Relaunch::retire(self)
+    }
+}
+
 /// A failed operation on the running copy or the fresh launch, with its original cause.
 #[derive(Debug)]
 pub(super) enum InstanceConflictError {
     /// A native process operation failed.
     Process(ProcessError),
-    /// Preparing the fresh launch's command failed at the named stage.
-    LaunchCommand(&'static str, Box<dyn Error + Send + Sync>),
     /// Starting or retiring the fresh launch failed.
     Launch(ClaimError),
     /// The operation's job was cancelled or reached its deadline first.
@@ -54,7 +68,6 @@ impl fmt::Display for InstanceConflictError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             Self::Process(_) => "Running copy operation failed",
-            Self::LaunchCommand(stage, _) => stage,
             Self::Launch(_) => "Fresh launch failed",
             Self::Expired => "Running copy operation expired",
             Self::Unsupported => "Running copy operation is not offered",
@@ -65,7 +78,6 @@ impl Error for InstanceConflictError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Process(cause) => Some(cause),
-            Self::LaunchCommand(_, cause) => Some(cause.as_ref()),
             Self::Launch(cause) => Some(cause),
             Self::Expired | Self::Unsupported => None,
         }
@@ -75,7 +87,6 @@ impl Error for InstanceConflictError {
 #[derive(Default)]
 struct State {
     ended: bool,
-    relaunch: Option<ApplicationLaunch>,
 }
 
 /// Shared custody for one running copy; clones operate on the same state.
@@ -84,19 +95,22 @@ pub(super) struct InstanceSession {
     copy: PreviousCopy,
     reported: PreviousCopyState,
     port: ProcessPort,
+    fresh: Arc<dyn FreshLaunch>,
     state: Arc<Mutex<State>>,
 }
 impl InstanceSession {
     /// Retain the verified copy and what it reported; nothing runs until a job executes.
     pub(super) fn new(copy: PreviousCopy, reported: PreviousCopyState) -> Self {
-        Self::with_port(copy, reported, NATIVE)
+        Self::with_port(copy, reported, NATIVE, Arc::new(Relaunch::default()))
     }
+    /// Retain the copy with substituted native operations and fresh launch.
     pub(super) fn with_port(
         copy: PreviousCopy,
         reported: PreviousCopyState,
         port: ProcessPort,
+        fresh: Arc<dyn FreshLaunch>,
     ) -> Self {
-        Self { copy, reported, port, state: Arc::default() }
+        Self { copy, reported, port, fresh, state: Arc::default() }
     }
     fn state(&self) -> std::sync::MutexGuard<'_, State> {
         self.state.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -160,38 +174,10 @@ impl ConflictBackend for InstanceSession {
         }
     }
     fn relaunch(&self, context: &JobContext) -> Result<(), InstanceConflictError> {
-        use std::os::windows::ffi::OsStrExt;
-        let setup = |stage: &'static str| {
-            move |cause: std::io::Error| InstanceConflictError::LaunchCommand(stage, Box::new(cause))
-        };
-        let executable = std::env::current_exe().map_err(setup("application_launch_executable"))?;
-        let directory = std::env::current_dir().map_err(setup("application_launch_directory"))?;
-        let arguments =
-            std::env::args_os().skip(1).map(|arg| arg.encode_wide().collect()).collect::<Vec<_>>();
-        let command = sugarsubstitute_supervision::WindowsLaunchCommand::from_utf16(
-            &executable.as_os_str().encode_wide().collect::<Vec<_>>(),
-            &directory.as_os_str().encode_wide().collect::<Vec<_>>(),
-            &arguments,
-        )
-        .map_err(|cause| {
-            InstanceConflictError::LaunchCommand("application_launch_command", Box::new(cause))
-        })?;
-        let launch = ApplicationLaunch::new(command);
-        {
-            let mut state = self.state();
-            if state.relaunch.is_some() {
-                return Err(InstanceConflictError::Unsupported);
-            }
-            state.relaunch = Some(launch.clone());
-        }
-        launch.launch(context).map_err(InstanceConflictError::Launch)
+        self.fresh.launch(context).map_err(InstanceConflictError::Launch)
     }
     fn retire_relaunch(&self) -> Result<(), InstanceConflictError> {
-        let launch = self.state().relaunch.clone();
-        if let Some(launch) = launch {
-            launch.retire().map_err(InstanceConflictError::Launch)?;
-        }
-        Ok(())
+        self.fresh.retire().map_err(InstanceConflictError::Launch)
     }
 }
 
@@ -222,6 +208,22 @@ mod tests {
     fn port(probe: fn(u32, u64) -> Result<ProcessResponsiveness, ProcessError>) -> ProcessPort {
         ProcessPort { probe, end: never_ends, wait: still_running }
     }
+    /// Counts fresh launches instead of starting a process.
+    #[derive(Default)]
+    struct Counted(std::sync::atomic::AtomicUsize);
+    impl FreshLaunch for Counted {
+        fn launch(&self, _: &JobContext) -> Result<(), ClaimError> {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+            Ok(())
+        }
+        fn retire(&self) -> Result<(), ClaimError> {
+            Ok(())
+        }
+    }
+    fn session(reported: PreviousCopyState, port: ProcessPort) -> (InstanceSession, Arc<Counted>) {
+        let fresh = Arc::new(Counted::default());
+        (InstanceSession::with_port(COPY, reported, port, fresh.clone()), fresh)
+    }
 
     /// The copy's own report and a probe of it decide what is shown; an exited copy releases.
     #[test]
@@ -236,7 +238,7 @@ mod tests {
             (Unresponsive, exited, ConflictObservation::Released),
         ];
         for (reported, probe, expected) in cases {
-            let session = InstanceSession::with_port(COPY, reported, port(probe));
+            let (session, _) = session(reported, port(probe));
             assert_eq!(session.discover()?, expected, "{reported:?}");
         }
         Ok(())
@@ -246,7 +248,7 @@ mod tests {
     /// retires without a fresh launch.
     #[test]
     fn a_closing_copy_is_waited_for_and_cancel_never_ends_or_launches() {
-        let session = InstanceSession::with_port(COPY, PreviousCopyState::Closing, port(responsive));
+        let (session, fresh) = session(PreviousCopyState::Closing, port(responsive));
         let observed = session.clone();
         let mut service = sugarsubstitute::instance_conflict::Service::new(session);
         let wake = Arc::new(Wake::default());
@@ -262,5 +264,6 @@ mod tests {
         wake.until(|| service.poll().done().then_some(()));
         assert!(!service.continued());
         assert!(!observed.state().ended, "Waiting never ends the previous copy");
+        assert_eq!(fresh.0.load(std::sync::atomic::Ordering::Acquire), 0);
     }
 }

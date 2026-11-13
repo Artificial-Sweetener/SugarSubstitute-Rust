@@ -151,3 +151,66 @@ fn cancellation_before_initialization_has_no_native_effects() -> Result<()> {
     assert!(boundary.0.lock().map_err(|_| "boundary poisoned")?.is_empty());
     Ok(())
 }
+
+/// A previous copy that reports itself closing and exits once `exited` is set.
+#[derive(Clone, Default)]
+struct ClosingCopy {
+    boundary: Boundary,
+    exited: Arc<std::sync::atomic::AtomicBool>,
+}
+impl ConflictBackend for ClosingCopy {
+    type Error = std::io::Error;
+    fn execute(&self, operation: Op, context: &JobContext) -> std::io::Result<Observation> {
+        Ok(match operation {
+            Op::Discover => Observation::Closing,
+            Op::Observe if self.exited.load(std::sync::atomic::Ordering::Acquire) => {
+                Observation::Released
+            }
+            Op::Observe => Observation::Waiting,
+            Op::Close | Op::Force => {
+                return Err(std::io::Error::other("waiting never ends a copy"));
+            }
+            Op::Retire => self.boundary.execute(operation, context)?,
+        })
+    }
+    fn relaunch(&self, context: &JobContext) -> std::io::Result<()> {
+        self.boundary.relaunch(context)
+    }
+    fn retire_relaunch(&self) -> std::io::Result<()> {
+        self.boundary.retire_relaunch()
+    }
+}
+/// A closing copy is waited for with only Cancel offered and no question; once it has exited
+/// this launch continues by itself with one fresh launch, and nothing was closed or ended.
+#[test]
+fn a_closing_copy_is_waited_for_then_the_launch_continues_by_itself() -> Result<()> {
+    let backend = ClosingCopy::default();
+    let mut service = Service::new(backend.clone());
+    let clock = ManualClock::new();
+    service.clock = clock.clone();
+    let wake = Arc::new(Wake::default());
+    service.initialize(wake.clone())?;
+    advance(&mut service, &wake, |service| {
+        service.pending.is_none() && service.phase == Phase::AwaitingExit
+    })?;
+    let waiting = service.poll();
+    assert_eq!(waiting.phase, ConflictPhase::AwaitingExit);
+    assert!(!waiting.close_enabled() && !waiting.force_enabled() && !waiting.done());
+    service.choose(ConflictAction::Close);
+    service.choose(ConflictAction::Force);
+    assert_eq!(service.phase, Phase::AwaitingExit);
+    for _ in 0..3 {
+        clock.advance(Duration::from_millis(250))?;
+        advance(&mut service, &wake, |service| service.pending.is_none())?;
+        assert_eq!(service.phase, Phase::AwaitingExit);
+    }
+    backend.exited.store(true, std::sync::atomic::Ordering::Release);
+    clock.advance(Duration::from_millis(250))?;
+    advance(&mut service, &wake, Service::finished)?;
+    assert!(service.continued());
+    assert_eq!(
+        *backend.boundary.0.lock().map_err(|_| "boundary poisoned")?,
+        ["retire", "relaunch"]
+    );
+    Ok(())
+}

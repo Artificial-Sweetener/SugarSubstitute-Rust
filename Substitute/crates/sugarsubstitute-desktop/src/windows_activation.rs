@@ -165,8 +165,7 @@ fn open_verified(
     access: PROCESS_ACCESS_RIGHTS,
 ) -> Result<Option<OwnedHandle>, ProcessError> {
     // SAFETY: the returned handle is adopted immediately and owned through identity checks.
-    let raw = match unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | access, false, pid) }
-    {
+    let raw = match unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | access, false, pid) } {
         Ok(raw) => raw,
         Err(cause)
             if cause.code() == windows::core::HRESULT::from_win32(ERROR_INVALID_PARAMETER.0) =>

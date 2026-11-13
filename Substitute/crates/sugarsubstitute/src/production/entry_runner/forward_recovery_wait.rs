@@ -72,7 +72,7 @@ impl Error for PreviousCopyBusy {}
 
 /// What the forwarding launch does at one moment.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum Decision {
+pub(crate) enum Decision {
     /// Keep forwarding without anything on screen.
     Continue,
     /// Probe the running copy, which has not answered within the presentation delay.
@@ -117,8 +117,10 @@ impl ForwardWait {
             // finds one that hangs before it serves.
             EntryTransportObservation::DiscoveryVerified { peer, phase, .. } => {
                 self.serving |= matches!(phase, EntryDiscoveryPhase::Serving(_));
-                self.peer =
-                    Some(PreviousCopy { pid: peer.process_id(), birth: peer.creation_time_100ns() });
+                self.peer = Some(PreviousCopy {
+                    pid: peer.process_id(),
+                    birth: peer.creation_time_100ns(),
+                });
             }
             EntryTransportObservation::OutcomeReceived { outcome, .. } => match outcome {
                 EntryOutcome::Closing => self.closing = true,

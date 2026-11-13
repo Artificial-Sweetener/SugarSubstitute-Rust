@@ -3,13 +3,13 @@
 //! The forwarding launch shows the running copy's state at two seconds on a manual clock.
 use super::*;
 use crate::completion_wake::Wake;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use sugarsubstitute_contracts::{
     coordinator_entry::{EntryConnectionId, EntryRequestId},
-    execution::{Clock, ExecutionPort, ScopeId, ScopeSpec, WaitFuture},
+    execution::{ExecutionPort, ScopeId, ScopeSpec},
 };
 use sugarsubstitute_desktop::ProcessError;
-use sugarsubstitute_execution::ExecutionOwner;
+use sugarsubstitute_execution::{ExecutionOwner, clock_fixture::ManualClock};
 type Result = std::result::Result<(), Box<dyn Error>>;
 
 const COPY: PreviousCopy = PreviousCopy { pid: 41, birth: 43 };
@@ -22,7 +22,9 @@ fn forwarding() -> std::result::Result<ForwardWait, Box<dyn Error>> {
     wait.peer = Some(COPY);
     Ok(wait)
 }
-fn received(outcome: EntryOutcome) -> std::result::Result<EntryTransportObservation, Box<dyn Error>> {
+fn received(
+    outcome: EntryOutcome,
+) -> std::result::Result<EntryTransportObservation, Box<dyn Error>> {
     Ok(EntryTransportObservation::OutcomeReceived {
         connection: EntryConnectionId::new(1)?,
         request: EntryRequestId::new(1)?,
@@ -85,46 +87,53 @@ fn nothing_is_presented_without_a_verified_copy() -> Result {
     let mut wait = ForwardWait::new(at(0))?;
     wait.reelected();
     wait.observe(&received(EntryOutcome::Closing)?);
-    assert_eq!(wait.decide(at(10_000), Some(ProcessResponsiveness::Unresponsive)), Decision::Continue);
+    assert_eq!(
+        wait.decide(at(10_000), Some(ProcessResponsiveness::Unresponsive)),
+        Decision::Continue
+    );
     Ok(())
 }
 
-struct ClockPort;
-impl Clock for ClockPort {
-    fn now(&self) -> Moment {
-        at(2_000)
-    }
-    fn sleep_until(&self, _: Moment) -> WaitFuture {
-        Box::pin(std::future::pending())
-    }
-}
+static HUNG_PROBES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 fn hung(_: u32, _: u64) -> std::result::Result<ProcessResponsiveness, ProcessError> {
+    HUNG_PROBES.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
     Ok(ProcessResponsiveness::Unresponsive)
 }
 fn responsive(_: u32, _: u64) -> std::result::Result<ProcessResponsiveness, ProcessError> {
     Ok(ProcessResponsiveness::Responsive)
 }
 
-/// At two seconds a silent copy's owned probe runs; a hung answer presents the question and a
-/// responsive one schedules the next probe after another delay.
+/// A server that verified itself and then never answers surfaces at two seconds on the manual
+/// execution clock: nothing is probed before then, the owned probe runs at two seconds, and its
+/// hung answer presents the question at once. A responsive answer instead keeps forwarding and
+/// probes again two seconds later, because that copy's window comes forward when it answers.
 #[test]
-fn the_owned_probe_of_a_silent_copy_presents_or_reschedules() -> Result {
+fn a_silent_server_surfaces_at_two_seconds_on_the_manual_clock() -> Result {
+    let clock = ManualClock::new();
     let wake = Arc::new(Wake::default());
-    let executor = ExecutionOwner::new(Arc::new(ClockPort), wake.clone())?;
+    let executor = ExecutionOwner::new(clock.clone(), wake.clone())?;
     let client = executor.client();
     let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
     let jobs = crate::job_sequence::JobSequence::new();
-    let mut wait = forwarding()?;
-    assert_eq!(wait.advance(at(1_999), (&client, &scope, &jobs), hung)?, None);
+    let mut wait = ForwardWait::new(client.now()?)?;
+    wait.peer = Some(COPY);
+    clock.advance(Duration::from_millis(1_999))?;
+    assert_eq!(wait.advance(client.now()?, (&client, &scope, &jobs), hung)?, None);
+    assert_eq!(HUNG_PROBES.load(std::sync::atomic::Ordering::Acquire), 0);
+    assert_eq!(wait.wake_at(), at(2_000));
+    clock.advance(Duration::from_millis(1))?;
     let shown = wake.until(|| {
         client.drain_completions(std::num::NonZeroUsize::MIN).ok()?;
-        wait.advance(at(2_000), (&client, &scope, &jobs), hung).ok().flatten()
+        wait.advance(client.now().ok()?, (&client, &scope, &jobs), hung).ok().flatten()
     });
+    assert_eq!(client.now()?, at(2_000));
     assert_eq!(shown, PreviousCopyBusy { copy: COPY, state: PreviousCopyState::Unresponsive });
-    let mut answering = forwarding()?;
+    assert_eq!(HUNG_PROBES.load(std::sync::atomic::Ordering::Acquire), 1);
+    let mut answering = ForwardWait::new(at(0))?;
+    answering.peer = Some(COPY);
     let rescheduled = wake.until(|| {
         client.drain_completions(std::num::NonZeroUsize::MIN).ok()?;
-        answering.advance(at(2_000), (&client, &scope, &jobs), responsive).ok()?;
+        answering.advance(client.now().ok()?, (&client, &scope, &jobs), responsive).ok()?;
         (answering.wake_at() > at(2_000)).then_some(answering.wake_at())
     });
     assert_eq!(rescheduled, at(4_000));

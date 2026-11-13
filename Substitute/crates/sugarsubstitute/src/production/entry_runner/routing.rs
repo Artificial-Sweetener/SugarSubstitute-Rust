@@ -62,7 +62,8 @@ impl<C: EntryActivation> EntryRunner<C> {
                 && matches!(entry.snapshot().phase, EntryPhase::Candidate | EntryPhase::Contended)
             {
                 if self.forward_wait.is_none() {
-                    self.forward_wait = Some(forward_recovery::wait::ForwardWait::new(client.now()?)?);
+                    self.forward_wait =
+                        Some(forward_recovery::wait::ForwardWait::new(client.now()?)?);
                 }
                 let input = entry.client_input()?.with_unsubmitted_recovery();
                 let spec = JobSpec {

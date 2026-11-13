@@ -11,8 +11,8 @@ pub mod bulk_channel_diagnostic;
 mod windows_activation;
 #[cfg(target_os = "windows")]
 pub use windows_activation::{
-    ProcessError, ProcessResponsiveness, activate_desktop_process, end_process, probe_process_responsiveness,
-    wait_for_process_exit,
+    ProcessError, ProcessResponsiveness, activate_desktop_process, end_process,
+    probe_process_responsiveness, wait_for_process_exit,
 };
 #[allow(unsafe_code)]
 mod file_dialog;

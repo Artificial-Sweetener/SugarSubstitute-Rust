@@ -79,7 +79,9 @@ fn a_hung_probe_answers_unresponsive_through_its_owned_job() -> Result<()> {
     assert_eq!(decide(false, true, Some(answer)), Decision::Unresponsive);
     assert!(probe.job.is_none());
     assert_eq!(
-        probe.observe((7, 11), &client, &scope, &jobs, |_, _| Ok(ProcessResponsiveness::Responsive))?,
+        probe.observe((7, 11), &client, &scope, &jobs, |_, _| Ok(
+            ProcessResponsiveness::Responsive
+        ))?,
         Some(ProcessResponsiveness::Unresponsive)
     );
     probe.reset();
