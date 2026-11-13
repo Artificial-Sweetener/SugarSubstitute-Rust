@@ -3112,7 +3112,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Own
 [[records]]
 path = "crates/sugarsubstitute/src/production/entry_runner/tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:42b94bf14bb722fdfaf4e2683095d3c3990fb8141915d05ecf01494c2ff0c601"
+source_sha256 = "sha256:3183daf22fb48315572ca90147c590c7e034a0145da8bb3a71d18386b811770c"
 capabilities = ["std::fs::create_dir", "std::fs::remove_dir", "std::fs::remove_file", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Fail configuration before any environment capture and observe real runner joins. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

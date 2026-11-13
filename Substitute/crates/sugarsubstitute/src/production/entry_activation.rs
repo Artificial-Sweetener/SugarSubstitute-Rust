@@ -35,6 +35,8 @@ mod incident_seed;
 pub(in crate::production) use incident_reporting::RetiredReporter;
 #[path = "entry_activation/launch.rs"]
 mod launch;
+#[path = "entry_activation/live_parents.rs"]
+mod live_parents;
 #[path = "entry_activation/normal_idle.rs"]
 mod normal_idle;
 #[path = "entry_activation/normal_retirement.rs"]
@@ -374,12 +376,8 @@ impl EntryActivation for ProductionActivation {
         revision: u64,
         status: &sugarsubstitute_contracts::update::status::UpdateStatus,
     ) -> Result<()> {
-        for retained in self.records.iter_mut().flatten() {
-            if retained.record.retired.is_none()
-                && let Some(parent) = retained.record.parent.as_deref_mut()
-            {
-                parent.publish_update_status(revision, status).map_err(outer)?;
-            }
+        for parent in self.live_parents_mut() {
+            parent.publish_update_status(revision, status).map_err(outer)?;
         }
         Ok(())
     }
@@ -390,15 +388,11 @@ impl EntryActivation for ProductionActivation {
             .unwrap_or_default()
     }
     fn take_update_check_request(&mut self) -> bool {
-        let mut requested = false;
-        for retained in self.records.iter_mut().flatten() {
-            if retained.record.retired.is_none()
-                && let Some(parent) = retained.record.parent.as_deref_mut()
-            {
-                requested |= parent.take_check_request();
-            }
-        }
-        requested
+        self.live_parents_mut()
+            .fold(false, |requested, parent| parent.take_check_request() | requested)
+    }
+    fn update_status_delivered(&self, revision: u64) -> bool {
+        self.live_parents().all(|parent| parent.update_status_delivered(revision))
     }
     fn restart_to_apply_requested(&self) -> bool {
         self.records.iter().flatten().any(|retained| {

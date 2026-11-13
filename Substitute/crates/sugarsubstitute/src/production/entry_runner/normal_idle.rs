@@ -59,8 +59,7 @@ impl<C: EntryActivation> EntryRunner<C> {
     /// into an update prepared before the window opened.
     fn normal_admission(&self) -> Admission {
         Admission {
-            requested: self.child.normal_close_requested()
-                || self.launch_update.restart().is_some(),
+            requested: self.child.normal_close_requested() || self.restart_owed(),
             initial_completed: self.initial_completed,
             initial_retired: self.transport_completions[1]
                 .as_ref()

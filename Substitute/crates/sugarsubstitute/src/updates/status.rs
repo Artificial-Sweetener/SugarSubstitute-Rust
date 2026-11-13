@@ -70,6 +70,11 @@ impl StatusSource {
         }
     }
 
+    /// Take back a restart this launch no longer makes.
+    pub(crate) fn withdraw_restart(&mut self) {
+        self.change(UpdateStatus::withdraw_restart);
+    }
+
     /// Adopt what this launch observed about the version it starts for the first time.
     pub(crate) fn observe_launch(&mut self, launch: LaunchVersion) {
         self.change(|status| status.observe_launch(launch));

@@ -90,3 +90,34 @@ fn the_splash_says_updating_sugarcubes_while_its_update_holds_the_start() -> Bac
     );
     Ok(())
 }
+
+/// While the coordinator restarts into an update prepared before the window opened, the splash
+/// stays and the window is never revealed; when it withdraws the restart, the held step runs.
+#[test]
+fn the_window_stays_hidden_while_the_app_restarts_into_its_update() -> BackendResult<()> {
+    use sugarsubstitute_contracts::startup::StartupEffect;
+    use sugarsubstitute_desktop::DesktopStartupCommand;
+    let mut host = host()?;
+    let launch = host.launch_id();
+    let mut status = UpdateStatus::default();
+    status.observe_launch(LaunchVersion::Restarting("2.4.1".into()));
+    host.child.update_status = Some(status.clone());
+    assert_eq!(
+        window_content::updating(&host.child, StartupStatus::Loading),
+        UpdateVersion::new("2.4.1").map(StartupStatus::Updating),
+        "the splash says which version it updates to"
+    );
+    host.route(super::policy::StartupRoute::Effect(StartupEffect::RetireSplash { launch }))?;
+    assert!(host.commands.take().is_none(), "the splash stays");
+    host.release_held_reveal()?;
+    assert!(host.commands.take().is_none(), "still restarting");
+    status.withdraw_restart();
+    host.child.update_status = Some(status);
+    host.release_held_reveal()?;
+    assert!(
+        matches!(host.commands.take(), Some(DesktopStartupCommand::RetireSplash(held)) if held == launch),
+        "the withdrawn restart lets the window open"
+    );
+    assert!(host.held_reveal.is_none());
+    Ok(())
+}

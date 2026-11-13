@@ -59,6 +59,13 @@ impl CoordinatorAuthority {
         self.installation.readiness_observed
     }
 
+    /// Observe readiness as `accept_installation` does once the main reveal is authorized, for
+    /// runner tests that have no authenticated channel to carry MainRevealed.
+    #[cfg(test)]
+    pub(in crate::production) fn observe_window_opened(&mut self) {
+        self.installation.observe_readiness();
+    }
+
     /// Record that `process` failed, for the verdict of an unaccepted trial. Call it where the
     /// failure is first observed; the first ending fact decides the verdict.
     pub(in crate::production) fn observe_trial_failure(&mut self, process: FailedProcess) {

@@ -42,9 +42,12 @@ impl LaunchUpdate {
         if self.eager { Duration::ZERO } else { FIRST_CHECK }
     }
 
-    /// The window is ready; from now on a prepared update waits for the next launch.
-    pub(crate) fn window_opened(&mut self) {
+    /// The window is ready; from now on a prepared update waits for the next launch. A restart
+    /// already decided is withdrawn, because the app never closes a window the user has seen;
+    /// returns whether one was.
+    pub(crate) fn window_opened(&mut self) -> bool {
         self.window_opened = true;
+        self.restart.take().is_some()
     }
 
     /// Adopt a finished check. A beta-eager launch whose window has not opened restarts into
@@ -93,15 +96,25 @@ mod tests {
         assert_eq!(launch.restart(), None);
         launch.finish(&prepared("2.0.0"));
         assert_eq!(launch.restart(), Some("2.0.0"));
-        launch.window_opened();
         launch.finish(&prepared("2.1.0"));
         assert_eq!(launch.restart(), Some("2.0.0"), "the first decision stands");
     }
 
     #[test]
+    fn a_window_that_opens_after_a_restart_was_decided_withdraws_it() {
+        let mut launch = LaunchUpdate::new(Some(UpdatePolicy::BetaEager));
+        launch.finish(&prepared("2.0.0"));
+        assert!(launch.window_opened(), "the decided restart is withdrawn");
+        assert_eq!(launch.restart(), None);
+        assert!(!launch.window_opened());
+        launch.finish(&prepared("2.1.0"));
+        assert_eq!(launch.restart(), None);
+    }
+
+    #[test]
     fn an_update_prepared_after_the_window_opened_waits_for_the_next_launch() {
         let mut launch = LaunchUpdate::new(Some(UpdatePolicy::BetaEager));
-        launch.window_opened();
+        assert!(!launch.window_opened());
         launch.finish(&prepared("2.0.0"));
         assert_eq!(launch.restart(), None);
     }

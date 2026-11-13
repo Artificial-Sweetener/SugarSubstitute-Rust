@@ -201,3 +201,37 @@ fn a_slow_launch_shows_the_notice_after_two_seconds_until_it_hands_off() -> Resu
     assert!(launcher.notice().is_none(), "the hand-off closes it");
     close(&mut launcher, &wake)
 }
+
+/// An update trial is announced from the version recorded when it was chosen, never from the
+/// launch a worker may be preparing; an explicit installation choice starts as "Starting".
+#[test]
+fn the_notice_names_only_an_update_trial_from_the_version_recorded_when_chosen() -> Result<()> {
+    let (mut launcher, clock, wake) = fixture()?;
+    let launch = launcher.launch.take().ok_or("Fixture creator absent")?;
+    launcher.choose_update("2.4.1".into(), launch);
+    clock.0.store(seconds(2), Ordering::SeqCst);
+    launcher.advance_notice();
+    let notice = launcher.notice.as_ref().ok_or("notice absent")?;
+    assert_eq!(
+        Some(notice.status()),
+        sugarsubstitute_splash::UpdateVersion::new("2.4.1")
+            .map(sugarsubstitute_splash::StartupStatus::Updating)
+    );
+    launcher.failed(Task::Trial, "trial transfer refused".into())?;
+    launcher.advance_notice();
+    let notice = launcher.notice.as_ref().ok_or("notice absent")?;
+    assert_eq!(notice.status(), sugarsubstitute_splash::StartupStatus::Starting);
+    launcher.request_shutdown()?;
+    finish(&mut launcher, &wake)?;
+
+    let (mut installing, clock, wake) = fixture()?;
+    let launch = installing.launch.take().ok_or("Fixture creator absent")?;
+    installing.installed(Some(launch));
+    assert!(matches!(installing.choice, Choice::Trial));
+    clock.0.store(seconds(2), Ordering::SeqCst);
+    installing.advance_notice();
+    let notice = installing.notice.as_ref().ok_or("notice absent")?;
+    assert_eq!(notice.status(), sugarsubstitute_splash::StartupStatus::Starting);
+    installing.request_shutdown()?;
+    finish(&mut installing, &wake)
+}

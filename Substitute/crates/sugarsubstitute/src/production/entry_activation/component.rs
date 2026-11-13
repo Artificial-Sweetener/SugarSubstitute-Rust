@@ -314,6 +314,10 @@ impl EntryActivation for ProfileComponent {
     fn restart_to_apply_requested(&self) -> bool {
         false
     }
+    /// The qualification child has no window an update restart could close.
+    fn update_status_delivered(&self, _: u64) -> bool {
+        true
+    }
     /// The qualification child has no update surfaces to ask for a check.
     fn take_update_check_request(&mut self) -> bool {
         false
