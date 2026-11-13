@@ -68,7 +68,7 @@ mod tests {
     }
     #[test]
     fn headless_expiry_mapping_uses_original_remaining_budget_and_rejects_expiry() -> Result<()> {
-        let sampled = std::time::Instant::now();
+        let sampled = sugarsubstitute_execution::qualification_time::anchor();
         let mapped = native_deadline(sampled, Moment::from_nanos(900), Moment::from_nanos(1000))?;
         assert_eq!(mapped.duration_since(sampled), std::time::Duration::from_nanos(100));
         assert!(

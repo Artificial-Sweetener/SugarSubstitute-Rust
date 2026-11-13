@@ -99,7 +99,7 @@ fn completed_descendant_leaf_does_not_close_writers_on_its_finished_write_deadli
         crate::diagnostics::DiagnosticHealth::fixture(),
     );
     child.deadline = Some(Moment::from_nanos(0));
-    child.deadline_wall = Some(Instant::now());
+    child.deadline_wall = Some(sugarsubstitute_execution::qualification_time::anchor());
     child.done_queued = true;
     child.observe_deadline()?;
     assert!(!child.deadline_observed && !child.closing);

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Preserve exact drained facts before fallible processing and bound every parser turn.
 use super::{Result, parent::Parent};
-use std::{num::NonZeroUsize, time::Instant};
+use std::num::NonZeroUsize;
 use sugarsubstitute_contracts::execution::ExecutionPort;
 use sugarsubstitute_desktop::HeadlessStep;
 impl Parent {
@@ -12,6 +12,9 @@ impl Parent {
             .as_ref()
             .ok_or("Output parent execution missing")?
             .drain_completions(max)?;
+        if !batch.notifications.is_empty() {
+            self.watch.progressed();
+        }
         for case in &mut self.cases {
             case.capture(&batch)?;
         }
@@ -24,10 +27,7 @@ impl Parent {
             registry.consume(&batch)?;
         }
         if self.registry.is_none() {
-            if !self.deadline_observed && Instant::now() >= self.deadline {
-                self.deadline_observed = true;
-                return Err("Registry construction exceeded original qualifier deadline".into());
-            }
+            self.watch.check()?;
             return Ok(if self.closing {
                 sugarsubstitute_desktop::HeadlessStep::Shutdown
             } else {
@@ -39,10 +39,7 @@ impl Parent {
         }
         self.cases[self.current].consume_jobs(self.closing)?;
         self.control(&batch)?;
-        if !self.deadline_observed && Instant::now() >= self.deadline {
-            self.deadline_observed = true;
-            return Err("Output qualification reached original60s deadline".into());
-        }
+        self.watch.check()?;
         let case = &self.cases[self.current];
         if !self.closing
             && case.process.is_none()

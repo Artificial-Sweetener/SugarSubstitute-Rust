@@ -249,18 +249,19 @@ accepted_versions = [1]
 compatibility = "reject"
 migrations = []
 
-# The internal native fixture emits schema-one qualification receipts after teardown.
+# The internal native fixtures emit schema-two qualification receipts after teardown. Schema two
+# records the no-progress stall and the far custody bound in place of the fixed campaign deadline.
 # They are retained diagnostic evidence; readers reject unsupported schemas.
 
 [[formats]]
 id = "native-process-family-report"
 owner = "sugarsubstitute"
 sources = ["crates/sugarsubstitute/src/process_fixture/receipt.rs"]
-source_sha256 = "sha256:35a28415d3eecd7ba35d1f28845bbd57868f8f0e70ff27284a1a78b1cf34422c"
+source_sha256 = "sha256:d73f4250341a28fb6c36c4e11ef19b18f596c7e06b1429fe194678ccaa49cdaa"
 classification = "authored_document"
 preservation = "must_preserve"
-current_version = 1
-accepted_versions = [1]
+current_version = 2
+accepted_versions = [2]
 compatibility = "reject"
 migrations = []
 
@@ -295,11 +296,11 @@ migrations = ["1->2"]
 id = "native-held-process-report"
 owner = "sugarsubstitute"
 sources = ["crates/sugarsubstitute/src/held_fixture/receipt.rs"]
-source_sha256 = "sha256:a6862af6259ac40048fe8d78e86bfdb73d333767144be6a23c8f9d651ebafd9a"
+source_sha256 = "sha256:3cc7588a9806cbd9890fe0525184dab89ab163549545d856302e53fdb0a34555"
 classification = "authored_document"
 preservation = "must_preserve"
-current_version = 1
-accepted_versions = [1]
+current_version = 2
+accepted_versions = [2]
 compatibility = "reject"
 migrations = []
 
@@ -343,11 +344,11 @@ migrations = []
 id = "native-resource-claims-report"
 owner = "sugarsubstitute"
 sources = ["crates/sugarsubstitute/src/claim_fixture/parent/receipt.rs", "crates/sugarsubstitute/src/claim_fixture/parent/delivery.rs"]
-source_sha256 = "sha256:a4571586434a4b873f2770ebf8746acfef791c50af01ede07e1f6720042cedc7"
+source_sha256 = "sha256:c6eac473a18209590db5e998e872483e96ce0bda99ba0aeba4cbb8796e7a8809"
 classification = "authored_document"
 preservation = "must_preserve"
-current_version = 1
-accepted_versions = [1]
+current_version = 2
+accepted_versions = [2]
 compatibility = "reject"
 migrations = []
 
@@ -367,11 +368,11 @@ migrations = []
 id = "native-descendant-family-report"
 owner = "sugarsubstitute"
 sources = ["crates/sugarsubstitute/src/descendant_fixture/mod.rs"]
-source_sha256 = "sha256:477de418d2a730ea98276e12d7761dcbf18a5b0b58ec8216ef6fed77557b1d41"
+source_sha256 = "sha256:3eb6e8e2aaa97de67e8994ab227847959bcae5048705d85a537871da15f9529d"
 classification = "authored_document"
 preservation = "must_preserve"
-current_version = 1
-accepted_versions = [1]
+current_version = 2
+accepted_versions = [2]
 compatibility = "reject"
 migrations = []
 
@@ -379,11 +380,11 @@ migrations = []
 id = "native-lifecycle-pipe-report"
 owner = "sugarsubstitute"
 sources = ["crates/sugarsubstitute/src/pipe_fixture/receipt.rs"]
-source_sha256 = "sha256:5e556bd558680e30c4197a7718dd6c096b9c979f1fb2c7ba6b109f5fe02a6bee"
+source_sha256 = "sha256:9c8752a1c4d6efcca68b3bbcb0e502687ff50e83347534c4b0e0cb7f76d5d89a"
 classification = "authored_document"
 preservation = "must_preserve"
-current_version = 1
-accepted_versions = [1]
+current_version = 2
+accepted_versions = [2]
 compatibility = "reject"
 migrations = []
 
@@ -415,11 +416,11 @@ migrations = []
 id = "native-contained-output-report"
 owner = "sugarsubstitute"
 sources = ["crates/sugarsubstitute/src/output_fixture/receipt.rs"]
-source_sha256 = "sha256:7791a8e94ea02e57422bd7b16617cfcbbcef94e63a74c4981d64f26507ef2312"
+source_sha256 = "sha256:7b49f3eaebb198ad6f815a81eaac0c571f204636ab03f442184332856859525d"
 classification = "authored_document"
 preservation = "must_preserve"
-current_version = 1
-accepted_versions = [1]
+current_version = 2
+accepted_versions = [2]
 compatibility = "reject"
 migrations = []
 

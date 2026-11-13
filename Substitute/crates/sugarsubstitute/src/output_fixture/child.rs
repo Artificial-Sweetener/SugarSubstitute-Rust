@@ -67,7 +67,7 @@ impl Child {
         Self {
             health,
             options,
-            clock: MonotonicClock::new(),
+            clock: crate::campaign_watch::execution_clock(),
             owner: None,
             client: None,
             scope: None,

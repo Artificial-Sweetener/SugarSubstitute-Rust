@@ -12,6 +12,7 @@ pub(crate) mod registry;
 #[cfg(test)]
 mod tests;
 
+use crate::campaign_watch::{self, CampaignWatch};
 use progress::{CaseProgress, StopPlan};
 use std::{
     error::Error,
@@ -41,8 +42,8 @@ const CODES: [u32; 3] = [0, 37, 259];
 
 /// Run on the native main thread and return bounded facts after actual final teardown.
 /// Errors retain their original typed cause after all admitted families/workers settle.
-/// The parent's separate absolute deadline must supervise this qualification process;
-/// the inner sixty-second deadline closes admission without inventing settlement.
+/// A campaign that makes no progress for the shared stall fails; the far custody bound only stops
+/// orphaned native work and never invents settlement.
 pub(crate) fn run() -> Result<serde_json::Value> {
     let mut fixture = Fixture::new()?;
     run_headless(&mut fixture)?;
@@ -51,9 +52,9 @@ pub(crate) fn run() -> Result<serde_json::Value> {
 
 struct Fixture {
     clock: Arc<MonotonicClock>,
-    deadline: Instant,
+    watch: CampaignWatch,
     execution_deadline: Moment,
-    deadline_observed: bool,
+    custody_expired: bool,
     owner_key: CoordinatorKey,
     registry: Option<WindowsProcessRegistry>,
     registry_creation: Option<crate::process_fixture::registry::PendingRegistry>,
@@ -74,13 +75,8 @@ struct Fixture {
 }
 impl Fixture {
     fn new() -> Result<Self> {
-        let started = Instant::now();
-        let deadline =
-            started.checked_add(Duration::from_secs(60)).ok_or("Fixture deadline overflow")?;
-        let clock = MonotonicClock::new();
-        let remaining =
-            deadline.checked_duration_since(Instant::now()).ok_or("Fixture deadline elapsed")?;
-        let execution_deadline = clock.now().checked_add(remaining)?;
+        let clock = campaign_watch::execution_clock();
+        let (_, execution_deadline) = campaign_watch::custody(clock.as_ref())?;
         // Private fixture facts match within this one registry; they grant no IPC authority.
         let owner_key = CoordinatorKey {
             namespace: NamespaceId::new([0x51; 32]),
@@ -88,9 +84,9 @@ impl Fixture {
         };
         Ok(Self {
             clock,
-            deadline,
+            watch: CampaignWatch::new("Registry qualification"),
             execution_deadline,
-            deadline_observed: false,
+            custody_expired: false,
             owner_key,
             registry: None,
             registry_creation: None,
@@ -166,7 +162,7 @@ impl Fixture {
             return Ok(());
         };
         if self.stop.is_none() {
-            let plan = StopPlan::new(self.clock.now(), Instant::now())?;
+            let plan = StopPlan::new(self.clock.now(), campaign_watch::native_now())?;
             let shutdown = ShutdownId::new(u64::try_from(self.current)? + 1)?;
             self.registry.as_mut().ok_or("Actual registry is not prepared")?.begin_stop(
                 key,
@@ -182,6 +178,9 @@ impl Fixture {
     fn drain(&mut self, max: NonZeroUsize) -> Result<()> {
         if let Some(client) = &self.client {
             let batch = client.drain_completions(max)?;
+            if !batch.notifications.is_empty() {
+                self.watch.progressed();
+            }
             let table_changed = crate::process_fixture::registry::poll(
                 &mut self.registry_creation,
                 &mut self.registry,

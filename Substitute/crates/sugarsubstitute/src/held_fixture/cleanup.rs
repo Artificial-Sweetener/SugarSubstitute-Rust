@@ -32,7 +32,7 @@ impl Fixture {
         if self.cleanup[index].stop.is_some() {
             return Ok(false);
         }
-        let plan = StopPlan::new(self.clock.now(), Instant::now())?;
+        let plan = StopPlan::new(self.clock.now(), campaign_watch::native_now())?;
         let shutdown = ShutdownId::new(u64::try_from(index)? + 1)?;
         self.registry.as_mut().ok_or("Actual registry is not prepared")?.begin_stop(
             key,

@@ -105,10 +105,10 @@ struct Fixture {
 impl Fixture {
     /// Prepare lexical inputs and immutable clock bounds before native startup.
     fn new(mut options: Options) -> Result<Self> {
-        let clock = MonotonicClock::new();
+        let clock = crate::campaign_watch::execution_clock();
         let budget = CaptureBudget::new(clock.now())?;
         let before = clock.now();
-        let native = Instant::now();
+        let native = crate::campaign_watch::native_now();
         let after = clock.now();
         let registration_alarm = state::map_deadline(budget.until(), before, native, after)?;
         let input = options.input.take().ok_or("Capture fixture input missing")?;

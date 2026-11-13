@@ -47,7 +47,7 @@ impl HeadlessLifetime for Child {
             );
             self.start_writers()?;
         }
-        let wall = Instant::now();
+        let wall = crate::campaign_watch::native_now();
         self.deadline_wall = Some(
             wall.checked_add(
                 self.deadline
