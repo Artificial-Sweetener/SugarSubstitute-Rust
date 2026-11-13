@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Pin each resolved directory against replacement and reject reparse-point traversal.
+#[cfg(test)]
+#[allow(unsafe_code)]
+pub(crate) mod alias_fixture;
 mod canonical;
 mod child;
 mod entries;
