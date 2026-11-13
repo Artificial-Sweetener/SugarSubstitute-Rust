@@ -7,9 +7,9 @@ use std::time::Duration;
 use sugarsubstitute_application::panel::{PanelEffects, PanelHostSession, PanelState};
 use sugarsubstitute_contracts::{
     appearance::AccentColor,
-    panel::{PanelMessage, PanelPalette, PanelPresentation, PanelSession, PanelStyle},
+    panel::{PanelMessage, PanelPresentation, PanelSession},
 };
-use sugarsubstitute_desktop::PanelCommand;
+use sugarsubstitute_desktop::{MainHosting, PanelCommand};
 
 #[path = "panel/deliveries.rs"]
 mod deliveries;
@@ -65,19 +65,26 @@ impl PanelOwner {
     }
 
     /// Claim the persistent state before constructing the navigation-bound panel policy.
-    /// The page is configured with the current operating-system `accent`, when reported.
+    /// The page is configured with the current operating-system `accent`, when reported, and
+    /// told what the host serves to a browser in `hosting`.
     fn new(
         identity: MainIdentity,
         lease: MemoryLease,
         now: Moment,
         accent: Option<AccentColor>,
+        hosting: MainHosting,
     ) -> Result<Option<Self>> {
         let claim = match lease.claim(OWNER_BYTES) {
             Ok(claim) => claim,
             Err(_) => return Ok(None),
         };
         let session = PanelSession::for_main(identity)?;
-        let policy = PanelHostSession::new(session, presentation(accent)?, now)?;
+        let policy = PanelHostSession::new(
+            session,
+            crate::panel_host::description(hosting)?,
+            crate::panel_host::presentation(accent)?,
+            now,
+        )?;
         let deadline = policy.next_deadline()?;
         Ok(Some(Self {
             identity,
@@ -131,7 +138,7 @@ impl PanelOwner {
     /// Reconfigure the live page with a changed operating-system accent.
     /// Without command capacity the newest presentation waits for a bounded retry.
     fn update_accent(&mut self, accent: Option<AccentColor>, now: Moment) -> Result<()> {
-        self.pending_presentation = Some(presentation(accent)?);
+        self.pending_presentation = Some(crate::panel_host::presentation(accent)?);
         self.adopt_pending_presentation()?;
         if self.pending_presentation.is_some() {
             self.schedule_pending(now)?;
@@ -228,6 +235,7 @@ impl PanelOwner {
         let configuration = matches!(message, PanelMessage::Configure { .. });
         let command = PanelCommand::new(
             self.identity,
+            effects.description,
             message,
             claim.ok_or("Panel command was not admitted")?,
         )?;
@@ -266,17 +274,6 @@ impl PanelOwner {
     pub(super) const fn deadline(&self) -> Option<Moment> {
         self.deadline
     }
-}
-
-/// Host presentation for the SugarCubes page; the accent is the operating-system accent.
-fn presentation(accent: Option<AccentColor>) -> Result<PanelPresentation> {
-    Ok(PanelPresentation::new(
-        false,
-        PanelStyle::Comfy,
-        Some(PanelPalette::DarkGray),
-        accent.map(AccentColor::css_hex),
-        0,
-    )?)
 }
 
 #[cfg(test)]

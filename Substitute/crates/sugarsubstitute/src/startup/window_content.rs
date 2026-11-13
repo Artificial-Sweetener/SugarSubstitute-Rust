@@ -222,6 +222,10 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
         if let Some(command) = self.memory.as_mut().and_then(memory::MemoryGovernor::take_command) {
             return Ok(Some(command));
         }
+        #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+        if let Some(command) = self.updates.take_command() {
+            return Ok(Some(command));
+        }
         #[cfg(all(windows, feature = "native-composition"))]
         if let Some(command) = self.canvas.as_mut().and_then(canvas::EmbeddedCanvas::take_command) {
             return Ok(Some(command));

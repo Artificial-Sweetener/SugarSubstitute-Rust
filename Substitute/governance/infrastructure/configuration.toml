@@ -282,7 +282,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute/src/lib.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:00c4a60f438f27f126dbbd2af663d01331f58918290d0810624c134cbbc71652"
+source_sha256 = "sha256:bb5070d02299aa6203fa5c60f795d96943ca00b41a2c2a825dcf96fe91bbd014"
 capabilities = ["arguments"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -420,9 +420,16 @@ capabilities = ["arguments"]
 rationale = "Crashpad owns native capture configuration; host startup settings do not enter this API."
 
 [[records]]
+path = "tools/xtask/src/fingerprints.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:9efb26c34a0d63d91de253bf8a2e9244e9b1e90512e8b701384240f68c876e8e"
+capabilities = ["codec"]
+rationale = "Tooling reads governance policy TOML to record reviewed source fingerprints; not product settings."
+
+[[records]]
 path = "tools/xtask/src/catalog.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:80ed9ab7261a8b71ab8b433fc2587e6be211ce4488b911daf99f453480d26e84"
+source_sha256 = "sha256:38a8d2877d91bf1d68b0a1d70d78bdecbdc7d7f427c8ca6bced514b513d0cd58"
 capabilities = ["codec"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
 
@@ -471,7 +478,7 @@ rationale = "Tooling build, source inspection or isolated qualification input; n
 [[records]]
 path = "tools/xtask/src/main.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:75136c55921a618aeed0f03e439afd92a83642e156656924590cedc77969d6ef"
+source_sha256 = "sha256:4c14bfe07ce52c66629919b0f517436fcd41b701d8158e2f4b4f20d1d3933205"
 capabilities = ["arguments"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
 
@@ -863,7 +870,7 @@ rationale = "Localization-governance rejection fixtures decode only their own TO
 [[records]]
 path = "tools/xtask/src/networking/external.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:9ab8b806f1658d068c0ddd149dba7511f7d17bd106fa7d40238e75ea9b148f39"
+source_sha256 = "sha256:0c60041af87295031953e2200069aafe2bf10740fbbfddbb2741dbca5864cd0f"
 capabilities = ["codec"]
 rationale = "Repository tooling decodes the vendored-material TOML manifest to bind the consumed upstream HTTP sources to their registered component."
 
@@ -968,7 +975,7 @@ rationale = "The developer composite check accepts one explicit Vulkan vendor/de
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:545b83f7de9fb25f4d4ed4ed389cbc42122683aca24754a0219af4c1a3f05669"
+source_sha256 = "sha256:113b2c25548f0203e07b5592f4c7783310ec4a17fdc82ba7130fcf0a01950e8f"
 capabilities = ["arguments"]
 rationale = "Accept an optional source fixture path to prove regressions against the prior transport implementation."
 

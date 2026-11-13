@@ -10,7 +10,7 @@ use sugarsubstitute_contracts::{
         CanvasSurfaceReplyStatus,
     },
 };
-use sugarsubstitute_desktop::{CanvasNativeReply, PanelIngressReceipt, SurfaceReply};
+use sugarsubstitute_desktop::{CanvasNativeReply, MainHosting, PanelIngressReceipt, SurfaceReply};
 
 enum Ordinary {
     Native(CanvasNativeReply),
@@ -103,13 +103,19 @@ impl Deliveries {
         Ok(())
     }
 
-    /// Refuse an unsupported surface operation, or acknowledge consumption of a cancellation.
+    /// Refuse a surface operation the native surface cannot answer yet, or acknowledge
+    /// consumption of a cancellation.
+    ///
+    /// A composition-hosted browser was told the host presents its output, so it hears that the
+    /// surface is unavailable for now; a windowed browser has no native surface at all, so it
+    /// hears that the surface is unsupported.
     pub(super) fn surface(
         &mut self,
         identity: MainIdentity,
         message: CanvasSurfaceMessage,
         lease: &MemoryLease,
         claim: MemoryClaim,
+        hosting: MainHosting,
     ) -> Result<()> {
         self.bind(identity, lease)?;
         if let CanvasSurfaceMessage::Cancel { session, request_id } = message {
@@ -124,6 +130,11 @@ impl Deliveries {
             return Ok(());
         }
         self.check_ordinary()?;
+        let absent = if hosting.presents_native_canvas() {
+            CanvasSurfaceDiscoveryStatus::Unavailable
+        } else {
+            CanvasSurfaceDiscoveryStatus::Unsupported
+        };
         let reply = match message {
             CanvasSurfaceMessage::Request(request) => SurfaceReply::new(
                 identity,
@@ -135,19 +146,14 @@ impl Deliveries {
             CanvasSurfaceMessage::Discovery(request) => SurfaceReply::discovery(
                 identity,
                 &request,
-                CanvasSurfaceDiscoveryStatus::Unsupported,
+                absent,
                 &CanvasSurfaceCapabilities::default(),
                 "",
                 claim,
             )?,
-            CanvasSurfaceMessage::Presentation(request) => SurfaceReply::presentation(
-                identity,
-                &request,
-                CanvasSurfaceDiscoveryStatus::Unsupported,
-                false,
-                "",
-                claim,
-            )?,
+            CanvasSurfaceMessage::Presentation(request) => {
+                SurfaceReply::presentation(identity, &request, absent, false, "", claim)?
+            }
             CanvasSurfaceMessage::Cancel { .. } => {
                 return Err("Panel cancellation escaped its dedicated delivery lane".into());
             }

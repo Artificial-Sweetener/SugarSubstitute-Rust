@@ -13,6 +13,32 @@ accepted_versions = [3]
 compatibility = "reject"
 migrations = []
 
+[[formats]]
+id = "sugarcubes-host-v1"
+owner = "sugarsubstitute-contracts"
+shared_component = "sugarcubes-contracts"
+sources = ["crates/sugarsubstitute-contracts/src/host.rs", "crates/sugarsubstitute-contracts/src/host/wire.rs", "Sugar/integrations/contracts/HostProtocol.generated.rs", "Sugar/integrations/contracts/host.schema.json"]
+source_sha256 = "sha256:be07ad13adc0d0b97d09ebdef3add3d00fd002caf518bd3a33598699e6b2ceb5"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "sugarcubes-updates-v1"
+owner = "sugarsubstitute-contracts"
+shared_component = "sugarcubes-contracts"
+sources = ["crates/sugarsubstitute-contracts/src/host_updates.rs", "crates/sugarsubstitute-contracts/src/host_updates/wire.rs", "Sugar/integrations/contracts/UpdatesProtocol.generated.rs", "Sugar/integrations/contracts/updates.schema.json"]
+source_sha256 = "sha256:8cb5c06a83d42c00d688d45466e3df398f073778fccf3761111e3aa72e44128b"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
 # Canvas envelope version three contains native-surface discovery schemas two/three and camera
 # notification schema two. Discovery schema one is decoded only for an empty, actionable
 # unsupported reply; it never negotiates a surface. Matching host/frontend upgrades are
@@ -1581,7 +1607,7 @@ migrations = []
 id = "native-panel-admission-v1"
 owner = "sugarsubstitute-desktop"
 sources = ["crates/sugarsubstitute-desktop/src/main_panel_ingress.rs", "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge.js", "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge_protocol.js", "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge_bulk.js", "crates/sugarsubstitute-desktop/src/main_bulk.rs", "crates/sugarsubstitute-desktop/src/main_bulk/wire.rs", "crates/sugarsubstitute-desktop/src/main_bulk/endpoint.rs", "crates/sugarsubstitute-desktop/src/main_actor/panel/admission.rs", "crates/sugarsubstitute-desktop/src/main_actor/panel/delivery.rs"]
-source_sha256 = "sha256:166b9db2a6ed00290bea2d3eb7795163416a722f03857006f96bce11fbc85afb"
+source_sha256 = "sha256:cfdfd1b01c219bdb36cfcba5f5337ec8da2397b07643236f96ea7eb24c5bfe00"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1

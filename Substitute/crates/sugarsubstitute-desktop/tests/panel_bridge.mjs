@@ -9,14 +9,11 @@ const sourcePath = process.argv[2] ?? new URL('../src/main_actor/panel/bridge.js
 const source = readFileSync(sourcePath, 'utf8');
 const policySource = readFileSync(new URL('../src/main_actor/panel/bridge_protocol.js', import.meta.url), 'utf8');
 const bulkSource = readFileSync(new URL('../src/main_actor/panel/bridge_bulk.js', import.meta.url), 'utf8');
-// Match the host's composition: the protocol expression receives the output surface preference.
-const policyFor = preference => `${policySource.trimEnd()}(${preference});\n`;
 // Match the host's composition: the bulk expression receives the absolute reserved path.
 const bulkFor = path => `${bulkSource.trimEnd()}(${JSON.stringify(path)});\n`;
 const pageOrigin = 'http://127.0.0.1:8188';
 const bulkPath = '/__sugarsubstitute/bulk/';
-const sources = [policyFor("'host'"), bulkFor(bulkPath), source];
-const windowedSources = [policyFor('undefined'), bulkFor(bulkPath), source];
+const sources = [policySource, bulkFor(bulkPath), source];
 const binding = '__sugarcubes_substitute_send_v3';
 const host = 'ai.artificialsweetener.sugarsubstitute';
 const session = 'session-12345678';
@@ -79,15 +76,37 @@ function admit(message, lane = 'o') {
 }
 
 test('each bootstrap script fits the unchanged native registration command', () => {
-  for (const source of [...sources, ...windowedSources])
+  for (const source of sources)
     assert.ok(Buffer.byteLength(JSON.stringify({ source })) <= 8192);
 });
-test('only a composition-hosted browser advertises host output presentation', () => {
-  assert.equal(fixture().bridge.outputSurfacePreference, 'host');
-  const windowed = fixture(undefined, windowedSources).bridge;
-  assert.ok(windowed);
-  assert.equal(Object.hasOwn(windowed, 'outputSurfacePreference'), false);
-  assert.equal(windowed.preferencePolicy, 'saved');
+test('the bridge carries only its identity and channel; host facts arrive in the description', () => {
+  assert.deepEqual(Object.keys(fixture().bridge).sort(), ['host', 'send', 'session', 'subscribe']);
+});
+test('the host description is a version-one notification for the current session only', () => {
+  const f = fixture();
+  const description = { protocol: 'sugarcubes.host', version: 1, session, type: 'description',
+    protocols: [{ name: 'sugarcubes.panel', version: 3 }], capabilities: [] };
+  for (const value of [{ ...description, version: 3 }, { ...description, session: 'another-session' },
+    { ...description, type: 'configure' }])
+    assert.equal(f.deliver(value), false);
+  assert.deepEqual(f.received, []);
+  assert.equal(f.deliver(description), true);
+  assert.equal(f.deliver(control('configure')), true);
+  assert.deepEqual(f.received.map(value => value.type), ['description', 'configure']);
+});
+test('one ordered evaluation hands over the configure only after the page accepted the description', () => {
+  // Match the host's ordered delivery: `deliver(description)&&deliver(configure)`.
+  const ordered = (first, second) => new Script(`globalThis.__sugarcubes_substitute_deliver_v3(${
+    JSON.stringify(first)})&&globalThis.__sugarcubes_substitute_deliver_v3(${JSON.stringify(second)})`);
+  const description = { protocol: 'sugarcubes.host', version: 1, session, type: 'description',
+    protocols: [{ name: 'sugarcubes.panel', version: 3 }], capabilities: [] };
+  const refused = fixture();
+  assert.equal(ordered({ ...description, session: 'another-session' }, control('configure'))
+    .runInContext(refused.context), false);
+  assert.deepEqual(refused.received, []);
+  const accepted = fixture();
+  assert.equal(ordered(description, control('configure')).runInContext(accepted.context), true);
+  assert.deepEqual(accepted.received.map(value => value.type), ['description', 'configure']);
 });
 test('escaped selection beyond the native frame uploads before custody and later small requests stay inline', async () => {
   const transfer = bulkFetch(), f = fixture(undefined, sources, transfer.fetch), request = selection('\\'.repeat(3800));
@@ -374,6 +393,44 @@ test('bounded control FIFO coalesces kinds and refusal preserves a newer pending
     [control('ready'), control('applied'), control('pong', { connected: true }), control('rejected')]);
   assert.equal(f.receipt('g', 'c', 6), true);
   assert.equal(f.sent.length, 5);
+});
+const updates = (type, extra = {}) => ({ protocol: 'sugarcubes.updates', version: 1, session, type, ...extra });
+const posted = f => f.sent.map(value => JSON.parse(value.slice(value.indexOf(':', 4) + 1)));
+test('update requests ride the control lane and every named request keeps its place', () => {
+  const f = fixture();
+  f.receipt('g', 'c', 1);
+  f.bridge.send(updates('watch'));
+  f.bridge.send(updates('check', { request: 'check-1' }));
+  f.bridge.send(updates('check', { request: 'check-2' }));
+  f.bridge.send(updates('restart', { request: 'restart-1', when: 'now' }));
+  f.bridge.send(control('pong', { connected: true }));
+  for (let ticket = 2; ticket <= 5; ticket++) { f.receipt('a', 'c', ticket - 1); f.receipt('g', 'c', ticket); }
+  assert.deepEqual(posted(f), [updates('watch'), updates('check', { request: 'check-1' }),
+    updates('check', { request: 'check-2' }), updates('restart', { request: 'restart-1', when: 'now' }),
+    control('pong', { connected: true })]);
+  assert.ok(f.sent.every(value => value.startsWith('1:c:')));
+});
+test('a refused named update request is retried in place and the named backlog is bounded', () => {
+  const f = fixture();
+  f.receipt('g', 'c', 1);
+  f.bridge.send(updates('check', { request: 'check-1' }));
+  // check-1 is in flight; sixteen more wait behind it.
+  for (let index = 2; index <= 17; index++) f.bridge.send(updates('check', { request: `check-${index}` }));
+  assert.throws(() => f.bridge.send(updates('check', { request: 'check-18' })), error => transportError(error, 'capacity'));
+  assert.equal(f.receipt('r', 'c', 1), true);
+  f.receipt('g', 'c', 2);
+  assert.deepEqual(posted(f).map(value => value.request), ['check-1', 'check-1']);
+});
+test('update states and answers are version-one notifications for the current session only', () => {
+  const f = fixture();
+  const state = updates('state', { revision: 1, update: {} });
+  for (const value of [updates('watch'), updates('check', { request: 'c' }), { ...state, version: 3 },
+    { ...state, session: 'another-session' }])
+    assert.equal(f.deliver(value), false);
+  for (const value of [state, updates('accepted', { request: 'c' }),
+    updates('rejected', { request: 'c', reason: 'busy' })])
+    assert.equal(f.deliver(value), true);
+  assert.deepEqual(f.received.map(value => value.type), ['state', 'accepted', 'rejected']);
 });
 test('permanent malformed control consumption does not replay or settle the ordinary request', () => {
   const f = fixture();
@@ -791,7 +848,7 @@ test('every shared surface and native canvas request type is admitted by the bri
   const schema = JSON.parse(readFileSync(
     new URL('../../../../Sugar/integrations/contracts/canvas.schema.json', import.meta.url), 'utf8'));
   const context = createContext({});
-  new Script(policyFor("'host'")).runInContext(context);
+  new Script(policySource).runInContext(context);
   const policy = context.__sugarcubes_substitute_policy_v3;
   const sharedTypes = Object.entries(schema.definitions ?? schema.$defs ?? {})
     .filter(([name, definition]) => name.endsWith('Request') && definition.properties?.type?.const)
@@ -915,7 +972,7 @@ test('pagehide aborts in-flight transfers and drops pending deliveries', async (
   const reply = canvas(1, 'surface.reply', { address, revision: 1, status: 'applied', message: 'r'.repeat(20000) });
   const text = JSON.stringify(reply);
   const transfer = bulkFetch((url, init) => init.method === 'GET' ? body(text) : { status: 204 });
-  const scripts = [policyFor("'host'"), bulkFor(path), source];
+  const scripts = [policySource, bulkFor(path), source];
   const f = fixture(undefined, scripts, transfer.fetch, remote);
   f.context.location.origin = 'https://elsewhere.example';
   f.receipt('g', 'o', 1, grant);

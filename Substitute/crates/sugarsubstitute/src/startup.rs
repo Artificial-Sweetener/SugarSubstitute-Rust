@@ -36,6 +36,8 @@ mod routing;
 mod scopes;
 #[path = "startup/shutdown.rs"]
 mod shutdown;
+#[cfg(all(windows, any(feature = "windows-native-host", test)))]
+mod updates_page;
 #[path = "startup/view.rs"]
 pub(crate) mod view;
 #[path = "startup/window_content.rs"]
@@ -92,6 +94,9 @@ pub struct StartupHost<B: StartupBackend> {
     /// The application memory budget, governing once a canvas exists.
     #[cfg(all(windows, any(feature = "windows-native-host", test)))]
     memory: Option<memory::MemoryGovernor>,
+    /// The page's update state and its check and restart answers.
+    #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+    updates: updates_page::UpdatesPage,
     #[cfg(all(windows, feature = "native-composition"))]
     composition: Option<composition::CompositionWork>,
     #[cfg(all(windows, feature = "native-composition"))]
@@ -173,6 +178,13 @@ impl<B: StartupBackend> StartupHost<B> {
             canvas: None,
             #[cfg(all(windows, any(feature = "windows-native-host", test)))]
             memory: None,
+            // Until the coordinator's update status reaches this host, the page is told the
+            // truth this host knows: up to date and idle, with no workflow to wait for.
+            #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+            updates: updates_page::UpdatesPage::new(
+                Box::new(sugarsubstitute_application::updates_panel::IdleUpdateStatus),
+                Box::new(sugarsubstitute_application::updates_panel::IdleWorkflowActivity),
+            )?,
             #[cfg(all(windows, feature = "native-composition"))]
             composition: None,
             #[cfg(all(windows, feature = "native-composition"))]

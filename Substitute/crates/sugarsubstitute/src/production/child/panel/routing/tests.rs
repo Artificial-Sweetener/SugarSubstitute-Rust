@@ -39,8 +39,14 @@ fn current_unready_and_failed_policies_both_return_correlated_ordinary_refusals(
         let identity = child.identity;
         let lease = MemoryLease::new(OWNER_BYTES + SurfaceReply::STORAGE_BYTES, Box::new(Release));
         if failed {
-            let mut panel = PanelOwner::new(identity, lease.clone(), Moment::from_nanos(0), None)?
-                .ok_or("Panel owner was not admitted")?;
+            let mut panel = PanelOwner::new(
+                identity,
+                lease.clone(),
+                Moment::from_nanos(0),
+                None,
+                MainHosting::Composition,
+            )?
+            .ok_or("Panel owner was not admitted")?;
             panel.tick(Moment::from_nanos(30_000_000_000))?;
             assert_eq!(panel.policy.state(), PanelState::Failed);
             child.panel = Some(panel);
@@ -50,6 +56,7 @@ fn current_unready_and_failed_policies_both_return_correlated_ordinary_refusals(
             surface(identity, 7, false)?,
             lease.clone(),
             lease.claim(SurfaceReply::STORAGE_BYTES)?,
+            MainHosting::Windowed,
         )?;
         let Some(DesktopStartupCommand::SendSurface(reply)) = child.take_command()? else {
             return Err("Current unavailable surface request was silently dropped".into());
@@ -87,12 +94,14 @@ fn consumed_control_and_cancel_return_receipts_without_ordinary_or_lifecycle_cap
         surface(identity, 3, false)?,
         lease.clone(),
         lease.claim(bytes)?,
+        MainHosting::Windowed,
     )?;
     child.receive_panel_control(
         identity,
         PanelMessage::Ready(PanelSession::for_main(identity)?),
         lease.clone(),
         lease.claim(bytes)?,
+        MainHosting::Composition,
         false,
     )?;
     child.receive_surface_message(
@@ -100,6 +109,7 @@ fn consumed_control_and_cancel_return_receipts_without_ordinary_or_lifecycle_cap
         surface(identity, 3, true)?,
         lease.clone(),
         lease.claim(bytes)?,
+        MainHosting::Windowed,
     )?;
     assert!(child.panel.is_none());
     assert!(child.commands.iter().all(Option::is_none));
@@ -133,12 +143,14 @@ fn foreign_and_retired_ingress_cannot_bind_the_current_child_delivery_owner() ->
             surface(observed, 4, false)?,
             lease.clone(),
             lease.claim(bytes)?,
+            MainHosting::Windowed,
         )?;
         child.receive_panel_control(
             observed,
             PanelMessage::Ready(PanelSession::for_main(observed)?),
             lease.clone(),
             lease.claim(bytes)?,
+            MainHosting::Composition,
             false,
         )?;
         assert!(child.panel_deliveries.take_command(current).is_none());
@@ -162,6 +174,7 @@ fn policy_processing_finishes_before_control_credit_is_returned_and_duplicate_ad
         PanelMessage::Ready(session.clone()),
         lease.clone(),
         lease.claim(bytes)?,
+        MainHosting::Composition,
         true,
     )?;
     let panel = child.panel.as_ref().ok_or("Ready control did not construct its policy")?;
@@ -177,6 +190,7 @@ fn policy_processing_finishes_before_control_credit_is_returned_and_duplicate_ad
                 },
                 lease.clone(),
                 lease.claim(bytes)?,
+                MainHosting::Composition,
                 true,
             )
             .is_err()
@@ -200,8 +214,14 @@ fn workflow_activation(identity: MainIdentity) -> Result<CanvasNativeRequest> {
 
 /// A panel whose handshake already timed out.
 fn failed_panel(identity: MainIdentity, lease: &MemoryLease) -> Result<PanelOwner> {
-    let mut panel = PanelOwner::new(identity, lease.clone(), Moment::from_nanos(0), None)?
-        .ok_or("Panel owner was not admitted")?;
+    let mut panel = PanelOwner::new(
+        identity,
+        lease.clone(),
+        Moment::from_nanos(0),
+        None,
+        MainHosting::Composition,
+    )?
+    .ok_or("Panel owner was not admitted")?;
     panel.tick(Moment::from_nanos(30_000_000_000))?;
     assert_eq!(panel.policy.state(), PanelState::Failed);
     Ok(panel)
@@ -247,8 +267,14 @@ fn canvas_admission_names_the_first_fact_that_fails() -> Result<()> {
     let lease = MemoryLease::new(2 * OWNER_BYTES, Box::new(Release));
     assert_eq!(child.admission(identity, &lease), Err(CanvasRefusal::PanelNotConfigured));
     child.panel = Some(
-        PanelOwner::new(identity, lease.clone(), Moment::from_nanos(0), None)?
-            .ok_or("Panel owner was not admitted")?,
+        PanelOwner::new(
+            identity,
+            lease.clone(),
+            Moment::from_nanos(0),
+            None,
+            MainHosting::Composition,
+        )?
+        .ok_or("Panel owner was not admitted")?,
     );
     assert_eq!(child.admission(identity, &lease), Ok(()));
     let later =
