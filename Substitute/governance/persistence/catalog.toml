@@ -203,8 +203,8 @@ migrations = []
 [[formats]]
 id = "native-update-attempt-v1"
 owner = "sugarsubstitute-contracts"
-sources = ["crates/sugarsubstitute-contracts/src/update/attempt.rs", "crates/sugarsubstitute-contracts/src/update/attempt/codec.rs"]
-source_sha256 = "sha256:0fef64aa352118223b3e5bf9d01dda74da5f49391ad131b44965c6f5f6fd74b8"
+sources = ["crates/sugarsubstitute-contracts/src/update/attempt.rs", "crates/sugarsubstitute-contracts/src/update/attempt/codec.rs", "crates/sugarsubstitute-contracts/src/update/attempt/redact.rs"]
+source_sha256 = "sha256:bf62771630022f0b6a80009a5b57a9eedcf001b9b71386535111c73e2aa947d8"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1
