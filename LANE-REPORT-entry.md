@@ -12,16 +12,16 @@
 4. **No splash in forwarding processes** (FINDINGS-host Q5); the surface is the D1w Fluent window.
 5. **Probe answers are bound to their identity.** Re-election to another copy forgets the old one. A failed probe is retried and never ends the launch.
 6. **`lane/ci` not merged** (not green). Merged tree checked locally.
-7. **Snapshot kept in history** (force-push refused). Commits before 8e08b69e carry the wrong author; the coordinator rewrites them.
+7. **Snapshot kept in history** (force-push refused). Authors were rewritten by the coordinator.
 
 ## Commits
 - 758d6d2c chore(entry): carry the entry lane's unfinished work to the cloud
-- b509038f merge: move lane/entry into main's monorepo layout under Substitute
-- 890db2c6 refactor(supervision): let any conflict resolution start one fresh launch with the original arguments
-- 968a350a feat(entry): a second launch brings a responsive copy forward, waits for a closing one and asks only about one that has stopped responding
-- d6fb6c18 fix(entry): probe each running copy afresh and let a launch continue when an unresponsive copy exits by itself
-- 1162d758 test(entry): build the lost-coordinator fixture without Windows-only error types
-- 8e08b69e feat(entry): show a launch waiting on another copy within two seconds while it keeps forwarding
+- 349a348b merge: move lane/entry into main's monorepo layout under Substitute
+- 5d3c75da refactor(supervision): let any conflict resolution start one fresh launch with the original arguments
+- a3c333e5 feat(entry): a second launch brings a responsive copy forward, waits for a closing one and asks only about one that has stopped responding
+- 3158e962 fix(entry): probe each running copy afresh and let a launch continue when an unresponsive copy exits by itself
+- 1bc25f24 test(entry): build the lost-coordinator fixture without Windows-only error types
+- b61736d2 feat(entry): show a launch waiting on another copy within two seconds while it keeps forwarding
 
 ## Verification
 - Governance and fmt pass. Windows-target workspace clippy (all targets and features, `-D warnings`) and rustdoc pass.
