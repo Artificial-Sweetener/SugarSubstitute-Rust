@@ -38,7 +38,7 @@ use crate::durable_storage::{
     protection::{self, Protection},
     staging,
 };
-pub use failure::TrustFailure;
+pub use failure::{AuthorityChange, TrustFailure};
 use std::{fs::File, io, io::Write, path::Path};
 use sugarsubstitute_contracts::{
     execution::{JobContext, MemoryClaim, MemoryLease},

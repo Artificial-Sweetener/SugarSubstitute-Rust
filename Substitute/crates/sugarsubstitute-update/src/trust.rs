@@ -74,6 +74,14 @@ impl RepositoryTrust {
         database(&self.checkpoint.root)?.trusted_root().version().checked_add(1).ok_or(Error::Bound)
     }
 
+    /// Version of the currently trusted root. Any accepted rotation increases it, so callers
+    /// compare it across a transaction to detect a rotation that kept old signatures valid.
+    /// # Errors
+    /// Rejects damaged trusted state.
+    pub fn root_version(&self) -> Result<u32, Error> {
+        Ok(database(&self.checkpoint.root)?.trusted_root().version())
+    }
+
     /// Verify exactly the next root, with both the old and new root signature thresholds.
     /// Expired roots may establish their authenticated successor before metadata refresh.
     /// # Errors

@@ -93,7 +93,7 @@ impl TrustStore {
         Ok(state)
     }
 
-    /// Reserve or resume the exact authenticated release. Called only inside `publish_updater`.
+    /// Reserve or resume the exact authenticated release. Called only inside `authenticate_updater`.
     /// Its caller freshly acquires engine exclusion and retains it and trust-writer custody
     /// throughout this operation. A retained trial owner must never call this reservation path.
     pub(in crate::setup_storage) fn reserve_updater(
@@ -161,7 +161,7 @@ impl TrustStore {
         .map_err(TrustFailure::from)
     }
 
-    /// Publish completion after exact destination verification inside `publish_updater`.
+    /// Publish completion after exact destination verification inside a staged commit.
     /// Never overwrites a newer candidate or a trial, and never changes accepted selection.
     pub(in crate::setup_storage) fn complete_updater(
         &self,

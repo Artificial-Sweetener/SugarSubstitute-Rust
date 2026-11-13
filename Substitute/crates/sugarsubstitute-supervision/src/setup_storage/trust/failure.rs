@@ -23,6 +23,9 @@ pub enum TrustFailure {
     LockCancelled,
     /// Verification failed; any previously accepted progress was saved successfully.
     Verification(Verification),
+    /// Signing authority or the local subscription changed between authenticating an offer and
+    /// committing its preparation. Nothing was published; the next check prepares again.
+    AuthorityChanged(AuthorityChange),
     /// Accepted trust could not be saved. No offer is returned; both failures are retained.
     Publication {
         /// Publication or serialization cause.
@@ -30,6 +33,17 @@ pub enum TrustFailure {
         /// A verification failure that preceded publication, when present.
         verification: Option<Verification>,
     },
+}
+
+/// What changed after an update offer was authenticated and before its preparation committed.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AuthorityChange {
+    /// The trusted root was rotated, even if the old metadata still verifies under it.
+    RootRotated,
+    /// The user's update subscription was changed.
+    SubscriptionChanged,
+    /// Current trust no longer authorizes the same package for this request.
+    OfferChanged,
 }
 impl fmt::Display for TrustFailure {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -39,6 +53,15 @@ impl fmt::Display for TrustFailure {
             Self::LockTimeout => "Update trust stayed locked by another process",
             Self::LockCancelled => "Update trust wait was cancelled",
             Self::Verification(_) => "Update verification failed",
+            Self::AuthorityChanged(AuthorityChange::RootRotated) => {
+                "Update signing authority changed during preparation"
+            }
+            Self::AuthorityChanged(AuthorityChange::SubscriptionChanged) => {
+                "Update subscription changed during preparation"
+            }
+            Self::AuthorityChanged(AuthorityChange::OfferChanged) => {
+                "Authorized update changed during preparation"
+            }
             Self::Publication { .. } => "Update trust could not be committed",
         })
     }
@@ -49,7 +72,7 @@ impl Error for TrustFailure {
             Self::Storage(cause) | Self::Publication { storage: cause, .. } => Some(cause),
             Self::Verification(cause) => Some(cause),
             Self::Retirement { operation, .. } => Some(operation.as_ref()),
-            Self::LockTimeout | Self::LockCancelled => None,
+            Self::LockTimeout | Self::LockCancelled | Self::AuthorityChanged(_) => None,
         }
     }
 }

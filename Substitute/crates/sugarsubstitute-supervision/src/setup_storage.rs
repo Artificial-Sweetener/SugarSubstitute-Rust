@@ -86,8 +86,8 @@ pub use trust::{
     OFFER_RESERVATION_BYTES,
 };
 pub use trust::{
-    TRUST_OPERATION_RESERVATION_BYTES, TRUST_RESERVATION_BYTES, TrustFailure, TrustStore,
-    UpdateAuthorization,
+    AuthorityChange, TRUST_OPERATION_RESERVATION_BYTES, TRUST_RESERVATION_BYTES, TrustFailure,
+    TrustStore, UpdateAuthorization,
 };
 pub use updater_package::{
     PreparedUpdater, RejectedUpdaterProbe, UPDATER_STAGING_RESERVATION_BYTES,
