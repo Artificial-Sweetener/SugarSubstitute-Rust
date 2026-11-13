@@ -75,6 +75,31 @@ fn malformed_schema_fields_and_empty_identity_never_disable_or_reset_updates() -
     Ok(())
 }
 
+/// The distribution release builds compile in, exactly as installer/release commits it.
+#[test]
+fn the_release_build_distribution_feeds_from_github_and_links_each_release() -> Result {
+    let committed = include_bytes!("../../../installer/release/update-distribution.json");
+    let distribution = Distribution::decode(committed)?;
+    assert_eq!(distribution.update_policy(), UpdatePolicy::BetaEager);
+    assert_eq!(
+        distribution.release_notes().url("0.2.0")?.as_str(),
+        "https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/releases/tag/substitute-v0.2.0"
+    );
+    let (identity, policy) = distribution.into_parts();
+    assert_ne!(identity, [0; 32]);
+    let timestamp = policy.asset("timestamp.json")?;
+    assert_eq!(
+        timestamp.request_target(),
+        "/Artificial-Sweetener/SugarSubstitute-Rust/releases/download/substitute-updates/timestamp.json"
+    );
+    for host in ["objects.githubusercontent.com", "release-assets.githubusercontent.com"] {
+        let asset = policy.redirect(&timestamp, &format!("https://{host}/asset?sig=1"))?;
+        assert!(policy.admits(&asset).is_ok(), "{host}");
+    }
+    assert!(policy.redirect(&timestamp, "https://example.test/asset").is_err());
+    Ok(())
+}
+
 #[test]
 fn release_notes_link_each_version_to_its_published_notes() -> Result {
     let distribution = Distribution::decode(&serde_json::to_vec(&configuration())?)?;

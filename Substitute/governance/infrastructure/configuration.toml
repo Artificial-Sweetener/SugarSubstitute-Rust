@@ -1055,3 +1055,10 @@ owner = "sugarsubstitute-supervision"
 source_sha256 = "sha256:2a3f596beba9828b8aa60c1068aa80a02febcf402d9b3eafd4b3fc1402cc9cb8"
 capabilities = ["document"]
 rationale = "Names an unused generation's installation-owned configuration documents only so retirement can delete them; it never reads, parses or writes their contents."
+
+[[records]]
+path = "installer/release/update-distribution.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:e9dd8cb5c56039dbf9e23f2bfa7b8385288534075990688b2bb17d42f479edc9"
+capabilities = ["arguments"]
+rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
