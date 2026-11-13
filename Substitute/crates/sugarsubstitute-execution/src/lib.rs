@@ -34,15 +34,22 @@ pub mod capture_attach;
 mod clock;
 mod clock_retirement;
 #[cfg(any(windows, test))]
+mod counter_clock;
+#[cfg(any(windows, test))]
 mod counter_deadline;
 mod cpu;
 #[cfg(any(windows, test))]
 mod desktop_capture;
 mod fork_join;
+#[cfg(any(windows, test))]
+mod platform_counter;
 #[cfg(all(feature = "k1-native-qualification", any(windows, test)))]
 mod preview_arming;
 #[cfg(all(feature = "k1-native-qualification", any(windows, test)))]
 mod registered_desktop_fault;
+#[cfg(all(unix, test))]
+#[allow(unsafe_code)]
+mod unix_counter;
 #[cfg(all(feature = "k1-native-qualification", any(windows, test)))]
 pub use desktop_capture::desktop_capture_control_storage_bytes;
 #[cfg(any(windows, test))]
