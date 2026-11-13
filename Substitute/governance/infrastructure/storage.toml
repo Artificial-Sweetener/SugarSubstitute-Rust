@@ -3978,7 +3978,7 @@ rationale = "Repository tooling authored_sources.rs: Discover authored sources i
 [[records]]
 path = "tools/xtask/src/cache_storage/scripts.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:b2e0fd070e725fb3337c03cbd95c29ec2eaea31dac126d8c914ff0e90809cb2a"
+source_sha256 = "sha256:fe1231e2541350b017ed315f235d7e9afce782ad72c8d4db181a957866fe9cb8"
 capabilities = ["literal restricted capability"]
 disposition = "tooling"
 rationale = "Repository tooling scripts.rs: Restrict script filesystem acquisition and upstream storage routes to exact reviewed boundaries. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -4096,9 +4096,25 @@ disposition = "tooling"
 rationale = "Repository tooling tests.rs: Reject new publication routes, stale dispositions and gaps in auxiliary source coverage. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
 
 [[records]]
+path = "tools/xtask/src/fingerprints.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:9efb26c34a0d63d91de253bf8a2e9244e9b1e90512e8b701384240f68c876e8e"
+capabilities = ["std::fs::read_dir", "std::fs::write"]
+disposition = "tooling"
+rationale = "Repository tooling fingerprints.rs: Record reviewed source fingerprints. Lists and reads governance policy files and rewrites only their stale fingerprint values; runtime crates do not depend on this source."
+
+[[records]]
+path = "tools/xtask/src/fingerprints_tests.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:2f0032bde34e40fa710a88ea933dd29cefaae2c1d7f61e81fd7e724e9d514cf1"
+capabilities = ["std::fs::create_dir_all", "std::fs::read_to_string", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir"]
+disposition = "tooling"
+rationale = "Repository tooling fingerprints_tests.rs: Prove the fingerprint task against isolated temporary monorepo fixtures; runtime crates do not depend on this source."
+
+[[records]]
 path = "tools/xtask/src/localization.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:61eed617546ede18584e03e88fb361506cd6391bd0f52f1479739c49be0abadd"
+source_sha256 = "sha256:bec1b1b4141317c2902f61f4c1953acaf249be894d45272f0138765c62c956b8"
 capabilities = ["literal restricted capability"]
 disposition = "tooling"
 rationale = "Repository tooling localization.rs: Gate known presentation capabilities and single-owner catalog construction. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -4114,7 +4130,7 @@ rationale = "Repository tooling tests.rs: Adversarial capability, copy-provenanc
 [[records]]
 path = "tools/xtask/src/main.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:75136c55921a618aeed0f03e439afd92a83642e156656924590cedc77969d6ef"
+source_sha256 = "sha256:4c14bfe07ce52c66629919b0f517436fcd41b701d8158e2f4b4f20d1d3933205"
 capabilities = ["method canonicalize"]
 disposition = "tooling"
 rationale = "Repository tooling main.rs: Provide the same portable verification entry point for local work, hooks and CI. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -4122,7 +4138,7 @@ rationale = "Repository tooling main.rs: Provide the same portable verification 
 [[records]]
 path = "tools/xtask/src/networking/external.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:9ab8b806f1658d068c0ddd149dba7511f7d17bd106fa7d40238e75ea9b148f39"
+source_sha256 = "sha256:0c60041af87295031953e2200069aafe2bf10740fbbfddbb2741dbca5864cd0f"
 capabilities = ["method exists"]
 disposition = "tooling"
 rationale = "Repository tooling external.rs binds upstream HTTP sources to the registered component before applying host transport patches. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."

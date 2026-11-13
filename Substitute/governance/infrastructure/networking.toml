@@ -167,7 +167,7 @@ rationale = "Pure external-source fixtures deliberately contain Electron HTTP ca
 [[records]]
 path = "tools/xtask/src/networking.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:fb765d268bb9da576234b63fdbe3e3e50afd9fbbeb0b11083b69c7a99cf2b7a4"
+source_sha256 = "sha256:02d098147aab8537c179fc3d9fe954f128a1279f4f15d44bc8e22fd90ec0aa97"
 boundary = "inspection"
 rationale = "Boundary-category classification data includes literal network module identifiers; direct transport construction remains forbidden in inspection sources."
 

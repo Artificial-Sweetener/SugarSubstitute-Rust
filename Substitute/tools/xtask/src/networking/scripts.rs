@@ -64,7 +64,7 @@ pub(super) fn check(
         require(
             fingerprint(root, &[record.path.clone(), record.lockfile.clone()])?
                 == record.source_sha256,
-            "networking: stale script dependency review",
+            format!("networking: stale script dependency review; {}", crate::fingerprints::RESYNC),
         )?;
         let declared = record.network_dependencies.iter().cloned().collect::<BTreeSet<_>>();
         require(
