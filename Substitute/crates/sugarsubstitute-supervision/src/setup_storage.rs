@@ -36,7 +36,7 @@ pub use image::PreparationImage;
 pub(crate) use launch_pointer::tests as launch_pointer_fixture;
 pub use launch_pointer::{
     EngineTarget, LAUNCH_ENGINE, LAUNCH_POINTER_FILE, LaunchPointer, POINTER_RESERVATION_BYTES,
-    PinnedEngine, PointerFailure, pin_engine, read_launch_pointer,
+    PinnedEngine, PointerFailure, pin_engine, pointed_generations, read_launch_pointer,
 };
 mod running;
 mod runtime_record;
@@ -74,8 +74,9 @@ pub use selection::{
 };
 pub use selection::{InheritedLaunch, capture_launch};
 pub use selection::{
-    InheritedTrial, TRIAL_WITNESS_RESERVATION_BYTES, TrialApplication, TrialTransfer, TrialWitness,
-    TrialWitnessTransfer, capture_trial_custody,
+    InheritedTrial, TRIAL_ADOPTION, TRIAL_ADOPTION_GRACE, TRIAL_WITNESS_RESERVATION_BYTES,
+    TrialApplication, TrialTransfer, TrialWitness, TrialWitnessTransfer, UnadoptedEnding,
+    capture_trial_custody,
 };
 pub use selection::{
     InstalledRelease, PreparedUpdate, Rollback, UpdateSelection, read_update_selection,

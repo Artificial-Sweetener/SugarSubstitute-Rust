@@ -147,16 +147,18 @@ pub(super) fn lock(
     context: &JobContext,
     file: BorrowedHandle<'_>,
     kind: LockKind,
+    range: Range,
     until: Moment,
 ) -> Result<(), FileLockError> {
     let handle = HANDLE(file.as_raw_handle());
+    let (low, high) = (range.length as u32, (range.length >> 32) as u32);
     require_overlapped(handle)?;
     let mut request = Request::new()?;
+    request.overlapped.Anonymous.Anonymous.Offset = range.offset as u32;
+    request.overlapped.Anonymous.Anonymous.OffsetHigh = (range.offset >> 32) as u32;
     // SAFETY: the boxed OVERLAPPED and its event outlive the request: every path below either
     // observes completion or abandons the storage.
-    match unsafe {
-        LockFileEx(handle, flags(kind), None, u32::MAX, u32::MAX, request.overlapped.as_mut())
-    } {
+    match unsafe { LockFileEx(handle, flags(kind), None, low, high, request.overlapped.as_mut()) } {
         Ok(()) => return Ok(()),
         Err(cause) if cause.code() == ERROR_IO_PENDING.to_hresult() => {}
         Err(cause) => return Err(native(cause)),
@@ -184,9 +186,10 @@ pub(super) fn lock(
         Ok(()) => {
             // Granted while the wait was ending: release it so an error never leaves a lock.
             let mut unlock = OVERLAPPED::default();
+            unlock.Anonymous.Anonymous.Offset = range.offset as u32;
+            unlock.Anonymous.Anonymous.OffsetHigh = (range.offset >> 32) as u32;
             // SAFETY: unlocks the range this call just acquired, with an owned local OVERLAPPED.
-            unsafe { UnlockFileEx(handle, None, u32::MAX, u32::MAX, &mut unlock) }
-                .map_err(native)?;
+            unsafe { UnlockFileEx(handle, None, low, high, &mut unlock) }.map_err(native)?;
         }
         Err(cause) if cause.code() == ERROR_OPERATION_ABORTED.to_hresult() => {}
         Err(cause) => return Err(native(cause)),

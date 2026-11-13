@@ -88,3 +88,20 @@ fn the_previous_release_as_fallback_returns_to_being_accepted() -> Result {
     assert_eq!(decide(&upgraded, &b.id, MAX_ENGINE_HOPS)?, Decision::Run(Route::Own));
     Ok(())
 }
+
+/// Antivirus removes the candidate's engine during its trial, and the trial was written by a
+/// later release that added fields. The accepted release's fallback engine still reads the
+/// record and starts only the accepted release, never the reinstall report.
+#[test]
+fn a_fallback_reads_a_later_releases_trial_and_starts_the_accepted_release() -> Result {
+    let a = generation(1)?.id;
+    let [_, _, _, on_trial] = records()?;
+    let mut later: serde_json::Value = serde_json::from_slice(&on_trial.encode()?)?;
+    later["candidate"]["attempt"]["handoff"] = serde_json::json!({"slot": 3});
+    later["candidate"]["attempt"]["generation"]["channel"] = "beta".into();
+    later["candidate"]["note"] = "added later".into();
+    let read = InstallationRecord::decode(&serde_json::to_vec(&later)?)?;
+    assert_eq!(read, on_trial);
+    assert_eq!(decide(&read, &a, MAX_ENGINE_HOPS)?, Decision::Run(Route::AcceptedOnly));
+    Ok(())
+}

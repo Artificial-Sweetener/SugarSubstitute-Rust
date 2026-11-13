@@ -68,7 +68,7 @@ impl UnstartedUpdaterTrial {
             self.publish(now, context)?;
             let exclusion = {
                 // The child adopts while this creator still holds its slot and handoff byte.
-                self.prepared._preparation.hold_handoff()?;
+                self.prepared._preparation.hold_handoff(context, context.now())?;
                 duplicate_inheritable(self.prepared._preparation.witness())?
             };
             check(context)?;
