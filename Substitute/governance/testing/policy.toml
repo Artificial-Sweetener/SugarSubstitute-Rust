@@ -1,0 +1,201 @@
+schema_version = 1
+platforms = ["windows", "macos", "linux"]
+
+[[owners]]
+package = "sugarsubstitute-image-gpu"
+root = "crates/sugarsubstitute-image-gpu"
+concern = "Exclusive surface configuration, transferable submission custody, scoped configuration recovery and transactional swapchain admission; GPU compatibility, exact device selection, shader validation, bounded physical display mappings, display-copy bounds and retryable admission classification; hardware qualification compares shared DAG pixels, display conversion, alias eviction and actual cancellation retirement; overlay pixels uploaded in admitted batches and drawn by a validated point shader over displays"
+minimum_tests = 28
+
+[[owners]]
+package = "sugarsubstitute-canvas"
+root = "crates/sugarsubstitute-canvas"
+concern = "Physical camera, retained projection phase and exact damage invariants; exact input-document archive round trips and rejection of corrupt, truncated and unsupported archives; semantic navigation stops, anchors, cadence, refresh deadlines and cancellation; tool selection, temporary navigation and document-bound transactional gestures sharing reversible history; selection and mask shape modes, constraints, snapping and outline dragging through deferred coverage work; deselect, clear and live-previewed coverage modification; CuteCanvas pixel-edge selection boundaries, boundary caching and ant animation; brush dab placement, falloff, accumulation, selection clipping and stroke lifecycles"
+minimum_tests = 72
+
+[[owners]]
+package = "sugarsubstitute-canvas-render"
+root = "crates/sugarsubstitute-canvas-render"
+concern = "Overlap-safe CPU repairs, stale-frame rejection, independently sampled disposable projection, storage reuse and memory pressure, bounded GPU damage inventories and native hardware comparison of immutable retained display copies against CPU and full GPU redraw, including finite-admission 4K replacement; marching-ant and drawn-outline overlay pixels projected through the camera, clipped, animated and painted"
+minimum_tests = 48
+
+[[owners]]
+package = "sugarsubstitute-image-ops"
+root = "crates/sugarsubstitute-image-ops"
+concern = "Graph identity, shared CPU/GPU sampling and retention, exact clipped tile inventories, pyramid semantics, vector coverage and its whole-pixel translation, dirty dependencies and original execution admission"
+minimum_tests = 59
+
+[[owners]]
+package = "sugarsubstitute-contracts"
+root = "crates/sugarsubstitute-contracts"
+concern = "Native installation selection, exact health-attempt correlation, interrupted trial reconciliation and failed-package suppression; Closed recovery correlation, physical generation identity, summary migration steps and localized capture degradation and unknown exit text; Owned contracts, localization, memory claims, immutable frames, scoped lifecycle and bounded transcript facts; bounded incident evidence, durable acknowledgment facts and namespace eviction ledger; bounded coordinator-entry identity, launch input and setup deadlines; sole five-locale native incident report messages and complete consent disclosure; fixed authenticated backend custody framing and exact purpose/session matching; authoritative capture target and domain-separated helper Supervisor subject; Shared diagnostic schema, identity grammar and privacy bounds; shared SugarCubes canvas and panel contracts, bounded wire data and source synchronization"
+minimum_tests = 182
+
+[[owners]]
+package = "sugarsubstitute-application"
+root = "crates/sugarsubstitute-application"
+concern = "Exact retiring predecessor profile exclusion advisory and independent backend settlement; Exact pre-ACK recovery admission, fresh operation allocation and independent failed-seed policy retirement; Acknowledged startup, settled retry, frame publication, backend leases, desktop exit, UI challenge and bounded transcript policy; finite preparation deadlines and cancellable readiness lifetimes; indexed actual-tail selection and shared immutable snapshot admission; bounded incident publication, report CAS, recovery and independent retirement policy; navigation-bound panel handshake, connection observations and monotonic deadlines; Occurrence-bound capture revisions, protected checkpoint recovery and restore cancellation"
+minimum_tests = 222
+
+[[owners]]
+package = "sugarsubstitute-comfy"
+root = "crates/sugarsubstitute-comfy"
+concern = "Bounded startup schema, effective managed argv and observed ComfyUI response contracts; Bounded fixed requests through the network adapter, installed runtime asset hash verification, deterministic readiness-owner custody and feature-gated external boundary fixtures; cancellable readiness campaigns, finite HTTP phases and typed native retry classification; Shared-transport native/I/O failure adaptation, original job cancellation and expiry precedence, peer-bound retry policy and retained native retirement causes; structured bounded Comfy output-view targets"
+minimum_tests = 116
+
+[[owners]]
+package = "sugarsubstitute"
+root = "crates/sugarsubstitute"
+concern = "Private worker record framing, original native snapshots, bounded uploads and immutable host-selected write authority; Original admitted startup file input, installed descriptor and Unicode input pairing, retained primary/post-control causes and whole preparation custody; Localized native recovery decisions preserve their original diagnostics; Early installer folder inspection waits for package verification without provisioning; Same-profile successor joins authenticated native release and domain settlement with unchanged cutoff; Fresh subordinate recovery composition with unchanged Root authority, admission before ACK, independent real receiving and checked cleanup; Production desktop startup and retirement through actual execution, authenticated parent/child transport, shared backends, profiles and native window adapters; retained failures, captured startup, bounded console rendering and isolated qualification roles; contained headless backend witness invocation and original-budget Finish lifecycle; genuine boxed incident construction and bounded original terminal/cause diagnostics; unique heap activation ownership outside the persistent native pump frame; original launched-profile release consumption and precise Finish request status; actual Desktop probe formatter and sole bounded Root stderr diagnostic decoding; Offline startup activation independent of producing-build network configuration; input-document session persistence with atomic replacement, recovery copies, rejection evidence, cancellation and debounced autosave; Durable authenticated workspace capture/materialization, immutable result custody, exact native-original replay, independent workflow fences and close delivery"
+minimum_tests = 1228
+
+[[owners]]
+package = "sugarsubstitute-execution"
+root = "crates/sugarsubstitute-execution"
+concern = "Original worker-transport admission through retained frames, ports and rejected-input error aliases, consumer-held delivery limits, incremental framing and actual authenticated loopback cancellation/closure; Genuine once-only recovery delegation, held process creation, bounded paired transport and capture-before-containment ownership; Admission, CPU scheduling, cancellation, retained ownership and observed worker teardown; authenticated bounded coordinator entry transport, replay and native issue fences; original whole preparation/native environment custody, retained error aliases and actual source/client staging fences; same-ledger capture bundle admission/cleanup, typed native dispatch, original ancestor and handshake fences, physical mapping/capsule retention; original finite custodied creation through both native acknowledgements and retained cleanup aliases; same-ledger BackendCustody capture pins, authenticated v5 inherited input and unchanged preflight budgets; one-shot callback-targeted injected clock regression with independent actual worker observations and sticky original global failure"
+minimum_tests = 741
+
+[[owners]]
+package = "sugarsubstitute-xtask"
+root = "tools/xtask"
+concern = "Architecture, execution, filesystem, cache, networking, diagnostics, configuration and localization owner boundaries; exact reviewed source and dependency identities across authored languages, alias-safe public contracts, adversarial rejection fixtures and verification orchestration."
+minimum_tests = 167
+
+[[owners]]
+package = "sugarsubstitute-supervision"
+root = "crates/sugarsubstitute-supervision"
+concern = "Cache-funded resumable custody without retaining transient download jobs, rejected undeclared payload access, shared resumable payload custody, byte admission before truncation, exact interval copying, real flush failures and verified updater integration; Native provisioning metadata transfer custody, Unicode byte roundtrips, bounded scratch admission, exact stopped inventories and protected publication beyond legacy Win32 path lengths; Selected ordinary record read-only custody, writer exclusion, exact-byte publication, bounded inventory and original reservation; Shared record sentinel bounds, incremental/exact allocation, interrupted-read policy, preparation primary/post-control custody and read-only input semantics; Shared report receiving-file selection bounds and exact native publication/retirement through feature integration; Windows retained filesystem ancestry, bounded records, pinned child reads and exact-identity retirement with hard-link preservation; Durable native consumer pins, containment-name collision rejection, pending recovery traversal and authenticated extracted-package reuse; Bounded streaming publication and Unicode inventory validation preserve byte admission and existing targets; Damaged cache roots do not block authoritative trust initialization or rollback floors; Download cleanup respects verified native pins and rejects hard links to authoritative bytes before reset; Authenticated offer generations use shared disposal without changing trust or legacy evidence; Shared cache scopes preserve original memory custody across jobs; Shared runtime cache admission, independent generations, native reader/writer exclusion, bounded inventory, idle retention and journaled cleanup preserve damaged and authoritative content; Environment-expanded native icon metadata preserves exact absolute launch targets and edited-link rejection; Independent updater staging, protected restart continuity, exact-release resumption, explicit repair generations and application-lease separation; Scoped update preparation jobs retain actual completion and cancellation custody, resume durable downloads, release setup exclusion on cleanup and never acquire application run ownership; Abandoned trials restore accepted selection under fresh exclusive run custody while preserving payloads, authored files, live holders and explicit repair; Frontend closure reuses retained inventory under concurrent lifecycle memory pressure; Retained signed candidates survive busy application ownership and rejected execution admission while rechecking authority and rejecting repeated trials; Composed signed repository discovery, durable partial references, bounded root rotation, subscription isolation and resumed download preparation independent of installation run custody; Durable release-history gates before package publication and after interrupted activation; Bounded missing-entry native recovery preserves unambiguous completed settings and rejects conflicting or corrupt history; Downloaded publication reauthorization, current trust exclusion, expiry and clock-regression rejection, exact native installation binding; Protected installation selection namespace, OS-backed run custody and current-attempt publication authority; Shared installer/downloaded-package extraction and native maintenance with preserved configuration; Actual local HTTP metadata delivery, signed offer download/resumption, bounded redirects and native request retirement; Resumable package cache preserves received prefixes, rejects hostile range framing and retains verified file custody; Protected update trust survives restart, rejects foreign state and commits security floors before returning offers; Native maintenance preserves exact startup inputs, missing-executable repair, input custody and ambiguous-installation rejection; Native installation selection publication, writer exclusion and exact-revision comparison; Historical exact native predecessor binding after consumed release; Exact recovery family enrollment and handler observation, protected historical origin opening and contiguous summary migration; Windows launch inputs, retained containment, resource exclusions, actual claim retirement, attempt-bound profile proofs and bounded lifecycle framing; Retained installed-file/hash custody and actual connected-loopback peer identity; authenticated fixed capture roles, same-job selected bundle and module credit custody, checked current-image/PE/PDB association and bounded original close retention; authenticated parent/witness association, independent dual exclusions, exact suspended-root transfer and checked custody retirement; phase-specific original profile release observation and retained actual Finish status; Runtime admission independent of diagnostic availability while complete copy verification rejects damaged symbols; Protected offline update authority and transport-free cached preparation; Canonical admitted backend correlation and same-owner immutable artifact read retirement"
+minimum_tests = 1402
+
+[[owners]]
+package = "sugarsubstitute-splash"
+root = "crates/sugarsubstitute-splash"
+concern = "Mascot animation, admitted splash composition, styled console placement, and clipped frame publication; shared widget, glyph, progress and scrollbar behavior is verified at sugarsubstitute-ui."
+minimum_tests = 64
+
+[[owners]]
+package = "sugarsubstitute-desktop"
+root = "crates/sugarsubstitute-desktop"
+concern = "Nonblocking frame delivery, pre-Tao preparation, lossless wake handoff, bounded native dispatch, headless settlement, retained native storage, input and timing boundaries; current-view native reporter controls, explicit consent and inert save selection, clipboard transfer, bounded modal input and checked font/callback retirement; post-show native layout reconciliation and retained closed preview source mismatch; actual incomplete-probe conditions, coalesced creating-thread custody counters and bounded closed stderr observations; current-document panel ingress, bounded callback admission and checked bridge retirement; composed-browser mouse-message decoding and callback retirement; Scoped session bridge admission and media lifetime, native placement before reveal and close sampling"
+minimum_tests = 504
+
+[[owners]]
+package = "sugarsubstitute-crash"
+root = "crates/sugarsubstitute-crash"
+concern = "Report selection, explicit overwrite consent and exact native receiving-file publication/cleanup through shared storage; Actual retained recovery capture origins, checked historical publication and native promotion replay, unknown-exit summaries and bounded report presentation; Bounded capture input, immutable budgets, retained partial registration and actual native retirement; bounded charged redacted report views, categorical absence and symbol failures; closed bounded diagnostic wire, replay high-water, exact result and transfer correlation, original transport guard custody; genuine installed bundle selection before capture effects, outside-lock parent loans, typed v2 failure adoption and process-lifetime module/source retention; source-derived exception facts preserve authoritative mechanism and dev-only semantic exit/collection/symbol/Reporter owner flow"
+minimum_tests = 281
+
+[[owners]]
+package = "sugarsubstitute-update"
+root = "crates/sugarsubstitute-update"
+concern = "Persisted publication sequence identities across channels, components and platforms; Portable package inventory, path and aggregate expansion bounds; HTTPS destination policy, hostile framing rejection; Real TUF signatures, root rotation, durable rollback floors, expiration and streamed package authentication"
+minimum_tests = 39
+
+[[owners]]
+package = "sugarsubstitute-networking"
+root = "crates/sugarsubstitute-networking"
+concern = "Original finite deadline conversion, closed HTTPS request validation, native policy queries, original-job confinement, active cancellation, peer-observed socket closure and checked child-before-parent retirement; Windows static/PAC route validation, deterministic expiry and final callback retirement; Node transport and proxy protocol qualification"
+minimum_tests = 15
+
+[[owners]]
+package = "sugarsubstitute-configuration"
+root = "crates/sugarsubstitute-configuration"
+concern = "Bounded startup schema, initial defaults, exact Unicode arguments and saved configuration preservation"
+minimum_tests = 24
+
+[[owners]]
+package = "sugarsubstitute-ui"
+root = "crates/sugarsubstitute-ui"
+concern = "Admitted layered surface clipping, fractional coverage, cancellation and validated pixel publication; shared form peer identities and text limits, shaped measurement/paint agreement; shared native availability and activation fencing, bounded raster, progress and scrollbar widgets; native and portable label shaping, geometry, memory custody, clipping and styled console text"
+minimum_tests = 80
+
+[[owners]]
+package = "sugarsubstitute-image-io"
+root = "crates/sugarsubstitute-image-io"
+concern = "Bounded image decoding, archive integrity and seam-safe region reads with original storage and memory admission"
+minimum_tests = 24
+
+[[real_time]]
+path = "crates/sugarsubstitute/src/paused_clock.rs"
+source_sha256 = "sha256:c8091a496cb5567b481f4345e9de5b3d67152ec1c83c6bcb08b595da50fb2428"
+reason = "Product services poll on their injected clock; this test clock freezes logical time and lets only polling delays of at most one second elapse for real, so no deadline can expire from machine load."
+
+[[real_time]]
+path = "crates/sugarsubstitute/src/diagnostics/service/tests.rs"
+source_sha256 = "sha256:557a228cd86b6e35dd921bc3f734bac33543eb2f28afc644c25641be6983d311"
+reason = "The diagnostics execution owner sleeps on a real clock; the test jumps that clock past every former bound with an explicit offset, so the held writer outlasts each deadline by construction, not by load."
+
+[[real_time]]
+path = "crates/sugarsubstitute/src/production/entry_runner/tests.rs"
+source_sha256 = "sha256:52475273daee64218da334804c269cc71569be8d1880882f2338a59b432a110f"
+reason = "The entry runner's execution owner requires the real monotonic clock; these tests construct it only for that signature, read native time through the frozen anchor and wait for observed runner joins."
+
+[[real_time]]
+path = "crates/sugarsubstitute-execution/src/clock_tests.rs"
+source_sha256 = "sha256:0ed07fad50f3ce814708852330650da7d7c6245ec86a8ab2f0bf4d037e47beef"
+reason = "These are the real monotonic clock's own contract tests: they prove that an observed moment maps inside the real interval sampled around it, and they assert ordering, never an elapsed duration."
+
+[[real_time]]
+path = "crates/sugarsubstitute-execution/src/windows_fixture.rs"
+source_sha256 = "sha256:96f0fd386a4188935649c084bf4ae713747637af812a46ddb05e2b3fd1e7bbca"
+reason = "Fixture deadline conversion maps a native Instant chosen by its caller onto the performance counter for child processes; it samples the clock once to translate, and decides no outcome."
+
+[[real_time]]
+path = "crates/sugarsubstitute-execution/src/windows_fixture_forwarding/native_abi_tests.rs"
+source_sha256 = "sha256:d5a63f3ed48953bde7d49e2103e742b446bf5bbad24be5534e1c5d4e3ae479ea"
+reason = "The native forwarding worker requires a finite real deadline; the test grants one a day away, far beyond any loaded run, so the fixture's own events decide every outcome in the module."
+
+[[real_time]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/test_worker/trace.rs"
+source_sha256 = "sha256:bd53096f72bffe863627fe28d38002550a7646360e2875e692c0c0cc97aa74ab"
+reason = "The storage test worker records how long live storage spans have run, only to print in a failure message; no assertion, admission or operation clock ever reads those durations."
+
+[[real_time]]
+path = "crates/sugarsubstitute-desktop/src/main_actor/composition/canvas/tests/shared.rs"
+source_sha256 = "sha256:592e24d87ffb6fa571da562c728c4d0b397095b52a9d4c48948bc3fbed20f6fa"
+reason = "The hardware composition qualification measures steady-state draw and fence handoff times and prints them as evidence; every assertion compares pixels, and none reads a measured duration."
+
+[[real_time]]
+path = "crates/sugarsubstitute-desktop/src/report/surface/native_tests/hosted.rs"
+source_sha256 = "sha256:f5580661efcac07acee43d43e4130a226addac7b8384903ecba494c5411a69fd"
+reason = "The hosted report qualification drives a real tao event loop that must wake to re-examine the native form; its 20 ms wake only schedules the next look, and every assertion waits for observed events."
+
+[[real_time]]
+path = "crates/sugarsubstitute-desktop/src/windows_console/text/performance_tests.rs"
+source_sha256 = "sha256:2d7075180789a74b382491a4712c37d5fe435e0e2ae6ac3c377b13983fbb4fa6"
+reason = "The native console performance qualification prints publication, paint and exposure timings as evidence; its assertions check tail following and glyph draw counts, never a measured duration."
+
+[[real_time]]
+path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/reattached_overview.rs"
+source_sha256 = "sha256:b8f24a054c79af770987c57a4936455b544071eef5f6c3a277791d5f042648f8"
+reason = "The canvas reports its next wake as a native Instant; the test converts it back to the logical delay and advances its fake clock by that much, so real time only recovers the delay it reached."
+
+[[real_time]]
+path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/reattached_overview/comparison_exit.rs"
+source_sha256 = "sha256:facefedf23820140755780e4a551d6fdde78344c37bbc8ea87045954e8fab6d0"
+reason = "The canvas reports its next wake as a native Instant; the test converts it back to the logical delay and advances its fake clock by that much, so real time only recovers the delay it reached."
+
+[[real_time]]
+path = "crates/sugarsubstitute/src/startup.rs"
+source_sha256 = "sha256:c652828fe909237b728c933eaebf65d18f9fde3d2165b7d39a5d83a34a3e67dd"
+reason = "The test-only constructor round trip builds the startup host, whose constructor requires the real monotonic execution clock; the round trip asserts the constructed parts and never reads a duration."
+
+[[real_time]]
+path = "crates/sugarsubstitute/src/startup/platform_tests.rs"
+source_sha256 = "sha256:131b4f0bf9fa9e730d63c70c38f6fe6a66415047b308a5cb70b5a4834a9f6212"
+reason = "The startup host's constructor requires the real monotonic execution clock; these tests construct it only to satisfy that signature, and every assertion waits for observed startup outcomes."
+
+[[real_time]]
+path = "crates/sugarsubstitute/src/startup/policy/child_routing_tests.rs"
+source_sha256 = "sha256:79f35914472debe03d0b26c85afdba11bd9246082f39c2afcbf40ca114d104e3"
+reason = "The startup host's constructor requires the real monotonic execution clock; these tests construct it only to satisfy that signature, and every assertion waits for observed routing outcomes."
+
+[[real_time]]
+path = "crates/sugarsubstitute/src/startup/memory/tests.rs"
+source_sha256 = "sha256:e8cd764bd7474d06790887aa5d4b2ce60881694dbbfeb0c14a061a86d6b0dcae"
+reason = "The memory governor stamps its first sample with its own Instant::now(), so these tests pass a real instant at or after that stamp and then derive every later moment by adding durations."
+
+[[real_time]]
+path = "crates/sugarsubstitute/src/startup/memory/page/tests.rs"
+source_sha256 = "sha256:c16404b5ffd841843782630bbfe7894e82a364492b8b9f9f16e77abe93de6628"
+reason = "A page report stamps its measurement due time with the product's own Instant::now(), so these tests pass a real instant at or after that stamp and then derive later moments by adding durations."

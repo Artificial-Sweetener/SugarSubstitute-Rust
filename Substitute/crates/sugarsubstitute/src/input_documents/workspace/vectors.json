@@ -1,0 +1,277 @@
+{
+  "format": "sugarcubes_input_canvas",
+  "version": 1,
+  "notes": [
+    "Selection keys are opaque UTF16 strings; native archive validation is a separate authority.",
+    "Unknown record members are ignored; the format decoder grants no native authority."
+  ],
+  "cases": [
+    {
+      "name": "canonical",
+      "record": {
+        "version": 1,
+        "id": "workflow-a",
+        "route": "input",
+        "surface": "surface-a",
+        "mask": null
+      },
+      "valid": true
+    },
+    {
+      "name": "nullable selections",
+      "record": {
+        "version": 1,
+        "id": "workflow-a",
+        "route": "output",
+        "surface": null,
+        "mask": null
+      },
+      "valid": true
+    },
+    {
+      "name": "generated UUID identity",
+      "record": {
+        "version": 1,
+        "id": "workflow-00000000-0000-4000-8000-000000000001",
+        "route": "input",
+        "surface": "surface-a",
+        "mask": null
+      },
+      "valid": true
+    },
+    {
+      "name": "ASCII underscore and hyphen identity",
+      "record": {
+        "version": 1,
+        "id": "workflow-A_1-z",
+        "route": "input",
+        "surface": "surface-a",
+        "mask": null
+      },
+      "valid": true
+    },
+    {
+      "name": "maximum identity suffix",
+      "record": {
+        "version": 1,
+        "id": "workflow-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "route": "input",
+        "surface": "surface-a",
+        "mask": null
+      },
+      "valid": true
+    },
+    {
+      "name": "maximum ASCII surface",
+      "record": {
+        "version": 1,
+        "id": "workflow-a",
+        "route": "input",
+        "surface": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mask": null
+      },
+      "valid": true
+    },
+    {
+      "name": "maximum UTF16 emoji surface",
+      "record": {
+        "version": 1,
+        "id": "workflow-a",
+        "route": "input",
+        "surface": "🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬",
+        "mask": null
+      },
+      "valid": true
+    },
+    {
+      "name": "Unicode mask",
+      "record": {
+        "version": 1,
+        "id": "workflow-a",
+        "route": "input",
+        "surface": "surface-a",
+        "mask": "café🍬"
+      },
+      "valid": true
+    },
+    {
+      "name": "unknown members preserved outside decoder",
+      "record": {
+        "version": 1,
+        "id": "workflow-a",
+        "route": "input",
+        "surface": "surface-a",
+        "mask": null,
+        "future": {
+          "value": 1
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "control in selection is opaque key",
+      "record": {
+        "version": 1,
+        "id": "workflow-a",
+        "route": "input",
+        "surface": "surface\nkey",
+        "mask": null
+      },
+      "valid": true
+    },
+    {
+      "name": "final newline identity",
+      "record": {
+        "version": 1,
+        "id": "workflow-a\n",
+        "route": "input",
+        "surface": "surface-a",
+        "mask": null
+      },
+      "valid": false
+    },
+    {
+      "name": "future version",
+      "record": {
+        "version": 2,
+        "id": "workflow-a",
+        "route": "input",
+        "surface": "surface-a",
+        "mask": null
+      },
+      "valid": false
+    },
+    {
+      "name": "string version",
+      "record": {
+        "version": "1",
+        "id": "workflow-a",
+        "route": "input",
+        "surface": "surface-a",
+        "mask": null
+      },
+      "valid": false
+    },
+    {
+      "name": "empty identity suffix",
+      "record": {
+        "version": 1,
+        "id": "workflow-",
+        "route": "input",
+        "surface": "surface-a",
+        "mask": null
+      },
+      "valid": false
+    },
+    {
+      "name": "nonASCII identity",
+      "record": {
+        "version": 1,
+        "id": "workflow-é",
+        "route": "input",
+        "surface": "surface-a",
+        "mask": null
+      },
+      "valid": false
+    },
+    {
+      "name": "oversize identity",
+      "record": {
+        "version": 1,
+        "id": "workflow-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "route": "input",
+        "surface": "surface-a",
+        "mask": null
+      },
+      "valid": false
+    },
+    {
+      "name": "embedded newline identity",
+      "record": {
+        "version": 1,
+        "id": "workflow-a\nb",
+        "route": "input",
+        "surface": "surface-a",
+        "mask": null
+      },
+      "valid": false
+    },
+    {
+      "name": "invalid route",
+      "record": {
+        "version": 1,
+        "id": "workflow-a",
+        "route": "Input",
+        "surface": "surface-a",
+        "mask": null
+      },
+      "valid": false
+    },
+    {
+      "name": "empty surface",
+      "record": {
+        "version": 1,
+        "id": "workflow-a",
+        "route": "input",
+        "surface": "",
+        "mask": null
+      },
+      "valid": false
+    },
+    {
+      "name": "oversize ASCII surface",
+      "record": {
+        "version": 1,
+        "id": "workflow-a",
+        "route": "input",
+        "surface": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mask": null
+      },
+      "valid": false
+    },
+    {
+      "name": "oversize UTF16 emoji surface",
+      "record": {
+        "version": 1,
+        "id": "workflow-a",
+        "route": "input",
+        "surface": "🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬🍬",
+        "mask": null
+      },
+      "valid": false
+    },
+    {
+      "name": "empty mask",
+      "record": {
+        "version": 1,
+        "id": "workflow-a",
+        "route": "input",
+        "surface": "surface-a",
+        "mask": ""
+      },
+      "valid": false
+    },
+    {
+      "name": "numeric mask",
+      "record": {
+        "version": 1,
+        "id": "workflow-a",
+        "route": "input",
+        "surface": "surface-a",
+        "mask": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "object surface",
+      "record": {
+        "version": 1,
+        "id": "workflow-a",
+        "route": "input",
+        "surface": {},
+        "mask": null
+      },
+      "valid": false
+    }
+  ]
+}

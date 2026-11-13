@@ -1,0 +1,124 @@
+#    SugarCubes - composable workflow units for ComfyUI
+#    Copyright (C) 2026  Artificial Sweetener and contributors
+#
+#    This program is free software: you can redistribute it and/or modify
+#    it under the terms of the GNU Affero General Public License as published by
+#    the Free Software Foundation, either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU Affero General Public License for more details.
+#
+#    You should have received a copy of the GNU Affero General Public License
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""SugarCubes ComfyUI extension entry point."""
+
+from __future__ import annotations
+
+import logging
+import sys
+from pathlib import Path
+from typing import cast
+
+from .sugarcubes import (
+    NODE_CLASS_MAPPINGS,
+    NODE_DISPLAY_NAME_MAPPINGS,
+    CubeValidationError,
+    DefinitionResolver,
+    ExportedCube,
+    export_cubes,
+    write_cube,
+    write_cubes,
+)
+from .sugarcubes.backend.composition import build_backend_services
+from .sugarcubes.backend.routes import register_routes
+from .sugarcubes.extension_layout import extension_root
+from .sugarcubes.frontend_assets import install_canvas_module_mime
+from .sugarcubes.execution.comfy_execution_port import (
+    ComfyExecutionModuleLike,
+    DirectComfyExecutionPort,
+    PromptServerLike,
+)
+from .sugarcubes.host_api import set_active_backend_services
+from .sugarcubes.runtime import (
+    execution_node_resolver_registry,
+    queue_observer_registry,
+)
+from .sugarcubes.model_library.integration import install_model_library
+from .sugarcubes.output_saving.integration import install_output_saving
+from .sugarcubes.input_canvas.infrastructure.http_routes import install_input_previews
+from .sugarcubes.execution.spatial_probe_http import install_spatial_probe_routes
+from .sugarcubes.input_canvas.infrastructure.prepared_input_http import (
+    install_prepared_input_route,
+)
+
+WEB_DIRECTORY = "web"
+__version__ = "0.15.3"
+_EXTENSION_ROOT = extension_root()
+_LOGGER = logging.getLogger(__name__)
+
+_prompt_server_module = sys.modules.get("server")
+PromptServer = (
+    getattr(_prompt_server_module, "PromptServer", None)
+    if _prompt_server_module is not None
+    else None
+)
+if PromptServer is not None:
+    try:
+        prompt_server = getattr(PromptServer, "instance", PromptServer)
+        install_canvas_module_mime(PromptServer, Path(__file__).parent.name)
+        comfy_execution = sys.modules.get("execution")
+        if comfy_execution is None:
+            raise RuntimeError("Comfy execution module is unavailable")
+        _output_saving_runtime = install_output_saving(PromptServer)
+        install_input_previews(PromptServer)
+        install_spatial_probe_routes(PromptServer)
+        _backend_services = build_backend_services(
+            _EXTENSION_ROOT,
+            execution_port=DirectComfyExecutionPort(
+                prompt_server=cast(PromptServerLike, prompt_server),
+                execution_module=cast(ComfyExecutionModuleLike, comfy_execution),
+                observers=queue_observer_registry(),
+                node_resolvers=execution_node_resolver_registry(),
+                prompt_policy=_output_saving_runtime.policy,
+            ),
+        )
+        install_prepared_input_route(
+            PromptServer,
+            _backend_services.execution.project_prepared_inputs,
+        )
+        set_active_backend_services(_backend_services)
+        register_routes(PromptServer, _backend_services)
+    except (
+        AttributeError,
+        ImportError,
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+    ):  # pragma: no cover - depends on Comfy import host state
+        _LOGGER.exception(
+            "ERROR: SugarCubes: backend route registration failed; cube library APIs "
+            "may be unavailable."
+        )
+
+    try:
+        _model_library_runtime = install_model_library(PromptServer)
+    except (ImportError, OSError, RuntimeError, TypeError, ValueError):
+        _LOGGER.exception("SugarCubes: model library APIs are unavailable.")
+
+
+__all__ = [
+    "NODE_CLASS_MAPPINGS",
+    "NODE_DISPLAY_NAME_MAPPINGS",
+    "WEB_DIRECTORY",
+    "__version__",
+    "CubeValidationError",
+    "DefinitionResolver",
+    "ExportedCube",
+    "export_cubes",
+    "write_cube",
+    "write_cubes",
+]

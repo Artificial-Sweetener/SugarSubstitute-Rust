@@ -1,0 +1,162 @@
+schema = 1
+
+[[waiver]]
+id = "SC-WAIVER-006"
+kind = "structural"
+rule = "STRUCT003"
+path = "frontend/comfyui/ui/cube/ComfyCubeRuntime.ts"
+owner = "SugarCubes Comfy runtime composition"
+justification = "The module composes one Comfy Cube runtime through focused host-value, graph-reorder and surface owners. Its native-renderer capability delegates to the sole Cube surface owner, shared by graph and masonry."
+review_by = 2026-11-30
+max_lines = 600
+
+[[waiver]]
+id = "SC-WAIVER-007"
+kind = "structural"
+rule = "STRUCT003"
+path = "frontend/comfyui/ui/cube/connection/CubePortPresentationController.ts"
+owner = "SugarCubes Cube port presentation"
+justification = "The controller and its private lane-allocation mathematics jointly own one animated port-presentation policy."
+review_by = 2026-11-30
+max_lines = 510
+
+[[waiver]]
+id = "SC-WAIVER-009"
+kind = "structural"
+rule = "STRUCT003"
+path = "frontend/comfyui/ui/graph/CubeBounds.ts"
+owner = "SugarCubes graph geometry"
+justification = "The module is the cohesive pure geometry policy for canonical Cube bounds, margins, and containment."
+review_by = 2026-11-30
+max_lines = 560
+
+[[waiver]]
+id = "SC-WAIVER-011"
+kind = "structural"
+rule = "STRUCT003"
+path = "frontend/comfyui/ui/layout/CubeLayoutEngine.ts"
+owner = "SugarCubes layout policy"
+justification = "The module contains one pure Cube chain-layout policy and its directly supporting graph algorithms."
+review_by = 2026-11-30
+max_lines = 515
+
+[[waiver]]
+id = "SC-WAIVER-016"
+kind = "structural"
+rule = "STRUCT003"
+path = "frontend/comfyui/ui/settings/HostSettingsController.ts"
+owner = "SugarCubes host settings presentation"
+justification = "The module contains one Comfy settings presentation surface, including its row and tracked-pack dialog rendering and event binding; repository and identity commands are owned separately."
+review_by = 2026-11-30
+max_lines = 776
+
+
+[[waiver]]
+id = "SC-WAIVER-018"
+kind = "structural"
+rule = "STRUCT003"
+path = "frontend/comfyui/ui/surface/CubeSurfaceStyles.ts"
+owner = "SugarCubes surface presentation"
+justification = "This module is one generated-at-runtime CSS resource owner for the Cube surface presentation system."
+review_by = 2026-11-30
+max_lines = 705
+
+[[waiver]]
+id = "SC-WAIVER-019"
+kind = "structural"
+rule = "STRUCT003"
+path = "scripts/migrate_subgraph_schema.py"
+owner = "SugarCubes schema migration tooling"
+justification = "The standalone migration command owns one historical subgraph-schema conversion, including its validation and atomic file replacement."
+review_by = 2026-11-30
+max_lines = 622
+
+[[waiver]]
+id = "SC-WAIVER-023"
+kind = "structural"
+rule = "STRUCT003"
+path = "sugarcubes/backend/services/cube_library_artifact_service.py"
+owner = "SugarCubes library artifacts"
+justification = "The service cohesively resolves current and historical Cube artifacts, refs, cache identity, and artifact provenance."
+review_by = 2026-11-30
+max_lines = 731
+
+[[waiver]]
+id = "SC-WAIVER-027"
+kind = "structural"
+rule = "STRUCT003"
+path = "sugarcubes/backend/services/local_flavor_service.py"
+owner = "SugarCubes local flavors"
+justification = "The service cohesively owns the local flavor aggregate, its persistence format, normalization, and collision invariants."
+review_by = 2026-11-30
+max_lines = 531
+
+[[waiver]]
+id = "SC-WAIVER-029"
+kind = "structural"
+rule = "STRUCT003"
+path = "sugarcubes/exporter/layout_serializer.py"
+owner = "SugarCubes export layout"
+justification = "The module cohesively normalizes and serializes workflow layout, group chrome, execution mode, and geometry values."
+review_by = 2026-11-30
+max_lines = 568
+
+[[waiver]]
+id = "SC-WAIVER-030"
+kind = "structural"
+rule = "STRUCT003"
+path = "sugarcubes/exporter/native_subgraph_adapter.py"
+owner = "SugarCubes native export projection"
+justification = "The module is one projection adapter that converts native Comfy subgraphs into the export graph boundary."
+review_by = 2026-11-30
+max_lines = 513
+
+[[waiver]]
+id = "SC-WAIVER-031"
+kind = "structural"
+rule = "STRUCT003"
+path = "sugarcubes/exporter/serializer.py"
+owner = "SugarCubes Cube serialization"
+justification = "The module cohesively builds validated Cube serialization output, including symbolization and deterministic fingerprints."
+review_by = 2026-11-30
+max_lines = 547
+
+[[waiver]]
+id = "SC-PROMPT-REORDER-MEASUREMENT"
+kind = "structural"
+rule = "STRUCT003"
+path = "frontend/sugarprompt/editor/src/reorder-measurement.ts"
+owner = "SugarPrompt native drag measurement"
+justification = "Reviewed the adopted 574-line mounted measurement owner and its source assessment REORDERMEASUREMENTOWNER001. The module owns one native measurement/resource lifetime: supported READ/WRITE scheduling, capture, finite edge scrolling and retirement. Geometry, source transformations, paint and gesture authority remain delegated to focused collaborators. Keeping this resource lifetime together preserves epoch and all-attempt cleanup invariants."
+review_by = 2027-01-10
+max_lines = 574
+
+[[waiver]]
+id = "SC-CANVAS-GENERATED-NATIVE-PROTOCOL"
+kind = "structural"
+rule = "STRUCT003"
+path = "integrations/contracts/CanvasNativeProtocol.generated.rs"
+owner = "SugarCubes portable canvas contract compiler"
+justification = "This compiler-owned closed version 3 wire-value module contains only schema-derived serde types and shape/bound validation for the document-canvas messages a native host decodes: context, sources, geometry, editing, workflow surfaces and error replies. They share the capability, document, file-reference and failure vocabulary, so one generated module keeps a single Rust type per wire value. Document lifecycle, editing, provisioning and transport policy remain in authored host owners; regeneration and shared vectors verify parity."
+review_by = 2026-11-30
+max_lines = 947
+
+[[waiver]]
+id = "SC-CANVAS-GENERATED-RUST-PROTOCOL"
+kind = "structural"
+rule = "STRUCT003"
+path = "integrations/contracts/CanvasSurfaceProtocol.generated.rs"
+owner = "SugarCubes portable canvas contract compiler"
+justification = "This compiler-owned closed version 3 wire-value module contains only schema-derived serde types and shape/bound validation sharing address, geometry, viewport, inspection, settled-camera, comparison, overview, occlusion and schema-three backdrop vocabulary. The added backdrop support and bounded geometry are closed schema-derived values and validators; native material evaluation, frame acknowledgement, session state, transfer custody and scheduling remain in authored owners. Keeping this mechanically expanded schema output together preserves one generated consumer module; regeneration, shared vectors and exact Rust synchronization verify parity. Reviewed LF SHA-256: d6d2a3f6b9f364b2f158833baefa45a8d1b201d7241e8f4114dc7c75d79d66ce."
+review_by = 2026-11-30
+max_lines = 898
+
+[[waiver]]
+id = "SC-SESSION-GENERATED-RUST-PROTOCOL"
+kind = "structural"
+rule = "STRUCT003"
+path = "integrations/contracts/SessionProtocol.generated.rs"
+owner = "SugarCubes portable desktop session contract compiler"
+justification = "This exact compiler-owned closed version-one wire module contains only schema-derived serde types and shape/bound validators. Snapshot sections and protocol operations share occurrence, artifact, scene, inspection and runtime-fence vocabulary, so one module preserves one generated Rust type per value. Transport, filesystem publication, native privileges, target selection, scheduling and lifecycle remain in authored owners. Generator freshness, shared roundtrip/rejection vectors and Rust decoder synchronization review the boundary. Reviewed LF SHA-256: 4d2b1fe943374e8e2263c8be874f05f18f9dd181a623bcc3d6af53f8ce8f9e31."
+review_by = 2026-11-30
+max_lines = 600

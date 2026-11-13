@@ -1,45 +1,22 @@
-# Build, packaging, test and diagnostic outputs.
+# Each component owns its ignore rules in Sugar/.gitignore and Substitute/.gitignore.
+# Outputs and local state that tools may leave at the repository root.
 /target/
 /build/
 /dist/
 /artifacts/
-**/target/
+/runtime/
 *.log
-*.dmp
-*.pdb
-*.profraw
-*.profdata
 *.tmp
-*.bak
 __pycache__/
 .mypy_cache/
 .ruff_cache/
-
-# Local development environments and editor state.
-.idea/
-.vscode/
+.pytest_cache/
 .venv/
 node_modules/
+.env
+.env.*
+.idea/
+.vscode/
 .DS_Store
 Thumbs.db
 Desktop.ini
-*.swp
-
-# Secrets and machine-local configuration.
-.env
-.env.*
-!.env.example
-*.local.toml
-*.local.json
-*.pem
-*.key
-
-# Installed application state and managed ComfyUI, not source fixtures.
-/user/
-/appdata/
-/runtime/
-/comfyui/
-/config/
-/state/
-
-# Cargo.lock belongs in version control for this application workspace.
