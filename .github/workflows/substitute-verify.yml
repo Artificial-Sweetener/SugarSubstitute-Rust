@@ -63,6 +63,15 @@ jobs:
             }
             Import-Module (Join-Path $instance 'Common7\Tools\Microsoft.VisualStudio.DevShell.dll')
             Enter-VsDevShell -VsInstallPath $instance -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64' | Out-Null
+            # The crash crate links the committed dump parser built by tools/crashpad on the
+            # maintainer's machine; CI links the recorded build until it builds from source.
+            $parser = Join-Path $env:GITHUB_WORKSPACE 'Substitute\tools\crashpad\prebuilt\x86_64-pc-windows-msvc'
+            $expected = (Get-Content -LiteralPath (Join-Path $parser 'committed_dump_parser.lib.sha256') -TotalCount 1).Split(' ')[0]
+            $actual = (Get-FileHash -LiteralPath (Join-Path $parser 'committed_dump_parser.lib') -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -ne $expected) {
+              throw "committed_dump_parser.lib is $actual, but its recorded SHA-256 is $expected."
+            }
+            $env:SUGAR_COMMITTED_PARSER_LIB = $parser
           }
           cargo xtask verify
           exit $LASTEXITCODE
