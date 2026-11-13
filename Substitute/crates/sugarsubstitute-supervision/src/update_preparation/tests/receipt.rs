@@ -65,7 +65,7 @@ fn offline_restart_starts_the_prepared_update_on_its_receipt_after_metadata_expi
         drop(candidate);
         Ok(())
     })?;
-    assert_unlocked(&mut pipeline, &fixture)
+    fixture.preserved()
 }
 
 #[test]

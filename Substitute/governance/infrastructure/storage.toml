@@ -2852,7 +2852,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Onl
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/update_preparation/tests/receipt.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:bd49afd0b93334492a91777213db07c22f3cbaf69a068d86db507c12da197d47"
+source_sha256 = "sha256:fb710addc5c515d4f0788f586a83f1b0b3937bf2c454048cdbd62f222616a68f"
 capabilities = ["std::fs::read", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: A prepared update starts offline on its receipt once cached metadata expired, and only then. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
