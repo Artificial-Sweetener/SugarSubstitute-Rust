@@ -45,6 +45,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # Governance verifies the vendored Comfy Desktop sources pinned by this submodule.
+          submodules: true
+      - name: Install Linux windowing libraries
+        if: runner.os == 'Linux'
+        # tao's Linux backend links GTK 3 and D-Bus through pkg-config.
+        run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends libgtk-3-dev libdbus-1-dev pkg-config
       - name: Prepare repository-pinned Rust
         run: rustup show active-toolchain
       - name: Verify governance, formatting, lints, tests and Rustdoc
@@ -58,6 +64,15 @@ jobs:
             }
             Import-Module (Join-Path $instance 'Common7\Tools\Microsoft.VisualStudio.DevShell.dll')
             Enter-VsDevShell -VsInstallPath $instance -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64' | Out-Null
+            # The crash crate links the committed dump parser built by tools/crashpad on the
+            # maintainer's machine; CI links the recorded build until it builds from source.
+            $parser = Join-Path $env:GITHUB_WORKSPACE 'Substitute\tools\crashpad\prebuilt\x86_64-pc-windows-msvc'
+            $expected = (Get-Content -LiteralPath (Join-Path $parser 'committed_dump_parser.lib.sha256') -TotalCount 1).Split(' ')[0]
+            $actual = (Get-FileHash -LiteralPath (Join-Path $parser 'committed_dump_parser.lib') -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -ne $expected) {
+              throw "committed_dump_parser.lib is $actual, but its recorded SHA-256 is $expected."
+            }
+            $env:SUGAR_COMMITTED_PARSER_LIB = $parser
           }
           cargo xtask verify
           exit $LASTEXITCODE

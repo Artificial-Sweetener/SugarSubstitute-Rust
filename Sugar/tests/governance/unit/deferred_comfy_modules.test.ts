@@ -16,14 +16,13 @@
 /** Preserve lazy modules while Comfy enumerates every deployed .js extension. */
 import { afterEach, beforeEach } from '@jest/globals';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { deferComfyModules } from '../../../scripts/DeferredComfyModules.js';
 
 let root: string;
 beforeEach(() => {
-  root = mkdtempSync(
-    path.join(path.resolve('D:/devartifacts/SugarCubes/output-saving'), 'lazy-modules-'),
-  );
+  root = mkdtempSync(path.join(tmpdir(), 'lazy-modules-'));
   mkdirSync(path.join(root, 'private'));
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
