@@ -1,24 +1,27 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! An update failure report offers Copy and Export; nothing restarts and nothing is uploaded.
-//! The update owner writes the export through its own execution so this surface never blocks.
-use super::{ReportCommand, ReportControl, ReportOwner, shown};
+//! Export writes exactly the text Copy copies. The update owner writes the export through its
+//! own execution so this surface never blocks.
+use super::{ReportCommand, ReportControl, ReportOwner, ReportPresentation, shown};
 use std::{error::Error, path::PathBuf, sync::Arc};
 use sugarsubstitute_contracts::{
     execution::CompletionWake, localization::incident::ReportMessages,
 };
 use sugarsubstitute_ui::report::{CommandState, ReportAction, ReportStatus};
 
-/// Writes an update report to a user-selected file away from the window's thread.
+/// Writes an update report to a user-selected file away from the window's thread. The writer
+/// stores the text it is given as UTF-8, unchanged, and sends nothing anywhere else.
 pub trait UpdateExport {
     /// Begin with a wake to call when a write completes.
     /// # Errors
     /// Preserves the export owner's start failure.
     fn start(&mut self, wake: Arc<dyn CompletionWake>) -> Result<(), Box<dyn Error>>;
-    /// Begin writing the report to `destination`. At most one write is outstanding.
+    /// Begin writing `report`, the full report text exactly as shown and copied, to
+    /// `destination`. At most one write is outstanding.
     /// # Errors
     /// Preserves admission failures; the report shows them as an export failure.
-    fn begin(&mut self, destination: PathBuf) -> Result<(), Box<dyn Error>>;
+    fn begin(&mut self, destination: PathBuf, report: &str) -> Result<(), Box<dyn Error>>;
     /// Take the outcome of the outstanding write once it has finished.
     fn finished(&mut self) -> Option<Result<(), Box<dyn Error>>>;
     /// Stop accepting writes; an outstanding write runs to its outcome.
@@ -32,8 +35,8 @@ impl<T: UpdateExport + ?Sized> UpdateExport for &mut T {
     fn start(&mut self, wake: Arc<dyn CompletionWake>) -> Result<(), Box<dyn Error>> {
         (**self).start(wake)
     }
-    fn begin(&mut self, destination: PathBuf) -> Result<(), Box<dyn Error>> {
-        (**self).begin(destination)
+    fn begin(&mut self, destination: PathBuf, report: &str) -> Result<(), Box<dyn Error>> {
+        (**self).begin(destination, report)
     }
     fn finished(&mut self) -> Option<Result<(), Box<dyn Error>>> {
         (**self).finished()
@@ -50,8 +53,8 @@ impl<T: UpdateExport + ?Sized> UpdateExport for Box<T> {
     fn start(&mut self, wake: Arc<dyn CompletionWake>) -> Result<(), Box<dyn Error>> {
         (**self).start(wake)
     }
-    fn begin(&mut self, destination: PathBuf) -> Result<(), Box<dyn Error>> {
-        (**self).begin(destination)
+    fn begin(&mut self, destination: PathBuf, report: &str) -> Result<(), Box<dyn Error>> {
+        (**self).begin(destination, report)
     }
     fn finished(&mut self) -> Option<Result<(), Box<dyn Error>>> {
         (**self).finished()
@@ -67,15 +70,23 @@ impl<T: UpdateExport + ?Sized> UpdateExport for Box<T> {
 /// Owner of an update failure report. Without a writer, Export is hidden and Copy remains.
 pub struct UpdateReport<E> {
     export: Option<E>,
+    text: String,
     words: &'static ReportMessages,
     writing: bool,
     export_hidden: bool,
 }
 
 impl<E: UpdateExport> UpdateReport<E> {
-    /// Report through `export`, with status words from the localization owner.
-    pub fn new(export: Option<E>, words: &'static ReportMessages) -> Self {
-        Self { export, words, writing: false, export_hidden: false }
+    /// Own `presentation`'s report, exporting its full text through `export`, with status
+    /// words from the presentation's language.
+    pub fn new(export: Option<E>, presentation: &ReportPresentation) -> Self {
+        Self {
+            export,
+            text: presentation.details.clone().unwrap_or_default(),
+            words: presentation.words,
+            writing: false,
+            export_hidden: false,
+        }
     }
 
     fn status(&self, success: bool) -> Option<ReportStatus> {
@@ -99,7 +110,7 @@ impl<E: UpdateExport> ReportOwner for UpdateReport<E> {
         match command {
             ReportCommand::Export { destination, .. } if !self.writing => {
                 let Some(export) = self.export.as_mut() else { return Ok(()) };
-                match export.begin(destination) {
+                match export.begin(destination, &self.text) {
                     Ok(()) => {
                         self.writing = true;
                         report.set_command(ReportAction::Export, shown(false));

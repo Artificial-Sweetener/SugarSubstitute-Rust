@@ -435,7 +435,7 @@ impl UpdateExport for NoExport {
     fn start(&mut self, _: Arc<dyn CompletionWake>) -> TestResult {
         Ok(())
     }
-    fn begin(&mut self, _: PathBuf) -> TestResult {
+    fn begin(&mut self, _: PathBuf, _: &str) -> TestResult {
         Err("fixture export".into())
     }
     fn finished(&mut self) -> Option<std::result::Result<(), Box<dyn Error>>> {
@@ -450,8 +450,14 @@ impl UpdateExport for NoExport {
 fn update_body() -> TestResult {
     let title = "SugarSubstitute";
     let copy = messages("en");
+    let details = "SugarSubstitute 0.5.0 update failed while downloading the package.\n\
+        caused by: the connection was reset after 41.2 MB of 96.0 MB\n\
+        caused by: An existing connection was forcibly closed by the remote host. (os error 10054)\n"
+        .to_owned();
+    let presentation =
+        ReportPresentation::update_failure(copy, title, "0.5.0", "Downloading the update", details);
     let mut export = NoExport;
-    let mut inner = UpdateReport::new(Some(&mut export), copy.report);
+    let mut inner = UpdateReport::new(Some(&mut export), &presentation);
     let mut script = Script::new(
         title,
         &mut inner,
@@ -462,14 +468,7 @@ fn update_body() -> TestResult {
             Step::Click(ReportAction::Close),
         ],
     );
-    let details = "SugarSubstitute 0.5.0 update failed while downloading the package.\n\
-        caused by: the connection was reset after 41.2 MB of 96.0 MB\n\
-        caused by: An existing connection was forcibly closed by the remote host. (os error 10054)\n"
-        .to_owned();
-    let captures = show(
-        ReportPresentation::update_failure(copy, title, "0.5.0", "Downloading the update", details),
-        &mut script,
-    )?;
+    let captures = show(presentation, &mut script)?;
     assert_eq!(script.failure, None);
     assert_eq!(script.next, 4);
     assert_painted(&captures);

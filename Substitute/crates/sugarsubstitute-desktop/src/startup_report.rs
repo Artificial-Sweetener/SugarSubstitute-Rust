@@ -9,26 +9,24 @@ use crate::{
     native_action::{FormAction, FormScope},
     report::surface::{ReportPresentation, UpdateExport, UpdateReport, lifetime::ReportLifetime},
 };
-use sugarsubstitute_contracts::{localization::Messages, update::attempt};
+use sugarsubstitute_contracts::update::status::UpdateStatus;
 use tao::{event::WindowEvent, window::WindowId};
 
 /// The hosted update report.
 pub(in crate::startup_runtime) type HostedReport = HostedForm<ReportLifetime<'static>>;
 
-/// The report of `failure` in `words`' language, exporting through `export` when the host has
-/// a writer.
+/// The report's lifetime, exporting through `export` when the host has a writer.
 fn lifetime(
-    words: &'static Messages,
-    title: &str,
-    failure: &attempt::UpdateReport,
+    presentation: ReportPresentation,
     export: Option<Box<dyn UpdateExport>>,
 ) -> Result<ReportLifetime<'static>, Box<dyn std::error::Error>> {
-    let presentation = ReportPresentation::update_attempt(words, title, failure);
-    ReportLifetime::new(presentation, UpdateReport::new(export, words.report))
+    let owner = UpdateReport::new(export, &presentation);
+    ReportLifetime::new(presentation, owner)
 }
 
-/// Open the report of the latest failed update over the main window, or bring an open one
-/// forward. Does nothing when no attempt failed or the main window is not up.
+/// Open the report of the latest failed application update and SugarCubes update over the
+/// main window, or bring an open one forward. Does nothing when nothing failed or the main
+/// window is not up.
 pub(super) fn open(
     session: &mut Session,
     content: &mut impl StartupWindowContent,
@@ -45,19 +43,20 @@ pub(super) fn open(
     };
     use tao::platform::windows::WindowExtWindows;
     let owner = FormOwner(::windows::Win32::Foundation::HWND(window.hwnd() as *mut _));
-    let Some(failure) = content.update_status().and_then(|status| status.failure().cloned()) else {
-        return Ok(());
-    };
+    let words = content.locale_messages();
+    let status = content.update_status();
+    let app = status.as_ref().and_then(UpdateStatus::failure);
+    let failed =
+        ReportPresentation::failed_updates(words, title, app, content.pack_update_failure());
+    let Some(presentation) = failed else { return Ok(()) };
     let picker = session
         .picker
         .take()
         .ok_or_else(|| DesktopError::message("open_update_report", "shell picker is held"))?;
-    let words = content.locale_messages();
-    let opened =
-        lifetime(words, title, &failure, content.update_report_export()).and_then(|lifetime| {
-            let window = crate::report::surface::report_window(title.to_owned());
-            HostedForm::open(target, proxy, picker.clone(), owner, window, lifetime)
-        });
+    let opened = lifetime(presentation, content.update_report_export()).and_then(|lifetime| {
+        let window = crate::report::surface::report_window(title.to_owned());
+        HostedForm::open(target, proxy, picker.clone(), owner, window, lifetime)
+    });
     match opened {
         Ok(report) => session.report = Some(report),
         Err(cause) => {

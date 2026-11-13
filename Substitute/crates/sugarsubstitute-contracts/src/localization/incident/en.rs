@@ -52,6 +52,8 @@ pub static EN: ReportMessages = ReportMessages {
     version: "Version",
     update_phase: "Step",
     export_file_name: "SugarSubstitute update report.txt",
+    pack_update_title: "SugarCubes update failed",
+    pack_update_message: "SugarCubes could not be updated. The version you have keeps working, and you can copy or export this report.",
     startup_failure: [
         "Connection preparation failed",
         "Connection unavailable",

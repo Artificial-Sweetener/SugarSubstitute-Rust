@@ -15,6 +15,7 @@ pub(super) fn turn(
     let Some(main) = &session.main else { return Ok(()) };
     let feed = UpdateFeed::read(
         content.update_status().as_ref(),
+        content.pack_update_failure().is_some(),
         content.close_save_progress(),
         content.workflow_activity(),
     );

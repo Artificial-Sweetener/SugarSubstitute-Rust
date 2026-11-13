@@ -42,7 +42,7 @@ fn saving() -> CloseSaveProgress {
 }
 
 fn feed(status: Option<&UpdateStatus>) -> UpdateFeed {
-    UpdateFeed::read(status, None, WorkflowActivity::Idle)
+    UpdateFeed::read(status, false, None, WorkflowActivity::Idle)
 }
 
 fn shown(view: &UpdateCaptionView) -> Vec<u16> {
@@ -82,6 +82,30 @@ fn a_ready_update_outranks_a_later_failed_check() {
 }
 
 #[test]
+fn a_failed_sugarcubes_update_shows_the_warning_that_opens_the_report() {
+    let pack_failed = |status: Option<&UpdateStatus>| {
+        UpdateFeed::read(status, true, None, WorkflowActivity::Idle)
+    };
+    let mut current = UpdateStatus::default();
+    current.begin();
+    current.finish(Some(AttemptOutcome::Current), 5);
+    for status in [None, Some(&current), Some(&failed())] {
+        let mut caption = CaptionUpdates::default();
+        assert!(caption.observe(pack_failed(status)));
+        let view = caption.view(messages("en"));
+        assert_eq!((view.glyph, shown(&view)), (UpdateGlyph::Warning, vec![UPDATE]));
+        assert_eq!(view.update.label, "Couldn't update. Show the report");
+        assert_eq!(caption.activate(UPDATE), (false, Some(UpdateIntent::OpenReport)));
+        assert_eq!(caption.view(messages("ko")).update.label, messages("ko").updates.failed);
+    }
+    // A ready application update still outranks it, and saving still hides it.
+    assert_eq!(pack_failed(Some(&ready())).glyph, UpdateGlyph::Ready);
+    let mut caption = CaptionUpdates::default();
+    caption.observe(UpdateFeed::read(None, true, Some(saving()), WorkflowActivity::Idle));
+    assert_eq!(caption.activate(UPDATE), (false, None));
+}
+
+#[test]
 fn ready_offers_the_restart_and_the_offer_waits_for_a_running_workflow() {
     let en = messages("en");
     let mut caption = CaptionUpdates::default();
@@ -91,7 +115,7 @@ fn ready_offers_the_restart_and_the_offer_waits_for_a_running_workflow() {
     assert_eq!(shown(&view), vec![UPDATE, OFFER]);
     assert_eq!(view.offer.text, "Restart to apply");
 
-    caption.observe(UpdateFeed::read(Some(&ready()), None, WorkflowActivity::Running));
+    caption.observe(UpdateFeed::read(Some(&ready()), false, None, WorkflowActivity::Running));
     assert_eq!(caption.view(en).offer.text, "Restart after this finishes");
     assert_eq!(caption.view(messages("es")).offer.text, "Reiniciar al terminar");
 
@@ -129,6 +153,7 @@ fn saving_replaces_everything_with_one_line_until_the_close_settles() {
     caption.notify(Notice::NotSaved { workspace: true, inputs: false });
     assert!(caption.observe(UpdateFeed::read(
         Some(&ready()),
+        false,
         Some(saving()),
         WorkflowActivity::Idle
     )));
@@ -144,9 +169,9 @@ fn saving_replaces_everything_with_one_line_until_the_close_settles() {
         inputs: SaveVerdict::Saved,
     };
     let recording = Some(CloseSaveProgress::Recording(outcome));
-    assert!(UpdateFeed::read(None, recording, WorkflowActivity::Idle).saving);
+    assert!(UpdateFeed::read(None, false, recording, WorkflowActivity::Idle).saving);
     let settled = Some(CloseSaveProgress::Settled(outcome));
-    assert!(!UpdateFeed::read(None, settled, WorkflowActivity::Idle).saving);
+    assert!(!UpdateFeed::read(None, false, settled, WorkflowActivity::Idle).saving);
 }
 
 #[test]

@@ -200,6 +200,8 @@ pub use host_contract::{
 pub use main_caption_contract::{
     MainBackendState, MainCaptionLabels, MainRecoveryLabels, UpdateNotice, WorkflowActivity,
 };
+/// A failed SugarCubes start-up update, as the window's update report shows it.
+pub use sugarsubstitute_contracts::update::pack_failure::PackUpdateFailure;
 
 pub use main_canvas_native::{
     CanvasNativeNotification, CanvasNativeObservation, CanvasNativeReply, CanvasNativeReplyError,

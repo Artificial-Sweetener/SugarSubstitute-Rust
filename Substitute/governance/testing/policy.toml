@@ -163,7 +163,7 @@ reason = "The hardware composition qualification measures steady-state draw and 
 
 [[real_time]]
 path = "crates/sugarsubstitute-desktop/src/report/surface/native_tests/hosted.rs"
-source_sha256 = "sha256:f5580661efcac07acee43d43e4130a226addac7b8384903ecba494c5411a69fd"
+source_sha256 = "sha256:bd154e1f71e1e949d49412788d30c91c4a0991b2b80bcbd54598e3b2f53c7dfd"
 reason = "The hosted report qualification drives a real tao event loop that must wake to re-examine the native form; its 20 ms wake only schedules the next look, and every assertion waits for observed events."
 
 [[real_time]]

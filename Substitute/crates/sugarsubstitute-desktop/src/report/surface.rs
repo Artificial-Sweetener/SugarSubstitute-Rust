@@ -7,6 +7,10 @@ use std::{error::Error, path::PathBuf, sync::Arc};
 use sugarsubstitute_contracts::{
     execution::{CompletionWake, CounterDeadline},
     localization::{Messages, incident::ReportMessages},
+    update::{
+        attempt::{UpdateReport as UpdateAttempt, sanitize},
+        pack_failure::PackUpdateFailure,
+    },
 };
 use sugarsubstitute_ui::report::{
     CommandState, ReportAction, ReportContent, ReportKind, ReportLabels, ReportSeverity,
@@ -90,6 +94,54 @@ impl ReportPresentation {
         step: &str,
         details: String,
     ) -> Self {
+        let words = copy.report;
+        let heading = (words.update_title, words.update_message);
+        Self::failure(copy, window_title, heading, version, step, details)
+    }
+
+    /// The update report of everything that failed: the application's latest update attempt
+    /// and SugarCubes' start-up update, each with its version, step and causes, in that order.
+    /// The summary shows the first one's version and step. Every cause is redacted again here,
+    /// so a report from any source shows no path, address or credential. `None` when nothing
+    /// failed.
+    pub fn failed_updates(
+        copy: &'static Messages,
+        window_title: &str,
+        app: Option<&UpdateAttempt>,
+        pack: Option<&PackUpdateFailure>,
+    ) -> Option<Self> {
+        let words = copy.report;
+        let mut details = String::new();
+        let mut first = None;
+        if let Some(app) = app {
+            let version = app.version.as_deref().map_or_else(|| words.unavailable.into(), sanitize);
+            let step = copy.updates.phase(app.phase);
+            let causes = app.causes.iter().map(|cause| sanitize(cause));
+            write_section(&mut details, copy, words.update_title, &version, step, causes);
+            first = Some(((words.update_title, words.update_message), version, step.to_owned()));
+        }
+        if let Some(pack) = pack {
+            let version = pack.version().unwrap_or(words.unavailable).to_owned();
+            let step = pack.step().unwrap_or(words.unavailable);
+            let causes = pack.lines().iter().chain(pack.causes()).cloned();
+            write_section(&mut details, copy, words.pack_update_title, &version, step, causes);
+            let heading = (words.pack_update_title, words.pack_update_message);
+            first.get_or_insert((heading, version, step.to_owned()));
+        }
+        let (heading, version, step) = first?;
+        Some(Self::failure(copy, window_title, heading, &version, &step, details))
+    }
+
+    /// An update failure headed by `heading` (title and explanation), with version and step as
+    /// summary facts and `details` as the full report.
+    fn failure(
+        copy: &'static Messages,
+        window_title: &str,
+        (title, message): (&str, &str),
+        version: &str,
+        step: &str,
+        details: String,
+    ) -> Self {
         let summary = vec![
             SummaryRow { label: copy.report.version.to_owned(), value: version.to_owned() },
             SummaryRow { label: copy.report.update_phase.to_owned(), value: step.to_owned() },
@@ -99,35 +151,14 @@ impl ReportPresentation {
                 kind: ReportKind::UpdateFailure,
                 severity: ReportSeverity::Warning,
                 window_title: window_title.to_owned(),
-                title: copy.report.update_title.to_owned(),
-                message: copy.report.update_message.to_owned(),
+                title: title.to_owned(),
+                message: message.to_owned(),
                 summary,
                 has_details: true,
             },
             Some(details),
             copy,
         )
-    }
-
-    /// A failed update attempt as the update owner recorded it: its version and step as
-    /// summary facts, and a report naming them with the cause chain, outermost first.
-    pub fn update_attempt(
-        copy: &'static Messages,
-        window_title: &str,
-        attempt: &sugarsubstitute_contracts::update::attempt::UpdateReport,
-    ) -> Self {
-        let version = attempt.version.as_deref().unwrap_or(copy.report.unavailable);
-        let step = copy.updates.phase(attempt.phase);
-        let mut details = format!(
-            "{}\n{}: {version}\n{}: {step}\n",
-            copy.report.update_title, copy.report.version, copy.report.update_phase,
-        );
-        for cause in &attempt.causes {
-            details.push('\n');
-            details.push_str(cause);
-        }
-        details.push('\n');
-        Self::update_failure(copy, window_title, version, step, details)
     }
 
     /// The question asked when the previous SugarSubstitute window has stopped responding.
@@ -145,6 +176,38 @@ impl ReportPresentation {
             None,
             copy,
         )
+    }
+}
+
+/// Append one failure's section to the full report text: its heading, version and step, then
+/// one cause per line. Sections are separated by a blank line.
+fn write_section(
+    details: &mut String,
+    copy: &'static Messages,
+    heading: &str,
+    version: &str,
+    step: &str,
+    causes: impl Iterator<Item = String>,
+) {
+    if !details.is_empty() {
+        details.push('\n');
+    }
+    let words = copy.report;
+    for line in [
+        heading,
+        &format!("{}: {version}", words.version),
+        &format!("{}: {step}", words.update_phase),
+    ] {
+        details.push_str(line);
+        details.push('\n');
+    }
+    let mut causes = causes.peekable();
+    if causes.peek().is_some() {
+        details.push('\n');
+    }
+    for cause in causes {
+        details.push_str(&cause);
+        details.push('\n');
     }
 }
 
