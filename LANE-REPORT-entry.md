@@ -1,18 +1,18 @@
 # Lane report: entry (A6, C-6, M-1)
 
 ## Unfinished and unproven
-- **Windows tests blocked.** No lane test has run. Even with `lane/ci`, Windows test binaries can't link, because `committed_dump_parser.lib` isn't built anywhere (`lane/ci` item 1).
-- **Native qualification, unproven:** frozen UI thread plus a second launch; foreground from behind another window; the real probe; surface images.
-- **Closing copy with no handshake:** if its endpoint is gone but it still holds its claim, there is no verified pid. The launch re-elects silently until that copy exits (15 s budget, or the 3600 s backstop if it hangs). Needs the claim holder's identity (Restart Manager on `coordinators\<ns>.claim`).
+- **Real-Windows CI hasn't run the tests.** Main's CI stops at the submodule step. With `lane/ci`, Windows test binaries still can't link `committed_dump_parser.lib` (`lane/ci` item 1). They ran locally under Wine (below).
+- **Native qualification, unproven:** frozen UI thread plus a second launch; foreground from behind another window; the real probe; the hosted waiting surface and its images.
+- **Claim holder without a handshake:** the claims owner can't yet name the coordinator's process, so that wait shows the closing line with Cancel but never the question. `ForwardWait` takes a `ClaimHolder` port; supervision needs to supply it.
 
 ## Decisions made
-1. **A copy that answers its message queue but not the pipe gets no surface (departs from C-6's wording).** At 2 s an owned probe decides: hung means the question, exited means re-election, responsive means keep forwarding and probe again. A window shown then can't be dismissed by a later Accepted, so it would strand over a copy still starting.
-2. **No splash in forwarding processes** (FINDINGS-host Q5). The D1w Fluent window shows "Starting SugarSubstitute", "Finishing closing the previous window…" and Cancel.
-3. **Continuing is a fresh launch** through supervision's shared `Relaunch`, once the copy has exited.
-4. **Probe targets:** the coordinator probes its desktop; the forwarding launch probes the coordinator's pump windows. Answers are bound to the identity probed.
-5. **No 15 s Force step (M-1).** "Close it and start" ends the verified coordinator at once. A copy that exits during the question continues the launch.
-6. **`lane/ci` not merged:** not green, and it wouldn't run these tests. The merged tree was checked locally.
-7. **Snapshot kept in history** (force-push refused).
+1. **C-6 followed (ruling):** every wait for another copy shows a surface at 2 s on the execution clock.
+2. **The headless pump hosts the surface** as an unowned form on its own loop. The launch keeps forwarding and re-electing behind it. Accepted or winning election dismisses it. The end-the-pump-and-relaunch path is removed.
+3. **Words:** "Checking the previous SugarSubstitute window…", or "Finishing closing the previous window…" for a closing copy, with Cancel only. Cancel ends the launch. The question appears only after a hung probe or an Unresponsive answer. "Close it and start" ends exactly that verified copy, with no 15 s Force step (M-1).
+4. **No splash in forwarding processes** (FINDINGS-host Q5); the surface is the D1w Fluent window.
+5. **Probe answers are bound to their identity.** Re-election to another copy forgets the old one. A failed probe is retried and never ends the launch.
+6. **`lane/ci` not merged** (not green). Merged tree checked locally.
+7. **Snapshot kept in history** (force-push refused). Commits before 8e08b69e carry the wrong author; the coordinator rewrites them.
 
 ## Commits
 - 758d6d2c chore(entry): carry the entry lane's unfinished work to the cloud
@@ -21,14 +21,14 @@
 - 968a350a feat(entry): a second launch brings a responsive copy forward, waits for a closing one and asks only about one that has stopped responding
 - d6fb6c18 fix(entry): probe each running copy afresh and let a launch continue when an unresponsive copy exits by itself
 - 1162d758 test(entry): build the lost-coordinator fixture without Windows-only error types
+- 8e08b69e feat(entry): show a launch waiting on another copy within two seconds while it keeps forwarding
 
 ## Verification
-- Branch: governance and fmt pass. Windows-target workspace clippy (all targets and features, `-D warnings`) and rustdoc pass.
-- Merged with `origin/lane/ci` (local only): clean merge, no stale fingerprints, governance and Windows clippy pass. Linux check with lints capped has no hard errors, and none of `lane/ci`'s remaining Linux lints are in this lane's files.
-- Linux tests: application and contracts pass.
-- CI runs 43338293318, 43340366209, 43345466481: failed on all OSes at the submodule baseline only.
+- Governance and fmt pass. Windows-target workspace clippy (all targets and features, `-D warnings`) and rustdoc pass.
+- Under Wine (`x86_64-pc-windows-gnu`, local stub parser archive, not committed): 359 entry runner, activation, parent lifecycle and conflict tests pass, including all 7 manual-clock wait tests. 156/157 execution coordinator-entry tests pass; the one failure also fails on `origin/main` under Wine. Desktop rendering tests hit Wine's E_NOTIMPL.
+- Merged with `origin/lane/ci` on Linux: no stale fingerprints; desktop report, contracts and application tests pass.
 
 ## Next
-- Integrator: merge `lane/ci` here when green. Once Windows tests link, fix any failure.
-- `lane/ci`: Linux clippy still fails in `sugarsubstitute-execution` on main.
-- Coordinator: rule on decision 1; assign claim-holder identity; run the native proofs.
+- Integrator: merge `lane/ci` when green; re-run on real Windows.
+- Supervision: provide `ClaimHolder`.
+- Coordinator: native proofs.
