@@ -2792,7 +2792,7 @@ boundary = "native_custody"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/updater_package/stage/trial/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:b6a6dae9a6867daa3a18a18b52caf113d7b5bdb660485fa083c8231bd322038b"
+source_sha256 = "sha256:562c9b503dc9a43ca7f8231bcc7f50a3177fce82e5e9fcd277d33deeb3b36b65"
 capabilities = ["assert! restricted capability fragments", "std::fs::read", "std::fs::remove_file", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Exercise authenticated engine trial publication and withdrawal through real storage exclusion. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
