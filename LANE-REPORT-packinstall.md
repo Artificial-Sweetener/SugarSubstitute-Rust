@@ -1,15 +1,15 @@
 # Lane report: packinstall
 
 ## Unfinished or unproven
-- **Unproven: the headless real run with ComfyUI.** Not possible in the cloud. Needed: setup fresh install, a splash update (registry and GitHub), and the three verdicts with rollback.
-- **Unproven on real Windows:** the junction vectors (`ownership_vectors`, `update_refusal_vectors`), `fresh_setup_installs_sugarcubes_as_a_registry_install` and the WinHTTP loopback tests. Wine lacks junctions, security descriptors and one WinHTTP option. CI can't run them until main's baseline is repaired.
+- **Unproven: the headless real run with ComfyUI.** Cloud cannot run it. Needed: setup fresh install, a splash update (registry and GitHub), and the three verdicts with rollback.
+- **Unproven on real Windows:** the junction vectors (`ownership_vectors`, `update_refusal_vectors`), `fresh_setup_installs_sugarcubes_as_a_registry_install` and the WinHTTP loopback tests. (Wine gaps). CI can't run them until main's baseline is repaired.
 - **Page failure isn't a verdict yet.** `SettleAttempt` carries no cause, so a SugarCubes page failure looks like a user close. The update then stays "being judged" and blocks later updates.
-- **Nothing shows the one line or the report yet.** Each run writes `state/pack-updates/SugarCubes/report.json`, and `StartupOutcome::notice`/`report_lines` render the words. Neither reaches the window. The splash also has no "Updating SugarCubes…" line during the wait (bounded at 5 minutes).
+- **Nothing shows the one line or the report yet.** Each run writes `state/pack-updates/SugarCubes/report.json`, and `StartupOutcome::notice`/`report_lines` render the words. Neither reaches the window. The splash also has no "Updating SugarCubes…" line during the wait.
 
 ## Decisions made
 - **Package format:** packages carry the exact registry archive at `sugarcubes/SugarCubes.zip`. Setup extracts it as a registry install does. The `sugarcubes/` folder form is no longer accepted (unreleased, so no migration).
 - **One accessor per suite:** both suites read vectors only through `drive("<group>")`. The xtask rejects any driver that bypasses it.
-- **Shared lock:** the host takes SugarCubes' own lock (`.sugarcubes/updates/.lock`) with a whole-file `LockFileEx`, which conflicts with Python's byte-0 lock.
+- **Shared lock:** the host takes SugarCubes' own `.sugarcubes/updates/.lock` with a whole-file `LockFileEx`.
 - **Coordinator gate:** the update runs in the coordinator backend before source inspection, and it gates launch.
 - **Readiness verdict:** backend ready counts as "start unobservable", because readiness can't see node registration. The main reveal counts as the page loading with SugarCubes ready (readiness.rs:130).
 - **No repeated failures:** a restored version is never reinstalled. Only a newer one is.
@@ -24,13 +24,13 @@
 
 ## Verification
 - `cargo xtask governance` and fmt pass.
-- Windows-target clippy `-D warnings` is clean on contracts, update, supervision and sugarsubstitute, in all three feature legs. It ran as a cross check with C objects stubbed.
+- Windows-target clippy `-D warnings` is clean on contracts, update, supervision and sugarsubstitute, in all three feature legs. (cross check, C objects stubbed).
 - Linux clippy fails on main's own `sugarsubstitute-execution` (E0609), before reaching my code.
 - Under Wine, `pack_install` gives 28 passed and 3 failed, all Wine gaps.
 - Linux focused tests pass: update `http::`, contracts `localization`, xtask `shared_vectors`.
 - pytest `tests/pack_install tests/self_update` gives 158 passed.
 - `npm run check:staged` stops at the known mypy baseline. black, ruff and mypy are clean on the changed files.
-- CI: see below.
+- CI: runs listed below.
 
 ## Next steps for other lanes
 - **release:** `application-package.mjs` must ship `SugarCubes-<version>.zip` as `sugarcubes/SugarCubes.zip`.
