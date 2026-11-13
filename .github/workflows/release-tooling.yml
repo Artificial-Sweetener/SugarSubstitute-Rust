@@ -1,0 +1,143 @@
+name: Release tooling
+
+# Proves the release tooling on every change that can alter a release, without publishing:
+# its own tests (synthetic histories, publication rules, the SugarCubes archive against a
+# registry-layout install), the release plan of this commit, and a semantic-release dry run of
+# every component that has a release due. A dry run happens in a disposable clone with no
+# credentials, so this workflow needs and holds read access only.
+
+on:
+  push:
+    branches-ignore:
+      - main
+    paths:
+      - '.github/release/**'
+      - '.github/workflows/release.yml'
+      - '.github/workflows/release-tooling.yml'
+      - '.github/workflows/substitute-update-repository.yml'
+      - 'Sugar/**'
+      - 'Substitute/Cargo.toml'
+      - 'Substitute/Cargo.lock'
+  pull_request:
+    paths:
+      - '.github/release/**'
+      - '.github/workflows/release.yml'
+      - '.github/workflows/release-tooling.yml'
+      - '.github/workflows/substitute-update-repository.yml'
+      - 'Sugar/**'
+      - 'Substitute/Cargo.toml'
+      - 'Substitute/Cargo.lock'
+  workflow_dispatch:
+  # The release workflow proves the tooling on the exact commit it is about to release.
+  workflow_call:
+    outputs:
+      sugarcubes_release:
+        value: ${{ jobs.tooling.outputs.sugarcubes_release }}
+      sugarcubes_version:
+        value: ${{ jobs.tooling.outputs.sugarcubes_version }}
+      sugarcubes_blocked:
+        value: ${{ jobs.tooling.outputs.sugarcubes_blocked }}
+      substitute_release:
+        value: ${{ jobs.tooling.outputs.substitute_release }}
+      substitute_version:
+        value: ${{ jobs.tooling.outputs.substitute_version }}
+      substitute_blocked:
+        value: ${{ jobs.tooling.outputs.substitute_blocked }}
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "24"
+  PYTHON_VERSION: "3.12"
+  COMFY_CLI_VERSION: "1.26.0"
+
+jobs:
+  tooling:
+    name: Test, plan and dry-run releases
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      sugarcubes_release: ${{ steps.plan.outputs.sugarcubes_release }}
+      sugarcubes_version: ${{ steps.plan.outputs.sugarcubes_version }}
+      sugarcubes_blocked: ${{ steps.plan.outputs.sugarcubes_blocked }}
+      substitute_release: ${{ steps.plan.outputs.substitute_release }}
+      substitute_version: ${{ steps.plan.outputs.substitute_version }}
+      substitute_blocked: ${{ steps.plan.outputs.substitute_blocked }}
+    steps:
+      - name: Checkout complete history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: .github/release/package-lock.json
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install release tooling
+        working-directory: .github/release
+        run: npm ci
+
+      - name: Check release tooling formatting
+        working-directory: .github/release
+        run: npm run format:check
+
+      - name: Install SugarCubes and the pinned registry client
+        run: pip install -e "Sugar[dev]" "comfy-cli==${{ env.COMFY_CLI_VERSION }}"
+
+      - name: Test release tooling
+        working-directory: .github/release
+        run: npm test
+
+      - name: Test the registry archive and its registry-layout install
+        working-directory: .github/release
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+
+      - name: Plan
+        id: plan
+        run: node .github/release/release.mjs plan
+
+      - name: Dry-run every component with a release due
+        # An explicit bash shell runs with pipefail, so a failed dry run fails through `tee`.
+        shell: bash
+        env:
+          SUGARCUBES_RELEASE: ${{ steps.plan.outputs.sugarcubes_release }}
+          SUGARCUBES_BLOCKED: ${{ steps.plan.outputs.sugarcubes_blocked }}
+          SUBSTITUTE_RELEASE: ${{ steps.plan.outputs.substitute_release }}
+          SUBSTITUTE_BLOCKED: ${{ steps.plan.outputs.substitute_blocked }}
+          SUGARCUBES_VERSION: ${{ steps.plan.outputs.sugarcubes_version }}
+          SUBSTITUTE_VERSION: ${{ steps.plan.outputs.substitute_version }}
+        run: |
+          for component in sugarcubes substitute; do
+            upper="${component^^}"
+            release_var="${upper}_RELEASE"
+            blocked_var="${upper}_BLOCKED"
+            if [ -n "${!blocked_var}" ]; then
+              echo "::notice title=$component cannot release yet::${!blocked_var}"
+            elif [ "${!release_var}" = "true" ]; then
+              version_var="${upper}_VERSION"
+              node .github/release/release.mjs release "$component" --dry-run | tee "$RUNNER_TEMP/$component.log"
+              # semantic-release must reach the version the plan predicted.
+              grep -qx "version=${!version_var}" "$RUNNER_TEMP/$component.log"
+            else
+              echo "$component has no release due."
+            fi
+          done
+
+      - name: Keep the dry-run release notes
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: dry-run-release-notes
+          path: dist/*/notes.md
+          if-no-files-found: ignore

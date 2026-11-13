@@ -192,11 +192,11 @@ migrations = []
 id = "native-update-distribution-v1"
 owner = "sugarsubstitute-update"
 sources = ["crates/sugarsubstitute-update/src/distribution.rs", "crates/sugarsubstitute-update/src/http.rs"]
-source_sha256 = "sha256:dc31160e2466feda85d3e93c3501d1e6c5d8267ea0cc59645384a6981ec13bad"
+source_sha256 = "sha256:9b4d83f76b899d8b722f1e4d9ac52ab61835e53f7b6f5602b0e5339ba91d9b59"
 classification = "protocol"
 preservation = "must_preserve"
-current_version = 2
-accepted_versions = [2]
+current_version = 3
+accepted_versions = [3]
 compatibility = "reject"
 migrations = []
 

@@ -427,6 +427,20 @@ capabilities = ["codec"]
 rationale = "Tooling reads governance policy TOML to record reviewed source fingerprints; not product settings."
 
 [[records]]
+path = "tools/update-repository/src/main.rs"
+owner = "sugarsubstitute-update-repository"
+source_sha256 = "sha256:2d65c4e259f824cad7d7dac32bf9de5f8f3321b25cec6392cb3cb014d0f3bda6"
+capabilities = ["arguments"]
+rationale = "Release-CI signing tool command line; its options select a repository folder, keys and times, never product settings."
+
+[[records]]
+path = "tools/update-repository/src/storage.rs"
+owner = "sugarsubstitute-update-repository"
+source_sha256 = "sha256:31250bbfae3c27afe8583f03e7ec92e8f5e3d84fd4059a146c10b38d6ade562f"
+capabilities = ["environment"]
+rationale = "Signing keys reach release CI only as secrets in the environment, named by an env:NAME key reference; never product settings."
+
+[[records]]
 path = "tools/xtask/src/catalog.rs"
 owner = "sugarsubstitute-xtask"
 source_sha256 = "sha256:38a8d2877d91bf1d68b0a1d70d78bdecbdc7d7f427c8ca6bced514b513d0cd58"
