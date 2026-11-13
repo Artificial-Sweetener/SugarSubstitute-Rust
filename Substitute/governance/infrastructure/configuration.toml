@@ -1013,3 +1013,10 @@ owner = "sugarsubstitute-splash"
 source_sha256 = "sha256:540f08b5ebbe208f1f61ba94ee04a166604434b83fe26d97e20de2dc1492d8e1"
 capabilities = ["environment"]
 rationale = "Read only the optional qualification evidence directory for splash captures; the test writes its own rendered frames there and reads or writes no product settings."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/generation_retirement/inventory.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:2e8c3088f26f79e522f1566f0626fa4bbc407e7d9b18ad60686973ec3dac8efa"
+capabilities = ["document"]
+rationale = "Names an unused generation's installation-owned configuration documents only so retirement can delete them; it never reads, parses or writes their contents."
