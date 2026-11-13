@@ -44,6 +44,7 @@ pub struct IssuedDiagnosticRequest {
     generation: u64,
 }
 impl IssuedDiagnosticRequest {
+    #[cfg(windows)]
     /// Match the complete original authenticated input against this issued correlation.
     /// This verifies key, request and SHA256; actual native origin remains with `received`.
     /// # Errors

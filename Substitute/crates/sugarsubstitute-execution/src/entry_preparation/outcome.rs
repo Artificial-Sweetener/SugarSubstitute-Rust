@@ -34,6 +34,7 @@ pub struct EntryPreparationFailure<E> {
     _unallocated: Option<MemoryClaim>,
 }
 impl<E> EntryPreparationFailure<E> {
+    #[cfg(any(windows, test))]
     pub(super) fn new(
         cause: EntryPreparationCause<E>,
         owner: Option<EntryPreparationOwner>,
@@ -46,11 +47,13 @@ impl<E> EntryPreparationFailure<E> {
             _unallocated: None,
         }
     }
+    #[cfg(any(windows, test))]
     pub(super) fn unallocated(cause: EntryPreparationInputError, claim: MemoryClaim) -> Self {
         let mut failure = Self::new(EntryPreparationCause::Preparation(cause), None);
         failure._unallocated = Some(claim);
         failure
     }
+    #[cfg(any(windows, test))]
     pub(super) fn append(&mut self, cause: EntryPreparationInputError) {
         if let Some(slot) = self.secondary.iter_mut().find(|slot| slot.is_none()) {
             *slot = Some(cause);

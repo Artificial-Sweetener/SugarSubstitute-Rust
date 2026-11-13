@@ -53,7 +53,7 @@ pub(crate) fn validate(
     state: &State,
     scope: &Scope,
     spec: JobSpec,
-    kind: &RequestKind<'_>,
+    kind: &RequestKind,
     now: Moment,
 ) -> Result<(), AdmissionError> {
     match kind {

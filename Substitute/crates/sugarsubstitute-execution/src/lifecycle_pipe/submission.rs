@@ -44,7 +44,7 @@ pub(crate) fn admit_owned<T: Send + 'static, M>(
     scope: &Scope,
     spec: JobSpec,
     admission: PipeAdmission<T>,
-    kind: RequestKind<'_>,
+    kind: RequestKind,
     input: M,
     lease: impl FnOnce(M, &JobContext) -> Result<PreparedPipeLease, (AdmissionError, M)>,
 ) -> Result<(Control, OwnedJob<T, LifecyclePipeFailure>), (AdmissionError, M)> {

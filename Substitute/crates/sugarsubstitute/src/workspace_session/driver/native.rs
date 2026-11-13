@@ -51,7 +51,7 @@ impl RecordedOutputs {
         Ok(())
     }
     /// Classification alone grants no bytes, native binding, or filesystem authority.
-    #[cfg(any(feature = "native-composition", test))]
+    #[cfg(all(windows, any(feature = "native-composition", test)))]
     fn recognizes(&self, id: &str) -> bool {
         self.saturated
             || <[u8; 36]>::try_from(id.as_bytes()).is_ok_and(|key| self.ids.contains(&key))

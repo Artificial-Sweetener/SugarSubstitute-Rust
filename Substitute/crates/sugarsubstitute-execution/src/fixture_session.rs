@@ -1,12 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Own admitted fixture events, protocol commands and checked native retirement.
+#[cfg(windows)]
 pub(crate) mod child;
+/// Portable test builds mount this publicly; Windows exports it through its adapter module.
+#[cfg(all(test, not(windows)))]
+pub mod child;
 pub(crate) mod child_worker;
 mod control;
 mod types;
 pub(crate) mod worker;
-pub use control::{FixtureChildEvents, FixtureSession, FixtureSessionControl};
+#[cfg(windows)]
+pub use control::FixtureChildEvents;
+pub use control::{FixtureSession, FixtureSessionControl};
 pub use types::{
     FixtureObservation, FixtureSessionError, FixtureSessionReport, MIN_FIXTURE_SESSION_BYTES,
 };

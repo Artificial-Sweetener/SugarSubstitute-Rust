@@ -83,7 +83,7 @@ impl Active {
         {
             if !cause.contains_owner_panic()
                 && matches!(cause.stage(), "pipe_issue" | "pipe_completion")
-                && cause.source().is_some_and(peer_closed_pipe)
+                && peer_closed(cause.source())
             {
                 return EntryTransportError::PeerDisconnected(cause);
             }
@@ -93,24 +93,18 @@ impl Active {
     }
 }
 
-/// Whether a native pipe failure proves the peer closed its end.
-///
-/// Windows reports ERROR_BROKEN_PIPE, ERROR_NO_DATA or ERROR_PIPE_NOT_CONNECTED.
+/// Broken, closing or absent pipe peers report these Win32 codes on the pipe operation.
 #[cfg(windows)]
-pub(in crate::coordinator_entry) fn peer_closed_pipe(error: &(dyn Error + 'static)) -> bool {
-    error.downcast_ref::<windows::core::Error>().is_some_and(|error| {
-        [109, 232, 233]
-            .into_iter()
-            .any(|code| error.code() == windows::core::HRESULT::from_win32(code))
+fn peer_closed(source: Option<&(dyn Error + 'static)>) -> bool {
+    source.and_then(|e| e.downcast_ref::<windows::core::Error>()).is_some_and(|e| {
+        [109, 232, 233].into_iter().any(|code| e.code() == windows::core::HRESULT::from_win32(code))
     })
 }
 
-/// Whether a native pipe failure proves the peer closed its end.
-///
-/// Other platforms report a closed pipe peer as a broken pipe.
+/// Portable pipes report a closed peer as a broken pipe.
 #[cfg(not(windows))]
-pub(in crate::coordinator_entry) fn peer_closed_pipe(error: &(dyn Error + 'static)) -> bool {
-    error
-        .downcast_ref::<std::io::Error>()
-        .is_some_and(|error| error.kind() == std::io::ErrorKind::BrokenPipe)
+fn peer_closed(source: Option<&(dyn Error + 'static)>) -> bool {
+    source
+        .and_then(|e| e.downcast_ref::<std::io::Error>())
+        .is_some_and(|e| e.kind() == std::io::ErrorKind::BrokenPipe)
 }

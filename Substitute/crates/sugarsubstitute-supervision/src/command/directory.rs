@@ -8,6 +8,7 @@ const DOT: u16 = b'.' as u16;
 const SPACE: u16 = b' ' as u16;
 const LEGACY_PATH_UNITS: usize = 260;
 
+#[cfg(windows)]
 /// Prepare the same operational spelling for explicit child environment paths.
 /// Lexical validation precedes normalization; this establishes no filesystem identity.
 /// Only the Windows launch environment spells explicit child paths.

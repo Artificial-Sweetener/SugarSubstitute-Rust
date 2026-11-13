@@ -41,6 +41,7 @@ fn snapshot(
 // The captured pair is minted by the Windows lifecycle pipe.
 #[cfg(windows)]
 #[test]
+#[cfg(windows)]
 fn captured_parent_requires_its_actual_allocation_before_factory_and_preserves_pair() -> TestResult
 {
     use crate::windows_lifecycle_pipe::{

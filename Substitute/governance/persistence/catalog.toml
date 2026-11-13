@@ -549,7 +549,7 @@ migrations = []
 id = "native-diagnostic-command"
 owner = "sugarsubstitute-crash"
 sources = ["crates/sugarsubstitute-crash/src/diagnostic_client.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/codec.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/command_codec.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/command_codec/fields.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/command_codec/read.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/command_codec/write.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/commands.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/error.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/identity.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/reader.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/replay.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/types.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/validation.rs", "crates/sugarsubstitute-crash/src/diagnostic_client/writer.rs"]
-source_sha256 = "sha256:4b51edbaf3232dc0864cc71daf8908086d5df06c2f2019bfecdd36c484160799"
+source_sha256 = "sha256:8c5bf91ed6505541a98b5c33182baa300191859a69ad6222f4fb9d96e43655b0"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 2
@@ -1752,7 +1752,7 @@ current_version = 1
 accepted_versions = [1]
 compatibility = "reject"
 migrations = []
-source_sha256 = "sha256:1ce27ed3053811f5f18433ec497b7dcb64edc1aacd1b426de74da5f03eeeffd2"
+source_sha256 = "sha256:1efc5c7530c372e1dd5b963f5d0d593aa42f91dbcf03d1ed495c4adaacadf29a"
 
 [[formats]]
 id = "legacy-input-workspace-association-v1"
@@ -1776,7 +1776,7 @@ current_version = 1
 accepted_versions = [1]
 compatibility = "reject"
 migrations = []
-source_sha256 = "sha256:b812a6d601574688d3da112cea31e04cc12dc33032b1d3bc5f086c4fe09db2a5"
+source_sha256 = "sha256:b36c3920767db7538ec95bbaa84662a4275b55df7c8e0bd07dbd307b1087e215"
 
 [[formats]]
 id = "desktop-session-media-capability-v1"
@@ -1788,7 +1788,7 @@ current_version = 1
 accepted_versions = [1]
 compatibility = "reject"
 migrations = []
-source_sha256 = "sha256:e1732a43294fcde613bfb5375d9323bf1ecf1dc2a908bd537c55cd499b9ef270"
+source_sha256 = "sha256:2099ffbae7d9cc07919aa3149a7e3b6cf11567ccc8b0decfe09121ca9e69bfc4"
 
 # What the last close did not keep: written under user\sessions\<profile> before the exit
 # intent when a close save is not fully saved, reported once by the next start and kept.

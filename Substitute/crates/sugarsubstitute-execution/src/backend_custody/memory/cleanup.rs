@@ -83,12 +83,14 @@ impl BackendCustodyCleanup {
             Ok(())
         }
     }
+    #[cfg(windows)]
     pub(crate) fn matches_metadata(&self, original: &BackendCustodyMemory) -> bool {
         match (&self.metadata.0, &original.0) {
             (Some(a), Some(b)) => Arc::ptr_eq(a, b),
             _ => false,
         }
     }
+    #[cfg(windows)]
     pub(crate) fn matches_slot(
         &self,
         original: &crate::backend_custody::BackendCustodySlotTurn,

@@ -17,6 +17,7 @@ use sugarsubstitute_contracts::{
 pub struct SurfacePresentation {
     identity: MainIdentity,
     /// Settled cameras coalesce only with settled cameras, never with full presentation state.
+    #[cfg(target_os = "windows")]
     camera: bool,
     address: CanvasSurfaceAddress,
     sequence: u64,
@@ -45,6 +46,7 @@ impl SurfacePresentation {
         let payload = change.encode(&session).map_err(SurfaceReplyError::Encode)?;
         Ok(Self {
             identity,
+            #[cfg(target_os = "windows")]
             camera: false,
             address: change.address().clone(),
             sequence: change.sequence(),
@@ -70,6 +72,7 @@ impl SurfacePresentation {
         let payload = change.encode(&session).map_err(SurfaceReplyError::Encode)?;
         Ok(Self {
             identity,
+            #[cfg(target_os = "windows")]
             camera: true,
             address: change.address().clone(),
             sequence: change.sequence(),
@@ -100,7 +103,7 @@ impl SurfacePresentation {
     }
 
     /// Compare only exact native navigation and attachment identities for pending coalescing.
-    #[cfg(any(target_os = "windows", test))]
+    #[cfg(target_os = "windows")]
     pub(crate) fn same_target(&self, other: &Self) -> bool {
         self.identity == other.identity
             && self.address == other.address

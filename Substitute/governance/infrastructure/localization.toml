@@ -132,7 +132,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/lib.rs"
-source_sha256 = "sha256:697dfeb70f1556095478978474e851158ff7a21216e8245d1597b5c68b8b7559"
+source_sha256 = "sha256:c8d72a256b68f88ca89903fbf6b1ff0a5d9384b68d151f0db89c66f1b2bc7f7b"
 kind = "native"
 rationale = "Native boundary: Own native window lifetime and CPU frame presentation independently of UI content.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -384,7 +384,7 @@ rationale = "Pure invalid-dimension qualification uses an empty title and unreac
 
 [[records]]
 path = "crates/sugarsubstitute/src/lib.rs"
-source_sha256 = "sha256:00c4a60f438f27f126dbbd2af663d01331f58918290d0810624c134cbbc71652"
+source_sha256 = "sha256:f9db62ea7c6f7be1ca2024ea294ec1b3dba87a32f8421260e7164901cca75829"
 kind = "presentation"
 rationale = "The explicit splash demo composes DesktopOptions.title from messages(options.locale).loading; diagnostic and protocol values do not become UI labels."
 
@@ -432,13 +432,13 @@ rationale = "Validate existing control labels for emptiness/NUL and unique ident
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/host_contract.rs"
-source_sha256 = "sha256:6384a440b38a3628668a9b2f65f04e4da973364038c4d73698bf48de3d03372c"
+source_sha256 = "sha256:f54cde5774d7a085622defb4acf38b1b47f8202b0fd43c60ef87c657356569cb"
 kind = "native"
 rationale = "Main caption/recovery contracts borrow localized labels from the host. They define presentation data and no catalog or fallback policy."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_backend.rs"
-source_sha256 = "sha256:ad0d8e74cf17c6ac77d07c8a8d4a6ffbc65a562ed3c016d68ffb3159eef98202"
+source_sha256 = "sha256:2e36efdc381de9c5f7dd03f6aa949240d043ea36cad9f0c58e92cc0e52fd3473"
 kind = "native"
 rationale = "Recovery selects supplied canonical retry labels according to current backend state; it lays out no caption."
 

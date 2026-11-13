@@ -55,8 +55,11 @@ mod main_panel_ingress;
 mod main_panel_ingress_receipt;
 #[cfg(test)]
 mod main_panel_ingress_vectors_tests;
+#[cfg(any(target_os = "windows", test))]
 mod main_readiness;
+#[cfg(any(target_os = "windows", test))]
 mod main_readiness_storage;
+#[cfg(any(target_os = "windows", test))]
 mod main_readiness_types;
 #[cfg(any(target_os = "windows", test))]
 mod main_reload;

@@ -9,14 +9,16 @@ use crate::{
     scope::lock,
 };
 use std::sync::{Arc, Mutex, Weak};
+#[cfg(any(windows, test))]
+use sugarsubstitute_contracts::execution::{
+    AdmittedJobResources, JobClass, JobPhase, MemoryClaim, Operation,
+};
 use sugarsubstitute_contracts::{
     coordinator_entry::EntrySetupBudget,
-    execution::{
-        AdmittedJobResources, CancelControl, JobClass, JobContext, JobPhase, MemoryClaim, Moment,
-        Operation, TimeError,
-    },
+    execution::{CancelControl, JobContext, Moment, TimeError},
 };
 
+#[cfg(any(windows, test))]
 pub(crate) const PREPARATION_BYTES: u64 = 4 * 1024 * 1024;
 
 /// Constructor-private proof of the genuine preparation record and original ports.
@@ -46,6 +48,7 @@ impl OriginalPreparation {
     /// This constructor samples no provider. The caller adopts the returned full
     /// claim before metadata allocation and performs check before the first effect.
     /// Caller clock/cancellation objects are neither compared nor invoked.
+    #[cfg(any(windows, test))]
     pub(crate) fn mint(
         core: &Arc<Core>,
         observed: &JobContext,
@@ -109,6 +112,7 @@ impl OriginalPreparation {
     }
 
     /// Borrow the genuine reconstructed ports, not caller-supplied public ports.
+    #[cfg(any(windows, test))]
     pub(crate) fn context(&self) -> &JobContext {
         &self.context
     }
@@ -122,6 +126,7 @@ impl OriginalPreparation {
     /// Read the last adopted original sample without calling a provider.
     /// A runner uses its genuine dispatch sample as a lower bound if the first
     /// control check failed before adopting a later sample. This never renews a cutoff.
+    #[cfg(any(windows, test))]
     pub(crate) fn last_observed(&self) -> Moment {
         lock(&self.sampled).last
     }
@@ -208,6 +213,7 @@ impl OriginalPreparation {
 
     /// Register the original passive slot after full-claim-backed owner construction.
     /// A rejected slot and every final owner guard are destroyed outside Core.
+    #[cfg(any(windows, test))]
     pub(crate) fn register(
         &self,
         slot: Arc<PreparationSlot>,
@@ -282,6 +288,7 @@ fn live(
 /// Revalidate actual receiving-client facts after the last external provider returns.
 /// This never samples or invokes ports from the supplied matching context.
 impl Core {
+    #[cfg(any(windows, test))]
     pub(crate) fn validate_preparation_client(
         &self,
         state: &State,

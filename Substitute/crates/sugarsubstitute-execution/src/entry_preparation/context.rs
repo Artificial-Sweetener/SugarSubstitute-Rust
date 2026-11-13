@@ -2,10 +2,12 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Borrow genuine original controls while native capture retains whole custody.
 
+#[cfg(any(windows, test))]
 use super::{
-    CapturedEntryEnvironment, EntryEnvironmentFailure, EntryPreparationError,
-    EntryPreparationInputError, owner::EntryPreparationOwner, port::EnvironmentPort,
+    CapturedEntryEnvironment, EntryEnvironmentFailure, EntryPreparationInputError,
+    port::EnvironmentPort,
 };
+use super::{EntryPreparationError, owner::EntryPreparationOwner};
 use sugarsubstitute_contracts::execution::{JobContext, Moment};
 
 /// The existing admitted worker supplies genuine reconstructed original ports.
@@ -14,6 +16,7 @@ pub struct EntryPreparationContext {
     owner: EntryPreparationOwner,
 }
 impl EntryPreparationContext {
+    #[cfg(any(windows, test))]
     pub(super) fn new(owner: EntryPreparationOwner) -> Self {
         Self { owner }
     }
@@ -50,6 +53,7 @@ impl EntryPreparationContext {
             .map_err(|cause| EntryEnvironmentFailure::from_control(cause, self.owner.clone()))?;
         self.capture_port(Box::new(crate::windows_entry_environment::WindowsEnvironment::new()))
     }
+    #[cfg(any(windows, test))]
     fn capture_port(
         &self,
         port: Box<dyn EnvironmentPort>,

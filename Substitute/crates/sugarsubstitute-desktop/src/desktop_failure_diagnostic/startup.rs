@@ -3,9 +3,11 @@
 //! Enrich the existing first failure frame from actual observation and retained typed close facts.
 
 use super::*;
+#[cfg(any(target_os = "windows", test))]
+use crate::DesktopStartupObservation;
 use crate::{
-    DesktopStartupObservation, StartupCaptureState, StartupCauseCode, StartupCloseFailure,
-    StartupCloseStage, StartupObservationKind,
+    StartupCaptureState, StartupCauseCode, StartupCloseFailure, StartupCloseStage,
+    StartupObservationKind,
 };
 
 /// Retain the exact content failure and actual observation tag without payload projection.

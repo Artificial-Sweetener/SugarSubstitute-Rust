@@ -425,6 +425,7 @@ pub enum DesktopStartupCommand {
 
 /// What a closing native session does with one queued command.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg(any(target_os = "windows", test))]
 pub(crate) enum ClosingAdmission {
     /// Close-owned work still runs.
     Run,
@@ -436,6 +437,7 @@ pub(crate) enum ClosingAdmission {
 impl DesktopStartupCommand {
     /// Classify this command once the native session began closing. A page message produced by
     /// work that finished as the window closed, such as a workspace save's outcome, is dropped.
+    #[cfg(any(target_os = "windows", test))]
     pub(crate) const fn while_closing(&self) -> ClosingAdmission {
         match self {
             Self::Close

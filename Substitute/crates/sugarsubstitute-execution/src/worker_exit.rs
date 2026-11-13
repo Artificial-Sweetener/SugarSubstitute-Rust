@@ -14,6 +14,7 @@ pub(crate) enum WorkerKind {
     /// One CPU lane thread.
     Cpu,
     /// The native registration/retirement thread.
+    #[cfg(any(windows, test))]
     Native,
 }
 
@@ -33,6 +34,7 @@ impl Running {
         match kind {
             WorkerKind::Async => &mut self.async_loops,
             WorkerKind::Cpu => &mut self.cpu_loops,
+            #[cfg(any(windows, test))]
             WorkerKind::Native => &mut self.native_loops,
         }
     }

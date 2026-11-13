@@ -135,6 +135,7 @@ impl<T: Send + 'static, E: Send + 'static> Job<T, E> {
 
     /// Publish a native custody job's terminal outcome while its worker keeps `context` and its
     /// custody guards. The reservation is released when that custody settles, not at publication.
+    #[cfg(any(windows, test))]
     pub(crate) fn finish_in_custody_at(
         &self,
         context: &JobContext,
@@ -163,6 +164,7 @@ impl<T: Send + 'static, E: Send + 'static> Job<T, E> {
     /// subordinate locks. It invokes no provider/native call or outcome destructor.
     /// Rejection returns the identical original outcome after all locks leave. Native custody
     /// publishes this way, so the worker keeps `context` and its reservation until custody settles.
+    #[cfg(any(windows, test))]
     pub(crate) fn finish_current_at(
         &self,
         context: &JobContext,
