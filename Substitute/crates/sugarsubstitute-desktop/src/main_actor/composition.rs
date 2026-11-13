@@ -12,6 +12,7 @@ mod drag_source;
 mod drop_target;
 mod input;
 mod modifiers;
+mod page;
 mod retirement;
 mod routing;
 mod scale;
@@ -166,6 +167,8 @@ pub(super) struct Composition {
     canvas: Option<canvas::Canvas>,
     /// The browser allocation the committed native pixels were placed against.
     shown: Option<crate::canvas::placement::WebViewAllocation>,
+    /// The client point the browser visual was last committed at.
+    placed: Option<windows::Win32::Foundation::POINT>,
     retirement_fence: Option<FencedCommit>,
     input: Option<input::Input>,
     /// The display whose refresh rate the canvas last received, as its native monitor handle.
@@ -192,6 +195,7 @@ impl Composition {
             browser: None,
             canvas: None,
             shown: None,
+            placed: None,
             retirement_fence: None,
             input: None,
             display: None,

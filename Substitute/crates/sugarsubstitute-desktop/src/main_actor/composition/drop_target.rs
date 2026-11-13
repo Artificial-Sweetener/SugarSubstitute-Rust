@@ -13,7 +13,6 @@ use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2CompositionContr
 use windows::{
     Win32::{
         Foundation::{DRAGDROP_E_INVALIDHWND, DRAGDROP_E_NOTREGISTERED, E_POINTER, POINT, POINTL},
-        Graphics::Gdi::ClientToScreen,
         System::{
             Com::IDataObject,
             Ole::{
@@ -32,13 +31,9 @@ fn effect_within(allowed: DROPEFFECT, chosen: DROPEFFECT) -> DROPEFFECT {
     DROPEFFECT(chosen.0 & (allowed.0 | DROPEFFECT_SCROLL.0))
 }
 
-/// Convert an OLE screen point to browser client pixels.
-/// The browser fills the client area from its origin, as for forwarded mouse input.
-fn browser_point(screen: POINTL, client_origin: POINT) -> Option<POINT> {
-    Some(POINT {
-        x: screen.x.checked_sub(client_origin.x)?,
-        y: screen.y.checked_sub(client_origin.y)?,
-    })
+/// Convert an OLE screen point to page pixels, whose top-left is at `page_origin` on the screen.
+fn browser_point(screen: POINTL, page_origin: POINT) -> Option<POINT> {
+    Some(POINT { x: screen.x.checked_sub(page_origin.x)?, y: screen.y.checked_sub(page_origin.y)? })
 }
 
 /// One positioned drag phase and the data object OLE lends for its duration.
@@ -50,7 +45,8 @@ enum Phase<'a> {
 
 /// Forwarding state shared with OLE's target reference on the window's UI thread.
 struct State {
-    window: HWND,
+    /// The controller's host window, whose client origin is the page's top-left.
+    host: HWND,
     controller: RefCell<Option<ICoreWebView2CompositionController3>>,
     events: Rc<Events>,
     active: Cell<bool>,
@@ -103,14 +99,7 @@ impl State {
         let Some(controller) = self.controller.borrow().clone() else {
             return Ok(DROPEFFECT_NONE);
         };
-        let mut origin = POINT::default();
-        // SAFETY: This UI thread owns the live HWND; the native call borrows local storage.
-        if !unsafe { ClientToScreen(self.window, &raw mut origin) }.as_bool() {
-            return Err(DesktopError::message(
-                "browser_drag_coordinates",
-                "Native client origin is unavailable",
-            ));
-        }
+        let origin = super::page::screen_origin(self.host)?;
         let point = browser_point(*screen, origin).ok_or_else(|| {
             DesktopError::message("browser_drag_coordinates", "Drag point is out of range")
         })?;
@@ -302,10 +291,12 @@ pub(super) struct DropTarget {
 }
 
 impl DropTarget {
-    /// Register on the live host HWND after the composition controller is ready.
+    /// Register on the live main `window` after the composition controller is ready; `host` is
+    /// the controller's host window, whose client origin is the page's top-left.
     /// Fails when the runtime lacks drag forwarding or another target owns the window.
     pub(super) fn register(
         window: HWND,
+        host: HWND,
         controller: &ICoreWebView2CompositionController,
         events: Rc<Events>,
     ) -> Result<Self, DesktopError> {
@@ -313,7 +304,7 @@ impl DropTarget {
             .cast::<ICoreWebView2CompositionController3>()
             .map_err(|cause| DesktopError::new("query_browser_drop_controller", cause))?;
         let state = Rc::new(State {
-            window,
+            host,
             controller: RefCell::new(Some(controller)),
             events,
             active: Cell::new(true),

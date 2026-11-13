@@ -4,8 +4,8 @@
 use super::Callback;
 use crate::{DesktopError, NativeMaterial};
 use windows::Win32::{
-    Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM},
-    Graphics::Gdi::{BeginPaint, EndPaint, HDC, PAINTSTRUCT},
+    Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM},
+    Graphics::Gdi::{BeginPaint, EndPaint, HDC, PAINTSTRUCT, ScreenToClient},
     UI::{
         Controls::{
             BP_PAINTPARAMS, BPBF_TOPDOWNDIB, BPPF_ERASE, BeginBufferedPaint, BufferedPaintInit,
@@ -13,9 +13,10 @@ use windows::Win32::{
             ODS_NOFOCUSRECT, ODS_SELECTED,
         },
         HiDpi::GetDpiForWindow,
+        Shell::DefSubclassProc,
         WindowsAndMessaging::{
-            GetClientRect, GetParent, GetWindowTextW, IsZoomed, WM_DRAWITEM, WM_ERASEBKGND,
-            WM_PAINT,
+            GetClientRect, GetParent, GetWindowTextW, HTCAPTION, HTCLIENT, IsZoomed, WM_DRAWITEM,
+            WM_ERASEBKGND, WM_NCHITTEST, WM_PAINT,
         },
     },
 };
@@ -35,6 +36,8 @@ pub(crate) struct Caption {
     pub(crate) material: NativeMaterial,
     /// State of the update button, which selects its tint.
     pub(crate) update: crate::main_updates::UpdateGlyph,
+    /// The client row where the page starts, in physical pixels; the strip above it is caption.
+    pub(crate) page_top: u32,
 }
 
 /// Route only this configured Main's parent paint and exact registered owner-drawn children.
@@ -42,11 +45,16 @@ pub(super) fn parent(
     callback: &Callback,
     hwnd: HWND,
     message: u32,
-    _wparam: WPARAM,
+    wparam: WPARAM,
     lparam: LPARAM,
 ) -> Option<LRESULT> {
     let caption = callback.caption.get()?;
     match message {
+        WM_NCHITTEST if caption.page_top > 0 => {
+            // SAFETY: Tao answers its frame edges first; only its client answer may become caption.
+            let hit = unsafe { DefSubclassProc(hwnd, message, wparam, lparam) };
+            Some(strip_hit(hwnd, hit, lparam, caption.page_top))
+        }
         WM_ERASEBKGND => Some(LRESULT(1)),
         WM_PAINT => {
             report(paint_parent(hwnd, caption));
@@ -68,6 +76,26 @@ pub(super) fn parent(
         }
         _ => None,
     }
+}
+
+/// Answer a client hit in the caption strip the page leaves above itself with `HTCAPTION`, so
+/// the strip moves, snaps and maximizes the window like the page's own title bar row does.
+fn strip_hit(hwnd: HWND, hit: LRESULT, lparam: LPARAM, page_top: u32) -> LRESULT {
+    if hit.0 != HTCLIENT as isize {
+        return hit;
+    }
+    let mut point =
+        POINT { x: lparam.0 as u16 as i16 as i32, y: (lparam.0 >> 16) as u16 as i16 as i32 };
+    // SAFETY: The original parent callback owns this live HWND; the call rewrites local storage.
+    if !unsafe { ScreenToClient(hwnd, &raw mut point) }.as_bool() {
+        return hit;
+    }
+    if in_strip(point.y, page_top) { LRESULT(HTCAPTION as isize) } else { hit }
+}
+
+/// Whether client row `y` lies in the caption strip above a page starting at `page_top`.
+fn in_strip(y: i32, page_top: u32) -> bool {
+    u32::try_from(y).is_ok_and(|y| y < page_top)
 }
 
 /// Keep hover ownership exclusive while Win32 retains capture, pressed and accessibility state.

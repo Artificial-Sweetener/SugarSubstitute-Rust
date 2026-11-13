@@ -3,10 +3,13 @@
 //! Exercise native mouse decoding without invoking a browser or changing the desktop.
 
 use super::*;
+use webview2_com::Microsoft::Web::WebView2::Win32::{
+    COREWEBVIEW2_NON_CLIENT_REGION_KIND, COREWEBVIEW2_NON_CLIENT_REGION_KIND_CAPTION,
+};
 use windows::Win32::UI::WindowsAndMessaging::{
-    WM_CHAR, WM_DEADCHAR, WM_IME_CHAR, WM_IME_COMPOSITION, WM_IME_ENDCOMPOSITION, WM_IME_NOTIFY,
-    WM_IME_SETCONTEXT, WM_IME_STARTCOMPOSITION, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS, WM_SETFOCUS,
-    WM_SIZE, WM_SYSCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_UNICHAR,
+    HTCAPTION, WM_CHAR, WM_DEADCHAR, WM_IME_CHAR, WM_IME_COMPOSITION, WM_IME_ENDCOMPOSITION,
+    WM_IME_NOTIFY, WM_IME_SETCONTEXT, WM_IME_STARTCOMPOSITION, WM_KEYDOWN, WM_KEYUP, WM_KILLFOCUS,
+    WM_SETFOCUS, WM_SIZE, WM_SYSCHAR, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_UNICHAR,
 };
 
 #[test]
@@ -87,11 +90,11 @@ fn keyboard_ime_and_focus_messages_pass_through_untouched() {
 #[test]
 fn only_the_page_caption_region_becomes_a_window_caption() {
     assert_eq!(
-        caption_hit(COREWEBVIEW2_NON_CLIENT_REGION_KIND_CAPTION),
+        page::caption_hit(COREWEBVIEW2_NON_CLIENT_REGION_KIND_CAPTION),
         Some(LRESULT(HTCAPTION as isize))
     );
     // WebView2's nowhere, client, minimize, maximize and close region kinds.
     for kind in [0, 1, 8, 9, 20] {
-        assert_eq!(caption_hit(COREWEBVIEW2_NON_CLIENT_REGION_KIND(kind)), None, "{kind}");
+        assert_eq!(page::caption_hit(COREWEBVIEW2_NON_CLIENT_REGION_KIND(kind)), None, "{kind}");
     }
 }

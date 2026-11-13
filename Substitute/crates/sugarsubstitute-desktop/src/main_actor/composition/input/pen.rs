@@ -148,7 +148,8 @@ impl State {
         if events.iter().all(Option::is_none) {
             return Ok(());
         }
-        let page = page_pointer(*pen, origin, self.device_rects(pen)?);
+        let page =
+            page_pointer(*pen, super::page::screen_origin(self.host)?, self.device_rects(pen)?);
         for kind in events.into_iter().flatten() {
             self.send_pen(kind, &page)?;
         }
@@ -357,7 +358,7 @@ pub(super) fn page_events(message: u32, forward: bool, tracked: bool) -> ([Optio
     }
 }
 
-/// One pen frame in WebView2 coordinates: the client area's physical pixels. The display
+/// One pen frame in WebView2 coordinates: the page's physical pixels. The display
 /// rectangle moves with the pixel locations, so the unchanged himetric locations and device
 /// rectangle keep mapping onto the same pixels.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -367,7 +368,8 @@ pub(super) struct PagePointer {
     display: RECT,
 }
 
-/// Translate a pen frame from screen to client coordinates for WebView2.
+/// Translate a pen frame from screen to page coordinates for WebView2; `origin` is the page's
+/// top-left on the screen.
 pub(super) fn page_pointer(
     mut pen: POINTER_PEN_INFO,
     origin: POINT,

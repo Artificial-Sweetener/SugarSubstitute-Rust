@@ -138,13 +138,13 @@ rationale = "Native boundary: Own native window lifetime and CPU frame presentat
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/composition/drop_target/tests.rs"
-source_sha256 = "sha256:deddfe2a33c851e2fc9f7346d93fb13b12a4102f57fb0a100656575c27bdded8"
+source_sha256 = "sha256:339bdbe377d5196966394965215565fb528ef4fd15cbb2d02dc09657d2db9f05"
 kind = "fixture"
 rationale = "Behavioral fixture creates a hidden OS STATIC window with a technical title to exercise real OLE drop registration and revocation; it grants no production text route."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/construction.rs"
-source_sha256 = "sha256:de46182948bd5b172bd1709e259ead731790c6c47b104d23131bb5117abffe8a"
+source_sha256 = "sha256:3e2b835ddf0952ec11c82a08715c5a774eb356e4c5b8e93cc32e5a2a82e00e70"
 kind = "native"
 rationale = "Native boundary: Adopt every window, presenter, controller and native getter before interpreting outcomes.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -234,7 +234,7 @@ rationale = "Native boundary: Own hidden RichEdit resources and the outer qualif
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/windows_controls.rs"
-source_sha256 = "sha256:063c18239676a1ffc9958dd305c4953743aa0ab52cf7d6ca60aae17a9fedfdea"
+source_sha256 = "sha256:6e2a77bdef8b22881bbb68da9718cd9eb42dc823c67ea5f40ed792fc8476c69e"
 kind = "native"
 rationale = "Native boundary: Own native accessible buttons and the bounded read-only console through checked retirement.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -744,7 +744,7 @@ rationale = "The shared form window takes its title from the lifetime's localize
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_caption.rs"
-source_sha256 = "sha256:7669fe4ba5d6501b243d9b9aedb3d8895bb9f59b284455c8e60213589f361917"
+source_sha256 = "sha256:475b1d1daf01b154c38dc2dd493426fcd189afe78a1bf044cd7f6720119a16eb"
 kind = "native"
 rationale = "Caption layout places the host's localized caption labels and the caption owner's localized update words; it selects no words itself."
 
@@ -756,9 +756,14 @@ rationale = "Main caption contracts borrow localized labels from the host. They 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_caption_tests.rs"
-source_sha256 = "sha256:1f120029d89926a7220ee3597901751cfae45efdcd02db6b8c6f006bcab8b384"
+source_sha256 = "sha256:8878b6ebb92197b8ab318c26994bb3fde893152a4933eb4813b3f9142029af3b"
 kind = "fixture"
 rationale = "Layout fixtures use short stand-in labels to check geometry; no product copy is defined here."
+[[records]]
+path = "crates/sugarsubstitute-desktop/src/main_actor/frame_tests.rs"
+source_sha256 = "sha256:b43ff134d4299585f3d7d37b60758e2523cc8a89af90b351d33b5d0f4554aab4"
+kind = "fixture"
+rationale = "Caption and page layout fixtures use short stand-in labels to check that no caption peer covers the page; no product copy is defined here."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/report/surface/native_tests/hosted.rs"

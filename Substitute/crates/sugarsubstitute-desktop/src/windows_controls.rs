@@ -114,7 +114,18 @@ impl Controls {
             dark,
             material,
             update: Default::default(),
+            page_top: 0,
         }));
+    }
+
+    /// Make the caption strip above client row `page_top` move the window while the page
+    /// starts below it; zero leaves every client hit to the page.
+    pub(crate) fn set_page_top(&self, page_top: u32) {
+        if let Some(caption) = self.callback.caption.get() {
+            self.callback
+                .caption
+                .set(Some(crate::windows_callbacks::caption::Caption { page_top, ..caption }));
+        }
     }
     /// Allocate inert retained callback/control data before any native initialization.
     pub(crate) fn new(
