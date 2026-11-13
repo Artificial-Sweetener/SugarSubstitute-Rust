@@ -5018,7 +5018,7 @@ rationale = "Durable filesystem owner: Qualify ownership admission, exact deleti
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/generation_retirement/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:36f51249d3b187f0435969ff298d52a8e32671581570b56575445595bfe1aa7a"
+source_sha256 = "sha256:90fc25a70d109d75607d462cb8b0a754450e5edf611aee23fdce2c7dad58ee6b"
 capabilities = ["method metadata", "std::fs::File::open", "std::fs::create_dir", "std::fs::create_dir_all", "std::fs::read", "std::fs::read_dir", "std::fs::remove_file", "std::fs::rename", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Old generations are retired under run and preparation custody while kept, open, pointed-to and unknown content survives. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

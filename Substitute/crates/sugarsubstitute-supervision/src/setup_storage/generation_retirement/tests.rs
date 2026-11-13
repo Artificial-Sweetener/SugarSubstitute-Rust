@@ -500,3 +500,32 @@ fn the_running_generation_and_the_installation_folder_are_read_from_its_path() -
     assert!(matches!(classify(".generation-init-", &kept), Entry::Unknown));
     Ok(())
 }
+
+#[test]
+fn the_production_pointer_keeps_exactly_what_the_launch_pointer_owner_names() -> TestResult {
+    use crate::setup_storage::launch_pointer_fixture::{engine, point};
+    test_worker::run_reserved(4 * crate::setup_storage::POINTER_RESERVATION_BYTES, |context, _| {
+        let root = test_worker::installation(171, context)?;
+        let production = LaunchPointerGenerations;
+        assert!(production.pointed_generations(root.path(), context)?.is_empty());
+        let first = GenerationId::new("1".repeat(32))?;
+        let second = GenerationId::new("2".repeat(32))?;
+        let primary = engine(root.path(), &first, b"first engine", context)?;
+        let fallback = engine(root.path(), &second, b"second engine", context)?;
+        point(
+            root.path(),
+            &crate::setup_storage::LaunchPointer::new(primary.clone(), Some(fallback)),
+            context,
+        )?;
+        let named = production.pointed_generations(root.path(), context)?;
+        assert_eq!(named, [first.clone(), second]);
+        assert_eq!(named, crate::setup_storage::pointed_generations(root.path(), context)?);
+        point(
+            root.path(),
+            &crate::setup_storage::LaunchPointer::new(primary.clone(), Some(primary)),
+            context,
+        )?;
+        assert_eq!(production.pointed_generations(root.path(), context)?, [first]);
+        Ok(())
+    })
+}

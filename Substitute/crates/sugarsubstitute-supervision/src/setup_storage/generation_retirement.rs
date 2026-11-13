@@ -22,7 +22,7 @@ use super::{
     RunningApplication, SelectionFailure, SelectionStore, check,
     entrypoint::stable,
     invalid,
-    launch_pointer::{PointerFailure, read_launch_pointer},
+    launch_pointer::{self, PointerFailure},
     owned_retirement_root, ownership,
     trust::{PreparationAttempt, try_preparation},
 };
@@ -69,7 +69,7 @@ pub trait PointedGenerations: Send + Sync {
     ) -> Result<Vec<GenerationId>, PointerFailure>;
 }
 
-/// The installation's protected launch pointer.
+/// The installation's protected launch pointer, read by its owner's `pointed_generations`.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct LaunchPointerGenerations;
 
@@ -79,14 +79,7 @@ impl PointedGenerations for LaunchPointerGenerations {
         installation: &Path,
         context: &JobContext,
     ) -> Result<Vec<GenerationId>, PointerFailure> {
-        match read_launch_pointer(installation, context) {
-            Ok(pointer) => Ok(std::iter::once(pointer.primary())
-                .chain(pointer.fallback())
-                .map(|target| target.generation().clone())
-                .collect()),
-            Err(PointerFailure::Missing) => Ok(Vec::new()),
-            Err(cause) => Err(cause),
-        }
+        launch_pointer::pointed_generations(installation, context)
     }
 }
 
