@@ -38,6 +38,8 @@ fn snapshot(
 }
 
 /// The ordinary allocation cannot admit the genuine captured pair or consume its identity.
+// The captured pair is minted by the Windows lifecycle pipe.
+#[cfg(windows)]
 #[test]
 fn captured_parent_requires_its_actual_allocation_before_factory_and_preserves_pair() -> TestResult
 {

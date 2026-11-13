@@ -5,6 +5,11 @@
 use crate::host_contract::MainIdentity;
 use std::{error::Error, fmt};
 
+/// Canonical ComfyUI diagnostic for failure of the required extension's setup hook.
+pub(crate) const SETUP_FAILED: &str = "Error calling extension 'SugarCubes.UI' method 'setup'";
+/// Canonical ComfyUI diagnostic for the required extension being disabled.
+pub(crate) const DISABLED: &str = "Extension SugarCubes.UI is disabled.";
+
 /// Own a bounded native CDP frame/loader identifier without per-event allocation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct DocumentId {

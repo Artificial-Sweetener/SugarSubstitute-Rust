@@ -360,7 +360,7 @@ rationale = "Repository build or verification diagnostics remain developer outpu
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/command/directory.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:c2344092b1f7836944d536e9112a5696e22b54d711698a9b7ea2125317fcf3be"
+source_sha256 = "sha256:df4deca73fb429e00116c3347017c34521f6980e7bb1e5d52290265b2f23c3e6"
 disposition = "capture"
 rationale = "Child launch path validation recognizes DOS console-device names as forbidden normalization targets; it does not open them."
 
@@ -1074,7 +1074,7 @@ rationale = "Isolated finite CPU qualification reports physical 4K projection co
 [[records]]
 path = "crates/sugarsubstitute-image-gpu/examples/composite_qualification.rs"
 owner = "sugarsubstitute-image-gpu"
-source_sha256 = "sha256:1c7fbddc7a2c91541cd6ac6df49dfd1ad273b53de75079bd63c5d41610bd30b0"
+source_sha256 = "sha256:6cc46a896758aa56c68a832cab803fd411f74352c128400bf865fdcce057957e"
 disposition = "fixture"
 rationale = "The explicit single-device offscreen composite check reports native adapter identity, exact CPU/GPU pixel agreement including overlay pixels and execution retirement; it creates no window or runtime diagnostic sink."
 

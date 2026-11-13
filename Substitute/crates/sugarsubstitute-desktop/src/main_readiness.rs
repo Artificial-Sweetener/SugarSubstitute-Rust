@@ -270,10 +270,10 @@ impl MainReadiness {
         let ConsoleArgument::PrimitiveString(message) = argument else {
             return Ok(());
         };
-        if kind == ConsoleKind::Error && message == crate::main_console::SETUP_FAILED {
+        if kind == ConsoleKind::Error && message == crate::main_readiness_types::SETUP_FAILED {
             return self.reject(ReadinessFault::SetupFailed);
         }
-        if kind == ConsoleKind::Warning && message == crate::main_console::DISABLED {
+        if kind == ConsoleKind::Warning && message == crate::main_readiness_types::DISABLED {
             return self.reject(ReadinessFault::DisabledExtension);
         }
         Ok(())

@@ -25,13 +25,14 @@ export function nativeEnvironment(): NodeJS.ProcessEnv {
     product !== 'Microsoft.VisualStudio.Product.Enterprise'
   )
     throw new Error('Select the declared VS2022 Community or Enterprise product.');
-  const vsRoot = execFileSync(
-    'C:/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe',
-    ['-products', product, '-version', '[17.0,18.0)', '-property', 'installationPath'],
-    { encoding: 'utf8' },
-  ).trim();
-  if (!vsRoot || vsRoot.includes('\n') || vsRoot.includes("'"))
-    throw new Error('Select exactly one installation of the declared VS2022 product.');
+  const vsRoot = declaredInstallation(
+    product,
+    execFileSync(
+      'C:/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe',
+      ['-products', product, '-version', '[17.0,18.0)', '-property', 'installationPath'],
+      { encoding: 'utf8' },
+    ),
+  );
   const module = `${vsRoot}/Common7/Tools/Microsoft.VisualStudio.DevShell.dll`;
   const script = `$ErrorActionPreference='Stop'; Import-Module -Name '${module}'; Enter-VsDevShell -VsInstallPath '${vsRoot}' -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64 -winsdk=10.0.26100.0' | Out-Null; $values=@{}; Get-ChildItem Env: | ForEach-Object { $values[$_.Name]=$_.Value }; $values | ConvertTo-Json -Compress`;
   const output = execFileSync(
@@ -56,4 +57,28 @@ export function nativeEnvironment(): NodeJS.ProcessEnv {
   )
     throw new Error('VS2022 and Windows SDK initialization is incomplete.');
   return environment;
+}
+
+/** Accept vswhere's report only when it names exactly one installation of the declared product.
+ *
+ * vswhere prints one installation path per line, with Windows line endings. A missing product and an
+ * ambiguous choice need different remedies, so each fails with its own message.
+ */
+export function declaredInstallation(product: string, report: string): string {
+  const installations = report
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  const [installation, ...others] = installations;
+  if (installation === undefined)
+    throw new Error(
+      `VS2022 (${product}) is not installed. Install it, or set SUGARCUBES_VS_PRODUCT to the installed VS2022 edition.`,
+    );
+  if (others.length > 0)
+    throw new Error(
+      `Select exactly one installation of the declared VS2022 product; ${installations.length} were found.`,
+    );
+  if (installation.includes("'"))
+    throw new Error('The VS2022 installation path cannot be passed to the developer shell.');
+  return installation;
 }
