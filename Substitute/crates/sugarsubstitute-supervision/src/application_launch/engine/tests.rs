@@ -143,7 +143,7 @@ fn a_silent_engine_is_stopped_at_its_bound_and_the_fallback_takes_over() -> Test
         |driver| {
             driver.handoff.wait(1);
             let bound = Moment::from_nanos(TAKEOVER.as_nanos() as u64);
-            driver.clock.wait_for_sleeper(bound);
+            driver.paused(bound)?;
             driver.clock.advance_to(bound)?;
             Ok(())
         },
@@ -237,10 +237,10 @@ fn a_scanner_releasing_the_pointer_within_the_bound_starts_the_primary_engine() 
             driver.handoff.wait(1);
             let retries = fixture::hold_retries();
             for retry in &retries[..3] {
-                driver.clock.wait_for_sleeper(*retry);
+                driver.paused(*retry)?;
                 driver.clock.advance_to(*retry)?;
             }
-            driver.clock.wait_for_sleeper(retries[3]);
+            driver.paused(retries[3])?;
             drop(crate::registry::lock(&scanner).take());
             driver.clock.advance_to(retries[3])?;
             Ok(())
@@ -291,7 +291,7 @@ fn a_scanner_holding_the_pointer_past_the_bound_is_reported_and_the_next_launch_
         |driver| {
             driver.handoff.wait(1);
             for retry in fixture::hold_retries() {
-                driver.clock.wait_for_sleeper(retry);
+                driver.paused(retry)?;
                 driver.clock.advance_to(retry)?;
             }
             drop(scanner);
