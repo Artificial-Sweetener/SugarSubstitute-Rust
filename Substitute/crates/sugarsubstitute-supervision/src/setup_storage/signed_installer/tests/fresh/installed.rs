@@ -115,6 +115,28 @@ fn incompatible_bundled_engine_cannot_commit_durable_installation_authority() ->
     })
 }
 
+/// An explicit installation choice is no update: its launch names no version, so the launcher
+/// says it is starting rather than updating, while an update trial names its own version.
+#[test]
+fn an_installation_choice_launch_records_no_update_version() -> TestResult {
+    let mut pipeline = Pipeline::new()?;
+    let (temporary, candidate) = pipeline.run(SIGNED_INSTALLER_RESERVATION_BYTES, |context| {
+        let temporary = tempfile::tempdir()?;
+        let runtime = runtime(temporary.path())?;
+        let prepared = import(temporary.path(), &context)?.prepare(|| NOW, &context)?;
+        let candidate = prepared.complete(&runtime, || NOW, &context)?;
+        Ok((temporary, candidate))
+    })?;
+    assert!(!candidate.version().is_empty());
+    let installed = pipeline.run(SIGNED_TRANSFER_RESERVATION_BYTES, move |context| {
+        Ok(Arc::new(candidate.authorize_installation(|| NOW, &context)?))
+    })?;
+    let launch = ApplicationLaunch::installed(installed);
+    assert_eq!(launch.update_version(), None);
+    drop(launch);
+    drop(temporary);
+    Ok(())
+}
 /// Separate original import, authorization and reopening under the production memory ledger.
 #[test]
 fn explicit_installation_reopens_without_metadata_and_retains_real_trial_recovery() -> TestResult {

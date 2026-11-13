@@ -55,7 +55,7 @@ impl<B: StartupBackend> StartupHost<B> {
                 self.child.advance_reload(prepared),
             )?;
         }
-        self.release_held_reveal()?;
+        self.advance_restart_hold()?;
         self.deliver_startup_events()?;
         self.advance_workflow_restart()?;
         #[cfg(all(windows, feature = "native-composition"))]

@@ -114,9 +114,9 @@ pub(crate) trait EntryActivation {
     /// Take, once, whether a live desktop child asked for an update check now since the last
     /// call. Requests from every child and repeats before this call count as one.
     fn take_update_check_request(&mut self) -> bool;
-    /// Whether every live desktop child has received the update status at `revision` or a newer
-    /// one. A run without a desktop child has no window to keep hidden.
-    fn update_status_delivered(&self, revision: u64) -> bool;
+    /// Whether every live desktop child has acknowledged applying the update status at
+    /// `revision` or a newer one. A run without a desktop child has no window to keep hidden.
+    fn update_status_applied(&self, revision: u64) -> bool;
     /// Borrow its original retained fatal failure without separating its custody.
     /// An exposed source closes runner admission even when the last turn returned Active.
     fn failure_source(&self) -> Option<&(dyn Error + 'static)>;

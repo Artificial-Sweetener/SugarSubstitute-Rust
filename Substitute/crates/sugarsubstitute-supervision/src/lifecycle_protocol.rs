@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Encode bounded, untrusted lifecycle messages independently of native authentication.
 //!
-//! Wire version 16 uses little-endian integers and a fixed 104-byte header. Kind21
+//! Wire version 17 uses little-endian integers and a fixed 104-byte header. Kind21
 //! reports the policy-accepted native main reveal after frontend readiness. The parent
 //! rechecks its retained profile/browser authorization before accepting that observation.
 //! Registration reply tag17 carries explicit parent-derived backend execution policy before
@@ -97,8 +97,11 @@
 //! ExitIntent; it grants no process authority, and the coordinator relaunches only when the
 //! child then exits normally. Kind24 CheckForUpdates is an empty child request asking the
 //! coordinator to run its update check now; a check already running is joined, and the result
-//! reaches the child only through later Kind22 statuses.
-//! Only schema16 is accepted; parent and captured child deploy together.
+//! reaches the child only through later Kind22 statuses. Kind25 UpdateStatusApplied is a child
+//! request naming the Kind22 revision the window has applied; a status that says the app restarts
+//! into an update is acknowledged only once the window has committed to staying hidden, so the
+//! coordinator closes the window only after that acknowledgement.
+//! Only schema17 is accepted; parent and captured child deploy together.
 //! Unknown tags and trailing bytes reject; no future operation is implied.
 mod binary;
 mod decode;
@@ -130,7 +133,7 @@ pub use target::{BorrowedBackendTarget, DecodedTarget, ManagedTargetRef};
 pub use utf16::{ArgumentRefs, Utf16Text};
 
 /// Exact supported wire version; unknown versions reject without negotiation.
-pub const WIRE_VERSION: u16 = 16;
+pub const WIRE_VERSION: u16 = 17;
 /// Exact header byte count, including the whole claimed run and deadline.
 pub const HEADER_BYTES: usize = 104;
 /// Maximum complete control frame, including header and payload.

@@ -25,9 +25,8 @@ impl Launcher {
                 self.choice = Choice::Accepted;
             }
             cached::Outcome::Candidate(candidate) => {
-                let version = candidate.version().to_owned();
                 self.cached = None;
-                self.choose_update(version, ApplicationLaunch::trial(Arc::from(candidate)));
+                self.choose_update(ApplicationLaunch::trial(Arc::from(candidate)));
             }
             cached::Outcome::Engine(image) => {
                 self.delegate = Some(Arc::new(std::sync::Mutex::new(Some(image))));
@@ -38,10 +37,8 @@ impl Launcher {
         Ok(())
     }
 
-    /// Start the update trial `launch` of `version`. The version is recorded here, outside the
-    /// launch, so the notice reads it without waiting on a worker preparing the trial.
-    pub(super) fn choose_update(&mut self, version: String, launch: ApplicationLaunch) {
-        self.update_version = Some(version);
+    /// Start the update trial `launch`.
+    pub(super) fn choose_update(&mut self, launch: ApplicationLaunch) {
         self.launch = Some(launch);
         self.choice = Choice::Trial;
     }

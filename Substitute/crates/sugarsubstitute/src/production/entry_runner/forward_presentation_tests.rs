@@ -25,7 +25,7 @@ fn forwarding() -> Result<(EntryRunner<NoChild>, Arc<Manual>), Box<dyn Error>> {
     let mut runner = EntryRunner::new(
         command,
         root,
-        Box::new(NoChild(None)),
+        Box::new(NoChild(None, None)),
         crate::diagnostics::DiagnosticHealth::fixture(),
     );
     let clock = Arc::new(Manual::default());
