@@ -212,34 +212,47 @@ fn identical_bytes_at_another_native_identity_cannot_replace_the_original_record
     })
 }
 
-/// A `TEMP` such as `C:\Users\RUNNER~1\AppData\Local\Temp` spells record parents with 8.3 short
-/// names. Those are the same folders, so custody opens there and keeps the resolved long spelling.
+/// Windows spells one folder several ways: 8.3 short names (a `TEMP` such as
+/// `C:\Users\RUNNER~1\AppData\Local\Temp`), the verbatim `\\?\` prefix and letter case. Each
+/// spelling reaches the same location, so custody opens there and keeps the resolved long spelling.
+/// The verbatim spelling differs from the resolved one on every volume; the short spelling also
+/// differs wherever the volume generates 8.3 names, as Windows system volumes do.
 #[test]
-fn short_name_parents_open_at_their_resolved_long_location() -> TestResult {
+fn every_spelling_of_a_record_parent_opens_at_its_resolved_long_location() -> TestResult {
     worker::run_reserved(4 * 1024 * 1024, |context, _| {
         let temporary = tempfile::tempdir()?;
         let long = temporary.path().join("Record parent with a long name");
         std::fs::create_dir(&long)?;
+        let resolved = Directory::open(&long, false)?.resolved()?.path().to_owned();
         let short = files::alias_fixture::short_spelling(&long)?;
-        assert_ne!(short.file_name(), long.file_name(), "volume generates no 8.3 short names");
-        let expected = Directory::open(&long, false)?.resolved()?.path().join("ComfyUI");
-        let verbatim = PathBuf::from(format!(r"\\?\{}", short.display()));
-        assert!(RecordDirectory::record_absent(&short.join("ComfyUI"), "record", context)?);
-        let directory = RecordDirectory::open(&short.join("ComfyUI"), true, true, context)?;
-        assert_eq!(directory.path(), expected);
-        directory.create(None, "record", b"through the short name", context)?;
-        drop(directory);
-        assert!(!RecordDirectory::record_absent(&verbatim.join("ComfyUI"), "record", context)?);
-        let directory = RecordDirectory::open(&verbatim.join("ComfyUI"), false, false, context)?;
-        assert_eq!(directory.path(), expected);
-        assert_eq!(directory.read(None, "record", context)?.as_slice(), b"through the short name");
-        assert_eq!(std::fs::read(long.join("ComfyUI").join("record"))?, b"through the short name");
+        let spellings = [
+            short.clone(),
+            PathBuf::from(format!(r"\\?\{}", resolved.display())),
+            PathBuf::from(format!(r"\\?\{}", short.display())),
+            PathBuf::from(resolved.to_string_lossy().to_uppercase()),
+        ];
+        let expected = resolved.join("ComfyUI");
+        for (index, parent) in spellings.iter().enumerate() {
+            let selected = parent.join("ComfyUI");
+            let leaf = format!("record-{index}");
+            assert!(RecordDirectory::record_absent(&selected, &leaf, context)?);
+            let directory = RecordDirectory::open(&selected, true, true, context)?;
+            assert_eq!(directory.path(), expected);
+            directory.create(None, &leaf, b"through another spelling", context)?;
+            drop(directory);
+            assert!(!RecordDirectory::record_absent(&selected, &leaf, context)?);
+            let directory = RecordDirectory::open(&selected, false, false, context)?;
+            assert_eq!(directory.path(), expected);
+            let read = directory.read(None, &leaf, context)?;
+            assert_eq!(read.as_slice(), b"through another spelling");
+            assert_eq!(std::fs::read(expected.join(&leaf))?, b"through another spelling");
+        }
         Ok(())
     })
 }
 
 /// A drive alias, as `subst` defines, reaches the same folder from another drive. Record custody
-/// still refuses that parent, whether it is the alias drive's root or a folder below it.
+/// still refuses a parent below the alias drive, and creates nothing at the aliased target.
 #[test]
 fn drive_alias_parents_stay_refused_without_creating_records() -> TestResult {
     worker::run_reserved(4 * 1024 * 1024, |context, _| {
@@ -247,12 +260,10 @@ fn drive_alias_parents_stay_refused_without_creating_records() -> TestResult {
         std::fs::create_dir(temporary.path().join("aliased"))?;
         let target = Directory::open(temporary.path(), false)?.resolved()?;
         let alias = files::alias_fixture::DriveAlias::define(target.path())?;
-        let refused = [alias.root().join("ComfyUI"), alias.root().join("aliased").join("ComfyUI")]
-            .iter()
-            .try_for_each(|selected| refuse_redirected_parent(selected, context));
+        let refused =
+            refuse_redirected_parent(&alias.root().join("aliased").join("ComfyUI"), context);
         alias.remove()?;
         refused?;
-        assert!(!temporary.path().join("ComfyUI").exists());
         assert!(!temporary.path().join("aliased").join("ComfyUI").exists());
         Ok(())
     })

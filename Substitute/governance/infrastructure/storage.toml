@@ -1500,7 +1500,7 @@ rationale = "Durable filesystem owner: Preserve original records and unknown ali
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/records/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:79f96d2132b3c46a7d19cd91254565ebde0d8094167259ec59a9f4b5e25005ca"
+source_sha256 = "sha256:ea13c9b2f282c8cb49fa39a88828a235402202860a2c8f8ace5aa69a7c630296"
 capabilities = ["assert! restricted capability fragments", "assert_eq! restricted capability fragments", "std::fs::create_dir", "std::fs::create_dir_all", "std::fs::hard_link", "std::fs::read", "std::fs::read_dir", "std::fs::remove_file", "std::fs::rename", "std::fs::write", "tempfile::tempdir"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Exercise actual selected-folder custody through the existing execution owner. Native access and its adversarial qualification remain within this owner."
