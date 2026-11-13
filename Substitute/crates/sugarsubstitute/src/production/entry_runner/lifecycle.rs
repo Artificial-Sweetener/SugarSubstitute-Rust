@@ -117,6 +117,9 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
         }
         Ok(())
     }
+    fn take_presentation(&mut self) -> Option<sugarsubstitute_desktop::HeadlessPresentation> {
+        self.take_forward_presentation()
+    }
     fn poll_shutdown(&mut self) -> Result<bool, Box<dyn Error>> {
         if !self.closing {
             return Ok(false);

@@ -444,6 +444,41 @@ fn a_long_message_on_a_small_work_area_scrolls_the_body_above_a_fixed_footer() -
     Ok(())
 }
 
+/// A launch waiting on another copy shows only a waiting line with Cancel while it checks or
+/// waits, never the question and never "Close it and start"; the question appears only once
+/// the controller reports that copy as not responding.
+#[test]
+fn a_waiting_launch_never_asks_until_the_copy_is_not_responding() -> TestResult {
+    for copy in sugarsubstitute_contracts::localization::LOCALES {
+        let (locale, words) = (copy.id, copy.conflict);
+        let cases = [
+            (ConflictPhase::Checking, words.checking, false),
+            (ConflictPhase::AwaitingExit, words.cleanup, false),
+            (ConflictPhase::Forcing, words.waiting, false),
+            (ConflictPhase::AwaitingDecision, words.prompt, true),
+            (ConflictPhase::Failed, words.failed, false),
+        ];
+        for (phase, message, asks) in cases {
+            let mut owner = ConflictReport::forwarding(Box::new(Fixed(phase)), words);
+            let (mut text, mut state, mut closed, mut changed) =
+                (String::new(), ReportState::new(ReportKind::UnresponsiveCopy), false, false);
+            let mut control = ReportControl {
+                message: &mut text,
+                state: &mut state,
+                closed: &mut closed,
+                changed: &mut changed,
+                requests: &mut ControlRequests::default(),
+            };
+            owner.poll(&mut control)?;
+            assert_eq!(control.message.as_str(), message, "{locale} {phase:?}");
+            assert_eq!(control.state.status, None, "{locale} {phase:?}");
+            assert_eq!(control.state.command(ReportAction::Close), shown(asks), "{phase:?}");
+            assert_eq!(control.state.command(ReportAction::Cancel), shown(true), "{phase:?}");
+        }
+    }
+    Ok(())
+}
+
 #[path = "update_tests.rs"]
 mod update;
 

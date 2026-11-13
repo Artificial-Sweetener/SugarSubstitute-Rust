@@ -417,6 +417,8 @@ fn unresponsive_body() -> TestResult {
     assert_eq!(script.next, 4);
     assert_painted(&captures);
     keep(&captures)?;
+    drop(script);
+    drop(inner);
     assert!(controller.done, "Escape cancelled through the controller");
     Ok(())
 }

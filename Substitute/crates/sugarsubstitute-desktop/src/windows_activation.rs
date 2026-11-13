@@ -22,11 +22,15 @@ const MAX_PROBED_WINDOWS: usize = 16;
 #[derive(Debug)]
 pub struct ProcessError {
     operation: &'static str,
-    cause: windows::core::Error,
+    cause: Box<dyn std::error::Error + Send + Sync>,
 }
 impl ProcessError {
-    fn new(operation: &'static str, cause: windows::core::Error) -> Self {
-        Self { operation, cause }
+    /// A failure of the native stage `operation`, keeping its original cause.
+    pub fn new(
+        operation: &'static str,
+        cause: impl std::error::Error + Send + Sync + 'static,
+    ) -> Self {
+        Self { operation, cause: Box::new(cause) }
     }
     /// The stage that failed.
     pub fn operation(&self) -> &'static str {
@@ -40,7 +44,7 @@ impl std::fmt::Display for ProcessError {
 }
 impl std::error::Error for ProcessError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        Some(&self.cause)
+        Some(self.cause.as_ref())
     }
 }
 
@@ -133,28 +137,6 @@ pub fn end_process(pid: u32, creation_time_100ns: u64) -> Result<bool, ProcessEr
     unsafe { TerminateProcess(HANDLE(process.as_raw_handle()), 1) }
         .map_err(|cause| ProcessError::new("end_process", cause))?;
     Ok(true)
-}
-
-/// Wait for an authenticated process to exit, at most `limit`. Returns true once it has exited
-/// or its id names another process. Blocks the calling thread on the process handle, so it runs
-/// in an owned blocking job.
-/// # Errors
-/// Native wait failures preserve their cause.
-pub fn wait_for_process_exit(
-    pid: u32,
-    creation_time_100ns: u64,
-    limit: Duration,
-) -> Result<bool, ProcessError> {
-    let Some(process) = open_verified(pid, creation_time_100ns, PROCESS_SYNCHRONIZE)? else {
-        return Ok(true);
-    };
-    let milliseconds = u32::try_from(limit.as_millis()).unwrap_or(INFINITE - 1);
-    // SAFETY: the owned process handle lives through this bounded wait.
-    match unsafe { WaitForSingleObject(HANDLE(process.as_raw_handle()), milliseconds) } {
-        WAIT_OBJECT_0 => Ok(true),
-        WAIT_TIMEOUT => Ok(false),
-        _ => Err(ProcessError::new("wait_for_process_exit", windows::core::Error::from_thread())),
-    }
 }
 
 /// Open `pid` with `access` plus query rights when it is still the process born at `birth`.
@@ -292,7 +274,6 @@ mod tests {
         let pid = std::process::id();
         assert_eq!(probe_process_responsiveness(pid, 0)?, ProcessResponsiveness::Exited);
         assert!(!end_process(pid, 0)?);
-        assert!(wait_for_process_exit(pid, 0, Duration::ZERO)?);
         Ok(())
     }
 }

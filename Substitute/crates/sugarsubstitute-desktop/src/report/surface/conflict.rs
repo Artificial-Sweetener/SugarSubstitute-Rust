@@ -3,6 +3,10 @@
 //! Ask whether to close an unresponsive previous SugarSubstitute window and start. The
 //! conflict controller owns process authority, waiting and timing; this adapter only offers
 //! "Close it and start" while the controller can act, and shows plain progress meanwhile.
+//!
+//! A launch waiting on another copy uses the forwarding words: while it checks or waits it
+//! shows only a progress line with Cancel, and the question appears only once the controller
+//! reports that copy as not responding.
 use super::{ReportCommand, ReportControl, ReportOwner, shown};
 use std::{error::Error, sync::Arc};
 use sugarsubstitute_contracts::{
@@ -14,8 +18,10 @@ use sugarsubstitute_ui::report::{ReportAction, ReportStatus};
 
 /// Owner adapter for a [`ConflictController`].
 pub struct ConflictReport<'a> {
-    controller: &'a mut dyn ConflictController,
+    controller: Box<dyn ConflictController + 'a>,
     words: &'static ConflictMessages,
+    /// A launch waiting on another copy: checking and waiting never show the question.
+    forwarding: bool,
     /// The controller allows ending the previous window outright rather than asking it to close.
     forceable: bool,
     /// The previous copy is closing by itself and nothing has been asked, so the surface
@@ -31,13 +37,39 @@ impl<'a> ConflictReport<'a> {
         controller: &'a mut dyn ConflictController,
         words: &'static ConflictMessages,
     ) -> Self {
-        Self { controller, words, forceable: false, waiting: false, done: false, cancelled: false }
+        Self::with(Box::new(controller), words, false)
+    }
+
+    /// Mirror a launch's wait on another copy, owning its controller.
+    pub fn forwarding(
+        controller: Box<dyn ConflictController + 'a>,
+        words: &'static ConflictMessages,
+    ) -> Self {
+        Self::with(controller, words, true)
+    }
+
+    fn with(
+        controller: Box<dyn ConflictController + 'a>,
+        words: &'static ConflictMessages,
+        forwarding: bool,
+    ) -> Self {
+        Self {
+            controller,
+            words,
+            forwarding,
+            forceable: false,
+            waiting: false,
+            done: false,
+            cancelled: false,
+        }
     }
 
     /// The question and the progress line this surface shows for `phase`, in its own locale.
     fn words_for(&self, phase: ConflictPhase) -> (&'static str, Option<&'static str>) {
         let words = self.words;
         match phase {
+            ConflictPhase::Checking if self.forwarding => (words.checking, None),
+            ConflictPhase::Forcing if self.forwarding => (words.waiting, None),
             ConflictPhase::Checking => (words.prompt, Some(words.checking)),
             ConflictPhase::AwaitingDecision | ConflictPhase::Done => (words.prompt, None),
             ConflictPhase::Closing | ConflictPhase::Forcing => (words.prompt, Some(words.waiting)),

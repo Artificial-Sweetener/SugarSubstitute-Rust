@@ -1,24 +1,30 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Pump a main-thread native lifetime without application windows or presentation.
+//! Pump a main-thread native lifetime without application windows, beside at most one
+//! surface the lifetime asks for.
 mod state;
+#[cfg(target_os = "windows")]
+mod surface;
 use crate::{
     DesktopError, StartupPreparationStep,
     bootstrap::{Bootstrap, WaitOutcome},
     completion_wake::{ProxyWake, WakeLifetime},
+    native_action::NativeAction,
 };
 use std::sync::Arc;
 use tao::{
-    event::Event, event_loop::EventLoopBuilder, platform::run_return::EventLoopExtRunReturn,
+    event::Event,
+    event_loop::{ControlFlow, EventLoopBuilder},
+    platform::run_return::EventLoopExtRunReturn,
 };
 
 use crate::{HeadlessLifetime, HeadlessStep};
-#[derive(Clone, Copy, Debug)]
-enum HeadlessAction {
-    Completions,
-}
 
 /// Run one main-thread native pump with no application window, frame or focus work.
+///
+/// When the lifetime asks for a surface through [`HeadlessLifetime::take_presentation`], the
+/// pump hosts it as an unowned form on this same loop while the lifetime keeps working, and
+/// closes it before the lifetime finishes. The loop runs until both have settled.
 ///
 /// A private native event exists before `start`; preparation completes before Tao.
 /// The same wake endpoint then retargets to the actual proxy under synchronization.
@@ -32,8 +38,8 @@ enum HeadlessAction {
 /// # Errors
 /// Return the first original startup/activity/cleanup/native-loop failure after
 /// settlement; secondary causes reach structured logging with their operation.
-/// This function must run on the native main thread. It performs no process launch,
-/// application-window creation, raw worker scheduling or blocking owner join.
+/// This function must run on the native main thread. It performs no process launch, raw
+/// worker scheduling or blocking owner join, and creates no window except the requested form.
 pub fn run_headless(lifetime: &mut impl HeadlessLifetime) -> Result<(), DesktopError> {
     let bootstrap = Bootstrap::new()?;
     let mut state = state::HeadlessState::new();
@@ -43,9 +49,12 @@ pub fn run_headless(lifetime: &mut impl HeadlessLifetime) -> Result<(), DesktopE
         state.retire_bootstrap(&bootstrap);
         return state.finish(lifetime, || {});
     }
-    let mut event_loop = match crate::bootstrap::construct_loop(|| {
-        EventLoopBuilder::<HeadlessAction>::with_user_event().build()
-    }) {
+    let mut builder = EventLoopBuilder::<NativeAction>::with_user_event();
+    #[cfg(target_os = "windows")]
+    let mut surface = surface::Surface::new(crate::file_dialog::Picker::new(&mut builder));
+    #[cfg(not(target_os = "windows"))]
+    let surface = NoSurface;
+    let mut event_loop = match crate::bootstrap::construct_loop(move || builder.build()) {
         Ok(event_loop) => event_loop,
         Err(cause) => {
             state.fail(lifetime, cause);
@@ -58,27 +67,39 @@ pub fn run_headless(lifetime: &mut impl HeadlessLifetime) -> Result<(), DesktopE
     let wake = Arc::new(ProxyWake::new(
         event_loop.create_proxy(),
         wake_lifetime.clone(),
-        HeadlessAction::Completions,
+        NativeAction::Completions,
     ));
+    #[cfg(target_os = "windows")]
+    let form_proxy = event_loop.create_proxy();
     if let Err(cause) = bootstrap.handoff(wake) {
         state.fail(lifetime, cause);
         prepare_before_loop(&bootstrap, &mut state, lifetime);
     }
     let session_end = headless_session_end();
-    while !state.settled() {
-        let exit_code = event_loop.run_return(|event, _, control| {
+    while !state.settled() || surface.open() {
+        let exit_code = event_loop.run_return(|event, _target, control| {
             match event {
-                Event::UserEvent(HeadlessAction::Completions) => state.activity(lifetime),
+                Event::UserEvent(NativeAction::Completions) => state.activity(lifetime),
                 Event::MainEventsCleared => {
                     if session_ending(session_end.as_ref()) {
                         lifetime.session_ending();
                     }
                     state.activity(lifetime);
                     state.poll_shutdown(lifetime);
+                    #[cfg(target_os = "windows")]
+                    surface.turn(lifetime, _target, &form_proxy, state.closing());
                 }
+                #[cfg(target_os = "windows")]
+                other => {
+                    surface.route(&other);
+                }
+                #[cfg(not(target_os = "windows"))]
                 _ => {}
             }
-            *control = state.control(lifetime);
+            *control = match state.control(lifetime) {
+                ControlFlow::Exit if surface.open() => ControlFlow::Wait,
+                flow => flow,
+            };
         });
         state.native_return(lifetime, exit_code);
     }
@@ -93,6 +114,17 @@ pub fn run_headless(lifetime: &mut impl HeadlessLifetime) -> Result<(), DesktopE
         wake_lifetime.disconnect();
         drop(event_loop);
     })
+}
+
+/// Platforms without hosted forms never open a surface.
+#[cfg(not(target_os = "windows"))]
+struct NoSurface;
+
+#[cfg(not(target_os = "windows"))]
+impl NoSurface {
+    const fn open(&self) -> bool {
+        false
+    }
 }
 
 /// Keep Tao from exiting a headless process from inside its window procedure at session end.

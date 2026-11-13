@@ -26,30 +26,33 @@ use sugarsubstitute_contracts::instance_conflict::{
 #[derive(Clone)]
 pub struct ConflictSession {
     native: Arc<Mutex<native::Native>>,
-    relaunch: Relaunch,
+    relaunch: Arc<Mutex<Option<crate::application_launch::ApplicationLaunch>>>,
 }
 impl ConflictSession {
     /// Construct inert state. Native operations must run in an admitted blocking job.
     pub fn new(request: ConflictRequest) -> Self {
         Self {
             native: Arc::new(Mutex::new(native::Native::new(request))),
-            relaunch: Relaunch::default(),
+            relaunch: Arc::new(Mutex::new(None)),
         }
     }
 }
-
-/// One fresh launch of this application with its original arguments, started at most once
-/// after a previous copy has gone and retained until it is retired. Clones share the launch.
-#[derive(Clone, Default)]
-pub struct Relaunch(Arc<Mutex<Option<crate::application_launch::ApplicationLaunch>>>);
-impl Relaunch {
-    /// Start the fresh launch inside an admitted blocking job.
+impl ConflictBackend for ConflictSession {
+    type Error = ClaimError;
+    /// Execute one bounded operation, retaining all partial outputs for explicit retirement.
     /// # Errors
-    /// Rejects a second launch and preserves executable, directory, command and process
-    /// creation failures.
-    pub fn launch(&self, context: &JobContext) -> Result<(), ClaimError> {
+    /// Rejects changed identity, unknown owners, expired jobs and native failures.
+    fn execute(
+        &self,
+        operation: ConflictOperation,
+        context: &JobContext,
+    ) -> Result<ConflictObservation, ClaimError> {
+        let mut state = crate::native_claims::lock(&self.native);
+        state.execute(operation, context)
+    }
+    fn relaunch(&self, context: &JobContext) -> Result<(), ClaimError> {
         use std::os::windows::ffi::OsStrExt;
-        let mut retained = crate::native_claims::lock(&self.0);
+        let mut retained = crate::native_claims::lock(&self.relaunch);
         if retained.is_some() {
             return Err(ClaimError::invalid("application_launch_duplicate"));
         }
@@ -67,35 +70,11 @@ impl Relaunch {
         *retained = Some(launch.clone());
         launch.launch(context)
     }
-    /// Retire the fresh launch's custody, if one was started.
-    /// # Errors
-    /// Preserves the launch's retirement failure.
-    pub fn retire(&self) -> Result<(), ClaimError> {
-        let launch = crate::native_claims::lock(&self.0).clone();
-        if let Some(launch) = launch {
+    fn retire_relaunch(&self) -> Result<(), ClaimError> {
+        if let Some(launch) = &*crate::native_claims::lock(&self.relaunch) {
             launch.retire()?;
         }
         Ok(())
-    }
-}
-impl ConflictBackend for ConflictSession {
-    type Error = ClaimError;
-    /// Execute one bounded operation, retaining all partial outputs for explicit retirement.
-    /// # Errors
-    /// Rejects changed identity, unknown owners, expired jobs and native failures.
-    fn execute(
-        &self,
-        operation: ConflictOperation,
-        context: &JobContext,
-    ) -> Result<ConflictObservation, ClaimError> {
-        let mut state = crate::native_claims::lock(&self.native);
-        state.execute(operation, context)
-    }
-    fn relaunch(&self, context: &JobContext) -> Result<(), ClaimError> {
-        self.relaunch.launch(context)
-    }
-    fn retire_relaunch(&self) -> Result<(), ClaimError> {
-        self.relaunch.retire()
     }
 }
 

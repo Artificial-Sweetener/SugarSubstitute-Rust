@@ -12,7 +12,7 @@ mod windows_activation;
 #[cfg(target_os = "windows")]
 pub use windows_activation::{
     ProcessError, ProcessResponsiveness, activate_desktop_process, end_process,
-    probe_process_responsiveness, wait_for_process_exit,
+    probe_process_responsiveness,
 };
 #[allow(unsafe_code)]
 mod file_dialog;
@@ -78,7 +78,7 @@ mod qualified_preview;
 #[cfg(target_os = "windows")]
 pub use headless::run_headless;
 mod headless_contract;
-pub use headless_contract::{HeadlessLifetime, HeadlessStep};
+pub use headless_contract::{HeadlessLifetime, HeadlessPresentation, HeadlessStep};
 #[cfg(all(target_os = "windows", feature = "k1-native-qualification"))]
 pub use qualified_preview::{
     CapturedMainPreview, MainDownloadFixture, MainPreviewSnapshot, MainPreviewViewport,
@@ -221,7 +221,7 @@ pub use main_surface_contract::{
 #[cfg(target_os = "windows")]
 mod startup_conflict;
 #[cfg(target_os = "windows")]
-pub use startup_conflict::{show_previous_copy_closing, show_startup_conflict};
+pub use startup_conflict::show_startup_conflict;
 
 #[cfg(all(any(test, feature = "boundary-fixtures"), target_os = "windows"))]
 #[allow(unsafe_code)]

@@ -60,6 +60,25 @@ impl ReportPresentation {
         Self { content, details, labels, words, locale: copy.id }
     }
 
+    /// A launch waiting on the previous SugarSubstitute window: a plain heading and the
+    /// checking line, with no details. The conflict owner replaces the message as it waits,
+    /// and only asks its question once that window has stopped responding.
+    pub fn waiting_for_previous_copy(copy: &'static Messages, window_title: &str) -> Self {
+        Self::new(
+            ReportContent {
+                kind: ReportKind::UnresponsiveCopy,
+                severity: ReportSeverity::Info,
+                window_title: window_title.to_owned(),
+                title: copy.conflict.starting.to_owned(),
+                message: copy.conflict.checking.to_owned(),
+                summary: Vec::new(),
+                has_details: false,
+            },
+            None,
+            copy,
+        )
+    }
+
     /// A launch that could not start: heading, explanation and the redacted cause chain.
     pub fn startup_failure(
         copy: &'static Messages,

@@ -33,10 +33,6 @@ pub enum ConflictOperation {
 pub enum ConflictObservation {
     /// Verified installation location for presentation to the user.
     Owner(PathBuf),
-    /// The verified owner is not responding; ending it needs the user's explicit choice.
-    Unresponsive,
-    /// The verified owner is closing by itself; this launch waits for it to exit.
-    Closing,
     /// Process or lock custody remains live.
     Waiting,
     /// Retained processes exited and the required exclusions were available.
@@ -125,4 +121,16 @@ pub trait ConflictController {
     fn poll(&mut self) -> ConflictView;
     /// Admit an explicit user decision only when the policy permits it.
     fn choose(&mut self, action: ConflictAction);
+}
+/// A borrowed controller is driven exactly as the controller it borrows.
+impl<T: ConflictController + ?Sized> ConflictController for &mut T {
+    fn start(&mut self, wake: Arc<dyn CompletionWake>) {
+        (**self).start(wake);
+    }
+    fn poll(&mut self) -> ConflictView {
+        (**self).poll()
+    }
+    fn choose(&mut self, action: ConflictAction) {
+        (**self).choose(action);
+    }
 }
