@@ -128,7 +128,9 @@ mod host_failure_read;
 #[cfg(test)]
 mod tests;
 
+#[cfg(windows)]
 mod pending;
+#[cfg(windows)]
 pub use pending::PendingIncidentSnapshot;
 
 #[cfg(windows)]

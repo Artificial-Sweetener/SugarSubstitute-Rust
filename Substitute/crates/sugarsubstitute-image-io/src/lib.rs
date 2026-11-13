@@ -9,6 +9,7 @@ mod cached;
 mod cached_input;
 mod descriptor;
 mod error;
+#[cfg(windows)]
 mod image_input;
 mod jpeg_input;
 mod layout;

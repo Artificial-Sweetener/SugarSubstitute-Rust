@@ -4,7 +4,7 @@
 //! Transfer bound or stopped native reservations without consuming ordinary task capacity.
 
 use super::*;
-use crate::task::Work;
+use crate::task::{Work, stop_reason_at};
 
 impl Core {
     pub(crate) fn take_native_at(
