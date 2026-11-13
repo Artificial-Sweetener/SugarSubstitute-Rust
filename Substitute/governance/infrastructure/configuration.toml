@@ -198,7 +198,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:9897d9c80eeb0eb886e0b364d6edb238a56e5f9d6d56917f20a895bfee6d50bd"
+source_sha256 = "sha256:50c1705ce2e171f4041518e4cef4e560734183537411bd982ae6f1ba3bcc1559"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -310,7 +310,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/application_launch/engine/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:82fbc63d96825780f390913d6630683e5e87e025d4e1951754a2d1d683f3782e"
+source_sha256 = "sha256:dd7d1de5d153f1a8e17788587030302d0205f23afa3bd1f984ec45806f1ce7fe"
 capabilities = ["arguments"]
 rationale = "Launch engine stand-in fixture: the child half reads its own fault mode from its arguments; no product configuration is acquired."
 
