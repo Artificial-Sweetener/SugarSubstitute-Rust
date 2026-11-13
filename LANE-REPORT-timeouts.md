@@ -1,12 +1,8 @@
 # Lane report: timeouts
 
 ## Unfinished
-- **Gate 1 fails on 18 fixer-owned files.** Their allowlist entries stay empty, as the brief asked. All are real stored-versus-fresh shapes (e.g. `finish_trial` stamps `unix_now()` at `selection/run/settlement.rs:90`; the test asserts `withheld(pkg, unix_now())`), so setup_storage needs an injected wall clock. Under `crates/sugarsubstitute-supervision/src/setup_storage/`:
-  - `user_data/tests.rs`, `selection/tests.rs`, `selection/tests/locks.rs`, `selection/run/{tests,fallback/tests,settlement/tests}.rs`
-  - `trust/tests.rs`, `trust/updater/recovery/tests.rs`, `updater_package/stage/trial/tests.rs`
-  - `signed_installer/tests/fresh/installed/rescue.rs`, `test_package/maintenance.rs`
-  - `packed/tests/downloaded/authorization/{candidates,launch}.rs` and `launch/{inheritance,maintenance,recovery,reservation,running/image}.rs`
-- **The crate test suites have not run:** CI stops at main's governance baseline, and main doesn't build on Linux (see "Found").
+- **Setup-storage and crate tests haven't run anywhere.** They need real Windows files. lane/ci reports that Windows test binaries can't link yet (`committed_dump_parser.lib`), and that Ubuntu and macOS stop on lint. Linux can't build `sugarsubstitute-execution` here either (`runtime_supervision.rs:192`).
+- **lane/ci isn't merged.** CLOUD-RULES says to merge it once its report shows both workflows green, and it doesn't yet. When it is merged, keep this lane's 240-minute hang guard over lane/ci's 60 minutes.
 
 ## Unproven
 Native qualification under the no-progress guard:
@@ -14,9 +10,16 @@ Native qualification under the no-progress guard:
 - both setup qualifications.
 
 ## Decisions made
-- **History.** Force-pushing was denied, so `946b22e2` merges the snapshot with a linear rebuild on main (same tree). Each rebuilt commit passes governance on its own, except the gate commit's 18 hits.
-- **Conflicts.** The three governance files come from a 3-way apply of the lane's delta, with fingerprints resynced by xtask's algorithm.
-- **CI.** `timeout-minutes: 240` moved to `substitute-verify.yml`; old `verify.yml` dropped.
+- **History.** Force-pushing was denied, so `946b22e2` merges the snapshot with a linear rebuild on main, with the same tree.
+- **The 13 combined-tree hits** (origin/integration, with fixer's StrikeClock):
+  - Tests that pass a time now use a fixed one.
+  - The fixtures that own their stores take `StrikeClock::Fixed` and assert the strike's date.
+  - Where the product opens its own stores on the system clock (updater staging, the first-install rescue), the test checks withholding at the strike's recorded date. A strike's `count` still decides whether it withholds.
+  - Passing a clock through `stage()` would have been a product API change, so I didn't.
+  - The test-only `unix_now()` and its re-exports are gone.
+  - The close-save `ManualClock` maps instants from the frozen anchor.
+  - Nothing is allowlisted.
+- **CI timeout.** `timeout-minutes: 240` is set in `substitute-verify.yml`.
 
 ## Commits
 - 9f3e5c7c test(execution): give tests one frozen time anchor and a shared no-progress guard
@@ -29,26 +32,20 @@ Native qualification under the no-progress guard:
 - 7d653758 build(xtask): reject wall-clock pass/fail in tests
 - 946b22e2 merge: move lane/timeouts into main's monorepo layout under Substitute
 - 83ed0c46 docs(execution): let qualification_time's module docs resolve their own links
+- 69b848f1 merge of origin/integration
+- 2c35b75b test(workspace): map the close-save fixture's native instants from the frozen anchor
+- 7954b3e6 test(setup-storage): date every setup-storage test from a fixed clock
 
 ## Verification
-- **xtask tests:** 185 pass, including the 6 gate fixtures. These reject the stored-versus-fresh shape for both `unix_now()` and `SystemTime::now()`.
-- **Governance:** passes with the 18 registered by an uncommitted probe, so there are no other hits or unused registrations.
+On the combined tree:
+- **Governance:** `cargo xtask governance` passes, gate 1 included. Fingerprints were recorded with `cargo xtask fingerprints`.
 - **fmt:** passes.
-- **Windows-target type checks** (`ring` built against stub C headers):
-  - clippy `-D warnings`, all three legs: clean.
-  - Rustdoc `-D warnings`: clean after 83ed0c46.
-- **Python:** the FamilySettlement tests pass with the Windows imports stubbed.
-- **CI:** [run 43340327438](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43340327438) fails on all three OSes at main's baseline (`resolve third_party/comfy-desktop/...download.ts`). Nothing new.
-  - The "Sugar quality" run was still running; `Sugar/` is identical to main.
-  - No load-only failures could be observed: no tests ran.
-
-## Found (not this lane)
-Main doesn't build on Linux or macOS:
-- `sugarsubstitute-execution` reads a `cfg(any(windows, test))` field in `runtime_supervision.rs:192`.
-- Under `test`, its Windows modules need the `windows` crate.
-- `sugarsubstitute-desktop` uses the Windows-only `crate::main_console`.
+- **xtask tests:** 192 pass.
+- **Windows-target clippy `-D warnings`, all three legs:** clean. This type-checks every test target; `ring` was built against stub C headers.
+- **Before the merge:** Windows Rustdoc was clean, and the FamilySettlement Python tests passed.
+- **CI:** [run 43340327438](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43340327438) stopped at main's submodule baseline. The run for this push is linked in the integration notes once it finishes.
 
 ## Next
-- **fixer:** inject a clock into setup_storage and convert the 18 files.
-- **lane/ci:** fix the build break above.
-- **This lane:** merge `origin/lane/ci` once it is green, then get CI green.
+- **Integrator:** merge lane/timeouts. Gate 1 passes on integration plus this branch.
+- **lane/ci or a portability lane:** the Windows test link and the non-Windows build.
+- **After that:** run the setup_storage, sugarsubstitute, desktop, execution and supervision suites on Windows CI.
