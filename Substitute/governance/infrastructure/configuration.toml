@@ -422,7 +422,7 @@ rationale = "Crashpad owns native capture configuration; host startup settings d
 [[records]]
 path = "tools/xtask/src/fingerprints.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:9efb26c34a0d63d91de253bf8a2e9244e9b1e90512e8b701384240f68c876e8e"
+source_sha256 = "sha256:0d06744cc6ea89750a07bb41fd719ade873382504655a79d91c4b9bdb638846b"
 capabilities = ["codec"]
 rationale = "Tooling reads governance policy TOML to record reviewed source fingerprints; not product settings."
 
