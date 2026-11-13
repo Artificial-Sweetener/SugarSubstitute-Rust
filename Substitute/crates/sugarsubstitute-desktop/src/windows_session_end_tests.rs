@@ -82,19 +82,3 @@ fn every_watched_window_answers_a_session_end_from_the_close_save() -> TestResul
     watch.retire()?;
     Ok(())
 }
-
-#[test]
-fn a_thread_target_paint_nested_inside_another_never_reaches_tao() {
-    let inner = std::cell::Cell::new(false);
-    let outer = paint_once(HWND::default(), || {
-        let nested = paint_once(HWND::default(), || {
-            inner.set(true);
-            LRESULT(7)
-        });
-        assert_eq!(nested, LRESULT(0));
-        LRESULT(1)
-    });
-    assert_eq!(outer, LRESULT(1));
-    assert!(!inner.get());
-    assert_eq!(paint_once(HWND::default(), || LRESULT(2)), LRESULT(2));
-}

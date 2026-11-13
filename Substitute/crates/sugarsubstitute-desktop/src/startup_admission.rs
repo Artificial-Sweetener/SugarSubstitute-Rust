@@ -30,7 +30,10 @@ pub(super) fn admit(
         let (event_loop, picker) = construct_loop(|| {
             let mut builder = EventLoopBuilder::<NativeAction>::with_user_event();
             let picker = Picker::new(&mut builder);
-            (builder.build(), picker)
+            let event_loop = builder.build();
+            #[cfg(target_os = "windows")]
+            crate::windows_thread_target::guard_current_thread();
+            (event_loop, picker)
         })?;
         let lifetime = WakeLifetime::new();
         let target = Arc::new(ProxyWake::new(
