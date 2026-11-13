@@ -45,7 +45,7 @@ mod held_fixture;
 pub mod input_documents;
 pub mod instance_conflict;
 mod invocation;
-#[cfg(all(windows, feature = "native-composition"))]
+#[cfg(windows)]
 mod job_deadline;
 pub mod job_sequence;
 #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
