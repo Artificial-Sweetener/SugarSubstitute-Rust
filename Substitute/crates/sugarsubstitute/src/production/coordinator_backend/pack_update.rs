@@ -2,23 +2,25 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Update SugarCubes during the splash, before the managed backend first inspects or loads it.
 //!
-//! The first managed preparation of a coordinator's life runs one startup update on an admitted
-//! blocking worker and holds both the SugarCubes source inspection and the backend launch until
-//! it settles, so nothing reads the pack while its files change. Later observations of that
-//! version (backend ready, the page established, the backend ending before ready) are written to
-//! the host's transaction as one small job each, in order. A failure of any of this never fails
-//! the backend: the start continues with whatever SugarCubes the folder now holds. The startup
-//! update records its outcome as the update report in the host's storage, from which the one
-//! plain line is shown; it is also logged here. An attached ComfyUI, which its user runs and
-//! which may already have the pack loaded, only gets a read-only check that reports a newer
-//! version; nothing in its folder is ever written.
-
+//! [`PackSchedule`] decides the work: the first preparation of a coordinator's life runs one
+//! startup update (managed) or a read-only check (attached ComfyUI, whose folder is never
+//! written); a managed update holds that preparation's SugarCubes inspection and launch until
+//! it settles, so nothing reads the pack while its files change. Trial observations follow in
+//! order: backend ready, the page established, the backend ending before ready, and the page
+//! reporting SugarCubes failing (carried by the child's attempt settlement). After a failed
+//! page the next managed preparation is held behind a restore of the previous version, so a
+//! version that failed never loads twice. This owner runs those jobs one at a time on the
+//! execution owner. A failure of any of them never fails the backend.
+//!
+//! Each run records its update report in the host's storage, and the schedule publishes the
+//! live [`sugarsubstitute_contracts::update::pack::PackUpdateStatus`] with a revision, logged
+//! here on every change, for the splash line, the one plain line and the window's report.
 use super::*;
-use std::{collections::VecDeque, path::PathBuf, time::Duration};
+use std::{path::PathBuf, time::Duration};
 use sugarsubstitute_supervision::{
     pack_install::{
-        HttpReleaseSources, Restored, STARTUP_UPDATE_RESERVATION_BYTES, StartupOutcome,
-        StartupStep, StartupUpdate, TrialEvent,
+        HttpReleaseSources, PackSchedule, PackWork, PackWorkEnded, Restored,
+        STARTUP_UPDATE_RESERVATION_BYTES, StartupOutcome, StartupStep, StartupUpdate, TrialEvent,
     },
     update_http::{self, Http},
 };
@@ -53,28 +55,41 @@ impl std::fmt::Display for PackJobError {
 
 impl std::error::Error for PackJobError {}
 
-/// One effect on the host's SugarCubes transaction, in the order the coordinator saw it.
-enum PackEffect {
-    Observe(TrialEvent),
-    BackendStopped,
+impl CoordinatorBackend {
+    /// The attempt's page reported SugarCubes itself unavailable or failed: a SugarCubes
+    /// update being judged did not load its page, and is restored before the next attempt.
+    pub(crate) fn pack_page_failed(&mut self, resources: &BackendResources<'_>) -> Result<()> {
+        self.pack.page_failed(resources)
+    }
+    /// The page established its session with every SugarCubes node registered; this keeps a
+    /// SugarCubes update being judged. Only a managed backend's pack is ever judged.
+    pub(crate) fn pack_page_loaded(&mut self, resources: &BackendResources<'_>) -> Result<()> {
+        self.pack.observe(
+            sugarsubstitute_supervision::pack_install::TrialEvent::PageLoaded {
+                nodes_registered: true,
+            },
+            resources,
+        )
+    }
 }
 
 struct Running {
     job: OwnedJob<PackJobResult, PackJobError>,
     scope: sugarsubstitute_contracts::execution::ScopeId,
     spec: JobSpec,
-    /// The record whose source inspection and launch wait for this job.
-    gates: Option<ResourceKey>,
 }
 
-/// The coordinator's single owner of SugarCubes updates and their trial observations.
+/// The coordinator's single owner of SugarCubes jobs. [`PackSchedule`] decides what runs and
+/// which preparation it holds; this owner runs one job at a time on the execution owner.
 #[derive(Default)]
 pub(super) struct PackUpdates {
     storage: Option<PathBuf>,
     folder: Option<PathBuf>,
-    checked: bool,
+    schedule: PackSchedule<ResourceKey>,
     running: Option<Running>,
-    queued: VecDeque<PackEffect>,
+    /// The latest preparation's budget end, which bounds the update it waits for.
+    until: Option<Moment>,
+    published: u64,
 }
 
 impl PackUpdates {
@@ -86,60 +101,41 @@ impl PackUpdates {
         self.storage = Some(PACK_STORAGE.iter().fold(state, |path, part| path.join(part)));
     }
 
-    /// Whether `key`'s inspection and launch still wait for the startup update.
+    /// Whether `key`'s inspection and launch still wait for a SugarCubes job.
     pub(super) fn gates(&self, key: ResourceKey) -> bool {
-        self.running.as_ref().is_some_and(|running| running.gates == Some(key))
+        self.schedule.gates(key)
     }
 
-    /// Ask a running job to stop; it observes cancellation between steps, never mid-replace.
-    pub(super) fn cancel(&self) {
-        if let Some(running) = &self.running {
+    /// `key` is being stopped: cancel the running job if it is the one holding `key`. It
+    /// observes cancellation between steps, never mid-replace; other jobs run on.
+    pub(super) fn cancel(&self, key: ResourceKey) {
+        if self.schedule.running_holds(key)
+            && let Some(running) = &self.running
+        {
             running.job.cancel();
         }
     }
 
-    /// Run the launch-time update for the first preparation of this coordinator: for a managed
-    /// backend, the update itself, which holds `key`'s inspection and launch (returns true); for
-    /// an attached ComfyUI, only a read-only check that reports a newer version.
+    /// Prepare SugarCubes for one backend preparation; returns whether a job now holds `key`'s
+    /// inspection and launch. See [`PackSchedule::prepare`].
     pub(super) fn begin(
         &mut self,
         key: ResourceKey,
         folder: &std::path::Path,
         managed: bool,
-        scope: &Scope,
         until: Moment,
         resources: &BackendResources<'_>,
     ) -> Result<bool> {
-        if self.checked || self.running.is_some() {
+        if self.storage.is_none() {
             return Ok(false);
         }
-        let Some(storage) = self.storage.clone() else {
-            return Ok(false);
-        };
-        self.checked = true;
-        let limit = resources.client.now()?.checked_add(PACK_UPDATE_LIMIT)?;
-        let deadline = if limit < until { limit } else { until };
-        let spec = CoordinatorBackend::spec(
-            resources,
-            Operation::Infrastructure,
-            JobClass::InfrastructureLifecycle,
-            STARTUP_UPDATE_RESERVATION_BYTES + update_http::RESERVATION_BYTES,
-            Some(deadline),
-        )?;
-        let path = folder.to_owned();
-        let scope = if managed { scope } else { resources.cleanup };
-        let job = resources.client.submit_blocking(scope, spec, move |context| {
-            Ok(PackJobResult::Update(run_update(&path, &storage, managed, &context)))
-        })?;
-        tracing::info!(operation = "pack_update", resource = ?key, managed, stage = "Submitted",
-            "The SugarCubes startup update began");
-        // Only a managed backend's pack is judged; an attached one is never written to.
-        if managed {
+        if self.folder.is_none() {
             self.folder = Some(folder.to_owned());
         }
-        let gates = managed.then_some(key);
-        self.running = Some(Running { job, scope: scope.id(), spec, gates });
-        Ok(managed)
+        self.until = Some(until);
+        let gated = self.schedule.prepare(key, managed);
+        self.pump(resources)?;
+        Ok(gated)
     }
 
     /// Record one observation of the version the managed backend runs.
@@ -148,20 +144,21 @@ impl PackUpdates {
         event: TrialEvent,
         resources: &BackendResources<'_>,
     ) -> Result<()> {
-        self.enqueue(PackEffect::Observe(event), resources)
+        self.schedule.observe(event);
+        self.pump(resources)
     }
 
     /// The managed backend ended before it was ready.
     pub(super) fn backend_stopped(&mut self, resources: &BackendResources<'_>) -> Result<()> {
-        self.enqueue(PackEffect::BackendStopped, resources)
+        self.schedule.backend_stopped();
+        self.pump(resources)
     }
 
-    fn enqueue(&mut self, effect: PackEffect, resources: &BackendResources<'_>) -> Result<()> {
-        if self.folder.is_none() {
-            return Ok(());
-        }
-        self.queued.push_back(effect);
-        self.submit_queued(resources)
+    /// The attempt's page reported SugarCubes itself failing; the judged version is restored
+    /// before the next managed attempt starts it.
+    pub(super) fn page_failed(&mut self, resources: &BackendResources<'_>) -> Result<()> {
+        self.schedule.page_failed();
+        self.pump(resources)
     }
 
     /// Adopt a finished job; returns the record whose inspection and launch it released.
@@ -170,72 +167,114 @@ impl PackUpdates {
         resources: &BackendResources<'_>,
     ) -> Result<Option<ResourceKey>> {
         let Some(running) = &mut self.running else {
-            return self.submit_queued(resources).map(|()| None);
+            self.pump(resources)?;
+            return Ok(None);
         };
         let Some(completion) = running.job.try_take_completion() else {
             return Ok(None);
         };
-        let released = running.gates;
         let original = completion.scope_id == running.scope && completion.spec == running.spec;
         self.running = None;
-        match completion.outcome {
+        let ended = match completion.outcome {
             JobOutcome::Success(PackJobResult::Update(outcome)) if original => {
                 tracing::info!(operation = "pack_update", stage = "Terminal", outcome = ?outcome,
                     "The SugarCubes startup update settled");
+                PackWorkEnded::Updated(outcome)
             }
-            JobOutcome::Success(PackJobResult::Stopped(Some(restored))) if original => {
-                tracing::warn!(operation = "pack_update", stage = "Restored", version = %restored.version,
-                    restored = %restored.restored_version, "The previous SugarCubes version was restored");
+            JobOutcome::Success(PackJobResult::Stopped(restored)) if original => {
+                if let Some(restored) = &restored {
+                    tracing::warn!(operation = "pack_update", stage = "Restored", version = %restored.version,
+                        restored = %restored.restored_version, "The previous SugarCubes version was restored");
+                }
+                PackWorkEnded::Restored(restored)
             }
-            JobOutcome::Success(_) if original => {}
+            JobOutcome::Success(PackJobResult::Observed) if original => PackWorkEnded::Observed,
             other => {
                 let stopped = matches!(other, JobOutcome::Cancelled | JobOutcome::TimedOut);
                 tracing::warn!(
                     operation = "pack_update",
                     stage = "Terminal",
                     stopped,
-                    gating = released.is_some(),
                     "A SugarCubes update job did not finish; the installed version is used"
                 );
+                PackWorkEnded::Unfinished { stopped }
             }
-        }
-        self.submit_queued(resources)?;
+        };
+        let released = self.schedule.ended(ended);
+        self.pump(resources)?;
         Ok(released)
     }
 
-    fn submit_queued(&mut self, resources: &BackendResources<'_>) -> Result<()> {
-        if self.running.is_some() {
-            return Ok(());
+    /// Start the schedule's next job when none runs, and log each status change for the
+    /// window's update surfaces.
+    fn pump(&mut self, resources: &BackendResources<'_>) -> Result<()> {
+        if self.running.is_none()
+            && let (Some(folder), Some(storage)) = (self.folder.clone(), self.storage.clone())
+            && let Some((work, gates)) = self.schedule.start_next()
+        {
+            let (bytes, limit) = match work {
+                PackWork::Update { .. } => (
+                    STARTUP_UPDATE_RESERVATION_BYTES + update_http::RESERVATION_BYTES,
+                    PACK_UPDATE_LIMIT,
+                ),
+                _ => (PACK_OBSERVATION_BYTES, PACK_OBSERVATION_LIMIT),
+            };
+            let limit = resources.client.now()?.checked_add(limit)?;
+            let deadline = match self.until {
+                Some(until) if gates.is_some() && until < limit => until,
+                _ => limit,
+            };
+            let spec = CoordinatorBackend::spec(
+                resources,
+                Operation::Infrastructure,
+                JobClass::InfrastructureLifecycle,
+                bytes,
+                Some(deadline),
+            )?;
+            let job =
+                resources.client.submit_blocking(resources.cleanup, spec, move |context| {
+                    run(work, &folder, &storage, &context)
+                })?;
+            tracing::info!(operation = "pack_update", work = ?work, resource = ?gates,
+                stage = "Submitted", "A SugarCubes job began");
+            self.running = Some(Running { job, scope: resources.cleanup.id(), spec });
         }
-        let (Some(effect), Some(folder), Some(storage)) =
-            (self.queued.pop_front(), self.folder.clone(), self.storage.clone())
-        else {
-            return Ok(());
-        };
-        let until = resources.client.now()?.checked_add(PACK_OBSERVATION_LIMIT)?;
-        let spec = CoordinatorBackend::spec(
-            resources,
-            Operation::Infrastructure,
-            JobClass::InfrastructureLifecycle,
-            PACK_OBSERVATION_BYTES,
-            Some(until),
-        )?;
-        let job = resources.client.submit_blocking(resources.cleanup, spec, move |_context| {
-            let update = StartupUpdate::at(&folder, &storage)
-                .map_err(|cause| PackJobError(cause.to_string()))?;
-            match effect {
-                PackEffect::Observe(event) => update
-                    .observe(event)
-                    .map(|()| PackJobResult::Observed)
-                    .map_err(|cause| PackJobError(cause.to_string())),
-                PackEffect::BackendStopped => update
-                    .backend_stopped()
-                    .map(PackJobResult::Stopped)
-                    .map_err(|cause| PackJobError(cause.to_string())),
-            }
-        })?;
-        self.running = Some(Running { job, scope: resources.cleanup.id(), spec, gates: None });
+        let (status, revision) = self.schedule.status();
+        if revision != self.published {
+            self.published = revision;
+            tracing::info!(operation = "pack_update_status", revision, status = ?status,
+                "The SugarCubes update status changed");
+        }
         Ok(())
+    }
+}
+
+/// The blocking body of one SugarCubes job.
+fn run(
+    work: PackWork,
+    folder: &std::path::Path,
+    storage: &std::path::Path,
+    context: &sugarsubstitute_contracts::execution::JobContext,
+) -> std::result::Result<PackJobResult, PackJobError> {
+    let failed = |cause: sugarsubstitute_supervision::pack_install::PackInstallError| {
+        PackJobError(cause.to_string())
+    };
+    if let PackWork::Update { managed } = work {
+        return Ok(PackJobResult::Update(run_update(folder, storage, managed, context)));
+    }
+    let update =
+        StartupUpdate::at(folder, storage).map_err(|cause| PackJobError(cause.to_string()))?;
+    match work {
+        PackWork::Observe(event) => {
+            update.observe(event).map(|()| PackJobResult::Observed).map_err(failed)
+        }
+        PackWork::BackendStopped => {
+            update.backend_stopped().map(PackJobResult::Stopped).map_err(failed)
+        }
+        PackWork::RestoreFailedPage => {
+            update.restore_failed_page().map(PackJobResult::Stopped).map_err(failed)
+        }
+        PackWork::Update { .. } => Err(PackJobError("The update ran above".into())),
     }
 }
 

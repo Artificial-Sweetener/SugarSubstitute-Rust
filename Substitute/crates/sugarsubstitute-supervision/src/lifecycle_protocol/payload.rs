@@ -126,6 +126,9 @@ pub enum WirePayload<'a> {
         identity: MainIdentity,
         /// Original Acquire request; never a caller-supplied resource privilege.
         acquisition: RequestId,
+        /// The attempt failed because its page reported SugarCubes unavailable or failed.
+        /// A classification only; the parent judges a SugarCubes update with it.
+        sugarcubes_failed: bool,
     },
     /// Tag20: explicit retry claim for the exact unavailable managed lease.
     /// Authentication, actual old settlement and retained target admission stay local.
@@ -245,6 +248,9 @@ pub enum DecodedPayload<'a> {
         identity: MainIdentity,
         /// Original Acquire request; never a caller-supplied resource privilege.
         acquisition: RequestId,
+        /// The attempt failed because its page reported SugarCubes unavailable or failed.
+        /// A classification only; the parent judges a SugarCubes update with it.
+        sugarcubes_failed: bool,
     },
     /// Tag20: explicit retry claim for the exact unavailable managed lease.
     /// Authentication, actual old settlement and retained target admission stay local.

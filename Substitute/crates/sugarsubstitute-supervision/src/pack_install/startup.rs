@@ -21,7 +21,7 @@ use super::ownership::NotOwnedReason;
 use super::selection::{ReleaseSources, SourceFailure, UpdateDecision, newest_offer};
 use super::sources::{ReleaseOffer, ReleaseSourceConfig, ReleaseSourceKind};
 use super::trial::{Restored, TrialEnding, TrialEvent};
-use super::{Ownership, PackFolder, PackTransaction};
+use super::{JournalPhase, Ownership, PackFolder, PackTransaction};
 use crate::durable_storage::pack_tree::PackLock;
 use crate::durable_storage::pack_tree::{NodeKind, PackTree};
 use serde::{Deserialize, Serialize};
@@ -29,9 +29,7 @@ use std::{
     io::{self, Read, Seek},
     path::Path,
 };
-use sugarsubstitute_contracts::localization::{
-    pack_updates::PackUpdateMessages, updates::UpdateMessages,
-};
+use sugarsubstitute_contracts::update::pack::{PackOutcome, PackUpdateReport};
 
 /// Where an installed SugarCubes describes its own release sources.
 pub const RELEASE_SOURCE_FILE: &str = "sugarcubes/backend/self_update/release_source.json";
@@ -50,7 +48,6 @@ const RESTORED_RECORD: &str = "restored.json";
 const RESTORED_SCHEMA: u32 = 1;
 /// The update report of the last startup update, in the host's storage for this pack.
 pub const REPORT_RECORD: &str = "report.json";
-const REPORT_SCHEMA: u32 = 1;
 const MAX_RECORD_BYTES: usize = 64 * 1024;
 
 /// The network boundary of a startup update: release metadata and archive downloads.
@@ -181,7 +178,9 @@ impl StartupUpdate {
             outcome = ?outcome,
             "The SugarCubes startup update finished"
         );
-        let written = serde_json::to_vec(&UpdateReport::of(&outcome))
+        let written = outcome
+            .report()
+            .render()
             .map_err(io::Error::other)
             .and_then(|bytes| self.replace_record(REPORT_RECORD, &bytes));
         if let Err(cause) = written {
@@ -313,8 +312,21 @@ impl StartupUpdate {
         self.transaction.observe(&version, event)
     }
 
+    /// The page of the version being judged reported SugarCubes failing in this run, and its
+    /// backend has since stopped: restore the previous version before another attempt starts
+    /// it. Does nothing unless the judgement recorded that page failure. Records the report.
+    ///
+    /// # Errors
+    /// Returns a journal or filesystem failure; the judgement stays for the next start.
+    pub fn restore_failed_page(&self) -> Result<Option<Restored>> {
+        if !matches!(self.transaction.pending()?, Some((JournalPhase::PageFailed, _, _))) {
+            return Ok(None);
+        }
+        self.backend_stopped()
+    }
+
     /// The backend ended before it was ready while an update was being judged: restore the
-    /// previous version now, so the next attempt starts with it.
+    /// previous version now, so the next attempt starts with it. Records the report.
     ///
     /// # Errors
     /// Returns a journal or filesystem failure; the judgement stays for the next start.
@@ -322,6 +334,7 @@ impl StartupUpdate {
         let restored = self.transaction.settle(&self.folder, TrialEnding::BackendStopped)?;
         if let Some(restored) = &restored {
             self.remember_restored(&restored.version)?;
+            self.record(StartupOutcome::Restored(restored.clone()));
         }
         Ok(restored)
     }
@@ -437,161 +450,51 @@ fn failed(step: StartupStep, cause: &PackInstallError) -> StartupOutcome {
 }
 
 impl StartupOutcome {
-    /// The one plain line a start shows about this outcome, if it needs one: an update, a
-    /// failure to check or update, or the previous version running again.
-    pub fn notice(&self, words: &PackUpdateMessages) -> Option<String> {
-        match self {
-            Self::Updated { to, .. } => {
-                Some(UpdateMessages::with_version(words.updated, &to.to_string()))
-            }
-            Self::Restored(_) => Some(words.previous_running.to_owned()),
-            Self::CouldNotCheck { .. } => Some(words.could_not_check.to_owned()),
-            Self::Failed { .. } => Some(words.could_not_update.to_owned()),
-            Self::Available { version, .. } => {
-                Some(UpdateMessages::with_version(words.available, &version.to_string()))
-            }
-            Self::UpToDate
-            | Self::Judging { .. }
-            | Self::NotManaged(_)
-            | Self::Busy
-            | Self::Stopped => None,
-        }
-    }
-
-    /// The update report's plain lines for this outcome.
-    pub fn report_lines(&self, words: &PackUpdateMessages) -> Vec<String> {
-        let unchecked = |kinds: &[ReleaseSourceKind]| -> Vec<String> {
-            kinds
-                .iter()
-                .map(|kind| match kind {
-                    ReleaseSourceKind::Registry => words.registry_unchecked.to_owned(),
-                    ReleaseSourceKind::GitHubRelease => words.github_unchecked.to_owned(),
-                })
-                .collect()
-        };
-        let step = |step: &StartupStep| {
-            words.steps[match step {
-                StartupStep::Checking => 0,
-                StartupStep::Downloading => 1,
-                StartupStep::Installing => 2,
-            }]
+    /// The update report of this outcome, which also renders its one plain line and report
+    /// lines through the localization owner.
+    pub fn report(&self) -> PackUpdateReport {
+        let kinds = |kinds: &[ReleaseSourceKind]| {
+            kinds.iter().map(|kind| kind.as_str().to_owned()).collect()
         };
         match self {
-            Self::Updated { to, unchecked: missing, .. } => {
-                std::iter::once(UpdateMessages::with_version(words.updated, &to.to_string()))
-                    .chain(unchecked(missing))
-                    .collect()
-            }
-            Self::UpToDate | Self::Judging { .. } => vec![words.up_to_date.to_owned()],
-            Self::Restored(_) => vec![words.previous_running.to_owned()],
-            Self::NotManaged(reason) => vec![
-                match reason {
-                    NotOwnedReason::GitCheckout => words.kept_git,
-                    NotOwnedReason::ChangedFiles => words.kept_edited,
-                    NotOwnedReason::LinkedFolder | NotOwnedReason::LinkedContent => {
-                        words.kept_linked
-                    }
-                    NotOwnedReason::Missing
-                    | NotOwnedReason::NotRegistryInstall
-                    | NotOwnedReason::InvalidTracking => words.kept_unregistered,
-                }
-                .to_owned(),
-            ],
-            Self::CouldNotCheck { unchecked: missing } => {
-                std::iter::once(words.could_not_check.to_owned())
-                    .chain(unchecked(missing))
-                    .collect()
-            }
-            Self::Busy => vec![words.busy.to_owned()],
-            Self::Failed { step: failed, .. } => {
-                vec![words.could_not_update.to_owned(), step(failed).to_owned()]
-            }
-            Self::Stopped => vec![words.could_not_check.to_owned()],
-            Self::Available { version, unchecked: missing } => {
-                std::iter::once(UpdateMessages::with_version(words.available, &version.to_string()))
-                    .chain(unchecked(missing))
-                    .collect()
-            }
+            Self::Updated { from, to, source, unchecked } => PackUpdateReport {
+                from: Some(from.to_string()),
+                to: Some(to.to_string()),
+                source: Some(source.as_str().to_owned()),
+                unchecked: kinds(unchecked),
+                ..PackUpdateReport::new(PackOutcome::Updated)
+            },
+            Self::UpToDate => PackUpdateReport::new(PackOutcome::UpToDate),
+            Self::Restored(restored) => PackUpdateReport {
+                from: Some(restored.version.clone()),
+                to: Some(restored.restored_version.clone()),
+                reason: Some(restored.reason.as_str().to_owned()),
+                ..PackUpdateReport::new(PackOutcome::Restored)
+            },
+            Self::Judging { version } => PackUpdateReport {
+                to: Some(version.clone()),
+                ..PackUpdateReport::new(PackOutcome::Judging)
+            },
+            Self::NotManaged(reason) => PackUpdateReport {
+                reason: Some(reason.as_str().to_owned()),
+                ..PackUpdateReport::new(PackOutcome::NotManaged)
+            },
+            Self::CouldNotCheck { unchecked } => PackUpdateReport {
+                unchecked: kinds(unchecked),
+                ..PackUpdateReport::new(PackOutcome::CouldNotCheck)
+            },
+            Self::Busy => PackUpdateReport::new(PackOutcome::Busy),
+            Self::Failed { step, code } => PackUpdateReport {
+                step: Some(step.as_str().to_owned()),
+                code: Some((*code).to_owned()),
+                ..PackUpdateReport::new(PackOutcome::Failed)
+            },
+            Self::Stopped => PackUpdateReport::new(PackOutcome::Stopped),
+            Self::Available { version, unchecked } => PackUpdateReport {
+                to: Some(version.to_string()),
+                unchecked: kinds(unchecked),
+                ..PackUpdateReport::new(PackOutcome::Available)
+            },
         }
-    }
-}
-
-/// The update report of one startup update, as kept in the host's storage.
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct UpdateReport {
-    schema: u32,
-    outcome: &'static str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    from: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    to: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    source: Option<&'static str>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    unchecked: Vec<&'static str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    reason: Option<&'static str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    step: Option<&'static str>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    code: Option<&'static str>,
-}
-
-impl UpdateReport {
-    fn of(outcome: &StartupOutcome) -> Self {
-        let mut report = Self {
-            schema: REPORT_SCHEMA,
-            outcome: "",
-            from: None,
-            to: None,
-            source: None,
-            unchecked: Vec::new(),
-            reason: None,
-            step: None,
-            code: None,
-        };
-        let kinds = |kinds: &[ReleaseSourceKind]| kinds.iter().map(|kind| kind.as_str()).collect();
-        report.outcome = match outcome {
-            StartupOutcome::Updated { from, to, source, unchecked } => {
-                report.from = Some(from.to_string());
-                report.to = Some(to.to_string());
-                report.source = Some(source.as_str());
-                report.unchecked = kinds(unchecked);
-                "updated"
-            }
-            StartupOutcome::UpToDate => "up-to-date",
-            StartupOutcome::Restored(restored) => {
-                report.from = Some(restored.version.clone());
-                report.to = Some(restored.restored_version.clone());
-                report.reason = Some(restored.reason.as_str());
-                "restored"
-            }
-            StartupOutcome::Judging { version } => {
-                report.to = Some(version.clone());
-                "judging"
-            }
-            StartupOutcome::NotManaged(reason) => {
-                report.reason = Some(reason.as_str());
-                "not-managed"
-            }
-            StartupOutcome::CouldNotCheck { unchecked } => {
-                report.unchecked = kinds(unchecked);
-                "could-not-check"
-            }
-            StartupOutcome::Busy => "busy",
-            StartupOutcome::Failed { step, code } => {
-                report.step = Some(step.as_str());
-                report.code = Some(code);
-                "failed"
-            }
-            StartupOutcome::Stopped => "stopped",
-            StartupOutcome::Available { version, unchecked } => {
-                report.to = Some(version.to_string());
-                report.unchecked = kinds(unchecked);
-                "available"
-            }
-        };
-        report
     }
 }

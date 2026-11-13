@@ -186,8 +186,7 @@ impl CoordinatorBackend {
         let record = self.records[at].as_mut().ok_or(LifecycleRejection::StaleIdentity)?;
         // The pack must be final before its inspection pins and hashes it, and before launch.
         let managed = matches!(record.target, BackendTarget::Managed(_));
-        let gated =
-            self.pack.begin(key, &cube, managed, &record.scope, budget.until(), resources)?;
+        let gated = self.pack.begin(key, &cube, managed, budget.until(), resources)?;
         if !gated {
             Self::submit_source_inspection(record, resources)?;
         }

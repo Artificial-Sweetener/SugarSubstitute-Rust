@@ -162,7 +162,7 @@ fn late_frontend_readiness_cannot_override_cancellation_or_process_exit() -> Res
             assert_eq!(phase, StartupPhase::Cancelling);
             assert!(session.failure().is_none());
         }
-        c.begin_attempt_cleanup()?;
+        c.begin_attempt_cleanup(false)?;
         assert!(!c.attempt.as_ref().ok_or("Cleanup owner absent")?.complete());
         assert!(
             c.ensure_retry_ready(MainIdentity { launch: LaunchId::new(2)?, ..c.identity }).is_err()
@@ -178,7 +178,7 @@ fn late_frontend_cleanup_keeps_original_fifteen_seconds_and_native_absence_requi
     let (mut c, _owner, clock) = child()?;
     c.prepared = true;
     clock.0.store(86_400_000_000_000, Ordering::SeqCst);
-    c.begin_attempt_cleanup()?;
+    c.begin_attempt_cleanup(false)?;
     let original = c.attempt.as_ref().ok_or("Original cleanup absent")?.original_deadline();
     assert_eq!(original, Moment::from_nanos(86_415_000_000_000));
     assert_eq!(c.next_deadline(), Some(original));
@@ -187,7 +187,7 @@ fn late_frontend_cleanup_keeps_original_fifteen_seconds_and_native_absence_requi
     );
     assert!(c.take_startup_event()?.is_none());
     clock.0.store(86_405_000_000_000, Ordering::SeqCst);
-    c.begin_attempt_cleanup()?;
+    c.begin_attempt_cleanup(false)?;
     assert_eq!(c.attempt.as_ref().ok_or("Original cleanup lost")?.original_deadline(), original);
     assert!(!c.attempt.as_ref().ok_or("Original cleanup lost")?.complete());
     clock.0.store(original.as_nanos(), Ordering::SeqCst);

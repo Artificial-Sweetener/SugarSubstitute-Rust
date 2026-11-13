@@ -243,16 +243,6 @@ impl CoordinatorBackend {
         self.custody_options = Some((executable, installation));
         Ok(())
     }
-    /// The page established its session with every SugarCubes node registered; this keeps a
-    /// SugarCubes update being judged. Only a managed backend's pack is ever judged.
-    pub(crate) fn pack_page_loaded(&mut self, resources: &BackendResources<'_>) -> Result<()> {
-        self.pack.observe(
-            sugarsubstitute_supervision::pack_install::TrialEvent::PageLoaded {
-                nodes_registered: true,
-            },
-            resources,
-        )
-    }
     /// Register facts authenticated by the existing native child owner.
     pub(crate) fn register_run(&mut self, registration: ClientRegistration) -> Result<()> {
         self.preflight_policy(

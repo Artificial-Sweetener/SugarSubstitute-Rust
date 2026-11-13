@@ -4,6 +4,7 @@
 use crate::installation::PreparationIntent;
 use serde::{Deserialize, Serialize};
 pub mod attempt;
+pub mod pack;
 pub mod status;
 pub mod subscription;
 

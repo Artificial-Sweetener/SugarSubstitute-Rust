@@ -20,6 +20,7 @@ mod identity;
 mod network;
 mod ownership;
 mod replacement;
+mod schedule;
 mod selection;
 mod sources;
 mod startup;
@@ -41,6 +42,7 @@ pub use identity::{MAX_PYPROJECT_BYTES, PackIdentity, ReleaseVersion};
 pub use network::{HttpReleaseSources, RELEASE_REQUEST_IDLE};
 pub use ownership::{InstalledDigests, NotOwnedReason, changed_tracked_files};
 pub use replacement::JournalPhase;
+pub use schedule::{PackSchedule, PackWork, PackWorkEnded};
 pub use selection::{ReleaseSources, SourceFailure, UpdateDecision, newest_offer};
 pub use sources::{
     MAX_ARCHIVE_BYTES, MetadataError, ReleaseOffer, ReleaseSourceConfig, ReleaseSourceKind,

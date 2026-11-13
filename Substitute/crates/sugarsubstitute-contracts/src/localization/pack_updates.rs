@@ -9,6 +9,8 @@
 /// [`super::updates::UpdateMessages::with_version`].
 #[non_exhaustive]
 pub struct PackUpdateMessages {
+    /// Splash line while a SugarCubes update holds the start.
+    pub updating: &'static str,
     /// One line: SugarCubes was updated during this start; contains the version.
     pub updated: &'static str,
     /// One line: neither release source answered, so the installed version runs.
@@ -41,9 +43,10 @@ pub struct PackUpdateMessages {
 
 impl PackUpdateMessages {
     /// Enumerate every owned label for complete registry coverage checks.
-    pub const fn labels(&self) -> [&'static str; 16] {
+    pub const fn labels(&self) -> [&'static str; 17] {
         let s = self.steps;
         [
+            self.updating,
             self.updated,
             self.could_not_check,
             self.could_not_update,
@@ -66,6 +69,7 @@ impl PackUpdateMessages {
 
 /// Canonical English words.
 pub static EN: PackUpdateMessages = PackUpdateMessages {
+    updating: "Updating SugarCubes…",
     updated: "SugarCubes updated to version {version}",
     could_not_check: "Couldn't check for a SugarCubes update.",
     could_not_update: "Couldn't update SugarCubes. The installed version is running.",
@@ -84,6 +88,7 @@ pub static EN: PackUpdateMessages = PackUpdateMessages {
 
 /// Simplified Chinese words.
 pub static ZH_HANS: PackUpdateMessages = PackUpdateMessages {
+    updating: "正在更新 SugarCubes…",
     updated: "SugarCubes 已更新到版本 {version}",
     could_not_check: "无法检查 SugarCubes 更新。",
     could_not_update: "无法更新 SugarCubes。正在运行已安装的版本。",
@@ -102,6 +107,7 @@ pub static ZH_HANS: PackUpdateMessages = PackUpdateMessages {
 
 /// Japanese words.
 pub static JA: PackUpdateMessages = PackUpdateMessages {
+    updating: "SugarCubes を更新しています…",
     updated: "SugarCubes をバージョン {version} に更新しました",
     could_not_check: "SugarCubes の更新を確認できませんでした。",
     could_not_update: "SugarCubes を更新できませんでした。インストール済みのバージョンで動作しています。",
@@ -124,6 +130,7 @@ pub static JA: PackUpdateMessages = PackUpdateMessages {
 
 /// Korean words.
 pub static KO: PackUpdateMessages = PackUpdateMessages {
+    updating: "SugarCubes 업데이트 중…",
     updated: "SugarCubes를 버전 {version}(으)로 업데이트했습니다",
     could_not_check: "SugarCubes 업데이트를 확인할 수 없습니다.",
     could_not_update: "SugarCubes를 업데이트할 수 없습니다. 설치된 버전이 실행 중입니다.",
@@ -142,6 +149,7 @@ pub static KO: PackUpdateMessages = PackUpdateMessages {
 
 /// Spanish words.
 pub static ES: PackUpdateMessages = PackUpdateMessages {
+    updating: "Actualizando SugarCubes…",
     updated: "SugarCubes se actualizó a la versión {version}",
     could_not_check: "No se pudo comprobar si hay una actualización de SugarCubes.",
     could_not_update: "No se pudo actualizar SugarCubes. Se está usando la versión instalada.",

@@ -184,8 +184,18 @@ impl ParentLifecycle {
                 )?;
                 self.advance_backend_commands(resources)?;
             }
-            DecodedPayload::SettleAttempt { identity, acquisition } => {
+            DecodedPayload::SettleAttempt { identity, acquisition, sugarcubes_failed } => {
                 self.begin_attempt_cleanup(index, identity, acquisition, until, resources)?;
+                // The authenticated attempt's page reported SugarCubes itself failing: a
+                // SugarCubes update being judged did not load its page.
+                if sugarcubes_failed
+                    && matches!(
+                        resources.target,
+                        sugarsubstitute_contracts::lifecycle::BackendTarget::Managed(_)
+                    )
+                {
+                    resources.backend.pack_page_failed(resources.execution)?;
+                }
             }
             DecodedPayload::Release(reference) => {
                 if let Some(failed) = self.recovery.invalidated_release(reference)? {

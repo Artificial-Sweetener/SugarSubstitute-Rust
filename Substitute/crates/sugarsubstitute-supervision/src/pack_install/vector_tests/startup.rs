@@ -312,7 +312,10 @@ fn every_run_leaves_its_update_report_and_shows_one_plain_line_when_needed() -> 
     let host = Host::new()?;
     host.publish("1.1.0")?;
     let outcome = host.run()?;
-    assert_eq!(outcome.notice(&EN).as_deref(), Some("SugarCubes updated to version 1.1.0"));
+    assert_eq!(
+        outcome.report().notice(&EN).as_deref(),
+        Some("SugarCubes updated to version 1.1.0")
+    );
     let report: Value = serde_json::from_slice(&std::fs::read(
         host.root.path().join("host-storage").join(REPORT_RECORD),
     )?)?;
@@ -324,14 +327,14 @@ fn every_run_leaves_its_update_report_and_shows_one_plain_line_when_needed() -> 
     let failed = StartupOutcome::CouldNotCheck {
         unchecked: vec![ReleaseSourceKind::Registry, ReleaseSourceKind::GitHubRelease],
     };
-    assert_eq!(failed.notice(&EN).as_deref(), Some(EN.could_not_check));
+    assert_eq!(failed.report().notice(&EN).as_deref(), Some(EN.could_not_check));
     assert_eq!(
-        failed.report_lines(&EN),
+        failed.report().lines(&EN),
         [EN.could_not_check, EN.registry_unchecked, EN.github_unchecked]
     );
-    assert_eq!(StartupOutcome::UpToDate.notice(&EN), None);
+    assert_eq!(StartupOutcome::UpToDate.report().notice(&EN), None);
     assert_eq!(
-        StartupOutcome::NotManaged(NotOwnedReason::GitCheckout).report_lines(&EN),
+        StartupOutcome::NotManaged(NotOwnedReason::GitCheckout).report().lines(&EN),
         [EN.kept_git]
     );
     Ok(())
@@ -348,9 +351,38 @@ fn a_comfyui_the_host_does_not_start_is_only_reported_on() -> TestResult {
         outcome,
         StartupOutcome::Available { version: version("1.1.0")?, unchecked: Vec::new() }
     );
-    assert_eq!(outcome.notice(&EN).as_deref(), Some("SugarCubes version 1.1.0 is available."));
+    assert_eq!(
+        outcome.report().notice(&EN).as_deref(),
+        Some("SugarCubes version 1.1.0 is available.")
+    );
     assert_eq!(folder_files(&host.pack())?, before);
     assert!(!host.root.path().join("host-storage/transaction").exists());
     assert!(!host.pack().join(".sugarcubes").exists());
+    Ok(())
+}
+
+#[test]
+fn a_failed_page_restores_the_previous_version_before_the_next_attempt() -> TestResult {
+    use sugarsubstitute_contracts::update::pack::{PackOutcome, PackUpdateReport};
+    let host = Host::new()?;
+    host.publish("1.1.0")?;
+    host.run()?;
+    let update = host.update()?;
+    // Nothing to restore while the new version has not failed its page.
+    assert_eq!(update.restore_failed_page()?, None);
+    update.observe(TrialEvent::BackendStartUnobservable)?;
+    assert_eq!(update.restore_failed_page()?, None);
+    assert_eq!(host.version()?, "1.1.0");
+    update.observe(TrialEvent::PageFailed)?;
+    let restored = update.restore_failed_page()?.ok_or("nothing restored")?;
+    assert_eq!(restored.reason, RestoreReason::PageDidNotLoad);
+    assert_eq!(host.version()?, "1.0.0");
+    let report = PackUpdateReport::parse(&std::fs::read(
+        host.root.path().join("host-storage").join(REPORT_RECORD),
+    )?)?;
+    assert_eq!(report.outcome, PackOutcome::Restored);
+    assert_eq!(report.reason.as_deref(), Some("page-did-not-load"));
+    // The failed version is not tried again; the next start is up to date.
+    assert_eq!(host.run()?, StartupOutcome::UpToDate);
     Ok(())
 }

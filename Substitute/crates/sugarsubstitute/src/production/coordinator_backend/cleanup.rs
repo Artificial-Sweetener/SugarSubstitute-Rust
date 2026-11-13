@@ -79,9 +79,7 @@ impl CoordinatorBackend {
                 "Original backend cleanup cutoff reached with retained owner state");
         }
         record.cleanup_failure.observe(now, budget);
-        if self.pack.gates(record.key) {
-            self.pack.cancel();
-        }
+        self.pack.cancel(record.key);
         if now >= budget.settle_until {
             return self.finish_cleanup(at, resources);
         }
