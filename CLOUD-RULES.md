@@ -52,7 +52,7 @@ Then run `cargo xtask check` from `Substitute/` and resync any governance finger
   - Substitute verification on every OS: xtask cannot resolve `third_party/comfy-desktop/src/main/lib/download.ts` (the submodule isn't checked out in CI).
   - Sugar quality on ubuntu: mypy flags Windows-only APIs in platform-guarded modules.
   - Sugar quality on windows: "Select exactly one installation of the declared VS2022 product".
-  Don't fix these in a lane branch. One owner repairs the baseline (branch `lane/ci` if it exists, otherwise the integrator on `integration`). Until then, judge your work by your own local `cargo xtask check` and focused tests, plus any CI failure that is new compared with main's baseline. Once the baseline fix exists, merge it into your branch and get fully green.
+  Don't fix these in a lane branch. A dedicated cloud session repairs the baseline on branch `lane/ci`. The integrator merges `lane/ci` into `integration` first, as soon as its LANE-REPORT-ci.md says both workflows are green; until then it treats these three failures as the known baseline. When `lane/ci` is green, every lane merges `origin/lane/ci` into its branch. Until then, judge your work by your own local `cargo xtask check` and focused tests, plus any CI failure that is new compared with main's baseline. Once the baseline fix exists, merge it into your branch and get fully green.
 - Native proofs on a hidden Windows desktop cannot run in the cloud. List each one your items need under "Unproven" in your report.
 
 ## Lane report
