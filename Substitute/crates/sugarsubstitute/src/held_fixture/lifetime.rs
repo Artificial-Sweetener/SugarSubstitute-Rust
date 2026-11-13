@@ -61,11 +61,10 @@ impl HeadlessLifetime for Fixture {
         self.advance(max)
     }
     fn next_deadline(&self) -> Option<Instant> {
-        let original = (!self.deadline_observed).then_some(self.deadline);
         self.cleanup
             .iter()
             .filter_map(|cleanup| cleanup.stop.as_ref().and_then(StopPlan::next_deadline))
-            .chain(original)
+            .chain(self.watch.next_deadline())
             .min()
     }
     fn request_shutdown(&mut self) -> Result<()> {
@@ -96,9 +95,9 @@ impl HeadlessLifetime for Fixture {
             owner.request_shutdown(self.execution_deadline);
         }
         let progress = owner.poll_shutdown()?;
-        if progress.deadline_expired && !self.deadline_observed {
-            self.deadline_observed = true;
-            return Err("Held campaign execution exceeded its original admitted deadline".into());
+        if progress.deadline_expired && !self.custody_expired {
+            self.custody_expired = true;
+            return Err("Held campaign execution exceeded its custody bound".into());
         }
         if progress.settled {
             self.workers = Some(progress.workers);

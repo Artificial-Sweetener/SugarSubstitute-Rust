@@ -13,6 +13,8 @@ pub mod viewer;
 
 #[cfg(all(windows, feature = "windows-native-host"))]
 mod authority_clock;
+#[cfg(all(windows, feature = "windows-native-host"))]
+mod campaign_watch;
 #[cfg(all(windows, any(feature = "native-composition", feature = "windows-native-host")))]
 mod canvas_preparation_diagnostic;
 #[cfg(all(windows, any(feature = "native-composition", feature = "windows-native-host")))]

@@ -4,6 +4,7 @@
 use super::*;
 use sugarsubstitute_application::transcript::TranscriptStore;
 use sugarsubstitute_contracts::{lifecycle::*, startup::StartupOperation, transcript::*};
+use sugarsubstitute_execution::qualification_time::anchor;
 
 /// Repainting retained output cannot manufacture activity or override frontend readiness.
 #[test]
@@ -22,7 +23,7 @@ fn output_revisions_advance_one_overall_bar_without_replaying_activity()
         Presentation::new("en", RequestedTheme::Dark, false)?,
         sugarsubstitute_ui::accent::AccentPalette::PRODUCT,
     );
-    let origin = Instant::now();
+    let origin = anchor();
     view.sample(StartupPhase::PreparingConnection, Duration::ZERO, origin);
     for (sequence, line, expected) in [
         (1, "Collecting torch\n", StartupOperation::Dependencies),

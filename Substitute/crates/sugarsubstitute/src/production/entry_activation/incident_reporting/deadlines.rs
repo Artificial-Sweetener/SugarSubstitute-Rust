@@ -35,7 +35,6 @@ mod tests {
         Arc,
         atomic::{AtomicU64, Ordering},
     };
-    use std::time::Instant;
     use sugarsubstitute_execution::ExecutionOwner;
     struct FixedClock(AtomicU64);
     impl Clock for FixedClock {
@@ -87,7 +86,7 @@ mod tests {
         )?;
         activation.incidents.reporting.queue_until = Some(moment(19));
         activation.incidents.reporting.relay_until = Some(moment(45));
-        let anchor = Instant::now();
+        let anchor = sugarsubstitute_execution::qualification_time::anchor();
         activation.arm_next_wake(&client, anchor)?;
         assert_eq!(activation.next_wake, anchor.checked_add(Duration::from_secs(25)));
         assert_eq!(activation.incidents.reporting.queue_until, Some(moment(19)));
@@ -113,7 +112,7 @@ mod tests {
         activation.incidents.reporting.relay_until = Some(moment(45));
         activation.incidents.reporting.continuation = Some(ReportContinuation::ConsumeEffect);
         activation.incidents.reporting.continuation = Some(ReportContinuation::AdvanceStore);
-        let anchor = Instant::now();
+        let anchor = sugarsubstitute_execution::qualification_time::anchor();
         activation.arm_next_wake(&client, anchor)?;
         assert_eq!(activation.next_wake, Some(anchor));
         assert!(activation.incidents.reporting.continuation.is_none());

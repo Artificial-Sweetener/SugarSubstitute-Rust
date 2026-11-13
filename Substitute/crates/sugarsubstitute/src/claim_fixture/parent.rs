@@ -14,12 +14,9 @@ use super::{
     options::{CampaignOptions, Role, hex_text},
     receipt::ChildReceipt,
 };
+use crate::campaign_watch::{self, CampaignWatch};
 use crate::process_fixture::progress::{CaseProgress, StopPlan};
-use std::{
-    num::NonZeroUsize,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{num::NonZeroUsize, sync::Arc, time::Instant};
 use sugarsubstitute_contracts::{
     configuration::LaunchConfiguration,
     execution::{
@@ -125,7 +122,7 @@ struct ChildCase {
 struct Fixture {
     options: CampaignOptions,
     clock: Arc<MonotonicClock>,
-    deadline: Instant,
+    watch: CampaignWatch,
     execution_deadline: Moment,
     child_deadline: FixtureDeadline,
     owner: Option<ExecutionOwner>,
@@ -155,7 +152,7 @@ struct Fixture {
     closing: bool,
     initialization_admitted: bool,
     execution_stopping: bool,
-    deadline_observed: bool,
+    custody_expired: bool,
     workers: Option<WorkerStatus>,
     finished: bool,
     premature_release_rejected: bool,
@@ -180,21 +177,15 @@ impl Fixture {
     }
 
     fn new(options: CampaignOptions) -> Result<Self> {
-        let started = Instant::now();
-        let clock = MonotonicClock::new();
-        let deadline = started
-            .checked_add(Duration::from_secs(60))
-            .ok_or("Claim campaign deadline overflow")?;
-        let child_deadline = FixtureDeadline::until(deadline)?;
-        let execution_deadline = clock.now().checked_add(
-            deadline.checked_duration_since(Instant::now()).ok_or("Claim campaign expired")?,
-        )?;
+        let clock = campaign_watch::execution_clock();
+        let (custody, execution_deadline) = campaign_watch::custody(clock.as_ref())?;
+        let child_deadline = FixtureDeadline::until(custody)?;
         let mut results = Vec::new();
         results.try_reserve_exact(7)?;
         Ok(Self {
             options,
             clock,
-            deadline,
+            watch: CampaignWatch::new("Claim campaign"),
             execution_deadline,
             child_deadline,
             owner: None,
@@ -224,7 +215,7 @@ impl Fixture {
             closing: false,
             initialization_admitted: false,
             execution_stopping: false,
-            deadline_observed: false,
+            custody_expired: false,
             workers: None,
             finished: false,
             premature_release_rejected: false,

@@ -6,6 +6,7 @@ use crate::{
     durable_storage::{files::reparse_fixture, protected::directories::Mode},
     setup_storage::{
         InstallationRun, OwnedTrial,
+        selection::StrikeClock,
         test_worker::{self, TestResult},
     },
 };
@@ -15,6 +16,10 @@ use sugarsubstitute_contracts::installation::{
 };
 
 type Failure = Box<dyn std::error::Error + Send + Sync>;
+
+/// The fixed UTC Unix time candidates are prepared at and bad trials are dated with; retirement
+/// never reads it.
+const PREPARED_AT: u64 = 1_800_000_000;
 
 /// Turn reservation plus the fixture's own record and folder work.
 const RESERVATION: u64 = GENERATION_RETIREMENT_RESERVATION_BYTES + 16 * 1024 * 1024;
@@ -50,7 +55,10 @@ impl Installation {
     fn new(context: &JobContext) -> Result<Self, Failure> {
         let root = test_worker::installation(7, context)?;
         std::fs::create_dir(root.path().join("releases"))?;
-        let store = Arc::new(SelectionStore::open(root.path(), context)?);
+        let store = Arc::new(
+            SelectionStore::open(root.path(), context)?
+                .with_strike_clock(StrikeClock::Fixed(PREPARED_AT)),
+        );
         let record = store.load(context)?.ok_or("record")?;
         Ok(Self { root, store, record })
     }
@@ -61,7 +69,7 @@ impl Installation {
 
     /// Prepare `generation` as the candidate, superseding any earlier candidate.
     fn prepare(&mut self, generation: &Generation, context: &JobContext) -> Result<(), Failure> {
-        let now = super::super::selection::unix_now()?;
+        let now = PREPARED_AT;
         let staging = match self.record.candidate() {
             None => self.record.prepare(generation.clone(), PreparationIntent::Automatic, now)?,
             Some(previous) => self.record.supersede_preparation(
@@ -387,7 +395,7 @@ fn a_running_preparation_skips_the_turn_and_a_staging_candidate_is_kept() -> Tes
                 _ => return Err("preparation was not taken".into()),
             };
         let staging = generation(3)?;
-        let now = super::super::selection::unix_now()?;
+        let now = PREPARED_AT;
         let reserved = installation.record.supersede_preparation(
             &superseded,
             staging.clone(),

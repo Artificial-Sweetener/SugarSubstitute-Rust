@@ -81,7 +81,7 @@ fn fresh_restart_ack_queue_and_store_queue_wake_before_original_cutoff_without_u
     assert!(
         matches!(host.next_effect()?, Some(IncidentEffect::Acknowledge { binding: queued, .. }) if *queued == binding)
     );
-    let anchor = Instant::now();
+    let anchor = sugarsubstitute_execution::qualification_time::anchor();
     activation.arm_next_wake(&client, anchor)?;
     assert_eq!(activation.next_deadline(), Some(anchor));
     activation.arm_next_wake(&client, anchor)?;
@@ -171,7 +171,7 @@ fn store_continuation_clears_while_actual_transaction_blocks_without_renewing_de
         competing_operation,
         &mut competing
     )?);
-    let anchor = Instant::now();
+    let anchor = sugarsubstitute_execution::qualification_time::anchor();
     activation.arm_next_wake(&client, anchor)?;
     assert_eq!(activation.next_deadline(), Some(anchor));
     activation.incidents.reporting.advance_store(

@@ -7,10 +7,7 @@ use sugarsubstitute_desktop::HeadlessStep;
 impl Fixture {
     pub(super) fn advance(&mut self, max: NonZeroUsize) -> Result<HeadlessStep> {
         self.drain(max)?;
-        if !self.deadline_observed && Instant::now() >= self.deadline {
-            self.deadline_observed = true;
-            return Err("Registry qualification exceeded its original sixty-second deadline".into());
-        }
+        self.watch.check()?;
         if !self.closing
             && self.registry_creation.is_none()
             && self.registry.is_some()
@@ -35,6 +32,7 @@ impl Fixture {
             else {
                 break;
             };
+            self.watch.progressed();
             self.cases[self.current].observe(observation)?;
         }
         if self.cases[self.current].exited.is_some() || self.closing {

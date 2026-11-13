@@ -10,6 +10,10 @@ use sugarsubstitute_contracts::installation::{
 mod locks;
 pub(super) type TestResult = Result<(), Box<dyn Error + Send + Sync>>;
 
+/// The fixed UTC Unix time these records are prepared and rejected at. Each test passes this
+/// time explicitly, so no outcome depends on the real clock.
+pub(super) const PREPARED_AT: u64 = 1_800_000_000;
+
 pub(super) fn root() -> Result<tempfile::TempDir, Box<dyn Error + Send + Sync>> {
     let root = tempfile::tempdir()?;
     std::fs::create_dir(root.path().join("state"))?;
@@ -44,16 +48,8 @@ fn competing_writers_compare_exact_state_and_never_overwrite_a_new_selection() -
             SelectionStore::initialize(root.path(), &initial, context),
             Err(SelectionFailure::Changed)
         ));
-        let a = initial.prepare(
-            generation(1)?,
-            PreparationIntent::Automatic,
-            crate::setup_storage::selection::unix_now()?,
-        )?;
-        let b = initial.prepare(
-            generation(2)?,
-            PreparationIntent::Automatic,
-            crate::setup_storage::selection::unix_now()?,
-        )?;
+        let a = initial.prepare(generation(1)?, PreparationIntent::Automatic, PREPARED_AT)?;
+        let b = initial.prepare(generation(2)?, PreparationIntent::Automatic, PREPARED_AT)?;
         first.compare_exchange(&initial, &a, context)?;
         assert!(matches!(
             second.compare_exchange(&initial, &b, context),
@@ -70,11 +66,8 @@ fn publication_reloads_complete_records_and_ignores_interrupted_staging_files() 
         let root = root()?;
         let initial = initial()?;
         let candidate = generation(1)?;
-        let staging = initial.prepare(
-            candidate.clone(),
-            PreparationIntent::Automatic,
-            crate::setup_storage::selection::unix_now()?,
-        )?;
+        let staging =
+            initial.prepare(candidate.clone(), PreparationIntent::Automatic, PREPARED_AT)?;
         {
             let store = SelectionStore::initialize(root.path(), &initial, context)?;
             std::fs::write(root.path().join(".selection-stage-interrupted"), b"{partial")?;
@@ -97,11 +90,8 @@ fn failed_replacement_keeps_original_selection_and_can_be_retried() -> TestResul
         let root = root()?;
         let initial = initial()?;
         let store = SelectionStore::initialize(root.path(), &initial, context)?;
-        let replacement = initial.prepare(
-            generation(1)?,
-            PreparationIntent::Automatic,
-            crate::setup_storage::selection::unix_now()?,
-        )?;
+        let replacement =
+            initial.prepare(generation(1)?, PreparationIntent::Automatic, PREPARED_AT)?;
         let pin = store.root.read(RECORD)?;
         assert!(matches!(
             store.compare_exchange(&initial, &replacement, context),
@@ -182,11 +172,7 @@ fn unrecognized_installation_and_noncontiguous_proposals_are_rejected() -> TestR
         let store = SelectionStore::initialize(root.path(), &initial, context)?;
         let candidate = generation(1)?;
         let skipped = initial
-            .prepare(
-                candidate.clone(),
-                PreparationIntent::Automatic,
-                crate::setup_storage::selection::unix_now()?,
-            )?
+            .prepare(candidate.clone(), PreparationIntent::Automatic, PREPARED_AT)?
             .prepared(&candidate)?;
         assert!(matches!(
             store.compare_exchange(&initial, &skipped, context),
@@ -195,7 +181,7 @@ fn unrecognized_installation_and_noncontiguous_proposals_are_rejected() -> TestR
         let foreign = InstallationRecord::empty(InstallationId::new("2".repeat(32))?).prepare(
             candidate,
             PreparationIntent::Automatic,
-            crate::setup_storage::selection::unix_now()?,
+            PREPARED_AT,
         )?;
         assert!(matches!(
             store.compare_exchange(&initial, &foreign, context),
@@ -212,11 +198,7 @@ fn expired_operation_preserves_accepted_record() -> TestResult {
         let root = root()?;
         let initial = initial()?;
         let store = SelectionStore::initialize(root.path(), &initial, context)?;
-        let next = initial.prepare(
-            generation(1)?,
-            PreparationIntent::Automatic,
-            crate::setup_storage::selection::unix_now()?,
-        )?;
+        let next = initial.prepare(generation(1)?, PreparationIntent::Automatic, PREPARED_AT)?;
         clock.expire();
         assert!(matches!(
             store.compare_exchange(&initial, &next, context),
@@ -300,11 +282,7 @@ fn accept(
     generation: &Generation,
     context: &JobContext,
 ) -> Result<InstallationRecord, Box<dyn Error + Send + Sync>> {
-    let staged = from.prepare(
-        generation.clone(),
-        PreparationIntent::Automatic,
-        crate::setup_storage::selection::unix_now()?,
-    )?;
+    let staged = from.prepare(generation.clone(), PreparationIntent::Automatic, PREPARED_AT)?;
     let prepared = staged.prepared(generation)?;
     let trial = prepared.begin_trial()?;
     let Some(sugarsubstitute_contracts::installation::Candidate::Trial { attempt }) =
@@ -340,11 +318,7 @@ fn a_replacement_between_reservation_and_use_is_detected_by_record_value() -> Te
         let candidate = advance(
             &store,
             &reserved,
-            [reserved.prepare(
-                generation(2)?,
-                PreparationIntent::Automatic,
-                crate::setup_storage::selection::unix_now()?,
-            )?],
+            [reserved.prepare(generation(2)?, PreparationIntent::Automatic, PREPARED_AT)?],
             context,
         )?;
         // Same startup selection: the reservation re-resolves and proceeds to verify the
@@ -390,11 +364,8 @@ fn update_selection_shows_prepared_candidates_and_rollback_only_after_a_bad_verd
         assert_eq!((shown.prepared, shown.rollback), (None, None));
 
         let candidate = generation(2)?;
-        let staged = running.prepare(
-            candidate.clone(),
-            PreparationIntent::Automatic,
-            crate::setup_storage::selection::unix_now()?,
-        )?;
+        let staged =
+            running.prepare(candidate.clone(), PreparationIntent::Automatic, PREPARED_AT)?;
         let staged = advance(&store, &running, [staged], context)?;
         assert_eq!(view()?.prepared, None);
         let prepared = advance(&store, &staged, [staged.prepared(&candidate)?], context)?;
@@ -423,7 +394,7 @@ fn update_selection_shows_prepared_candidates_and_rollback_only_after_a_bad_verd
         let Some(Candidate::Trial { attempt }) = trial.candidate().cloned() else {
             return Err("Trial absent".into());
         };
-        let rejected = advance(&store, &trial, [trial.reject(&attempt, unix_now()?)?], context)?;
+        let rejected = advance(&store, &trial, [trial.reject(&attempt, PREPARED_AT)?], context)?;
         let shown = view()?;
         assert_eq!(shown.running.generation, generation(1)?.id);
         assert_eq!(shown.prepared, None);

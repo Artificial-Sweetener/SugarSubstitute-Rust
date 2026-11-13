@@ -3,6 +3,7 @@
 //! Show a crash report in the real window on a private desktop and prove its session settles
 //! only after the window has actually retired.
 use super::*;
+use sugarsubstitute_execution::qualification_time::anchor;
 
 /// A reporter session that acknowledges dismissal durably, and settles only after it has
 /// observed the native window's actual retirement.
@@ -132,11 +133,7 @@ fn crash_body() -> TestResult {
         committed: Some((binding, committed)),
         ..AcknowledgingSession::default()
     }));
-    let mut inner = crash::CrashReport::new(
-        options,
-        Shared(session.clone()),
-        Box::new(std::time::Instant::now),
-    );
+    let mut inner = crash::CrashReport::new(options, Shared(session.clone()), Box::new(anchor));
     let mut script = Script::new(
         copy.report.title,
         &mut inner,

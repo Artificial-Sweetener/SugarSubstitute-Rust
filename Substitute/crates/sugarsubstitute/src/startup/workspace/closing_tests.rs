@@ -22,18 +22,15 @@ impl MemoryRelease for Release {
     fn release(&self, _: u64) {}
 }
 /// A host clock that moves only when a test moves it, so no deadline in this fixture expires
-/// because the machine running it is slow. Native instants come from a real monotonic anchor.
+/// because the machine running it is slow. Native instants are offsets from the process's frozen
+/// test anchor; the fixture drives polling itself and never waits for them.
 pub(super) struct ManualClock {
     nanos: AtomicU64,
-    anchor: Arc<sugarsubstitute_execution::MonotonicClock>,
 }
 impl ManualClock {
     /// Start far enough from zero that budgets dated just before the start stay valid.
     fn new() -> Arc<Self> {
-        Arc::new(Self {
-            nanos: AtomicU64::new(1_000_000_000_000),
-            anchor: sugarsubstitute_execution::MonotonicClock::new(),
-        })
+        Arc::new(Self { nanos: AtomicU64::new(1_000_000_000_000) })
     }
     /// Move this clock forward by `by`, as a slow machine does between two steps.
     pub(super) fn advance(&self, by: Duration) {
@@ -56,7 +53,9 @@ impl sugarsubstitute_contracts::execution::Clock for ManualClock {
 }
 impl crate::startup::HostClock for ManualClock {
     fn instant_for(&self, moment: Moment) -> Result<std::time::Instant, TimeError> {
-        self.anchor.instant_for(moment)
+        sugarsubstitute_execution::qualification_time::anchor()
+            .checked_add(Duration::from_nanos(moment.as_nanos()))
+            .ok_or(TimeError::Overflow)
     }
 }
 pub(super) struct Fixture {

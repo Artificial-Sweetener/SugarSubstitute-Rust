@@ -52,10 +52,9 @@ impl HeadlessLifetime for Fixture {
         self.advance(max)
     }
     fn next_deadline(&self) -> Option<Instant> {
-        let original = (!self.deadline_observed).then_some(self.deadline);
-        match (original, self.stop.as_ref().and_then(StopPlan::next_deadline)) {
-            (Some(original), Some(stop)) => Some(original.min(stop)),
-            (original, stop) => original.or(stop),
+        match (self.watch.next_deadline(), self.stop.as_ref().and_then(StopPlan::next_deadline)) {
+            (Some(stall), Some(stop)) => Some(stall.min(stop)),
+            (stall, stop) => stall.or(stop),
         }
     }
     fn request_shutdown(&mut self) -> Result<()> {
@@ -82,10 +81,10 @@ impl HeadlessLifetime for Fixture {
             owner.request_shutdown(self.execution_deadline);
         }
         let progress = owner.poll_shutdown()?;
-        if progress.deadline_expired && !self.deadline_observed {
-            self.deadline_observed = true;
+        if progress.deadline_expired && !self.custody_expired {
+            self.custody_expired = true;
             return Err(
-                "Registry fixture execution has not settled before its original deadline".into()
+                "Registry fixture execution has not settled before its custody bound".into()
             );
         }
         if progress.settled {

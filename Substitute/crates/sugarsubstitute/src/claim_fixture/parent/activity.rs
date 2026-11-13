@@ -6,6 +6,9 @@ impl Fixture {
     fn drain(&mut self, max: NonZeroUsize) -> Result<bool> {
         let Some(client) = &self.client else { return Ok(false) };
         let batch = client.drain_completions(max)?;
+        if !batch.notifications.is_empty() {
+            self.watch.progressed();
+        }
         let table_changed = crate::process_fixture::registry::poll(
             &mut self.registry_creation,
             &mut self.registry,
@@ -152,16 +155,17 @@ impl Fixture {
     }
     pub(super) fn advance(&mut self, max: NonZeroUsize) -> Result<HeadlessStep> {
         let mut changed = self.drain(max)?;
-        if !self.deadline_observed && Instant::now() >= self.deadline {
-            self.deadline_observed = true;
-            return Err("Claim campaign exceeded original sixty-second deadline".into());
+        if changed {
+            self.watch.progressed();
         }
+        self.watch.check()?;
         if self.closing {
             changed |= self.closing_step()?;
         } else {
             changed |= self.step()?;
         }
         if changed {
+            self.watch.progressed();
             self.notify()?;
         }
         Ok(if self.closing || self.phase == Phase::Done {

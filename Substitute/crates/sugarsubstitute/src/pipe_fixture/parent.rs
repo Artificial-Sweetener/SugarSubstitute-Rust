@@ -2,14 +2,10 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compose one fixed campaign with retained execution, authenticated channels and registry.
 use super::{Result, evidence::Case, options::CaseKind};
-use std::{
-    ffi::OsString,
-    os::windows::io::AsRawHandle,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use crate::campaign_watch::{self, CampaignWatch};
+use std::{ffi::OsString, os::windows::io::AsRawHandle, sync::Arc};
 use sugarsubstitute_contracts::{
-    execution::{Clock, JobClass, JobId, JobSpec, Moment, Operation, Scope, ScopeId, ScopeSpec},
+    execution::{JobClass, JobId, JobSpec, Moment, Operation, Scope, ScopeId, ScopeSpec},
     lifecycle::{CoordinatorEpoch, CoordinatorKey, InstanceId, NamespaceId, RunGeneration, RunKey},
 };
 use sugarsubstitute_desktop::run_headless;
@@ -27,9 +23,9 @@ pub(super) fn run() -> Result<serde_json::Value> {
 }
 pub(super) struct Parent {
     pub(super) clock: Arc<MonotonicClock>,
-    pub(super) deadline: Instant,
+    pub(super) watch: CampaignWatch,
     pub(super) execution_deadline: Moment,
-    pub(super) deadline_observed: bool,
+    pub(super) custody_expired: bool,
     pub(super) registry: Option<WindowsProcessRegistry>,
     pub(super) registry_creation: Option<crate::process_fixture::registry::PendingRegistry>,
     pub(super) owner: Option<ExecutionOwner>,
@@ -47,11 +43,8 @@ pub(super) struct Parent {
 }
 impl Parent {
     pub(super) fn new() -> Result<Self> {
-        let deadline = Instant::now()
-            .checked_add(Duration::from_secs(60))
-            .ok_or("Lifecycle campaign deadline overflow")?;
-        let clock = MonotonicClock::new();
-        let execution_deadline = original_deadline(clock.as_ref(), deadline, Instant::now)?;
+        let clock = campaign_watch::execution_clock();
+        let (_, execution_deadline) = campaign_watch::custody(clock.as_ref())?;
         // Isolated local facts bind only this campaign's actual contained children.
         let owner_key = CoordinatorKey {
             namespace: NamespaceId::new([0x71; 32]),
@@ -66,9 +59,9 @@ impl Parent {
         };
         Ok(Self {
             clock,
-            deadline,
+            watch: CampaignWatch::new("Lifecycle qualification"),
             execution_deadline,
-            deadline_observed: false,
+            custody_expired: false,
             registry: None,
             registry_creation: None,
             owner: None,
@@ -170,20 +163,3 @@ impl Parent {
         Ok(())
     }
 }
-
-/// Sample the destination epoch first so sampling latency cannot extend the source deadline.
-fn original_deadline(
-    clock: &dyn Clock,
-    deadline: Instant,
-    native_now: impl FnOnce() -> Instant,
-) -> Result<Moment> {
-    let before = clock.now();
-    let remaining = deadline
-        .checked_duration_since(native_now())
-        .ok_or("Lifecycle campaign already expired")?;
-    Ok(before.checked_add(remaining)?)
-}
-
-#[cfg(test)]
-#[path = "clock_tests.rs"]
-mod clock_tests;

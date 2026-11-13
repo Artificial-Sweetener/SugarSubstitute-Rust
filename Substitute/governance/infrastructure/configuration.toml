@@ -282,7 +282,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute/src/lib.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:bb5070d02299aa6203fa5c60f795d96943ca00b41a2c2a825dcf96fe91bbd014"
+source_sha256 = "sha256:ed740f9e6499fa7253905b15f06b09f65e97d5c3dabb53356ae0a58a060767f9"
 capabilities = ["arguments"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -492,14 +492,14 @@ rationale = "Tooling build, source inspection or isolated qualification input; n
 [[records]]
 path = "tools/xtask/src/main.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:4c14bfe07ce52c66629919b0f517436fcd41b701d8158e2f4b4f20d1d3933205"
+source_sha256 = "sha256:f51bcdb6293887ae84afea84b42bbd5c550e02eaf9fa9233c4299c6969ee5871"
 capabilities = ["arguments"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
 
 [[records]]
 path = "tools/xtask/src/policy.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:c12e32b21a3d20fa2330fffcf4718efd13661069f019ca22618fc0cc0a54d848"
+source_sha256 = "sha256:93ec8c957b48f8fb8400ddc873632d79b73fd734f7ec703f931e059b0efa7083"
 capabilities = ["codec"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
 
@@ -555,7 +555,7 @@ rationale = "Native first-install publication fixtures observe saved startup doc
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/fresh/installed/rescue.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:a45707b1aa99d6f824a1a8a16938b5d3fb37a6e4b908a11f371aeb978761b6b5"
+source_sha256 = "sha256:99c85c740cc2ffa8bc5f880a5447fba05ffa9637ea425b06f1a8b3ff7aa5f049"
 capabilities = ["document"]
 rationale = "Lost-trial rescue fixtures preserve exact saved startup bytes and reject reauthorization of failed payloads."
 
@@ -898,7 +898,7 @@ rationale = "Networking-governance rejection fixtures decode only their own TOML
 [[records]]
 path = "tools/updater_publication_qualification.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:0fc7b697eb5efa48924f8833063b3ef8703c53abf114de28673ecd2cd8ae198d"
+source_sha256 = "sha256:1922029df07c5a1d10cf88e1201d51ece4d77e70400d759c59ef2bc49608e8e1"
 capabilities = ["codec"]
 rationale = "Publication-recovery qualification reads the authoritative cache catalog to locate its shared payload namespace; it creates no application preferences or independent cache-path registry."
 
@@ -1010,7 +1010,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/user_data/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:054f04d3efe3e610e7d49bc9e2cbcd879e898655a5d229c71d072cf865314fc8"
+source_sha256 = "sha256:62bde03e6e008421794c1e07067f0614c1500df2e0f1b510a2479781d3d3d631"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
