@@ -15,8 +15,9 @@ use std::{
     time::{Duration, Instant},
 };
 
-/// Pointer read and two bounded takeovers, with room for pinning each engine.
-const BUDGET: Duration = Duration::from_secs(40);
+/// Pointer read, including waiting out a scanner holding it, and two bounded takeovers, with
+/// room for pinning each engine.
+const BUDGET: Duration = setup_storage::POINTER_HOLD_BOUND.saturating_add(Duration::from_secs(40));
 use sugarsubstitute_contracts::{
     execution::{
         Clock, CompletionWake, ExecutionPort, JobClass, JobContext, JobOutcome, JobSpec, Moment,

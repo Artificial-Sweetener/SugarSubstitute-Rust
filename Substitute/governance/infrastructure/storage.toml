@@ -528,7 +528,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Pro
 [[records]]
 path = "crates/sugarsubstitute-execution/src/handle_wait.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:95d9419b6c8c6c1cb590d78dfc4c8b8d832519b10d22b721f76ef2a3f46da2af"
+source_sha256 = "sha256:5bc373ad8af95f6a3cffa19fac1f08a8a8e753d275ef9abd434117ca401dcd70"
 capabilities = ["export public restricted capability std::os::windows::io::BorrowedHandle"]
 disposition = "boundary"
 rationale = "Execution-owned native object wait: Register one thread-pool wait per object, race the first wake against the job's clock, cancellation and deadline, and retire every registration before returning."
@@ -961,10 +961,10 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/application_launch/engine/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:dd7d1de5d153f1a8e17788587030302d0205f23afa3bd1f984ec45806f1ce7fe"
-capabilities = ["std::fs::OpenOptions::new", "tempfile::TempDir"]
+source_sha256 = "sha256:1f7efdbda1e68153c53a84ce1b16aca00d276667bc6f59414f7f0018c5f2914f"
+capabilities = ["std::fs::File", "std::fs::OpenOptions::new", "std::fs::read", "std::fs::remove_file", "std::fs::write", "tempfile::TempDir"]
 disposition = "fixture"
-rationale = "Launch engine owner tests: stand-in engines prove takeover, early exit, silent termination, changed bytes, a scanner holding the new engine, missing fallback and corrupt pointers each end in a running engine or a typed refusal. The unshared read-only open stands in for an antivirus scanner and never writes."
+rationale = "Launch engine owner tests: stand-in engines prove takeover, early exit, silent termination, changed bytes, a scanner holding the new engine, missing fallback and corrupt pointers each end in a running engine or a typed refusal; a held pointer is waited out within its bound, and a missing or damaged pointer starts the engine identical to the stable entry. The unshared read-only open stands in for an antivirus scanner and never writes; the writes, reads and removal place a stand-in stable entry image and damage the fixture pointer deliberately."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/application_launch/rejected_creation.rs"
@@ -1988,7 +1988,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Rej
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/launch_pointer.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:05e7918242c9ec9f7780a85b46c8e62d0f97278d715c6079f8676c4868dd2626"
+source_sha256 = "sha256:b82e32128ec1b910e6f211c3e34771569ceb03126f2156ffda4e6514ea3aa067"
 capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: read the permanent protected launch pointer and pin only engine bytes that match it, denying writes and deletion until the engine exists. Private file values do not grant constructors or detach native ancestry."
@@ -1997,7 +1997,7 @@ boundary = "native_custody"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/launch_pointer/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:2f47f0a9c8bb9dc1c4b7b0bd71db70e67f4ce57025854eec75da52dc5921b819"
+source_sha256 = "sha256:ac15a4485749a242e07b715ea15efa2829607933dbbef4a6abc5adb5690c321b"
 capabilities = ["assert! restricted capability fragments", "std::fs::OpenOptions::new", "std::fs::remove_file"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: forward-tolerant pointer decoding, typed refusals and exact protected engine pinning. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

@@ -211,6 +211,69 @@ pub fn read_launch_pointer(
     LaunchPointer::decode(&bytes.ok_or(PointerFailure::Missing)?)
 }
 
+/// Longest product time the stable entry waits for another process, such as an antivirus scanner
+/// or the search indexer, to release a pointer it opened without sharing.
+pub const POINTER_HOLD_BOUND: std::time::Duration = std::time::Duration::from_secs(10);
+/// First pause after a held pointer; each later pause doubles up to `LONGEST_HOLD_RETRY`.
+pub(crate) const FIRST_HOLD_RETRY: std::time::Duration = std::time::Duration::from_millis(50);
+/// Longest pause between two reads of a held pointer.
+pub(crate) const LONGEST_HOLD_RETRY: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// Read the pointer as [`read_launch_pointer`] does, waiting out another process that holds it
+/// without sharing. Only an observed sharing or lock violation is retried, with a doubling pause
+/// on the job's clock, for at most [`POINTER_HOLD_BOUND`]; every other outcome returns at once.
+/// Run on an admitted blocking infrastructure job.
+/// # Errors
+/// As [`read_launch_pointer`]; a pointer still held at the bound is `Storage` with the sharing
+/// violation, and cancellation or the job deadline during a pause is `Storage`.
+pub fn await_launch_pointer(
+    installation: &Path,
+    context: &JobContext,
+) -> Result<LaunchPointer, PointerFailure> {
+    let bound = context.now().checked_add(POINTER_HOLD_BOUND).map_err(io::Error::other)?;
+    let mut pause = FIRST_HOLD_RETRY;
+    loop {
+        let cause = match read_launch_pointer(installation, context) {
+            Err(PointerFailure::Storage(cause)) if held(&cause) => cause,
+            outcome => return outcome,
+        };
+        let now = context.now();
+        if now >= bound {
+            tracing::warn!(
+                operation = "launch_pointer_held",
+                cause = %cause,
+                "Another program kept the launch pointer open past the wait bound"
+            );
+            return Err(PointerFailure::Storage(cause));
+        }
+        let next = now.checked_add(pause).map_err(io::Error::other)?.min(bound);
+        sugarsubstitute_execution::handle_wait::pause_until(context, next)
+            .map_err(io::Error::other)?;
+        pause = (pause * 2).min(LONGEST_HOLD_RETRY);
+    }
+}
+
+/// Whether `cause`, or an I/O error it wraps, is another handle's sharing or lock violation.
+fn held(cause: &io::Error) -> bool {
+    const ERROR_SHARING_VIOLATION: i32 = 32;
+    const ERROR_LOCK_VIOLATION: i32 = 33;
+    let mut current: Option<&(dyn std::error::Error + 'static)> = Some(cause);
+    while let Some(error) = current {
+        if let Some(io) = error.downcast_ref::<io::Error>() {
+            if matches!(io.raw_os_error(), Some(ERROR_SHARING_VIOLATION | ERROR_LOCK_VIOLATION)) {
+                return true;
+            }
+            // `io::Error::source` skips the wrapped error itself, so look inside it first.
+            if let Some(inner) = io.get_ref() {
+                current = Some(inner);
+                continue;
+            }
+        }
+        current = error.source();
+    }
+    false
+}
+
 /// Generations the stable entry may start: the pointer's primary and fallback, in that order.
 /// Retirement must keep both. A missing pointer names none.
 /// Run on an admitted storage worker with `POINTER_RESERVATION_BYTES`.
@@ -296,6 +359,65 @@ pub fn pin_engine(
     }
     let executable = path.join(LAUNCH_ENGINE);
     Ok(PinnedEngine { _file: file, _pins: pins, executable, directory: path })
+}
+
+/// Pin the generation engine whose bytes equal `image`, the running stable entry's own
+/// executable, for a start when the pointer itself is missing or unreadable.
+///
+/// The stable entry is a byte-exact copy of one generation's engine, so its own image is the
+/// expected size and hash: an engine that matches runs exactly the code already running, and
+/// needs no pointer to vouch for it. Generations are tried in name order; the first engine that
+/// pins with identical bytes is returned. That engine routes startup to the generation that
+/// should run and starts nothing the selection record has not accepted or prepared.
+/// Run on an admitted storage worker with `POINTER_RESERVATION_BYTES`.
+/// # Errors
+/// `EngineMismatch` when no generation holds an identical engine; `Storage` when the image
+/// cannot be read.
+pub fn pin_matching_engine(
+    installation: &Path,
+    image: &Path,
+    context: &JobContext,
+) -> Result<PinnedEngine, PointerFailure> {
+    check(context)?;
+    let (Some(folder), Some(leaf)) =
+        (image.parent(), image.file_name().and_then(|leaf| leaf.to_str()))
+    else {
+        return Err(invalid("The stable entry image has no folder or name").into());
+    };
+    let mut own = Directory::open(folder, false)?.read(leaf)?;
+    let (sha256, bytes) = (hash(&mut own, context)?, files::length(&own, context)?);
+    drop(own);
+    let releases = match Directory::open(&installation.join("releases"), false) {
+        Ok(releases) => releases,
+        Err(cause) if cause.kind() == io::ErrorKind::NotFound => {
+            return Err(PointerFailure::EngineMismatch);
+        }
+        Err(cause) => return Err(cause.into()),
+    };
+    let mut generations = Vec::new();
+    for entry in releases.entries(context)? {
+        let name = entry?.file_name();
+        if let Some(generation) =
+            name.into_string().ok().and_then(|name| GenerationId::new(name).ok())
+        {
+            generations.push(generation);
+        }
+    }
+    generations.sort();
+    for generation in generations {
+        let target = EngineTarget { generation, sha256: sha256.clone(), bytes };
+        match pin_engine(installation, &target, context) {
+            Ok(engine) => return Ok(engine),
+            Err(PointerFailure::EngineMismatch) => {}
+            Err(cause) => tracing::warn!(
+                operation = "stable_entry_engine_match",
+                generation = target.generation.as_str(),
+                cause = %cause,
+                "A generation's engine could not be compared with the stable entry"
+            ),
+        }
+    }
+    Err(PointerFailure::EngineMismatch)
 }
 
 /// Replace the pointer atomically in the protected state folder.

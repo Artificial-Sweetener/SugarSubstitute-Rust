@@ -160,6 +160,55 @@ fn cancellation_ends_an_object_wait_before_its_deadline() -> TestResult {
     Ok(())
 }
 
+/// How one pause ended, once it has.
+type Paused = Arc<Mutex<Option<Result<(), Observed>>>>;
+
+/// Run one blocking pause until `until` and record how it ended.
+fn pauser(harness: &Harness, until: Moment) -> TestResult<(OwnedJob<(), ()>, Paused)> {
+    let observed = Arc::new(Mutex::new(None));
+    let output = observed.clone();
+    let job = harness.client.submit_blocking(
+        &harness.scope,
+        spec(1, JobClass::InfrastructureOrdinary, 0)?,
+        move |context| {
+            let result = pause_until(&context, until).map_err(|cause| Observed::from(Err(cause)));
+            *output.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(result);
+            Ok::<_, ()>(())
+        },
+    )?;
+    Ok((job, observed))
+}
+
+#[test]
+fn a_pause_ends_exactly_when_its_moment_is_reached_on_the_jobs_clock() -> TestResult {
+    let harness = Harness::new()?;
+    let until = moment(750);
+    let (mut job, result) = pauser(&harness, until)?;
+    harness.clock.wait_for_sleeper(until);
+    assert!(result.lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_none());
+    harness.clock.advance_to(moment(749))?;
+    assert!(result.lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_none());
+    harness.clock.advance_to(until)?;
+    assert_eq!(harness.settle(&mut job)?, TerminalKind::Success);
+    assert_eq!(*result.lock().unwrap_or_else(std::sync::PoisonError::into_inner), Some(Ok(())));
+    Ok(())
+}
+
+#[test]
+fn cancellation_ends_a_pause_before_its_moment() -> TestResult {
+    let harness = Harness::new()?;
+    let until = moment(750);
+    let (mut job, result) = pauser(&harness, until)?;
+    harness.clock.wait_for_sleeper(until);
+    job.cancel();
+    assert_eq!(harness.settle(&mut job)?, TerminalKind::Cancelled);
+    assert_eq!(
+        *result.lock().unwrap_or_else(std::sync::PoisonError::into_inner),
+        Some(Err(Observed::Cancelled))
+    );
+    Ok(())
+}
+
 #[test]
 fn empty_lists_and_async_jobs_are_refused_without_blocking() -> TestResult {
     let harness = Harness::new()?;

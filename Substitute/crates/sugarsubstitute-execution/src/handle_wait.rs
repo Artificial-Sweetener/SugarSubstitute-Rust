@@ -84,6 +84,29 @@ pub fn wait_any(
     native::wait(context, handles, until)
 }
 
+/// Wait until `until` on the job's clock, for a retry backoff where no kernel object announces
+/// the awaited change, such as another process closing a file it opened without sharing.
+///
+/// The same job rules as [`wait_any`] apply: call only from a blocking infrastructure job, never
+/// on a UI thread. A moment already reached returns at once.
+/// # Errors
+/// `Timeout` when the job deadline arrives before `until`, `Cancelled` on a cancellation request,
+/// `Unavailable` outside a blocking infrastructure job, or `Io` when no runtime drives the wait.
+pub fn pause_until(context: &JobContext, until: Moment) -> Result<(), HandleWaitError> {
+    if !matches!(
+        context.spec().class,
+        JobClass::InfrastructureOrdinary | JobClass::InfrastructureLifecycle
+    ) {
+        return Err(HandleWaitError::Unavailable);
+    }
+    let bound = context.deadline().map_or(until, |deadline| deadline.min(until));
+    match race(std::future::pending::<()>(), bound, context)? {
+        Ended::Cancelled => Err(HandleWaitError::Cancelled),
+        Ended::Deadline if bound < until => Err(HandleWaitError::Timeout),
+        Ended::Deadline | Ended::Signalled => Ok(()),
+    }
+}
+
 /// What ended one wait race on the execution runtime.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Ended {
