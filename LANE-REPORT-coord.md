@@ -28,7 +28,7 @@ Earlier: 455ad5f3, f33d3298, 7f3cfa37, 07029e40, 8eed7548, 1896c9d1 (layout, que
 - Strict Clippy for the Windows MSVC target passes on all three legs, as a cross-check without linking.
 - Linux: contracts 319/319 and the application's updates panel 10/10 pass.
 - Wine: lifecycle protocol 53/53, websocket 9/9, queue watch 3/3, free-space checks 5/5.
-- CI: CI_RESULT
+- CI [run 43370543732](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43370543732) at fcf54146: only main's baseline. Without lane/ci, the comfy-desktop submodule isn't checked out, so governance stops on all three OSes before compiling. Nothing new from this lane.
 
 ## Next
 - **Integrator, packinstall (F3w)**:
