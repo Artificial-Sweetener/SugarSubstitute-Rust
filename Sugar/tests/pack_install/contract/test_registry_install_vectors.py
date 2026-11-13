@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 import os
 from pathlib import Path
@@ -31,10 +32,13 @@ from sugarcubes.backend.pack_install.archive import (
     list_registry_archive,
 )
 from sugarcubes.backend.pack_install.digest_manifest import (
+    DIGEST_MANIFEST_NAME,
+    DIGEST_RECORD_VERSION,
     parse_digest_manifest,
     read_digest_manifest,
+    render_digest_manifest,
 )
-from sugarcubes.backend.pack_install.entry_paths import parse_entry
+from sugarcubes.backend.pack_install.entry_paths import TRACKING_FILE_NAME, parse_entry
 from sugarcubes.backend.pack_install.errors import PackInstallError
 from sugarcubes.backend.pack_install.ownership import (
     OwnedPack,
@@ -46,6 +50,7 @@ from sugarcubes.backend.pack_install.replacement import (
     TrackedReplacement,
 )
 from sugarcubes.backend.pack_install.tracking import (
+    TRACKING_FORMAT_VERSION,
     parse_tracking,
     read_tracking,
     render_tracking,
@@ -54,31 +59,18 @@ from sugarcubes.backend.pack_install.tracking import (
 from tests.pack_install.support.install_vectors import (
     JsonObject,
     build_folder,
+    drive,
     folder_files,
     load_vectors,
-    vector_group,
     write_archive,
 )
-
-
-def _ids(group: list[JsonObject]) -> list[str]:
-    return [str(vector["name"]) for vector in group]
 
 
 def _expect(vector: JsonObject) -> JsonObject:
     return cast(JsonObject, vector["expect"])
 
 
-TRACKING_PARSE = vector_group("trackingParse")
-TRACKING_RENDER = vector_group("trackingRender")
-ARCHIVES = vector_group("archives")
-ARCHIVE_LIMITS = vector_group("archiveLimits")
-OWNERSHIP = vector_group("ownership")
-LOCAL_EDITS = vector_group("localEdits")
-REPLACEMENTS = vector_group("replacements")
-
-
-@pytest.mark.parametrize("vector", TRACKING_PARSE, ids=_ids(TRACKING_PARSE))
+@drive("trackingParse")
 def test_tracking_parse_vectors(vector: JsonObject) -> None:
     """Each record either yields the listed entries or the listed typed error."""
 
@@ -92,7 +84,7 @@ def test_tracking_parse_vectors(vector: JsonObject) -> None:
     assert [entry.text for entry in parse_tracking(content)] == expected["entries"]
 
 
-@pytest.mark.parametrize("vector", TRACKING_RENDER, ids=_ids(TRACKING_RENDER))
+@drive("trackingRender")
 def test_tracking_render_vectors(vector: JsonObject, tmp_path: Path) -> None:
     """The record keeps archive order and uses the platform separator on disk."""
 
@@ -104,7 +96,7 @@ def test_tracking_render_vectors(vector: JsonObject, tmp_path: Path) -> None:
     assert read_tracking(tmp_path) == entries
 
 
-@pytest.mark.parametrize("vector", ARCHIVES, ids=_ids(ARCHIVES))
+@drive("archives")
 def test_archive_vectors(vector: JsonObject, tmp_path: Path) -> None:
     """Archives are listed in order or refused with the vector's typed error."""
 
@@ -128,7 +120,7 @@ def test_archive_vectors(vector: JsonObject, tmp_path: Path) -> None:
             )
 
 
-@pytest.mark.parametrize("vector", ARCHIVE_LIMITS, ids=_ids(ARCHIVE_LIMITS))
+@drive("archiveLimits")
 def test_archive_limit_vectors(vector: JsonObject, tmp_path: Path) -> None:
     """Size and count bounds refuse an archive before it can fill the disk."""
 
@@ -146,7 +138,7 @@ def test_archive_limit_vectors(vector: JsonObject, tmp_path: Path) -> None:
     assert raised.value.code.value == _expect(vector)["error"]
 
 
-@pytest.mark.parametrize("vector", OWNERSHIP, ids=_ids(OWNERSHIP))
+@drive("ownership")
 def test_ownership_vectors(vector: JsonObject, tmp_path: Path) -> None:
     """Only a plain registry install is owned; everything else says why not."""
 
@@ -161,7 +153,7 @@ def test_ownership_vectors(vector: JsonObject, tmp_path: Path) -> None:
     assert verdict.reason.value == expected["reason"]
 
 
-@pytest.mark.parametrize("vector", LOCAL_EDITS, ids=_ids(LOCAL_EDITS))
+@drive("localEdits")
 def test_local_edit_vectors(vector: JsonObject) -> None:
     """A tracked file differing from the published release is a local edit."""
 
@@ -179,7 +171,7 @@ def test_local_edit_vectors(vector: JsonObject) -> None:
     assert list(changed_tracked_files(installed, published)) == vector["expectChanged"]
 
 
-@pytest.mark.parametrize("vector", REPLACEMENTS, ids=_ids(REPLACEMENTS))
+@drive("replacements")
 def test_replacement_vectors(vector: JsonObject, tmp_path: Path) -> None:
     """Replacing tracked files leaves exactly the vector's resulting folder."""
 
@@ -218,7 +210,7 @@ DIGEST_MANIFESTS = cast(JsonObject, load_vectors()["digestManifests"])
 DIGEST_CASES = cast(list[JsonObject], DIGEST_MANIFESTS["cases"])
 
 
-@pytest.mark.parametrize("vector", DIGEST_CASES, ids=_ids(DIGEST_CASES))
+@drive("digestManifests")
 def test_digest_manifest_vectors(vector: JsonObject) -> None:
     """The digest record is trusted only for the exact install it describes."""
 
@@ -235,3 +227,70 @@ def test_digest_manifest_vectors(vector: JsonObject) -> None:
         assert recorded == expected["files"]
     else:
         assert recorded is None
+
+
+def test_digest_record_renders_exactly_the_shared_bytes() -> None:
+    """Every implementation writes the same record bytes for the same install."""
+
+    first = cast(JsonObject, DIGEST_CASES[0]["manifest"])
+    rendered = render_digest_manifest(
+        version=str(DIGEST_MANIFESTS["version"]),
+        tracking_sha256=str(first["tracking"]),
+        files=cast(dict[str, str], first["files"]),
+    )
+    assert rendered == DIGEST_MANIFESTS["rendered"]
+
+
+@drive("formats")
+def test_format_versions_match_the_shared_catalog(vector: JsonObject) -> None:
+    """The record names and versions written here are the ones the vectors declare."""
+
+    written = {
+        "tracking": (TRACKING_FILE_NAME, TRACKING_FORMAT_VERSION),
+        "digestRecord": (DIGEST_MANIFEST_NAME, DIGEST_RECORD_VERSION),
+    }
+    assert (vector["file"], vector["version"]) == written[str(vector["name"])]
+
+
+# Every vector group and the Python suite that drives each of its vectors. The decision
+# groups run end to end through the updater in
+# tests/self_update/integration/test_update_decision_vectors.py.
+PYTHON_VECTOR_GROUPS = {
+    "formats": "test_format_versions_match_the_shared_catalog",
+    "trackingParse": "test_tracking_parse_vectors",
+    "trackingRender": "test_tracking_render_vectors",
+    "archives": "test_archive_vectors",
+    "archiveLimits": "test_archive_limit_vectors",
+    "ownership": "test_ownership_vectors",
+    "localEdits": "test_local_edit_vectors",
+    "replacements": "test_replacement_vectors",
+    "digestManifests": "test_digest_manifest_vectors",
+    "sourceSelection": "test_source_selection_vectors",
+    "updateRefusals": "test_update_refusal_vectors",
+    "rollbackTriggers": "test_rollback_trigger_vectors",
+}
+
+
+def test_every_vector_group_is_driven_and_every_name_is_unique() -> None:
+    """A group added to the shared file fails here until a Python suite drives it."""
+
+    document = load_vectors()
+    groups = set(document) - {"schema", "description"}
+    assert groups == set(PYTHON_VECTOR_GROUPS)
+    for name in groups:
+        value = document[name]
+        vectors = (
+            value
+            if isinstance(value, list)
+            else cast(JsonObject, value).get("cases", [])
+        )
+        names = [
+            str(cast(JsonObject, vector)["name"])
+            for vector in cast(list[object], vectors)
+        ]
+        assert len(names) == len(set(names)), name
+    decisions = importlib.import_module(
+        "tests.self_update.integration.test_update_decision_vectors"
+    )
+    for test in PYTHON_VECTOR_GROUPS.values():
+        assert callable(globals().get(test) or getattr(decisions, test, None)), test

@@ -9,7 +9,7 @@ use std::sync::atomic::Ordering;
 fn local_acquisition_retirement_requires_actual_current_absence_and_never_synthesizes_remote_ack()
 -> Result<()> {
     let (mut c, _owner, _clock) = child()?;
-    c.begin_attempt_cleanup()?;
+    c.begin_attempt_cleanup(false)?;
     assert!(!c.attempt.as_ref().ok_or("Cleanup absent")?.complete());
     assert!(c.take_startup_event()?.is_none());
     assert!(
@@ -42,7 +42,7 @@ fn local_acquisition_retirement_requires_actual_current_absence_and_never_synthe
 fn local_acquisition_retirement_keeps_original_cutoff_and_cleanup_failure_blocks_retry()
 -> Result<()> {
     let (mut c, _owner, clock) = child()?;
-    c.begin_attempt_cleanup()?;
+    c.begin_attempt_cleanup(false)?;
     let original = c.attempt.as_ref().ok_or("Cleanup absent")?.original_deadline();
     clock.0.store(original.as_nanos(), Ordering::SeqCst);
     assert!(c.observe(DesktopStartupObservation::MainAbsent(c.identity), None).is_err());
@@ -59,7 +59,7 @@ fn local_acquisition_retirement_keeps_original_cutoff_and_cleanup_failure_blocks
 fn local_acquisition_retirement_event_capacity_retains_absence_without_fake_settlement()
 -> Result<()> {
     let (mut c, _owner, _clock) = child()?;
-    c.begin_attempt_cleanup()?;
+    c.begin_attempt_cleanup(false)?;
     for slot in &mut c.events {
         *slot = Some(StartupEvent::new(c.identity.launch, StartupObservation::SplashPresented));
     }
@@ -206,7 +206,7 @@ fn acquisition_authenticated_denial_requires_actual_current_absence_and_ack_befo
 -> Result<()> {
     let (mut c, _owner, _clock) = child()?;
     c.acquisition_header = Some(queued(&c, Moment::from_nanos(100))?.header);
-    c.begin_attempt_cleanup()?;
+    c.begin_attempt_cleanup(false)?;
     assert!(c.shutdown.main_absence_pending);
     assert!(
         matches!(c.take_command()?,Some(DesktopStartupCommand::ConfirmMainAbsent(id)) if id==c.identity)

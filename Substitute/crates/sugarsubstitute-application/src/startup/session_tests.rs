@@ -379,3 +379,15 @@ fn configured_retry_requires_settlement_and_waits_for_new_native_presentation() 
 
 #[path = "session_tests/reload.rs"]
 mod reload;
+
+/// Only a page that reported SugarCubes itself unavailable or failed counts against a
+/// just-installed SugarCubes; other frontend failures and adapter failures give no verdict.
+#[test]
+fn only_sugarcubes_page_failures_count_against_a_sugarcubes_update() {
+    use sugarsubstitute_contracts::startup::{ProbeFailure, ReadinessFailure};
+    let frontend = |code| SessionFailure::Frontend(ProbeFailure { code, detail: String::new() });
+    assert!(frontend(ReadinessFailure::SugarcubesUnavailable).sugarcubes_failed());
+    assert!(frontend(ReadinessFailure::SugarcubesFailed).sugarcubes_failed());
+    assert!(!frontend(ReadinessFailure::FrontendUnavailable).sugarcubes_failed());
+    assert!(!frontend(ReadinessFailure::TimedOut).sugarcubes_failed());
+}

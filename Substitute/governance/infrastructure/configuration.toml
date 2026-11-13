@@ -107,7 +107,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/installed_frontend/manifest.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:411a0bf729232d3d4c8b037ca768d6ad55d19a0d8a4a645448a9bf76b460f63f"
+source_sha256 = "sha256:d5181853d393de33814b3f1d5488490a7804ab10e87cebeea1c253f689130891"
 capabilities = ["codec"]
 rationale = "SugarCubes owns its package manifest. Read only its supported package identity/version; no host settings persistence."
 
@@ -149,7 +149,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/inventory.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:733b87bf95a51bb6137932fa0a19f4ec2b9eb83045ab8f2b55fd4b173c7b36a2"
+source_sha256 = "sha256:01df31054dbbc8d058ee8f3fa7ee4cdf1df474c50f62ca1ec74d3668b79762de"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -441,9 +441,16 @@ capabilities = ["environment"]
 rationale = "Signing keys reach release CI only as secrets in the environment, named by an env:NAME key reference; never product settings."
 
 [[records]]
+path = "tools/xtask/src/shared_vectors_tests.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:2f4ac23ae3bbcd1753cdfceceab5f5a51dca1980a64346716f1b28bd53126013"
+capabilities = ["codec"]
+rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
+
+[[records]]
 path = "tools/xtask/src/catalog.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:38a8d2877d91bf1d68b0a1d70d78bdecbdc7d7f427c8ca6bced514b513d0cd58"
+source_sha256 = "sha256:ed2a97ccc5d0f6bac81368a9dc7ae186c0219754408b7df475b2ddb6c6a81a9e"
 capabilities = ["codec"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
 
@@ -485,14 +492,14 @@ rationale = "Tooling build, source inspection or isolated qualification input; n
 [[records]]
 path = "tools/xtask/src/governance.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:79899997dc08a0c38429be84592844ff724ed6c874ae4b3f003b80270705fa4b"
+source_sha256 = "sha256:a905a6d20af18ba89edfedc98c012c100eca88ad63326c4ad5a9a8bfd82a848e"
 capabilities = ["codec"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
 
 [[records]]
 path = "tools/xtask/src/main.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:f51bcdb6293887ae84afea84b42bbd5c550e02eaf9fa9233c4299c6969ee5871"
+source_sha256 = "sha256:6819bf400054ada7178b94b2b196dbf624679d01aad1657d8342c2520c1a7419"
 capabilities = ["arguments"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
 
@@ -520,7 +527,7 @@ rationale = "Build-time Cargo OUT_DIR selects the generated immutable diagnostic
 [[records]]
 path = "crates/sugarsubstitute/src/setup/worker/downloads/native_tests/fixture.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:aa4d1971e6b7f9ad74d766710b983086f852d261cc794c181d8a2ad039db7c21"
+source_sha256 = "sha256:a886458a79ca6d5c9d9fa03678eb7b8a40fb0ebc7d17f6d0688323e520afa25f"
 capabilities = ["environment"]
 rationale = "Native junction qualification selects the Windows system command from SystemRoot and supplies isolated per-child fixture paths. It creates no product settings or application configuration defaults."
 

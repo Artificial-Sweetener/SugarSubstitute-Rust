@@ -30,6 +30,8 @@ pub(in crate::production) mod output;
 #[cfg(test)]
 #[path = "coordinator_backend/output_fixture.rs"]
 pub(in crate::production) mod output_fixture;
+#[path = "coordinator_backend/pack_update.rs"]
+mod pack_update;
 #[path = "coordinator_backend/policy_funding.rs"]
 mod policy_funding;
 #[path = "coordinator_backend/preparation.rs"]
@@ -164,6 +166,8 @@ pub(crate) struct CoordinatorBackend {
     output_clients: output::Subscribers,
     next_shutdown: u64,
     undelivered: Option<ResourceTransition>,
+    /// The SugarCubes startup update and its trial observations.
+    pack: pack_update::PackUpdates,
     // These original data-backed credits outlive every source, policy and return above.
     policy_funding: PolicyFunding,
 }
@@ -235,6 +239,7 @@ impl CoordinatorBackend {
             &installation,
             None,
         )?;
+        self.pack.configure(&installation);
         self.custody_options = Some((executable, installation));
         Ok(())
     }

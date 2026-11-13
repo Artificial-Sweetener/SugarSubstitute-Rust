@@ -37,6 +37,12 @@ impl ParentLifecycle {
             || Ok(resources.execution.client.now()?),
         )?;
         if accepted {
+            if matches!(
+                resources.target,
+                sugarsubstitute_contracts::lifecycle::BackendTarget::Managed(_)
+            ) {
+                resources.backend.pack_page_loaded(resources.execution)?;
+            }
             resources.execution.authority.accept_installation(
                 resources.execution.client,
                 resources.finite,

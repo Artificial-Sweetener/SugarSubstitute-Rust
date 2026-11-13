@@ -117,11 +117,7 @@ fn require_application(manifest: &sugarsubstitute_update::package::Manifest) -> 
         "app/sugarsubstitute_crashpad_client.dll",
         "worker/package.json",
         "worker/out/main/index.cjs",
-        "sugarcubes/__init__.py",
-        "sugarcubes/pyproject.toml",
-        "sugarcubes/prestartup_script.py",
-        "sugarcubes/load_model_roots.py",
-        "sugarcubes/sugarcubes_model_roots/__init__.py",
+        crate::pack_install::SUGARCUBES_PACKAGE_ARCHIVE,
     ] {
         if !manifest.entries().iter().any(|entry| entry.path() == name) {
             return Err(invalid(

@@ -39,6 +39,7 @@ mod networking;
 mod policy;
 mod script_dependencies;
 mod shared_components;
+mod shared_vectors;
 mod source;
 mod source_tokens;
 mod structure;

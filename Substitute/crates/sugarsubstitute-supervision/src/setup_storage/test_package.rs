@@ -58,16 +58,17 @@ pub(crate) fn distribution_with_installation(
         "electron/electron.exe",
         "worker/package.json",
         "worker/out/main/index.cjs",
-        "sugarcubes/__init__.py",
-        "sugarcubes/pyproject.toml",
-        "sugarcubes/prestartup_script.py",
-        "sugarcubes/load_model_roots.py",
-        "sugarcubes/sugarcubes_model_roots/__init__.py",
     ] {
         let bytes = format!("inert fixture payload: {name}");
         entries.push(serde_json::json!({"path":name,"bytes":bytes.len(),"sha256":format!("{:x}",Sha256::digest(bytes.as_bytes()))}));
         gzip.write_all(bytes.as_bytes())?;
     }
+    let cubes = sugarcubes_archive()?;
+    entries.push(serde_json::json!({
+        "path":crate::pack_install::SUGARCUBES_PACKAGE_ARCHIVE,
+        "bytes":cubes.len(),"sha256":format!("{:x}",Sha256::digest(&cubes)),
+    }));
+    gzip.write_all(&cubes)?;
     if let Some(bytes) = contract {
         entries.push(serde_json::json!({
             "path":format!("app/{}",sugarsubstitute_contracts::application_launch::CONTRACT_FILE),
@@ -111,6 +112,33 @@ pub(crate) fn distribution_with_installation(
     )?;
     Ok((manifest, gzip.finish()?))
 }
+/// The members of the fixture's SugarCubes registry archive, in archive order; `None` is a
+/// directory member, as `comfy node pack` writes none but other registry packers may.
+pub(crate) const SUGARCUBES_MEMBERS: [(&str, Option<&str>); 5] = [
+    ("pyproject.toml", Some("[project]\nname = \"SugarCubes\"\nversion = \"1.2.0\"\n")),
+    ("__init__.py", Some("WEB_DIRECTORY = './web'\n")),
+    ("web/", None),
+    ("web/app.js", Some("// inert fixture\n")),
+    ("sugarcubes/core.py", Some("# inert fixture\n")),
+];
+
+/// Build the flat registry archive of a small SugarCubes release, stored without compression.
+pub(crate) fn sugarcubes_archive() -> io::Result<Vec<u8>> {
+    let mut writer = zip::ZipWriter::new(io::Cursor::new(Vec::new()));
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    for (name, text) in SUGARCUBES_MEMBERS {
+        match text {
+            Some(text) => {
+                writer.start_file(name, options).map_err(io::Error::other)?;
+                writer.write_all(text.as_bytes())?;
+            }
+            None => writer.add_directory(name, options).map_err(io::Error::other)?,
+        }
+    }
+    Ok(writer.finish().map_err(io::Error::other)?.into_inner())
+}
+
 /// Serialize the documented common archive envelope without a platform executable prefix.
 pub(crate) fn seal(manifest: &[u8], compressed: &[u8]) -> Vec<u8> {
     let mut archive = compressed.to_vec();

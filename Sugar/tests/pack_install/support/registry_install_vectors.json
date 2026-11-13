@@ -1,6 +1,16 @@
 {
   "schema": 1,
-  "description": "Language-neutral vectors for the Comfy Registry install format of a node pack. Every implementation (SugarCubes in Python, the Substitute host in Rust) must consume this file unchanged. Entries are forward-slash relative paths; a trailing slash marks a directory. `.tracking` is the entries joined by the platform line separator (CRLF on Windows, LF elsewhere) with no trailing separator; readers accept LF or CRLF and skip blank lines. Error and reason codes are the format's typed outcomes. A member `kind` is file, directory or symlink; `text` is UTF-8 file content; `unixMode` is the octal Unix mode stored in the zip external attributes when given. `.tracking-digests.json` (schema 1) records the SHA-256 of every tracked file for offline local-edit detection; it applies only when its `tracking` equals the SHA-256 of the exact `.tracking` bytes, its `version` equals the installed version, and its `files` keys equal the tracked file paths exactly; otherwise it is ignored and the installed release is compared with the published one.",
+  "description": "Language-neutral vectors for the Comfy Registry install format of a node pack. Every implementation (SugarCubes in Python, the Substitute host in Rust) must consume this file unchanged. Entries are forward-slash relative paths; a trailing slash marks a directory. `.tracking` is the entries joined by the platform line separator (CRLF on Windows, LF elsewhere) with no trailing separator; readers accept LF or CRLF and skip blank lines. Error and reason codes are the format's typed outcomes. A member `kind` is file, directory or symlink; `text` is UTF-8 file content; `unixMode` is the octal Unix mode stored in the zip external attributes when given. `.tracking-digests.json` (schema 1) records the SHA-256 of every tracked file for offline local-edit detection; it applies only when its `tracking` equals the SHA-256 of the exact `.tracking` bytes, its `version` equals the installed version, and its `files` keys equal the tracked file paths exactly; otherwise it is ignored and the installed release is compared with the published one. `formats` versions `.tracking` and the digest record; their versions are registered in Substitute's persistence catalog. Decision groups: `sourceSelection` (both sources are always asked; a registry status of Active or Flagged is installable, every other status is skipped; drafts and prereleases on GitHub are skipped; the newest version above the installed one wins, from the registry when both have it; a source that does not answer is listed in `unchecked`, and with nothing newer from the other the check fails rather than reporting up to date). `updateRefusals` (a folder with a newer release published: `digestRecord` true writes a correct record before `edits` are applied, a null edit deletes the file; without a record the installed release is published for comparison). `rollbackTriggers` (events after a 1.0.0 to 1.1.0 install: backend-ready, backend-ready-nodes-missing, backend-start-unobservable, page-loaded, page-loaded-nodes-missing, page-failed, power-cut-while-replacing and restart; `kept` means the new version with its backup released, `pending` the new version with its backup held, `restored` the previous version).",
+  "formats": {
+    "tracking": {
+      "file": ".tracking",
+      "version": 1
+    },
+    "digestRecord": {
+      "file": ".tracking-digests.json",
+      "version": 1
+    }
+  },
   "trackingParse": [
     {
       "name": "manager-crlf-no-trailing-separator",
@@ -806,6 +816,594 @@
           "applies": false
         }
       }
-    ]
-  }
+    ],
+    "rendered": "{\n  \"schema\": 1,\n  \"version\": \"1.2.3\",\n  \"tracking\": \"a1302b157c4255e69d61a85fda7401432f6bc9f312f57ec3e813febb9244aec0\",\n  \"files\": {\n    \"__init__.py\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\n    \"pyproject.toml\": \"9db496674d490e553881abaea32031d2ce1b1636c60d33f6efac50161253faf4\"\n  }\n}"
+  },
+  "sourceSelection": [
+    {
+      "name": "registry-newer-than-github",
+      "installed": "1.0.0",
+      "registry": {
+        "versions": [
+          {
+            "version": "1.2.0",
+            "status": "NodeVersionStatusActive"
+          },
+          {
+            "version": "1.1.0",
+            "status": "NodeVersionStatusActive"
+          }
+        ]
+      },
+      "github": {
+        "releases": [
+          {
+            "version": "1.1.0"
+          }
+        ]
+      },
+      "expect": {
+        "outcome": "staged",
+        "version": "1.2.0",
+        "source": "registry",
+        "unchecked": []
+      }
+    },
+    {
+      "name": "github-newer-than-registry",
+      "installed": "1.0.0",
+      "registry": {
+        "versions": [
+          {
+            "version": "1.1.0",
+            "status": "NodeVersionStatusActive"
+          }
+        ]
+      },
+      "github": {
+        "releases": [
+          {
+            "version": "1.1.0"
+          },
+          {
+            "version": "1.3.0"
+          }
+        ]
+      },
+      "expect": {
+        "outcome": "staged",
+        "version": "1.3.0",
+        "source": "github-release",
+        "unchecked": []
+      }
+    },
+    {
+      "name": "same-newest-on-both-comes-from-registry",
+      "installed": "1.0.0",
+      "registry": {
+        "versions": [
+          {
+            "version": "1.2.0",
+            "status": "NodeVersionStatusActive"
+          }
+        ]
+      },
+      "github": {
+        "releases": [
+          {
+            "version": "1.2.0"
+          }
+        ]
+      },
+      "expect": {
+        "outcome": "staged",
+        "version": "1.2.0",
+        "source": "registry",
+        "unchecked": []
+      }
+    },
+    {
+      "name": "flagged-registry-version-is-installed-like-active",
+      "installed": "1.0.0",
+      "registry": {
+        "versions": [
+          {
+            "version": "1.1.0",
+            "status": "NodeVersionStatusFlagged"
+          }
+        ]
+      },
+      "github": {
+        "releases": []
+      },
+      "expect": {
+        "outcome": "staged",
+        "version": "1.1.0",
+        "source": "registry",
+        "unchecked": []
+      }
+    },
+    {
+      "name": "deleted-and-banned-registry-versions-are-skipped",
+      "installed": "1.0.0",
+      "registry": {
+        "versions": [
+          {
+            "version": "1.4.0",
+            "status": "NodeVersionStatusDeleted"
+          },
+          {
+            "version": "1.3.0",
+            "status": "NodeVersionStatusBanned"
+          },
+          {
+            "version": "1.2.0",
+            "status": "NodeVersionStatusPending"
+          },
+          {
+            "version": "1.1.0",
+            "status": "NodeVersionStatusActive"
+          }
+        ]
+      },
+      "github": {
+        "releases": []
+      },
+      "expect": {
+        "outcome": "staged",
+        "version": "1.1.0",
+        "source": "registry",
+        "unchecked": []
+      }
+    },
+    {
+      "name": "github-drafts-and-prereleases-are-skipped",
+      "installed": "1.0.0",
+      "registry": {
+        "versions": []
+      },
+      "github": {
+        "releases": [
+          {
+            "version": "1.3.0",
+            "draft": true
+          },
+          {
+            "version": "1.2.0",
+            "prerelease": true
+          },
+          {
+            "version": "1.1.0"
+          }
+        ]
+      },
+      "expect": {
+        "outcome": "staged",
+        "version": "1.1.0",
+        "source": "github-release",
+        "unchecked": []
+      }
+    },
+    {
+      "name": "registry-down-github-newer",
+      "installed": "1.0.0",
+      "registry": {
+        "unavailable": true
+      },
+      "github": {
+        "releases": [
+          {
+            "version": "1.1.0"
+          }
+        ]
+      },
+      "expect": {
+        "outcome": "staged",
+        "version": "1.1.0",
+        "source": "github-release",
+        "unchecked": [
+          "registry"
+        ]
+      }
+    },
+    {
+      "name": "github-down-registry-newer",
+      "installed": "1.0.0",
+      "registry": {
+        "versions": [
+          {
+            "version": "1.1.0",
+            "status": "NodeVersionStatusActive"
+          }
+        ]
+      },
+      "github": {
+        "unavailable": true
+      },
+      "expect": {
+        "outcome": "staged",
+        "version": "1.1.0",
+        "source": "registry",
+        "unchecked": [
+          "github-release"
+        ]
+      }
+    },
+    {
+      "name": "one-source-down-and-nothing-newer-is-not-up-to-date",
+      "installed": "1.0.0",
+      "registry": {
+        "unavailable": true
+      },
+      "github": {
+        "releases": [
+          {
+            "version": "1.0.0"
+          }
+        ]
+      },
+      "expect": {
+        "outcome": "check-failed",
+        "unchecked": [
+          "registry"
+        ]
+      }
+    },
+    {
+      "name": "both-sources-down",
+      "installed": "1.0.0",
+      "registry": {
+        "unavailable": true
+      },
+      "github": {
+        "unavailable": true
+      },
+      "expect": {
+        "outcome": "check-failed",
+        "unchecked": [
+          "registry",
+          "github-release"
+        ]
+      }
+    },
+    {
+      "name": "nothing-newer-on-either-source",
+      "installed": "1.1.0",
+      "registry": {
+        "versions": [
+          {
+            "version": "1.1.0",
+            "status": "NodeVersionStatusActive"
+          },
+          {
+            "version": "1.0.0",
+            "status": "NodeVersionStatusActive"
+          }
+        ]
+      },
+      "github": {
+        "releases": [
+          {
+            "version": "1.0.0"
+          }
+        ]
+      },
+      "expect": {
+        "outcome": "up-to-date",
+        "unchecked": []
+      }
+    },
+    {
+      "name": "versions-compare-numerically",
+      "installed": "1.9.0",
+      "registry": {
+        "versions": [
+          {
+            "version": "1.10.0",
+            "status": "NodeVersionStatusActive"
+          },
+          {
+            "version": "1.9.0",
+            "status": "NodeVersionStatusActive"
+          }
+        ]
+      },
+      "github": {
+        "releases": [
+          {
+            "version": "1.9.1"
+          }
+        ]
+      },
+      "expect": {
+        "outcome": "staged",
+        "version": "1.10.0",
+        "source": "registry",
+        "unchecked": []
+      }
+    }
+  ],
+  "updateRefusals": [
+    {
+      "name": "unchanged-registry-install-is-updated",
+      "installed": {
+        "files": {
+          "pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.0.0\"\n",
+          "__init__.py": "VERSION = '1.0.0'\n",
+          "nodes.py": "NODES = 1\n"
+        },
+        "tracking": "pyproject.toml\n__init__.py\nnodes.py"
+      },
+      "digestRecord": true,
+      "edits": {},
+      "newer": "1.1.0",
+      "expect": {
+        "outcome": "staged",
+        "version": "1.1.0"
+      }
+    },
+    {
+      "name": "untracked-user-data-is-not-an-edit",
+      "installed": {
+        "files": {
+          "pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.0.0\"\n",
+          "__init__.py": "VERSION = '1.0.0'\n",
+          "nodes.py": "NODES = 1\n"
+        },
+        "tracking": "pyproject.toml\n__init__.py\nnodes.py"
+      },
+      "digestRecord": true,
+      "edits": {
+        "user/settings.json": "{}"
+      },
+      "newer": "1.1.0",
+      "expect": {
+        "outcome": "staged",
+        "version": "1.1.0"
+      }
+    },
+    {
+      "name": "deleted-tracked-file-is-not-an-edit",
+      "installed": {
+        "files": {
+          "pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.0.0\"\n",
+          "__init__.py": "VERSION = '1.0.0'\n",
+          "nodes.py": "NODES = 1\n"
+        },
+        "tracking": "pyproject.toml\n__init__.py\nnodes.py"
+      },
+      "digestRecord": true,
+      "edits": {
+        "nodes.py": null
+      },
+      "newer": "1.1.0",
+      "expect": {
+        "outcome": "staged",
+        "version": "1.1.0"
+      }
+    },
+    {
+      "name": "edited-tracked-file-against-digest-record",
+      "installed": {
+        "files": {
+          "pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.0.0\"\n",
+          "__init__.py": "VERSION = '1.0.0'\n",
+          "nodes.py": "NODES = 1\n"
+        },
+        "tracking": "pyproject.toml\n__init__.py\nnodes.py"
+      },
+      "digestRecord": true,
+      "edits": {
+        "nodes.py": "NODES = 2\n"
+      },
+      "newer": "1.1.0",
+      "expect": {
+        "outcome": "not-managed",
+        "reason": "changed-files"
+      }
+    },
+    {
+      "name": "edited-tracked-file-against-published-release",
+      "installed": {
+        "files": {
+          "pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.0.0\"\n",
+          "__init__.py": "VERSION = '1.0.0'\n",
+          "nodes.py": "NODES = 1\n"
+        },
+        "tracking": "pyproject.toml\n__init__.py\nnodes.py"
+      },
+      "digestRecord": false,
+      "edits": {
+        "nodes.py": "NODES = 2\n"
+      },
+      "newer": "1.1.0",
+      "expect": {
+        "outcome": "not-managed",
+        "reason": "changed-files"
+      }
+    },
+    {
+      "name": "manager-install-without-record-matches-published",
+      "installed": {
+        "files": {
+          "pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.0.0\"\n",
+          "__init__.py": "VERSION = '1.0.0'\n",
+          "nodes.py": "NODES = 1\n"
+        },
+        "tracking": "pyproject.toml\n__init__.py\nnodes.py"
+      },
+      "digestRecord": false,
+      "edits": {},
+      "newer": "1.1.0",
+      "expect": {
+        "outcome": "staged",
+        "version": "1.1.0"
+      }
+    },
+    {
+      "name": "git-checkout",
+      "installed": {
+        "files": {
+          "pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.0.0\"\n",
+          "__init__.py": "VERSION = '1.0.0'\n",
+          "nodes.py": "NODES = 1\n"
+        },
+        "tracking": "pyproject.toml\n__init__.py\nnodes.py",
+        "git": "directory"
+      },
+      "digestRecord": true,
+      "edits": {},
+      "newer": "1.1.0",
+      "expect": {
+        "outcome": "not-managed",
+        "reason": "git-checkout"
+      }
+    },
+    {
+      "name": "linked-folder",
+      "installed": {
+        "files": {
+          "pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.0.0\"\n",
+          "__init__.py": "VERSION = '1.0.0'\n",
+          "nodes.py": "NODES = 1\n"
+        },
+        "tracking": "pyproject.toml\n__init__.py\nnodes.py",
+        "link": true
+      },
+      "digestRecord": true,
+      "edits": {},
+      "newer": "1.1.0",
+      "expect": {
+        "outcome": "not-managed",
+        "reason": "linked-folder"
+      }
+    },
+    {
+      "name": "not-a-registry-install",
+      "installed": {
+        "files": {
+          "pyproject.toml": "[project]\nname = \"SugarCubes\"\nversion = \"1.0.0\"\n",
+          "__init__.py": "VERSION = '1.0.0'\n",
+          "nodes.py": "NODES = 1\n"
+        },
+        "tracking": null
+      },
+      "digestRecord": false,
+      "edits": {},
+      "newer": "1.1.0",
+      "expect": {
+        "outcome": "not-managed",
+        "reason": "not-registry-install"
+      }
+    }
+  ],
+  "rollbackTriggers": [
+    {
+      "name": "start-and-page-load-keep-the-update",
+      "events": [
+        "backend-ready",
+        "page-loaded",
+        "restart"
+      ],
+      "expect": {
+        "verdict": "kept",
+        "version": "1.1.0"
+      }
+    },
+    {
+      "name": "backend-never-ready-restores",
+      "events": [
+        "restart"
+      ],
+      "expect": {
+        "verdict": "restored",
+        "version": "1.0.0",
+        "reason": "did-not-start"
+      }
+    },
+    {
+      "name": "backend-ready-without-every-node-restores",
+      "events": [
+        "backend-ready-nodes-missing",
+        "restart"
+      ],
+      "expect": {
+        "verdict": "restored",
+        "version": "1.0.0",
+        "reason": "did-not-start"
+      }
+    },
+    {
+      "name": "page-load-failure-restores",
+      "events": [
+        "backend-ready",
+        "page-failed",
+        "restart"
+      ],
+      "expect": {
+        "verdict": "restored",
+        "version": "1.0.0",
+        "reason": "page-did-not-load"
+      }
+    },
+    {
+      "name": "backend-ready-awaits-the-first-page",
+      "events": [
+        "backend-ready",
+        "restart"
+      ],
+      "expect": {
+        "verdict": "pending",
+        "version": "1.1.0"
+      }
+    },
+    {
+      "name": "unobservable-start-is-settled-by-the-page",
+      "events": [
+        "backend-start-unobservable",
+        "page-loaded",
+        "restart"
+      ],
+      "expect": {
+        "verdict": "kept",
+        "version": "1.1.0"
+      }
+    },
+    {
+      "name": "unobservable-start-page-without-every-node-restores",
+      "events": [
+        "backend-start-unobservable",
+        "page-loaded-nodes-missing",
+        "restart"
+      ],
+      "expect": {
+        "verdict": "restored",
+        "version": "1.0.0",
+        "reason": "page-did-not-load"
+      }
+    },
+    {
+      "name": "unobservable-start-and-restart-alone-change-nothing",
+      "events": [
+        "backend-start-unobservable",
+        "restart"
+      ],
+      "expect": {
+        "verdict": "pending",
+        "version": "1.1.0"
+      }
+    },
+    {
+      "name": "power-cut-while-replacing-restores",
+      "events": [
+        "power-cut-while-replacing",
+        "restart"
+      ],
+      "expect": {
+        "verdict": "restored",
+        "version": "1.0.0",
+        "reason": "interrupted"
+      }
+    }
+  ]
 }

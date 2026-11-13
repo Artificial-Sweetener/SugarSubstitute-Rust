@@ -22,6 +22,7 @@ fn prepared() -> Result<(Box<ParentLifecycle>, WireHeader, WireHeader, usize, Le
             payload: WirePayload::SettleAttempt {
                 identity: identity()?,
                 acquisition: h.request.ok_or("Original absent")?,
+                sugarcubes_failed: false,
             },
         },
         &mut bytes,

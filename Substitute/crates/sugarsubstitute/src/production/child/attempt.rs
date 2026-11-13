@@ -42,6 +42,8 @@ pub(super) struct AttemptCleanup {
     local: Option<LocalAttemptRetirement>,
     settled: bool,
     failures: [Option<Box<dyn Error>>; 2],
+    /// The attempt's page reported SugarCubes unavailable or failed.
+    sugarcubes_failed: bool,
     omitted_failures: u64,
 }
 impl AttemptCleanup {
@@ -56,6 +58,7 @@ impl AttemptCleanup {
             settled,
             failures: [failed.then(|| std::io::Error::other("Cleanup failed").into()), None],
             omitted_failures: 0,
+            sugarcubes_failed: false,
         }
     }
     /// Original cleanup cutoff, retained independently of failure/timer presentation.
@@ -106,7 +109,9 @@ impl ProductionChild {
         ))
     }
     /// Close only this attempt's finite main/output work; capture and channel stay live.
-    pub(super) fn begin_attempt_cleanup(&mut self) -> Result<()> {
+    /// `sugarcubes_failed` tells the parent the attempt's page reported SugarCubes unavailable
+    /// or failed, so the parent can judge a SugarCubes update by it.
+    pub(super) fn begin_attempt_cleanup(&mut self, sugarcubes_failed: bool) -> Result<()> {
         if self.attempt.is_some() {
             return Ok(());
         }
@@ -133,6 +138,7 @@ impl ProductionChild {
             settled: false,
             failures: [None, None],
             omitted_failures: 0,
+            sugarcubes_failed,
         });
         self.advance_attempt()
     }
@@ -206,7 +212,14 @@ impl ProductionChild {
             if self.bootstrap.channel_mut().try_send(
                 &WireMessage {
                     header,
-                    payload: WirePayload::SettleAttempt { identity: self.identity, acquisition },
+                    payload: WirePayload::SettleAttempt {
+                        identity: self.identity,
+                        acquisition,
+                        sugarcubes_failed: self
+                            .attempt
+                            .as_ref()
+                            .is_some_and(|attempt| attempt.sugarcubes_failed),
+                    },
                 },
                 original,
             )? {
@@ -298,6 +311,7 @@ mod tests {
                 None,
             ],
             omitted_failures: 0,
+            sugarcubes_failed: false,
         };
         assert_eq!(ActivityRoute::select(false, Some(&cleanup)), ActivityRoute::AttemptCleanup);
         assert_eq!(ActivityRoute::select(false, None), ActivityRoute::Startup);
@@ -341,6 +355,7 @@ mod tests {
             settled: false,
             failures: [None, None],
             omitted_failures: 0,
+            sugarcubes_failed: false,
         };
         assert_eq!(attempt.deadline(), Some(original));
         attempt.failures[0] =
