@@ -65,7 +65,7 @@ sources = [
     "crates/sugarsubstitute-splash/src/render.rs",
     "crates/sugarsubstitute-splash/src/render_stages.rs",
 ]
-source_sha256 = "sha256:9f9ed903b1a9995389fceae15ece61d45ea6ce1f941e3dfc79c16cb6e197d72b"
+source_sha256 = "sha256:03526f5452c67bb3d18b9d0f21fbd902dd605871b993c6f9215315219a29cb09"
 
 [[boundaries]]
 owner = "sugarsubstitute-desktop"

@@ -4471,10 +4471,18 @@ rationale = "Owned temporary PNG outputs are read into the fixture cache as enco
 [[records]]
 path = "crates/sugarsubstitute/src/startup/platform_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:4184a2e1d0a1caaf6408b589dcb2417f2225a5fdd75c0dd2ffdeef19b2f3ad0d"
+source_sha256 = "sha256:3a3b827168b66f34482dbc7255554dc5d7d7182869f239367ff750bd306dd20a"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
 rationale = "An owned temporary cache anchor verifies platform startup rejects invalid canvas scope and path configurations."
+
+[[records]]
+path = "crates/sugarsubstitute/src/startup/update_report/tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:3fb6f453e40a6769aa9190d717eb82bd0d64eff8142470e84ea124ba8842a7fd"
+capabilities = ["assert_eq! restricted capability fragments", "std::fs::read_dir", "std::fs::read_to_string", "std::fs::write", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Owned temporary directories verify the update report export writes, replaces and activates the selected file and leaves no stage, backup or unselected file."
 
 [[records]]
 path = "crates/sugarsubstitute-image-io/src/source/tests.rs"
