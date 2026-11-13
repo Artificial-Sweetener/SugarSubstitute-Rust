@@ -13,15 +13,15 @@
 - **Export**: each report gets its own execution owner on the report window's wake, using the report-export admission plus `receiving::ReportFile`. It writes the report's `to_text()`, the same text Copy uses.
 - **Page failure**: new lifecycle kind 24 `PageFailed` (Unavailable or SetupFailed), sent once per start. Lifecycle stays v14, which is unreleased. The child's control queue grows from 5 to 6.
 - **SugarCubes status**: `PackActivity` travels in the update status (kind 22). Its line arrives already localized by the coordinator, because packinstall owns those words. "Updating SugarCubes…" is new copy in `updates.rs`.
-- **Identity**: my earlier commits went out as `Claude <noreply@anthropic.com>`, the container's preset, which I never checked. The checkout now commits as Artificial Sweetener. I recreated my two unpushed commits; pushed history waits for the coordinator's rewrite.
+- **Identity**: my first commits went out as `Claude <noreply@anthropic.com>`, the container's preset, which I never checked. The checkout now commits as Artificial Sweetener, and the coordinator's rewrite has replaced the old commits; all hashes here are the rewritten ones.
 
 ## Commits since the rebuild
-- 7c578eaf merge: bring the integration branch into the coord lane
-- a09e0ab1 feat(updates): export the update report to the file the user chooses
-- 670c49f7 test(updates): build the panel's recorded update state from its defaults
-- 5c280ad6 feat(updates): tell the coordinator when the SugarCubes page fails, and say on the splash that SugarCubes is updating
+- eeb8c781 merge: bring the integration branch into the coord lane
+- d770fd72 feat(updates): export the update report to the file the user chooses
+- bfd045a7 test(updates): build the panel's recorded update state from its defaults
+- 7e56ecdf feat(updates): tell the coordinator when the SugarCubes page fails, and say on the splash that SugarCubes is updating
 
-Earlier: 455ad5f3, f33d3298, 7f3cfa37, 07029e40, 8eed7548, 1896c9d1 (layout, queue watch, notices, C7).
+Earlier: 7e22170f, 2f4a3abb, 24fefeb8, 6a3d8ebf, 96af700b, 0c10a026 (layout, queue watch, notices, C7).
 
 ## Verification
 - `cargo xtask governance` and `cargo fmt --check` pass.
