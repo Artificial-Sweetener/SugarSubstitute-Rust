@@ -417,7 +417,7 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute-execution/src/coordinator_entry/worker/source_staging.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:133587f7f8a3daeff7d09d84f20adb9651bc7f43a370a72f9be22d7f8bdee7fd"
+source_sha256 = "sha256:cdda40408830a5fccd4e7c57b548e444440af9cab73b32d71d024b61da820feb"
 capabilities = ["method metadata"]
 disposition = "consumer"
 rationale = "Execution clock, admitted memory or retained task metadata for: Adopt each encoder outcome before observing original preparation controls. This receiver does not inspect filesystem state."
