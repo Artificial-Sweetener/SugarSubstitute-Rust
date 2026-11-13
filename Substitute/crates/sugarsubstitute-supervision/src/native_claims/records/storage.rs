@@ -159,6 +159,7 @@ pub(crate) fn prepare_coordinator_release(
         || actual.resource != own.resource
         || actual.generation != own.generation
         || actual.digest != own.digest
+        || actual.holder != own.holder
         || actual.process != 0
         || actual.resource != 0
         || !matches!(actual.state, RecordState::Held | RecordState::Released)

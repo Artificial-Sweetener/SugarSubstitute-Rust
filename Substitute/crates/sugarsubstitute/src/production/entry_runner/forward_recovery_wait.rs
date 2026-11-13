@@ -7,9 +7,11 @@
 //! waiting surface beside its own pump and keeps forwarding and re-electing behind it: an
 //! accepted launch or this launch winning election dismisses the surface. While it waits, a
 //! copy that is closing shows "Finishing closing the previous window…", any other wait shows
-//! the checking line, and only Cancel is offered. Only an owned responsiveness probe, or the
-//! copy's own Unresponsive answer, turns the surface into the question "Close it and start" /
-//! "Cancel", and only that choice ends the verified copy.
+//! the checking line, and only Cancel is offered. That includes a copy that verified itself on
+//! its pipe and has not answered yet: elapsed time alone never asks the user anything. Only an
+//! owned probe finding the copy's windows hung, or the copy's own Unresponsive answer, turns the
+//! surface into the question "Close it and start" / "Cancel", and only that choice ends the
+//! verified copy.
 use crate::production::entry_activation::{ProbeProcess, ResponsivenessProbe};
 use std::{
     error::Error,
@@ -39,22 +41,6 @@ pub(crate) struct PreviousCopy {
     pub(crate) pid: u32,
     /// Process creation time in 100 ns units, so a reused id never matches.
     pub(crate) birth: u64,
-}
-
-/// Names the process holding the coordinator claim when no handshake verified one.
-///
-/// The claims owner does not yet expose that identity, so production answers `None` and such
-/// a wait shows only the waiting line. Tests supply a holder to prove the question follows.
-pub(crate) trait ClaimHolder {
-    /// The holder's identity, when the claims owner can name it.
-    fn holder(&self) -> Option<PreviousCopy>;
-}
-/// The production claims owner cannot name the holder yet.
-pub(crate) struct UnnamedClaimHolder;
-impl ClaimHolder for UnnamedClaimHolder {
-    fn holder(&self) -> Option<PreviousCopy> {
-        None
-    }
 }
 
 /// The native operations on a verified copy; tests substitute their own.
@@ -157,13 +143,17 @@ impl ForwardWait {
             native_wake: None,
         })
     }
-    /// Record what the transport verified or received.
+    /// Record what the transport verified or received. A copy verified on its pipe, by a
+    /// connection or a discovery, becomes the copy whose windows are probed.
     pub(crate) fn observe(&mut self, observation: &EntryTransportObservation) {
         match observation {
-            EntryTransportObservation::DiscoveryVerified { peer, phase, .. } => self.discovered(
-                PreviousCopy { pid: peer.process_id(), birth: peer.creation_time_100ns() },
-                matches!(phase, EntryDiscoveryPhase::Serving(_)),
-            ),
+            EntryTransportObservation::ConnectionVerified { peer, .. } => {
+                self.discovered(copy_of(peer));
+            }
+            EntryTransportObservation::DiscoveryVerified { peer, phase, .. } => {
+                self.discovered(copy_of(peer));
+                self.serving |= matches!(phase, EntryDiscoveryPhase::Serving(_));
+            }
             EntryTransportObservation::OutcomeReceived { outcome, .. } => match outcome {
                 EntryOutcome::Closing => self.closing = true,
                 EntryOutcome::Unresponsive => self.unresponsive = true,
@@ -172,8 +162,8 @@ impl ForwardWait {
             _ => {}
         }
     }
-    /// The transport verified `copy` on its pipe, serving launches or still initializing.
-    fn discovered(&mut self, copy: PreviousCopy, serving: bool) {
+    /// The transport verified `copy` on its pipe.
+    fn discovered(&mut self, copy: PreviousCopy) {
         if self.peer.is_some_and(|known| known != copy) {
             // Re-election reached another copy: what was known about the old one, including a
             // finished close, says nothing about this one.
@@ -184,7 +174,6 @@ impl ForwardWait {
                 self.ending = None;
             }
         }
-        self.serving |= serving;
         self.peer = Some(copy);
     }
     /// The launch source came back for re-election. A copy that was serving, or one this
@@ -200,10 +189,14 @@ impl ForwardWait {
         self.native_wake = None;
         self.set_phase(ConflictPhase::Done);
     }
-    /// Take the surface's controller once the wait has lasted two seconds, or at once when the
-    /// copy is known not to respond. Returns it exactly once.
+    /// Whether the surface is due and not yet taken: the wait has lasted two seconds, or the
+    /// copy is known not to respond.
+    pub(crate) fn presentation_due(&self, now: Moment) -> bool {
+        !self.resolved && self.shared.is_none() && (now >= self.present_at || self.unresponsive)
+    }
+    /// Take the surface's controller once it is due. Returns it exactly once.
     pub(crate) fn take_surface(&mut self, now: Moment) -> Option<WaitSurface> {
-        if self.resolved || self.shared.is_some() || (now < self.present_at && !self.unresponsive) {
+        if !self.presentation_due(now) {
             return None;
         }
         let shared = Arc::new(Mutex::new(Shared { phase: self.phase(), choice: None }));
@@ -233,13 +226,15 @@ impl ForwardWait {
             lock(shared).phase = phase;
         }
     }
-    /// The copy to probe or end: the one the pipe verified, or the claim holder.
-    fn target(&self, holder: &dyn ClaimHolder) -> Option<PreviousCopy> {
-        self.peer.or_else(|| holder.holder())
+    /// The copy to probe or end: the one the pipe verified, or the process the coordinator
+    /// record names as its holder.
+    fn target(&self, holder: Option<PreviousCopy>) -> Option<PreviousCopy> {
+        self.peer.or(holder)
     }
     /// Advance at `now`: act on the user's choice, collect an ending, probe a copy that has not
-    /// answered, and update what the surface shows. Probe failures are logged and the copy is
-    /// probed again later; they never end the launch.
+    /// answered, and update what the surface shows. `holder` is the process the coordinator record names, for a copy this launch
+    /// never reached. Probe failures are logged and the copy is probed again later; they never
+    /// end the launch.
     /// # Errors
     /// Preserves job submission and clock failures.
     pub(crate) fn advance(
@@ -247,7 +242,7 @@ impl ForwardWait {
         now: Moment,
         jobs: Jobs<'_>,
         port: ProcessPort,
-        holder: &dyn ClaimHolder,
+        holder: Option<PreviousCopy>,
     ) -> Result<WaitStep, Box<dyn Error>> {
         if self.resolved {
             return Ok(WaitStep::Continue);
@@ -329,6 +324,10 @@ impl ForwardWait {
     pub(crate) fn native_wake(&self) -> Option<std::time::Instant> {
         self.native_wake
     }
+}
+
+fn copy_of(peer: &sugarsubstitute_execution::VerifiedEntryPeer) -> PreviousCopy {
+    PreviousCopy { pid: peer.process_id(), birth: peer.creation_time_100ns() }
 }
 
 /// End the verified copy in an owned blocking job; the end re-verifies its identity first.

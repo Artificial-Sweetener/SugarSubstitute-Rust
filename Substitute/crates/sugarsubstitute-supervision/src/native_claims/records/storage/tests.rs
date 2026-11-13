@@ -113,3 +113,26 @@ fn changed_desired_record_requires_previous_actual_activation_cleanup() -> TestR
     assert!(state.is_none());
     Ok(())
 }
+
+/// Releasing a coordinator record keeps the holder it names, and a record naming another holder
+/// is not this coordinator's to release.
+#[test]
+fn coordinator_release_keeps_its_holder_and_refuses_another() -> TestResult {
+    let key = CoordinatorKey {
+        namespace: NamespaceId::new([1; 32]),
+        epoch: CoordinatorEpoch::new([2; 16])?,
+    };
+    let holder = crate::coordinator_entry::EntryHolder { process_id: 7, creation_time_100ns: 11 };
+    let own = Record::coordinator(key).held_by(holder);
+    let mut expected = Some(own.clone());
+    let activated = record_file::PublicationRetirement::Activated(own.encode());
+    assert!(prepare_coordinator_release(activated, &mut expected, None)?);
+    let released = expected.ok_or("release missing")?;
+    assert_eq!((released.state, released.holder), (RecordState::Released, Some(holder)));
+    let other = Record::coordinator(key)
+        .held_by(crate::coordinator_entry::EntryHolder { process_id: 8, creation_time_100ns: 11 });
+    let mut expected = Some(own);
+    let activated = record_file::PublicationRetirement::Activated(other.encode());
+    assert!(prepare_coordinator_release(activated, &mut expected, None).is_err());
+    Ok(())
+}

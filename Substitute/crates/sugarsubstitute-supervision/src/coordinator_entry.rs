@@ -24,7 +24,8 @@ pub(crate) use namespace::NamespaceLifetime;
 pub use namespace::VerifiedEntryNamespace;
 pub use owner::{CoordinatorEntryOwner, EntrySourceDataAdmission};
 pub use types::{
-    EntryAdmissionError, EntryError, EntryInputError, EntryObservation, EntryPhase, EntrySnapshot,
+    EntryAdmissionError, EntryError, EntryHolder, EntryInputError, EntryObservation, EntryPhase,
+    EntrySnapshot,
 };
 /// Exact retained reservation for finite namespace/image/election custody, in bytes.
 pub const ENTRY_PREPARATION_BYTES: u64 = 2 * 1024 * 1024;

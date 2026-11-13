@@ -5,6 +5,9 @@
 use super::*;
 use sugarsubstitute_contracts::execution::JobOutcome;
 use sugarsubstitute_supervision::coordinator_entry::EntryPhase;
+#[cfg(test)]
+#[path = "forward_presentation_tests.rs"]
+mod presentation_tests;
 #[path = "forward_recovery_wait.rs"]
 pub(crate) mod wait;
 impl<C: EntryActivation> EntryRunner<C> {
@@ -49,10 +52,15 @@ impl<C: EntryActivation> EntryRunner<C> {
         if self.closing {
             return Ok(());
         }
+        let snapshot =
+            self.bootstrap.as_ref().and_then(EntryBootstrap::owner).map(|owner| owner.snapshot());
         let won = self.forward.is_none()
-            && self.bootstrap.as_ref().and_then(EntryBootstrap::owner).is_some_and(|owner| {
-                matches!(owner.snapshot().phase, EntryPhase::ElectionHeld | EntryPhase::Serving)
+            && snapshot.is_some_and(|snapshot| {
+                matches!(snapshot.phase, EntryPhase::ElectionHeld | EntryPhase::Serving)
             });
+        let holder = snapshot.and_then(|snapshot| snapshot.holder).map(|holder| {
+            wait::PreviousCopy { pid: holder.process_id, birth: holder.creation_time_100ns }
+        });
         let (Some(wait), Some(client), Some(finite)) =
             (&mut self.forward_wait, &self.client, &self.finite)
         else {
@@ -63,12 +71,7 @@ impl<C: EntryActivation> EntryRunner<C> {
             return Ok(());
         }
         let now = client.now()?;
-        let step = wait.advance(
-            now,
-            (client, finite, &self.jobs),
-            wait::NATIVE_PROCESS,
-            &wait::UnnamedClaimHolder,
-        )?;
+        let step = wait.advance(now, (client, finite, &self.jobs), wait::NATIVE_PROCESS, holder)?;
         wait.schedule_native(now, (self.native_now)());
         if step == wait::WaitStep::Cancel {
             tracing::info!(
@@ -79,6 +82,18 @@ impl<C: EntryActivation> EntryRunner<C> {
             self.request_shutdown()?;
         }
         Ok(())
+    }
+
+    /// Whether this launch must show the wait on the other copy now. The headless pump admits
+    /// its native loop for it, since a forwarding launch never activates its own server.
+    pub(super) fn forward_presentation_due(&self) -> bool {
+        if self.closing || self.initial_completed {
+            return false;
+        }
+        let Some(now) = self.client.as_ref().and_then(|client| client.now().ok()) else {
+            return false;
+        };
+        self.forward_wait.as_ref().is_some_and(|wait| wait.presentation_due(now))
     }
 
     /// The waiting surface, once this launch has waited two seconds for the other copy.

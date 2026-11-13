@@ -38,6 +38,31 @@ fn fixed_records_preserve_exact_coordinator_and_backend_generation_fields() -> T
     }
     Ok(())
 }
+/// A coordinator record carries the coordinator process that holds it in its otherwise unused
+/// identity slots, keeps it through release, and rejects half an identity or an impossible id.
+#[test]
+fn a_coordinator_record_names_its_holder_through_release() -> TestResult {
+    let holder = crate::coordinator_entry::EntryHolder {
+        process_id: 4242,
+        creation_time_100ns: 133_000_000_000_000_000,
+    };
+    let mut record = Record::coordinator(owner()?).held_by(holder);
+    let decoded = Record::decode(&record.encode())?;
+    assert_eq!((decoded.holder, decoded.generation, decoded.process), (Some(holder), 0, 0));
+    record.state = RecordState::Released;
+    assert_eq!(Record::decode(&record.encode())?.holder, Some(holder));
+    assert_eq!(Record::decode(&Record::coordinator(owner()?).encode())?.holder, None);
+    let bytes = record.encode();
+    for range in [68..76, 76..84] {
+        let mut half = bytes;
+        half[range].fill(0);
+        assert!(Record::decode(&half).is_err(), "half an identity must not decode");
+    }
+    let mut oversized = bytes;
+    oversized[80] = 1;
+    assert!(Record::decode(&oversized).is_err(), "a process id wider than 32 bits is foreign");
+    Ok(())
+}
 #[test]
 fn schema_unknown_fields_versions_states_and_invalid_epoch_fail_closed() -> TestResult {
     let bytes = Record::coordinator(owner()?).encode();
