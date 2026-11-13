@@ -12,6 +12,7 @@
 mod events;
 mod feedback;
 mod intents;
+pub mod launcher;
 mod main_identity;
 mod readiness;
 

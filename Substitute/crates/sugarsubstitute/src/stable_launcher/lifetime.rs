@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain each launcher job through terminal consumption and execution shutdown.
+//!
+//! The whole launch is bounded by [`LauncherBudget`]: optional update work is admitted only
+//! before its cutoff, after which the accepted version starts, and the process exits a short
+//! grace after its cleanup cutoff even if a worker never returns.
+mod bound;
+#[cfg(test)]
+mod bound_tests;
 mod cached;
 mod engine;
 mod installation;
@@ -13,11 +20,11 @@ mod startup_tests;
 mod tests;
 use std::{error::Error, io, num::NonZeroUsize, path::PathBuf, sync::Arc, time::Instant};
 use sugarsubstitute_contracts::{
-    coordinator_entry::EntrySetupBudget,
     execution::{
         Clock, CompletionWake, ExecutionPort, JobClass, JobContext, JobOutcome, JobSpec, Moment,
         Operation, OwnedJob, Scope, ScopeId, ScopeSpec,
     },
+    startup::launcher::LauncherBudget,
 };
 use sugarsubstitute_desktop::{HeadlessLifetime, HeadlessStep, StartupPreparationStep};
 use sugarsubstitute_execution::{ExecutionClient, ExecutionOwner, MonotonicClock};
@@ -98,6 +105,9 @@ pub(super) struct Launcher {
     recovery_until: Option<Moment>,
     recovery_wake: Option<Instant>,
     update_failure: Option<Box<dyn Error>>,
+    budget: Option<LauncherBudget>,
+    /// Native wake at the update cutoff, until that cutoff has been observed.
+    update_wake: Option<Instant>,
     until: Option<Moment>,
     cleanup_until: Option<Moment>,
     wake_at: Option<Instant>,
@@ -105,9 +115,24 @@ pub(super) struct Launcher {
     completed: bool,
     stopping: bool,
     cutoff_reported: bool,
+    /// When the process exits regardless, once the cleanup cutoff has been reported.
+    exit_at: Option<(Moment, Option<Instant>)>,
+    /// Workers never returned by `exit_at`; this process exits without joining them.
+    abandoned: bool,
     failure: Option<Box<dyn Error>>,
     finished: bool,
 }
+
+/// The update took too long to begin, so the accepted version starts instead.
+#[derive(Debug)]
+pub(super) struct LateUpdate;
+impl std::fmt::Display for LateUpdate {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .write_str("The prepared update did not start in time; starting the accepted release")
+    }
+}
+impl Error for LateUpdate {}
 impl Launcher {
     /// Allocate inert composition state; all filesystem and native creation runs on workers.
     pub(super) fn new(root: PathBuf) -> Self {
@@ -130,6 +155,8 @@ impl Launcher {
             recovery_until: None,
             recovery_wake: None,
             update_failure: None,
+            budget: None,
+            update_wake: None,
             until: None,
             cleanup_until: None,
             wake_at: None,
@@ -137,6 +164,8 @@ impl Launcher {
             completed: false,
             stopping: false,
             cutoff_reported: false,
+            exit_at: None,
+            abandoned: false,
             failure: None,
             finished: false,
         }
@@ -227,6 +256,7 @@ impl Launcher {
             }
         }
         self.advance_cached()?;
+        self.stop_late_update()?;
         if !self.closing && self.recovery_until.is_some_and(|until| self.clock.now() >= until) {
             return Err("Startup trial recovery reached its original cutoff".into());
         }
@@ -253,8 +283,7 @@ impl HeadlessLifetime for Launcher {
         }
         self.owner = Some(ExecutionOwner::new(self.clock.clone(), wake)?);
         let client = self.owner.as_ref().ok_or("Launcher execution absent")?.client();
-        self.until = Some(EntrySetupBudget::new(client.now()?)?.until());
-        self.wake_at = Instant::now().checked_add(EntrySetupBudget::DURATION);
+        self.begin_budget(LauncherBudget::new(client.now()?)?);
         self.work_scope =
             Some(client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?);
         self.cleanup_scope =
@@ -273,10 +302,11 @@ impl HeadlessLifetime for Launcher {
     }
     fn next_deadline(&self) -> Option<Instant> {
         if self.cutoff_reported {
-            return None;
+            return if self.abandoned { None } else { self.exit_at.and_then(|(_, wake)| wake) };
         }
         [
             self.wake_at,
+            self.update_wake,
             self.recovery_wake,
             self.cached.as_ref().and_then(cached::Cached::next_deadline),
         ]
@@ -293,6 +323,9 @@ impl HeadlessLifetime for Launcher {
     fn finish_shutdown(&mut self) -> Result<()> {
         if self.finished || !self.closing || !self.poll_shutdown()? {
             return Err("Launcher still owns active work".into());
+        }
+        if self.abandoned {
+            return Err(self.abandon());
         }
         if let Some(owner) = &mut self.owner {
             owner.finish_shutdown()?;

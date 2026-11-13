@@ -37,6 +37,9 @@ impl Launcher {
         if !self.closing {
             return Ok(false);
         }
+        if self.abandoned {
+            return Ok(true);
+        }
         let until = self.cleanup_until.ok_or("Launcher cleanup cutoff absent")?;
         let expired = self.clock.now() >= until;
         if expired && !self.stopping {
@@ -81,6 +84,8 @@ impl Launcher {
     }
 
     /// Logical retirement and actual worker joins are separate facts; report unsettled custody once.
+    /// The report starts a short exit grace; work still unsettled after it is abandoned, so the
+    /// headless pump always reaches its exit.
     fn observe_join(&mut self, expired: bool) -> Result<bool> {
         let actual = self.owner.as_ref().map(ExecutionOwner::poll_shutdown).transpose()?;
         let settled = actual.as_ref().is_none_or(|progress| progress.settled);
@@ -94,7 +99,12 @@ impl Launcher {
                 || (!settled && actual.is_some_and(|progress| progress.deadline_expired)))
         {
             self.cutoff_reported = true;
+            self.arm_exit()?;
             return Err("Launcher ownership remains unsettled after its original cutoff".into());
+        }
+        if !settled && self.exit_due() {
+            self.abandoned = true;
+            return Ok(true);
         }
         Ok(settled)
     }

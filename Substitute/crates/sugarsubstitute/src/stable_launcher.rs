@@ -7,6 +7,8 @@
 //! engine argument, it is that generation's launch engine and owns the rest of startup.
 mod lifetime;
 mod root;
+#[cfg(test)]
+mod test_support;
 use std::{
     error::Error,
     ffi::OsString,
