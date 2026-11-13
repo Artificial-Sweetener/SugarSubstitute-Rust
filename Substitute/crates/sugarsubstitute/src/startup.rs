@@ -24,6 +24,8 @@ mod consume_diagnostic;
 mod delivery;
 #[path = "startup/execution.rs"]
 mod execution;
+#[path = "startup/held_reveal.rs"]
+mod held_reveal;
 #[cfg(all(windows, any(feature = "windows-native-host", test)))]
 #[path = "startup/host_updates.rs"]
 mod host_updates;
@@ -128,6 +130,9 @@ pub struct StartupHost<B: StartupBackend> {
     closing: bool,
     finished: bool,
     commands: commands::StartupCommands,
+    /// The splash retirement or main reveal held while the coordinator restarts into an update
+    /// prepared before the window opened, so the user never sees a window that then closes.
+    held_reveal: Option<sugarsubstitute_contracts::startup::StartupEffect>,
     next_deadline: Option<Instant>,
     shutdown: shutdown::ShutdownTransaction,
     /// Why the application closes; the first close request decides it.
@@ -216,6 +221,7 @@ impl<B: StartupBackend> StartupHost<B> {
             closing: false,
             finished: false,
             commands: commands::StartupCommands::new(),
+            held_reveal: None,
             next_deadline: None,
             shutdown: shutdown::ShutdownTransaction::new(),
             close_reason:

@@ -360,6 +360,11 @@ impl SignedCandidate {
         self.candidate.directory()
     }
 
+    /// Version label of the release this update candidate starts.
+    pub fn version(&self) -> &str {
+        self.candidate.generation().release.version()
+    }
+
     /// Retained payload and revision custody survives retirement of signature-verification storage.
     /// This proves preparation only; `transfer` still authorizes the exact trial before launch.
     pub(crate) fn prepared(&self) -> &Arc<PreparedCandidate> {

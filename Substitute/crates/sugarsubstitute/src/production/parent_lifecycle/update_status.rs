@@ -31,6 +31,9 @@ pub(super) struct OutgoingUpdates {
     writing: bool,
     restart_to_apply: bool,
     check_requested: bool,
+    /// Coordinator revision of the status being written, and of the newest the child received.
+    writing_status: Option<u64>,
+    delivered_status: Option<u64>,
     watch: workflow_watch::WorkflowWatch,
 }
 impl OutgoingUpdates {
@@ -43,11 +46,15 @@ impl OutgoingUpdates {
     /// The child's snapshot write finished.
     pub(super) fn written(&mut self) {
         self.writing = false;
+        if let Some(written) = self.writing_status.take() {
+            self.delivered_status = self.delivered_status.max(Some(written));
+        }
     }
 
     /// The child's snapshot write was revoked before issue; the newest state goes out again.
     pub(super) fn revoked(&mut self) {
         self.writing = false;
+        self.writing_status = None;
         self.due = true;
     }
 
@@ -89,6 +96,7 @@ impl OutgoingUpdates {
         let revision = NonZeroU64::new(self.revision.checked_add(1)?)?;
         self.revision = revision.get();
         self.due = false;
+        self.writing_status = self.status_revision;
         Some((revision, self.sent_queue.unwrap_or(WorkflowQueue::Unobserved), status))
     }
 }
@@ -126,6 +134,11 @@ impl ParentLifecycle {
         self.updates.restart_to_apply
     }
 
+    /// Whether the child received the coordinator's status at `revision` or a newer one.
+    pub(crate) fn update_status_delivered(&self, revision: u64) -> bool {
+        self.updates.delivered_status.is_some_and(|delivered| delivered >= revision)
+    }
+
     /// Take the child's request to check for updates now, once.
     pub(crate) fn take_check_request(&mut self) -> bool {
         std::mem::take(&mut self.updates.check_requested)
@@ -149,6 +162,7 @@ impl ParentLifecycle {
             self.updates.writing = true;
         } else {
             self.updates.due = true;
+            self.updates.writing_status = None;
         }
         Ok(())
     }
@@ -180,13 +194,59 @@ mod tests {
         Ok(())
     }
 
+    fn parent() -> std::result::Result<ParentLifecycle, Box<dyn std::error::Error + Send + Sync>> {
+        let identity = super::super::tests::identity().map_err(|cause| cause.to_string())?;
+        let mut storage = Some(super::super::causes::BackendCauses::new(
+            crate::production::coordinator_backend::tests::storage_tests::claim(
+                ParentLifecycle::storage_bytes(),
+            )?,
+        )?);
+        Ok(ParentLifecycle::new(
+            identity.run,
+            identity.launch,
+            sugarsubstitute_contracts::configuration::ProfileId::new("Updates_1".into())?,
+            sugarsubstitute_contracts::lifecycle::ConnectionId::new(1)?,
+            sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeDeadline::new(
+                100,
+                1_000_000_000,
+            )?,
+            &mut storage,
+        )?)
+    }
+
+    /// The child's check requests reach the runner through the parent's own take, once, however
+    /// many arrived before it was taken.
     #[test]
-    fn repeated_check_requests_before_the_runner_takes_them_are_one() {
-        let mut updates = OutgoingUpdates::default();
-        assert!(!std::mem::take(&mut updates.check_requested));
-        updates.check_requested();
-        updates.check_requested();
-        assert!(std::mem::take(&mut updates.check_requested));
-        assert!(!std::mem::take(&mut updates.check_requested), "taken once");
+    fn repeated_check_requests_before_the_runner_takes_them_are_one()
+    -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let mut parent = parent()?;
+        assert!(!parent.take_check_request());
+        parent.updates.check_requested();
+        parent.updates.check_requested();
+        assert!(parent.take_check_request());
+        assert!(!parent.take_check_request(), "taken once");
+        Ok(())
+    }
+
+    /// A status counts as delivered only once its own write finished: a revoked or still
+    /// running write delivers nothing, and a newer status is not delivered by an older write.
+    #[test]
+    fn a_status_is_delivered_only_when_its_write_finishes()
+    -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let mut parent = parent()?;
+        let status = UpdateStatus::default();
+        parent.publish_update_status(4, &status)?;
+        assert!(!parent.update_status_delivered(4), "nothing written yet");
+        parent.updates.take_due().ok_or("status not due")?;
+        parent.updates.writing = true;
+        parent.publish_update_status(5, &status)?;
+        assert!(!parent.update_status_delivered(4), "a write in flight delivers nothing");
+        parent.updates.revoked();
+        assert!(!parent.update_status_delivered(4));
+        parent.updates.take_due().ok_or("status not due again")?;
+        parent.updates.written();
+        assert!(parent.update_status_delivered(5));
+        assert!(!parent.update_status_delivered(6));
+        Ok(())
     }
 }

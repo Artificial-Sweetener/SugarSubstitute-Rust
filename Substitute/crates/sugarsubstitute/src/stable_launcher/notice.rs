@@ -86,6 +86,12 @@ impl Notice {
         }
     }
 
+    /// What the notice says now.
+    #[cfg(test)]
+    pub(super) const fn status(&self) -> StartupStatus {
+        self.status
+    }
+
     /// Observe the clock and whether the launcher still owns startup.
     pub(super) fn observe(&mut self, now: Moment, owns_startup: bool) {
         if self.policy.observe(now, owns_startup) == Some(NoticeChange::Withdraw) {

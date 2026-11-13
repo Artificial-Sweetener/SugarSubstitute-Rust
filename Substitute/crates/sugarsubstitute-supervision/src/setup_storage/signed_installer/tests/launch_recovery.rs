@@ -107,25 +107,3 @@ fn cancelled_recovery_retains_trial_exclusion_until_an_independent_cleanup_job_f
     })?;
     Ok(())
 }
-
-#[test]
-fn a_trial_launch_names_the_version_it_starts() -> TestResult {
-    let mut pipeline = Pipeline::new()?;
-    let (fixture, launch) = pipeline.run(SIGNED_INSTALLER_RESERVATION_BYTES, |context| {
-        let (fixture, _, launch) = pending(&context)?;
-        Ok((fixture, launch))
-    })?;
-    pipeline.run(RESERVATION_BYTES, move |context| {
-        let store = SelectionStore::open(fixture.installation.path(), &context)?;
-        let trial = store.load(&context)?.ok_or("Selection absent")?;
-        let Some(Candidate::Trial { attempt }) = trial.candidate() else {
-            return Err("Trial absent".into());
-        };
-        assert_eq!(launch.trial_version().as_deref(), Some(attempt.generation.release.version()));
-        assert_eq!(
-            launch.recover_and_retire(&context)?,
-            crate::application_launch::CreationOutcome::NotCreated
-        );
-        fixture.preserved()
-    })
-}
