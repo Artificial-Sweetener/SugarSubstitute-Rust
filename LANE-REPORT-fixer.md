@@ -14,10 +14,10 @@
 - I didn't commit a local non-Windows build fix for execution (another owner's file).
 
 ## Commits
-- `5e56965b` fix(model-library): report an offline preview refresh as one plain warning
-- `0d60d9b5` test(diagnostics): keep captured log lines when another thread registers a callsite first
-- `84c43d2f` refactor(setup-storage): date strikes and withholding from one injectable store clock
-- `f601ff5f` test(workspace): run the close-save fixture on a clock only the test moves
+- `dce65944` fix(model-library): report an offline preview refresh as one plain warning
+- `14c5477f` test(diagnostics): keep captured log lines when another thread registers a callsite first
+- `01819cc8` refactor(setup-storage): date strikes and withholding from one injectable store clock
+- `72020c32` test(workspace): run the close-save fixture on a clock only the test moves
 
 ## Verification
 - `cargo xtask governance` and `cargo fmt --check`: pass. Fingerprints recomputed with the gate's own algorithm.
