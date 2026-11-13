@@ -69,6 +69,33 @@ fn offline_restart_starts_the_prepared_update_on_its_receipt_after_metadata_expi
 }
 
 #[test]
+fn offline_restart_starts_the_prepared_update_on_its_receipt_when_cached_metadata_is_missing()
+-> TestResult {
+    let (fixture, original) = prepared()?;
+    let offers = crate::setup_storage::test_worker::cache_file(
+        fixture.installation.path(),
+        crate::setup_storage::cache::Namespace::UpdateOffers,
+        "record",
+    )?;
+    let generation =
+        offers.parent().and_then(std::path::Path::parent).ok_or("Offer cache absent")?;
+    std::fs::remove_dir_all(generation)?;
+    let mut pipeline = Pipeline::new()?;
+    let mut worker = Worker::resume_cached(cached_configuration(&fixture))?;
+    for expected in [Progress::Restoring, Progress::Reopening, Progress::Ready] {
+        assert_eq!(step(&mut pipeline, &mut worker)?.progress, expected);
+    }
+    let candidate = worker.take_candidate()?;
+    assert_eq!(candidate.directory(), original);
+    pipeline.run(0, move |_| {
+        drop(candidate);
+        Ok(())
+    })?;
+    assert_unlocked(&mut pipeline, &fixture)?;
+    fixture.preserved()
+}
+
+#[test]
 fn a_receipt_older_than_ninety_days_starts_the_accepted_version() -> TestResult {
     let (fixture, _) = prepared()?;
     let failure = refused(&fixture, NOW + RECEIPT_LIFETIME_SECONDS + 1)?;

@@ -173,40 +173,67 @@ impl TrustStore {
         .map_err(TrustFailure::from)
     }
 
-    /// Decide under the trust reader whether `receipt` may start its update now (D22).
-    /// `request` carries this engine's local facts for the user's current subscription; `now` is
-    /// Unix UTC seconds from the caller's injected clock. Retained signed targets are consulted
-    /// only to judge metadata newer than the receipt. Reserve `OFFER_LOOKUP_RESERVATION_BYTES`
-    /// plus ordinary trust-operation capacity.
+    /// Bind `receipt` to `request` and retain the signed targets cached for that request, which
+    /// judge any metadata newer than the receipt, for the reopening and the trial admission of
+    /// one received candidate. Reserve `OFFER_LOOKUP_RESERVATION_BYTES` for this call; the result
+    /// keeps `OFFER_RESERVATION_BYTES` claimed until it is dropped. Missing cached metadata is
+    /// retained as absent, which refuses only when newer metadata was authenticated.
+    /// # Errors
+    /// Preserves corrupt or foreign cached bytes, cancellation and storage failures.
+    pub fn receipt_authority(
+        &self,
+        receipt: UpdateReceipt,
+        request: Request,
+        context: &JobContext,
+    ) -> Result<ReceiptAuthority, TrustFailure> {
+        check(context)?;
+        let memory = context.memory().claim(OFFER_RESERVATION_BYTES).map_err(io::Error::other)?;
+        let targets = self.cached_inputs(request, context)?.map(|inputs| inputs.targets);
+        Ok(ReceiptAuthority { receipt, request, targets, _memory: memory })
+    }
+
+    /// Decide under the trust reader whether `authority`'s receipt may start its update now
+    /// (D22). Its request carries this engine's local facts for the user's current subscription;
+    /// `now` is Unix UTC seconds from the caller's injected clock. Its retained targets are
+    /// consulted only to judge metadata newer than the receipt, and only while they are the
+    /// newest this installation authenticated. Reserve ordinary trust-operation capacity.
     /// # Errors
     /// Returns `ReceiptRefused` with the failing condition, or storage, lock and cancellation
     /// failures. Nothing is written; on any error the accepted version starts.
     pub fn admit_receipt(
         &self,
-        receipt: &UpdateReceipt,
-        request: &Request,
+        authority: &ReceiptAuthority,
         now: i64,
         context: &JobContext,
     ) -> Result<(), TrustFailure> {
         check(context)?;
-        let _memory = context.memory().claim(OFFER_RESERVATION_BYTES).map_err(io::Error::other)?;
-        let cached = self.cached_inputs(*request, context)?;
+        let ReceiptAuthority { receipt, request, targets, .. } = authority;
         self.protected(context, |protection| {
             let _reader = self.reader(protection, context)?;
             self.require_subscription(request, protection, context)?;
             let trust = self.read(protection)?;
             let history = self.read_releases(protection)?;
             trust
-                .admit_prepared(
-                    receipt.release(),
-                    request,
-                    &history,
-                    cached.as_ref().map(|inputs| inputs.targets.as_slice()),
-                    now,
-                )
+                .admit_prepared(receipt.release(), request, &history, targets.as_deref(), now)
                 .map_err(TrustFailure::ReceiptRefused)?;
             check(context)?;
             Ok(())
         })
+    }
+}
+
+/// A receipt bound to the request it is judged for, with the cached signed targets retained
+/// alongside, so trial admission judges it again without another cache read. Targets that are
+/// no longer the newest authenticated ones refuse rather than stand in for newer metadata.
+pub struct ReceiptAuthority {
+    receipt: UpdateReceipt,
+    request: Request,
+    targets: Option<Vec<u8>>,
+    _memory: MemoryClaim,
+}
+impl ReceiptAuthority {
+    /// The protected receipt this authority judges.
+    pub fn receipt(&self) -> &UpdateReceipt {
+        &self.receipt
     }
 }

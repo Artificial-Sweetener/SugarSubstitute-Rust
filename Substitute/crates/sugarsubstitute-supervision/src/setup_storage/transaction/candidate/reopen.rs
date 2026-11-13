@@ -2,8 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Reopen completed native preparation without extracting its provisioning distribution again.
 use super::*;
-use crate::setup_storage::{AuthenticatedOffer, TrustFailure, TrustStore, UpdateReceipt};
-use sugarsubstitute_contracts::update::Request;
+use crate::setup_storage::{AuthenticatedOffer, ReceiptAuthority, TrustFailure, TrustStore};
 
 impl PreparedCandidate {
     /// Retain destination and configuration pins before reauthorizing the exact prepared snapshot.
@@ -78,17 +77,18 @@ impl PreparedCandidate {
 }
 
 impl PreparedCandidate {
-    /// Reopen the prepared generation that `receipt` names, verifying every application byte,
-    /// then admit it on the receipt alone (D22) at `now` (Unix UTC seconds, injected clock).
+    /// Reopen the prepared generation that `authority`'s receipt names, verifying every
+    /// application byte, then admit it on the receipt alone (D22) at `now` (Unix UTC seconds,
+    /// injected clock).
     /// A different or missing prepared generation, or a withheld release, returns `None`.
     pub(in crate::setup_storage) fn reopen_received(
         session: &InstallationSession,
         trust: &TrustStore,
-        receipt: &UpdateReceipt,
-        request: &Request,
+        authority: &ReceiptAuthority,
         now: i64,
         context: &JobContext,
     ) -> Result<Option<(Arc<Self>, ExistingInstallation)>, TrustFailure> {
+        let receipt = authority.receipt();
         let store = crate::setup_storage::SelectionStore::open(session.directory(), context)
             .map_err(io::Error::other)?;
         let snapshot = store
@@ -123,7 +123,7 @@ impl PreparedCandidate {
         application.payload.compatibility.require_trial_launch()?;
         let installation = Directory::open(session.directory(), false)?;
         receipt.require(&installation, &application.directory, &snapshot)?;
-        trust.admit_receipt(receipt, request, now, context)?;
+        trust.admit_receipt(authority, now, context)?;
         let candidate = Arc::new(Self {
             generation: application.generation,
             directory: application.directory,

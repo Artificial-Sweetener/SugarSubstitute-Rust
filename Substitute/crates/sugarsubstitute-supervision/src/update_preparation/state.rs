@@ -96,9 +96,12 @@ impl State {
             Phase::Restore(trust) => {
                 let request = trust.application_request(self.channel(&trust, context)?, context)?;
                 match trust.cached_offer(request, now(), context) {
-                    Ok(None) => (Phase::Receipt(trust), Progress::Reopening),
+                    Ok(None) if Self::receipt_serves(&trust, &request, context) => {
+                        (Phase::Receipt(trust), Progress::Reopening)
+                    }
+                    Ok(None) => (Phase::Empty, Progress::Unavailable),
                     Err(crate::setup_storage::TrustFailure::Verification(cause))
-                        if cause.is_expiry() =>
+                        if cause.is_expiry() && Self::receipt_serves(&trust, &request, context) =>
                     {
                         tracing::info!(
                             operation = "update_cached_metadata_expired",
@@ -337,6 +340,31 @@ impl State {
         self.failure.is_none()
             && matches!(self.phase, Phase::Download(..))
             && matches!(self.progress, Progress::Downloading { .. })
+    }
+
+    /// Peak new admission for the next step. Reopening on a receipt has no retained offer, so it
+    /// funds its own signed-targets lookup; reopening on a cached offer does not.
+    pub(super) fn reservation(&self) -> u64 {
+        match self.phase {
+            Phase::Receipt(_) => super::RECEIPT_REOPENING_RESERVATION_BYTES,
+            _ => self.progress.reservation(),
+        }
+    }
+
+    /// Whether a prepared update receipt may stand in for absent or expired cached metadata on
+    /// this subscription's route. A receipt for another route leaves the accepted version
+    /// current, as no receipt does. A receipt that cannot be read is never ignored: the
+    /// reopening step reads it again and reports why it is refused.
+    fn receipt_serves(
+        trust: &TrustStore,
+        request: &sugarsubstitute_contracts::update::Request,
+        context: &JobContext,
+    ) -> bool {
+        match trust.update_receipt(context) {
+            Ok(None) => false,
+            Ok(Some(receipt)) => receipt.release().serves(request),
+            Err(_) => true,
+        }
     }
 
     /// Close HTTP custody before dropping storage owners on this admitted cleanup worker.

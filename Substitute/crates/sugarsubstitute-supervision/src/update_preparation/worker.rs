@@ -42,6 +42,8 @@ pub struct Worker {
     job: Option<OwnedJob<(), Arc<Failure>>>,
     owner: Option<ExecutionId>,
     progress: Progress,
+    /// Peak new admission for the next step, observed together with `progress`.
+    reservation: u64,
     closing: bool,
     halted: bool,
 }
@@ -101,6 +103,7 @@ impl Worker {
             job: None,
             owner: None,
             progress: Progress::Opening,
+            reservation: Progress::Opening.reservation(),
             closing: false,
             halted: false,
         })
@@ -161,7 +164,7 @@ impl Worker {
                 JobClass::InfrastructureOrdinary
             },
             deadline: Some(deadline),
-            reservation_bytes: self.progress.reservation(),
+            reservation_bytes: self.reservation,
             replacement: None,
         };
         let job = execution
@@ -196,6 +199,7 @@ impl Worker {
         }
         self.closing = true;
         self.progress = Progress::Retiring;
+        self.reservation = Progress::Retiring.reservation();
     }
 
     /// Nonblocking terminal observation. No native/storage retirement happens on this caller.
@@ -214,6 +218,11 @@ impl Worker {
             Progress::Failed
         } else {
             state.progress
+        };
+        self.reservation = if self.progress == state.progress {
+            state.reservation()
+        } else {
+            self.progress.reservation()
         };
         Some(Observation {
             progress: self.progress,
