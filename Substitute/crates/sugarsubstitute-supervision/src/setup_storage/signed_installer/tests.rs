@@ -19,6 +19,7 @@ mod retry;
 mod staged;
 mod supersession;
 mod transfer_recovery;
+mod write_faults;
 
 #[test]
 fn composed_maintenance_preserves_configuration_and_transfers_only_an_unaccepted_trial()

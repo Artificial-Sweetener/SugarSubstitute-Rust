@@ -67,10 +67,12 @@ pub(super) fn create(
         return Err(crate::setup_storage::invalid("Selection snapshot exceeds its bound"));
     }
     let path = staging::unique_path(&store.root, purpose.prefix())?;
+    // The snapshot is never renamed; handing its read-only handle over publishes it.
+    let mut write = write_port::begin(UpdateFile::Selection, &path);
     let mut file = protection.transient_file(&path, context)?;
-    file.write_all(&bytes)?;
+    write.bytes(&mut file, &bytes)?;
     files::sync(&file, context)?;
-    let readonly = duplicate_readonly_inheritable(&file)?;
+    let readonly = write.publish(|| duplicate_readonly_inheritable(&file))?;
     check(context)?;
     Ok(readonly)
 }

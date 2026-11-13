@@ -42,6 +42,9 @@ pub(super) fn open(
     })
 }
 
+/// Prefix of the continuity marker's stage in the selection folder.
+const MARKER_STAGE: &str = ".selection-enable-stage";
+
 /// Publish continuity only while the caller retains transition custody and complete state.
 pub(super) fn publish_marker(
     installation: &Directory,
@@ -54,16 +57,16 @@ pub(super) fn publish_marker(
     if let Some(marker) = read_marker(installation, protection)? {
         return Ok(marker);
     }
-    let staged = staging::unique_path(root, ".selection-enable-stage")?;
+    let destination = super::super::ownership::state_path(installation).join(NAMESPACE_MARKER);
+    let mut write = write_port::begin(UpdateFile::Selection, &destination);
+    protection::with(context, |owner| staging::reclaim(root, MARKER_STAGE, &[], owner, context))?;
+    let staged = staging::unique_path(root, MARKER_STAGE)?;
     let mut file = protection.file(&staged, context)?;
-    file.write_all(CONTENT)?;
+    write.bytes(&mut file, CONTENT)?;
     files::sync(&file, context)?;
     drop(file);
     check(context)?;
-    staging::publish(
-        &staged,
-        &super::super::ownership::state_path(installation).join(NAMESPACE_MARKER),
-    )?;
+    write.publish(|| staging::publish(&staged, &destination))?;
     read_marker(installation, protection)?
         .ok_or_else(|| super::super::invalid("Published selection continuity marker is absent"))
 }

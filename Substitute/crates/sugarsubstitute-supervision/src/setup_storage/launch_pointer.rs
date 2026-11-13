@@ -21,6 +21,7 @@ use super::*;
 use crate::durable_storage::{
     files::{self, Directory},
     protection::{self, Protection},
+    write_port::UpdateFile,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -307,10 +308,19 @@ pub(in crate::setup_storage) fn publish(
     context: &JobContext,
 ) -> io::Result<()> {
     let bytes = pointer.encode()?;
-    let mut stage = publication::Stage::create(state, protection, context)?;
-    std::io::Write::write_all(stage.file(), &bytes)?;
+    // Writers are serialized, so an earlier attempt that ended before publication is dead.
+    publication::recover(state, protection, context)?;
+    let destination = state.path().join(LAUNCH_POINTER_FILE);
+    let mut stage = publication::Stage::create(
+        state,
+        UpdateFile::LaunchPointer,
+        &destination,
+        protection,
+        context,
+    )?;
+    stage.write(&bytes)?;
     files::sync(stage.file(), context)?;
-    stage.publish(&state.path().join(LAUNCH_POINTER_FILE), true, protection, context)
+    stage.publish(&destination, true, protection, context)
 }
 
 fn hash(file: &mut File, context: &JobContext) -> io::Result<String> {

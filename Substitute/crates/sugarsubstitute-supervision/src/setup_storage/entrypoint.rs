@@ -36,7 +36,12 @@ pub(super) fn stage(generation: &Path) -> io::Result<()> {
         Err(cause) => return Err(cause),
     }
     let bytes = native::encode(&generation.join("sugarsubstitute.exe"))?;
-    files::write_immutable(&destination, &bytes, files::create_new)
+    files::write_immutable(
+        crate::durable_storage::write_port::UpdateFile::Payload,
+        &destination,
+        &bytes,
+        files::create_new,
+    )
 }
 
 /// Decide whether a shell entry's stored target is this executable. The shell stores targets in

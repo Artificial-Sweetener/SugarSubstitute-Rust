@@ -17,9 +17,17 @@ fn replacement(root: &Directory, context: &JobContext) -> io::Result<record::Rec
         };
         let source =
             Directory::open(&root.path().join("releases").join(generation.id.as_str()), true)?;
-        publication::write_immutable(&source, SOURCE, b"rescue launcher", protection, context)?;
         publication::write_immutable(
             &source,
+            crate::durable_storage::write_port::UpdateFile::Launcher,
+            SOURCE,
+            b"rescue launcher",
+            protection,
+            context,
+        )?;
+        publication::write_immutable(
+            &source,
+            crate::durable_storage::write_port::UpdateFile::Launcher,
             "sugarsubstitute-launcher.json",
             CURRENT_LAUNCHER_CONTRACT,
             protection,
