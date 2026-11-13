@@ -48,6 +48,12 @@ pub enum AuthorityChange {
     /// Current trust no longer authorizes the same package for this request.
     OfferChanged,
 }
+impl TrustFailure {
+    /// Whether signed metadata failed only because it outlived its lifetime.
+    pub fn is_expiry(&self) -> bool {
+        matches!(self, Self::Verification(cause) if cause.is_expiry())
+    }
+}
 impl fmt::Display for TrustFailure {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {

@@ -147,7 +147,8 @@ impl<'a> UpdateAuthorization<'a> {
 impl StagedDelivery<'_> {
     /// Reverify against current trust and release history, authorize the history and run
     /// `publish` in one writer hold. `publish` receives the verified offer, the receipt facts
-    /// that this hold's trust binds to it, and a recheck for use between its writes.
+    /// that this hold's trust binds to it (absent for an included installer release), and a
+    /// recheck for use between its writes.
     /// # Errors
     /// Returns `AuthorityChanged` when the root rotated, the subscription changed or current
     /// trust authorizes a different package; verification, storage, lock and cancellation
@@ -158,7 +159,7 @@ impl StagedDelivery<'_> {
         context: &JobContext,
         publish: impl FnOnce(
             &VerifiedOffer,
-            &PreparedRelease,
+            Option<&PreparedRelease>,
             &mut dyn FnMut() -> io::Result<()>,
         ) -> io::Result<T>,
     ) -> Result<T, TrustFailure> {
@@ -179,19 +180,23 @@ impl StagedDelivery<'_> {
             {
                 return Err(TrustFailure::AuthorityChanged(AuthorityChange::OfferChanged));
             }
-            let release = held.trust.prepared_release(
-                authorization.request,
-                &held.offer,
-                authorization.descriptor,
-                held.time,
-            )?;
+            // An included installer release has no current metadata to bind a receipt to.
+            let release = match authorization.mode {
+                MetadataMode::Current => Some(held.trust.prepared_release(
+                    authorization.request,
+                    &held.offer,
+                    authorization.descriptor,
+                    held.time,
+                )?),
+                MetadataMode::Included => None,
+            };
             held.publish(
                 authorization,
                 self.evidence,
                 &mut now,
                 protection,
                 context,
-                |offer, recheck| publish(offer, &release, recheck),
+                |offer, recheck| publish(offer, release.as_ref(), recheck),
             )
         })
     }

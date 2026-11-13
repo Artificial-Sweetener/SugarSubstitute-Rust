@@ -19,6 +19,19 @@ pub struct UpdateAuthorization<'a> {
     pub request: &'a Request,
     /// Exact descriptor bytes authenticated as this subscription's signed target.
     pub descriptor: &'a [u8],
+    /// Whether `metadata` must be within its signed lifetime, or is an installer's included set.
+    pub mode: MetadataMode,
+}
+
+/// Which signed metadata an authorization rests on.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MetadataMode {
+    /// Metadata within its signed lifetime at the injected time; accepted floors advance durably.
+    Current,
+    /// An installer's compiled-in set, chosen explicitly by the user while offline (C4). Every
+    /// role must be validly signed under the trusted root and the package must match its signed
+    /// digest, but expiry is not enforced and durable floors are neither consulted nor advanced.
+    Included,
 }
 
 mod staged;
@@ -49,6 +62,11 @@ impl UpdateAuthorization<'_> {
             self.trust.require_subscription(self.request, protection, context)?;
             let history = self.trust.read_releases(protection)?;
             let mut trust = self.trust.read(protection)?;
+            if self.mode == MetadataMode::Included {
+                return Ok(self
+                    .verify(&trust, &history, Evidence::Archive(bytes), now)
+                    .map(|_| ())?);
+            }
             self.trust.apply(&mut trust, protection, context, |trust| {
                 trust.refresh(
                     MetadataSet {
@@ -211,6 +229,11 @@ impl UpdateAuthorization<'_> {
         }
         let history = self.trust.read_releases(protection)?;
         let mut time = i64::MIN;
+        if self.mode == MetadataMode::Included {
+            time = now();
+            let offer = self.verify(&trust, &history, evidence, time)?;
+            return Ok(Held { trust, history, offer, authority, time });
+        }
         let offer = self.trust.apply(&mut trust, protection, context, |trust| {
             time = now();
             trust.refresh(
@@ -253,7 +276,12 @@ impl UpdateAuthorization<'_> {
         evidence: Evidence<'_>,
         now: i64,
     ) -> Result<VerifiedOffer, Verification> {
-        let offer = trust.offer(self.request, self.descriptor, now)?;
+        let offer = match self.mode {
+            MetadataMode::Current => trust.offer(self.request, self.descriptor, now)?,
+            MetadataMode::Included => {
+                trust.pinned_offer(self.metadata, self.request, self.descriptor)?
+            }
+        };
         history.check(self.request, &offer)?;
         if offer.admission() != sugarsubstitute_contracts::update::Admission::Prepare {
             return Err(Verification::Admission);

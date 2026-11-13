@@ -77,6 +77,7 @@ impl SignedPackage {
             metadata: self.metadata.metadata(),
             request: &self.request,
             descriptor: &self.descriptor,
+            mode: crate::setup_storage::MetadataMode::Current,
         }
     }
 }

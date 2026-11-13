@@ -88,8 +88,8 @@ pub use trust::{
     OFFER_RESERVATION_BYTES,
 };
 pub use trust::{
-    AuthorityChange, TRUST_OPERATION_RESERVATION_BYTES, TRUST_RESERVATION_BYTES, TrustFailure,
-    TrustStore, UpdateAuthorization, UpdateReceipt,
+    AuthorityChange, MetadataMode, TRUST_OPERATION_RESERVATION_BYTES, TRUST_RESERVATION_BYTES,
+    TrustFailure, TrustStore, UpdateAuthorization, UpdateReceipt,
 };
 pub use updater_package::{
     PreparedUpdater, RejectedUpdaterProbe, UPDATER_STAGING_RESERVATION_BYTES,
@@ -98,10 +98,10 @@ pub use updater_package::{
 mod signed_installer;
 pub(crate) use signed_installer::CachedCandidate;
 pub use signed_installer::{
-    CompletedInstallation, InstalledCandidate, InstallerDistribution, InstallerSource,
-    MAX_DISTRIBUTION_BYTES, SIGNED_INSTALLER_RESERVATION_BYTES,
-    SIGNED_PREPARATION_RESERVATION_BYTES, SIGNED_TRANSFER_RESERVATION_BYTES, SignedCandidate,
-    SignedInstallation, SignedPreparation,
+    CompletedInstallation, IncludedInstallChoice, InstalledCandidate, InstallerAuthority,
+    InstallerDistribution, InstallerMetadataChoice, InstallerSource, MAX_DISTRIBUTION_BYTES,
+    SIGNED_INSTALLER_RESERVATION_BYTES, SIGNED_PREPARATION_RESERVATION_BYTES,
+    SIGNED_TRANSFER_RESERVATION_BYTES, SignedCandidate, SignedInstallation, SignedPreparation,
 };
 
 /// Memory reserved for bounded manifests, streaming copies and retained filesystem custody.

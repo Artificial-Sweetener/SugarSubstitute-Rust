@@ -13,6 +13,7 @@ use tuf::{
 };
 
 /// Exact unmodified remote role bytes; URLs, filenames and HTTP headers grant no trust.
+#[derive(Clone, Copy)]
 pub struct MetadataSet<'a> {
     /// Timestamp metadata, verified first.
     pub timestamp: &'a [u8],

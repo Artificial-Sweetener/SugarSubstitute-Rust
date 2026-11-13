@@ -64,6 +64,20 @@ pub fn preparation(
     configuration(EMBEDDED, installation, workspace, idle)?.map(Worker::new).transpose()
 }
 
+/// Repository transport for an installer whose compiled-in metadata expired (C4), using this
+/// build's distribution origin policy; `None` when the build has no update configuration.
+/// # Errors
+/// Rejects malformed configured bytes.
+pub(crate) fn installer_repository(
+    idle: Duration,
+) -> io::Result<Option<sugarsubstitute_supervision::update_repository::Repository>> {
+    if EMBEDDED.is_empty() {
+        return Ok(None);
+    }
+    let (_, policy) = Distribution::decode(EMBEDDED)?.into_parts();
+    Ok(Some(sugarsubstitute_supervision::update_repository::Repository::new(policy, idle)))
+}
+
 /// Reauthenticate prepared bytes using established installation authority, without HTTP.
 /// Producing-build network configuration does not control offline activation.
 pub(crate) fn cached_preparation(installation: PathBuf) -> io::Result<Worker> {

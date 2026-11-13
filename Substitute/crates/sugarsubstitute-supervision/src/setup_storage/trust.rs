@@ -9,7 +9,7 @@
 mod activation;
 mod continuity;
 mod discovery;
-pub use activation::UpdateAuthorization;
+pub use activation::{MetadataMode, UpdateAuthorization};
 mod envelope;
 mod failure;
 mod initialize;
@@ -136,6 +136,30 @@ impl TrustStore {
                 history.check(request, &offer)?;
                 Ok(offer)
             })
+        })
+    }
+
+    /// Authenticate an installer's included metadata and descriptor without a clock (C4).
+    /// Signatures must hold under this installation's current root and the release must pass
+    /// durable rollback history, but expiry is not enforced and nothing durable changes.
+    /// Use only after the user explicitly chose to install the included release offline.
+    /// # Errors
+    /// Rejects unsigned, foreign-key or inconsistent roles, routing or rollback failures,
+    /// lock contention, cancellation and storage errors.
+    pub fn pinned_offer(
+        &self,
+        metadata: MetadataSet<'_>,
+        request: &Request,
+        descriptor: &[u8],
+        context: &JobContext,
+    ) -> Result<VerifiedOffer, TrustFailure> {
+        self.protected(context, |protection| {
+            let _reader = self.reader(protection, context)?;
+            let history = self.read_releases(protection)?;
+            let offer = self.read(protection)?.pinned_offer(metadata, request, descriptor)?;
+            history.check(request, &offer)?;
+            check(context)?;
+            Ok(offer)
         })
     }
 

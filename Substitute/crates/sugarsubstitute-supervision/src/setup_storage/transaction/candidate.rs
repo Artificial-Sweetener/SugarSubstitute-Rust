@@ -201,7 +201,9 @@ impl PreparedInstallation {
         staged.commit(now, context, |offer, release, recheck| {
             authorization.record_generation(offer, &generation, &directory, context)?;
             // D22: the receipt is written in this same hold, before the prepared record exists.
-            authorization.record_receipt(release, &generation, &directory, context)?;
+            if let Some(release) = release {
+                authorization.record_receipt(release, &generation, &directory, context)?;
+            }
             recheck()?;
             let prepared = if matches!(staging.candidate(), Some(Candidate::Staging { .. })) {
                 let prepared = staging.prepared(&generation).map_err(io::Error::other)?;
