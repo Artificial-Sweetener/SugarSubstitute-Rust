@@ -1,25 +1,51 @@
 name: Substitute verification
 
+# Decision M-4: the full suite runs on the combined branches; lanes run their own area's tests.
 on:
   push:
+    branches:
+      - main
+      - integration
+      - 'lane/**'
     paths:
       - 'Substitute/**'
       - 'Sugar/integrations/contracts/**'
       - '.github/workflows/substitute-verify.yml'
+      - '.github/scripts/lane_tests.py'
+      - 'LANE-TESTS.txt'
       - '!**/*.md'
   pull_request:
+    branches:
+      - main
     paths:
       - 'Substitute/**'
       - 'Sugar/integrations/contracts/**'
       - '.github/workflows/substitute-verify.yml'
       - '!**/*.md'
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'full: xtask verify on all three platforms; focused: Windows check plus one test selection'
+        type: choice
+        options:
+          - full
+          - focused
+        default: full
+      package:
+        description: 'focused: the workspace package whose tests run'
+        type: string
+        default: ''
+      filter:
+        description: 'focused: an optional test-name filter'
+        type: string
+        default: ''
 
 permissions:
   contents: read
 
 concurrency:
-  group: verify-${{ github.workflow }}-${{ github.ref }}
+  # A dispatched full or focused run is not cancelled by a later push to the same branch.
+  group: verify-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ inputs.mode }}
   cancel-in-progress: true
 
 defaults:
@@ -29,6 +55,10 @@ defaults:
 jobs:
   verify:
     name: Verify (${{ matrix.os }})
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/integration')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.mode != 'focused')
     strategy:
       fail-fast: false
       matrix:
@@ -75,3 +105,76 @@ jobs:
           }
           cargo xtask verify
           exit $LASTEXITCODE
+
+  focused:
+    name: Focused (windows-2022)
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/lane/')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.mode == 'focused')
+    runs-on: windows-2022
+    timeout-minutes: 60
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+          # The changed-package selection compares a new branch with origin/main.
+          fetch-depth: 0
+      - name: Prepare repository-pinned Rust
+        run: rustup show active-toolchain
+      - name: Set up the test selector's Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Restore the focused build cache
+        uses: Swatinem/rust-cache@2201cc584a476d1b508be977bbe4b7d1c7a52e9c # v2.9.3
+        with:
+          workspaces: Substitute -> target
+      - name: Check governance, formatting and lints, then run the lane's tests
+        shell: pwsh
+        env:
+          FOCUSED_PACKAGE: ${{ inputs.package }}
+          FOCUSED_FILTER: ${{ inputs.filter }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $instance = & $vswhere -version '[17.0,18.0)' -products Microsoft.VisualStudio.Product.Enterprise -property installationPath
+          if (-not $instance -or @($instance).Count -ne 1) {
+            throw 'Expected one Visual Studio 2022 Enterprise instance on the Windows runner.'
+          }
+          Import-Module (Join-Path $instance 'Common7\Tools\Microsoft.VisualStudio.DevShell.dll')
+          Enter-VsDevShell -VsInstallPath $instance -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64' | Out-Null
+          $parser = Join-Path $env:GITHUB_WORKSPACE 'Substitute\tools\crashpad\prebuilt\x86_64-pc-windows-msvc'
+          $expected = (Get-Content -LiteralPath (Join-Path $parser 'committed_dump_parser.lib.sha256') -TotalCount 1).Split(' ')[0]
+          $actual = (Get-FileHash -LiteralPath (Join-Path $parser 'committed_dump_parser.lib') -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) {
+            throw "committed_dump_parser.lib is $actual, but its recorded SHA-256 is $expected."
+          }
+          $env:SUGAR_COMMITTED_PARSER_LIB = $parser
+          cargo xtask check
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $scripts = Join-Path $env:GITHUB_WORKSPACE '.github\scripts'
+          python -m unittest discover -s $scripts -p 'test_*.py'
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $selector = @((Join-Path $scripts 'lane_tests.py'), '--root', $env:GITHUB_WORKSPACE)
+          if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') {
+            if (-not $env:FOCUSED_PACKAGE) { throw 'A focused run names the workspace package whose tests run.' }
+            $selector += @('--package', $env:FOCUSED_PACKAGE)
+            if ($env:FOCUSED_FILTER) { $selector += @('--filter', $env:FOCUSED_FILTER) }
+          } else {
+            $selector += @('--before', $env:PUSH_BEFORE, '--after', $env:GITHUB_SHA)
+          }
+          $selections = @(python @selector)
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          if ($selections.Count -eq 0) { Write-Output 'No lane test selection: the push changed no workspace package.' }
+          $failed = 0
+          foreach ($selection in $selections) {
+            $arguments = @($selection | ConvertFrom-Json)
+            Write-Output "=== cargo $($arguments -join ' ')"
+            & cargo @arguments
+            if ($LASTEXITCODE) { $failed++ }
+          }
+          exit $failed
