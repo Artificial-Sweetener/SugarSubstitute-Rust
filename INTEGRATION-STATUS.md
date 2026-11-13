@@ -2,6 +2,66 @@
 
 Branch `integration`, created from `origin/main` 0cd6362f. Updated by each cloud integration pass.
 
+## Pass 4 (2026-11-13)
+
+Tools that worked: git fetch/push over the proxy; rustup 1.93.1 with clippy, rustfmt and the
+`x86_64-pc-windows-gnu` target; apt for mingw-w64, `libgtk-3-dev`, `libdbus-1-dev` and
+`pkg-config`; the public Actions REST API through curl; the GitHub MCP `get_job_logs`. Not
+working: `gh` (token rejected). Python 3.11 with no pytest; I ran the updater tool tests with
+`unittest`.
+
+### Integration tip and CI
+
+- New tip a0e1b56b: merge of lane/timeouts at e9572e0b. No integration fixes were needed.
+- CI on integration for a0e1b56b starts with this push. Runs:
+  [integration runs](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions?query=branch%3Aintegration).
+  Expect the baseline only (submodule on every OS for Substitute; ubuntu mypy and windows-latest
+  VS2022 for Sugar quality). The previous tip's runs are listed under pass 3.
+- Local checks on a0e1b56b:
+  - `cargo fmt --check` passed. `cargo xtask governance` passed with the submodule checked out,
+    including timeouts' new wall-clock gate (gate 1) across the whole merged tree.
+  - `cargo test --locked -p sugarsubstitute-xtask`: 192 passed.
+  - Windows-target Clippy (`-D warnings`) passed all three legs: workspace all-targets
+    all-features, `-p sugarsubstitute`, and `--no-default-features`.
+  - `python -m unittest tools.test_updater_feed_fixture`: passed. `tools.test_updater_qualification`
+    can't import on Linux (it needs `native_windows`); CI on Windows runs it. **Unproven here.**
+  - `sugarsubstitute-execution` still doesn't build on Linux (baseline), so its new
+    `qualification_time` tests didn't run here.
+  - `Sugar/` didn't change, so no Sugar gate was needed.
+- Wiring: retire to storage was done in pass 1. Host `sugarcubes.updates` to coord is **still
+  pending, because coord isn't merged**. Host's idle placeholders must not ship.
+
+### Lanes
+
+Only ci and timeouts moved since pass 3. A new branch, `lane/linux` (3e439aa2, "lint the
+workspace clean on Linux and macOS without allowances", built on lane/ci), appeared. It isn't one
+of the lanes this pass is given, it has no lane report, and its Substitute verification
+([run 43361831925](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43361831925))
+was still running. I didn't review or merge it. It looks like the portability lane lane/ci's report
+recommended; it will need the coordinator to list it before it merges.
+
+| Lane | Tip | State | Last reviewed | Merged | Stalled | Blocking reasons / unproven |
+|---|---|---|---|---|---|---|
+| ci | 11311c2f | working | 11311c2f | no | no | [Sugar quality](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43357914629) on 11311c2f is **green** on every leg, the first time. The report hasn't changed and still doesn't say both workflows are green: Substitute on Windows can't link `committed_dump_parser.lib` (**needs the maintainer or the crash owner**), and Linux/macOS lints remain (lane/linux may address those). No Substitute verification run on 11311c2f. |
+| timeouts | e9572e0b | items done | e9572e0b | **yes** (a0e1b56b) | no | CI on 15cb35e9 (the code tip; later commits are report-only) is baseline only: [Substitute verification](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43361365145) stops at "resolve third_party/comfy-desktop/src/main/lib/download.ts" on ubuntu (windows and macOS fail in the same step); [Sugar quality](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43361365413) ubuntu fails mypy "Found 22 errors in 11 files" and windows-latest was still finishing; [Release tooling](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43361365196) **success**. Review passed. The branch already contained integration 47d2ade4, and its 13 combined-tree hits are converted, not allowlisted. `ProgressGuard` fails only after 10 minutes with no progress at all, as a hang backstop, so elapsed time never decides a pass. Its 15 s patrol only re-checks progress. The strike tests now check withholding at the strike's own recorded date, not at a later real-clock "now". That's the same claim without the real clock. `count` still decides withholding. The lost-event message test moved into `qualification_time`'s stall test (the stall still returns the lock and fails the check). No sleeps added and no attribution trailers. Commit 69b848f1 ("Merge remote-tracking branch…") doesn't follow the commit format (minor). Unproven: setup_storage and crate tests on Windows (test link blocker); native qualification campaigns under the no-progress guard; `test_updater_qualification` on Windows. Its 240-minute CI job limit must win over lane/ci's 60 when lane/ci merges. |
+| canvas-flakes | 4a709007 | finished | 4a709007 | **yes** (e27622c5) | no | none |
+| ui | 0c68a2c7 | finished, converted | 0c68a2c7 | **yes** (d0ab3289) | no | Native: splash and caption images. |
+| retire | 13ff72df | item done | 13ff72df | **yes** (e8a83a7d) | no | Unchanged. |
+| fixer | a2a51446 | items done | a2a51446 | **yes** (00d6be71) | no | Unchanged. |
+| storage | e0fb0c7b | items done | e0fb0c7b | **yes** (d37b4821) | no | Unchanged. |
+| trust | b1609462 | items done | b1609462 | **yes** (138d1308) | no | Unchanged. |
+| host (+ host-d2w-draft) | 94ef3807 | items done except E6 | 94ef3807 | **yes** (04811a38) | no | Unchanged. Wiring to coord is pending. |
+| release | 3e05348e | items done | 3e05348e | **yes** (b4ea9dc4) | no | Unchanged. |
+| entry | 640e8f55 | items reported done | 640e8f55 | no | no | Unchanged; **still fails review** for the pass 1/2 reasons (C-6 departure; silent waits of up to 15 s or 3600 s). |
+| coord | 19d3f15b | items done except `update_report_export` | 19d3f15b | no | no | Unchanged. It contains non-green lane/ci (80c37dd3), and item 2 is unfinished. |
+| packinstall | d18856b6 | items reported done, with open gaps | d18856b6 | no | no | Unchanged; **still fails review** for the pass 3 reasons (no `PageFailed` verdict, so a broken pack is never restored and later updates block; the splash can wait up to 300 s with nothing on screen). |
+
+### Native Windows proofs (unproven here)
+
+Unchanged from pass 2, plus timeouts' native qualification campaigns under the no-progress guard.
+Every Windows-only test on integration stays unproven until `committed_dump_parser.lib` builds in
+CI.
+
 ## Pass 3 (2026-11-13)
 
 Tools that worked: git fetch/push over the proxy; the public Actions REST API through curl (runs,
