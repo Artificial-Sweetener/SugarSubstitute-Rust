@@ -968,7 +968,7 @@ rationale = "Native frame qualification accepts explicit backend/vendor/device s
 [[records]]
 path = "crates/sugarsubstitute-image-gpu/examples/composite_qualification.rs"
 owner = "sugarsubstitute-image-gpu"
-source_sha256 = "sha256:1c7fbddc7a2c91541cd6ac6df49dfd1ad273b53de75079bd63c5d41610bd30b0"
+source_sha256 = "sha256:6cc46a896758aa56c68a832cab803fd411f74352c128400bf865fdcce057957e"
 capabilities = ["arguments"]
 rationale = "The developer composite check accepts one explicit Vulkan vendor/device selector and resolves it through the production adapter catalog."
 

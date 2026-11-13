@@ -55,6 +55,7 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
         canvas.granted(self.child.canvas_backend(region.identity)).then_some(region)
     }
 
+    #[cfg(windows)]
     fn main_canvas_animating(&self) -> bool {
         self.canvas.as_ref().is_some_and(|canvas| canvas.animating())
     }
