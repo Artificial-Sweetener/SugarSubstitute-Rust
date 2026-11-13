@@ -29,6 +29,7 @@ impl HeadlessLifetime for Session {
             attempt.reserve(
                 &client,
                 self.cleanup.as_ref().ok_or("Update cleanup scope absent")?,
+                ScopeSpec { id: ScopeId::new(CHANNEL_SCOPE)?, deadline: None },
                 spec,
             )?;
         }

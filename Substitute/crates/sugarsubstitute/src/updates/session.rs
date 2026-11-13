@@ -22,6 +22,9 @@ type Result<T> = std::result::Result<T, Box<dyn Error>>;
 type Factory = Box<dyn FnOnce(&JobContext) -> io::Result<Option<Worker>> + Send>;
 use super::STEP;
 const CLEANUP: Duration = Duration::from_secs(15);
+/// Scope identities advance in creation order: cleanup 1 and work 2 at start, then the
+/// update-attempt channel's native scope, then a delegated engine's work and cleanup.
+pub(super) const CHANNEL_SCOPE: u64 = 3;
 
 /// Own preparation or one-shot verification; never retain application run, profile or ComfyUI custody.
 /// Native process containment must enforce the outer bound if an OS call cannot retire.
@@ -208,11 +211,11 @@ impl Session {
             if !self.closing && observed.progress == Progress::EngineReady {
                 let client = self.client.as_ref().ok_or("Update execution absent")?.clone();
                 let work = client.create_scope(
-                    ScopeSpec { id: ScopeId::new(3)?, deadline: None },
+                    ScopeSpec { id: ScopeId::new(CHANNEL_SCOPE + 1)?, deadline: None },
                     Some(self.work.as_ref().ok_or("Update scope absent")?),
                 )?;
                 let cleanup = client.create_scope(
-                    ScopeSpec { id: ScopeId::new(4)?, deadline: None },
+                    ScopeSpec { id: ScopeId::new(CHANNEL_SCOPE + 2)?, deadline: None },
                     Some(self.cleanup.as_ref().ok_or("Update cleanup scope absent")?),
                 )?;
                 self.engine =

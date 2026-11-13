@@ -63,7 +63,7 @@ impl Engine {
             work,
             cleanup,
             closing: None,
-            next_scope: 5,
+            next_scope: super::session::CHANNEL_SCOPE + 3,
             succeeded: false,
             attempt: None,
             attempt_outcome: None,
