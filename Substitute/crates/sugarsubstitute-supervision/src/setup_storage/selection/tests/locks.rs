@@ -124,7 +124,7 @@ fn exercise(
             let bound = Moment::from_nanos(0).checked_add(WAIT)?;
             let conflicts = held == Held::Exclusive || matches!(operation, Operation::Publish);
             if conflicts {
-                driver.clock.wait_for_sleeper(bound);
+                driver.paused(bound)?;
                 match ending {
                     Ending::Release => drop(holder.take()),
                     Ending::Deadline => driver.clock.advance_to(bound)?,

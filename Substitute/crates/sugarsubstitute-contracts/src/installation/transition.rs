@@ -206,6 +206,21 @@ impl InstallationRecord {
         next.validate()?;
         Ok(next)
     }
+    /// Rebuild the authoritative record from this last known good copy after the published record
+    /// was found damaged or missing. Acceptance, the retained generation, strikes, rollback and
+    /// repair are kept, so only releases this installation accepted can start. Any candidate is
+    /// dropped, because a copy may predate its trial's verdict; the next update check prepares it
+    /// again. The abandoned-trial streak goes with it. The revision advances so a writer still
+    /// holding the copy's value cannot publish over the rebuilt record.
+    /// # Errors
+    /// `Capacity` on revision exhaustion.
+    pub fn restored(&self) -> Result<Self, Rejection> {
+        let mut next = self.advance()?;
+        next.candidate = None;
+        next.unwitnessed = None;
+        next.validate()?;
+        Ok(next)
+    }
     /// Abandon preparation without marking a user's cancelled download as a broken release.
     /// The adapter must stop and observe the preparation worker before using this proposal.
     /// # Errors

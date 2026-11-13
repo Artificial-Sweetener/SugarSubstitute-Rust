@@ -3,6 +3,7 @@
 //! Exercise version transitions, restart boundaries and hostile durable input without native fakes.
 use super::*;
 mod fallback;
+mod restoration;
 mod strikes;
 mod supersession;
 /// UTC Unix seconds the transitions under test observe, unless a test moves time itself.

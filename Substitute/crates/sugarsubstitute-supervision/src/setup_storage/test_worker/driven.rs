@@ -41,6 +41,16 @@ pub(crate) struct Driver<'a> {
     cancel: &'a dyn Fn(),
 }
 impl Driver<'_> {
+    /// Block until the job parks a wait for exactly `deadline` on its clock. A job that ends
+    /// first, for example because it failed before it waited, fails the test with an error here,
+    /// and [`run_driven`] reports the job's own result ahead of it; the test never hangs.
+    pub(crate) fn paused(&self, deadline: Moment) -> TestResult {
+        if self.clock.wait_for_sleeper_or_end(deadline) {
+            Ok(())
+        } else {
+            Err(format!("The job ended before it paused until {deadline:?}").into())
+        }
+    }
     /// Request cancellation of the running storage job.
     pub(crate) fn cancel(&self) {
         (self.cancel)();
@@ -66,6 +76,7 @@ pub(crate) fn run_driven(
     let observed = Arc::new(Mutex::new(None));
     let worker_observed = observed.clone();
     let worker_handoff = handoff.clone();
+    let worker_clock = clock.clone();
     let mut job = client.submit_blocking(
         &scope,
         JobSpec {
@@ -78,8 +89,9 @@ pub(crate) fn run_driven(
         },
         move |context| {
             let result = body(&context, &worker_handoff);
-            worker_handoff.reach(u32::MAX);
             *crate::registry::lock(&worker_observed) = Some(result);
+            worker_handoff.reach(u32::MAX);
+            worker_clock.mark_work_ended();
             Ok::<_, io::Error>(())
         },
     )?;
@@ -108,4 +120,16 @@ pub(crate) fn run_driven(
         JobOutcome::Failure(cause) => Err(cause.into()),
         other => Err(format!("Unexpected storage outcome: {:?}", other.kind()).into()),
     }
+}
+
+/// A job that fails before it waits fails its test with its own error instead of hanging it.
+#[test]
+fn a_job_that_fails_before_it_pauses_fails_the_test_with_its_error() {
+    let outcome = run_driven(
+        1024 * 1024,
+        |_, _| Err("injected early failure".into()),
+        |driver| driver.paused(Moment::from_nanos(5)),
+    );
+    let failure = outcome.err().map(|cause| cause.to_string());
+    assert_eq!(failure.as_deref(), Some("injected early failure"));
 }

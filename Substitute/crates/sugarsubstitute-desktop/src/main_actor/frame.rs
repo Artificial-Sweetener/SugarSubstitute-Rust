@@ -3,6 +3,7 @@
 //! Configure the installed frontend's owned desktop frame through presentation protocol one.
 
 use super::*;
+use crate::main_caption::{CAPTION_WIDTH, TITLEBAR_HEIGHT};
 use crate::main_readiness_types::ProbeTarget;
 use serde::Deserialize;
 use wry::WebViewExtWindows;
@@ -34,8 +35,8 @@ impl Receipt {
     /// Reject version, geometry or native-theme mismatches before releasing mutation custody.
     pub(super) fn validate(&self, dark: bool) -> Result<(), DesktopError> {
         if self.schema_version != 1
-            || self.caption_width != 138
-            || self.titlebar_height != 34
+            || self.caption_width != CAPTION_WIDTH
+            || self.titlebar_height != TITLEBAR_HEIGHT
             || self.dark_theme != dark
         {
             return Err(DesktopError::message(
@@ -91,18 +92,21 @@ impl MainActor {
     }
 }
 
-/// Fill the client area in physical pixels; web-owned tabs share the native caption's first row.
-pub(super) fn browser_bounds(width: u32, height: u32) -> wry::Rect {
+/// Fill a `width` by `height` physical-pixel client area from row `top` down. With `top` zero
+/// the page's own title bar row shares the native caption strip; a nonzero `top` leaves the
+/// strip to caption peers the page does not reserve room for.
+pub(super) fn browser_bounds(width: u32, height: u32, top: u32) -> wry::Rect {
+    let top = top.min(height.saturating_sub(1));
     wry::Rect {
-        position: wry::dpi::PhysicalPosition::new(0, 0).into(),
-        size: wry::dpi::PhysicalSize::new(width.max(1), height.max(1)).into(),
+        position: wry::dpi::PhysicalPosition::new(0_u32, top).into(),
+        size: wry::dpi::PhysicalSize::new(width.max(1), (height - top).max(1)).into(),
     }
 }
 
 /// Invoke the supported presentation owner; no DOM selectors or copied frontend controls live here.
 fn parameters(target: ProbeTarget, dark: bool) -> Result<String, DesktopError> {
     let expression = format!(
-        "(()=>{{const api=window.SugarCubes;if(typeof api?.configureDesktopFrame!=='function')throw new Error('SugarCubes desktop frame protocol 1 is unavailable.');return JSON.stringify(api.configureDesktopFrame({{schemaVersion:1,captionWidth:138,titlebarHeight:34,darkTheme:{dark}}}));}})()"
+        "(()=>{{const api=window.SugarCubes;if(typeof api?.configureDesktopFrame!=='function')throw new Error('SugarCubes desktop frame protocol 1 is unavailable.');return JSON.stringify(api.configureDesktopFrame({{schemaVersion:1,captionWidth:{CAPTION_WIDTH},titlebarHeight:{TITLEBAR_HEIGHT},darkTheme:{dark}}}));}})()"
     );
     serde_json::to_string(&serde_json::json!({
         "expression":expression,

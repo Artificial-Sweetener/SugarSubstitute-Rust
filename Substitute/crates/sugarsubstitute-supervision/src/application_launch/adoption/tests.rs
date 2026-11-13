@@ -94,10 +94,10 @@ fn a_silent_child_loses_its_handoff_and_is_ended_after_the_grace() -> TestResult
         |driver| {
             driver.handoff.wait(1);
             let bound = Moment::from_nanos(BOUNDS.adoption.as_nanos() as u64);
-            driver.clock.wait_for_sleeper(bound);
+            driver.paused(bound)?;
             driver.clock.advance_to(bound)?;
             let grace = bound.checked_add(BOUNDS.grace)?;
-            driver.clock.wait_for_sleeper(grace);
+            driver.paused(grace)?;
             driver.clock.advance_to(grace)?;
             Ok(())
         },
@@ -132,7 +132,7 @@ fn a_cancelled_wait_gives_up_the_handoff_and_reports_uncertain_creation() -> Tes
         },
         |driver| {
             driver.handoff.wait(1);
-            driver.clock.wait_for_sleeper(Moment::from_nanos(BOUNDS.adoption.as_nanos() as u64));
+            driver.paused(Moment::from_nanos(BOUNDS.adoption.as_nanos() as u64))?;
             driver.cancel();
             Ok(())
         },

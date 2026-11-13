@@ -28,6 +28,29 @@ impl VerifiedApplication {
     pub(super) fn require_installed_launch(&self) -> io::Result<()> {
         self.payload.require_installed_launch()
     }
+    /// Whether `generation`'s inventory is still on disk and matches its recorded package,
+    /// without verifying the payload or its protection. A missing folder or inventory, or a
+    /// different digest, is `false`. This only chooses which release is worth starting;
+    /// [`Self::open`] still verifies the chosen one in full.
+    /// # Errors
+    /// Other storage failures, such as an inventory another program holds open.
+    pub(super) fn inventory_matches(
+        installation: &Directory,
+        generation: &Generation,
+        context: &JobContext,
+    ) -> io::Result<bool> {
+        check(context)?;
+        let path = installation.path().join("releases").join(generation.id.as_str());
+        let opened = Directory::open(&path, false)
+            .and_then(|directory| directory.read(inventory::INSTALLED_MANIFEST));
+        let mut file = match opened {
+            Ok(file) => file,
+            Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(false),
+            Err(cause) => return Err(cause),
+        };
+        let bytes = files::read_bounded(&mut file, MAX_MANIFEST_BYTES)?;
+        Ok(format!("{:x}", Sha256::digest(&bytes)) == generation.package.as_str())
+    }
     /// Resolve only the recorded generation under its pinned installation, offline.
     /// Keep this owner alive while its executable is used; neither a path nor a hash pins bytes.
     pub(super) fn open(

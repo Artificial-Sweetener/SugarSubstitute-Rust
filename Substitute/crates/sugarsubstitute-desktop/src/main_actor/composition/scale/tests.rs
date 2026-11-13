@@ -13,6 +13,8 @@ struct Fake {
     scale: Cell<f64>,
     zoom: f64,
     size: Cell<(i32, i32)>,
+    /// The bounds' top within the host window.
+    top: Cell<i32>,
     sets: Cell<u32>,
     failing: bool,
 }
@@ -23,6 +25,7 @@ impl Fake {
             scale: Cell::new(scale),
             zoom,
             size: Cell::new(size),
+            top: Cell::new(0),
             sets: Cell::new(0),
             failing: false,
         }
@@ -45,15 +48,16 @@ impl Browser for Fake {
         Ok(self.zoom)
     }
     fn bounds(&self) -> windows::core::Result<RECT> {
-        let (right, bottom) = self.size.get();
-        Ok(RECT { left: 0, top: 0, right, bottom })
+        let (right, height) = self.size.get();
+        let top = self.top.get();
+        Ok(RECT { left: 0, top, right, bottom: top + height })
     }
 }
 
 #[test]
 fn a_dpi_change_withdraws_shown_pixels_but_a_resize_keeps_them() -> TestResult {
     let browser = Fake::new(1.0, 1.0, (800, 600));
-    let shown = allocation(&browser)?;
+    let shown = allocation(&browser, POINT::default())?;
     assert_eq!(
         shown,
         WebViewAllocation {
@@ -65,12 +69,12 @@ fn a_dpi_change_withdraws_shown_pixels_but_a_resize_keeps_them() -> TestResult {
 
     rescale(&browser, 1.5)?;
     assert_eq!(browser.sets.get(), 1);
-    let rescaled = allocation(&browser)?;
+    let rescaled = allocation(&browser, POINT::default())?;
     assert_eq!(rescaled.physical_pixels_per_css_pixel, 1.5);
     assert!(stale(Some(shown), rescaled), "density alone invalidates shown pixels");
 
     browser.size.set((1200, 900));
-    let resized = allocation(&browser)?;
+    let resized = allocation(&browser, POINT::default())?;
     assert_eq!(resized.bounds, PhysicalRect { x: 0, y: 0, width: 1200, height: 900 });
     assert!(
         !stale(Some(rescaled), resized),
@@ -91,9 +95,23 @@ fn a_moved_browser_origin_withdraws_shown_pixels() {
 }
 
 #[test]
+fn the_allocation_starts_where_the_host_window_places_the_page() -> TestResult {
+    let browser = Fake::new(1.75, 1.0, (2240, 1340));
+    let below_caption = allocation(&browser, POINT { x: 0, y: 60 })?;
+    assert_eq!(below_caption.bounds, PhysicalRect { x: 0, y: 60, width: 2240, height: 1340 });
+    let filling = allocation(&browser, POINT::default())?;
+    assert!(stale(Some(below_caption), filling), "the page moving back withdraws shown pixels");
+    assert!(allocation(&browser, POINT { x: 0, y: i32::MAX }).is_ok());
+    let browser = Fake::new(1.0, 1.0, (10, 10));
+    browser.top.set(1);
+    assert!(allocation(&browser, POINT { x: 0, y: i32::MAX }).is_err(), "an overflowing origin");
+    Ok(())
+}
+
+#[test]
 fn page_zoom_multiplies_the_rasterization_scale() -> TestResult {
     let browser = Fake::new(1.25, 1.5, (100, 50));
-    assert_eq!(allocation(&browser)?.physical_pixels_per_css_pixel, 1.875);
+    assert_eq!(allocation(&browser, POINT::default())?.physical_pixels_per_css_pixel, 1.875);
     Ok(())
 }
 
@@ -107,5 +125,5 @@ fn unrepresentable_scales_and_controller_failures_fail_closed() {
     let failing = Fake { failing: true, ..Fake::new(1.0, 1.0, (100, 50)) };
     assert!(rescale(&failing, 2.0).is_err());
     let inverted = Fake::new(1.0, 1.0, (-1, 50));
-    assert!(allocation(&inverted).is_err());
+    assert!(allocation(&inverted, POINT::default()).is_err());
 }

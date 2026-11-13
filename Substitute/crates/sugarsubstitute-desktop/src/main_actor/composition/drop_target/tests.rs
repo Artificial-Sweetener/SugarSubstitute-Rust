@@ -153,7 +153,7 @@ fn real_registration_owns_the_window_until_revoked_and_declines_without_a_browse
     let window = HiddenWindow::new()?;
     let fixture = fixture_events(Rc::new(Cell::new(0)))?;
     let state = Rc::new(State {
-        window: window.0,
+        host: window.0,
         controller: RefCell::new(None),
         events: fixture.events.clone(),
         active: Cell::new(true),
@@ -196,7 +196,7 @@ fn an_export_refuses_its_own_drops_and_holds_retirement_until_it_returns()
     let wakes = Rc::new(Cell::new(0));
     let fixture = fixture_events(wakes.clone())?;
     let state = Rc::new(State {
-        window: HWND::default(),
+        host: HWND::default(),
         controller: RefCell::new(None),
         events: fixture.events.clone(),
         active: Cell::new(true),
