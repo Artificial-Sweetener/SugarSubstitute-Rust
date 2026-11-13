@@ -20,6 +20,13 @@
 //! - WM_ENDSESSION(FALSE) means the session continues: block reasons are removed and a
 //!   [`SessionEndSignal::Cancelled`] is reported.
 //!
+//! The thread-target subclass also keeps Tao's WM_PAINT handler from being re-entered. Tao uses
+//! that WM_PAINT to flush the paint messages of its windows and asserts it is never nested, but
+//! the window is a visible (layered) popup, so another process repainting every window can send
+//! it a WM_PAINT synchronously while the flush is peeking messages, and the assertion then ends
+//! the process. A WM_PAINT arriving while one is being handled is validated and answered here;
+//! the outer handler finishes the flush.
+//!
 //! Nothing blocks or waits inside a window procedure. Every call runs on the UI thread that
 //! owns these windows.
 use crate::{DesktopError, windows_subclass};
@@ -30,6 +37,7 @@ use std::{
 use windows::{
     Win32::{
         Foundation::{HMODULE, HWND, LPARAM, LRESULT, TRUE, WPARAM},
+        Graphics::Gdi::ValidateRect,
         System::{
             LibraryLoader::GetModuleHandleW, Shutdown::ShutdownBlockReasonCreate,
             Shutdown::ShutdownBlockReasonDestroy, Threading::GetCurrentThreadId,
@@ -38,7 +46,7 @@ use windows::{
             Shell::DefSubclassProc,
             WindowsAndMessaging::{
                 EnumThreadWindows, GCLP_HMODULE, GetClassLongPtrW, GetClassNameW, GetParent,
-                IsWindowVisible, WM_ENDSESSION, WM_NCDESTROY, WM_QUERYENDSESSION,
+                IsWindowVisible, WM_ENDSESSION, WM_NCDESTROY, WM_PAINT, WM_QUERYENDSESSION,
             },
         },
     },
@@ -325,7 +333,32 @@ unsafe extern "system" fn target_proc(
     data: usize,
 ) -> LRESULT {
     // SAFETY: Win32 calls this only for the installed thread-target subclass.
-    unsafe { answer(hwnd, message, wparam, lparam, data, false, Some(target_proc)) }
+    let forward =
+        || unsafe { answer(hwnd, message, wparam, lparam, data, false, Some(target_proc)) };
+    if message == WM_PAINT { paint_once(hwnd, forward) } else { forward() }
+}
+
+thread_local! {
+    /// Whether this UI thread is inside the thread target's WM_PAINT handler.
+    static TARGET_PAINTING: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Forward one thread-target WM_PAINT to Tao at a time; see the module documentation. A nested
+/// one is validated so Windows stops asking, and answered without reaching Tao.
+fn paint_once(hwnd: HWND, forward: impl FnOnce() -> LRESULT) -> LRESULT {
+    struct Painting;
+    impl Drop for Painting {
+        fn drop(&mut self) {
+            TARGET_PAINTING.set(false);
+        }
+    }
+    if TARGET_PAINTING.replace(true) {
+        // SAFETY: Validating a window of this thread has no other effect; a stale handle fails.
+        let _ = unsafe { ValidateRect(Some(hwnd), None) };
+        return LRESULT(0);
+    }
+    let _painting = Painting;
+    forward()
 }
 
 unsafe extern "system" fn window_proc(
