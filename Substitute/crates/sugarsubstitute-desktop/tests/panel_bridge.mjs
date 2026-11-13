@@ -394,6 +394,44 @@ test('bounded control FIFO coalesces kinds and refusal preserves a newer pending
   assert.equal(f.receipt('g', 'c', 6), true);
   assert.equal(f.sent.length, 5);
 });
+const updates = (type, extra = {}) => ({ protocol: 'sugarcubes.updates', version: 1, session, type, ...extra });
+const posted = f => f.sent.map(value => JSON.parse(value.slice(value.indexOf(':', 4) + 1)));
+test('update requests ride the control lane and every named request keeps its place', () => {
+  const f = fixture();
+  f.receipt('g', 'c', 1);
+  f.bridge.send(updates('watch'));
+  f.bridge.send(updates('check', { request: 'check-1' }));
+  f.bridge.send(updates('check', { request: 'check-2' }));
+  f.bridge.send(updates('restart', { request: 'restart-1', when: 'now' }));
+  f.bridge.send(control('pong', { connected: true }));
+  for (let ticket = 2; ticket <= 5; ticket++) { f.receipt('a', 'c', ticket - 1); f.receipt('g', 'c', ticket); }
+  assert.deepEqual(posted(f), [updates('watch'), updates('check', { request: 'check-1' }),
+    updates('check', { request: 'check-2' }), updates('restart', { request: 'restart-1', when: 'now' }),
+    control('pong', { connected: true })]);
+  assert.ok(f.sent.every(value => value.startsWith('1:c:')));
+});
+test('a refused named update request is retried in place and the named backlog is bounded', () => {
+  const f = fixture();
+  f.receipt('g', 'c', 1);
+  f.bridge.send(updates('check', { request: 'check-1' }));
+  // check-1 is in flight; sixteen more wait behind it.
+  for (let index = 2; index <= 17; index++) f.bridge.send(updates('check', { request: `check-${index}` }));
+  assert.throws(() => f.bridge.send(updates('check', { request: 'check-18' })), error => transportError(error, 'capacity'));
+  assert.equal(f.receipt('r', 'c', 1), true);
+  f.receipt('g', 'c', 2);
+  assert.deepEqual(posted(f).map(value => value.request), ['check-1', 'check-1']);
+});
+test('update states and answers are version-one notifications for the current session only', () => {
+  const f = fixture();
+  const state = updates('state', { revision: 1, update: {} });
+  for (const value of [updates('watch'), updates('check', { request: 'c' }), { ...state, version: 3 },
+    { ...state, session: 'another-session' }])
+    assert.equal(f.deliver(value), false);
+  for (const value of [state, updates('accepted', { request: 'c' }),
+    updates('rejected', { request: 'c', reason: 'busy' })])
+    assert.equal(f.deliver(value), true);
+  assert.deepEqual(f.received.map(value => value.type), ['state', 'accepted', 'rejected']);
+});
 test('permanent malformed control consumption does not replay or settle the ordinary request', () => {
   const f = fixture();
   f.receipt('g', 'o', 1);

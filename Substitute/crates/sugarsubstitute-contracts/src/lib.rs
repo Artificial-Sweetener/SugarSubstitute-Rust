@@ -15,6 +15,7 @@ pub mod desktop_session;
 pub mod diagnostics;
 pub mod execution;
 pub mod host;
+pub mod host_updates;
 pub mod incident;
 pub mod installation;
 pub mod instance_conflict;

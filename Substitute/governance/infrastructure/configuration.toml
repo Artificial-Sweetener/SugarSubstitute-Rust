@@ -975,7 +975,7 @@ rationale = "The developer composite check accepts one explicit Vulkan vendor/de
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:a7ba42f2c9fa994ddbff0a7a64cdcbd2d9b6065ad7ece3f75de8634d90c49370"
+source_sha256 = "sha256:113b2c25548f0203e07b5592f4c7783310ec4a17fdc82ba7130fcf0a01950e8f"
 capabilities = ["arguments"]
 rationale = "Accept an optional source fixture path to prove regressions against the prior transport implementation."
 

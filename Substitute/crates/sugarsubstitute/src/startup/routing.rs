@@ -39,6 +39,11 @@ impl<B: StartupBackend> StartupHost<B> {
         let composition = Ok(());
         #[cfg(all(windows, any(feature = "windows-native-host", test)))]
         self.govern_memory();
+        #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+        if let Err(error) = self.updates.refresh() {
+            tracing::warn!(operation = "updates_state", %error,
+                "The page's update state could not be funded; it keeps the previous state");
+        }
         #[cfg(windows)]
         let canvas = self.canvas.as_mut().map_or(Ok(()), canvas::EmbeddedCanvas::poll);
         #[cfg(not(windows))]
@@ -144,6 +149,10 @@ impl<B: StartupBackend> StartupHost<B> {
                 };
                 #[cfg(all(windows, any(feature = "windows-native-host", test)))]
                 let Some(observation) = self.observe_memory(observation)? else {
+                    return Ok(());
+                };
+                #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+                let Some(observation) = self.observe_updates(observation)? else {
                     return Ok(());
                 };
                 #[cfg(all(windows, feature = "native-composition"))]
@@ -362,6 +371,35 @@ impl<B: StartupBackend> StartupHost<B> {
             // A failed sample keeps the previous allowance; the application stays healthy.
             Err(error) => tracing::warn!(operation = "memory_budget_sample", %error,
                 "System memory could not be sampled; the previous cache allowance remains"),
+        }
+    }
+
+    /// Consume the page's update requests and retire its session with its navigation; returns
+    /// any other observation unchanged.
+    #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+    fn observe_updates(
+        &mut self,
+        observation: DesktopStartupObservation,
+    ) -> Result<Option<DesktopStartupObservation>, Box<dyn Error>> {
+        match observation {
+            DesktopStartupObservation::UpdatesMessage(observed) => {
+                let (identity, message, lease, claim) = observed.into_parts();
+                self.updates.observe(identity, message, lease, claim)?;
+                Ok(None)
+            }
+            DesktopStartupObservation::MainRetired(identity) => {
+                self.updates.retire(identity);
+                Ok(Some(DesktopStartupObservation::MainRetired(identity)))
+            }
+            DesktopStartupObservation::MainAbsent(identity) => {
+                self.updates.retire(identity);
+                Ok(Some(DesktopStartupObservation::MainAbsent(identity)))
+            }
+            DesktopStartupObservation::MainReloadRequested { identity, reason } => {
+                self.updates.retire(identity);
+                Ok(Some(DesktopStartupObservation::MainReloadRequested { identity, reason }))
+            }
+            other => Ok(Some(other)),
         }
     }
 

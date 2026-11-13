@@ -75,7 +75,9 @@ fn ready_is_answered_with_the_description_of_what_this_browser_is_served() -> Re
         )?;
         let configuration = panel.take_command().ok_or("Configuration missing")?;
         let description = configuration.description().ok_or("Description missing")?;
-        for protocol in [HostProtocol::PANEL, HostProtocol::CANVAS, HostProtocol::MEMORY] {
+        for protocol in
+            [HostProtocol::PANEL, HostProtocol::CANVAS, HostProtocol::MEMORY, HostProtocol::UPDATES]
+        {
             assert!(description.serves(protocol), "{protocol:?}");
         }
         assert!(description.declares(HostCapability::SYSTEM_ACCENT));

@@ -16,7 +16,9 @@ fn session() -> Result<PanelSession> {
 fn every_browser_is_told_the_protocols_served_and_the_system_accent() -> Result {
     for hosting in [MainHosting::Composition, MainHosting::Windowed] {
         let description = description(hosting)?;
-        for protocol in [HostProtocol::PANEL, HostProtocol::CANVAS, HostProtocol::MEMORY] {
+        for protocol in
+            [HostProtocol::PANEL, HostProtocol::CANVAS, HostProtocol::MEMORY, HostProtocol::UPDATES]
+        {
             assert!(description.serves(protocol), "{hosting:?} {protocol:?}");
         }
         assert!(description.declares(HostCapability::SYSTEM_ACCENT), "{hosting:?}");
@@ -44,6 +46,7 @@ fn the_description_names_no_host_styles_and_encodes_as_the_shared_schema_require
                 { "name": "sugarcubes.panel", "version": 3 },
                 { "name": "sugarcubes.canvas", "version": 3 },
                 { "name": "sugarcubes.memory", "version": 1 },
+                { "name": "sugarcubes.updates", "version": 1 },
             ],
             "capabilities": [{ "name": "presentation.system-accent" }, { "name": "output.host-surface" }],
         })
