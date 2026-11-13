@@ -52,7 +52,49 @@ pub use trial::{RestoreReason, Restored, TrialEnding, TrialEvent, UNWITNESSED_EN
 use crate::durable_storage::pack_tree::PackTree;
 use ownership::{PackOwnership, inspect_pack_folder, installed_file_digests, read_identity};
 use replacement::{ReplacementPlan, TrackedReplacement};
-use std::{io, path::Path};
+use std::{
+    io::{self, Read, Seek},
+    path::Path,
+};
+
+/// The Comfy Registry id of SugarCubes, which is also its installed folder name.
+pub const SUGARCUBES_PACK_ID: &str = "SugarCubes";
+
+/// Where an application package carries SugarCubes: its registry archive, byte-identical to
+/// the one published to the Comfy Registry and attached to its GitHub release.
+pub const SUGARCUBES_PACKAGE_ARCHIVE: &str = "sugarcubes/SugarCubes.zip";
+
+/// Write a registry archive into `folder`, an empty folder the caller created and will publish,
+/// exactly as a registry install leaves a pack: the archive's members at the root, `.tracking`
+/// listing them in archive order, and the digest record bound to that `.tracking`.
+///
+/// `source` is read in bounded chunks. The archive must be the pack named `pack_id`.
+///
+/// # Errors
+/// Returns the shared refusal for an invalid archive or another pack, or a filesystem
+/// failure; the caller discards the folder.
+pub fn write_registry_install<R: Read + Seek>(
+    source: R,
+    folder: &Path,
+    pack_id: &str,
+) -> Result<PackIdentity> {
+    let tree = PackTree::at(folder)?;
+    let extracted = archive::extract_registry_source(source, &tree, ArchiveLimits::default())?;
+    let identity = read_identity(&tree)?;
+    if !identity.is_pack(pack_id) {
+        return Err(PackInstallError::format(
+            ErrorCode::PackIdentity,
+            "The archive is not the expected pack.",
+        ));
+    }
+    ownership::write_ownership_records(
+        &tree,
+        &extracted.entries,
+        &identity.version.to_string(),
+        &extracted.file_digests,
+    )?;
+    Ok(identity)
+}
 
 /// What an installed pack folder is to this host.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -145,10 +187,10 @@ impl PackTransaction {
     /// # Errors
     /// Returns the shared refusal for an invalid archive or a changed folder, or `busy` when
     /// an earlier replacement is unsettled; a failed replacement is restored first.
-    pub fn install(
+    pub fn install<R: Read + Seek>(
         &self,
         folder: &PackFolder,
-        archive: &[u8],
+        archive: R,
         pack_id: &str,
         offer: &ReleaseOffer,
         installed: &InstalledDigests,
@@ -160,16 +202,16 @@ impl PackTransaction {
         cleaned.map_err(PackInstallError::from)
     }
 
-    fn install_staged(
+    fn install_staged<R: Read + Seek>(
         &self,
         folder: &PackFolder,
-        archive: &[u8],
+        archive: R,
         pack_id: &str,
         offer: &ReleaseOffer,
         installed: &InstalledDigests,
     ) -> Result<()> {
         let extracted =
-            archive::extract_registry_archive(archive, &self.staging, ArchiveLimits::default())?;
+            archive::extract_registry_source(archive, &self.staging, ArchiveLimits::default())?;
         let identity = read_identity(&self.staging)?;
         if !identity.is_pack(pack_id) || identity.version != offer.version {
             return Err(PackInstallError::format(

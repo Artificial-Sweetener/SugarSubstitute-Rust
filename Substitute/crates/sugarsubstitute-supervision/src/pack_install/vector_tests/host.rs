@@ -150,3 +150,31 @@ fn an_unsettled_transaction_refuses_another_install() -> TestResult {
     assert_eq!(code(&refused), "busy");
     Ok(())
 }
+
+#[test]
+fn a_fresh_install_is_owned_and_refuses_another_pack() -> TestResult {
+    let root = tempfile::tempdir()?;
+    let pack = install_registry_pack(root.path(), &pack_files("1.0.0"))?;
+    let tracking = std::fs::read(pack.join(TRACKING_FILE_NAME))?;
+    assert!(String::from_utf8(tracking.clone())?.contains("sugarcubes/core.py"));
+    match PackFolder::at(&pack)?.ownership()? {
+        Ownership::Owned(identity) => assert_eq!(identity.version.to_string(), "1.0.0"),
+        other => return Err(format!("not owned: {other:?}").into()),
+    }
+    let recorded =
+        ownership::read_digest_record(&PackTree::at(&pack)?, "1.0.0", &parse_tracking(&tracking)?)?;
+    assert_eq!(recorded.map(|files| files.len()), Some(pack_files("1.0.0").len()));
+    let mut other = pack_files("1.0.0");
+    other.insert(
+        "pyproject.toml".into(),
+        "[project]\nname = \"Other\"\nversion = \"1.0.0\"\n".into(),
+    );
+    let archive = zip_bytes(&file_members(&other))?;
+    let refused = write_registry_install(
+        std::io::Cursor::new(archive),
+        &root.path().join("other"),
+        SUGARCUBES_PACK_ID,
+    );
+    assert_eq!(refused.err().as_ref().map(code), Some("pack-identity"));
+    Ok(())
+}

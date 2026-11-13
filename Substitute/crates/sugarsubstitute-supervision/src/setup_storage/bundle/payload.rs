@@ -157,6 +157,23 @@ impl Payload {
         self.inventory.release()
     }
 
+    /// Read one verified retained file in place, for a consumer that streams it.
+    ///
+    /// The reader uses positioned reads on the retained handle, so it never moves a shared
+    /// file pointer, and it reads only the authenticated length.
+    /// # Errors
+    /// Rejects a path the authenticated inventory does not list.
+    pub(in crate::setup_storage) fn reader(&self, path: &str) -> io::Result<PayloadReader<'_>> {
+        let (entry, input) = self
+            .inventory
+            .entries()
+            .iter()
+            .zip(&self.inputs)
+            .find(|(entry, _)| entry.path() == path)
+            .ok_or_else(|| invalid("The package does not hold the requested file"))?;
+        Ok(PayloadReader { file: &input.file, offset: 0, length: entry.bytes() })
+    }
+
     /// Copy retained source bytes using create-only publication; existing exact files resume.
     /// The caller supplies the destination's protection policy on the admitted storage worker.
     pub(in crate::setup_storage) fn copy(
@@ -256,6 +273,39 @@ pub(super) fn hash(file: &mut File, context: &JobContext) -> io::Result<String> 
     }
     file.seek(SeekFrom::Start(0))?;
     Ok(digest.finish_hex())
+}
+
+/// A seekable view of one verified retained payload file, bounded to its authenticated length.
+pub(in crate::setup_storage) struct PayloadReader<'a> {
+    file: &'a File,
+    offset: u64,
+    length: u64,
+}
+
+impl Read for PayloadReader<'_> {
+    fn read(&mut self, bytes: &mut [u8]) -> io::Result<usize> {
+        let remaining = self.length.saturating_sub(self.offset);
+        let wanted = bytes.len().min(usize::try_from(remaining).unwrap_or(usize::MAX));
+        if wanted == 0 {
+            return Ok(0);
+        }
+        let count = self.file.seek_read(&mut bytes[..wanted], self.offset)?;
+        self.offset += count as u64;
+        Ok(count)
+    }
+}
+
+impl Seek for PayloadReader<'_> {
+    fn seek(&mut self, position: SeekFrom) -> io::Result<u64> {
+        let next = match position {
+            SeekFrom::Start(offset) => Some(offset),
+            SeekFrom::End(delta) => self.length.checked_add_signed(delta),
+            SeekFrom::Current(delta) => self.offset.checked_add_signed(delta),
+        };
+        let next = next.ok_or_else(|| invalid("Payload seek outside the file"))?;
+        self.offset = next;
+        Ok(next)
+    }
 }
 
 /// Require the cache owner's original lease even when a payload arrived through a drive alias.

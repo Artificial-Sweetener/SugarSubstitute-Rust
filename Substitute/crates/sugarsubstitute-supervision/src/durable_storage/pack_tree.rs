@@ -149,7 +149,9 @@ impl PackTree {
         self.replace_with(relative, |output| io::copy(&mut input, output).map(|_| ()))
     }
 
-    fn replace_with(
+    /// Durably replace one file with what `fill` writes to it; a failed fill leaves the
+    /// previous file in place.
+    pub(crate) fn replace_with(
         &self,
         relative: &str,
         fill: impl FnOnce(&mut File) -> io::Result<()>,

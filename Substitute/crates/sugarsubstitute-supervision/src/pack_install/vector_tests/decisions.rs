@@ -111,24 +111,14 @@ impl FakeSources {
 }
 
 /// Install `files` the way this format leaves a registry install: files, `.tracking`, record.
+/// Install `files` as the registry install SugarCubes and the host's setup both write.
 pub(super) fn install_registry_pack(
     root: &Path,
     files: &BTreeMap<String, String>,
 ) -> std::result::Result<PathBuf, Failure> {
-    let pack = root.join("custom_nodes").join("SugarCubes");
-    let extracted = archive::extract_registry_archive(
-        &zip_bytes(&file_members(files))?,
-        &PackTree::at(&pack)?,
-        ArchiveLimits::default(),
-    )?;
-    let version =
-        PackIdentity::parse(files.get("pyproject.toml").ok_or("no pyproject")?.as_bytes())?.version;
-    ownership::write_ownership_records(
-        &PackTree::at(&pack)?,
-        &extracted.entries,
-        &version.to_string(),
-        &extracted.file_digests,
-    )?;
+    let pack = root.join("custom_nodes").join(SUGARCUBES_PACK_ID);
+    let archive = zip_bytes(&file_members(files))?;
+    write_registry_install(std::io::Cursor::new(archive), &pack, SUGARCUBES_PACK_ID)?;
     Ok(pack)
 }
 

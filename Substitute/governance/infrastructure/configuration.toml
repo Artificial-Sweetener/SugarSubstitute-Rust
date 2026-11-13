@@ -149,7 +149,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/inventory.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:733b87bf95a51bb6137932fa0a19f4ec2b9eb83045ab8f2b55fd4b173c7b36a2"
+source_sha256 = "sha256:01df31054dbbc8d058ee8f3fa7ee4cdf1df474c50f62ca1ec74d3668b79762de"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -506,7 +506,7 @@ rationale = "Build-time Cargo OUT_DIR selects the generated immutable diagnostic
 [[records]]
 path = "crates/sugarsubstitute/src/setup/worker/downloads/native_tests/fixture.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:aa4d1971e6b7f9ad74d766710b983086f852d261cc794c181d8a2ad039db7c21"
+source_sha256 = "sha256:a886458a79ca6d5c9d9fa03678eb7b8a40fb0ebc7d17f6d0688323e520afa25f"
 capabilities = ["environment"]
 rationale = "Native junction qualification selects the Windows system command from SystemRoot and supplies isolated per-child fixture paths. It creates no product settings or application configuration defaults."
 

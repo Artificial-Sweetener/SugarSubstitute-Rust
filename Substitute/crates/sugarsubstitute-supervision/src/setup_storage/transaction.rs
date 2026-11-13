@@ -174,11 +174,18 @@ impl PreparedInstallation {
         }
         let _frontend = Directory::open(&runtime.frontend, false)?;
         let nodes = Directory::open(&runtime.directory.join("custom_nodes"), true)?;
-        let cube = nodes.path().join("SugarCubes");
+        let cube = nodes.path().join(crate::pack_install::SUGARCUBES_PACK_ID);
         if !files::exists(&cube, context)? {
+            // The package carries the exact registry archive, so the folder is written as a
+            // registry install writes it and ComfyUI Manager and SugarCubes both own it.
             let stage =
                 crate::durable_storage::staging::directory(&_comfy, ".substitute-node-stage")?;
-            self.bundle.payload.copy("sugarcubes/", &stage, context, files::create_new)?;
+            crate::pack_install::write_registry_install(
+                self.bundle.payload.reader(crate::pack_install::SUGARCUBES_PACKAGE_ARCHIVE)?,
+                &stage,
+                crate::pack_install::SUGARCUBES_PACK_ID,
+            )
+            .map_err(io::Error::other)?;
             {
                 let directory = Directory::open(&stage, false)?;
                 let project = files::read_bounded(&mut directory.read("pyproject.toml")?, 65536)?;

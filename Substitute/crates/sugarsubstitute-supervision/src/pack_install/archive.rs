@@ -13,7 +13,7 @@ use super::entry::{EntryName, parse_entry, validate_entry_set};
 use super::error::{ErrorCode, PackInstallError, Result};
 use crate::durable_storage::pack_tree::PackTree;
 use sha2::{Digest, Sha256};
-use std::io::{Cursor, Read};
+use std::io::{Cursor, Read, Seek, Write};
 
 const FILE_TYPE_MASK: u32 = 0o170_000;
 const REGULAR_FILE: u32 = 0o100_000;
@@ -50,10 +50,10 @@ pub struct ExtractedArchive {
     pub file_digests: FileDigests,
 }
 
-type Archive<'a> = zip::ZipArchive<Cursor<&'a [u8]>>;
+type Archive<R> = zip::ZipArchive<R>;
 
-fn open(bytes: &[u8]) -> Result<Archive<'_>> {
-    zip::ZipArchive::new(Cursor::new(bytes)).map_err(|_| not_a_zip())
+fn open<R: Read + Seek>(source: R) -> Result<Archive<R>> {
+    zip::ZipArchive::new(source).map_err(|_| not_a_zip())
 }
 
 fn not_a_zip() -> PackInstallError {
@@ -66,18 +66,30 @@ fn not_a_zip() -> PackInstallError {
 /// Returns the shared refusal for a corrupt container, an unsafe, reserved or duplicate
 /// name, a link, device or encrypted member, or a declared size or count over its bound.
 pub fn list_registry_archive(bytes: &[u8], limits: ArchiveLimits) -> Result<Vec<EntryName>> {
-    let mut archive = open(bytes)?;
+    let mut archive = open(Cursor::new(bytes))?;
     validated_members(&mut archive, limits)
         .map(|members| members.into_iter().map(|(_, entry)| entry).collect())
 }
 
-/// Extract a validated archive into `target`, an empty folder the caller owns.
+/// Extract a validated archive held in memory into `target`, an empty folder the caller owns.
+#[cfg(test)]
 pub(crate) fn extract_registry_archive(
     bytes: &[u8],
     target: &PackTree,
     limits: ArchiveLimits,
 ) -> Result<ExtractedArchive> {
-    let mut archive = open(bytes)?;
+    extract_registry_source(Cursor::new(bytes), target, limits)
+}
+
+/// Extract a validated archive read from `source` (a file or memory) into `target`, an empty
+/// folder the caller owns. Each member streams to its file in bounded chunks, so memory use
+/// does not grow with the archive.
+pub(crate) fn extract_registry_source<R: Read + Seek>(
+    source: R,
+    target: &PackTree,
+    limits: ArchiveLimits,
+) -> Result<ExtractedArchive> {
+    let mut archive = open(source)?;
     let members = validated_members(&mut archive, limits)?;
     target.create()?;
     let mut total = 0_u64;
@@ -90,16 +102,33 @@ pub(crate) fn extract_registry_archive(
         if let Some((parent, _)) = entry.path().rsplit_once('/') {
             target.create_directories(parent)?;
         }
-        let (content, digest) = read_member(&mut archive, *index, &mut total, limits)?;
-        target.write(entry.path(), &content)?;
+        let mut digest = None;
+        let mut refusal = None;
+        let written = target.replace_with(entry.path(), |output| {
+            match copy_member(&mut archive, *index, output, &mut total, limits) {
+                Ok(value) => {
+                    digest = Some(value);
+                    Ok(())
+                }
+                Err(cause) => {
+                    refusal = Some(cause);
+                    Err(std::io::Error::other("The archive member was refused"))
+                }
+            }
+        });
+        if let Some(cause) = refusal {
+            return Err(cause);
+        }
+        written?;
+        let digest = digest.ok_or_else(not_a_zip)?;
         file_digests.insert(entry.path().to_owned(), digest);
     }
     let entries = members.into_iter().map(|(_, entry)| entry).collect();
     Ok(ExtractedArchive { entries, file_digests })
 }
 
-fn validated_members(
-    archive: &mut Archive<'_>,
+fn validated_members<R: Read + Seek>(
+    archive: &mut Archive<R>,
     limits: ArchiveLimits,
 ) -> Result<Vec<(usize, EntryName)>> {
     let mut named = Vec::new();
@@ -151,15 +180,17 @@ fn validated_members(
     Ok(members)
 }
 
-fn read_member(
-    archive: &mut Archive<'_>,
+/// Stream one member into `output`, enforcing the produced-size bounds; returns its SHA-256.
+fn copy_member<R: Read + Seek>(
+    archive: &mut Archive<R>,
     index: usize,
+    output: &mut impl Write,
     total: &mut u64,
     limits: ArchiveLimits,
-) -> Result<(Vec<u8>, String)> {
+) -> Result<String> {
     let mut member = archive.by_index(index).map_err(|_| not_a_zip())?;
-    let mut content = Vec::new();
     let mut digest = Sha256::new();
+    let mut file_bytes = 0_u64;
     let mut buffer = vec![0_u8; READ_CHUNK_BYTES];
     loop {
         let read = member.read(&mut buffer).map_err(|_| not_a_zip())?;
@@ -168,14 +199,14 @@ fn read_member(
         }
         let produced = u64::try_from(read).map_err(|_| too_large())?;
         *total = total.saturating_add(produced);
-        let file_bytes = u64::try_from(content.len()).map_err(|_| too_large())? + produced;
+        file_bytes = file_bytes.saturating_add(produced);
         if file_bytes > limits.max_file_bytes || *total > limits.max_total_bytes {
             return Err(too_large());
         }
         digest.update(&buffer[..read]);
-        content.extend_from_slice(&buffer[..read]);
+        output.write_all(&buffer[..read])?;
     }
-    Ok((content, format!("{:x}", digest.finalize())))
+    Ok(format!("{:x}", digest.finalize()))
 }
 
 fn empty() -> PackInstallError {

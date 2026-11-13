@@ -331,3 +331,51 @@ fn repeated_explicit_authorization_preserves_the_exact_durable_choice() -> TestR
         Ok(())
     })
 }
+
+/// A fresh setup installs SugarCubes from the package's registry archive exactly as a registry
+/// install leaves it: the archive's members, `.tracking` in archive order and the digest record,
+/// so ComfyUI Manager and both SugarCubes updaters recognise and may later update it.
+#[test]
+fn fresh_setup_installs_sugarcubes_as_a_registry_install() -> TestResult {
+    use crate::pack_install::{Ownership, PackFolder, parse_entry, tracking_bytes};
+    worker::run_reserved(SIGNED_INSTALLER_RESERVATION_BYTES, |context, _| {
+        let temporary = tempfile::tempdir()?;
+        let path = temporary.path();
+        let runtime = runtime(path)?;
+        let cube = runtime.directory.join("custom_nodes/SugarCubes");
+        std::fs::remove_dir_all(&cube)?;
+        import(path, context)?.prepare(|| NOW, context)?.complete(&runtime, || NOW, context)?;
+        let entries = test_package::SUGARCUBES_MEMBERS
+            .iter()
+            .map(|(name, _)| parse_entry(name))
+            .collect::<crate::pack_install::Result<Vec<_>>>()?;
+        assert_eq!(std::fs::read(cube.join(".tracking"))?, tracking_bytes(&entries));
+        for (name, text) in test_package::SUGARCUBES_MEMBERS {
+            match text {
+                Some(text) => assert_eq!(std::fs::read_to_string(cube.join(name))?, text),
+                None => assert!(cube.join(name).is_dir(), "{name}"),
+            }
+        }
+        assert!(cube.join(".tracking-digests.json").is_file());
+        match PackFolder::at(&cube)?.ownership()? {
+            Ownership::Owned(identity) => assert_eq!(identity.version.to_string(), "1.2.0"),
+            other => return Err(format!("not a registry install: {other:?}").into()),
+        }
+        let mut names: Vec<_> = std::fs::read_dir(&cube)?
+            .map(|entry| entry.map(|entry| entry.file_name().to_string_lossy().into_owned()))
+            .collect::<std::io::Result<_>>()?;
+        names.sort();
+        assert_eq!(
+            names,
+            [
+                ".tracking",
+                ".tracking-digests.json",
+                "__init__.py",
+                "pyproject.toml",
+                "sugarcubes",
+                "web"
+            ]
+        );
+        Ok(())
+    })
+}
