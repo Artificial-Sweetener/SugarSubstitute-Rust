@@ -4,6 +4,7 @@
 use super::*;
 use crate::{StartupPreparationStep, startup_runtime::test_content::*};
 use std::{cell::Cell, rc::Rc};
+use sugarsubstitute_execution::qualification_time::anchor;
 #[test]
 fn actual_preparation_wake_and_ready_precede_native_construction_without_surface_work() -> TestResult
 {
@@ -29,11 +30,10 @@ fn expired_original_limit_closes_before_native_construction_and_ignores_late_rea
     content.settlements.push_back(Ok(true));
     let constructed = Rc::new(Cell::new(false));
     let marker = constructed.clone();
-    let result =
-        admit_with(&bootstrap, &mut content, budget()?, Some(Instant::now()), None, || {
-            marker.set(true);
-            Ok(((), WakeLifetime::new(), Arc::new(Wake)))
-        });
+    let result = admit_with(&bootstrap, &mut content, budget()?, Some(anchor()), None, || {
+        marker.set(true);
+        Ok(((), WakeLifetime::new(), Arc::new(Wake)))
+    });
     assert!(result.is_err());
     assert!(!constructed.get());
     assert_eq!(content.calls, ["start", "close", "native_retired", "prepare", "settle"]);

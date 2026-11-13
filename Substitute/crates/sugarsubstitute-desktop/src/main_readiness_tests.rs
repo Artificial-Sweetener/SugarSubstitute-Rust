@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise the actual bounded observer; faked notifications do not qualify WebView2 ordering.
 use super::*;
+use sugarsubstitute_execution::qualification_time::anchor;
 #[cfg(feature = "k1-native-qualification")]
 #[path = "main_readiness_trace_tests.rs"]
 mod traces;
@@ -51,7 +52,7 @@ fn loaded(owner: &mut MainReadiness) -> Result<ProbeTarget> {
     owner.frame("root", "loader", None, "http://127.0.0.1:8188/")?;
     owner.context(7, "root", "http://127.0.0.1:8188", true)?;
     owner.navigation_completed(true)?;
-    Ok(owner.poll_probe(Instant::now())?.ok_or("Loaded probe target missing")?)
+    Ok(owner.poll_probe(anchor())?.ok_or("Loaded probe target missing")?)
 }
 fn positive(target: ProbeTarget) -> Result<ReadinessReceipt> {
     Ok(ReadinessReceipt::parse(format!(r#"{{"schema_version":1,"launch_id":{},"navigation_generation":{},"outcome":{{"status":"ready","evidence":{{"frontend_version":"1.47.11","sugarcubes_version":"0.15.0","app_graph_ready":true,"canvas_connected":true,"loading_finished":true,"sugarcubes_registered":true,"sugarcubes_ready":true}}}}}}"#,
@@ -62,14 +63,14 @@ fn positive(target: ProbeTarget) -> Result<ReadinessReceipt> {
 fn positive_dom_waits_for_barrier_and_transfers_exactly_one_receipt() -> Result {
     let mut owner = owner()?;
     let target = loaded(&mut owner)?;
-    assert!(owner.dom_result(target, Some(positive(target)?), Instant::now())?);
+    assert!(owner.dom_result(target, Some(positive(target)?), anchor())?);
     assert!(owner.pending.is_some());
     assert!(!owner.completed);
     assert_eq!(owner.barrier_complete(target)?.navigation(), target.identity.navigation);
     assert!(owner.completed);
     assert!(owner.ready());
     assert_eq!(owner.barrier_complete(target), Err(ReadinessFault::StaleProbe));
-    assert!(owner.poll_probe(Instant::now())?.is_none());
+    assert!(owner.poll_probe(anchor())?.is_none());
     Ok(())
 }
 
@@ -79,7 +80,7 @@ fn renderer_snapshot_requires_actual_positive_barrier_and_retains_native_documen
     assert!(owner.render_document().is_none());
     let target = loaded(&mut owner)?;
     assert!(owner.render_document().is_none());
-    owner.dom_result(target, Some(positive(target)?), Instant::now())?;
+    owner.dom_result(target, Some(positive(target)?), anchor())?;
     assert!(owner.render_document().is_none());
     owner.barrier_complete(target)?;
     let document = owner.render_document().ok_or("Ready document snapshot missing")?;
@@ -100,7 +101,7 @@ fn panel_attribution_requires_positive_current_top_document_and_closes_on_contex
     owner.frame("child", "child-loader", Some("root"), "http://127.0.0.1:8188/child")?;
     owner.context(8, "child", "http://127.0.0.1:8188", true)?;
     assert_eq!(owner.panel_context(), None);
-    owner.dom_result(target, Some(positive(target)?), Instant::now())?;
+    owner.dom_result(target, Some(positive(target)?), anchor())?;
     assert_eq!(owner.panel_context(), None);
     owner.barrier_complete(target)?;
     assert_eq!(owner.panel_context(), Some(7));
@@ -113,7 +114,7 @@ fn panel_attribution_requires_positive_current_top_document_and_closes_on_contex
 fn renderer_snapshot_does_not_survive_actual_current_document_health_failure() -> Result {
     let mut owner = owner()?;
     let target = loaded(&mut owner)?;
-    owner.dom_result(target, Some(positive(target)?), Instant::now())?;
+    owner.dom_result(target, Some(positive(target)?), anchor())?;
     owner.barrier_complete(target)?;
     assert!(owner.render_document().is_some());
     owner.invalidate(ReadinessFault::SetupFailed);
@@ -124,7 +125,7 @@ fn renderer_snapshot_does_not_survive_actual_current_document_health_failure() -
 fn late_caught_setup_error_defeats_positive_dom_and_barrier() -> Result {
     let mut owner = owner()?;
     let target = loaded(&mut owner)?;
-    owner.dom_result(target, Some(positive(target)?), Instant::now())?;
+    owner.dom_result(target, Some(positive(target)?), anchor())?;
     assert_eq!(
         owner.console(
             7,
@@ -136,7 +137,7 @@ fn late_caught_setup_error_defeats_positive_dom_and_barrier() -> Result {
         Err(ReadinessFault::SetupFailed)
     );
     assert_eq!(owner.barrier_complete(target), Err(ReadinessFault::SetupFailed));
-    assert_eq!(owner.poll_probe(Instant::now()), Err(ReadinessFault::SetupFailed));
+    assert_eq!(owner.poll_probe(anchor()), Err(ReadinessFault::SetupFailed));
     assert!(!owner.completed);
     Ok(())
 }
@@ -153,7 +154,7 @@ fn disabled_warning_remains_sticky_after_settings_or_globals_appear_positive() -
         Err(ReadinessFault::DisabledExtension)
     );
     assert_eq!(
-        owner.dom_result(target, Some(positive(target)?), Instant::now()),
+        owner.dom_result(target, Some(positive(target)?), anchor()),
         Err(ReadinessFault::DisabledExtension)
     );
     Ok(())
@@ -174,7 +175,7 @@ fn subframe_and_isolated_console_messages_cannot_supply_top_document_setup_failu
             ),
         )?;
     }
-    owner.dom_result(target, Some(positive(target)?), Instant::now())?;
+    owner.dom_result(target, Some(positive(target)?), anchor())?;
     owner.barrier_complete(target)?;
     Ok(())
 }
@@ -192,7 +193,7 @@ fn unknown_console_context_cannot_supply_readiness_diagnostics() -> Result {
 fn context_loss_cannot_be_repaired_by_positive_sample_or_late_barrier() -> Result {
     let mut owner = owner()?;
     let target = loaded(&mut owner)?;
-    owner.dom_result(target, Some(positive(target)?), Instant::now())?;
+    owner.dom_result(target, Some(positive(target)?), anchor())?;
     assert_eq!(owner.context_destroyed(7), Err(ReadinessFault::ContextLost));
     assert_eq!(owner.barrier_complete(target), Err(ReadinessFault::ContextLost));
     Ok(())
@@ -203,9 +204,9 @@ fn foreign_callback_target_leaves_current_pending_evaluation_available() -> Resu
     let target = loaded(&mut owner)?;
     let mut foreign = target;
     foreign.identity.navigation = Generation::new(2)?;
-    assert_eq!(owner.dom_result(foreign, None, Instant::now()), Err(ReadinessFault::StaleProbe));
-    assert!(owner.poll_probe(Instant::now())?.is_none());
-    owner.dom_result(target, Some(positive(target)?), Instant::now())?;
+    assert_eq!(owner.dom_result(foreign, None, anchor()), Err(ReadinessFault::StaleProbe));
+    assert!(owner.poll_probe(anchor())?.is_none());
+    owner.dom_result(target, Some(positive(target)?), anchor())?;
     owner.barrier_complete(target)?;
     Ok(())
 }
@@ -284,7 +285,7 @@ fn admitted_tables_retain_charge_until_owner_drops_and_reject_shared_oversubscri
 }
 #[test]
 fn operation_exhaustion_and_cancellation_do_not_reuse_a_callback_identity() -> Result {
-    let now = std::time::Instant::now();
+    let now = anchor();
     let mut exhausted = owner()?;
     let first = loaded(&mut exhausted)?;
     exhausted.dom_result(first, None, now)?;
@@ -313,8 +314,8 @@ fn initial_blank_context_clearing_is_not_loss_of_current_document_evidence() -> 
     owner.frame("root", "loader", None, "http://127.0.0.1:8188/")?;
     owner.context(7, "root", "http://127.0.0.1:8188", true)?;
     owner.navigation_completed(true)?;
-    let target = owner.poll_probe(Instant::now())?.ok_or("Current target missing")?;
-    owner.dom_result(target, Some(positive(target)?), Instant::now())?;
+    let target = owner.poll_probe(anchor())?.ok_or("Current target missing")?;
+    owner.dom_result(target, Some(positive(target)?), anchor())?;
     assert_eq!(owner.contexts_cleared(), Err(ReadinessFault::ContextLost));
     assert_eq!(owner.barrier_complete(target), Err(ReadinessFault::ContextLost));
     Ok(())
@@ -325,7 +326,7 @@ fn validated_failure_detail_transfers_without_becoming_positive_readiness() -> R
     let mut owner = owner()?;
     let target = loaded(&mut owner)?;
     let receipt = ReadinessReceipt::parse(br#"{"schema_version":1,"launch_id":1,"navigation_generation":1,"outcome":{"status":"failed","failure":{"code":"frontend_unavailable","detail":"Original bounded probe failure"}}}"#)?;
-    owner.dom_result(target, Some(receipt), Instant::now())?;
+    owner.dom_result(target, Some(receipt), anchor())?;
     let observed = owner.barrier_complete(target)?;
     assert!(!owner.ready());
     let ReadinessOutcome::Failed { failure } = observed.into_outcome() else {
@@ -344,7 +345,7 @@ fn child_detachment_preserves_attribution_until_context_retirement_and_root_deta
     owner.context(8, "child", "http://127.0.0.1:8188", true)?;
     owner.frame_detached("child")?;
     owner.context_destroyed(8)?;
-    owner.dom_result(target, Some(positive(target)?), Instant::now())?;
+    owner.dom_result(target, Some(positive(target)?), anchor())?;
     assert_eq!(owner.frame_detached("root"), Err(ReadinessFault::ContextLost));
     assert_eq!(owner.barrier_complete(target), Err(ReadinessFault::ContextLost));
     Ok(())

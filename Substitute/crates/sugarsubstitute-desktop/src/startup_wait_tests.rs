@@ -3,10 +3,11 @@
 //! Keep native incomplete-sample wakes independent of presentation and original cutoffs.
 use super::*;
 use std::time::Duration;
+use sugarsubstitute_execution::qualification_time::anchor;
 
 #[test]
 fn incomplete_probe_wakes_inactive_and_retired_splash_at_its_native_deadline() {
-    let now = Instant::now();
+    let now = anchor();
     let probe = now + Duration::from_millis(100);
     let original = now + Duration::from_secs(30);
     let deadline = wait_deadline(Some(original), None, Some(probe));
@@ -32,7 +33,7 @@ fn incomplete_probe_wakes_inactive_and_retired_splash_at_its_native_deadline() {
 
 #[test]
 fn pending_or_completed_probe_adds_no_native_polling_wake() {
-    let now = Instant::now();
+    let now = anchor();
     let original = now + Duration::from_secs(30);
     assert_eq!(wait_deadline(Some(original), None, None), Some(original));
     assert_eq!(

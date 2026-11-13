@@ -2,10 +2,11 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Repeated UI polling preserves genuine issued native-operation and receipt custody.
 use super::*;
+use sugarsubstitute_execution::qualification_time::anchor;
 
 #[test]
 fn repeated_polls_keep_one_issued_evaluation_through_its_exact_native_barrier() -> Result {
-    let now = std::time::Instant::now();
+    let now = anchor();
     let mut owner = owner()?;
     let target = loaded(&mut owner)?;
     let next = owner.next_operation;
@@ -42,7 +43,7 @@ fn repeated_polls_keep_one_issued_evaluation_through_its_exact_native_barrier() 
 #[test]
 fn incomplete_callback_alone_allows_next_operation_and_foreign_callbacks_keep_current_custody()
 -> Result {
-    let now = std::time::Instant::now();
+    let now = anchor();
     let mut owner = owner()?;
     let first = loaded(&mut owner)?;
     let mut foreign = first;
@@ -75,7 +76,7 @@ fn incomplete_callback_alone_allows_next_operation_and_foreign_callbacks_keep_cu
 
 #[test]
 fn repeated_polling_never_coalesces_away_context_loss_or_malformed_duplicate_receipts() -> Result {
-    let now = std::time::Instant::now();
+    let now = anchor();
     let mut context = owner()?;
     let target = loaded(&mut context)?;
     assert!(context.poll_probe(now)?.is_none());
@@ -105,7 +106,7 @@ fn repeated_polling_never_coalesces_away_context_loss_or_malformed_duplicate_rec
 #[test]
 fn frontend_timeout_snapshot_is_passive_and_tracks_real_probe_barrier_and_fault_custody() -> Result
 {
-    let now = std::time::Instant::now();
+    let now = anchor();
     use crate::main_readiness::snapshot::Wait;
     let mut value = owner()?;
     assert_eq!(value.wait_snapshot().wait, Wait::Setup);
@@ -142,7 +143,7 @@ fn frontend_timeout_snapshot_is_passive_and_tracks_real_probe_barrier_and_fault_
 
 #[test]
 fn incomplete_samples_wait_until_one_hundred_milliseconds_after_consumption() -> Result {
-    let now = Instant::now();
+    let now = anchor();
     let mut value = owner()?;
     let first = loaded(&mut value)?;
     assert!(value.next_probe_deadline().is_none());
@@ -176,7 +177,7 @@ fn incomplete_samples_wait_until_one_hundred_milliseconds_after_consumption() ->
 
 #[test]
 fn deferred_retry_checks_document_and_clears_on_context_loss_or_close() -> Result {
-    let now = Instant::now();
+    let now = anchor();
     for fault in [ReadinessFault::Cancelled, ReadinessFault::SetupFailed] {
         let mut value = owner()?;
         let target = loaded(&mut value)?;
@@ -204,7 +205,7 @@ fn deferred_retry_checks_document_and_clears_on_context_loss_or_close() -> Resul
 
 #[test]
 fn stale_incomplete_callback_cannot_move_retry_or_delay_current_positive_barrier() -> Result {
-    let now = Instant::now();
+    let now = anchor();
     let mut value = owner()?;
     let first = loaded(&mut value)?;
     value.dom_result(first, None, now)?;
@@ -225,7 +226,7 @@ fn stale_incomplete_callback_cannot_move_retry_or_delay_current_positive_barrier
 
 #[test]
 fn incomplete_result_does_not_immediately_issue_another_probe() -> Result {
-    let now = Instant::now();
+    let now = anchor();
     let mut value = owner()?;
     let first = loaded(&mut value)?;
     assert!(!value.dom_result(first, None, now)?);
@@ -238,7 +239,7 @@ fn incomplete_result_does_not_immediately_issue_another_probe() -> Result {
 
 #[test]
 fn incomplete_dom_releases_slot_without_readiness_or_deadline_renewal() -> Result {
-    let now = std::time::Instant::now();
+    let now = anchor();
     let mut owner = owner()?;
     let first = loaded(&mut owner)?;
     assert!(!owner.dom_result(first, None, now)?);

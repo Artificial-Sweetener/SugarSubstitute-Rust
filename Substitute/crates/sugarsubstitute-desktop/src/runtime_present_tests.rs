@@ -5,6 +5,7 @@
 use super::*;
 use std::error::Error;
 use sugarsubstitute_contracts::execution::{Generation, SurfaceId};
+use sugarsubstitute_execution::qualification_time::anchor;
 
 fn identity(state: u64, sequence: u64) -> Result<FrameIdentity, Box<dyn Error>> {
     Ok(FrameIdentity {
@@ -17,7 +18,7 @@ fn identity(state: u64, sequence: u64) -> Result<FrameIdentity, Box<dyn Error>> 
 #[test]
 fn successful_identity_changes_and_retained_exposes_have_parallel_exact_counts()
 -> Result<(), Box<dyn Error>> {
-    let start = Instant::now();
+    let start = anchor();
     let mut presentations = Presentations::new(start, false);
     for (index, identity) in
         [identity(1, 1)?, identity(1, 1)?, identity(1, 2)?, identity(1, 2)?, identity(2, 1)?]
@@ -50,7 +51,7 @@ fn successful_identity_changes_and_retained_exposes_have_parallel_exact_counts()
 #[test]
 fn failed_submission_does_not_consume_identity_or_timing_or_first_frame()
 -> Result<(), Box<dyn Error>> {
-    let start = Instant::now();
+    let start = anchor();
     let mut presentations = Presentations::new(start, false);
     let first = identity(1, 1)?;
     let failed = identity(1, 2)?;

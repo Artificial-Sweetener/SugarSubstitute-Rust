@@ -49,14 +49,14 @@ mod tests {
     /// Owned close remains responsive independently of hidden/static preparation cadence.
     #[test]
     fn closing_poll_has_a_bounded_native_deadline() {
-        let now = Instant::now();
+        let now = sugarsubstitute_execution::qualification_time::anchor();
         assert_eq!(closing_wait(now), ControlFlow::WaitUntil(now + Duration::from_millis(16)));
     }
 
     /// Preserve early input cadence and skip missed animation periods without catch-up work.
     #[test]
     fn cadence_skips_late_frames_and_keeps_early_input_deadline() {
-        let origin = Instant::now();
+        let origin = sugarsubstitute_execution::qualification_time::anchor();
         let scheduled = origin + FRAME_INTERVAL;
         assert_eq!(advance_deadline(scheduled, origin + Duration::from_millis(4)), scheduled);
         assert_eq!(
@@ -73,7 +73,7 @@ mod tests {
     /// Stop both static and background animation work, retaining the earliest terminal deadline.
     #[test]
     fn static_hidden_and_minimized_surfaces_wait_for_meaningful_events() {
-        let now = Instant::now();
+        let now = sugarsubstitute_execution::qualification_time::anchor();
         let next = now + FRAME_INTERVAL;
         let shutdown = now + Duration::from_secs(3);
         for (visible, minimized, frame) in

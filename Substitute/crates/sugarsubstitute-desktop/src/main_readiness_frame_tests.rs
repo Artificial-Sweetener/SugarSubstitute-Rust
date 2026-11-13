@@ -2,10 +2,11 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Keep presentation mutation separate from frontend readiness and exact native document custody.
 use super::*;
+use sugarsubstitute_execution::qualification_time::anchor;
 
 #[test]
 fn frame_configuration_requires_fresh_readonly_sample_and_original_completion_barrier() -> Result {
-    let now = Instant::now();
+    let now = anchor();
     let mut owner = owner()?;
     let target = loaded(&mut owner)?;
     owner.begin_frame_configuration(target)?;
@@ -28,7 +29,7 @@ fn frame_configuration_requires_fresh_readonly_sample_and_original_completion_ba
 
 #[test]
 fn frame_configuration_rejects_foreign_duplicate_and_readonly_completion_substitution() -> Result {
-    let now = Instant::now();
+    let now = anchor();
     let mut foreign = owner()?;
     let target = loaded(&mut foreign)?;
     foreign.begin_frame_configuration(target)?;
@@ -58,7 +59,7 @@ fn frame_configuration_rejects_foreign_duplicate_and_readonly_completion_substit
 
 #[test]
 fn context_loss_and_cancellation_veto_pending_frame_configuration() -> Result {
-    let now = Instant::now();
+    let now = anchor();
     let mut lost = owner()?;
     let target = loaded(&mut lost)?;
     lost.begin_frame_configuration(target)?;
