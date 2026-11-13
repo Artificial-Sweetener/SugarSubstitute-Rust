@@ -141,6 +141,9 @@ pub mod windows_recovery_supervisor;
 #[cfg(any(test, feature = "boundary-fixtures"))]
 pub mod clock_fixture;
 
+/// The frozen test anchor and the no-progress hang guard: the only real time tests may use.
+pub mod qualification_time;
+
 pub use clock::MonotonicClock;
 pub use runtime::{
     EntryEnvironmentCustody, EntryEnvironmentExtent, ExecutionClient, ExecutionLimits,
