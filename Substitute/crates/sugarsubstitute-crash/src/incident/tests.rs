@@ -89,6 +89,7 @@ mod allocation_lifecycle;
 #[cfg(windows)]
 mod allocation_layout;
 
+#[cfg(windows)]
 mod allocation_validation;
 
 #[cfg(windows)]

@@ -16,14 +16,13 @@
 /** Deployed module graphs must resolve inside the served extension tree. */
 import { afterEach, beforeEach } from '@jest/globals';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { assertDeployedModulesResolve } from '../../../scripts/WebModuleResolution.js';
 
 let root: string;
 beforeEach(() => {
-  const parent = mkdtempSync(
-    path.join(path.resolve('D:/devartifacts/SugarCubes/output-saving'), 'module-resolution-'),
-  );
+  const parent = mkdtempSync(path.join(tmpdir(), 'module-resolution-'));
   root = path.join(parent, 'web');
   mkdirSync(path.join(root, 'ui/infrastructure'), { recursive: true });
 });

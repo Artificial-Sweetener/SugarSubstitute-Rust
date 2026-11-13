@@ -760,7 +760,7 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute-execution/src/windows.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:75a246ce4a1f42c150bd063fc7ed4f6f0490f62d7172531505f76717a3e71df9"
+source_sha256 = "sha256:d804712aaa771029c812d8456db7a414dd0e5f3e1fc2ed574250ac4e21ba73ec"
 capabilities = ["export public restricted capability std::os::windows::io::OwnedHandle"]
 disposition = "boundary"
 rationale = "Execution-owned native pipe, shared section, process or handle lifetime: Observe owned Windows processes through admitted, cancellable execution lifetimes. Native object custody and original queue, memory and shutdown limits remain with the execution owner."
@@ -4663,7 +4663,7 @@ rationale = "An isolated temporary cache root and explicit target-existence chec
 [[records]]
 path = "crates/sugarsubstitute/src/input_documents/tests/storage.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:e9f5bc95d1ad2a54782ced3cf21a9db6aea8a10b2d37b68b1192ff0e909adfa3"
+source_sha256 = "sha256:f8c2c92695d2d84511a7156598e0e337081c58bfc2edbc26ed2b4449451ab5ae"
 capabilities = ["std::fs::OpenOptions::new", "std::fs::read", "std::fs::read_dir", "std::fs::remove_file", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary session directories let real execution jobs save, damage, hold and reload input-document archives, proving atomic replacement, recovery copies, rejection evidence and preserved unknown files without user data."

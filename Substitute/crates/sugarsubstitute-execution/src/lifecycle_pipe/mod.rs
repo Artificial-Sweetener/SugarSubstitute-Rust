@@ -50,7 +50,10 @@ use sugarsubstitute_contracts::{
     lifecycle::{ProcessKey, RunKey},
 };
 pub use types::*;
+// The snapshot borrows the Windows startup mapping loan.
+#[cfg(windows)]
 mod startup_snapshot;
+#[cfg(windows)]
 pub use startup_snapshot::AuthenticatedStartupSnapshot;
 
 pub(crate) use crate::native_pipe::Progress;

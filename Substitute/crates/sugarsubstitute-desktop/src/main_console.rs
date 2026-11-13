@@ -4,16 +4,12 @@
 //!
 //! Native JSON remains byte-bounded. Projection retains no strings, objects or stacks;
 //! escaped-string decoder scratch is covered by the callback owner's memory claim.
+use crate::main_readiness_types::{DISABLED, SETUP_FAILED};
 use serde::{
     Deserialize, Deserializer,
     de::{IgnoredAny, MapAccess, SeqAccess, Visitor},
 };
 use std::fmt;
-
-/// Canonical ComfyUI diagnostic for failure of the required extension's setup hook.
-pub(crate) const SETUP_FAILED: &str = "Error calling extension 'SugarCubes.UI' method 'setup'";
-/// Canonical ComfyUI diagnostic for the required extension being disabled.
-pub(crate) const DISABLED: &str = "Extension SugarCubes.UI is disabled.";
 
 #[derive(Deserialize)]
 struct Console<'a> {
