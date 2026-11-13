@@ -35,7 +35,8 @@
 
 ## Verification
 
-- Substitute verification [43343727996](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43343727996) failed on all three OSes at the known baseline only (`download.ts` missing). There are no new failures.
+- Substitute verification [43343727996](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43343727996) and [43344721034](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43344721034): every OS stops at the known baseline (`download.ts` missing).
+- Sugar quality [43343727876](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43343727876): the known baseline only (ubuntu mypy, windows VS2022). No failure is new.
 - Local: `cargo xtask governance` passes. Windows-target Clippy passes all three legs. Linux tests pass: contracts, application and xtask (186). The 92 Node bridge tests pass.
 
 ## Next
