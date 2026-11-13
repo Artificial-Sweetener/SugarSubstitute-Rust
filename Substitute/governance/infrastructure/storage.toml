@@ -1060,8 +1060,8 @@ rationale = "Durable filesystem owner: Anchor Unix artifact effects to retained 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/artifacts/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:161f4e80d2a862d7e2f3d7ff662bc793cc791c2adecccd80a436d7d0676425b0"
-capabilities = ["std::fs::hard_link", "std::fs::read", "std::fs::write", "tempfile::tempdir"]
+source_sha256 = "sha256:71f0dbd2f4566335934e55c21fad9174758c26e09eb9e88ff91ec652a8868f85"
+capabilities = ["method canonicalize", "std::fs::hard_link", "std::fs::read", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Exercise selected artifacts with real execution, files, bounded allocation and original expiry. Native access and its adversarial qualification remain within this owner."
 
