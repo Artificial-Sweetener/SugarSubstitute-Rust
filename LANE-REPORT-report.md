@@ -23,8 +23,8 @@
 - **Hazard:** `host_contract.rs` is at its 500-line limit; the next addition must extract code first.
 
 ## Commits
-- 5a5e8ebf fix(updates): keep paths with spaces, addresses and credentials out of update reports
-- 08178c01 feat(updates): show a failed SugarCubes update in the update report and export exactly what it shows
+- bbbe6614 fix(updates): keep paths with spaces, addresses and credentials out of update reports
+- 8c998de5 feat(updates): show a failed SugarCubes update in the update report and export exactly what it shows
 
 ## Verification
 - `cargo xtask check` on Linux: governance and fmt pass, then it stops in `sugarsubstitute-execution` (Linux baseline). Fingerprints resynced with `cargo xtask fingerprints`.
