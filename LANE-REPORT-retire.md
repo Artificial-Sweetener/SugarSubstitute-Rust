@@ -4,7 +4,7 @@
 - **Windows tests not executed.** All changed code is Windows-only. Here it was type-checked, clippy'd and rustdoc'd for `x86_64-pc-windows-msvc` only. CI stops at the known submodule baseline; once `lane/ci` is green, merge it here and rerun.
 - **Unproven native assumption:** renaming a folder fails while any file inside is open, even with delete sharing. `a_tree_with_an_open_file_is_left_untouched` and `a_generation_in_use_survives_and_is_removed_once_released` rely on it.
 - **An interrupted staging generation is only partly reclaimed.** Preparation copies the payload before writing `application-package.json`, so a staging folder superseded before then loses only its records and stage files; its payload stays in the tombstone. Fix in `transaction/candidate.rs` (lane trust): retain the inventory before copying.
-- **No native proof** of a real update cycle reclaiming disk on a home PC.
+- No native proof of a real update cycle reclaiming disk.
 
 ## Decisions made
 - The keep set also includes the stable entry's repair source (`.launcher-generation.json`) and the running generation. `rollback` and `repair` generations are removed, because nothing reads their files.
@@ -25,7 +25,7 @@
 - `cargo xtask governance`: passed.
 - `cargo xtask check` on Linux fails at `clippy --workspace --all-features` in `sugarsubstitute-execution`, and Linux clippy on `sugarsubstitute-supervision` fails in `command/directory.rs`. Neither file is changed on this branch, so both failures are pre-existing.
 - Windows target: clippy is clean for both crates (`--all-targets`, default and all features), and rustdoc for supervision builds with no warnings.
-- CI run 43339422045 (Substitute verification) fails on all three OS only at the known baseline (`resolve third_party/comfy-desktop/...`), before tests. Run 43339422184 (Sugar quality) is for pack changes; none here.
+- CI run 43339422045 (Substitute verification) fails on all three OS only at the known baseline (`resolve third_party/comfy-desktop/...`), before tests.
 
 ## Next for other lanes
 - **storage / integrator:** once `pointed_generations` lands, make the body of `LaunchPointerGenerations::pointed_generations` (`setup_storage/generation_retirement.rs`) delegate to it.
