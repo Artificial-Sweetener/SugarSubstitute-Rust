@@ -6,11 +6,15 @@ use super::{
     EntryPreparationInputError,
     core_binding::OriginalPreparation,
     custody::{PreparationPayload, WholePreparation},
-    slot::{PreparationPhase, PreparationSlot},
 };
-use crate::{admission::Core, scope::lock};
 use std::sync::Arc;
-use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim, Moment, PanicCause};
+use sugarsubstitute_contracts::execution::{JobContext, Moment};
+#[cfg(any(windows, test))]
+use {
+    super::slot::{PreparationPhase, PreparationSlot},
+    crate::{admission::Core, scope::lock},
+    sugarsubstitute_contracts::execution::{MemoryClaim, PanicCause},
+};
 
 #[derive(Clone)]
 pub(crate) struct EntryPreparationOwner {
@@ -31,6 +35,7 @@ impl PreparedOperationSlot {
 }
 
 impl EntryPreparationOwner {
+    #[cfg(any(windows, test))]
     pub(super) fn new(
         core: Arc<Core>,
         binding: OriginalPreparation,
@@ -62,6 +67,7 @@ impl EntryPreparationOwner {
     }
 
     /// Register only after the runner retains this whole owner outside provider unwind.
+    #[cfg(any(windows, test))]
     pub(super) fn register(&self) -> Result<(), EntryPreparationInputError> {
         let payload = self.payload()?;
         let slot = self.passive_slot()?.clone();
@@ -85,6 +91,7 @@ impl EntryPreparationOwner {
     ) -> Result<&OriginalPreparation, EntryPreparationInputError> {
         Ok(&self.payload()?.binding)
     }
+    #[cfg(any(windows, test))]
     pub(crate) fn passive_slot(&self) -> Result<&Arc<PreparationSlot>, EntryPreparationInputError> {
         self.payload()?.slot.get().ok_or(EntryPreparationInputError::Closed)
     }
@@ -127,11 +134,13 @@ impl EntryPreparationOwner {
             payload.binding.close_publication();
         }
     }
+    #[cfg(any(windows, test))]
     pub(super) fn close_acquisition(&self) {
         if let Ok(payload) = self.payload() {
             lock(&payload.native).acquisition_open = false;
         }
     }
+    #[cfg(any(windows, test))]
     pub(super) fn callback(&self) -> Result<PreparationCallback, EntryPreparationInputError> {
         let payload = self.payload()?;
         {
@@ -142,14 +151,17 @@ impl EntryPreparationOwner {
         payload.publish_quiescence();
         Ok(PreparationCallback { owner: self.clone() })
     }
+    #[cfg(any(windows, test))]
     pub(super) fn claimed_bytes(&self) -> Result<u64, EntryPreparationInputError> {
         Ok(self.payload()?.claimed_bytes())
     }
+    #[cfg(any(windows, test))]
     pub(super) fn publish_phase(&self, phase: PreparationPhase) {
         if let Ok(slot) = self.passive_slot() {
             lock(&slot.state).phase = phase;
         }
     }
+    #[cfg(any(windows, test))]
     pub(crate) fn fail_owner(&mut self, cause: &PanicCause) {
         self.close_publication();
         if let Ok(payload) = self.payload()
@@ -163,9 +175,11 @@ impl EntryPreparationOwner {
 }
 
 /// Retain the actual owner across callbacks and publish quiescence only after return.
+#[cfg(any(windows, test))]
 pub(super) struct PreparationCallback {
     owner: EntryPreparationOwner,
 }
+#[cfg(any(windows, test))]
 impl Drop for PreparationCallback {
     fn drop(&mut self) {
         if let Ok(payload) = self.owner.payload() {

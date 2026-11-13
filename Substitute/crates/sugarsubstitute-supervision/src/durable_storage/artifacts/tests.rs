@@ -16,6 +16,27 @@ mod input;
 #[cfg(windows)]
 mod retained;
 type TestResult = Result<(), Box<dyn Error + Send + Sync>>;
+/// A temporary directory reached without redirected ancestry.
+///
+/// Publication refuses symlinked ancestors on Unix, and macOS places temporary
+/// directories under the `/var` symlink, so Unix tests use the resolved path.
+struct Root {
+    _directory: tempfile::TempDir,
+    path: std::path::PathBuf,
+}
+impl Root {
+    fn new() -> std::io::Result<Self> {
+        let directory = tempfile::tempdir()?;
+        #[cfg(not(windows))]
+        let path = directory.path().canonicalize()?;
+        #[cfg(windows)]
+        let path = directory.path().to_path_buf();
+        Ok(Self { _directory: directory, path })
+    }
+    fn path(&self) -> &std::path::Path {
+        &self.path
+    }
+}
 #[derive(Default)]
 pub(super) struct TestClock(AtomicU64);
 impl TestClock {
@@ -102,7 +123,7 @@ pub(super) fn run(
 #[test]
 fn artifact_replacement_never_truncates_another_link_to_the_previous_output() -> TestResult {
     run(|context, _| {
-        let root = tempfile::tempdir()?;
+        let root = Root::new()?;
         let path = root.path().join("selected");
         let other = root.path().join("authored");
         std::fs::write(&path, b"preserved")?;
@@ -126,7 +147,7 @@ fn artifact_replacement_never_truncates_another_link_to_the_previous_output() ->
 fn selected_artifact_publication_preserves_occupied_outputs_until_explicit_replacement()
 -> TestResult {
     run(|context, _| {
-        let root = tempfile::tempdir()?;
+        let root = Root::new()?;
         let path = root.path().join("日本語😀.json");
         write_artifact(&path, false, ArtifactPublication::CreateOnly, 32, context, |output| {
             output.write_all(b"original")
@@ -155,7 +176,7 @@ fn selected_artifact_publication_preserves_occupied_outputs_until_explicit_repla
 #[test]
 fn artifact_bounds_and_failed_producers_cannot_truncate_selected_outputs() -> TestResult {
     run(|context, _| {
-        let root = tempfile::tempdir()?;
+        let root = Root::new()?;
         let path = root.path().join("receipt");
         std::fs::write(&path, b"preserved")?;
         let result = write_artifact(
@@ -192,7 +213,7 @@ fn artifact_bounds_and_failed_producers_cannot_truncate_selected_outputs() -> Te
 #[test]
 fn artifact_expiry_after_native_writes_preserves_the_original_target() -> TestResult {
     run(|context, clock| {
-        let root = tempfile::tempdir()?;
+        let root = Root::new()?;
         let path = root.path().join("receipt");
         std::fs::write(&path, b"preserved")?;
         let result = write_artifact(
@@ -217,7 +238,7 @@ fn artifact_expiry_after_native_writes_preserves_the_original_target() -> TestRe
 #[test]
 fn artifact_input_bounds_and_retained_memory_follow_actual_byte_lifetimes() -> TestResult {
     run(|context, _| {
-        let root = tempfile::tempdir()?;
+        let root = Root::new()?;
         let path = root.path().join("scenarios");
         std::fs::write(&path, b"data")?;
         assert!(read_artifact(&path, 3, context).is_err());
@@ -235,7 +256,7 @@ fn artifact_input_bounds_and_retained_memory_follow_actual_byte_lifetimes() -> T
 #[test]
 fn artifact_parent_creation_and_original_controls_are_independent_permissions() -> TestResult {
     run(|context, clock| {
-        let root = tempfile::tempdir()?;
+        let root = Root::new()?;
         let path = root.path().join("nested/receipt");
         assert!(
             write_artifact(&path, false, ArtifactPublication::CreateOnly, 32, context, |output| {

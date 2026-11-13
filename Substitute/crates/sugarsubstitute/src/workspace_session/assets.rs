@@ -9,7 +9,9 @@ use sugarsubstitute_contracts::{
     desktop_session::{InstallationId, MAX_ASSET_BYTES, ProfileId, wire::SessionAsset},
     execution::JobContext,
 };
-use sugarsubstitute_supervision::{ArtifactPublication, with_artifact_input, write_artifact};
+use sugarsubstitute_supervision::with_artifact_input;
+#[cfg(windows)]
+use sugarsubstitute_supervision::{ArtifactPublication, write_artifact};
 const MAX_INVENTORY_BYTES: usize = 16 * 1024 * 1024;
 const SCRATCH: usize = 64 * 1024;
 #[derive(Serialize, Deserialize)]
@@ -158,6 +160,7 @@ pub(super) fn verify(
     })
     .map_err(files::artifact)
 }
+#[cfg(windows)]
 /// Publish only from an independently verified current-backend reader. The caller must first
 /// persist its quota reservation; neither `asset` nor a browser path grants source authority.
 pub(super) fn retain(

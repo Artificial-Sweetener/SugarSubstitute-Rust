@@ -28,6 +28,7 @@ pub struct CaptureStartInput {
     #[cfg(windows)]
     pub(crate) recovery:
         Option<sugarsubstitute_execution::recovery_supervisor::AuthenticatedRecoveryOrigin>,
+    #[cfg(any(windows, test))]
     pub(crate) selection: Option<sugarsubstitute_supervision::CaptureSelectionRequest>,
 }
 impl CaptureStartInput {
@@ -42,10 +43,14 @@ impl CaptureStartInput {
             return Err(CrashError::invalid(CaptureOperation::Runtime));
         }
         validate_path(&capture_root)?;
+        // Only Windows native registration consumes the inert selection request.
+        #[cfg(not(any(windows, test)))]
+        let _ = selection;
         Ok(Self {
             capture_root,
             #[cfg(windows)]
             recovery: None,
+            #[cfg(any(windows, test))]
             selection: Some(selection),
         })
     }

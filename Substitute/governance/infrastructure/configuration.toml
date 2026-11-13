@@ -282,7 +282,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute/src/lib.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:ed740f9e6499fa7253905b15f06b09f65e97d5c3dabb53356ae0a58a060767f9"
+source_sha256 = "sha256:f6c65654d84b75c89a7355371ecd7651db3a4015f56e43b8b04a409998df1d39"
 capabilities = ["arguments"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -989,7 +989,7 @@ rationale = "Native frame qualification accepts explicit backend/vendor/device s
 [[records]]
 path = "crates/sugarsubstitute-image-gpu/examples/composite_qualification.rs"
 owner = "sugarsubstitute-image-gpu"
-source_sha256 = "sha256:6cc46a896758aa56c68a832cab803fd411f74352c128400bf865fdcce057957e"
+source_sha256 = "sha256:f21a0daed1b94804c954f925e8543e80e982f24436102e08dcd6ca00da8b49c0"
 capabilities = ["arguments"]
 rationale = "The developer composite check accepts one explicit Vulkan vendor/device selector and resolves it through the production adapter catalog."
 

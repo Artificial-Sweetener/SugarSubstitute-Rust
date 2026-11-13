@@ -119,6 +119,7 @@ impl InheritedCaptureAttachInput {
         }
     }
     /// Count this concrete allocation before the actual native producer allocates it.
+    #[cfg(windows)]
     pub(crate) const fn storage_bytes() -> usize {
         size_of::<InheritedCaptureFields>() + size_of::<Self>()
     }

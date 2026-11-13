@@ -185,9 +185,11 @@ mod tests {
         );
         assert_eq!(rig.scope.snapshot().reserved_bytes, 0);
         assert_eq!(external.closes(), 0);
-        let native = rig
-            .client
-            .create_native_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?;
+        let native = rig.client.core.create_scope_kind(
+            ScopeSpec { id: ScopeId::new(2)?, deadline: None },
+            None,
+            true,
+        )?;
         let mut session =
             external.reserve(&rig.client, &native, spec, OutputIdentity::Managed(key))?;
         let terminal = rig.completion(&mut session.completion)?;

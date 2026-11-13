@@ -23,7 +23,7 @@ use sugarsubstitute_image_ops::{AssetId, Coverage, Extent, FULL_COVERAGE, Region
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 #[cfg(all(windows, feature = "native-composition"))]
 mod bases;
-#[cfg(feature = "native-composition")]
+#[cfg(all(windows, feature = "native-composition"))]
 mod legacy;
 
 struct FixedClock(Moment);

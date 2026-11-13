@@ -130,13 +130,6 @@ impl SceneResources {
     }
 }
 
-#[cfg_attr(
-    not(windows),
-    expect(
-        clippy::large_enum_variant,
-        reason = "The portable glyph cursor keeps its rasterization context inline; boxing it adds an allocation outside the admitted text claim"
-    )
-)]
 enum Active {
     Decoration(DecorationCursor),
     Label(GlyphPaint),

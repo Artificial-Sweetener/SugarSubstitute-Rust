@@ -292,7 +292,7 @@ impl EntryLease for Lease {
             if bytes.len() == 1 && lock(&self.0.peer_closed).contains(&index) {
                 return Err(EntryTransportError::native(NativeObservationError::new(
                     "pipe_issue",
-                    super::closed_pipe(),
+                    broken_pipe(),
                 )));
             }
             let frame = {
@@ -338,7 +338,7 @@ impl EntryLease for Lease {
                 {
                     return Err(EntryTransportError::native(NativeObservationError::new(
                         "pipe_completion",
-                        super::closed_pipe(),
+                        broken_pipe(),
                     )));
                 }
                 Ok(lock(&self.0.reads)[index].map_or(Progress::Pending, Progress::Complete))

@@ -20,9 +20,10 @@ pub(super) fn expectation(run: RunKey) -> TestResult<CaptureAttachExpectation> {
     )?)
 }
 pub(super) fn another_scope(rig: &Rig, id: u64) -> TestResult<Scope> {
-    Ok(rig.client.create_native_scope(
+    Ok(rig.client.core.create_scope_kind(
         ScopeSpec { id: ScopeId::new(id)?, deadline: None },
         Some(&rig.scope),
+        true,
     )?)
 }
 pub(super) fn rejected(

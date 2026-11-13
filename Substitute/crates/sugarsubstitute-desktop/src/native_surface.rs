@@ -54,6 +54,8 @@ pub(crate) fn callback_kind(event: &Event<'_, NativeAction>) -> crate::timing::N
     match event {
         Event::WindowEvent { .. } => NativeCallbackKind::WindowEvent,
         Event::UserEvent(NativeAction::Completions) => NativeCallbackKind::CompletionDrain,
+        // Every other native action exists only on Windows.
+        #[cfg(target_os = "windows")]
         Event::UserEvent(_) => NativeCallbackKind::NativeAction,
         Event::RedrawRequested(_) => NativeCallbackKind::Redraw,
         Event::MainEventsCleared => NativeCallbackKind::LoopProgress,

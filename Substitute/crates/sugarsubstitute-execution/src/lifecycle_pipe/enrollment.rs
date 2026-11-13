@@ -9,6 +9,7 @@ pub(crate) struct Enrollment {
     active: bool,
 }
 impl Enrollment {
+    #[cfg(windows)]
     pub(crate) fn binding(&self) -> Option<PeerBinding> {
         lock(&self.shared.state).binding
     }

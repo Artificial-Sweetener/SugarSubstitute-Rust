@@ -10,6 +10,7 @@ pub(crate) const MAX_URI_BYTES: usize = 4096;
 pub(crate) enum Header<'a> {
     Absent,
     Text(&'a str),
+    #[cfg(target_os = "windows")]
     Unreadable,
 }
 pub(crate) struct Evidence<'a> {
@@ -23,7 +24,9 @@ pub(crate) struct Evidence<'a> {
     pub(crate) range: Header<'a>,
 }
 pub(crate) struct Requested {
+    #[cfg(target_os = "windows")]
     pub(crate) output: String,
+    #[cfg(target_os = "windows")]
     pub(crate) binding: SessionBinding,
     pub(crate) range: Option<SessionMediaRange>,
     pub(crate) head: bool,
@@ -105,10 +108,13 @@ impl Endpoint {
         let range = match evidence.range {
             Header::Absent => None,
             Header::Text(value) => Some(SessionMediaRange::parse(value).ok()?),
+            #[cfg(target_os = "windows")]
             Header::Unreadable => return None,
         };
         Some(Requested {
+            #[cfg(target_os = "windows")]
             output: output.to_owned(),
+            #[cfg(target_os = "windows")]
             binding,
             range,
             head: evidence.method == "HEAD",

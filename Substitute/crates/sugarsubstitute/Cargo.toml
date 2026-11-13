@@ -43,11 +43,11 @@ sugarsubstitute-networking = { path = "../sugarsubstitute-networking" }
 sugarsubstitute-crash = { path = "../sugarsubstitute-crash" }
 
 [dev-dependencies]
+sugarsubstitute-execution = { path = "../sugarsubstitute-execution", features = ["boundary-fixtures"] }
 sugarsubstitute-image-gpu = { path = "../sugarsubstitute-image-gpu", features = ["boundary-fixtures"] }
 
 [target.'cfg(windows)'.dev-dependencies]
 tempfile.workspace = true
-sugarsubstitute-execution = { path = "../sugarsubstitute-execution", features = ["boundary-fixtures"] }
 sugarsubstitute-desktop = { path = "../sugarsubstitute-desktop", features = ["boundary-fixtures"] }
 sugarsubstitute-supervision = { path = "../sugarsubstitute-supervision", features = ["boundary-fixtures"] }
 

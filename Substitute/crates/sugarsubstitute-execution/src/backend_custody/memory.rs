@@ -85,12 +85,14 @@ impl BackendCustodyMemory {
             + size_of::<crate::admission::Record>()
     }
     /// Allocate one distinct process-signal cell on this exact original native owner.
+    #[cfg(windows)]
     pub(crate) fn watch_signal(&self) -> Option<Arc<crate::native::Signal>> {
         self.0
             .as_ref()
             .and_then(|owner| owner.core.upgrade())
             .map(|core| crate::native::Signal::new(&core))
     }
+    #[cfg(windows)]
     pub(crate) fn matches_wake(&self, wake: &super::BackendCustodyWake) -> bool {
         self.0.as_ref().is_some_and(|owner| {
             owner.context.job_id() == wake.job && wake.signal.matches_core(&owner.core)

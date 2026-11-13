@@ -28,9 +28,11 @@ pub(crate) fn recovery_parent(
     scope_id: u64,
     job_id: u64,
 ) -> TestResult<(Scope, BackendCustodyPipeSession, BackendCustodyParentStorage)> {
-    let scope = rig
-        .client
-        .create_native_scope(ScopeSpec { id: ScopeId::new(scope_id)?, deadline: None }, None)?;
+    let scope = rig.client.core.create_scope_kind(
+        ScopeSpec { id: ScopeId::new(scope_id)?, deadline: None },
+        None,
+        true,
+    )?;
     let boundary = Boundary::new();
     let key = sugarsubstitute_contracts::backend_custody::BackendCustodyKey::new(
         run()?.owner,
@@ -100,9 +102,11 @@ pub(crate) fn recovery_server(
     job_id: u64,
     grant: &RegisteredRecoveryGrant,
 ) -> TestResult<(Scope, RecoveryPipeSession)> {
-    let scope = rig
-        .client
-        .create_native_scope(ScopeSpec { id: ScopeId::new(scope_id)?, deadline: None }, None)?;
+    let scope = rig.client.core.create_scope_kind(
+        ScopeSpec { id: ScopeId::new(scope_id)?, deadline: None },
+        None,
+        true,
+    )?;
     let boundary = Boundary::new();
     *lock(&boundary.binding) = Some(PeerBinding::Recovery(grant.key()));
     let mut spec = spec(job_id, JobClass::NativeObservation, MIN_LIFECYCLE_PIPE_BYTES)?;
@@ -158,9 +162,11 @@ pub(crate) fn recovery_child(
     job_id: u64,
     key: sugarsubstitute_contracts::recovery_supervisor::RecoveryGrantKey,
 ) -> TestResult<(Scope, RecoveryPipeSession, RecoveryChildBoundary)> {
-    let scope = rig
-        .client
-        .create_native_scope(ScopeSpec { id: ScopeId::new(scope_id)?, deadline: None }, None)?;
+    let scope = rig.client.core.create_scope_kind(
+        ScopeSpec { id: ScopeId::new(scope_id)?, deadline: None },
+        None,
+        true,
+    )?;
     let boundary = Boundary::new();
     *lock(&boundary.binding) = Some(PeerBinding::Recovery(key));
     *lock(&boundary.original_counter) =
@@ -251,9 +257,11 @@ pub(crate) fn prepared_direct_server(
     LifecyclePipeBootstrap,
     crate::lifecycle_pipe::enrollment::Enrollment,
 )> {
-    let scope = rig
-        .client
-        .create_native_scope(ScopeSpec { id: ScopeId::new(scope_id)?, deadline: None }, None)?;
+    let scope = rig.client.core.create_scope_kind(
+        ScopeSpec { id: ScopeId::new(scope_id)?, deadline: None },
+        None,
+        true,
+    )?;
     let boundary = Boundary::new();
     boundary.inherited.store(20, Ordering::Release);
     *lock(&boundary.binding) = Some(PeerBinding::Desktop(grant.key().run()));

@@ -6,10 +6,10 @@ impl Record {
     pub(super) fn admitted(
         context: &JobContext,
         job: Arc<dyn ErasedJob>,
-        kind: &RequestKind<'_>,
+        kind: &RequestKind,
         work: Option<&crate::task::Work>,
     ) -> Self {
-        // Only Windows-native records retain work-derived custody and deadlines.
+        // Only Windows native work seeds custody and deadline slots.
         #[cfg(not(any(windows, test)))]
         let _ = work;
         let spec = context.spec();
@@ -26,12 +26,15 @@ impl Record {
                 None
             },
             memory: Some(memory),
+            #[cfg(any(windows, test))]
             entry_setup: match &kind {
                 RequestKind::EntryPreparation(setup) => Some(*setup),
                 _ => None,
             },
+            #[cfg(any(windows, test))]
             preparation_issued: false,
             preparation: None,
+            #[cfg(any(windows, test))]
             registered_startup_issued: false,
             capture_bundle_issued: false,
             #[cfg(any(windows, test))]
@@ -45,7 +48,9 @@ impl Record {
                 Some(crate::task::Work::Native(work)) => work.initial_desktop_custody(),
                 _ => None,
             },
+            #[cfg(any(windows, test))]
             symbol_original: match &kind {
+                #[cfg(windows)]
                 RequestKind::SymbolNative { original, .. } => Some(original.job_id()),
                 _ => None,
             },

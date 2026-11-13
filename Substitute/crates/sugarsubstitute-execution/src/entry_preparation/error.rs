@@ -114,9 +114,11 @@ impl EntryPreparationError {
         drop(pending);
         retained
     }
+    #[cfg(any(windows, test))]
     pub(crate) fn retained_owner(&self) -> Option<&EntryPreparationOwner> {
         Some(&self.owner)
     }
+    #[cfg(any(windows, test))]
     pub(crate) fn into_source(self) -> (PreparationSource, EntryPreparationOwner) {
         let Self { source, owner } = self;
         (source, owner)

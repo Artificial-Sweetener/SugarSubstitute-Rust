@@ -132,7 +132,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/lib.rs"
-source_sha256 = "sha256:f43528532dce19e21f3bd9232557270cc6322190142031f26f425f1c91909892"
+source_sha256 = "sha256:e13ff84465a94fb3c0dde414e2b1bb3ea68ab3b698f01038067e28d86e0eff2f"
 kind = "native"
 rationale = "Native boundary: Own native window lifetime and CPU frame presentation independently of UI content.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -174,7 +174,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/runtime.rs"
-source_sha256 = "sha256:fc0a7bc158add83f23bea50f80728e14a5697b348f640a71686ed73531d8660d"
+source_sha256 = "sha256:5ee09573eac5ddb5e625f7c17a6a589f3ec7d475237b49ae732dcd9d3a34b9d6"
 kind = "native"
 rationale = "Native boundary: Pump native callbacks while preparation and owned shutdown progress without UI waits.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -384,7 +384,7 @@ rationale = "Pure invalid-dimension qualification uses an empty title and unreac
 
 [[records]]
 path = "crates/sugarsubstitute/src/lib.rs"
-source_sha256 = "sha256:ed740f9e6499fa7253905b15f06b09f65e97d5c3dabb53356ae0a58a060767f9"
+source_sha256 = "sha256:f6c65654d84b75c89a7355371ecd7651db3a4015f56e43b8b04a409998df1d39"
 kind = "presentation"
 rationale = "The explicit splash demo composes DesktopOptions.title from messages(options.locale).loading; diagnostic and protocol values do not become UI labels."
 
@@ -432,13 +432,13 @@ rationale = "Validate existing control labels for emptiness/NUL and unique ident
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/host_contract.rs"
-source_sha256 = "sha256:9b34e62ebfe91e0cba3e7c6368cd84a22b1a76e9e6d8c069380f4af19c063a0e"
+source_sha256 = "sha256:1cd92a2077627813d0f0accb8c91b6ac495fccb064c6d86054a3657948c712bb"
 kind = "native"
 rationale = "Main caption/recovery contracts borrow localized labels from the host. They define presentation data and no catalog or fallback policy."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_backend.rs"
-source_sha256 = "sha256:ad0d8e74cf17c6ac77d07c8a8d4a6ffbc65a562ed3c016d68ffb3159eef98202"
+source_sha256 = "sha256:2e36efdc381de9c5f7dd03f6aa949240d043ea36cad9f0c58e92cc0e52fd3473"
 kind = "native"
 rationale = "Recovery selects supplied canonical retry labels according to current backend state; it lays out no caption."
 

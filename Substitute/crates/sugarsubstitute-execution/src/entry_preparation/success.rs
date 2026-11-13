@@ -18,6 +18,7 @@ impl<T> EntryPreparationSuccess<T> {
         &self.value
     }
 
+    #[cfg(any(windows, test))]
     pub(crate) fn new(value: T, owner: EntryPreparationOwner) -> Self {
         Self { value, owner }
     }

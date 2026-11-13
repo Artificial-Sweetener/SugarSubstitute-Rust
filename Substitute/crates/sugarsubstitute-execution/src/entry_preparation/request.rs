@@ -18,15 +18,22 @@ use sugarsubstitute_contracts::{
 pub struct EntryRequestInput {
     request: Box<EntryLaunchRequest>,
     preparation: Option<EntryPreparationOwner>,
+    #[cfg(any(windows, test))]
     transport_memory: Option<sugarsubstitute_contracts::execution::MemoryClaim>,
 }
 impl From<EntryLaunchRequest> for EntryRequestInput {
     fn from(request: EntryLaunchRequest) -> Self {
-        Self { request: Box::new(request), preparation: None, transport_memory: None }
+        Self {
+            request: Box::new(request),
+            preparation: None,
+            #[cfg(any(windows, test))]
+            transport_memory: None,
+        }
     }
 }
 impl EntryRequestInput {
     /// Keep the transport's actual storage charge across a checked source handback.
+    #[cfg(any(windows, test))]
     pub(crate) fn retain_transport_memory(
         &mut self,
         claim: sugarsubstitute_contracts::execution::MemoryClaim,
@@ -55,6 +62,7 @@ impl EntryRequestInput {
     pub(crate) fn original_owner(&self) -> Option<&EntryPreparationOwner> {
         self.preparation.as_ref()
     }
+    #[cfg(any(windows, test))]
     pub(crate) fn check_original_core(
         &self,
         core: &crate::admission::Core,
@@ -72,6 +80,7 @@ impl EntryRequestInput {
             .map_err(|cause| EntryPreparationError::new(cause, owner.clone()))
     }
 
+    #[cfg(any(windows, test))]
     pub(crate) fn observe_current_original_core(
         &self,
         core: &crate::admission::Core,
@@ -177,6 +186,7 @@ impl CapturedEntryEnvironment {
             Ok(request) => Ok(EntryRequestInput {
                 request: Box::new(request),
                 preparation: Some(owner),
+                #[cfg(any(windows, test))]
                 transport_memory: None,
             }),
             Err(source) => Err(EntryEnvironmentFailure::from_shape(source, owner)),

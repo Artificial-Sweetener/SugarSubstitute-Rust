@@ -9,7 +9,11 @@ use crate::{
 use sugarsubstitute_contracts::execution::{CancelControl, JobPhase, ScopeId, TerminalKind};
 pub(crate) struct Source {
     pub(crate) key: RecoveryGrantKey,
+    #[cfg(windows)]
     pub(crate) root_desktop: crate::recovery_supervisor::root_desktop::RootDesktopBootstrapLoan,
+    /// Portable test builds keep the loan for this source's lifetime without reading it.
+    #[cfg(not(windows))]
+    _root_desktop: crate::recovery_supervisor::root_desktop::RootDesktopBootstrapLoan,
     pub(crate) creation_taken: std::sync::atomic::AtomicBool,
     pub(crate) enrollment_sequence: std::sync::atomic::AtomicU64,
     pub(crate) enrollment_taken: std::sync::atomic::AtomicBool,
@@ -114,7 +118,10 @@ impl Source {
                 enrollment_taken: std::sync::atomic::AtomicBool::new(false),
                 counter: root_desktop.counter(),
                 until: shared.original_deadline.min(root_desktop.until()),
+                #[cfg(windows)]
                 root_desktop,
+                #[cfg(not(windows))]
+                _root_desktop: root_desktop,
                 body,
                 root_units_le,
                 root_length: 0,

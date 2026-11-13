@@ -151,14 +151,14 @@ pub(super) fn rejected_connection(
     }
 }
 
-/// The failure the platform's pipe reports once its peer has closed.
+/// The failure a pipe operation reports once its peer closed.
 #[cfg(windows)]
-pub(in crate::coordinator_entry) fn closed_pipe() -> windows::core::Error {
+pub(super) fn broken_pipe() -> windows::core::Error {
     windows::core::Error::from_hresult(windows::core::HRESULT::from_win32(109))
 }
 
-/// The failure the platform's pipe reports once its peer has closed.
+/// The portable failure a pipe operation reports once its peer closed.
 #[cfg(not(windows))]
-pub(in crate::coordinator_entry) fn closed_pipe() -> std::io::Error {
-    std::io::Error::from(std::io::ErrorKind::BrokenPipe)
+pub(super) fn broken_pipe() -> std::io::Error {
+    std::io::ErrorKind::BrokenPipe.into()
 }

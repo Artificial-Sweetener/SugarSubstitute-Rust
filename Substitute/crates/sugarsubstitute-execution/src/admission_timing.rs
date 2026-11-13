@@ -24,7 +24,7 @@ pub(crate) fn validate(
     state: &State,
     receiving_scope: ScopeId,
     spec: JobSpec,
-    kind: &RequestKind<'_>,
+    kind: &RequestKind,
     effective_deadline: Option<Moment>,
     now: Moment,
 ) -> Result<AdmittedTiming, AdmissionError> {

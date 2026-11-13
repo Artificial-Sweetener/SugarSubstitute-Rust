@@ -74,7 +74,12 @@ pub fn run(
     if let Some(monitor) = window.current_monitor().or_else(|| window.primary_monitor()) {
         let origin = monitor.position();
         let size = monitor.size();
+        // tao's GTK backend reports no outer size until the first configure event; this
+        // undecorated window's inner size is its outer size and is known at creation.
+        #[cfg(target_os = "windows")]
         let client = window.outer_size();
+        #[cfg(not(target_os = "windows"))]
+        let client = window.inner_size();
         let x = i64::from(origin.x) + (i64::from(size.width) - i64::from(client.width)) / 2;
         let y = i64::from(origin.y) + (i64::from(size.height) - i64::from(client.height)) / 2;
         if let (Ok(x), Ok(y)) = (i32::try_from(x), i32::try_from(y)) {

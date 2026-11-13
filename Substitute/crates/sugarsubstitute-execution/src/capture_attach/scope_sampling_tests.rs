@@ -48,9 +48,11 @@ fn scope_cancel_returns_requested_while_original_sampling_retains_pin_and_deadli
     let _release_sampling = ReleaseSampling(clock.clone());
     let client = owner.client();
     let ordinary = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
-    let native = Arc::new(
-        client.create_native_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?,
-    );
+    let native = Arc::new(client.core.create_scope_kind(
+        ScopeSpec { id: ScopeId::new(2)?, deadline: None },
+        None,
+        true,
+    )?);
     let boundary = Arc::new(Boundary::default());
     let _release_boundary = ReleaseBoundary::new(&client.core, &boundary);
     boundary.ready.store(true, Ordering::Release);
