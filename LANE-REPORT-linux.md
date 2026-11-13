@@ -4,6 +4,9 @@
 - **Production host on Linux.** `sugarsubstitute` runs its native splash host on GTK under Xvfb. Setup storage, the launcher and updater, ComfyUI supervision, the main webview, the native canvas, crash capture and pipe IPC remain Windows-only. The launcher, installer, updater and viewer declare `native_adapter_unavailable`, and that is tested. Each mechanism needs its own platform boundary: wry on WebKitGTK, `flock`, Unix sockets, and declared-unsupported crash capture.
 - **GTK visibility read-back.** A deferred check on the next loop turn would be stronger than accepting the submitted transition.
 
+## Owned by lane/ci
+- windows-2022 `cargo test --workspace --all-features`: `sugarsubstitute-crash` (lib test, `portable_history`) fails with LNK1181 `committed_dump_parser.lib` ([run](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43372999638/job/131712910795)). That's the Windows parser build; this lane didn't change it.
+
 ## Unproven
 - Windows-only behaviour can't run here; CI covers its build, lints and tests.
 
@@ -31,7 +34,7 @@
 - **Tests on Linux:** every crate's suite, 61 test binaries with no failures, including all 668 execution tests. Windows-only tests stay Windows-only.
 - **Runs:** the splash host, launched under Xvfb in CI; the step requires the first presented frame.
 - **Local:** `cargo xtask verify` passes in the container. Clippy `-D warnings` for `x86_64-pc-windows-gnu` (mingw-w64) is clean in all three `xtask verify` legs at `492fb7b8`: workspace all-features, `-p sugarsubstitute`, and `-p sugarsubstitute --no-default-features`.
-- **CI:** [43367808883](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43367808883) ran on `23b1971f`: ubuntu-24.04 green, including the Xvfb launch, and macOS-15 green. windows-2022 failed only on the minimal-host `job_deadline` gate, which `90f4320a` fixes. Dispatched run [43372999638](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43372999638) verifies the rewritten head.
+- **CI:** [43372999638](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/actions/runs/43372999638) on `492fb7b8`: ubuntu-24.04 green, including the Xvfb launch; macOS-15 green. windows-2022 passed governance, fmt and all three clippy legs, then failed at test link time on a lane/ci item (below).
 
 ## Next
 - Merge `lane/linux` after `lane/ci`. They overlap only in the files resolved above.
