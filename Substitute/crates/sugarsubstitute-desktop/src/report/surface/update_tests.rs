@@ -347,14 +347,16 @@ fn a_saved_update_report_has_a_plain_title_and_is_named_for_the_product_it_is_ab
         };
         assert_eq!(title, "Save the report");
         assert_eq!(named, product);
-        let date = sugarsubstitute_contracts::localization::incident::LocalDate {
+        let date = sugarsubstitute_contracts::localization::incident::LocalDateTime {
             year: 2026,
             month: 11,
             day: 14,
+            hour: 9,
+            minute: 42,
         };
         assert_eq!(
             sugarsubstitute_contracts::localization::incident::file_name(file_name, named, date),
-            format!("{product} update report 2026-11-14.txt")
+            format!("{product} update report 2026-11-14 09-42.txt")
         );
     }
     Ok(())

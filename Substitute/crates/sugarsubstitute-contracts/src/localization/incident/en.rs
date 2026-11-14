@@ -51,7 +51,7 @@ pub static EN: ReportMessages = ReportMessages {
     update_message: "The update could not be installed. The version you have keeps working, and you can copy or export this report.",
     version: "Version",
     update_phase: "Step",
-    update_file_name: "{product} update report {date}.txt",
+    update_file_name: "{product} update report {date} {time}.txt",
     pack_update_title: "SugarCubes update failed",
     pack_update_message: "SugarCubes could not be updated. The version you have keeps working, and you can copy or export this report.",
     startup_failure: [

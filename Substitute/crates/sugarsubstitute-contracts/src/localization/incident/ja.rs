@@ -51,7 +51,7 @@ pub static JA: ReportMessages = ReportMessages {
     update_message: "アップデートをインストールできませんでした。現在のバージョンは引き続き使用でき、このレポートをコピーまたはエクスポートできます。",
     version: "バージョン",
     update_phase: "ステップ",
-    update_file_name: "{product} アップデートレポート {date}.txt",
+    update_file_name: "{product} アップデートレポート {date} {time}.txt",
     pack_update_title: "SugarCubes のアップデートに失敗しました",
     pack_update_message: "SugarCubes をアップデートできませんでした。現在のバージョンは引き続き使用でき、このレポートをコピーまたはエクスポートできます。",
     startup_failure: [

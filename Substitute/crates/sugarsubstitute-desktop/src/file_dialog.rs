@@ -54,14 +54,16 @@ pub enum SelectionKind {
 }
 
 #[cfg(windows)]
-/// Today's date in the user's time zone, for a suggested file name.
-fn today() -> sugarsubstitute_contracts::localization::incident::LocalDate {
+/// The date and time in the user's time zone, for a suggested file name.
+fn now() -> sugarsubstitute_contracts::localization::incident::LocalDateTime {
     // SAFETY: a plain query of the local clock with no arguments.
     let now = unsafe { windows::Win32::System::SystemInformation::GetLocalTime() };
-    sugarsubstitute_contracts::localization::incident::LocalDate {
+    sugarsubstitute_contracts::localization::incident::LocalDateTime {
         year: now.wYear,
         month: u8::try_from(now.wMonth).unwrap_or(1),
         day: u8::try_from(now.wDay).unwrap_or(1),
+        hour: u8::try_from(now.wHour).unwrap_or(0),
+        minute: u8::try_from(now.wMinute).unwrap_or(0),
     }
 }
 
@@ -86,7 +88,7 @@ fn choose(
                 let file_name = sugarsubstitute_contracts::localization::incident::file_name(
                     file_name,
                     product,
-                    today(),
+                    now(),
                 );
                 let (title, file_name, filter) =
                     (HSTRING::from(title), HSTRING::from(file_name), HSTRING::from(filter));

@@ -51,7 +51,7 @@ pub static ZH_HANS: ReportMessages = ReportMessages {
     update_message: "无法安装更新。您当前的版本仍可继续使用，您可以复制或导出此报告。",
     version: "版本",
     update_phase: "步骤",
-    update_file_name: "{product} 更新报告 {date}.txt",
+    update_file_name: "{product} 更新报告 {date} {time}.txt",
     pack_update_title: "SugarCubes 更新失败",
     pack_update_message: "无法更新 SugarCubes。您当前的版本仍可继续使用，您可以复制或导出此报告。",
     startup_failure: [
