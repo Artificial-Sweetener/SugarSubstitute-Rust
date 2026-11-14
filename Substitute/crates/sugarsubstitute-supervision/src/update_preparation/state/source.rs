@@ -11,8 +11,9 @@ use sugarsubstitute_contracts::execution::JobContext;
 pub(in crate::update_preparation) enum Source {
     /// This campaign owns no HTTP client or transport policy.
     Installed,
-    /// Online discovery remains bound to the producing distribution's repository.
-    Distribution { identity: [u8; 32], repository: Box<Repository> },
+    /// Online discovery remains bound to the producing distribution's repository, whose trusted
+    /// root the build ships.
+    Distribution { identity: [u8; 32], trusted_root: Vec<u8>, repository: Box<Repository> },
 }
 impl Source {
     /// Open authority under the selected campaign's exact trust boundary.
@@ -27,6 +28,15 @@ impl Source {
                 TrustStore::open(installation, *identity, context)?
             }
         })
+    }
+
+    /// The repository identity and trusted root this build ships, to set trust up again from.
+    /// Offline startup has none: it never resets trust.
+    pub(in crate::update_preparation) fn bootstrap(&self) -> Option<([u8; 32], &[u8])> {
+        match self {
+            Self::Distribution { identity, trusted_root, .. } => Some((*identity, trusted_root)),
+            Self::Installed => None,
+        }
     }
 
     /// Offline state cannot transition into a network operation.

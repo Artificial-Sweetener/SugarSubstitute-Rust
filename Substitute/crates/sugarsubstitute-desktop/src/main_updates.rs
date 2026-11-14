@@ -98,6 +98,8 @@ pub(crate) enum Notice {
     PreviousVersionRunning,
     /// The previous version is running while the newer one is repaired.
     Repairing,
+    /// The update storage was set aside and updates were set up again.
+    StorageSetAside,
     /// The start's SugarCubes update's one line.
     Sugarcubes(PackUpdateReport),
 }
@@ -120,6 +122,7 @@ impl Notice {
             }
             crate::UpdateNotice::PreviousVersionRunning => Self::PreviousVersionRunning,
             crate::UpdateNotice::Repairing => Self::Repairing,
+            crate::UpdateNotice::StorageSetAside => Self::StorageSetAside,
             crate::UpdateNotice::Sugarcubes(report) => Self::Sugarcubes(report),
         }
     }
@@ -282,6 +285,7 @@ impl CaptionUpdates {
             },
             Some(Notice::PreviousVersionRunning) => PeerView::shown(true, updates.previous_running),
             Some(Notice::Repairing) => PeerView::shown(true, updates.repairing),
+            Some(Notice::StorageSetAside) => PeerView::shown(true, updates.storage_set_aside),
             Some(Notice::Sugarcubes(report)) => {
                 let words = words.pack_updates;
                 match (report.notice_template(words), report.notice(words)) {

@@ -2255,7 +2255,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: For
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/selection.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:38b4bcfb72c56cc105211b221b8796f16f4c945c1f48f824245ce326f48d4177"
+source_sha256 = "sha256:408a93d56542d56a9d2c01f8f0aa9cc693c774edf5dbdf3c5556c7f7174a1b84"
 capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Protected selection publication and independent OS-backed application-run ownership. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
@@ -2669,7 +2669,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Acq
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/trust.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:05ce200848650383e3262293c7cfc4b35d8461705a23b715528354328601cef7"
+source_sha256 = "sha256:8014c6639691f86da324f751a665a83016acd85cd14ade7ed1e6c7012872f5b9"
 capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Persist update trust under independent exclusion before returning authenticated offers. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
@@ -2953,6 +2953,14 @@ disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: New HTTP publication supersedes pending selection and survives a fully offline restart. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/src/update_preparation/tests/untrusted_storage.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:ae9d529cdcf3e27cd17b5abd7fea90c39ea89ac4a68443b01fc159446a02ce6c"
+capabilities = ["std::fs::read_dir"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: A check sets untrusted update storage aside and keeps refusing older releases. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
 path = "crates/sugarsubstitute-supervision/src/update_repository.rs"
 owner = "sugarsubstitute-supervision"
 source_sha256 = "sha256:a16ebdb3a5564dfd6facd8701484927a925fff30694f38c9cd672b7cdaea4d11"
@@ -3021,7 +3029,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Eac
 [[records]]
 path = "crates/sugarsubstitute-update/src/releases/tests.rs"
 owner = "sugarsubstitute-update"
-source_sha256 = "sha256:916aaaa2fdd46244d84f33d2ec50f1cb7cadfc90e6169dacd166e7793664ffd3"
+source_sha256 = "sha256:a06819cd2af25305e7c41f73a3f4a67c244a19c7b8b79d907e50b71adb90fa10"
 capabilities = ["method metadata"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Durable floors admit only authenticated route identities and never claim application health. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -5340,7 +5348,7 @@ rationale = "Repository tooling release-signature.mjs: writes a new release mani
 [[records]]
 path = "installer/release/update-distribution.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:e9dd8cb5c56039dbf9e23f2bfa7b8385288534075990688b2bb17d42f479edc9"
+source_sha256 = "sha256:13b6c9e76602c8933d9d37446ed3887479111943c708c07d8c7509e030713127"
 capabilities = ["fs", "node:fs/promises", "readFile"]
 disposition = "tooling"
 rationale = "Repository tooling update-distribution.mjs: update-distribution Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -5348,7 +5356,7 @@ rationale = "Repository tooling update-distribution.mjs: update-distribution Rea
 [[records]]
 path = "installer/release/update-distribution.test.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:611b0029166f44b68987123dd91618c2eac6afe572ffe3096752107885e9173d"
+source_sha256 = "sha256:687ed2096eed961be1344b40c619e6a088acdaad4c66793777e58aeb8f63f2cd"
 capabilities = ["fs", "mkdtemp", "node:fs/promises", "readFile", "writeFile"]
 disposition = "tooling"
 rationale = "Repository tooling update-distribution.test.mjs: update-distribution.test Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."

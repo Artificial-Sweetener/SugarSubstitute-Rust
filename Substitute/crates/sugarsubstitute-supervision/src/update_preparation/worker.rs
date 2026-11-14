@@ -42,6 +42,7 @@ pub struct Worker {
     job: Option<OwnedJob<(), Arc<Failure>>>,
     owner: Option<ExecutionId>,
     version: Option<String>,
+    storage_set_aside: bool,
     progress: Progress,
     /// Peak new admission for the next step, observed together with `progress`.
     reservation: u64,
@@ -61,6 +62,7 @@ impl Worker {
             configuration.workspace,
             super::state::Source::Distribution {
                 identity: configuration.repository,
+                trusted_root: configuration.trusted_root,
                 repository: Box::new(Repository::new(configuration.policy, configuration.idle)),
             },
         )
@@ -99,12 +101,14 @@ impl Worker {
             failure: None,
             retirement_failure: None,
             version: None,
+            storage_set_aside: None,
         };
         Ok(Self {
             state: Arc::new(Mutex::new(state)),
             job: None,
             owner: None,
             version: None,
+            storage_set_aside: false,
             progress: Progress::Opening,
             reservation: Progress::Opening.reservation(),
             closing: false,
@@ -120,6 +124,12 @@ impl Worker {
     /// Version label of the authenticated offer, as of the last observed boundary.
     pub fn version(&self) -> Option<&str> {
         self.version.as_deref()
+    }
+
+    /// Whether this campaign found update storage another program had changed, set it aside
+    /// and set updates up again, as of the last observed boundary.
+    pub fn storage_set_aside(&self) -> bool {
+        self.storage_set_aside
     }
 
     /// Whether an admitted step still requires its actual terminal observation.
@@ -216,6 +226,7 @@ impl Worker {
         self.job = None;
         let state = crate::registry::lock(&self.state);
         self.version.clone_from(&state.version);
+        self.storage_set_aside = state.storage_set_aside.is_some();
         let continues = !self.closing
             && matches!(completion.outcome, JobOutcome::TimedOut)
             && state.continues_download();

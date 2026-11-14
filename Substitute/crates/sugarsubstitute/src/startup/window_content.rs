@@ -103,6 +103,7 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
             StartupNotice::Repairing => UpdateNotice::Repairing,
             StartupNotice::PreviousVersionRunning => UpdateNotice::PreviousVersionRunning,
             StartupNotice::Sugarcubes(report) => UpdateNotice::Sugarcubes(report),
+            StartupNotice::StorageSetAside => UpdateNotice::StorageSetAside,
         })
     }
 

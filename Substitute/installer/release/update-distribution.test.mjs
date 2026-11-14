@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { changelogSection, releaseDistribution, writeUpdateDistribution } from './update-distribution.mjs'
+import { changelogSection, releaseDistribution, repositoryRoot, writeUpdateDistribution } from './update-distribution.mjs'
 
 const notesTemplate = 'https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/releases/tag/substitute-v{version}'
 
@@ -30,7 +30,8 @@ const released = [
 
 test('the committed release distribution links each version to its published release notes', async () => {
   const distribution = JSON.parse(await fs.readFile(releaseDistribution, 'utf8'))
-  assert.equal(distribution.schema_version, 3)
+  assert.equal(distribution.schema_version, 4)
+  assert.equal(distribution.trusted_root, await fs.readFile(repositoryRoot, 'utf8'))
   assert.equal(distribution.release_notes, notesTemplate)
   assert.equal(distribution.update_policy, 'beta_eager')
   assert.equal(distribution.feed.transport, 'https')
@@ -84,12 +85,13 @@ test('an existing output, a relative output and a malformed source fail closed',
     { release_notes: 'https://example.test/{version}/{version}' },
     { release_notes: 'http://example.test/{version}' },
     { release_notes: 'https://example.test/{version}?tab=notes' },
-    { schema_version: 2 },
+    { schema_version: 3 },
+    { trusted_root: '{}' },
   ]) {
     const source = path.join(root, 'source.json')
     await fs.writeFile(source, JSON.stringify({ ...committed, ...change }))
     const fresh = path.join(root, `fresh-${Math.random().toString(16).slice(2)}.json`)
-    await assert.rejects(writeUpdateDistribution({ workspace: root, source, output: fresh }), /release notes|schema 3|https/i)
+    await assert.rejects(writeUpdateDistribution({ workspace: root, source, output: fresh }), /release notes|schema 4|https|trusted root/i)
     await assert.rejects(fs.access(fresh))
   }
 })

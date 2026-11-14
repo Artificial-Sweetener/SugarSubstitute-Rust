@@ -41,6 +41,21 @@ impl TrustStore {
             SelectionStore::open(installation_root, context).map_err(io::Error::other)?;
         let (selection, _selection_guard) =
             selection_store.lock_initial(context).map_err(io::Error::other)?;
+        let history = sugarsubstitute_update::ReleaseHistory::empty();
+        Self::establish(installation_root, repository, trust, &history, &selection, context)
+    }
+
+    /// Publish fresh trust state from `trust` and `history` for `selection`'s installation, then
+    /// its continuity marker. The caller holds selection writer custody and has established that
+    /// no trust state or continuity marker exists.
+    pub(super) fn establish(
+        installation_root: &Path,
+        repository: [u8; 32],
+        trust: RepositoryTrust,
+        history: &sugarsubstitute_update::ReleaseHistory,
+        selection: &sugarsubstitute_contracts::installation::InstallationRecord,
+        context: &JobContext,
+    ) -> Result<Self, TrustFailure> {
         let memory = context.memory().claim(1024 * 1024).map_err(io::Error::other)?;
         let parent = Directory::open(installation_root, false)?;
         let ownership = ownership::read(&parent)?;
@@ -55,7 +70,7 @@ impl TrustStore {
             envelope::Kind::Releases,
             &installation,
             &repository,
-            &sugarsubstitute_update::ReleaseHistory::empty().encode()?,
+            &history.encode()?,
         )?;
         let state = ownership::state(&parent)?;
         let destination = state.path().join(DIRECTORY);
@@ -66,7 +81,7 @@ impl TrustStore {
             )
             .into());
         }
-        // The selection's initial lock serializes initialization; earlier attempts are dead.
+        // The selection writer serializes initialization; earlier attempts are dead.
         protection::with(context, |protection| {
             staging::reclaim(
                 &state,

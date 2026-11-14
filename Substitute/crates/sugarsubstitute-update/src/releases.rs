@@ -114,6 +114,33 @@ impl ReleaseHistory {
         Ok(())
     }
 
+    /// History for a fresh trust namespace of an installation that already runs a release:
+    /// every route in `routes` starts at the running release's `sequence` and package `digest`,
+    /// so nothing older than what runs is ever accepted again. A `sequence` of zero means no
+    /// release runs yet and gives empty history.
+    /// # Errors
+    /// Rejects more routes than history holds and the same route twice.
+    pub fn running(
+        routes: &[(Channel, Component, Platform)],
+        sequence: u64,
+        digest: [u8; 32],
+    ) -> Result<Self, Error> {
+        let mut history = Self::empty();
+        if sequence == 0 {
+            return Ok(history);
+        }
+        for &(channel, component, platform) in routes {
+            let floor = Floor { channel, component, platform, sequence, digest };
+            if history.floors.len() == MAX_ROUTES
+                || history.floors.iter().any(|other| other.same_route(&floor))
+            {
+                return Err(Error::Bound);
+            }
+            history.floors.push(floor);
+        }
+        Ok(history)
+    }
+
     /// Durable floor for `request`'s route, if this installation ever authorised one.
     pub(crate) fn floor(&self, request: &Request) -> Option<RouteFloor> {
         self.floors

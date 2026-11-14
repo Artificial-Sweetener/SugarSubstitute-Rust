@@ -26,6 +26,9 @@ pub struct Configuration {
     pub policy: Policy,
     /// Finite idle network timeout, independent of the host's per-job execution deadline.
     pub idle: Duration,
+    /// Root metadata of that repository, compiled into the build. Installed trust starts from it
+    /// again only when its protected storage can no longer be trusted.
+    pub trusted_root: Vec<u8>,
 }
 
 /// Local startup inputs. Repository authority comes from protected installation state;

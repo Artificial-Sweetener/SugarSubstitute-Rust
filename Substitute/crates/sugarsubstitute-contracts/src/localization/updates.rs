@@ -33,13 +33,15 @@ pub struct UpdateMessages {
     pub previous_running: &'static str,
     /// The newer version's files were damaged, so the one before it runs while it is repaired.
     pub repairing: &'static str,
+    /// Another program changed the update storage, so it was set aside and set up again.
+    pub storage_set_aside: &'static str,
     /// Update report step names in [`AttemptPhase`] declaration order.
     pub phases: [&'static str; 7],
 }
 
 impl UpdateMessages {
     /// Enumerate every owned label for complete registry coverage checks.
-    pub const fn labels(&self) -> [&'static str; 18] {
+    pub const fn labels(&self) -> [&'static str; 19] {
         let p = self.phases;
         [
             self.ready,
@@ -53,6 +55,7 @@ impl UpdateMessages {
             self.updated,
             self.previous_running,
             self.repairing,
+            self.storage_set_aside,
             p[0],
             p[1],
             p[2],
@@ -95,6 +98,7 @@ pub static EN: UpdateMessages = UpdateMessages {
     updated: "Updated to version {version}",
     previous_running: "The previous version is running.",
     repairing: "SugarSubstitute is running the previous version while it repairs the update.",
+    storage_set_aside: "Update storage had been changed by another program, so it was set aside and updates were set up again.",
     phases: [
         "Getting ready",
         "Checking for updates",
@@ -119,6 +123,7 @@ pub static ZH_HANS: UpdateMessages = UpdateMessages {
     updated: "已更新到版本 {version}",
     previous_running: "正在运行之前的版本。",
     repairing: "SugarSubstitute 正在运行之前的版本，同时修复这次更新。",
+    storage_set_aside: "更新存储已被其他程序更改，因此已将其移到一旁，并重新设置了更新。",
     phases: [
         "正在准备",
         "正在检查更新",
@@ -143,6 +148,7 @@ pub static JA: UpdateMessages = UpdateMessages {
     updated: "バージョン {version} に更新しました",
     previous_running: "以前のバージョンで動作しています。",
     repairing: "SugarSubstitute は更新を修復する間、以前のバージョンで動作しています。",
+    storage_set_aside: "更新用の保存領域が別のプログラムによって変更されていたため、退避して更新をもう一度設定しました。",
     phases: [
         "準備中",
         "更新を確認中",
@@ -167,6 +173,7 @@ pub static KO: UpdateMessages = UpdateMessages {
     updated: "버전 {version}(으)로 업데이트됨",
     previous_running: "이전 버전이 실행 중입니다.",
     repairing: "SugarSubstitute가 업데이트를 복구하는 동안 이전 버전으로 실행 중입니다.",
+    storage_set_aside: "다른 프로그램이 업데이트 저장소를 변경해서 따로 보관하고 업데이트를 다시 설정했습니다.",
     phases: [
         "준비 중",
         "업데이트 확인 중",
@@ -191,6 +198,7 @@ pub static ES: UpdateMessages = UpdateMessages {
     updated: "Actualizado a la versión {version}",
     previous_running: "Se está usando la versión anterior.",
     repairing: "SugarSubstitute está usando la versión anterior mientras repara la actualización.",
+    storage_set_aside: "Otro programa había cambiado el almacenamiento de actualizaciones, así que se apartó y las actualizaciones se configuraron de nuevo.",
     phases: [
         "Preparando",
         "Buscando actualizaciones",

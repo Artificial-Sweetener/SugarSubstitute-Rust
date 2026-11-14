@@ -196,6 +196,12 @@ impl Parent {
         self.attempt.as_ref().and_then(AttemptChannel::progress)
     }
 
+    /// Whether the running or last attempt set untrusted update storage aside and set updates
+    /// up again.
+    pub(crate) fn storage_set_aside(&self) -> bool {
+        self.attempt.as_ref().is_some_and(AttemptChannel::storage_set_aside)
+    }
+
     /// Validate the channel's frames. Once the helper is gone, a channel with nothing more to
     /// deliver closes so that it retires; an authenticated channel still owed a result first
     /// drains what the helper wrote, ending when the pipe breaks.

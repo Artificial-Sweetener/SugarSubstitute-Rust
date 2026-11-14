@@ -97,8 +97,9 @@ pub use trust::{
     OFFER_RESERVATION_BYTES,
 };
 pub use trust::{
-    AuthorityChange, MetadataMode, ReceiptAuthority, TRUST_OPERATION_RESERVATION_BYTES,
-    TRUST_RESERVATION_BYTES, TrustFailure, TrustStore, UpdateAuthorization, UpdateReceipt,
+    AuthorityChange, MetadataMode, ReceiptAuthority, SET_ASIDE_FOLDER,
+    TRUST_OPERATION_RESERVATION_BYTES, TRUST_RESERVATION_BYTES, TrustFailure, TrustStore,
+    UpdateAuthorization, UpdateReceipt,
 };
 pub(crate) use trust::{UPDATE_RECEIPT_FILE, UPDATE_RECEIPT_STAGE};
 pub use updater_package::{

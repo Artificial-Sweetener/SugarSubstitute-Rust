@@ -70,6 +70,7 @@ pub(in crate::updates) struct AttemptChannel {
     verification_queued: bool,
     next_operation: u64,
     progress: Option<AttemptProgress>,
+    storage_set_aside: bool,
     outcome: Option<AttemptOutcome>,
     cancel: Cancel,
     buffer: Option<LifecyclePipeWriteBuffer>,
@@ -113,6 +114,7 @@ impl AttemptChannel {
             verification_queued: false,
             next_operation: 0,
             progress: None,
+            storage_set_aside: false,
             outcome: None,
             cancel: Cancel::None,
             buffer: None,
@@ -147,6 +149,11 @@ impl AttemptChannel {
     /// Latest validated progress.
     pub(in crate::updates) const fn progress(&self) -> Option<AttemptProgress> {
         self.progress
+    }
+
+    /// Whether the helper said it set untrusted update storage aside.
+    pub(in crate::updates) const fn storage_set_aside(&self) -> bool {
+        self.storage_set_aside
     }
 
     /// The helper's validated result, once.
@@ -251,6 +258,10 @@ impl AttemptChannel {
                     match message {
                         AttemptMessage::Progress { progress } => {
                             self.progress = Some(progress);
+                            self.read()?;
+                        }
+                        AttemptMessage::StorageSetAside => {
+                            self.storage_set_aside = true;
                             self.read()?;
                         }
                         AttemptMessage::Finished { result } => self.outcome = Some(result),

@@ -762,7 +762,7 @@ rationale = "Caption layout places the host's localized caption labels and the c
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_caption_contract.rs"
-source_sha256 = "sha256:ec7a86711bc44f44b0f8ce357be14c07c14671582e033893364867b07fb67136"
+source_sha256 = "sha256:92291bb168138ccd198bf70daa37d67bcbd739171a0540dbb37da433aabed5fe"
 kind = "native"
 rationale = "Main caption contracts borrow localized labels from the host. They define presentation data and no catalog or fallback policy."
 

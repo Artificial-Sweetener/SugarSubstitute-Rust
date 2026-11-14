@@ -47,6 +47,8 @@ pub(super) fn configuration(fixture: &Fixture, policy: Policy) -> Configuration 
         policy,
         // The product's longest supported idle timeout: only a dead peer reaches it.
         idle: Duration::from_secs(120),
+        trusted_root: SignedPackage::new(&fixture.archive, 1)
+            .map_or_else(|_| Vec::new(), |signed| signed.root),
     }
 }
 

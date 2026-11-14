@@ -115,7 +115,14 @@ impl Session {
             None => self.worker.as_ref().map(Worker::progress).and_then(attempt_progress),
         };
         let version = self.worker.as_ref().and_then(Worker::version).map(str::to_owned);
+        let set_aside = match &self.engine {
+            Some(engine) => engine.storage_set_aside(),
+            None => self.worker.as_ref().is_some_and(Worker::storage_set_aside),
+        };
         let Some(attempt) = &mut self.attempt else { return };
+        if set_aside {
+            attempt.storage_set_aside();
+        }
         if let Some(progress) = progress {
             self.phase = progress.phase;
             attempt.progress(progress);

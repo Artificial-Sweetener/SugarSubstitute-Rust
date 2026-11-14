@@ -118,3 +118,16 @@ files = [
 consumers = [
   "crates/sugarsubstitute-desktop/tests/host_conformance.mjs",
 ]
+
+# The update repository's trusted root is committed once at the monorepo root, where the release
+# workflow signs against it. Release distributions carry it and the update tests read it in place.
+[[components]]
+id = "update-repository-root"
+root = ".github/update-repository"
+owner = "Update repository: the committed trusted root metadata every release distribution carries"
+files = [".github/update-repository/root.json"]
+consumers = [
+  "crates/sugarsubstitute-update/tests/distribution.rs",
+  "crates/sugarsubstitute/src/updates/test_support.rs",
+  "installer/release/update-distribution.mjs",
+]

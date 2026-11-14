@@ -1100,6 +1100,6 @@ rationale = "The real manifest producer test runs the Python named by SUBSTITUTE
 [[records]]
 path = "installer/release/update-distribution.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:e9dd8cb5c56039dbf9e23f2bfa7b8385288534075990688b2bb17d42f479edc9"
+source_sha256 = "sha256:13b6c9e76602c8933d9d37446ed3887479111943c708c07d8c7509e030713127"
 capabilities = ["arguments"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."

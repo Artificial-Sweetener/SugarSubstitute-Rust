@@ -74,3 +74,9 @@ pub(crate) fn retain_capacity(
     })?;
     retained.ok_or_else(|| "Capacity fixture lost its reservation".into())
 }
+
+/// The update repository's committed trusted root, which every release distribution carries.
+pub(crate) const TRUSTED_ROOT: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../../.github/update-repository/root.json"
+));

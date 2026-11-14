@@ -25,6 +25,7 @@ pub(in crate::setup_storage) use preparation::{PreparationAttempt, try_preparati
 mod receipt;
 mod records;
 mod releases;
+mod reset;
 mod session;
 mod subscription;
 mod update_receipt;
@@ -49,6 +50,7 @@ const CHECKPOINT_STAGE: &str = "pending";
 const RECORD_STAGE: &str = "record-pending";
 const RELEASES_STAGE: &str = "releases-pending";
 const STAGES: [&str; 4] = [CHECKPOINT_STAGE, RECORD_STAGE, RELEASES_STAGE, files::IMMUTABLE_STAGE];
+pub use reset::SET_ASIDE_FOLDER;
 use std::{fs::File, io, path::Path};
 use sugarsubstitute_contracts::{
     execution::{JobContext, MemoryClaim, MemoryLease},

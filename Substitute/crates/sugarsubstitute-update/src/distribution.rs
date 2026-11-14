@@ -9,8 +9,8 @@ use std::io;
 /// Maximum encoded producing-build configuration, in bytes.
 pub const MAX_BYTES: usize = 16 * 1024;
 /// Encoded schema this build accepts; version 2 added the required update policy, version 3 the
-/// required release-notes location.
-pub const SCHEMA_VERSION: u32 = 3;
+/// required release-notes location, version 4 the repository's trusted root metadata.
+pub const SCHEMA_VERSION: u32 = 4;
 /// Placeholder that a release-notes location replaces with the version it describes.
 pub const VERSION_PLACEHOLDER: &str = "{version}";
 
@@ -22,6 +22,7 @@ struct Configuration {
     feed: Feed,
     update_policy: UpdatePolicy,
     release_notes: String,
+    trusted_root: String,
 }
 
 #[derive(Deserialize)]
@@ -60,6 +61,7 @@ pub struct Distribution {
     policy: Policy,
     update_policy: UpdatePolicy,
     release_notes: ReleaseNotes,
+    trusted_root: Vec<u8>,
 }
 
 /// Where a build's release notes are published: an https URL template containing
@@ -135,12 +137,23 @@ impl Distribution {
             Feed::Loopback { port } => Policy::loopback(port),
         }
         .map_err(|cause| io::Error::new(io::ErrorKind::InvalidData, cause))?;
+        let trusted_root = configuration.trusted_root.into_bytes();
+        crate::RepositoryTrust::bootstrap(&trusted_root)
+            .map_err(|cause| io::Error::new(io::ErrorKind::InvalidData, cause))?;
         Ok(Self {
             repository: configuration.repository,
             policy,
             update_policy: configuration.update_policy,
             release_notes: ReleaseNotes::new(configuration.release_notes)?,
+            trusted_root,
         })
+    }
+
+    /// The exact root metadata this build's repository was created with. Installed trust starts
+    /// from it again only when its protected storage can no longer be trusted; the installation's
+    /// rollback floor then keeps everything older than the running release refused.
+    pub fn trusted_root(&self) -> &[u8] {
+        &self.trusted_root
     }
 
     /// Where this build's release notes are published, for the "What's new" link.

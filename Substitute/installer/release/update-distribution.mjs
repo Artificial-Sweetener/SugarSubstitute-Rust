@@ -7,12 +7,15 @@ import { createHash } from 'node:crypto'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 /**
- * The distribution every release build compiles in: repository, feed, policy and notes link.
+ * The distribution every release build compiles in: repository, feed, policy, notes link and the
+ * repository's trusted root.
  * Its repository identity is the SHA-256 of
  * `sugarsubstitute-update-repository:github.com/Artificial-Sweetener/SugarSubstitute-Rust/substitute-updates`
  * and never changes once a release ships it, because installations bind their trust to it.
  */
 export const releaseDistribution = fileURLToPath(new URL('./update-distribution.json', import.meta.url))
+/** The root metadata the update repository was created with; installed trust can restart from it. */
+export const repositoryRoot = fileURLToPath(new URL('../../../.github/update-repository/root.json', import.meta.url))
 const workspaceRoot = fileURLToPath(new URL('../../', import.meta.url))
 const distributionLimit = 16 * 1024
 const changelogLimit = 16 * 1024 ** 2
@@ -41,11 +44,17 @@ export function changelogSection(changelog, version) {
   return section
 }
 
-/** Validate the committed distribution as far as release tooling can: one https notes template. */
-function requireReleaseNotes(distribution, version) {
+/**
+ * Validate the committed distribution as far as release tooling can: one https notes template and
+ * the repository's trusted root, exactly as the update repository commits it.
+ */
+function requireReleaseNotes(distribution, version, trustedRoot) {
   const template = distribution?.release_notes
-  if (distribution?.schema_version !== 3 || typeof template !== 'string' || template.split(placeholder).length !== 2) {
-    throw new Error('The release distribution needs schema 3 and one release notes template with a version placeholder')
+  if (distribution?.schema_version !== 4 || typeof template !== 'string' || template.split(placeholder).length !== 2) {
+    throw new Error('The release distribution needs schema 4 and one release notes template with a version placeholder')
+  }
+  if (distribution.trusted_root !== trustedRoot) {
+    throw new Error('The release distribution must carry the update repository trusted root exactly')
   }
   const link = new URL(template.replace(placeholder, version))
   if (link.protocol !== 'https:' || link.username || link.password || link.search || !link.hostname) {
@@ -59,7 +68,7 @@ function requireReleaseNotes(distribution, version) {
  * is confirmed. The bytes are the committed release distribution, unchanged; its notes link opens
  * the published release whose body is that section. `output` must not exist.
  */
-export async function writeUpdateDistribution({ workspace = workspaceRoot, source = releaseDistribution, output }) {
+export async function writeUpdateDistribution({ workspace = workspaceRoot, source = releaseDistribution, root = repositoryRoot, output }) {
   if (!path.isAbsolute(output ?? '')) throw new Error('The update distribution needs a new absolute output path')
   const version = await workspaceVersion(workspace)
   const changelogFile = path.join(workspace, 'CHANGELOG.md')
@@ -67,7 +76,8 @@ export async function writeUpdateDistribution({ workspace = workspaceRoot, sourc
   const section = changelogSection(await fs.readFile(changelogFile, 'utf8'), version)
   const bytes = await fs.readFile(source)
   if (bytes.length === 0 || bytes.length > distributionLimit) throw new Error('The release distribution is empty or exceeds its compiled bound')
-  const releaseNotes = requireReleaseNotes(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)), version)
+  const trustedRoot = new TextDecoder('utf-8', { fatal: true }).decode(await fs.readFile(root))
+  const releaseNotes = requireReleaseNotes(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)), version, trustedRoot)
   await fs.writeFile(output, bytes, { flag: 'wx' })
   const sha256 = data => createHash('sha256').update(data).digest('hex')
   return { distribution: output, version, releaseNotes, sha256: sha256(bytes), changelogSha256: sha256(section) }

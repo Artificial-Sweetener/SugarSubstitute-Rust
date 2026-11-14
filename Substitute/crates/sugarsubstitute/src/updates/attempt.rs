@@ -50,6 +50,8 @@ pub(super) struct AttemptReporter {
     result_in_flight: bool,
     progress: Option<AttemptProgress>,
     sent: Option<AttemptProgress>,
+    /// Update storage was set aside: `Some(false)` until written, then `Some(true)`.
+    set_aside: Option<bool>,
     result: Option<AttemptOutcome>,
     delivered: bool,
     cancel_requested: bool,
@@ -76,6 +78,7 @@ impl AttemptReporter {
             result_in_flight: false,
             progress: None,
             sent: None,
+            set_aside: None,
             result: None,
             delivered: false,
             cancel_requested: false,
@@ -124,6 +127,13 @@ impl AttemptReporter {
         }
     }
 
+    /// Say that this attempt set untrusted update storage aside, once and before its result.
+    pub(super) fn storage_set_aside(&mut self) {
+        if self.set_aside.is_none() && !self.result_in_flight && !self.delivered {
+            self.set_aside = Some(false);
+        }
+    }
+
     /// Whether a result was recorded, whether or not it reached the pipe yet.
     pub(super) const fn has_result(&self) -> bool {
         self.result.is_some() || self.result_in_flight || self.delivered
@@ -134,7 +144,10 @@ impl AttemptReporter {
     pub(super) const fn quiet(&self) -> bool {
         self.delivered
             || self.failure.is_some()
-            || (self.result.is_none() && !self.result_in_flight && self.writing.is_none())
+            || (self.result.is_none()
+                && !self.result_in_flight
+                && self.writing.is_none()
+                && !matches!(self.set_aside, Some(false)))
     }
 
     /// Record the attempt's one result. Later results are ignored: the first one is the answer.
@@ -233,7 +246,10 @@ impl AttemptReporter {
             self.write(&capability, self.session_deadline()?)?;
             self.hello = Hello::Issued;
         } else if self.hello == Hello::Written && self.writing.is_none() {
-            let message = if let Some(result) = self.result.take() {
+            let message = if self.set_aside == Some(false) {
+                self.set_aside = Some(true);
+                Some(AttemptMessage::StorageSetAside)
+            } else if let Some(result) = self.result.take() {
                 self.result_in_flight = true;
                 Some(AttemptMessage::Finished { result })
             } else {

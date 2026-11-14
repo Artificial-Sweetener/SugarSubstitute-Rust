@@ -44,6 +44,25 @@ impl Descriptor {
         }
     }
 }
+/// Whether `error` was caused by protected storage whose security another account, an
+/// unprotected DACL, a foreign owner or a lowered label has made untrustworthy.
+pub(crate) fn untrusted(error: &(dyn std::error::Error + 'static)) -> bool {
+    let mut current = Some(error);
+    while let Some(cause) = current {
+        if let Some(claim) = cause.downcast_ref::<ClaimError>()
+            && descriptor::UNTRUSTED.contains(&claim.operation())
+        {
+            return true;
+        }
+        // An I/O error's `source` skips the error it wraps, so look inside it first.
+        current = match cause.downcast_ref::<std::io::Error>().and_then(std::io::Error::get_ref) {
+            Some(inner) => Some(inner),
+            None => cause.source(),
+        };
+    }
+    false
+}
+
 const INFORMATION: u32 =
     OWNER_SECURITY_INFORMATION.0 | DACL_SECURITY_INFORMATION.0 | LABEL_SECURITY_INFORMATION.0;
 pub(crate) fn verify(

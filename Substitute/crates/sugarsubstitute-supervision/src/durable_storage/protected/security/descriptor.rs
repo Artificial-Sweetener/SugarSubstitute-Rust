@@ -4,6 +4,9 @@
 #[cfg(test)]
 mod tests;
 pub(super) const MAXIMUM_BYTES: usize = 8192;
+/// Refusals meaning the security no longer keeps other accounts out, as opposed to a malformed
+/// or oversized descriptor.
+pub(super) const UNTRUSTED: [&str; 2] = ["foreign_storage_security", "security_descriptor_shape"];
 const CONTROL: u16 = 0x8000 | 0x1000 | 0x0004 | 0x0010;
 pub(super) const SYSTEM: &[u8] = &[1, 1, 0, 0, 0, 0, 0, 5, 18, 0, 0, 0];
 const MEDIUM: &[u8] = &[1, 1, 0, 0, 0, 0, 0, 16, 0, 32, 0, 0];

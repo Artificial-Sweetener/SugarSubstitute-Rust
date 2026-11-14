@@ -29,6 +29,9 @@ impl<C: EntryActivation> EntryRunner<C> {
             if let Some(progress) = updater.attempt_progress() {
                 self.update_status.observe(progress);
             }
+            if updater.storage_set_aside() {
+                self.update_status.observe_storage_set_aside();
+            }
         }
         self.update_status.poll();
         self.update_status.observe_sugarcubes(self.child.sugarcubes_update());

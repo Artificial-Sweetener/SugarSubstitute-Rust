@@ -12,8 +12,9 @@ use std::{fmt, num::NonZeroU64};
 
 /// Registered protocol name of the update-attempt channel.
 pub const PROTOCOL: &str = "sugarsubstitute.update-attempt";
-/// Protocol version written and accepted by this build.
-pub const PROTOCOL_VERSION: u32 = 1;
+/// Protocol version written and accepted by this build; version 2 added
+/// [`AttemptMessage::StorageSetAside`].
+pub const PROTOCOL_VERSION: u32 = 2;
 /// Largest encoded message, in bytes, accepted before decoding.
 pub const MAX_MESSAGE_BYTES: usize = 8 * 1024;
 
@@ -64,6 +65,9 @@ pub enum AttemptMessage {
         /// Current stage and byte counts.
         progress: AttemptProgress,
     },
+    /// Update storage another program had changed was set aside and set up again; the attempt
+    /// continues.
+    StorageSetAside,
     /// The attempt's terminal result; nothing may follow it.
     Finished {
         /// How the attempt ended.
@@ -201,7 +205,7 @@ fn validate(message: &AttemptMessage) -> Result<(), AttemptCodecError> {
             !version.is_empty() && version.len() <= MAX_VERSION_BYTES
         }
         AttemptMessage::Finished { result: AttemptOutcome::Failed(report) } => valid_report(report),
-        AttemptMessage::Finished { .. } => true,
+        AttemptMessage::Finished { .. } | AttemptMessage::StorageSetAside => true,
     };
     if valid { Ok(()) } else { Err(AttemptCodecError::Bounds) }
 }
@@ -237,6 +241,7 @@ mod tests {
                     bytes: Some((10, 100)),
                 },
             },
+            AttemptMessage::StorageSetAside,
             AttemptMessage::Finished { result: AttemptOutcome::Current },
             AttemptMessage::Finished {
                 result: AttemptOutcome::Prepared { version: "2.0.0".into() },

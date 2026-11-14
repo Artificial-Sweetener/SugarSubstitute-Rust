@@ -147,3 +147,35 @@ fn incompatible_or_rebound_offer_cannot_advance_publication_history() -> TestRes
     assert_eq!(history.encode()?, ReleaseHistory::empty().encode()?);
     Ok(())
 }
+
+#[test]
+fn history_rebuilt_for_a_running_release_refuses_anything_older_than_it() -> TestResult {
+    let request = request();
+    let running = offer(&request, 8, b"running")?;
+    let digest = running.offer().package_digest();
+    let routes = [
+        (Channel::Release, Component::Application, Platform::WindowsX86_64),
+        (Channel::Canary, Component::Application, Platform::WindowsX86_64),
+    ];
+    let history = ReleaseHistory::decode(&ReleaseHistory::running(&routes, 8, digest)?.encode()?)?;
+    assert!(matches!(
+        history.check(&request, &offer(&request, 7, b"older")?),
+        Err(Error::Offer(Rejection::Rollback))
+    ));
+    assert!(matches!(
+        history.check(&request, &offer(&request, 8, b"other")?),
+        Err(Error::Offer(Rejection::Identity))
+    ));
+    history.check(&request, &running)?;
+    history.check(&request, &offer(&request, 9, b"newer")?)?;
+    let mut canary = request;
+    canary.channel = Channel::Canary;
+    assert!(matches!(
+        history.check(&canary, &offer(&canary, 7, b"older")?),
+        Err(Error::Offer(Rejection::Rollback))
+    ));
+    // Nothing runs yet: history stays empty and admits any authenticated release.
+    ReleaseHistory::running(&routes, 0, digest)?.check(&request, &offer(&request, 1, b"first")?)?;
+    assert!(ReleaseHistory::running(&[routes[0], routes[0]], 8, digest).is_err());
+    Ok(())
+}
