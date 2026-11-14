@@ -39,7 +39,8 @@ impl TrustStore {
     /// metadata this build ships. Returns the store and, when storage was set aside, the folder
     /// it was moved to. Storage whose DACL only inherits again while still letting in no one but
     /// this account and SYSTEM is protected again in place and kept instead. Call only after
-    /// [`Self::storage_untrusted`] judged an open of this installation's trust. The accepted
+    /// [`Self::storage_untrusted`] judged an open of this installation's trust; storage that opens
+    /// once this reset holds the selection writer is kept as it is. The accepted
     /// release keeps starting throughout: selection is read, never changed. Run on a storage
     /// worker reserving `TRUST_RESERVATION_BYTES`.
     /// # Errors
@@ -54,18 +55,18 @@ impl TrustStore {
         check(context)?;
         let store = SelectionStore::open(installation_root, context).map_err(io::Error::other)?;
         let (selection, _writer) = store.hold_writer(context).map_err(io::Error::other)?;
-        if reprotect_harmless(installation_root, context)? {
-            match Self::open_selected(installation_root, Some(repository), &selection, context) {
-                Ok(trust) => {
-                    tracing::warn!(
-                        operation = "update_storage_reprotected",
-                        "Update storage that inherited permissions again was protected again"
-                    );
-                    return Ok((trust, None));
-                }
-                Err(cause) if Self::storage_untrusted(&cause) => {}
-                Err(cause) => return Err(cause),
-            }
+        // Another check may have set the storage up again while this one waited for the writer.
+        if let Some(trust) = Self::reopen(installation_root, repository, &selection, context)? {
+            return Ok((trust, None));
+        }
+        if reprotect_harmless(installation_root, context)?
+            && let Some(trust) = Self::reopen(installation_root, repository, &selection, context)?
+        {
+            tracing::warn!(
+                operation = "update_storage_reprotected",
+                "Update storage that inherited permissions again was protected again"
+            );
+            return Ok((trust, None));
         }
         // A reopen above holds its own work reservation, so this one is claimed only now.
         let _work = context.memory().claim(WORK_BYTES).map_err(io::Error::other)?;
@@ -77,6 +78,21 @@ impl TrustStore {
         tracing::warn!(operation = "update_storage_set_aside", folder = %set_aside.display(),
             "Update storage another program changed was set aside; updates were set up again");
         Ok((trust, Some(set_aside)))
+    }
+
+    /// Open this installation's trust for `selection`, whose writer the caller holds, or `None`
+    /// while its storage is still untrusted.
+    fn reopen(
+        installation_root: &Path,
+        repository: [u8; 32],
+        selection: &InstallationRecord,
+        context: &JobContext,
+    ) -> Result<Option<Self>, TrustFailure> {
+        match Self::open_selected(installation_root, Some(repository), selection, context) {
+            Ok(trust) => Ok(Some(trust)),
+            Err(cause) if Self::storage_untrusted(&cause) => Ok(None),
+            Err(cause) => Err(cause),
+        }
     }
 }
 

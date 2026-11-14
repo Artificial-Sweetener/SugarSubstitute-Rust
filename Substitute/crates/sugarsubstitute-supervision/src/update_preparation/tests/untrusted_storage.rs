@@ -111,3 +111,22 @@ fn a_check_protects_storage_that_only_inherits_again_instead_of_setting_it_aside
     drop(signed);
     installation.preserved()
 }
+
+#[test]
+fn a_reset_that_finds_the_storage_trusted_under_the_writer_keeps_it() -> TestResult {
+    let mut pipeline = Pipeline::new()?;
+    let (fixture, signed) = initialized(&mut pipeline)?;
+    let fixture = accept(&mut pipeline, fixture, 1)?;
+    let root = signed.root.clone();
+    let installation = pipeline.run(SIGNED_INSTALLER_RESERVATION_BYTES, move |context| {
+        // Another check set the storage up again while this one waited for the writer.
+        let (trust, set_aside) =
+            TrustStore::reset_untrusted(fixture.installation.path(), [92; 32], &root, &context)?;
+        assert!(set_aside.is_none(), "trusted storage was set aside");
+        drop(trust);
+        Ok(fixture)
+    })?;
+    assert!(!installation.installation.path().join("user").join(SET_ASIDE_FOLDER).exists());
+    drop(signed);
+    installation.preserved()
+}
