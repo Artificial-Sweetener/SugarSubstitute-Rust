@@ -96,6 +96,10 @@ impl Controls {
 }
 
 #[cfg(test)]
+#[path = "windows_controls_caption_frame_tests.rs"]
+#[allow(unsafe_code)]
+mod frame_tests;
+#[cfg(test)]
 #[path = "windows_controls_caption_hit_tests.rs"]
 #[allow(unsafe_code)]
 mod hit_tests;

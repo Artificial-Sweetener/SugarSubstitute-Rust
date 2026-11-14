@@ -790,13 +790,13 @@ rationale = "A private-desktop test titles its stand-in main window and report t
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/windows_controls_caption.rs"
-source_sha256 = "sha256:9cc36e1edb868492dc04d4410792c007aa8ae5a1e2624e24ce38165294b492ab"
+source_sha256 = "sha256:7ceb2121062006a7a7dd6a73c3fe7e406e47bf3745127c785001ec7a80f84b71"
 kind = "native"
 rationale = "Caption peers show the caption owner's words, which come from the typed catalog; Win32 receives them unchanged."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/windows_controls_caption_tests.rs"
-source_sha256 = "sha256:e80a7604c34c427bb6e4778fd68ac1129fa98c5b2d7366233f513e9a93990e15"
+source_sha256 = "sha256:5f1d642b7a978e9989940d0c471fb2a31d3a9cacbdbbb0cf989b2c1dc43948bb"
 kind = "fixture"
 rationale = "A private-desktop test uses stand-in window-button labels and its own window title; update words come from the catalog."
 
@@ -805,3 +805,9 @@ path = "crates/sugarsubstitute-desktop/src/windows_controls_caption_hit_tests.rs
 source_sha256 = "sha256:1c4a1e253645ee48d5d63395cee626ee105ae194156681798a6ebc7f5a256697"
 kind = "fixture"
 rationale = "Private-desktop hit tests use stand-in window-button labels and their own window titles; update words come from the catalog."
+
+[[records]]
+path = "crates/sugarsubstitute-desktop/src/windows_controls_caption_frame_tests.rs"
+source_sha256 = "sha256:6461b19ce72407d2a79bbb4e1cead910aa64050f1e7589870d1c4dfe09340270"
+kind = "fixture"
+rationale = "A private-desktop compositor test names its own window; no product copy is defined here."
