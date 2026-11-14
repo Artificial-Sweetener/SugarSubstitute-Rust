@@ -33,7 +33,8 @@ pub(in crate::updates) struct Completion {
 impl Parent {
     /// Adopt a prepared input only after inert construction succeeds. Errors preserve the caller's
     /// option, including an already published probe. A probe performs only finite verification
-    /// and is closed at its outer cutoff; a delegated preparation helper has no overall cutoff.
+    /// and is closed at its outer cutoff; a delegated preparation helper has no overall cutoff,
+    /// only the limits on its check and its exit.
     pub(in crate::updates) fn from_input(
         client: ExecutionClient,
         scope: LaunchScope,
@@ -82,6 +83,7 @@ impl Parent {
             retiring_application: false,
             process: None,
             until: None,
+            limit: None,
             wake_at,
             shutdown: None,
             continuation: None,

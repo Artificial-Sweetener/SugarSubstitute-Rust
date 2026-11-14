@@ -110,7 +110,10 @@ fn configuration(
 pub(crate) fn run(
     arguments: impl IntoIterator<Item = std::ffi::OsString>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    tracing::info!(operation = "update_preparation_started", "Update preparation process started");
     let options = options::Options::parse(arguments)?;
+    tracing::info!(operation = "update_preparation_installation", installation = %options.installation.display(),
+        "Update preparation opens the installation and reports to its coordinator");
     let (bootstrap, deadline) = options.attempt;
     let (installation, workspace) = (options.installation, options.workspace);
     let mut session = session::Session::new(

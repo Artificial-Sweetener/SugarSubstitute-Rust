@@ -9,6 +9,7 @@ use sugarsubstitute_contracts::{
     lifecycle::{CoordinatorEpoch, NamespaceId},
 };
 use sugarsubstitute_execution::ExecutionOwner;
+mod check_limit;
 mod prepared;
 type TestResult = std::result::Result<(), Box<dyn Error>>;
 
@@ -31,6 +32,7 @@ fn partial(client: ExecutionClient) -> Result<Parent> {
         retiring_application: false,
         process: None,
         until: None,
+        limit: None,
         wake_at: None,
         shutdown: None,
         continuation: None,
@@ -185,7 +187,8 @@ fn partially_admitted_registry_is_observed_and_released_before_join() -> TestRes
 }
 
 #[test]
-fn a_running_preparation_helper_has_no_overall_cutoff_or_campaign_wake() -> TestResult {
+fn a_helper_has_no_campaign_cutoff_and_its_check_is_limited_from_when_it_is_first_observed()
+-> TestResult {
     let clock = Arc::new(Manual::default());
     let wake = Arc::new(Wake::default());
     let mut owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
@@ -198,7 +201,10 @@ fn a_running_preparation_helper_has_no_overall_cutoff_or_campaign_wake() -> Test
     parent.advance(&batch, &jobs).map_err(|cause| cause as Box<dyn Error>)?;
     assert!(parent.shutdown.is_none());
     assert!(parent.failure.is_none());
-    assert_eq!(parent.next_deadline(), None);
+    assert_eq!(parent.until, None);
+    // Only its check is limited, from this first observation.
+    assert_eq!(parent.limit, Some((limits::Wait::Check, clock.now().checked_add(limits::CHECK)?)));
+    assert!(parent.next_deadline().is_some(), "the check's limit has no wake");
     let deadline = parent
         .constructing
         .as_ref()

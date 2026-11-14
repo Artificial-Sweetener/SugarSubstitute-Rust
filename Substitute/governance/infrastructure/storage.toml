@@ -2875,7 +2875,7 @@ consumer = "protocol_metadata"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/update_http/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:f26d6f46ec9e7a66de1d0c24c5c45a0966962e8ef9213e627c3170696bc69313"
+source_sha256 = "sha256:f0351e2655e065ab0fb28286ca2ac70e9c1d94d3cfa413b38315a5836e620cb0"
 capabilities = ["method metadata"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Actual WinHTTP requests against isolated execution-owned loopback sockets. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

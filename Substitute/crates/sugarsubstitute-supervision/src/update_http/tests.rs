@@ -26,6 +26,39 @@ fn silent_server_times_out_and_observes_the_client_close_its_socket() -> TestRes
 }
 
 #[test]
+fn a_server_that_accepts_and_never_answers_ends_the_request_at_the_idle_limit() -> TestResult {
+    worker::run_reserved(RESERVATION, |context, _| {
+        let mut silent = exchange("silent", None, 200, "", b"");
+        silent.response.clear();
+        silent.await_client_close = true;
+        let (server, policy) = Running::start(vec![silent], context)?;
+        let mut http = Http::new();
+        let result = http.metadata(
+            &policy,
+            policy.asset("silent")?,
+            100,
+            Duration::from_millis(50),
+            context,
+        );
+        let Err(Failure::Io(cause)) = result else {
+            return Err("A request no server answered did not end as a transport failure".into());
+        };
+        // ERROR_WINHTTP_TIMEOUT: the wait for response headers ended at the idle limit.
+        assert_eq!(
+            cause
+                .get_ref()
+                .and_then(|transport| std::error::Error::source(transport))
+                .and_then(|native| native.downcast_ref::<windows::core::Error>())
+                .map(|native| native.code().0),
+            Some(0x8007_2EE2_u32 as i32),
+            "ended for another cause: {cause:?}"
+        );
+        assert!(http.settled());
+        server.finish()
+    })
+}
+
+#[test]
 fn actual_http_follows_approved_redirect_and_reuses_settled_custody() -> TestResult {
     worker::run_reserved(RESERVATION, |context, _| {
         let (server, policy) = Running::start(

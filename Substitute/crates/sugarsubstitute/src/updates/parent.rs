@@ -5,6 +5,7 @@ mod attempt;
 mod cleanup;
 mod continuation;
 mod launch;
+mod limits;
 mod prepared;
 pub(super) use attempt::AttemptChannel;
 
@@ -55,8 +56,11 @@ pub(crate) struct Parent {
     retiring_application: bool,
     process: Option<ProcessKey>,
     /// Outer cutoff for a finite helper (an engine probe, or a continuation after close).
-    /// A preparation helper has none: its own step deadlines and stall timeout bound its work.
+    /// A preparation helper has none: its own step deadlines and stall timeout bound its work,
+    /// and `limit` bounds its check and its exit.
     until: Option<Moment>,
+    /// The limited wait an open preparation helper is in, and the moment that wait ends.
+    limit: Option<(limits::Wait, Moment)>,
     wake_at: Option<Instant>,
     shutdown: Option<ShutdownBudget>,
     continuation: Option<continuation::Window>,
@@ -112,6 +116,9 @@ impl Parent {
         if let Err(cause) = self.observe_attempt(now) {
             self.record(cause);
         }
+        if let Err(cause) = self.observe_limit(now) {
+            self.record(cause);
+        }
         if self.shutdown.is_none() {
             if self.failure.is_some() || self.until.is_some_and(|until| now >= until) {
                 self.close(None)?;
@@ -150,8 +157,9 @@ impl Parent {
         }
     }
 
-    /// The outer cutoff wake of a finite helper, then native graceful and final cleanup cutoffs.
-    /// A running preparation helper needs no wake: its completions arrive as execution events.
+    /// The outer cutoff wake of a finite helper or the end of a preparation helper's limited
+    /// wait, then native graceful and final cleanup cutoffs. A preparation helper that is
+    /// downloading or preparing needs no wake: its completions arrive as execution events.
     pub(crate) fn next_deadline(&self) -> Option<Instant> {
         if self.retired {
             return None;

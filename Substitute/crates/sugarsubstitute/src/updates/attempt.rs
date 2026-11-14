@@ -123,6 +123,10 @@ impl AttemptReporter {
             && !self.delivered
             && self.sent != Some(progress)
         {
+            if self.progress.map(|last| last.phase) != Some(progress.phase) {
+                tracing::info!(operation = "update_preparation_phase", phase = ?progress.phase,
+                    "Update preparation entered a phase");
+            }
             self.progress = Some(progress);
         }
     }
