@@ -139,6 +139,17 @@ impl MainActor {
                     .with_transparent(true)
                     .with_additional_browser_args("")
                     .without_download_handlers()
+                    // A link the page opens in a new window opens in the user's browser.
+                    .with_new_window_req_handler(
+                        |uri, _| match crate::windows_open_link::new_window(
+                            &uri,
+                            crate::windows_open_link::open,
+                        ) {
+                            crate::windows_open_link::NewWindow::Cancel => {
+                                wry::NewWindowResponse::Deny
+                            }
+                        },
+                    )
                     .with_bounds(self.browser_bounds()?);
                 // Proof builds only: DevTools must be enabled for the browser to open the
                 // remote-debugging port its environment names; shipped builds keep it closed.
