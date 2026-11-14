@@ -14,7 +14,7 @@ pub static JA: ReportMessages = ReportMessages {
     restart_unavailable: "再起動の準備ができませんでした。インシデントは引き続きローカルに保存されています。",
     include_dump: "メモリのスナップショットを含める（原因の特定に役立ちます）",
     dump_warning: "メモリのスナップショットには、パスワードやその他の個人情報が含まれる場合があります。",
-    save_title: "インシデントをエクスポート",
+    save_title: "レポートを保存",
     text_filter: "テキストレポート (*.txt)",
     archive_filter: "レポートとメモリダンプ (*.zip)",
     copied: "レポートをコピーしました。",
@@ -51,7 +51,7 @@ pub static JA: ReportMessages = ReportMessages {
     update_message: "アップデートをインストールできませんでした。現在のバージョンは引き続き使用でき、このレポートをコピーまたはエクスポートできます。",
     version: "バージョン",
     update_phase: "ステップ",
-    export_file_name: "SugarSubstitute アップデートレポート.txt",
+    update_file_name: "{product} アップデートレポート {date} {time}.txt",
     pack_update_title: "SugarCubes のアップデートに失敗しました",
     pack_update_message: "SugarCubes をアップデートできませんでした。現在のバージョンは引き続き使用でき、このレポートをコピーまたはエクスポートできます。",
     startup_failure: [

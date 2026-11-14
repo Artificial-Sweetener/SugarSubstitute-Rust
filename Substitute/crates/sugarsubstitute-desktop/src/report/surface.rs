@@ -42,6 +42,8 @@ pub struct ReportPresentation {
     pub(super) labels: ReportLabels,
     pub(super) words: &'static ReportMessages,
     pub(super) locale: &'static str,
+    /// The product the report is about, which names its saved file.
+    pub(super) subject: &'static str,
 }
 
 impl ReportPresentation {
@@ -62,7 +64,7 @@ impl ReportPresentation {
             dump_warning: words.dump_warning,
         };
         let content = ReportContent { has_details: details.is_some(), ..content };
-        Self { content, details, labels, words, locale: copy.id }
+        Self { content, details, labels, words, locale: copy.id, subject: copy.updates.product }
     }
 
     /// The full report text that Copy copies and Export writes, when the report has one.
@@ -136,7 +138,12 @@ impl ReportPresentation {
         pack: Option<&PackUpdateFailure>,
     ) -> Option<Self> {
         let (heading, version, step, details) = failed_update_sections(copy, app, pack)?;
-        Some(Self::failure(copy, window_title, heading, &version, &step, details))
+        let mut report = Self::failure(copy, window_title, heading, &version, &step, details);
+        // A report of SugarCubes' update alone is about SugarCubes, and its saved file says so.
+        if app.is_none() {
+            report.subject = copy.pack_updates.product;
+        }
+        Some(report)
     }
 
     /// The window's update report from the host's update status: its latest failed attempt and

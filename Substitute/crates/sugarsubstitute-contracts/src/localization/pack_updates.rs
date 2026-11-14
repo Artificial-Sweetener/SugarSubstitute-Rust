@@ -9,6 +9,8 @@
 /// [`super::updates::UpdateMessages::with_version`].
 #[non_exhaustive]
 pub struct PackUpdateMessages {
+    /// The pack's name, as an update report's file name shows it.
+    pub product: &'static str,
     /// Splash line while a SugarCubes update holds the start.
     pub updating: &'static str,
     /// Splash line while the previous SugarCubes version is put back; no retry is offered yet.
@@ -96,6 +98,7 @@ impl PackUpdateMessages {
 
 /// Canonical English words.
 pub static EN: PackUpdateMessages = PackUpdateMessages {
+    product: "SugarCubes",
     updating: "Updating SugarCubes…",
     restoring: "Putting the previous SugarCubes version back…",
     updated: "SugarCubes updated to version {version}",
@@ -128,6 +131,7 @@ pub static EN: PackUpdateMessages = PackUpdateMessages {
 
 /// Simplified Chinese words.
 pub static ZH_HANS: PackUpdateMessages = PackUpdateMessages {
+    product: "SugarCubes",
     updating: "正在更新 SugarCubes…",
     restoring: "正在恢复之前的 SugarCubes 版本…",
     updated: "SugarCubes 已更新到版本 {version}",
@@ -160,6 +164,7 @@ pub static ZH_HANS: PackUpdateMessages = PackUpdateMessages {
 
 /// Japanese words.
 pub static JA: PackUpdateMessages = PackUpdateMessages {
+    product: "SugarCubes",
     updating: "SugarCubes を更新しています…",
     restoring: "以前の SugarCubes バージョンに戻しています…",
     updated: "SugarCubes をバージョン {version} に更新しました",
@@ -192,6 +197,7 @@ pub static JA: PackUpdateMessages = PackUpdateMessages {
 
 /// Korean words.
 pub static KO: PackUpdateMessages = PackUpdateMessages {
+    product: "SugarCubes",
     updating: "SugarCubes 업데이트 중…",
     restoring: "이전 SugarCubes 버전으로 되돌리는 중…",
     updated: "SugarCubes를 버전 {version}(으)로 업데이트했습니다",
@@ -224,6 +230,7 @@ pub static KO: PackUpdateMessages = PackUpdateMessages {
 
 /// Spanish words.
 pub static ES: PackUpdateMessages = PackUpdateMessages {
+    product: "SugarCubes",
     updating: "Actualizando SugarCubes…",
     restoring: "Restaurando la versión anterior de SugarCubes…",
     updated: "SugarCubes se actualizó a la versión {version}",
