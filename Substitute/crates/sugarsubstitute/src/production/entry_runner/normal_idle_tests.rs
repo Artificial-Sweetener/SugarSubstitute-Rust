@@ -354,3 +354,24 @@ fn a_window_revealed_before_processing_the_restart_is_never_closed() -> Result<(
     assert!(!runner.relaunch_wanted(), "the update waits for the next launch");
     Ok(())
 }
+
+/// "Restart to apply": once the window that asked has closed and its record is gone, the
+/// restart is still owed, so the notice stays on screen until the relaunched copy shows,
+/// instead of closing in the gap before the relaunch starts.
+#[test]
+fn the_restart_notice_stays_after_the_asking_window_is_gone() -> Result<(), Box<dyn Error>> {
+    let mut runner = runner()?;
+    runner.initialize_execution(Arc::new(crate::completion_wake::Wake::default()))?;
+    runner.initial_completed = true;
+    runner.intake_ready = true;
+    runner.child.2 = true;
+    runner.closing = true;
+    runner.observe_restart_notice();
+    assert!(runner.restart_notice().is_some(), "the notice is asked for while the window closes");
+    // The window completed its close and the coordinator dropped its record.
+    runner.child.2 = false;
+    runner.observe_restart_notice();
+    assert!(runner.relaunch_wanted(), "the restart is still owed");
+    assert!(runner.restart_notice().is_some(), "the notice stays until the new copy shows");
+    Ok(())
+}

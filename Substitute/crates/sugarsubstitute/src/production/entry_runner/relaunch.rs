@@ -86,9 +86,14 @@ impl<C: EntryActivation> EntryRunner<C> {
     /// Whether this run's close owes a relaunch into a prepared update: a restart the window
     /// asked for, or one decided before the window opened. However that close ends, normally or
     /// with a failure, the relaunch is owed, so the user is never left without the app: the
-    /// stable launcher then starts the prepared version, or the accepted one.
+    /// stable launcher then starts the prepared version, or the accepted one. The window's ask
+    /// is remembered, so the restart stays owed, and its notice on screen, after the closed
+    /// window's record is gone and before the relaunch starts.
     pub(super) fn relaunch_wanted(&self) -> bool {
-        self.child.restart_to_apply_requested() || self.launch_update.restart().is_some()
+        if self.child.restart_to_apply_requested() {
+            self.restart_asked.set(true);
+        }
+        self.restart_asked.get() || self.launch_update.restart().is_some()
     }
 
     /// Whether a restart into an update is owed now: decided before the window opened, or asked
