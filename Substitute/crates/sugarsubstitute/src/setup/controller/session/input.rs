@@ -21,7 +21,7 @@ impl Session {
             return None;
         }
         self.picker_queued = false;
-        self.picker.as_ref().map(|pending| pending.request)
+        self.picker.as_ref().map(|pending| pending.request.clone())
     }
     /// Admit native events against current flow and original page inventory, never display labels.
     pub(in super::super) fn input(

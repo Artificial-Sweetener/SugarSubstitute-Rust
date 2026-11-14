@@ -222,8 +222,10 @@ fn native_picker_correlation_preserves_current_user_text() -> Result<()> {
         &mut f.controller,
         NativeEvent::Control(field, Input::Text { value: Some("User edit".into()), revision: 1 }),
     )?;
-    f.session
-        .input(&mut f.controller, NativeEvent::Picked(first, Ok(Some("Stale selection".into()))))?;
+    f.session.input(
+        &mut f.controller,
+        NativeEvent::Picked(first.clone(), Ok(Some("Stale selection".into()))),
+    )?;
     assert_eq!(f.session.navigation.flow.choices().install_root, "User edit");
     f.frame(Duration::ZERO)?;
     f.session.input(&mut f.controller, NativeEvent::Control(browse, Input::Invoke))?;

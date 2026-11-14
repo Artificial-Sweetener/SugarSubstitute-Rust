@@ -15,6 +15,7 @@ pub static ES: ReportMessages = ReportMessages {
     include_dump: "Incluir una instantánea de memoria (nos ayuda a encontrar la causa)",
     dump_warning: "Una instantánea de memoria puede contener contraseñas u otra información privada.",
     save_title: "Guardar el informe",
+    update_save_title: "Exportar informe de actualización",
     text_filter: "Informe de texto (*.txt)",
     archive_filter: "Informe y volcado de memoria (*.zip)",
     copied: "Informe copiado.",

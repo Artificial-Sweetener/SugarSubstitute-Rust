@@ -15,6 +15,7 @@ pub static JA: ReportMessages = ReportMessages {
     include_dump: "メモリのスナップショットを含める（原因の特定に役立ちます）",
     dump_warning: "メモリのスナップショットには、パスワードやその他の個人情報が含まれる場合があります。",
     save_title: "レポートを保存",
+    update_save_title: "アップデートレポートをエクスポート",
     text_filter: "テキストレポート (*.txt)",
     archive_filter: "レポートとメモリダンプ (*.zip)",
     copied: "レポートをコピーしました。",

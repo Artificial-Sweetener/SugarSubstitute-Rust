@@ -186,7 +186,7 @@ rationale = "Native boundary: Pump native callbacks while preparation and owned 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/file_dialog.rs"
-source_sha256 = "sha256:a060d446564cd6d3b40b14a1de1969494765585ff86c82b4637bebef796d6341"
+source_sha256 = "sha256:c288ead2e07e0584be556159cc4d4e9e411eeb4faf8aa25be1d596ba68b7be12"
 kind = "native"
 rationale = "Native boundary: Queue shell selection between application callbacks on the desktop's existing UI STA. The save dialog's title, suggested file name and file type label arrive from the typed catalog; the file pattern and extension are technical identities supplied by the caller."
 
@@ -750,7 +750,7 @@ rationale = "The headless notice window takes its title from the role's Headless
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/installer/native/form_window.rs"
-source_sha256 = "sha256:4804c9300d2a5d5a4836820dc2c4947363a4557af9f53eb493824a93362f3ccc"
+source_sha256 = "sha256:d1d599c9d02b9306c889403839a5cd99b7895e266c1d1c76836372ad82410481"
 kind = "native"
 rationale = "The shared form window takes its title from the lifetime's localized window options; it adds no product text."
 

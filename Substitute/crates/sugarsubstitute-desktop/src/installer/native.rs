@@ -252,7 +252,7 @@ pub enum CopyFailure {
     Transfer(String),
 }
 /// Original modal picker request, independent of display strings and filesystem authority.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Picker {
     /// Target path peer, never the Browse button itself.
     pub control: ControlId,

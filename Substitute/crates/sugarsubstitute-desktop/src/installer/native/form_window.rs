@@ -343,7 +343,7 @@ impl FormWindow {
             && !self.picker.busy()
             && let Some(request) = lifetime.picker()
         {
-            self.picker.request(request.kind)?;
+            self.picker.request(request.kind.clone())?;
             self.picker_request = Some(request);
         }
         if !self.closing

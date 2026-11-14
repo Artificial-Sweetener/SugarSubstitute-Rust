@@ -15,6 +15,7 @@ pub static EN: ReportMessages = ReportMessages {
     include_dump: "Include a memory snapshot (helps us find the cause)",
     dump_warning: "A memory snapshot can contain passwords or other private information.",
     save_title: "Save the report",
+    update_save_title: "Export update report",
     text_filter: "Text report (*.txt)",
     archive_filter: "Report and memory dump (*.zip)",
     copied: "Report copied.",

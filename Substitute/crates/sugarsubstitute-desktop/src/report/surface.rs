@@ -42,8 +42,9 @@ pub struct ReportPresentation {
     pub(super) labels: ReportLabels,
     pub(super) words: &'static ReportMessages,
     pub(super) locale: &'static str,
-    /// The product the report is about, which names its saved file.
-    pub(super) subject: &'static str,
+    /// The product the report is about and the version of its update when known, which name
+    /// its saved file.
+    pub(super) subject: String,
 }
 
 impl ReportPresentation {
@@ -64,7 +65,8 @@ impl ReportPresentation {
             dump_warning: words.dump_warning,
         };
         let content = ReportContent { has_details: details.is_some(), ..content };
-        Self { content, details, labels, words, locale: copy.id, subject: copy.updates.product }
+        let subject = copy.updates.product.to_owned();
+        Self { content, details, labels, words, locale: copy.id, subject }
     }
 
     /// The full report text that Copy copies and Export writes, when the report has one.
@@ -123,7 +125,9 @@ impl ReportPresentation {
     ) -> Self {
         let words = copy.report;
         let heading = (words.update_title, words.update_message);
-        Self::failure(copy, window_title, heading, version, step, details)
+        let mut report = Self::failure(copy, window_title, heading, version, step, details);
+        report.subject = saved_subject(copy.updates.product, Some(version));
+        report
     }
 
     /// The update report of everything that failed: the application's latest update attempt
@@ -139,10 +143,14 @@ impl ReportPresentation {
     ) -> Option<Self> {
         let (heading, version, step, details) = failed_update_sections(copy, app, pack)?;
         let mut report = Self::failure(copy, window_title, heading, &version, &step, details);
-        // A report of SugarCubes' update alone is about SugarCubes, and its saved file says so.
-        if app.is_none() {
-            report.subject = copy.pack_updates.product;
-        }
+        // The saved file names the update the summary shows: the application's when it failed,
+        // otherwise SugarCubes'.
+        report.subject = match app {
+            Some(app) => saved_subject(copy.updates.product, app.version.as_deref()),
+            None => {
+                saved_subject(copy.pack_updates.product, pack.and_then(PackUpdateFailure::version))
+            }
+        };
         Some(report)
     }
 
@@ -202,6 +210,19 @@ impl ReportPresentation {
             None,
             copy,
         )
+    }
+}
+
+/// `product` followed by `version` when that version can be part of a file name, for a saved
+/// update report's name.
+fn saved_subject(product: &str, version: Option<&str>) -> String {
+    let nameable = |version: &&str| {
+        !version.is_empty()
+            && version.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '+'))
+    };
+    match version.filter(nameable) {
+        Some(version) => format!("{product} {version}"),
+        None => product.to_owned(),
     }
 }
 

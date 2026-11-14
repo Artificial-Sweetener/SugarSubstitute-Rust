@@ -15,6 +15,7 @@ pub static ZH_HANS: ReportMessages = ReportMessages {
     include_dump: "包含内存快照（帮助我们找到原因）",
     dump_warning: "内存快照可能包含密码或其他私人信息。",
     save_title: "保存报告",
+    update_save_title: "导出更新报告",
     text_filter: "文本报告 (*.txt)",
     archive_filter: "报告和内存转储 (*.zip)",
     copied: "已复制报告。",

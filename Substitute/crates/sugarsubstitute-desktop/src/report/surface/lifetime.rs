@@ -187,14 +187,18 @@ impl<'a> ReportLifetime<'a> {
                 (ReportKind::Crash, false) => ("report.txt", words.text_filter, "txt"),
                 _ => (words.update_file_name, words.text_filter, "txt"),
             };
+        let title = match self.presentation.content.kind {
+            ReportKind::UpdateFailure => words.update_save_title,
+            _ => words.save_title,
+        };
         self.requests += 1;
         Picker {
             control: ReportAction::Export.id(),
             request: self.requests,
             kind: crate::SelectionKind::Save {
-                title: words.save_title,
+                title,
                 file_name,
-                product: self.presentation.subject,
+                product: self.presentation.subject.clone(),
                 filter,
                 extension,
             },

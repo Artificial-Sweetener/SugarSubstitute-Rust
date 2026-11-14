@@ -13,7 +13,8 @@ pub use ko::KO;
 mod es;
 pub use es::ES;
 
-/// Placeholder in [`ReportMessages::update_file_name`] for the product the report is about.
+/// Placeholder in [`ReportMessages::update_file_name`] for the product the report is about,
+/// followed by the version of its update when that is known.
 pub const PRODUCT: &str = "{product}";
 /// Placeholder in [`ReportMessages::update_file_name`] for the local date, as `YYYY-MM-DD`.
 pub const DATE: &str = "{date}";
@@ -66,8 +67,10 @@ pub struct ReportMessages {
     pub include_dump: &'static str,
     /// Unsanitized sensitive native memory disclosure.
     pub dump_warning: &'static str,
-    /// Title of the dialog that saves the report.
+    /// Title of the dialog that saves a crash or start-up report.
     pub save_title: &'static str,
+    /// Title of the dialog that exports an update report.
+    pub update_save_title: &'static str,
     /// Text export format label.
     pub text_filter: &'static str,
     /// Dump archive format label.
@@ -157,7 +160,7 @@ pub struct ReportMessages {
 
 impl ReportMessages {
     /// Borrow every owned label for complete-coverage validation.
-    pub fn labels(&self) -> [&'static str; 71] {
+    pub fn labels(&self) -> [&'static str; 72] {
         [
             self.title,
             self.explanation,
@@ -170,6 +173,7 @@ impl ReportMessages {
             self.include_dump,
             self.dump_warning,
             self.save_title,
+            self.update_save_title,
             self.text_filter,
             self.archive_filter,
             self.copied,
@@ -244,9 +248,10 @@ mod tests {
         for messages in crate::localization::LOCALES {
             let words = messages.report;
             assert!(!words.save_title.contains("incident"), "{}", messages.id);
-            let name = file_name(words.update_file_name, "SugarCubes", date);
+            assert_ne!(words.update_save_title, words.save_title, "{}", messages.id);
+            let name = file_name(words.update_file_name, "SugarCubes 0.15.6", date);
             assert!(
-                name.contains("SugarCubes")
+                name.contains("SugarCubes 0.15.6")
                     && name.contains("2026-11-04")
                     && name.contains("09-05"),
                 "{name}"
@@ -257,7 +262,12 @@ mod tests {
             file_name(EN.update_file_name, "SugarCubes", date),
             "SugarCubes update report 2026-11-04 09-05.txt"
         );
+        assert_eq!(
+            file_name(EN.update_file_name, "SugarCubes 0.15.6", date),
+            "SugarCubes 0.15.6 update report 2026-11-04 09-05.txt"
+        );
         assert_eq!(EN.save_title, "Save the report");
+        assert_eq!(EN.update_save_title, "Export update report");
         assert_eq!(file_name("report.txt", "SugarCubes", date), "report.txt");
     }
     #[test]

@@ -31,7 +31,7 @@ use windows::{
 const SAVE_DIALOG: GUID = GUID::from_u128(0x5b0e_8d3c_7a41_4c55_9e1f_2d6b_8a4c_1e70);
 
 /// Native shell selection semantics; storage owners validate the selected original later.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SelectionKind {
     /// Choose an existing directory.
     Folder,
@@ -44,8 +44,8 @@ pub enum SelectionKind {
         /// Suggested file name; the dialog fills its product and date placeholders (see
         /// `sugarsubstitute_contracts::localization::incident::file_name`).
         file_name: &'static str,
-        /// The product the saved file is about.
-        product: &'static str,
+        /// The product the saved file is about, with the version of its update when known.
+        product: String,
         /// Localized file type label, such as "Text report (*.txt)".
         filter: &'static str,
         /// File extension without its dot, such as "txt".
@@ -87,7 +87,7 @@ fn choose(
                     CoCreateInstance(&FileSaveDialog, None, CLSCTX_INPROC_SERVER)?;
                 let file_name = sugarsubstitute_contracts::localization::incident::file_name(
                     file_name,
-                    product,
+                    &product,
                     now(),
                 );
                 let (title, file_name, filter) =

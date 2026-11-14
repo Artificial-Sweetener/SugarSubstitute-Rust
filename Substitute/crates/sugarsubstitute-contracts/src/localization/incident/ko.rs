@@ -15,6 +15,7 @@ pub static KO: ReportMessages = ReportMessages {
     include_dump: "메모리 스냅샷 포함(원인을 찾는 데 도움이 됩니다)",
     dump_warning: "메모리 스냅샷에는 비밀번호나 기타 개인 정보가 포함될 수 있습니다.",
     save_title: "보고서 저장",
+    update_save_title: "업데이트 보고서 내보내기",
     text_filter: "텍스트 보고서 (*.txt)",
     archive_filter: "보고서 및 메모리 덤프 (*.zip)",
     copied: "보고서를 복사했습니다.",
