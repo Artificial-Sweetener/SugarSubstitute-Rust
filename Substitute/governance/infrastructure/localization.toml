@@ -766,6 +766,11 @@ source_sha256 = "sha256:8878b6ebb92197b8ab318c26994bb3fde893152a4933eb4813b3f914
 kind = "fixture"
 rationale = "Layout fixtures use short stand-in labels to check geometry; no product copy is defined here."
 [[records]]
+path = "crates/sugarsubstitute-desktop/src/main_actor/composition/input/tests.rs"
+source_sha256 = "sha256:344c42f14dc1013940f04eda2a189b543678363a69e9e88944c84b73afd4bc63"
+kind = "fixture"
+rationale = "Input mapping fixtures lay the caption out with short stand-in labels to find the page's offset; no product copy is defined here."
+[[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/frame_tests.rs"
 source_sha256 = "sha256:b43ff134d4299585f3d7d37b60758e2523cc8a89af90b351d33b5d0f4554aab4"
 kind = "fixture"
