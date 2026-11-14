@@ -138,7 +138,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/lib.rs"
-source_sha256 = "sha256:6c93da8c2353e541a2fd6002c1b6fa3df76054aea418329e88803d8512ccfd85"
+source_sha256 = "sha256:1ea7706b8e2f27b47fa58298468a21171458abf8e906d9e06aeadde6574f99ff"
 kind = "native"
 rationale = "Native boundary: Own native window lifetime and CPU frame presentation independently of UI content.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -150,7 +150,7 @@ rationale = "Behavioral fixture creates a hidden OS STATIC window with a technic
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/construction.rs"
-source_sha256 = "sha256:c1d059652685083f125d80f2b95643f413a854903bda8d91457937dadc70cc37"
+source_sha256 = "sha256:2fbcd5157e6f1aaacaa346da5cbbe2e116b06189a6b1d0d0174bcb4acabe9484"
 kind = "native"
 rationale = "Native boundary: Adopt every window, presenter, controller and native getter before interpreting outcomes.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
