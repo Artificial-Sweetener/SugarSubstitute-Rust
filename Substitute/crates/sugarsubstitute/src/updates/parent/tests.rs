@@ -18,6 +18,7 @@ fn partial(client: ExecutionClient) -> Result<Parent> {
         work: client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?,
         cleanup: client.create_scope(ScopeSpec { id: ScopeId::new(2)?, deadline: None }, None)?,
         native: ScopeSpec { id: ScopeId::new(3)?, deadline: None },
+        channel: None,
         key: CoordinatorKey {
             namespace: NamespaceId::new([5; 32]),
             epoch: CoordinatorEpoch::new([8; 16])?,
@@ -100,6 +101,41 @@ fn an_attempt_that_never_reported_concludes_once_as_a_typed_failure() -> TestRes
     assert!(!report.causes.is_empty());
     assert!(parent.take_check_outcome().is_none());
     Ok(())
+}
+
+/// A pipe session is a native observation; ordinary cleanup scopes host task factories, so the
+/// channel opens in its own native scope owned by cleanup and retires with the helper.
+#[test]
+fn the_attempt_channel_opens_in_a_native_scope_beside_ordinary_cleanup() -> TestResult {
+    use sugarsubstitute_contracts::update::attempt::codec::{
+        UpdateAttemptChannel, UpdateAttemptKey,
+    };
+    let clock = Arc::new(Manual::default());
+    let wake = Arc::new(Wake::default());
+    let mut owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
+    let mut parent = partial(owner.client()).map_err(|cause| cause as Box<dyn Error>)?;
+    let jobs = JobSequence::new();
+    let spec = JobSpec {
+        id: jobs.allocate()?,
+        operation: Operation::NativeLifecycle,
+        class: JobClass::NativeObservation,
+        deadline: None,
+        reservation_bytes: sugarsubstitute_execution::purpose_pipe::MIN_LIFECYCLE_PIPE_BYTES,
+        replacement: None,
+    };
+    let attempt = std::num::NonZeroU64::new(spec.id.get()).ok_or("Attempt id absent")?;
+    let channel = UpdateAttemptChannel::new(parent.key, UpdateAttemptKey::new(attempt));
+    let handshake = clock.now().checked_add(super::attempt::HANDSHAKE)?;
+    parent.attempt = Some(AttemptChannel::reserve(
+        &parent.client,
+        &parent.cleanup,
+        ScopeSpec { id: ScopeId::new(4)?, deadline: None },
+        spec,
+        channel,
+        handshake,
+    )?);
+    parent.close(None).map_err(|cause| cause as Box<dyn Error>)?;
+    finish(&mut parent, &mut owner, &wake, &jobs)
 }
 
 #[test]

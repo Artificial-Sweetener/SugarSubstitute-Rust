@@ -67,6 +67,25 @@ fn a_last_hop_engine_never_redirects_and_runs_only_its_accepted_release() -> Res
 }
 
 #[test]
+fn a_fresh_installation_starts_its_first_prepared_release_itself() -> Result {
+    let a = generation(1)?;
+    let other = generation(2)?.id;
+    let empty = InstallationRecord::empty(InstallationId::new("9".repeat(32))?);
+    let staging = empty.prepare(a.clone(), PreparationIntent::Automatic, 1)?;
+    let prepared = staging.prepared(&a)?;
+    let on_trial = prepared.begin_trial()?;
+    for record in [&prepared, &on_trial] {
+        assert!(record.accepted().is_none());
+        for hops in [0, MAX_ENGINE_HOPS] {
+            assert_eq!(decide(record, &a.id, hops)?, Decision::Run(Route::Own));
+        }
+        assert!(matches!(decide(record, &other, 0), Err(RouteFailure::Foreign)));
+    }
+    assert!(matches!(decide(&staging, &a.id, 0), Err(RouteFailure::NeedsInstallation)));
+    Ok(())
+}
+
+#[test]
 fn an_installation_without_an_accepted_release_needs_setup() -> Result {
     let empty = InstallationRecord::empty(InstallationId::new("9".repeat(32))?);
     assert!(matches!(decide(&empty, &generation(1)?.id, 0), Err(RouteFailure::NeedsInstallation)));

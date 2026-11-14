@@ -59,6 +59,7 @@ fn run_with_picker(
     }
     let picker = make_picker(&mut builder);
     let mut events = builder.build();
+    crate::windows_thread_target::guard_current_thread();
     let window = match WindowBuilder::new()
         .with_title(&options.title)
         .with_inner_size(PhysicalSize::new(options.extent.width(), options.extent.height()))

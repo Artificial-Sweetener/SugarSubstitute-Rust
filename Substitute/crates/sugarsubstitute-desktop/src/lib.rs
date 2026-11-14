@@ -189,6 +189,9 @@ mod windows_system_accent;
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
 mod windows_text;
+#[cfg(target_os = "windows")]
+#[allow(unsafe_code)]
+mod windows_thread_target;
 
 pub use contract::{
     AccessibleControl, ControlBounds, DesktopError, DesktopOptions, DesktopReceipt,

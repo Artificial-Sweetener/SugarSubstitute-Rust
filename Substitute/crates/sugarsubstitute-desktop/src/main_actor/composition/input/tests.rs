@@ -50,6 +50,19 @@ fn mouse_leave_has_no_stale_pointer_data_and_other_messages_are_not_forwarded() 
     assert_eq!(mouse(WM_SIZE, WPARAM(0), LPARAM(0)), None);
 }
 
+/// While the page sits below the caption strip, pointer messages move into page pixels, and a
+/// leave stays at the page's top-left: the client origin above the page is outside it, which
+/// WebView2 rejects, and that rejection closed the window whenever the pointer left it.
+#[test]
+fn a_leave_stays_inside_a_page_below_the_caption_strip() {
+    let origin = POINT { x: 0, y: 60 };
+    assert_eq!(
+        page_input_point(WM_MOUSEMOVE, POINT { x: 300, y: 200 }, origin),
+        POINT { x: 300, y: 140 }
+    );
+    assert_eq!(page_input_point(WM_MOUSELEAVE, POINT::default(), origin), POINT::default());
+}
+
 /// The subclass consumes only client-area `WM_SETCURSOR`; these reach Tao and the browser's own
 /// focus window exactly as Windows sent them, without forwarding, focus moves or cancellation.
 #[test]

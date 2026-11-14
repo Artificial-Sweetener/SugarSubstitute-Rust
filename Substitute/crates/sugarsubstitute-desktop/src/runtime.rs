@@ -58,6 +58,8 @@ pub fn run(
     #[cfg(target_os = "windows")]
     let mut apartment = crate::windows_ui_apartment::UiApartment::enter()?;
     let mut event_loop = EventLoopBuilder::<NativeAction>::with_user_event().build();
+    #[cfg(target_os = "windows")]
+    crate::windows_thread_target::guard_current_thread();
     observe_startup(timings.as_ref(), StartupStage::EventLoopReady)?;
     let window = Rc::new(
         WindowBuilder::new()

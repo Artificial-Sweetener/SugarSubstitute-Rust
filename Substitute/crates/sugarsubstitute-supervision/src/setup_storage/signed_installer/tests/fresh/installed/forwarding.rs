@@ -38,6 +38,7 @@ fn duplicate_trial_reference_permits_health_and_never_retains_run_ownership() ->
     worker::run_reserved(SIGNED_INSTALLER_RESERVATION_BYTES, |context, _| {
         let temporary = tempfile::tempdir()?;
         let (completed, store, run, trial) = running(temporary.path(), context)?;
+        assert!(!trial.replaces_release(), "a first installation's trial replaces no release");
         let before = store.load(context)?;
         let reserved = reserve(completed.root(), context)?;
         assert_eq!(reserved.generation(), &trial.attempt().generation);

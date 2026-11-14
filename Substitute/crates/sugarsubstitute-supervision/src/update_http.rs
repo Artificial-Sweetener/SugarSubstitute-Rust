@@ -234,6 +234,12 @@ impl Read for Body<'_> {
     }
 }
 
+// A local-update qualification build serves its signed feed and SugarCubes releases from literal
+// loopback, so it must carry the loopback transport too; without it every request fails with
+// "Update transport requires HTTPS" while the loopback feed itself decodes.
+#[cfg(all(feature = "local-update-qualification", not(feature = "boundary-fixtures")))]
+compile_error!("local-update-qualification requires the boundary-fixtures loopback transport");
+
 /// Adapt only this feature's already origin-authorized endpoint to closed transport controls.
 fn transport_request<'a>(
     endpoint: &'a Endpoint,

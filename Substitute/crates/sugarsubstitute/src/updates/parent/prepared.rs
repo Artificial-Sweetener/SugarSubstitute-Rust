@@ -9,6 +9,9 @@ pub(in crate::updates) struct LaunchScope {
     pub work: Scope,
     pub cleanup: Scope,
     pub native: ScopeSpec,
+    /// The native scope of the update-attempt channel the helper's owner opens itself; `None`
+    /// when the channel comes with an adopted helper.
+    pub channel: Option<ScopeSpec>,
     pub key: CoordinatorKey,
 }
 
@@ -70,6 +73,7 @@ impl Parent {
             work: scope.work,
             cleanup: scope.cleanup,
             native: scope.native,
+            channel: scope.channel,
             key: scope.key,
             retained: Some(held),
             constructing: None,

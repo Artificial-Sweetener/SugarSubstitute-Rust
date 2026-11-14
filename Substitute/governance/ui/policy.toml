@@ -151,7 +151,7 @@ sources = [
     "crates/sugarsubstitute-desktop/src/windows_text/field_tests.rs",
     "crates/sugarsubstitute-desktop/src/windows_text/renderer.rs",
 ]
-source_sha256 = "sha256:f0cf40ea99c9b046fa5c386f046b8fd6c56c37102117a56b17f07ac8dfd1ea07"
+source_sha256 = "sha256:b6effa379c96376afcb424941691f6119a125da235212d2fce40fcb7809611d0"
 
 [[boundaries]]
 owner = "sugarsubstitute-image-gpu"
@@ -198,6 +198,15 @@ sources = [
     "crates/sugarsubstitute-desktop/src/file_dialog.rs",
 ]
 source_sha256 = "sha256:c358901b3c8d344dca82ca653b76ee57e8daa2b59c18de9c191a3816b531cc76"
+
+[[boundaries]]
+owner = "sugarsubstitute-desktop"
+concern = "Windows event-loop paint guard qualification: one message-only window proves a cross-thread sent WM_PAINT never reaches the guarded window"
+capabilities = ["window"]
+sources = [
+    "crates/sugarsubstitute-desktop/src/windows_thread_target_tests.rs",
+]
+source_sha256 = "sha256:3dae7f6185b7ee83c39b0f0f0521aed76b2d15d28930e87fa8a5a295ba283589"
 
 [[boundaries]]
 owner = "sugarsubstitute-desktop"

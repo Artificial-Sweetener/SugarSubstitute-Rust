@@ -5,7 +5,7 @@
 //! may send back is a cancel request.
 use std::{num::NonZeroUsize, time::Duration};
 use sugarsubstitute_contracts::{
-    execution::{JobCompletion, JobSpec, Moment, Scope},
+    execution::{JobCompletion, JobSpec, Moment, Scope, ScopeSpec},
     update::{
         Admission,
         attempt::{
@@ -56,6 +56,9 @@ pub(super) struct AttemptReporter {
     next_operation: u64,
     failure: Option<LifecyclePipeError>,
     terminal: Option<JobCompletion<PurposePipeReport, LifecyclePipeFailure>>,
+    /// The native scope the pipe session is admitted in; declared last so the session it
+    /// charges is released first.
+    scope: Option<Scope>,
 }
 impl AttemptReporter {
     /// Hold the inherited section inert until `reserve` admits the transport.
@@ -79,27 +82,33 @@ impl AttemptReporter {
             next_operation: 0,
             failure: None,
             terminal: None,
+            scope: None,
         }
     }
 
     /// Admit the helper side of the channel through the execution owner and bind the section.
+    /// A pipe is a native observation, so it gets its own native scope `native`, owned by
+    /// `cleanup` so cancelling ordinary work never loses the result.
     /// # Errors
     /// Rejects a second reservation and an admission the execution owner refuses.
     pub(super) fn reserve(
         &mut self,
         client: &ExecutionClient,
-        scope: &Scope,
+        cleanup: &Scope,
+        native: ScopeSpec,
         spec: JobSpec,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let input = self.input.take().ok_or(LifecyclePipeError::AlreadyTransferred)?;
+        let scope = client.create_native_scope(native, Some(cleanup))?;
         let permit = client.reserve_purpose_pipe_client(
-            scope,
+            &scope,
             spec,
             Purpose::UpdateAttempt,
             self.original,
             PurposePipeResources::Standard,
         )?;
         self.session = Some(permit.bind(input).ok_or(LifecyclePipeError::Closed)?);
+        self.scope = Some(scope);
         Ok(())
     }
 

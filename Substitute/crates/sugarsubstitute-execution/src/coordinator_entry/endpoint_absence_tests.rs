@@ -221,10 +221,11 @@ fn peer_lost_after_launch_without_recovery_fails_without_handback() -> TestResul
     Ok(())
 }
 
-/// An unresponsive running copy admitted nothing; the outcome reaches the launching process
-/// and the source obligation ends there.
+/// An unresponsive running copy admitted nothing: the outcome reaches the launching process,
+/// which asks the user about that copy, and the issued source returns for re-election after the
+/// original probe, so choosing to close the copy can still start this launch.
 #[test]
-fn unresponsive_outcome_is_delivered_and_ends_the_source_obligation() -> TestResult {
+fn unresponsive_outcome_is_delivered_and_returns_the_issued_source_for_reelection() -> TestResult {
     let rig = Rig::new()?;
     let boundary = Boundary::new(&rig, false)?;
     boundary.unresponsive_after_launch.store(true, Ordering::Release);
@@ -236,8 +237,14 @@ fn unresponsive_outcome_is_delivered_and_ends_the_source_obligation() -> TestRes
         outcome,
         EntryTransportObservation::OutcomeReceived { outcome: EntryOutcome::Unresponsive, .. }
     ));
-    assert!(matches!(rig.completion(&mut session.completion)?.outcome, JobOutcome::Success(_)));
+    rig.clock.wait_until_registered(Moment::from_nanos(2_000_000_000))?;
     assert!(session.control.take_unsubmitted_request().is_none());
+    rig.clock.advance(2_000_000_000);
+    assert!(matches!(rig.completion(&mut session.completion)?.outcome, JobOutcome::Success(_)));
+    let returned =
+        session.control.take_unsubmitted_request().ok_or("Unresponsive consumed source")?;
+    validate_returned(&rig, &returned)?;
+    assert_eq!(lock(&boundary.client_launches).len(), 1);
     Ok(())
 }
 

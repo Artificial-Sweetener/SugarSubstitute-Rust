@@ -3,12 +3,31 @@
 /** Assemble native application roles, their runtime closure and the existing provisioning payload. */
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { artifactDirectory, copyArtifact, newArtifactDirectory } from './artifact-files.mjs'
+import { artifactDirectory, copyArtifact, newArtifactDirectory, regularArtifact } from './artifact-files.mjs'
 import { completeNativeClosure } from './native-closure.mjs'
 import { requireBootstrapDependencies } from './windows-imports.mjs'
 import { writeInventory } from '../package-inventory.mjs'
 import { requireWorkerPayload } from '../worker-graph.mjs'
 import { engineBuildFile, readEngineIdentity } from './engine-identity.mjs'
+
+/** Where the package carries SugarCubes; setup storage reads exactly this path. */
+export const sugarcubesArchive = 'sugarcubes/SugarCubes.zip'
+/** The largest SugarCubes archive the host accepts (pack_install::MAX_ARCHIVE_BYTES). */
+const maximumArchiveBytes = 64 * 1024 ** 2
+
+/** Admit a zip archive within the host's bound; setup validates its members when installing. */
+async function requireRegistryArchive(file) {
+  const info = await regularArtifact(file)
+  if (info.size < 22 || info.size > maximumArchiveBytes) throw new Error('SugarCubes registry archive is empty or oversized')
+  const handle = await fs.open(file, 'r')
+  try {
+    const signature = Buffer.alloc(4)
+    await handle.read(signature, 0, 4, 0)
+    if (!signature.equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))) throw new Error('SugarCubes release is not a registry archive')
+  } finally {
+    await handle.close()
+  }
+}
 
 const nativeRoles = [
   'sugarsubstitute.exe', 'sugarsubstitute.pdb',
@@ -24,12 +43,16 @@ const nativeRoles = [
 /** Inspect actual copied host, launcher, updater and crash-handler images before publishing
  * an inventory. Explicit runtime inputs are copied beside the app images that load them.
  * Producing compatibility declarations and Comfy provisioning choices remain byte-for-byte.
+ * `cubes` is SugarCubes' registry archive, the exact bytes published to the Comfy Registry and
+ * attached to its GitHub release; setup installs it as a registry install from
+ * `sugarcubesArchive`.
  */
 export async function packageApplication({ app, cubes, build, output, release, runtimeFiles }, inspect) {
   for (const value of [app, cubes, output, build]) {
     if (!value || !path.isAbsolute(value)) throw new Error('All package paths must be absolute')
   }
   if (!/^[a-zA-Z0-9_-]{1,64}$/.test(release)) throw new Error('Invalid release identity')
+  await requireRegistryArchive(cubes)
   const engine = await readEngineIdentity(path.join(app, engineBuildFile))
   if (BigInt(engine.release) < 2n) throw new Error('Node provisioning requires a producing engine release of at least 2')
   await newArtifactDirectory(output)
@@ -55,10 +78,7 @@ export async function packageApplication({ app, cubes, build, output, release, r
     runtimeFiles, inspect, (name, source) => copyFile(source, `app/${name}`),
   )
   requireBootstrapDependencies(dependencies.filter(image => ['sugarsubstitute.exe', 'sugarsubstitute-launcher.exe', 'sugarsubstitute-updater.exe'].includes(image.name)))
-  for (const leaf of [
-    '__init__.py', 'prestartup_script.py', 'load_model_roots.py', 'pyproject.toml',
-    'requirements.txt', 'LICENSE', 'sugarcubes', 'sugarcubes_model_roots', 'web',
-  ]) await copyTree(path.join(cubes, leaf), `sugarcubes/${leaf}`)
+  await copyFile(cubes, sugarcubesArchive)
   await copyTree(path.join(build, 'worker'), 'worker')
   requireWorkerPayload(files.map(file => file.path))
   const workerDependencies = await inspect(path.join(output, 'worker/runtime/node.exe'))

@@ -247,9 +247,16 @@ rationale = "Bounded Python metadata subprocess returns structured stdout to its
 [[records]]
 path = "installer/worker/integration.ts"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:ca64cbbe04fb4e4f8e2a9ba0c8e4fb91952b8d2d65a6e7db5e9f2ed5ccd03e83"
+source_sha256 = "sha256:51952b5b46bc9adbab52ae0c0b956c62745f76ad87814f18452053d5745dddbe"
 disposition = "capture"
 rationale = "Upstream subprocess stdout and stderr are consumed as untrusted progress through the supported worker diagnostic lane."
+
+[[records]]
+path = "installer/worker/bundled-pack.mjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:a2f6b83268d1327b317a9f8b61c5c7483a87134389ddc7140d058246f260a0a4"
+disposition = "capture"
+rationale = "7-Zip stderr is captured, bounded and carried only as the cause of a failed bundled-archive extraction through the worker failure result."
 
 [[records]]
 path = "installer/worker/provision.ts"
@@ -632,14 +639,14 @@ rationale = "The package-path validator recognizes Windows CONOUT$ aliases to re
 [[records]]
 path = "installer/package.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:273765d0320f12fa58659d4a401ed1db9f6c71a1e69b9f63b5a965b59d7fadcb"
+source_sha256 = "sha256:52c6b0608844aa0354cc928fc5bc9a9d875145da92cce532fef19807d1be007c"
 disposition = "developer"
 rationale = "The package CLI reports its producing-platform and completed assembly result as developer JSON output."
 
 [[records]]
 path = "installer/package.test.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:ad9b9c2967740f697bd667a757c5f0bd2185a02c3ff6b3ab444ac1ea34be552d"
+source_sha256 = "sha256:cc8c9f289243120938b81fef2fe0cb19c0846bf87b1b858a9012a4d07d93d0c9"
 disposition = "fixture"
 rationale = "Packaging CLI tests inspect captured stderr to verify invalid invocation rejection."
 

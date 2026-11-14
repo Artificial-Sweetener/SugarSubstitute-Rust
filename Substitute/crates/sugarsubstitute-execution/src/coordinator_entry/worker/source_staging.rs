@@ -76,8 +76,10 @@ impl Active {
     }
 
     /// Settle a source retained through an issued Launch once its outcome is authenticated.
-    /// Closing admitted nothing, so the source returns for re-election once this connection
-    /// has retired; every other outcome ends the source obligation.
+    /// Closing and Unresponsive admitted nothing, so the source returns for re-election once
+    /// this connection has retired: a closing copy is waited out, and a copy that stopped
+    /// responding is asked about while this launch keeps re-electing behind the question, so
+    /// "Close it and start" can start it. Every other outcome ends the source obligation.
     pub(super) fn settle_retained_source(
         &mut self,
         core: &Core,
@@ -88,7 +90,7 @@ impl Active {
         if !self.retains_issued_source() {
             return Ok(());
         }
-        if outcome == EntryOutcome::Closing {
+        if matches!(outcome, EntryOutcome::Closing | EntryOutcome::Unresponsive) {
             self.return_unsubmitted = true;
             self.connections[index].retry_at =
                 Some(schedule::probe(received, self.work.shared.original_preparation)?);

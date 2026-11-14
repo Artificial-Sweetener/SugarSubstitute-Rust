@@ -63,7 +63,7 @@ impl Engine {
             work,
             cleanup,
             closing: None,
-            next_scope: 5,
+            next_scope: super::session::CHANNEL_SCOPE + 3,
             succeeded: false,
             attempt: None,
             attempt_outcome: None,
@@ -97,9 +97,12 @@ impl Engine {
             let channel =
                 UpdateAttemptChannel::new(process::key()?, UpdateAttemptKey::new(attempt));
             let handshake = self.client.now()?.checked_add(parent::attempt_handshake())?;
+            let native = self.next_scope;
+            self.next_scope = native.checked_add(1).ok_or("Updater scope identities exhausted")?;
             self.attempt = Some(parent::AttemptChannel::reserve(
                 &self.client,
                 &self.cleanup,
+                ScopeSpec { id: ScopeId::new(native)?, deadline: None },
                 spec,
                 channel,
                 handshake,

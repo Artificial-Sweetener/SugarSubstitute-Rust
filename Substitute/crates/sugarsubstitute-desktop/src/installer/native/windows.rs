@@ -36,6 +36,7 @@ pub(super) fn run(
     }
     let picker = crate::file_dialog::Picker::new(&mut builder);
     let mut events = builder.build();
+    crate::windows_thread_target::guard_current_thread();
     let proxy = events.create_proxy();
     let wake_lifetime = WakeLifetime::new();
     let mut accent =

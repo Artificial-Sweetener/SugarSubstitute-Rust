@@ -15,7 +15,8 @@ local-k1-symbol-trust = []
 # folder, so it never reads or changes the account's own data. Never part of a shipped build.
 qualification-historical-root = []
 k1-native-qualification = ["sugarsubstitute-execution/k1-native-qualification"]
-local-update-qualification = ["sugarsubstitute-update/boundary-fixtures"]
+# Proof builds only: a local signed feed and SugarCubes release fixture on literal loopback.
+local-update-qualification = ["boundary-fixtures", "sugarsubstitute-update/boundary-fixtures"]
 
 [dependencies]
 sugarsubstitute-contracts = { path = "../sugarsubstitute-contracts" }

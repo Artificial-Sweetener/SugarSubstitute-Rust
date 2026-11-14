@@ -7,7 +7,7 @@ use crate::updates::{
     parent::Parent,
     schedule::{CheckOutcome, CheckRequest, CheckSchedule},
 };
-use sugarsubstitute_contracts::lifecycle::CoordinatorKey;
+use sugarsubstitute_contracts::{lifecycle::CoordinatorKey, update::status::LaunchVersion};
 use sugarsubstitute_supervision::setup_storage::RunningApplication;
 impl<C: EntryActivation> EntryRunner<C> {
     /// Every updater job uses this runner's actual executor and globally shared identity sequences.
@@ -176,7 +176,7 @@ impl<C: EntryActivation> EntryRunner<C> {
         }
         let scope = self.update_status_scope.as_ref().ok_or("Update status scope absent")?;
         let id = self.jobs.allocate()?;
-        self.update_status.submit_read(&client, scope, id, self.installation.clone())
+        self.update_status.submit_read(&client, scope, id, record_root(&self.installation))
     }
 
     /// Offer the coordinator's update status, with what this launch does about its version.
@@ -190,27 +190,22 @@ impl<C: EntryActivation> EntryRunner<C> {
     }
 
     /// What this launch did about the version it runs: restarting into its prepared update,
-    /// or, when it runs a trial, applying it until the trial's acceptance is published, then
-    /// updated to it. An accepted launch, and a run without installation ownership, start no
-    /// new version.
-    pub(super) fn launch_version(
-        &self,
-    ) -> Option<sugarsubstitute_contracts::update::status::LaunchVersion> {
+    /// or, when it runs a trial that replaces an accepted release, applying it until the
+    /// trial's acceptance is published, then updated to it. An accepted launch, a fresh
+    /// installation's first release, and a run without installation ownership start no update.
+    pub(super) fn launch_version(&self) -> Option<LaunchVersion> {
         if let Some(version) = self.launch_update.restart() {
-            return Some(sugarsubstitute_contracts::update::status::LaunchVersion::Restarting(
-                version.to_owned(),
-            ));
+            return Some(LaunchVersion::Restarting(version.to_owned()));
         }
         let authority = self.authority.as_ref()?;
         let application = authority.running_installation()?;
-        application.trial()?;
-        let version = application.generation().release.version().to_owned();
+        let trial = application.trial()?;
         // Only an accepted trial is an update source; an unaccepted one is still applying.
-        Some(if authority.update_source(false).is_some() {
-            sugarsubstitute_contracts::update::status::LaunchVersion::Updated(version)
-        } else {
-            sugarsubstitute_contracts::update::status::LaunchVersion::Applying(version)
-        })
+        trial_launch(
+            trial.replaces_release(),
+            authority.update_source(false).is_some(),
+            application.generation().release.version(),
+        )
     }
 
     /// Admit one helper family in fresh scopes; failure leaves no partial helper behind.
@@ -224,16 +219,60 @@ impl<C: EntryActivation> EntryRunner<C> {
             client.create_scope(ScopeSpec { id: self.scopes.allocate()?, deadline: None }, None)?;
         let cleanup =
             client.create_scope(ScopeSpec { id: self.scopes.allocate()?, deadline: None }, None)?;
+        // Scope identities advance in creation order: the attempt channel opens before the
+        // helper's native process scope.
+        let channel = ScopeSpec { id: self.scopes.allocate()?, deadline: None };
         let native = ScopeSpec { id: self.scopes.allocate()?, deadline: None };
-        Parent::new(client, work, cleanup, native, key, application)
+        Parent::new(client, work, cleanup, native, channel, key, application)
             .map_err(|cause| cause as Box<dyn Error>)
     }
+}
+
+/// The installation root whose selection and update trust hold the update record, for the
+/// directory this run's image executes from: an installed run executes from its generation's
+/// folder below `releases`, which holds no record of its own.
+fn record_root(image_directory: &std::path::Path) -> std::path::PathBuf {
+    sugarsubstitute_configuration::layout::InstallationLayout::for_image_directory(image_directory)
+        .root()
+        .to_path_buf()
+}
+
+/// A trial's first start of `version`: an update when it replaces an accepted release, applying
+/// until `confirmed`; a fresh installation's first release is no update.
+fn trial_launch(replaces_release: bool, confirmed: bool, version: &str) -> Option<LaunchVersion> {
+    if !replaces_release {
+        return None;
+    }
+    let version = version.to_owned();
+    Some(if confirmed { LaunchVersion::Updated(version) } else { LaunchVersion::Applying(version) })
 }
 
 #[cfg(test)]
 mod tests {
     use super::super::tests::{NoChild, freeze_time, unopened_paths};
     use super::*;
+
+    /// A fresh installation's first release starts without an update notice, before and after
+    /// its trial is accepted; a trial that replaces an accepted release applies, then updates.
+    #[test]
+    fn only_a_trial_that_replaces_an_accepted_release_is_an_update() {
+        assert_eq!(trial_launch(false, false, "0.1.0"), None);
+        assert_eq!(trial_launch(false, true, "0.1.0"), None);
+        assert_eq!(
+            trial_launch(true, false, "0.2.0"),
+            Some(LaunchVersion::Applying("0.2.0".into()))
+        );
+        assert_eq!(trial_launch(true, true, "0.2.0"), Some(LaunchVersion::Updated("0.2.0".into())));
+    }
+
+    /// An installed run reads its update record and channel from the installation root, not
+    /// from the generation folder its image runs from.
+    #[test]
+    fn the_update_record_is_read_from_the_installation_root() {
+        let root = std::path::Path::new(r"D:\Apps\SugarSubstitute");
+        assert_eq!(record_root(&root.join("releases").join("0123abcd")), root);
+        assert_eq!(record_root(root), root, "a source-tree run keeps its own folder");
+    }
 
     /// A run that cannot check, here one without installation authority, still reads its
     /// update record and channel, so the window shows them.

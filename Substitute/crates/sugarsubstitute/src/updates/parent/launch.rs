@@ -31,9 +31,11 @@ impl Parent {
             let channel = UpdateAttemptChannel::new(self.key, UpdateAttemptKey::new(attempt));
             let handshake = self.client.now()?.checked_add(super::attempt::HANDSHAKE)?;
             // The channel lives in the cleanup scope, so cancelling work never loses the result.
+            let native = self.channel.take().ok_or("Update attempt scope absent")?;
             self.attempt = Some(AttemptChannel::reserve(
                 &self.client,
                 &self.cleanup,
+                native,
                 spec,
                 channel,
                 handshake,

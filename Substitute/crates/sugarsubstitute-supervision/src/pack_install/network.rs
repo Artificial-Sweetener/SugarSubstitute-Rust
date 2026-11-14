@@ -49,6 +49,11 @@ impl<'a> HttpReleaseSources<'a> {
         scratch: &std::path::Path,
         context: &'a JobContext,
     ) -> Result<Self, MetadataError> {
+        #[cfg(feature = "local-update-qualification")]
+        if let Some(policies) = loopback_policies(config)? {
+            return Self::with_policies(http, policies, scratch, context)
+                .map_err(|_| MetadataError("The comparison download folder is invalid."));
+        }
         let refused = |_| MetadataError("The release-source configuration is not HTTPS.");
         let hosts: Vec<String> =
             config.download_hosts.iter().map(|host| format!("https://{host}/")).collect();
@@ -100,6 +105,80 @@ impl<'a> HttpReleaseSources<'a> {
                 }
             },
         )
+    }
+}
+
+/// A local-update qualification build serves every release source from one loopback fixture:
+/// both API roots name the same `http://127.0.0.1:<port>` origin, and archives and download
+/// hosts stay on that host. Any other loopback mix is refused; a configuration without
+/// loopback roots returns `None` and keeps the HTTPS-only policies.
+#[cfg(feature = "local-update-qualification")]
+fn loopback_policies(config: &ReleaseSourceConfig) -> Result<Option<[Policy; 2]>, MetadataError> {
+    let port = |root: &str| {
+        url::Url::parse(root)
+            .ok()
+            .filter(|url| url.scheme() == "http" && url.host_str() == Some("127.0.0.1"))
+            .and_then(|url| url.port())
+    };
+    let (registry, github) = (port(&config.registry_api_root), port(&config.github_api_root));
+    if registry.is_none() && github.is_none() {
+        return Ok(None);
+    }
+    let refused = MetadataError("The loopback release-source configuration is inconsistent.");
+    let Some(port) = registry.filter(|registry| Some(*registry) == github) else {
+        return Err(refused);
+    };
+    if config.registry_archive_host != "127.0.0.1"
+        || config.download_hosts.iter().any(|host| host != "127.0.0.1")
+    {
+        return Err(refused);
+    }
+    let policy = || Policy::loopback(port).map_err(|_| refused.clone());
+    Ok(Some([policy()?, policy()?]))
+}
+
+#[cfg(all(test, feature = "local-update-qualification"))]
+mod qualification_tests {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    fn config(api: &str, archive: &str, downloads: &[&str]) -> ReleaseSourceConfig {
+        ReleaseSourceConfig {
+            pack_id: "SugarCubes".into(),
+            registry_api_root: api.into(),
+            registry_archive_host: archive.into(),
+            github_api_root: api.into(),
+            github_repository: "example/monorepo".into(),
+            tag_prefix: "sugarcubes-v".into(),
+            asset_name: "SugarCubes-{version}.zip".into(),
+            download_hosts: downloads
+                .iter()
+                .map(|host| (*host).to_owned())
+                .collect::<BTreeSet<_>>(),
+        }
+    }
+
+    #[test]
+    fn a_qualification_build_reaches_a_loopback_release_fixture() -> Result<(), MetadataError> {
+        let policies =
+            loopback_policies(&config("http://127.0.0.1:8472", "127.0.0.1", &["127.0.0.1"]))?
+                .ok_or(MetadataError("A loopback fixture was not admitted."))?;
+        for policy in &policies {
+            assert!(policy.endpoint("http://127.0.0.1:8472/nodes/SugarCubes/versions").is_ok());
+            assert!(policy.endpoint("http://127.0.0.1:8473/nodes/SugarCubes/versions").is_err());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn https_sources_keep_their_https_policies_and_mixed_loopback_is_refused() {
+        let https = config("https://api.comfy.org", "cdn.comfy.org", &["github.com"]);
+        assert_eq!(loopback_policies(&https).map(|found| found.is_none()), Ok(true));
+        let mut mixed = config("http://127.0.0.1:8472", "127.0.0.1", &["127.0.0.1"]);
+        mixed.github_api_root = "https://api.github.com".into();
+        assert!(loopback_policies(&mixed).is_err());
+        let foreign = config("http://127.0.0.1:8472", "cdn.comfy.org", &["127.0.0.1"]);
+        assert!(loopback_policies(&foreign).is_err());
     }
 }
 

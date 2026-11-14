@@ -17,6 +17,12 @@ kind = "fixture"
 rationale = "Behavioral fixture explicitly exercises native presentation, input validation, or original dynamic text; it grants no production text route. Verify original real scope custody and no-effect rejection before native admission."
 
 [[records]]
+path = "crates/sugarsubstitute-desktop/src/windows_thread_target_tests.rs"
+source_sha256 = "sha256:3dae7f6185b7ee83c39b0f0f0521aed76b2d15d28930e87fa8a5a295ba283589"
+kind = "fixture"
+rationale = "Behavioral fixture creates one untitled message-only window to prove a cross-thread sent WM_PAINT never reaches an event-loop window; it shows nothing and grants no production text route."
+
+[[records]]
 path = "crates/sugarsubstitute/src/production/child/main/settings_tests.rs"
 source_sha256 = "sha256:b1443ee52f1a4ec5c9a76290d804f7e3262ef96f1292615badaf1ced366270ee"
 kind = "fixture"
@@ -132,7 +138,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/lib.rs"
-source_sha256 = "sha256:623b2336b1a0182ed394564a1a68040167bec8ca08fb5335dd839d1255d5b912"
+source_sha256 = "sha256:1afb15da07cfddeef5650a1d50d91eaf1fef5adb6a17f1281d034023a8fd7b87"
 kind = "native"
 rationale = "Native boundary: Own native window lifetime and CPU frame presentation independently of UI content.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -174,7 +180,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/runtime.rs"
-source_sha256 = "sha256:5ee09573eac5ddb5e625f7c17a6a589f3ec7d475237b49ae732dcd9d3a34b9d6"
+source_sha256 = "sha256:fe6fd0df0e2c278d1ee941c6c940b99ebcdb2caee03d84d0659d57bb9f37d3af"
 kind = "native"
 rationale = "Native boundary: Pump native callbacks while preparation and owned shutdown progress without UI waits.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -306,7 +312,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "installer/worker/integration.ts"
-source_sha256 = "sha256:ca64cbbe04fb4e4f8e2a9ba0c8e4fb91952b8d2d65a6e7db5e9f2ed5ccd03e83"
+source_sha256 = "sha256:51952b5b46bc9adbab52ae0c0b956c62745f76ad87814f18452053d5745dddbe"
 kind = "presentation"
 rationale = "SugarCubes dependency preparation emits only the closed checkingSugarCubes, installingSugarCubes and sugarCubesReady product codes; errors remain diagnostic causes."
 
@@ -672,7 +678,7 @@ rationale = "The upstream derivative compares numeric HTTP statusCode framing an
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/canvas/windows.rs"
-source_sha256 = "sha256:91d293b3621697f9722a755707b581e1668004203d808ff112357ae6a857cc97"
+source_sha256 = "sha256:7d4c4dd53913bce6644048be9b516266d53dac1cda471c82da887d1a1e27c1db"
 kind = "native"
 rationale = "Native canvas window consumes catalog-owned titles/status from the application lifetime; input observations preserve authored source paths without constructing product copy."
 

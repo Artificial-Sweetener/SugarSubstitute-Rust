@@ -60,7 +60,12 @@ pub fn run_headless(lifetime: &mut impl HeadlessLifetime) -> Result<(), DesktopE
     let mut surface = surface::Surface::new(crate::file_dialog::Picker::new(&mut builder));
     #[cfg(not(target_os = "windows"))]
     let surface = NoSurface;
-    let mut event_loop = match crate::bootstrap::construct_loop(move || builder.build()) {
+    let mut event_loop = match crate::bootstrap::construct_loop(move || {
+        let event_loop = builder.build();
+        #[cfg(target_os = "windows")]
+        crate::windows_thread_target::guard_current_thread();
+        event_loop
+    }) {
         Ok(event_loop) => event_loop,
         Err(cause) => {
             state.fail(lifetime, cause);
