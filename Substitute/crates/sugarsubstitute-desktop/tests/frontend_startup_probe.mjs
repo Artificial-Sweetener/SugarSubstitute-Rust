@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { Script, SyntheticModule, createContext } from 'node:vm';
+import { Script, SourceTextModule, SyntheticModule, createContext } from 'node:vm';
 
 const source = readFileSync(
   process.argv[2] ?? new URL('../src/main_actor/evidence/probe.rs', import.meta.url),
@@ -29,7 +29,8 @@ async function inspect({ splash = false, extra = [], graphReady = true, setupDon
   registered = true, graphSame = true, connected = true, width = 640,
   complete = true, configuring = false, library = true, apiAfterImport = true,
   earlyExtensionGetter = false, forbidImport = false, appPresent = true,
-  apiBucketPresent = true, forbidDerived = false, frameApi = true, frame = {} } = {}) {
+  apiBucketPresent = true, forbidDerived = false, frameApi = true, frame = {},
+  setupOutcome = null } = {}) {
   const extension = { name: named ? 'SugarCubes.UI' : 'Other' };
   const graph = {};
   const elements = [...extra];
@@ -58,6 +59,9 @@ async function inspect({ splash = false, extra = [], graphReady = true, setupDon
       } : null },
     document: {
       readyState: complete ? 'complete' : 'loading',
+      documentElement: {
+        getAttribute: (name) => (name === 'data-sugarcubes-setup' ? setupOutcome : null),
+      },
       getElementById: (id) => elements.find((item) => item.id === id) ?? null,
       querySelectorAll: (selector) => elements.filter((item) =>
         selector.split(',').some((part) => item.selectors.includes(part.trim()))),
@@ -163,8 +167,8 @@ test('removing the startup splash does not replace completed SugarCubes setup', 
 
 test('actual sample identifies each remaining blocked condition without receipt rights', async () => {
   for (const [options, incomplete] of [
-    [{ vueReady: false }, 2], [{ position: false }, 4], [{ api: false }, 8],
-    [{ extensions: false }, 16], [{ named: false }, 32],
+    [{ vueReady: false }, 2], [{ position: false }, 4],
+    [{ extensions: false }, 16],
     [{ registered: false }, 64], [{ graphSame: false }, 128],
     [{ connected: false }, 256], [{ width: 0 }, 256],
     [{ complete: false }, 512], [{ configuring: true }, 1024],
@@ -181,9 +185,117 @@ test('actual sample preserves simultaneous failed checks after the same owner im
 test('pre-Vue gate keeps the Pinia getter unread and earlier initialization gates keep owner unimported', async () => {
   for (const [options, incomplete] of [
     [{ graphReady: false }, 1], [{ vueReady: false }, 2],
-    [{ position: false }, 4], [{ api: false }, 8],
+    [{ position: false }, 4],
   ]) assert.deepEqual(await inspect({ ...options, earlyExtensionGetter: true, forbidImport: true }),
     { incomplete });
+});
+
+function failure(code, detail) {
+  return { schema_version: 1, launch_id: 11, navigation_generation: 17,
+    outcome: { status: 'failed', failure: { code, detail } } };
+}
+
+const unavailable = failure('sugarcubes_unavailable', 'SugarCubes did not load in this page.');
+
+test('after every extension settled, an absent SugarCubes API or extension is a terminal failure', async () => {
+  for (const options of [{ api: false }, { named: false }, { api: false, named: false }]) {
+    assert.deepEqual(await inspect({ ...options, forbidImport: true }), unavailable);
+  }
+});
+
+test('before extensions settle, an absent SugarCubes stays an incomplete sample', async () => {
+  assert.deepEqual(await inspect({ api: false, named: false, position: false, forbidImport: true }),
+    { incomplete: 4 });
+});
+
+test('a setup failure SugarCubes recorded on the document is a terminal failure', async () => {
+  assert.deepEqual(await inspect({ setupDone: false, setupOutcome: 'failed', forbidImport: true }),
+    failure('sugarcubes_failed', 'SugarCubes reported that its setup failed.'));
+  assert.deepEqual(await inspect({ setupDone: false, setupOutcome: 'loaded' }), { incomplete: 4096 });
+});
+
+// Load fixture extension modules the way ComfyUI 1.47's extension service does: import each
+// module, log and skip one that throws, run every registered setup, and only then assign
+// positionConversion. The real SAMPLE then inspects the page those modules produced.
+async function inspectLoadedPage(sources) {
+  const graph = {};
+  const extensions = [];
+  const app = {
+    isGraphReady: false,
+    vueAppReady: true,
+    positionConversion: null,
+    get extensions() { return extensions; },
+    registerExtension(extension) { extensions.push(extension); },
+    graph,
+    canvas: { graph, canvas: { ...element(), getBoundingClientRect: () => ({ width: 640, height: 480 }) } },
+    configuringGraph: false,
+  };
+  const attributes = new Map();
+  const window = { comfyAPI: { app: { app } } };
+  const context = createContext({
+    window,
+    document: {
+      readyState: 'complete',
+      documentElement: {
+        getAttribute: (name) => attributes.get(name) ?? null,
+        setAttribute: (name, value) => attributes.set(name, String(value)),
+      },
+      getElementById: () => null,
+      querySelectorAll: () => [],
+    },
+    getComputedStyle: () => ({ visibility: 'visible' }),
+    LAUNCH: 11, NAV: 17, FRONT: '1.47.11', CUBES: '0.15.3', NATIVE_DARK: true,
+  });
+  const scripts = new SyntheticModule(['app'], function () { this.setExport('app', app); },
+    { context });
+  const errors = [];
+  for (const source of sources) {
+    const module = new SourceTextModule(source, { context });
+    await module.link((specifier) => {
+      assert.equal(specifier, '/scripts/app.js');
+      return scripts;
+    });
+    try {
+      await module.evaluate();
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  app.isGraphReady = true;
+  await Promise.all(extensions.map(async (extension) => {
+    try { await extension.setup?.(); } catch (error) { errors.push(error); }
+  }));
+  app.positionConversion = {};
+  const script = new Script(sample, {
+    importModuleDynamically: () => assert.fail('A SugarCubes that failed must not be imported'),
+  });
+  return { receipt: JSON.parse(await script.runInContext(context)), errors };
+}
+
+test('a SugarCubes UI module that throws while loading reports SugarCubes unavailable', async () => {
+  const { receipt, errors } = await inspectLoadedPage([
+    `import { app } from '/scripts/app.js';
+     throw new Error('Fixture: this SugarCubes UI cannot load');
+     app.registerExtension({ name: 'SugarCubes.UI' });`,
+    `import { app } from '/scripts/app.js';
+     app.registerExtension({ name: 'SugarCubes.PageLoadReport', setup() {} });`,
+  ]);
+  assert.equal(errors.length, 1);
+  assert.match(errors[0].message, /cannot load/);
+  assert.deepEqual(receipt, unavailable);
+});
+
+test('a SugarCubes UI whose setup throws and records it reports SugarCubes failed', async () => {
+  const { receipt, errors } = await inspectLoadedPage([
+    `import { app } from '/scripts/app.js';
+     app.registerExtension({ name: 'SugarCubes.UI', async setup() {
+       document.documentElement.setAttribute('data-sugarcubes-setup', 'failed');
+       throw new Error('Fixture: this SugarCubes setup cannot finish');
+     } });
+     window.SugarCubes = { openLibrary() {} };`,
+  ]);
+  assert.equal(errors.length, 1);
+  assert.deepEqual(receipt, failure('sugarcubes_failed', 'SugarCubes reported that its setup failed.'));
 });
 
 // Pre-Vue masks leave extension-array bit16 unknown; no Pinia-backed getter is invoked.
