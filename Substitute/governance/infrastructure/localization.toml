@@ -744,7 +744,7 @@ rationale = "The bounded dedicated WebView session transport defines technical J
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/headless/notice.rs"
-source_sha256 = "sha256:ee5c14b0feb8b58fa9f05a5dc7047ab45715ebf9dd9fd1dfc3ac1e1c3c65aef0"
+source_sha256 = "sha256:735efbcbfde9ac4a6b8c00849cb10e33b559ee4b93f5c913be051fb40609e38b"
 kind = "native"
 rationale = "The headless notice window takes its title from the role's HeadlessNotice; the launcher passes the product name. Its words are drawn from the typed catalog into prepared pixels; it adds no product text."
 

@@ -87,6 +87,8 @@ impl Notice {
     ) -> Result<(), crate::DesktopError> {
         if self.window.is_none() {
             self.open(&notice, lifetime, target)?;
+        } else {
+            self.follow_client(lifetime)?;
         }
         let Some(frame) = notice.frame else { return Ok(()) };
         if Some(frame.shape()) != self.shape {
@@ -100,6 +102,26 @@ impl Notice {
             self.shown = true;
         }
         presenter.expose_prepared()
+    }
+
+    /// Report the window's client again when it no longer matches the reported surface, so
+    /// every frame covers the whole client. Tao grows an undecorated window's client by its
+    /// hidden frame after creation; a frame for the creation size would leave rows unpainted.
+    fn follow_client(
+        &mut self,
+        lifetime: &mut impl HeadlessLifetime,
+    ) -> Result<(), crate::DesktopError> {
+        let window = self.window.as_ref().ok_or_else(|| absent("window"))?;
+        let Some(shape) = crate::native_surface::surface_shape(window)? else { return Ok(()) };
+        if Some(shape) != self.shape {
+            self.shape = Some(shape);
+            lifetime.notice_surface(NoticeSurface {
+                shape,
+                dark: window.theme() == Theme::Dark,
+                accent: crate::windows_system_accent::current(),
+            });
+        }
+        Ok(())
     }
 
     /// Create the hidden window, centred on the cursor's monitor like the splash, and report

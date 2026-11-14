@@ -16,7 +16,7 @@ use sugarsubstitute_contracts::{
         ExecutionPort, Generation, JobClass, JobOutcome, JobSpec, Moment, Operation, OwnedJob,
         ReplacementKey, Scope, SurfaceId,
     },
-    presentation::{ConsolePresentation, FrameIdentity, PreparedFrame},
+    presentation::{ConsolePresentation, FrameIdentity, FrameShape, PreparedFrame},
     startup::launcher::{LauncherBudget, NoticeChange, NoticePhase, StartingNotice},
 };
 use sugarsubstitute_desktop::{HeadlessNotice, NoticeSurface};
@@ -58,6 +58,8 @@ pub(crate) struct Notice {
     prepared: bool,
     /// The pump took a frame: it shows the window in the same turn.
     presented: bool,
+    /// The surface shape and words the running preparation draws.
+    preparing_for: Option<(FrameShape, StartupStatus)>,
     failed: bool,
 }
 
@@ -86,6 +88,7 @@ impl Notice {
             frame: None,
             prepared: false,
             presented: false,
+            preparing_for: None,
             failed: false,
         }
     }
@@ -200,8 +203,14 @@ impl Notice {
             self.preparation = None;
             let result = outcome(completion.outcome)?;
             renderer = Some(result.renderer);
-            self.frame = Some(result.frame?);
-            self.prepared = true;
+            let frame = result.frame?;
+            // A frame drawn for a surface or words that changed meanwhile is never shown; the
+            // current ones are prepared next.
+            let current = self.surface.map(|surface| (surface.shape, self.status));
+            if self.preparing_for.take() == current {
+                self.frame = Some(frame);
+                self.prepared = true;
+            }
         }
         let Some(surface) = self.surface else { return Ok(()) };
         if closing || self.failed || !self.shown() || self.prepared || self.busy() {
@@ -222,6 +231,7 @@ impl Notice {
         };
         let request = request(surface, self.status)?;
         let bytes = request.reservation_bytes();
+        self.preparing_for = Some((surface.shape, self.status));
         self.preparation = Some(resources.client.submit_cpu(
             resources.scope,
             spec(resources, bytes)?,

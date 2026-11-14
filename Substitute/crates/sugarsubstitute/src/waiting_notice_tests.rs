@@ -158,3 +158,39 @@ fn the_notice_says_updating_to_the_version_this_launch_starts() -> Result {
     assert_eq!(notice.status, StartupStatus::Starting, "an unshowable version never shows");
     Ok(())
 }
+
+/// The window's client can grow after it was first reported, as Tao adds an undecorated
+/// window's hidden frame. A frame prepared for the earlier surface is never handed over; the
+/// next frame is prepared for the client as it is now, so the whole client is painted.
+#[test]
+fn a_surface_that_changes_while_a_frame_is_prepared_gets_a_frame_of_its_own_shape() -> Result {
+    let clock = Arc::new(Manual::default());
+    let wake = Arc::new(Wake::default());
+    let mut owner = ExecutionOwner::new(clock.clone(), wake.clone())?;
+    let client = owner.client();
+    let scope = client.create_scope(ScopeSpec { id: ScopeId::new(1)?, deadline: None }, None)?;
+    let jobs = JobSequence::new();
+    let resources = Resources { client: &client, scope: &scope, jobs: &jobs, until: at(120_000) };
+    let mut notice = notice()?;
+    notice.observe(at(2_000), true);
+    let created = FrameShape::new(977, 927, 1.75)?;
+    let grown = FrameShape::new(977, 977, 1.75)?;
+    notice.surface(NoticeSurface { shape: created, dark: true, accent: None });
+    observe(&wake, || {
+        client.drain_completions(DRAIN)?;
+        notice.advance(&resources, false);
+        Ok(notice.preparing_for.is_some())
+    })?;
+    notice.surface(NoticeSurface { shape: grown, dark: true, accent: None });
+    observe(&wake, || {
+        client.drain_completions(DRAIN)?;
+        notice.advance(&resources, false);
+        Ok(!notice.busy() && notice.prepared)
+    })?;
+    let frame = notice.wanted().and_then(|wanted| wanted.frame).ok_or("no frame prepared")?;
+    assert_eq!(frame.shape(), grown, "the frame covers the client as it is now");
+    owner.request_shutdown(clock.now().checked_add(LauncherBudget::EXIT_GRACE)?);
+    observe(&wake, || Ok(owner.poll_shutdown()?.settled))?;
+    owner.finish_shutdown()?;
+    Ok(())
+}
