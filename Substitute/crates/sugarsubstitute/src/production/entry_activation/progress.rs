@@ -171,6 +171,13 @@ impl ProductionActivation {
         ) {
             failure.get_or_insert_with(|| outer(cause));
         }
+        // Every turn, whatever the records or earlier failures: only the pack owner takes a
+        // finished SugarCubes job's result, and the coordinator cannot stop before it is taken.
+        if let Err(cause) =
+            backend.advance_pack(&backend_resources(resources, self.capture.as_ref()))
+        {
+            failure.get_or_insert_with(|| outer(cause));
+        }
         delivery.capture_pending(|| backend.take_pending_transition());
         if let Err(cause) =
             delivery.route(&mut self.records, backend, self.capture.as_ref(), resources)

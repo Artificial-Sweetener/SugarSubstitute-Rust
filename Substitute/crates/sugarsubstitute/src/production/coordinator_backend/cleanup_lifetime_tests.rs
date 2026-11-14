@@ -317,6 +317,7 @@ fn an_attempt_settles_only_after_its_finished_sugarcubes_job_is_acknowledged() -
         assert!(!backend.pack.idle(), "the record settles only after the job is taken");
         turns += 1;
         client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
+        backend.advance_pack(&resources).map_err(|cause| -> Box<dyn Error> { cause })?;
         backend.cleanup(0, &mut resources).map_err(|cause| -> Box<dyn Error> { cause })?;
         Ok(backend.attempt_settled(key))
     })
@@ -324,6 +325,64 @@ fn an_attempt_settles_only_after_its_finished_sugarcubes_job_is_acknowledged() -
     assert!(turns > 0, "the record waited for the running SugarCubes job");
     assert!(backend.pack.idle());
     executor.request_shutdown(Moment::from_nanos(14_000_000_000));
+    let progress = executor.poll_shutdown()?;
+    assert!(progress.unresolved_job_ids.is_empty(), "no job is left unacknowledged");
+    Ok(())
+}
+
+/// A backend whose attempts are all gone, as after a failed backend cleanup ended the run,
+/// still owns a SugarCubes job it started, here the startup update restoring the previous
+/// version. It is not settled until that job's result is taken, and the activation's every
+/// turn takes it, so the execution owner and the coordinator can stop.
+#[test]
+fn a_backend_without_attempts_settles_only_after_taking_its_finished_sugarcubes_job() -> Result<()>
+{
+    let clock = Arc::new(tests::TestClock::default());
+    let wake = Arc::new(crate::updates::test_support::Wake::default());
+    let mut executor = sugarsubstitute_execution::ExecutionOwner::new(clock.clone(), wake.clone())?;
+    let client = executor.client();
+    let scopes = ScopeSequence::new();
+    let native =
+        client.create_native_scope(ScopeSpec { id: scopes.allocate()?, deadline: None }, None)?;
+    let cleanup =
+        client.create_scope(ScopeSpec { id: scopes.allocate()?, deadline: None }, None)?;
+    let jobs = JobSequence::new();
+    let mut authority = CoordinatorAuthority::new(
+        sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget::new(Moment::from_nanos(0))?,
+        None,
+    )?;
+    let mut held = tests::unadmitted_policy()?;
+    let backend = held.backend.as_mut();
+    let resources = BackendResources {
+        client: &client,
+        native: &native,
+        cleanup: &cleanup,
+        jobs: &jobs,
+        scopes: &scopes,
+        authority: &mut authority,
+        capture: None,
+    };
+    let spec = CoordinatorBackend::spec(
+        &resources,
+        Operation::Infrastructure,
+        JobClass::InfrastructureLifecycle,
+        1024 * 1024,
+        Some(Moment::from_nanos(30_000_000_000)),
+    )?;
+    let job = client.submit_blocking(&cleanup, spec, |_| {
+        Ok(super::pack_update::PackJobResult::Stopped(None))
+    })?;
+    backend.hold_pack_job(job, cleanup.id(), spec);
+    assert!(backend.resource_keys().iter().all(Option::is_none), "no attempt is left");
+    assert!(!backend.settled(), "the SugarCubes job's result is still owed");
+    crate::updates::test_support::observe(&wake, || {
+        client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
+        backend.advance_pack(&resources).map_err(|cause| -> Box<dyn Error> { cause })?;
+        Ok(backend.pack_idle())
+    })
+    .map_err(|cause| cause.to_string())?;
+    assert!(backend.settled());
+    executor.request_shutdown(Moment::from_nanos(1_000_000_000));
     let progress = executor.poll_shutdown()?;
     assert!(progress.unresolved_job_ids.is_empty(), "no job is left unacknowledged");
     Ok(())

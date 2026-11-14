@@ -36,7 +36,7 @@ const PACK_OBSERVATION_BYTES: u64 = 1024 * 1024;
 const PACK_STORAGE: [&str; 2] = ["pack-updates", "SugarCubes"];
 
 /// What one pack job did.
-pub(super) enum PackJobResult {
+pub(crate) enum PackJobResult {
     /// The startup update ran.
     Update(StartupOutcome),
     /// A trial observation was recorded.
@@ -47,7 +47,7 @@ pub(super) enum PackJobResult {
 
 /// A pack job that could not run; the start continues regardless.
 #[derive(Debug)]
-pub(super) struct PackJobError(String);
+pub(crate) struct PackJobError(String);
 
 impl std::fmt::Display for PackJobError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -75,6 +75,37 @@ impl CoordinatorBackend {
                 self.pack.observe(TrialEvent::PageUnconfirmed, resources)
             }
         }
+    }
+
+    /// Take a finished SugarCubes job's result and start the next one; a preparation it
+    /// released goes on to inspection unless it is being stopped. The activation calls this on
+    /// every turn, whatever its records or failures, because only this owner takes those
+    /// results: one left untaken keeps the execution owner, and so the coordinator, alive.
+    pub(crate) fn advance_pack(&mut self, resources: &BackendResources<'_>) -> Result<()> {
+        if let Some(released) = self.pack.advance(resources)?
+            && let Ok(index) = self.index(released)
+            && let Some(record) = self.records[index].as_mut()
+            && record.shutdown.is_none()
+        {
+            Self::submit_source_inspection(record, resources)?;
+        }
+        Ok(())
+    }
+
+    /// Whether no SugarCubes job is outstanding; the backend's owner never settles before.
+    pub(crate) fn pack_idle(&self) -> bool {
+        self.pack.idle()
+    }
+
+    /// Hold `job` as the running SugarCubes job, as the pack owner admits one.
+    #[cfg(test)]
+    pub(crate) fn hold_pack_job(
+        &mut self,
+        job: OwnedJob<PackJobResult, PackJobError>,
+        scope: sugarsubstitute_contracts::execution::ScopeId,
+        spec: JobSpec,
+    ) {
+        self.pack.hold(job, scope, spec);
     }
 
     /// The live SugarCubes update state of this coordinator, for its window.

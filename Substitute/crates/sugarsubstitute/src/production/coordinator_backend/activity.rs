@@ -223,13 +223,7 @@ impl CoordinatorBackend {
         batch: &CompletionBatch,
         resources: &mut BackendResources<'_>,
     ) -> Result<ResourceTransition> {
-        if let Some(released) = self.pack.advance(resources)?
-            && let Ok(index) = self.index(released)
-            && let Some(record) = self.records[index].as_mut()
-            && record.shutdown.is_none()
-        {
-            Self::submit_source_inspection(record, resources)?;
-        }
+        self.advance_pack(resources)?;
         let custody = match &mut self.custody {
             Some(custody) => custody.advance(resources),
             None => Ok(self.custody_options.is_none()),
