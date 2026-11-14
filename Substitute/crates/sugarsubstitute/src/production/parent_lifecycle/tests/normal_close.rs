@@ -324,3 +324,50 @@ fn accepted_whole_close_without_final_completion_arms_original_role_grace_and_pr
 
 #[path = "normal_close/release_admission.rs"]
 mod release_admission;
+
+/// A coordinator close of a live registered desktop asks it to close normally and keeps the
+/// pipe for its handshake: no cleanup is owed until the child's ExitIntent hands the decision to
+/// its own close transaction, or the coordinator's original grace expires. A desktop that is not
+/// registered, failed or already closing is cleaned up at once.
+#[test]
+fn coordinator_close_asks_a_live_desktop_to_close_before_any_cleanup() -> Result<()> {
+    use super::super::child_close::ChildClose;
+    let global = ShutdownBudget::new(Moment::from_nanos(100))?;
+    let mut parent = actor()?;
+    let process = ProcessKey { owner: parent.run.owner, id: ProcessId::new(1)? };
+    parent.exit = Some(DesktopExitTransaction::new(parent.run, process)?);
+    assert!(!parent.ask_child_to_close(global.started, global), "unregistered: cleaned at once");
+    parent.registered = true;
+    assert!(parent.ask_child_to_close(global.started, global), "a live desktop closes itself");
+    assert_eq!(parent.child_close(), ChildClose::Due(global.graceful_until));
+    assert!(parent.ask_child_to_close(global.started, global));
+    assert_eq!(parent.child_close(), ChildClose::Due(global.graceful_until), "asked once");
+    assert!(!parent.ask_child_to_close(global.graceful_until, global), "grace expired");
+
+    let mut parent = actor()?;
+    parent.registered = true;
+    intent_at(&mut parent, CompletionIntent::StartupCancelled, Moment::from_nanos(150))?;
+    assert!(!parent.ask_child_to_close(global.started, global), "its own close decides");
+    assert!(parent.normal_close_handshake_pending(Moment::from_nanos(150)));
+
+    let mut parent = actor()?;
+    parent.registered = true;
+    parent.failure = Some(Box::new(std::io::Error::other("Original actor failure")));
+    assert!(!parent.ask_child_to_close(global.started, global), "failed: cleaned at once");
+    Ok(())
+}
+
+/// The request write completes once; a revoked write goes out again.
+#[test]
+fn the_close_request_is_resent_after_a_revoked_write_and_sent_once() {
+    use super::super::child_close::ChildClose;
+    let until = Moment::from_nanos(9);
+    let mut close = ChildClose::Writing(until);
+    close.revoked();
+    assert_eq!(close, ChildClose::Due(until));
+    close.written();
+    assert_eq!(close, ChildClose::Due(until), "only an issued write completes");
+    let mut close = ChildClose::Writing(until);
+    close.written();
+    assert_eq!(close, ChildClose::Sent);
+}

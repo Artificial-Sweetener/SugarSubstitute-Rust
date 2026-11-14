@@ -40,10 +40,8 @@ pub(super) struct Platform {
     /// The coordinator status this fake child last received.
     pub(in crate::startup) update_status:
         Option<sugarsubstitute_contracts::update::status::UpdateStatus>,
-    /// The coordinator's revision of that status.
-    pub(in crate::startup) update_revision: u64,
-    /// Status revisions this fake child acknowledged to the coordinator, in order.
-    pub(in crate::startup) acknowledged: Vec<u64>,
+    /// Whether the coordinator asked this fake child's window to close.
+    pub(in crate::startup) close_requested_by_coordinator: bool,
     /// Start-up messages this fake child still has for the window.
     pub(in crate::startup) notices:
         std::collections::VecDeque<sugarsubstitute_contracts::update::status::StartupNotice>,
@@ -168,12 +166,8 @@ impl StartupBackend for Platform {
     fn update_status(&self) -> Option<&sugarsubstitute_contracts::update::status::UpdateStatus> {
         self.update_status.as_ref()
     }
-    fn update_status_revision(&self) -> u64 {
-        self.update_revision
-    }
-    fn acknowledge_update_status(&mut self, revision: u64) -> BackendResult<()> {
-        self.acknowledged.push(revision);
-        Ok(())
+    fn coordinator_close_requested(&self) -> bool {
+        self.close_requested_by_coordinator
     }
     fn workflow_queue(&self) -> sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue {
         sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue::Unobserved

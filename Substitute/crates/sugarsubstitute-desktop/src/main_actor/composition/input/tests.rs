@@ -111,3 +111,74 @@ fn only_the_page_caption_region_becomes_a_window_caption() {
         assert_eq!(page::caption_hit(COREWEBVIEW2_NON_CLIENT_REGION_KIND(kind)), None, "{kind}");
     }
 }
+
+/// The client row where the real caption layout starts the page in a 1280 by 800 logical
+/// window at 175%, the proof desktop's 168 DPI, with or without the update line.
+fn page_top_at_175(line: bool) -> Result<(u32, [u32; 2]), Box<dyn std::error::Error>> {
+    use crate::main_updates::{CaptionUpdates, Notice};
+    use sugarsubstitute_contracts::{execution::Generation, lifecycle, startup::LaunchId};
+    let scale = 1.75;
+    let client = [2240_u32, 1400_u32];
+    let mut caption = CaptionUpdates::default();
+    if line {
+        caption.notify(Notice::Updated { version: "0.2.0".to_owned(), changelog: None });
+    }
+    let identity = crate::MainIdentity {
+        run: lifecycle::RunKey {
+            owner: lifecycle::CoordinatorKey {
+                namespace: lifecycle::NamespaceId::new([1; 32]),
+                epoch: lifecycle::CoordinatorEpoch::new([2; 16])?,
+            },
+            instance: lifecycle::InstanceId::new(1)?,
+            generation: lifecycle::RunGeneration::new(1)?,
+        },
+        launch: LaunchId::new(1)?,
+        navigation: Generation::new(1)?,
+    };
+    let retry = crate::main_backend::Recovery::new(identity)
+        .presentation(crate::MainRecoveryLabels { retry: "Retry", retry_ready: "Ready" });
+    let labels = crate::MainCaptionLabels {
+        minimize: "min",
+        maximize: "max",
+        restore: "restore",
+        close: "close",
+    };
+    let width = f64::from(client[0]) / scale;
+    let view = caption.view(sugarsubstitute_contracts::localization::messages("en"));
+    let measure = |text: &str| Ok::<_, std::convert::Infallible>(text.chars().count() as f64 * 7.0);
+    let controls =
+        crate::main_caption::caption_controls(width, false, labels, retry, &view, measure)?;
+    Ok((crate::main_caption::page_top(width, &controls, scale), client))
+}
+
+/// At 175% the browser is placed at the real layout's page offset, and a pointer over any page
+/// pixel reaches WebView2 as that same page pixel, while the line shows and after Dismiss.
+#[test]
+fn page_input_lands_on_the_page_pixel_under_the_pointer_at_175_percent()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut tops = Vec::new();
+    for line in [true, false] {
+        let (top, [width, height]) = page_top_at_175(line)?;
+        tops.push(top);
+        let bounds = crate::main_actor::frame::browser_bounds(width, height, top);
+        let position = bounds.position.to_physical::<i32>(1.75);
+        let size = bounds.size.to_physical::<i32>(1.75);
+        let origin = POINT { x: position.x, y: position.y };
+        // The tab bar's new-tab button, the avatar, and the page's first and last pixels.
+        let targets = [
+            POINT { x: 432, y: 33 },
+            POINT { x: 55, y: 52 },
+            POINT { x: 0, y: 0 },
+            POINT { x: size.width - 1, y: size.height - 1 },
+        ];
+        for page in targets {
+            let client = POINT { x: page.x + origin.x, y: page.y + origin.y };
+            for kind in [WM_MOUSEMOVE, WM_LBUTTONDOWN, WM_LBUTTONUP] {
+                assert_eq!(page_input_point(kind, client, origin), page, "line={line}");
+            }
+        }
+        assert_eq!(page_input_point(WM_MOUSELEAVE, POINT::default(), origin), POINT::default());
+    }
+    assert_eq!(tops, [60, 0], "the line moves the page down 60 pixels; Dismiss returns it");
+    Ok(())
+}

@@ -133,7 +133,6 @@ impl<C: EntryActivation> EntryRunner<C> {
             && self.launch_update.window_opened()
         {
             self.update_status.withdraw_restart();
-            self.restart_announced = None;
             tracing::info!(
                 operation = "update_restart_withdrawn",
                 "The window opened before the restart; the update starts on the next launch"
@@ -141,23 +140,19 @@ impl<C: EntryActivation> EntryRunner<C> {
         }
     }
 
-    /// Tell the window this launch restarts into its prepared update, so it keeps the splash and
-    /// stays hidden. The close waits until every window acknowledged it had committed to that.
+    /// Tell the window this launch restarts into its prepared update. A window that was never
+    /// revealed shows which version it updates to and closes itself to restart.
     pub(super) fn announce_restart(&mut self) -> Result<(), Box<dyn Error>> {
-        self.publish_update_status()?;
-        self.restart_announced = Some(self.update_status.snapshot().0);
-        Ok(())
+        self.publish_update_status()
     }
 
-    /// Whether this run owes its restart close now: a restart is decided, the window has not
-    /// opened, and every window acknowledged the status that keeps it hidden. A window that
-    /// revealed before applying it never acknowledges it; its MainRevealed withdraws the restart.
+    /// Whether this run owes its own restart close now: a restart is decided, the window has not
+    /// opened, and no desktop child is live. A live desktop child is never closed from here: one
+    /// never revealed closes itself to restart, and one revealed first withdraws the restart.
     pub(super) fn restart_owed(&self) -> bool {
         self.launch_update.restart().is_some()
             && !self.authority.as_ref().is_some_and(CoordinatorAuthority::window_opened)
-            && self
-                .restart_announced
-                .is_some_and(|revision| self.child.update_status_applied(revision))
+            && !self.child.has_desktop()
     }
 
     /// Read this installation's update record and channel when they may have changed and no read
@@ -288,7 +283,7 @@ mod tests {
         let mut runner = EntryRunner::new(
             command,
             path,
-            Box::new(NoChild(None, None)),
+            Box::new(NoChild(None, false)),
             crate::diagnostics::DiagnosticHealth::fixture(),
         );
         freeze_time(&mut runner);

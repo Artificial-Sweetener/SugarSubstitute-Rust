@@ -383,6 +383,10 @@ impl ChildBootstrap {
     pub(super) fn coordinator_updates(&self) -> &super::channel::CoordinatorUpdates {
         self.channel.updates()
     }
+    /// Whether the coordinator asked the window to close through its ordinary close.
+    pub(super) fn coordinator_close_requested(&self) -> bool {
+        self.channel.close_requested()
+    }
     /// Borrow the actual channel for output, profile and native challenge transactions.
     pub(super) fn channel_mut(&mut self) -> &mut ChildChannel {
         &mut self.channel

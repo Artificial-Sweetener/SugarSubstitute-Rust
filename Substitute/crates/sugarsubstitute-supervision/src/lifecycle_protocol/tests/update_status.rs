@@ -40,21 +40,21 @@ fn update_status_and_restart_intent_round_trip_with_their_identity_rules() -> Te
     let message = WireMessage { header: unrequested, payload: WirePayload::CheckForUpdates };
     assert!(matches!(FrameCodec::encode(&message, &mut [0; 256]), Err(ProtocolError::Identity)));
 
-    let applied = encoded(WirePayload::UpdateStatusApplied(revision))?;
-    assert_eq!(u16::from_le_bytes([applied[12], applied[13]]), 25);
-    assert_eq!(&applied[HEADER_BYTES..], 5u64.to_le_bytes());
-    let decoded = FrameCodec::decode(&applied)?;
-    assert!(decoded.header.request.is_some());
-    assert!(
-        matches!(decoded.payload, DecodedPayload::UpdateStatusApplied(read) if read == revision)
-    );
-    let mut zero = applied.clone();
-    zero[HEADER_BYTES..].fill(0);
-    assert!(FrameCodec::decode(&zero).is_err(), "revision zero names no status");
-    let mut unrequested = header(25)?;
-    unrequested.request = None;
-    let message =
-        WireMessage { header: unrequested, payload: WirePayload::UpdateStatusApplied(revision) };
+    let mut close = header(25)?;
+    close.request = None;
+    let mut source = vec![0; 256];
+    let length = FrameCodec::encode(
+        &WireMessage { header: close, payload: WirePayload::CloseRequest },
+        &mut source,
+    )?;
+    source.truncate(length);
+    assert_eq!(source.len(), HEADER_BYTES);
+    assert_eq!(u16::from_le_bytes([source[12], source[13]]), 25);
+    let decoded = FrameCodec::decode(&source)?;
+    assert!(decoded.header.request.is_none());
+    assert!(matches!(decoded.payload, DecodedPayload::CloseRequest));
+    close.request = Some(RequestId::new(13)?);
+    let message = WireMessage { header: close, payload: WirePayload::CloseRequest };
     assert!(matches!(FrameCodec::encode(&message, &mut [0; 256]), Err(ProtocolError::Identity)));
 
     let mut with_request = header(22)?;
@@ -86,11 +86,7 @@ fn malformed_update_status_frames_reject() -> TestResult {
     overlong[payload + 9..payload + 13]
         .copy_from_slice(&(MAX_UPDATE_STATUS_BYTES as u32 + 1).to_le_bytes());
     assert!(matches!(FrameCodec::decode(&overlong), Err(ProtocolError::Length)));
-    for payload in [
-        WirePayload::RestartToApply,
-        WirePayload::CheckForUpdates,
-        WirePayload::UpdateStatusApplied(revision),
-    ] {
+    for payload in [WirePayload::RestartToApply, WirePayload::CheckForUpdates] {
         let mut trailing = encoded(payload)?;
         trailing.push(0);
         set_length(&mut trailing);

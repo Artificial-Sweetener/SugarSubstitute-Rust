@@ -31,11 +31,6 @@ pub(super) struct OutgoingUpdates {
     writing: bool,
     restart_to_apply: bool,
     check_requested: bool,
-    /// The latest snapshots sent, as (wire revision, coordinator status revision), so the
-    /// child's acknowledgement of a wire revision names the status it applied.
-    sent: [Option<(u64, u64)>; 4],
-    /// The newest coordinator status revision the child acknowledged as applied.
-    applied_status: Option<u64>,
     watch: workflow_watch::WorkflowWatch,
 }
 impl OutgoingUpdates {
@@ -59,15 +54,6 @@ impl OutgoingUpdates {
     /// The authenticated child finished its close save and is exiting so an update applies.
     pub(super) fn restart_to_apply(&mut self) {
         self.restart_to_apply = true;
-    }
-
-    /// The authenticated child applied the snapshot it received as wire `revision`. An unknown
-    /// or older revision changes nothing.
-    pub(super) fn applied(&mut self, revision: u64) {
-        let status = self.sent.iter().flatten().find(|(wire, _)| *wire == revision);
-        if let Some(&(_, status)) = status {
-            self.applied_status = self.applied_status.max(Some(status));
-        }
     }
 
     /// The authenticated child asked for an update check now.
@@ -103,8 +89,6 @@ impl OutgoingUpdates {
         let revision = NonZeroU64::new(self.revision.checked_add(1)?)?;
         self.revision = revision.get();
         self.due = false;
-        self.sent.rotate_right(1);
-        self.sent[0] = self.status_revision.map(|status| (revision.get(), status));
         Some((revision, self.sent_queue.unwrap_or(WorkflowQueue::Unobserved), status))
     }
 }
@@ -140,12 +124,6 @@ impl ParentLifecycle {
     /// This is intent only; the caller still requires the child's normal exit.
     pub(crate) fn restart_to_apply_requested(&self) -> bool {
         self.updates.restart_to_apply
-    }
-
-    /// Whether the child acknowledged applying the coordinator's status at `revision` or a
-    /// newer one.
-    pub(crate) fn update_status_applied(&self, revision: u64) -> bool {
-        self.updates.applied_status.is_some_and(|applied| applied >= revision)
     }
 
     /// Take the child's request to check for updates now, once.
@@ -233,30 +211,6 @@ mod tests {
         parent.updates.check_requested();
         assert!(parent.take_check_request());
         assert!(!parent.take_check_request(), "taken once");
-        Ok(())
-    }
-
-    /// A status counts as applied only when the child acknowledges the wire revision that
-    /// carried it: a finished write proves nothing, an unknown revision changes nothing, and an
-    /// older acknowledgement never takes back a newer one.
-    #[test]
-    fn a_status_counts_as_applied_only_when_the_child_acknowledges_it()
-    -> std::result::Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let mut parent = parent()?;
-        let status = UpdateStatus::default();
-        parent.publish_update_status(4, &status)?;
-        let (first, ..) = parent.updates.take_due().ok_or("status not due")?;
-        parent.updates.written();
-        assert!(!parent.update_status_applied(4), "a finished write is not an acknowledgement");
-        parent.publish_update_status(5, &status)?;
-        let (second, ..) = parent.updates.take_due().ok_or("status not due again")?;
-        parent.updates.applied(second.get() + 1);
-        assert!(!parent.update_status_applied(4), "an unknown revision changes nothing");
-        parent.updates.applied(second.get());
-        assert!(parent.update_status_applied(5));
-        parent.updates.applied(first.get());
-        assert!(parent.update_status_applied(5), "an older acknowledgement takes nothing back");
-        assert!(!parent.update_status_applied(6));
         Ok(())
     }
 }
