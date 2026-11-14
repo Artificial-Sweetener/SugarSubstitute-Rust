@@ -4,14 +4,15 @@
 //!
 //! Only a failure of the new pack itself counts against it: a backend that ends before it is
 //! ready with every SugarCubes node registered, or a first page that reports a load failure.
-//! A start the host did not witness (power cut, forced kill, the user closing the app first)
-//! is no verdict: the new version stays and is judged at the next start, except that three
-//! unwitnessed endings in a row count as one failed start, so a pack that takes the whole
-//! start down with it can never loop. A host that always opens the page also reports a page
-//! that did not load for a cause it could not attribute: a later page of the same run still
-//! keeps the version, and otherwise the next start restores the previous one, so a version
-//! whose page never loads is never run a second time. A confirmed version drops its backup;
-//! a failed one is restored from it.
+//! A start the host did not witness (power cut, forced kill) is no verdict: the new version
+//! stays and is judged at the next start, except that three unwitnessed endings in a row count
+//! as one failed start, so a pack that takes the whole start down with it can never loop. A
+//! host that always opens the page also reports a page that did not load for a cause it could
+//! not attribute: a later page of the same run still keeps the version, and otherwise the next
+//! start restores the previous one, so a version whose page never loads is never run a second
+//! time. Such a host reports the user cancelling a startup whose page never became ready as a
+//! page failure, since a page that cannot become ready leaves the user nothing else to do. A
+//! confirmed version drops its backup; a failed one is restored from it.
 
 use super::error::Result;
 use super::replacement::{JournalPhase, TrackedReplacement};

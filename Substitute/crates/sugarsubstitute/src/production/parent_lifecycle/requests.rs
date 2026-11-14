@@ -306,6 +306,20 @@ impl ParentLifecycle {
                 )?;
                 self.cleanup = Some(budget);
                 self.requests.get_mut(index)?.reply = Some(Reply::Acknowledged);
+                // The user cancelled a startup whose page never became ready: a SugarCubes
+                // update judged by that page failed it. The exit proceeds regardless.
+                if intent
+                    == sugarsubstitute_contracts::lifecycle::CompletionIntent::StartupCancelled
+                    && matches!(
+                        resources.target,
+                        sugarsubstitute_contracts::lifecycle::BackendTarget::Managed(_)
+                    )
+                    && let Err(cause) =
+                        resources.backend.pack_startup_cancelled(resources.execution)
+                {
+                    tracing::warn!(operation = "pack_update", error = %cause,
+                        "The cancelled startup could not be recorded against the SugarCubes update");
+                }
             }
             DecodedPayload::ExitCompleted(shutdown) => {
                 self.exit

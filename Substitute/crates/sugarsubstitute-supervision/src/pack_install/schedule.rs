@@ -9,7 +9,8 @@
 //! ComfyUI it only checks, read-only, and holds nothing. Trial observations of the judged
 //! version run in the order the coordinator saw them. When the judged version's page reports
 //! SugarCubes failing, the next managed preparation is held behind a restore of the previous
-//! version, so the version that failed never loads twice. The live [`PackUpdateStatus`] and
+//! version, so the version that failed never loads twice; the user cancelling a startup whose
+//! page never became ready is the same observed failure. The live [`PackUpdateStatus`] and
 //! its revision are what the coordinator publishes to its window.
 
 use super::startup::StartupOutcome;
@@ -117,6 +118,15 @@ impl<K: Copy + Eq> PackSchedule<K> {
             self.page_failed = true;
             self.observe(TrialEvent::PageFailed);
         }
+    }
+
+    /// The user cancelled startup before its page became ready. For the judged version this is
+    /// an observed page failure: the user stopped waiting for a page that never loaded, so the
+    /// previous version is restored before another start loads it. The judgement counts it only
+    /// after the version's backend became ready and before its page loaded; earlier, the
+    /// backend ending decides, and a version whose page loaded is already kept.
+    pub fn startup_cancelled(&mut self) {
+        self.page_failed();
     }
 
     /// Whether the running job is the one holding `key`, so stopping `key` may cancel it.

@@ -1383,6 +1383,19 @@
       }
     },
     {
+      "name": "unobservable-start-then-page-failure-restores",
+      "events": [
+        "backend-start-unobservable",
+        "page-failed",
+        "restart"
+      ],
+      "expect": {
+        "verdict": "restored",
+        "version": "1.0.0",
+        "reason": "page-did-not-load"
+      }
+    },
+    {
       "name": "unobservable-start-and-restart-alone-change-nothing",
       "events": [
         "backend-start-unobservable",
