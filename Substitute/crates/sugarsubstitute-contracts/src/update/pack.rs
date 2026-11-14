@@ -235,6 +235,9 @@ pub enum PackUpdateStatus {
     Idle,
     /// A SugarCubes update is running and holds the backend start.
     Updating,
+    /// The previous SugarCubes version is being put back after the new one failed; it holds
+    /// the next backend start, and no retry is offered until it finishes.
+    Restoring,
     /// The start's SugarCubes update finished with this report.
     Finished(PackUpdateReport),
 }
@@ -242,7 +245,11 @@ pub enum PackUpdateStatus {
 impl PackUpdateStatus {
     /// The splash line while a SugarCubes update holds the start.
     pub fn splash_line(&self, words: &PackUpdateMessages) -> Option<&'static str> {
-        matches!(self, Self::Updating).then_some(words.updating)
+        match self {
+            Self::Updating => Some(words.updating),
+            Self::Restoring => Some(words.restoring),
+            Self::Idle | Self::Finished(_) => None,
+        }
     }
 
     /// The one plain line to show once the update finished, if any.
@@ -254,7 +261,7 @@ impl PackUpdateStatus {
     pub fn report(&self) -> Option<&PackUpdateReport> {
         match self {
             Self::Finished(report) => Some(report),
-            Self::Idle | Self::Updating => None,
+            Self::Idle | Self::Updating | Self::Restoring => None,
         }
     }
 
