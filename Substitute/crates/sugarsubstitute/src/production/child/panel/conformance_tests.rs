@@ -81,9 +81,9 @@ fn page_script(session: &str) -> Vec<Value> {
             envelope("sugarcubes.memory", 1),
             json!({ "type": "usage", "usedBytes": 0, "demandBytes": 0, "consumers": [] }),
         ),
-        with(envelope("sugarcubes.updates", 1), json!({ "type": "watch" })),
+        with(envelope("sugarcubes.updates", 2), json!({ "type": "watch" })),
         with(
-            envelope("sugarcubes.updates", 1),
+            envelope("sugarcubes.updates", 2),
             json!({ "type": "check", "request": "conformance-check" }),
         ),
     ]

@@ -46,6 +46,16 @@ fn each_outcome_shows_at_most_one_plain_line_and_its_report_lines() {
         Some("SugarCubes version 1.2.0 is available.")
     );
     assert_eq!(with(PackOutcome::Restored, None).notice(&EN).as_deref(), Some(EN.previous_running));
+    let restored = PackUpdateReport {
+        from: Some("1.1.0".into()),
+        to: Some("1.0.0".into()),
+        reason: Some("did-not-start".into()),
+        ..PackUpdateReport::new(PackOutcome::Restored)
+    };
+    assert_eq!(
+        restored.notice(&EN).as_deref(),
+        Some("The new SugarCubes version didn't start, so the previous version was put back.")
+    );
     for quiet in [PackOutcome::UpToDate, PackOutcome::Judging, PackOutcome::Busy] {
         assert_eq!(with(quiet, None).notice(&EN), None);
     }

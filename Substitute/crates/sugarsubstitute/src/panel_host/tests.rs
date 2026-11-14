@@ -46,7 +46,7 @@ fn the_description_names_no_host_styles_and_encodes_as_the_shared_schema_require
                 { "name": "sugarcubes.panel", "version": 3 },
                 { "name": "sugarcubes.canvas", "version": 3 },
                 { "name": "sugarcubes.memory", "version": 1 },
-                { "name": "sugarcubes.updates", "version": 1 },
+                { "name": "sugarcubes.updates", "version": 2 },
             ],
             "capabilities": [{ "name": "presentation.system-accent" }, { "name": "output.host-surface" }],
         })

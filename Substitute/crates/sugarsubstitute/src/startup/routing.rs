@@ -389,9 +389,11 @@ impl<B: StartupBackend> StartupHost<B> {
         use sugarsubstitute_desktop::StartupWindowContent;
         let status = self.update_status();
         let queue = self.child.workflow_queue();
+        let product = self.locale_messages().updates.product;
         let child = &mut self.child;
         let mut check = || child.request_update_check();
         let mut updater = host_updates::HostUpdates::new(
+            product,
             status,
             queue,
             self.closing,
@@ -413,9 +415,11 @@ impl<B: StartupBackend> StartupHost<B> {
         use sugarsubstitute_desktop::StartupWindowContent;
         let status = self.update_status();
         let queue = self.child.workflow_queue();
+        let product = self.locale_messages().updates.product;
         // Refreshing never asks for a check.
         let mut check = || Ok::<(), Box<dyn Error>>(());
         let updater = host_updates::HostUpdates::new(
+            product,
             status,
             queue,
             self.closing,

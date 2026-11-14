@@ -27,7 +27,7 @@
             },
             {
               "name": "sugarcubes.updates",
-              "version": 1
+              "version": 2
             }
           ],
           "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
@@ -184,20 +184,21 @@
             "channel": "stable",
             "currentVersion": "0.1.0",
             "previousVersionRunning": false,
+            "product": "SugarSubstitute",
             "scheduledRestart": "none",
             "status": {
               "state": "up-to-date"
             },
             "workflowRunning": false
           },
-          "version": 1
+          "version": 2
         }
       ],
       "page": {
         "protocol": "sugarcubes.updates",
         "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
         "type": "watch",
-        "version": 1
+        "version": 2
       }
     },
     {
@@ -208,7 +209,7 @@
           "request": "conformance-check",
           "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
           "type": "rejected",
-          "version": 1
+          "version": 2
         }
       ],
       "page": {
@@ -216,7 +217,7 @@
         "request": "conformance-check",
         "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
         "type": "check",
-        "version": 1
+        "version": 2
       }
     }
   ],

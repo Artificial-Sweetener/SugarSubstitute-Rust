@@ -50,30 +50,37 @@ const UNMANAGED = {
     "SugarCubes wasn't installed from ComfyUI Manager, so it isn't updated here. Reinstall it from ComfyUI Manager to get updates.",
 } as const;
 
-/** Say where an update stands in one plain sentence. */
-export function updateStatusText(status: UpdateStatus, applies: UpdateSource['applies']): string {
+/**
+ * Say where an update stands in one plain sentence that names the product it describes. A
+ * source that can't name its product, an older host, gets the same sentences without a name.
+ */
+export function updateStatusText(
+  status: UpdateStatus,
+  applies: UpdateSource['applies'],
+  product: string | null,
+): string {
+  const release = (version: string) => (product ? `${product} ${version}` : `Version ${version}`);
   switch (status.state) {
     case 'up-to-date':
-      return 'SugarCubes is up to date.';
+      return product ? `${product} is up to date.` : 'Up to date.';
     case 'checking':
-      return 'Checking for updates…';
+      return product ? `Checking for ${product} updates…` : 'Checking for updates…';
     case 'available':
-      return `Version ${status.version} is available.`;
+      return `${release(status.version)} is available.`;
     case 'ready':
       return applies === 'host-restart'
-        ? `Version ${status.version} is ready. Restart to apply it.`
-        : `Version ${status.version} is ready. Apply it, then restart ComfyUI.`;
+        ? `${release(status.version)} is ready. Restart to apply it.`
+        : `${release(status.version)} is ready. Apply it, then restart ComfyUI.`;
     case 'failed':
-      return status.during === 'check'
-        ? "Couldn't check for updates."
-        : "The update couldn't be installed.";
+      if (status.during === 'check')
+        return product ? `Couldn't check for ${product} updates.` : "Couldn't check for updates.";
+      return product ? `${product} couldn't be updated.` : "The update couldn't be installed.";
     case 'restart-comfyui':
-      return `Version ${status.version} will be installed when you restart ComfyUI.`;
+      return `${release(status.version)} will be installed when you restart ComfyUI.`;
     case 'unmanaged':
       return UNMANAGED[status.reason];
   }
 }
-
 /** Keep one stable page whose rows follow every snapshot the attached source reports. */
 export class UpdatesSettingsPage {
   readonly element: HTMLElement;
@@ -200,7 +207,7 @@ export class UpdatesSettingsPage {
       snapshot.lastSuccessfulCheck === null
         ? 'Not checked yet'
         : this.formatTime(snapshot.lastSuccessfulCheck);
-    this.#status.textContent = updateStatusText(snapshot.status, source.applies);
+    this.#status.textContent = updateStatusText(snapshot.status, source.applies, snapshot.product);
     this.#notes.textContent = this.#notesFor(snapshot);
     this.#causes.replaceChildren(
       ...(snapshot.report?.causes ?? []).map((cause) => {
@@ -229,7 +236,12 @@ export class UpdatesSettingsPage {
   #notesFor(snapshot: UpdateSnapshot): string {
     const notes: string[] = [];
     if (this.#refusal) notes.push(this.#refusal);
-    if (snapshot.previousVersionRunning) notes.push('The previous version is running.');
+    if (snapshot.previousVersionRunning)
+      notes.push(
+        snapshot.product
+          ? `The previous ${snapshot.product} version is running.`
+          : 'The previous version is running.',
+      );
     if (snapshot.restartAfterWorkflow)
       notes.push('The restart will happen when the running workflow finishes.');
     return notes.join(' ');

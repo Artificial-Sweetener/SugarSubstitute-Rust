@@ -20,27 +20,35 @@ import { pathToFileURL } from 'node:url';
 import { contractBindings } from './ContractBindings.js';
 import { rustContractBindings } from './RustContractBindings.js';
 
-/** Compile TypeScript types, guards and Rust decoders from the one updates schema. */
+/** The released update protocol versions; each keeps its own schema and bindings. */
+export const UPDATES_VERSIONS = {
+  1: { schema: 'updates.schema.json', stem: 'Updates', words: 'version-one' },
+  2: { schema: 'updates-v2.schema.json', stem: 'UpdatesV2', words: 'version-two' },
+} as const;
+
+/** Compile TypeScript types, guards and Rust decoders from one updates schema version. */
 export async function updatesBindings(
   schemaText: string,
+  version: keyof typeof UPDATES_VERSIONS = 1,
 ): Promise<Readonly<Record<string, string>>> {
+  const { schema: schemaFile, stem, words } = UPDATES_VERSIONS[version];
   const typescript = await contractBindings(schemaText, {
     union: 'UpdatesMessage',
-    schema: 'updates.schema.json',
+    schema: schemaFile,
     generator: 'scripts/integrations/generate-updates-contract.ts',
-    types: 'integrations/contracts/UpdatesProtocol.generated.ts',
-    validation: 'integrations/shared/UpdatesValidation.generated.ts',
-    importPath: '../contracts/UpdatesProtocol.generated.js',
-    description: 'every version-one update status message',
+    types: `integrations/contracts/${stem}Protocol.generated.ts`,
+    validation: `integrations/shared/${stem}Validation.generated.ts`,
+    importPath: `../contracts/${stem}Protocol.generated.js`,
+    description: `every ${words} update status message`,
   });
   const schema = JSON.parse(schemaText) as { $defs: Record<string, unknown> };
   return {
     ...typescript,
-    'integrations/contracts/UpdatesProtocol.generated.rs': rustContractBindings(
+    [`integrations/contracts/${stem}Protocol.generated.rs`]: rustContractBindings(
       schema.$defs,
       schemaText,
       {
-        schema: 'updates.schema.json',
+        schema: schemaFile,
         generator: 'scripts/integrations/generate-updates-contract.ts',
         prefix: 'Updates',
       },
@@ -51,18 +59,23 @@ export async function updatesBindings(
 /** Generate or check bindings without modifying application or host state. */
 async function main(): Promise<void> {
   const root = path.resolve(import.meta.dirname, '../..');
-  const sources = await updatesBindings(
-    readFileSync(path.join(root, 'integrations/contracts/updates.schema.json'), 'utf8'),
-  );
-  for (const [relative, source] of Object.entries(sources)) {
-    const file = path.join(root, relative);
-    if (process.argv.includes('--check')) {
-      if (readFileSync(file, 'utf8').replaceAll('\r\n', '\n') !== source)
-        throw new Error(`Regenerate ${relative}.`);
-    } else writeFileSync(file, source);
+  for (const version of [1, 2] as const) {
+    const sources = await updatesBindings(
+      readFileSync(
+        path.join(root, 'integrations/contracts', UPDATES_VERSIONS[version].schema),
+        'utf8',
+      ),
+      version,
+    );
+    for (const [relative, source] of Object.entries(sources)) {
+      const file = path.join(root, relative);
+      if (process.argv.includes('--check')) {
+        if (readFileSync(file, 'utf8').replaceAll('\r\n', '\n') !== source)
+          throw new Error(`Regenerate ${relative}.`);
+      } else writeFileSync(file, source);
+    }
   }
 }
-
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
   main().catch((error: unknown) => {
     console.error(error);

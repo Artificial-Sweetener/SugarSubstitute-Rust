@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 
-// SugarCubes generates these wire shapes from its updates.schema.json; the workspace compiles that
-// single source directly so the host and the pack cannot drift apart.
-include!("../../../../../Sugar/integrations/contracts/UpdatesProtocol.generated.rs");
+// SugarCubes generates these wire shapes from its updates-v2.schema.json; the workspace compiles
+// that single source directly so the host and the pack cannot drift apart.
+include!("../../../../../Sugar/integrations/contracts/UpdatesV2Protocol.generated.rs");
 
 use super::{PROTOCOL, UpdatesError, VERSION};
 
@@ -52,6 +52,7 @@ pub(super) fn encode(message: &super::UpdatesHostMessage, session: &str) -> Upda
 
 fn state(value: &super::UpdatesState) -> UpdatesState {
     UpdatesState {
+        product: value.product.clone(),
         current_version: value.current_version.as_str().to_owned(),
         channel: match value.channel {
             super::UpdatesChannel::Stable => UpdatesChannel::Stable,

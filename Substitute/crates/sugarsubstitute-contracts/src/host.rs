@@ -34,8 +34,9 @@ impl HostProtocol {
     pub const CANVAS: Self = Self { name: "sugarcubes.canvas", version: 3 };
     /// `sugarcubes.memory` version 1: the application memory budget for the page's caches.
     pub const MEMORY: Self = Self { name: "sugarcubes.memory", version: 1 };
-    /// `sugarcubes.updates` version 1: the host's update state, check now and restart to apply.
-    pub const UPDATES: Self = Self { name: "sugarcubes.updates", version: 1 };
+    /// `sugarcubes.updates` version 2: the host's update state naming its product, check now and
+    /// restart to apply.
+    pub const UPDATES: Self = Self { name: "sugarcubes.updates", version: 2 };
 
     /// Borrow the protocol's message name.
     pub const fn name(self) -> &'static str {

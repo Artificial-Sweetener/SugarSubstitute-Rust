@@ -31,6 +31,7 @@ import { isCanvasSurfaceCapabilitiesReply } from '../CanvasSurfaceValidation.gen
 import { isCanvasMaskMessage } from '../CanvasMasksValidation.generated.js';
 import { isMemoryAllowanceMessage } from '../MemoryValidation.generated.js';
 import { isUpdatesHostMessage } from '../UpdatesValidation.generated.js';
+import { isUpdatesHostMessage as isNamedUpdatesHostMessage } from '../UpdatesV2Validation.generated.js';
 import { discoverCanvasSurface } from '../CanvasSurfaceDiscovery.js';
 import type { ConformanceExchange, HostConformanceReport } from './HostConformance.js';
 
@@ -153,7 +154,8 @@ function declaredMessage(message: unknown, declared: DeclaredHost | null): boole
     (isCanvasMessage(message) && declared.serves(HOST_PROTOCOLS.canvas)) ||
     (isCanvasMaskMessage(message) && declared.serves(HOST_PROTOCOLS.canvasMasks)) ||
     (isMemoryAllowanceMessage(message) && declared.serves(HOST_PROTOCOLS.memory)) ||
-    (isUpdatesHostMessage(message) && declared.serves(HOST_PROTOCOLS.updates))
+    (isUpdatesHostMessage(message) && declared.serves(HOST_PROTOCOLS.updates)) ||
+    (isNamedUpdatesHostMessage(message) && declared.serves(HOST_PROTOCOLS.namedUpdates))
   );
 }
 

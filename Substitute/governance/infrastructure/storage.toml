@@ -4664,7 +4664,7 @@ rationale = "Read the bridge scripts, the host's recorded conformance answers an
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:113b2c25548f0203e07b5592f4c7783310ec4a17fdc82ba7130fcf0a01950e8f"
+source_sha256 = "sha256:f3ffe027a58f0fa85c342549483c4dc7f8bfac3b0bad3210c71d5657cf390dd9"
 capabilities = ["node:fs", "readFileSync"]
 disposition = "fixture"
 rationale = "Read the injected transport and protocol-policy bootstrap sources for executable envelope and custody regression tests."
@@ -5276,7 +5276,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: the
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/pack_install/vector_tests/startup.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:41c3bdeadfbe18ddafff07181a523e059e8a79f7050aef6418969e58254f4c36"
+source_sha256 = "sha256:7c4a5d5795cfe29d17edfc244908bbfb9264fccb976da114be015c4c2a609980"
 capabilities = ["std::fs::File::options", "std::fs::create_dir", "std::fs::create_dir_all", "std::fs::read", "std::fs::read_to_string", "std::fs::remove_dir", "std::fs::remove_file", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: the host's splash-time SugarCubes update against faked and loopback release sources. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

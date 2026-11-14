@@ -290,6 +290,7 @@ fn before_an_updater_reports_the_page_is_told_up_to_date_and_idle() -> TestResul
     assert_eq!(
         **update,
         UpdatesState {
+            product: "SugarSubstitute".into(),
             current_version: UpdatesVersion::new("0.4.0")?,
             channel: UpdatesChannel::Stable,
             last_successful_check_ms: None,
@@ -365,5 +366,12 @@ fn the_channel_shown_is_the_one_the_subscription_follows() -> TestResult {
         let snapshot = UpdateSnapshot { status, ..UpdateSnapshot::default() };
         assert_eq!(page_state(&version, &snapshot, false).channel, shown);
     }
+    Ok(())
+}
+
+#[test]
+fn the_state_names_the_product_its_snapshot_describes() -> TestResult {
+    let snapshot = UpdateSnapshot { product: "SugarSubstitute", ..UpdateSnapshot::default() };
+    assert_eq!(page_state(&version()?, &snapshot, false).product, "SugarSubstitute");
     Ok(())
 }

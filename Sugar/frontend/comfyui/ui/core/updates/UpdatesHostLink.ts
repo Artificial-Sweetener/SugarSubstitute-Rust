@@ -14,13 +14,17 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Present a host's own updater to the page through the `sugarcubes.updates` protocol, version 1.
+ * Present a host's own updater to the page through the `sugarcubes.updates` protocol.
  *
- * `integrations/contracts/updates.schema.json` owns the wire shapes; every host message is
- * admitted through the generated guard before it is read.
+ * Version 2 (`integrations/contracts/updates-v2.schema.json`) names the product each state
+ * describes; version 1 (`updates.schema.json`) does not, so its snapshots name none. Every host
+ * message is admitted through its version's generated guard before it is read.
  */
 import {
+  isNamedUpdatesHostMessage,
   isUpdatesHostMessage,
+  type NamedUpdatesClientMessage,
+  type NamedUpdatesState,
   type UpdatesClientMessage,
   type UpdatesRestartTiming,
   type UpdatesState,
@@ -29,19 +33,20 @@ import type { UpdateRequestOutcome, UpdateSnapshot, UpdateSource } from './Updat
 
 /** Protocol identifier shared with desktop hosts. */
 export const UPDATES_PROTOCOL = 'sugarcubes.updates';
-/** Protocol version; it advances independently of the panel transport. */
-export const UPDATES_PROTOCOL_VERSION = 1;
+/** The protocol versions the page speaks; they advance independently of the panel transport. */
+export type UpdatesProtocolVersion = 1 | 2;
 
 /** The host transport slice the link needs; it grants no host authority. */
 export interface UpdatesLinkTransport {
   readonly session: string;
-  send(message: UpdatesClientMessage): void;
+  send(message: UpdatesClientMessage | NamedUpdatesClientMessage): void;
   subscribe(receive: (value: unknown) => void): () => void;
 }
 
 /** Translate the host's wire state into the snapshot every update source shares. */
-function snapshot(state: UpdatesState): UpdateSnapshot {
+function snapshot(state: UpdatesState | NamedUpdatesState): UpdateSnapshot {
   return Object.freeze({
+    product: 'product' in state && state.product.trim() !== '' ? state.product : null,
     currentVersion: state.currentVersion,
     channel: state.channel,
     lastSuccessfulCheck: state.lastSuccessfulCheck?.completedAt ?? null,
@@ -72,6 +77,7 @@ export class UpdatesHostLink implements UpdateSource {
   constructor(
     private readonly transport: UpdatesLinkTransport,
     private readonly report: (error: unknown) => void,
+    private readonly version: UpdatesProtocolVersion,
   ) {}
 
   /** Listen before asking the host to watch, so its synchronous first state cannot be lost. */
@@ -113,16 +119,21 @@ export class UpdatesHostLink implements UpdateSource {
   }
 
   #envelope() {
-    return {
-      protocol: UPDATES_PROTOCOL,
-      version: UPDATES_PROTOCOL_VERSION,
-      session: this.transport.session,
-    } as const;
+    const session = this.transport.session;
+    return this.version === 2
+      ? ({ protocol: UPDATES_PROTOCOL, version: 2, session } as const)
+      : ({ protocol: UPDATES_PROTOCOL, version: 1, session } as const);
+  }
+
+  /** Admit a host message through the guard of the version this link speaks. */
+  #admit(value: unknown) {
+    if (this.version === 2) return isNamedUpdatesHostMessage(value) ? value : null;
+    return isUpdatesHostMessage(value) ? value : null;
   }
 
   #request(
     kind: 'check' | 'restart',
-    message: (request: string) => UpdatesClientMessage,
+    message: (request: string) => UpdatesClientMessage | NamedUpdatesClientMessage,
   ): Promise<UpdateRequestOutcome> {
     if (this.#disposed || !this.#stop)
       return Promise.resolve({ accepted: false, reason: 'unavailable' });
@@ -135,13 +146,14 @@ export class UpdatesHostLink implements UpdateSource {
   }
 
   #receive(value: unknown): void {
-    if (!isUpdatesHostMessage(value) || value.session !== this.transport.session) return;
-    if (value.type === 'accepted') this.#settle(value.request, { accepted: true });
-    else if (value.type === 'rejected')
-      this.#settle(value.request, { accepted: false, reason: value.reason });
-    else if (value.revision > this.#revision) {
-      this.#revision = value.revision;
-      this.#snapshot = snapshot(value.update);
+    const message = this.#admit(value);
+    if (!message || message.session !== this.transport.session) return;
+    if (message.type === 'accepted') this.#settle(message.request, { accepted: true });
+    else if (message.type === 'rejected')
+      this.#settle(message.request, { accepted: false, reason: message.reason });
+    else if (message.revision > this.#revision) {
+      this.#revision = message.revision;
+      this.#snapshot = snapshot(message.update);
       for (const changed of [...this.#listeners]) changed();
     }
   }
@@ -158,7 +170,7 @@ export class UpdatesHostLink implements UpdateSource {
   }
 
   /** Send one message; a transport failure retires the link and is reported once. */
-  #send(message: UpdatesClientMessage): boolean {
+  #send(message: UpdatesClientMessage | NamedUpdatesClientMessage): boolean {
     if (this.#disposed) return false;
     try {
       this.transport.send(message);

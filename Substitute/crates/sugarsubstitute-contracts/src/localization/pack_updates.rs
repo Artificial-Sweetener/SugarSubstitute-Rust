@@ -19,6 +19,12 @@ pub struct PackUpdateMessages {
     pub could_not_update: &'static str,
     /// One line: the last update did not start, so the version before it runs again.
     pub previous_running: &'static str,
+    /// Report: the new version didn't start, so the previous one was put back.
+    pub restored_did_not_start: &'static str,
+    /// Report: the new version's page didn't load, so the previous one was put back.
+    pub restored_page: &'static str,
+    /// Report: installing the new version was interrupted, so the previous one was put back.
+    pub restored_interrupted: &'static str,
     /// One line: a newer version exists for a ComfyUI this app does not start; contains it.
     pub available: &'static str,
     /// Report: SugarCubes is up to date.
@@ -37,15 +43,15 @@ pub struct PackUpdateMessages {
     pub kept_unregistered: &'static str,
     /// Report: SugarCubes' own updater was changing the folder, so nothing was done.
     pub busy: &'static str,
-    /// Report step names: checking, downloading, installing.
-    pub steps: [&'static str; 3],
+    /// Report step names: checking, downloading, installing, starting.
+    pub steps: [&'static str; 4],
     /// Report heading of the SugarCubes section.
     pub report_title: &'static str,
 }
 
 impl PackUpdateMessages {
     /// Enumerate every owned label for complete registry coverage checks.
-    pub const fn labels(&self) -> [&'static str; 18] {
+    pub const fn labels(&self) -> [&'static str; 22] {
         let s = self.steps;
         [
             self.updating,
@@ -53,6 +59,9 @@ impl PackUpdateMessages {
             self.could_not_check,
             self.could_not_update,
             self.previous_running,
+            self.restored_did_not_start,
+            self.restored_page,
+            self.restored_interrupted,
             self.available,
             self.up_to_date,
             self.registry_unchecked,
@@ -65,6 +74,7 @@ impl PackUpdateMessages {
             s[0],
             s[1],
             s[2],
+            s[3],
             self.report_title,
         ]
     }
@@ -77,6 +87,9 @@ pub static EN: PackUpdateMessages = PackUpdateMessages {
     could_not_check: "Couldn't check for a SugarCubes update.",
     could_not_update: "Couldn't update SugarCubes. The installed version is running.",
     previous_running: "The previous SugarCubes version is running.",
+    restored_did_not_start: "The new SugarCubes version didn't start, so the previous version was put back.",
+    restored_page: "The new SugarCubes version didn't load in the page, so the previous version was put back.",
+    restored_interrupted: "Installing the new SugarCubes version was interrupted, so the previous version was put back.",
     available: "SugarCubes version {version} is available.",
     up_to_date: "SugarCubes is up to date.",
     registry_unchecked: "Couldn't check the Comfy Registry.",
@@ -86,7 +99,12 @@ pub static EN: PackUpdateMessages = PackUpdateMessages {
     kept_linked: "The SugarCubes folder is a link, so it isn't updated here.",
     kept_unregistered: "SugarCubes wasn't installed from the registry, so it isn't updated here.",
     busy: "SugarCubes was updating itself, so it was left as it is.",
-    steps: ["Checking for a SugarCubes update", "Downloading SugarCubes", "Installing SugarCubes"],
+    steps: [
+        "Checking for a SugarCubes update",
+        "Downloading SugarCubes",
+        "Installing SugarCubes",
+        "Starting SugarCubes",
+    ],
     report_title: "SugarCubes update",
 };
 
@@ -97,6 +115,9 @@ pub static ZH_HANS: PackUpdateMessages = PackUpdateMessages {
     could_not_check: "无法检查 SugarCubes 更新。",
     could_not_update: "无法更新 SugarCubes。正在运行已安装的版本。",
     previous_running: "正在运行之前的 SugarCubes 版本。",
+    restored_did_not_start: "新的 SugarCubes 版本未能启动，因此已恢复之前的版本。",
+    restored_page: "新的 SugarCubes 版本未能在页面中加载，因此已恢复之前的版本。",
+    restored_interrupted: "安装新的 SugarCubes 版本时被中断，因此已恢复之前的版本。",
     available: "SugarCubes 版本 {version} 可用。",
     up_to_date: "SugarCubes 已是最新版本。",
     registry_unchecked: "无法检查 Comfy Registry。",
@@ -106,7 +127,12 @@ pub static ZH_HANS: PackUpdateMessages = PackUpdateMessages {
     kept_linked: "SugarCubes 文件夹是一个链接，因此不在此处更新。",
     kept_unregistered: "SugarCubes 不是从 Registry 安装的，因此不在此处更新。",
     busy: "SugarCubes 正在自行更新，因此保持原样。",
-    steps: ["正在检查 SugarCubes 更新", "正在下载 SugarCubes", "正在安装 SugarCubes"],
+    steps: [
+        "正在检查 SugarCubes 更新",
+        "正在下载 SugarCubes",
+        "正在安装 SugarCubes",
+        "正在启动 SugarCubes",
+    ],
     report_title: "SugarCubes 更新",
 };
 
@@ -117,6 +143,9 @@ pub static JA: PackUpdateMessages = PackUpdateMessages {
     could_not_check: "SugarCubes の更新を確認できませんでした。",
     could_not_update: "SugarCubes を更新できませんでした。インストール済みのバージョンで動作しています。",
     previous_running: "以前の SugarCubes バージョンで動作しています。",
+    restored_did_not_start: "新しい SugarCubes のバージョンが起動しなかったため、以前のバージョンに戻しました。",
+    restored_page: "新しい SugarCubes のバージョンがページで読み込まれなかったため、以前のバージョンに戻しました。",
+    restored_interrupted: "新しい SugarCubes のバージョンのインストールが中断されたため、以前のバージョンに戻しました。",
     available: "SugarCubes バージョン {version} を利用できます。",
     up_to_date: "SugarCubes は最新です。",
     registry_unchecked: "Comfy Registry を確認できませんでした。",
@@ -130,6 +159,7 @@ pub static JA: PackUpdateMessages = PackUpdateMessages {
         "SugarCubes の更新を確認しています",
         "SugarCubes をダウンロードしています",
         "SugarCubes をインストールしています",
+        "SugarCubes を起動しています",
     ],
     report_title: "SugarCubes の更新",
 };
@@ -141,6 +171,9 @@ pub static KO: PackUpdateMessages = PackUpdateMessages {
     could_not_check: "SugarCubes 업데이트를 확인할 수 없습니다.",
     could_not_update: "SugarCubes를 업데이트할 수 없습니다. 설치된 버전이 실행 중입니다.",
     previous_running: "이전 SugarCubes 버전이 실행 중입니다.",
+    restored_did_not_start: "새 SugarCubes 버전이 시작되지 않아 이전 버전으로 되돌렸습니다.",
+    restored_page: "새 SugarCubes 버전이 페이지에서 로드되지 않아 이전 버전으로 되돌렸습니다.",
+    restored_interrupted: "새 SugarCubes 버전 설치가 중단되어 이전 버전으로 되돌렸습니다.",
     available: "SugarCubes 버전 {version}을(를) 사용할 수 있습니다.",
     up_to_date: "SugarCubes가 최신 버전입니다.",
     registry_unchecked: "Comfy Registry를 확인할 수 없습니다.",
@@ -150,7 +183,12 @@ pub static KO: PackUpdateMessages = PackUpdateMessages {
     kept_linked: "SugarCubes 폴더가 링크이므로 여기서 업데이트하지 않습니다.",
     kept_unregistered: "SugarCubes가 Registry에서 설치되지 않았으므로 여기서 업데이트하지 않습니다.",
     busy: "SugarCubes가 스스로 업데이트하는 중이어서 그대로 두었습니다.",
-    steps: ["SugarCubes 업데이트 확인 중", "SugarCubes 다운로드 중", "SugarCubes 설치 중"],
+    steps: [
+        "SugarCubes 업데이트 확인 중",
+        "SugarCubes 다운로드 중",
+        "SugarCubes 설치 중",
+        "SugarCubes 시작 중",
+    ],
     report_title: "SugarCubes 업데이트",
 };
 
@@ -161,6 +199,9 @@ pub static ES: PackUpdateMessages = PackUpdateMessages {
     could_not_check: "No se pudo comprobar si hay una actualización de SugarCubes.",
     could_not_update: "No se pudo actualizar SugarCubes. Se está usando la versión instalada.",
     previous_running: "Se está usando la versión anterior de SugarCubes.",
+    restored_did_not_start: "La nueva versión de SugarCubes no se inició, así que se restauró la versión anterior.",
+    restored_page: "La nueva versión de SugarCubes no se cargó en la página, así que se restauró la versión anterior.",
+    restored_interrupted: "Se interrumpió la instalación de la nueva versión de SugarCubes, así que se restauró la versión anterior.",
     available: "La versión {version} de SugarCubes está disponible.",
     up_to_date: "SugarCubes está actualizado.",
     registry_unchecked: "No se pudo comprobar el Comfy Registry.",
@@ -174,6 +215,7 @@ pub static ES: PackUpdateMessages = PackUpdateMessages {
         "Buscando una actualización de SugarCubes",
         "Descargando SugarCubes",
         "Instalando SugarCubes",
+        "Iniciando SugarCubes",
     ],
     report_title: "Actualización de SugarCubes",
 };

@@ -10,6 +10,8 @@ pub const VERSION: &str = "{version}";
 /// Words for the update button, the restart offer and the start-up update lines.
 #[non_exhaustive]
 pub struct UpdateMessages {
+    /// The application's name, as the embedded page's Updates entry shows it beside its version.
+    pub product: &'static str,
     /// Name of the update button when an update is ready to apply.
     pub ready: &'static str,
     /// Name of the update button when the last update attempt failed.
@@ -39,9 +41,10 @@ pub struct UpdateMessages {
 
 impl UpdateMessages {
     /// Enumerate every owned label for complete registry coverage checks.
-    pub const fn labels(&self) -> [&'static str; 18] {
+    pub const fn labels(&self) -> [&'static str; 19] {
         let p = self.phases;
         [
+            self.product,
             self.ready,
             self.failed,
             self.restart,
@@ -84,6 +87,7 @@ impl UpdateMessages {
 
 /// Canonical English update words.
 pub static EN: UpdateMessages = UpdateMessages {
+    product: "SugarSubstitute",
     ready: "Update ready",
     failed: "Couldn't update. Show the report",
     restart: "Restart to apply",
@@ -108,6 +112,7 @@ pub static EN: UpdateMessages = UpdateMessages {
 
 /// Simplified Chinese update words.
 pub static ZH_HANS: UpdateMessages = UpdateMessages {
+    product: "SugarSubstitute",
     ready: "更新已就绪",
     failed: "无法更新。查看报告",
     restart: "重新启动以应用",
@@ -132,6 +137,7 @@ pub static ZH_HANS: UpdateMessages = UpdateMessages {
 
 /// Japanese update words.
 pub static JA: UpdateMessages = UpdateMessages {
+    product: "SugarSubstitute",
     ready: "更新の準備ができました",
     failed: "更新できませんでした。レポートを表示",
     restart: "再起動して適用",
@@ -156,6 +162,7 @@ pub static JA: UpdateMessages = UpdateMessages {
 
 /// Korean update words.
 pub static KO: UpdateMessages = UpdateMessages {
+    product: "SugarSubstitute",
     ready: "업데이트 준비됨",
     failed: "업데이트할 수 없습니다. 보고서 보기",
     restart: "다시 시작하여 적용",
@@ -180,6 +187,7 @@ pub static KO: UpdateMessages = UpdateMessages {
 
 /// Spanish update words.
 pub static ES: UpdateMessages = UpdateMessages {
+    product: "SugarSubstitute",
     ready: "Actualización lista",
     failed: "No se pudo actualizar. Ver el informe",
     restart: "Reiniciar para aplicar",

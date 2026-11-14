@@ -39,6 +39,7 @@ import { isCanvasSurfaceCapabilitiesReply } from '../CanvasSurfaceValidation.gen
 import { isCanvasMaskMessage, isCanvasMaskReply } from '../CanvasMasksValidation.generated.js';
 import { isMemoryAllowanceMessage } from '../MemoryValidation.generated.js';
 import { isUpdatesHostMessage } from '../UpdatesValidation.generated.js';
+import { isUpdatesHostMessage as isNamedUpdatesHostMessage } from '../UpdatesV2Validation.generated.js';
 import { emptyCanvasSurfaceCapabilities } from '../CanvasSurfaceDiscovery.js';
 import { NEWEST_CANVAS_SURFACE_SCHEMA } from '../CanvasSurfaceSchemas.js';
 
@@ -129,7 +130,10 @@ function validHostMessage(value: unknown, declared: DeclaredHost | null): boolea
     case HOST_PROTOCOLS.memory.name:
       return !!declared?.serves(HOST_PROTOCOLS.memory) && isMemoryAllowanceMessage(value);
     case HOST_PROTOCOLS.updates.name:
-      return !!declared?.serves(HOST_PROTOCOLS.updates) && isUpdatesHostMessage(value);
+      return (
+        (!!declared?.serves(HOST_PROTOCOLS.namedUpdates) && isNamedUpdatesHostMessage(value)) ||
+        (!!declared?.serves(HOST_PROTOCOLS.updates) && isUpdatesHostMessage(value))
+      );
     default:
       return false;
   }
@@ -221,20 +225,25 @@ async function conform(probe: HostProbe, session: string): Promise<HostConforman
     pass('memory');
   } else skip('memory');
 
-  if (declared.serves(HOST_PROTOCOLS.updates)) {
+  // A host that names its product speaks version two; an older host speaks version one.
+  const named = declared.serves(HOST_PROTOCOLS.namedUpdates);
+  if (named || declared.serves(HOST_PROTOCOLS.updates)) {
     probe.check = 'updates';
-    const updates = envelope(HOST_PROTOCOLS.updates, session);
+    const updates = envelope(named ? HOST_PROTOCOLS.namedUpdates : HOST_PROTOCOLS.updates, session);
+    const admitted = (
+      value: unknown,
+    ): value is { readonly type: string; readonly request?: string } =>
+      named ? isNamedUpdatesHostMessage(value) : isUpdatesHostMessage(value);
     probe.send({ ...updates, type: 'watch' });
     await probe.next(
       'an update state after watch',
-      (value): value is UpdatesStateMessage =>
-        isUpdatesHostMessage(value) && value.type === 'state',
+      (value): value is UpdatesStateMessage => admitted(value) && value.type === 'state',
     );
     probe.send({ ...updates, type: 'check', request: 'conformance-check' });
     await probe.next(
       'an answer naming the check request',
       (value) =>
-        isUpdatesHostMessage(value) &&
+        admitted(value) &&
         (value.type === 'accepted' || value.type === 'rejected') &&
         value.request === 'conformance-check',
     );

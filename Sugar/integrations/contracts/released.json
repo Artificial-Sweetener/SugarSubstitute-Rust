@@ -34,6 +34,11 @@
       "file": "updates.schema.json",
       "id": "https://artificialsweetener.ai/schemas/sugarcubes/updates/v1",
       "sha256": "ef20c40afebe2ed098bc5ba83461a568dce40b1451d6b3fcbcb38ba28ef9f562"
+    },
+    {
+      "file": "updates-v2.schema.json",
+      "id": "https://artificialsweetener.ai/schemas/sugarcubes/updates/v2",
+      "sha256": "d4bb52e07811428726bdaf0967e1287bf2d2ffb867c079d9a28631a3fc640bff"
     }
   ],
   "capabilities": [

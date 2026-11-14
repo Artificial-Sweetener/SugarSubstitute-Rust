@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Exchange the host's update state with the embedded SugarCubes page (`sugarcubes.updates` v1).
+//! Exchange the host's update state with the embedded SugarCubes page (`sugarcubes.updates` v2).
 //!
 //! The page sends `watch` once the host description lists the protocol; the host answers with
 //! its update state and sends a new state, with a higher revision, whenever it changes. The page
 //! asks to check now or to restart to apply, and the host answers each such request accepted or
-//! rejected by name. Decoding validates shape and bounds only; it grants no host authority.
+//! rejected by name. Every state names the product it describes. Decoding validates shape and bounds only; it grants no host authority.
 
 use crate::panel::{PanelError, PanelSession};
 use std::{error::Error, fmt};
@@ -18,7 +18,7 @@ mod tests;
 /// Maximum encoded updates message admitted or produced, in UTF-8 bytes.
 pub const MAX_UPDATES_MESSAGE_BYTES: usize = 16384;
 const PROTOCOL: &str = "sugarcubes.updates";
-const VERSION: u64 = 1;
+const VERSION: u64 = 2;
 /// Most causes one state's report carries.
 pub const MAX_REPORT_CAUSES: usize = 8;
 /// Longest cause one state's report carries, in Unicode scalar values.
@@ -172,6 +172,8 @@ pub enum UpdatesRejection {
 /// The host's complete update state for one revision.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UpdatesState {
+    /// The product this state describes, as the user knows it; at most 64 characters.
+    pub product: String,
     /// The running version.
     pub current_version: UpdatesVersion,
     /// The channel the host follows.

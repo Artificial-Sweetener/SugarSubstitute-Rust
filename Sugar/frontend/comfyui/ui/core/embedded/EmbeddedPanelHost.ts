@@ -158,9 +158,16 @@ export class EmbeddedPanelHost {
   /** Present the host's updater in the Updates entry once the host declares that it serves it. */
   #watchHostUpdates(): void {
     const host = this.options.host.read();
-    if (this.#updates || !this.options.updates || !host?.serves(HOST_PROTOCOLS.updates)) return;
+    if (this.#updates || !this.options.updates || !host) return;
+    // A host that names its product speaks version two; an older host speaks version one.
+    const version = host.serves(HOST_PROTOCOLS.namedUpdates)
+      ? 2
+      : host.serves(HOST_PROTOCOLS.updates)
+        ? 1
+        : null;
+    if (version === null) return;
     try {
-      const link = new UpdatesHostLink(this.transport, this.options.report);
+      const link = new UpdatesHostLink(this.transport, this.options.report, version);
       this.#updates = { link, detach: this.options.updates.attach(link) };
       link.start();
     } catch (error: unknown) {

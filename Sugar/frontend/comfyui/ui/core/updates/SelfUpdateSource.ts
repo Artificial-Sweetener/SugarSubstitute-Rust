@@ -211,6 +211,7 @@ export function selfUpdateSnapshot(state: BackendState): UpdateSnapshot | null {
   const status = statusOf(state);
   if (!status) return null;
   return {
+    product: 'SugarCubes',
     currentVersion: state.currentVersion,
     channel: 'stable',
     lastSuccessfulCheck: state.lastCheckedAt,
@@ -320,7 +321,12 @@ export function attachSelfUpdateWhenUnhosted(options: {
     if (!declared) return false;
     stopWaiting?.();
     stopWaiting = null;
-    if (declared.serves(HOST_PROTOCOLS.updates) || options.updates.read()) return true;
+    if (
+      declared.serves(HOST_PROTOCOLS.namedUpdates) ||
+      declared.serves(HOST_PROTOCOLS.updates) ||
+      options.updates.read()
+    )
+      return true;
     const source = new SelfUpdateSource(options.transport, options.report);
     const detach = options.updates.attach(source);
     source.start();

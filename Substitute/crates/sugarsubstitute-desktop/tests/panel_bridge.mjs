@@ -394,7 +394,7 @@ test('bounded control FIFO coalesces kinds and refusal preserves a newer pending
   assert.equal(f.receipt('g', 'c', 6), true);
   assert.equal(f.sent.length, 5);
 });
-const updates = (type, extra = {}) => ({ protocol: 'sugarcubes.updates', version: 1, session, type, ...extra });
+const updates = (type, extra = {}) => ({ protocol: 'sugarcubes.updates', version: 2, session, type, ...extra });
 const posted = f => f.sent.map(value => JSON.parse(value.slice(value.indexOf(':', 4) + 1)));
 test('update requests ride the control lane and every named request keeps its place', () => {
   const f = fixture();

@@ -286,7 +286,7 @@ mod tests {
     -> Result<(), Box<dyn Error>> {
         let session = PanelSession::new("session-12345678".into())?;
         let envelope =
-            r#""protocol":"sugarcubes.updates","version":1,"session":"session-12345678""#;
+            r#""protocol":"sugarcubes.updates","version":2,"session":"session-12345678""#;
         for body in [
             r#""type":"watch""#,
             r#""type":"check","request":"check-1""#,

@@ -15,8 +15,8 @@
     'surface.preview.end', 'surface.preview.withdraw', 'surface.overview'];
   // The host description, memory budget and updates protocols version independently of the
   // version-three transport.
-  const version = value =>
-    ['sugarcubes.host', 'sugarcubes.memory', 'sugarcubes.updates'].includes(value.protocol) ? 1 : 3;
+  const version = value => value.protocol === 'sugarcubes.updates' ? 2 :
+    ['sugarcubes.host', 'sugarcubes.memory'].includes(value.protocol) ? 1 : 3;
   const notification = value => value.protocol === 'sugarcubes.panel' ||
     value.protocol === 'sugarcubes.host' && value.type === 'description' ||
     value.protocol === 'sugarcubes.memory' && value.type === 'allowance' ||
