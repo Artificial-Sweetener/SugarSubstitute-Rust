@@ -49,7 +49,7 @@ impl ChangelogSource {
     /// SugarSubstitute's changelog in its release repository.
     ///
     /// A local-update qualification build reads it from the loopback fixture named by
-    /// `SUGARSUBSTITUTE_QUALIFICATION_RELEASE_NOTES_PORT` when that variable holds a port, so a
+    /// `QUALIFICATION_RELEASE_NOTES_PORT` when that variable holds a port, so a
     /// proof never reaches GitHub.
     ///
     /// # Errors

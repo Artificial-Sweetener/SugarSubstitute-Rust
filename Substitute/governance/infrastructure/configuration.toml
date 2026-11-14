@@ -1051,7 +1051,7 @@ rationale = "Fixture for the SugarCubes-owned model-root configuration adapter: 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/release_notes/qualification.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:17dc99713ca7498ff04bc0a032f9d119ecc6e94a7100574e2ccb6f69901546eb"
+source_sha256 = "sha256:227767e77df9ca9a9525328c24c86ebc399681fb08af66ccd5426db0ee35e5f6"
 capabilities = ["environment"]
 rationale = "Compiled only by the local-update-qualification proof feature: a headless proof names the loopback port of its release-notes fixture through one environment variable, so a proof never reaches GitHub. Shipped builds exclude it and always read the published changelog."
 

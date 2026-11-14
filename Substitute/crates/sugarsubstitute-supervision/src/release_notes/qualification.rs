@@ -3,8 +3,11 @@
 //! Local-update qualification builds only: a proof serves SugarSubstitute's changelog from a
 //! loopback fixture and names its port through one environment variable, so a proof never
 //! reaches GitHub. Shipped builds exclude this module and always read the published changelog.
+//!
+//! The notes are fetched in the desktop child, and `SUGARSUBSTITUTE_`-prefixed variables never
+//! reach a child process, so the variable carries no product prefix.
 
-const PORT: &str = "SUGARSUBSTITUTE_QUALIFICATION_RELEASE_NOTES_PORT";
+const PORT: &str = "QUALIFICATION_RELEASE_NOTES_PORT";
 
 /// The loopback port a proof named for the changelog, when it named exactly one nonzero port.
 pub(super) fn loopback_port() -> Option<u16> {
