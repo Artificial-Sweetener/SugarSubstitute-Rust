@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compare bounded native security without allocating foreign descriptor strings.
 mod descriptor;
+#[cfg(test)]
+pub(crate) mod rewrite;
 use super::native_phase::NativePhase;
 use crate::claim_error::BoundedNativeCause;
 use crate::{ClaimError, native_claims::files::Handle};
