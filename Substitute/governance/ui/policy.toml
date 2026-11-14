@@ -91,6 +91,7 @@ sources = [
     "crates/sugarsubstitute-desktop/src/report/surface/native_tests/hosted.rs",
     "crates/sugarsubstitute-desktop/src/windows_controls_caption_tests.rs",
     "crates/sugarsubstitute-desktop/src/windows_controls_caption_hit_tests.rs",
+    "crates/sugarsubstitute-desktop/src/windows_controls_caption_frame_tests.rs",
     "crates/sugarsubstitute-desktop/src/linux.rs",
     "crates/sugarsubstitute-desktop/src/macos.rs",
     "crates/sugarsubstitute-desktop/src/main_actor.rs",
@@ -152,7 +153,7 @@ sources = [
     "crates/sugarsubstitute-desktop/src/windows_text/field_tests.rs",
     "crates/sugarsubstitute-desktop/src/windows_text/renderer.rs",
 ]
-source_sha256 = "sha256:44cd592dcb6adf3fd593c82f0652e2398306ffa82929f7983cac4faa279e679d"
+source_sha256 = "sha256:9bdea498b504a562dda20a8eb57d92946874f61db85b4099b79790a66488977a"
 
 [[boundaries]]
 owner = "sugarsubstitute-image-gpu"

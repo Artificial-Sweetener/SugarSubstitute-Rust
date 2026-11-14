@@ -114,8 +114,8 @@ fn states() -> Vec<State> {
 
 /// An owned top-down 32-bit memory bitmap one caption peer paints into, as Windows gives an
 /// owner-drawn button its own client rectangle.
-struct Surface {
-    dc: HDC,
+pub(super) struct Surface {
+    pub(super) dc: HDC,
     bitmap: HBITMAP,
     previous: windows::Win32::Graphics::Gdi::HGDIOBJ,
     bits: *mut u8,
@@ -124,7 +124,7 @@ struct Surface {
 }
 
 impl Surface {
-    fn new(width: i32, height: i32) -> Result<Self, Box<dyn std::error::Error>> {
+    pub(super) fn new(width: i32, height: i32) -> Result<Self, Box<dyn std::error::Error>> {
         let info = BITMAPINFO {
             bmiHeader: BITMAPINFOHEADER {
                 biSize: size_of::<BITMAPINFOHEADER>() as u32,
@@ -147,7 +147,7 @@ impl Surface {
         }
     }
 
-    fn pixels(&self) -> &[u8] {
+    pub(super) fn pixels(&self) -> &[u8] {
         // SAFETY: The DIB section is exactly width*height 32-bit pixels and lives with self.
         unsafe { std::slice::from_raw_parts(self.bits, (self.width * self.height * 4) as usize) }
     }

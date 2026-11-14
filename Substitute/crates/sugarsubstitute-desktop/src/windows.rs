@@ -65,8 +65,11 @@ impl Presenter {
         let hwnd = HWND(window.hwnd() as *mut c_void);
         let native_dark = i32::from(dark);
         let corner = 2_i32;
+        // Extend the frame up from the bottom edge across the whole client rather than as a
+        // sheet of glass: the system draws its own caption buttons into a frame extended from
+        // the top, and on a maximized window they show through the caption's transparent buttons.
         let margins =
-            MARGINS { cxLeftWidth: -1, cxRightWidth: -1, cyTopHeight: -1, cyBottomHeight: -1 };
+            MARGINS { cxLeftWidth: 0, cxRightWidth: 0, cyTopHeight: 0, cyBottomHeight: i32::MAX };
         let _theme_supported = set_attribute(
             hwnd,
             DWMWA_USE_IMMERSIVE_DARK_MODE,
