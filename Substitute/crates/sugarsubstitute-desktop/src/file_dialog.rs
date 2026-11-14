@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Queue shell selection between application callbacks on the desktop's existing UI STA.
 #[cfg(windows)]
+mod export_folder;
+#[cfg(windows)]
 mod picker;
 #[cfg(windows)]
 pub(crate) use picker::Picker;
@@ -17,11 +19,16 @@ use windows::{
         UI::Shell::{
             Common::COMDLG_FILTERSPEC, FOS_FILEMUSTEXIST, FOS_FORCEFILESYSTEM, FOS_OVERWRITEPROMPT,
             FOS_PATHMUSTEXIST, FOS_PICKFOLDERS, FileOpenDialog, FileSaveDialog, IFileDialog,
-            IFileOpenDialog, IFileSaveDialog, SIGDN_FILESYSPATH,
+            IFileOpenDialog, IFileSaveDialog, IShellItem, SHCreateItemFromParsingName,
+            SIGDN_FILESYSPATH,
         },
     },
-    core::{HRESULT, HSTRING, Interface, PCWSTR},
+    core::{GUID, HRESULT, HSTRING, Interface, PCWSTR},
 };
+
+/// Save dialogs remember their own last folder, apart from every other dialog of the process.
+#[cfg(windows)]
+const SAVE_DIALOG: GUID = GUID::from_u128(0x5b0e_8d3c_7a41_4c55_9e1f_2d6b_8a4c_1e70);
 
 /// Native shell selection semantics; storage owners validate the selected original later.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -72,6 +79,13 @@ fn choose(
                 dialog.SetTitle(&title)?;
                 dialog.SetFileName(&file_name)?;
                 dialog.SetOptions(FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | FOS_OVERWRITEPROMPT)?;
+                dialog.SetClientGuid(&SAVE_DIALOG)?;
+                let remembered = dialog.GetFolder().ok().and_then(|folder| path_of(&folder).ok());
+                if let Some(folder) = export_folder::resolve(remembered) {
+                    let folder: IShellItem =
+                        SHCreateItemFromParsingName(&HSTRING::from(folder.as_os_str()), None)?;
+                    dialog.SetFolder(&folder)?;
+                }
                 dialog.cast()?
             }
             open => {
@@ -93,11 +107,19 @@ fn choose(
             }
             Err(cause) => return Err(cause.into()),
         }
-        let selected = dialog.GetResult()?;
-        let pointer = selected.GetDisplayName(SIGDN_FILESYSPATH)?;
-        let result = PathBuf::from(OsString::from_wide(pointer.as_wide()));
+        Ok(Some(path_of(&dialog.GetResult()?)?))
+    }
+}
+
+/// The file-system path of a shell item.
+#[cfg(windows)]
+fn path_of(item: &IShellItem) -> windows::core::Result<PathBuf> {
+    // SAFETY: The item is live on this STA; the returned string is copied, then freed once.
+    unsafe {
+        let pointer = item.GetDisplayName(SIGDN_FILESYSPATH)?;
+        let path = PathBuf::from(OsString::from_wide(pointer.as_wide()));
         CoTaskMemFree(Some(pointer.0.cast()));
-        Ok(Some(result))
+        Ok(path)
     }
 }
 

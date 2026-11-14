@@ -197,7 +197,7 @@ capabilities = ["modal"]
 sources = [
     "crates/sugarsubstitute-desktop/src/file_dialog.rs",
 ]
-source_sha256 = "sha256:c358901b3c8d344dca82ca653b76ee57e8daa2b59c18de9c191a3816b531cc76"
+source_sha256 = "sha256:09254197e12f058634153a2908431dae2f343fc428a9c17f569d4af1ad944681"
 
 [[boundaries]]
 owner = "sugarsubstitute-desktop"
