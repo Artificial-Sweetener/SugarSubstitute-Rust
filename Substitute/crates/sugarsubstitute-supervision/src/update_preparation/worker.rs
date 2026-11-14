@@ -101,7 +101,7 @@ impl Worker {
             failure: None,
             retirement_failure: None,
             version: None,
-            storage_set_aside: None,
+            storage_set_aside: false,
         };
         Ok(Self {
             state: Arc::new(Mutex::new(state)),
@@ -226,7 +226,7 @@ impl Worker {
         self.job = None;
         let state = crate::registry::lock(&self.state);
         self.version.clone_from(&state.version);
-        self.storage_set_aside = state.storage_set_aside.is_some();
+        self.storage_set_aside = state.storage_set_aside;
         let continues = !self.closing
             && matches!(completion.outcome, JobOutcome::TimedOut)
             && state.continues_download();

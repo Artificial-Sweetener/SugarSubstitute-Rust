@@ -50,6 +50,8 @@ const CHECKPOINT_STAGE: &str = "pending";
 const RECORD_STAGE: &str = "record-pending";
 const RELEASES_STAGE: &str = "releases-pending";
 const STAGES: [&str; 4] = [CHECKPOINT_STAGE, RECORD_STAGE, RELEASES_STAGE, files::IMMUTABLE_STAGE];
+#[cfg(test)]
+pub(crate) use reset::INTERRUPT_AFTER_SET_ASIDE;
 pub use reset::SET_ASIDE_FOLDER;
 use std::{fs::File, io, path::Path};
 use sugarsubstitute_contracts::{

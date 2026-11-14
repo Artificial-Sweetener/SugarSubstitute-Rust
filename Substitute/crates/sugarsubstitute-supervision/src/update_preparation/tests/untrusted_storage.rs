@@ -122,11 +122,50 @@ fn a_reset_that_finds_the_storage_trusted_under_the_writer_keeps_it() -> TestRes
         // Another check set the storage up again while this one waited for the writer.
         let (trust, set_aside) =
             TrustStore::reset_untrusted(fixture.installation.path(), [92; 32], &root, &context)?;
-        assert!(set_aside.is_none(), "trusted storage was set aside");
+        assert!(!set_aside, "trusted storage was set aside");
         drop(trust);
         Ok(fixture)
     })?;
     assert!(!installation.installation.path().join("user").join(SET_ASIDE_FOLDER).exists());
+    drop(signed);
+    installation.preserved()
+}
+
+#[test]
+fn a_check_finishes_a_reset_interrupted_after_it_set_the_storage_aside() -> TestResult {
+    let mut pipeline = Pipeline::new()?;
+    let (fixture, signed) = initialized(&mut pipeline)?;
+    let fixture = accept(&mut pipeline, fixture, 1)?;
+    let root = fixture.installation.path().to_owned();
+    rewrite(&root.join("state/update-trust/checkpoint"), Rewrite::UsersMayWrite)?;
+    let trusted = signed.root.clone();
+    let fixture = pipeline.run(SIGNED_INSTALLER_RESERVATION_BYTES, move |context| {
+        INTERRUPT_AFTER_SET_ASIDE.set(true);
+        let interrupted =
+            TrustStore::reset_untrusted(fixture.installation.path(), [92; 32], &trusted, &context);
+        INTERRUPT_AFTER_SET_ASIDE.set(false);
+        assert!(interrupted.is_err(), "the reset was not interrupted");
+        Ok(fixture)
+    })?;
+    assert!(!root.join("state/update-trust").exists(), "the storage was not set aside");
+    // The next check finishes the reset instead of finding no trust at all.
+    let (mut worker, server) =
+        campaign(&mut pipeline, &fixture, SignedPackage::new(&fixture.archive, 2)?, false)?;
+    assert_eq!(step(&mut pipeline, &mut worker)?.progress, Progress::Checking);
+    assert!(worker.storage_set_aside(), "the check did not finish the reset");
+    while !matches!(
+        worker.progress(),
+        Progress::Decision(_) | Progress::Failed | Progress::Ready | Progress::Unavailable
+    ) {
+        submit(&mut pipeline, &mut worker)?;
+        pipeline.observe(|| worker.poll())?;
+    }
+    server.finish()?;
+    retire(&mut pipeline, &mut worker)?;
+    let installation = pipeline.run(SIGNED_INSTALLER_RESERVATION_BYTES, move |context| {
+        drop(TrustStore::open(fixture.installation.path(), [92; 32], &context)?);
+        Ok(fixture)
+    })?;
     drop(signed);
     installation.preserved()
 }

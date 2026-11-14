@@ -175,6 +175,7 @@ fn cancellation_before_directory_publication_preserves_unpublished_state() -> Te
         let parent = Directory::open(installation.path(), false)?;
         let staged = InitialState::stage(
             &Directory::open(&parent.path().join("state"), false)?,
+            INITIAL_STAGE,
             &parent.path().join("state").join(DIRECTORY),
             b"checkpoint",
             b"history",
@@ -197,6 +198,7 @@ fn replacing_a_staging_path_with_identical_bytes_cannot_publish_another_director
         let parent = Directory::open(installation.path(), false)?;
         let staged = InitialState::stage(
             &Directory::open(&parent.path().join("state"), false)?,
+            INITIAL_STAGE,
             &parent.path().join("state").join(DIRECTORY),
             b"checkpoint",
             b"history",
@@ -233,6 +235,7 @@ fn publication_never_replaces_an_existing_directory_or_its_files() -> TestResult
         let parent = Directory::open(installation.path(), false)?;
         let staged = InitialState::stage(
             &Directory::open(&parent.path().join("state"), false)?,
+            INITIAL_STAGE,
             &parent.path().join("state").join(DIRECTORY),
             b"checkpoint",
             b"history",
@@ -280,6 +283,7 @@ fn crash_after_publication_leaves_complete_trust_that_reopens_without_initializi
         let (checkpoint, history) = records(parent.path(), &trusted_root, context)?;
         let staged = InitialState::stage(
             &Directory::open(&parent.path().join("state"), false)?,
+            INITIAL_STAGE,
             &parent.path().join("state").join(DIRECTORY),
             &checkpoint,
             &history,

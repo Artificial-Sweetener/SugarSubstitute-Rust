@@ -91,6 +91,8 @@ pub use transaction::{
     AdmittedCandidate, InstallationSession, InstalledApplication, IntegrationRequest,
     IntegrationStorage, PreparedCandidate, PreparedInstallation, RuntimePaths, Selection,
 };
+#[cfg(test)]
+pub(crate) use trust::INTERRUPT_AFTER_SET_ASIDE;
 pub(crate) use trust::offered::OfferInputs;
 pub use trust::{
     AuthenticatedOffer, OFFER_LOOKUP_RESERVATION_BYTES, OFFER_PUBLICATION_RESERVATION_BYTES,

@@ -2677,7 +2677,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Acq
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/trust.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:8014c6639691f86da324f751a665a83016acd85cd14ade7ed1e6c7012872f5b9"
+source_sha256 = "sha256:1f8cc242647e98e9b7fb7ecdfb5788fb0c3405f1ac27771e5214d46c24ebd021"
 capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Persist update trust under independent exclusion before returning authenticated offers. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
@@ -2694,7 +2694,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Nat
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/trust/initialize/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:a5fc8a0424b929e4d5482dd0614eed5aa8a1c2e1df670f87918fd529e77a5cc7"
+source_sha256 = "sha256:bc73978041918baa266e09c789957712e50c2e480ff9a539ebaea9e711064dc8"
 capabilities = ["assert_eq! restricted capability fragments", "method exists", "method sync_all", "std::fs::create_dir", "std::fs::read", "std::fs::read_dir", "std::fs::rename", "std::fs::symlink_metadata", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Interrupted bootstrap never exposes partial trust or replaces a foreign native directory. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2963,7 +2963,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: New
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/update_preparation/tests/untrusted_storage.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:1a59c432a3e3d065317b726cfb271b2fd791db8bd521f95ebe28b29e8b2c0110"
+source_sha256 = "sha256:2bd3a7e58d26cd69662c4d9401c2fcee685f3bc1730ca37448cc136ead4f26ab"
 capabilities = ["std::fs::read_dir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: A check sets untrusted update storage aside and keeps refusing older releases. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

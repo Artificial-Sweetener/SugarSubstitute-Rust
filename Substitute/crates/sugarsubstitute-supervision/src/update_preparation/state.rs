@@ -49,7 +49,7 @@ pub(super) struct State {
     /// Version label of the offer this campaign authenticated, for its attempt report.
     pub(super) version: Option<String>,
     /// Where this campaign set untrusted update storage aside before setting updates up again.
-    pub(super) storage_set_aside: Option<PathBuf>,
+    pub(super) storage_set_aside: bool,
 }
 impl State {
     /// Advance a single admitted boundary. Failed custody retires on the same worker where possible.
@@ -69,10 +69,15 @@ impl State {
     }
 
     /// Open installed trust. Storage another program made untrustworthy is set aside and set up
-    /// again from the build's own root, so a permission change never blocks updates for good.
+    /// again from the build's own root, so a permission change never blocks updates for good; a
+    /// reset that was interrupted is finished.
     fn open_trust(&mut self, context: &JobContext) -> Result<TrustStore, Failure> {
         match self.source.open(&self.installation, context) {
-            Err(Failure::Trust(cause)) if TrustStore::storage_untrusted(&cause) => {
+            Err(Failure::Trust(cause))
+                if TrustStore::storage_untrusted(&cause)
+                    || TrustStore::reset_interrupted(&self.installation, context)
+                        .unwrap_or(false) =>
+            {
                 let Some((repository, root)) = self.source.bootstrap() else {
                     return Err(cause.into());
                 };
