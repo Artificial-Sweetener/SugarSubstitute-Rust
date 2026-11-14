@@ -230,3 +230,7 @@ mod tests {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "update_status/pair_peer.rs"]
+pub(super) mod pair_peer;

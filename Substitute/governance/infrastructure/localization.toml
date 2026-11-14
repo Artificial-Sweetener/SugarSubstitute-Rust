@@ -396,7 +396,7 @@ rationale = "Pure invalid-dimension qualification uses an empty title and unreac
 
 [[records]]
 path = "crates/sugarsubstitute/src/lib.rs"
-source_sha256 = "sha256:48b7dcdfaa9f45d29402b11fa7b4eda8683585fc31b2da344f18fce9966d664b"
+source_sha256 = "sha256:603fe8e5a62d62a0d2857c6ab47bec08bb5de9922b427ed99d17c8a04bb12209"
 kind = "presentation"
 rationale = "The explicit splash demo composes DesktopOptions.title from messages(options.locale).loading; diagnostic and protocol values do not become UI labels."
 
@@ -414,7 +414,7 @@ rationale = "Startup View binds output, cancel and retry accessible controls to 
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup.rs"
-source_sha256 = "sha256:86af4977757072a07731e9410eeddef60e25c6ffe34a70df7202fdd534dda332"
+source_sha256 = "sha256:7989de1be35bdb221025d754719e3e8390db6f8193194733a481dd77ea1d9f7b"
 kind = "presentation"
 rationale = "WindowContent returns the authoritative startup View accessible controls. This composing owner introduces no label literals."
 

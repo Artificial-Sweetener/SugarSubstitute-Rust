@@ -375,3 +375,7 @@ fn the_restart_notice_stays_after_the_asking_window_is_gone() -> Result<(), Box<
     assert!(runner.restart_notice().is_some(), "the notice stays until the new copy shows");
     Ok(())
 }
+
+#[cfg(feature = "native-composition")]
+#[path = "lifecycle_pair_tests.rs"]
+mod lifecycle_pair;

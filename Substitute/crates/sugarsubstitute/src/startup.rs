@@ -78,6 +78,8 @@ pub use backend::{BackendResult, PreparedStartup, StartupBackend};
 #[cfg(all(windows, feature = "native-composition"))]
 mod workspace;
 use execution::StartupExecution;
+#[cfg(all(test, windows, feature = "native-composition", feature = "windows-native-host"))]
+pub(crate) use workspace::lifecycle_peer;
 mod host_clock;
 pub use host_clock::HostClock;
 use policy::StartupPolicy;

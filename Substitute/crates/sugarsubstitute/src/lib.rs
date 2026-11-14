@@ -32,6 +32,8 @@ mod demo;
 #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
 mod descendant_fixture;
 mod diagnostics;
+#[cfg(all(test, windows, feature = "windows-native-host"))]
+mod lifecycle_harness;
 mod native_entry;
 #[cfg(any(all(windows, feature = "windows-native-host"), test))]
 mod panel_host;

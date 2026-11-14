@@ -65,6 +65,35 @@ pub(super) fn unadmitted_policy() -> Result<RetainedBackend> {
     };
     Ok(RetainedBackend { backend: Box::new(backend), _storage: storage })
 }
+/// A backend with no admitted resources whose SugarCubes owner is putting the previous SugarCubes
+/// version back, its job held until `release` opens when given, for the two-peer lifecycle harness.
+pub(crate) fn backend_with_pack_job(
+    resources: &BackendResources<'_>,
+    release: Option<Arc<crate::completion_wake::Gate>>,
+) -> Result<RetainedBackend> {
+    let mut held = unadmitted_policy()?;
+    let spec = CoordinatorBackend::spec(
+        resources,
+        Operation::Infrastructure,
+        JobClass::InfrastructureLifecycle,
+        1024 * 1024,
+        None,
+    )?;
+    let job = resources.client.submit_blocking(resources.cleanup, spec, move |_| {
+        if let Some(gate) = release {
+            gate.hold();
+        }
+        Ok(super::pack_update::PackJobResult::Stopped(None))
+    })?;
+    // The schedule is putting the previous version back after a backend ended: installing.
+    let key = sugarsubstitute_contracts::lifecycle::ResourceKey {
+        owner: held.backend.owner,
+        id: sugarsubstitute_contracts::lifecycle::ResourceId::new(1)?,
+        generation: sugarsubstitute_contracts::lifecycle::ResourceGeneration::new(1)?,
+    };
+    held.backend.hold_pack_restore(key, job, resources.cleanup.id(), spec);
+    Ok(held)
+}
 #[test]
 fn inert_authority_cannot_construct_backend_driver() -> Result<()> {
     let original =

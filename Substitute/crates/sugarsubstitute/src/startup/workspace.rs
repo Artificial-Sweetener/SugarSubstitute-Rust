@@ -9,6 +9,8 @@ mod close_save_tests;
 mod closing_tests;
 mod integration;
 mod jobs;
+#[cfg(all(test, feature = "windows-native-host"))]
+pub(crate) mod lifecycle_peer;
 mod media;
 mod observations;
 #[cfg(test)]

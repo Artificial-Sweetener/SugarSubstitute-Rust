@@ -63,6 +63,8 @@ mod transport;
 mod types;
 #[path = "parent_lifecycle/update_status.rs"]
 mod update_status;
+#[cfg(test)]
+pub(in crate::production) use update_status::pair_peer::DesktopPeer;
 #[path = "parent_lifecycle/watchdog.rs"]
 mod watchdog;
 #[path = "parent_lifecycle/workflow_watch.rs"]
