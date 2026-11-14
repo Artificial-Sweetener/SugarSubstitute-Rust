@@ -131,4 +131,34 @@ mod tests {
         assert_eq!(updates.take_notice(), None);
         Ok(())
     }
+
+    /// A start that updated SugarSubstitute and put the previous SugarCubes back announces both.
+    #[test]
+    fn an_app_update_and_a_sugarcubes_rollback_in_one_start_are_both_announced()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use sugarsubstitute_contracts::update::{
+            pack::{PackOutcome, PackUpdateReport, PackUpdateStatus},
+            status::LaunchVersion,
+        };
+        let restored = PackUpdateReport {
+            from: Some("0.15.6".into()),
+            to: Some("0.15.3".into()),
+            reason: Some("did-not-start".into()),
+            ..PackUpdateReport::new(PackOutcome::Restored)
+        };
+        let mut updates = CoordinatorUpdates::default();
+        let mut status = UpdateStatus::default();
+        status.observe_launch(LaunchVersion::Applying("0.5.0".into()));
+        status.observe_sugarcubes(PackUpdateStatus::Restoring);
+        updates.receive(&snapshot(1, WorkflowQueue::Idle, &status.encode()?)?)?;
+        assert_eq!(updates.take_notice(), None);
+        status.observe_sugarcubes(PackUpdateStatus::Finished(restored.clone()));
+        updates.receive(&snapshot(2, WorkflowQueue::Idle, &status.encode()?)?)?;
+        status.observe_launch(LaunchVersion::Updated("0.5.0".into()));
+        updates.receive(&snapshot(3, WorkflowQueue::Idle, &status.encode()?)?)?;
+        assert_eq!(updates.take_notice(), Some(StartupNotice::Updated("0.5.0".into())));
+        assert_eq!(updates.take_notice(), Some(StartupNotice::Sugarcubes(restored)));
+        assert_eq!(updates.take_notice(), None);
+        Ok(())
+    }
 }

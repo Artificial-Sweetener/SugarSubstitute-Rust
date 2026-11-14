@@ -119,7 +119,7 @@ impl<B: StartupBackend> StartupHost<B> {
         Self::prepare_retry_policy(&self.child, startup.session_mut(), identity)?;
         self.child.retry_attempt(identity, startup)?;
         if let Some(view) = &mut self.view {
-            view.phase(sugarsubstitute_application::startup::StartupPhase::SplashFirstFrame);
+            view.begin_retry();
         }
         self.invalidate(true);
         Ok(())

@@ -145,7 +145,7 @@ impl<B: StartupBackend> StartupHost<B> {
                 retain(&mut failure, self.observed_close(StartupCloseStage::ExitIntent, requested));
                 // The window stays up until the coordinator's "Updating to version X…" notice
                 // covers the screen, so no empty frame shows before the next copy appears.
-                if failure.is_none() && !self.restart_close_covered() {
+                if failure.is_none() && self.restart_close_held() {
                     return self.refresh_deadline();
                 }
             }
@@ -239,7 +239,17 @@ impl<B: StartupBackend> StartupHost<B> {
         });
         #[cfg(not(all(windows, any(feature = "windows-native-host", test))))]
         let notes = true;
-        let owners = render && child && canvas && composition && workspace && reports && notes;
+        // A "Restart to apply" close keeps its window, and so this whole lifetime, until the
+        // coordinator's notice covers the screen; only then does the exit intent go out.
+        let restart_held = self.restart_close_held();
+        let owners = !restart_held
+            && render
+            && child
+            && canvas
+            && composition
+            && workspace
+            && reports
+            && notes;
         let execution = self.execution.poll_shutdown(owners && measured);
         let execution = observe_settlement(&mut failure, execution);
         failure.map_or(Ok(owners && execution), Err)

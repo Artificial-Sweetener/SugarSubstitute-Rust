@@ -332,12 +332,14 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
 
 /// The splash line in place of the ordinary loading lines: "Updating SugarCubes…" while the
 /// coordinator's SugarCubes update holds the start, otherwise "Updating to version X…" while
-/// this launch starts a new version for the first time, until the coordinator confirms it.
+/// this launch's first attempt starts a new version, until the coordinator confirms it. A
+/// retry starts that version again, already applied, so it shows the ordinary lines.
 /// Failure, retry and cleanup lines always win, and a version label the splash cannot show
 /// leaves the ordinary line.
 pub(super) fn updating<B: StartupBackend>(
     child: &B,
     current: sugarsubstitute_splash::StartupStatus,
+    retried: bool,
 ) -> Option<sugarsubstitute_splash::StartupStatus> {
     use sugarsubstitute_splash::StartupStatus;
     if !matches!(
@@ -352,6 +354,9 @@ pub(super) fn updating<B: StartupBackend>(
         sugarsubstitute_contracts::update::pack::PackUpdateStatus::Updating
     ) {
         return Some(StartupStatus::UpdatingSugarcubes);
+    }
+    if retried && !status.restarting() {
+        return None;
     }
     sugarsubstitute_splash::UpdateVersion::new(status.applying()?).map(StartupStatus::Updating)
 }
@@ -383,9 +388,10 @@ pub(super) fn sugarcubes_retry<B: StartupBackend>(
     })
 }
 
-/// While the previous SugarCubes version is put back the splash says so in place of loading or
-/// retry lines, so no retry is offered until the restore finished; a retry the user already
-/// asked for waits for it in the coordinator. Cleanup lines still win.
+/// While the previous SugarCubes version is put back the splash says so in place of the
+/// loading, failure, cleanup-in-progress and retry lines, so no retry is offered until the
+/// restore finished; a retry the user already asked for waits for it in the coordinator. A
+/// failed cleanup still wins.
 pub(super) fn restoring<B: StartupBackend>(
     child: &B,
     current: sugarsubstitute_splash::StartupStatus,
@@ -398,6 +404,9 @@ pub(super) fn restoring<B: StartupBackend>(
                 | StartupStatus::LoadingLong
                 | StartupStatus::LoadingExtended
                 | StartupStatus::UpdatingSugarcubes
+                | StartupStatus::Updating(_)
+                | StartupStatus::Failed
+                | StartupStatus::Settling
         );
     (replaces
         && matches!(

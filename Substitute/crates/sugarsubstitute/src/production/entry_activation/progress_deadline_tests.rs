@@ -35,7 +35,7 @@ fn owner() -> Result<Box<ProductionActivation>> {
         r"D:\unopened".into(),
     )
 }
-fn retained_record(until: Moment) -> Result<RetainedRecord> {
+pub(super) fn retained_record(until: Moment) -> Result<RetainedRecord> {
     let run = RunKey {
         owner: CoordinatorKey {
             namespace: NamespaceId::new([1; 32]),
