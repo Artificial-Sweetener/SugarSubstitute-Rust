@@ -41,7 +41,7 @@ fn only_accepted_normal_shutdown_suppresses_a_nested_failure_dialog() -> Result<
         let mut lifetime = Box::new(EntryRunner::new(
             command,
             path,
-            Box::new(super::super::tests::NoChild(None, None)),
+            Box::new(super::super::tests::NoChild(None, false)),
             crate::diagnostics::DiagnosticHealth::fixture(),
         ));
         lifetime.normal_shutdown = normal;
@@ -133,7 +133,7 @@ fn runner() -> Result<EntryRunner<super::super::tests::NoChild>, Box<dyn Error>>
     let mut runner = EntryRunner::new(
         command,
         path,
-        Box::new(super::super::tests::NoChild(None, Some(0))),
+        Box::new(super::super::tests::NoChild(None, true)),
         crate::diagnostics::DiagnosticHealth::fixture(),
     );
     super::super::tests::freeze_time(&mut runner);
@@ -175,38 +175,49 @@ fn reveal(runner: &mut EntryRunner<super::super::tests::NoChild>) -> Result<(), 
     Ok(())
 }
 
-/// A beta-eager check that prepares an update before intake is ready owes a restart: it says
-/// which version it restarts into at once, keeping the window hidden, waits until the window
-/// acknowledges staying hidden and for the close fence, never closes past an in-flight entry request, and then closes normally and
-/// relaunches into the update. The fence is supplied here: the real one is the entry intake's
-/// `try_close_when_idle`, which needs a live entry server.
+/// A beta-eager check that prepares an update before the window opened says which version it
+/// restarts into at once. A live desktop child is never closed by the coordinator: a window
+/// that was never revealed closes itself to restart, through its own normal close.
 #[test]
-fn a_restart_before_the_window_waits_for_the_close_fence_then_closes_normally_and_relaunches()
--> Result<(), Box<dyn Error>> {
+fn a_restart_before_the_window_leaves_a_live_desktop_to_close_itself() -> Result<(), Box<dyn Error>>
+{
     use sugarsubstitute_contracts::update::status::LaunchVersion;
     let mut runner = runner()?;
+    runner.initial_completed = true;
+    runner.intake_ready = true;
     decide_restart(&mut runner)?;
     let status = runner.update_status.snapshot().1;
     assert!(status.restarting(), "the window is told to stay hidden");
     assert_eq!(status.applying(), Some("2.0.0"));
     assert_eq!(runner.launch_version(), Some(LaunchVersion::Restarting("2.0.0".into())));
+    let fences = Cell::new(0);
+    runner.close_after_fence(admission(&runner, true), |_| {
+        fences.set(fences.get() + 1);
+        Ok(true)
+    })?;
+    assert_eq!(fences.get(), 0, "the coordinator never cuts off a live window");
+    assert!(!runner.closing);
+    assert!(runner.launch_update.restart().is_some(), "the restart still stands");
+    Ok(())
+}
 
+/// Without a desktop child there is no window to keep hidden: the restart waits only for the
+/// close fence, never closes past an in-flight entry request, then closes normally and
+/// relaunches into the update. The fence is supplied here: the real one is the entry intake's
+/// `try_close_when_idle`, which needs a live entry server.
+#[test]
+fn a_restart_before_any_window_waits_for_the_close_fence_then_closes_normally_and_relaunches()
+-> Result<(), Box<dyn Error>> {
+    let mut runner = runner()?;
+    runner.child.1 = false;
+    decide_restart(&mut runner)?;
     let fences = Cell::new(0);
     let fence = |idle: bool| {
         fences.set(fences.get() + 1);
         Ok::<_, Box<dyn Error>>(idle)
     };
-    let announced = runner.restart_announced.ok_or("restart not announced")?;
-    runner.initial_completed = true;
-    runner.intake_ready = true;
-    runner.close_after_fence(admission(&runner, true), |_| fence(true))?;
-    assert_eq!(fences.get(), 0, "the window has not acknowledged staying hidden");
-    assert!(!runner.closing);
-    runner.child.1 = Some(announced);
-    runner.initial_completed = false;
-    runner.intake_ready = false;
     let pending = admission(&runner, false);
-    assert!(pending.requested, "the acknowledged restart is a requested close");
+    assert!(pending.requested, "the restart is a requested close");
     runner.close_after_fence(pending, |_| fence(true))?;
     assert_eq!(fences.get(), 0, "intake not ready: the fence is not even asked");
     assert!(!runner.closing && !runner.normal_shutdown);
@@ -224,9 +235,8 @@ fn a_restart_before_the_window_waits_for_the_close_fence_then_closes_normally_an
     Ok(())
 }
 
-/// The window reveals before it processed the status that keeps it hidden, so it never
-/// acknowledges it: no close is owed while its MainRevealed is on its way, none once it arrives,
-/// even with a stray acknowledgement, the next update step withdraws the restart and tells the
+/// A window revealed before it processed the restart stays open: the coordinator owes no close
+/// with or without a desktop child, the next update step withdraws the restart and tells the
 /// window, and the update waits for the next launch.
 #[test]
 fn a_window_revealed_before_processing_the_restart_is_never_closed() -> Result<(), Box<dyn Error>> {
@@ -234,19 +244,14 @@ fn a_window_revealed_before_processing_the_restart_is_never_closed() -> Result<(
     runner.initial_completed = true;
     runner.intake_ready = true;
     decide_restart(&mut runner)?;
+    reveal(&mut runner)?;
+    runner.child.1 = false;
     let fences = Cell::new(0);
     runner.close_after_fence(admission(&runner, true), |_| {
         fences.set(fences.get() + 1);
         Ok(true)
     })?;
-    assert_eq!(fences.get(), 0, "no acknowledgement: the window may already be on screen");
-    reveal(&mut runner)?;
-    runner.child.1 = runner.restart_announced;
-    runner.close_after_fence(admission(&runner, true), |_| {
-        fences.set(fences.get() + 1);
-        Ok(true)
-    })?;
-    assert_eq!(fences.get(), 0, "a seen window owes no close, even acknowledged");
+    assert_eq!(fences.get(), 0, "a seen window owes no close");
     assert!(!runner.closing);
 
     runner.observe_window();
@@ -257,31 +262,5 @@ fn a_window_revealed_before_processing_the_restart_is_never_closed() -> Result<(
     assert!(runner.launch_update.restart().is_none());
     runner.normal_shutdown = true;
     assert!(!runner.relaunch_wanted(), "the update waits for the next launch");
-    Ok(())
-}
-
-/// When the window opens before the check prepares its update, nothing restarts: no close is
-/// owed, the splash names no version, and a later close does not relaunch.
-#[test]
-fn an_update_prepared_after_the_window_opened_neither_closes_nor_relaunches()
--> Result<(), Box<dyn Error>> {
-    let mut runner = runner()?;
-    reveal(&mut runner)?;
-    decide_restart(&mut runner)?;
-    assert!(!runner.update_status.snapshot().1.restarting());
-    assert_eq!(runner.update_status.snapshot().1.applying(), None);
-    runner.initial_completed = true;
-    runner.intake_ready = true;
-    let owed = admission(&runner, true);
-    assert!(!owed.requested);
-    let fences = Cell::new(0);
-    runner.close_after_fence(owed, |_| {
-        fences.set(fences.get() + 1);
-        Ok(true)
-    })?;
-    assert_eq!(fences.get(), 0);
-    assert!(!runner.closing);
-    runner.normal_shutdown = true;
-    assert!(!runner.relaunch_wanted());
     Ok(())
 }

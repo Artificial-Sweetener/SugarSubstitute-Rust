@@ -45,11 +45,6 @@ impl CoordinatorUpdates {
         self.status.as_ref()
     }
 
-    /// The revision of the newest status; zero before the first.
-    pub(in crate::production) fn revision(&self) -> u64 {
-        self.revision
-    }
-
     /// The backend's workflow queue at the newest snapshot; unobserved before the first.
     pub(in crate::production) fn workflow(&self) -> WorkflowQueue {
         self.workflow

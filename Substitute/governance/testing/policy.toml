@@ -133,7 +133,7 @@ reason = "The diagnostics execution owner sleeps on a real clock; the test jumps
 
 [[real_time]]
 path = "crates/sugarsubstitute/src/production/entry_runner/tests.rs"
-source_sha256 = "sha256:50cc2851c75d4a9094a090ff4f9f840cdda223d50c114efb60696e5786114802"
+source_sha256 = "sha256:66ce29e5e5647fa0ba140723cf12adb664a903a55a1a53ccc26db923cea97eaf"
 reason = "The entry runner's execution owner requires the real monotonic clock; these tests construct it only for that signature, read native time through the frozen anchor and wait for observed runner joins."
 
 [[real_time]]
@@ -183,12 +183,12 @@ reason = "The canvas reports its next wake as a native Instant; the test convert
 
 [[real_time]]
 path = "crates/sugarsubstitute/src/startup.rs"
-source_sha256 = "sha256:9d53c25f26ecbb363eb348b40a9125d95dbc3d7c604bd17c6fc897aa9387691e"
+source_sha256 = "sha256:5fe6066bcfaa264dcc3395ef49de5cc8beb2bc68ef6c24836637ca3c68938c5a"
 reason = "The test-only constructor round trip builds the startup host, whose constructor requires the real monotonic execution clock; the round trip asserts the constructed parts and never reads a duration."
 
 [[real_time]]
 path = "crates/sugarsubstitute/src/startup/platform_tests.rs"
-source_sha256 = "sha256:5b6cba14499c1458a114594f38e54fd70237c06af1923932570c113de9e4c892"
+source_sha256 = "sha256:5ea2b1d0adafcfb06f78ddd25a19c71020971c1433af8f6d64cbf65415dc6347"
 reason = "The startup host's constructor requires the real monotonic execution clock; these tests construct it only to satisfy that signature, and every assertion waits for observed startup outcomes."
 
 [[real_time]]

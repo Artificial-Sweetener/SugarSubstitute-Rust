@@ -13,7 +13,7 @@ impl Control {
             Self::Release(_) => Some(CloseControl::Release),
             Self::ExitIntent => Some(CloseControl::ExitIntent),
             Self::RestartToApply => Some(CloseControl::RestartToApply),
-            Self::CheckForUpdates | Self::UpdateStatusApplied(_) => None,
+            Self::CheckForUpdates => None,
             Self::ExitCompleted => Some(CloseControl::ExitCompleted),
             Self::Activity { .. } => None,
         }
@@ -117,9 +117,6 @@ impl ProductionChild {
                 Control::ExitIntent => self.shutdown.exit_intent_payload()?,
                 Control::RestartToApply => WirePayload::RestartToApply,
                 Control::CheckForUpdates => WirePayload::CheckForUpdates,
-                Control::UpdateStatusApplied(revision) => {
-                    WirePayload::UpdateStatusApplied(revision)
-                }
                 Control::ExitCompleted => WirePayload::ExitCompleted(
                     self.shutdown.shutdown.ok_or("Actual shutdown identity absent")?,
                 ),

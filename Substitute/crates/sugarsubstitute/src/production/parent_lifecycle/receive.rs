@@ -172,6 +172,5 @@ fn received_payload_kind(bytes: &[u8]) -> &'static str {
         Payload::UpdateStatus { .. } => "UpdateStatus",
         Payload::RestartToApply => "RestartToApply",
         Payload::CheckForUpdates => "CheckForUpdates",
-        Payload::UpdateStatusApplied(_) => "UpdateStatusApplied",
     }
 }

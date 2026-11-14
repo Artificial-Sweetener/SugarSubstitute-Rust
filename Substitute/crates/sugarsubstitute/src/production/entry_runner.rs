@@ -114,9 +114,10 @@ pub(crate) trait EntryActivation {
     /// Take, once, whether a live desktop child asked for an update check now since the last
     /// call. Requests from every child and repeats before this call count as one.
     fn take_update_check_request(&mut self) -> bool;
-    /// Whether every live desktop child has acknowledged applying the update status at
-    /// `revision` or a newer one. A run without a desktop child has no window to keep hidden.
-    fn update_status_applied(&self, revision: u64) -> bool;
+    /// Whether a live desktop child could still show a window. Such a child closes itself to
+    /// restart into an update prepared before its window opened; a run without one has no window
+    /// to close.
+    fn has_desktop(&self) -> bool;
     /// Borrow its original retained fatal failure without separating its custody.
     /// An exposed source closes runner admission even when the last turn returned Active.
     fn failure_source(&self) -> Option<&(dyn Error + 'static)>;
@@ -349,8 +350,6 @@ pub(crate) struct EntryRunner<C: EntryActivation> {
     /// When this launch checks, and whether it restarts into an update prepared before the
     /// window opened.
     launch_update: crate::updates::launch::LaunchUpdate,
-    /// Revision of the status that announced the restart, once announced.
-    restart_announced: Option<u64>,
     /// Native wake for the next due update check; the check itself runs on the executor.
     update_wake: Option<Instant>,
     /// What the update control shows, from attempt results and the selection record.
@@ -417,7 +416,6 @@ impl<C: EntryActivation> EntryRunner<C> {
             bootstrap: None,
             updater: None,
             update_schedule: None,
-            restart_announced: None,
             launch_update: crate::updates::launch::LaunchUpdate::new(
                 crate::updates::policy().unwrap_or_else(|cause| {
                     tracing::warn!(operation = "update_policy_unreadable", cause = %cause,
