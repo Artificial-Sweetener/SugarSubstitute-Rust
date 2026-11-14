@@ -88,3 +88,62 @@ fn stopping_forgets_the_queue_and_any_reconnect() {
     assert_eq!(watch.queue(), WorkflowQueue::Unobserved);
     assert_eq!(watch.deadline(), None);
 }
+
+/// The watch's connection job is admitted: an ordinary child scope of the backend's native
+/// scope, which refuses tasks, and the lifecycle I/O class a readiness watch takes. Either
+/// refusal failed every connection before it was made, so the backend always read as lost.
+#[test]
+fn a_watch_is_admitted_beside_the_backends_native_scope() -> Result<(), Box<dyn std::error::Error>>
+{
+    use crate::{job_sequence::JobSequence, scope_sequence::ScopeSequence};
+    use std::sync::Arc;
+    use sugarsubstitute_contracts::{
+        configuration::LoopbackOrigin,
+        coordinator_entry::EntrySetupBudget,
+        execution::{Clock, CompletionWake, ExecutionError, WaitFuture},
+    };
+    struct Frozen;
+    impl Clock for Frozen {
+        fn now(&self) -> Moment {
+            Moment::from_nanos(0)
+        }
+        fn sleep_until(&self, _: Moment) -> WaitFuture {
+            Box::pin(std::future::pending())
+        }
+    }
+    struct Wake;
+    impl CompletionWake for Wake {
+        fn wake(&self) -> Result<(), ExecutionError> {
+            Ok(())
+        }
+    }
+    let execution =
+        sugarsubstitute_execution::ExecutionOwner::new(Arc::new(Frozen), Arc::new(Wake))?;
+    let client = execution.client();
+    let scopes = ScopeSequence::new();
+    let native =
+        client.create_native_scope(ScopeSpec { id: scopes.allocate()?, deadline: None }, None)?;
+    let cleanup =
+        client.create_scope(ScopeSpec { id: scopes.allocate()?, deadline: None }, None)?;
+    let jobs = JobSequence::new();
+    let mut authority = crate::production::coordinator_authority::CoordinatorAuthority::new(
+        EntrySetupBudget::new(Moment::from_nanos(0))?,
+        None,
+    )?;
+    let resources = BackendResources {
+        client: &client,
+        native: &native,
+        cleanup: &cleanup,
+        jobs: &jobs,
+        scopes: &scopes,
+        authority: &mut authority,
+        capture: None,
+    };
+    let mut watch = WorkflowWatch::default();
+    watch.advance(Some(LoopbackOrigin::parse("http://127.0.0.1:9/", 9)?), &resources);
+    assert!(watch.job.is_some(), "the connection job was admitted");
+    assert_eq!(watch.failures, 0);
+    assert!(watch.deadline().is_none(), "no reconnect is pending");
+    watch.stop();
+    Ok(())
+}

@@ -16,7 +16,9 @@ use std::time::Duration;
 use sugarsubstitute_comfy::queue_watch::{self, QueueActivity, QueueObservation};
 use sugarsubstitute_contracts::{
     configuration::LoopbackOrigin,
-    execution::{ExecutionPort, JobClass, JobOutcome, JobSpec, Moment, Operation, OwnedJob},
+    execution::{
+        ExecutionPort, JobClass, JobOutcome, JobSpec, Moment, Operation, OwnedJob, Scope, ScopeSpec,
+    },
 };
 use sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue;
 
@@ -40,6 +42,9 @@ pub(super) struct WorkflowWatch {
     queue: Option<QueueActivity>,
     origin: Option<LoopbackOrigin>,
     job: Option<OwnedJob<QueueObservation, std::io::Error>>,
+    /// The ordinary scope the watch's task runs in, a child of the backend's native scope: a
+    /// native scope admits native observations only, never a task.
+    scope: Option<Scope>,
     retry_at: Option<Moment>,
     backoff: Option<Duration>,
     /// Consecutive connections that ended without a healthy window or a status.
@@ -126,21 +131,24 @@ impl WorkflowWatch {
         let target = queue_watch::target(origin)?;
         let until = now.checked_add(WINDOW)?;
         let known = self.queue;
+        let scope = match &self.scope {
+            Some(scope) => scope,
+            None => self.scope.insert(resources.client.create_scope(
+                ScopeSpec { id: resources.scopes.allocate()?, deadline: None },
+                Some(resources.native),
+            )?),
+        };
         let spec = JobSpec {
             id: resources.jobs.allocate()?,
             operation: Operation::Readiness,
-            class: JobClass::IoOrdinary,
+            class: JobClass::IoLifecycle,
             deadline: Some(until.checked_add(MARGIN)?),
             reservation_bytes: queue_watch::RESERVATION_BYTES,
             replacement: None,
         };
-        self.job = Some(resources.client.submit_async(
-            resources.native,
-            spec,
-            move |context| async move {
-                queue_watch::next_change(&target, &context, until, known).await
-            },
-        )?);
+        self.job = Some(resources.client.submit_async(scope, spec, move |context| async move {
+            queue_watch::next_change(&target, &context, until, known).await
+        })?);
         Ok(())
     }
 

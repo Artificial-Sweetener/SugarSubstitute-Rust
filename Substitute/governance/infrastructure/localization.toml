@@ -150,7 +150,7 @@ rationale = "Behavioral fixture creates a hidden OS STATIC window with a technic
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/construction.rs"
-source_sha256 = "sha256:3e2b835ddf0952ec11c82a08715c5a774eb356e4c5b8e93cc32e5a2a82e00e70"
+source_sha256 = "sha256:c1d059652685083f125d80f2b95643f413a854903bda8d91457937dadc70cc37"
 kind = "native"
 rationale = "Native boundary: Adopt every window, presenter, controller and native getter before interpreting outcomes.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
