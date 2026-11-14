@@ -14,7 +14,7 @@ pub static KO: ReportMessages = ReportMessages {
     restart_unavailable: "다시 시작을 준비하지 못했습니다. 사고 기록은 로컬에 계속 저장되어 있습니다.",
     include_dump: "메모리 스냅샷 포함(원인을 찾는 데 도움이 됩니다)",
     dump_warning: "메모리 스냅샷에는 비밀번호나 기타 개인 정보가 포함될 수 있습니다.",
-    save_title: "사고 내보내기",
+    save_title: "보고서 저장",
     text_filter: "텍스트 보고서 (*.txt)",
     archive_filter: "보고서 및 메모리 덤프 (*.zip)",
     copied: "보고서를 복사했습니다.",
@@ -51,7 +51,7 @@ pub static KO: ReportMessages = ReportMessages {
     update_message: "업데이트를 설치할 수 없습니다. 현재 버전은 계속 작동하며 이 보고서를 복사하거나 내보낼 수 있습니다.",
     version: "버전",
     update_phase: "단계",
-    export_file_name: "SugarSubstitute 업데이트 보고서.txt",
+    update_file_name: "{product} 업데이트 보고서 {date}.txt",
     pack_update_title: "SugarCubes 업데이트 실패",
     pack_update_message: "SugarCubes를 업데이트할 수 없습니다. 현재 버전은 계속 작동하며 이 보고서를 복사하거나 내보낼 수 있습니다.",
     startup_failure: [

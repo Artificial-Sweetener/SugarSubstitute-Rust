@@ -14,7 +14,7 @@ pub static ES: ReportMessages = ReportMessages {
     restart_unavailable: "No se pudo preparar el reinicio. El incidente sigue guardado localmente.",
     include_dump: "Incluir una instantánea de memoria (nos ayuda a encontrar la causa)",
     dump_warning: "Una instantánea de memoria puede contener contraseñas u otra información privada.",
-    save_title: "Exportar incidente",
+    save_title: "Guardar el informe",
     text_filter: "Informe de texto (*.txt)",
     archive_filter: "Informe y volcado de memoria (*.zip)",
     copied: "Informe copiado.",
@@ -51,7 +51,7 @@ pub static ES: ReportMessages = ReportMessages {
     update_message: "No se pudo instalar la actualización. La versión que tienes sigue funcionando y puedes copiar o exportar este informe.",
     version: "Versión",
     update_phase: "Paso",
-    export_file_name: "Informe de actualización de SugarSubstitute.txt",
+    update_file_name: "Informe de actualización de {product} {date}.txt",
     pack_update_title: "La actualización de SugarCubes falló",
     pack_update_message: "No se pudo actualizar SugarCubes. La versión que tienes sigue funcionando y puedes copiar o exportar este informe.",
     startup_failure: [

@@ -9,6 +9,8 @@
 /// [`super::updates::UpdateMessages::with_version`].
 #[non_exhaustive]
 pub struct PackUpdateMessages {
+    /// The pack's name, as an update report's file name shows it.
+    pub product: &'static str,
     /// Splash line while a SugarCubes update holds the start.
     pub updating: &'static str,
     /// One line: SugarCubes was updated during this start; contains the version.
@@ -93,6 +95,7 @@ impl PackUpdateMessages {
 
 /// Canonical English words.
 pub static EN: PackUpdateMessages = PackUpdateMessages {
+    product: "SugarCubes",
     updating: "Updating SugarCubes…",
     updated: "SugarCubes updated to version {version}",
     could_not_check: "Couldn't check for a SugarCubes update.",
@@ -124,6 +127,7 @@ pub static EN: PackUpdateMessages = PackUpdateMessages {
 
 /// Simplified Chinese words.
 pub static ZH_HANS: PackUpdateMessages = PackUpdateMessages {
+    product: "SugarCubes",
     updating: "正在更新 SugarCubes…",
     updated: "SugarCubes 已更新到版本 {version}",
     could_not_check: "无法检查 SugarCubes 更新。",
@@ -155,6 +159,7 @@ pub static ZH_HANS: PackUpdateMessages = PackUpdateMessages {
 
 /// Japanese words.
 pub static JA: PackUpdateMessages = PackUpdateMessages {
+    product: "SugarCubes",
     updating: "SugarCubes を更新しています…",
     updated: "SugarCubes をバージョン {version} に更新しました",
     could_not_check: "SugarCubes の更新を確認できませんでした。",
@@ -186,6 +191,7 @@ pub static JA: PackUpdateMessages = PackUpdateMessages {
 
 /// Korean words.
 pub static KO: PackUpdateMessages = PackUpdateMessages {
+    product: "SugarCubes",
     updating: "SugarCubes 업데이트 중…",
     updated: "SugarCubes를 버전 {version}(으)로 업데이트했습니다",
     could_not_check: "SugarCubes 업데이트를 확인할 수 없습니다.",
@@ -217,6 +223,7 @@ pub static KO: PackUpdateMessages = PackUpdateMessages {
 
 /// Spanish words.
 pub static ES: PackUpdateMessages = PackUpdateMessages {
+    product: "SugarCubes",
     updating: "Actualizando SugarCubes…",
     updated: "SugarCubes se actualizó a la versión {version}",
     could_not_check: "No se pudo comprobar si hay una actualización de SugarCubes.",

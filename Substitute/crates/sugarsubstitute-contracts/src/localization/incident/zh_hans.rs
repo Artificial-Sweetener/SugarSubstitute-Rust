@@ -14,7 +14,7 @@ pub static ZH_HANS: ReportMessages = ReportMessages {
     restart_unavailable: "无法准备重新启动。事件记录仍保存在本地。",
     include_dump: "包含内存快照（帮助我们找到原因）",
     dump_warning: "内存快照可能包含密码或其他私人信息。",
-    save_title: "导出事件",
+    save_title: "保存报告",
     text_filter: "文本报告 (*.txt)",
     archive_filter: "报告和内存转储 (*.zip)",
     copied: "已复制报告。",
@@ -51,7 +51,7 @@ pub static ZH_HANS: ReportMessages = ReportMessages {
     update_message: "无法安装更新。您当前的版本仍可继续使用，您可以复制或导出此报告。",
     version: "版本",
     update_phase: "步骤",
-    export_file_name: "SugarSubstitute 更新报告.txt",
+    update_file_name: "{product} 更新报告 {date}.txt",
     pack_update_title: "SugarCubes 更新失败",
     pack_update_message: "无法更新 SugarCubes。您当前的版本仍可继续使用，您可以复制或导出此报告。",
     startup_failure: [

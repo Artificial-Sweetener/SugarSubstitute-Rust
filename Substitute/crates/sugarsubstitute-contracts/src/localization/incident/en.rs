@@ -14,7 +14,7 @@ pub static EN: ReportMessages = ReportMessages {
     restart_unavailable: "Restart could not be prepared. The incident remains stored locally.",
     include_dump: "Include a memory snapshot (helps us find the cause)",
     dump_warning: "A memory snapshot can contain passwords or other private information.",
-    save_title: "Export incident",
+    save_title: "Save the report",
     text_filter: "Text report (*.txt)",
     archive_filter: "Report and memory dump (*.zip)",
     copied: "Report copied.",
@@ -51,7 +51,7 @@ pub static EN: ReportMessages = ReportMessages {
     update_message: "The update could not be installed. The version you have keeps working, and you can copy or export this report.",
     version: "Version",
     update_phase: "Step",
-    export_file_name: "SugarSubstitute update report.txt",
+    update_file_name: "{product} update report {date}.txt",
     pack_update_title: "SugarCubes update failed",
     pack_update_message: "SugarCubes could not be updated. The version you have keeps working, and you can copy or export this report.",
     startup_failure: [

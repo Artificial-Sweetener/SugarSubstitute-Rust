@@ -41,13 +41,28 @@ pub enum SelectionKind {
     Save {
         /// Localized dialog title.
         title: &'static str,
-        /// Suggested file name.
+        /// Suggested file name; the dialog fills its product and date placeholders (see
+        /// `sugarsubstitute_contracts::localization::incident::file_name`).
         file_name: &'static str,
+        /// The product the saved file is about.
+        product: &'static str,
         /// Localized file type label, such as "Text report (*.txt)".
         filter: &'static str,
         /// File extension without its dot, such as "txt".
         extension: &'static str,
     },
+}
+
+#[cfg(windows)]
+/// Today's date in the user's time zone, for a suggested file name.
+fn today() -> sugarsubstitute_contracts::localization::incident::LocalDate {
+    // SAFETY: a plain query of the local clock with no arguments.
+    let now = unsafe { windows::Win32::System::SystemInformation::GetLocalTime() };
+    sugarsubstitute_contracts::localization::incident::LocalDate {
+        year: now.wYear,
+        month: u8::try_from(now.wMonth).unwrap_or(1),
+        day: u8::try_from(now.wDay).unwrap_or(1),
+    }
 }
 
 #[cfg(windows)]
@@ -65,9 +80,14 @@ fn choose(
     // borrowed title, name and filter strings outlive the synchronous configuration calls.
     unsafe {
         let dialog: IFileDialog = match kind {
-            SelectionKind::Save { title, file_name, filter, extension } => {
+            SelectionKind::Save { title, file_name, product, filter, extension } => {
                 let dialog: IFileSaveDialog =
                     CoCreateInstance(&FileSaveDialog, None, CLSCTX_INPROC_SERVER)?;
+                let file_name = sugarsubstitute_contracts::localization::incident::file_name(
+                    file_name,
+                    product,
+                    today(),
+                );
                 let (title, file_name, filter) =
                     (HSTRING::from(title), HSTRING::from(file_name), HSTRING::from(filter));
                 let pattern = HSTRING::from(format!("*.{extension}"));
