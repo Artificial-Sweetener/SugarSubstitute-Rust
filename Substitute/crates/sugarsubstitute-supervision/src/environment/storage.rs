@@ -72,20 +72,24 @@ impl LaunchEnvironment {
             .collect::<Vec<_>>();
         let pip_log_name = "PIP_LOG".encode_utf16().collect::<Vec<_>>();
         changes.push(EnvironmentOverride::Set { name: &pip_log_name, value: &pip_log });
-        #[cfg(feature = "page-automation-qualification")]
-        let removed: &[&str] = if debugging_port_only(snapshot) {
-            &["WEBVIEW2_USER_DATA_FOLDER"]
-        } else {
-            &["WEBVIEW2_USER_DATA_FOLDER", "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"]
-        };
-        #[cfg(not(feature = "page-automation-qualification"))]
-        let removed: &[&str] =
-            &["WEBVIEW2_USER_DATA_FOLDER", "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"];
-        let browser_names =
-            removed.iter().map(|name| name.encode_utf16().collect::<Vec<_>>()).collect::<Vec<_>>();
+        let browser_names = removed_browser_overrides(snapshot)
+            .iter()
+            .map(|name| name.encode_utf16().collect::<Vec<_>>())
+            .collect::<Vec<_>>();
         changes.extend(browser_names.iter().map(|name| EnvironmentOverride::Remove { name }));
         Self::from_snapshot_utf16(snapshot, &changes)
     }
+}
+
+/// The inherited WebView2 overrides a child's environment drops, so they cannot move the
+/// browser profile or change how the browser runs.
+#[cfg_attr(not(feature = "page-automation-qualification"), expect(unused_variables))]
+pub(super) fn removed_browser_overrides(snapshot: &[u16]) -> &'static [&'static str] {
+    #[cfg(feature = "page-automation-qualification")]
+    if debugging_port_only(snapshot) {
+        return &["WEBVIEW2_USER_DATA_FOLDER"];
+    }
+    &["WEBVIEW2_USER_DATA_FOLDER", "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"]
 }
 
 /// Qualification builds only: a proof drives and reads the embedded page over a loopback
