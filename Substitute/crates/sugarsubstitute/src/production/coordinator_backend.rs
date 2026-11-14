@@ -32,6 +32,9 @@ pub(in crate::production) mod output;
 pub(in crate::production) mod output_fixture;
 #[path = "coordinator_backend/pack_update.rs"]
 mod pack_update;
+#[cfg(test)]
+#[path = "coordinator_backend/pack_update_tests.rs"]
+mod pack_update_tests;
 #[path = "coordinator_backend/policy_funding.rs"]
 mod policy_funding;
 #[path = "coordinator_backend/preparation.rs"]

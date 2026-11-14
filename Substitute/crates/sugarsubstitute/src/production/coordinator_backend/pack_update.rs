@@ -181,7 +181,14 @@ struct Running {
     job: OwnedJob<PackJobResult, PackJobError>,
     scope: sugarsubstitute_contracts::execution::ScopeId,
     spec: JobSpec,
+    kept: KeptOutcome,
 }
+
+/// What a startup update did, kept by the job itself. A stop or its time limit can arrive while
+/// the update runs, and the execution owner then ends the job as cancelled or timed out whatever
+/// it returned; files the update had already replaced are installed all the same, so its own
+/// outcome is what the window and the next start are told.
+pub(super) type KeptOutcome = std::sync::Arc<std::sync::OnceLock<StartupOutcome>>;
 
 /// The coordinator's single owner of SugarCubes jobs. [`PackSchedule`] decides what runs and
 /// which preparation it holds; this owner runs one job at a time on the execution owner.
@@ -230,7 +237,23 @@ impl PackUpdates {
         scope: sugarsubstitute_contracts::execution::ScopeId,
         spec: JobSpec,
     ) {
-        self.running = Some(Running { job, scope, spec });
+        self.running = Some(Running { job, scope, spec, kept: KeptOutcome::default() });
+    }
+
+    /// Hold `job` as the startup update that `key`'s first managed preparation started, with
+    /// its own outcome kept in `kept`, as `pump` admits one.
+    #[cfg(test)]
+    pub(super) fn hold_update(
+        &mut self,
+        key: ResourceKey,
+        job: OwnedJob<PackJobResult, PackJobError>,
+        scope: sugarsubstitute_contracts::execution::ScopeId,
+        spec: JobSpec,
+        kept: KeptOutcome,
+    ) {
+        self.schedule.prepare(key, true);
+        let _ = self.schedule.start_next();
+        self.running = Some(Running { job, scope, spec, kept });
     }
 
     /// `key` is being stopped: cancel the running job if it is the one holding `key`, and
@@ -309,22 +332,30 @@ impl PackUpdates {
             return Ok(None);
         };
         let original = completion.scope_id == running.scope && completion.spec == running.spec;
+        let kept = running.kept.get().cloned();
         self.running = None;
-        let ended = match completion.outcome {
-            JobOutcome::Success(PackJobResult::Update(outcome)) if original => {
+        let ended = match (completion.outcome, kept) {
+            (JobOutcome::Success(PackJobResult::Update(outcome)), _) if original => {
                 tracing::info!(operation = "pack_update", stage = "Terminal", outcome = ?outcome,
                     "The SugarCubes startup update settled");
                 PackWorkEnded::Updated(outcome)
             }
-            JobOutcome::Success(PackJobResult::Stopped(restored)) if original => {
+            (JobOutcome::Success(PackJobResult::Stopped(restored)), _) if original => {
                 if let Some(restored) = &restored {
                     tracing::warn!(operation = "pack_update", stage = "Restored", version = %restored.version,
                         restored = %restored.restored_version, "The previous SugarCubes version was restored");
                 }
                 PackWorkEnded::Restored(restored)
             }
-            JobOutcome::Success(PackJobResult::Observed) if original => PackWorkEnded::Observed,
-            other => {
+            (JobOutcome::Success(PackJobResult::Observed), _) if original => {
+                PackWorkEnded::Observed
+            }
+            (JobOutcome::Cancelled | JobOutcome::TimedOut, Some(outcome)) if original => {
+                tracing::info!(operation = "pack_update", stage = "Terminal", outcome = ?outcome,
+                    "The SugarCubes startup update settled as it was being stopped");
+                PackWorkEnded::Updated(outcome)
+            }
+            (other, _) => {
                 let stopped = matches!(other, JobOutcome::Cancelled | JobOutcome::TimedOut);
                 tracing::warn!(
                     operation = "pack_update",
@@ -367,13 +398,19 @@ impl PackUpdates {
                 bytes,
                 Some(deadline),
             )?;
+            let kept = KeptOutcome::default();
+            let keeping = std::sync::Arc::clone(&kept);
             let job =
                 resources.client.submit_blocking(resources.cleanup, spec, move |context| {
-                    run(work, &folder, &storage, &context)
+                    let result = run(work, &folder, &storage, &context);
+                    if let Ok(PackJobResult::Update(outcome)) = &result {
+                        keeping.get_or_init(|| outcome.clone());
+                    }
+                    result
                 })?;
             tracing::info!(operation = "pack_update", work = ?work, resource = ?gates,
                 stage = "Submitted", "A SugarCubes job began");
-            self.running = Some(Running { job, scope: resources.cleanup.id(), spec });
+            self.running = Some(Running { job, scope: resources.cleanup.id(), spec, kept });
         }
         let (status, revision) = self.schedule.status();
         if revision != self.published {

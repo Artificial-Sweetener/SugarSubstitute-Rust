@@ -56,6 +56,14 @@ impl<B: StartupBackend> StartupHost<B> {
         }
         self.deferred_close = None;
         if !self.closing {
+            // What the window knew of a SugarCubes update when it began to close, so a close
+            // that did not wait for one can be told from a close that had nothing to wait for.
+            tracing::info!(
+                operation = "startup_close_begins",
+                reason = ?reason,
+                sugarcubes = ?self.child.update_status().map(|status| status.sugarcubes()),
+                "The window begins its close"
+            );
             self.close_reason = reason;
         }
         if matches!(reason, CloseReason::SessionEnding { critical: true }) {
