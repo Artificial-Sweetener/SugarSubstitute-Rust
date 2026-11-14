@@ -66,6 +66,9 @@ pub enum StartupNotice {
     PreviousVersionRunning,
     /// The start's SugarCubes update finished with a report that has a line to show.
     Sugarcubes(PackUpdateReport),
+    /// Another program changed the update storage, so it was set aside and updates were set up
+    /// again.
+    StorageSetAside,
 }
 
 /// One host's update status for its update surfaces. The coordinator owns it; the desktop child
@@ -90,6 +93,8 @@ pub struct UpdateStatus {
     restart_covered: bool,
     #[serde(default)]
     running: Option<String>,
+    #[serde(default)]
+    storage_set_aside: bool,
 }
 impl UpdateStatus {
     /// The channel the installation's subscription follows; a new installation follows
@@ -172,6 +177,9 @@ impl UpdateStatus {
         {
             notices.push(StartupNotice::Sugarcubes(report.clone()));
         }
+        if self.storage_set_aside {
+            notices.push(StartupNotice::StorageSetAside);
+        }
         notices
     }
     /// The start's SugarCubes update: running, finished with its report, or not run.
@@ -222,6 +230,11 @@ impl UpdateStatus {
     /// Adopt the selection record's prepared and rollback state.
     pub fn reconcile(&mut self, recorded: RecordedUpdates) {
         self.recorded = recorded;
+    }
+    /// An attempt found update storage another program had changed, set it aside and set
+    /// updates up again.
+    pub fn observe_storage_set_aside(&mut self) {
+        self.storage_set_aside = true;
     }
     /// Adopt the coordinator's SugarCubes update state.
     pub fn observe_sugarcubes(&mut self, status: PackUpdateStatus) {
@@ -520,6 +533,17 @@ mod tests {
         status.observe_launch(LaunchVersion::Applying("2.0.0".into()));
         status.withdraw_restart();
         assert_eq!(status.applying(), Some("2.0.0"), "only a restart is withdrawn");
+        Ok(())
+    }
+
+    #[test]
+    fn update_storage_set_aside_is_said_once_the_coordinator_has_seen_it()
+    -> Result<(), StatusCodecError> {
+        let mut status = UpdateStatus::default();
+        assert!(!status.startup_notices().contains(&StartupNotice::StorageSetAside));
+        status.observe_storage_set_aside();
+        let copy = UpdateStatus::decode(&status.encode()?)?;
+        assert_eq!(copy.startup_notices(), vec![StartupNotice::StorageSetAside]);
         Ok(())
     }
 }

@@ -64,6 +64,9 @@ pub enum UpdateNotice {
     /// The newer version's files were damaged, so the one before it is running while the
     /// update is downloaded again.
     Repairing,
+    /// Another program changed the update storage, so it was set aside and updates were set
+    /// up again.
+    StorageSetAside,
     /// The start's SugarCubes update has one line to say, such as that it couldn't check.
     Sugarcubes(sugarsubstitute_contracts::update::pack::PackUpdateReport),
 }

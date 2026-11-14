@@ -18,7 +18,9 @@ struct Floor {
     component: Component,
     platform: Platform,
     sequence: u64,
-    digest: [u8; 32],
+    /// Absent only for a fresh namespace's start whose package this installation never recorded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    digest: Option<[u8; 32]>,
 }
 impl Floor {
     fn matches(&self, request: &Request) -> bool {
@@ -37,7 +39,31 @@ impl Floor {
 #[derive(Clone, Copy)]
 pub(crate) struct RouteFloor {
     pub(crate) sequence: u64,
-    pub(crate) digest: [u8; 32],
+    pub(crate) digest: Option<[u8; 32]>,
+}
+impl RouteFloor {
+    /// Whether a package at `sequence` with `digest` falls below this floor or reuses its
+    /// sequence for a different package.
+    pub(crate) fn refuses(&self, sequence: u64, digest: [u8; 32]) -> bool {
+        sequence < self.sequence
+            || (sequence == self.sequence && self.digest.is_some_and(|floor| floor != digest))
+    }
+}
+
+/// Where one route's history starts in a fresh trust namespace: nothing below `sequence` is
+/// admitted, and when `digest` is known the start sequence admits only that package.
+#[derive(Clone, Copy, Debug)]
+pub struct RouteStart {
+    /// Release channel of the route.
+    pub channel: Channel,
+    /// Component the route delivers.
+    pub component: Component,
+    /// Package platform of the route.
+    pub platform: Platform,
+    /// Lowest sequence the route admits again; zero leaves the route without a floor.
+    pub sequence: u64,
+    /// Package the installation recorded at `sequence`, when it recorded one.
+    pub digest: Option<[u8; 32]>,
 }
 
 /// Highest authorized package sequence for each route, including failed activation attempts.
@@ -106,12 +132,37 @@ impl ReleaseHistory {
                 return Err(Error::Offer(Rejection::Rollback));
             }
             if offer.offer().sequence() == floor.sequence
-                && offer.offer().package_digest() != floor.digest
+                && floor.digest.is_some_and(|digest| digest != offer.offer().package_digest())
             {
                 return Err(Error::Offer(Rejection::Identity));
             }
         }
         Ok(())
+    }
+
+    /// History for a fresh trust namespace of an installation that already holds releases: each
+    /// route starts at its [`RouteStart`], so nothing older than what the installation already
+    /// runs or authorised is accepted again. Starts at sequence zero add no floor.
+    /// # Errors
+    /// Rejects more routes than history holds and the same route twice.
+    pub fn starting(starts: &[RouteStart]) -> Result<Self, Error> {
+        let mut history = Self::empty();
+        for start in starts.iter().filter(|start| start.sequence != 0) {
+            let floor = Floor {
+                channel: start.channel,
+                component: start.component,
+                platform: start.platform,
+                sequence: start.sequence,
+                digest: start.digest,
+            };
+            if history.floors.len() == MAX_ROUTES
+                || history.floors.iter().any(|other| other.same_route(&floor))
+            {
+                return Err(Error::Bound);
+            }
+            history.floors.push(floor);
+        }
+        Ok(history)
     }
 
     /// Durable floor for `request`'s route, if this installation ever authorised one.
@@ -139,7 +190,7 @@ impl ReleaseHistory {
             component: request.component,
             platform: request.platform,
             sequence: offer.offer().sequence(),
-            digest: offer.offer().package_digest(),
+            digest: Some(offer.offer().package_digest()),
         };
         let mut next = self.clone();
         if let Some(previous) = next.floors.iter_mut().find(|floor| floor.matches(request)) {

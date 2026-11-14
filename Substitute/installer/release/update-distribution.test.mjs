@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { changelogSection, releaseDistribution, writeUpdateDistribution } from './update-distribution.mjs'
+import { changelogSection, releaseDistribution, repositoryRoot, writeUpdateDistribution } from './update-distribution.mjs'
 
 /** A workspace at `version` with `changelog`, as semantic-release leaves it after a release. */
 async function workspace(t, version, changelog) {
@@ -26,10 +26,11 @@ const released = [
   '',
 ].join('\n')
 
-test('the committed release distribution names its repository, feed and update policy only', async () => {
+test('the committed release distribution names its repository, feed, update policy and trusted root only', async () => {
   const distribution = JSON.parse(await fs.readFile(releaseDistribution, 'utf8'))
-  assert.deepEqual(Object.keys(distribution).sort(), ['feed', 'repository', 'schema_version', 'update_policy'])
+  assert.deepEqual(Object.keys(distribution).sort(), ['feed', 'repository', 'schema_version', 'trusted_root', 'update_policy'])
   assert.equal(distribution.schema_version, 4)
+  assert.equal(distribution.trusted_root, await fs.readFile(repositoryRoot, 'utf8'))
   assert.equal(distribution.update_policy, 'beta_eager')
   assert.equal(distribution.feed.transport, 'https')
   assert.equal(distribution.repository.length, 32)
@@ -76,11 +77,11 @@ test('an existing output, a relative output and a malformed source fail closed',
   assert.equal(await fs.readFile(output, 'utf8'), 'kept')
   await assert.rejects(writeUpdateDistribution({ workspace: root, output: 'relative.json' }), /absolute/)
   const committed = JSON.parse(await fs.readFile(releaseDistribution, 'utf8'))
-  for (const change of [{ schema_version: 3 }, { schema_version: 5 }]) {
+  for (const change of [{ schema_version: 3 }, { schema_version: 5 }, { trusted_root: '{}' }]) {
     const source = path.join(root, 'source.json')
     await fs.writeFile(source, JSON.stringify({ ...committed, ...change }))
     const fresh = path.join(root, `fresh-${Math.random().toString(16).slice(2)}.json`)
-    await assert.rejects(writeUpdateDistribution({ workspace: root, source, output: fresh }), /schema 4/)
+    await assert.rejects(writeUpdateDistribution({ workspace: root, source, output: fresh }), /schema 4|trusted root/i)
     await assert.rejects(fs.access(fresh))
   }
 })

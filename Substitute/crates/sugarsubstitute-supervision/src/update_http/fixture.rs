@@ -77,6 +77,32 @@ impl Running {
     }
     /// Observe actual server completion; a client succeeding cannot conceal fixture failure.
     pub(crate) fn finish(mut self) -> TestResult {
+        match self.completion()?.outcome {
+            JobOutcome::Success(()) => Ok(()),
+            JobOutcome::Failure(cause) => Err(cause.into()),
+            other => Err(format!("Unexpected HTTP fixture outcome: {:?}", other.kind()).into()),
+        }
+    }
+
+    /// Stop a server whose client stopped before requesting every exchange, then observe it
+    /// end. Exchanges the client never requested are not a failure; any other server failure is.
+    pub(crate) fn stop(mut self) -> TestResult {
+        self._scope.cancel();
+        match self.completion()?.outcome {
+            JobOutcome::Success(()) | JobOutcome::Cancelled => Ok(()),
+            JobOutcome::Failure(cause) if cause.kind() == io::ErrorKind::Interrupted => Ok(()),
+            JobOutcome::Failure(cause) => Err(cause.into()),
+            other => Err(format!("Unexpected HTTP fixture outcome: {:?}", other.kind()).into()),
+        }
+    }
+
+    /// Wait for the server job's completion through the execution owner's wakes.
+    fn completion(
+        &mut self,
+    ) -> Result<
+        sugarsubstitute_contracts::execution::JobCompletion<(), io::Error>,
+        Box<dyn std::error::Error + Send + Sync>,
+    > {
         let completion = loop {
             let revision = *crate::registry::lock(&self.wake.0);
             self.client
@@ -91,11 +117,7 @@ impl Running {
                     .map_err(|_| "Poisoned HTTP fixture wake")?,
             );
         };
-        match completion.outcome {
-            JobOutcome::Success(()) => Ok(()),
-            JobOutcome::Failure(cause) => Err(cause.into()),
-            other => Err(format!("Unexpected HTTP fixture outcome: {:?}", other.kind()).into()),
-        }
+        Ok(completion)
     }
 }
 

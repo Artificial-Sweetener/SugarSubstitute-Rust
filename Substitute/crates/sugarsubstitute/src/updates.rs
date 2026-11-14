@@ -97,8 +97,10 @@ fn configuration(
     if bytes.is_empty() {
         return Ok(None);
     }
-    let (repository, policy) = Distribution::decode(bytes)?.into_parts();
-    Ok(Some(Configuration { installation, workspace, repository, policy, idle }))
+    let distribution = Distribution::decode(bytes)?;
+    let trusted_root = distribution.trusted_root().to_vec();
+    let (repository, policy) = distribution.into_parts();
+    Ok(Some(Configuration { installation, workspace, repository, policy, idle, trusted_root }))
 }
 
 /// Run one dedicated preparation process on its native main thread, with no application window.
@@ -143,7 +145,7 @@ mod tests {
     #[test]
     fn compiled_policy_uses_the_actual_preparation_owner_without_reading_paths() -> Result {
         let bytes = serde_json::to_vec(&serde_json::json!({
-            "schema_version":4, "update_policy":"beta_eager", "repository":vec![92;32], "feed":{
+            "schema_version":4, "trusted_root": crate::updates::test_support::TRUSTED_ROOT, "update_policy":"beta_eager", "repository":vec![92;32], "feed":{
                 "transport":"https", "base":"https://updates.example.test/", "redirects":[]
             }
         }))?;
@@ -179,7 +181,7 @@ mod tests {
     fn compiled_policy_comes_only_from_the_embedded_distribution() -> Result {
         assert_eq!(compiled_policy(b"")?, None);
         let bytes = serde_json::to_vec(&serde_json::json!({
-            "schema_version":4, "update_policy":"standard", "repository":vec![92;32], "feed":{
+            "schema_version":4, "trusted_root": crate::updates::test_support::TRUSTED_ROOT, "update_policy":"standard", "repository":vec![92;32], "feed":{
                 "transport":"https", "base":"https://updates.example.test/", "redirects":[]
             }
         }))?;

@@ -60,6 +60,11 @@ impl StatusSource {
         self.change(|status| status.observe(progress));
     }
 
+    /// The running check set untrusted update storage aside and set updates up again.
+    pub(crate) fn observe_storage_set_aside(&mut self) {
+        self.change(UpdateStatus::observe_storage_set_aside);
+    }
+
     /// Adopt the coordinator's SugarCubes update state.
     pub(crate) fn observe_sugarcubes(
         &mut self,

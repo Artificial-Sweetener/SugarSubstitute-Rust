@@ -215,6 +215,28 @@ impl TrustStore {
     }
 
     /// Canonical generation IDs cannot escape or alias another record domain.
+    /// Receipt of the highest updater release this installation accepted, running or retained.
+    /// The caller holds the trust writer.
+    pub(super) fn accepted_updater(
+        &self,
+        protection: &Protection,
+    ) -> Result<Option<Receipt>, TrustFailure> {
+        let Some(bytes) =
+            self.read_bound_record(SELECTION, envelope::Kind::UpdaterSelection, protection)?
+        else {
+            return Ok(None);
+        };
+        let state = InstallationRecord::decode(&bytes).map_err(io::Error::other)?;
+        let Some(generation) = [state.accepted(), state.retained()]
+            .into_iter()
+            .flatten()
+            .max_by_key(|generation| generation.release.sequence())
+        else {
+            return Ok(None);
+        };
+        self.updater_receipt(generation, protection).map(Some)
+    }
+
     fn updater_receipt_name(generation: &Generation) -> String {
         format!("engine-{}.release", generation.id.as_str())
     }

@@ -147,3 +147,65 @@ fn incompatible_or_rebound_offer_cannot_advance_publication_history() -> TestRes
     assert_eq!(history.encode()?, ReleaseHistory::empty().encode()?);
     Ok(())
 }
+
+fn start(
+    channel: Channel,
+    component: Component,
+    sequence: u64,
+    digest: Option<[u8; 32]>,
+) -> RouteStart {
+    RouteStart { channel, component, platform: Platform::WindowsX86_64, sequence, digest }
+}
+
+#[test]
+fn history_rebuilt_for_a_running_release_refuses_anything_older_than_it() -> TestResult {
+    let request = request();
+    let running = offer(&request, 8, b"running")?;
+    let digest = Some(running.offer().package_digest());
+    let starts = [
+        start(Channel::Release, Component::Application, 8, digest),
+        start(Channel::Canary, Component::Application, 8, digest),
+    ];
+    let history = ReleaseHistory::decode(&ReleaseHistory::starting(&starts)?.encode()?)?;
+    assert!(matches!(
+        history.check(&request, &offer(&request, 7, b"older")?),
+        Err(Error::Offer(Rejection::Rollback))
+    ));
+    assert!(matches!(
+        history.check(&request, &offer(&request, 8, b"other")?),
+        Err(Error::Offer(Rejection::Identity))
+    ));
+    history.check(&request, &running)?;
+    history.check(&request, &offer(&request, 9, b"newer")?)?;
+    let mut canary = request;
+    canary.channel = Channel::Canary;
+    assert!(matches!(
+        history.check(&canary, &offer(&canary, 7, b"older")?),
+        Err(Error::Offer(Rejection::Rollback))
+    ));
+    // Nothing runs yet: history stays empty and admits any authenticated release.
+    let nothing = [start(Channel::Release, Component::Application, 0, digest)];
+    ReleaseHistory::starting(&nothing)?.check(&request, &offer(&request, 1, b"first")?)?;
+    assert!(ReleaseHistory::starting(&[starts[0], starts[0]]).is_err());
+    Ok(())
+}
+
+#[test]
+fn a_start_without_a_recorded_package_refuses_older_releases_and_admits_any_at_its_sequence()
+-> TestResult {
+    let mut request = request();
+    request.component = Component::Updater;
+    let starts = [start(Channel::Release, Component::Updater, 5, None)];
+    let history = ReleaseHistory::decode(&ReleaseHistory::starting(&starts)?.encode()?)?;
+    assert!(matches!(
+        history.check(&request, &offer(&request, 4, b"older engine")?),
+        Err(Error::Offer(Rejection::Rollback))
+    ));
+    history.check(&request, &offer(&request, 5, b"engine")?)?;
+    let next = history.authorize(&request, &offer(&request, 5, b"engine")?)?;
+    assert!(matches!(
+        next.check(&request, &offer(&request, 5, b"other engine")?),
+        Err(Error::Offer(Rejection::Identity))
+    ));
+    Ok(())
+}

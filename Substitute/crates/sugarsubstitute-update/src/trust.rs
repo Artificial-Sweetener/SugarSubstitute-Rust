@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain authenticated role floors even when a later download or verification fails.
-use crate::{Error, MAX_METADATA_BYTES, Target, checkpoint::Checkpoint};
+use crate::{
+    Error, MAX_METADATA_BYTES, Target,
+    checkpoint::{Checkpoint, VersionFloors},
+};
 use chrono::{DateTime, Utc};
 use tuf::{
     database::Database,
@@ -88,6 +91,21 @@ impl RepositoryTrust {
         Ok(database(&self.checkpoint.root)?.trusted_root().version())
     }
 
+    /// Root and role version floors this trust enforces, for keeping outside the trust
+    /// namespace so fresh trust can carry them.
+    /// # Errors
+    /// Rejects damaged trusted state.
+    pub fn version_floors(&self) -> Result<VersionFloors, Error> {
+        Ok(self.checkpoint.version_floors(self.root_version()?))
+    }
+
+    /// Carry `floors` from trust this namespace replaces: metadata is refused until the trusted
+    /// root reaches `floors.root`, and no role is accepted below its floor. Floors only rise.
+    pub fn carry(&mut self, floors: VersionFloors) {
+        self.checkpoint.carried = self.checkpoint.carried.max(floors);
+        self.verified = None;
+    }
+
     /// Verify exactly the next root, with both the old and new root signature thresholds.
     /// Expired roots may establish their authenticated successor before metadata refresh.
     /// # Errors
@@ -161,9 +179,20 @@ impl RepositoryTrust {
         if database.trusted_root().expires() <= &time {
             return Err(Error::Expired);
         }
+        let carried = self.checkpoint.carried;
+        // Fresh trust starts at the build's root; it trusts no metadata until it rotated to the
+        // root the replaced trust had reached.
+        if database.trusted_root().version() < carried.root {
+            return Err(Error::Rollback);
+        }
         let timestamp = raw::<TimestampMetadata>(bytes)?;
         database.update_timestamp(&time, &timestamp)?;
         let timestamp = database.trusted_timestamp().ok_or(Error::Incomplete)?;
+        if timestamp.version() < carried.timestamp
+            || timestamp.snapshot().version() < carried.snapshot
+        {
+            return Err(Error::Rollback);
+        }
         self.checkpoint.snapshot.require(timestamp.snapshot().version())?;
         if timestamp.snapshot().version() < self.checkpoint.minimum_snapshot {
             return Err(Error::Rollback);
@@ -187,7 +216,9 @@ impl RepositoryTrust {
         let targets_version =
             snapshot.meta().get(&MetadataPath::targets()).ok_or(Error::Incomplete)?.version();
         self.checkpoint.targets.require(targets_version)?;
-        if targets_version < self.checkpoint.minimum_targets {
+        if targets_version < self.checkpoint.minimum_targets
+            || targets_version < self.checkpoint.carried.targets
+        {
             return Err(Error::Rollback);
         }
         self.checkpoint.snapshot.advance(snapshot.version(), bytes)?;

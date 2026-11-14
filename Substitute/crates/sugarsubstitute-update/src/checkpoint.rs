@@ -33,6 +33,38 @@ impl Floor {
     }
 }
 
+/// Lowest root and role versions a trust namespace accepts. Fresh trust for an installation
+/// whose earlier trust was set aside carries that trust's floors, so metadata older than what the
+/// installation already accepted is never accepted again. Zero is no floor.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct VersionFloors {
+    /// Lowest root version metadata is accepted under.
+    pub root: u32,
+    /// Lowest timestamp version.
+    pub timestamp: u32,
+    /// Lowest snapshot version.
+    pub snapshot: u32,
+    /// Lowest top-level targets version.
+    pub targets: u32,
+}
+impl VersionFloors {
+    fn is_none(&self) -> bool {
+        *self == Self::default()
+    }
+
+    /// The higher of each floor of `self` and `other`.
+    #[must_use]
+    pub fn max(self, other: Self) -> Self {
+        Self {
+            root: self.root.max(other.root),
+            timestamp: self.timestamp.max(other.timestamp),
+            snapshot: self.snapshot.max(other.snapshot),
+            targets: self.targets.max(other.targets),
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Checkpoint {
@@ -44,6 +76,9 @@ pub(super) struct Checkpoint {
     pub(super) minimum_snapshot: u32,
     pub(super) minimum_targets: u32,
     pub(super) time_floor: i64,
+    /// Floors carried over from trust this namespace replaced; absent when it replaced none.
+    #[serde(default, skip_serializing_if = "VersionFloors::is_none")]
+    pub(super) carried: VersionFloors,
 }
 impl Checkpoint {
     /// Bootstrap only from a root delivered through an already trusted distribution channel.
@@ -57,6 +92,7 @@ impl Checkpoint {
             minimum_snapshot: 0,
             minimum_targets: 0,
             time_floor: 0,
+            carried: VersionFloors::default(),
         }
     }
     /// Decode an authenticated local trust store without resetting unknown or damaged state.
@@ -82,6 +118,17 @@ impl Checkpoint {
         }
         Ok(value)
     }
+    /// The floors this checkpoint enforces with `root` as its trusted root's version: each
+    /// accepted role version, never below what it carries.
+    pub(super) fn version_floors(&self, root: u32) -> VersionFloors {
+        self.carried.max(VersionFloors {
+            root,
+            timestamp: self.timestamp.version,
+            snapshot: self.snapshot.version,
+            targets: self.targets.version,
+        })
+    }
+
     /// Newest authenticated targets version and the SHA-256 of its exact signed bytes.
     pub(crate) fn targets_floor(&self) -> (u32, [u8; 32]) {
         (self.targets.version, self.targets.digest)

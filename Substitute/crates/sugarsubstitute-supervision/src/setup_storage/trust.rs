@@ -7,6 +7,7 @@
 //! state is an error, never permission to bootstrap again. Account protection excludes other
 //! accounts; software already controlling this account is outside this storage trust boundary.
 mod activation;
+mod carried;
 mod continuity;
 mod discovery;
 pub use activation::{MetadataMode, UpdateAuthorization};
@@ -25,6 +26,7 @@ pub(in crate::setup_storage) use preparation::{PreparationAttempt, try_preparati
 mod receipt;
 mod records;
 mod releases;
+mod reset;
 mod session;
 mod subscription;
 mod update_receipt;
@@ -49,6 +51,9 @@ const CHECKPOINT_STAGE: &str = "pending";
 const RECORD_STAGE: &str = "record-pending";
 const RELEASES_STAGE: &str = "releases-pending";
 const STAGES: [&str; 4] = [CHECKPOINT_STAGE, RECORD_STAGE, RELEASES_STAGE, files::IMMUTABLE_STAGE];
+#[cfg(test)]
+pub(crate) use reset::INTERRUPT_AFTER_SET_ASIDE;
+pub use reset::SET_ASIDE_FOLDER;
 use std::{fs::File, io, path::Path};
 use sugarsubstitute_contracts::{
     execution::{JobContext, MemoryClaim, MemoryLease},
@@ -238,6 +243,7 @@ impl TrustStore {
         if let Err(storage) = publication {
             return Err(TrustFailure::Publication { storage, verification: outcome.err() });
         }
+        self.carry_floors(protection, context)?;
         let value = outcome?;
         check(context)?;
         Ok(value)

@@ -44,6 +44,90 @@ impl Descriptor {
         }
     }
 }
+/// Whether `error` was caused by protected storage whose security another account, an
+/// unprotected DACL, a foreign owner or a lowered label has made untrustworthy.
+pub(crate) fn untrusted(error: &(dyn std::error::Error + 'static)) -> bool {
+    let mut current = Some(error);
+    while let Some(cause) = current {
+        if let Some(claim) = cause.downcast_ref::<ClaimError>()
+            && descriptor::UNTRUSTED.contains(&claim.operation())
+        {
+            return true;
+        }
+        // An I/O error's `source` skips the error it wraps, so look inside it first.
+        current = match cause.downcast_ref::<std::io::Error>().and_then(std::io::Error::get_ref) {
+            Some(inner) => Some(inner),
+            None => cause.source(),
+        };
+    }
+    false
+}
+
+/// Protect the DACL of the object at `path` again when inheriting is all that is wrong with
+/// its security: every grant still names this account (`sid`) or SYSTEM and the owner and label
+/// are this account's. The DACL becomes the one this account gives its storage. Returns whether
+/// the object was repaired; objects with any other security, and links, are left as they are.
+/// # Errors
+/// The object cannot be opened, read or changed, or it is still untrusted after the change.
+pub(crate) fn reprotect(path: &std::path::Path, sid: &[u8]) -> std::io::Result<bool> {
+    use std::os::windows::{fs::OpenOptionsExt, io::AsRawHandle};
+    use windows::Win32::{
+        Foundation::HANDLE,
+        Storage::FileSystem::{
+            FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
+            READ_CONTROL, WRITE_DAC,
+        },
+    };
+    let file = std::fs::OpenOptions::new()
+        .access_mode((READ_CONTROL | WRITE_DAC).0)
+        .share_mode(7)
+        .custom_flags((FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT).0)
+        .open(path)?;
+    use std::os::windows::fs::MetadataExt;
+    if file.metadata()?.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0 {
+        return Ok(false);
+    }
+    let handle = HANDLE(file.as_raw_handle());
+    if descriptor::verify(&query(handle)?, sid) != Err(descriptor::UNPROTECTED) {
+        return Ok(false);
+    }
+    let expected =
+        Descriptor::from_bytes(descriptor::expected(sid).map_err(std::io::Error::other)?);
+    // SAFETY: The handle stays open for this synchronous call and the self-relative descriptor
+    // is DWORD-aligned and alive; only its DACL is applied, protected from inheritance.
+    unsafe {
+        SetKernelObjectSecurity(
+            handle,
+            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+            PSECURITY_DESCRIPTOR(expected.words.as_ptr() as *mut _),
+        )
+    }
+    .map_err(std::io::Error::other)?;
+    descriptor::verify(&query(handle)?, sid).map_err(std::io::Error::other)?;
+    Ok(true)
+}
+
+/// The owner, DACL and label of the object `handle` opens, as a self-relative descriptor.
+fn query(handle: windows::Win32::Foundation::HANDLE) -> std::io::Result<Vec<u8>> {
+    let mut words = vec![0_u32; descriptor::MAXIMUM_BYTES / 4];
+    let mut needed = 0;
+    // SAFETY: The DWORD-aligned buffer owns `MAXIMUM_BYTES` writable bytes; Windows copies a
+    // descriptor only when it fits and reports its size.
+    unsafe {
+        GetKernelObjectSecurity(
+            handle,
+            INFORMATION,
+            Some(PSECURITY_DESCRIPTOR(words.as_mut_ptr().cast())),
+            descriptor::MAXIMUM_BYTES as u32,
+            &mut needed,
+        )
+    }
+    .map_err(std::io::Error::other)?;
+    let length = (needed as usize).min(descriptor::MAXIMUM_BYTES);
+    // SAFETY: Windows initialized `needed` bytes of the owned buffer.
+    Ok(unsafe { std::slice::from_raw_parts(words.as_ptr().cast::<u8>(), length) }.to_vec())
+}
+
 const INFORMATION: u32 =
     OWNER_SECURITY_INFORMATION.0 | DACL_SECURITY_INFORMATION.0 | LABEL_SECURITY_INFORMATION.0;
 pub(crate) fn verify(

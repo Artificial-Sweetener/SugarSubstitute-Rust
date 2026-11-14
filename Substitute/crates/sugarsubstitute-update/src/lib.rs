@@ -21,12 +21,13 @@ mod prepared;
 mod releases;
 mod target;
 mod trust;
+pub use checkpoint::VersionFloors;
 pub use engine::{ENGINE_PROTOCOL, ENGINE_RELEASE};
 pub use error::Error;
 pub use offer::VerifiedOffer;
 pub use pinned::{named_snapshot, named_targets, signed_lifetime_end};
 pub use prepared::{PreparedRelease, RECEIPT_LIFETIME_SECONDS, ReceiptRefusal};
-pub use releases::{MAX_RELEASE_HISTORY_BYTES, ReleaseHistory};
+pub use releases::{MAX_RELEASE_HISTORY_BYTES, ReleaseHistory, RouteStart};
 pub use target::{Target, TargetVerifier, VerifiedBytes};
 pub use trust::{MetadataSet, RepositoryTrust};
 

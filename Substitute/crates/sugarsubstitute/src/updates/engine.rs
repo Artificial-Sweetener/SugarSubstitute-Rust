@@ -75,6 +75,11 @@ impl Engine {
         self.parent.as_ref().and_then(Parent::attempt_progress)
     }
 
+    /// Whether the delegated preparation set untrusted update storage aside.
+    pub(super) fn storage_set_aside(&self) -> bool {
+        self.parent.as_ref().is_some_and(Parent::storage_set_aside)
+    }
+
     /// What the delegated preparation reported, once its helper settled.
     pub(super) fn take_attempt_outcome(&mut self) -> Option<AttemptOutcome> {
         self.attempt_outcome.take()

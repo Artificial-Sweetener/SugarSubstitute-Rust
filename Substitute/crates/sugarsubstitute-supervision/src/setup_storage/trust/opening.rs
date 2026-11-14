@@ -29,6 +29,16 @@ impl TrustStore {
     ) -> Result<Self, TrustFailure> {
         check(context)?;
         let selection = Self::selection(installation_root, context)?;
+        Self::open_selected(installation_root, expected, &selection, context)
+    }
+
+    /// [`Self::open_bound`] for `selection`, which the caller loaded and may hold the writer of.
+    pub(super) fn open_selected(
+        installation_root: &Path,
+        expected: Option<[u8; 32]>,
+        selection: &sugarsubstitute_contracts::installation::InstallationRecord,
+        context: &JobContext,
+    ) -> Result<Self, TrustFailure> {
         let memory = context.memory().claim(1024 * 1024).map_err(io::Error::other)?;
         let _work = context.memory().claim(WORK_BYTES).map_err(io::Error::other)?;
         let parent = Directory::open(installation_root, false)?;
@@ -71,6 +81,9 @@ impl TrustStore {
                 continuity::read(&store, protection)?
                     .ok_or_else(|| invalid("Established update trust continuity is absent"))?
             };
+            if expected.is_some() {
+                store.carry_floors(protection, context)?;
+            }
             check(context)?;
             store._continuity = Some(marker);
             Ok(store)

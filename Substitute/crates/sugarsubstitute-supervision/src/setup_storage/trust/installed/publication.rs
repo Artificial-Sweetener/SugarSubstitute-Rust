@@ -12,6 +12,11 @@ pub(in crate::setup_storage) struct PublishedRelease {
     _file: File,
 }
 impl PublishedRelease {
+    /// The channel this release was published on and the digest of its archive.
+    pub(in crate::setup_storage) fn archive(&self) -> (Channel, [u8; 32]) {
+        (self.receipt.channel, self.receipt.archive_sha256)
+    }
+
     /// A protected receipt cannot be rebound to another native installation with matching IDs.
     pub(in crate::setup_storage) fn require_installation(
         &self,
@@ -44,11 +49,30 @@ impl TrustStore {
         generation: &Generation,
         context: &JobContext,
     ) -> Result<Option<PublishedRelease>, TrustFailure> {
+        PublishedRelease::read(
+            &self._installation_root,
+            &self.installation,
+            &self.repository,
+            generation,
+            context,
+        )
+    }
+}
+impl PublishedRelease {
+    /// [`TrustStore::published_release`] for the installation `root` holds, bound to
+    /// `installation` and `repository`, without an open trust store.
+    pub(in crate::setup_storage) fn read(
+        root: &Directory,
+        installation_id: &InstallationId,
+        repository: &[u8; 32],
+        generation: &Generation,
+        context: &JobContext,
+    ) -> Result<Option<Self>, TrustFailure> {
         let request = UpdateAuthorization::local_request(Channel::Release)?;
         protection::with_domain(context, |protection| -> Result<_, TrustFailure> {
             check(context)?;
-            let installation = Directory::open(self._installation_root.path(), false)?;
-            if installation.identity()? != self._installation_root.identity()? {
+            let installation = Directory::open(root.path(), false)?;
+            if installation.identity()? != root.identity()? {
                 return Err(invalid("Prepared release installation changed").into());
             }
             let path = installation.path().join("releases").join(generation.id.as_str());
@@ -63,8 +87,8 @@ impl TrustStore {
             let bytes = files::read_bounded(&mut file, envelope::Kind::InstalledRelease.limit())?;
             let payload = envelope::decode(
                 envelope::Kind::InstalledRelease,
-                &self.installation,
-                &self.repository,
+                installation_id,
+                repository,
                 &bytes,
             )?;
             let receipt: Receipt = serde_json::from_slice(payload).map_err(io::Error::other)?;
@@ -79,7 +103,7 @@ impl TrustStore {
                 );
             }
             check(context)?;
-            Ok(Some(PublishedRelease { receipt, installation, _directory: directory, _file: file }))
+            Ok(Some(Self { receipt, installation, _directory: directory, _file: file }))
         })
         .map_err(TrustFailure::from)
     }

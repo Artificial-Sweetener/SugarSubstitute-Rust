@@ -14,6 +14,7 @@ mod resumption;
 mod startup;
 mod subscription;
 mod supersession;
+mod untrusted_storage;
 use crate::setup_storage::{
     test_package::{maintenance::Fixture, repository::SignedPackage},
     test_worker::TestResult,

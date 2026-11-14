@@ -261,6 +261,19 @@ impl SelectionStore {
         })
     }
 
+    /// Hold the selection writer and read the current record, for an operation that must not
+    /// race any selection publication. The returned lock releases the writer when dropped.
+    pub(in crate::setup_storage) fn hold_writer(
+        &self,
+        context: &JobContext,
+    ) -> Result<(InstallationRecord, File), SelectionFailure> {
+        self.protected(context, |protection| {
+            let writer = writer(&self.root, protection, context)?;
+            let record = self.read(protection)?.ok_or(SelectionFailure::Missing)?;
+            Ok((record, writer))
+        })
+    }
+
     fn publish(
         &self,
         protection: &Protection,

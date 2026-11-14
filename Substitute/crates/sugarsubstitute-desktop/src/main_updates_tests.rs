@@ -280,6 +280,29 @@ fn a_repair_is_one_plain_line_in_every_language() {
     assert_eq!(shown(&caption.view(en)), Vec::<u16>::new());
 }
 
+#[test]
+fn set_aside_update_storage_is_one_plain_line_in_every_language() {
+    let mut caption = CaptionUpdates::default();
+    caption.notify(Notice::update(crate::UpdateNotice::StorageSetAside));
+    let en = messages("en");
+    let view = caption.view(en);
+    assert_eq!(shown(&view), vec![LINE, DISMISS]);
+    assert_eq!(
+        view.line.text,
+        "Update storage had been changed by another program, so it was set aside and updates were set up again."
+    );
+    for locale in sugarsubstitute_contracts::localization::LOCALES {
+        assert_eq!(
+            caption.view(locale).line.text,
+            locale.updates.storage_set_aside,
+            "{}",
+            locale.id
+        );
+    }
+    assert_eq!(caption.activate(DISMISS), (true, None));
+    assert_eq!(shown(&caption.view(en)), Vec::<u16>::new());
+}
+
 /// A SugarCubes update that couldn't check shows its one plain line in the user's language,
 /// and the update button opens the report that holds it; an update that went fine shows its
 /// line without a report.

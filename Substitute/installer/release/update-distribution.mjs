@@ -7,12 +7,15 @@ import { createHash } from 'node:crypto'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 /**
- * The distribution every release build compiles in: repository, feed and update policy.
+ * The distribution every release build compiles in: repository, feed, update policy and the
+ * repository's trusted root.
  * Its repository identity is the SHA-256 of
  * `sugarsubstitute-update-repository:github.com/Artificial-Sweetener/SugarSubstitute-Rust/substitute-updates`
  * and never changes once a release ships it, because installations bind their trust to it.
  */
 export const releaseDistribution = fileURLToPath(new URL('./update-distribution.json', import.meta.url))
+/** The root metadata the update repository was created with; installed trust can restart from it. */
+export const repositoryRoot = fileURLToPath(new URL('../../../.github/update-repository/root.json', import.meta.url))
 const workspaceRoot = fileURLToPath(new URL('../../', import.meta.url))
 const distributionLimit = 16 * 1024
 const changelogLimit = 16 * 1024 ** 2
@@ -40,9 +43,15 @@ export function changelogSection(changelog, version) {
   return section
 }
 
-/** Validate the committed distribution as far as release tooling can: the schema this build reads. */
-function requireSchema(distribution) {
+/**
+ * Validate the committed distribution as far as release tooling can: the schema this build reads
+ * and the repository's trusted root, exactly as the update repository commits it.
+ */
+function requireDistribution(distribution, trustedRoot) {
   if (distribution?.schema_version !== 4) throw new Error('The release distribution needs schema 4')
+  if (distribution.trusted_root !== trustedRoot) {
+    throw new Error('The release distribution must carry the update repository trusted root exactly')
+  }
 }
 
 /**
@@ -51,7 +60,7 @@ function requireSchema(distribution) {
  * include this version. The bytes are the committed release distribution, unchanged. `output`
  * must not exist.
  */
-export async function writeUpdateDistribution({ workspace = workspaceRoot, source = releaseDistribution, output }) {
+export async function writeUpdateDistribution({ workspace = workspaceRoot, source = releaseDistribution, root = repositoryRoot, output }) {
   if (!path.isAbsolute(output ?? '')) throw new Error('The update distribution needs a new absolute output path')
   const version = await workspaceVersion(workspace)
   const changelogFile = path.join(workspace, 'CHANGELOG.md')
@@ -59,7 +68,8 @@ export async function writeUpdateDistribution({ workspace = workspaceRoot, sourc
   const section = changelogSection(await fs.readFile(changelogFile, 'utf8'), version)
   const bytes = await fs.readFile(source)
   if (bytes.length === 0 || bytes.length > distributionLimit) throw new Error('The release distribution is empty or exceeds its compiled bound')
-  requireSchema(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)))
+  const trustedRoot = new TextDecoder('utf-8', { fatal: true }).decode(await fs.readFile(root))
+  requireDistribution(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)), trustedRoot)
   await fs.writeFile(output, bytes, { flag: 'wx' })
   const sha256 = data => createHash('sha256').update(data).digest('hex')
   return { distribution: output, version, sha256: sha256(bytes), changelogSha256: sha256(section) }

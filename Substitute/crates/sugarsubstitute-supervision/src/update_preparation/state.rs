@@ -48,6 +48,8 @@ pub(super) struct State {
     pub(super) retirement_failure: Option<Arc<Failure>>,
     /// Version label of the offer this campaign authenticated, for its attempt report.
     pub(super) version: Option<String>,
+    /// Where this campaign set untrusted update storage aside before setting updates up again.
+    pub(super) storage_set_aside: bool,
 }
 impl State {
     /// Advance a single admitted boundary. Failed custody retires on the same worker where possible.
@@ -64,6 +66,28 @@ impl State {
             self.progress = Progress::Failed;
             cause
         })
+    }
+
+    /// Open installed trust. Storage another program made untrustworthy is set aside and set up
+    /// again from the build's own root, so a permission change never blocks updates for good; a
+    /// reset that was interrupted is finished.
+    fn open_trust(&mut self, context: &JobContext) -> Result<TrustStore, Failure> {
+        match self.source.open(&self.installation, context) {
+            Err(Failure::Trust(cause))
+                if TrustStore::storage_untrusted(&cause)
+                    || TrustStore::reset_interrupted(&self.installation, context)
+                        .unwrap_or(false) =>
+            {
+                let Some((repository, root)) = self.source.bootstrap() else {
+                    return Err(cause.into());
+                };
+                let (trust, set_aside) =
+                    TrustStore::reset_untrusted(&self.installation, repository, root, context)?;
+                self.storage_set_aside = set_aside;
+                Ok(trust)
+            }
+            opened => opened,
+        }
     }
 
     /// Remember the authenticated offer's version once a phase holds it; it outlives the phase
@@ -98,7 +122,7 @@ impl State {
         }
         let (next, progress) = match phase {
             Phase::Open => {
-                let mut trust = Box::new(self.source.open(&self.installation, context)?);
+                let mut trust = Box::new(self.open_trust(context)?);
                 self.subscription = Some(trust.subscription(context)?);
                 match trust.acquire_preparation(context) {
                     Err(crate::setup_storage::TrustFailure::Storage(cause))

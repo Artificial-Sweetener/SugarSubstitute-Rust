@@ -3,9 +3,12 @@
 //! Exercise the built library's producing-feed decoder, including production feature gating.
 use sugarsubstitute_update::distribution::{Distribution, MAX_BYTES, UpdatePolicy};
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;
+/// The update repository's committed trusted root, which every release distribution carries.
+const TRUSTED_ROOT: &str = include_str!("../../../../.github/update-repository/root.json");
 
 fn configuration() -> serde_json::Value {
-    serde_json::json!({"schema_version":4, "update_policy":"beta_eager", "repository":vec![92;32], "feed": {
+    serde_json::json!({"schema_version":4, "update_policy":"beta_eager", "repository":vec![92;32],
+        "trusted_root": TRUSTED_ROOT, "feed": {
         "transport":"https", "base":"https://updates.example.test/releases/",
         "redirects":["https://assets.example.test/"]
     }})
@@ -47,11 +50,19 @@ fn malformed_schema_fields_and_empty_identity_never_disable_or_reset_updates() -
         "missing_channel_override",
         "missing_policy",
         "unknown_policy",
+        "missing_trusted_root",
+        "invalid_trusted_root",
     ] {
         let mut value = configuration();
         match field {
             "schema" => value["schema_version"] = 5.into(),
             "previous_schema" => value["schema_version"] = 3.into(),
+            "missing_trusted_root" => {
+                if let Some(fields) = value.as_object_mut() {
+                    fields.remove("trusted_root");
+                }
+            }
+            "invalid_trusted_root" => value["trusted_root"] = "{}".into(),
             "missing_policy" => {
                 if let Some(fields) = value.as_object_mut() {
                     fields.remove("update_policy");
@@ -73,6 +84,7 @@ fn malformed_schema_fields_and_empty_identity_never_disable_or_reset_updates() -
 fn the_release_build_distribution_feeds_from_github() -> Result {
     let committed = include_bytes!("../../../installer/release/update-distribution.json");
     let distribution = Distribution::decode(committed)?;
+    assert_eq!(distribution.trusted_root(), TRUSTED_ROOT.as_bytes());
     assert_eq!(distribution.update_policy(), UpdatePolicy::BetaEager);
     let (identity, policy) = distribution.into_parts();
     assert_ne!(identity, [0; 32]);

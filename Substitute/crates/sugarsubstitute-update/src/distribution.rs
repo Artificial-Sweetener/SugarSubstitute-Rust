@@ -8,7 +8,8 @@ use std::io;
 
 /// Maximum encoded producing-build configuration, in bytes.
 pub const MAX_BYTES: usize = 16 * 1024;
-/// Encoded schema this build accepts: a repository, a feed and an update policy.
+/// Encoded schema this build accepts: a repository, a feed, an update policy and the
+/// repository's trusted root metadata.
 pub const SCHEMA_VERSION: u32 = 4;
 
 #[derive(Deserialize)]
@@ -18,6 +19,7 @@ struct Configuration {
     repository: [u8; 32],
     feed: Feed,
     update_policy: UpdatePolicy,
+    trusted_root: String,
 }
 
 #[derive(Deserialize)]
@@ -55,6 +57,7 @@ pub struct Distribution {
     repository: [u8; 32],
     policy: Policy,
     update_policy: UpdatePolicy,
+    trusted_root: Vec<u8>,
 }
 
 impl Distribution {
@@ -82,11 +85,22 @@ impl Distribution {
             Feed::Loopback { port } => Policy::loopback(port),
         }
         .map_err(|cause| io::Error::new(io::ErrorKind::InvalidData, cause))?;
+        let trusted_root = configuration.trusted_root.into_bytes();
+        crate::RepositoryTrust::bootstrap(&trusted_root)
+            .map_err(|cause| io::Error::new(io::ErrorKind::InvalidData, cause))?;
         Ok(Self {
             repository: configuration.repository,
             policy,
             update_policy: configuration.update_policy,
+            trusted_root,
         })
+    }
+
+    /// The exact root metadata this build's repository was created with. Installed trust starts
+    /// from it again only when its protected storage can no longer be trusted; the installation's
+    /// rollback floor then keeps everything older than the running release refused.
+    pub fn trusted_root(&self) -> &[u8] {
+        &self.trusted_root
     }
 
     /// How this build applies application updates.

@@ -189,3 +189,32 @@ fn accepted_references_remain_floors_even_when_referenced_metadata_never_arrives
     trust.refresh(Set::new(&key, [5, 12, 20], b"future", EXPIRES)?.metadata(), NOW)?;
     Ok(())
 }
+
+#[test]
+fn fresh_trust_carrying_floors_refuses_older_metadata_and_roots() -> TestResult {
+    let key = key(41)?;
+    let mut trust = RepositoryTrust::bootstrap(&root(&key, 1, None)?)?;
+    let current = Set::new(&key, [3; 3], b"current", EXPIRES)?;
+    trust.refresh(current.metadata(), NOW)?;
+    let floors = trust.version_floors()?;
+    assert_eq!(floors, VersionFloors { root: 1, timestamp: 3, snapshot: 3, targets: 3 });
+    // Fresh trust from the same root, after the old trust was set aside.
+    let mut fresh = RepositoryTrust::bootstrap(&root(&key, 1, None)?)?;
+    fresh.carry(floors);
+    for older in [[2, 3, 3], [4, 2, 3], [4, 4, 2]] {
+        assert!(matches!(
+            fresh.refresh(Set::new(&key, older, b"old", EXPIRES)?.metadata(), NOW),
+            Err(Error::Rollback)
+        ));
+    }
+    let carried = RepositoryTrust::from_trusted_checkpoint(&fresh.checkpoint()?)?;
+    assert_eq!(carried.version_floors()?.max(floors), carried.version_floors()?, "floors lost");
+    fresh.refresh(Set::new(&key, [5, 4, 3], b"current", EXPIRES)?.metadata(), NOW)?;
+    // A root floor above the build's root refuses metadata until trust rotated to it.
+    let mut behind = RepositoryTrust::bootstrap(&root(&key, 1, None)?)?;
+    behind.carry(VersionFloors { root: 2, ..VersionFloors::default() });
+    assert!(matches!(behind.refresh(current.metadata(), NOW), Err(Error::Rollback)));
+    behind.rotate(&root(&key, 2, Some(&key))?)?;
+    behind.refresh(current.metadata(), NOW)?;
+    Ok(())
+}

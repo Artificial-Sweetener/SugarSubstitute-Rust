@@ -29,6 +29,9 @@ impl<C: EntryActivation> EntryRunner<C> {
             if let Some(progress) = updater.attempt_progress() {
                 self.update_status.observe(progress);
             }
+            if updater.storage_set_aside() {
+                self.update_status.observe_storage_set_aside();
+            }
         }
         // The restart notice is advanced on every turn, closing included: a window that asked
         // to restart keeps itself up until this notice covers the screen.

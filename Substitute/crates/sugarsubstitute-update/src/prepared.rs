@@ -165,9 +165,7 @@ impl RepositoryTrust {
         }
         if release.sequence < request.sequence_floor
             || history.floor(request).is_some_and(|floor: RouteFloor| {
-                release.sequence < floor.sequence
-                    || (release.sequence == floor.sequence
-                        && release.package_digest != floor.digest)
+                floor.refuses(release.sequence, release.package_digest)
             })
         {
             return Err(ReceiptRefusal::BelowFloor);

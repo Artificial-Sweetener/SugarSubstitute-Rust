@@ -41,22 +41,26 @@ impl TrustStore {
             SelectionStore::open(installation_root, context).map_err(io::Error::other)?;
         let (selection, _selection_guard) =
             selection_store.lock_initial(context).map_err(io::Error::other)?;
+        let history = sugarsubstitute_update::ReleaseHistory::empty();
+        Self::establish(installation_root, repository, trust, &history, &selection, context)
+    }
+
+    /// Publish fresh trust state from `trust` and `history` for `selection`'s installation, then
+    /// its continuity marker. The caller holds selection writer custody and has established that
+    /// no trust state or continuity marker exists.
+    pub(super) fn establish(
+        installation_root: &Path,
+        repository: [u8; 32],
+        trust: RepositoryTrust,
+        history: &sugarsubstitute_update::ReleaseHistory,
+        selection: &sugarsubstitute_contracts::installation::InstallationRecord,
+        context: &JobContext,
+    ) -> Result<Self, TrustFailure> {
         let memory = context.memory().claim(1024 * 1024).map_err(io::Error::other)?;
         let parent = Directory::open(installation_root, false)?;
         let ownership = ownership::read(&parent)?;
         let installation = selection.installation().clone();
-        let bytes = envelope::encode(
-            envelope::Kind::Checkpoint,
-            &installation,
-            &repository,
-            &trust.checkpoint()?,
-        )?;
-        let history = envelope::encode(
-            envelope::Kind::Releases,
-            &installation,
-            &repository,
-            &sugarsubstitute_update::ReleaseHistory::empty().encode()?,
-        )?;
+        let (bytes, history) = fresh_records(&installation, &repository, &trust, history)?;
         let state = ownership::state(&parent)?;
         let destination = state.path().join(DIRECTORY);
         if Self::has_state(parent.path(), context)? {
@@ -66,7 +70,7 @@ impl TrustStore {
             )
             .into());
         }
-        // The selection's initial lock serializes initialization; earlier attempts are dead.
+        // The selection writer serializes initialization; earlier attempts are dead.
         protection::with(context, |protection| {
             staging::reclaim(
                 &state,
@@ -76,7 +80,8 @@ impl TrustStore {
                 context,
             )
         })?;
-        let staged = InitialState::stage(&state, &destination, &bytes, &history, context)?;
+        let staged =
+            InitialState::stage(&state, INITIAL_STAGE, &destination, &bytes, &history, context)?;
         let root = staged.publish(&destination, context)?;
         let mut store = Self {
             cache: std::sync::Mutex::new(None),
@@ -115,17 +120,38 @@ impl TrustStore {
     }
 }
 
+/// The checkpoint and release history records of fresh trust from `trust` and `history`, bound to
+/// `installation` and `repository`.
+pub(super) fn fresh_records(
+    installation: &sugarsubstitute_contracts::installation::InstallationId,
+    repository: &[u8; 32],
+    trust: &RepositoryTrust,
+    history: &sugarsubstitute_update::ReleaseHistory,
+) -> Result<(Vec<u8>, Vec<u8>), TrustFailure> {
+    let checkpoint = envelope::encode(
+        envelope::Kind::Checkpoint,
+        installation,
+        repository,
+        &trust.checkpoint()?,
+    )?;
+    let history =
+        envelope::encode(envelope::Kind::Releases, installation, repository, &history.encode()?)?;
+    Ok((checkpoint, history))
+}
+
 /// Unpublished initialization retains its native directory identity, never authority by pathname.
-struct InitialState {
+pub(super) struct InitialState {
     path: PathBuf,
     identity: (u32, u32, u32),
     write: FileWrite,
 }
 impl InitialState {
-    /// Flush all initial records in a fresh namespace; abandoned staging is never reused.
-    /// The namespace is one trust write: both records land, then the folder is published.
-    fn stage(
+    /// Flush all initial records in a fresh namespace named for `prefix`; abandoned staging is
+    /// never reused. The namespace is one trust write: both records land, then the folder is
+    /// published.
+    pub(super) fn stage(
         parent: &Directory,
+        prefix: &str,
         destination: &Path,
         checkpoint: &[u8],
         history: &[u8],
@@ -133,7 +159,7 @@ impl InitialState {
     ) -> io::Result<Self> {
         let mut write = write_port::begin(UpdateFile::Trust, &destination.join(RECORD));
         protection::with(context, |protection| {
-            let path = staging::unique_path(parent, INITIAL_STAGE)?;
+            let path = staging::unique_path(parent, prefix)?;
             protection.directory(&path, Mode::CreateNew, context)?;
             let root = Directory::open(&path, false)?;
             files::sync(&protection.file(&path.join(LOCK), context)?, context)?;
@@ -148,7 +174,11 @@ impl InitialState {
     }
 
     /// Rename the exact completed object while retaining the selected installation's parent.
-    fn publish(mut self, destination: &Path, context: &JobContext) -> io::Result<Directory> {
+    pub(super) fn publish(
+        mut self,
+        destination: &Path,
+        context: &JobContext,
+    ) -> io::Result<Directory> {
         protection::with(context, |protection| {
             self.write.publish(|| {
                 protection.publish(
