@@ -230,6 +230,14 @@ rationale = "Build-time inputs and generated outputs for sugarsubstitute-desktop
 boundary = "build"
 
 [[records]]
+path = "crates/sugarsubstitute-desktop/src/file_dialog/export_folder_tests.rs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:94050d314d9494cf58009958ab801e6ce7612e5eaa1c6ec53be9db9fa55826bc"
+capabilities = ["std::fs::create_dir_all", "std::fs::remove_dir", "std::fs::remove_dir_all", "std::fs::write"]
+disposition = "fixture"
+rationale = "Native fixture setup for: build a disposable folder tree under the test temporary root (profile, redirected installation home, ComfyUI installation, earlier export folder) to qualify the save dialog's default-folder choice. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
+
+[[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/render_preview/capture.rs"
 owner = "sugarsubstitute-desktop"
 source_sha256 = "sha256:b2219d3ddf7108c3b77db878d00188c9eeb87cf9291a53016786c63d4bfcdf08"

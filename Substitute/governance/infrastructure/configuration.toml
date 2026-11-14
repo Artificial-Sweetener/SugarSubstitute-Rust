@@ -923,6 +923,13 @@ capabilities = ["codec"]
 rationale = "Construct isolated malformed UI policy documents to verify unknown-schema, duplicate, stale-review and dependency-identity rejection through the real governance checker."
 
 [[records]]
+path = "crates/sugarsubstitute-desktop/src/file_dialog/export_folder.rs"
+owner = "sugarsubstitute-desktop"
+source_sha256 = "sha256:175e56dbec6ad374b75dc6326e8cfa81f77de8569bdec368612ea8aab1c5a397"
+capabilities = ["environment"]
+rationale = "Read only the home, settings and temporary folder variables to recognise folders redirected into the installation, so a save dialog never opens there; it writes no environment and reads or writes no product settings."
+
+[[records]]
 path = "crates/sugarsubstitute-desktop/src/report/surface/native_tests/evidence.rs"
 owner = "sugarsubstitute-desktop"
 source_sha256 = "sha256:44ab9479e475c3b69dcd9685e562926a68d1ccd476b0b9db24e18515e473c4c9"
