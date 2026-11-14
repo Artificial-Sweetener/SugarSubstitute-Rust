@@ -97,8 +97,7 @@ pub(super) fn project<'storage>(
     let mut environment = Vec::new();
     environment.try_reserve_exact(view.environment().unit_len())?;
     environment.extend(view.environment().units());
-    let storage = requested_profile.parent().ok_or("Profile storage parent missing")?;
-    let desktop_environment = LaunchEnvironment::for_local_storage(&environment, storage)?;
+    let desktop_environment = LaunchEnvironment::for_desktop(&environment)?;
     let backend_environment = match &target {
         BackendTarget::Managed(configuration) => Some(LaunchEnvironment::for_managed_backend(
             &environment,
