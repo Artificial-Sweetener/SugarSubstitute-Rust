@@ -280,6 +280,40 @@ fn restart_to_apply_relaunches_only_once_the_close_save_has_its_outcome() -> Tes
     fixture.retire()
 }
 
+/// "Restart to apply" keeps the window up after its close save until the coordinator's own
+/// "Updating to version X…" notice covers the screen; only then does the exit intent go out,
+/// so no empty frame shows before the restarted copy appears.
+#[test]
+fn restart_to_apply_keeps_the_window_until_the_coordinator_notice_covers_the_screen() -> TestResult
+{
+    use sugarsubstitute_contracts::update::status::UpdateStatus;
+    let mut fixture = Fixture::new(true)?;
+    fixture.host.workspace.as_mut().ok_or("Workspace")?.driver = None;
+    fixture.host.input_probe = Some(InputSaveProbe::default());
+    fixture.host.child.update_status = Some(UpdateStatus::default());
+    fixture.host.request_restart_to_apply()?;
+    fixture.poll()?;
+    fixture.host.input_probe.as_mut().ok_or("Probe")?.verdict = Some(SaveVerdict::Saved);
+    let host = &mut fixture.host;
+    fixture.wake.until(|| {
+        match host.poll_frame(std::num::NonZeroUsize::MIN.saturating_add(31)) {
+            Err(cause) => return Some(Err(cause)),
+            Ok(frame) if frame.is_some() => return Some(Err("Unexpected frame".into())),
+            Ok(_) => {}
+        }
+        (host.child.restart_requests >= 1).then_some(Ok(()))
+    })?;
+    fixture.poll()?;
+    assert!(
+        fixture.host.child.shutdown_requests.is_empty(),
+        "the window stays up until the coordinator's notice covers the screen"
+    );
+    let mut covered = UpdateStatus::default();
+    covered.observe_restart_cover(true);
+    fixture.host.child.update_status = Some(covered);
+    fixture.exit_intent()?;
+    fixture.retire()
+}
 /// The fixture's clock moves only when a test moves it, so a slow machine can never carry a
 /// close past its settle cutoff before the record of unsaved work is written.
 #[test]

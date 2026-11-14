@@ -93,11 +93,18 @@ impl<C: EntryActivation> EntryRunner<C> {
         wanted(self.normal_shutdown, self.failure_source().is_some(), restart)
     }
 
-    /// Whether a restart into an update is owed now: decided before the window opened, or a
-    /// normal close that relaunches.
-    fn restart_pending(&self) -> bool {
+    /// Whether a restart into an update is owed now: decided before the window opened, or asked
+    /// for by the window ("Restart to apply") from the moment it starts closing, while its close
+    /// can still end normally and relaunch.
+    pub(super) fn restart_pending(&self) -> bool {
+        let closing_normally = self.normal_shutdown || !self.child_closed;
         (self.launch_update.restart().is_some()
             && !self.authority.as_ref().is_some_and(CoordinatorAuthority::window_opened))
+            || wanted(
+                closing_normally,
+                self.failure_source().is_some(),
+                self.child.restart_to_apply_requested(),
+            )
             || self.relaunch_wanted()
     }
 

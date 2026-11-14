@@ -245,7 +245,8 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
         {
             return Ok(false);
         }
-        if !self.advance_relaunch(budget.settle_until)? || self.observe_restart_notice() {
+        let notice_busy = self.observe_restart_notice();
+        if !self.advance_relaunch(budget.settle_until)? || notice_busy {
             return Ok(false);
         }
         if self.updater.as_ref().is_some_and(|updater| !updater.settled()) {

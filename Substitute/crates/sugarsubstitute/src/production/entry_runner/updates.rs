@@ -30,6 +30,9 @@ impl<C: EntryActivation> EntryRunner<C> {
                 self.update_status.observe(progress);
             }
         }
+        // The restart notice is advanced on every turn, closing included: a window that asked
+        // to restart keeps itself up until this notice covers the screen.
+        self.observe_restart_notice();
         self.update_status.poll();
         self.update_status.observe_sugarcubes(self.child.sugarcubes_update());
         self.observe_window();
@@ -111,8 +114,8 @@ impl<C: EntryActivation> EntryRunner<C> {
                 "An update was prepared before the window opened; restarting into it"
             );
             self.announce_restart()?;
+            self.observe_restart_notice();
         }
-        self.observe_restart_notice();
         // A finished check may have prepared an update.
         self.submit_record_read()?;
         self.update_wake = match self.update_schedule.as_ref().and_then(CheckSchedule::due) {
@@ -285,7 +288,7 @@ mod tests {
         let mut runner = EntryRunner::new(
             command,
             path,
-            Box::new(NoChild(None, false)),
+            Box::new(NoChild(None, false, false)),
             crate::diagnostics::DiagnosticHealth::fixture(),
         );
         freeze_time(&mut runner);
