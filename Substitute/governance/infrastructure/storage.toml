@@ -5140,7 +5140,7 @@ rationale = "An owned temporary workspace is seeded with a previous run's checkp
 [[records]]
 path = "crates/sugarsubstitute/src/startup/workspace/close_save_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:06245be04087b559bdf6bf014261b4898af33726f4ee9f9be4232d39d155475c"
+source_sha256 = "sha256:b67767f5b11e393826fd9e542ac6e2b14d42536ea7f97a779a7bc0a858baf46d"
 capabilities = ["std::fs::remove_dir_all", "std::fs::write"]
 disposition = "fixture"
 rationale = "The owned temporary workspace's checkpoint folder is replaced by a file to inject a failed final publication, which the close save must record before the exit intent."

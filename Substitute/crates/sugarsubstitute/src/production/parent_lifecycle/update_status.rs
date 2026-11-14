@@ -126,6 +126,12 @@ impl ParentLifecycle {
         self.updates.restart_to_apply
     }
 
+    /// Record the child's RestartToApply as its authenticated request does.
+    #[cfg(test)]
+    pub(crate) fn observe_restart_to_apply(&mut self) {
+        self.updates.restart_to_apply();
+    }
+
     /// Take the child's request to check for updates now, once.
     pub(crate) fn take_check_request(&mut self) -> bool {
         std::mem::take(&mut self.updates.check_requested)

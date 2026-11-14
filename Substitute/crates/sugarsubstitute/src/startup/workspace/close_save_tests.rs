@@ -308,6 +308,7 @@ fn restart_to_apply_keeps_the_window_until_the_coordinator_notice_covers_the_scr
         fixture.host.child.shutdown_requests.is_empty(),
         "the window stays up until the coordinator's notice covers the screen"
     );
+    assert!(!fixture.host.poll_owned_shutdown()?, "the held window's lifetime never settles");
     let mut covered = UpdateStatus::default();
     covered.observe_restart_cover(true);
     fixture.host.child.update_status = Some(covered);
