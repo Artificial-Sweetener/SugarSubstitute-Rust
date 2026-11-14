@@ -343,6 +343,9 @@ pub(crate) unsafe extern "system" fn child_proc(
             {
                 return LRESULT(HTTRANSPARENT as isize);
             }
+            WM_NCHITTEST if caption::drags_window(callback, hwnd) => {
+                return LRESULT(HTTRANSPARENT as isize);
+            }
             WM_ERASEBKGND if callback.prepared_pixels() || callback.caption.get().is_some() => {
                 return LRESULT(1);
             }

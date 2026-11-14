@@ -109,6 +109,15 @@ fn in_strip(y: i32, page_top: u32) -> bool {
     u32::try_from(y).is_ok_and(|y| y < page_top)
 }
 
+/// Whether `hwnd` is the caption's message line. Its words are not a control, so a press on
+/// them falls through to the strip beneath and drags the window, as a title bar's label does;
+/// the line's links and buttons stay clickable.
+pub(super) fn drags_window(callback: &Callback, hwnd: HWND) -> bool {
+    callback.caption.get().is_some()
+        && callback.controls.try_borrow().is_ok_and(|controls| {
+            controls.iter().any(|peer| peer.hwnd == hwnd && peer.id == crate::main_updates::LINE)
+        })
+}
 /// Keep hover ownership exclusive while Win32 retains capture, pressed and accessibility state.
 pub(super) fn child(callback: &Callback, hwnd: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) {
     if callback.caption.get().is_some() {
