@@ -37,6 +37,24 @@ impl<B: StartupBackend> StartupHost<B> {
     /// # Errors
     /// Preserves the close transaction's first measurement or cleanup failure.
     pub fn request_close(&mut self, reason: CloseReason) -> Result<(), Box<dyn Error>> {
+        // A close while SugarCubes files are installed or put back waits for that to end, the
+        // window saying so; a further request does not force it. Only a session end, which
+        // the system will not wait for, closes at once.
+        if !self.closing
+            && !matches!(reason, CloseReason::SessionEnding { .. })
+            && self.sugarcubes_installing()
+        {
+            if self.deferred_close.is_none() {
+                tracing::info!(
+                    operation = "startup_close_waits_for_sugarcubes",
+                    "The close waits for the SugarCubes update to finish"
+                );
+                self.deferred_close = Some(reason);
+                self.invalidate(true);
+            }
+            return Ok(());
+        }
+        self.deferred_close = None;
         if !self.closing {
             self.close_reason = reason;
         }
@@ -47,6 +65,22 @@ impl<B: StartupBackend> StartupHost<B> {
                 Some(self.critical_until.map_or(until, |earlier| earlier.min(until)));
         }
         self.close_owned()
+    }
+
+    /// Begin a close that waited for a SugarCubes install or restore, once that ended.
+    pub(super) fn advance_deferred_close(&mut self) -> Result<(), Box<dyn Error>> {
+        match self.deferred_close {
+            Some(reason) if !self.sugarcubes_installing() => self.request_close(reason),
+            _ => Ok(()),
+        }
+    }
+
+    /// Whether SugarCubes files are being installed or put back now, as the coordinator says.
+    fn sugarcubes_installing(&self) -> bool {
+        use sugarsubstitute_contracts::update::pack::PackUpdateStatus;
+        self.child.update_status().is_some_and(|status| {
+            matches!(status.sugarcubes(), PackUpdateStatus::Updating | PackUpdateStatus::Restoring)
+        })
     }
 
     /// Close through the ordinary close, with its close save, once the coordinator asks.

@@ -15,6 +15,8 @@ pub struct PackUpdateMessages {
     pub updating: &'static str,
     /// Splash line while the previous SugarCubes version is put back; no retry is offered yet.
     pub restoring: &'static str,
+    /// Splash line while a close waits for a SugarCubes install or restore to end.
+    pub finishing: &'static str,
     /// One line: SugarCubes was updated during this start; contains the version.
     pub updated: &'static str,
     /// One line: neither release source answered, so the installed version runs.
@@ -63,11 +65,12 @@ pub struct PackUpdateMessages {
 
 impl PackUpdateMessages {
     /// Enumerate every owned label for complete registry coverage checks.
-    pub const fn labels(&self) -> [&'static str; 26] {
+    pub const fn labels(&self) -> [&'static str; 27] {
         let s = self.steps;
         [
             self.updating,
             self.restoring,
+            self.finishing,
             self.updated,
             self.could_not_check,
             self.could_not_update,
@@ -101,6 +104,7 @@ pub static EN: PackUpdateMessages = PackUpdateMessages {
     product: "SugarCubes",
     updating: "Updating SugarCubes…",
     restoring: "Putting the previous SugarCubes version back…",
+    finishing: "Finishing the SugarCubes update…",
     updated: "SugarCubes updated to version {version}",
     could_not_check: "Couldn't check for a SugarCubes update.",
     could_not_update: "Couldn't update SugarCubes. The installed version is running.",
@@ -134,6 +138,7 @@ pub static ZH_HANS: PackUpdateMessages = PackUpdateMessages {
     product: "SugarCubes",
     updating: "正在更新 SugarCubes…",
     restoring: "正在恢复之前的 SugarCubes 版本…",
+    finishing: "正在完成 SugarCubes 更新…",
     updated: "SugarCubes 已更新到版本 {version}",
     could_not_check: "无法检查 SugarCubes 更新。",
     could_not_update: "无法更新 SugarCubes。正在运行已安装的版本。",
@@ -167,6 +172,7 @@ pub static JA: PackUpdateMessages = PackUpdateMessages {
     product: "SugarCubes",
     updating: "SugarCubes を更新しています…",
     restoring: "以前の SugarCubes バージョンに戻しています…",
+    finishing: "SugarCubes の更新を完了しています…",
     updated: "SugarCubes をバージョン {version} に更新しました",
     could_not_check: "SugarCubes の更新を確認できませんでした。",
     could_not_update: "SugarCubes を更新できませんでした。インストール済みのバージョンで動作しています。",
@@ -200,6 +206,7 @@ pub static KO: PackUpdateMessages = PackUpdateMessages {
     product: "SugarCubes",
     updating: "SugarCubes 업데이트 중…",
     restoring: "이전 SugarCubes 버전으로 되돌리는 중…",
+    finishing: "SugarCubes 업데이트를 마무리하는 중…",
     updated: "SugarCubes를 버전 {version}(으)로 업데이트했습니다",
     could_not_check: "SugarCubes 업데이트를 확인할 수 없습니다.",
     could_not_update: "SugarCubes를 업데이트할 수 없습니다. 설치된 버전이 실행 중입니다.",
@@ -233,6 +240,7 @@ pub static ES: PackUpdateMessages = PackUpdateMessages {
     product: "SugarCubes",
     updating: "Actualizando SugarCubes…",
     restoring: "Restaurando la versión anterior de SugarCubes…",
+    finishing: "Terminando la actualización de SugarCubes…",
     updated: "SugarCubes se actualizó a la versión {version}",
     could_not_check: "No se pudo comprobar si hay una actualización de SugarCubes.",
     could_not_update: "No se pudo actualizar SugarCubes. Se está usando la versión instalada.",

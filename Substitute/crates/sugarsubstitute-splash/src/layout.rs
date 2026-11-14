@@ -49,6 +49,8 @@ pub enum StartupStatus {
     SugarcubesRetryPrevious,
     /// The previous SugarCubes version is being put back; retry waits until it is.
     RestoringSugarcubes,
+    /// A close waits for a SugarCubes install or restore to end.
+    FinishingSugarcubes,
 }
 
 impl StartupStatus {

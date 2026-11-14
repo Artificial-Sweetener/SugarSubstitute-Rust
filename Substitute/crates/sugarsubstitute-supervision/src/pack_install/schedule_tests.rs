@@ -36,8 +36,9 @@ fn the_first_managed_preparation_waits_for_the_update_and_shows_it() -> TestResu
     let mut schedule = PackSchedule::default();
     assert!(schedule.prepare(1, true));
     assert!(schedule.gates(1));
-    assert_eq!(schedule.status(), (&PackUpdateStatus::Updating, 1));
+    assert_eq!(schedule.status(), (&PackUpdateStatus::Idle, 0), "not before it begins");
     assert_eq!(schedule.start_next(), Some((PackWork::Update { managed: true }, Some(1))));
+    assert_eq!(schedule.status(), (&PackUpdateStatus::Updating, 1));
     assert_eq!(schedule.start_next(), None, "one job at a time");
     assert!(schedule.gates(1));
     assert_eq!(schedule.ended(PackWorkEnded::Updated(updated()?)), Some(1));
