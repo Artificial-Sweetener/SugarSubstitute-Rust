@@ -407,3 +407,129 @@ fn caption_retry_keeps_its_own_state_alongside_updates() -> TestResult {
     assert!(layout[3].visible && layout[4].visible);
     Ok(())
 }
+
+/// Ask the real window for its hit at client point (`x`, `y`), as Windows does for the pointer.
+fn hit_at(parent: HWND, x: i32, y: i32) -> Result<isize, Box<dyn std::error::Error>> {
+    let mut point = windows::Win32::Foundation::POINT { x, y };
+    // SAFETY: Map this test window's client point to the screen; no input or paint occurs.
+    if !unsafe { windows::Win32::Graphics::Gdi::ClientToScreen(parent, &raw mut point) }.as_bool() {
+        return Err("client origin unavailable".into());
+    }
+    let lparam = LPARAM(((point.y as u16 as isize) << 16) | point.x as u16 as isize);
+    // SAFETY: A synchronous hit test on this test's own window on its private desktop.
+    Ok(unsafe {
+        SendMessageW(
+            parent,
+            windows::Win32::UI::WindowsAndMessaging::WM_NCHITTEST,
+            Some(WPARAM(0)),
+            Some(lparam),
+        )
+    }
+    .0)
+}
+
+/// A default procedure below the Main caption that answers every client hit with `HTNOWHERE`,
+/// the answer the proof desktop's frameless Main window gave over the strip and the tab row.
+unsafe extern "system" fn nowhere(
+    hwnd: HWND,
+    message: u32,
+    wparam: WPARAM,
+    lparam: LPARAM,
+    _id: usize,
+    _data: usize,
+) -> windows::Win32::Foundation::LRESULT {
+    use windows::Win32::UI::WindowsAndMessaging::{HTCLIENT, HTNOWHERE};
+    // SAFETY: Forward this test window's live message through its own subclass chain.
+    let hit = unsafe { windows::Win32::UI::Shell::DefSubclassProc(hwnd, message, wparam, lparam) };
+    if message == windows::Win32::UI::WindowsAndMessaging::WM_NCHITTEST
+        && hit.0 == HTCLIENT as isize
+    {
+        return windows::Win32::Foundation::LRESULT(HTNOWHERE as isize);
+    }
+    hit
+}
+
+/// The strip above a page that starts below it moves the window: a real hit test through the
+/// Main window's whole procedure chain answers it with `HTCAPTION`, whether the frameless
+/// window's default answer there is client or nowhere, and the page below keeps its own answer.
+fn strip_hit_body() -> TestResult {
+    for answers_nowhere in [false, true] {
+        strip_hit_case(answers_nowhere)?;
+    }
+    Ok(())
+}
+
+fn strip_hit_case(answers_nowhere: bool) -> TestResult {
+    use windows::Win32::UI::WindowsAndMessaging::HTCAPTION;
+    let identity = identity()?;
+    let mut builder = EventLoopBuilder::<NativeAction>::with_user_event();
+    tao::platform::windows::EventLoopBuilderExtWindows::with_any_thread(&mut builder, true);
+    let events = builder.build();
+    // Built as the Main window is: frameless, resizable and transparent.
+    let window = Rc::new(
+        WindowBuilder::new()
+            .with_title("Main caption strip qualification")
+            .with_inner_size(LogicalSize::new(f64::from(WIDTH), 600.0))
+            .with_decorations(false)
+            .with_resizable(true)
+            .with_transparent(true)
+            .with_visible(true)
+            .build(&events)?,
+    );
+    let parent = HWND(window.hwnd() as *mut c_void);
+    if answers_nowhere {
+        // SAFETY: Installed below the caption on this test's own window, which it outlives.
+        if !unsafe { windows::Win32::UI::Shell::SetWindowSubclass(parent, Some(nowhere), 1, 0) }
+            .as_bool()
+        {
+            return Err("default-procedure stand-in not installed".into());
+        }
+    }
+    // The Main window's own material: Mica Alt over a client-wide glass frame.
+    let presenter = crate::windows::Presenter::new_main(window.clone(), true)?;
+    let retry = Recovery::new(identity)
+        .presentation(MainRecoveryLabels { retry: "Retry", retry_ready: "Retry ready" });
+    let measure = |text: &str| crate::windows_callbacks::caption::measure_text(parent, text);
+    let view = CaptionUpdates::default().view(messages("en"));
+    let layout = caption_controls(f64::from(WIDTH), false, LABELS, retry, &view, measure)?;
+    let mut controls = Controls::new(
+        window.clone(),
+        events.create_proxy(),
+        &Specification::buttons(&layout),
+        PaintMode::NativeButtons(identity),
+        None,
+    )?;
+    controls.configure_caption(true, presenter.material());
+    controls.initialize()?;
+    let scale = window.scale_factor();
+    let top = (34.0 * scale).ceil() as i32;
+    let caption = HTCAPTION as isize;
+    let result = (|| -> TestResult {
+        let (x, strip_y, page_y) = ((300.0 * scale) as i32, top / 2, top + top / 2);
+        let filling = hit_at(parent, x, strip_y)?;
+        controls.set_page_top(top as u32);
+        let strip = hit_at(parent, x, strip_y)?;
+        let page = hit_at(parent, x, page_y)?;
+        controls.set_page_top(0);
+        let dismissed = hit_at(parent, x, strip_y)?;
+        assert_eq!(strip, caption, "strip with default answer {filling}");
+        assert_eq!(page, filling, "the page below the strip keeps its own answer");
+        assert_eq!(dismissed, filling, "after Dismiss the page's row answers for itself");
+        Ok(())
+    })();
+    let shutdown = controls.shutdown();
+    drop(controls);
+    drop(presenter);
+    drop(window);
+    result?;
+    shutdown?;
+    Ok(())
+}
+
+#[test]
+fn the_strip_above_the_page_answers_a_real_hit_test_as_caption() -> TestResult {
+    crate::windows_test_desktop::run(
+        concat!(module_path!(), "::the_strip_above_the_page_answers_a_real_hit_test_as_caption"),
+        strip_hit_body,
+    )
+}
