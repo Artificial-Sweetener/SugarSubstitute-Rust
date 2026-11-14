@@ -1380,7 +1380,7 @@ rationale = "Durable filesystem owner: Preserve unreadable fixed records beside 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/protection.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:a6c0cc2637331690663be4d2eea83fec6f2296c646b19cddfc759fe9d180f3d7"
+source_sha256 = "sha256:5e3c9f841d6c461f63b75eb643d57416fba9073b7bc43015c960399b7c9abc07"
 capabilities = ["CreateFileW", "assert! restricted capability fragments", "method metadata", "std::fs::File", "std::fs::File::from_raw_handle", "std::fs::create_dir", "std::fs::read", "std::fs::read_dir", "tempfile::tempdir", "windows::Win32::Storage::FileSystem::*"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Create desktop release inputs through the existing protected-storage security policy. Native access and its adversarial qualification remain within this owner."
@@ -5352,3 +5352,11 @@ source_sha256 = "sha256:611b0029166f44b68987123dd91618c2eac6afe572ffe30967521078
 capabilities = ["fs", "mkdtemp", "node:fs/promises", "readFile", "writeFile"]
 disposition = "tooling"
 rationale = "Repository tooling update-distribution.test.mjs: update-distribution.test Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/durable_storage/protected/security/rewrite.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:6959b368a9770f1b6568c251a37f90d592c6900d5fbb61a95f1c047492351e44"
+capabilities = ["GetFileSecurityW", "SetFileSecurityW", "windows::Win32::Security::GetFileSecurityW", "windows::Win32::Security::SetFileSecurityW"]
+disposition = "implementation"
+rationale = "Durable filesystem owner: Rewrite a real file's DACL the way permission tools and restores do, for qualification. Native access and its adversarial qualification remain within this owner."

@@ -311,8 +311,40 @@ impl Protection {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::durable_storage::protected::security::rewrite::{Rewrite, rewrite};
     use crate::native_claims::files::test_support::{TestResult, admitted};
     use std::io::Write;
+
+    #[test]
+    fn a_permission_tool_round_trip_keeps_protected_storage_trusted_unless_others_may_write()
+    -> TestResult {
+        admitted(|context| {
+            let temporary = tempfile::tempdir().map_err(|e| ClaimError::new("fixture", e))?;
+            with(&context, |protection| {
+                let folder = temporary.path().join("state");
+                protection.directory(&folder, directories::Mode::CreateNew, &context)?;
+                for (index, change) in
+                    [Rewrite::SameAccessReordered, Rewrite::DenyExecute, Rewrite::UsersMayWrite]
+                        .into_iter()
+                        .enumerate()
+                {
+                    let path = folder.join(format!("record-{index}"));
+                    let mut record = protection.file(&path, &context)?;
+                    record.write_all(b"record")?;
+                    rewrite(&path, change)?;
+                    // The same handle now reads the rewritten security of the file.
+                    let verified = protection.verify_file(&record);
+                    match change {
+                        Rewrite::UsersMayWrite => assert!(verified.is_err(), "{change:?}"),
+                        _ => verified
+                            .map_err(|cause| io::Error::other(format!("{change:?}: {cause}")))?,
+                    }
+                }
+                Ok(())
+            })
+            .map_err(|e| ClaimError::new("fixture_protection", e))
+        })
+    }
 
     #[test]
     fn installed_inputs_satisfy_runtime_protection_without_repairing_foreign_content() -> TestResult
