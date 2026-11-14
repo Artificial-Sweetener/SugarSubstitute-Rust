@@ -33,6 +33,8 @@ import type { MemoryBudgetRegistry } from '../memory/MemoryBudgetRegistry.js';
 import { MemoryHostLink, type MemoryPreferenceSource } from '../memory/MemoryHostLink.js';
 import { UpdatesHostLink } from '../updates/UpdatesHostLink.js';
 import type { UpdateSourceSlot } from '../updates/UpdateSource.js';
+import { HostReleaseNotesLink } from '../release_notes/HostReleaseNotesLink.js';
+import type { ReleaseNotesHostAttachment } from '../release_notes/WhatsNewPresenter.js';
 
 /** Supply the browser lifetime without introducing another connection or preference owner. */
 export interface EmbeddedPanelOptions {
@@ -50,6 +52,8 @@ export interface EmbeddedPanelOptions {
   };
   /** Receives the host's updater when the host declares `sugarcubes.updates`. */
   readonly updates?: UpdateSourceSlot;
+  /** Receives the host's release notes when the host declares `sugarcubes.release-notes`. */
+  readonly releaseNotes?: ReleaseNotesHostAttachment;
   connected(): boolean;
   subscribeConnection?(listener: (connected: boolean) => void): () => void;
   report(error: unknown): void;
@@ -62,6 +66,7 @@ export class EmbeddedPanelHost {
   #stopConnection: (() => void) | null = null;
   #memory: MemoryHostLink | null = null;
   #updates: { readonly link: UpdatesHostLink; readonly detach: () => void } | null = null;
+  #releaseNotes: { readonly link: HostReleaseNotesLink; readonly detach: () => void } | null = null;
   #stopHost: (() => void) | null = null;
   #timer: number | null = null;
 
@@ -153,6 +158,25 @@ export class EmbeddedPanelHost {
   #joinHostServices(): void {
     this.#joinMemoryBudget();
     this.#watchHostUpdates();
+    this.#watchHostReleaseNotes();
+  }
+
+  /** Show the host's release notes in What's new once the host declares that it serves them. */
+  #watchHostReleaseNotes(): void {
+    const host = this.options.host.read();
+    if (
+      this.#releaseNotes ||
+      !this.options.releaseNotes ||
+      !host?.serves(HOST_PROTOCOLS.releaseNotes)
+    )
+      return;
+    try {
+      const link = new HostReleaseNotesLink(this.transport, this.options.report);
+      this.#releaseNotes = { link, detach: this.options.releaseNotes.attachHost(link) };
+      link.start();
+    } catch (error: unknown) {
+      this.options.report(error);
+    }
   }
 
   /** Present the host's updater in the Updates entry once the host declares that it serves it. */
@@ -201,6 +225,9 @@ export class EmbeddedPanelHost {
     this.#updates?.detach();
     this.#updates?.link.dispose();
     this.#updates = null;
+    this.#releaseNotes?.detach();
+    this.#releaseNotes?.link.dispose();
+    this.#releaseNotes = null;
     if (this.#timer !== null) this.options.window.clearInterval(this.#timer);
     this.#timer = null;
     this.options.window.removeEventListener('pagehide', this.dispose);

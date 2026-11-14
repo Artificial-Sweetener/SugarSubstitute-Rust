@@ -432,6 +432,29 @@ test('update states and answers are version-one notifications for the current se
     assert.equal(f.deliver(value), true);
   assert.deepEqual(f.received.map(value => value.type), ['state', 'accepted', 'rejected']);
 });
+const notes = (type, extra = {}) => ({ protocol: 'sugarcubes.release-notes', version: 1, session, type, ...extra });
+test('release notes requests ride the control lane and every fetch keeps its place', () => {
+  const f = fixture();
+  f.receipt('g', 'c', 1);
+  f.bridge.send(notes('watch'));
+  f.bridge.send(notes('load', { request: 'load-1', since: '0.1.0' }));
+  f.bridge.send(notes('load', { request: 'load-2', since: '0.1.0' }));
+  for (let ticket = 2; ticket <= 3; ticket++) { f.receipt('a', 'c', ticket - 1); f.receipt('g', 'c', ticket); }
+  assert.deepEqual(posted(f), [notes('watch'), notes('load', { request: 'load-1', since: '0.1.0' }),
+    notes('load', { request: 'load-2', since: '0.1.0' })]);
+  assert.ok(f.sent.every(value => value.startsWith('1:c:')));
+});
+test('release notes states, open requests and answers are version-one notifications for the current session only', () => {
+  const f = fixture();
+  const state = notes('state', { revision: 1, product: 'SugarSubstitute', currentVersion: '0.2.0' });
+  for (const value of [notes('watch'), notes('load', { request: 'f', since: '0.1.0' }),
+    { ...state, version: 3 }, { ...state, session: 'another-session' }])
+    assert.equal(f.deliver(value), false);
+  for (const value of [state, notes('open'), notes('notes', { request: 'f', releases: [], omitted: 0 }),
+    notes('failed', { request: 'f', reason: 'unavailable' })])
+    assert.equal(f.deliver(value), true);
+  assert.deepEqual(f.received.map(value => value.type), ['state', 'open', 'notes', 'failed']);
+});
 test('permanent malformed control consumption does not replay or settle the ordinary request', () => {
   const f = fixture();
   f.receipt('g', 'o', 1);

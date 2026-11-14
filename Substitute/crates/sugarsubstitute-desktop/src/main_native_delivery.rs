@@ -18,6 +18,7 @@ pub(crate) enum NativeDelivery {
     Ingress(PanelIngressReceipt),
     Memory(crate::MemoryCommand),
     Updates(crate::UpdatesCommand),
+    ReleaseNotes(crate::ReleaseNotesCommand),
 }
 
 impl NativeDelivery {
@@ -31,6 +32,7 @@ impl NativeDelivery {
             Self::Ingress(value) => value.identity(),
             Self::Memory(value) => value.identity(),
             Self::Updates(value) => value.identity(),
+            Self::ReleaseNotes(value) => value.identity(),
         }
     }
 
@@ -41,7 +43,8 @@ impl NativeDelivery {
             Self::CanvasNotification(_)
             | Self::Presentation(_)
             | Self::Memory(_)
-            | Self::Updates(_) => None,
+            | Self::Updates(_)
+            | Self::ReleaseNotes(_) => None,
             Self::Ingress(value) => Some(match value.kind() {
                 ReceiptKind::Control => Lane::Control,
                 ReceiptKind::Cancellation { .. } => Lane::Cancellation,
@@ -57,7 +60,8 @@ impl NativeDelivery {
             Self::CanvasNotification(_)
             | Self::Presentation(_)
             | Self::Memory(_)
-            | Self::Updates(_) => None,
+            | Self::Updates(_)
+            | Self::ReleaseNotes(_) => None,
             Self::Ingress(value) => match value.kind() {
                 ReceiptKind::Control => None,
                 ReceiptKind::Cancellation { request_id } => Some(request_id),
@@ -74,6 +78,7 @@ impl NativeDelivery {
             Self::Presentation(value) => Some(value.payload()),
             Self::Memory(value) => Some(value.payload()),
             Self::Updates(value) => Some(value.payload()),
+            Self::ReleaseNotes(value) => Some(value.payload()),
             Self::Ingress(_) => None,
         }
     }
@@ -89,6 +94,7 @@ impl NativeDelivery {
             Self::Presentation(value) => Some(value.take_payload()),
             Self::Memory(value) => Some(value.take_payload()),
             Self::Updates(value) => Some(value.take_payload()),
+            Self::ReleaseNotes(value) => Some(value.take_payload()),
             Self::Ingress(_) => None,
         }
     }
@@ -103,6 +109,7 @@ impl NativeDelivery {
             Self::Ingress(value) => value.into_claim(),
             Self::Memory(value) => value.into_claim(),
             Self::Updates(value) => value.into_claim(),
+            Self::ReleaseNotes(value) => value.into_claim(),
         }
     }
 }

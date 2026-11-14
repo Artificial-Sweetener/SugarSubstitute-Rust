@@ -1,0 +1,173 @@
+[
+  {
+    "label": "state",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.release-notes",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "state",
+      "revision": 1,
+      "product": "SugarSubstitute",
+      "currentVersion": "0.4.2"
+    }
+  },
+  {
+    "label": "open",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.release-notes",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "open"
+    }
+  },
+  {
+    "label": "notes for two versions with one older version left out",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.release-notes",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "notes",
+      "request": "load-1",
+      "releases": [
+        {
+          "version": "0.4.2",
+          "notes": "## [0.4.2](https://example.test/compare) (2026-11-10)\n\n### Bug Fixes\n\n* **caption:** keep the line\n"
+        },
+        { "version": "0.4.1", "notes": "## 0.4.1\n" }
+      ],
+      "omitted": 1
+    }
+  },
+  {
+    "label": "failed while unavailable",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.release-notes",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "failed",
+      "request": "load-1",
+      "reason": "unavailable"
+    }
+  },
+  {
+    "label": "failed because nothing is published",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.release-notes",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "failed",
+      "request": "load-2",
+      "reason": "not-published"
+    }
+  },
+  {
+    "label": "watch",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.release-notes",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "watch"
+    }
+  },
+  {
+    "label": "load since a version",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.release-notes",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "load",
+      "request": "load-1",
+      "since": "0.3.0"
+    }
+  },
+  {
+    "label": "load without since",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.release-notes",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "load",
+      "request": "load-1"
+    }
+  },
+  {
+    "label": "notes without any release",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.release-notes",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "notes",
+      "request": "load-1",
+      "releases": [],
+      "omitted": 0
+    }
+  },
+  {
+    "label": "an unknown failure",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.release-notes",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "failed",
+      "request": "load-1",
+      "reason": "offline"
+    }
+  },
+  {
+    "label": "a newer protocol version",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.release-notes",
+      "version": 2,
+      "session": "panel-0123456789abcdef",
+      "type": "watch"
+    }
+  },
+  {
+    "label": "an extended open",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.release-notes",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "open",
+      "url": "https://example.test/"
+    }
+  },
+  {
+    "label": "an uppercase version",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.release-notes",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "state",
+      "revision": 1,
+      "product": "SugarSubstitute",
+      "currentVersion": "V1"
+    }
+  },
+  {
+    "label": "a zero revision",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.release-notes",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "state",
+      "revision": 0,
+      "product": "SugarSubstitute",
+      "currentVersion": "0.4.2"
+    }
+  }
+]

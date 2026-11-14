@@ -179,10 +179,11 @@ fn line_drag_body() -> TestResult {
         .presentation(MainRecoveryLabels { retry: "Retry", retry_ready: "Retry ready" });
     let measure = |text: &str| crate::windows_callbacks::caption::measure_text(parent, text);
     let mut caption = CaptionUpdates::default();
-    caption.notify(Notice::update(crate::UpdateNotice::Updated {
-        version: "0.2.0".into(),
-        changelog: url::Url::parse("https://github.com/example/releases/tag/v0.2.0").ok(),
-    }));
+    caption.observe(crate::main_updates::UpdateFeed {
+        whats_new: true,
+        ..crate::main_updates::UpdateFeed::default()
+    });
+    caption.notify(Notice::update(crate::UpdateNotice::Updated { version: "0.2.0".into() }));
     let view = caption.view(messages("en"));
     let width = window.inner_size().to_logical::<f64>(window.scale_factor()).width;
     let layout = caption_controls(width, false, LABELS, retry, &view, measure)?;

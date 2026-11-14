@@ -8,8 +8,6 @@ import os from 'node:os'
 import path from 'node:path'
 import { changelogSection, releaseDistribution, writeUpdateDistribution } from './update-distribution.mjs'
 
-const notesTemplate = 'https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/releases/tag/substitute-v{version}'
-
 /** A workspace at `version` with `changelog`, as semantic-release leaves it after a release. */
 async function workspace(t, version, changelog) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'substitute-update-distribution-'))
@@ -28,21 +26,20 @@ const released = [
   '',
 ].join('\n')
 
-test('the committed release distribution links each version to its published release notes', async () => {
+test('the committed release distribution names its repository, feed and update policy only', async () => {
   const distribution = JSON.parse(await fs.readFile(releaseDistribution, 'utf8'))
-  assert.equal(distribution.schema_version, 3)
-  assert.equal(distribution.release_notes, notesTemplate)
+  assert.deepEqual(Object.keys(distribution).sort(), ['feed', 'repository', 'schema_version', 'update_policy'])
+  assert.equal(distribution.schema_version, 4)
   assert.equal(distribution.update_policy, 'beta_eager')
   assert.equal(distribution.feed.transport, 'https')
   assert.equal(distribution.repository.length, 32)
 })
 
-test('a released version gets the committed distribution, byte for byte, with its notes link', async t => {
+test('a released version gets the committed distribution, byte for byte', async t => {
   const root = await workspace(t, '0.2.0', `# Changelog\n\n${released}\n## [0.1.1](https://example.test) (2026-11-01)\n\n### Bug Fixes\n\n* older\n`)
   const output = path.join(root, 'update-distribution.json')
   const receipt = await writeUpdateDistribution({ workspace: root, output })
   assert.equal(receipt.version, '0.2.0')
-  assert.equal(receipt.releaseNotes, 'https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/releases/tag/substitute-v0.2.0')
   assert.deepEqual(await fs.readFile(output), await fs.readFile(releaseDistribution))
 })
 
@@ -79,17 +76,11 @@ test('an existing output, a relative output and a malformed source fail closed',
   assert.equal(await fs.readFile(output, 'utf8'), 'kept')
   await assert.rejects(writeUpdateDistribution({ workspace: root, output: 'relative.json' }), /absolute/)
   const committed = JSON.parse(await fs.readFile(releaseDistribution, 'utf8'))
-  for (const change of [
-    { release_notes: 'https://example.test/notes' },
-    { release_notes: 'https://example.test/{version}/{version}' },
-    { release_notes: 'http://example.test/{version}' },
-    { release_notes: 'https://example.test/{version}?tab=notes' },
-    { schema_version: 2 },
-  ]) {
+  for (const change of [{ schema_version: 3 }, { schema_version: 5 }]) {
     const source = path.join(root, 'source.json')
     await fs.writeFile(source, JSON.stringify({ ...committed, ...change }))
     const fresh = path.join(root, `fresh-${Math.random().toString(16).slice(2)}.json`)
-    await assert.rejects(writeUpdateDistribution({ workspace: root, source, output: fresh }), /release notes|schema 3|https/i)
+    await assert.rejects(writeUpdateDistribution({ workspace: root, source, output: fresh }), /schema 4/)
     await assert.rejects(fs.access(fresh))
   }
 })

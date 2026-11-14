@@ -189,10 +189,11 @@ fn intersects(a: RECT, b: RECT) -> bool {
 fn the_update_line_never_covers_the_page_and_dismiss_gives_its_strip_back() -> TestResult {
     for scale in SCALES {
         let mut caption = CaptionUpdates::default();
-        caption.notify(Notice::Updated {
-            version: "0.1.0".to_owned(),
-            changelog: Some(url::Url::parse("https://example.invalid/releases/0.1.0")?),
+        caption.observe(crate::main_updates::UpdateFeed {
+            whats_new: true,
+            ..crate::main_updates::UpdateFeed::default()
         });
+        caption.notify(Notice::Updated { version: "0.1.0".to_owned() });
         caption.notify(Notice::NotSaved { workspace: true, inputs: false });
 
         for _ in 0..2 {

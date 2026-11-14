@@ -241,6 +241,19 @@ name = "self_update"
 sources = ["sugarcubes/backend/self_update/**"]
 proofs = ["unit", "integration"]
 
+[[area]]
+name = "release_notes"
+sources = ["sugarcubes/backend/release_notes/**"]
+proofs = ["unit"]
+
+[[boundary]]
+name = "release_notes_service"
+area = "release_notes"
+
+[[subscription]]
+boundary = "release_notes_service"
+groups = ["backend_api/integration"]
+
 [[boundary]]
 name = "self_update_service"
 area = "self_update"

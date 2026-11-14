@@ -106,6 +106,24 @@ impl<B: StartupBackend> StartupHost<B> {
         Ok(())
     }
 
+    /// Reserve the scope that reads the published release notes the page shows.
+    #[cfg(any(feature = "windows-native-host", test))]
+    pub(crate) fn configure_release_notes(
+        &mut self,
+        scope: sugarsubstitute_contracts::execution::ScopeSpec,
+    ) -> Result<(), Box<dyn Error>> {
+        if self.started
+            || self.release_notes_jobs.is_some()
+            || scope.deadline.is_some()
+            || scope.id <= self.scopes.child.id
+            || scope.id <= self.scopes.render.id
+        {
+            return Err("Release notes scope is invalid or already configured".into());
+        }
+        self.release_notes_jobs = Some(super::release_notes_fetch::ReleaseNotesJobs::new(scope));
+        Ok(())
+    }
+
     /// Reserve the composition-wait scope before native window construction begins.
     #[cfg(feature = "native-composition")]
     pub(crate) fn configure_composition(

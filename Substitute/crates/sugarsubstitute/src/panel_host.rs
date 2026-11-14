@@ -19,11 +19,16 @@ use sugarsubstitute_desktop::MainHosting;
 ///
 /// The page's memory budget arrives as `sugarcubes.memory` allowances, so the protocol is
 /// always declared; the host never reports a budget any other way. The startup host answers
-/// `sugarcubes.updates` for every navigation, so it is declared too, at version 1 so every
-/// released SugarCubes page finds it; [`HostCapability::NAMED_UPDATES`] tells a newer page that
-/// version 2 is answered as well.
-const PROTOCOLS: [HostProtocol; 4] =
-    [HostProtocol::PANEL, HostProtocol::CANVAS, HostProtocol::MEMORY, HostProtocol::UPDATES];
+/// `sugarcubes.updates` and `sugarcubes.release-notes` for every navigation, so they are
+/// declared too. Updates is declared at version 1 so every released SugarCubes page finds it;
+/// [`HostCapability::NAMED_UPDATES`] tells a newer page that version 2 is answered as well.
+const PROTOCOLS: [HostProtocol; 5] = [
+    HostProtocol::PANEL,
+    HostProtocol::CANVAS,
+    HostProtocol::MEMORY,
+    HostProtocol::UPDATES,
+    HostProtocol::RELEASE_NOTES,
+];
 
 /// What this host serves and declares to a page in a browser with `hosting`.
 ///

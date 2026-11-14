@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 /**
- * The distribution every release build compiles in: repository, feed, policy and notes link.
+ * The distribution every release build compiles in: repository, feed and update policy.
  * Its repository identity is the SHA-256 of
  * `sugarsubstitute-update-repository:github.com/Artificial-Sweetener/SugarSubstitute-Rust/substitute-updates`
  * and never changes once a release ships it, because installations bind their trust to it.
@@ -16,7 +16,6 @@ export const releaseDistribution = fileURLToPath(new URL('./update-distribution.
 const workspaceRoot = fileURLToPath(new URL('../../', import.meta.url))
 const distributionLimit = 16 * 1024
 const changelogLimit = 16 * 1024 ** 2
-const placeholder = '{version}'
 const plainVersion = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/
 
 /** The `[workspace.package]` version: the exact version the workspace builds. */
@@ -41,23 +40,16 @@ export function changelogSection(changelog, version) {
   return section
 }
 
-/** Validate the committed distribution as far as release tooling can: one https notes template. */
-function requireReleaseNotes(distribution, version) {
-  const template = distribution?.release_notes
-  if (distribution?.schema_version !== 3 || typeof template !== 'string' || template.split(placeholder).length !== 2) {
-    throw new Error('The release distribution needs schema 3 and one release notes template with a version placeholder')
-  }
-  const link = new URL(template.replace(placeholder, version))
-  if (link.protocol !== 'https:' || link.username || link.password || link.search || !link.hostname) {
-    throw new Error('Release notes must link to a plain https address')
-  }
-  return link.href
+/** Validate the committed distribution as far as release tooling can: the schema this build reads. */
+function requireSchema(distribution) {
+  if (distribution?.schema_version !== 4) throw new Error('The release distribution needs schema 4')
 }
 
 /**
  * Write the update distribution for the version `workspace` builds, after its changelog section
- * is confirmed. The bytes are the committed release distribution, unchanged; its notes link opens
- * the published release whose body is that section. `output` must not exist.
+ * is confirmed, so the release notes the application reads at runtime from that changelog
+ * include this version. The bytes are the committed release distribution, unchanged. `output`
+ * must not exist.
  */
 export async function writeUpdateDistribution({ workspace = workspaceRoot, source = releaseDistribution, output }) {
   if (!path.isAbsolute(output ?? '')) throw new Error('The update distribution needs a new absolute output path')
@@ -67,10 +59,10 @@ export async function writeUpdateDistribution({ workspace = workspaceRoot, sourc
   const section = changelogSection(await fs.readFile(changelogFile, 'utf8'), version)
   const bytes = await fs.readFile(source)
   if (bytes.length === 0 || bytes.length > distributionLimit) throw new Error('The release distribution is empty or exceeds its compiled bound')
-  const releaseNotes = requireReleaseNotes(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)), version)
+  requireSchema(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)))
   await fs.writeFile(output, bytes, { flag: 'wx' })
   const sha256 = data => createHash('sha256').update(data).digest('hex')
-  return { distribution: output, version, releaseNotes, sha256: sha256(bytes), changelogSha256: sha256(section) }
+  return { distribution: output, version, sha256: sha256(bytes), changelogSha256: sha256(section) }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -28,12 +28,16 @@ import { DeclaredHost } from '../core/embedded/PanelRuntime.js';
 import { startEmbeddedPanel } from '../core/embedded/EmbeddedPanelHost.js';
 import { EmbeddedCanvasConnection } from '../core/embedded/EmbeddedCanvasConnection.js';
 import { MemoryBudgetSettings } from '../settings/MemoryBudgetSettings.js';
+import { WhatsNewPresenter, } from '../core/release_notes/WhatsNewPresenter.js';
+import { WhatsNewModal } from '../dialogs/WhatsNewModal.js';
+import { WhatsNewSeenSetting } from '../settings/WhatsNewSeenSetting.js';
 /** Share seed reuse across actual native field mounts and the override toolbar. */
 export function createWorkflowFieldHost(options) {
     const embedded = new EmbeddedPresentation();
     const hostAccent = new HostAccent();
     const host = new HostDescriptionState();
     const updates = new UpdateSourceSlot();
+    const whatsNew = new WhatsNewPresenter(new WhatsNewModal({ document: options.document }), seenReleases(options.app, options.reportPresentationError), options.reportPresentationError);
     const canvas = new EmbeddedCanvasConnection();
     const relations = new RelationHostLifecycle({
         ...options,
@@ -76,6 +80,7 @@ export function createWorkflowFieldHost(options) {
         mode: frame.mode,
         palette: appearance.palette,
         updates,
+        whatsNew: () => whatsNew.open(),
         report: options.reportPresentationError,
     });
     /** Mount field appearance and its frame/navigation presentation after native workspace setup. */
@@ -91,6 +96,7 @@ export function createWorkflowFieldHost(options) {
                 window: windowRef,
                 host,
                 updates,
+                releaseNotes: whatsNew,
                 presentation: embedded,
                 hostAccent,
                 canvas,
@@ -112,7 +118,21 @@ export function createWorkflowFieldHost(options) {
         canvas,
         host,
         updates,
+        whatsNew,
         settingsRoute: settingsWorkspace.sessionRoute,
         setupPresentation,
     };
+}
+/**
+ * Keep seen versions in Comfy's settings; without them nothing counts as an update, so the
+ * view opens only when the user asks for it.
+ */
+function seenReleases(app, report) {
+    try {
+        return new WhatsNewSeenSetting(app);
+    }
+    catch (error) {
+        report(error);
+        return { read: () => null, record: () => undefined };
+    }
 }

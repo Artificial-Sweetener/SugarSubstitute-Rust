@@ -231,7 +231,15 @@ impl<B: StartupBackend> StartupHost<B> {
             self.update_reports.as_ref().is_none_or(update_report::UpdateReports::settled);
         #[cfg(not(windows))]
         let reports = true;
-        let owners = render && child && canvas && composition && workspace && reports;
+        // A release notes fetch is asked to stop when the close begins and observed here.
+        #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+        let notes = self.release_notes_jobs.as_ref().is_none_or(|jobs| {
+            jobs.cancel();
+            jobs.settled()
+        });
+        #[cfg(not(all(windows, any(feature = "windows-native-host", test))))]
+        let notes = true;
+        let owners = render && child && canvas && composition && workspace && reports && notes;
         let execution = self.execution.poll_shutdown(owners && measured);
         let execution = observe_settlement(&mut failure, execution);
         failure.map_or(Ok(owners && execution), Err)

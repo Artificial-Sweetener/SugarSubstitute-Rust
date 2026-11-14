@@ -67,7 +67,7 @@ struct State {
 }
 
 fn states() -> Vec<State> {
-    let feed = |glyph, saving, workflow| UpdateFeed { glyph, saving, workflow };
+    let feed = |glyph, saving, workflow| UpdateFeed { glyph, saving, workflow, whats_new: true };
     let ready = feed(crate::main_updates::UpdateGlyph::Ready, false, WorkflowActivity::Idle);
     let mut states = Vec::new();
     states.push(State {
@@ -100,11 +100,8 @@ fn states() -> Vec<State> {
     caption.notify(Notice::NotSaved { workspace: true, inputs: false });
     states.push(State { name: "caption-not-saved-notice", caption, shown: &[7, 9] });
     let mut caption = CaptionUpdates::default();
-    let notes = url::Url::parse("https://github.com/example/releases/tag/v2.4.1").ok();
-    caption.notify(Notice::update(crate::UpdateNotice::Updated {
-        version: "2.4.1".into(),
-        changelog: notes,
-    }));
+    caption.observe(UpdateFeed { whats_new: true, ..UpdateFeed::default() });
+    caption.notify(Notice::update(crate::UpdateNotice::Updated { version: "2.4.1".into() }));
     states.push(State { name: "caption-updated-to-version", caption, shown: &[7, 8, 9] });
     let mut caption = CaptionUpdates::default();
     caption.notify(Notice::update(crate::UpdateNotice::PreviousVersionRunning));

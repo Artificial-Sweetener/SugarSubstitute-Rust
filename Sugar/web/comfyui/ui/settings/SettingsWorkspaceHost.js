@@ -118,7 +118,7 @@ export class SettingsWorkspaceHost {
             tooltip: 'Current version, update channel, last check, and applying a ready update.',
             defaultValue: '',
             type: () => {
-                this.#updatesPage ??= new UpdatesSettingsPage(this.options.document, updates, this.options.report);
+                this.#updatesPage ??= new UpdatesSettingsPage(this.options.document, updates, this.options.report, undefined, this.options.whatsNew ?? null);
                 return this.#updatesPage.element;
             },
         });

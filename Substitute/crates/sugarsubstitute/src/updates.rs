@@ -51,23 +51,6 @@ fn compiled_policy(bytes: &[u8]) -> io::Result<Option<UpdatePolicy>> {
     Ok(Some(Distribution::decode(bytes)?.update_policy()))
 }
 
-/// Where this build says the release notes of `version` are: an `https` address, or `None`
-/// when the build has no update configuration or `version` is not a plain release version.
-/// Reads only compiled bytes.
-pub(crate) fn release_notes(version: &str) -> Option<url::Url> {
-    if EMBEDDED.is_empty() {
-        return None;
-    }
-    match Distribution::decode(EMBEDDED) {
-        Ok(distribution) => distribution.release_notes().url(version).ok(),
-        Err(cause) => {
-            tracing::warn!(operation = "release_notes_unavailable", cause = %cause,
-                "The build's update distribution could not be read; no release notes link");
-            None
-        }
-    }
-}
-
 /// Construct an inert worker on an admitted preparation job. Empty producing-build configuration
 /// disables automatic checking. The worker reads the protected local subscription; the distribution binds
 /// only repository and transport authority. No runtime environment or neighboring file is read.
@@ -160,7 +143,7 @@ mod tests {
     #[test]
     fn compiled_policy_uses_the_actual_preparation_owner_without_reading_paths() -> Result {
         let bytes = serde_json::to_vec(&serde_json::json!({
-            "schema_version":3, "release_notes":"https://notes.example.test/{version}", "update_policy":"beta_eager", "repository":vec![92;32], "feed":{
+            "schema_version":4, "update_policy":"beta_eager", "repository":vec![92;32], "feed":{
                 "transport":"https", "base":"https://updates.example.test/", "redirects":[]
             }
         }))?;
@@ -196,7 +179,7 @@ mod tests {
     fn compiled_policy_comes_only_from_the_embedded_distribution() -> Result {
         assert_eq!(compiled_policy(b"")?, None);
         let bytes = serde_json::to_vec(&serde_json::json!({
-            "schema_version":3, "release_notes":"https://notes.example.test/{version}", "update_policy":"standard", "repository":vec![92;32], "feed":{
+            "schema_version":4, "update_policy":"standard", "repository":vec![92;32], "feed":{
                 "transport":"https", "base":"https://updates.example.test/", "redirects":[]
             }
         }))?;

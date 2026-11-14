@@ -35,6 +35,12 @@ mod lifetime;
 pub(crate) mod memory;
 #[path = "startup/policy.rs"]
 mod policy;
+#[cfg(all(windows, any(feature = "windows-native-host", test)))]
+pub(crate) mod release_notes_fetch;
+#[cfg(all(windows, any(feature = "windows-native-host", test)))]
+mod release_notes_host;
+#[cfg(all(windows, any(feature = "windows-native-host", test)))]
+pub(crate) mod release_notes_page;
 #[path = "startup/routing.rs"]
 mod routing;
 #[path = "startup/scopes.rs"]
@@ -44,6 +50,8 @@ mod shutdown;
 #[cfg(windows)]
 #[path = "startup/update_report.rs"]
 mod update_report;
+#[cfg(all(windows, any(feature = "windows-native-host", test)))]
+mod updates_host;
 #[cfg(all(windows, any(feature = "windows-native-host", test)))]
 pub(crate) mod updates_page;
 #[path = "startup/view.rs"]
@@ -107,6 +115,12 @@ pub struct StartupHost<B: StartupBackend> {
     /// The page's update state and its check and restart answers.
     #[cfg(all(windows, any(feature = "windows-native-host", test)))]
     updates: updates_page::UpdatesPage,
+    /// The page's view of the host's release notes, and "What's new" asked for on the caption.
+    #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+    release_notes: release_notes_page::ReleaseNotesPage,
+    /// The fetches that read the release notes, once process composition assigned their scope.
+    #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+    release_notes_jobs: Option<release_notes_fetch::ReleaseNotesJobs>,
     #[cfg(all(windows, feature = "native-composition"))]
     composition: Option<composition::CompositionWork>,
     #[cfg(all(windows, feature = "native-composition"))]
@@ -198,6 +212,10 @@ impl<B: StartupBackend> StartupHost<B> {
             memory: None,
             #[cfg(all(windows, any(feature = "windows-native-host", test)))]
             updates: updates_page::UpdatesPage::new()?,
+            #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+            release_notes: release_notes_page::ReleaseNotesPage::new()?,
+            #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+            release_notes_jobs: None,
             #[cfg(all(windows, feature = "native-composition"))]
             composition: None,
             #[cfg(all(windows, feature = "native-composition"))]

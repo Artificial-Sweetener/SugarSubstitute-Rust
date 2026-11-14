@@ -53,13 +53,11 @@ pub enum WorkflowActivity {
 /// the user can dismiss.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum UpdateNotice {
-    /// This is the first start on a new version: "Updated to version X", with a link to its
-    /// release notes when the host knows where they are. Only `https` links are opened.
+    /// This is the first start on a new version: "Updated to version X". Its "What's new"
+    /// opens the embedded page's release notes while a page can show them.
     Updated {
         /// The version now running.
         version: String,
-        /// The release notes of that version.
-        changelog: Option<url::Url>,
     },
     /// The new version did not start, so the one before it is running.
     PreviousVersionRunning,

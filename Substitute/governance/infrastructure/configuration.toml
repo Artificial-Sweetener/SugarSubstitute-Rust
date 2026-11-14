@@ -1009,14 +1009,14 @@ rationale = "The developer composite check accepts one explicit Vulkan vendor/de
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/host_conformance.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:2c287ae21783689d83c7cc3ccdc75ff32eb06694b778eee4e9d68dbce0afa184"
+source_sha256 = "sha256:221701db582d3f930d787bc023394b8ad3d17f9db86184ebe5f0507147611a38"
 capabilities = ["arguments"]
 rationale = "Accept --record to save the conformance kit's transcript as this host's SugarCubes profile; without it the saved profile must match."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:77ceaf9f030db630c2456d70ceed88fe1f764e043cc39111d0b26e667f80264c"
+source_sha256 = "sha256:e9a4a20ac7df256a1afe267b4d67f366dbf0b56e9afbd63e4bbd0fdac813721c"
 capabilities = ["arguments"]
 rationale = "Accept an optional source fixture path to prove regressions against the prior transport implementation."
 
@@ -1100,6 +1100,6 @@ rationale = "The real manifest producer test runs the Python named by SUBSTITUTE
 [[records]]
 path = "installer/release/update-distribution.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:e9dd8cb5c56039dbf9e23f2bfa7b8385288534075990688b2bb17d42f479edc9"
+source_sha256 = "sha256:39a42098b477ef73f61d97389c98e5645f75cc89c96ad60aa7c138d7b1dd8bf7"
 capabilities = ["arguments"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."

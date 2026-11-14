@@ -40,6 +40,8 @@ export interface SettingsWorkspaceOptions {
   readonly palette: Pick<AccentThemeHost, 'theme' | 'subscribe'>;
   /** The page's update source; the Updates entry appears once a source attaches. */
   readonly updates?: UpdateSourceSlot;
+  /** Opens the What's new view from the Updates entry. */
+  readonly whatsNew?: () => void;
   report(error: unknown): void;
 }
 
@@ -158,6 +160,8 @@ export class SettingsWorkspaceHost {
           this.options.document,
           updates,
           this.options.report,
+          undefined,
+          this.options.whatsNew ?? null,
         );
         return this.#updatesPage.element;
       },

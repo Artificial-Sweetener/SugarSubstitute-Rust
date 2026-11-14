@@ -121,7 +121,7 @@ fn page_top_at_175(line: bool) -> Result<(u32, [u32; 2]), Box<dyn std::error::Er
     let client = [2240_u32, 1400_u32];
     let mut caption = CaptionUpdates::default();
     if line {
-        caption.notify(Notice::Updated { version: "0.2.0".to_owned(), changelog: None });
+        caption.notify(Notice::Updated { version: "0.2.0".to_owned() });
     }
     let identity = crate::MainIdentity {
         run: lifecycle::RunKey {

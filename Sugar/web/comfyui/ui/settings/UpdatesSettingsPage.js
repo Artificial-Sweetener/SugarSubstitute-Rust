@@ -47,6 +47,7 @@ export class UpdatesSettingsPage {
     slot;
     report;
     formatTime;
+    openWhatsNew;
     element;
     #version;
     #channel;
@@ -57,6 +58,7 @@ export class UpdatesSettingsPage {
     #check;
     #restart;
     #restartLater;
+    #whatsNew;
     #source = null;
     #stopSource = null;
     #stopSlot;
@@ -67,12 +69,14 @@ export class UpdatesSettingsPage {
      * Build the page once; it follows the slot until disposed.
      *
      * @param formatTime Formats a completed check, given in milliseconds since the Unix epoch.
+     * @param openWhatsNew Opens the What's new view; without it the page offers no such button.
      */
-    constructor(document, slot, report, formatTime = (epochMs) => new Date(epochMs).toLocaleString()) {
+    constructor(document, slot, report, formatTime = (epochMs) => new Date(epochMs).toLocaleString(), openWhatsNew = null) {
         this.document = document;
         this.slot = slot;
         this.report = report;
         this.formatTime = formatTime;
+        this.openWhatsNew = openWhatsNew;
         this.element = document.createElement('section');
         this.element.className = 'sc-settings-about sc-settings-updates';
         this.element.setAttribute('aria-label', 'SugarCubes updates');
@@ -95,7 +99,9 @@ export class UpdatesSettingsPage {
         this.#check = this.#button('Check for updates', () => this.#run((source) => source.check()));
         this.#restart = this.#button('Restart to apply', () => this.#apply('now'));
         this.#restartLater = this.#button('Restart after this workflow finishes', () => this.#apply('after-workflow'));
-        actions.append(this.#check, this.#restart, this.#restartLater);
+        this.#whatsNew = this.#button("What's new", () => this.openWhatsNew?.());
+        this.#whatsNew.hidden = this.openWhatsNew === null;
+        actions.append(this.#check, this.#restart, this.#restartLater, this.#whatsNew);
         this.element.append(details, this.#status, this.#notes, this.#causes, actions);
         this.#stopSlot = slot.subscribe(() => this.#follow());
         this.#follow();

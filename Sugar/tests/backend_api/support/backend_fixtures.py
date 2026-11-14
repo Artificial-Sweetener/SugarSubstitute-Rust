@@ -26,6 +26,10 @@ from typing import Any, cast
 import pytest
 
 from sugarcubes.backend.composition import BackendServices
+from sugarcubes.backend.release_notes import (
+    ReleaseNotesService,
+    build_release_notes_service,
+)
 from sugarcubes.backend.self_update import SelfUpdateService, build_self_update_service
 from sugarcubes.backend.self_update.http_client import (
     Cancelled,
@@ -104,6 +108,12 @@ def offline_self_update(pack_folder: Path) -> SelfUpdateService:
         clock=lambda: 0,
         runner=InlineJobs(),
     )
+
+
+def offline_release_notes() -> ReleaseNotesService:
+    """Build a release notes reader that never reaches the network."""
+
+    return build_release_notes_service(running_version="0.0.0", http=OfflineHttp())
 
 
 class FakeRequest:
@@ -442,6 +452,7 @@ def backend_services_factory() -> BackendServicesFactory:
             sugarscript_authoring=sugarscript_authoring,
             legacy_workflow_authoring=legacy_workflow_authoring,
             self_update=offline_self_update(extension_root),
+            release_notes=offline_release_notes(),
         )
 
     return factory

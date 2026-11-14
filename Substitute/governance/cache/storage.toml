@@ -137,14 +137,14 @@ role = "fixture"
 [[script_boundaries]]
 path = "crates/sugarsubstitute-desktop/tests/host_conformance.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:2c287ae21783689d83c7cc3ccdc75ff32eb06694b778eee4e9d68dbce0afa184"
+source_sha256 = "sha256:221701db582d3f930d787bc023394b8ad3d17f9db86184ebe5f0507147611a38"
 rationale = "Run the SugarCubes conformance kit over the actual panel bridge in an isolated JavaScript VM and compare or record this host's profile; it acquires no runtime cache."
 role = "fixture"
 
 [[script_boundaries]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:77ceaf9f030db630c2456d70ceed88fe1f764e043cc39111d0b26e667f80264c"
+source_sha256 = "sha256:e9a4a20ac7df256a1afe267b4d67f366dbf0b56e9afbd63e4bbd0fdac813721c"
 rationale = "Exercise the actual bounded panel transport in an isolated JavaScript VM with native and browser boundary fixtures."
 role = "fixture"
 

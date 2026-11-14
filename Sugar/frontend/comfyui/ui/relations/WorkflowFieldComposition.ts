@@ -33,6 +33,12 @@ import { EmbeddedCanvasConnection } from '../core/embedded/EmbeddedCanvasConnect
 import type { MemoryBudgetRegistry } from '../core/memory/MemoryBudgetRegistry.js';
 import { MemoryBudgetSettings } from '../settings/MemoryBudgetSettings.js';
 import type { SettingsWorkspaceRoute } from '../settings/SettingsWorkspaceRoute.js';
+import {
+  WhatsNewPresenter,
+  type SeenReleaseStore,
+} from '../core/release_notes/WhatsNewPresenter.js';
+import { WhatsNewModal } from '../dialogs/WhatsNewModal.js';
+import { WhatsNewSeenSetting } from '../settings/WhatsNewSeenSetting.js';
 
 export interface WorkflowFieldHostOptions
   extends Omit<RelationHostOptions, 'reportError' | 'appearance'> {
@@ -56,6 +62,8 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
   host: HostDescriptionState;
   /** The page's one update source; SugarCubes' own updater attaches here without a host one. */
   updates: UpdateSourceSlot;
+  /** The page's one What's new view, for every product whose notes this page shows. */
+  whatsNew: WhatsNewPresenter;
   settingsRoute: SettingsWorkspaceRoute;
   setupPresentation(): void;
 } {
@@ -63,6 +71,11 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
   const hostAccent = new HostAccent();
   const host = new HostDescriptionState();
   const updates = new UpdateSourceSlot();
+  const whatsNew = new WhatsNewPresenter(
+    new WhatsNewModal({ document: options.document }),
+    seenReleases(options.app, options.reportPresentationError),
+    options.reportPresentationError,
+  );
   const canvas = new EmbeddedCanvasConnection();
   const relations: RelationHostLifecycle = new RelationHostLifecycle({
     ...options,
@@ -105,6 +118,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
     mode: frame.mode,
     palette: appearance.palette,
     updates,
+    whatsNew: () => whatsNew.open(),
     report: options.reportPresentationError,
   });
   /** Mount field appearance and its frame/navigation presentation after native workspace setup. */
@@ -120,6 +134,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
         window: windowRef,
         host,
         updates,
+        releaseNotes: whatsNew,
         presentation: embedded,
         hostAccent,
         canvas,
@@ -140,7 +155,21 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
     canvas,
     host,
     updates,
+    whatsNew,
     settingsRoute: settingsWorkspace.sessionRoute,
     setupPresentation,
   };
+}
+
+/**
+ * Keep seen versions in Comfy's settings; without them nothing counts as an update, so the
+ * view opens only when the user asks for it.
+ */
+function seenReleases(app: unknown, report: (error: unknown) => void): SeenReleaseStore {
+  try {
+    return new WhatsNewSeenSetting(app);
+  } catch (error: unknown) {
+    report(error);
+    return { read: () => null, record: () => undefined };
+  }
 }
