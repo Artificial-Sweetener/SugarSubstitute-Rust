@@ -14,9 +14,10 @@
     'surface.commit', 'surface.release', 'surface.preview.begin', 'surface.preview.chunk',
     'surface.preview.end', 'surface.preview.withdraw', 'surface.overview'];
   // The host description, memory budget and updates protocols version independently of the
-  // version-three transport.
-  const version = value => value.protocol === 'sugarcubes.updates' ? 2 :
-    ['sugarcubes.host', 'sugarcubes.memory'].includes(value.protocol) ? 1 : 3;
+  // version-three transport. Updates answers every released version, each page in its own.
+  const versions = value => value.protocol === 'sugarcubes.updates' ? [1, 2] :
+    ['sugarcubes.host', 'sugarcubes.memory'].includes(value.protocol) ? [1] : [3];
+  const speaks = value => versions(value).includes(value.version);
   const notification = value => value.protocol === 'sugarcubes.panel' ||
     value.protocol === 'sugarcubes.host' && value.type === 'description' ||
     value.protocol === 'sugarcubes.memory' && value.type === 'allowance' ||
@@ -45,7 +46,7 @@
     control: value => value.protocol === 'sugarcubes.panel' && controls.includes(value.type) ||
       value.protocol === 'sugarcubes.memory' && memoryReports.includes(value.type) ||
       value.protocol === 'sugarcubes.updates' && updateRequests.includes(value.type),
-    version,
+    speaks,
     // A newer control message replaces a queued one of the same protocol and type, except an
     // update check or restart: the host answers each by its request name, so each one is kept.
     replaces: (queued, value) => queued.protocol === value.protocol && queued.type === value.type &&
@@ -67,7 +68,7 @@
     reply: (request, value) => !!value && value.version === 3 && value.protocol === 'sugarcubes.canvas' &&
       value.session === request.session && value.requestId === request.requestId &&
       acceptsReply(request.type, value),
-    notification: (value, session) => !!value && value.version === version(value) &&
+    notification: (value, session) => !!value && speaks(value) &&
       value.session === session && notification(value),
   });
   Object.defineProperty(globalThis, '__sugarcubes_substitute_policy_v3', { value: policy });

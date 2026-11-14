@@ -14,7 +14,7 @@ use sugarsubstitute_application::updates_panel::{
 };
 use sugarsubstitute_contracts::{
     execution::{MemoryClaim, MemoryLease},
-    host_updates::{UpdatesClientMessage, UpdatesHostMessage, UpdatesVersion},
+    host_updates::{UpdatesClientMessage, UpdatesHostMessage, UpdatesProtocol, UpdatesVersion},
     startup::MainIdentity,
 };
 use sugarsubstitute_desktop::{DesktopStartupCommand, PanelIngressReceipt, UpdatesCommand};
@@ -25,8 +25,20 @@ const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The current navigation's updates session and the lease that funds its messages.
 struct Page {
     identity: MainIdentity,
+    /// The `sugarcubes.updates` version this page speaks, from its latest message.
+    protocol: UpdatesProtocol,
     lease: MemoryLease,
     session: UpdatesPanelSession,
+}
+
+/// One page update request: the navigation that sent it, the `protocol` version it spoke, and
+/// the page's `lease` and the `claim` that admitted it.
+pub(crate) struct PageRequest {
+    pub(crate) identity: MainIdentity,
+    pub(crate) message: UpdatesClientMessage,
+    pub(crate) protocol: UpdatesProtocol,
+    pub(crate) lease: MemoryLease,
+    pub(crate) claim: MemoryClaim,
 }
 
 /// One host's updates answers for whichever navigation is current.
@@ -51,28 +63,26 @@ impl UpdatesPage {
         })
     }
 
-    /// Consume one page request, attributed to `identity` and admitted with `claim`, decide it
-    /// with the host's `updater` and `workflow`, and queue its answers in the order the page
-    /// must see them.
+    /// Consume one page `request`, decide it with the host's `updater` and `workflow`, and queue
+    /// its answers, in the version the page spoke, in the order the page must see them.
     ///
     /// # Errors
     /// Rejects an allocation too small for the control-lane receipt, or answer storage the
     /// page's lease cannot fund.
     pub(crate) fn observe(
         &mut self,
-        identity: MainIdentity,
-        message: UpdatesClientMessage,
-        lease: MemoryLease,
-        claim: MemoryClaim,
+        request: PageRequest,
         updater: &mut dyn UpdateStatusPort,
         workflow: &dyn WorkflowActivitySource,
     ) -> Result<(), Box<dyn Error>> {
+        let PageRequest { identity, message, protocol, lease, claim } = request;
         // Consuming the request returns its control-lane credit to the page.
         self.receipts.push_back(PanelIngressReceipt::control(identity, claim)?);
         if self.page.as_ref().is_none_or(|page| page.identity != identity) {
             self.outbox.retain(|command| command.identity() == identity);
             self.page = Some(Page {
                 identity,
+                protocol,
                 lease,
                 session: UpdatesPanelSession::new(self.current_version.clone()),
             });
@@ -80,6 +90,7 @@ impl UpdatesPage {
         let Some(page) = &mut self.page else {
             return Ok(());
         };
+        page.protocol = protocol;
         let answers = page.session.receive(message, updater, workflow);
         for answer in answers {
             self.queue(&answer)?;
@@ -129,7 +140,7 @@ impl UpdatesPage {
             return Ok(());
         };
         let claim = page.lease.claim(UpdatesCommand::STORAGE_BYTES)?;
-        let command = UpdatesCommand::new(page.identity, message, claim)?;
+        let command = UpdatesCommand::new(page.identity, message, page.protocol, claim)?;
         // An undelivered older state is superseded; answers are never dropped.
         if command.revision().is_some()
             && let Some(index) = self.outbox.iter().position(|queued| queued.revision().is_some())

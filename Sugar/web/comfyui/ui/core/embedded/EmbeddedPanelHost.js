@@ -128,14 +128,10 @@ export class EmbeddedPanelHost {
         const host = this.options.host.read();
         if (this.#updates || !this.options.updates || !host)
             return;
-        // A host that names its product speaks version two; an older host speaks version one.
-        const version = host.serves(HOST_PROTOCOLS.namedUpdates)
-            ? 2
-            : host.serves(HOST_PROTOCOLS.updates)
-                ? 1
-                : null;
-        if (version === null)
+        if (!host.serves(HOST_PROTOCOLS.updates))
             return;
+        // A host that also answers version two, which names its product, says so with a capability.
+        const version = host.declares(HOST_CAPABILITIES.namedUpdates) ? 2 : 1;
         try {
             const link = new UpdatesHostLink(this.transport, this.options.report, version);
             this.#updates = { link, detach: this.options.updates.attach(link) };

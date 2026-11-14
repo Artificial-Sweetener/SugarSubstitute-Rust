@@ -18,7 +18,20 @@ id = "sugarcubes-host-v1"
 owner = "sugarsubstitute-contracts"
 shared_component = "sugarcubes-contracts"
 sources = ["crates/sugarsubstitute-contracts/src/host.rs", "crates/sugarsubstitute-contracts/src/host/wire.rs", "Sugar/integrations/contracts/HostProtocol.generated.rs", "Sugar/integrations/contracts/host.schema.json"]
-source_sha256 = "sha256:f71cffa9a1819fd69a2d30d3339e671175b3d2af29c90deb26a135d7af29f11f"
+source_sha256 = "sha256:d93341d61f3f6a32ff0f80f1d44df9cdbbe6bdf9e89ea39fe9886bf73ac18e40"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
+[[formats]]
+id = "sugarcubes-updates-v1"
+owner = "sugarsubstitute-contracts"
+shared_component = "sugarcubes-contracts"
+sources = ["crates/sugarsubstitute-contracts/src/host_updates.rs", "crates/sugarsubstitute-contracts/src/host_updates/wire.rs", "Sugar/integrations/contracts/UpdatesProtocol.generated.rs", "Sugar/integrations/contracts/updates.schema.json"]
+source_sha256 = "sha256:cbc95bd5522706363ef37e08f471b6657cc75182c31d90e07b3ece3620242618"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1
@@ -31,7 +44,7 @@ id = "sugarcubes-updates-v2"
 owner = "sugarsubstitute-contracts"
 shared_component = "sugarcubes-contracts"
 sources = ["crates/sugarsubstitute-contracts/src/host_updates.rs", "crates/sugarsubstitute-contracts/src/host_updates/wire.rs", "Sugar/integrations/contracts/UpdatesV2Protocol.generated.rs", "Sugar/integrations/contracts/updates-v2.schema.json"]
-source_sha256 = "sha256:ae56d3da0789162e61e4f6bd7f8f5fd6a88b9b601c0cd19bf6601cdfc53e59c5"
+source_sha256 = "sha256:ca6685a4de855b10917a254dc5c937491cd265e569ea3a885eb17b4f5db90c5e"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 2
@@ -39,12 +52,6 @@ accepted_versions = [2]
 compatibility = "reject"
 migrations = []
 
-# Canvas envelope version three contains native-surface discovery schemas two/three and camera
-# notification schema two. Discovery schema one is decoded only for an empty, actionable
-# unsupported reply; it never negotiates a surface. Matching host/frontend upgrades are
-# required. Discovery schema three adds bounded backdrop schema one; schema-two replies omit
-# that declaration. Presentation observation remains schema one. This transient protocol has no
-# persisted camera migration; desktop-session inspection schema one is preserved unchanged.
 [[formats]]
 id = "sugarcubes-canvas-surface-v3"
 owner = "sugarsubstitute-contracts"
@@ -1632,7 +1639,7 @@ migrations = []
 id = "native-panel-admission-v1"
 owner = "sugarsubstitute-desktop"
 sources = ["crates/sugarsubstitute-desktop/src/main_panel_ingress.rs", "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge.js", "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge_protocol.js", "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge_bulk.js", "crates/sugarsubstitute-desktop/src/main_bulk.rs", "crates/sugarsubstitute-desktop/src/main_bulk/wire.rs", "crates/sugarsubstitute-desktop/src/main_bulk/endpoint.rs", "crates/sugarsubstitute-desktop/src/main_actor/panel/admission.rs", "crates/sugarsubstitute-desktop/src/main_actor/panel/delivery.rs"]
-source_sha256 = "sha256:b3a98587bb19fb75cdd099c786459113c42fd62a3fd7002cc3a6954c293a5aae"
+source_sha256 = "sha256:8ec2ebcef0d048b65294b346fe6b8965f534e6cf68c8a52acd0d8151b88b1194"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1

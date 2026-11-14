@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 // Generated from updates-v2.schema.json by scripts/integrations/generate-updates-contract.ts.
-// Schema SHA-256 (LF): e04157f0461db9549bb8faea9970512a15b3839f8132439063f5dbd13fb69c7e
+// Schema SHA-256 (LF): 0ef4befbfee8e30354f35abfbd225a6a151d45b1fd087995e2e635c2648b50c0
 
 /// Schema-defined untrusted UpdatesChannel token; decoding admits only the listed values.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]

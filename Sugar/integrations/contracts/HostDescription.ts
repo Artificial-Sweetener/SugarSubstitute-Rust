@@ -35,7 +35,6 @@ export const HOST_PROTOCOLS = Object.freeze({
   canvasMasks: Object.freeze({ name: 'sugarcubes.canvas.masks', version: 2 }),
   memory: Object.freeze({ name: 'sugarcubes.memory', version: 1 }),
   updates: Object.freeze({ name: 'sugarcubes.updates', version: 1 }),
-  namedUpdates: Object.freeze({ name: 'sugarcubes.updates', version: 2 }),
 } as const satisfies Readonly<Record<string, HostProtocol>>);
 
 /** The capabilities SugarCubes reads from a host description. */
@@ -46,6 +45,8 @@ export const HOST_CAPABILITIES = Object.freeze({
   systemAccent: 'presentation.system-accent',
   /** The host presents output images itself; the page never falls back to browser images. */
   hostOutputSurface: 'output.host-surface',
+  /** Besides sugarcubes.updates version 1, the host answers version 2 on the same channel, whose states name the product they describe. */
+  namedUpdates: 'updates.product-name',
 } as const);
 
 /** One capability name SugarCubes reads. */

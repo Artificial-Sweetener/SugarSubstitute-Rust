@@ -6,7 +6,7 @@ use super::*;
 use sugarsubstitute_application::updates_panel::IdleUpdateStatus;
 use sugarsubstitute_contracts::{
     execution::{Generation, MemoryRelease},
-    host_updates::UpdatesRequestName,
+    host_updates::{UpdatesProtocol, UpdatesRequestName},
     lifecycle::{CoordinatorEpoch, CoordinatorKey, InstanceId, NamespaceId, RunGeneration, RunKey},
     panel::PanelSession,
     startup::LaunchId,
@@ -47,9 +47,20 @@ fn request(
     identity: MainIdentity,
     message: UpdatesClientMessage,
 ) -> TestResult {
+    request_in(link, identity, message, UpdatesProtocol::V2)
+}
+
+/// Send one page request in the `protocol` version the page speaks.
+fn request_in(
+    link: &mut UpdatesPage,
+    identity: MainIdentity,
+    message: UpdatesClientMessage,
+    protocol: UpdatesProtocol,
+) -> TestResult {
     let lease = MemoryLease::new(1024 * 1024, Box::new(Release));
     let claim = lease.claim(PanelIngressReceipt::STORAGE_BYTES)?;
-    link.observe(identity, message, lease, claim, &mut IdleUpdateStatus, &Workflow(false))
+    let request = PageRequest { identity, message, protocol, lease, claim };
+    link.observe(request, &mut IdleUpdateStatus, &Workflow(false))
 }
 
 fn watch(identity: MainIdentity) -> Result<UpdatesClientMessage, Box<dyn Error>> {
@@ -171,5 +182,37 @@ fn a_retired_navigation_receives_nothing_more() -> TestResult {
 #[test]
 fn the_page_is_told_this_builds_version() -> TestResult {
     assert_eq!(idle()?.current_version.as_str(), env!("CARGO_PKG_VERSION"));
+    Ok(())
+}
+
+/// The update messages sent to the page, decoded.
+fn sent_updates(link: &mut UpdatesPage) -> Result<Vec<serde_json::Value>, Box<dyn Error>> {
+    let mut sent = Vec::new();
+    while let Some(command) = link.take_command() {
+        if let DesktopStartupCommand::SendUpdates(command) = command {
+            sent.push(serde_json::from_slice(command.payload())?);
+        }
+    }
+    Ok(sent)
+}
+
+#[test]
+fn a_released_version_one_page_gets_version_one_answers_and_a_newer_page_the_named_state()
+-> TestResult {
+    for (protocol, version, product) in
+        [(UpdatesProtocol::V1, 1, None), (UpdatesProtocol::V2, 2, Some("SugarSubstitute"))]
+    {
+        let mut link = idle()?;
+        let page = identity(1)?;
+        request_in(&mut link, page, watch(page)?, protocol)?;
+        request_in(&mut link, page, check(page, "check-1")?, protocol)?;
+        let sent = sent_updates(&mut link)?;
+        let kinds: Vec<_> = sent.iter().map(|message| message["type"].clone()).collect();
+        assert_eq!(kinds, ["state", "rejected"], "{protocol:?}");
+        for message in &sent {
+            assert_eq!(message["version"], version, "{protocol:?}");
+        }
+        assert_eq!(sent[0]["update"]["product"].as_str(), product, "{protocol:?}");
+    }
     Ok(())
 }

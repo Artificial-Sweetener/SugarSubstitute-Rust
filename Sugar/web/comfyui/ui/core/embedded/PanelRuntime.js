@@ -45,8 +45,7 @@ var HOST_PROTOCOLS = Object.freeze({
   canvas: Object.freeze({ name: "sugarcubes.canvas", version: 3 }),
   canvasMasks: Object.freeze({ name: "sugarcubes.canvas.masks", version: 2 }),
   memory: Object.freeze({ name: "sugarcubes.memory", version: 1 }),
-  updates: Object.freeze({ name: "sugarcubes.updates", version: 1 }),
-  namedUpdates: Object.freeze({ name: "sugarcubes.updates", version: 2 })
+  updates: Object.freeze({ name: "sugarcubes.updates", version: 1 })
 });
 var HOST_CAPABILITIES = Object.freeze({
   /** The host's configured presentation replaces the user's saved appearance while embedded. */
@@ -54,7 +53,9 @@ var HOST_CAPABILITIES = Object.freeze({
   /** The host's configured accent is the system accent, offered as a choice beside a custom one. */
   systemAccent: "presentation.system-accent",
   /** The host presents output images itself; the page never falls back to browser images. */
-  hostOutputSurface: "output.host-surface"
+  hostOutputSurface: "output.host-surface",
+  /** Besides sugarcubes.updates version 1, the host answers version 2 on the same channel, whose states name the product they describe. */
+  namedUpdates: "updates.product-name"
 });
 
 // integrations/shared/HostDescription.ts

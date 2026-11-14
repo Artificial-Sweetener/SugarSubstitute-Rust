@@ -19,7 +19,9 @@ use sugarsubstitute_desktop::MainHosting;
 ///
 /// The page's memory budget arrives as `sugarcubes.memory` allowances, so the protocol is
 /// always declared; the host never reports a budget any other way. The startup host answers
-/// `sugarcubes.updates` for every navigation, so it is declared too.
+/// `sugarcubes.updates` for every navigation, so it is declared too, at version 1 so every
+/// released SugarCubes page finds it; [`HostCapability::NAMED_UPDATES`] tells a newer page that
+/// version 2 is answered as well.
 const PROTOCOLS: [HostProtocol; 4] =
     [HostProtocol::PANEL, HostProtocol::CANVAS, HostProtocol::MEMORY, HostProtocol::UPDATES];
 
@@ -37,6 +39,7 @@ pub(crate) fn description(hosting: MainHosting) -> Result<HostDescription, Panel
     if hosting.presents_native_canvas() {
         capabilities.push(HostCapability::HOST_OUTPUT_SURFACE);
     }
+    capabilities.push(HostCapability::NAMED_UPDATES);
     HostDescription::new(PROTOCOLS.to_vec(), capabilities)
 }
 

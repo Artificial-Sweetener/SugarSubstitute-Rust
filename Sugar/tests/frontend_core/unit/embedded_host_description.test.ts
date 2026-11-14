@@ -165,6 +165,41 @@ test('only a host that declares the update protocol supplies the Updates entry',
   expect(updating.report).not.toHaveBeenCalled();
 });
 
+test('a host declaring named updates is followed in version two, any other in version one', () => {
+  const state = (version: number, product?: string) => ({
+    protocol: 'sugarcubes.updates',
+    version,
+    session,
+    type: 'state',
+    revision: 1,
+    update: {
+      ...(product ? { product } : {}),
+      currentVersion: '0.1.0',
+      channel: 'stable',
+      status: { state: 'up-to-date' },
+      previousVersionRunning: false,
+      workflowRunning: false,
+      scheduledRestart: 'none',
+    },
+  });
+  const named = page();
+  named.receive(
+    description([HOST_PROTOCOLS.panel, HOST_PROTOCOLS.updates], [HOST_CAPABILITIES.namedUpdates]),
+  );
+  named.receive(state(1));
+  expect(named.updates.read()?.read()).toBeNull();
+  named.receive(state(2, 'SugarSubstitute'));
+  expect(named.updates.read()?.read()?.product).toBe('SugarSubstitute');
+  named.panel.dispose();
+  const released = page();
+  released.receive(description([HOST_PROTOCOLS.panel, HOST_PROTOCOLS.updates]));
+  released.receive(state(2, 'SugarSubstitute'));
+  expect(released.updates.read()?.read()).toBeNull();
+  released.receive(state(1));
+  expect(released.updates.read()?.read()?.product).toBeNull();
+  released.panel.dispose();
+});
+
 test('a canvas host that does not serve masks gets no mask requests', () => {
   const f = page();
   f.receive(description([HOST_PROTOCOLS.panel, HOST_PROTOCOLS.canvas]));

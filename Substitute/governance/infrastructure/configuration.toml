@@ -1009,7 +1009,7 @@ rationale = "Accept --record to save the conformance kit's transcript as this ho
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:f3ffe027a58f0fa85c342549483c4dc7f8bfac3b0bad3210c71d5657cf390dd9"
+source_sha256 = "sha256:77ceaf9f030db630c2456d70ceed88fe1f764e043cc39111d0b26e667f80264c"
 capabilities = ["arguments"]
 rationale = "Accept an optional source fixture path to prove regressions against the prior transport implementation."
 

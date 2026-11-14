@@ -22,6 +22,7 @@ fn every_browser_is_told_the_protocols_served_and_the_system_accent() -> Result 
             assert!(description.serves(protocol), "{hosting:?} {protocol:?}");
         }
         assert!(description.declares(HostCapability::SYSTEM_ACCENT), "{hosting:?}");
+        assert!(description.declares(HostCapability::NAMED_UPDATES), "{hosting:?}");
     }
     Ok(())
 }
@@ -46,9 +47,9 @@ fn the_description_names_no_host_styles_and_encodes_as_the_shared_schema_require
                 { "name": "sugarcubes.panel", "version": 3 },
                 { "name": "sugarcubes.canvas", "version": 3 },
                 { "name": "sugarcubes.memory", "version": 1 },
-                { "name": "sugarcubes.updates", "version": 2 },
+                { "name": "sugarcubes.updates", "version": 1 },
             ],
-            "capabilities": [{ "name": "presentation.system-accent" }, { "name": "output.host-surface" }],
+            "capabilities": [{ "name": "presentation.system-accent" }, { "name": "output.host-surface" }, { "name": "updates.product-name" }],
         })
     );
     Ok(())

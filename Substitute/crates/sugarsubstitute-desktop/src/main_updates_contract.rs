@@ -5,7 +5,7 @@
 
 use sugarsubstitute_contracts::{
     execution::{MemoryClaim, MemoryLease},
-    host_updates::{UpdatesClientMessage, UpdatesError, UpdatesHostMessage},
+    host_updates::{UpdatesClientMessage, UpdatesError, UpdatesHostMessage, UpdatesProtocol},
     panel::PanelSession,
     startup::MainIdentity,
 };
@@ -15,6 +15,7 @@ use sugarsubstitute_contracts::{
 pub struct UpdatesObservation {
     identity: MainIdentity,
     message: UpdatesClientMessage,
+    protocol: UpdatesProtocol,
     lease: MemoryLease,
     claim: MemoryClaim,
 }
@@ -25,10 +26,16 @@ impl UpdatesObservation {
     pub(crate) fn new(
         identity: MainIdentity,
         message: UpdatesClientMessage,
+        protocol: UpdatesProtocol,
         lease: MemoryLease,
         claim: MemoryClaim,
     ) -> Self {
-        Self { identity, message, lease, claim }
+        Self { identity, message, protocol, lease, claim }
+    }
+
+    /// The `sugarcubes.updates` version the page spoke; the host answers it in that version.
+    pub const fn protocol(&self) -> UpdatesProtocol {
+        self.protocol
     }
 
     /// Borrow the native document identity that supplied the observation.
@@ -54,20 +61,21 @@ impl UpdatesCommand {
     /// Admitted storage for the encoded message and its native command serialization.
     pub const STORAGE_BYTES: u64 = 20480;
 
-    /// Encode `message` for the exact current main session.
+    /// Encode `message` for the exact current main session in the page's `protocol` version.
     ///
     /// # Errors
     /// Rejects inadequate storage, an invalid native identity or a shared encoding failure.
     pub fn new(
         identity: MainIdentity,
         message: &UpdatesHostMessage,
+        protocol: UpdatesProtocol,
         claim: MemoryClaim,
     ) -> Result<Self, UpdatesError> {
         if claim.bytes() < Self::STORAGE_BYTES {
             return Err(UpdatesError::Invalid);
         }
         let session = PanelSession::for_main(identity).map_err(UpdatesError::Session)?;
-        let payload = message.encode(&session)?;
+        let payload = message.encode(&session, protocol)?;
         let revision = match message {
             UpdatesHostMessage::State { revision, .. } => Some(*revision),
             UpdatesHostMessage::Accepted(_) | UpdatesHostMessage::Rejected { .. } => None,

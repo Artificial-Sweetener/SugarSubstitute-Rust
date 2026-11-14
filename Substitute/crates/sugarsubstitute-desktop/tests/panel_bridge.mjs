@@ -987,3 +987,11 @@ test('pagehide aborts in-flight transfers and drops pending deliveries', async (
   assert.equal(f.received[0].message.length, reply.message.length);
   assert.ok(!bulkSource.includes('.invalid'));
 });
+test('update requests and answers pass in both released versions and no other', () => {
+  const f = fixture();
+  f.receipt('g', 'c', 1);
+  for (const version of [1, 2]) f.bridge.send({ ...updates('watch'), version });
+  for (let ticket = 2; ticket <= 2; ticket++) { f.receipt('a', 'c', ticket - 1); f.receipt('g', 'c', ticket); }
+  assert.deepEqual(posted(f).map(value => value.version), [1, 2]);
+  assert.throws(() => f.bridge.send({ ...updates('watch'), version: 3 }));
+});

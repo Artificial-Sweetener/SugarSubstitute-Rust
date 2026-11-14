@@ -696,13 +696,13 @@ rationale = "Hidden native picker lifecycle fixtures preserve original paths and
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge.js"
-source_sha256 = "sha256:ff4f842bb8515ff4bedab35d1243dee14e7c3b4b0a16bf5c4ca8f4a0badbad79"
+source_sha256 = "sha256:221a8307b697518c316f2f3302f690cbc99a55d3a80a846ea9a11a23d63d4f41"
 kind = "native"
 rationale = "The bounded WebView transport defines technical JavaScript properties and error diagnostics; it does not construct product-facing text or select a locale."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge_protocol.js"
-source_sha256 = "sha256:6fd7e0772d8e49436fa540150d298c0cc757f52696b7b1d67d57e12651e2d42c"
+source_sha256 = "sha256:20e364828fdbddee585ce1b7f353da845ee0e40da054b40bdda0f96ef3a27bf2"
 kind = "native"
 rationale = "The native bootstrap policy validates session query identities and routes technical canvas protocol reply, cancellation and notification shapes; its message fields are empty protocol data."
 
@@ -714,7 +714,7 @@ rationale = "The bulk channel transport helper moves exact JSON bytes through ho
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
-source_sha256 = "sha256:f3ffe027a58f0fa85c342549483c4dc7f8bfac3b0bad3210c71d5657cf390dd9"
+source_sha256 = "sha256:77ceaf9f030db630c2456d70ceed88fe1f764e043cc39111d0b26e667f80264c"
 kind = "fixture"
 rationale = "The isolated JavaScript VM fixture supplies promptId and sourceId attribution fields to exercise the actual bounded native transport; these technical protocol identities are fixture data and never become product labels or a prompt editor route."
 

@@ -80,7 +80,7 @@
         const bytes = bulk.size(encoded, binding);
         if (bytes > bulk.max) deny('bound');
         const value = JSON.parse(encoded);
-        if (!value || value.session !== session || value.version !== policy.version(value))
+        if (!value || value.session !== session || !policy.speaks(value))
           deny();
         let lane;
         if (policy.control(value)) lane = 'c';

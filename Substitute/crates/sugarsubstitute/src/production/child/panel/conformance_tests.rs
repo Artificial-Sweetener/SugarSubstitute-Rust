@@ -15,7 +15,10 @@
 //! SugarCubes profile, which SugarCubes replays in CI.
 
 use super::*;
-use crate::startup::{memory::MemoryGovernor, updates_page::UpdatesPage};
+use crate::startup::{
+    memory::MemoryGovernor,
+    updates_page::{PageRequest, UpdatesPage},
+};
 use serde_json::{Value, json};
 use sugarsubstitute_application::updates_panel::{IdleUpdateStatus, IdleWorkflowActivity};
 use sugarsubstitute_contracts::{
@@ -81,10 +84,16 @@ fn page_script(session: &str) -> Vec<Value> {
             envelope("sugarcubes.memory", 1),
             json!({ "type": "usage", "usedBytes": 0, "demandBytes": 0, "consumers": [] }),
         ),
+        // Every released page speaks version 1; the host also answers version 2, as it declares.
+        with(envelope("sugarcubes.updates", 1), json!({ "type": "watch" })),
+        with(
+            envelope("sugarcubes.updates", 1),
+            json!({ "type": "check", "request": "conformance-check-v1" }),
+        ),
         with(envelope("sugarcubes.updates", 2), json!({ "type": "watch" })),
         with(
             envelope("sugarcubes.updates", 2),
-            json!({ "type": "check", "request": "conformance-check" }),
+            json!({ "type": "check", "request": "conformance-check-v2" }),
         ),
     ]
 }
@@ -170,15 +179,15 @@ impl Host {
                 }
             }
             Some("sugarcubes.updates") => {
-                let message = UpdatesClientMessage::decode(&bytes)?;
-                self.updates.observe(
-                    self.identity,
+                let (message, protocol) = UpdatesClientMessage::decode(&bytes)?;
+                let request = PageRequest {
+                    identity: self.identity,
                     message,
-                    self.lease.clone(),
-                    claim()?,
-                    &mut IdleUpdateStatus,
-                    &IdleWorkflowActivity,
-                )?;
+                    protocol,
+                    lease: self.lease.clone(),
+                    claim: claim()?,
+                };
+                self.updates.observe(request, &mut IdleUpdateStatus, &IdleWorkflowActivity)?;
                 while let Some(command) = self.updates.take_command() {
                     if let DesktopStartupCommand::SendUpdates(update) = command {
                         answers.push(serde_json::from_slice(update.payload())?);

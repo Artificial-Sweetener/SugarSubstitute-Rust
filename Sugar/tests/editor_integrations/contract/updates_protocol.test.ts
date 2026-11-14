@@ -55,7 +55,7 @@ test('generated language bindings and validators match the authoritative wire sc
 
 test('a host declares the update protocol by its schema name and fixed version', () => {
   expect(HOST_PROTOCOLS.updates).toEqual({ name: 'sugarcubes.updates', version: 1 });
-  expect(HOST_PROTOCOLS.namedUpdates).toEqual({ name: 'sugarcubes.updates', version: 2 });
+  // Version two is offered beside version one by a capability, never as a second listing.
 });
 
 test('version-two bindings match their schema and every state names its product', async () => {

@@ -20,7 +20,7 @@
  * conformance run and stores it as `profiles/<host>/<release>.json` beside this module. Older
  * profiles stay, so a page change that an older host release can no longer use fails replay.
  */
-import { HOST_PROTOCOLS } from '../../contracts/HostDescription.js';
+import { HOST_CAPABILITIES, HOST_PROTOCOLS } from '../../contracts/HostDescription.js';
 import type { CanvasSurfaceHost } from '../../contracts/CanvasSurface.js';
 import { DeclaredHost } from '../HostDescription.js';
 import { PanelClientSession } from '../PanelSession.js';
@@ -155,7 +155,9 @@ function declaredMessage(message: unknown, declared: DeclaredHost | null): boole
     (isCanvasMaskMessage(message) && declared.serves(HOST_PROTOCOLS.canvasMasks)) ||
     (isMemoryAllowanceMessage(message) && declared.serves(HOST_PROTOCOLS.memory)) ||
     (isUpdatesHostMessage(message) && declared.serves(HOST_PROTOCOLS.updates)) ||
-    (isNamedUpdatesHostMessage(message) && declared.serves(HOST_PROTOCOLS.namedUpdates))
+    (isNamedUpdatesHostMessage(message) &&
+      declared.serves(HOST_PROTOCOLS.updates) &&
+      declared.declares(HOST_CAPABILITIES.namedUpdates))
   );
 }
 

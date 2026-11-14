@@ -131,8 +131,9 @@ function validHostMessage(value: unknown, declared: DeclaredHost | null): boolea
       return !!declared?.serves(HOST_PROTOCOLS.memory) && isMemoryAllowanceMessage(value);
     case HOST_PROTOCOLS.updates.name:
       return (
-        (!!declared?.serves(HOST_PROTOCOLS.namedUpdates) && isNamedUpdatesHostMessage(value)) ||
-        (!!declared?.serves(HOST_PROTOCOLS.updates) && isUpdatesHostMessage(value))
+        !!declared?.serves(HOST_PROTOCOLS.updates) &&
+        (isUpdatesHostMessage(value) ||
+          (declared.declares(HOST_CAPABILITIES.namedUpdates) && isNamedUpdatesHostMessage(value)))
       );
     default:
       return false;
@@ -225,28 +226,31 @@ async function conform(probe: HostProbe, session: string): Promise<HostConforman
     pass('memory');
   } else skip('memory');
 
-  // A host that names its product speaks version two; an older host speaks version one.
-  const named = declared.serves(HOST_PROTOCOLS.namedUpdates);
-  if (named || declared.serves(HOST_PROTOCOLS.updates)) {
+  if (declared.serves(HOST_PROTOCOLS.updates)) {
     probe.check = 'updates';
-    const updates = envelope(named ? HOST_PROTOCOLS.namedUpdates : HOST_PROTOCOLS.updates, session);
-    const admitted = (
-      value: unknown,
-    ): value is { readonly type: string; readonly request?: string } =>
-      named ? isNamedUpdatesHostMessage(value) : isUpdatesHostMessage(value);
-    probe.send({ ...updates, type: 'watch' });
-    await probe.next(
-      'an update state after watch',
-      (value): value is UpdatesStateMessage => admitted(value) && value.type === 'state',
-    );
-    probe.send({ ...updates, type: 'check', request: 'conformance-check' });
-    await probe.next(
-      'an answer naming the check request',
-      (value) =>
-        admitted(value) &&
-        (value.type === 'accepted' || value.type === 'rejected') &&
-        value.request === 'conformance-check',
-    );
+    // Every page released so far speaks version one; a host that also answers version two,
+    // which names its product, declares so and is proved in both versions.
+    const versions = declared.declares(HOST_CAPABILITIES.namedUpdates) ? [1, 2] : [1];
+    for (const version of versions) {
+      const updates = { protocol: HOST_PROTOCOLS.updates.name, version, session } as const;
+      const admitted = (
+        value: unknown,
+      ): value is { readonly type: string; readonly request?: string } =>
+        version === 2 ? isNamedUpdatesHostMessage(value) : isUpdatesHostMessage(value);
+      probe.send({ ...updates, type: 'watch' });
+      await probe.next(
+        `an update state after a version ${String(version)} watch`,
+        (value): value is UpdatesStateMessage => admitted(value) && value.type === 'state',
+      );
+      probe.send({ ...updates, type: 'check', request: `conformance-check-v${String(version)}` });
+      await probe.next(
+        `an answer naming the version ${String(version)} check request`,
+        (value) =>
+          admitted(value) &&
+          (value.type === 'accepted' || value.type === 'rejected') &&
+          value.request === `conformance-check-v${String(version)}`,
+      );
+    }
     pass('updates');
   } else skip('updates');
 
