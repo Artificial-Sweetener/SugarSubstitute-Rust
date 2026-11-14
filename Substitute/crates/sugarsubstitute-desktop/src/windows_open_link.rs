@@ -27,34 +27,34 @@ pub(crate) fn external_link(uri: &str) -> Option<url::Url> {
     .then_some(url)
 }
 
-/// What the embedded browser does with a new-window request from the page.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum NewWindow {
-    /// Open no window inside the embedded browser.
-    Cancel,
-}
+/// Whether a new-window request from the page may open a window inside the embedded browser.
+/// It never may: the main browser's receiver marks every request handled without a window.
+pub(crate) const EMBEDDED_WINDOWS: bool = false;
 
-/// Answer one new-window request from the page: hand an allowed link to `open`, log a link
-/// that is refused or that `open` could not open, and cancel the embedded window either way.
-pub(crate) fn new_window(
+/// Hand the link of one new-window request to `open` when it is an allowed link; log a link
+/// that is refused or that `open` could not open. Returns whether the link was opened.
+pub(crate) fn hand_to_browser(
     uri: &str,
     open: impl FnOnce(&url::Url) -> Result<(), DesktopError>,
-) -> NewWindow {
+) -> bool {
     match external_link(uri) {
-        Some(url) => {
-            if let Err(cause) = open(&url) {
+        Some(url) => match open(&url) {
+            Ok(()) => true,
+            Err(cause) => {
                 tracing::warn!(operation = "open_link", cause = %cause,
                     "A link from the page could not be opened in the browser");
+                false
             }
+        },
+        None => {
+            tracing::warn!(
+                operation = "open_link_refused",
+                "A link from the page was refused: only http and https links open"
+            );
+            false
         }
-        None => tracing::warn!(
-            operation = "open_link_refused",
-            "A link from the page was refused: only http and https links open"
-        ),
     }
-    NewWindow::Cancel
 }
-
 /// Ask the shell to open `url` in the default browser. The shell returns without waiting for
 /// the browser, so the calling turn stays short.
 /// # Errors
@@ -99,18 +99,16 @@ mod tests {
 
     #[test]
     fn every_new_window_is_cancelled_and_only_an_allowed_link_is_opened() {
+        const { assert!(!EMBEDDED_WINDOWS, "no new-window request opens a window inside the app") };
         let opened = RefCell::new(Vec::new());
         let open = |url: &url::Url| {
             opened.borrow_mut().push(url.to_string());
             Ok(())
         };
-        let response = new_window("https://github.com/example/commit/abc1234", open);
-        assert_eq!(response, NewWindow::Cancel);
-        let response = new_window("file:///C:/Windows/System32/calc.exe", open);
-        assert_eq!(response, NewWindow::Cancel);
+        assert!(hand_to_browser("https://github.com/example/commit/abc1234", open));
+        assert!(!hand_to_browser("file:///C:/Windows/System32/calc.exe", open));
         let failing = |_: &url::Url| Err(DesktopError::message("open_link", "shell refused"));
-        let response = new_window("https://example.test/", failing);
-        assert_eq!(response, NewWindow::Cancel, "a shell failure still cancels");
+        assert!(!hand_to_browser("https://example.test/", failing));
         assert_eq!(*opened.borrow(), ["https://github.com/example/commit/abc1234"]);
     }
 }
