@@ -355,7 +355,7 @@ fn update_glyph_is_tinted_for_ready_and_warning() -> Result<(), Box<dyn std::err
                     buffered(dc, rect, |_target, buffer| {
                         pixels::with_pixels(buffer, rect, |pixels| {
                             pixels.fill([0; 4]);
-                            glyphs::update(pixels, dpi, tint);
+                            glyphs::update(pixels, dpi, warning, tint);
                             let (count, box_) = pixels.ink(tint);
                             let scale = |v: usize| v * dpi as usize / 96;
                             assert!(count > scale(20), "dpi={dpi} dark={dark}: {count} pixels");
@@ -367,7 +367,7 @@ fn update_glyph_is_tinted_for_ready_and_warning() -> Result<(), Box<dyn std::err
                     })?;
                 }
                 assert_ne!(glyphs::update_tint(false, dark), glyphs::update_tint(true, dark));
-                assert_eq!(inks[0], inks[1], "the tint changes only the color");
+                assert_ne!(inks[0], inks[1], "a failure draws a warning sign, not the arrow");
             }
         }
         Ok::<(), DesktopError>(())

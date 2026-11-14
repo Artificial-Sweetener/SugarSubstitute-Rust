@@ -41,11 +41,19 @@ pub struct PackUpdateMessages {
     pub steps: [&'static str; 3],
     /// Report heading of the SugarCubes section.
     pub report_title: &'static str,
+    /// Opens the SugarCubes update report from its one line.
+    pub show_report: &'static str,
+    /// Splash line when the page failed because SugarCubes could not load; selecting it
+    /// retries.
+    pub retry: &'static str,
+    /// Splash line when SugarCubes, just updated, could not load; selecting it retries with
+    /// the version before the update.
+    pub retry_previous: &'static str,
 }
 
 impl PackUpdateMessages {
     /// Enumerate every owned label for complete registry coverage checks.
-    pub const fn labels(&self) -> [&'static str; 18] {
+    pub const fn labels(&self) -> [&'static str; 21] {
         let s = self.steps;
         [
             self.updating,
@@ -66,6 +74,9 @@ impl PackUpdateMessages {
             s[1],
             s[2],
             self.report_title,
+            self.show_report,
+            self.retry,
+            self.retry_previous,
         ]
     }
 }
@@ -88,6 +99,9 @@ pub static EN: PackUpdateMessages = PackUpdateMessages {
     busy: "SugarCubes was updating itself, so it was left as it is.",
     steps: ["Checking for a SugarCubes update", "Downloading SugarCubes", "Installing SugarCubes"],
     report_title: "SugarCubes update",
+    show_report: "Show the report",
+    retry: "SugarCubes couldn't load. Select here to retry",
+    retry_previous: "SugarCubes couldn't load. Select here to retry with the previous version",
 };
 
 /// Simplified Chinese words.
@@ -108,6 +122,9 @@ pub static ZH_HANS: PackUpdateMessages = PackUpdateMessages {
     busy: "SugarCubes 正在自行更新，因此保持原样。",
     steps: ["正在检查 SugarCubes 更新", "正在下载 SugarCubes", "正在安装 SugarCubes"],
     report_title: "SugarCubes 更新",
+    show_report: "查看报告",
+    retry: "SugarCubes 无法加载，点击此处重试",
+    retry_previous: "SugarCubes 无法加载，点击此处使用之前的版本重试",
 };
 
 /// Japanese words.
@@ -132,6 +149,9 @@ pub static JA: PackUpdateMessages = PackUpdateMessages {
         "SugarCubes をインストールしています",
     ],
     report_title: "SugarCubes の更新",
+    show_report: "レポートを表示",
+    retry: "SugarCubes を読み込めませんでした。ここを選択して再試行",
+    retry_previous: "SugarCubes を読み込めませんでした。ここを選択して以前のバージョンで再試行",
 };
 
 /// Korean words.
@@ -152,6 +172,9 @@ pub static KO: PackUpdateMessages = PackUpdateMessages {
     busy: "SugarCubes가 스스로 업데이트하는 중이어서 그대로 두었습니다.",
     steps: ["SugarCubes 업데이트 확인 중", "SugarCubes 다운로드 중", "SugarCubes 설치 중"],
     report_title: "SugarCubes 업데이트",
+    show_report: "보고서 보기",
+    retry: "SugarCubes를 불러올 수 없습니다. 여기를 선택하여 다시 시도",
+    retry_previous: "SugarCubes를 불러올 수 없습니다. 여기를 선택하여 이전 버전으로 다시 시도",
 };
 
 /// Spanish words.
@@ -176,4 +199,7 @@ pub static ES: PackUpdateMessages = PackUpdateMessages {
         "Instalando SugarCubes",
     ],
     report_title: "Actualización de SugarCubes",
+    show_report: "Ver el informe",
+    retry: "No se pudo cargar SugarCubes. Selecciona aquí para reintentar",
+    retry_previous: "No se pudo cargar SugarCubes. Selecciona aquí para reintentar con la versión anterior",
 };

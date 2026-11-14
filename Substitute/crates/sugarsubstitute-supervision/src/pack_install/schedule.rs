@@ -34,6 +34,29 @@ pub enum PackWork {
     RestoreFailedPage,
 }
 
+/// What a job of the schedule does, which decides how much time and memory it is given.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PackWorkKind {
+    /// Checks the release sources and may download and install a version.
+    Download,
+    /// May put the previous version's files back, a replacement as large as an install.
+    Replace,
+    /// Writes one small journal record.
+    Record,
+}
+
+impl PackWork {
+    /// What this job does. A restore is given an install's time, never an observation's, so
+    /// a slow disk cannot cut it short and lose the report of what it restored.
+    pub const fn kind(self) -> PackWorkKind {
+        match self {
+            Self::Update { .. } => PackWorkKind::Download,
+            Self::BackendStopped | Self::RestoreFailedPage => PackWorkKind::Replace,
+            Self::Observe(_) => PackWorkKind::Record,
+        }
+    }
+}
+
 /// How one job of the schedule ended.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PackWorkEnded {

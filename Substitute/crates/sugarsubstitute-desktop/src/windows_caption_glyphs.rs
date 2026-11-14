@@ -89,35 +89,57 @@ pub(super) fn draw(
     Ok(())
 }
 
-/// The update button's arrow into a tray, in the caption buttons' 10-pixel glyph box, drawn
-/// whole in `tint` so ready and warning read at a glance.
-pub(super) fn update(pixels: &mut Pixels<'_>, dpi: u32, tint: [u8; 3]) {
-    let scale = |value: usize| value * dpi as usize / 96;
-    let stroke = scale(1).max(1);
-    let mut dot = |x: usize, y: usize| {
+/// The update button's picture, in the caption buttons' 10-pixel glyph box, drawn whole in
+/// `tint` so ready and warning read at a glance: an arrow into a tray when an update is ready,
+/// a warning sign when an update failed or needs the user's attention.
+pub(super) fn update(pixels: &mut Pixels<'_>, dpi: u32, warning: bool, tint: [u8; 3]) {
+    let stroke = (dpi as usize / 96).max(1);
+    for (x, y) in update_dots(dpi, warning) {
         for dy in 0..stroke {
             for dx in 0..stroke {
                 pixels.over_color(x + dx, y + dy, tint, 255);
             }
         }
-    };
-    let (left, top, side) = (scale(18), scale(11), scale(10));
-    let middle = left + side / 2;
-    for y in top..=top + side * 7 / 10 {
-        dot(middle, y);
-    }
-    // The arrowhead's two diagonals meet at the stem's foot.
-    let head = side * 4 / 10;
-    let foot = top + side * 7 / 10;
-    for step in 0..=head {
-        dot(middle - step, foot - step);
-        dot(middle + step, foot - step);
-    }
-    for x in left..=left + side {
-        dot(x, top + side);
     }
 }
 
+/// The device-pixel origins of the update picture's dots.
+fn update_dots(dpi: u32, warning: bool) -> Vec<(usize, usize)> {
+    let scale = |value: usize| value * dpi as usize / 96;
+    let (left, top, side) = (scale(18), scale(11), scale(10));
+    let middle = left + side / 2;
+    let mut dots = Vec::new();
+    if warning {
+        // A triangle standing on the glyph box's floor, with an exclamation mark inside.
+        for y in top..=top + side {
+            let half = (y - top) / 2;
+            dots.push((middle - half, y));
+            dots.push((middle + half, y));
+        }
+        for x in middle - side / 2..=middle + side / 2 {
+            dots.push((x, top + side));
+        }
+        for y in top + side * 4 / 10..=top + side * 6 / 10 {
+            dots.push((middle, y));
+        }
+        dots.push((middle, top + side * 8 / 10));
+    } else {
+        for y in top..=top + side * 7 / 10 {
+            dots.push((middle, y));
+        }
+        // The arrowhead's two diagonals meet at the stem's foot.
+        let head = side * 4 / 10;
+        let foot = top + side * 7 / 10;
+        for step in 0..=head {
+            dots.push((middle - step, foot - step));
+            dots.push((middle + step, foot - step));
+        }
+        for x in left..=left + side {
+            dots.push((x, top + side));
+        }
+    }
+    dots
+}
 /// Tint of the update glyph: Fluent success green when ready, caution amber after a failure.
 pub(super) const fn update_tint(warning: bool, dark: bool) -> [u8; 3] {
     match (warning, dark) {
@@ -212,6 +234,30 @@ mod tests {
         Foundation::RECT,
         Graphics::Gdi::{CreateCompatibleDC, DeleteDC},
     };
+
+    /// A failed update shows a warning sign, never the ready update's download arrow: its
+    /// apex sits on the stem's line, and its exclamation mark ends in a separate dot.
+    #[test]
+    fn a_failed_update_draws_a_warning_sign_not_the_download_arrow() {
+        for dpi in [96, 120, 144, 168, 192] {
+            let scale = |value: usize| value * dpi as usize / 96;
+            let (top, side, middle) = (scale(11), scale(10), scale(18) + scale(10) / 2);
+            let arrow = update_dots(dpi, false);
+            let warning = update_dots(dpi, true);
+            assert_ne!(arrow, warning, "{dpi}");
+            // The arrow's stem runs straight down from the top; the sign's apex stands alone.
+            assert!(arrow.contains(&(middle, top + 1)), "{dpi}");
+            assert!(!warning.contains(&(middle, top + side * 3 / 10)), "{dpi}");
+            // The exclamation mark's dot is separated from its stroke.
+            assert!(warning.contains(&(middle, top + side * 8 / 10)), "{dpi}");
+            assert!(!warning.contains(&(middle, top + side * 7 / 10)), "{dpi}");
+            // Both stay in the 10-pixel glyph box.
+            for (x, y) in arrow.iter().chain(&warning) {
+                assert!((scale(18)..=scale(18) + side).contains(x), "{dpi}");
+                assert!((top..=top + side).contains(y), "{dpi}");
+            }
+        }
+    }
 
     /// Resource corruption and unsupported device scales cannot publish a caption frame.
     #[test]

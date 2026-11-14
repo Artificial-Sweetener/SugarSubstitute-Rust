@@ -169,9 +169,7 @@ impl StartupView {
     }
     /// Project the sole application phase into native copy and accessible affordances.
     pub(crate) fn phase(&mut self, phase: StartupPhase) {
-        if self.appearance.status == sugarsubstitute_splash::StartupStatus::RetryReady
-            && phase == StartupPhase::SplashFirstFrame
-        {
+        if self.appearance.status.offers_retry() && phase == StartupPhase::SplashFirstFrame {
             self.wait_started = self.elapsed;
             self.reset_wait_on_sample = true;
             self.progress = StartupProgress::default();
@@ -219,7 +217,7 @@ impl StartupView {
         self.feedback_deadline.is_some_and(|deadline| now >= deadline)
     }
     fn control(&self, pointer: Pointer) -> Option<Control> {
-        if self.appearance.status == sugarsubstitute_splash::StartupStatus::RetryReady
+        if self.appearance.status.offers_retry()
             && (24.0..534.0).contains(&pointer.x)
             && (486.0..534.0).contains(&pointer.y)
         {
@@ -305,7 +303,7 @@ impl StartupView {
     }
     /// Activate only the non-close disclosure control; desktop owns native close intent.
     pub(crate) fn activate(&mut self, id: u16) -> bool {
-        if id == 3 && self.appearance.status == sugarsubstitute_splash::StartupStatus::RetryReady {
+        if id == 3 && self.appearance.status.offers_retry() {
             self.retry_requested = true;
             return true;
         }

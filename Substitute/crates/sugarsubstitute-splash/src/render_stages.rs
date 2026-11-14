@@ -226,6 +226,10 @@ impl RenderStages {
                     crate::StartupStatus::Failed => copy.connection_failed,
                     crate::StartupStatus::Settling => copy.cleanup_pending,
                     crate::StartupStatus::RetryReady => copy.retry_ready,
+                    crate::StartupStatus::SugarcubesRetryReady => copy.pack_updates.retry,
+                    crate::StartupStatus::SugarcubesRetryPrevious => {
+                        copy.pack_updates.retry_previous
+                    }
                     crate::StartupStatus::CleanupFailed => copy.cleanup_failed,
                     crate::StartupStatus::Starting => copy.starting,
                 };
