@@ -1113,13 +1113,6 @@ disposition = "fixture"
 rationale = "Verify that inherited delegated-tool log destinations are replaced by the explicit installation-local path without mutating the original environment."
 
 [[records]]
-path = "crates/sugarsubstitute/src/production/entry_activation/projection_tests.rs"
-owner = "sugarsubstitute"
-source_sha256 = "sha256:77b8323a9d1604dc19bd016c2e418eddb1c1bd3bc6afa314e3a7db19e2114fda"
-disposition = "fixture"
-rationale = "Assert that production projection confines delegated pip log and temporary destinations while preserving the original captured environment; no diagnostic sink is created."
-
-[[records]]
 path = "installer/tests/model-root.test.mjs"
 owner = "sugarsubstitute"
 source_sha256 = "sha256:2227fd686de624ef4fb7af5a1e2b8ab022e183933ec685a50acf1a0b6cfd0c79"

@@ -43,6 +43,7 @@ fn managed_view<'a>(
     arguments: &'a [u8],
     count: u8,
     locale: &str,
+    environment: &'a [u8],
 ) -> Result<EntryLaunchRequestView<'a>, Box<dyn Error + Send + Sync>> {
     use sugarsubstitute_contracts::{
         configuration::{Presentation, Theme},
@@ -61,8 +62,28 @@ fn managed_view<'a>(
         root,
         "Profile_1",
         Presentation::new(locale, Theme::Dark, false)?,
-        EntryEnvironmentView::from_le_bytes(&[0, 0, 0, 0])?,
+        EntryEnvironmentView::from_le_bytes(environment)?,
     )?)
+}
+
+/// No captured variables.
+const NO_ENVIRONMENT: &[u8] = &[0, 0, 0, 0];
+
+/// A captured user environment: the real profile's folders and an inherited browser override.
+fn user_environment() -> Vec<u8> {
+    let mut units = Vec::new();
+    for line in [
+        r"APPDATA=C:\Users\person\AppData\Roaming",
+        r"LOCALAPPDATA=C:\Users\person\AppData\Local",
+        r"TEMP=C:\Users\person\AppData\Local\Temp",
+        r"USERPROFILE=C:\Users\person",
+        r"WEBVIEW2_USER_DATA_FOLDER=C:\Elsewhere",
+    ] {
+        units.extend(line.encode_utf16());
+        units.push(0);
+    }
+    units.push(0);
+    bytes(&units)
 }
 
 #[test]
@@ -70,7 +91,7 @@ fn originals_matching_data_never_bypasses_missing_native_source_or_installed_cus
 -> Result<(), Box<dyn Error + Send + Sync>> {
     let root = bytes(&r"E:\comfyui".encode_utf16().collect::<Vec<_>>());
     let interpreter = bytes(&r"E:\python.exe".encode_utf16().collect::<Vec<_>>());
-    let view = managed_view(&root, &interpreter, &[], 0, "en")?;
+    let view = managed_view(&root, &interpreter, &[], 0, "en", NO_ENVIRONMENT)?;
     assert!(validate_source(view, None, false).is_err());
     assert!(validate_source(view, None, true).is_ok());
     let referenced = view.with_originals(
@@ -88,7 +109,8 @@ fn parent_projection_composes_complete_managed_command_from_empty_extras()
     let root = bytes(&r"E:\comfyui".encode_utf16().collect::<Vec<_>>());
     let interpreter =
         bytes(&r"E:\comfyui\venv\Scripts\python.exe".encode_utf16().collect::<Vec<_>>());
-    let original = managed_view(&root, &interpreter, &[], 0, "en")?;
+    let environment = user_environment();
+    let original = managed_view(&root, &interpreter, &[], 0, "en", &environment)?;
     let capture = PathBuf::from(r"D:\SugarSubstitute-Rust\artifacts\inert-capture");
     let available = projection_data_bytes().ok_or("Joined projection partition underflow")?;
     let (claim, scope) = super::super::funding::tests::admitted(PROJECTION_BYTES, available)?;
@@ -125,11 +147,21 @@ fn parent_projection_composes_complete_managed_command_from_empty_extras()
     ] {
         assert!(backend_environment.split('\0').any(|line| line == expected));
     }
+    // The desktop child keeps the user's own profile, so Windows dialogs and known folders
+    // resolve to the user's folders; only the inherited browser override is removed.
     let desktop_environment = String::from_utf16(projected.desktop_environment.as_utf16())?;
-    for expected in [r"TEMP=E:\", r"APPDATA=E:\", r"PIP_LOG=E:\pip.log"] {
-        assert!(desktop_environment.split('\0').any(|line| line == expected));
-    }
-    assert_eq!(original.environment().units().collect::<Vec<_>>(), [0, 0]);
+    let desktop: Vec<_> = desktop_environment.split('\0').filter(|line| !line.is_empty()).collect();
+    assert_eq!(
+        desktop,
+        [
+            r"APPDATA=C:\Users\person\AppData\Roaming",
+            r"LOCALAPPDATA=C:\Users\person\AppData\Local",
+            r"TEMP=C:\Users\person\AppData\Local\Temp",
+            r"USERPROFILE=C:\Users\person",
+        ]
+    );
+    let captured: Vec<u16> = original.environment().units().collect();
+    assert_eq!(bytes(&captured), environment, "the captured environment is unchanged");
     let EntryConnectionView::Managed { arguments, .. } = original.connection() else {
         return Err("Original mode changed".into());
     };
@@ -165,7 +197,7 @@ fn parent_projection_rejects_effective_command_overflow_without_changing_extra_s
         arguments.extend_from_slice(&5u32.to_le_bytes());
         arguments.extend_from_slice(b"--cpu");
     }
-    let original = managed_view(&root, &interpreter, &arguments, 58, "en")?;
+    let original = managed_view(&root, &interpreter, &arguments, 58, "en", NO_ENVIRONMENT)?;
     let cause = fields::project(
         original,
         &PathBuf::new(),
@@ -202,8 +234,8 @@ fn configured_japanese_locale_reaches_production_report_view_work_without_web_co
     };
     let root = bytes(&r"E:\comfyui".encode_utf16().collect::<Vec<_>>());
     let interpreter = bytes(&r"E:\python.exe".encode_utf16().collect::<Vec<_>>());
-    let original =
-        managed_view(&root, &interpreter, &[], 0, "ja").map_err(|cause| cause as Box<dyn Error>)?;
+    let original = managed_view(&root, &interpreter, &[], 0, "ja", NO_ENVIRONMENT)
+        .map_err(|cause| cause as Box<dyn Error>)?;
     let projected = fields::project(
         original,
         &PathBuf::new(),
@@ -324,7 +356,7 @@ fn managed_projection_still_rejects_input_beyond_its_partition_as_overloaded()
     let long = format!(r"E:\{}", "x".repeat(20_000));
     let root = bytes(&long.encode_utf16().collect::<Vec<_>>());
     let interpreter = bytes(&r"E:\python.exe".encode_utf16().collect::<Vec<_>>());
-    let view = managed_view(&root, &interpreter, &[], 0, "en")?;
+    let view = managed_view(&root, &interpreter, &[], 0, "en", NO_ENVIRONMENT)?;
     let cause = fields::project(
         view,
         &PathBuf::new(),

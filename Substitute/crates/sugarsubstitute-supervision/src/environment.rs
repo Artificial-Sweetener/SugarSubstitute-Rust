@@ -8,6 +8,7 @@
 //! process privilege, filesystem trust or bootstrap capability.
 //! See [Windows environments](https://learn.microsoft.com/en-us/windows/win32/procthread/changing-environment-variables).
 mod backend;
+mod desktop;
 mod entries;
 mod errors;
 #[allow(unsafe_code)]
@@ -163,7 +164,8 @@ impl LaunchEnvironment {
         (MAX_VARIABLES * size_of::<entries::Entry<'static>>() + MAX_UNITS * size_of::<u16>()) as u64
     }
 
-    /// Bound the peak buffers one [`Self::for_local_storage`] build owns beside its snapshot.
+    /// Bound the peak buffers one [`Self::for_local_storage`] or [`Self::for_desktop`] build owns
+    /// beside its snapshot.
     ///
     /// Every merge table and output block is reserved exactly and limited by this owner's
     /// enforced unit, variable and override counts, so the peak never exceeds this constant for
