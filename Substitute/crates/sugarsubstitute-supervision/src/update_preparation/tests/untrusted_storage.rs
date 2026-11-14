@@ -3,7 +3,10 @@
 //! Update storage another program made untrustworthy is set aside and set up again by the
 //! next check, without ever accepting a release older than the one that runs.
 use super::*;
-use crate::durable_storage::protected::security::rewrite::{Rewrite, rewrite};
+use crate::durable_storage::protected::{
+    directories::Mode,
+    security::rewrite::{Rewrite, rewrite},
+};
 
 /// Accept release `sequence` through the real installer pipeline and native run owner.
 fn accept(pipeline: &mut Pipeline, fixture: Fixture, sequence: u32) -> Result<Fixture, Failure> {
@@ -52,8 +55,18 @@ fn a_check_sets_untrusted_update_storage_aside_and_keeps_refusing_older_releases
     assert!(set_aside[0].path().join("update-trust").join("checkpoint").is_file());
     assert!(set_aside[0].path().join("update-trust-enabled").is_file());
     let installation = fixture;
+    let set_aside = set_aside[0].path();
     // Fresh storage this account owns opens, and its floor is the running release.
     let installation = pipeline.run(SIGNED_INSTALLER_RESERVATION_BYTES, move |context| {
+        // Set-aside storage keeps the protection of the trust storage it holds.
+        crate::durable_storage::protection::with(&context, |protection| {
+            for folder in
+                [set_aside.parent().ok_or_else(|| std::io::Error::other("parent"))?, &set_aside]
+            {
+                protection.directory(folder, Mode::Existing, &context)?;
+            }
+            Ok(())
+        })?;
         drop(TrustStore::open(installation.installation.path(), [92; 32], &context)?);
         let accepted = SelectionStore::open(installation.installation.path(), &context)?
             .load(&context)?

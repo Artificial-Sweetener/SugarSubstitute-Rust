@@ -92,12 +92,14 @@ pub(crate) fn replace_record(source: &Path, destination: &Path) -> io::Result<()
 /// Digits of the ordinal that numbers each folder [`numbered_directory`] creates.
 const ORDINAL_DIGITS: usize = 20;
 
-/// Create the folder `<prefix>-<ordinal>` in `parent`, numbered one after the highest such
-/// folder there, so names order folders by when they were made. The caller serializes every
-/// writer of these folders.
+/// Create a folder in `parent` with `create`, named `<prefix>-<ordinal>` one after the highest
+/// such folder there, so names order folders by when they were made. When the ordinals are
+/// exhausted or that name cannot be created, the folder is named `<prefix>-<GUID>` instead,
+/// which [`retain_numbered`] never removes. The caller serializes every writer of these folders.
 pub(crate) fn numbered_directory(
     parent: &Directory,
     prefix: &str,
+    mut create: impl FnMut(&Path) -> io::Result<()>,
     context: &JobContext,
 ) -> io::Result<PathBuf> {
     files::flat_leaf(prefix)?;
@@ -105,26 +107,37 @@ pub(crate) fn numbered_directory(
         .iter()
         .map(|(ordinal, _)| *ordinal)
         .max()
-        .map_or(Some(1), |highest| highest.checked_add(1))
-        .ok_or_else(|| invalid("Numbered folders are exhausted"))?;
-    let path = parent.path().join(format!("{prefix}-{next:0ORDINAL_DIGITS$}"));
-    std::fs::create_dir(&path)?;
+        .map_or(Some(1), |highest| highest.checked_add(1));
+    if let Some(next) = next {
+        let path = parent.path().join(format!("{prefix}-{next:0ORDINAL_DIGITS$}"));
+        match create(&path) {
+            Ok(()) => return Ok(path),
+            Err(cause) => {
+                check(context)?;
+                tracing::warn!(operation = "numbered_folder_renamed", folder = %path.display(),
+                    error = %cause, "The next numbered folder could not be created; a unique name is used");
+            }
+        }
+    }
+    let path = unique_path(parent, prefix)?;
+    create(&path)?;
     Ok(path)
 }
 
-/// Remove every numbered folder `prefix` names in `parent` except the `keep` newest, with all
-/// it holds. Links inside are removed, never followed. Entries that are not plain folders, and
-/// folders that cannot be removed now, are kept and reported; a later call retries them.
-/// Only cancellation fails.
+/// Remove every numbered folder `prefix` names in `parent` except the `keep` newest and
+/// `spared`, with all they hold. Links inside are removed, never followed. Entries that are
+/// not plain folders, and folders that cannot be removed now, are kept and reported; a later
+/// call retries them. Only cancellation fails.
 pub(crate) fn retain_numbered(
     parent: &Directory,
     prefix: &str,
     keep: usize,
+    spared: &Path,
     context: &JobContext,
 ) -> io::Result<()> {
     let mut folders = numbered(parent, prefix, context)?;
     folders.sort_unstable_by_key(|(ordinal, _)| std::cmp::Reverse(*ordinal));
-    for (_, path) in folders.into_iter().skip(keep) {
+    for (_, path) in folders.into_iter().skip(keep).filter(|(_, path)| path != spared) {
         check(context)?;
         if let Err(cause) = std::fs::remove_dir_all(&path) {
             check(context)?;
@@ -297,6 +310,10 @@ mod tests {
         Ok(())
     }
 
+    fn plain(path: &Path) -> io::Result<()> {
+        std::fs::create_dir(path)
+    }
+
     #[test]
     fn numbered_folders_count_up_and_only_the_newest_are_retained()
     -> crate::setup_storage::test_worker::TestResult {
@@ -309,7 +326,7 @@ mod tests {
             std::fs::create_dir(&unrelated)?;
             let mut made = Vec::new();
             for _ in 0..4 {
-                let folder = numbered_directory(&parent, "set-aside", context)?;
+                let folder = numbered_directory(&parent, "set-aside", plain, context)?;
                 std::fs::create_dir(folder.join("nested"))?;
                 std::fs::write(folder.join("nested").join("record"), b"kept for diagnosis")?;
                 crate::durable_storage::files::reparse_fixture::junction(
@@ -320,14 +337,39 @@ mod tests {
                 made.push(folder);
             }
             assert!(made[3].ends_with("set-aside-00000000000000000004"));
-            retain_numbered(&parent, "set-aside", 2, context)?;
-            assert!(!made[0].exists() && !made[1].exists());
+            retain_numbered(&parent, "set-aside", 2, &made[0], context)?;
+            assert!(made[0].join("nested").join("record").is_file(), "the spared folder went");
+            assert!(!made[1].exists());
             assert!(made[2].join("nested").join("record").is_file());
             assert!(made[3].join("nested").join("record").is_file());
             assert!(unrelated.is_dir());
             assert_eq!(std::fs::read(outside.path().join("elsewhere"))?, b"never followed");
-            let next = numbered_directory(&parent, "set-aside", context)?;
+            let next = numbered_directory(&parent, "set-aside", plain, context)?;
             assert!(next.ends_with("set-aside-00000000000000000005"));
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn exhausted_or_occupied_numbers_fall_back_to_a_unique_name()
+    -> crate::setup_storage::test_worker::TestResult {
+        crate::setup_storage::test_worker::run(|context, _| {
+            let temporary = tempfile::tempdir()?;
+            let parent = Directory::open(temporary.path(), false)?;
+            let last = parent.path().join(format!("set-aside-{}", u64::MAX));
+            std::fs::create_dir(&last)?;
+            let exhausted = numbered_directory(&parent, "set-aside", plain, context)?;
+            assert!(exhausted.is_dir() && exhausted != last);
+            let name = exhausted.file_name().and_then(|name| name.to_str()).unwrap_or_default();
+            assert!(is_attempt(name, "set-aside"), "{name} is not a unique name");
+            std::fs::remove_dir(&last)?;
+            // A file already holds the next number's name.
+            std::fs::write(parent.path().join("set-aside-00000000000000000001"), b"in the way")?;
+            let occupied = numbered_directory(&parent, "set-aside", plain, context)?;
+            let name = occupied.file_name().and_then(|name| name.to_str()).unwrap_or_default();
+            assert!(occupied.is_dir() && is_attempt(name, "set-aside"), "{name}");
+            retain_numbered(&parent, "set-aside", 0, &occupied, context)?;
+            assert!(exhausted.is_dir() && occupied.is_dir(), "unique names are never removed");
             Ok(())
         })
     }

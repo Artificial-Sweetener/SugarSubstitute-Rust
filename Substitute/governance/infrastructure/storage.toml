@@ -1532,7 +1532,7 @@ rationale = "Durable filesystem owner: Qualify exact native identity, retained a
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/staging.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:c4a9288ad73236e897891207365f60ec6a9826420b3b2ce228e55d8d545f7adb"
+source_sha256 = "sha256:da4eac00fd1a6d23a0b4102791f02ede84ae5121bf99ccc0f16d9fd37efa1a14"
 capabilities = ["MoveFileExW", "std::fs::create_dir", "std::fs::read", "std::fs::remove_dir", "std::fs::remove_dir_all", "std::fs::remove_file", "std::fs::symlink_metadata", "std::fs::write", "tempfile::tempdir", "windows::Win32::Storage::FileSystem", "windows::Win32::Storage::FileSystem::MoveFileExW"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Allocate independent install attempts and publish complete directories without replacement. Native access and its adversarial qualification remain within this owner."
@@ -2955,7 +2955,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: New
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/update_preparation/tests/untrusted_storage.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:ae9d529cdcf3e27cd17b5abd7fea90c39ea89ac4a68443b01fc159446a02ce6c"
+source_sha256 = "sha256:51807c7368e34b0400e386171cf98da55a426f5d08960e36b1eb1a8ab0942429"
 capabilities = ["std::fs::read_dir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: A check sets untrusted update storage aside and keeps refusing older releases. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

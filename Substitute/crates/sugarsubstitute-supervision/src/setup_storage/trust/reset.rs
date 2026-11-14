@@ -124,13 +124,24 @@ fn hex(text: &str, output: &mut [u8; 32]) -> io::Result<()> {
 }
 
 /// Move the trust folder, its continuity marker and the update workspace into a new folder under
-/// `user\` named for this reset. The trust folder must move; the others move when present.
+/// `user\` named for this reset, protected like the trust storage itself. The trust folder must
+/// move; the others move when present.
 fn set_aside(installation_root: &Path, context: &JobContext) -> io::Result<PathBuf> {
     let layout = sugarsubstitute_configuration::layout::InstallationLayout::new(installation_root);
     let state = layout.state();
     let user = Directory::open(&layout.user(), true)?;
-    let folder = Directory::open(&user.path().join(SET_ASIDE_FOLDER), true)?;
-    let destination = staging::numbered_directory(&folder, SET_ASIDE_PREFIX, context)?;
+    let (folder, destination) = protection::with(context, |protection| {
+        let path = user.path().join(SET_ASIDE_FOLDER);
+        protection.directory(&path, Mode::OpenOrCreate, context)?;
+        let folder = Directory::open(&path, false)?;
+        let destination = staging::numbered_directory(
+            &folder,
+            SET_ASIDE_PREFIX,
+            |path| protection.directory(path, Mode::CreateNew, context).map(drop),
+            context,
+        )?;
+        Ok((folder, destination))
+    })?;
     check(context)?;
     staging::publish(&state.join(DIRECTORY), &destination.join(DIRECTORY))?;
     for (source, name) in [
@@ -147,7 +158,7 @@ fn set_aside(installation_root: &Path, context: &JobContext) -> io::Result<PathB
             }
         }
     }
-    staging::retain_numbered(&folder, SET_ASIDE_PREFIX, KEPT_SET_ASIDE, context)?;
+    staging::retain_numbered(&folder, SET_ASIDE_PREFIX, KEPT_SET_ASIDE, &destination, context)?;
     Ok(destination)
 }
 
