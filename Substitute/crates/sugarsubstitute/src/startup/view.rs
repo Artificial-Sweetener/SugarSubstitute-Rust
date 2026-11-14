@@ -190,6 +190,12 @@ impl StartupView {
             },
         };
     }
+    /// Show `status` in place of the phase's own line; the Retry control is offered only while
+    /// the shown line offers retry.
+    pub(crate) fn show_status(&mut self, status: sugarsubstitute_splash::StartupStatus) {
+        self.appearance.status = status;
+        self.controls[2].visible = status.offers_retry();
+    }
     /// Sample a real frame and schedule only the next text transition, including reduced motion.
     pub(crate) fn sample(&mut self, phase: StartupPhase, elapsed: Duration, now: Instant) {
         self.elapsed = elapsed;

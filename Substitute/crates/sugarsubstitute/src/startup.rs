@@ -267,8 +267,9 @@ impl<B: StartupBackend> WindowContent for StartupHost<B> {
             self.view.as_mut().ok_or_else(|| std::io::Error::other("Startup view absent"))?;
         view.sample(startup.session().phase(), elapsed, Instant::now());
         if self.child.cleanup_failed() {
-            view.appearance.status = sugarsubstitute_splash::StartupStatus::CleanupFailed;
-        } else if let Some(status) = window_content::updating(&self.child, view.appearance.status)
+            view.show_status(sugarsubstitute_splash::StartupStatus::CleanupFailed);
+        } else if let Some(status) = window_content::restoring(&self.child, view.appearance.status)
+            .or_else(|| window_content::updating(&self.child, view.appearance.status))
             .or_else(|| {
                 window_content::sugarcubes_retry(
                     &self.child,
@@ -277,7 +278,7 @@ impl<B: StartupBackend> WindowContent for StartupHost<B> {
                 )
             })
         {
-            view.appearance.status = status;
+            view.show_status(status);
         }
         view.animation.tick(elapsed);
         let progress = view.progress();

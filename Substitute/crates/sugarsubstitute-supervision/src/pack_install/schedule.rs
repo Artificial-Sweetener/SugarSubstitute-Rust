@@ -82,6 +82,8 @@ pub struct PackSchedule<K> {
     running: Option<(PackWork, Option<K>)>,
     queued: VecDeque<(PackWork, Option<K>)>,
     status: PackUpdateStatus,
+    /// The status a restore that finds nothing to put back returns to.
+    before_restore: Option<PackUpdateStatus>,
     revision: u64,
 }
 
@@ -94,6 +96,7 @@ impl<K> Default for PackSchedule<K> {
             running: None,
             queued: VecDeque::new(),
             status: PackUpdateStatus::Idle,
+            before_restore: None,
             revision: 0,
         }
     }
@@ -101,7 +104,8 @@ impl<K> Default for PackSchedule<K> {
 
 impl<K: Copy + Eq> PackSchedule<K> {
     /// A backend preparation `key` begins. Returns whether SugarCubes work now holds its
-    /// inspection and launch.
+    /// inspection and launch. A managed preparation always waits for a restore that is
+    /// running or queued, so a retry never reads or starts the pack while its files change.
     pub fn prepare(&mut self, key: K, managed: bool) -> bool {
         if !self.checked {
             self.checked = true;
@@ -112,12 +116,36 @@ impl<K: Copy + Eq> PackSchedule<K> {
             }
             return managed;
         }
-        if !(managed && std::mem::take(&mut self.page_failed)) {
+        if !managed {
             return false;
         }
-        self.queued.push_back((PackWork::RestoreFailedPage, Some(key)));
-        self.publish(PackUpdateStatus::Updating);
-        true
+        if std::mem::take(&mut self.page_failed) {
+            self.queued.push_back((PackWork::RestoreFailedPage, Some(key)));
+            self.restoring();
+            return true;
+        }
+        self.hold_behind_restore(key)
+    }
+
+    /// Let a restore that holds no preparation yet hold `key`; returns whether one does.
+    fn hold_behind_restore(&mut self, key: K) -> bool {
+        let pending = self.running.iter_mut().chain(self.queued.iter_mut());
+        for (work, gates) in pending {
+            if work.kind() == PackWorkKind::Replace && gates.is_none_or(|held| held == key) {
+                *gates = Some(key);
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Publish that the previous version is being put back, remembering what to show again if
+    /// nothing needs restoring.
+    fn restoring(&mut self) {
+        if self.status != PackUpdateStatus::Restoring {
+            self.before_restore = Some(std::mem::take(&mut self.status));
+            self.publish(PackUpdateStatus::Restoring);
+        }
     }
 
     /// Record an observation of the judged version; ignored when nothing is judged here.
@@ -131,6 +159,7 @@ impl<K: Copy + Eq> PackSchedule<K> {
     pub fn backend_stopped(&mut self) {
         if self.judging {
             self.queued.push_back((PackWork::BackendStopped, None));
+            self.restoring();
         }
     }
 
@@ -152,9 +181,12 @@ impl<K: Copy + Eq> PackSchedule<K> {
         self.page_failed();
     }
 
-    /// Whether the running job is the one holding `key`, so stopping `key` may cancel it.
+    /// Whether stopping `key` may cancel the running job: the launch-time update that holds
+    /// it. A restore is never cancelled; the preparation waiting for it simply stops waiting.
     pub fn running_holds(&self, key: K) -> bool {
-        self.running.is_some_and(|(_, gates)| gates == Some(key))
+        self.running.is_some_and(|(work, gates)| {
+            gates == Some(key) && work.kind() == PackWorkKind::Download
+        })
     }
 
     /// Whether `key`'s inspection and launch still wait for SugarCubes work.
@@ -179,29 +211,53 @@ impl<K: Copy + Eq> PackSchedule<K> {
     pub fn ended(&mut self, ended: PackWorkEnded) -> Option<K> {
         let (work, released) = self.running.take()?;
         let update = matches!(work, PackWork::Update { .. });
+        let restore = work.kind() == PackWorkKind::Replace;
         match ended {
             PackWorkEnded::Updated(outcome) => {
-                self.publish(PackUpdateStatus::Finished(outcome.report()));
+                self.show_after_restores(PackUpdateStatus::Finished(outcome.report()));
             }
             PackWorkEnded::Restored(Some(restored)) => {
+                self.before_restore = None;
                 self.publish(PackUpdateStatus::Finished(
                     StartupOutcome::Restored(restored).report(),
                 ));
             }
-            PackWorkEnded::Restored(None) if released.is_some() => {
-                self.publish(PackUpdateStatus::Idle);
+            PackWorkEnded::Restored(None) if !self.restore_pending() => {
+                if let Some(previous) = self.before_restore.take() {
+                    self.publish(previous);
+                }
             }
-            PackWorkEnded::Unfinished { stopped } if update || released.is_some() => {
+            PackWorkEnded::Unfinished { stopped } if update || restore || released.is_some() => {
                 let outcome = if stopped {
                     StartupOutcome::Stopped
                 } else {
                     StartupOutcome::Failed { step: super::StartupStep::Checking, code: "job" }
                 };
-                self.publish(PackUpdateStatus::Finished(outcome.report()));
+                let status = PackUpdateStatus::Finished(outcome.report());
+                if restore {
+                    self.before_restore = None;
+                    self.publish(status);
+                } else {
+                    self.show_after_restores(status);
+                }
             }
             _ => {}
         }
         released.filter(|key| !self.gates(*key))
+    }
+
+    /// Publish `status`, or keep it for after the restore when one is putting the previous
+    /// version back, so the splash keeps saying so until it finished.
+    fn show_after_restores(&mut self, status: PackUpdateStatus) {
+        if self.status == PackUpdateStatus::Restoring {
+            self.before_restore = Some(status);
+        } else {
+            self.publish(status);
+        }
+    }
+
+    fn restore_pending(&self) -> bool {
+        self.queued.iter().any(|(work, _)| work.kind() == PackWorkKind::Replace)
     }
 
     /// The live update state and its revision, which rises with every change.
