@@ -367,6 +367,9 @@ pub(crate) struct EntryRunner<C: EntryActivation> {
     post_exit: Option<post_exit::Deadline>,
     /// The one restart-to-apply relaunch, after a normal close the child asked for.
     relaunch: relaunch::Relaunch,
+    /// The window asked to restart into the update. The decision outlives the window: once it
+    /// closed, its record goes, and the restart is still owed.
+    restart_asked: std::cell::Cell<bool>,
     /// The "Updating to version X…" notice shown while this run restarts into an update.
     restart_notice: Option<relaunch::RestartNotice>,
     command: Option<ProductionCommand>,
@@ -438,6 +441,7 @@ impl<C: EntryActivation> EntryRunner<C> {
             update_status_scope: None,
             post_exit: None,
             relaunch: relaunch::Relaunch::Idle,
+            restart_asked: std::cell::Cell::new(false),
             restart_notice: None,
             command: Some(command),
             executable,
