@@ -115,6 +115,14 @@ fn mouse(message: u32, wparam: WPARAM, lparam: LPARAM) -> Option<Mouse> {
     })
 }
 
+/// The page point WebView2 receives for a client point, with the page's top-left at `origin`.
+/// A leave has no position: WebView2 rejects one outside the page with `E_INVALIDARG`, so it
+/// stays at the page's top-left rather than the client origin above a page that sits below
+/// the caption strip.
+fn page_input_point(kind: u32, point: POINT, origin: POINT) -> POINT {
+    if kind == WM_MOUSELEAVE { POINT::default() } else { page::page_point(point, origin) }
+}
+
 struct State {
     window: HWND,
     /// The controller's host window, whose client origin is the page's top-left.
@@ -174,7 +182,8 @@ impl State {
         if !forward {
             return Ok(());
         }
-        let point = page::page_point(point, page::client_origin(self.host, self.window)?);
+        let point =
+            page_input_point(message.kind, point, page::client_origin(self.host, self.window)?);
         // SAFETY: The controller is retained on its creating UI apartment until subclass removal.
         unsafe {
             self.controller.SendMouseInput(
