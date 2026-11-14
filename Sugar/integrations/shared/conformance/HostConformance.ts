@@ -39,6 +39,8 @@ import { isCanvasSurfaceCapabilitiesReply } from '../CanvasSurfaceValidation.gen
 import { isCanvasMaskMessage, isCanvasMaskReply } from '../CanvasMasksValidation.generated.js';
 import { isMemoryAllowanceMessage } from '../MemoryValidation.generated.js';
 import { isUpdatesHostMessage } from '../UpdatesValidation.generated.js';
+import { isReleaseNotesHostMessage } from '../ReleaseNotesValidation.generated.js';
+import type { ReleaseNotesStateMessage } from '../../contracts/ReleaseNotesProtocol.generated.js';
 import { emptyCanvasSurfaceCapabilities } from '../CanvasSurfaceDiscovery.js';
 import { NEWEST_CANVAS_SURFACE_SCHEMA } from '../CanvasSurfaceSchemas.js';
 
@@ -101,6 +103,7 @@ export const CONFORMANCE_CHECKS = Object.freeze([
   'canvas-masks',
   'memory',
   'updates',
+  'release-notes',
   'capability.presentation.host-styles',
   'capability.presentation.system-accent',
   'capability.output.host-surface',
@@ -130,6 +133,8 @@ function validHostMessage(value: unknown, declared: DeclaredHost | null): boolea
       return !!declared?.serves(HOST_PROTOCOLS.memory) && isMemoryAllowanceMessage(value);
     case HOST_PROTOCOLS.updates.name:
       return !!declared?.serves(HOST_PROTOCOLS.updates) && isUpdatesHostMessage(value);
+    case HOST_PROTOCOLS.releaseNotes.name:
+      return !!declared?.serves(HOST_PROTOCOLS.releaseNotes) && isReleaseNotesHostMessage(value);
     default:
       return false;
   }
@@ -240,6 +245,21 @@ async function conform(probe: HostProbe, session: string): Promise<HostConforman
     );
     pass('updates');
   } else skip('updates');
+
+  // A watch is answered from the host alone; fetching notes reads the release repository, which
+  // a conformance run never reaches.
+  if (declared.serves(HOST_PROTOCOLS.releaseNotes)) {
+    probe.check = 'release-notes';
+    probe.send({ ...envelope(HOST_PROTOCOLS.releaseNotes, session), type: 'watch' });
+    const state = await probe.next(
+      'a release notes state after watch',
+      (value): value is ReleaseNotesStateMessage =>
+        isReleaseNotesHostMessage(value) && value.type === 'state',
+    );
+    if (state.product.length === 0)
+      throw new HostConformanceFailure(probe.check, 'the state names no product', state);
+    pass('release-notes');
+  } else skip('release-notes');
 
   capability(
     results,

@@ -65,9 +65,13 @@ fn repeated_entries_and_a_missing_panel_protocol_are_refused() {
 
 #[test]
 fn every_named_protocol_and_capability_is_a_schema_token() {
-    for protocol in
-        [HostProtocol::PANEL, HostProtocol::CANVAS, HostProtocol::MEMORY, HostProtocol::UPDATES]
-    {
+    for protocol in [
+        HostProtocol::PANEL,
+        HostProtocol::CANVAS,
+        HostProtocol::MEMORY,
+        HostProtocol::UPDATES,
+        HostProtocol::RELEASE_NOTES,
+    ] {
         let wire = wire::HostProtocol {
             name: protocol.name().into(),
             version: u64::from(protocol.version()),

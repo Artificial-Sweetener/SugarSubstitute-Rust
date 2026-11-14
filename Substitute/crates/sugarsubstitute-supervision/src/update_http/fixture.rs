@@ -32,6 +32,7 @@ pub(crate) struct Running {
     _scope: Scope,
     wake: Arc<Wake>,
     _executor: ExecutionOwner,
+    port: u16,
 }
 impl Running {
     /// Bind before publishing the port, then admit the socket owner with a finite lifetime.
@@ -40,7 +41,8 @@ impl Running {
         context: &JobContext,
     ) -> Result<(Self, Policy), Box<dyn std::error::Error + Send + Sync>> {
         let server = Server::bind(exchanges, context)?;
-        let policy = Policy::loopback(server.port()?)?;
+        let port = server.port()?;
+        let policy = Policy::loopback(port)?;
         let wake = Arc::new(Wake::default());
         let executor = ExecutionOwner::new(ManualClock::new(), wake.clone())?;
         let client = executor.client();
@@ -59,7 +61,11 @@ impl Running {
             },
             move |context| server.run(context),
         )?;
-        Ok((Self { job, client, _scope: scope, wake, _executor: executor }, policy))
+        Ok((Self { job, client, _scope: scope, wake, _executor: executor, port }, policy))
+    }
+    /// The literal loopback port the fixture serves, for callers that address it themselves.
+    pub(crate) fn port(&self) -> u16 {
+        self.port
     }
     /// Observe the server even when its client has already returned an error.
     /// The server's finite job deadline never elapses on the fixture's manual clock, and the

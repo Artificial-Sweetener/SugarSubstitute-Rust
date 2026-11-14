@@ -86,24 +86,30 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
         )
     }
 
-    /// The coordinator's next one-time start-up update message, with the running version's
-    /// release notes when this build names them.
+    /// The coordinator's next one-time start-up update message.
     fn take_update_notice(&mut self) -> Option<sugarsubstitute_desktop::UpdateNotice> {
         use sugarsubstitute_contracts::update::status::StartupNotice;
         use sugarsubstitute_desktop::UpdateNotice;
         Some(match self.child.take_update_notice()? {
-            StartupNotice::Updated(version) => {
-                // Only a build with update configuration names its release notes.
-                #[cfg(all(windows, feature = "windows-native-host"))]
-                let changelog = crate::updates::release_notes(&version);
-                #[cfg(not(all(windows, feature = "windows-native-host")))]
-                let changelog = None;
-                UpdateNotice::Updated { version, changelog }
-            }
+            StartupNotice::Updated(version) => UpdateNotice::Updated { version },
             StartupNotice::Repairing => UpdateNotice::Repairing,
             StartupNotice::PreviousVersionRunning => UpdateNotice::PreviousVersionRunning,
             StartupNotice::Sugarcubes(report) => UpdateNotice::Sugarcubes(report),
         })
+    }
+
+    #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+    fn whats_new_available(&self) -> bool {
+        !self.closing && self.release_notes.watching()
+    }
+
+    /// The page shows what is new; nothing leaves the application.
+    #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+    fn open_whats_new(&mut self) -> Result<(), Box<dyn Error>> {
+        if self.closing {
+            return Err("The application is closing".into());
+        }
+        self.release_notes.open()
     }
 
     fn workflow_activity(&self) -> sugarsubstitute_desktop::WorkflowActivity {
@@ -292,6 +298,10 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
         }
         #[cfg(all(windows, any(feature = "windows-native-host", test)))]
         if let Some(command) = self.updates.take_command() {
+            return Ok(Some(command));
+        }
+        #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+        if let Some(command) = self.release_notes.take_command() {
             return Ok(Some(command));
         }
         #[cfg(all(windows, feature = "native-composition"))]

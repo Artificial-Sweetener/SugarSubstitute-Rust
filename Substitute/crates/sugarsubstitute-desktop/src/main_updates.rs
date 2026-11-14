@@ -50,17 +50,20 @@ pub(crate) struct UpdateFeed {
     pub(crate) glyph: UpdateGlyph,
     pub(crate) saving: bool,
     pub(crate) workflow: WorkflowActivity,
+    /// The embedded page can show what is new, so "What's new" is offered.
+    pub(crate) whats_new: bool,
 }
 
 impl UpdateFeed {
-    /// Reduce the host's update status, with its SugarCubes update, close-save progress and
-    /// workflow activity. A ready update outranks a later failed check or a
+    /// Reduce the host's update status, with its SugarCubes update, close-save progress,
+    /// workflow activity and whether the page can show what is new. A ready update outranks a later failed check or a
     /// failed SugarCubes update, because restarting still applies it; either failure alone
     /// shows the warning that opens the update report.
     pub(crate) fn read(
         status: Option<&UpdateStatus>,
         closing: Option<CloseSaveProgress>,
         workflow: WorkflowActivity,
+        whats_new: bool,
     ) -> Self {
         let glyph = match status {
             Some(status) if status.ready().is_some() => UpdateGlyph::Ready,
@@ -73,7 +76,7 @@ impl UpdateFeed {
             closing,
             Some(CloseSaveProgress::Saving { .. } | CloseSaveProgress::Recording(_))
         );
-        Self { glyph, saving, workflow }
+        Self { glyph, saving, workflow, whats_new }
     }
 }
 
@@ -87,12 +90,10 @@ pub(crate) enum Notice {
         /// Input canvas edits were lost.
         inputs: bool,
     },
-    /// The first start on a new version, with where its release notes are.
+    /// The first start on a new version.
     Updated {
         /// The version now running.
         version: String,
-        /// The release notes, opened by the caption's link when present.
-        changelog: Option<url::Url>,
     },
     /// A new version did not start, so the one before it is running.
     PreviousVersionRunning,
@@ -112,11 +113,12 @@ impl Notice {
         }
     }
 
-    /// Whether the line offers a link: the release notes of a new version, or the report of a
-    /// SugarCubes update that needs attention, such as the previous version running again.
-    fn links(&self) -> bool {
+    /// Whether the line offers a link: what is new in a new version while the page can show
+    /// it, or the report of a SugarCubes update that needs attention, such as the previous
+    /// version running again.
+    fn links(&self, whats_new: bool) -> bool {
         match self {
-            Self::Updated { changelog, .. } => changelog.is_some(),
+            Self::Updated { .. } => whats_new,
             Self::Sugarcubes(report) => report.needs_attention(),
             Self::NotSaved { .. } | Self::PreviousVersionRunning | Self::Repairing => false,
         }
@@ -125,9 +127,7 @@ impl Notice {
     /// The line for a start-up update message.
     pub(crate) fn update(notice: crate::UpdateNotice) -> Self {
         match notice {
-            crate::UpdateNotice::Updated { version, changelog } => {
-                Self::Updated { version, changelog }
-            }
+            crate::UpdateNotice::Updated { version } => Self::Updated { version },
             crate::UpdateNotice::PreviousVersionRunning => Self::PreviousVersionRunning,
             crate::UpdateNotice::Repairing => Self::Repairing,
             crate::UpdateNotice::Sugarcubes(report) => Self::Sugarcubes(report),
@@ -142,8 +142,8 @@ pub(crate) enum UpdateIntent {
     OpenReport,
     /// Run the ordinary close and relaunch so the ready update applies.
     RestartToApply,
-    /// Open the running version's release notes in the user's browser.
-    OpenChangelog(url::Url),
+    /// Show what is new in the embedded page's release notes.
+    OpenWhatsNew,
 }
 
 /// One caption peer's current state. `label` is the peer's stable localized name; `text` is
@@ -233,9 +233,7 @@ impl CaptionUpdates {
                 (true, Some(UpdateIntent::RestartToApply))
             }
             (LINK, _) => match self.notices.front() {
-                Some(Notice::Updated { changelog: Some(url), .. }) => {
-                    (false, Some(UpdateIntent::OpenChangelog(url.clone())))
-                }
+                Some(Notice::Updated { .. }) => (false, Some(UpdateIntent::OpenWhatsNew)),
                 Some(Notice::Sugarcubes(report)) if report.needs_attention() => {
                     (false, Some(UpdateIntent::OpenReport))
                 }
@@ -256,7 +254,10 @@ impl CaptionUpdates {
             UPDATE => quiet && self.feed.glyph != UpdateGlyph::Hidden,
             OFFER => quiet && self.feed.glyph == UpdateGlyph::Ready && self.offer_open,
             LINE => !quiet || !self.notices.is_empty(),
-            LINK => quiet && self.notices.front().is_some_and(Notice::links),
+            LINK => {
+                quiet
+                    && self.notices.front().is_some_and(|notice| notice.links(self.feed.whats_new))
+            }
             DISMISS => quiet && !self.notices.is_empty(),
             _ => false,
         }

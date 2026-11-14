@@ -42,6 +42,10 @@
           {
             "name": "sugarcubes.updates",
             "version": 1
+          },
+          {
+            "name": "sugarcubes.release-notes",
+            "version": 1
           }
         ],
         "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
@@ -238,6 +242,27 @@
         "request": "conformance-check",
         "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
         "type": "rejected",
+        "version": 1
+      }
+    },
+    {
+      "from": "page",
+      "message": {
+        "protocol": "sugarcubes.release-notes",
+        "version": 1,
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "watch"
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "currentVersion": "0.1.0",
+        "product": "SugarSubstitute",
+        "protocol": "sugarcubes.release-notes",
+        "revision": 1,
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "state",
         "version": 1
       }
     }

@@ -152,7 +152,7 @@ sources = [
     "crates/sugarsubstitute-desktop/src/windows_text/field_tests.rs",
     "crates/sugarsubstitute-desktop/src/windows_text/renderer.rs",
 ]
-source_sha256 = "sha256:c097c5146ef63f773a339fef7c972eeb1114f86910a49d84d411261defa49d19"
+source_sha256 = "sha256:bf6f7f51c9ecceee6426bda4bd39edde4db078f6169e34e594c44e78d447d7b8"
 
 [[boundaries]]
 owner = "sugarsubstitute-image-gpu"

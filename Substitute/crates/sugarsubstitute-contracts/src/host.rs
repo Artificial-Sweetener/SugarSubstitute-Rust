@@ -36,6 +36,9 @@ impl HostProtocol {
     pub const MEMORY: Self = Self { name: "sugarcubes.memory", version: 1 };
     /// `sugarcubes.updates` version 1: the host's update state, check now and restart to apply.
     pub const UPDATES: Self = Self { name: "sugarcubes.updates", version: 1 };
+    /// `sugarcubes.release-notes` version 1: the host's own release notes, and "What's new"
+    /// asked for on the host.
+    pub const RELEASE_NOTES: Self = Self { name: "sugarcubes.release-notes", version: 1 };
 
     /// Borrow the protocol's message name.
     pub const fn name(self) -> &'static str {

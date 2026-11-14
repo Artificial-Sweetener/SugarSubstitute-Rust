@@ -69,6 +69,7 @@ mod main_readiness;
 mod main_readiness_storage;
 #[cfg(any(target_os = "windows", test))]
 mod main_readiness_types;
+mod main_release_notes_contract;
 #[cfg(any(target_os = "windows", test))]
 mod main_reload;
 mod main_session_contract;
@@ -179,9 +180,6 @@ mod windows_drag;
 mod windows_move_state;
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
-mod windows_open_link;
-#[cfg(target_os = "windows")]
-#[allow(unsafe_code)]
 mod windows_scroll;
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
@@ -226,6 +224,7 @@ pub use main_hosting::MainHosting;
 pub use main_memory_contract::{MemoryCommand, MemoryObservation};
 pub use main_panel_contract::{PanelCommand, PanelObservation};
 pub use main_panel_ingress_receipt::{PanelIngressReceipt, PanelIngressReceiptError};
+pub use main_release_notes_contract::{ReleaseNotesCommand, ReleaseNotesObservation};
 pub use main_session_contract::{SessionBootstrap, SessionCommand, SessionObservation};
 pub use main_session_media::{
     MAX_MEDIA_BYTES, SessionMediaFailure, SessionMediaObservation, SessionMediaRange,

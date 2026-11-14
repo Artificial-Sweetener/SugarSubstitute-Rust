@@ -17,6 +17,7 @@ pub(super) fn turn(
         content.update_status().as_ref(),
         content.close_save_progress(),
         content.workflow_activity(),
+        content.whats_new_available(),
     );
     let mut notices = Vec::new();
     if main.shows_messages() {
@@ -47,11 +48,11 @@ pub(super) fn activate(
         Some(UpdateIntent::RestartToApply) => content
             .request_restart_to_apply()
             .map_err(|cause| DesktopError::boxed("restart_to_apply", cause)),
-        Some(UpdateIntent::OpenChangelog(url)) => {
-            // The release notes are optional: a link the shell cannot open is logged only.
-            if let Err(cause) = crate::windows_open_link::open(&url) {
-                tracing::warn!(operation = "open_changelog", cause = %cause,
-                    "The release notes could not be opened");
+        Some(UpdateIntent::OpenWhatsNew) => {
+            // What is new is optional: a request the page cannot be sent is logged only.
+            if let Err(cause) = content.open_whats_new() {
+                tracing::warn!(operation = "open_whats_new", cause = %cause,
+                    "What's new could not be shown in the page");
             }
             Ok(())
         }

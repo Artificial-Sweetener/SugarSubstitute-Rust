@@ -100,6 +100,7 @@ fn the_update_button_sits_beside_minimize_and_the_offer_beside_it() -> TestResul
         glyph: UpdateGlyph::Ready,
         saving: false,
         workflow: WorkflowActivity::Idle,
+        whats_new: false,
     });
     caption.activate(crate::main_updates::UPDATE);
     let controls = layout(1280.0, &caption, false)?;
@@ -119,6 +120,7 @@ fn a_message_line_and_its_dismiss_fill_the_left_without_crossing_the_buttons() -
         glyph: UpdateGlyph::Warning,
         saving: false,
         workflow: WorkflowActivity::Idle,
+        whats_new: false,
     });
     caption.notify(Notice::NotSaved { workspace: true, inputs: true });
     let wide = layout(1600.0, &caption, false)?;
@@ -164,6 +166,7 @@ fn the_page_leaves_the_caption_strip_only_while_a_peer_beyond_the_window_buttons
         glyph: UpdateGlyph::Ready,
         saving: false,
         workflow: WorkflowActivity::Idle,
+        whats_new: false,
     });
     let update = layout(1280.0, &caption, false)?;
     // The strip's edge rounds up so it covers every peer's rounded rectangle.

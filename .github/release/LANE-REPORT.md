@@ -15,8 +15,6 @@
 - No CI builds `.ssupdate` packages or descriptors, and `release.yml` doesn't call the
   update-repository workflow yet. Not created yet: `.github/update-repository/root.json`, the
   `substitute-updates` release, the `update-signing` environment, the `UPDATE_*_KEY` secrets.
-- Builds must embed `release_notes` = `…/releases/tag/substitute-v{version}` of this repository; no
-  pipeline here produces the distribution file yet.
 - HANDOFF: C3, C4 and F10 must land before the D5 lifetimes can be relied on.
 
 ## Decisions made

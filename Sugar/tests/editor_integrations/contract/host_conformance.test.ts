@@ -33,6 +33,7 @@ import {
   conformanceSession as session,
   masksWithoutDocument,
   memoryHost,
+  releaseNotesHost,
   updatesHost,
 } from '../support/ConformanceHosts.js';
 
@@ -59,6 +60,7 @@ test('a host serving every protocol passes every check it declares', async () =>
           HOST_PROTOCOLS.canvasMasks,
           HOST_PROTOCOLS.memory,
           HOST_PROTOCOLS.updates,
+          HOST_PROTOCOLS.releaseNotes,
         ],
         capabilities: [
           { name: HOST_CAPABILITIES.hostStyles },
@@ -71,6 +73,7 @@ test('a host serving every protocol passes every check it declares', async () =>
         masksWithoutDocument(send),
         memoryHost(send),
         updatesHost(send),
+        releaseNotesHost(send),
       ],
     }),
     { session },
@@ -84,6 +87,7 @@ test('a host serving every protocol passes every check it declares', async () =>
     'canvas-masks': 'passed',
     memory: 'passed',
     updates: 'passed',
+    'release-notes': 'passed',
     'capability.presentation.host-styles': 'passed',
     'capability.presentation.system-accent': 'passed',
     'capability.output.host-surface': 'not-offered',
@@ -111,7 +115,25 @@ test('a host serving only the panel passes, with everything else not offered', a
     'canvas-masks': 'not-offered',
     memory: 'not-offered',
     updates: 'not-offered',
+    'release-notes': 'not-offered',
   });
+});
+
+test('a release notes state without a product name fails its check', async () => {
+  const run = runHostConformance(
+    inMemoryHostChannel({
+      session,
+      description: {
+        protocols: [HOST_PROTOCOLS.panel, HOST_PROTOCOLS.releaseNotes],
+        capabilities: [],
+      },
+      presentation,
+      handlers: (send) => [releaseNotesHost(send, '')],
+    }),
+    { session },
+  );
+  await expect(run).rejects.toThrow(HostConformanceFailure);
+  await expect(run).rejects.toMatchObject({ check: 'release-notes' });
 });
 
 test('an invalid reply fails its check at once', async () => {

@@ -19,6 +19,7 @@ import { CanvasMaskServer } from '../../../integrations/shared/CanvasMaskServer.
 import type { InMemoryHostHandler } from '../../../integrations/shared/conformance/InMemoryHostChannel.js';
 import { isMemoryUsageMessage } from '../../../integrations/shared/MemoryValidation.generated.js';
 import { isUpdatesClientMessage } from '../../../integrations/shared/UpdatesValidation.generated.js';
+import { isReleaseNotesClientMessage } from '../../../integrations/shared/ReleaseNotesValidation.generated.js';
 
 export const conformanceSession = 'panel-0123456789abcdef';
 
@@ -99,6 +100,27 @@ export function updatesHost(send: (message: unknown) => void): InMemoryHostHandl
           },
         });
       else send({ ...envelope, type: 'accepted', request: value.request });
+      return true;
+    },
+  };
+}
+
+/** A host that names its product and running version and has no notes published. */
+export function releaseNotesHost(
+  send: (message: unknown) => void,
+  product = 'Conformance Host',
+): InMemoryHostHandler {
+  const envelope = {
+    protocol: 'sugarcubes.release-notes',
+    version: 1,
+    session: conformanceSession,
+  };
+  return {
+    receive: (value) => {
+      if (!isReleaseNotesClientMessage(value)) return false;
+      if (value.type === 'watch')
+        send({ ...envelope, type: 'state', revision: 1, product, currentVersion: '1.0.0' });
+      else send({ ...envelope, type: 'failed', request: value.request, reason: 'not-published' });
       return true;
     },
   };

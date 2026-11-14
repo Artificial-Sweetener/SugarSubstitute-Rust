@@ -359,6 +359,9 @@ pub enum DesktopStartupCommand {
     /// Deliver an update state or answer to the current top document; a newer state replaces
     /// an unsent older one, and answers are never replaced.
     SendUpdates(crate::UpdatesCommand),
+    /// Deliver a release notes state, open request or answer to the current top document; a
+    /// newer state replaces an unsent older one, and nothing else is ever replaced.
+    SendReleaseNotes(crate::ReleaseNotesCommand),
     /// Report the current browser environment's processes as [`DesktopStartupObservation::BrowserProcesses`].
     MeasureBrowser(MainIdentity),
     /// Ask the current browser to trim its memory (`low`) or return to normal use.
@@ -515,6 +518,8 @@ pub enum DesktopStartupObservation {
     MemoryMessage(crate::MemoryObservation),
     /// A bounded update request from the current native top-document context.
     UpdatesMessage(crate::UpdatesObservation),
+    /// A bounded release notes request from the current native top-document context.
+    ReleaseNotesMessage(crate::ReleaseNotesObservation),
     /// The processes the current browser environment runs, for the memory budget's footprint.
     BrowserProcesses {
         /// Exact current native document identity.
@@ -787,6 +792,23 @@ pub trait StartupWindowContent: WindowContent {
     /// main window can show it.
     fn take_update_notice(&mut self) -> Option<crate::UpdateNotice> {
         None
+    }
+
+    /// Whether the embedded page can show what is new: the current navigation's page follows
+    /// the host's release notes. The caption offers "What's new" only then.
+    fn whats_new_available(&self) -> bool {
+        false
+    }
+
+    /// The user asked to see what is new. The embedded page shows its release notes; nothing
+    /// leaves the application. Called on the event-loop thread between native callbacks;
+    /// returns promptly.
+    ///
+    /// # Errors
+    /// Preserves the failure to queue the request for the page; this default refuses because
+    /// the host shows no release notes.
+    fn open_whats_new(&mut self) -> Result<(), Box<dyn Error>> {
+        Err("This host shows no release notes".into())
     }
 
     /// Whether a workflow is running, so the restart offer can say it waits for it.

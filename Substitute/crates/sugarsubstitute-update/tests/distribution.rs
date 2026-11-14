@@ -5,8 +5,7 @@ use sugarsubstitute_update::distribution::{Distribution, MAX_BYTES, UpdatePolicy
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 
 fn configuration() -> serde_json::Value {
-    serde_json::json!({"schema_version":3, "update_policy":"beta_eager", "repository":vec![92;32],
-        "release_notes":"https://github.com/example/monorepo/releases/tag/substitute-v{version}", "feed": {
+    serde_json::json!({"schema_version":4, "update_policy":"beta_eager", "repository":vec![92;32], "feed": {
         "transport":"https", "base":"https://updates.example.test/releases/",
         "redirects":["https://assets.example.test/"]
     }})
@@ -48,17 +47,11 @@ fn malformed_schema_fields_and_empty_identity_never_disable_or_reset_updates() -
         "missing_channel_override",
         "missing_policy",
         "unknown_policy",
-        "missing_release_notes",
     ] {
         let mut value = configuration();
         match field {
-            "schema" => value["schema_version"] = 4.into(),
-            "previous_schema" => value["schema_version"] = 2.into(),
-            "missing_release_notes" => {
-                if let Some(fields) = value.as_object_mut() {
-                    fields.remove("release_notes");
-                }
-            }
+            "schema" => value["schema_version"] = 5.into(),
+            "previous_schema" => value["schema_version"] = 3.into(),
             "missing_policy" => {
                 if let Some(fields) = value.as_object_mut() {
                     fields.remove("update_policy");
@@ -77,14 +70,10 @@ fn malformed_schema_fields_and_empty_identity_never_disable_or_reset_updates() -
 
 /// The distribution release builds compile in, exactly as installer/release commits it.
 #[test]
-fn the_release_build_distribution_feeds_from_github_and_links_each_release() -> Result {
+fn the_release_build_distribution_feeds_from_github() -> Result {
     let committed = include_bytes!("../../../installer/release/update-distribution.json");
     let distribution = Distribution::decode(committed)?;
     assert_eq!(distribution.update_policy(), UpdatePolicy::BetaEager);
-    assert_eq!(
-        distribution.release_notes().url("0.2.0")?.as_str(),
-        "https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/releases/tag/substitute-v0.2.0"
-    );
     let (identity, policy) = distribution.into_parts();
     assert_ne!(identity, [0; 32]);
     let timestamp = policy.asset("timestamp.json")?;
@@ -97,54 +86,6 @@ fn the_release_build_distribution_feeds_from_github_and_links_each_release() -> 
         assert!(policy.admits(&asset).is_ok(), "{host}");
     }
     assert!(policy.redirect(&timestamp, "https://example.test/asset").is_err());
-    Ok(())
-}
-
-#[test]
-fn release_notes_link_each_version_to_its_published_notes() -> Result {
-    let distribution = Distribution::decode(&serde_json::to_vec(&configuration())?)?;
-    let notes = distribution.release_notes();
-    assert_eq!(
-        notes.url("0.2.0")?.as_str(),
-        "https://github.com/example/monorepo/releases/tag/substitute-v0.2.0"
-    );
-    let long = "9".repeat(65);
-    for version in [
-        "",
-        "1",
-        "1.2",
-        "1.2.3.4",
-        "01.2.3",
-        "1.2.3-beta",
-        "1.2.x",
-        "../1.2.3",
-        "1.2.3#x",
-        "2.4.1/../../x",
-        "2.4.1?x=1",
-        "2.4.1 beta",
-        &long,
-    ] {
-        assert!(notes.url(version).is_err(), "{version}");
-    }
-    Ok(())
-}
-
-#[test]
-fn release_notes_locations_must_be_one_plain_https_template() -> Result {
-    for location in [
-        "https://example.test/notes",
-        "https://example.test/{version}/{version}",
-        "http://example.test/{version}",
-        "https://user:secret@example.test/{version}",
-        "https://example.test/{version}?ticket=1",
-        "file:///notes/{version}",
-        "{version}",
-        "not an address {version}",
-    ] {
-        let mut value = configuration();
-        value["release_notes"] = location.into();
-        assert!(Distribution::decode(&serde_json::to_vec(&value)?).is_err(), "{location}");
-    }
     Ok(())
 }
 

@@ -23,11 +23,7 @@ fn every_start_up_message_reaches_the_window_once_in_its_own_form() -> BackendRe
         StartupNotice::PreviousVersionRunning,
         StartupNotice::Sugarcubes(could_not_check()),
     ]);
-    // A build without update configuration names no release notes, so no link is offered.
-    assert_eq!(
-        host.take_update_notice(),
-        Some(UpdateNotice::Updated { version: "2.4.1".into(), changelog: None })
-    );
+    assert_eq!(host.take_update_notice(), Some(UpdateNotice::Updated { version: "2.4.1".into() }));
     assert_eq!(host.take_update_notice(), Some(UpdateNotice::Repairing));
     assert_eq!(host.take_update_notice(), Some(UpdateNotice::PreviousVersionRunning));
     assert_eq!(host.take_update_notice(), Some(UpdateNotice::Sugarcubes(could_not_check())));
@@ -35,6 +31,34 @@ fn every_start_up_message_reaches_the_window_once_in_its_own_form() -> BackendRe
     Ok(())
 }
 
+#[test]
+fn whats_new_waits_for_a_page_that_shows_the_release_notes() -> BackendResult<()> {
+    let mut host = host()?;
+    // What's new is shown only in the embedded page; before a page watches, nothing is offered
+    // and asking shows nothing anywhere else.
+    assert!(!host.whats_new_available());
+    assert!(host.open_whats_new().is_err());
+    assert!(host.release_notes.take_command().is_none());
+    Ok(())
+}
+
+#[test]
+fn the_release_notes_scope_is_unbounded_follows_the_startup_scopes_and_is_configured_once()
+-> BackendResult<()> {
+    use sugarsubstitute_contracts::execution::{Moment, ScopeId, ScopeSpec};
+    let spec = |id, deadline| -> BackendResult<ScopeSpec> {
+        Ok(ScopeSpec { id: ScopeId::new(id)?, deadline })
+    };
+    let mut host = host()?;
+    for refused in [spec(1, None)?, spec(2, None)?, spec(3, Some(Moment::from_nanos(1)))?] {
+        assert!(host.configure_release_notes(refused).is_err());
+        assert!(host.release_notes_jobs.is_none());
+    }
+    host.configure_release_notes(spec(3, None)?)?;
+    assert!(host.release_notes_jobs.as_ref().is_some_and(|jobs| jobs.settled()));
+    assert!(host.configure_release_notes(spec(4, None)?).is_err(), "configured once");
+    Ok(())
+}
 #[test]
 fn the_splash_says_updating_only_while_the_new_version_is_unconfirmed() -> BackendResult<()> {
     let mut host = host()?;

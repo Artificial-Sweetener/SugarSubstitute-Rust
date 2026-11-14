@@ -14,6 +14,7 @@ pub(in crate::main_actor) enum Ingress {
     Native(crate::CanvasNativeObservation),
     Memory(crate::MemoryObservation),
     Updates(crate::UpdatesObservation),
+    ReleaseNotes(crate::ReleaseNotesObservation),
 }
 
 impl MainActor {
@@ -99,6 +100,14 @@ impl MainActor {
             crate::main_panel_ingress::ClientMessage::Updates(message) => Ingress::Updates(
                 crate::UpdatesObservation::new(self.identity(), message, lease, claim),
             ),
+            crate::main_panel_ingress::ClientMessage::ReleaseNotes(message) => {
+                Ingress::ReleaseNotes(crate::ReleaseNotesObservation::new(
+                    self.identity(),
+                    message,
+                    lease,
+                    claim,
+                ))
+            }
             crate::main_panel_ingress::ClientMessage::Native(request) => {
                 Ingress::Native(crate::CanvasNativeObservation::new(
                     self.identity(),
@@ -121,6 +130,9 @@ impl MainActor {
             Ingress::Panel(observation) => DesktopStartupObservation::PanelMessage(observation),
             Ingress::Memory(observation) => DesktopStartupObservation::MemoryMessage(observation),
             Ingress::Updates(observation) => DesktopStartupObservation::UpdatesMessage(observation),
+            Ingress::ReleaseNotes(observation) => {
+                DesktopStartupObservation::ReleaseNotesMessage(observation)
+            }
             Ingress::Surface(observation) => {
                 #[cfg(feature = "native-composition")]
                 let mut observation = observation;

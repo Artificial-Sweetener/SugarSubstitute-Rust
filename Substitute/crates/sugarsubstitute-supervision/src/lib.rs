@@ -21,6 +21,8 @@ pub mod setup_storage;
 #[cfg(windows)]
 pub use setup_storage::cache;
 #[cfg(windows)]
+pub mod release_notes;
+#[cfg(windows)]
 pub mod update_http;
 #[cfg(windows)]
 pub mod update_preparation;

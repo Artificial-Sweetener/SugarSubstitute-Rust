@@ -6,6 +6,7 @@ use serde::Deserialize;
 use sugarsubstitute_contracts::{
     canvas_native::CanvasNativeRequest,
     canvas_surface::CanvasSurfaceMessage,
+    host_release_notes::ReleaseNotesClientMessage,
     host_updates::UpdatesClientMessage,
     memory::MemoryMessage,
     panel::{PanelMessage, PanelSession},
@@ -146,13 +147,16 @@ pub(crate) enum ClientMessage {
     Native(CanvasNativeRequest),
     Memory(MemoryMessage),
     Updates(UpdatesClientMessage),
+    ReleaseNotes(ReleaseNotesClientMessage),
 }
 
 impl ClientMessage {
     /// Keep control and cancellation traffic independent of ordinary response ownership.
     pub(crate) const fn lane(&self) -> Lane {
         match self {
-            Self::Panel(_) | Self::Memory(_) | Self::Updates(_) => Lane::Control,
+            Self::Panel(_) | Self::Memory(_) | Self::Updates(_) | Self::ReleaseNotes(_) => {
+                Lane::Control
+            }
             Self::Surface(CanvasSurfaceMessage::Cancel { .. }) => Lane::Cancellation,
             Self::Surface(_) | Self::Native(_) => Lane::Ordinary,
         }
@@ -161,7 +165,7 @@ impl ClientMessage {
     /// Correlate cancellation and replies without imposing a global public-ID frontier.
     pub(crate) fn request_id(&self) -> Option<u64> {
         match self {
-            Self::Panel(_) | Self::Memory(_) | Self::Updates(_) => None,
+            Self::Panel(_) | Self::Memory(_) | Self::Updates(_) | Self::ReleaseNotes(_) => None,
             Self::Surface(CanvasSurfaceMessage::Request(value)) => Some(value.request_id()),
             Self::Surface(CanvasSurfaceMessage::Discovery(value)) => Some(value.request_id()),
             Self::Surface(CanvasSurfaceMessage::Presentation(value)) => Some(value.request_id()),
@@ -215,6 +219,9 @@ pub(crate) fn decode_payload(payload: &str, session: &PanelSession) -> Option<Cl
     }
     if let Ok(message) = UpdatesClientMessage::decode(payload.as_bytes()) {
         return (message.session() == session).then_some(ClientMessage::Updates(message));
+    }
+    if let Ok(message) = ReleaseNotesClientMessage::decode(payload.as_bytes()) {
+        return (message.session() == session).then_some(ClientMessage::ReleaseNotes(message));
     }
     let request = CanvasNativeRequest::decode(payload.as_bytes()).ok()?;
     (request.session() == session).then_some(ClientMessage::Native(request))

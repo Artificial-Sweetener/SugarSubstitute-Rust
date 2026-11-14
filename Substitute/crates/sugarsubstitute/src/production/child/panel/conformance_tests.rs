@@ -3,10 +3,11 @@
 //! Record what this host answers the SugarCubes conformance kit, from its production owners.
 //!
 //! The kit (the pack's `integrations/shared/conformance/HostConformance.ts`) plays the page.
-//! For a host serving the panel, canvas, memory and updates protocols it sends the fixed sequence
-//! in [`page_script`]. Each message goes to the owner that answers it in production: the panel owner
-//! (description, configure and heartbeat), the desktop child's surface answer before the native
-//! surface can answer, the memory governor and the updates link. What they answer to each page
+//! For a host serving the panel, canvas, memory, updates and release notes protocols it sends the
+//! fixed sequence in [`page_script`]. Each message goes to the owner that answers it in production:
+//! the panel owner (description, configure and heartbeat), the desktop child's surface answer
+//! before the native surface can answer, the memory governor, the updates link and the release
+//! notes link. What they answer to each page
 //! message must equal the recorded answers in `conformance_answers.json`.
 //!
 //! `crates/sugarsubstitute-desktop/tests/host_conformance.mjs` runs the kit under Node over the
@@ -15,12 +16,16 @@
 //! SugarCubes profile, which SugarCubes replays in CI.
 
 use super::*;
-use crate::startup::{memory::MemoryGovernor, updates_page::UpdatesPage};
+use crate::startup::{
+    memory::MemoryGovernor, release_notes_fetch::NoFetches, release_notes_page::ReleaseNotesPage,
+    updates_page::UpdatesPage,
+};
 use serde_json::{Value, json};
 use sugarsubstitute_application::updates_panel::{IdleUpdateStatus, IdleWorkflowActivity};
 use sugarsubstitute_contracts::{
     canvas_surface::CanvasSurfaceMessage,
     execution::{Generation, MemoryRelease},
+    host_release_notes::ReleaseNotesClientMessage,
     host_updates::UpdatesClientMessage,
     memory::MemoryMessage,
     startup::LaunchId,
@@ -86,6 +91,7 @@ fn page_script(session: &str) -> Vec<Value> {
             envelope("sugarcubes.updates", 1),
             json!({ "type": "check", "request": "conformance-check" }),
         ),
+        with(envelope("sugarcubes.release-notes", 1), json!({ "type": "watch" })),
     ]
 }
 
@@ -97,6 +103,7 @@ struct Host {
     deliveries: Deliveries,
     memory: MemoryGovernor,
     updates: UpdatesPage,
+    release_notes: ReleaseNotesPage,
     now: Moment,
 }
 
@@ -126,6 +133,7 @@ impl Host {
             deliveries,
             memory: MemoryGovernor::new(Box::new(Machine), MemoryPreference::default()),
             updates: UpdatesPage::new()?,
+            release_notes: ReleaseNotesPage::new()?,
             now: Moment::from_nanos(1),
         })
     }
@@ -182,6 +190,21 @@ impl Host {
                 while let Some(command) = self.updates.take_command() {
                     if let DesktopStartupCommand::SendUpdates(update) = command {
                         answers.push(serde_json::from_slice(update.payload())?);
+                    }
+                }
+            }
+            Some("sugarcubes.release-notes") => {
+                let message = ReleaseNotesClientMessage::decode(&bytes)?;
+                self.release_notes.observe(
+                    self.identity,
+                    message,
+                    self.lease.clone(),
+                    claim()?,
+                    &mut NoFetches,
+                )?;
+                while let Some(command) = self.release_notes.take_command() {
+                    if let DesktopStartupCommand::SendReleaseNotes(notes) = command {
+                        answers.push(serde_json::from_slice(notes.payload())?);
                     }
                 }
             }

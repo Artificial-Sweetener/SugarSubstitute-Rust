@@ -42,7 +42,7 @@ fn saving() -> CloseSaveProgress {
 }
 
 fn feed(status: Option<&UpdateStatus>) -> UpdateFeed {
-    UpdateFeed::read(status, None, WorkflowActivity::Idle)
+    UpdateFeed::read(status, None, WorkflowActivity::Idle, false)
 }
 
 fn shown(view: &UpdateCaptionView) -> Vec<u16> {
@@ -107,7 +107,7 @@ fn a_failed_sugarcubes_update_shows_the_warning_that_opens_the_report() {
     assert_eq!(feed(Some(&pack_failed(ready()))).glyph, UpdateGlyph::Ready);
     let mut caption = CaptionUpdates::default();
     let status = pack_failed(UpdateStatus::default());
-    caption.observe(UpdateFeed::read(Some(&status), Some(saving()), WorkflowActivity::Idle));
+    caption.observe(UpdateFeed::read(Some(&status), Some(saving()), WorkflowActivity::Idle, false));
     assert_eq!(caption.activate(UPDATE), (false, None));
 }
 
@@ -121,7 +121,7 @@ fn ready_offers_the_restart_and_the_offer_waits_for_a_running_workflow() {
     assert_eq!(shown(&view), vec![UPDATE, OFFER]);
     assert_eq!(view.offer.text, "Restart to apply");
 
-    caption.observe(UpdateFeed::read(Some(&ready()), None, WorkflowActivity::Running));
+    caption.observe(UpdateFeed::read(Some(&ready()), None, WorkflowActivity::Running, false));
     assert_eq!(caption.view(en).offer.text, "Restart after this finishes");
     assert_eq!(caption.view(messages("es")).offer.text, "Reiniciar al terminar");
 
@@ -160,7 +160,8 @@ fn saving_replaces_everything_with_one_line_until_the_close_settles() {
     assert!(caption.observe(UpdateFeed::read(
         Some(&ready()),
         Some(saving()),
-        WorkflowActivity::Idle
+        WorkflowActivity::Idle,
+        false
     )));
     let view = caption.view(en);
     assert_eq!(shown(&view), vec![LINE]);
@@ -174,9 +175,9 @@ fn saving_replaces_everything_with_one_line_until_the_close_settles() {
         inputs: SaveVerdict::Saved,
     };
     let recording = Some(CloseSaveProgress::Recording(outcome));
-    assert!(UpdateFeed::read(None, recording, WorkflowActivity::Idle).saving);
+    assert!(UpdateFeed::read(None, recording, WorkflowActivity::Idle, false).saving);
     let settled = Some(CloseSaveProgress::Settled(outcome));
-    assert!(!UpdateFeed::read(None, settled, WorkflowActivity::Idle).saving);
+    assert!(!UpdateFeed::read(None, settled, WorkflowActivity::Idle, false).saving);
 }
 
 #[test]
@@ -210,15 +211,14 @@ fn the_not_saved_notice_is_one_line_the_user_can_dismiss() {
 }
 
 #[test]
-fn the_first_start_on_a_new_version_says_so_once_with_a_link_to_its_notes()
+fn the_first_start_on_a_new_version_says_so_once_with_what_is_new_in_the_page()
 -> Result<(), Box<dyn std::error::Error>> {
     let en = messages("en");
-    let notes = url::Url::parse("https://github.com/example/releases/tag/v2.4.1")?;
     let mut caption = CaptionUpdates::default();
-    assert!(caption.notify(Notice::update(crate::UpdateNotice::Updated {
-        version: "2.4.1".into(),
-        changelog: Some(notes.clone()),
-    })));
+    caption.observe(UpdateFeed::read(None, None, WorkflowActivity::Idle, true));
+    assert!(
+        caption.notify(Notice::update(crate::UpdateNotice::Updated { version: "2.4.1".into() }))
+    );
     // A loss at the same start waits behind the update line.
     assert!(!caption.notify(Notice::NotSaved { workspace: true, inputs: false }));
     let view = caption.view(en);
@@ -226,7 +226,8 @@ fn the_first_start_on_a_new_version_says_so_once_with_a_link_to_its_notes()
     assert_eq!(view.line.text, "Updated to version 2.4.1");
     assert_eq!(view.link.text, "What's new");
     assert_eq!(caption.view(messages("ja")).line.text, "バージョン 2.4.1 に更新しました");
-    assert_eq!(caption.activate(LINK), (false, Some(UpdateIntent::OpenChangelog(notes))));
+    // What's new asks the application to show the page's release notes; it names no address.
+    assert_eq!(caption.activate(LINK), (false, Some(UpdateIntent::OpenWhatsNew)));
     assert_eq!(caption.activate(DISMISS), (true, None));
     let view = caption.view(en);
     assert_eq!(shown(&view), vec![LINE, DISMISS]);
@@ -236,14 +237,17 @@ fn the_first_start_on_a_new_version_says_so_once_with_a_link_to_its_notes()
 }
 
 #[test]
-fn without_release_notes_the_update_line_has_no_link_and_a_rollback_is_one_plain_line() {
+fn without_a_page_that_shows_release_notes_the_update_line_has_no_link_and_a_rollback_is_one_plain_line()
+ {
     let en = messages("en");
     let mut caption = CaptionUpdates::default();
-    caption.notify(Notice::update(crate::UpdateNotice::Updated {
-        version: "2.4.1".into(),
-        changelog: None,
-    }));
+    caption.notify(Notice::update(crate::UpdateNotice::Updated { version: "2.4.1".into() }));
     assert_eq!(shown(&caption.view(en)), vec![LINE, DISMISS]);
+    assert_eq!(caption.activate(LINK), (false, None), "a hidden link does nothing");
+    // Once the page follows the host's release notes, the link appears for the same line.
+    caption.observe(UpdateFeed::read(None, None, WorkflowActivity::Idle, true));
+    assert_eq!(shown(&caption.view(en)), vec![LINE, LINK, DISMISS]);
+    caption.observe(UpdateFeed::default());
     caption.activate(DISMISS);
     caption.notify(Notice::update(crate::UpdateNotice::PreviousVersionRunning));
     let view = caption.view(en);
