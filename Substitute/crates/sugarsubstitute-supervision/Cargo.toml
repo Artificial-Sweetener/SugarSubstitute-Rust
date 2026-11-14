@@ -17,6 +17,9 @@ qualification-historical-root = []
 k1-native-qualification = ["sugarsubstitute-execution/k1-native-qualification"]
 # Proof builds only: a local signed feed and SugarCubes release fixture on literal loopback.
 local-update-qualification = ["boundary-fixtures", "sugarsubstitute-update/boundary-fixtures"]
+# Proof builds only: a proof drives and reads the embedded page over a loopback DevTools port
+# named by an inherited WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS. Never part of a shipped build.
+page-automation-qualification = []
 
 [dependencies]
 sugarsubstitute-contracts = { path = "../sugarsubstitute-contracts" }
