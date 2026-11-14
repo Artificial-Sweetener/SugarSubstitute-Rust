@@ -2677,7 +2677,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Acq
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/trust.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:1f8cc242647e98e9b7fb7ecdfb5788fb0c3405f1ac27771e5214d46c24ebd021"
+source_sha256 = "sha256:943eeca82d99f18f00a189cf2780cd1ef8b5f475b149d395fb2f0fd9b4427c44"
 capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Persist update trust under independent exclusion before returning authenticated offers. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
@@ -2963,7 +2963,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: New
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/update_preparation/tests/untrusted_storage.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:2bd3a7e58d26cd69662c4d9401c2fcee685f3bc1730ca37448cc136ead4f26ab"
+source_sha256 = "sha256:bf41e2ca36143f87919b131a89edc1b4652072ff05c60172a02b3f198291bba7"
 capabilities = ["std::fs::read_dir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: A check sets untrusted update storage aside and keeps refusing older releases. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -3045,7 +3045,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Dur
 [[records]]
 path = "crates/sugarsubstitute-update/src/tests.rs"
 owner = "sugarsubstitute-update"
-source_sha256 = "sha256:cee8603bf4423a7a9cfa68d3970e4161ff02e368f1fd26d299d5709f50b420a7"
+source_sha256 = "sha256:392d636b5b18bc044a94db75afc22cf6661a79846f761c82d635a936b095eba9"
 capabilities = ["method metadata"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Exercise real signature verification, trust recovery and hostile metadata/payload boundaries. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

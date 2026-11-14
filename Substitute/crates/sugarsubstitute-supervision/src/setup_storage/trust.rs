@@ -7,6 +7,7 @@
 //! state is an error, never permission to bootstrap again. Account protection excludes other
 //! accounts; software already controlling this account is outside this storage trust boundary.
 mod activation;
+mod carried;
 mod continuity;
 mod discovery;
 pub use activation::{MetadataMode, UpdateAuthorization};
@@ -242,6 +243,7 @@ impl TrustStore {
         if let Err(storage) = publication {
             return Err(TrustFailure::Publication { storage, verification: outcome.err() });
         }
+        self.carry_floors(protection, context)?;
         let value = outcome?;
         check(context)?;
         Ok(value)

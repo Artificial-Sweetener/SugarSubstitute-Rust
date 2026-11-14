@@ -38,15 +38,20 @@ fn a_check_sets_untrusted_update_storage_aside_and_keeps_refusing_older_releases
         campaign(&mut pipeline, &fixture, SignedPackage::new(&fixture.archive, 1)?, false)?;
     assert_eq!(step(&mut pipeline, &mut worker)?.progress, Progress::Checking);
     assert!(worker.storage_set_aside());
+    let mut failure = None;
     while !matches!(
         worker.progress(),
         Progress::Decision(_) | Progress::Failed | Progress::Ready | Progress::Unavailable
     ) {
         submit(&mut pipeline, &mut worker)?;
-        pipeline.observe(|| worker.poll())?;
+        failure = pipeline.observe(|| worker.poll())?.failure;
     }
-    assert_ne!(worker.progress(), Progress::Ready, "an older release was prepared");
-    server.finish()?;
+    assert_eq!(worker.progress(), Progress::Failed, "an older release was prepared");
+    // The fresh trust carries the set-aside trust's metadata floors, so the older release's
+    // metadata is refused before anything else is requested.
+    let failure = failure.ok_or("The refusal has no cause")?;
+    assert!(format!("{failure:?}").contains("Rollback"), "refused for another cause: {failure:?}");
+    server.stop()?;
     retire(&mut pipeline, &mut worker)?;
     // The old storage is kept, renamed, under user\ for diagnosis.
     let set_aside: Vec<_> = std::fs::read_dir(root.join("user").join(SET_ASIDE_FOLDER))?
@@ -54,6 +59,8 @@ fn a_check_sets_untrusted_update_storage_aside_and_keeps_refusing_older_releases
     assert_eq!(set_aside.len(), 1);
     assert!(set_aside[0].path().join("update-trust").join("checkpoint").is_file());
     assert!(set_aside[0].path().join("update-trust-enabled").is_file());
+    // The version floors kept outside the trust folder stay for the fresh trust.
+    assert!(root.join("state").join("update-floors").is_file(), "the floors were not kept");
     let installation = fixture;
     let set_aside = set_aside[0].path();
     // Fresh storage this account owns opens, and its floor is the running release.

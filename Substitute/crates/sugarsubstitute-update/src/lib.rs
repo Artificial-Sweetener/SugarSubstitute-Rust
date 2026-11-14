@@ -21,6 +21,7 @@ mod prepared;
 mod releases;
 mod target;
 mod trust;
+pub use checkpoint::VersionFloors;
 pub use engine::{ENGINE_PROTOCOL, ENGINE_RELEASE};
 pub use error::Error;
 pub use offer::VerifiedOffer;

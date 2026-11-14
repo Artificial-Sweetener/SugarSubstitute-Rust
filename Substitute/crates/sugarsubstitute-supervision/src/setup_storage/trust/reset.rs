@@ -6,7 +6,7 @@
 //! its DACL inherits again, its owner changed or its label was lowered, nothing in it can be
 //! relied on. The storage is moved, never deleted, into a set-aside folder under `user\` for
 //! diagnosis, and fresh storage this account owns is created from the trusted root this build
-//! ships. The fresh storage is staged complete before anything moves, so a reset interrupted at
+//! ships, carrying the root and metadata version floors kept outside the trust folder. The fresh storage is staged complete before anything moves, so a reset interrupted at
 //! any point is finished by the next one. Only the newest [`KEPT_SET_ASIDE`] set-aside folders are kept. Rollback protection
 //! holds because the fresh release history starts each application route at the highest release
 //! the protected selection knows and each updater route at this build's own engine release:
@@ -96,7 +96,8 @@ impl TrustStore {
             }
             stage_fresh(installation_root, repository, trusted_root, &selection, context)?;
         }
-        let set_aside = set_aside(installation_root, context)?;
+        let set_aside =
+            set_aside(installation_root, selection.installation(), repository, context)?;
         #[cfg(test)]
         if INTERRUPT_AFTER_SET_ASIDE.get() {
             return Err(invalid("The reset was interrupted").into());
@@ -196,7 +197,7 @@ const REPROTECT_LIMIT: usize = 4096;
 
 /// Protect again every object of the trust storage whose DACL only inherits again while still
 /// letting in no one but this account and SYSTEM: the state folder, the trust folder and all it
-/// holds, and the continuity marker. Links are never followed. Returns whether any object was
+/// holds, the continuity marker and the kept floors. Links are never followed. Returns whether any object was
 /// repaired; objects that cannot be repaired are left for the reset.
 fn reprotect_harmless(installation_root: &Path, context: &JobContext) -> io::Result<bool> {
     let state =
@@ -208,6 +209,7 @@ fn reprotect_harmless(installation_root: &Path, context: &JobContext) -> io::Res
             (state.clone(), false),
             (state.join(DIRECTORY), true),
             (state.join(continuity::MARKER), false),
+            (state.join(carried::RECORD), false),
         ];
         let mut repaired = false;
         let mut next = 0;
@@ -249,7 +251,10 @@ fn stage_fresh(
     context: &JobContext,
 ) -> Result<(), TrustFailure> {
     let _work = context.memory().claim(WORK_BYTES).map_err(io::Error::other)?;
-    let trust = RepositoryTrust::bootstrap(trusted_root)?;
+    let mut trust = RepositoryTrust::bootstrap(trusted_root)?;
+    trust.carry(
+        kept_floors(installation_root, selection.installation(), repository, context).metadata,
+    );
     let history = starting_history(selection)?;
     let (checkpoint, history) =
         initialize::fresh_records(selection.installation(), &repository, &trust, &history)?;
@@ -279,6 +284,39 @@ fn stage_fresh(
     )?;
     drop(staged.publish(&ready, context)?);
     Ok(())
+}
+
+/// The floors kept outside the trust folder for `installation`; kept floors that cannot be
+/// trusted carry nothing, and [`set_aside`] moves them aside with the storage.
+fn kept_floors(
+    installation_root: &Path,
+    installation: &InstallationId,
+    repository: [u8; 32],
+    context: &JobContext,
+) -> carried::Carried {
+    match read_kept(installation_root, installation, repository, context) {
+        Ok(kept) => kept.unwrap_or_default(),
+        Err(cause) => {
+            tracing::warn!(operation = "update_floors_untrusted", error = %cause,
+                "Kept update floors cannot be trusted and carry nothing");
+            carried::Carried::default()
+        }
+    }
+}
+
+/// Read the floors kept outside the trust folder for `installation`.
+fn read_kept(
+    installation_root: &Path,
+    installation: &InstallationId,
+    repository: [u8; 32],
+    context: &JobContext,
+) -> Result<Option<carried::Carried>, TrustFailure> {
+    let parent = Directory::open(installation_root, false)?;
+    let state = ownership::state(&parent)?;
+    protection::with_domain(context, |protection| {
+        carried::read(&state, installation, &repository, protection)
+    })
+    .map_err(TrustFailure::from)
 }
 
 /// Publish the fresh trust [`stage_fresh`] made ready as the installation's trust folder.
@@ -311,14 +349,30 @@ fn present(path: &Path, context: &JobContext) -> io::Result<bool> {
 /// `user\` named for this reset, protected like the trust storage itself. Returns that folder,
 /// or `None` when an interrupted reset already moved the trust folder and marker. The workspace
 /// moves when present; it is kept in place when it cannot move.
-fn set_aside(installation_root: &Path, context: &JobContext) -> io::Result<Option<PathBuf>> {
+fn set_aside(
+    installation_root: &Path,
+    installation: &InstallationId,
+    repository: [u8; 32],
+    context: &JobContext,
+) -> io::Result<Option<PathBuf>> {
     let layout = sugarsubstitute_configuration::layout::InstallationLayout::new(installation_root);
     let state = layout.state();
-    if !present(&state.join(DIRECTORY), context)?
-        && !present(&state.join(continuity::MARKER), context)?
-    {
+    let mut moves = vec![
+        (state.join(DIRECTORY), DIRECTORY),
+        (state.join(continuity::MARKER), continuity::MARKER),
+    ];
+    // Kept floors stay unless they cannot be trusted.
+    if read_kept(installation_root, installation, repository, context).is_err() {
+        moves.push((state.join(carried::RECORD), carried::RECORD));
+    }
+    let mut required = false;
+    for (source, _) in &moves {
+        required |= present(source, context)?;
+    }
+    if !required {
         return Ok(None);
     }
+    moves.push((installation_root.join(WORKSPACE), WORKSPACE));
     let user = Directory::open(&layout.user(), true)?;
     let (folder, destination) = protection::with(context, |protection| {
         let path = user.path().join(SET_ASIDE_FOLDER);
@@ -333,11 +387,7 @@ fn set_aside(installation_root: &Path, context: &JobContext) -> io::Result<Optio
         Ok((folder, destination))
     })?;
     check(context)?;
-    for (source, name) in [
-        (state.join(DIRECTORY), DIRECTORY),
-        (state.join(continuity::MARKER), continuity::MARKER),
-        (installation_root.join(WORKSPACE), WORKSPACE),
-    ] {
+    for (source, name) in moves {
         match staging::publish(&source, &destination.join(name)) {
             Ok(()) => {}
             Err(cause) if absent(&cause) => {}

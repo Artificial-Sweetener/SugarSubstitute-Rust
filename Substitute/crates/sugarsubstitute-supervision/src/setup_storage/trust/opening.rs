@@ -81,6 +81,9 @@ impl TrustStore {
                 continuity::read(&store, protection)?
                     .ok_or_else(|| invalid("Established update trust continuity is absent"))?
             };
+            if expected.is_some() {
+                store.carry_floors(protection, context)?;
+            }
             check(context)?;
             store._continuity = Some(marker);
             Ok(store)

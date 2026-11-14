@@ -21,6 +21,7 @@ pub(super) enum Kind {
     UpdaterMarker,
     UpdaterRelease,
     UpdateReceipt,
+    Floors,
 }
 impl Kind {
     fn magic(self) -> &'static [u8; 8] {
@@ -36,6 +37,7 @@ impl Kind {
             Self::UpdaterMarker => b"SSENGSM1",
             Self::UpdaterRelease => b"SSENGRL1",
             Self::UpdateReceipt => b"SSUPRCT1",
+            Self::Floors => b"SSFLOOR1",
         }
     }
     fn payload_limit(self) -> usize {
@@ -51,6 +53,7 @@ impl Kind {
             Self::UpdaterMarker => 64,
             Self::UpdaterRelease => super::receipt::MAX_BYTES,
             Self::UpdateReceipt => super::update_receipt::MAX_BYTES,
+            Self::Floors => super::carried::MAX_BYTES,
         }
     }
     /// Exact envelope size after validating its feature-owned payload length.
