@@ -45,6 +45,8 @@ export const HOST_CAPABILITIES = Object.freeze({
   systemAccent: 'presentation.system-accent',
   /** The host presents output images itself; the page never falls back to browser images. */
   hostOutputSurface: 'output.host-surface',
+  /** Besides sugarcubes.updates version 1, the host answers version 2 on the same channel, whose states name the product they describe. */
+  namedUpdates: 'updates.product-name',
 } as const);
 
 /** One capability name SugarCubes reads. */

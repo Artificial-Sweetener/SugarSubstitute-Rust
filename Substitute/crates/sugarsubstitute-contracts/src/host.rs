@@ -35,6 +35,7 @@ impl HostProtocol {
     /// `sugarcubes.memory` version 1: the application memory budget for the page's caches.
     pub const MEMORY: Self = Self { name: "sugarcubes.memory", version: 1 };
     /// `sugarcubes.updates` version 1: the host's update state, check now and restart to apply.
+    /// A host that also answers version 2 declares [`HostCapability::NAMED_UPDATES`].
     pub const UPDATES: Self = Self { name: "sugarcubes.updates", version: 1 };
 
     /// Borrow the protocol's message name.
@@ -57,6 +58,9 @@ impl HostCapability {
     pub const SYSTEM_ACCENT: Self = Self("presentation.system-accent");
     /// The host presents output images itself; the page never falls back to browser images.
     pub const HOST_OUTPUT_SURFACE: Self = Self("output.host-surface");
+    /// Besides `sugarcubes.updates` version 1, the host answers version 2 on the same channel,
+    /// whose states name the product they describe.
+    pub const NAMED_UPDATES: Self = Self("updates.product-name");
 
     /// Borrow the capability name.
     pub const fn name(self) -> &'static str {

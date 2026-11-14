@@ -383,15 +383,18 @@ impl<B: StartupBackend> StartupHost<B> {
         &mut self,
         identity: sugarsubstitute_contracts::startup::MainIdentity,
         message: sugarsubstitute_contracts::host_updates::UpdatesClientMessage,
+        protocol: sugarsubstitute_contracts::host_updates::UpdatesProtocol,
         lease: sugarsubstitute_contracts::execution::MemoryLease,
         claim: sugarsubstitute_contracts::execution::MemoryClaim,
     ) -> Result<(), Box<dyn Error>> {
         use sugarsubstitute_desktop::StartupWindowContent;
         let status = self.update_status();
         let queue = self.child.workflow_queue();
+        let product = self.locale_messages().updates.product;
         let child = &mut self.child;
         let mut check = || child.request_update_check();
         let mut updater = host_updates::HostUpdates::new(
+            product,
             status,
             queue,
             self.closing,
@@ -399,7 +402,8 @@ impl<B: StartupBackend> StartupHost<B> {
             &mut check,
         );
         let activity = host_updates::QueueActivity(queue);
-        self.updates.observe(identity, message, lease, claim, &mut updater, &activity)?;
+        let request = updates_page::PageRequest { identity, message, protocol, lease, claim };
+        self.updates.observe(request, &mut updater, &activity)?;
         if updater.close_now() {
             self.restart_to_apply()?;
         }
@@ -413,9 +417,11 @@ impl<B: StartupBackend> StartupHost<B> {
         use sugarsubstitute_desktop::StartupWindowContent;
         let status = self.update_status();
         let queue = self.child.workflow_queue();
+        let product = self.locale_messages().updates.product;
         // Refreshing never asks for a check.
         let mut check = || Ok::<(), Box<dyn Error>>(());
         let updater = host_updates::HostUpdates::new(
+            product,
             status,
             queue,
             self.closing,
@@ -434,8 +440,9 @@ impl<B: StartupBackend> StartupHost<B> {
     ) -> Result<Option<DesktopStartupObservation>, Box<dyn Error>> {
         match observation {
             DesktopStartupObservation::UpdatesMessage(observed) => {
+                let protocol = observed.protocol();
                 let (identity, message, lease, claim) = observed.into_parts();
-                self.answer_updates(identity, message, lease, claim)?;
+                self.answer_updates(identity, message, protocol, lease, claim)?;
                 Ok(None)
             }
             DesktopStartupObservation::MainRetired(identity) => {

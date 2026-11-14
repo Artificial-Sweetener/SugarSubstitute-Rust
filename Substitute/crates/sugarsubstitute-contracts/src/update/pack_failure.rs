@@ -63,7 +63,16 @@ impl PackUpdateFailure {
                 };
                 (report.to.as_deref(), Some(words.steps[step]), vec![&report.code, &report.reason])
             }
-            PackOutcome::Restored => (report.from.as_deref(), None, vec![&report.reason]),
+            // The report's first line says in plain words why the previous version is back, so the
+            // reason's code adds nothing for the reader.
+            PackOutcome::Restored => {
+                let step = match report.reason.as_deref() {
+                    Some("interrupted") => Some(words.steps[2]),
+                    Some("did-not-start" | "page-did-not-load") => Some(words.steps[3]),
+                    _ => None,
+                };
+                (report.from.as_deref(), step, Vec::new())
+            }
             PackOutcome::CouldNotCheck | PackOutcome::Stopped => {
                 (None, Some(words.steps[0]), Vec::new())
             }
@@ -160,18 +169,33 @@ mod tests {
         let restored = PackUpdateReport {
             from: Some("0.16.0".into()),
             to: Some("0.15.0".into()),
-            reason: Some("page-failed".into()),
+            reason: Some("did-not-start".into()),
             ..PackUpdateReport::new(PackOutcome::Restored)
         };
         assert_eq!(
             PackUpdateFailure::from_report(&restored, words),
             Some(PackUpdateFailure::new(
                 Some("0.16.0"),
-                None,
-                [words.previous_running],
-                ["page-failed"],
-            ))
+                Some(words.steps[3]),
+                [words.restored_did_not_start],
+                [""; 0],
+            )),
+            "a put-back says why in plain words and shows no raw code"
         );
+        for (reason, step, line) in [
+            ("page-did-not-load", Some(words.steps[3]), words.restored_page),
+            ("interrupted", Some(words.steps[2]), words.restored_interrupted),
+            ("unknown-reason", None, words.previous_running),
+        ] {
+            let restored = PackUpdateReport { reason: Some(reason.into()), ..restored.clone() };
+            let failure = PackUpdateFailure::from_report(&restored, words);
+            assert_eq!(failure.as_ref().and_then(PackUpdateFailure::step), step, "{reason}");
+            assert_eq!(
+                failure.as_ref().map(PackUpdateFailure::lines),
+                Some(&[line.to_owned()][..])
+            );
+            assert_eq!(failure.as_ref().map(|failure| failure.causes().len()), Some(0));
+        }
         let unchecked = PackUpdateReport {
             unchecked: vec!["registry".into(), "github-release".into()],
             ..PackUpdateReport::new(PackOutcome::CouldNotCheck)

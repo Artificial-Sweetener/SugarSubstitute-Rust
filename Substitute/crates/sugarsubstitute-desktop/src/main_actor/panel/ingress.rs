@@ -96,9 +96,15 @@ impl MainActor {
             crate::main_panel_ingress::ClientMessage::Memory(message) => Ingress::Memory(
                 crate::MemoryObservation::new(self.identity(), message, lease, claim),
             ),
-            crate::main_panel_ingress::ClientMessage::Updates(message) => Ingress::Updates(
-                crate::UpdatesObservation::new(self.identity(), message, lease, claim),
-            ),
+            crate::main_panel_ingress::ClientMessage::Updates(message, protocol) => {
+                Ingress::Updates(crate::UpdatesObservation::new(
+                    self.identity(),
+                    message,
+                    protocol,
+                    lease,
+                    claim,
+                ))
+            }
             crate::main_panel_ingress::ClientMessage::Native(request) => {
                 Ingress::Native(crate::CanvasNativeObservation::new(
                     self.identity(),

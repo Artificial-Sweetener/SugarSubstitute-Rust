@@ -37,6 +37,7 @@ async function settle(): Promise<void> {
 }
 
 const upToDate: UpdateSnapshot = {
+  product: 'SugarSubstitute',
   currentVersion: '0.4.2',
   channel: 'beta',
   lastSuccessfulCheck: 1762876800000,
@@ -99,16 +100,16 @@ test('shows the version, channel and last check, and a check result as it arrive
   expect(view.text()).toContain('0.4.2');
   expect(view.text()).toContain('Beta');
   expect(view.text()).toContain('at 1762876800000');
-  expect(view.status()).toBe('SugarCubes is up to date.');
+  expect(view.status()).toBe('SugarSubstitute is up to date.');
   view.button('Check for updates')?.click();
   expect(host.value.check).toHaveBeenCalledTimes(1);
   expect(view.button('Check for updates')?.disabled).toBe(true);
   host.publish({ status: { state: 'checking' } });
-  expect(view.status()).toBe('Checking for updates…');
+  expect(view.status()).toBe('Checking for SugarSubstitute updates…');
   host.answer({ accepted: true });
   await settle();
   host.publish({ status: { state: 'failed', during: 'check' }, lastSuccessfulCheck: null });
-  expect(view.status()).toBe("Couldn't check for updates.");
+  expect(view.status()).toBe("Couldn't check for SugarSubstitute updates.");
   expect(view.text()).toContain('Not checked yet');
   expect(view.button('Check for updates')?.disabled).toBe(false);
   view.page.dispose();
@@ -123,7 +124,7 @@ test('a ready host update restarts now, or after the running workflow when one r
   });
   slot.attach(host.value);
   const view = mount(slot);
-  expect(view.status()).toBe('Version 0.5.0 is ready. Restart to apply it.');
+  expect(view.status()).toBe('SugarSubstitute 0.5.0 is ready. Restart to apply it.');
   expect(view.button('Restart after this workflow finishes')).toBeUndefined();
   host.publish({ workflowRunning: true });
   view.button('Restart after this workflow finishes')?.click();
@@ -156,8 +157,8 @@ test('a failed update shows its causes and that the previous version is running'
     }).value,
   );
   const view = mount(slot);
-  expect(view.status()).toBe("The update couldn't be installed.");
-  expect(view.text()).toContain('The previous version is running.');
+  expect(view.status()).toBe("SugarSubstitute couldn't be updated.");
+  expect(view.text()).toContain('The previous SugarSubstitute version is running.');
   expect([...view.page.element.querySelectorAll('li')].map((item) => item.textContent)).toEqual([
     'The download did not match its signature.',
   ]);
@@ -168,6 +169,7 @@ test("SugarCubes' own updater feeds the same entry and asks for a ComfyUI restar
   const slot = new UpdateSourceSlot();
   const own = source('comfyui-restart', {
     ...upToDate,
+    product: 'SugarCubes',
     status: { state: 'ready', version: '0.5.0' },
     workflowRunning: true,
   });
@@ -175,12 +177,12 @@ test("SugarCubes' own updater feeds the same entry and asks for a ComfyUI restar
   expect(view.status()).toBe('Updates are unavailable right now.');
   expect(view.button('Check for updates')).toBeUndefined();
   const release = slot.attach(own.value);
-  expect(view.status()).toBe('Version 0.5.0 is ready. Apply it, then restart ComfyUI.');
+  expect(view.status()).toBe('SugarCubes 0.5.0 is ready. Apply it, then restart ComfyUI.');
   expect(view.button('Restart after this workflow finishes')).toBeUndefined();
   view.button('Apply update')?.click();
   expect(own.value.apply).toHaveBeenCalledWith('now');
   own.publish({ status: { state: 'restart-comfyui', version: '0.5.0' } });
-  expect(view.status()).toBe('Version 0.5.0 will be installed when you restart ComfyUI.');
+  expect(view.status()).toBe('SugarCubes 0.5.0 will be installed when you restart ComfyUI.');
   own.publish({ status: { state: 'unmanaged', reason: 'git-checkout' } });
   expect(view.button('Check for updates')).toBeUndefined();
   release();
@@ -189,17 +191,29 @@ test("SugarCubes' own updater feeds the same entry and asks for a ComfyUI restar
 });
 
 test('a copy that is never updated in place says why', () => {
-  expect(updateStatusText({ state: 'unmanaged', reason: 'linked-folder' }, 'comfyui-restart')).toBe(
-    "SugarCubes is installed from a linked folder, so it isn't updated here.",
-  );
   expect(
-    updateStatusText({ state: 'unmanaged', reason: 'not-registry-install' }, 'comfyui-restart'),
+    updateStatusText(
+      { state: 'unmanaged', reason: 'linked-folder' },
+      'comfyui-restart',
+      'SugarCubes',
+    ),
+  ).toBe("SugarCubes is installed from a linked folder, so it isn't updated here.");
+  expect(
+    updateStatusText(
+      { state: 'unmanaged', reason: 'not-registry-install' },
+      'comfyui-restart',
+      'SugarCubes',
+    ),
   ).toBe(
     "SugarCubes wasn't installed from ComfyUI Manager, so it isn't updated here. Reinstall it from ComfyUI Manager to get updates.",
   );
-  expect(updateStatusText({ state: 'unmanaged', reason: 'git-checkout' }, 'comfyui-restart')).toBe(
-    "This copy of SugarCubes is a git checkout, so it isn't updated here.",
-  );
+  expect(
+    updateStatusText(
+      { state: 'unmanaged', reason: 'git-checkout' },
+      'comfyui-restart',
+      'SugarCubes',
+    ),
+  ).toBe("This copy of SugarCubes is a git checkout, so it isn't updated here.");
 });
 
 test('status words stay plain for every state', () => {
@@ -218,5 +232,24 @@ test('status words stay plain for every state', () => {
   ];
   for (const status of states)
     for (const applies of ['host-restart', 'comfyui-restart'] as const)
-      expect(updateStatusText(status, applies)).not.toMatch(/trial|candidate|quarantine|stag/i);
+      for (const product of ['SugarSubstitute', null])
+        expect(updateStatusText(status, applies, product)).not.toMatch(
+          /trial|candidate|quarantine|stag/i,
+        );
+});
+
+test('every line names the product its source describes, and an unnamed source names none', () => {
+  const lines = (product: string | null) =>
+    (
+      [
+        { state: 'up-to-date' },
+        { state: 'checking' },
+        { state: 'available', version: '1.0.0' },
+        { state: 'ready', version: '1.0.0' },
+        { state: 'failed', during: 'check' },
+        { state: 'failed', during: 'update' },
+      ] as const
+    ).map((status) => updateStatusText(status, 'host-restart', product));
+  for (const line of lines('SugarSubstitute')) expect(line).toContain('SugarSubstitute');
+  for (const line of lines(null)) expect(line).not.toMatch(/SugarCubes|SugarSubstitute/);
 });

@@ -167,7 +167,12 @@ impl PackUpdateReport {
         match self.outcome {
             PackOutcome::Updated if self.to.is_some() => Some(words.updated),
             PackOutcome::Available if self.to.is_some() => Some(words.available),
-            PackOutcome::Restored => Some(words.previous_running),
+            PackOutcome::Restored => Some(match self.reason.as_deref() {
+                Some("did-not-start") => words.restored_did_not_start,
+                Some("page-did-not-load") => words.restored_page,
+                Some("interrupted") => words.restored_interrupted,
+                _ => words.previous_running,
+            }),
             PackOutcome::CouldNotCheck => Some(words.could_not_check),
             PackOutcome::Failed => Some(words.could_not_update),
             PackOutcome::Updated

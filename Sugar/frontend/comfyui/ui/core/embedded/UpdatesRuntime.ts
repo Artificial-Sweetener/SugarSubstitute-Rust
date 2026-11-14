@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Bundle the portable update status contract for browser consumers. */
+/** Bundle the portable update status contract, both released versions, for browser consumers. */
 export { isUpdatesHostMessage } from '../../../../../integrations/shared/UpdatesValidation.generated.js';
 export type {
   UpdatesChannel,
@@ -25,3 +25,8 @@ export type {
   UpdatesState,
   UpdatesStatus,
 } from '../../../../../integrations/contracts/UpdatesProtocol.generated.js';
+export { isUpdatesHostMessage as isNamedUpdatesHostMessage } from '../../../../../integrations/shared/UpdatesV2Validation.generated.js';
+export type {
+  UpdatesClientMessage as NamedUpdatesClientMessage,
+  UpdatesState as NamedUpdatesState,
+} from '../../../../../integrations/contracts/UpdatesV2Protocol.generated.js';

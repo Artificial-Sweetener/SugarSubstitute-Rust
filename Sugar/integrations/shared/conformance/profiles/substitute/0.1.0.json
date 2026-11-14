@@ -23,6 +23,9 @@
           },
           {
             "name": "output.host-surface"
+          },
+          {
+            "name": "updates.product-name"
           }
         ],
         "protocol": "sugarcubes.host",
@@ -227,7 +230,7 @@
         "version": 1,
         "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
         "type": "check",
-        "request": "conformance-check"
+        "request": "conformance-check-v1"
       }
     },
     {
@@ -235,10 +238,61 @@
       "message": {
         "protocol": "sugarcubes.updates",
         "reason": "unavailable",
-        "request": "conformance-check",
+        "request": "conformance-check-v1",
         "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
         "type": "rejected",
         "version": 1
+      }
+    },
+    {
+      "from": "page",
+      "message": {
+        "protocol": "sugarcubes.updates",
+        "version": 2,
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "watch"
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "protocol": "sugarcubes.updates",
+        "revision": 2,
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "state",
+        "update": {
+          "channel": "stable",
+          "currentVersion": "0.1.0",
+          "previousVersionRunning": false,
+          "product": "SugarSubstitute",
+          "scheduledRestart": "none",
+          "status": {
+            "state": "up-to-date"
+          },
+          "workflowRunning": false
+        },
+        "version": 2
+      }
+    },
+    {
+      "from": "page",
+      "message": {
+        "protocol": "sugarcubes.updates",
+        "version": 2,
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "check",
+        "request": "conformance-check-v2"
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "protocol": "sugarcubes.updates",
+        "reason": "unavailable",
+        "request": "conformance-check-v2",
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "rejected",
+        "version": 2
       }
     }
   ]

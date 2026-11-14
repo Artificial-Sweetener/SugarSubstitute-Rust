@@ -394,7 +394,7 @@ test('bounded control FIFO coalesces kinds and refusal preserves a newer pending
   assert.equal(f.receipt('g', 'c', 6), true);
   assert.equal(f.sent.length, 5);
 });
-const updates = (type, extra = {}) => ({ protocol: 'sugarcubes.updates', version: 1, session, type, ...extra });
+const updates = (type, extra = {}) => ({ protocol: 'sugarcubes.updates', version: 2, session, type, ...extra });
 const posted = f => f.sent.map(value => JSON.parse(value.slice(value.indexOf(':', 4) + 1)));
 test('update requests ride the control lane and every named request keeps its place', () => {
   const f = fixture();
@@ -986,4 +986,12 @@ test('pagehide aborts in-flight transfers and drops pending deliveries', async (
   ]);
   assert.equal(f.received[0].message.length, reply.message.length);
   assert.ok(!bulkSource.includes('.invalid'));
+});
+test('update requests and answers pass in both released versions and no other', () => {
+  const f = fixture();
+  f.receipt('g', 'c', 1);
+  for (const version of [1, 2]) f.bridge.send({ ...updates('watch'), version });
+  for (let ticket = 2; ticket <= 2; ticket++) { f.receipt('a', 'c', ticket - 1); f.receipt('g', 'c', ticket); }
+  assert.deepEqual(posted(f).map(value => value.version), [1, 2]);
+  assert.throws(() => f.bridge.send({ ...updates('watch'), version: 3 }));
 });

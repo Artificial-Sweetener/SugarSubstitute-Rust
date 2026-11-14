@@ -53,6 +53,8 @@ export type UpdateStatus =
 
 /** Everything the Updates entry shows; a new snapshot replaces the previous one whole. */
 export interface UpdateSnapshot {
+  /** The product the snapshot describes, as the user knows it; null when the source can't say. */
+  readonly product: string | null;
   readonly currentVersion: string;
   readonly channel: UpdatesChannel;
   /** Milliseconds since the Unix epoch of the last check that completed, or null before any. */

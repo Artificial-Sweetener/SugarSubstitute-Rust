@@ -14,6 +14,7 @@ fn session() -> Result<PanelSession, PanelError> {
 
 fn state() -> Result<UpdatesState, UpdatesError> {
     Ok(UpdatesState {
+        product: "SugarSubstitute".into(),
         current_version: UpdatesVersion::new("0.4.0")?,
         channel: UpdatesChannel::Beta,
         last_successful_check_ms: Some(1_700_000_000_000),
@@ -30,7 +31,7 @@ fn state() -> Result<UpdatesState, UpdatesError> {
 }
 
 fn encoded(message: &UpdatesHostMessage) -> Result<Value, Box<dyn Error>> {
-    Ok(serde_json::from_slice(&message.encode(&session()?)?)?)
+    Ok(serde_json::from_slice(&message.encode(&session()?, UpdatesProtocol::V2)?)?)
 }
 
 #[test]
@@ -39,10 +40,10 @@ fn a_state_encodes_every_schema_field() -> TestResult {
     assert_eq!(
         encoded(&message)?,
         json!({
-            "protocol": "sugarcubes.updates", "version": 1, "session": SESSION, "type": "state",
+            "protocol": "sugarcubes.updates", "version": 2, "session": SESSION, "type": "state",
             "revision": 3,
             "update": {
-                "currentVersion": "0.4.0", "channel": "beta",
+                "product": "SugarSubstitute", "currentVersion": "0.4.0", "channel": "beta",
                 "lastSuccessfulCheck": {"completedAt": 1_700_000_000_000_u64},
                 "status": {"state": "ready", "version": "0.5.0-beta.1"},
                 "report": {"version": "0.5.0-beta.1", "phase": "download",
@@ -94,7 +95,7 @@ fn answers_name_their_request() -> TestResult {
     let request = UpdatesRequestName::new("check-1")?;
     assert_eq!(
         encoded(&UpdatesHostMessage::Accepted(request.clone()))?,
-        json!({"protocol": "sugarcubes.updates", "version": 1, "session": SESSION,
+        json!({"protocol": "sugarcubes.updates", "version": 2, "session": SESSION,
             "type": "accepted", "request": "check-1"})
     );
     for (reason, token) in [
@@ -114,14 +115,17 @@ fn answers_name_their_request() -> TestResult {
 fn a_revision_outside_the_schema_is_refused() -> TestResult {
     for revision in [0, 9_007_199_254_740_992] {
         let message = UpdatesHostMessage::State { revision, update: Box::new(state()?) };
-        assert!(matches!(message.encode(&session()?), Err(UpdatesError::Invalid)));
+        assert!(matches!(
+            message.encode(&session()?, UpdatesProtocol::V2),
+            Err(UpdatesError::Invalid)
+        ));
     }
     Ok(())
 }
 
 #[test]
 fn page_requests_decode_for_their_session() -> TestResult {
-    let envelope = json!({"protocol": "sugarcubes.updates", "version": 1, "session": SESSION});
+    let envelope = json!({"protocol": "sugarcubes.updates", "version": 2, "session": SESSION});
     let with = |extra: Value| -> Result<Vec<u8>, Box<dyn Error>> {
         let mut value = envelope.clone();
         let fields = value.as_object_mut().ok_or("Envelope is not an object")?;
@@ -129,11 +133,11 @@ fn page_requests_decode_for_their_session() -> TestResult {
         Ok(serde_json::to_vec(&value)?)
     };
     assert_eq!(
-        UpdatesClientMessage::decode(&with(json!({"type": "watch"}))?)?,
+        UpdatesClientMessage::decode(&with(json!({"type": "watch"}))?)?.0,
         UpdatesClientMessage::Watch(session()?)
     );
     assert_eq!(
-        UpdatesClientMessage::decode(&with(json!({"type": "check", "request": "c-1"}))?)?,
+        UpdatesClientMessage::decode(&with(json!({"type": "check", "request": "c-1"}))?)?.0,
         UpdatesClientMessage::Check {
             session: session()?,
             request: UpdatesRequestName::new("c-1")?
@@ -143,7 +147,7 @@ fn page_requests_decode_for_their_session() -> TestResult {
         ("now", UpdatesRestartTiming::Now),
         ("after-workflow", UpdatesRestartTiming::AfterWorkflow),
     ] {
-        let message = UpdatesClientMessage::decode(&with(
+        let (message, _) = UpdatesClientMessage::decode(&with(
             json!({"type": "restart", "request": "r-1", "when": when}),
         )?)?;
         assert_eq!(
@@ -162,13 +166,13 @@ fn page_requests_decode_for_their_session() -> TestResult {
 #[test]
 fn foreign_extended_and_malformed_requests_are_refused() -> TestResult {
     for text in [
-        r#"{"protocol":"sugarcubes.updates","version":2,"session":"session-12345678","type":"watch"}"#,
+        r#"{"protocol":"sugarcubes.updates","version":3,"session":"session-12345678","type":"watch"}"#,
         r#"{"protocol":"sugarcubes.memory","version":1,"session":"session-12345678","type":"watch"}"#,
-        r#"{"protocol":"sugarcubes.updates","version":1,"session":"short","type":"watch"}"#,
-        r#"{"protocol":"sugarcubes.updates","version":1,"session":"session-12345678","type":"watch","x":1}"#,
-        r#"{"protocol":"sugarcubes.updates","version":1,"session":"session-12345678","type":"check","request":"Upper"}"#,
-        r#"{"protocol":"sugarcubes.updates","version":1,"session":"session-12345678","type":"restart","request":"r","when":"later"}"#,
-        r#"{"protocol":"sugarcubes.updates","version":1,"session":"session-12345678","type":"state"}"#,
+        r#"{"protocol":"sugarcubes.updates","version":2,"session":"short","type":"watch"}"#,
+        r#"{"protocol":"sugarcubes.updates","version":2,"session":"session-12345678","type":"watch","x":1}"#,
+        r#"{"protocol":"sugarcubes.updates","version":2,"session":"session-12345678","type":"check","request":"Upper"}"#,
+        r#"{"protocol":"sugarcubes.updates","version":2,"session":"session-12345678","type":"restart","request":"r","when":"later"}"#,
+        r#"{"protocol":"sugarcubes.updates","version":2,"session":"session-12345678","type":"state"}"#,
     ] {
         assert!(UpdatesClientMessage::decode(text.as_bytes()).is_err(), "{text}");
     }
@@ -197,10 +201,10 @@ fn tokens_and_reports_hold_the_schema_bounds() {
 #[test]
 fn the_generated_decoder_identifies_the_shared_schema() -> TestResult {
     use sha2::{Digest, Sha256};
-    let schema = include_str!("../../../../../Sugar/integrations/contracts/updates.schema.json")
+    let schema = include_str!("../../../../../Sugar/integrations/contracts/updates-v2.schema.json")
         .replace("\r\n", "\n");
     let source =
-        include_str!("../../../../../Sugar/integrations/contracts/UpdatesProtocol.generated.rs");
+        include_str!("../../../../../Sugar/integrations/contracts/UpdatesV2Protocol.generated.rs");
     let recorded = source
         .lines()
         .find_map(|line| line.strip_prefix("// Schema SHA-256 (LF): "))
@@ -212,7 +216,7 @@ fn the_generated_decoder_identifies_the_shared_schema() -> TestResult {
 #[test]
 fn the_named_bounds_match_the_shared_schema() -> TestResult {
     let schema: Value = serde_json::from_str(include_str!(
-        "../../../../../Sugar/integrations/contracts/updates.schema.json"
+        "../../../../../Sugar/integrations/contracts/updates-v2.schema.json"
     ))?;
     let definitions = &schema["$defs"];
     assert_eq!(definitions["UpdatesReport"]["properties"]["causes"]["maxItems"], MAX_REPORT_CAUSES);
@@ -234,7 +238,40 @@ fn the_named_bounds_match_the_shared_schema() -> TestResult {
     ] {
         let envelope = &definitions[message]["properties"];
         assert_eq!(envelope["protocol"]["const"], PROTOCOL, "{message}");
-        assert_eq!(envelope["version"]["const"], VERSION, "{message}");
+        assert_eq!(envelope["version"]["const"], 2, "{message}");
     }
+    Ok(())
+}
+
+#[test]
+fn a_version_one_page_is_answered_in_version_one_without_the_product() -> TestResult {
+    let message = UpdatesHostMessage::State { revision: 3, update: Box::new(state()?) };
+    let value: Value = serde_json::from_slice(&message.encode(&session()?, UpdatesProtocol::V1)?)?;
+    assert_eq!(value["version"], 1);
+    let update = value["update"].as_object().ok_or("State is not an object")?;
+    assert!(!update.contains_key("product"));
+    assert_eq!(update["currentVersion"], "0.4.0");
+    let watch = br#"{"protocol":"sugarcubes.updates","version":1,"session":"session-12345678","type":"watch"}"#;
+    assert_eq!(
+        UpdatesClientMessage::decode(watch)?,
+        (UpdatesClientMessage::Watch(session()?), UpdatesProtocol::V1)
+    );
+    let named = br#"{"protocol":"sugarcubes.updates","version":2,"session":"session-12345678","type":"watch"}"#;
+    assert_eq!(UpdatesClientMessage::decode(named)?.1, UpdatesProtocol::V2);
+    Ok(())
+}
+
+#[test]
+fn the_version_one_decoder_identifies_the_released_schema() -> TestResult {
+    use sha2::{Digest, Sha256};
+    let schema = include_str!("../../../../../Sugar/integrations/contracts/updates.schema.json")
+        .replace("\r\n", "\n");
+    let source =
+        include_str!("../../../../../Sugar/integrations/contracts/UpdatesProtocol.generated.rs");
+    let recorded = source
+        .lines()
+        .find_map(|line| line.strip_prefix("// Schema SHA-256 (LF): "))
+        .ok_or("Generated updates schema fingerprint absent")?;
+    assert_eq!(recorded, format!("{:x}", Sha256::digest(schema.as_bytes())));
     Ok(())
 }

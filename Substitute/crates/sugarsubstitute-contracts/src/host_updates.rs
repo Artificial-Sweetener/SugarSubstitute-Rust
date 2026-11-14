@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Exchange the host's update state with the embedded SugarCubes page (`sugarcubes.updates` v1).
+//! Exchange the host's update state with the embedded SugarCubes page (`sugarcubes.updates`).
 //!
 //! The page sends `watch` once the host description lists the protocol; the host answers with
 //! its update state and sends a new state, with a higher revision, whenever it changes. The page
 //! asks to check now or to restart to apply, and the host answers each such request accepted or
-//! rejected by name. Decoding validates shape and bounds only; it grants no host authority.
+//! rejected by name. Version 1 is the released protocol; version 2 adds the product each state
+//! describes. The host answers each page in the version that page speaks. Decoding validates shape and bounds only; it grants no host authority.
 
 use crate::panel::{PanelError, PanelSession};
 use std::{error::Error, fmt};
@@ -18,7 +19,15 @@ mod tests;
 /// Maximum encoded updates message admitted or produced, in UTF-8 bytes.
 pub const MAX_UPDATES_MESSAGE_BYTES: usize = 16384;
 const PROTOCOL: &str = "sugarcubes.updates";
-const VERSION: u64 = 1;
+
+/// A released `sugarcubes.updates` wire version.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UpdatesProtocol {
+    /// Version 1, without the product a state describes.
+    V1,
+    /// Version 2, whose states name the product they describe.
+    V2,
+}
 /// Most causes one state's report carries.
 pub const MAX_REPORT_CAUSES: usize = 8;
 /// Longest cause one state's report carries, in Unicode scalar values.
@@ -172,6 +181,8 @@ pub enum UpdatesRejection {
 /// The host's complete update state for one revision.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UpdatesState {
+    /// The product this state describes, as the user knows it; at most 64 characters.
+    pub product: String,
     /// The running version.
     pub current_version: UpdatesVersion,
     /// The channel the host follows.
@@ -212,17 +223,20 @@ pub enum UpdatesHostMessage {
 }
 
 impl UpdatesHostMessage {
-    /// Encode this message addressed to `session`.
+    /// Encode this message addressed to `session` in the page's `protocol` version.
     ///
     /// # Errors
     /// Rejects a revision outside 1 to 2^53-1, generated-contract drift, encoding failure or an
     /// exceeded byte bound.
-    pub fn encode(&self, session: &PanelSession) -> Result<Vec<u8>, UpdatesError> {
-        let value = wire::encode(self, session.as_str());
-        if !value.valid() {
-            return Err(UpdatesError::Invalid);
-        }
-        let encoded = serde_json::to_vec(&value).map_err(UpdatesError::Malformed)?;
+    pub fn encode(
+        &self,
+        session: &PanelSession,
+        protocol: UpdatesProtocol,
+    ) -> Result<Vec<u8>, UpdatesError> {
+        let encoded = match protocol {
+            UpdatesProtocol::V1 => wire::v1::encode(self, session.as_str())?,
+            UpdatesProtocol::V2 => wire::v2::encode(self, session.as_str())?,
+        };
         if encoded.len() > MAX_UPDATES_MESSAGE_BYTES {
             return Err(UpdatesError::TooLarge);
         }
@@ -263,20 +277,27 @@ impl UpdatesClientMessage {
         }
     }
 
-    /// Decode one page-direction message without authorizing its sender.
+    /// Decode one page-direction message, with the version the page speaks, without authorizing
+    /// its sender.
     ///
     /// # Errors
-    /// Rejects oversized, malformed, extended or out-of-bounds messages and foreign protocols.
-    pub fn decode(bytes: &[u8]) -> Result<Self, UpdatesError> {
+    /// Rejects oversized, malformed, extended or out-of-bounds messages, foreign protocols and
+    /// unreleased versions.
+    pub fn decode(bytes: &[u8]) -> Result<(Self, UpdatesProtocol), UpdatesError> {
         if bytes.len() > MAX_UPDATES_MESSAGE_BYTES {
             return Err(UpdatesError::TooLarge);
         }
-        let message: wire::UpdatesClientMessage =
-            serde_json::from_slice(bytes).map_err(UpdatesError::Malformed)?;
-        if !message.valid() {
-            return Err(UpdatesError::Invalid);
+        #[derive(serde::Deserialize)]
+        struct Envelope {
+            version: Option<serde_json::Value>,
         }
-        wire::decode(message)
+        let envelope: Envelope = serde_json::from_slice(bytes).map_err(UpdatesError::Malformed)?;
+        if envelope.version == Some(1.into()) {
+            return Ok((wire::v1::decode(bytes)?, UpdatesProtocol::V1));
+        }
+        // Every other version is checked against the newest schema, which refuses it unless it
+        // is version 2.
+        Ok((wire::v2::decode(bytes)?, UpdatesProtocol::V2))
     }
 }
 

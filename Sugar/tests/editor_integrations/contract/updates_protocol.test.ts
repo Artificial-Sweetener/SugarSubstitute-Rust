@@ -23,6 +23,7 @@ import {
   isUpdatesMessage,
 } from '../../../integrations/shared/UpdatesValidation.generated.js';
 import { HOST_PROTOCOLS } from '../../../integrations/contracts/HostDescription.js';
+import { isUpdatesHostMessage as isNamedUpdatesHostMessage } from '../../../integrations/shared/UpdatesV2Validation.generated.js';
 
 interface Vector {
   readonly label: string;
@@ -54,6 +55,41 @@ test('generated language bindings and validators match the authoritative wire sc
 
 test('a host declares the update protocol by its schema name and fixed version', () => {
   expect(HOST_PROTOCOLS.updates).toEqual({ name: 'sugarcubes.updates', version: 1 });
+  // Version two is offered beside version one by a capability, never as a second listing.
+});
+
+test('version-two bindings match their schema and every state names its product', async () => {
+  const bindings = await updatesBindings(
+    readFileSync('integrations/contracts/updates-v2.schema.json', 'utf8'),
+    2,
+  );
+  expect(Object.keys(bindings).sort()).toEqual([
+    'integrations/contracts/UpdatesV2Protocol.generated.rs',
+    'integrations/contracts/UpdatesV2Protocol.generated.ts',
+    'integrations/shared/UpdatesV2Validation.generated.ts',
+  ]);
+  for (const [file, source] of Object.entries(bindings))
+    expect(readFileSync(file, 'utf8').replaceAll('\r\n', '\n')).toBe(source);
+  const update = {
+    currentVersion: '0.1.0',
+    channel: 'stable',
+    status: { state: 'up-to-date' },
+    previousVersionRunning: false,
+    workflowRunning: false,
+    scheduledRestart: 'none',
+  };
+  const state = (value: object) => ({
+    protocol: 'sugarcubes.updates',
+    version: 2,
+    session: 'panel-0123456789abcdef',
+    type: 'state',
+    revision: 1,
+    update: value,
+  });
+  expect(isNamedUpdatesHostMessage(state({ ...update, product: 'SugarSubstitute' }))).toBe(true);
+  expect(isNamedUpdatesHostMessage(state(update))).toBe(false);
+  expect(isNamedUpdatesHostMessage(state({ ...update, product: 'x'.repeat(65) }))).toBe(false);
+  expect(isUpdatesHostMessage(state({ ...update, product: 'SugarSubstitute' }))).toBe(false);
 });
 
 test('shared update vectors preserve the closed version-one wire contract', () => {

@@ -316,8 +316,8 @@ fn a_sugarcubes_update_shows_one_plain_line_and_opens_its_report() {
     assert_eq!(caption.view(en).line.text, "SugarCubes updated to version 1.1.0");
 }
 
-/// A restored SugarCubes says the previous version is running in plain words, and the report
-/// stays available from that line; the warning button opens the same report.
+/// A restored SugarCubes says in plain words why the previous version was put back, and the
+/// report stays available from that line; the warning button opens the same report.
 #[test]
 fn a_restored_sugarcubes_shows_the_previous_version_line_with_its_report() {
     use sugarsubstitute_contracts::update::pack::{
@@ -338,11 +338,14 @@ fn a_restored_sugarcubes_shows_the_previous_version_line_with_its_report() {
     let view = caption.view(en);
     assert_eq!(shown(&view), vec![UPDATE, LINE, LINK, DISMISS]);
     assert_eq!(view.glyph, UpdateGlyph::Warning);
-    assert_eq!(view.line.text, "The previous SugarCubes version is running.");
+    assert_eq!(
+        view.line.text,
+        "The new SugarCubes version didn't load in the page, so the previous version was put back."
+    );
     assert_eq!(view.link.label, "Show the report");
     for locale in sugarsubstitute_contracts::localization::LOCALES {
         let view = caption.view(locale);
-        assert_eq!(view.line.text, locale.pack_updates.previous_running, "{}", locale.id);
+        assert_eq!(view.line.text, locale.pack_updates.restored_page, "{}", locale.id);
         assert_eq!(view.link.label, locale.pack_updates.show_report, "{}", locale.id);
     }
     assert_eq!(caption.activate(LINK), (false, Some(UpdateIntent::OpenReport)));

@@ -101,6 +101,11 @@ impl StatusSource {
         });
     }
 
+    /// Adopt the version this launch runs.
+    pub(crate) fn observe_running(&mut self, running: Option<String>) {
+        self.change(|status| status.observe_running(running));
+    }
+
     /// Adopt whether a check runs when asked now.
     pub(crate) fn observe_checks(&mut self, checks: bool) {
         self.change(|status| status.observe_checks(checks));
@@ -262,6 +267,17 @@ mod tests {
         assert_eq!((source.snapshot().0, source.snapshot().1.channel()), (1, Channel::Canary));
         source.adopt(StoredUpdates::default());
         assert_eq!((source.snapshot().0, source.snapshot().1.channel()), (1, Channel::Canary));
+    }
+
+    #[test]
+    fn the_running_version_raises_the_revision_only_when_it_changes() {
+        let mut source = StatusSource::new();
+        source.observe_running(None);
+        assert_eq!(source.snapshot().0, 0);
+        source.observe_running(Some("0.2.0".into()));
+        source.observe_running(Some("0.2.0".into()));
+        assert_eq!(source.snapshot().0, 1);
+        assert_eq!(source.snapshot().1.running(), Some("0.2.0"));
     }
 
     #[test]

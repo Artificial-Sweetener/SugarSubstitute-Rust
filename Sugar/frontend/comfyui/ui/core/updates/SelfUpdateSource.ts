@@ -211,6 +211,7 @@ export function selfUpdateSnapshot(state: BackendState): UpdateSnapshot | null {
   const status = statusOf(state);
   if (!status) return null;
   return {
+    product: 'SugarCubes',
     currentVersion: state.currentVersion,
     channel: 'stable',
     lastSuccessfulCheck: state.lastCheckedAt,

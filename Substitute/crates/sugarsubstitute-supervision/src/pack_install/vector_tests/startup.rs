@@ -161,7 +161,7 @@ fn a_page_that_never_loaded_runs_the_previous_version_at_the_second_launch() -> 
     let report = sugarsubstitute_contracts::update::pack::PackUpdateReport::parse(&std::fs::read(
         host.root.path().join("host-storage").join(REPORT_RECORD),
     )?)?;
-    assert_eq!(report.notice(&EN).as_deref(), Some(EN.previous_running));
+    assert_eq!(report.notice(&EN).as_deref(), Some(EN.restored_page));
     assert_eq!(host.run()?, StartupOutcome::UpToDate);
     assert_eq!(host.version()?, "1.0.0");
     Ok(())

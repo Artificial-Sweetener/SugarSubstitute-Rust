@@ -37,8 +37,10 @@ files = [
   "Sugar/integrations/contracts/session_vectors.json",
   "Sugar/integrations/contracts/session.schema.json",
   "Sugar/integrations/contracts/SessionProtocol.generated.rs",
+  "Sugar/integrations/contracts/updates-v2.schema.json",
   "Sugar/integrations/contracts/updates.schema.json",
   "Sugar/integrations/contracts/UpdatesProtocol.generated.rs",
+  "Sugar/integrations/contracts/UpdatesV2Protocol.generated.rs",
 ]
 consumers = [
   "crates/sugarsubstitute-application/src/workspace_session/tests.rs",

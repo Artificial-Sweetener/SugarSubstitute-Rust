@@ -23,6 +23,7 @@ pub(super) type CheckRequest<'a> = &'a mut dyn FnMut() -> Result<(), Box<dyn Err
 
 /// One turn's view of the host's updater for the page, and the close the page asked for.
 pub(super) struct HostUpdates<'a> {
+    product: &'static str,
     status: Option<UpdateStatus>,
     queue: WorkflowQueue,
     closing: bool,
@@ -32,17 +33,18 @@ pub(super) struct HostUpdates<'a> {
 }
 
 impl<'a> HostUpdates<'a> {
-    /// The window's `status`, the backend's workflow `queue`, whether the application is
+    /// The `product` the window's words name, the window's `status`, the backend's workflow `queue`, whether the application is
     /// already `closing`, the restart that may wait for the workflow, and how to ask the
     /// coordinator to `check`.
     pub(super) fn new(
+        product: &'static str,
         status: Option<UpdateStatus>,
         queue: WorkflowQueue,
         closing: bool,
         restart: &'a mut WorkflowRestart,
         check: CheckRequest<'a>,
     ) -> Self {
-        Self { status, queue, closing, restart, check, close_now: false }
+        Self { product, status, queue, closing, restart, check, close_now: false }
     }
 
     /// Whether the page asked for a restart that closes the application now.
@@ -54,7 +56,11 @@ impl<'a> HostUpdates<'a> {
 impl UpdateStatusPort for HostUpdates<'_> {
     fn snapshot(&self) -> Option<UpdateSnapshot> {
         let status = self.status.clone()?;
-        Some(UpdateSnapshot { status, restart_after_workflow: self.restart.waiting() })
+        Some(UpdateSnapshot {
+            product: self.product,
+            status,
+            restart_after_workflow: self.restart.waiting(),
+        })
     }
 
     fn check_now(&mut self) -> Result<(), UpdatesRejection> {
@@ -103,6 +109,8 @@ impl WorkflowActivitySource for QueueActivity {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const PRODUCT: &str = "SugarSubstitute";
     use sugarsubstitute_contracts::update::{
         Channel,
         attempt::{AttemptOutcome, AttemptPhase, UpdateReport},
@@ -135,16 +143,29 @@ mod tests {
         let mut restart = WorkflowRestart::default();
         let mut sent = 0;
         let mut check = counting(&mut sent);
-        let port = HostUpdates::new(None, WorkflowQueue::Idle, false, &mut restart, &mut check);
-        assert_eq!(port.snapshot(), None, "nothing to show before the coordinator reports");
         let port =
-            HostUpdates::new(Some(ready()), WorkflowQueue::Busy, false, &mut restart, &mut check);
+            HostUpdates::new(PRODUCT, None, WorkflowQueue::Idle, false, &mut restart, &mut check);
+        assert_eq!(port.snapshot(), None, "nothing to show before the coordinator reports");
+        let port = HostUpdates::new(
+            PRODUCT,
+            Some(ready()),
+            WorkflowQueue::Busy,
+            false,
+            &mut restart,
+            &mut check,
+        );
         let snapshot = port.snapshot();
         assert_eq!(snapshot.as_ref().and_then(|shown| shown.status.ready()), Some("2.0.0"));
         assert_eq!(snapshot.map(|shown| shown.restart_after_workflow), Some(false));
         assert!(!restart.request(WorkflowQueue::Busy));
-        let port =
-            HostUpdates::new(Some(ready()), WorkflowQueue::Busy, false, &mut restart, &mut check);
+        let port = HostUpdates::new(
+            PRODUCT,
+            Some(ready()),
+            WorkflowQueue::Busy,
+            false,
+            &mut restart,
+            &mut check,
+        );
         assert_eq!(port.snapshot().map(|shown| shown.restart_after_workflow), Some(true));
         assert!(QueueActivity(WorkflowQueue::Busy).workflow_running());
         assert!(!QueueActivity(WorkflowQueue::Idle).workflow_running());
@@ -157,9 +178,16 @@ mod tests {
         let mut check = || Ok::<(), Box<dyn Error>>(());
         let mut status = checking_host();
         status.observe_channel(Channel::Canary);
-        let port =
-            HostUpdates::new(Some(status), WorkflowQueue::Idle, false, &mut restart, &mut check);
+        let port = HostUpdates::new(
+            PRODUCT,
+            Some(status),
+            WorkflowQueue::Idle,
+            false,
+            &mut restart,
+            &mut check,
+        );
         assert_eq!(port.snapshot().map(|shown| shown.status.channel()), Some(Channel::Canary));
+        assert_eq!(port.snapshot().map(|shown| shown.product), Some(PRODUCT));
     }
 
     #[test]
@@ -168,6 +196,7 @@ mod tests {
         let mut sent = 0;
         let mut check = counting(&mut sent);
         let mut port = HostUpdates::new(
+            PRODUCT,
             Some(checking_host()),
             WorkflowQueue::Idle,
             false,
@@ -177,8 +206,14 @@ mod tests {
         assert_eq!(port.check_now(), Ok(()));
         let mut running = checking_host();
         running.begin();
-        let mut port =
-            HostUpdates::new(Some(running), WorkflowQueue::Idle, false, &mut restart, &mut check);
+        let mut port = HostUpdates::new(
+            PRODUCT,
+            Some(running),
+            WorkflowQueue::Idle,
+            false,
+            &mut restart,
+            &mut check,
+        );
         assert_eq!(port.check_now(), Ok(()), "a running check answers the request");
         drop(port);
         drop(check);
@@ -197,6 +232,7 @@ mod tests {
             let mut restart = WorkflowRestart::default();
             let mut check = || Ok::<(), Box<dyn Error>>(());
             let port = HostUpdates::new(
+                PRODUCT,
                 Some(status),
                 WorkflowQueue::Idle,
                 false,
@@ -229,15 +265,27 @@ mod tests {
     fn a_restart_after_the_workflow_waits_for_a_busy_queue_and_closes_at_once_when_idle() {
         let mut restart = WorkflowRestart::default();
         let mut check = || Ok::<(), Box<dyn Error>>(());
-        let mut port =
-            HostUpdates::new(Some(ready()), WorkflowQueue::Busy, false, &mut restart, &mut check);
+        let mut port = HostUpdates::new(
+            PRODUCT,
+            Some(ready()),
+            WorkflowQueue::Busy,
+            false,
+            &mut restart,
+            &mut check,
+        );
         assert_eq!(port.restart(UpdatesRestartTiming::AfterWorkflow), Ok(()));
         assert!(!port.close_now(), "a running workflow keeps the application open");
         drop(port);
         assert!(restart.waiting());
         assert!(restart.advance(WorkflowQueue::Idle), "the close starts once the queue is idle");
-        let mut port =
-            HostUpdates::new(Some(ready()), WorkflowQueue::Idle, false, &mut restart, &mut check);
+        let mut port = HostUpdates::new(
+            PRODUCT,
+            Some(ready()),
+            WorkflowQueue::Idle,
+            false,
+            &mut restart,
+            &mut check,
+        );
         assert_eq!(port.restart(UpdatesRestartTiming::AfterWorkflow), Ok(()));
         assert!(port.close_now());
     }
@@ -247,8 +295,14 @@ mod tests {
         let mut restart = WorkflowRestart::default();
         let mut check = || Ok::<(), Box<dyn Error>>(());
         assert!(!restart.request(WorkflowQueue::Busy));
-        let mut port =
-            HostUpdates::new(Some(ready()), WorkflowQueue::Busy, false, &mut restart, &mut check);
+        let mut port = HostUpdates::new(
+            PRODUCT,
+            Some(ready()),
+            WorkflowQueue::Busy,
+            false,
+            &mut restart,
+            &mut check,
+        );
         assert_eq!(port.restart(UpdatesRestartTiming::Now), Ok(()));
         assert!(port.close_now());
         drop(port);
@@ -261,6 +315,7 @@ mod tests {
         let mut sent = 0;
         let mut check = counting(&mut sent);
         let mut port = HostUpdates::new(
+            PRODUCT,
             Some(checking_host()),
             WorkflowQueue::Idle,
             false,
@@ -270,6 +325,7 @@ mod tests {
         assert_eq!(port.restart(UpdatesRestartTiming::Now), Err(UpdatesRejection::NotReady));
         assert!(!port.close_now());
         let mut port = HostUpdates::new(
+            PRODUCT,
             Some(UpdateStatus::default()),
             WorkflowQueue::Idle,
             false,
@@ -281,10 +337,17 @@ mod tests {
             Err(UpdatesRejection::Unavailable),
             "a launch that cannot check says so"
         );
-        let mut port = HostUpdates::new(None, WorkflowQueue::Idle, false, &mut restart, &mut check);
-        assert_eq!(port.check_now(), Err(UpdatesRejection::Unavailable));
         let mut port =
-            HostUpdates::new(Some(ready()), WorkflowQueue::Idle, true, &mut restart, &mut check);
+            HostUpdates::new(PRODUCT, None, WorkflowQueue::Idle, false, &mut restart, &mut check);
+        assert_eq!(port.check_now(), Err(UpdatesRejection::Unavailable));
+        let mut port = HostUpdates::new(
+            PRODUCT,
+            Some(ready()),
+            WorkflowQueue::Idle,
+            true,
+            &mut restart,
+            &mut check,
+        );
         assert_eq!(port.restart(UpdatesRestartTiming::Now), Err(UpdatesRejection::Busy));
         assert_eq!(port.check_now(), Err(UpdatesRejection::Busy));
         assert!(!port.close_now());
@@ -294,6 +357,7 @@ mod tests {
         let mut restart = WorkflowRestart::default();
         let mut unreachable = || Err::<(), Box<dyn Error>>("channel closed".into());
         let mut port = HostUpdates::new(
+            PRODUCT,
             Some(checking_host()),
             WorkflowQueue::Idle,
             false,

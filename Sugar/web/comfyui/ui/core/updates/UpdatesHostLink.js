@@ -14,19 +14,19 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Present a host's own updater to the page through the `sugarcubes.updates` protocol, version 1.
+ * Present a host's own updater to the page through the `sugarcubes.updates` protocol.
  *
- * `integrations/contracts/updates.schema.json` owns the wire shapes; every host message is
- * admitted through the generated guard before it is read.
+ * Version 2 (`integrations/contracts/updates-v2.schema.json`) names the product each state
+ * describes; version 1 (`updates.schema.json`) does not, so its snapshots name none. Every host
+ * message is admitted through its version's generated guard before it is read.
  */
-import { isUpdatesHostMessage, } from '../embedded/UpdatesRuntime.js';
+import { isNamedUpdatesHostMessage, isUpdatesHostMessage, } from '../embedded/UpdatesRuntime.js';
 /** Protocol identifier shared with desktop hosts. */
 export const UPDATES_PROTOCOL = 'sugarcubes.updates';
-/** Protocol version; it advances independently of the panel transport. */
-export const UPDATES_PROTOCOL_VERSION = 1;
 /** Translate the host's wire state into the snapshot every update source shares. */
 function snapshot(state) {
     return Object.freeze({
+        product: 'product' in state && state.product.trim() !== '' ? state.product : null,
         currentVersion: state.currentVersion,
         channel: state.channel,
         lastSuccessfulCheck: state.lastSuccessfulCheck?.completedAt ?? null,
@@ -46,6 +46,7 @@ function snapshot(state) {
 export class UpdatesHostLink {
     transport;
     report;
+    version;
     applies = 'host-restart';
     #listeners = new Set();
     #pending = new Map();
@@ -54,9 +55,10 @@ export class UpdatesHostLink {
     #requests = 0;
     #stop = null;
     #disposed = false;
-    constructor(transport, report) {
+    constructor(transport, report, version) {
         this.transport = transport;
         this.report = report;
+        this.version = version;
     }
     /** Listen before asking the host to watch, so its synchronous first state cannot be lost. */
     start() {
@@ -92,11 +94,16 @@ export class UpdatesHostLink {
         this.#listeners.clear();
     }
     #envelope() {
-        return {
-            protocol: UPDATES_PROTOCOL,
-            version: UPDATES_PROTOCOL_VERSION,
-            session: this.transport.session,
-        };
+        const session = this.transport.session;
+        return this.version === 2
+            ? { protocol: UPDATES_PROTOCOL, version: 2, session }
+            : { protocol: UPDATES_PROTOCOL, version: 1, session };
+    }
+    /** Admit a host message through the guard of the version this link speaks. */
+    #admit(value) {
+        if (this.version === 2)
+            return isNamedUpdatesHostMessage(value) ? value : null;
+        return isUpdatesHostMessage(value) ? value : null;
     }
     #request(kind, message) {
         if (this.#disposed || !this.#stop)
@@ -109,15 +116,16 @@ export class UpdatesHostLink {
         });
     }
     #receive(value) {
-        if (!isUpdatesHostMessage(value) || value.session !== this.transport.session)
+        const message = this.#admit(value);
+        if (!message || message.session !== this.transport.session)
             return;
-        if (value.type === 'accepted')
-            this.#settle(value.request, { accepted: true });
-        else if (value.type === 'rejected')
-            this.#settle(value.request, { accepted: false, reason: value.reason });
-        else if (value.revision > this.#revision) {
-            this.#revision = value.revision;
-            this.#snapshot = snapshot(value.update);
+        if (message.type === 'accepted')
+            this.#settle(message.request, { accepted: true });
+        else if (message.type === 'rejected')
+            this.#settle(message.request, { accepted: false, reason: message.reason });
+        else if (message.revision > this.#revision) {
+            this.#revision = message.revision;
+            this.#snapshot = snapshot(message.update);
             for (const changed of [...this.#listeners])
                 changed();
         }

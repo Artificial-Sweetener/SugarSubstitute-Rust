@@ -34,6 +34,11 @@
       "file": "updates.schema.json",
       "id": "https://artificialsweetener.ai/schemas/sugarcubes/updates/v1",
       "sha256": "ef20c40afebe2ed098bc5ba83461a568dce40b1451d6b3fcbcb38ba28ef9f562"
+    },
+    {
+      "file": "updates-v2.schema.json",
+      "id": "https://artificialsweetener.ai/schemas/sugarcubes/updates/v2",
+      "sha256": "9eb680f6538fe229ac1f661dca102122bbf0e3b13020a463103618b73ffc9e7c"
     }
   ],
   "capabilities": [
@@ -48,6 +53,10 @@
     {
       "name": "output.host-surface",
       "meaning": "The host presents output images itself; the page never falls back to browser images."
+    },
+    {
+      "name": "updates.product-name",
+      "meaning": "Besides sugarcubes.updates version 1, the host answers version 2 on the same channel, whose states name the product they describe."
     }
   ]
 }

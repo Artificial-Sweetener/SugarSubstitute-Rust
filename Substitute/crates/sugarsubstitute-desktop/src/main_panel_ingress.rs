@@ -6,7 +6,7 @@ use serde::Deserialize;
 use sugarsubstitute_contracts::{
     canvas_native::CanvasNativeRequest,
     canvas_surface::CanvasSurfaceMessage,
-    host_updates::UpdatesClientMessage,
+    host_updates::{UpdatesClientMessage, UpdatesProtocol},
     memory::MemoryMessage,
     panel::{PanelMessage, PanelSession},
 };
@@ -145,14 +145,14 @@ pub(crate) enum ClientMessage {
     Surface(CanvasSurfaceMessage),
     Native(CanvasNativeRequest),
     Memory(MemoryMessage),
-    Updates(UpdatesClientMessage),
+    Updates(UpdatesClientMessage, UpdatesProtocol),
 }
 
 impl ClientMessage {
     /// Keep control and cancellation traffic independent of ordinary response ownership.
     pub(crate) const fn lane(&self) -> Lane {
         match self {
-            Self::Panel(_) | Self::Memory(_) | Self::Updates(_) => Lane::Control,
+            Self::Panel(_) | Self::Memory(_) | Self::Updates(..) => Lane::Control,
             Self::Surface(CanvasSurfaceMessage::Cancel { .. }) => Lane::Cancellation,
             Self::Surface(_) | Self::Native(_) => Lane::Ordinary,
         }
@@ -161,7 +161,7 @@ impl ClientMessage {
     /// Correlate cancellation and replies without imposing a global public-ID frontier.
     pub(crate) fn request_id(&self) -> Option<u64> {
         match self {
-            Self::Panel(_) | Self::Memory(_) | Self::Updates(_) => None,
+            Self::Panel(_) | Self::Memory(_) | Self::Updates(..) => None,
             Self::Surface(CanvasSurfaceMessage::Request(value)) => Some(value.request_id()),
             Self::Surface(CanvasSurfaceMessage::Discovery(value)) => Some(value.request_id()),
             Self::Surface(CanvasSurfaceMessage::Presentation(value)) => Some(value.request_id()),
@@ -213,8 +213,8 @@ pub(crate) fn decode_payload(payload: &str, session: &PanelSession) -> Option<Cl
     if let Ok(message) = MemoryMessage::decode(payload.as_bytes()) {
         return (message.session() == session).then_some(ClientMessage::Memory(message));
     }
-    if let Ok(message) = UpdatesClientMessage::decode(payload.as_bytes()) {
-        return (message.session() == session).then_some(ClientMessage::Updates(message));
+    if let Ok((message, protocol)) = UpdatesClientMessage::decode(payload.as_bytes()) {
+        return (message.session() == session).then_some(ClientMessage::Updates(message, protocol));
     }
     let request = CanvasNativeRequest::decode(payload.as_bytes()).ok()?;
     (request.session() == session).then_some(ClientMessage::Native(request))
@@ -286,7 +286,7 @@ mod tests {
     -> Result<(), Box<dyn Error>> {
         let session = PanelSession::new("session-12345678".into())?;
         let envelope =
-            r#""protocol":"sugarcubes.updates","version":1,"session":"session-12345678""#;
+            r#""protocol":"sugarcubes.updates","version":2,"session":"session-12345678""#;
         for body in [
             r#""type":"watch""#,
             r#""type":"check","request":"check-1""#,
@@ -294,7 +294,7 @@ mod tests {
         ] {
             let request = format!("{{{envelope},{body}}}");
             let message = decode_payload(&request, &session).ok_or("Update request missing")?;
-            assert!(matches!(message, ClientMessage::Updates(_)), "{request}");
+            assert!(matches!(message, ClientMessage::Updates(_, UpdatesProtocol::V2)), "{request}");
             assert_eq!(message.lane(), Lane::Control);
             assert_eq!(message.request_id(), None);
             let other = PanelSession::new("session-87654321".into())?;

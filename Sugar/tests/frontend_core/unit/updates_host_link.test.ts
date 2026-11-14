@@ -16,6 +16,7 @@
 /** Prove the page follows a host updater and settles every request on the host's own answer. */
 import { expect, jest, test } from '@jest/globals';
 import { isUpdatesClientMessage } from '../../../integrations/shared/UpdatesValidation.generated.js';
+import { isUpdatesClientMessage as isNamedUpdatesClientMessage } from '../../../integrations/shared/UpdatesV2Validation.generated.js';
 import { UpdatesHostLink } from '../../../frontend/comfyui/ui/core/updates/UpdatesHostLink.js';
 import { UpdateSourceSlot } from '../../../frontend/comfyui/ui/core/updates/UpdateSource.js';
 import type { UpdatesClientMessage } from '../../../frontend/comfyui/ui/core/embedded/UpdatesRuntime.js';
@@ -58,7 +59,7 @@ function channel(options: { failSend?: boolean } = {}) {
 
 test('watches on start and follows only newer, schema-valid state for its own session', () => {
   const host = channel();
-  const link = new UpdatesHostLink(host.transport, jest.fn());
+  const link = new UpdatesHostLink(host.transport, jest.fn(), 1);
   const changed = jest.fn();
   link.subscribe(changed);
   link.start();
@@ -67,6 +68,7 @@ test('watches on start and follows only newer, schema-valid state for its own se
   expect(link.read()).toBeNull();
   host.receive({ ...envelope, type: 'state', revision: 2, update: ready });
   expect(link.read()).toEqual({
+    product: null,
     currentVersion: '0.4.2',
     channel: 'beta',
     lastSuccessfulCheck: 1762876800000,
@@ -111,7 +113,7 @@ test('watches on start and follows only newer, schema-valid state for its own se
 
 test('each request settles on the host answer that names it', async () => {
   const host = channel();
-  const link = new UpdatesHostLink(host.transport, jest.fn());
+  const link = new UpdatesHostLink(host.transport, jest.fn(), 1);
   link.start();
   const check = link.check();
   const restart = link.apply('after-workflow');
@@ -134,7 +136,7 @@ test('each request settles on the host answer that names it', async () => {
 
 test('requests waiting at retirement, and requests after it, settle as unavailable', async () => {
   const host = channel();
-  const link = new UpdatesHostLink(host.transport, jest.fn());
+  const link = new UpdatesHostLink(host.transport, jest.fn(), 1);
   await expect(link.check()).resolves.toEqual({ accepted: false, reason: 'unavailable' });
   link.start();
   const waiting = link.apply('now');
@@ -146,7 +148,7 @@ test('requests waiting at retirement, and requests after it, settle as unavailab
 test('a failing host channel is reported once and retires the link', async () => {
   const host = channel({ failSend: true });
   const report = jest.fn();
-  const link = new UpdatesHostLink(host.transport, report);
+  const link = new UpdatesHostLink(host.transport, report, 1);
   link.start();
   expect(report).toHaveBeenCalledTimes(1);
   await expect(link.check()).resolves.toEqual({ accepted: false, reason: 'unavailable' });
@@ -158,14 +160,37 @@ test('the slot holds one source at a time and announces attach and retire', () =
   const slot = new UpdateSourceSlot();
   const changed = jest.fn();
   slot.subscribe(changed);
-  const first = new UpdatesHostLink(channel().transport, jest.fn());
+  const first = new UpdatesHostLink(channel().transport, jest.fn(), 1);
   const release = slot.attach(first);
   expect(slot.read()).toBe(first);
-  expect(() => slot.attach(new UpdatesHostLink(channel().transport, jest.fn()))).toThrow(
+  expect(() => slot.attach(new UpdatesHostLink(channel().transport, jest.fn(), 1))).toThrow(
     'already attached',
   );
   release();
   release();
   expect(slot.read()).toBeNull();
   expect(changed).toHaveBeenCalledTimes(2);
+});
+
+test('a host speaking version two names the product each state describes', () => {
+  const host = channel();
+  const link = new UpdatesHostLink(host.transport, jest.fn(), 2);
+  link.start();
+  const named = { ...envelope, version: 2 } as const;
+  expect(host.sent).toEqual([{ ...named, type: 'watch' }]);
+  expect(host.sent.every(isNamedUpdatesClientMessage)).toBe(true);
+  host.receive({ ...envelope, type: 'state', revision: 1, update: ready });
+  expect(link.read()).toBeNull();
+  host.receive({ ...named, type: 'state', revision: 1, update: ready });
+  expect(link.read()).toBeNull();
+  host.receive({
+    ...named,
+    type: 'state',
+    revision: 2,
+    update: { ...ready, product: 'SugarSubstitute' },
+  });
+  expect(link.read()?.product).toBe('SugarSubstitute');
+  host.receive({ ...named, type: 'state', revision: 3, update: { ...ready, product: ' ' } });
+  expect(link.read()?.product).toBeNull();
+  link.dispose();
 });

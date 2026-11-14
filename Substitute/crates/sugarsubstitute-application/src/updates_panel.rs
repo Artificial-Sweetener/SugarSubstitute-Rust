@@ -28,6 +28,8 @@ mod tests;
 /// What the updater reports at one moment.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct UpdateSnapshot {
+    /// The product the status describes, in the words of the localization owner.
+    pub product: &'static str,
     /// The coordinator's update status, including the channel its subscription follows.
     pub status: UpdateStatus,
     /// A restart is waiting for the running workflow to finish.
@@ -73,7 +75,10 @@ pub struct IdleUpdateStatus;
 
 impl UpdateStatusPort for IdleUpdateStatus {
     fn snapshot(&self) -> Option<UpdateSnapshot> {
-        Some(UpdateSnapshot::default())
+        Some(UpdateSnapshot {
+            product: sugarsubstitute_contracts::localization::updates::EN.product,
+            ..UpdateSnapshot::default()
+        })
     }
 
     fn check_now(&mut self) -> Result<(), UpdatesRejection> {
@@ -192,7 +197,12 @@ pub fn page_state(
         UpdatesStatus::UpToDate
     };
     UpdatesState {
-        current_version: current_version.clone(),
+        product: snapshot.product.to_owned(),
+        // The version this launch runs, which after an update differs from the build's own.
+        current_version: status
+            .running()
+            .and_then(page_version)
+            .unwrap_or_else(|| current_version.clone()),
         channel: match status.channel() {
             Channel::Release => UpdatesChannel::Stable,
             Channel::Canary => UpdatesChannel::Beta,

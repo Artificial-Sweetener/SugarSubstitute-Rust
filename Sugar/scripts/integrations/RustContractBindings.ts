@@ -93,7 +93,7 @@ export function rustContractBindings(
   options: { readonly schema: string; readonly generator: string; readonly prefix: string },
 ): string {
   if (
-    !/^[a-z-]+\.schema\.json$/.test(options.schema) ||
+    !/^[a-z][a-z0-9-]*\.schema\.json$/.test(options.schema) ||
     !/^scripts\/integrations\/generate-[a-z-]+-contract\.ts$/.test(options.generator) ||
     !/^[A-Za-z]+$/.test(options.prefix)
   )

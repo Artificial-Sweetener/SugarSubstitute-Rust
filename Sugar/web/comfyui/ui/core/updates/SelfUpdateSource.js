@@ -156,6 +156,7 @@ export function selfUpdateSnapshot(state) {
     if (!status)
         return null;
     return {
+        product: 'SugarCubes',
         currentVersion: state.currentVersion,
         channel: 'stable',
         lastSuccessfulCheck: state.lastCheckedAt,
