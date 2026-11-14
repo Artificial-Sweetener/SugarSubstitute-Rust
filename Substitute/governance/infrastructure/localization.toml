@@ -138,7 +138,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/lib.rs"
-source_sha256 = "sha256:1ea7706b8e2f27b47fa58298468a21171458abf8e906d9e06aeadde6574f99ff"
+source_sha256 = "sha256:6c93da8c2353e541a2fd6002c1b6fa3df76054aea418329e88803d8512ccfd85"
 kind = "native"
 rationale = "Native boundary: Own native window lifetime and CPU frame presentation independently of UI content.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -150,7 +150,7 @@ rationale = "Behavioral fixture creates a hidden OS STATIC window with a technic
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/construction.rs"
-source_sha256 = "sha256:f64f13138f8faa82bbf2b484f4381bde31533cb9d73b6db8131360467ae71409"
+source_sha256 = "sha256:c1d059652685083f125d80f2b95643f413a854903bda8d91457937dadc70cc37"
 kind = "native"
 rationale = "Native boundary: Adopt every window, presenter, controller and native getter before interpreting outcomes.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -414,7 +414,7 @@ rationale = "Startup View binds output, cancel and retry accessible controls to 
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup.rs"
-source_sha256 = "sha256:e85e4fbb5f6fdf79878738f184d7928ee0d5c9244fe943e53fd8ff2b0d154172"
+source_sha256 = "sha256:86af4977757072a07731e9410eeddef60e25c6ffe34a70df7202fdd534dda332"
 kind = "presentation"
 rationale = "WindowContent returns the authoritative startup View accessible controls. This composing owner introduces no label literals."
 
