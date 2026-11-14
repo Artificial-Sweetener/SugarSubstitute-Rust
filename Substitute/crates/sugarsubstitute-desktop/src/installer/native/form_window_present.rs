@@ -14,6 +14,17 @@ impl FormWindow {
         Ok(())
     }
 
+    /// After a size change: centre a window not shown yet, and keep a shown one inside its work
+    /// area, as when it grows or moves to another monitor.
+    pub(super) fn keep_placed(&self) -> Result {
+        if !self.revealed {
+            return self.place();
+        }
+        let presenter = self.presenter.as_ref().ok_or("Native form presenter absent")?;
+        presenter.keep_within_work_area()?;
+        Ok(())
+    }
+
     pub(super) fn present(&mut self, lifetime: &mut impl Lifetime) -> Result {
         if let Some(page) = lifetime.page()
             && Some(page.frame.shape()) == self.shape

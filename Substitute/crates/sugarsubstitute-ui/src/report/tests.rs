@@ -323,9 +323,14 @@ fn light_theme_paints_the_light_footer_and_a_dark_close_glyph() -> Result {
     assert_eq!(footer, &[243, 243, 243, 255]);
     let ink = (11..21)
         .flat_map(|y| (WIDTH as usize - 28..WIDTH as usize - 18).map(move |x| (x, y)))
-        .filter(|(x, y)| pixels.pixels()[index(*x, *y) + 3] > 100)
+        .filter(|(x, y)| pixels.pixels()[index(*x, *y)] < 128)
         .count();
     assert!(ink > 6, "close glyph uses the light theme's text tone");
+    assert_eq!(
+        &pixels.pixels()[index(4, 40)..][..4],
+        &[249, 249, 249, 255],
+        "light dialog surface"
+    );
     Ok(())
 }
 
@@ -450,3 +455,5 @@ fn the_fully_expanded_report_uses_the_compact_panel_on_a_small_screen() -> Resul
     assert!((compact.height(1.0) - compact.height(0.0) - 172.0).abs() < 0.01);
     Ok(())
 }
+
+mod surface;

@@ -12,6 +12,7 @@ use crate::{
     windows_controls::Controls,
     windows_scroll::ScrollViewport,
 };
+use client_size::ClientSize;
 use std::{rc::Rc, time::Instant};
 use sugarsubstitute_contracts::{execution::MemoryClaim, presentation::FrameIdentity};
 use tao::{
@@ -24,6 +25,8 @@ use tao::{
 
 type Result<T = ()> = std::result::Result<T, Box<dyn Error>>;
 
+#[path = "client_size.rs"]
+mod client_size;
 #[path = "form_window_input.rs"]
 mod input;
 #[path = "form_window_present.rs"]
@@ -82,6 +85,10 @@ pub(crate) struct FormWindow {
     point: (f64, f64),
     picker_request: Option<Picker>,
     applied_size: Option<[u32; 2]>,
+    /// The logical client size kept across display scales while the lifetime has no preferred size.
+    client: ClientSize,
+    /// The display scale the lifetime last measured its work area at.
+    scale: f64,
     closing: bool,
     close_started: bool,
     revealed: bool,
@@ -111,8 +118,11 @@ impl FormWindow {
         lifetime: &mut impl Lifetime,
         wake: Arc<dyn CompletionWake>,
     ) -> Result<Self> {
+        // Open on the target monitor, so Windows creates the window at that monitor's scale.
+        let origin = crate::windows::opening_origin(owner.map(|FormOwner(hwnd)| hwnd))?;
         let mut builder = WindowBuilder::new()
             .with_title(options.title)
+            .with_position(origin)
             .with_inner_size(LogicalSize::new(options.size[0], options.size[1]))
             .with_resizable(options.resizable)
             .with_max_inner_size(tao::dpi::PhysicalSize::new(4096, 4096))
@@ -169,6 +179,7 @@ impl FormWindow {
             tracing::error!(operation="native_form_start", cause=%cause, "Form window start failed");
             retain(cause);
         }
+        let scale = window.scale_factor();
         Ok(Self {
             closing: failure.is_some(),
             window,
@@ -188,6 +199,8 @@ impl FormWindow {
             point: (0.0, 0.0),
             picker_request: None,
             applied_size: None,
+            client: ClientSize::new(options.size),
+            scale,
             close_started: false,
             revealed: false,
             released: false,
@@ -295,6 +308,7 @@ impl FormWindow {
             self.scroll.shutdown()?;
         }
         if !self.closing {
+            self.fit_client(lifetime)?;
             let size = self.window.inner_size();
             if size.width > 0 && size.height > 0 {
                 let next = FrameShape::new(size.width, size.height, self.window.scale_factor())?;
@@ -350,9 +364,7 @@ impl FormWindow {
             if Some(size) != self.applied_size {
                 super::apply_client_size(&self.window, size);
                 self.applied_size = Some(size);
-                if !self.revealed {
-                    self.place()?;
-                }
+                self.keep_placed()?;
             }
             // Acknowledge every turn with the size the window really has, so a lifetime
             // waiting on its request prepares for this window, not the request.
@@ -369,5 +381,28 @@ impl FormWindow {
         }
         self.present(lifetime)?;
         Ok(false)
+    }
+
+    /// Keep the client at its logical size on the window's current display scale, unless the
+    /// lifetime sizes the window itself, and give the lifetime its work area again after the
+    /// scale changed. Runs before the lifetime sees the window's size, so no page is prepared for
+    /// a size the window is about to leave.
+    fn fit_client(&mut self, lifetime: &mut impl Lifetime) -> Result {
+        let scale = self.window.scale_factor();
+        let presenter = self.presenter.as_ref().ok_or("Native form presenter absent")?;
+        if self.scale != scale {
+            self.scale = scale;
+            lifetime.work_area(presenter.work_area_height()?);
+        }
+        let size = self.window.inner_size();
+        if lifetime.preferred_size().is_some() || size.width == 0 || size.height == 0 {
+            return Ok(());
+        }
+        let limit = presenter.client_limit()?;
+        if let Some(target) = self.client.observe([size.width, size.height], scale, limit) {
+            super::apply_client_size(&self.window, target);
+            self.keep_placed()?;
+        }
+        Ok(())
     }
 }

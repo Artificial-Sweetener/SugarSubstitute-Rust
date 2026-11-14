@@ -131,6 +131,14 @@ impl Decoration {
                 if dark { white(13) } else { white(179) },
                 [0, 0, 0, if dark { 25 } else { 15 }],
             ),
+            Self::DialogSurface => Palette {
+                radius: 0.0,
+                fill: if dark { [43, 43, 43, 255] } else { [249, 249, 249, 255] },
+                border: white(0),
+                top: white(0),
+                bottom: white(0),
+                insets: [0.0; 4],
+            },
             Self::Footer => Palette {
                 radius: 0.0,
                 fill: if dark { [32, 32, 32, 255] } else { [243, 243, 243, 255] },

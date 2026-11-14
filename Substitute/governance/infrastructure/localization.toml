@@ -744,7 +744,7 @@ rationale = "The headless notice window takes its title from the role's Headless
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/installer/native/form_window.rs"
-source_sha256 = "sha256:79343269c5204ac910421413723b0a86b97aeac920453344827845cbb3996f13"
+source_sha256 = "sha256:4804c9300d2a5d5a4836820dc2c4947363a4557af9f53eb493824a93362f3ccc"
 kind = "native"
 rationale = "The shared form window takes its title from the lifetime's localized window options; it adds no product text."
 
