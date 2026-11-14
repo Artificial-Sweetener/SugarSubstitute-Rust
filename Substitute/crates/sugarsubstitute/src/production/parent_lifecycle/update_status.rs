@@ -132,14 +132,24 @@ impl ParentLifecycle {
         self.updates.restart_to_apply();
     }
 
+    /// Whether the registered child still takes update snapshots: until its close begins, or,
+    /// for a child closing to restart into an update, until its final ExitCompleted.
+    pub(super) fn update_status_open(&self) -> bool {
+        let restart_waits = self.updates.restart_to_apply && self.close_after_reply.is_none();
+        self.registered && (self.cleanup.is_none() || restart_waits)
+    }
+
     /// Take the child's request to check for updates now, once.
     pub(crate) fn take_check_request(&mut self) -> bool {
         std::mem::take(&mut self.updates.check_requested)
     }
 
     /// Write the waiting snapshot when the shared write slot is free and the child is registered.
+    /// Once the child's close began, only a child closing to restart into an update still gets
+    /// snapshots, until its final ExitCompleted: it keeps its window up until the status says
+    /// the coordinator's restart notice covers the screen, and only then completes its close.
     pub(super) fn send_update_status(&mut self, resources: &ParentResources<'_, '_>) -> Result<()> {
-        if self.write.is_some() || !self.registered || self.cleanup.is_some() {
+        if self.write.is_some() || !self.update_status_open() {
             return Ok(());
         }
         let until = resources.execution.client.now()?.checked_add(WRITE)?;

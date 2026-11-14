@@ -112,6 +112,7 @@ pub(super) fn creator(
         shutdown: None,
         failure_published: false,
         settled: false,
+        install_waited: false,
         cleanup_failure: cleanup_state::CleanupState::new(),
     })
 }

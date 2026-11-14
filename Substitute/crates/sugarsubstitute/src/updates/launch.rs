@@ -20,6 +20,8 @@ use sugarsubstitute_contracts::update::attempt::AttemptOutcome;
 pub(crate) struct LaunchUpdate {
     eager: bool,
     window_opened: bool,
+    /// A check finished, whatever it found.
+    checked: bool,
     restart: Option<String>,
 }
 impl LaunchUpdate {
@@ -28,6 +30,7 @@ impl LaunchUpdate {
         Self {
             eager: matches!(policy, Some(UpdatePolicy::BetaEager)),
             window_opened: false,
+            checked: false,
             restart: None,
         }
     }
@@ -53,6 +56,7 @@ impl LaunchUpdate {
     /// Adopt a finished check. A beta-eager launch whose window has not opened restarts into
     /// the version the check prepared; every other outcome leaves the launch running.
     pub(crate) fn finish(&mut self, outcome: &AttemptOutcome) {
+        self.checked = true;
         if let AttemptOutcome::Prepared { version } = outcome
             && self.eager
             && !self.window_opened
@@ -65,6 +69,13 @@ impl LaunchUpdate {
     /// The version this launch restarts into, once decided.
     pub(crate) fn restart(&self) -> Option<&str> {
         self.restart.as_deref()
+    }
+
+    /// Whether the launch-time SugarCubes update waits: this beta-eager launch restarts into
+    /// an application update, or may still, because its first check (which `can_check` says
+    /// can run) has not finished before the window opened. The restarted copy then runs it.
+    pub(crate) const fn holds_sugarcubes_update(&self, can_check: bool) -> bool {
+        self.restart.is_some() || (self.eager && !self.window_opened && can_check && !self.checked)
     }
 }
 
@@ -87,6 +98,25 @@ mod tests {
             assert!(!launch.checks_before_window());
             assert_eq!(launch.first_check(), FIRST_CHECK);
         }
+    }
+
+    /// The SugarCubes update waits while the first eager check may still restart the app, and
+    /// for good once it decided to; a launch that cannot check, a standard launch, a finished
+    /// check that prepared nothing and an opened window all let it run.
+    #[test]
+    fn the_sugarcubes_update_waits_while_an_application_restart_may_still_come() {
+        let mut launch = LaunchUpdate::new(Some(UpdatePolicy::BetaEager));
+        assert!(launch.holds_sugarcubes_update(true), "the first check is pending");
+        assert!(!launch.holds_sugarcubes_update(false), "no check can run");
+        launch.finish(&AttemptOutcome::Current);
+        assert!(!launch.holds_sugarcubes_update(true), "the check found nothing");
+        let mut launch = LaunchUpdate::new(Some(UpdatePolicy::BetaEager));
+        launch.finish(&prepared("2.0.0"));
+        assert!(launch.holds_sugarcubes_update(false), "the restarted copy runs it");
+        let mut launch = LaunchUpdate::new(Some(UpdatePolicy::BetaEager));
+        launch.window_opened();
+        assert!(!launch.holds_sugarcubes_update(true));
+        assert!(!LaunchUpdate::new(Some(UpdatePolicy::Standard)).holds_sugarcubes_update(true));
     }
 
     #[test]

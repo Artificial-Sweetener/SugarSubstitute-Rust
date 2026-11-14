@@ -108,8 +108,16 @@ pub(crate) trait EntryActivation {
     fn sugarcubes_update(&self) -> sugarsubstitute_contracts::update::pack::PackUpdateStatus {
         sugarsubstitute_contracts::update::pack::PackUpdateStatus::Idle
     }
-    /// Whether a desktop child that asked to restart so an update applies has since completed
-    /// a normal close. A crashed or failed child never counts.
+    /// Hold the launch-time SugarCubes update while this launch may still restart into an
+    /// application update. A coordinator without a backend runs no SugarCubes update.
+    fn hold_sugarcubes_update(&mut self, _held: bool) {}
+    /// Whether SugarCubes files are being installed or put back now. A restart waits for this
+    /// to end, so it is never cut short and its result is reported as it is.
+    fn sugarcubes_installing(&self) -> bool {
+        false
+    }
+    /// Whether a desktop child asked to restart so an update applies: while it closes, or once
+    /// it completed that close.
     fn restart_to_apply_requested(&self) -> bool;
     /// Take, once, whether a live desktop child asked for an update check now since the last
     /// call. Requests from every child and repeats before this call count as one.

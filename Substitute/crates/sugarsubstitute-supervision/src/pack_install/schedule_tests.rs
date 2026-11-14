@@ -233,3 +233,32 @@ fn a_queued_restore_holds_the_retry_and_one_with_nothing_to_restore_shows_the_re
     assert_eq!(outcome(&schedule), Some(PackOutcome::Updated));
     Ok(())
 }
+
+/// While this launch may still restart into an application update, the launch-time update
+/// waits; if the launch restarts, the preparation stopping leaves the update to the next copy.
+/// An update already installing is reported as such, so a restart waits for it.
+#[test]
+fn the_launch_time_update_waits_while_an_application_restart_may_still_come() -> TestResult {
+    let mut schedule = PackSchedule::default();
+    schedule.hold_update(true);
+    assert!(schedule.prepare(1, true));
+    assert_eq!(schedule.start_next(), None, "held while the application check is pending");
+    assert!(!schedule.installing());
+    schedule.withdraw_update(1);
+    assert!(!schedule.gates(1), "a stopping preparation no longer waits for it");
+    assert_eq!(schedule.status().0, &PackUpdateStatus::Idle);
+    assert_eq!(schedule.start_next(), None, "the restarted copy runs it");
+
+    let mut schedule = PackSchedule::default();
+    schedule.hold_update(true);
+    assert!(schedule.prepare(1, true));
+    schedule.hold_update(false);
+    assert_eq!(schedule.start_next(), Some((PackWork::Update { managed: true }, Some(1))));
+    assert!(schedule.installing(), "a restart now waits for the install");
+    schedule.hold_update(true);
+    assert!(schedule.installing(), "a running update is never held back");
+    schedule.ended(PackWorkEnded::Updated(updated()?));
+    assert!(!schedule.installing());
+    assert_eq!(outcome(&schedule), Some(PackOutcome::Updated), "its real result is reported");
+    Ok(())
+}

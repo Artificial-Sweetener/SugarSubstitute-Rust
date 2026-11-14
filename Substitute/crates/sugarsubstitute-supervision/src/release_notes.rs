@@ -9,6 +9,8 @@
 //! the user, parsed into version sections and bounded before it leaves this owner.
 
 pub mod changelog;
+#[cfg(feature = "local-update-qualification")]
+mod qualification;
 
 #[cfg(test)]
 mod tests;
@@ -46,9 +48,22 @@ pub struct ChangelogSource {
 impl ChangelogSource {
     /// SugarSubstitute's changelog in its release repository.
     ///
+    /// A local-update qualification build reads it from the loopback fixture named by
+    /// `QUALIFICATION_RELEASE_NOTES_PORT` when that variable holds a port, so a
+    /// proof never reaches GitHub.
+    ///
     /// # Errors
     /// Refuses an origin the update HTTP policy cannot admit, which would be a defect here.
     pub fn substitute() -> Result<Self, Rejection> {
+        #[cfg(feature = "local-update-qualification")]
+        if let Some(port) = qualification::loopback_port() {
+            return Self::loopback(port);
+        }
+        Self::published()
+    }
+
+    /// The changelog in SugarSubstitute's published release repository.
+    fn published() -> Result<Self, Rejection> {
         Ok(Self {
             policy: Policy::https("https://api.github.com/", &[])?,
             api_root: "https://api.github.com".into(),
@@ -60,12 +75,12 @@ impl ChangelogSource {
     }
 
     /// The same changelog served by a literal loopback fixture on `port`.
-    #[cfg(test)]
+    #[cfg(any(test, feature = "local-update-qualification"))]
     pub(crate) fn loopback(port: u16) -> Result<Self, Rejection> {
         Ok(Self {
             policy: Policy::loopback(port)?,
             api_root: format!("http://127.0.0.1:{port}"),
-            ..Self::substitute()?
+            ..Self::published()?
         })
     }
 

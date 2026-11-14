@@ -177,7 +177,16 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
         }
         let native_now = (self.native_now)();
         let cutoff = self.consume_cleanup_cutoff(native_now);
-        if cutoff {
+        if cutoff && let Err(cause) = self.begin_owed_relaunch() {
+            tracing::error!(operation = "restart_to_apply_relaunch_failed", cause = %crate::failure_details::Details(cause.as_ref()),
+                "SugarSubstitute could not be started again after its close ran past its cutoff");
+        }
+        if self.deadline_reported {
+            self.take_relaunch_result();
+        }
+        // Past the cutoff, execution stops admitting work once a relaunch owed by this close
+        // has started the next copy, so the user is never left without the app.
+        if self.deadline_reported && !self.relaunch_running() {
             let budget = self.shutdown.ok_or("Original production shutdown budget missing")?;
             if let Some(execution) = &mut self.execution
                 && !self.execution_stopping

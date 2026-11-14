@@ -67,8 +67,18 @@ impl CoordinatorBackend {
         if record.settled {
             return Ok(ResourceTransition::default());
         }
-        let (_, budget) = record.shutdown.ok_or(LifecycleRejection::WrongPhase)?;
+        let (shutdown, mut budget) = record.shutdown.ok_or(LifecycleRejection::WrongPhase)?;
         let now = resources.client.now()?;
+        // A SugarCubes install or restore that runs is a visibly progressing outcome, never a
+        // failed cleanup: the cleanup waits for it, and its cutoff starts again once it ended.
+        if self.pack.installing() {
+            record.install_waited |= now >= budget.graceful_until;
+            return self.finish_cleanup(at, resources);
+        }
+        if std::mem::take(&mut record.install_waited) {
+            budget = ShutdownBudget::new(now)?;
+            record.shutdown = Some((shutdown, budget));
+        }
         if now >= budget.settle_until && record.cleanup_failure.first().is_none() {
             tracing::warn!(operation="backend_attempt_cleanup",resource=?record.key,
                 source_pending=record.source_job || record.source_close.is_some(),

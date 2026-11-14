@@ -85,6 +85,9 @@ pub struct PackSchedule<K> {
     /// The status a restore that finds nothing to put back returns to.
     before_restore: Option<PackUpdateStatus>,
     revision: u64,
+    /// The launch-time update waits: this launch may still restart into an application
+    /// update, and then the restarted copy runs it.
+    update_held: bool,
 }
 
 impl<K> Default for PackSchedule<K> {
@@ -98,6 +101,7 @@ impl<K> Default for PackSchedule<K> {
             status: PackUpdateStatus::Idle,
             before_restore: None,
             revision: 0,
+            update_held: false,
         }
     }
 }
@@ -195,9 +199,39 @@ impl<K: Copy + Eq> PackSchedule<K> {
             || self.queued.iter().any(|(_, gates)| *gates == Some(key))
     }
 
-    /// The next work to start when no job runs, with the preparation it holds.
+    /// Hold the launch-time update while this launch may still restart into an application
+    /// update, or let it start. A running update is never held back; it runs to its end.
+    pub fn hold_update(&mut self, held: bool) {
+        self.update_held = held;
+    }
+
+    /// Whether SugarCubes files are being installed or put back now. A restart waits for this
+    /// to end instead of cutting it short.
+    pub fn installing(&self) -> bool {
+        self.running.is_some_and(|(work, _)| work.kind() != PackWorkKind::Record)
+    }
+
+    /// `key` is being stopped before its launch-time update began: that update is left to the
+    /// copy that starts next, and `key` no longer waits for it.
+    pub fn withdraw_update(&mut self, key: K) {
+        let before = self.queued.len();
+        self.queued.retain(|(work, gates)| {
+            !(matches!(work, PackWork::Update { .. }) && *gates == Some(key))
+        });
+        if self.queued.len() != before && self.status == PackUpdateStatus::Updating {
+            self.publish(PackUpdateStatus::Idle);
+        }
+    }
+
+    /// The next work to start when no job runs, with the preparation it holds. A held
+    /// launch-time update and everything after it wait.
     pub fn start_next(&mut self) -> Option<(PackWork, Option<K>)> {
         if self.running.is_some() {
+            return None;
+        }
+        if self.update_held
+            && self.queued.front().is_some_and(|(work, _)| matches!(work, PackWork::Update { .. }))
+        {
             return None;
         }
         let (work, gates) = self.queued.pop_front()?;
