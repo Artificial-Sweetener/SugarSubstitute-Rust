@@ -11,7 +11,7 @@ owner = "sugarsubstitute"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:f1fb881148ea42bee82ca5b17acf4f16b73b035244dae35b95390f23fa865790"
+source_sha256 = "sha256:ef4f957f83a4d12dd89b6a47f595c124ac3dc685be42ca2517ab31a96bdbba18"
 rationale = "Isolated test fixture directories for sugarsubstitute; each authored acquisition still requires an exact source review."
 
 [[dependencies]]
@@ -43,7 +43,7 @@ owner = "sugarsubstitute-desktop"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:e59440bae9d11a4baa0ba8ff8b248a0c604256015876fa472f759cbd4637ecdc"
+source_sha256 = "sha256:9c72a32effefdf42a250b31017f4d2df97ab47a540af8035bc66207e5b56ccc1"
 rationale = "Native OS adapter bindings for sugarsubstitute-desktop; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]

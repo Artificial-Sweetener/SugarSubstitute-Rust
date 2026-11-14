@@ -140,6 +140,10 @@ impl MainActor {
                     .with_additional_browser_args("")
                     .without_download_handlers()
                     .with_bounds(self.browser_bounds()?);
+                // Proof builds only: DevTools must be enabled for the browser to open the
+                // remote-debugging port its environment names; shipped builds keep it closed.
+                #[cfg(feature = "page-automation-qualification")]
+                let builder = builder.with_devtools(true);
                 // A windowed rebuild reuses the environment the parent already authorized.
                 #[cfg(feature = "native-composition")]
                 let builder = match self.reused_environment.take() {
