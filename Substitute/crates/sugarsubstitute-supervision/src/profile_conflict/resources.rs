@@ -10,12 +10,48 @@ use windows::{
 
 /// Retain a session until its checked native end succeeds, including after query failure.
 #[derive(Default)]
-pub(super) struct Resources {
+pub(crate) struct Resources {
     session: Option<u32>,
+}
+
+/// One process Restart Manager reports using a file: its id and the name Windows shows for it.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct Holder {
+    pub(crate) pid: u32,
+    pub(crate) name: String,
+}
+
+impl std::fmt::Display for Holder {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{} (pid {})", self.name, self.pid)
+    }
 }
 impl Resources {
     /// Return a bounded snapshot of processes using one canonical protected file.
     pub(super) fn users(&mut self, path: &Path) -> Result<Vec<RM_UNIQUE_PROCESS>, ClaimError> {
+        Ok(self.processes(path)?.iter().map(|item| item.Process).collect())
+    }
+
+    /// The live processes holding `path` open, with the names Windows shows for them.
+    pub(crate) fn holders(&mut self, path: &Path) -> Result<Vec<Holder>, ClaimError> {
+        Ok(self
+            .processes(path)?
+            .iter()
+            .map(|item| {
+                let length = item
+                    .strAppName
+                    .iter()
+                    .position(|unit| *unit == 0)
+                    .unwrap_or(item.strAppName.len());
+                Holder {
+                    pid: item.Process.dwProcessId,
+                    name: String::from_utf16_lossy(&item.strAppName[..length]),
+                }
+            })
+            .collect())
+    }
+
+    fn processes(&mut self, path: &Path) -> Result<Vec<RM_PROCESS_INFO>, ClaimError> {
         self.close()?;
         let mut session = 0;
         let mut key = [0; 33];
@@ -40,11 +76,11 @@ impl Resources {
         if count > 64 || needed > 64 {
             return Err(ClaimError::invalid("profile_conflict_user_bound"));
         }
-        let users = items[..count as usize].iter().map(|item| item.Process).collect();
+        items.truncate(count as usize);
         self.close()?;
-        Ok(users)
+        Ok(items)
     }
-    pub(super) fn close(&mut self) -> Result<(), ClaimError> {
+    pub(crate) fn close(&mut self) -> Result<(), ClaimError> {
         if let Some(session) = self.session {
             // SAFETY: This owner alone ends the retained Restart Manager session.
             unsafe { RmEndSession(session) }

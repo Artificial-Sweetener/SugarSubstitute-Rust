@@ -34,7 +34,12 @@ pub(super) fn open(
             Err(cause) => return Err(cause),
         };
         protection.directory(&path, Mode::Existing, context)?;
-        verify_record(&root, protection)?;
+        {
+            // Read the record under the shared lock like every reader: a record opened outside
+            // it shares no delete, so a writer's replace in flight would fail on it.
+            let _reader = reader(&root, protection, context).map_err(io::Error::other)?;
+            verify_record(&root, protection)?;
+        }
         if enable && marker.is_none() {
             marker = Some(publish_marker(installation, &root, protection, context)?);
         }

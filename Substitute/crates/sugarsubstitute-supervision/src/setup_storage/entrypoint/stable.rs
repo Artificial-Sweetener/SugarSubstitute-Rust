@@ -96,7 +96,8 @@ pub(in crate::setup_storage) fn install(
 ) -> io::Result<()> {
     recover_publications(root, state, protection, context)?;
     if record::read(state, protection, context)?.is_some() {
-        return prepare(root, state, candidate, protection, context);
+        // An installation the user asked for publishes its launcher now or reports why not.
+        return advance(root, state, candidate, protection, context);
     }
     transition::recover(root, state, protection, context)?;
     let directory = Directory::open(candidate.directory(), false)?;
@@ -175,7 +176,32 @@ fn initialize(
 /// Advance established launcher ownership using a completed candidate under current signed authority.
 /// Retain the previous executable until the replacement intent is durable. Missing original source
 /// files do not prevent rescue from the authenticated candidate; unknown root files remain intact.
+///
+/// A running copy of the application keeps the installation folder pinned for as long as it
+/// runs, so the root entry cannot change under it. A replacement that finds the installation in
+/// use is therefore left for a later preparation: the previous launcher stays published and
+/// owned, it starts every generation's launch engine, and reopening this candidate at the next
+/// launch publishes the new launcher before its trial is admitted.
 pub(in crate::setup_storage) fn prepare(
+    root: &Directory,
+    state: &Directory,
+    candidate: &crate::setup_storage::PreparedCandidate,
+    protection: &mut Protection,
+    context: &JobContext,
+) -> io::Result<()> {
+    match advance(root, state, candidate, protection, context) {
+        Err(cause) if crate::durable_storage::protection::held(&cause) => {
+            check(context)?;
+            tracing::info!(operation = "stable_launcher_replacement_deferred", cause = %cause,
+                "The installation is in use; the launcher is replaced at a later preparation");
+            Ok(())
+        }
+        advanced => advanced,
+    }
+}
+
+/// Publish the candidate's launcher as the root entry, or republish the owned one.
+fn advance(
     root: &Directory,
     state: &Directory,
     candidate: &crate::setup_storage::PreparedCandidate,

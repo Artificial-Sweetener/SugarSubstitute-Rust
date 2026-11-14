@@ -34,7 +34,7 @@ mod runtime_storage;
 mod slots;
 mod stage;
 pub(crate) use outcome::{DomainFailure, with_domain};
-pub(crate) use publication::Publication;
+pub(crate) use publication::{Publication, held};
 #[cfg(test)]
 pub(crate) use slots::exclusion_held;
 pub(crate) use slots::{SlotExclusion, is_busy};

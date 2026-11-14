@@ -114,7 +114,7 @@ rationale = "SugarCubes owns its package manifest. Read only its supported packa
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/profile_conflict.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:3082f8f55de2fe795a0c524ea27853a58cb5c0340fdc58955138b48eee5920de"
+source_sha256 = "sha256:3b15d65ab02423987ecc891bd101e8d95b26ac89a95c9d48b7717f1ae8071635"
 capabilities = ["arguments"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -219,7 +219,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/test_package/maintenance.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:98bc5c02b8fd693ba39ef5e751793790a2390a85f003b317a5deb093c7f23187"
+source_sha256 = "sha256:2778d654422efa626aa2ed1fdffbd605bf7666d76e2a88b87bb5e2c7cb1eefd6"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 

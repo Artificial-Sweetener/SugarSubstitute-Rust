@@ -96,6 +96,23 @@ impl Fixture {
         signed: SignedPackage,
         context: &JobContext,
     ) -> Result<SignedInstallation, TrustFailure> {
+        self.import_from(&self.source, signed, context)
+    }
+
+    /// Write an installer that carries `archive`, as a later release ships its own.
+    pub(crate) fn installer(&self, name: &str, archive: &[u8]) -> std::io::Result<PathBuf> {
+        let source = self.workspace.path().join(name);
+        std::fs::write(&source, [b"inert installer prefix".as_slice(), archive].concat())?;
+        Ok(source)
+    }
+
+    /// Exercise the public signed offline import of the installer at `executable`.
+    pub(crate) fn import_from(
+        &self,
+        executable: &std::path::Path,
+        signed: SignedPackage,
+        context: &JobContext,
+    ) -> Result<SignedInstallation, TrustFailure> {
         InstallationSession::maintain(self.installation.path(), context)?.import_installer(
             InstallerSource {
                 repository: [92; 32],
@@ -103,7 +120,7 @@ impl Fixture {
                 roots: &[],
                 metadata: signed.metadata.metadata(),
                 descriptor: &signed.descriptor,
-                executable: &self.source,
+                executable,
             },
             signed.request,
             crate::setup_storage::BundleSource::Extract(self.workspace.path()),

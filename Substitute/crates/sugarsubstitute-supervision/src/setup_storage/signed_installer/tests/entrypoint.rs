@@ -41,11 +41,43 @@ fn prepare(
     sequence: u32,
     context: &JobContext,
 ) -> Result<SignedCandidate, Failure> {
-    let prepared = fixture
-        .import(SignedPackage::new(&fixture.archive, sequence)?, context)?
-        .prepare(|| NOW, context)?;
+    complete(fixture.import(SignedPackage::new(&fixture.archive, sequence)?, context)?, context)
+}
+
+/// Complete `archive` as release `sequence` from its own installer, as a later release arrives.
+fn prepare_archive(
+    fixture: &Fixture,
+    archive: &[u8],
+    sequence: u32,
+    context: &JobContext,
+) -> Result<SignedCandidate, Failure> {
+    let installer = fixture.installer(&format!("setup-{sequence}.exe"), archive)?;
+    let signed = SignedPackage::new(archive, sequence)?;
+    complete(fixture.import_from(&installer, signed, context)?, context)
+}
+
+/// Prepare and complete an imported installation, as the background updater does.
+fn complete(
+    imported: SignedInstallation,
+    context: &JobContext,
+) -> Result<SignedCandidate, Failure> {
+    let prepared = imported.prepare(|| NOW, context)?;
     let runtime = prepared.maintenance_runtime().ok_or("Saved runtime absent")?.clone();
     Ok(prepared.complete(&runtime, || NOW, context)?)
+}
+
+/// Hold the installation folder as a running copy does: its crash-capture and diagnostic pins
+/// keep the folder open without write sharing for as long as the copy runs.
+fn running_copy_pin(root: &std::path::Path) -> std::io::Result<std::fs::File> {
+    use std::os::windows::fs::OpenOptionsExt;
+    use windows::Win32::Storage::FileSystem::{
+        FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_READ,
+    };
+    std::fs::OpenOptions::new()
+        .read(true)
+        .share_mode(FILE_SHARE_READ.0)
+        .custom_flags((FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT).0)
+        .open(root)
 }
 
 /// The root holds exactly the stable entry file; everything else is a folder.
@@ -184,6 +216,65 @@ fn reopening_cached_candidate_restores_launcher_without_changing_selection() -> 
         assert_eq!(std::fs::read(root.join(ENTRY))?, image);
         assert_eq!(store.load(context)?, before);
         assert!(InstallationRun::acquire(store, context).is_err());
+        fixture.preserved()
+    })
+}
+
+/// Every real release carries a rebuilt launcher. Preparing one while a copy runs leaves the
+/// update ready and the running copy's launcher in place; the next launch, with no copy
+/// running, publishes the new launcher before the update starts.
+#[test]
+fn an_update_with_a_new_launcher_is_prepared_under_a_running_copy_and_published_at_the_next_launch()
+-> TestResult {
+    const NEXT_LAUNCHER: &[u8] = b"inert launcher of the next release";
+    worker::run_reserved(SIGNED_INSTALLER_RESERVATION_BYTES, |context, _| {
+        let fixture = installed(context)?;
+        let root = fixture.installation.path();
+        let running_launcher = std::fs::read(root.join(ENTRY))?;
+        let ownership = std::fs::read(root.join(RECORD))?;
+        let (manifest, compressed) = test_package::distribution_with_launcher_image(
+            Some(CURRENT_CONTRACT),
+            CURRENT_LAUNCHER_CONTRACT,
+            NEXT_LAUNCHER,
+        )?;
+        let archive = test_package::seal(&manifest, &compressed);
+        let store = Arc::new(SelectionStore::open(root, context)?);
+        let before = store.load(context)?.ok_or("Selection missing")?;
+        let run = InstallationRun::acquire(store.clone(), context)?;
+        let pin = running_copy_pin(root)?;
+        let SignedCandidate { candidate, trust, authority, _custody } =
+            prepare_archive(&fixture, &archive, 2, context)?;
+        let after = store.load(context)?.ok_or("Selection missing")?;
+        assert_eq!(after.accepted(), before.accepted());
+        assert!(
+            matches!(after.candidate(), Some(Candidate::Prepared { generation }) if generation == candidate.generation()),
+            "the update is not ready: {:?}",
+            after.candidate()
+        );
+        assert_eq!(std::fs::read(root.join(ENTRY))?, running_launcher);
+        assert_eq!(std::fs::read(root.join(RECORD))?, ownership);
+        require_self_contained_root(root)?;
+        let CandidateAuthority::Offer(offer) = authority else {
+            return Err("Prepared candidate lacks its signed offer".into());
+        };
+        let directory = candidate.directory().to_owned();
+        drop(candidate);
+        drop(_custody);
+        // The copy closes, and the next launch reopens the prepared update before starting it.
+        drop(pin);
+        drop(run);
+        let _run = InstallationRun::acquire(store, context)?;
+        let CachedCandidate::Ready(reopened) =
+            SignedCandidate::reopen_cached(root, trust, *offer, || NOW, context)?
+        else {
+            return Err("Prepared update was not reopened".into());
+        };
+        assert_eq!(reopened.directory(), directory);
+        assert_eq!(std::fs::read(root.join(ENTRY))?, NEXT_LAUNCHER);
+        let owner: serde_json::Value = serde_json::from_slice(&std::fs::read(root.join(RECORD))?)?;
+        assert_eq!(owner["source"]["id"], reopened.candidate.generation().id.as_str());
+        assert!(!root.join("state/selection/.launcher-transition-v1.json").exists());
+        require_self_contained_root(root)?;
         fixture.preserved()
     })
 }

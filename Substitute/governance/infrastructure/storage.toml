@@ -1388,7 +1388,7 @@ rationale = "Durable filesystem owner: Preserve unreadable fixed records beside 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/protection.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:5e3c9f841d6c461f63b75eb643d57416fba9073b7bc43015c960399b7c9abc07"
+source_sha256 = "sha256:3e2c2a51a87826c21cb552f18359d57c8750938eee8cd5c2fb12a7e8e1762f2d"
 capabilities = ["CreateFileW", "assert! restricted capability fragments", "method metadata", "std::fs::File", "std::fs::File::from_raw_handle", "std::fs::create_dir", "std::fs::read", "std::fs::read_dir", "tempfile::tempdir", "windows::Win32::Storage::FileSystem::*"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Create desktop release inputs through the existing protected-storage security policy. Native access and its adversarial qualification remain within this owner."
@@ -1428,8 +1428,8 @@ rationale = "Durable filesystem owner tests: slot exclusion ignores foreign read
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/protection/publication.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:77b334f4a4c1653548c651dcf8e1ff3fd142b7ed616563bcdb03903774bf5aa9"
-capabilities = ["method metadata", "std::fs::OpenOptions", "std::fs::OpenOptions::new"]
+source_sha256 = "sha256:9d1d4721d8e520e89dcb1005a42d66e11c4409d8a5b2c400aacb54a22eb90f3e"
+capabilities = ["method metadata", "std::fs::OpenOptions", "std::fs::OpenOptions::new", "std::fs::write", "tempfile::tempdir"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Publish a completed protected filesystem object through its retained native handle. Native access and its adversarial qualification remain within this owner."
 
@@ -2411,7 +2411,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Rea
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/selection/tests/locks.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:82721254d629b4071541595e63b3f584268c6df3b7999a33e6af518573866e32"
+source_sha256 = "sha256:7aba1dac5fa5cd66eedb118a103b37f6bd9ffc11d0089d108eb32845bcf56e47"
 capabilities = ["std::fs::File", "std::fs::OpenOptions", "std::fs::OpenOptions::new"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Prove the selection reader-writer lock against a real second handle on manual time. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2468,8 +2468,8 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Ret
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/entrypoint.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:5ea807f760df533df7c6e602cdd532008bf52ee247e43fef59fd1ac20a5a75bd"
-capabilities = ["std::fs::read", "std::fs::read_dir", "std::fs::remove_file", "std::fs::write"]
+source_sha256 = "sha256:04442aac77df0fa534aa59da4304e532ddf78375dbe82251b04fdec9823c0e77"
+capabilities = ["std::fs::File", "std::fs::OpenOptions::new", "std::fs::read", "std::fs::read_dir", "std::fs::remove_file", "std::fs::write", "windows::Win32::Storage::FileSystem"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Signed maintenance restores established launcher ownership before an optional application run. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
@@ -2604,7 +2604,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Exp
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/test_package/maintenance.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:98bc5c02b8fd693ba39ef5e751793790a2390a85f003b317a5deb093c7f23187"
+source_sha256 = "sha256:2778d654422efa626aa2ed1fdffbd605bf7666d76e2a88b87bb5e2c7cb1eefd6"
 capabilities = ["method metadata", "std::fs::read", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Shared inert native installation for signed installer and preparation-worker qualification. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

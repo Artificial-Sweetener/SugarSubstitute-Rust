@@ -124,10 +124,123 @@ impl Protection {
             matches!(publication, Publication::File { replace: true }),
             &mut phase,
         )
-        .map_err(io::Error::other)?;
+        .map_err(|cause| held_destination(destination, cause))?;
         if !directory {
             self.handles[index].close().map_err(io::Error::other)?;
         }
+        Ok(())
+    }
+}
+
+/// A rename refused because another handle holds its destination, or the folder receiving it,
+/// without sharing the access the rename needs.
+const SHARING_VIOLATION: u32 = 32;
+
+/// A publication refused because its destination, or the folder receiving it, is in use.
+///
+/// Carried by an [`io::ErrorKind::ResourceBusy`] error, so an owner whose publication may wait
+/// for the holder can tell this refusal from every other failure. A running copy of the
+/// application is one such holder: its crash-capture and diagnostic pins keep the installation
+/// folder open without write sharing for as long as it runs.
+#[derive(Debug)]
+struct HeldDestination {
+    destination: std::path::PathBuf,
+    holders: String,
+    cause: crate::ClaimError,
+}
+
+impl std::fmt::Display for HeldDestination {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "{} could not be published, {}: {}",
+            self.destination.display(),
+            self.holders,
+            self.cause
+        )
+    }
+}
+
+impl std::error::Error for HeldDestination {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(&self.cause)
+    }
+}
+
+/// Whether `cause` is a publication refused because its destination, or the folder receiving
+/// it, is in use.
+pub(crate) fn held(cause: &io::Error) -> bool {
+    cause.get_ref().is_some_and(|inner| inner.is::<HeldDestination>())
+}
+
+/// Name who holds a destination a rename found in use. Restart Manager is asked at once which
+/// live processes hold the destination file; each is logged and named in the error. When none
+/// holds the file, the folder receiving it is what is held, and the error says so. Any other
+/// failure passes through unchanged.
+fn held_destination(destination: &Path, cause: crate::ClaimError) -> io::Error {
+    if cause.win32_code() != Some(SHARING_VIOLATION) {
+        return io::Error::other(cause);
+    }
+    let mut resources = crate::profile_conflict::resources::Resources::default();
+    let holders = match resources.holders(destination) {
+        Ok(holders) if holders.is_empty() => {
+            "no process holds the file itself, so the folder receiving it is held open".to_owned()
+        }
+        Ok(holders) => {
+            for holder in &holders {
+                tracing::info!(operation = "protected_publication_held", destination = %destination.display(),
+                    holder = %holder, "Another process holds a destination open");
+            }
+            format!(
+                "held by {}",
+                holders.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ")
+            )
+        }
+        Err(query) => format!("its holders could not be listed: {query}"),
+    };
+    if let Err(close) = resources.close() {
+        tracing::warn!(operation = "protected_publication_held", error = %close,
+            "The holder lookup could not be closed");
+    }
+    io::Error::new(
+        io::ErrorKind::ResourceBusy,
+        HeldDestination { destination: destination.to_owned(), holders, cause },
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::held_destination;
+    use std::os::windows::fs::OpenOptionsExt;
+
+    /// A rename refused because its destination is in use is a busy refusal that names who holds
+    /// the file, or says the folder is what is held when no process holds the file itself. Every
+    /// other failure passes through as it was.
+    #[test]
+    fn a_held_destination_is_a_busy_refusal_that_names_its_holder()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let directory = tempfile::tempdir()?;
+        let destination = directory.path().join("record");
+        std::fs::write(&destination, b"held")?;
+        let refused = || {
+            crate::ClaimError::new("activate_claim_record", std::io::Error::from_raw_os_error(32))
+        };
+        let holder = std::fs::OpenOptions::new().read(true).share_mode(0x1).open(&destination)?;
+        let held = held_destination(&destination, refused());
+        assert_eq!(held.kind(), std::io::ErrorKind::ResourceBusy);
+        let named = held.to_string();
+        assert!(named.contains(&format!("(pid {})", std::process::id())), "{named}");
+        assert!(named.contains("record"), "{named}");
+        drop(holder);
+        let folder = held_destination(&destination, refused());
+        assert_eq!(folder.kind(), std::io::ErrorKind::ResourceBusy);
+        assert!(folder.to_string().contains("the folder receiving it is held open"), "{folder}");
+        let other = held_destination(
+            &destination,
+            crate::ClaimError::new("activate_claim_record", std::io::Error::from_raw_os_error(5)),
+        );
+        assert_ne!(other.kind(), std::io::ErrorKind::ResourceBusy);
+        assert!(!other.to_string().contains("could not be published"), "{other}");
         Ok(())
     }
 }

@@ -188,3 +188,41 @@ fn cancellation_ends_reader_and_writer_waits_with_a_typed_cancel() -> TestResult
     assert_eq!((reader, writer, published), (Outcome::Cancelled, Outcome::Cancelled, false));
     Ok(())
 }
+
+/// Opening the store reads its record under the shared lock like every reader. A record opened
+/// outside it shares no delete, so a writer's replace in flight failed on any process merely
+/// opening the store, such as the coordinator reading its update status.
+#[test]
+fn opening_the_store_waits_out_a_publication_in_flight() -> TestResult {
+    let root = root()?;
+    let path = root.path().to_path_buf();
+    let worker_path = path.clone();
+    run_driven(
+        RESERVATION,
+        move |context, handoff: &Handoff| {
+            SelectionStore::initialize(&worker_path, &initial()?, context)?;
+            handoff.reach(READY);
+            handoff.wait(HELD);
+            assert!(
+                SelectionStore::existing(&worker_path, context).is_err(),
+                "a publication in flight is waited out, never read past"
+            );
+            handoff.reach(DECIDED);
+            handoff.wait(RELEASED);
+            assert!(SelectionStore::existing(&worker_path, context)?.is_some());
+            Ok(())
+        },
+        |driver: &Driver<'_>| {
+            driver.handoff.wait(READY);
+            let holder = hold(&lock_path(&path), Held::Exclusive)?;
+            driver.handoff.reach(HELD);
+            let bound = Moment::from_nanos(0).checked_add(WAIT)?;
+            driver.paused(bound)?;
+            driver.clock.advance_to(bound)?;
+            driver.handoff.wait(DECIDED);
+            drop(holder);
+            driver.handoff.reach(RELEASED);
+            Ok(())
+        },
+    )
+}

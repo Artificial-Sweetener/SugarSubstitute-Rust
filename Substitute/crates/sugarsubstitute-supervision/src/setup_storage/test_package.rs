@@ -48,6 +48,34 @@ pub(crate) fn distribution_with_installation(
     updater: Option<&[u8]>,
     installation: Option<&[u8]>,
 ) -> io::Result<(Vec<u8>, Vec<u8>)> {
+    assemble(
+        contract,
+        launcher.map(|declaration| (declaration, LAUNCHER_IMAGE)),
+        updater,
+        installation,
+    )
+}
+
+/// The launcher image a fixture distribution carries unless a test supplies its own.
+pub(crate) const LAUNCHER_IMAGE: &[u8] = b"inert launcher";
+
+/// Pair an application with a launcher whose executable is `image`, as a release that changed
+/// its launcher carries one.
+pub(crate) fn distribution_with_launcher_image(
+    contract: Option<&[u8]>,
+    launcher: &[u8],
+    image: &[u8],
+) -> io::Result<(Vec<u8>, Vec<u8>)> {
+    assemble(contract, Some((launcher, image)), None, None)
+}
+
+/// Build the manifest and compressed payload; a launcher is its declaration and its image.
+fn assemble(
+    contract: Option<&[u8]>,
+    launcher: Option<(&[u8], &[u8])>,
+    updater: Option<&[u8]>,
+    installation: Option<&[u8]>,
+) -> io::Result<(Vec<u8>, Vec<u8>)> {
     let mut entries = Vec::new();
     let mut gzip = GzEncoder::new(Vec::new(), Compression::fast());
     for name in [
@@ -77,11 +105,11 @@ pub(crate) fn distribution_with_installation(
         }));
         gzip.write_all(bytes)?;
     }
-    if let Some(launcher) = launcher {
+    if let Some((declaration, image)) = launcher {
         for (name, bytes) in [
-            ("app/sugarsubstitute-launcher.exe", b"inert launcher".as_slice()),
+            ("app/sugarsubstitute-launcher.exe", image),
             ("app/sugarsubstitute_launcher.pdb", b"inert launcher symbols".as_slice()),
-            ("app/sugarsubstitute-launcher.json", launcher),
+            ("app/sugarsubstitute-launcher.json", declaration),
         ] {
             entries.push(serde_json::json!({
                 "path":name,"bytes":bytes.len(),"sha256":format!("{:x}",Sha256::digest(bytes)),

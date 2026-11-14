@@ -3,7 +3,7 @@
 //! Resolve a user-selected profile conflict through retained native process identities.
 mod native;
 mod processes;
-mod resources;
+pub(crate) mod resources;
 use crate::ClaimError;
 use std::{
     path::PathBuf,
