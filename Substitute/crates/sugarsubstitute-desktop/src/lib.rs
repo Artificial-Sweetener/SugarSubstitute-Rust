@@ -180,6 +180,9 @@ mod windows_drag;
 mod windows_move_state;
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
+mod windows_open_link;
+#[cfg(target_os = "windows")]
+#[allow(unsafe_code)]
 mod windows_scroll;
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]

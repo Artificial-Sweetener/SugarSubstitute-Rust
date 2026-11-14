@@ -318,6 +318,34 @@ fn a_sugarcubes_update_shows_one_plain_line_and_opens_its_report() {
     let mut caption = CaptionUpdates::default();
     caption.notify(Notice::update(crate::UpdateNotice::Sugarcubes(updated)));
     assert_eq!(caption.view(en).line.text, "SugarCubes updated to version 1.1.0");
+    assert_eq!(shown(&caption.view(en)), vec![LINE, DISMISS], "no page shows what is new yet");
+    assert_eq!(caption.activate(LINK), (false, None));
+}
+
+/// A SugarCubes update line offers the same What's new as the application's own, once the
+/// page can show it.
+#[test]
+fn a_sugarcubes_update_line_opens_whats_new_in_the_page() {
+    use sugarsubstitute_contracts::update::pack::{PackOutcome, PackUpdateReport};
+    let updated = PackUpdateReport {
+        to: Some("1.1.0".into()),
+        ..PackUpdateReport::new(PackOutcome::Updated)
+    };
+    let mut caption = CaptionUpdates::default();
+    caption.observe(UpdateFeed::read(None, None, WorkflowActivity::Idle, true));
+    caption.notify(Notice::update(crate::UpdateNotice::Sugarcubes(updated)));
+    let view = caption.view(messages("en"));
+    assert_eq!(shown(&view), vec![LINE, LINK, DISMISS]);
+    assert_eq!(view.link.text, "What's new");
+    assert_eq!(caption.activate(LINK), (false, Some(UpdateIntent::OpenWhatsNew)));
+    // A SugarCubes update that needs attention keeps its report link.
+    let mut caption = CaptionUpdates::default();
+    caption.observe(UpdateFeed::read(None, None, WorkflowActivity::Idle, true));
+    caption.notify(Notice::update(crate::UpdateNotice::Sugarcubes(PackUpdateReport::new(
+        PackOutcome::Failed,
+    ))));
+    assert_eq!(caption.view(messages("en")).link.label, "Show the report");
+    assert_eq!(caption.activate(LINK), (false, Some(UpdateIntent::OpenReport)));
 }
 
 /// A restored SugarCubes says in plain words why the previous version was put back, and the

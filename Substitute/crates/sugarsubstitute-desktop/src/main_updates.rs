@@ -113,14 +113,17 @@ impl Notice {
         }
     }
 
-    /// Whether the line offers a link: what is new in a new version while the page can show
-    /// it, or the report of a SugarCubes update that needs attention, such as the previous
-    /// version running again.
-    fn links(&self, whats_new: bool) -> bool {
+    /// What the line's link does, if it offers one: show what is new in a new version of the
+    /// application or of SugarCubes while the page can show it, or open the report of a
+    /// SugarCubes update that needs attention, such as the previous version running again.
+    fn link(&self, whats_new: bool) -> Option<UpdateIntent> {
         match self {
-            Self::Updated { .. } => whats_new,
-            Self::Sugarcubes(report) => report.needs_attention(),
-            Self::NotSaved { .. } | Self::PreviousVersionRunning | Self::Repairing => false,
+            Self::Updated { .. } => whats_new.then_some(UpdateIntent::OpenWhatsNew),
+            Self::Sugarcubes(report) if report.needs_attention() => Some(UpdateIntent::OpenReport),
+            Self::Sugarcubes(report) => (whats_new
+                && report.outcome == sugarsubstitute_contracts::update::pack::PackOutcome::Updated)
+                .then_some(UpdateIntent::OpenWhatsNew),
+            Self::NotSaved { .. } | Self::PreviousVersionRunning | Self::Repairing => None,
         }
     }
 
@@ -232,13 +235,9 @@ impl CaptionUpdates {
                 self.offer_open = false;
                 (true, Some(UpdateIntent::RestartToApply))
             }
-            (LINK, _) => match self.notices.front() {
-                Some(Notice::Updated { .. }) => (false, Some(UpdateIntent::OpenWhatsNew)),
-                Some(Notice::Sugarcubes(report)) if report.needs_attention() => {
-                    (false, Some(UpdateIntent::OpenReport))
-                }
-                _ => (false, None),
-            },
+            (LINK, _) => {
+                (false, self.notices.front().and_then(|notice| notice.link(self.feed.whats_new)))
+            }
             (DISMISS, _) => {
                 self.notices.pop_front();
                 (true, None)
@@ -256,7 +255,10 @@ impl CaptionUpdates {
             LINE => !quiet || !self.notices.is_empty(),
             LINK => {
                 quiet
-                    && self.notices.front().is_some_and(|notice| notice.links(self.feed.whats_new))
+                    && self
+                        .notices
+                        .front()
+                        .is_some_and(|notice| notice.link(self.feed.whats_new).is_some())
             }
             DISMISS => quiet && !self.notices.is_empty(),
             _ => false,
@@ -310,10 +312,9 @@ impl CaptionUpdates {
             line,
             link: PeerView::shown(
                 self.shows(LINK),
-                if matches!(self.notices.front(), Some(Notice::Sugarcubes(_))) {
-                    words.pack_updates.show_report
-                } else {
-                    updates.whats_new
+                match self.notices.front().and_then(|notice| notice.link(self.feed.whats_new)) {
+                    Some(UpdateIntent::OpenReport) => words.pack_updates.show_report,
+                    _ => updates.whats_new,
                 },
             ),
             dismiss: PeerView::shown(self.shows(DISMISS), updates.dismiss),

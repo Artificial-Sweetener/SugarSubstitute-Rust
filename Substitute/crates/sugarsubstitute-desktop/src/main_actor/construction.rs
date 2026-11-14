@@ -132,14 +132,7 @@ impl MainActor {
                 let mut context =
                     WebContext::new(Some(self.request()?.profile_directory().to_owned()));
                 let captured = proxy;
-                let builder = WebViewBuilder::new_with_web_context(&mut context)
-                    .with_url("about:blank")
-                    .with_visible(false)
-                    .with_focused(false)
-                    .with_transparent(true)
-                    .with_additional_browser_args("")
-                    .without_download_handlers()
-                    .with_bounds(self.browser_bounds()?);
+                let builder = main_webview_builder(&mut context, self.browser_bounds()?);
                 // Proof builds only: DevTools must be enabled for the browser to open the
                 // remote-debugging port its environment names; shipped builds keep it closed.
                 #[cfg(feature = "page-automation-qualification")]
@@ -417,5 +410,57 @@ impl MainActor {
         #[cfg(feature = "native-composition")]
         self.rescale_composition(scale)?;
         self.resize()
+    }
+}
+
+/// The main browser as owned construction admits it: hidden, unfocused, transparent, blank,
+/// without download or other generic handlers. Owned construction refuses any wry callback
+/// handler; the desktop's own receivers observe browser events once the browser exists, new
+/// windows included.
+fn main_webview_builder(context: &mut WebContext, bounds: wry::Rect) -> WebViewBuilder<'_> {
+    WebViewBuilder::new_with_web_context(context)
+        .with_url("about:blank")
+        .with_visible(false)
+        .with_focused(false)
+        .with_transparent(true)
+        .with_additional_browser_args("")
+        .without_download_handlers()
+        .with_bounds(bounds)
+}
+
+#[cfg(test)]
+mod builder_tests {
+    use super::*;
+    use wry::raw_window_handle::{
+        HandleError, HasWindowHandle, RawWindowHandle, Win32WindowHandle, WindowHandle,
+    };
+
+    /// A parent the owned builder only reads: validation precedes every window or COM effect.
+    struct Parent;
+    impl HasWindowHandle for Parent {
+        fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
+            let handle = std::num::NonZeroIsize::new(1).ok_or(HandleError::Unavailable)?;
+            // SAFETY: The handle is never dereferenced: owned construction validates its whole
+            // configuration before using the parent window.
+            Ok(unsafe {
+                WindowHandle::borrow_raw(RawWindowHandle::Win32(Win32WindowHandle::new(handle)))
+            })
+        }
+    }
+
+    /// Owned construction admits the main browser's configuration in both hostings.
+    #[test]
+    fn owned_construction_admits_the_main_browser_configuration() {
+        let profile = std::env::temp_dir().join("sugarsubstitute-main-builder-profile");
+        for composition in [false, true] {
+            let mut context = WebContext::new(Some(profile.clone()));
+            let builder = main_webview_builder(&mut context, wry::Rect::default());
+            let begun = if composition {
+                builder.begin_owned_as_composition_child(&Parent, || {})
+            } else {
+                builder.begin_owned_as_child(&Parent, || {})
+            };
+            assert!(begun.is_ok(), "composition={composition}");
+        }
     }
 }
