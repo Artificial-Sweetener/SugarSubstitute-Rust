@@ -176,7 +176,7 @@ impl<C: EntryActivation> EntryRunner<C> {
         }
         let scope = self.update_status_scope.as_ref().ok_or("Update status scope absent")?;
         let id = self.jobs.allocate()?;
-        self.update_status.submit_read(&client, scope, id, self.installation.clone())
+        self.update_status.submit_read(&client, scope, id, record_root(&self.installation))
     }
 
     /// Offer the coordinator's update status, with what this launch does about its version.
@@ -228,6 +228,15 @@ impl<C: EntryActivation> EntryRunner<C> {
     }
 }
 
+/// The installation root whose selection and update trust hold the update record, for the
+/// directory this run's image executes from: an installed run executes from its generation's
+/// folder below `releases`, which holds no record of its own.
+fn record_root(image_directory: &std::path::Path) -> std::path::PathBuf {
+    sugarsubstitute_configuration::layout::InstallationLayout::for_image_directory(image_directory)
+        .root()
+        .to_path_buf()
+}
+
 /// A trial's first start of `version`: an update when it replaces an accepted release, applying
 /// until `confirmed`; a fresh installation's first release is no update.
 fn trial_launch(replaces_release: bool, confirmed: bool, version: &str) -> Option<LaunchVersion> {
@@ -254,6 +263,15 @@ mod tests {
             Some(LaunchVersion::Applying("0.2.0".into()))
         );
         assert_eq!(trial_launch(true, true, "0.2.0"), Some(LaunchVersion::Updated("0.2.0".into())));
+    }
+
+    /// An installed run reads its update record and channel from the installation root, not
+    /// from the generation folder its image runs from.
+    #[test]
+    fn the_update_record_is_read_from_the_installation_root() {
+        let root = std::path::Path::new(r"D:\Apps\SugarSubstitute");
+        assert_eq!(record_root(&root.join("releases").join("0123abcd")), root);
+        assert_eq!(record_root(root), root, "a source-tree run keeps its own folder");
     }
 
     /// A run that cannot check, here one without installation authority, still reads its

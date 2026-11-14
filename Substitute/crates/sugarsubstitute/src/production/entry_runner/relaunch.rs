@@ -35,6 +35,17 @@ pub(super) fn wanted(normal_shutdown: bool, failed: bool, restart_requested: boo
     normal_shutdown && !failed && restart_requested
 }
 
+/// The installation's stable entry and root for the directory this run's image executes from.
+/// An installed run executes from its generation's folder below `releases`; relaunching the
+/// stable entry routes to the prepared update, while that folder's own image would start this
+/// same generation again.
+fn stable_entry(image_directory: &std::path::Path) -> (std::path::PathBuf, std::path::PathBuf) {
+    let layout = sugarsubstitute_configuration::layout::InstallationLayout::for_image_directory(
+        image_directory,
+    );
+    (layout.entry(), layout.root().to_path_buf())
+}
+
 impl<C: EntryActivation> EntryRunner<C> {
     /// Whether this run's close owes a relaunch into a prepared update.
     pub(super) fn relaunch_wanted(&self) -> bool {
@@ -52,12 +63,10 @@ impl<C: EntryActivation> EntryRunner<C> {
             if !self.relaunch_wanted() {
                 return Ok(true);
             }
-            let entry =
-                sugarsubstitute_configuration::layout::InstallationLayout::new(&self.installation)
-                    .entry();
+            let (entry, root) = stable_entry(&self.installation);
             let command = WindowsLaunchCommand::from_utf16(
                 &entry.as_os_str().encode_wide().collect::<Vec<_>>(),
-                &self.installation.as_os_str().encode_wide().collect::<Vec<_>>(),
+                &root.as_os_str().encode_wide().collect::<Vec<_>>(),
                 &[],
             )?;
             let launch = ApplicationLaunch::new(command);
@@ -110,7 +119,18 @@ impl<C: EntryActivation> EntryRunner<C> {
 
 #[cfg(test)]
 mod tests {
-    use super::wanted;
+    use super::{stable_entry, wanted};
+    use std::path::Path;
+
+    /// An installed run relaunches the root's stable entry, which routes to the prepared update,
+    /// never its own generation's image.
+    #[test]
+    fn an_installed_run_relaunches_the_stable_entry_at_the_installation_root() {
+        let root = Path::new(r"D:\Apps\SugarSubstitute");
+        let (entry, directory) = stable_entry(&root.join("releases").join("0123abcd"));
+        assert_eq!(entry, root.join("SugarSubstitute.exe"));
+        assert_eq!(directory, root);
+    }
 
     #[test]
     fn only_intent_plus_a_normal_failure_free_shutdown_relaunches() {
