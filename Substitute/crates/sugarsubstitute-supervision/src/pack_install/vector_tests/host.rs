@@ -263,15 +263,19 @@ fn a_restore_records_its_phases_and_moves_every_file_back() -> TestResult {
     let original = folder_files(&pack)?;
     let staged = PackTree::at(&root.path().join("staged"))?;
     let archive = zip_bytes(&file_members(&sized_pack("1.1.0", count)))?;
-    let new_entries =
-        archive::extract_registry_archive(&archive, &staged, ArchiveLimits::default())?.entries;
+    let (extracted, extract) = archive::extract_registry_source_timed(
+        std::io::Cursor::new(archive),
+        &staged,
+        ArchiveLimits::default(),
+    )?;
+    let new_entries = extracted.entries;
     let target = PackTree::at(&pack)?;
     let ownership::PackOwnership::Owned(owned) = ownership::inspect_pack_folder(&target)? else {
         return Err("fixture is not owned".into());
     };
     let transaction =
         replacement::TrackedReplacement::new(PackTree::at(&root.path().join("transaction"))?);
-    transaction.apply(&replacement::ReplacementPlan {
+    let install = transaction.apply_timed(&replacement::ReplacementPlan {
         target: &target,
         source: &staged,
         old_entries: &owned.entries,
@@ -285,6 +289,8 @@ fn a_restore_records_its_phases_and_moves_every_file_back() -> TestResult {
     assert!(timings.moved >= count, "the backup sits beside the pack, so every file is moved");
     let record = serde_json::json!({
         "files": original.len(),
+        "extractMs": extract.as_secs_f64() * 1000.0,
+        "install": install.to_json(),
         "restore": timings.to_json(),
     });
     if let Some(path) = timings_file {
@@ -322,6 +328,32 @@ fn a_restore_cut_off_at_any_point_finishes_when_repeated() -> TestResult {
             .roll_back(&target)?;
         assert_eq!(folder_files(&update.pack())?, update.original, "effect {cut}");
         assert!(!exists(&update.transaction_root()), "effect {cut} left its transaction");
+    }
+    Ok(())
+}
+
+/// An install cut off before any of its effects, as a power cut would, leaves either the old
+/// pack untouched or a journal the next start restores it from.
+#[test]
+fn an_install_cut_off_at_any_point_is_recovered_at_the_next_start() -> TestResult {
+    let clean = Update::new()?;
+    let counted = replacement::TrackedReplacement::with_faults(
+        PackTree::at(&clean.transaction_root())?,
+        None,
+        None,
+    );
+    clean.apply(&counted)?;
+    let installing = counted.effects();
+    assert!(installing > 5);
+    for cut in 1..=installing {
+        let update = Update::new()?;
+        let root = PackTree::at(&update.transaction_root())?;
+        let transaction = replacement::TrackedReplacement::cut_before(root.clone(), cut);
+        assert!(update.apply(&transaction).is_err(), "effect {cut} was not cut");
+        let next = replacement::TrackedReplacement::new(root);
+        next.settle(&PackTree::at(&update.pack())?, TrialEnding::Unwitnessed)?;
+        assert_eq!(folder_files(&update.pack())?, update.original, "effect {cut}");
+        assert_eq!(next.pending()?, None, "effect {cut} left its journal");
     }
     Ok(())
 }

@@ -5244,7 +5244,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Dis
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/pack_tree.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:f5512774b48ed5b22c4fdb8966af647eaea1f206d514cbd529b8f5ebe4b09048"
+source_sha256 = "sha256:884d9449aeb6e229b25e22507ded06c010c1b8592ab463afbcdb1dd307efdab2"
 capabilities = ["method metadata", "method sync_all", "std::fs::File", "std::fs::OpenOptions", "std::fs::OpenOptions::new", "std::fs::create_dir", "std::fs::create_dir_all", "std::fs::read_dir", "std::fs::remove_dir", "std::fs::remove_file", "std::fs::rename", "std::fs::set_permissions", "std::fs::symlink_metadata"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Replace a shared node-pack folder's named files through flushed unique siblings, refusing links and junctions at each effect, for the registry install format."
@@ -5268,7 +5268,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: the
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/pack_install/vector_tests/host.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:99496b272c91758e52c109eee21189b7e18ea29d5afe6ff2943c69662dcf4f13"
+source_sha256 = "sha256:0f1f93e089f91a614290e4e1ae2868a43ab50b08f28e585a48d1d9bb12730036"
 capabilities = ["std::fs::read", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir", "tempfile::tempdir_in"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: the shared SugarCubes registry-install vectors and the host's pack update faults. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
