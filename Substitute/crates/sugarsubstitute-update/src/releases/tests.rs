@@ -209,3 +209,23 @@ fn a_start_without_a_recorded_package_refuses_older_releases_and_admits_any_at_i
     ));
     Ok(())
 }
+
+#[test]
+fn starts_keep_every_floor_a_fresh_namespace_needs() -> TestResult {
+    let starts = [
+        start(Channel::Release, Component::Updater, 5, Some([3; 32])),
+        start(Channel::Canary, Component::Application, 8, None),
+    ];
+    let history = ReleaseHistory::decode(&ReleaseHistory::starting(&starts)?.encode()?)?;
+    let kept = history.starts();
+    assert_eq!(kept.len(), starts.len());
+    for (kept, start) in kept.iter().zip(&starts) {
+        assert_eq!(
+            (kept.channel, kept.component, kept.platform, kept.sequence, kept.digest),
+            (start.channel, start.component, start.platform, start.sequence, start.digest)
+        );
+    }
+    let again = ReleaseHistory::starting(&kept)?;
+    assert_eq!(again.encode()?, history.encode()?);
+    Ok(())
+}

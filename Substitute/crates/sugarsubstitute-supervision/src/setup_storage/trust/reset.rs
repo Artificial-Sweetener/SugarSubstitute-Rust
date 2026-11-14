@@ -6,11 +6,16 @@
 //! its DACL inherits again, its owner changed or its label was lowered, nothing in it can be
 //! relied on. The storage is moved, never deleted, into a set-aside folder under `user\` for
 //! diagnosis, and fresh storage this account owns is created from the trusted root this build
-//! ships, carrying the root and metadata version floors kept outside the trust folder. The fresh storage is staged complete before anything moves, so a reset interrupted at
-//! any point is finished by the next one. Only the newest [`KEPT_SET_ASIDE`] set-aside folders are kept. Rollback protection
-//! holds because the fresh release history starts each application route at the highest release
-//! the protected selection knows and each updater route at the highest updater the installation
-//! accepted, never below this build's own engine release: nothing older is accepted again. The next check downloads as usual.
+//! ships, carrying the floors kept outside the trust folder. The fresh storage is staged
+//! complete before anything moves, so a reset interrupted at any point is finished by the next
+//! one. Only the newest [`KEPT_SET_ASIDE`] set-aside folders are kept.
+//!
+//! Rollback protection holds because the fresh release history starts each application route at
+//! the highest release the protected selection knows and each updater route at the kept updater
+//! floor, never below this build's own engine release: nothing older is accepted again. Trust
+//! keeps those floors from the moment it is established, so a reset that cannot read them has
+//! lost the record of what this installation accepted. It then refuses and moves nothing,
+//! because trust set up again without them would accept an older updater.
 use super::*;
 use crate::setup_storage::check;
 use std::path::PathBuf;
@@ -135,12 +140,11 @@ impl TrustStore {
 
 /// Release history for fresh trust: application routes start at the highest release `selection`
 /// knows (running, retained or prepared), so a superseded offer below an already authorised
-/// release stays refused. Updater routes start at `updater`, the highest updater the
-/// installation accepted, and never below this build's own engine release; only `updater`'s
-/// channel admits just its archive at its sequence. `archive` gives the channel and archive digest a generation was
+/// release stays refused. `archive` gives the channel and archive digest a generation was
 /// published from; on that channel the start admits only that archive, and elsewhere, or when
-/// the archive is not known, any package at its sequence. Updater routes start at this build's own engine release; the installed
-/// engine's records were set aside with the storage, so its package is not known.
+/// the archive is not known, any package at its sequence. Updater routes start at `updater`,
+/// the kept updater floor, and never below this build's own engine release; only `updater`'s
+/// channel admits just its archive at its sequence, when the floor names one.
 fn starting_history(
     selection: &InstallationRecord,
     updater: Option<carried::KeptRelease>,
@@ -178,7 +182,7 @@ fn starting_history(
                         component: Component::Updater,
                         platform,
                         sequence: kept.sequence,
-                        digest: (kept.channel == channel).then_some(kept.archive_sha256),
+                        digest: kept.archive_sha256.filter(|_| kept.channel == channel),
                     },
                     None => RouteStart {
                         channel,
@@ -253,7 +257,7 @@ fn stage_fresh(
     context: &JobContext,
 ) -> Result<(), TrustFailure> {
     let _work = context.memory().claim(WORK_BYTES).map_err(io::Error::other)?;
-    let kept = kept_floors(installation_root, selection.installation(), repository, context);
+    let kept = kept_floors(installation_root, selection.installation(), repository, context)?;
     let mut trust = RepositoryTrust::bootstrap(trusted_root)?;
     trust.carry(kept.metadata);
     let parent = Directory::open(installation_root, false)?;
@@ -302,20 +306,32 @@ fn stage_fresh(
     Ok(())
 }
 
-/// The floors kept outside the trust folder for `installation`; kept floors that cannot be
-/// trusted carry nothing, and [`set_aside`] moves them aside with the storage.
+/// The floors kept outside the trust folder for `installation`.
+/// # Errors
+/// The floors are missing or cannot be read or trusted. The only other record of what this
+/// installation accepted is in the storage being reset, so nothing is set up again.
 fn kept_floors(
     installation_root: &Path,
     installation: &InstallationId,
     repository: [u8; 32],
     context: &JobContext,
-) -> carried::Carried {
+) -> Result<carried::Carried, TrustFailure> {
+    let damaged =
+        || invalid("The updater's version history is damaged; update storage was left as it is");
     match read_kept(installation_root, installation, repository, context) {
-        Ok(kept) => kept.unwrap_or_default(),
+        Ok(Some(kept)) => Ok(kept),
+        Ok(None) => {
+            tracing::error!(
+                operation = "update_floors_lost",
+                "No update floors are kept for this installation; its update storage is not reset"
+            );
+            Err(damaged().into())
+        }
         Err(cause) => {
-            tracing::warn!(operation = "update_floors_untrusted", error = %cause,
-                "Kept update floors cannot be trusted and carry nothing");
-            carried::Carried::default()
+            check(context)?;
+            tracing::error!(operation = "update_floors_lost", error = %cause,
+                "Kept update floors cannot be read; update storage is not reset");
+            Err(damaged().into())
         }
     }
 }

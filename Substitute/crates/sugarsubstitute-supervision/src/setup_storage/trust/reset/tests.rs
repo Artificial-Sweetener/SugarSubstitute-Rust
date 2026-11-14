@@ -81,7 +81,7 @@ fn updater_routes_start_at_the_highest_accepted_updater() -> TestResult {
     let accepted = carried::KeptRelease {
         channel: Channel::Release,
         sequence: ENGINE_RELEASE + 5,
-        archive_sha256: [7; 32],
+        archive_sha256: Some([7; 32]),
     };
     let floors = floors(&starting_history(&selection, Some(accepted), |_| None)?)?;
     let release = floor(&floors, "release", "updater").ok_or("Release updater floor")?;

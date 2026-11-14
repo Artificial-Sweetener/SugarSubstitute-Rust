@@ -2612,7 +2612,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Sha
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/test_package/repository.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:37dd2cc8731e9bd9af4b734aebf796d2ea2e0fada4a70889e53f5c53e43d314d"
+source_sha256 = "sha256:4e6435af06b760fc3508e3d7c6fde3a9e9de86e9634e966642f0bdf01865c14b"
 capabilities = ["method metadata"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Genuine signed channel/package fixture shared by native publication qualification. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2682,6 +2682,14 @@ capabilities = ["std::fs::File"]
 disposition = "boundary"
 rationale = "Retain or lend storage-owner-acquired verified file custody for: Persist update trust under independent exclusion before returning authenticated offers. Private file values do not grant constructors or detach native ancestry; public handle loans preserve explicit inherited-object lifetime."
 boundary = "native_custody"
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/trust/carried/tests.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:a97642ce0d9e67cd06f4cabcb8c5af98cc17c644ddbab331bfbcd435498babcb"
+capabilities = ["method metadata", "std::fs::remove_file", "std::fs::write", "tempfile::tempdir"]
+disposition = "fixture"
+rationale = "Native fixture setup, deliberate corruption or observation for: The updater floor survives losing any one record and is never set up again without one. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/trust/continuity/tests.rs"
@@ -3037,7 +3045,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Eac
 [[records]]
 path = "crates/sugarsubstitute-update/src/releases/tests.rs"
 owner = "sugarsubstitute-update"
-source_sha256 = "sha256:586e3b67a91c82751c07506a7863195ae3134ebe758cadecd307b15ca9180397"
+source_sha256 = "sha256:eae5b06db37f709fbfaf2e2b3bb8302f7c961667ebd68786791f00917c6f7d0b"
 capabilities = ["method metadata"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Durable floors admit only authenticated route identities and never claim application health. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

@@ -99,7 +99,11 @@ impl TrustStore {
         let marker = protection::with_domain(context, |protection| {
             protection.directory(store.root.path(), Mode::Existing, context)?;
             let _writer = store.writer(protection, context)?;
-            continuity::ensure(&store, protection, context)
+            let marker = continuity::ensure(&store, protection, context)?;
+            // Floors are kept outside the trust folder from the moment trust exists, so a later
+            // reset either reads them or knows they were lost.
+            store.carry_floors(protection, context)?;
+            Ok(marker)
         })
         .map_err(TrustFailure::from)?;
         store._continuity = Some(marker);

@@ -30,6 +30,16 @@ impl SignedPackage {
         version: u32,
         component: Component,
     ) -> Result<Self, Failure> {
+        Self::component_signed_at(bytes, version, component, version)
+    }
+    /// Sign a component-specific target at `version` in metadata of `metadata_version`, so a
+    /// release can be offered again in metadata newer than any the installation accepted.
+    pub(crate) fn component_signed_at(
+        bytes: &[u8],
+        version: u32,
+        component: Component,
+        metadata_version: u32,
+    ) -> Result<Self, Failure> {
         let key = key(92)?;
         let digest = format!("{:x}", Sha256::digest(bytes));
         let descriptor = serde_json::to_vec(&serde_json::json!({
@@ -51,7 +61,7 @@ impl SignedPackage {
         };
         let metadata = Set::targets(
             &key,
-            [version; 3],
+            [metadata_version; 3],
             &[(&request.target_name(), &descriptor), (&format!("{digest}.ssupdate"), bytes)],
             EXPIRES,
         )?;

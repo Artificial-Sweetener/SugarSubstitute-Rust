@@ -165,6 +165,20 @@ impl ReleaseHistory {
         Ok(history)
     }
 
+    /// Each route's floor, as the [`RouteStart`] that keeps it in a fresh namespace.
+    pub fn starts(&self) -> Vec<RouteStart> {
+        self.floors
+            .iter()
+            .map(|floor| RouteStart {
+                channel: floor.channel,
+                component: floor.component,
+                platform: floor.platform,
+                sequence: floor.sequence,
+                digest: floor.digest,
+            })
+            .collect()
+    }
+
     /// Durable floor for `request`'s route, if this installation ever authorised one.
     pub(crate) fn floor(&self, request: &Request) -> Option<RouteFloor> {
         self.floors
