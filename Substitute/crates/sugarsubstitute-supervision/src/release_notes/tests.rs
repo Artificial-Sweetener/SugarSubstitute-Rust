@@ -197,12 +197,26 @@ fn a_silent_server_ends_at_the_idle_bound_as_unavailable() -> TestResult {
 
 #[test]
 fn the_published_source_is_the_release_repositorys_changelog_over_https() -> TestResult {
-    let source = ChangelogSource::substitute()?;
+    let source = ChangelogSource::published()?;
     assert_eq!(
         source.address("1.2.3"),
         "https://api.github.com/repos/Artificial-Sweetener/SugarSubstitute-Rust/contents/Substitute/CHANGELOG.md?ref=substitute-v1.2.3"
     );
     assert!(source.policy.endpoint(&source.address("1.2.3")).is_ok());
     assert!(source.policy.endpoint("https://example.test/elsewhere").is_err());
+    Ok(())
+}
+
+/// The loopback source asks the same contents path at the same tag, on the fixture's origin only.
+#[cfg(feature = "local-update-qualification")]
+#[test]
+fn the_qualification_source_is_the_same_changelog_on_loopback() -> TestResult {
+    let source = ChangelogSource::loopback(8472)?;
+    assert_eq!(
+        source.address("1.2.3"),
+        "http://127.0.0.1:8472/repos/Artificial-Sweetener/SugarSubstitute-Rust/contents/Substitute/CHANGELOG.md?ref=substitute-v1.2.3"
+    );
+    assert!(source.policy.endpoint(&source.address("1.2.3")).is_ok());
+    assert!(source.policy.endpoint("https://api.github.com/repos").is_err());
     Ok(())
 }

@@ -1049,6 +1049,13 @@ capabilities = ["environment", "external"]
 rationale = "Fixture for the SugarCubes-owned model-root configuration adapter: it launches the actual public API through the filtered worker environment against isolated roots and asserts that selected model paths are preserved."
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/src/release_notes/qualification.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:17dc99713ca7498ff04bc0a032f9d119ecc6e94a7100574e2ccb6f69901546eb"
+capabilities = ["environment"]
+rationale = "Compiled only by the local-update-qualification proof feature: a headless proof names the loopback port of its release-notes fixture through one environment variable, so a proof never reaches GitHub. Shipped builds exclude it and always read the published changelog."
+
+[[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/protected/account/runtime_base/historical/qualification.rs"
 owner = "sugarsubstitute-supervision"
 source_sha256 = "sha256:340c6b65203d8f55dce02c7a781204914408589789be8f40df2404b70a57e3cd"
