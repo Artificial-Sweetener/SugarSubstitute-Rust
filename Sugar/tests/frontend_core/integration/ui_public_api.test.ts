@@ -75,6 +75,8 @@ describe('ui public api', () => {
     };
 
     await loadUi();
+    // Startup reads of its own (such as SugarCubes' running version) are not these calls.
+    calls.length = 0;
     const list = await window.SugarCubes.listCubes();
     const preview = await window.SugarCubes.previewCube('local/example-user/demo.cube');
 

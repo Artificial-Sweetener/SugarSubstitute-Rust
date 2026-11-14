@@ -29,6 +29,7 @@ from .execution_routes import build_execution_route_handlers
 from .flavor_routes import build_flavor_route_handlers
 from .implementation_save_routes import build_implementation_save_route_handlers
 from .legacy_workflow_routes import build_legacy_workflow_route_handlers
+from .release_notes_routes import build_release_notes_route_handlers
 from .repository_routes import build_repository_route_handlers
 from .self_update_routes import (
     accept_updates_on_full_start,
@@ -112,6 +113,8 @@ class RouteHandlers:
     cancel_self_update: RouteHandler
     dismiss_self_update_notice: RouteHandler
     report_self_update_page_load: RouteHandler
+    get_release_notes_version: RouteHandler
+    get_release_notes: RouteHandler
 
 
 def build_route_handlers(services: BackendServices) -> RouteHandlers:
@@ -135,6 +138,7 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
     workflow_remove_cube = build_workflow_remove_cube_handler(services)
     workflow_replace_cube = build_workflow_replace_cube_handler(services)
     self_update = build_self_update_route_handlers(services)
+    release_notes = build_release_notes_route_handlers(services)
     return RouteHandlers(
         get_status=catalog.get_status,
         list_cubes=catalog.list_cubes,
@@ -195,6 +199,8 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
         cancel_self_update=self_update.cancel_self_update,
         dismiss_self_update_notice=self_update.dismiss_self_update_notice,
         report_self_update_page_load=self_update.report_self_update_page_load,
+        get_release_notes_version=release_notes.get_release_notes_version,
+        get_release_notes=release_notes.get_release_notes,
     )
 
 
@@ -275,6 +281,8 @@ def register_routes(prompt_server: Any, services: BackendServices) -> RouteHandl
     routes.post("/sugarcubes/self-update/page-load")(
         handlers.report_self_update_page_load
     )
+    routes.get("/sugarcubes/release-notes")(handlers.get_release_notes_version)
+    routes.get("/sugarcubes/release-notes/notes")(handlers.get_release_notes)
     publish_self_update_events(server, services)
     accept_updates_on_full_start(server, services)
     return handlers

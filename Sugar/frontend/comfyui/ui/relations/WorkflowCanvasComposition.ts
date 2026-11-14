@@ -24,6 +24,10 @@ import {
   attachSelfUpdateWhenUnhosted,
   comfySelfUpdateTransport,
 } from '../core/updates/SelfUpdateSource.js';
+import {
+  OwnReleaseNotesSource,
+  comfyReleaseNotesBackend,
+} from '../core/release_notes/OwnReleaseNotesSource.js';
 import type { DimensionFieldTarget } from '../editor_actions/application/CanvasDimensionFields.js';
 import type { ContextMenuEntry } from '../menus/ContextMenu.js';
 import { ComfyWorkflowWorkspace } from '../surface/ComfyWorkflowWorkspace.js';
@@ -86,6 +90,15 @@ export function createWorkflowCanvasComposition(
       transport: selfUpdate,
       report: (error) => options.logger.warn('SugarCubes update request failed', { error }),
     });
+  const releaseNotesBackend = comfyReleaseNotesBackend(options.api);
+  // SugarCubes' own notes live as long as the page.
+  if (releaseNotesBackend) {
+    const ownNotes = new OwnReleaseNotesSource(releaseNotesBackend, (error) =>
+      options.logger.warn('SugarCubes release notes request failed', { error }),
+    );
+    workflowFields.whatsNew.attach(ownNotes);
+    void ownNotes.start();
+  }
   const window = options.document.defaultView;
   if (window)
     workflowExecution.bindCanvas(workflowFields.canvas, window, (message) =>

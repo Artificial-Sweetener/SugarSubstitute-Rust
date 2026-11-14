@@ -20,6 +20,7 @@ import { createNativePanelTransport } from './NativePanelTransport.js';
 import { EmbeddedPanelLayout } from './EmbeddedPanelLayout.js';
 import { MemoryHostLink } from '../memory/MemoryHostLink.js';
 import { UpdatesHostLink } from '../updates/UpdatesHostLink.js';
+import { HostReleaseNotesLink } from '../release_notes/HostReleaseNotesLink.js';
 /** Keep messaging active only while the owning SugarCubes document is alive. */
 export class EmbeddedPanelHost {
     options;
@@ -29,6 +30,7 @@ export class EmbeddedPanelHost {
     #stopConnection = null;
     #memory = null;
     #updates = null;
+    #releaseNotes = null;
     #stopHost = null;
     #timer = null;
     /** Receive an identified adapter transport after Comfy and presentation setup have succeeded. */
@@ -122,6 +124,23 @@ export class EmbeddedPanelHost {
     #joinHostServices() {
         this.#joinMemoryBudget();
         this.#watchHostUpdates();
+        this.#watchHostReleaseNotes();
+    }
+    /** Show the host's release notes in What's new once the host declares that it serves them. */
+    #watchHostReleaseNotes() {
+        const host = this.options.host.read();
+        if (this.#releaseNotes ||
+            !this.options.releaseNotes ||
+            !host?.serves(HOST_PROTOCOLS.releaseNotes))
+            return;
+        try {
+            const link = new HostReleaseNotesLink(this.transport, this.options.report);
+            this.#releaseNotes = { link, detach: this.options.releaseNotes.attachHost(link) };
+            link.start();
+        }
+        catch (error) {
+            this.options.report(error);
+        }
     }
     /** Present the host's updater in the Updates entry once the host declares that it serves it. */
     #watchHostUpdates() {
@@ -163,6 +182,9 @@ export class EmbeddedPanelHost {
         this.#updates?.detach();
         this.#updates?.link.dispose();
         this.#updates = null;
+        this.#releaseNotes?.detach();
+        this.#releaseNotes?.link.dispose();
+        this.#releaseNotes = null;
         if (this.#timer !== null)
             this.options.window.clearInterval(this.#timer);
         this.#timer = null;

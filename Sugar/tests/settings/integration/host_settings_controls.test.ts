@@ -990,6 +990,8 @@ describe('host settings and public library APIs', () => {
       return { ok: true, json: async () => ({ ok: true }) };
     };
     await loadUi();
+    // Startup reads of its own (such as SugarCubes' running version) are not this call.
+    calls.length = 0;
 
     await window.SugarCubes.previewCube('cube/id/\u6d4b\u8bd5');
     expect(calls[0]).toBe('/sugarcubes/preview?cube_id=cube%2Fid%2F%E6%B5%8B%E8%AF%95');

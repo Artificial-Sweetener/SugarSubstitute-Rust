@@ -86,6 +86,7 @@ export class UpdatesSettingsPage {
   readonly #check: HTMLButtonElement;
   readonly #restart: HTMLButtonElement;
   readonly #restartLater: HTMLButtonElement;
+  readonly #whatsNew: HTMLButtonElement;
   #source: UpdateSource | null = null;
   #stopSource: (() => void) | null = null;
   readonly #stopSlot: () => void;
@@ -97,6 +98,7 @@ export class UpdatesSettingsPage {
    * Build the page once; it follows the slot until disposed.
    *
    * @param formatTime Formats a completed check, given in milliseconds since the Unix epoch.
+   * @param openWhatsNew Opens the What's new view; without it the page offers no such button.
    */
   constructor(
     private readonly document: Document,
@@ -104,6 +106,7 @@ export class UpdatesSettingsPage {
     private readonly report: (error: unknown) => void,
     private readonly formatTime: (epochMs: number) => string = (epochMs) =>
       new Date(epochMs).toLocaleString(),
+    private readonly openWhatsNew: (() => void) | null = null,
   ) {
     this.element = document.createElement('section');
     this.element.className = 'sc-settings-about sc-settings-updates';
@@ -129,7 +132,9 @@ export class UpdatesSettingsPage {
     this.#restartLater = this.#button('Restart after this workflow finishes', () =>
       this.#apply('after-workflow'),
     );
-    actions.append(this.#check, this.#restart, this.#restartLater);
+    this.#whatsNew = this.#button("What's new", () => this.openWhatsNew?.());
+    this.#whatsNew.hidden = this.openWhatsNew === null;
+    actions.append(this.#check, this.#restart, this.#restartLater, this.#whatsNew);
     this.element.append(details, this.#status, this.#notes, this.#causes, actions);
     this.#stopSlot = slot.subscribe(() => this.#follow());
     this.#follow();

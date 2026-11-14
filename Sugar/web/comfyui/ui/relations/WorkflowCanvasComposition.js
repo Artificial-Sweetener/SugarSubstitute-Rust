@@ -18,6 +18,7 @@ import { createComfyWorkflowExecutionRuntime } from '../execution/infrastructure
 import { createWorkflowFieldHost, } from './WorkflowFieldComposition.js';
 import { createCanvasInputs } from '../input_canvas/infrastructure/CanvasInputComposition.js';
 import { attachSelfUpdateWhenUnhosted, comfySelfUpdateTransport, } from '../core/updates/SelfUpdateSource.js';
+import { OwnReleaseNotesSource, comfyReleaseNotesBackend, } from '../core/release_notes/OwnReleaseNotesSource.js';
 import { ComfyWorkflowWorkspace } from '../surface/ComfyWorkflowWorkspace.js';
 /** Bind peer canvas capabilities without teaching the web output viewer about native document editing. */
 export function createWorkflowCanvasComposition(options) {
@@ -45,6 +46,13 @@ export function createWorkflowCanvasComposition(options) {
             transport: selfUpdate,
             report: (error) => options.logger.warn('SugarCubes update request failed', { error }),
         });
+    const releaseNotesBackend = comfyReleaseNotesBackend(options.api);
+    // SugarCubes' own notes live as long as the page.
+    if (releaseNotesBackend) {
+        const ownNotes = new OwnReleaseNotesSource(releaseNotesBackend, (error) => options.logger.warn('SugarCubes release notes request failed', { error }));
+        workflowFields.whatsNew.attach(ownNotes);
+        void ownNotes.start();
+    }
     const window = options.document.defaultView;
     if (window)
         workflowExecution.bindCanvas(workflowFields.canvas, window, (message) => options.notify('error', 'Canvas delivery failed', message));

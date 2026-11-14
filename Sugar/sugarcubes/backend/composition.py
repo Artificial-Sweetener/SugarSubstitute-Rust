@@ -51,6 +51,7 @@ from ..library import (
 from ..payloads import retarget_cube_payload
 from ..package_identity import runtime_version
 from .comfy_node_registry import resolve_active_comfy_node_class_mappings
+from .release_notes import ReleaseNotesService, build_release_notes_service
 from .self_update import (
     SelfUpdateService,
     build_self_update_service,
@@ -102,6 +103,7 @@ class BackendServices:
     sugarscript_authoring: SugarScriptWorkflowAuthoringService
     legacy_workflow_authoring: LegacyWorkflowAuthoringService
     self_update: SelfUpdateService
+    release_notes: ReleaseNotesService
     execution: CubeExecutionCoordinator = field(
         default_factory=CubeExecutionCoordinator
     )
@@ -271,6 +273,7 @@ def build_backend_services(
             pack_folder=extension_root,
             running_version=runtime_version(),
         ),
+        release_notes=build_release_notes_service(running_version=runtime_version()),
         execution=CubeExecutionCoordinator(
             comfy=execution_port,
             live_defaults=LiveNodeDefaultReconciler(resolve_definition_via_nodes),
