@@ -198,7 +198,11 @@ pub fn page_state(
     };
     UpdatesState {
         product: snapshot.product.to_owned(),
-        current_version: current_version.clone(),
+        // The version this launch runs, which after an update differs from the build's own.
+        current_version: status
+            .running()
+            .and_then(page_version)
+            .unwrap_or_else(|| current_version.clone()),
         channel: match status.channel() {
             Channel::Release => UpdatesChannel::Stable,
             Channel::Canary => UpdatesChannel::Beta,

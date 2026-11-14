@@ -86,12 +86,19 @@ pub struct UpdateStatus {
     channel: Channel,
     #[serde(default)]
     checks: bool,
+    #[serde(default)]
+    running: Option<String>,
 }
 impl UpdateStatus {
     /// The channel the installation's subscription follows; a new installation follows
     /// releases.
     pub fn channel(&self) -> Channel {
         self.channel
+    }
+    /// The version this launch runs, as the installation records it; `None` for a run without
+    /// an installation.
+    pub fn running(&self) -> Option<&str> {
+        self.running.as_deref()
     }
     /// Whether the coordinator checks for updates when asked now. A build without update
     /// configuration, or a launch that does not own the installation, never checks.
@@ -216,6 +223,10 @@ impl UpdateStatus {
     pub fn observe_channel(&mut self, channel: Channel) {
         self.channel = channel;
     }
+    /// Adopt the version this launch runs.
+    pub fn observe_running(&mut self, running: Option<String>) {
+        self.running = running;
+    }
     /// Adopt whether the coordinator checks for updates when asked now.
     pub fn observe_checks(&mut self, checks: bool) {
         self.checks = checks;
@@ -267,6 +278,7 @@ impl UpdateStatus {
         self.activity
             .is_none_or(|progress| progress.bytes.is_none_or(|(received, total)| received <= total))
             && self.recorded.prepared.as_ref().is_none_or(version)
+            && self.running.as_ref().is_none_or(version)
             && self.launch.as_ref().is_none_or(|launch| match launch {
                 LaunchVersion::Applying(value)
                 | LaunchVersion::Updated(value)
@@ -419,6 +431,17 @@ mod tests {
             to: Some("v".repeat(65)),
             ..PackUpdateReport::new(PackOutcome::Updated)
         }));
+        assert_eq!(status.encode(), Err(StatusCodecError::Bounds));
+        Ok(())
+    }
+
+    #[test]
+    fn the_running_version_crosses_processes_within_its_bound() -> Result<(), StatusCodecError> {
+        let mut status = UpdateStatus::default();
+        assert_eq!(status.running(), None);
+        status.observe_running(Some("0.2.0".into()));
+        assert_eq!(UpdateStatus::decode(&status.encode()?)?.running(), Some("0.2.0"));
+        status.observe_running(Some("v".repeat(MAX_VERSION_BYTES + 1)));
         assert_eq!(status.encode(), Err(StatusCodecError::Bounds));
         Ok(())
     }

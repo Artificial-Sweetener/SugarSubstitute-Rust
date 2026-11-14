@@ -375,3 +375,18 @@ fn the_state_names_the_product_its_snapshot_describes() -> TestResult {
     assert_eq!(page_state(&version()?, &snapshot, false).product, "SugarSubstitute");
     Ok(())
 }
+
+#[test]
+fn the_current_version_is_the_one_this_launch_runs_not_the_build_version() -> TestResult {
+    let mut status = UpdateStatus::default();
+    status.observe_running(Some("0.2.0".into()));
+    let snapshot = UpdateSnapshot { status, ..UpdateSnapshot::default() };
+    assert_eq!(page_state(&version()?, &snapshot, false).current_version.as_str(), "0.2.0");
+    let unrecorded = UpdateSnapshot::default();
+    assert_eq!(
+        page_state(&version()?, &unrecorded, false).current_version,
+        version()?,
+        "a run without an installation shows the build's version"
+    );
+    Ok(())
+}

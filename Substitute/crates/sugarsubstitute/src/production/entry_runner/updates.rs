@@ -33,6 +33,10 @@ impl<C: EntryActivation> EntryRunner<C> {
         self.update_status.poll();
         self.update_status.observe_sugarcubes(self.child.sugarcubes_update());
         self.observe_window();
+        let running = self.authority.as_ref().and_then(CoordinatorAuthority::running_installation);
+        self.update_status.observe_running(
+            running.map(|application| application.generation().release.version().to_owned()),
+        );
         let check_requested = self.child.take_update_check_request();
         let before_window = self.launch_update.checks_before_window();
         let source =
