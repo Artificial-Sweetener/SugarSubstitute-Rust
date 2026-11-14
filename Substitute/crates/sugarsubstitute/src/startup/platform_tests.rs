@@ -40,6 +40,8 @@ pub(super) struct Platform {
     /// The coordinator status this fake child last received.
     pub(in crate::startup) update_status:
         Option<sugarsubstitute_contracts::update::status::UpdateStatus>,
+    /// Whether the coordinator asked this fake child's window to close.
+    pub(in crate::startup) close_requested_by_coordinator: bool,
     /// Start-up messages this fake child still has for the window.
     pub(in crate::startup) notices:
         std::collections::VecDeque<sugarsubstitute_contracts::update::status::StartupNotice>,
@@ -163,6 +165,9 @@ impl StartupBackend for Platform {
     }
     fn update_status(&self) -> Option<&sugarsubstitute_contracts::update::status::UpdateStatus> {
         self.update_status.as_ref()
+    }
+    fn coordinator_close_requested(&self) -> bool {
+        self.close_requested_by_coordinator
     }
     fn workflow_queue(&self) -> sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue {
         sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue::Unobserved

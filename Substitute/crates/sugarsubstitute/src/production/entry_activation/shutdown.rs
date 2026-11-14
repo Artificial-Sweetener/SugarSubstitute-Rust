@@ -106,6 +106,11 @@ impl ProductionActivation {
         if record.parent.as_ref().is_some_and(|parent| parent.normal_close_handshake_pending(now)) {
             return Ok(());
         }
+        // A live desktop closes itself through its ordinary close; its pipe stays open for that
+        // handshake until the original grace expires.
+        if record.parent.as_mut().is_some_and(|parent| parent.ask_child_to_close(now, budget)) {
+            return Ok(());
+        }
         if record.parent.is_some() {
             progress::with_parent(
                 record,

@@ -166,6 +166,10 @@ impl ChildChannel {
                 self.updates.receive(&frame.payload)?;
                 return Ok(false);
             }
+            wire::IncomingKind::CloseRequest => {
+                self.close_requested = true;
+                return Ok(false);
+            }
         }
         Ok(true)
     }

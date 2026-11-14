@@ -31,6 +31,8 @@ pub(super) enum IncomingKind {
     Challenge,
     /// The coordinator's update status; the newest revision replaces older ones.
     UpdateStatus,
+    /// The coordinator asks the window to close through its ordinary close.
+    CloseRequest,
 }
 
 /// Validate a client application message before encoding into actual transport storage.
@@ -56,6 +58,7 @@ pub(super) fn outbound(
             | WirePayload::Reply(_)
             | WirePayload::UiChallenge(_)
             | WirePayload::UpdateStatus { .. }
+            | WirePayload::CloseRequest
     ) {
         return Err(ApplicationWireError::Payload);
     }
@@ -78,6 +81,9 @@ pub(super) fn incoming(
         DecodedPayload::UiChallenge(_) => Ok(IncomingKind::Challenge),
         DecodedPayload::UpdateStatus { .. } if frame.header.request.is_none() => {
             Ok(IncomingKind::UpdateStatus)
+        }
+        DecodedPayload::CloseRequest if frame.header.request.is_none() => {
+            Ok(IncomingKind::CloseRequest)
         }
         _ => Err(ApplicationWireError::Payload),
     }

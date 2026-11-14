@@ -150,3 +150,19 @@ fn a_window_revealed_before_the_restart_stays_open_until_the_restart_is_withdraw
     assert!(!host.closing);
     Ok(())
 }
+
+/// The coordinator's close request closes the window through its ordinary close, once.
+#[test]
+fn a_coordinator_close_request_closes_the_window_normally() -> BackendResult<()> {
+    use sugarsubstitute_application::workspace_session::close_save::CloseReason;
+    let mut host = host()?;
+    host.advance_coordinator_close()?;
+    assert!(!host.closing);
+    host.child.close_requested_by_coordinator = true;
+    host.advance_coordinator_close()?;
+    assert!(host.closing);
+    assert_eq!(host.close_reason, CloseReason::Close);
+    host.advance_coordinator_close()?;
+    assert_eq!(host.close_reason, CloseReason::Close, "one close");
+    Ok(())
+}

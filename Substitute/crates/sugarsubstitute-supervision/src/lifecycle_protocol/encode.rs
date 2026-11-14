@@ -125,7 +125,9 @@ fn payload(
             writer.u32(u32::try_from(status.len()).map_err(|_| ProtocolError::Length)?)?;
             writer.put(status)
         }
-        WirePayload::RestartToApply | WirePayload::CheckForUpdates => Ok(()),
+        WirePayload::RestartToApply | WirePayload::CheckForUpdates | WirePayload::CloseRequest => {
+            Ok(())
+        }
     }
 }
 fn encode_target(
