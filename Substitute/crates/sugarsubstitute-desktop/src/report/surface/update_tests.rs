@@ -325,3 +325,39 @@ fn the_update_report_carries_the_sugarcubes_report() {
     assert!(both.starts_with("Update failed\nVersion: 2.0.0\n"), "{both}");
     assert!(both.ends_with(&format!("\n\n{expected}")), "{both}");
 }
+
+#[test]
+fn a_saved_update_report_has_a_plain_title_and_is_named_for_the_product_it_is_about() -> TestResult
+{
+    let en = messages("en");
+    for (app, product) in [(None, "SugarCubes"), (Some(attempt()), "SugarSubstitute")] {
+        let report =
+            ReportPresentation::failed_updates(en, "SugarSubstitute", app.as_ref(), Some(&pack()))
+                .ok_or("a failed update has a report")?;
+        let mut exports = Exports::default();
+        let mut owner = UpdateReport::new(Some(&mut exports), &report);
+        let mut lifetime = ReportLifetime::new(report, &mut owner)?;
+        started(&mut lifetime)?;
+        next_frame(&mut lifetime, Duration::ZERO)?;
+        invoke(&mut lifetime, ReportAction::Export)?;
+        let picker = lifetime.picker().ok_or("export asks for a destination")?;
+        let crate::SelectionKind::Save { title, file_name, product: named, .. } = picker.kind
+        else {
+            return Err("export asks where to save".into());
+        };
+        assert_eq!(title, "Save the report");
+        assert_eq!(named, product);
+        let date = sugarsubstitute_contracts::localization::incident::LocalDateTime {
+            year: 2026,
+            month: 11,
+            day: 14,
+            hour: 9,
+            minute: 42,
+        };
+        assert_eq!(
+            sugarsubstitute_contracts::localization::incident::file_name(file_name, named, date),
+            format!("{product} update report 2026-11-14 09-42.txt")
+        );
+    }
+    Ok(())
+}

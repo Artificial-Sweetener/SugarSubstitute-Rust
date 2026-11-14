@@ -372,3 +372,27 @@ pub(super) fn sugarcubes_retry<B: StartupBackend>(
         StartupStatus::SugarcubesRetryReady
     })
 }
+
+/// While the previous SugarCubes version is put back the splash says so in place of loading or
+/// retry lines, so no retry is offered until the restore finished; a retry the user already
+/// asked for waits for it in the coordinator. Cleanup lines still win.
+pub(super) fn restoring<B: StartupBackend>(
+    child: &B,
+    current: sugarsubstitute_splash::StartupStatus,
+) -> Option<sugarsubstitute_splash::StartupStatus> {
+    use sugarsubstitute_splash::StartupStatus;
+    let replaces = current.offers_retry()
+        || matches!(
+            current,
+            StartupStatus::Loading
+                | StartupStatus::LoadingLong
+                | StartupStatus::LoadingExtended
+                | StartupStatus::UpdatingSugarcubes
+        );
+    (replaces
+        && matches!(
+            child.update_status()?.sugarcubes(),
+            sugarsubstitute_contracts::update::pack::PackUpdateStatus::Restoring
+        ))
+    .then_some(StartupStatus::RestoringSugarcubes)
+}

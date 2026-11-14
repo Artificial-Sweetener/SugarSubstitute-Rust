@@ -248,3 +248,35 @@ fn the_retry_line_names_sugarcubes_when_it_could_not_load() -> BackendResult<()>
     assert!(!StartupStatus::Settling.offers_retry());
     Ok(())
 }
+
+/// While the previous SugarCubes version is put back the splash says so instead of offering
+/// Retry, and the ordinary lines return once it finished.
+#[test]
+fn no_retry_is_offered_while_the_previous_sugarcubes_is_put_back() -> BackendResult<()> {
+    let mut host = host()?;
+    let mut status = UpdateStatus::default();
+    status.observe_sugarcubes(PackUpdateStatus::Restoring);
+    host.child.update_status = Some(status.clone());
+    for current in [
+        StartupStatus::RetryReady,
+        StartupStatus::SugarcubesRetryReady,
+        StartupStatus::SugarcubesRetryPrevious,
+        StartupStatus::Loading,
+        StartupStatus::LoadingLong,
+        StartupStatus::UpdatingSugarcubes,
+    ] {
+        assert_eq!(
+            window_content::restoring(&host.child, current),
+            Some(StartupStatus::RestoringSugarcubes),
+            "{current:?}"
+        );
+    }
+    for other in [StartupStatus::Settling, StartupStatus::CleanupFailed, StartupStatus::Failed] {
+        assert_eq!(window_content::restoring(&host.child, other), None, "{other:?} wins");
+    }
+    assert!(!StartupStatus::RestoringSugarcubes.offers_retry());
+    status.observe_sugarcubes(PackUpdateStatus::Finished(could_not_check()));
+    host.child.update_status = Some(status);
+    assert_eq!(window_content::restoring(&host.child, StartupStatus::RetryReady), None);
+    Ok(())
+}

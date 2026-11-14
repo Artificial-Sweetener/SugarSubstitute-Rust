@@ -270,3 +270,20 @@ fn readonly_console_geometry_preserves_original_retry_peer_and_locale_owner()
     }
     Ok(())
 }
+
+/// While the previous SugarCubes version is put back, Retry is neither shown nor accepted;
+/// once the retry line returns it is both.
+#[test]
+fn the_restoring_line_withholds_retry_until_the_retry_line_returns() -> Result<(), Box<dyn Error>> {
+    let mut view = view(true)?;
+    view.phase(StartupPhase::Stopped);
+    view.show_status(sugarsubstitute_splash::StartupStatus::RestoringSugarcubes);
+    assert!(!view.controls()[2].visible);
+    assert!(!view.activate(3));
+    assert!(!view.take_retry());
+    view.show_status(sugarsubstitute_splash::StartupStatus::SugarcubesRetryPrevious);
+    assert!(view.controls()[2].visible);
+    assert!(view.activate(3));
+    assert!(view.take_retry());
+    Ok(())
+}

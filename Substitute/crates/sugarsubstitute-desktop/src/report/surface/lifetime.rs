@@ -185,7 +185,7 @@ impl<'a> ReportLifetime<'a> {
             match (self.presentation.content.kind, self.state.include_dump) {
                 (ReportKind::Crash, true) => ("report.zip", words.archive_filter, "zip"),
                 (ReportKind::Crash, false) => ("report.txt", words.text_filter, "txt"),
-                _ => (words.export_file_name, words.text_filter, "txt"),
+                _ => (words.update_file_name, words.text_filter, "txt"),
             };
         self.requests += 1;
         Picker {
@@ -194,6 +194,7 @@ impl<'a> ReportLifetime<'a> {
             kind: crate::SelectionKind::Save {
                 title: words.save_title,
                 file_name,
+                product: self.presentation.subject,
                 filter,
                 extension,
             },

@@ -76,6 +76,11 @@ fn each_outcome_shows_at_most_one_plain_line_and_its_report_lines() {
 #[test]
 fn the_splash_names_the_update_only_while_it_runs() {
     assert_eq!(PackUpdateStatus::Updating.splash_line(&EN), Some("Updating SugarCubes…"));
+    assert_eq!(
+        PackUpdateStatus::Restoring.splash_line(&EN),
+        Some("Putting the previous SugarCubes version back…")
+    );
+    assert_eq!(PackUpdateStatus::Restoring.report(), None);
     assert_eq!(PackUpdateStatus::Idle.splash_line(&EN), None);
     let finished = PackUpdateStatus::Finished(PackUpdateReport::new(PackOutcome::CouldNotCheck));
     assert_eq!(finished.splash_line(&EN), None);

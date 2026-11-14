@@ -85,7 +85,7 @@ fn a_failed_page_holds_the_retry_behind_a_restore_of_the_previous_version() -> T
     );
     // The retry arrives while the failed page is still being recorded: it waits for both.
     assert!(schedule.prepare(2, true));
-    assert_eq!(schedule.status().0, &PackUpdateStatus::Updating);
+    assert_eq!(schedule.status().0, &PackUpdateStatus::Restoring);
     assert_eq!(schedule.ended(PackWorkEnded::Observed), None);
     assert!(schedule.gates(2));
     assert_eq!(schedule.start_next(), Some((PackWork::Observe(TrialEvent::PageFailed), None)));
@@ -109,7 +109,8 @@ fn observations_run_in_order_and_an_unfinished_update_still_releases_the_start()
     schedule.backend_stopped();
     assert_eq!(schedule.start_next(), Some((PackWork::Update { managed: true }, Some(1))));
     assert_eq!(schedule.ended(PackWorkEnded::Unfinished { stopped: true }), Some(1));
-    assert_eq!(outcome(&schedule), Some(PackOutcome::Stopped));
+    // The queued restore keeps the splash saying the previous version is being put back.
+    assert_eq!(schedule.status().0, &PackUpdateStatus::Restoring);
     assert_eq!(
         schedule.start_next(),
         Some((PackWork::Observe(TrialEvent::BackendStartUnobservable), None))
@@ -185,4 +186,50 @@ fn a_restore_is_given_an_installs_budget_and_only_observations_are_records() {
     assert_eq!(PackWork::BackendStopped.kind(), PackWorkKind::Replace);
     assert_eq!(PackWork::RestoreFailedPage.kind(), PackWorkKind::Replace);
     assert_eq!(PackWork::Observe(TrialEvent::PageFailed).kind(), PackWorkKind::Record);
+}
+
+/// A retry that arrives while a backend-failure restore runs waits for it, and stopping that
+/// retry never cancels the restore; the splash says the previous version is being put back
+/// until it is.
+#[test]
+fn a_retry_waits_for_a_running_restore_and_never_cancels_it() -> TestResult {
+    let mut schedule = PackSchedule::default();
+    schedule.prepare(1, true);
+    schedule.start_next();
+    schedule.ended(PackWorkEnded::Updated(updated()?));
+    schedule.backend_stopped();
+    assert_eq!(schedule.status().0, &PackUpdateStatus::Restoring);
+    assert_eq!(schedule.start_next(), Some((PackWork::BackendStopped, None)));
+    // The user's retry begins a preparation while the files are still being put back.
+    assert!(schedule.prepare(2, true), "the retry must wait for the restore");
+    assert!(schedule.gates(2));
+    assert!(!schedule.running_holds(2), "stopping the retry must not cancel the restore");
+    assert_eq!(schedule.ended(PackWorkEnded::Restored(Some(restored()))), Some(2));
+    assert_eq!(outcome(&schedule), Some(PackOutcome::Restored));
+    assert!(!schedule.gates(2));
+    assert!(!schedule.prepare(3, true), "a later start waits for nothing");
+    Ok(())
+}
+
+/// A retry that arrives before the queued restore even started also waits; a restore that
+/// finds nothing to put back shows the update's report again.
+#[test]
+fn a_queued_restore_holds_the_retry_and_one_with_nothing_to_restore_shows_the_report_again()
+-> TestResult {
+    let mut schedule = PackSchedule::default();
+    schedule.prepare(1, true);
+    schedule.start_next();
+    schedule.ended(PackWorkEnded::Updated(updated()?));
+    schedule.observe(TrialEvent::BackendStartUnobservable);
+    schedule.backend_stopped();
+    assert!(schedule.prepare(2, true));
+    assert_eq!(
+        schedule.start_next(),
+        Some((PackWork::Observe(TrialEvent::BackendStartUnobservable), None))
+    );
+    assert_eq!(schedule.ended(PackWorkEnded::Observed), None);
+    assert_eq!(schedule.start_next(), Some((PackWork::BackendStopped, Some(2))));
+    assert_eq!(schedule.ended(PackWorkEnded::Restored(None)), Some(2));
+    assert_eq!(outcome(&schedule), Some(PackOutcome::Updated));
+    Ok(())
 }

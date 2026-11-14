@@ -65,7 +65,7 @@ sources = [
     "crates/sugarsubstitute-splash/src/render.rs",
     "crates/sugarsubstitute-splash/src/render_stages.rs",
 ]
-source_sha256 = "sha256:9ea8c82d9d941e11c089dc70c6a592c95932feafe3b32ed3c3b7baec56480797"
+source_sha256 = "sha256:87448b294263582d8fee96f41215e399706b6623af97b993e8f2c71a7c3bc7c0"
 
 [[boundaries]]
 owner = "sugarsubstitute-desktop"
@@ -198,7 +198,7 @@ capabilities = ["modal"]
 sources = [
     "crates/sugarsubstitute-desktop/src/file_dialog.rs",
 ]
-source_sha256 = "sha256:09254197e12f058634153a2908431dae2f343fc428a9c17f569d4af1ad944681"
+source_sha256 = "sha256:a060d446564cd6d3b40b14a1de1969494765585ff86c82b4637bebef796d6341"
 
 [[boundaries]]
 owner = "sugarsubstitute-desktop"

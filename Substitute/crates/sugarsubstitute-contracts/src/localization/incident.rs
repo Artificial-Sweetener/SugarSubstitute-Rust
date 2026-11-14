@@ -13,6 +13,36 @@ pub use ko::KO;
 mod es;
 pub use es::ES;
 
+/// Placeholder in [`ReportMessages::update_file_name`] for the product the report is about.
+pub const PRODUCT: &str = "{product}";
+/// Placeholder in [`ReportMessages::update_file_name`] for the local date, as `YYYY-MM-DD`.
+pub const DATE: &str = "{date}";
+/// Placeholder in [`ReportMessages::update_file_name`] for the local time, as `HH-MM`.
+pub const TIME: &str = "{time}";
+
+/// A calendar date and time of day in the user's time zone.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct LocalDateTime {
+    /// Four-digit year.
+    pub year: u16,
+    /// Month, 1 to 12.
+    pub month: u8,
+    /// Day of the month, 1 to 31.
+    pub day: u8,
+    /// Hour, 0 to 23.
+    pub hour: u8,
+    /// Minute, 0 to 59.
+    pub minute: u8,
+}
+
+/// `template` with [`PRODUCT`] replaced by `product`, [`DATE`] by `now`'s date as `YYYY-MM-DD`
+/// and [`TIME`] by its time as `HH-MM`; a name without placeholders is returned unchanged.
+pub fn file_name(template: &str, product: &str, now: LocalDateTime) -> String {
+    let date = format!("{:04}-{:02}-{:02}", now.year, now.month, now.day);
+    let time = format!("{:02}-{:02}", now.hour, now.minute);
+    template.replace(PRODUCT, product).replace(DATE, &date).replace(TIME, &time)
+}
+
 /// Bind localized native report controls, status and evidence labels.
 #[non_exhaustive]
 pub struct ReportMessages {
@@ -36,7 +66,7 @@ pub struct ReportMessages {
     pub include_dump: &'static str,
     /// Unsanitized sensitive native memory disclosure.
     pub dump_warning: &'static str,
-    /// Native destination selection title.
+    /// Title of the dialog that saves the report.
     pub save_title: &'static str,
     /// Text export format label.
     pub text_filter: &'static str,
@@ -115,8 +145,8 @@ pub struct ReportMessages {
     pub version: &'static str,
     /// Update step summary label.
     pub update_phase: &'static str,
-    /// Suggested file name when exporting an update report.
-    pub export_file_name: &'static str,
+    /// Suggested file name when saving an update report; contains [`PRODUCT`], [`DATE`] and [`TIME`].
+    pub update_file_name: &'static str,
     /// Heading of a report on a SugarCubes update that failed during start-up.
     pub pack_update_title: &'static str,
     /// Explain that SugarCubes was not updated while the version installed keeps working.
@@ -192,7 +222,7 @@ impl ReportMessages {
             self.update_message,
             self.version,
             self.update_phase,
-            self.export_file_name,
+            self.update_file_name,
             self.pack_update_title,
             self.pack_update_message,
             self.startup_failure[0],
@@ -206,6 +236,30 @@ impl ReportMessages {
 
 #[cfg(test)]
 mod tests {
+    use super::{EN, LocalDateTime, file_name};
+
+    #[test]
+    fn a_saved_update_report_is_named_for_its_product_and_date_in_every_language() {
+        let date = LocalDateTime { year: 2026, month: 11, day: 4, hour: 9, minute: 5 };
+        for messages in crate::localization::LOCALES {
+            let words = messages.report;
+            assert!(!words.save_title.contains("incident"), "{}", messages.id);
+            let name = file_name(words.update_file_name, "SugarCubes", date);
+            assert!(
+                name.contains("SugarCubes")
+                    && name.contains("2026-11-04")
+                    && name.contains("09-05"),
+                "{name}"
+            );
+            assert!(!name.contains('{') && name.ends_with(".txt"), "{name}");
+        }
+        assert_eq!(
+            file_name(EN.update_file_name, "SugarCubes", date),
+            "SugarCubes update report 2026-11-04 09-05.txt"
+        );
+        assert_eq!(EN.save_title, "Save the report");
+        assert_eq!(file_name("report.txt", "SugarCubes", date), "report.txt");
+    }
     #[test]
     fn every_registered_locale_has_complete_incident_copy() {
         for locale in super::super::LOCALES {
