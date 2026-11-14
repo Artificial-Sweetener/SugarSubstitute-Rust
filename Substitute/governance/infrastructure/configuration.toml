@@ -302,7 +302,7 @@ rationale = "Native boundary input or configuration contract regression fixture;
 [[records]]
 path = "crates/sugarsubstitute/src/production/dispatch.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:9e6d68a7fd2d43dec27b38d77b5aa55b380cbf3c4791f3ca9b1c38bb18ab84e0"
+source_sha256 = "sha256:15200862a4670aa54ace257c11890c5bb8209193d3cdbd07b0268ff852dacf19"
 capabilities = ["document"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -1047,6 +1047,13 @@ owner = "sugarsubstitute"
 source_sha256 = "sha256:2227fd686de624ef4fb7af5a1e2b8ab022e183933ec685a50acf1a0b6cfd0c79"
 capabilities = ["environment", "external"]
 rationale = "Fixture for the SugarCubes-owned model-root configuration adapter: it launches the actual public API through the filtered worker environment against isolated roots and asserts that selected model paths are preserved."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/release_notes/qualification.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:227767e77df9ca9a9525328c24c86ebc399681fb08af66ccd5426db0ee35e5f6"
+capabilities = ["environment"]
+rationale = "Compiled only by the local-update-qualification proof feature: a headless proof names the loopback port of its release-notes fixture through one environment variable, so a proof never reaches GitHub. Shipped builds exclude it and always read the published changelog."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/protected/account/runtime_base/historical/qualification.rs"

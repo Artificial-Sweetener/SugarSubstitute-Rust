@@ -181,6 +181,7 @@ impl CoordinatorBackend {
             shutdown: None,
             failure_published: false,
             settled: false,
+            install_waited: false,
             cleanup_failure: cleanup_state::CleanupState::new(),
         });
         let record = self.records[at].as_mut().ok_or(LifecycleRejection::StaleIdentity)?;

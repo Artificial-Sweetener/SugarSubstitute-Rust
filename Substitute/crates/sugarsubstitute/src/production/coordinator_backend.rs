@@ -151,6 +151,9 @@ struct Backend {
     shutdown: Option<(ShutdownId, ShutdownBudget)>,
     failure_published: bool,
     settled: bool,
+    /// Cleanup waited for a SugarCubes install or restore that ran past its cutoff; its cutoff
+    /// starts again once that install ended, so a progressing install never fails it.
+    install_waited: bool,
     cleanup_failure: cleanup_state::CleanupState,
 }
 
@@ -450,6 +453,8 @@ impl CoordinatorBackend {
             .flatten()
             .filter(|record| !record.settled)
             .flat_map(|record| match record.shutdown {
+                // A running SugarCubes install wakes its cleanup when it ends, never a cutoff.
+                Some(_) if self.pack.installing() => [None, None],
                 Some((_, budget)) => record.cleanup_failure.deadlines(budget),
                 None => [
                     record.campaign.next_deadline().or_else(|| {

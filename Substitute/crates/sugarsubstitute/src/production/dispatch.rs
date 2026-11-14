@@ -134,7 +134,7 @@ mod tests {
             crate::diagnostics::DiagnosticHealth::fixture(),
             |_| {
                 calls.set(calls.get() + 1);
-                Ok(Box::new(super::super::entry_runner::tests::NoChild(None, false, false)))
+                Ok(Box::new(super::super::entry_runner::tests::NoChild(None, false, false, false)))
             },
         )?
         .ok_or("Legacy command unexpectedly ran production")?;
