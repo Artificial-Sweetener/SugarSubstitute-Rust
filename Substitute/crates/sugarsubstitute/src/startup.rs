@@ -287,7 +287,9 @@ impl<B: StartupBackend> WindowContent for StartupHost<B> {
         if self.child.cleanup_failed() {
             view.show_status(sugarsubstitute_splash::StartupStatus::CleanupFailed);
         } else if let Some(status) = window_content::restoring(&self.child, view.appearance.status)
-            .or_else(|| window_content::updating(&self.child, view.appearance.status))
+            .or_else(|| {
+                window_content::updating(&self.child, view.appearance.status, view.retried())
+            })
             .or_else(|| {
                 window_content::sugarcubes_retry(
                     &self.child,

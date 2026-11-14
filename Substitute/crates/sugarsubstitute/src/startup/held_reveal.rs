@@ -63,7 +63,12 @@ impl<B: StartupBackend> StartupHost<B> {
         use sugarsubstitute_splash::StartupStatus::{Loading, LoadingExtended, LoadingLong};
         if !self.prepared
             || !self.visible
-            || window_content::updating(&self.child, Loading).is_none()
+            || window_content::updating(
+                &self.child,
+                Loading,
+                self.view.as_ref().is_some_and(StartupView::retried),
+            )
+            .is_none()
         {
             return true;
         }

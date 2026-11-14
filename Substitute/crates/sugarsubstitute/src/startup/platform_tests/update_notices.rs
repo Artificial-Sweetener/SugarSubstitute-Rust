@@ -62,7 +62,7 @@ fn the_release_notes_scope_is_unbounded_follows_the_startup_scopes_and_is_config
 #[test]
 fn the_splash_says_updating_only_while_the_new_version_is_unconfirmed() -> BackendResult<()> {
     let mut host = host()?;
-    assert_eq!(window_content::updating(&host.child, StartupStatus::Loading), None);
+    assert_eq!(window_content::updating(&host.child, StartupStatus::Loading, false), None);
     let mut status = UpdateStatus::default();
     status.observe_launch(LaunchVersion::Applying("2.4.1".into()));
     host.child.update_status = Some(status.clone());
@@ -70,19 +70,19 @@ fn the_splash_says_updating_only_while_the_new_version_is_unconfirmed() -> Backe
     for loading in
         [StartupStatus::Loading, StartupStatus::LoadingLong, StartupStatus::LoadingExtended]
     {
-        assert_eq!(window_content::updating(&host.child, loading), updating);
+        assert_eq!(window_content::updating(&host.child, loading, false), updating);
     }
     for other in [StartupStatus::Settling, StartupStatus::RetryReady, StartupStatus::CleanupFailed]
     {
-        assert_eq!(window_content::updating(&host.child, other), None, "{other:?} wins");
+        assert_eq!(window_content::updating(&host.child, other, false), None, "{other:?} wins");
     }
     status.observe_launch(LaunchVersion::Updated("2.4.1".into()));
     host.child.update_status = Some(status);
-    assert_eq!(window_content::updating(&host.child, StartupStatus::Loading), None);
+    assert_eq!(window_content::updating(&host.child, StartupStatus::Loading, false), None);
     let mut unshowable = UpdateStatus::default();
     unshowable.observe_launch(LaunchVersion::Applying("9".repeat(40)));
     host.child.update_status = Some(unshowable);
-    assert_eq!(window_content::updating(&host.child, StartupStatus::Loading), None);
+    assert_eq!(window_content::updating(&host.child, StartupStatus::Loading, false), None);
     Ok(())
 }
 
@@ -99,17 +99,17 @@ fn the_splash_says_updating_sugarcubes_while_its_update_holds_the_start() -> Bac
         [StartupStatus::Loading, StartupStatus::LoadingLong, StartupStatus::LoadingExtended]
     {
         assert_eq!(
-            window_content::updating(&host.child, loading),
+            window_content::updating(&host.child, loading, false),
             Some(StartupStatus::UpdatingSugarcubes)
         );
     }
     for other in [StartupStatus::Failed, StartupStatus::Settling, StartupStatus::CleanupFailed] {
-        assert_eq!(window_content::updating(&host.child, other), None, "{other:?} wins");
+        assert_eq!(window_content::updating(&host.child, other, false), None, "{other:?} wins");
     }
     status.observe_sugarcubes(PackUpdateStatus::Finished(could_not_check()));
     host.child.update_status = Some(status);
     assert_eq!(
-        window_content::updating(&host.child, StartupStatus::Loading),
+        window_content::updating(&host.child, StartupStatus::Loading, false),
         UpdateVersion::new("2.4.1").map(StartupStatus::Updating)
     );
     Ok(())
@@ -131,7 +131,7 @@ fn a_window_never_revealed_closes_itself_to_restart_into_the_update() -> Backend
     let mut host = host()?;
     host.child.update_status = Some(restarting());
     assert_eq!(
-        window_content::updating(&host.child, StartupStatus::Loading),
+        window_content::updating(&host.child, StartupStatus::Loading, false),
         UpdateVersion::new("2.4.1").map(StartupStatus::Updating),
         "the splash says which version it updates to"
     );
@@ -295,12 +295,49 @@ fn no_retry_is_offered_while_the_previous_sugarcubes_is_put_back() -> BackendRes
             "{current:?}"
         );
     }
-    for other in [StartupStatus::Settling, StartupStatus::CleanupFailed, StartupStatus::Failed] {
-        assert_eq!(window_content::restoring(&host.child, other), None, "{other:?} wins");
+    for current in [StartupStatus::Settling, StartupStatus::Failed] {
+        assert_eq!(
+            window_content::restoring(&host.child, current),
+            Some(StartupStatus::RestoringSugarcubes),
+            "cleanup in progress: {current:?}"
+        );
     }
+    assert_eq!(
+        window_content::restoring(&host.child, StartupStatus::CleanupFailed),
+        None,
+        "a failed cleanup wins"
+    );
     assert!(!StartupStatus::RestoringSugarcubes.offers_retry());
     status.observe_sugarcubes(PackUpdateStatus::Finished(could_not_check()));
     host.child.update_status = Some(status);
     assert_eq!(window_content::restoring(&host.child, StartupStatus::RetryReady), None);
+    Ok(())
+}
+
+/// A retry starts the version this launch already updated to, so the splash no longer says it
+/// is updating to it; the SugarCubes lines still show, and a restart into an update keeps its
+/// line.
+#[test]
+fn a_retry_drops_the_app_update_line_that_was_already_applied() -> BackendResult<()> {
+    let mut host = host()?;
+    let mut status = UpdateStatus::default();
+    status.observe_launch(LaunchVersion::Applying("0.5.0".into()));
+    host.child.update_status = Some(status.clone());
+    assert_eq!(
+        window_content::updating(&host.child, StartupStatus::Loading, false),
+        UpdateVersion::new("0.5.0").map(StartupStatus::Updating)
+    );
+    assert_eq!(window_content::updating(&host.child, StartupStatus::Loading, true), None);
+    status.observe_sugarcubes(PackUpdateStatus::Updating);
+    host.child.update_status = Some(status);
+    assert_eq!(
+        window_content::updating(&host.child, StartupStatus::Loading, true),
+        Some(StartupStatus::UpdatingSugarcubes)
+    );
+    host.child.update_status = Some(restarting());
+    assert_eq!(
+        window_content::updating(&host.child, StartupStatus::Loading, true),
+        UpdateVersion::new("2.4.1").map(StartupStatus::Updating)
+    );
     Ok(())
 }
