@@ -9,8 +9,8 @@
 //! ships, carrying the root and metadata version floors kept outside the trust folder. The fresh storage is staged complete before anything moves, so a reset interrupted at
 //! any point is finished by the next one. Only the newest [`KEPT_SET_ASIDE`] set-aside folders are kept. Rollback protection
 //! holds because the fresh release history starts each application route at the highest release
-//! the protected selection knows and each updater route at this build's own engine release:
-//! nothing older is accepted again. The next check downloads as usual.
+//! the protected selection knows and each updater route at the highest updater the installation
+//! accepted, never below this build's own engine release: nothing older is accepted again. The next check downloads as usual.
 use super::*;
 use crate::setup_storage::check;
 use std::path::PathBuf;
@@ -135,12 +135,15 @@ impl TrustStore {
 
 /// Release history for fresh trust: application routes start at the highest release `selection`
 /// knows (running, retained or prepared), so a superseded offer below an already authorised
-/// release stays refused. `archive` gives the channel and archive digest a generation was
+/// release stays refused. Updater routes start at `updater`, the highest updater the
+/// installation accepted, and never below this build's own engine release; only `updater`'s
+/// channel admits just its archive at its sequence. `archive` gives the channel and archive digest a generation was
 /// published from; on that channel the start admits only that archive, and elsewhere, or when
 /// the archive is not known, any package at its sequence. Updater routes start at this build's own engine release; the installed
 /// engine's records were set aside with the storage, so its package is not known.
 fn starting_history(
     selection: &InstallationRecord,
+    updater: Option<carried::KeptRelease>,
     archive: impl FnOnce(&Generation) -> Option<(Channel, [u8; 32])>,
 ) -> io::Result<ReleaseHistory> {
     let platform = UpdateAuthorization::local_request(Channel::Release)?.platform;
@@ -169,12 +172,21 @@ fn starting_history(
                         .filter(|(published, _)| *published == channel)
                         .map(|(_, digest)| digest),
                 },
-                RouteStart {
-                    channel,
-                    component: Component::Updater,
-                    platform,
-                    sequence: ENGINE_RELEASE,
-                    digest: None,
+                match updater.filter(|kept| kept.sequence >= ENGINE_RELEASE) {
+                    Some(kept) => RouteStart {
+                        channel,
+                        component: Component::Updater,
+                        platform,
+                        sequence: kept.sequence,
+                        digest: (kept.channel == channel).then_some(kept.archive_sha256),
+                    },
+                    None => RouteStart {
+                        channel,
+                        component: Component::Updater,
+                        platform,
+                        sequence: ENGINE_RELEASE,
+                        digest: None,
+                    },
                 },
             ]
         })
@@ -241,28 +253,26 @@ fn stage_fresh(
     context: &JobContext,
 ) -> Result<(), TrustFailure> {
     let _work = context.memory().claim(WORK_BYTES).map_err(io::Error::other)?;
+    let kept = kept_floors(installation_root, selection.installation(), repository, context);
     let mut trust = RepositoryTrust::bootstrap(trusted_root)?;
-    trust.carry(
-        kept_floors(installation_root, selection.installation(), repository, context).metadata,
-    );
+    trust.carry(kept.metadata);
     let parent = Directory::open(installation_root, false)?;
-    let history =
-        starting_history(selection, |generation| {
-            match installed::PublishedRelease::read(
-                &parent,
-                selection.installation(),
-                &repository,
-                generation,
-                context,
-            ) {
-                Ok(published) => published.map(|published| published.archive()),
-                Err(cause) => {
-                    tracing::warn!(operation = "update_receipt_unreadable", error = %cause,
+    let history = starting_history(selection, kept.updater, |generation| {
+        match installed::PublishedRelease::read(
+            &parent,
+            selection.installation(),
+            &repository,
+            generation,
+            context,
+        ) {
+            Ok(published) => published.map(|published| published.archive()),
+            Err(cause) => {
+                tracing::warn!(operation = "update_receipt_unreadable", error = %cause,
                     "A release receipt could not be read; its floor admits any package");
-                    None
-                }
+                None
             }
-        })?;
+        }
+    })?;
     let (checkpoint, history) =
         initialize::fresh_records(selection.installation(), &repository, &trust, &history)?;
     let state = ownership::state(&parent)?;

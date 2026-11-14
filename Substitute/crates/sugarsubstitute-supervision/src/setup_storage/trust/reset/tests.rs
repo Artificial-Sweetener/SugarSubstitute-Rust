@@ -44,7 +44,7 @@ fn application_routes_start_at_the_highest_release_the_selection_knows() -> Test
     selection = selection.prepare(generation(5)?, PreparationIntent::Automatic, 1)?;
     selection = selection.prepared(&generation(5)?)?;
     let mut asked = None;
-    let history = starting_history(&selection, |generation| {
+    let history = starting_history(&selection, None, |generation| {
         asked = Some(generation.clone());
         Some((Channel::Release, [9; 32]))
     })?;
@@ -65,12 +65,36 @@ fn application_routes_start_at_the_highest_release_the_selection_knows() -> Test
 #[test]
 fn updater_routes_start_at_this_builds_engine_release() -> TestResult {
     let selection = InstallationRecord::empty(InstallationId::new(format!("{:032x}", 7))?);
-    let floors = floors(&starting_history(&selection, |_| None)?)?;
+    let floors = floors(&starting_history(&selection, None, |_| None)?)?;
     for channel in ["release", "canary"] {
         let updater = floor(&floors, channel, "updater").ok_or("Updater floor")?;
         assert_eq!(updater["sequence"], ENGINE_RELEASE);
         assert!(updater.get("digest").is_none(), "the set-aside engine's package is not known");
         assert!(floor(&floors, channel, "application").is_none(), "nothing runs yet");
     }
+    Ok(())
+}
+
+#[test]
+fn updater_routes_start_at_the_highest_accepted_updater() -> TestResult {
+    let selection = InstallationRecord::empty(InstallationId::new(format!("{:032x}", 7))?);
+    let accepted = carried::KeptRelease {
+        channel: Channel::Release,
+        sequence: ENGINE_RELEASE + 5,
+        archive_sha256: [7; 32],
+    };
+    let floors = floors(&starting_history(&selection, Some(accepted), |_| None)?)?;
+    let release = floor(&floors, "release", "updater").ok_or("Release updater floor")?;
+    assert_eq!(release["sequence"], ENGINE_RELEASE + 5);
+    assert_eq!(release["digest"], serde_json::json!(vec![7_u8; 32]));
+    let canary = floor(&floors, "canary", "updater").ok_or("Canary updater floor")?;
+    assert_eq!(canary["sequence"], ENGINE_RELEASE + 5);
+    assert!(canary.get("digest").is_none(), "only the accepted channel names its archive");
+    // An accepted updater older than this build's engine does not lower the floor.
+    let older = carried::KeptRelease { sequence: ENGINE_RELEASE - 1, ..accepted };
+    let lowered = self::floors(&starting_history(&selection, Some(older), |_| None)?)?;
+    let release = floor(&lowered, "release", "updater").ok_or("Release updater floor")?;
+    assert_eq!(release["sequence"], ENGINE_RELEASE);
+    assert!(release.get("digest").is_none());
     Ok(())
 }

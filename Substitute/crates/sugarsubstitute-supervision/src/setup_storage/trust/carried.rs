@@ -5,9 +5,11 @@
 //! The record sits in the state folder beside the trust folder and is bound to the same
 //! installation and repository. A reset sets the trust folder aside but keeps this record, and
 //! fresh trust carries its floors: metadata older than what the installation already accepted is
-//! never accepted again. Floors here only rise.
+//! never accepted again, and neither is an updater older than the highest one it accepted.
+//! Floors here only rise.
 use super::*;
 use serde::{Deserialize, Serialize};
+use sugarsubstitute_contracts::update::Channel;
 use sugarsubstitute_update::VersionFloors;
 
 /// The record in the installation's state folder.
@@ -24,12 +26,28 @@ pub(super) struct Carried {
     schema_version: u32,
     /// Root and role version floors of the trust.
     pub(super) metadata: VersionFloors,
+    /// Highest updater release the installation accepted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) updater: Option<KeptRelease>,
 }
 impl Carried {
     /// The higher of each floor of `self` and `other`.
     fn max(&self, other: &Self) -> Self {
-        Self { schema_version: 1, metadata: self.metadata.max(other.metadata) }
+        let updater = match (self.updater, other.updater) {
+            (Some(kept), Some(newer)) if newer.sequence > kept.sequence => Some(newer),
+            (kept, newer) => kept.or(newer),
+        };
+        Self { schema_version: 1, metadata: self.metadata.max(other.metadata), updater }
     }
+}
+
+/// One accepted release: the channel it was published on, its sequence and archive digest.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct KeptRelease {
+    pub(super) channel: Channel,
+    pub(super) sequence: u64,
+    pub(super) archive_sha256: [u8; 32],
 }
 
 impl TrustStore {
@@ -42,8 +60,16 @@ impl TrustStore {
     ) -> Result<(), TrustFailure> {
         let state = ownership::state(&self._installation_root)?;
         let kept = read(&state, &self.installation, &self.repository, protection)?;
-        let current =
-            Carried { schema_version: 1, metadata: self.read(protection)?.version_floors()? };
+        let updater = self.accepted_updater(protection)?.map(|receipt| KeptRelease {
+            channel: receipt.channel,
+            sequence: receipt.sequence,
+            archive_sha256: receipt.archive_sha256,
+        });
+        let current = Carried {
+            schema_version: 1,
+            metadata: self.read(protection)?.version_floors()?,
+            updater,
+        };
         let raised = kept.clone().unwrap_or_default().max(&current);
         if kept.as_ref() == Some(&raised) {
             return Ok(());
