@@ -44,8 +44,11 @@ impl<C: EntryActivation> EntryRunner<C> {
         let before_window = self.launch_update.checks_before_window();
         let source =
             self.authority.as_ref().and_then(|authority| authority.update_source(before_window));
-        self.update_status
-            .observe_checks(!self.closing && crate::updates::configured() && source.is_some());
+        let can_check = !self.closing && crate::updates::configured() && source.is_some();
+        self.update_status.observe_checks(can_check);
+        // The SugarCubes update runs in the copy that stays: never in one that may still
+        // restart into an application update.
+        self.child.hold_sugarcubes_update(self.launch_update.holds_sugarcubes_update(can_check));
         self.publish_update_status()?;
         if self.closing
             && let Some(scope) = &self.update_status_scope
@@ -161,6 +164,7 @@ impl<C: EntryActivation> EntryRunner<C> {
         self.launch_update.restart().is_some()
             && !self.authority.as_ref().is_some_and(CoordinatorAuthority::window_opened)
             && !self.child.has_desktop()
+            && !self.child.sugarcubes_installing()
     }
 
     /// Read this installation's update record and channel when they may have changed and no read
@@ -292,7 +296,7 @@ mod tests {
         let mut runner = EntryRunner::new(
             command,
             path,
-            Box::new(NoChild(None, false, false)),
+            Box::new(NoChild(None, false, false, false)),
             crate::diagnostics::DiagnosticHealth::fixture(),
         );
         freeze_time(&mut runner);
