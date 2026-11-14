@@ -15,8 +15,8 @@ use windows::Win32::{
         HiDpi::GetDpiForWindow,
         Shell::DefSubclassProc,
         WindowsAndMessaging::{
-            GetClientRect, GetParent, GetWindowTextW, HTCAPTION, HTCLIENT, IsZoomed, WM_DRAWITEM,
-            WM_ERASEBKGND, WM_NCHITTEST, WM_PAINT,
+            GetClientRect, GetParent, GetWindowTextW, HTBOTTOMRIGHT, HTCAPTION, HTLEFT, IsZoomed,
+            WM_DRAWITEM, WM_ERASEBKGND, WM_NCHITTEST, WM_PAINT,
         },
     },
 };
@@ -51,7 +51,7 @@ pub(super) fn parent(
     let caption = callback.caption.get()?;
     match message {
         WM_NCHITTEST if caption.page_top > 0 => {
-            // SAFETY: Tao answers its frame edges first; only its client answer may become caption.
+            // SAFETY: Tao answers its frame edges first; they keep resizing the window.
             let hit = unsafe { DefSubclassProc(hwnd, message, wparam, lparam) };
             Some(strip_hit(hwnd, hit, lparam, caption.page_top))
         }
@@ -78,19 +78,30 @@ pub(super) fn parent(
     }
 }
 
-/// Answer a client hit in the caption strip the page leaves above itself with `HTCAPTION`, so
-/// the strip moves, snaps and maximizes the window like the page's own title bar row does.
+/// Answer a hit in the caption strip the page leaves above itself with `HTCAPTION`, so the
+/// strip moves, snaps and maximizes the window like the page's own title bar row does. Only a
+/// frame edge's resize answer outranks it; whatever the frameless window's default procedure
+/// answers inside the client (client or nowhere), the strip is caption.
 fn strip_hit(hwnd: HWND, hit: LRESULT, lparam: LPARAM, page_top: u32) -> LRESULT {
-    if hit.0 != HTCLIENT as isize {
+    if resizes(hit) {
         return hit;
     }
     let mut point =
         POINT { x: lparam.0 as u16 as i16 as i32, y: (lparam.0 >> 16) as u16 as i16 as i32 };
-    // SAFETY: The original parent callback owns this live HWND; the call rewrites local storage.
-    if !unsafe { ScreenToClient(hwnd, &raw mut point) }.as_bool() {
-        return hit;
+    let mut client = RECT::default();
+    // SAFETY: The original parent callback owns this live HWND; both calls write local storage.
+    let mapped = unsafe { ScreenToClient(hwnd, &raw mut point) }.as_bool()
+        && unsafe { GetClientRect(hwnd, &raw mut client) }.is_ok();
+    if mapped && point.x >= client.left && point.x < client.right && in_strip(point.y, page_top) {
+        LRESULT(HTCAPTION as isize)
+    } else {
+        hit
     }
-    if in_strip(point.y, page_top) { LRESULT(HTCAPTION as isize) } else { hit }
+}
+
+/// Whether `hit` is a frame edge or corner that resizes the window.
+fn resizes(hit: LRESULT) -> bool {
+    (HTLEFT as isize..=HTBOTTOMRIGHT as isize).contains(&hit.0)
 }
 
 /// Whether client row `y` lies in the caption strip above a page starting at `page_top`.

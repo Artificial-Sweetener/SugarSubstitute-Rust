@@ -384,3 +384,16 @@ fn only_the_strip_above_the_page_moves_the_window() {
     assert!(!in_strip(60, 60), "the page's first row is the page's");
     assert!(!in_strip(-1, 60), "rows above the client are the frame's");
 }
+
+#[test]
+fn frame_edges_keep_resizing_over_the_strip() {
+    use windows::Win32::UI::WindowsAndMessaging::{
+        HTBOTTOM, HTCLIENT, HTNOWHERE, HTTOP, HTTOPLEFT,
+    };
+    for edge in [HTTOP, HTTOPLEFT, HTBOTTOM, HTLEFT, HTBOTTOMRIGHT] {
+        assert!(resizes(LRESULT(edge as isize)), "{edge}");
+    }
+    for other in [HTCLIENT, HTNOWHERE, HTCAPTION] {
+        assert!(!resizes(LRESULT(other as isize)), "{other}");
+    }
+}
