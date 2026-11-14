@@ -371,3 +371,21 @@ fn the_close_request_is_resent_after_a_revoked_write_and_sent_once() {
     close.written();
     assert_eq!(close, ChildClose::Sent);
 }
+
+/// "Restart to apply": the window sends ExitIntent, then RestartToApply, and keeps itself up
+/// until the coordinator's status says its restart notice covers the screen; only then does it
+/// send ExitCompleted. The coordinator therefore keeps sending that window its update status
+/// after its close began, until the final ExitCompleted; any other closing window gets none.
+#[test]
+fn a_window_closing_to_restart_keeps_receiving_update_status_until_it_completes() -> Result<()> {
+    let mut parent = actor()?;
+    parent.registered = true;
+    assert!(parent.update_status_open(), "a live window takes snapshots");
+    intent(&mut parent, CompletionIntent::Normal)?;
+    assert!(!parent.update_status_open(), "a plain close gets no more snapshots");
+    parent.observe_restart_to_apply();
+    assert!(parent.update_status_open(), "the restarting window waits for its cover");
+    parent.close_after_reply = Some(0);
+    assert!(!parent.update_status_open(), "nothing after its final ExitCompleted");
+    Ok(())
+}
