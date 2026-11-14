@@ -92,6 +92,9 @@ pub enum Decoration {
     Summary,
     /// A Fluent card grouping read-only facts, such as a report's summary rows.
     Card,
+    /// A dialog's opaque surface under its whole window, so the window's material never shows
+    /// behind its content whether the window is active or not.
+    DialogSurface,
     /// A dialog's command band: an opaque layer separated from content by its top edge.
     Footer,
     /// Background around the native output control.
