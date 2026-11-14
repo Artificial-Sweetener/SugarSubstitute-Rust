@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Encode bounded, untrusted lifecycle messages independently of native authentication.
 //!
-//! Wire version 18 uses little-endian integers and a fixed 104-byte header. Kind21
+//! Wire version 19 uses little-endian integers and a fixed 104-byte header. Kind21
 //! reports the policy-accepted native main reveal after frontend readiness. The parent
 //! rechecks its retained profile/browser authorization before accepting that observation.
 //! Registration reply tag17 carries explicit parent-derived backend execution policy before
@@ -99,7 +99,11 @@
 //! coordinator to run its update check now; a check already running is joined, and the result
 //! reaches the child only through later Kind22 statuses. A window that receives a status saying the
 //! app restarts into an update before it was ever revealed closes itself with Kind23 and ExitIntent.
-//! Only schema18 is accepted; parent and captured child deploy together.
+//! Kind25 CloseRequest, sent by the coordinator without a request and with an empty payload, asks
+//! the window to close through its ordinary close; it grants no process authority, and the
+//! coordinator retires the desktop only after the ExitIntent/ExitCompleted handshake or the
+//! original shutdown grace.
+//! Only schema19 is accepted; parent and captured child deploy together.
 //! Unknown tags and trailing bytes reject; no future operation is implied.
 mod binary;
 mod decode;
@@ -131,7 +135,7 @@ pub use target::{BorrowedBackendTarget, DecodedTarget, ManagedTargetRef};
 pub use utf16::{ArgumentRefs, Utf16Text};
 
 /// Exact supported wire version; unknown versions reject without negotiation.
-pub const WIRE_VERSION: u16 = 18;
+pub const WIRE_VERSION: u16 = 19;
 /// Exact header byte count, including the whole claimed run and deadline.
 pub const HEADER_BYTES: usize = 104;
 /// Maximum complete control frame, including header and payload.

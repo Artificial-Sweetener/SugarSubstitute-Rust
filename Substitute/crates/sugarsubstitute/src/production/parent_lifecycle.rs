@@ -15,6 +15,8 @@ pub(in crate::production) use attempt::SettledAttemptFailure;
 mod backend;
 #[path = "parent_lifecycle/causes.rs"]
 pub(in crate::production) mod causes;
+#[path = "parent_lifecycle/child_close.rs"]
+mod child_close;
 #[path = "parent_lifecycle/deadlines.rs"]
 mod deadlines;
 #[path = "parent_lifecycle/expiry.rs"]
@@ -151,6 +153,8 @@ pub(crate) struct ParentLifecycle {
     close_after_reply: Option<usize>,
     backend_causes: Option<causes::BackendCauses>,
     updates: update_status::OutgoingUpdates,
+    /// The coordinator's request that this desktop close normally.
+    child_close: child_close::ChildClose,
 }
 
 impl ParentLifecycle {
@@ -243,6 +247,7 @@ impl ParentLifecycle {
             close_after_reply: None,
             backend_causes: Some(causes.take().ok_or(ParentError::Storage)?),
             updates: update_status::OutgoingUpdates::default(),
+            child_close: child_close::ChildClose::Idle,
         })
     }
 

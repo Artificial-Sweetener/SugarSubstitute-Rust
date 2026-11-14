@@ -3,8 +3,8 @@
 //! Keep the window up until everything authored is durable, or the record says what is not.
 //!
 //! [`StartupHost::request_close`] is the one entry point for every close that keeps the user's
-//! work: the window's close button (through the desktop's close observation), restart to apply
-//! an update and the operating system's session end. Each passes its [`CloseReason`]; all run
+//! work: the window's close button (through the desktop's close observation), the coordinator's
+//! close request, restart to apply an update and the operating system's session end. Each passes its [`CloseReason`]; all run
 //! the same close save. Once the shutdown budget is measured, the close save begins the input
 //! canvas's final save and the workspace's final capture together, both bounded by the
 //! graceful cutoff, while the window stays up showing [`CloseSaveProgress`]. The exit intent is
@@ -47,6 +47,18 @@ impl<B: StartupBackend> StartupHost<B> {
                 Some(self.critical_until.map_or(until, |earlier| earlier.min(until)));
         }
         self.close_owned()
+    }
+
+    /// Close through the ordinary close, with its close save, once the coordinator asks.
+    pub(super) fn advance_coordinator_close(&mut self) -> Result<(), Box<dyn Error>> {
+        if self.closing || !self.child.coordinator_close_requested() {
+            return Ok(());
+        }
+        tracing::info!(
+            operation = "startup_coordinator_close",
+            "The coordinator asked the window to close; closing normally"
+        );
+        self.request_close(CloseReason::Close)
     }
 
     /// The graceful cutoff the close save works to: the budget's, or the shorter one a

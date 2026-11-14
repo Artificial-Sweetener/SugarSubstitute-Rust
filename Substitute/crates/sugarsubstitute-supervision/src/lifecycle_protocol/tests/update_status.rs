@@ -40,6 +40,23 @@ fn update_status_and_restart_intent_round_trip_with_their_identity_rules() -> Te
     let message = WireMessage { header: unrequested, payload: WirePayload::CheckForUpdates };
     assert!(matches!(FrameCodec::encode(&message, &mut [0; 256]), Err(ProtocolError::Identity)));
 
+    let mut close = header(25)?;
+    close.request = None;
+    let mut source = vec![0; 256];
+    let length = FrameCodec::encode(
+        &WireMessage { header: close, payload: WirePayload::CloseRequest },
+        &mut source,
+    )?;
+    source.truncate(length);
+    assert_eq!(source.len(), HEADER_BYTES);
+    assert_eq!(u16::from_le_bytes([source[12], source[13]]), 25);
+    let decoded = FrameCodec::decode(&source)?;
+    assert!(decoded.header.request.is_none());
+    assert!(matches!(decoded.payload, DecodedPayload::CloseRequest));
+    close.request = Some(RequestId::new(13)?);
+    let message = WireMessage { header: close, payload: WirePayload::CloseRequest };
+    assert!(matches!(FrameCodec::encode(&message, &mut [0; 256]), Err(ProtocolError::Identity)));
+
     let mut with_request = header(22)?;
     with_request.request = Some(RequestId::new(13)?);
     let message = WireMessage {

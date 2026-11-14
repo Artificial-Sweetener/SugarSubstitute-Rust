@@ -208,3 +208,21 @@ fn missing_client_request_and_nonpositive_cutoff_never_reach_native_encoding() -
     }
     Ok(())
 }
+
+/// The coordinator's close request enters the child as its own kind and never leaves it.
+#[test]
+fn coordinator_close_request_enters_and_cannot_leave() -> TestResult {
+    let binding = registered()?;
+    let message = WireMessage {
+        header: WireHeader { request: None, ..header(&binding)? },
+        payload: WirePayload::CloseRequest,
+    };
+    let mut bytes = [0; 512];
+    let count = FrameCodec::encode(&message, &mut bytes)?;
+    assert_eq!(
+        incoming(&binding, &FrameCodec::decode(&bytes[..count])?),
+        Ok(IncomingKind::CloseRequest)
+    );
+    assert!(outbound(&binding, &message).is_err());
+    Ok(())
+}

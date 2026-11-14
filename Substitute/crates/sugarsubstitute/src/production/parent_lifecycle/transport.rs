@@ -124,7 +124,8 @@ impl ParentLifecycle {
                     }
                     WritePurpose::Welcome
                     | WritePurpose::AcquisitionProgress(_)
-                    | WritePurpose::UpdateStatus => {}
+                    | WritePurpose::UpdateStatus
+                    | WritePurpose::ChildClose => {}
                 }
             }
             LifecyclePipeObservation::Written { operation, bytes } => {
@@ -166,6 +167,7 @@ impl ParentLifecycle {
                     }
                     WritePurpose::Challenge(_) => {}
                     WritePurpose::UpdateStatus => self.updates.written(),
+                    WritePurpose::ChildClose => self.child_close.written(),
                 }
                 self.write = None;
                 self.resume_acquisition_receive(resources)?;
@@ -186,6 +188,12 @@ impl ParentLifecycle {
                     WritePurpose::UpdateStatus
                 ) {
                     self.updates.revoked();
+                }
+                if matches!(
+                    self.write.as_ref().ok_or(ParentError::WrongPhase)?.purpose,
+                    WritePurpose::ChildClose
+                ) {
+                    self.child_close.revoked();
                 }
                 if let WritePurpose::AcquisitionProgress(header) =
                     self.write.as_ref().ok_or(ParentError::WrongPhase)?.purpose

@@ -98,6 +98,8 @@ pub(super) struct ChildChannel {
     terminal: Option<Terminal>,
     capture_input: preparation::CaptureInput,
     updates: CoordinatorUpdates,
+    /// The coordinator asked the window to close through its ordinary close.
+    close_requested: bool,
 }
 impl ChildChannel {
     /// Retain the lexical inherited token without any native operation.
@@ -130,12 +132,18 @@ impl ChildChannel {
             terminal: None,
             capture_input: preparation::CaptureInput::Unchecked,
             updates: CoordinatorUpdates::default(),
+            close_requested: false,
         }
     }
 
     /// The coordinator's newest update status, as this channel last received it.
     pub(in crate::production) fn updates(&self) -> &CoordinatorUpdates {
         &self.updates
+    }
+
+    /// Whether the coordinator asked the window to close through its ordinary close.
+    pub(in crate::production) fn close_requested(&self) -> bool {
+        self.close_requested
     }
 
     /// The coordinator's update snapshot, for taking its one-time start-up messages.

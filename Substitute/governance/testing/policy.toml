@@ -188,7 +188,7 @@ reason = "The test-only constructor round trip builds the startup host, whose co
 
 [[real_time]]
 path = "crates/sugarsubstitute/src/startup/platform_tests.rs"
-source_sha256 = "sha256:5ea2b1d0adafcfb06f78ddd25a19c71020971c1433af8f6d64cbf65415dc6347"
+source_sha256 = "sha256:9d9a2140530ad934b3cd89590354166dfdda02b8dd041f38089d7b5376cc09c0"
 reason = "The startup host's constructor requires the real monotonic execution clock; these tests construct it only to satisfy that signature, and every assertion waits for observed startup outcomes."
 
 [[real_time]]
