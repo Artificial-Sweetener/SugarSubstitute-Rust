@@ -118,6 +118,36 @@ impl CoordinatorBackend {
         self.pack.idle()
     }
 
+    /// Hold the launch-time SugarCubes update while this launch may still restart into an
+    /// application update; the restarted copy then runs it.
+    pub(crate) fn hold_pack_update(&mut self, held: bool) {
+        self.pack.schedule.hold_update(held);
+    }
+
+    /// Whether SugarCubes files are being installed or put back now; a restart waits for it.
+    pub(crate) fn pack_installing(&self) -> bool {
+        self.pack.installing()
+    }
+
+    /// Hold `job` as the restore of the previous SugarCubes version that `key`'s backend
+    /// ending started, as the pack owner admits one.
+    #[cfg(test)]
+    pub(crate) fn hold_pack_restore(
+        &mut self,
+        key: ResourceKey,
+        job: OwnedJob<PackJobResult, PackJobError>,
+        scope: sugarsubstitute_contracts::execution::ScopeId,
+        spec: JobSpec,
+    ) {
+        let schedule = &mut self.pack.schedule;
+        schedule.prepare(key, true);
+        let _ = schedule.start_next();
+        schedule.ended(PackWorkEnded::Unfinished { stopped: true });
+        schedule.backend_stopped();
+        let _ = schedule.start_next();
+        self.pack.hold(job, scope, spec);
+    }
+
     /// Hold `job` as the running SugarCubes job, as the pack owner admits one.
     #[cfg(test)]
     pub(crate) fn hold_pack_job(
@@ -187,6 +217,11 @@ impl PackUpdates {
         self.running.is_none()
     }
 
+    /// Whether SugarCubes files are being installed or put back now.
+    pub(super) fn installing(&self) -> bool {
+        self.schedule.installing()
+    }
+
     /// Hold `job` as the running SugarCubes job, as `pump` admits one.
     #[cfg(test)]
     pub(super) fn hold(
@@ -198,9 +233,11 @@ impl PackUpdates {
         self.running = Some(Running { job, scope, spec });
     }
 
-    /// `key` is being stopped: cancel the running job if it is the one holding `key`. It
-    /// observes cancellation between steps, never mid-replace; other jobs run on.
-    pub(super) fn cancel(&self, key: ResourceKey) {
+    /// `key` is being stopped: cancel the running job if it is the one holding `key`, and
+    /// leave a launch-time update that has not begun to the copy that starts next. A running
+    /// job observes cancellation between steps, never mid-replace; other jobs run on.
+    pub(super) fn cancel(&mut self, key: ResourceKey) {
+        self.schedule.withdraw_update(key);
         if self.schedule.running_holds(key)
             && let Some(running) = &self.running
         {

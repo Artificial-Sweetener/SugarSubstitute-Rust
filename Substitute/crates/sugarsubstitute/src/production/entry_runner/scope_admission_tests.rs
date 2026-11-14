@@ -49,7 +49,7 @@ fn mailbox_wake_failure_retains_original_and_runner_observes_cleanup_after_admis
     let mut runner = EntryRunner::new(
         command,
         invalid,
-        Box::new(NoChild(None, false, false)),
+        Box::new(NoChild(None, false, false, false)),
         crate::diagnostics::DiagnosticHealth::fixture(),
     );
     let identity = Arc::new(());
@@ -155,7 +155,7 @@ fn actual_runner_native_rejects_finite_box_and_real_finite_scope_preserves_origi
     let mut runner = EntryRunner::new(
         command,
         invalid,
-        Box::new(NoChild(None, false, false)),
+        Box::new(NoChild(None, false, false, false)),
         crate::diagnostics::DiagnosticHealth::fixture(),
     );
     freeze_time(&mut runner);

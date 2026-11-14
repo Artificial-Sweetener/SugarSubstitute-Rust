@@ -23,4 +23,17 @@ impl ProductionActivation {
             .filter(|retained| retained.record.retired.is_none())
             .filter_map(|retained| retained.record.parent.as_deref_mut())
     }
+
+    /// A live window that asked to restart while it closes, so the restart notice can cover
+    /// the screen before it hides, or a window that then completed that close normally.
+    pub(super) fn restart_requested(&self) -> bool {
+        self.live_parents().any(ParentLifecycle::restart_to_apply_requested)
+            || self.records.iter().flatten().any(|retained| {
+                retained
+                    .record
+                    .completed_normal
+                    .as_ref()
+                    .is_some_and(super::normal_retirement::CompletedNormal::restart_to_apply)
+            })
+    }
 }

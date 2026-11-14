@@ -41,7 +41,7 @@ fn only_accepted_normal_shutdown_suppresses_a_nested_failure_dialog() -> Result<
         let mut lifetime = Box::new(EntryRunner::new(
             command,
             path,
-            Box::new(super::super::tests::NoChild(None, false, false)),
+            Box::new(super::super::tests::NoChild(None, false, false, false)),
             crate::diagnostics::DiagnosticHealth::fixture(),
         ));
         lifetime.normal_shutdown = normal;
@@ -133,7 +133,7 @@ fn runner() -> Result<EntryRunner<super::super::tests::NoChild>, Box<dyn Error>>
     let mut runner = EntryRunner::new(
         command,
         path,
-        Box::new(super::super::tests::NoChild(None, true, false)),
+        Box::new(super::super::tests::NoChild(None, true, false, false)),
         crate::diagnostics::DiagnosticHealth::fixture(),
     );
     super::super::tests::freeze_time(&mut runner);
@@ -261,8 +261,33 @@ fn a_user_restart_shows_the_restart_notice_from_the_moment_the_window_closes()
     runner.advance_updates(&batch)?;
     assert!(runner.update_status.snapshot().1.restart_covered(), "the window may close now");
 
+    // The window's close then fails: the restart is still owed, so the stable launcher starts
+    // the prepared or the accepted version and the user is never left without the app.
     runner.child_closed = true;
-    assert!(!runner.restart_pending(), "a close that did not end normally relaunches nothing");
+    assert!(!runner.normal_shutdown);
+    assert!(runner.relaunch_wanted(), "a restart whose close failed still relaunches");
+    Ok(())
+}
+
+/// A SugarCubes install that runs when the restart is decided finishes first: the window is
+/// not told the restart is covered, and a run without a window does not close for it, until
+/// the install has ended, so the restart never cuts it short.
+#[test]
+fn a_restart_waits_for_a_running_sugarcubes_install() -> Result<(), Box<dyn Error>> {
+    let mut runner = runner()?;
+    runner.initialize_execution(Arc::new(crate::completion_wake::Wake::default()))?;
+    runner.initial_completed = true;
+    runner.intake_ready = true;
+    runner.child.3 = true;
+    decide_restart(&mut runner)?;
+    runner.observe_restart_notice();
+    runner.restart_notice.as_mut().ok_or("notice absent")?.notice.abandon();
+    assert!(!runner.restart_covered(), "the window keeps the screen while SugarCubes installs");
+    runner.child.1 = false;
+    assert!(!runner.restart_owed(), "no close while SugarCubes installs");
+    runner.child.3 = false;
+    assert!(runner.restart_covered(), "the install ended: the restart goes ahead");
+    assert!(runner.restart_owed());
     Ok(())
 }
 

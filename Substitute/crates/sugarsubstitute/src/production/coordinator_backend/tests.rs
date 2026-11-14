@@ -387,6 +387,7 @@ fn partial_backend_cleanup_keeps_actual_parent_budget_across_later_clock_and_rep
         shutdown: None,
         failure_published: false,
         settled: false,
+        install_waited: false,
         cleanup_failure: cleanup_state::CleanupState::new(),
     });
     let mut resources = BackendResources {
