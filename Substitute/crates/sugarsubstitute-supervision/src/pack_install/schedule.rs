@@ -115,9 +115,6 @@ impl<K: Copy + Eq> PackSchedule<K> {
             self.checked = true;
             self.judging = managed;
             self.queued.push_back((PackWork::Update { managed }, managed.then_some(key)));
-            if managed {
-                self.publish(PackUpdateStatus::Updating);
-            }
             return managed;
         }
         if !managed {
@@ -214,13 +211,9 @@ impl<K: Copy + Eq> PackSchedule<K> {
     /// `key` is being stopped before its launch-time update began: that update is left to the
     /// copy that starts next, and `key` no longer waits for it.
     pub fn withdraw_update(&mut self, key: K) {
-        let before = self.queued.len();
         self.queued.retain(|(work, gates)| {
             !(matches!(work, PackWork::Update { .. }) && *gates == Some(key))
         });
-        if self.queued.len() != before && self.status == PackUpdateStatus::Updating {
-            self.publish(PackUpdateStatus::Idle);
-        }
     }
 
     /// The next work to start when no job runs, with the preparation it holds. A held
@@ -236,6 +229,11 @@ impl<K: Copy + Eq> PackSchedule<K> {
         }
         let (work, gates) = self.queued.pop_front()?;
         self.running = Some((work, gates));
+        // The splash says SugarCubes is updating only while it really is, never while the
+        // update waits, so a close never waits for an update that has not begun.
+        if work == (PackWork::Update { managed: true }) {
+            self.show_after_restores(PackUpdateStatus::Updating);
+        }
         Some((work, gates))
     }
 

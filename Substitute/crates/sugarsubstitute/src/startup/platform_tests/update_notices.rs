@@ -341,3 +341,36 @@ fn a_retry_drops_the_app_update_line_that_was_already_applied() -> BackendResult
     );
     Ok(())
 }
+
+/// A close asked for while SugarCubes files are installed or put back waits for that to end:
+/// the splash says "Finishing the SugarCubes update…", a second close request forces nothing,
+/// and the ordinary close begins once the coordinator says the install ended. A session end
+/// still closes at once.
+#[test]
+fn a_close_during_a_sugarcubes_install_waits_for_it_to_finish() -> BackendResult<()> {
+    use sugarsubstitute_application::workspace_session::close_save::CloseReason;
+    let mut host = host()?;
+    let mut installing = UpdateStatus::default();
+    installing.observe_sugarcubes(PackUpdateStatus::Updating);
+    host.child.update_status = Some(installing.clone());
+    host.request_close(CloseReason::Close)?;
+    assert!(!host.closing, "the close waits for the install");
+    assert_eq!(host.deferred_close, Some(CloseReason::Close));
+    host.request_close(CloseReason::Close)?;
+    assert!(!host.closing, "a second request forces nothing");
+    host.advance_deferred_close()?;
+    assert!(!host.closing, "still installing");
+    installing.observe_sugarcubes(PackUpdateStatus::Finished(could_not_check()));
+    host.child.update_status = Some(installing);
+    host.advance_deferred_close()?;
+    assert!(host.closing, "the install ended: the ordinary close begins");
+    assert_eq!(host.deferred_close, None);
+
+    let mut ending = super::host()?;
+    let mut restoring = UpdateStatus::default();
+    restoring.observe_sugarcubes(PackUpdateStatus::Restoring);
+    ending.child.update_status = Some(restoring);
+    ending.request_close(CloseReason::SessionEnding { critical: false })?;
+    assert!(ending.closing, "a session end does not wait");
+    Ok(())
+}

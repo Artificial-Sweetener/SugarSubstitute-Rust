@@ -62,6 +62,7 @@ impl<B: StartupBackend> StartupHost<B> {
         }
         self.advance_coordinator_close()?;
         self.advance_restart_hold()?;
+        self.advance_deferred_close()?;
         self.deliver_startup_events()?;
         self.advance_workflow_restart()?;
         #[cfg(all(windows, feature = "native-composition"))]

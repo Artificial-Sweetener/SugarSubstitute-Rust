@@ -220,6 +220,7 @@ impl RenderStages {
                         updating.as_str()
                     }
                     crate::StartupStatus::UpdatingSugarcubes => copy.pack_updates.updating,
+                    crate::StartupStatus::FinishingSugarcubes => copy.pack_updates.finishing,
                     crate::StartupStatus::RestoringSugarcubes => copy.pack_updates.restoring,
                     crate::StartupStatus::Loading => operation[0],
                     crate::StartupStatus::LoadingLong => operation[1],

@@ -151,6 +151,9 @@ pub struct StartupHost<B: StartupBackend> {
     shutdown: shutdown::ShutdownTransaction,
     /// Why the application closes; the first close request decides it.
     close_reason: sugarsubstitute_application::workspace_session::close_save::CloseReason,
+    /// A close asked for while SugarCubes files are installed or put back; it begins once that
+    /// ended, so the close never cuts it short.
+    deferred_close: Option<sugarsubstitute_application::workspace_session::close_save::CloseReason>,
     /// The close save, once the shutdown budget was measured.
     close_save: Option<sugarsubstitute_application::workspace_session::close_save::CloseSave>,
     close_record_submitted: bool,
@@ -244,6 +247,7 @@ impl<B: StartupBackend> StartupHost<B> {
             shutdown: shutdown::ShutdownTransaction::new(),
             close_reason:
                 sugarsubstitute_application::workspace_session::close_save::CloseReason::Close,
+            deferred_close: None,
             close_save: None,
             close_record_submitted: false,
             workflow_restart: workflow_restart::WorkflowRestart::default(),
@@ -286,6 +290,8 @@ impl<B: StartupBackend> WindowContent for StartupHost<B> {
         view.sample(startup.session().phase(), elapsed, Instant::now());
         if self.child.cleanup_failed() {
             view.show_status(sugarsubstitute_splash::StartupStatus::CleanupFailed);
+        } else if self.deferred_close.is_some() {
+            view.show_status(sugarsubstitute_splash::StartupStatus::FinishingSugarcubes);
         } else if let Some(status) = window_content::restoring(&self.child, view.appearance.status)
             .or_else(|| {
                 window_content::updating(&self.child, view.appearance.status, view.retried())
