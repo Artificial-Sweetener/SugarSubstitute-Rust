@@ -145,3 +145,35 @@ fn an_attached_check_that_does_not_finish_says_so() -> TestResult {
     assert_eq!(outcome(&schedule), Some(PackOutcome::Stopped));
     Ok(())
 }
+
+#[test]
+fn a_cancelled_startup_is_a_page_failure_of_the_judged_version() -> TestResult {
+    let mut schedule = PackSchedule::default();
+    schedule.prepare(1, true);
+    schedule.start_next();
+    schedule.ended(PackWorkEnded::Updated(updated()?));
+    schedule.observe(TrialEvent::BackendStartUnobservable);
+    schedule.startup_cancelled();
+    assert_eq!(
+        schedule.start_next(),
+        Some((PackWork::Observe(TrialEvent::BackendStartUnobservable), None))
+    );
+    assert_eq!(schedule.ended(PackWorkEnded::Observed), None);
+    assert_eq!(schedule.start_next(), Some((PackWork::Observe(TrialEvent::PageFailed), None)));
+    assert_eq!(schedule.ended(PackWorkEnded::Observed), None);
+    // A later managed start of the same coordinator restores the previous version first.
+    assert!(schedule.prepare(2, true));
+    assert_eq!(schedule.start_next(), Some((PackWork::RestoreFailedPage, Some(2))));
+    Ok(())
+}
+
+#[test]
+fn a_cancelled_startup_judges_nothing_in_an_attached_comfyui() {
+    let mut schedule = PackSchedule::<u8>::default();
+    schedule.prepare(1, false);
+    schedule.start_next();
+    schedule.ended(PackWorkEnded::Unfinished { stopped: true });
+    schedule.startup_cancelled();
+    assert_eq!(schedule.start_next(), None);
+    assert!(!schedule.prepare(2, false));
+}

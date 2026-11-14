@@ -7,6 +7,8 @@
 /// graph initialized, Vue ready, position conversion, public API, extension array,
 /// named extension, exact extension identity, graph equality, connected canvas bounds,
 /// complete document, graph configuration finished, splash absent, setup done, library API, public API still present after import.
+/// Bits three and five stay unset: once position conversion exists, a missing public API or
+/// named extension is a terminal SugarCubes failure receipt, not an incomplete sample.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Blocked(u16);
 impl Blocked {

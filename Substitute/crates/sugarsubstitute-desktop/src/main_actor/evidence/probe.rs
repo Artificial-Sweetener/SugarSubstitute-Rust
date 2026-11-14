@@ -6,10 +6,18 @@ use super::*;
 
 /// Module import consumes the installed owner, without running setup or registering another extension.
 /// `_setupDone` observes completion of the SugarCubes UI owner's async setup.
+///
+/// ComfyUI assigns `positionConversion` only after it has imported every extension module and
+/// settled every extension's `setup`. From then on a SugarCubes whose public API or extension is
+/// absent failed to load, whatever its version, and a SugarCubes that recorded a failed setup on
+/// the document failed too; the sample reports either as a terminal SugarCubes failure instead of
+/// waiting for a page that cannot become ready.
 const SAMPLE: &str = r#"(async()=>{
 const app=window.comfyAPI?.app?.app;
 let missing=0;
 const check=(condition,bit)=>{if(!condition)missing|=bit;return !!condition;};
+const failed=(code,detail)=>JSON.stringify({schema_version:1,launch_id:LAUNCH,navigation_generation:NAV,
+ outcome:{status:'failed',failure:{code,detail}}});
 const graphReady=check(app?.isGraphReady,1);
 const vueReady=check(app?.vueAppReady===true,2);
 let extensions;
@@ -17,10 +25,10 @@ let extensions;
 if(vueReady){extensions=app.extensions;check(Array.isArray(extensions),16);}
 if(!graphReady||!vueReady)return JSON.stringify({incomplete:missing});
 if(!check(app.positionConversion,4))return JSON.stringify({incomplete:missing});
-const publicApi=window.SugarCubes;
-if(!check(publicApi,8))return JSON.stringify({incomplete:missing});
 if(!Array.isArray(extensions))return JSON.stringify({incomplete:missing});
-if(!check(extensions.some(extension=>extension.name==='SugarCubes.UI'),32))return JSON.stringify({incomplete:missing});
+// Every extension module loaded and every setup settled before positionConversion existed.
+if(!window.SugarCubes||!extensions.some(extension=>extension.name==='SugarCubes.UI'))return failed('sugarcubes_unavailable','SugarCubes did not load in this page.');
+if(document.documentElement?.getAttribute?.('data-sugarcubes-setup')==='failed')return failed('sugarcubes_failed','SugarCubes reported that its setup failed.');
 const cubes=await import('/extensions/SugarCubes/comfyui/ui.js');
 const canvas=app?.canvas?.canvas;
 const bounds=canvas?.getBoundingClientRect();

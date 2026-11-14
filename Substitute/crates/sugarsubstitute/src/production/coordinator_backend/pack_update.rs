@@ -6,12 +6,22 @@
 //! startup update (managed) or a read-only check (attached ComfyUI, whose folder is never
 //! written); a managed update holds that preparation's SugarCubes inspection and launch until
 //! it settles, so nothing reads the pack while its files change. Trial observations follow in
-//! order: backend ready, the page established, the backend ending before ready, and the page
-//! not loading (carried by the child's attempt settlement). After a page that reported
-//! SugarCubes failing, the next managed preparation is held behind a restore of the previous
-//! version, so a version that failed never loads twice; a page that did not load for another
-//! cause leaves a later page of the run to decide, and the next start restores otherwise. This owner runs those jobs one at a time on the
-//! execution owner. A failure of any of them never fails the backend.
+//! order: backend ready, the page established, the backend ending before ready, the page not
+//! loading (carried by the child's attempt settlement), and the user cancelling a startup whose
+//! page never became ready (carried by the desktop's exit intent).
+//!
+//! The version being judged fails its judgement when its backend ends before it is ready, when
+//! its page reports SugarCubes unavailable or failed, or when the user cancels the startup after
+//! its backend became ready and before its page loaded: a page that cannot become ready is
+//! never a dead end. After a page failure the next managed preparation of the run is held
+//! behind a restore of the previous version, and a run that ends instead leaves the failure in
+//! the judgement, so the next start restores it before its backend starts; either way a version
+//! that failed never loads twice. A page that did not load for a cause it could not attribute
+//! leaves a later page of the run to decide, and the next start restores the previous version
+//! when none does. A run that ends without any of these observations is no verdict: the next
+//! start judges the version again, and three such endings in a row count as one failed start.
+//! This owner runs those jobs one at a time on the execution owner. A failure of any of them
+//! never fails the backend.
 //!
 //! Each run records its update report in the host's storage, and the schedule publishes the
 //! live [`sugarsubstitute_contracts::update::pack::PackUpdateStatus`], logged here on every
@@ -59,9 +69,9 @@ impl std::error::Error for PackJobError {}
 
 impl CoordinatorBackend {
     /// The attempt's page did not load. A SugarCubes update being judged is restored before
-    /// the next attempt when the page reported SugarCubes itself unavailable or failed;
-    /// otherwise a later page of this run may still keep it, and the next start restores it
-    /// if none does.
+    /// the next attempt of this run, or at the next start, when the page reported SugarCubes
+    /// itself unavailable or failed; otherwise a later page of this run may still keep it, and
+    /// the next start restores it if none does.
     pub(crate) fn pack_page_failed(
         &mut self,
         failure: sugarsubstitute_contracts::startup::PageFailure,
@@ -75,6 +85,16 @@ impl CoordinatorBackend {
                 self.pack.observe(TrialEvent::PageUnconfirmed, resources)
             }
         }
+    }
+
+    /// The user cancelled this run's startup. A SugarCubes update whose backend became ready
+    /// and whose page never loaded failed its judgement, and the next start restores the
+    /// previous version; see [`PackSchedule::startup_cancelled`].
+    pub(crate) fn pack_startup_cancelled(
+        &mut self,
+        resources: &BackendResources<'_>,
+    ) -> Result<()> {
+        self.pack.startup_cancelled(resources)
     }
 
     /// The live SugarCubes update state of this coordinator, for its window.
@@ -180,6 +200,12 @@ impl PackUpdates {
     /// before the next managed attempt starts it.
     pub(super) fn page_failed(&mut self, resources: &BackendResources<'_>) -> Result<()> {
         self.schedule.page_failed();
+        self.pump(resources)
+    }
+
+    /// The user cancelled startup; see [`PackSchedule::startup_cancelled`].
+    pub(super) fn startup_cancelled(&mut self, resources: &BackendResources<'_>) -> Result<()> {
+        self.schedule.startup_cancelled();
         self.pump(resources)
     }
 
