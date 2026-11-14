@@ -101,6 +101,10 @@ impl ReportLayout {
         }
         let expansion = state.expansion.clamp(0.0, 1.0);
         let mut shell = Builder::new(surface.theme, labels, state);
+        shell.elements.push(Element::Decoration {
+            bounds: rect(0.0, 0.0, width, height),
+            appearance: Decoration::DialogSurface,
+        });
         Self::title_bar(&mut shell, content);
         let mut body = Builder::new(surface.theme, labels, state);
         let mut frame = ReportFrame::empty();
