@@ -5,7 +5,11 @@
 use crate::{DesktopError, NativeMaterial, native_storage::Dib};
 use std::{ffi::c_void, rc::Rc};
 use sugarsubstitute_contracts::presentation::PreparedFrame;
-use tao::{dpi::PhysicalPosition, platform::windows::WindowExtWindows, window::Window};
+use tao::{
+    dpi::{PhysicalPosition, PhysicalSize},
+    platform::windows::WindowExtWindows,
+    window::Window,
+};
 use windows::Win32::{
     Foundation::{E_ACCESSDENIED, E_INVALIDARG, E_NOTIMPL, HWND, POINT, RECT},
     Graphics::{
@@ -15,7 +19,7 @@ use windows::Win32::{
             DwmExtendFrameIntoClientArea, DwmSetWindowAttribute,
         },
         Gdi::{
-            BitBlt, GetDC, GetMonitorInfoW, MONITOR_DEFAULTTOPRIMARY, MONITORINFO,
+            BitBlt, GetDC, GetMonitorInfoW, HMONITOR, MONITOR_DEFAULTTOPRIMARY, MONITORINFO,
             MonitorFromPoint, ReleaseDC, SRCCOPY,
         },
     },
@@ -122,33 +126,51 @@ impl Presenter {
         }
         let size = self.window.outer_size();
         let centered = centered_origin(bounds, size.width, size.height)?;
-        let work = info.rcWork;
-        let clamp = |value: i32, low: i32, high: i32, extent: u32| {
-            let extent = i32::try_from(extent).unwrap_or(i32::MAX);
-            value.min(high.saturating_sub(extent)).max(low)
-        };
-        self.window.set_outer_position(PhysicalPosition::new(
-            clamp(centered.x, work.left, work.right, size.width),
-            clamp(centered.y, work.top, work.bottom, size.height),
-        ));
+        self.window.set_outer_position(within(info.rcWork, centered, size));
         Ok(())
+    }
+
+    /// Physical work area of the monitor holding the window.
+    fn work_area(&self) -> Result<RECT, DesktopError> {
+        use windows::Win32::Graphics::Gdi::{MONITOR_DEFAULTTONEAREST, MonitorFromWindow};
+        let hwnd = HWND(self.window.hwnd() as *mut c_void);
+        // SAFETY: The retained HWND is live on this thread; MonitorFromWindow returns a borrowed
+        // system monitor handle.
+        let monitor = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST) };
+        Ok(monitor_info(monitor, "query_window_work_area")?.rcWork)
     }
 
     /// Logical height of the work area of the monitor holding the window.
     pub(crate) fn work_area_height(&self) -> Result<f64, DesktopError> {
-        use windows::Win32::Graphics::Gdi::{MONITOR_DEFAULTTONEAREST, MonitorFromWindow};
-        let hwnd = HWND(self.window.hwnd() as *mut c_void);
-        let mut info =
-            MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
-        // SAFETY: The retained HWND is live on this thread; the output structure has its
-        // documented ABI and lives through the synchronous query.
-        unsafe {
-            let monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-            GetMonitorInfoW(monitor, &raw mut info)
-                .ok()
-                .map_err(|error| DesktopError::new("query_window_work_area", error))?;
+        let work = self.work_area()?;
+        Ok(f64::from(work.bottom - work.top) / self.window.scale_factor())
+    }
+
+    /// The largest physical client the window's work area holds with the window's frame.
+    pub(crate) fn client_limit(&self) -> Result<[u32; 2], DesktopError> {
+        let work = self.work_area()?;
+        let (outer, inner) = (self.window.outer_size(), self.window.inner_size());
+        let span =
+            |low: i32, high: i32| u32::try_from(i64::from(high) - i64::from(low)).unwrap_or(0);
+        Ok([
+            span(work.left, work.right).saturating_sub(outer.width.saturating_sub(inner.width)),
+            span(work.top, work.bottom).saturating_sub(outer.height.saturating_sub(inner.height)),
+        ]
+        .map(|extent| extent.max(1)))
+    }
+
+    /// Move the window back inside its work area where it reaches past it.
+    pub(crate) fn keep_within_work_area(&self) -> Result<(), DesktopError> {
+        let work = self.work_area()?;
+        let position = self
+            .window
+            .outer_position()
+            .map_err(|error| DesktopError::new("query_window_position", error))?;
+        let next = within(work, position, self.window.outer_size());
+        if next != position {
+            self.window.set_outer_position(next);
         }
-        Ok(f64::from(info.rcWork.bottom - info.rcWork.top) / self.window.scale_factor())
+        Ok(())
     }
 
     /// Update this retained window's normal material mode before preparing its next frame.
@@ -288,21 +310,61 @@ fn copy_to_window(hwnd: HWND, dib: &Dib, excluded: Option<RECT>) -> Result<(), D
     Ok(())
 }
 
-/// Center on the cursor monitor, using the primary monitor when cursor access is unavailable.
-fn center_on_cursor_work_area(window: &Window) -> Result<(), DesktopError> {
+/// The monitor under the cursor, or the primary monitor when cursor access is unavailable.
+fn cursor_monitor() -> Result<HMONITOR, DesktopError> {
     let mut cursor = POINT::default();
-    let mut info =
-        MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
-    // SAFETY: Both output structures have their documented ABI and live through the
-    // synchronous queries. MonitorFromPoint returns a borrowed system monitor handle.
+    // SAFETY: The output point has its documented ABI and lives through the synchronous query.
+    // MonitorFromPoint returns a borrowed system monitor handle.
     unsafe {
         let observed = GetCursorPos(&raw mut cursor).map(|()| cursor);
-        cursor = placement_point(observed)?;
-        let monitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTOPRIMARY);
-        GetMonitorInfoW(monitor, &raw mut info)
-            .ok()
-            .map_err(|error| DesktopError::new("query_monitor_work_area", error))?;
+        Ok(MonitorFromPoint(placement_point(observed)?, MONITOR_DEFAULTTOPRIMARY))
     }
+}
+
+/// Bounds and work area of monitor.
+fn monitor_info(monitor: HMONITOR, operation: &'static str) -> Result<MONITORINFO, DesktopError> {
+    let mut info =
+        MONITORINFO { cbSize: std::mem::size_of::<MONITORINFO>() as u32, ..Default::default() };
+    // SAFETY: The output structure has its documented ABI and lives through the synchronous query.
+    unsafe { GetMonitorInfoW(monitor, &raw mut info) }
+        .ok()
+        .map_err(|error| DesktopError::new(operation, error))?;
+    Ok(info)
+}
+
+/// Where a new window is created: on the work area of its owner's monitor, or of the cursor's
+/// monitor without an owner, so Windows creates it at that monitor's scale. Placement centres it
+/// once its size is known.
+pub(crate) fn opening_origin(owner: Option<HWND>) -> Result<PhysicalPosition<i32>, DesktopError> {
+    use windows::Win32::Graphics::Gdi::{MONITOR_DEFAULTTONEAREST, MonitorFromWindow};
+    let monitor = match owner {
+        // SAFETY: The owner is a live window of this thread; the handle returned is borrowed.
+        Some(owner) => unsafe { MonitorFromWindow(owner, MONITOR_DEFAULTTONEAREST) },
+        None => cursor_monitor()?,
+    };
+    let work = monitor_info(monitor, "query_opening_work_area")?.rcWork;
+    Ok(PhysicalPosition::new(work.left, work.top))
+}
+
+/// origin moved so a window of size stays inside work, its top-left corner first.
+fn within(
+    work: RECT,
+    origin: PhysicalPosition<i32>,
+    size: PhysicalSize<u32>,
+) -> PhysicalPosition<i32> {
+    let clamp = |value: i32, low: i32, high: i32, extent: u32| {
+        let extent = i32::try_from(extent).unwrap_or(i32::MAX);
+        value.min(high.saturating_sub(extent)).max(low)
+    };
+    PhysicalPosition::new(
+        clamp(origin.x, work.left, work.right, size.width),
+        clamp(origin.y, work.top, work.bottom, size.height),
+    )
+}
+
+/// Center on the cursor monitor, using the primary monitor when cursor access is unavailable.
+fn center_on_cursor_work_area(window: &Window) -> Result<(), DesktopError> {
+    let info = monitor_info(cursor_monitor()?, "query_monitor_work_area")?;
     let target_scale = window
         .available_monitors()
         .find(|monitor| {

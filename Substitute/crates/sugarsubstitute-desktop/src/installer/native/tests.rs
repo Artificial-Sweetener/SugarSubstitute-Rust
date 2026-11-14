@@ -393,6 +393,9 @@ mod scrolling;
 #[path = "capture_tests.rs"]
 mod capture;
 
+#[path = "scale_tests.rs"]
+mod scales;
+
 /// The resolved Tao mode reaches the same shared preparation mode without a forced default.
 #[test]
 fn resolved_native_theme_keeps_both_preparation_modes() {
