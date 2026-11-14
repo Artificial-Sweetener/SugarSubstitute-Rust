@@ -140,3 +140,22 @@ fn security_that_lets_another_account_or_a_lower_integrity_in_is_refused() -> Te
     assert!(verify(&null_dacl, ACCOUNT).is_err());
     Ok(())
 }
+
+#[test]
+fn a_generic_all_grant_is_full_access_and_harmless_inheritance_is_repairable() -> TestResult {
+    let label = Some(ace(17, 0, 1, MEDIUM));
+    let generic = descriptor(
+        CONTROL,
+        &[ace(0, 0, 0x1000_0000, ACCOUNT), ace(0, 0, 0x001f01ff, SYSTEM)],
+        label.clone(),
+    );
+    verify(&generic, ACCOUNT)?;
+    // Inherited grants to the account and SYSTEM only: protecting the DACL again repairs it.
+    let ours = [ace(0, 0x10, 0x001f01ff, ACCOUNT), ace(0, 0x10, 0x001f01ff, SYSTEM)];
+    let inheriting = descriptor(CONTROL & !0x1000, &ours, label.clone());
+    assert_eq!(verify(&inheriting, ACCOUNT), Err(UNPROTECTED));
+    let foreign = [ours[0].clone(), ace(0, 0x10, 0x0012019f, USERS)];
+    let open = descriptor(CONTROL & !0x1000, &foreign, label);
+    assert_eq!(verify(&open, ACCOUNT), Err("foreign_storage_security"));
+    Ok(())
+}

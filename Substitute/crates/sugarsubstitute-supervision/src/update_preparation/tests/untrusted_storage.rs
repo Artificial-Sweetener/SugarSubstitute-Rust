@@ -80,3 +80,34 @@ fn a_check_sets_untrusted_update_storage_aside_and_keeps_refusing_older_releases
     drop(signed);
     installation.preserved()
 }
+
+#[test]
+fn a_check_protects_storage_that_only_inherits_again_instead_of_setting_it_aside() -> TestResult {
+    let mut pipeline = Pipeline::new()?;
+    let (mut fixture, signed) = initialized(&mut pipeline)?;
+    fixture = accept(&mut pipeline, fixture, 1)?;
+    let root = fixture.installation.path().to_owned();
+    // A tool keeps the account's and SYSTEM's grants but lets the checkpoint inherit again.
+    rewrite(&root.join("state/update-trust/checkpoint"), Rewrite::InheritsAgain)?;
+    let (mut worker, server) =
+        campaign(&mut pipeline, &fixture, SignedPackage::new(&fixture.archive, 2)?, false)?;
+    assert_eq!(step(&mut pipeline, &mut worker)?.progress, Progress::Checking);
+    assert!(!worker.storage_set_aside(), "harmless storage was set aside");
+    while !matches!(
+        worker.progress(),
+        Progress::Decision(_) | Progress::Failed | Progress::Ready | Progress::Unavailable
+    ) {
+        submit(&mut pipeline, &mut worker)?;
+        pipeline.observe(|| worker.poll())?;
+    }
+    server.finish()?;
+    retire(&mut pipeline, &mut worker)?;
+    assert!(!root.join("user").join(SET_ASIDE_FOLDER).exists());
+    let installation = pipeline.run(SIGNED_INSTALLER_RESERVATION_BYTES, move |context| {
+        // The same storage opens again, protected as before.
+        drop(TrustStore::open(fixture.installation.path(), [92; 32], &context)?);
+        Ok(fixture)
+    })?;
+    drop(signed);
+    installation.preserved()
+}

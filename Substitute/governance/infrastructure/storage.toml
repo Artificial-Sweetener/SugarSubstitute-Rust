@@ -1242,6 +1242,14 @@ disposition = "implementation"
 rationale = "Durable filesystem owner: Atomically return one directory handle under an actual retained protected parent. Native access and its adversarial qualification remain within this owner."
 
 [[records]]
+path = "crates/sugarsubstitute-supervision/src/durable_storage/protected/security.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:04f97cd3987cb05ac6aafecd42f5dafb53c460f3bcc8b1587caa9c0cc362ed57"
+capabilities = ["method metadata", "std::fs::OpenOptions::new", "windows::Win32::Storage::FileSystem"]
+disposition = "implementation"
+rationale = "Durable filesystem owner: Protect the DACL of trust storage again in place when inheriting is all that changed, opening each object without following links. Native access and its adversarial qualification remain within this owner."
+
+[[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/protected/exclusion.rs"
 owner = "sugarsubstitute-supervision"
 source_sha256 = "sha256:6b831e89a9052a579aad52f13775a083114343f42d8eef12c640564e60ba2e95"
@@ -2955,7 +2963,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: New
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/update_preparation/tests/untrusted_storage.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:51807c7368e34b0400e386171cf98da55a426f5d08960e36b1eb1a8ab0942429"
+source_sha256 = "sha256:f8bbd007ee4498a6fd5212ae00d26e58e757af939444478cadcaf5fa8383d26b"
 capabilities = ["std::fs::read_dir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: A check sets untrusted update storage aside and keeps refusing older releases. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -5364,7 +5372,7 @@ rationale = "Repository tooling update-distribution.test.mjs: update-distributio
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/protected/security/rewrite.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:6959b368a9770f1b6568c251a37f90d592c6900d5fbb61a95f1c047492351e44"
+source_sha256 = "sha256:493b0dc63b590fdcdfae398a35c1dfafa77e0bb608bc9dbfc37dbc45f730783c"
 capabilities = ["GetFileSecurityW", "SetFileSecurityW", "windows::Win32::Security::GetFileSecurityW", "windows::Win32::Security::SetFileSecurityW"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Rewrite a real file's DACL the way permission tools and restores do, for qualification. Native access and its adversarial qualification remain within this owner."

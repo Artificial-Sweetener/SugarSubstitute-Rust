@@ -78,7 +78,7 @@ impl State {
                 };
                 let (trust, set_aside) =
                     TrustStore::reset_untrusted(&self.installation, repository, root, context)?;
-                self.storage_set_aside = Some(set_aside);
+                self.storage_set_aside = set_aside;
                 Ok(trust)
             }
             opened => opened,

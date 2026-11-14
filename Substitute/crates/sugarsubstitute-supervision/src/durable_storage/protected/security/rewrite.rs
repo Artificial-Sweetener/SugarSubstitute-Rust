@@ -7,6 +7,7 @@ use windows::{
     Win32::Security::{
         DACL_SECURITY_INFORMATION, GetFileSecurityW, OWNER_SECURITY_INFORMATION,
         PROTECTED_DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, SetFileSecurityW,
+        UNPROTECTED_DACL_SECURITY_INFORMATION,
     },
     core::HSTRING,
 };
@@ -20,6 +21,8 @@ pub(crate) enum Rewrite {
     DenyExecute,
     /// A tool that also lets every user of the machine change the file.
     UsersMayWrite,
+    /// A tool that keeps the same grants but lets the file inherit its folder's again.
+    InheritsAgain,
 }
 
 const FULL: u32 = 0x001f01ff;
@@ -55,12 +58,17 @@ pub(crate) fn rewrite(path: &Path, rewrite: Rewrite) -> io::Result<()> {
         Rewrite::UsersMayWrite => {
             vec![ace(0, 0, FULL, SYSTEM), ace(0, 0, FULL, &account), ace(0, 0, 0x0012019f, USERS)]
         }
+        Rewrite::InheritsAgain => vec![ace(0, 0, FULL, &account), ace(0, 0, FULL, SYSTEM)],
+    };
+    let (control, inheritance) = match rewrite {
+        Rewrite::InheritsAgain => (0x8000_u16 | 0x0004, UNPROTECTED_DACL_SECURITY_INFORMATION),
+        _ => (0x8000_u16 | 0x1000 | 0x0004, PROTECTED_DACL_SECURITY_INFORMATION),
     };
     let dacl = acl(&aces);
-    // Self-relative, DACL present and protected; the DACL follows the 20-byte header.
+    // Self-relative with a DACL, protected unless it inherits; the DACL follows the header.
     let mut bytes = vec![0_u8; 20];
     bytes[0] = 1;
-    bytes[2..4].copy_from_slice(&(0x8000_u16 | 0x1000 | 0x0004).to_le_bytes());
+    bytes[2..4].copy_from_slice(&control.to_le_bytes());
     bytes[16..20].copy_from_slice(&20_u32.to_le_bytes());
     bytes.extend_from_slice(&dacl);
     let mut words = vec![0_u32; bytes.len().div_ceil(4)];
@@ -72,7 +80,7 @@ pub(crate) fn rewrite(path: &Path, rewrite: Rewrite) -> io::Result<()> {
     unsafe {
         SetFileSecurityW(
             &name,
-            DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+            DACL_SECURITY_INFORMATION | inheritance,
             PSECURITY_DESCRIPTOR(words.as_mut_ptr().cast()),
         )
     }

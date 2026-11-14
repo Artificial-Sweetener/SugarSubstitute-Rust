@@ -6,7 +6,11 @@ mod tests;
 pub(super) const MAXIMUM_BYTES: usize = 8192;
 /// Refusals meaning the security no longer keeps other accounts out, as opposed to a malformed
 /// or oversized descriptor.
-pub(super) const UNTRUSTED: [&str; 2] = ["foreign_storage_security", "security_descriptor_shape"];
+pub(super) const UNTRUSTED: [&str; 3] =
+    ["foreign_storage_security", "security_descriptor_shape", UNPROTECTED];
+/// Refusal of a DACL that inherits again but still lets only this account and SYSTEM in, so
+/// protecting it again restores the security this account set.
+pub(super) const UNPROTECTED: &str = "unprotected_storage_security";
 const CONTROL: u16 = 0x8000 | 0x1000 | 0x0004 | 0x0010;
 pub(super) const SYSTEM: &[u8] = &[1, 1, 0, 0, 0, 0, 0, 5, 18, 0, 0, 0];
 const MEDIUM: &[u8] = &[1, 1, 0, 0, 0, 0, 0, 16, 0, 32, 0, 0];
@@ -118,6 +122,7 @@ const ACCESS_DENIED: u8 = 1;
 const MANDATORY_LABEL: u8 = 17;
 const INHERIT_ONLY: u8 = 0x08;
 const FILE_ALL_ACCESS: u32 = 0x001f01ff;
+const GENERIC_ALL: u32 = 0x1000_0000;
 const NO_WRITE_UP: u32 = 1;
 const SELF_RELATIVE: u16 = 0x8000;
 const DACL_PROTECTED: u16 = 0x1000;
@@ -166,18 +171,20 @@ fn aces(bytes: &[u8], field: usize) -> Result<Option<Vec<Ace<'_>>>, &'static str
 /// Trust storage whose security still lets only this account and SYSTEM change it.
 ///
 /// The owner is the account, the DACL is protected from inheritance and present, every ACE that
-/// grants access names the account or SYSTEM, the account's grants cover full file access, and
-/// any integrity label is medium or higher with no write up. Denials only take access away, so
-/// they are accepted. ACE order, inheritance flags and the auto-inherited control bits do not
-/// change who can write the object and are accepted too: permission tools, antivirus and backup
-/// software rewrite them while restoring the same access.
+/// grants access names the account or SYSTEM, the account's grants cover full file access (a
+/// generic-all grant does), and any integrity label is medium or higher with no write up.
+/// Denials only take access away, so they are accepted. ACE order, inheritance flags and the
+/// auto-inherited control bits do not change who can write the object and are accepted too:
+/// permission tools, antivirus and backup software rewrite them while restoring the same access.
+/// A DACL that meets all of this but inherits again is refused as [`UNPROTECTED`], which
+/// [`super::reprotect`] repairs in place.
 pub(super) fn verify(bytes: &[u8], sid: &[u8]) -> Result<(), &'static str> {
     expected(sid)?;
     if !(20..=MAXIMUM_BYTES).contains(&bytes.len()) || bytes[0] != 1 {
         return Err("security_descriptor_shape");
     }
     let control = short(bytes, 2)?;
-    let required = SELF_RELATIVE | DACL_PRESENT | DACL_PROTECTED;
+    let required = SELF_RELATIVE | DACL_PRESENT;
     if control & required != required {
         return Err("security_descriptor_shape");
     }
@@ -190,7 +197,8 @@ pub(super) fn verify(bytes: &[u8], sid: &[u8]) -> Result<(), &'static str> {
             ACCESS_DENIED => {}
             ACCESS_ALLOWED if ace.sid == sid => {
                 if ace.flags & INHERIT_ONLY == 0 {
-                    account |= ace.mask;
+                    // Generic all means every right of the object, file access included.
+                    account |= if ace.mask & GENERIC_ALL != 0 { FILE_ALL_ACCESS } else { ace.mask };
                 }
             }
             ACCESS_ALLOWED if ace.sid == SYSTEM => {}
@@ -213,6 +221,9 @@ pub(super) fn verify(bytes: &[u8], sid: &[u8]) -> Result<(), &'static str> {
                 return Err("foreign_storage_security");
             }
         }
+    }
+    if control & DACL_PROTECTED == 0 {
+        return Err(UNPROTECTED);
     }
     Ok(())
 }

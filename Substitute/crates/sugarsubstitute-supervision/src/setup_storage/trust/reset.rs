@@ -36,10 +36,12 @@ impl TrustStore {
     }
 
     /// Set untrusted update storage aside and create fresh trust from `trusted_root`, the root
-    /// metadata this build ships. Returns the fresh store and the folder the old storage was
-    /// moved to. Call only after [`Self::storage_untrusted`] judged an open of this
-    /// installation's trust. The accepted release keeps starting throughout: selection is read,
-    /// never changed. Run on a storage worker reserving `TRUST_RESERVATION_BYTES`.
+    /// metadata this build ships. Returns the store and, when storage was set aside, the folder
+    /// it was moved to. Storage whose DACL only inherits again while still letting in no one but
+    /// this account and SYSTEM is protected again in place and kept instead. Call only after
+    /// [`Self::storage_untrusted`] judged an open of this installation's trust. The accepted
+    /// release keeps starting throughout: selection is read, never changed. Run on a storage
+    /// worker reserving `TRUST_RESERVATION_BYTES`.
     /// # Errors
     /// An invalid root, storage still in use by another process (retried by the next check),
     /// and storage failures. Nothing is deleted on any path.
@@ -48,19 +50,33 @@ impl TrustStore {
         repository: [u8; 32],
         trusted_root: &[u8],
         context: &JobContext,
-    ) -> Result<(Self, PathBuf), TrustFailure> {
+    ) -> Result<(Self, Option<PathBuf>), TrustFailure> {
         check(context)?;
-        let _work = context.memory().claim(WORK_BYTES).map_err(io::Error::other)?;
-        let trust = RepositoryTrust::bootstrap(trusted_root)?;
         let store = SelectionStore::open(installation_root, context).map_err(io::Error::other)?;
         let (selection, _writer) = store.hold_writer(context).map_err(io::Error::other)?;
+        if reprotect_harmless(installation_root, context)? {
+            match Self::open_selected(installation_root, Some(repository), &selection, context) {
+                Ok(trust) => {
+                    tracing::warn!(
+                        operation = "update_storage_reprotected",
+                        "Update storage that inherited permissions again was protected again"
+                    );
+                    return Ok((trust, None));
+                }
+                Err(cause) if Self::storage_untrusted(&cause) => {}
+                Err(cause) => return Err(cause),
+            }
+        }
+        // A reopen above holds its own work reservation, so this one is claimed only now.
+        let _work = context.memory().claim(WORK_BYTES).map_err(io::Error::other)?;
+        let trust = RepositoryTrust::bootstrap(trusted_root)?;
         let history = starting_history(&selection)?;
         let set_aside = set_aside(installation_root, context)?;
         let trust =
             Self::establish(installation_root, repository, trust, &history, &selection, context)?;
         tracing::warn!(operation = "update_storage_set_aside", folder = %set_aside.display(),
             "Update storage another program changed was set aside; updates were set up again");
-        Ok((trust, set_aside))
+        Ok((trust, Some(set_aside)))
     }
 }
 
@@ -121,6 +137,54 @@ fn hex(text: &str, output: &mut [u8; 32]) -> io::Result<()> {
             .map_err(|_| invalid("Package digest is not hexadecimal"))?;
     }
     Ok(())
+}
+
+/// Most objects one repair visits; trust storage holds far fewer.
+const REPROTECT_LIMIT: usize = 4096;
+
+/// Protect again every object of the trust storage whose DACL only inherits again while still
+/// letting in no one but this account and SYSTEM: the state folder, the trust folder and all it
+/// holds, and the continuity marker. Links are never followed. Returns whether any object was
+/// repaired; objects that cannot be repaired are left for the reset.
+fn reprotect_harmless(installation_root: &Path, context: &JobContext) -> io::Result<bool> {
+    let state =
+        sugarsubstitute_configuration::layout::InstallationLayout::new(installation_root).state();
+    protection::with(context, |protection| {
+        let sid = protection.account_sid().to_vec();
+        // Each object with whether its children are visited too.
+        let mut pending = vec![
+            (state.clone(), false),
+            (state.join(DIRECTORY), true),
+            (state.join(continuity::MARKER), false),
+        ];
+        let mut repaired = false;
+        let mut next = 0;
+        while let Some((path, descend)) = pending.get(next).cloned() {
+            next += 1;
+            check(context)?;
+            if next > REPROTECT_LIMIT {
+                break;
+            }
+            match crate::durable_storage::protected::security::reprotect(&path, &sid) {
+                Ok(changed) => repaired |= changed,
+                Err(cause) if cause.kind() == io::ErrorKind::NotFound => continue,
+                Err(cause) => {
+                    tracing::warn!(operation = "update_storage_kept_unprotected",
+                        path = %path.display(), error = %cause, "Storage could not be protected again");
+                    continue;
+                }
+            }
+            if descend {
+                for entry in Directory::open(&path, false)?.entries(context)? {
+                    let entry = entry?;
+                    let folder =
+                        entry.file_type().is_ok_and(|kind| kind.is_dir() && !kind.is_symlink());
+                    pending.push((path.join(entry.file_name()), folder));
+                }
+            }
+        }
+        Ok(repaired)
+    })
 }
 
 /// Move the trust folder, its continuity marker and the update workspace into a new folder under
