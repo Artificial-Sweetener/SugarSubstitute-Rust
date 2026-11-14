@@ -1532,8 +1532,8 @@ rationale = "Durable filesystem owner: Qualify exact native identity, retained a
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/staging.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:ef17782a5e653ce66a3749e8e72989754a40d1ee3c9351229c4a25463c252694"
-capabilities = ["MoveFileExW", "std::fs::create_dir", "std::fs::read", "std::fs::remove_dir", "std::fs::remove_file", "std::fs::symlink_metadata", "std::fs::write", "tempfile::tempdir", "windows::Win32::Storage::FileSystem", "windows::Win32::Storage::FileSystem::MoveFileExW"]
+source_sha256 = "sha256:c4a9288ad73236e897891207365f60ec6a9826420b3b2ce228e55d8d545f7adb"
+capabilities = ["MoveFileExW", "std::fs::create_dir", "std::fs::read", "std::fs::remove_dir", "std::fs::remove_dir_all", "std::fs::remove_file", "std::fs::symlink_metadata", "std::fs::write", "tempfile::tempdir", "windows::Win32::Storage::FileSystem", "windows::Win32::Storage::FileSystem::MoveFileExW"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Allocate independent install attempts and publish complete directories without replacement. Native access and its adversarial qualification remain within this owner."
 
@@ -3029,7 +3029,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Eac
 [[records]]
 path = "crates/sugarsubstitute-update/src/releases/tests.rs"
 owner = "sugarsubstitute-update"
-source_sha256 = "sha256:a06819cd2af25305e7c41f73a3f4a67c244a19c7b8b79d907e50b71adb90fa10"
+source_sha256 = "sha256:586e3b67a91c82751c07506a7863195ae3134ebe758cadecd307b15ca9180397"
 capabilities = ["method metadata"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Durable floors admit only authenticated route identities and never claim application health. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

@@ -6,19 +6,25 @@
 //! its DACL inherits again, its owner changed or its label was lowered, nothing in it can be
 //! relied on. The storage is moved, never deleted, into a set-aside folder under `user\` for
 //! diagnosis, and fresh storage this account owns is created from the trusted root this build
-//! ships. Rollback protection holds because the fresh release history starts at the release
-//! that runs: nothing older than it is accepted again. The next check downloads as usual.
+//! ships. Only the newest [`KEPT_SET_ASIDE`] set-aside folders are kept. Rollback protection
+//! holds because the fresh release history starts each application route at the highest release
+//! the protected selection knows and each updater route at this build's own engine release:
+//! nothing older is accepted again. The next check downloads as usual.
 use super::*;
 use crate::setup_storage::check;
 use std::path::PathBuf;
 use sugarsubstitute_contracts::{
-    installation::Generation,
+    installation::{Candidate, Generation, InstallationRecord},
     update::{Channel, Component},
 };
-use sugarsubstitute_update::ReleaseHistory;
+use sugarsubstitute_update::{ENGINE_RELEASE, ReleaseHistory, RouteStart};
 
 /// Folder under the installation's `user` folder that keeps set-aside update storage.
 pub const SET_ASIDE_FOLDER: &str = "update-storage-set-aside";
+/// Set-aside folders kept for diagnosis; older ones are deleted after each reset.
+const KEPT_SET_ASIDE: usize = 2;
+/// Name prefix of each numbered set-aside folder.
+const SET_ASIDE_PREFIX: &str = "set-aside";
 /// The installation's update workspace, where downloads and extraction are staged.
 const WORKSPACE: &str = ".update-workspace";
 
@@ -48,7 +54,7 @@ impl TrustStore {
         let trust = RepositoryTrust::bootstrap(trusted_root)?;
         let store = SelectionStore::open(installation_root, context).map_err(io::Error::other)?;
         let (selection, _writer) = store.hold_writer(context).map_err(io::Error::other)?;
-        let history = running_history(selection.accepted())?;
+        let history = starting_history(&selection)?;
         let set_aside = set_aside(installation_root, context)?;
         let trust =
             Self::establish(installation_root, repository, trust, &history, &selection, context)?;
@@ -58,17 +64,52 @@ impl TrustStore {
     }
 }
 
-/// Release history starting every application route at the release that runs.
-fn running_history(accepted: Option<&Generation>) -> io::Result<ReleaseHistory> {
-    let Some(accepted) = accepted else {
-        return Ok(ReleaseHistory::empty());
-    };
+/// Release history for fresh trust: application routes start at the highest release `selection`
+/// knows (running, retained or prepared), so a superseded offer below an already authorised
+/// release stays refused. Updater routes start at this build's own engine release; the installed
+/// engine's records were set aside with the storage, so its package is not known.
+fn starting_history(selection: &InstallationRecord) -> io::Result<ReleaseHistory> {
     let platform = UpdateAuthorization::local_request(Channel::Release)?.platform;
+    let highest = [
+        selection.accepted(),
+        selection.retained(),
+        selection.candidate().map(Candidate::generation),
+    ]
+    .into_iter()
+    .flatten()
+    .max_by_key(|generation| generation.release.sequence());
+    let (sequence, digest) = match highest {
+        Some(generation) => (generation.release.sequence(), Some(package_digest(generation)?)),
+        None => (0, None),
+    };
+    let starts: Vec<_> = [Channel::Release, Channel::Canary]
+        .into_iter()
+        .flat_map(|channel| {
+            [
+                RouteStart {
+                    channel,
+                    component: Component::Application,
+                    platform,
+                    sequence,
+                    digest,
+                },
+                RouteStart {
+                    channel,
+                    component: Component::Updater,
+                    platform,
+                    sequence: ENGINE_RELEASE,
+                    digest: None,
+                },
+            ]
+        })
+        .collect();
+    ReleaseHistory::starting(&starts).map_err(io::Error::other)
+}
+
+fn package_digest(generation: &Generation) -> io::Result<[u8; 32]> {
     let mut digest = [0_u8; 32];
-    hex(accepted.package.as_str(), &mut digest)?;
-    let routes = [Channel::Release, Channel::Canary]
-        .map(|channel| (channel, Component::Application, platform));
-    ReleaseHistory::running(&routes, accepted.release.sequence(), digest).map_err(io::Error::other)
+    hex(generation.package.as_str(), &mut digest)?;
+    Ok(digest)
 }
 
 fn hex(text: &str, output: &mut [u8; 32]) -> io::Result<()> {
@@ -89,7 +130,7 @@ fn set_aside(installation_root: &Path, context: &JobContext) -> io::Result<PathB
     let state = layout.state();
     let user = Directory::open(&layout.user(), true)?;
     let folder = Directory::open(&user.path().join(SET_ASIDE_FOLDER), true)?;
-    let destination = staging::directory(&folder, "set-aside")?;
+    let destination = staging::numbered_directory(&folder, SET_ASIDE_PREFIX, context)?;
     check(context)?;
     staging::publish(&state.join(DIRECTORY), &destination.join(DIRECTORY))?;
     for (source, name) in [
@@ -106,6 +147,7 @@ fn set_aside(installation_root: &Path, context: &JobContext) -> io::Result<PathB
             }
         }
     }
+    staging::retain_numbered(&folder, SET_ASIDE_PREFIX, KEPT_SET_ASIDE, context)?;
     Ok(destination)
 }
 
@@ -120,3 +162,6 @@ fn absent(cause: &io::Error) -> bool {
         },
     )
 }
+
+#[cfg(test)]
+mod tests;

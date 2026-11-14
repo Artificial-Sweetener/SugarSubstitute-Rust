@@ -1,0 +1,66 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Artificial Sweetener and contributors
+//! Fresh history after a reset starts every route at what the installation already holds.
+use super::*;
+use sugarsubstitute_contracts::installation::{
+    GenerationId, InstallationId, PackageDigest, PreparationIntent, SignedRelease,
+};
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+fn generation(sequence: u64) -> Result<Generation, Box<dyn std::error::Error>> {
+    Ok(Generation {
+        id: GenerationId::new(format!("{sequence:032x}"))?,
+        package: PackageDigest::new(format!("{sequence:064x}"))?,
+        release: SignedRelease::new(format!("1.0.{sequence}"), sequence)?,
+    })
+}
+
+/// The floors `history` holds, as (channel, component, sequence, digest) in encoded form.
+fn floors(history: &ReleaseHistory) -> Result<Vec<serde_json::Value>, Box<dyn std::error::Error>> {
+    let value: serde_json::Value = serde_json::from_slice(&history.encode()?)?;
+    Ok(value["floors"].as_array().cloned().unwrap_or_default())
+}
+
+fn floor<'a>(
+    floors: &'a [serde_json::Value],
+    channel: &str,
+    component: &str,
+) -> Option<&'a serde_json::Value> {
+    floors.iter().find(|floor| floor["channel"] == channel && floor["component"] == component)
+}
+
+#[test]
+fn application_routes_start_at_the_highest_release_the_selection_knows() -> TestResult {
+    let mut selection = InstallationRecord::empty(InstallationId::new(format!("{:032x}", 7))?);
+    for sequence in [2, 3] {
+        selection = selection.prepare(generation(sequence)?, PreparationIntent::Automatic, 1)?;
+        selection = selection.prepared(&generation(sequence)?)?.begin_trial()?;
+        let Some(Candidate::Trial { attempt }) = selection.candidate().cloned() else {
+            return Err("Trial missing".into());
+        };
+        selection = selection.accept(&attempt)?;
+    }
+    // Release 5 is prepared but not yet running; 3 runs and 2 is retained.
+    selection = selection.prepare(generation(5)?, PreparationIntent::Automatic, 1)?;
+    selection = selection.prepared(&generation(5)?)?;
+    let floors = floors(&starting_history(&selection)?)?;
+    for channel in ["release", "canary"] {
+        let application = floor(&floors, channel, "application").ok_or("Application floor")?;
+        assert_eq!(application["sequence"], 5);
+        assert_eq!(application["digest"], serde_json::json!(package_digest(&generation(5)?)?));
+    }
+    Ok(())
+}
+
+#[test]
+fn updater_routes_start_at_this_builds_engine_release() -> TestResult {
+    let selection = InstallationRecord::empty(InstallationId::new(format!("{:032x}", 7))?);
+    let floors = floors(&starting_history(&selection)?)?;
+    for channel in ["release", "canary"] {
+        let updater = floor(&floors, channel, "updater").ok_or("Updater floor")?;
+        assert_eq!(updater["sequence"], ENGINE_RELEASE);
+        assert!(updater.get("digest").is_none(), "the set-aside engine's package is not known");
+        assert!(floor(&floors, channel, "application").is_none(), "nothing runs yet");
+    }
+    Ok(())
+}
