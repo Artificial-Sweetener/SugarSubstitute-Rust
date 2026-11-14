@@ -21,6 +21,17 @@ use std::{
 const REPARSE_POINT: u32 = 0x400;
 const OPEN_REPARSE_POINT: u32 = 0x0020_0000;
 const COPY_CHUNK_BYTES: usize = 1024 * 1024;
+/// `FILE_FLAG_BACKUP_SEMANTICS`, which lets a folder be opened as a handle.
+const BACKUP_SEMANTICS: u32 = 0x0200_0000;
+
+/// How [`PackTree::move_from`] brought a file over.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum Transfer {
+    /// Renamed on the same drive.
+    Moved,
+    /// Copied from another drive, then removed there.
+    Copied,
+}
 
 /// What one name in a pack tree currently is, observed without following links.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -187,6 +198,54 @@ impl PackTree {
     ) -> io::Result<()> {
         let mut input = source.open_regular(source_relative)?;
         self.replace_with(relative, |output| io::copy(&mut input, output).map(|_| ()))
+    }
+
+    /// Move one regular file of `source` over `relative` in this tree. On the same drive it is
+    /// renamed, a change of names only: the bytes already reached the disk when they were
+    /// written, and [`Self::flush_names`] makes the new names durable for a whole batch. A
+    /// source on another drive is copied durably and then removed.
+    pub(crate) fn move_from(
+        &self,
+        relative: &str,
+        source: &Self,
+        source_relative: &str,
+    ) -> io::Result<Transfer> {
+        let destination = self.path(relative)?;
+        match self.kind(relative)? {
+            NodeKind::Link | NodeKind::Directory => {
+                return Err(invalid("A pack file cannot replace a link or folder"));
+            }
+            NodeKind::File => clear_read_only(&destination)?,
+            NodeKind::Missing => {}
+        }
+        if source.kind(source_relative)? != NodeKind::File {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "Moved entry is not a regular file",
+            ));
+        }
+        match std::fs::rename(source.path(source_relative)?, &destination) {
+            Ok(()) => Ok(Transfer::Moved),
+            Err(cause) if cause.kind() == io::ErrorKind::CrossesDevices => {
+                self.copy_from(relative, source, source_relative)?;
+                source.remove_file(source_relative)?;
+                Ok(Transfer::Copied)
+            }
+            Err(cause) => Err(cause),
+        }
+    }
+
+    /// Make the names changed in this tree durable, once for a whole batch of moves: flushing
+    /// the folder commits NTFS's metadata log, which holds every rename before it in order.
+    pub(crate) fn flush_names(&self) -> io::Result<()> {
+        if self.root_kind()? != NodeKind::Directory {
+            return Err(invalid("A pack folder is not a plain folder"));
+        }
+        OpenOptions::new()
+            .write(true)
+            .custom_flags(BACKUP_SEMANTICS | OPEN_REPARSE_POINT)
+            .open(&self.root)?
+            .sync_all()
     }
 
     /// Durably replace one file with what `fill` writes to it; a failed fill leaves the

@@ -1103,3 +1103,10 @@ owner = "sugarsubstitute-xtask"
 source_sha256 = "sha256:39a42098b477ef73f61d97389c98e5645f75cc89c96ad60aa7c138d7b1dd8bf7"
 capabilities = ["arguments"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
+
+[[records]]
+path = "crates/sugarsubstitute-supervision/src/pack_install/vector_tests/host.rs"
+owner = "sugarsubstitute-supervision"
+source_sha256 = "sha256:99496b272c91758e52c109eee21189b7e18ea29d5afe6ff2943c69662dcf4f13"
+capabilities = ["environment"]
+rationale = "The restore measurement harness reads where to measure and where to keep its phase timings; the timings are recorded, never judged."
