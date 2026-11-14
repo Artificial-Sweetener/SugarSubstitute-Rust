@@ -470,7 +470,10 @@ impl EntryActivation for ProductionActivation {
             (Err(cause), Ok(())) | (Ok(_), Err(cause)) => return Err(cause),
             (Ok(closed), Ok(())) => closed,
         };
-        Ok(self.recovery_pending.as_ref().is_none_or(|pending| pending.settled())
+        // A finished SugarCubes job's result is taken by the activity above; the close
+        // settles only once it has been.
+        Ok(self.backend.as_ref().is_none_or(|retained| retained.backend.pack_idle())
+            && self.recovery_pending.as_ref().is_none_or(|pending| pending.settled())
             && self.records.iter().flatten().all(|retained| retained.record.closed)
             && self.records.iter().flatten().all(|retained| retained.record.seed.delivered())
             && self.records.iter().flatten().all(|retained| retained.record.collection.delivered())

@@ -41,7 +41,7 @@ fn only_accepted_normal_shutdown_suppresses_a_nested_failure_dialog() -> Result<
         let mut lifetime = Box::new(EntryRunner::new(
             command,
             path,
-            Box::new(super::super::tests::NoChild(None, false)),
+            Box::new(super::super::tests::NoChild(None, false, false)),
             crate::diagnostics::DiagnosticHealth::fixture(),
         ));
         lifetime.normal_shutdown = normal;
@@ -133,7 +133,7 @@ fn runner() -> Result<EntryRunner<super::super::tests::NoChild>, Box<dyn Error>>
     let mut runner = EntryRunner::new(
         command,
         path,
-        Box::new(super::super::tests::NoChild(None, true)),
+        Box::new(super::super::tests::NoChild(None, true, false)),
         crate::diagnostics::DiagnosticHealth::fixture(),
     );
     super::super::tests::freeze_time(&mut runner);
@@ -237,6 +237,32 @@ fn the_restart_notice_covers_the_screen_from_the_decision_until_the_new_copy_sho
     let until = runner.client()?.now()?;
     assert!(!runner.advance_relaunch(until)?, "no window of the new copy yet");
     assert!(runner.relaunch_wake().is_some(), "it keeps looking");
+    Ok(())
+}
+
+/// "Restart to apply": from the moment the window asks and starts closing, the closing run's
+/// update turn shows the "Updating to version X…" notice and tells the window once it covers
+/// the screen. A close that does not end normally owes no notice.
+#[test]
+fn a_user_restart_shows_the_restart_notice_from_the_moment_the_window_closes()
+-> Result<(), Box<dyn Error>> {
+    let mut runner = runner()?;
+    runner.initialize_execution(Arc::new(crate::completion_wake::Wake::default()))?;
+    runner.initial_completed = true;
+    runner.intake_ready = true;
+    runner.child.2 = true;
+    runner.closing = true;
+    let batch = runner.client()?.drain_completions(std::num::NonZeroUsize::MIN)?;
+    runner.advance_updates(&batch)?;
+    assert!(runner.restart_notice().is_some(), "the notice is asked for while the window closes");
+    assert!(!runner.update_status.snapshot().1.restart_covered(), "nothing on screen yet");
+    runner.restart_notice.as_mut().ok_or("notice absent")?.notice.abandon();
+    let batch = runner.client()?.drain_completions(std::num::NonZeroUsize::MIN)?;
+    runner.advance_updates(&batch)?;
+    assert!(runner.update_status.snapshot().1.restart_covered(), "the window may close now");
+
+    runner.child_closed = true;
+    assert!(!runner.restart_pending(), "a close that did not end normally relaunches nothing");
     Ok(())
 }
 

@@ -5,9 +5,11 @@ use super::*;
 use crate::{completion_wake::Wake, paused_clock::PausedClock};
 use std::sync::atomic::{AtomicU64, Ordering};
 static NEXT: AtomicU64 = AtomicU64::new(1);
-/// A child without native activation. The second field says whether a desktop child is live.
+/// A child without native activation. The second field says whether a desktop child is live,
+/// the third whether it asked to restart to apply an update.
 pub(crate) struct NoChild(
     pub(crate) Option<sugarsubstitute_contracts::configuration::LocaleId>,
+    pub(crate) bool,
     pub(crate) bool,
 );
 
@@ -65,7 +67,7 @@ fn original_cleanup_wake_is_consumed_before_unsettled_owner_returns() -> Result<
     let mut owner = EntryRunner::new(
         command,
         installation.join("unopened.exe"),
-        Box::new(NoChild(None, false)),
+        Box::new(NoChild(None, false, false)),
         crate::diagnostics::DiagnosticHealth::fixture(),
     );
     let issued = ShutdownBudget::new(sugarsubstitute_contracts::execution::Moment::from_nanos(0))?;
@@ -216,7 +218,7 @@ impl EntryActivation for NoChild {
         Ok(())
     }
     fn restart_to_apply_requested(&self) -> bool {
-        false
+        self.2
     }
     fn has_desktop(&self) -> bool {
         self.1

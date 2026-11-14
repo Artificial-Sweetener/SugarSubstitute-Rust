@@ -133,7 +133,7 @@ reason = "The diagnostics execution owner sleeps on a real clock; the test jumps
 
 [[real_time]]
 path = "crates/sugarsubstitute/src/production/entry_runner/tests.rs"
-source_sha256 = "sha256:a6de4a13afe8e3793dc875ee12f4105419cea94fe0193df340ca6db74173e584"
+source_sha256 = "sha256:d424e4588c35af1753b38325cb1787cfc227175f421b5f40d770d75768651d95"
 reason = "The entry runner's execution owner requires the real monotonic clock; these tests construct it only for that signature, read native time through the frozen anchor and wait for observed runner joins."
 
 [[real_time]]

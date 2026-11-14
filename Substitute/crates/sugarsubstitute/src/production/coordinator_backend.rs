@@ -349,10 +349,12 @@ impl CoordinatorBackend {
         std::array::from_fn(|at| self.records[at].as_ref().filter(|r| !r.settled).map(|r| r.key))
     }
 
-    /// Report complete backend retirement; desktop/profile settlement remains with its owner.
+    /// Report complete backend retirement, including the result of every SugarCubes job it
+    /// started; desktop/profile settlement remains with its owner.
     pub(crate) fn settled(&self) -> bool {
         self.policy.snapshot().resources == 0
             && self.records.iter().flatten().all(|r| r.settled)
+            && self.pack.idle()
             && self.custody.as_ref().is_none_or(|custody| custody.settled())
     }
     /// Progress final witness retirement after local writers and families close.

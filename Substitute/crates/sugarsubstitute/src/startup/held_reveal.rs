@@ -81,6 +81,14 @@ impl<B: StartupBackend> StartupHost<B> {
             .is_some_and(sugarsubstitute_contracts::update::status::UpdateStatus::restart_covered)
     }
 
+    /// Whether a "Restart to apply" close may hide the window: the coordinator's restart notice
+    /// covers the screen, or no coordinator status reaches this window to wait for.
+    pub(super) fn restart_close_covered(&self) -> bool {
+        self.child
+            .update_status()
+            .is_none_or(sugarsubstitute_contracts::update::status::UpdateStatus::restart_covered)
+    }
+
     fn restarting(&self) -> bool {
         self.child
             .update_status()

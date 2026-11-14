@@ -52,6 +52,7 @@ mod tests {
             let child = NoChild(
                 Some(sugarsubstitute_contracts::configuration::LocaleId::new(selected.id)?),
                 false,
+                false,
             );
             let lifetime = Box::new(EntryRunner::new(
                 command,

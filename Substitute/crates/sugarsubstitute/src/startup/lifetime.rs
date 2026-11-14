@@ -143,6 +143,11 @@ impl<B: StartupBackend> StartupHost<B> {
             {
                 let requested = self.child.request_restart_to_apply();
                 retain(&mut failure, self.observed_close(StartupCloseStage::ExitIntent, requested));
+                // The window stays up until the coordinator's "Updating to version X…" notice
+                // covers the screen, so no empty frame shows before the next copy appears.
+                if failure.is_none() && !self.restart_close_covered() {
+                    return self.refresh_deadline();
+                }
             }
             let requested = self.child.request_shutdown(budget);
             retain(&mut failure, self.observed_close(StartupCloseStage::ExitIntent, requested));

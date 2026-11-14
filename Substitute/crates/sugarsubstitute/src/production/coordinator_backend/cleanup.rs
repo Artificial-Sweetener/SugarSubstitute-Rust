@@ -232,6 +232,9 @@ impl CoordinatorBackend {
         });
         if record.source_closed
             && !self.pack.gates(record.key)
+            // A SugarCubes job admitted for this attempt, such as the observation of its
+            // failed page, must have its result taken first.
+            && self.pack.idle()
             && record.campaign.settled()
             && output_settled
             && record.resolution.is_none()

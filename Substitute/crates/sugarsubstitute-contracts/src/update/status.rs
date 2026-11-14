@@ -142,10 +142,11 @@ impl UpdateStatus {
     pub fn restarting(&self) -> bool {
         matches!(self.launch, Some(LaunchVersion::Restarting(_)))
     }
-    /// Whether a restarting window may close now: the coordinator's own "Updating to
-    /// version X…" notice is on screen to stay until the next copy shows, or it cannot show one.
+    /// Whether a window that restarts into an update, before it was shown or by "Restart to
+    /// apply", may close now: the coordinator's own "Updating to version X…" notice is on
+    /// screen to stay until the next copy shows, or it cannot show one.
     pub fn restart_covered(&self) -> bool {
-        self.restarting() && self.restart_covered
+        self.restart_covered
     }
     /// The version this launch started for the first time and confirmed.
     pub fn updated_to(&self) -> Option<&str> {
