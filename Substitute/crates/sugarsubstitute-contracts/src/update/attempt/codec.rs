@@ -268,9 +268,11 @@ mod tests {
         let bytes = encode(key(7)?, &message)?;
         assert_eq!(decode(key(8)?, &bytes), Err(AttemptCodecError::Attempt));
         let mut value: serde_json::Value = serde_json::from_slice(&bytes)?;
-        value["protocol_version"] = 2.into();
+        value["protocol_version"] = (PROTOCOL_VERSION + 1).into();
         assert_eq!(decode(key(7)?, &serde_json::to_vec(&value)?), Err(AttemptCodecError::Version));
-        value["protocol_version"] = 1.into();
+        value["protocol_version"] = (PROTOCOL_VERSION - 1).into();
+        assert_eq!(decode(key(7)?, &serde_json::to_vec(&value)?), Err(AttemptCodecError::Version));
+        value["protocol_version"] = PROTOCOL_VERSION.into();
         value["unexpected"] = true.into();
         assert_eq!(
             decode(key(7)?, &serde_json::to_vec(&value)?),
@@ -296,7 +298,7 @@ mod tests {
         };
         assert_eq!(encode(attempt, &leaking), Err(AttemptCodecError::Bounds));
         let frame = serde_json::json!({
-            "protocol_version": 1, "attempt": 3, "body": {"message": "finished",
+            "protocol_version": PROTOCOL_VERSION, "attempt": 3, "body": {"message": "finished",
             "result": {"outcome": "failed", "version": null, "phase": "preparing",
                 "causes": [r"Cannot open C:\Users\someone\file"]}}
         });

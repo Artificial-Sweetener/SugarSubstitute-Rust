@@ -5356,7 +5356,7 @@ rationale = "Repository tooling release-signature.mjs: writes a new release mani
 [[records]]
 path = "installer/release/update-distribution.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:39a42098b477ef73f61d97389c98e5645f75cc89c96ad60aa7c138d7b1dd8bf7"
+source_sha256 = "sha256:ea849f15cfcb45144b2c5cf19e90c1de2d35019ae2ff9777a00a775613e530c0"
 capabilities = ["fs", "node:fs/promises", "readFile"]
 disposition = "tooling"
 rationale = "Repository tooling update-distribution.mjs: update-distribution Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -5364,7 +5364,7 @@ rationale = "Repository tooling update-distribution.mjs: update-distribution Rea
 [[records]]
 path = "installer/release/update-distribution.test.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:c26394cc345b597f7285939ec46d77a92e7441580ce8b1d35fdd8d8de9b04894"
+source_sha256 = "sha256:14fabf5b8a56d604605a9abc039906c26790ffec55699d004542cbd1938ecaee"
 capabilities = ["fs", "mkdtemp", "node:fs/promises", "readFile", "writeFile"]
 disposition = "tooling"
 rationale = "Repository tooling update-distribution.test.mjs: update-distribution.test Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."

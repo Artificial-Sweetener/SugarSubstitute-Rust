@@ -43,7 +43,7 @@ pub struct UpdateMessages {
 
 impl UpdateMessages {
     /// Enumerate every owned label for complete registry coverage checks.
-    pub const fn labels(&self) -> [&'static str; 19] {
+    pub const fn labels(&self) -> [&'static str; 20] {
         let p = self.phases;
         [
             self.product,

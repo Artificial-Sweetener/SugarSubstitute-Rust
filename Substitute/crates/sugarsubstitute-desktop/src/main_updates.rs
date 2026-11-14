@@ -125,7 +125,10 @@ impl Notice {
             Self::Sugarcubes(report) => (whats_new
                 && report.outcome == sugarsubstitute_contracts::update::pack::PackOutcome::Updated)
                 .then_some(UpdateIntent::OpenWhatsNew),
-            Self::NotSaved { .. } | Self::PreviousVersionRunning | Self::Repairing => None,
+            Self::NotSaved { .. }
+            | Self::PreviousVersionRunning
+            | Self::Repairing
+            | Self::StorageSetAside => None,
         }
     }
 
