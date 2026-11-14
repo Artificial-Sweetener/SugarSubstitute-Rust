@@ -2,6 +2,23 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Preserve the sole execution owner, original budgets and scopes until actual joins.
 use super::*;
+
+/// How often a shutdown past its original cutoff observes execution again. Work retained past
+/// the cutoff may settle without a completion wake, so the runner keeps looking and exits once
+/// it has.
+const RETAINED_OBSERVATION: Duration = Duration::from_secs(5);
+
+impl<C: EntryActivation> EntryRunner<C> {
+    /// The next observation of a shutdown already reported past its cutoff: at once until the
+    /// first observation, then every [`RETAINED_OBSERVATION`].
+    fn retained_shutdown_wake(&self) -> Option<Instant> {
+        match self.shutdown_diagnostic {
+            Some(previous) => previous.checked_add(RETAINED_OBSERVATION),
+            None => Some((self.native_now)()),
+        }
+    }
+}
+
 impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
     fn start(&mut self, wake: Arc<dyn CompletionWake>) -> Result<(), Box<dyn Error>> {
         self.initialize_execution(wake)?;
@@ -34,7 +51,11 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
             };
         }
         let own = if self.closing {
-            (!self.deadline_reported).then_some(self.cleanup_deadline).flatten()
+            if self.deadline_reported {
+                self.retained_shutdown_wake()
+            } else {
+                self.cleanup_deadline
+            }
         } else if !self.initial_completed {
             let forward = self
                 .forward_wait
@@ -172,7 +193,7 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
             let now = (self.native_now)();
             if self
                 .shutdown_diagnostic
-                .is_none_or(|previous| now.duration_since(previous) >= Duration::from_secs(5))
+                .is_none_or(|previous| now.duration_since(previous) >= RETAINED_OBSERVATION)
             {
                 tracing::warn!(operation="production_retained_shutdown", progress=?actual,
                     "Original shutdown is still observing actual execution retirement");
