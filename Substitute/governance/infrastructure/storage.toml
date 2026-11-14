@@ -2963,7 +2963,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: New
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/update_preparation/tests/untrusted_storage.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:bf41e2ca36143f87919b131a89edc1b4652072ff05c60172a02b3f198291bba7"
+source_sha256 = "sha256:36817075bb68c0993c3219f687726b6d9c0bde7e5a6dcbe6a0513e88fbb3e93d"
 capabilities = ["std::fs::read_dir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: A check sets untrusted update storage aside and keeps refusing older releases. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

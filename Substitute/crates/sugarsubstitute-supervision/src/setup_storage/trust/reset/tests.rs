@@ -43,19 +43,29 @@ fn application_routes_start_at_the_highest_release_the_selection_knows() -> Test
     // Release 5 is prepared but not yet running; 3 runs and 2 is retained.
     selection = selection.prepare(generation(5)?, PreparationIntent::Automatic, 1)?;
     selection = selection.prepared(&generation(5)?)?;
-    let floors = floors(&starting_history(&selection)?)?;
+    let mut asked = None;
+    let history = starting_history(&selection, |generation| {
+        asked = Some(generation.clone());
+        Some((Channel::Release, [9; 32]))
+    })?;
+    assert_eq!(asked, Some(generation(5)?), "the highest generation's archive was not looked up");
+    let floors = floors(&history)?;
     for channel in ["release", "canary"] {
         let application = floor(&floors, channel, "application").ok_or("Application floor")?;
         assert_eq!(application["sequence"], 5);
-        assert_eq!(application["digest"], serde_json::json!(package_digest(&generation(5)?)?));
     }
+    // Only the channel the archive was published on admits just that archive.
+    let release = floor(&floors, "release", "application").ok_or("Release floor")?;
+    assert_eq!(release["digest"], serde_json::json!(vec![9_u8; 32]));
+    let canary = floor(&floors, "canary", "application").ok_or("Canary floor")?;
+    assert!(canary.get("digest").is_none());
     Ok(())
 }
 
 #[test]
 fn updater_routes_start_at_this_builds_engine_release() -> TestResult {
     let selection = InstallationRecord::empty(InstallationId::new(format!("{:032x}", 7))?);
-    let floors = floors(&starting_history(&selection)?)?;
+    let floors = floors(&starting_history(&selection, |_| None)?)?;
     for channel in ["release", "canary"] {
         let updater = floor(&floors, channel, "updater").ok_or("Updater floor")?;
         assert_eq!(updater["sequence"], ENGINE_RELEASE);

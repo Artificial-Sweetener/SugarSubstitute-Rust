@@ -81,6 +81,8 @@ fn a_check_sets_untrusted_update_storage_aside_and_keeps_refusing_older_releases
         assert_eq!(accepted.accepted().ok_or("Nothing accepted")?.release.sequence(), 2);
         let older = installation.import(SignedPackage::new(&installation.archive, 1)?, &context);
         assert!(older.is_err(), "a release older than the running one was accepted");
+        // The running release's own archive is still admitted at its sequence.
+        drop(installation.import(SignedPackage::new(&installation.archive, 2)?, &context)?);
         drop(installation.import(SignedPackage::new(&installation.archive, 3)?, &context)?);
         Ok(installation)
     })?;

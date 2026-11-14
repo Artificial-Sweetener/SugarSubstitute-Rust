@@ -135,9 +135,14 @@ impl TrustStore {
 
 /// Release history for fresh trust: application routes start at the highest release `selection`
 /// knows (running, retained or prepared), so a superseded offer below an already authorised
-/// release stays refused. Updater routes start at this build's own engine release; the installed
+/// release stays refused. `archive` gives the channel and archive digest a generation was
+/// published from; on that channel the start admits only that archive, and elsewhere, or when
+/// the archive is not known, any package at its sequence. Updater routes start at this build's own engine release; the installed
 /// engine's records were set aside with the storage, so its package is not known.
-fn starting_history(selection: &InstallationRecord) -> io::Result<ReleaseHistory> {
+fn starting_history(
+    selection: &InstallationRecord,
+    archive: impl FnOnce(&Generation) -> Option<(Channel, [u8; 32])>,
+) -> io::Result<ReleaseHistory> {
     let platform = UpdateAuthorization::local_request(Channel::Release)?.platform;
     let highest = [
         selection.accepted(),
@@ -147,8 +152,8 @@ fn starting_history(selection: &InstallationRecord) -> io::Result<ReleaseHistory
     .into_iter()
     .flatten()
     .max_by_key(|generation| generation.release.sequence());
-    let (sequence, digest) = match highest {
-        Some(generation) => (generation.release.sequence(), Some(package_digest(generation)?)),
+    let (sequence, archive) = match highest {
+        Some(generation) => (generation.release.sequence(), archive(generation)),
         None => (0, None),
     };
     let starts: Vec<_> = [Channel::Release, Channel::Canary]
@@ -160,7 +165,9 @@ fn starting_history(selection: &InstallationRecord) -> io::Result<ReleaseHistory
                     component: Component::Application,
                     platform,
                     sequence,
-                    digest,
+                    digest: archive
+                        .filter(|(published, _)| *published == channel)
+                        .map(|(_, digest)| digest),
                 },
                 RouteStart {
                     channel,
@@ -173,23 +180,6 @@ fn starting_history(selection: &InstallationRecord) -> io::Result<ReleaseHistory
         })
         .collect();
     ReleaseHistory::starting(&starts).map_err(io::Error::other)
-}
-
-fn package_digest(generation: &Generation) -> io::Result<[u8; 32]> {
-    let mut digest = [0_u8; 32];
-    hex(generation.package.as_str(), &mut digest)?;
-    Ok(digest)
-}
-
-fn hex(text: &str, output: &mut [u8; 32]) -> io::Result<()> {
-    if text.len() != 64 {
-        return Err(invalid("Package digest is not 32 bytes"));
-    }
-    for (index, byte) in output.iter_mut().enumerate() {
-        *byte = u8::from_str_radix(&text[2 * index..2 * index + 2], 16)
-            .map_err(|_| invalid("Package digest is not hexadecimal"))?;
-    }
-    Ok(())
 }
 
 /// Most objects one repair visits; trust storage holds far fewer.
@@ -255,10 +245,26 @@ fn stage_fresh(
     trust.carry(
         kept_floors(installation_root, selection.installation(), repository, context).metadata,
     );
-    let history = starting_history(selection)?;
+    let parent = Directory::open(installation_root, false)?;
+    let history =
+        starting_history(selection, |generation| {
+            match installed::PublishedRelease::read(
+                &parent,
+                selection.installation(),
+                &repository,
+                generation,
+                context,
+            ) {
+                Ok(published) => published.map(|published| published.archive()),
+                Err(cause) => {
+                    tracing::warn!(operation = "update_receipt_unreadable", error = %cause,
+                    "A release receipt could not be read; its floor admits any package");
+                    None
+                }
+            }
+        })?;
     let (checkpoint, history) =
         initialize::fresh_records(selection.installation(), &repository, &trust, &history)?;
-    let parent = Directory::open(installation_root, false)?;
     let state = ownership::state(&parent)?;
     let ready = state.path().join(READY);
     // The selection writer serializes resets; earlier stages are dead.
