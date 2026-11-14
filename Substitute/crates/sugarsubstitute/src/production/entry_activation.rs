@@ -394,14 +394,17 @@ impl EntryActivation for ProductionActivation {
     fn has_desktop(&self) -> bool {
         self.live_parents().next().is_some()
     }
+    /// A live window that asked to restart while it closes, so the restart notice can cover
+    /// the screen before it hides, or a window that then completed that close normally.
     fn restart_to_apply_requested(&self) -> bool {
-        self.records.iter().flatten().any(|retained| {
-            retained
-                .record
-                .completed_normal
-                .as_ref()
-                .is_some_and(normal_retirement::CompletedNormal::restart_to_apply)
-        })
+        self.live_parents().any(ParentLifecycle::restart_to_apply_requested)
+            || self.records.iter().flatten().any(|retained| {
+                retained
+                    .record
+                    .completed_normal
+                    .as_ref()
+                    .is_some_and(normal_retirement::CompletedNormal::restart_to_apply)
+            })
     }
     fn shutdown_budget(&self) -> Option<ShutdownBudget> {
         self.records

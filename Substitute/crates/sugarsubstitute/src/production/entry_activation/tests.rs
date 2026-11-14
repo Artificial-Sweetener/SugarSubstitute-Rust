@@ -73,3 +73,39 @@ fn boxed_activation_configuration_and_close_retain_original_owner_and_first_caus
     assert!(std::ptr::eq(owned.failure_source().ok_or("First cause lost")?, original_cause));
     Ok(())
 }
+
+/// "Restart to apply": the window tells the coordinator before it hides, then waits for the
+/// coordinator's notice to cover the screen. The coordinator owes that notice, and the relaunch
+/// after a normal close, from the live window's request, not only once its close completed:
+/// owing it only afterwards left the window and the coordinator waiting on each other until the
+/// window was cut off, and nothing relaunched.
+#[test]
+fn a_live_window_that_asked_to_restart_is_a_restart_before_its_close_completes() -> Result<()> {
+    use sugarsubstitute_contracts::lifecycle::ConnectionId;
+    let mut owned = owner()?;
+    let retained = super::progress_deadline_tests::retained_record(Moment::from_nanos(1))?;
+    let storage = crate::production::coordinator_backend::tests::storage_tests::claim(
+        crate::production::parent_lifecycle::ParentLifecycle::storage_bytes(),
+    )
+    .map_err(outer)?;
+    let mut parent = crate::production::parent_lifecycle::ParentLifecycle::new(
+        retained.record.run,
+        retained.record.launch,
+        sugarsubstitute_contracts::configuration::ProfileId::new("Restart_1".into())?,
+        ConnectionId::new(1)?,
+        sugarsubstitute_execution::windows_lifecycle_pipe::LifecyclePipeDeadline::new(
+            100,
+            1_000_000_000,
+        )?,
+        &mut Some(crate::production::parent_lifecycle::causes::BackendCauses::new(storage)?),
+    )?;
+    owned.records[0] = Some(retained);
+    assert!(!EntryActivation::restart_to_apply_requested(owned.as_ref()));
+    parent.observe_restart_to_apply();
+    owned.records[0].as_mut().ok_or("record absent")?.record.parent = Some(Box::new(parent));
+    assert!(
+        EntryActivation::restart_to_apply_requested(owned.as_ref()),
+        "the live window's request is the restart"
+    );
+    Ok(())
+}
