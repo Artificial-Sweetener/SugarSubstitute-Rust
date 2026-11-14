@@ -248,6 +248,53 @@ impl PackTree {
             .sync_all()
     }
 
+    /// Create a new file at `relative` with what `fill` writes to it, without waiting for the
+    /// disk: for a folder this owner just created and fills before anything reads it, whose
+    /// files are made durable together with [`Self::flush_file`]. An existing name, link or
+    /// folder is refused.
+    pub(crate) fn create_file(
+        &self,
+        relative: &str,
+        fill: impl FnOnce(&mut File) -> io::Result<()>,
+    ) -> io::Result<()> {
+        if self.kind(relative)? != NodeKind::Missing {
+            return Err(invalid("A new pack file's name is taken"));
+        }
+        let path = self.path(relative)?;
+        let written = (|| {
+            let mut output = OpenOptions::new().write(true).create_new(true).open(&path)?;
+            fill(&mut output)
+        })();
+        if written.is_err() {
+            match std::fs::remove_file(&path) {
+                Ok(()) => {}
+                Err(cause) if cause.kind() == io::ErrorKind::NotFound => {}
+                Err(cause) => tracing::warn!(
+                    target: "sugarsubstitute::pack_install",
+                    operation = "discard_partial",
+                    error = %cause,
+                    "A partial pack file could not be removed"
+                ),
+            }
+        }
+        written
+    }
+
+    /// Wait until one regular file's bytes reached the disk.
+    pub(crate) fn flush_file(&self, relative: &str) -> io::Result<()> {
+        if self.kind(relative)? != NodeKind::File {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "Pack entry is not a regular file",
+            ));
+        }
+        OpenOptions::new()
+            .write(true)
+            .custom_flags(OPEN_REPARSE_POINT)
+            .open(self.path(relative)?)?
+            .sync_all()
+    }
+
     /// Durably replace one file with what `fill` writes to it; a failed fill leaves the
     /// previous file in place.
     pub(crate) fn replace_with(

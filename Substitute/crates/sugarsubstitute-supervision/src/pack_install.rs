@@ -219,8 +219,17 @@ impl PackTransaction {
         offer: &ReleaseOffer,
         installed: &InstalledDigests,
     ) -> Result<()> {
-        let extracted =
-            archive::extract_registry_source(archive, &self.staging, ArchiveLimits::default())?;
+        let (extracted, extract) = archive::extract_registry_source_timed(
+            archive,
+            &self.staging,
+            ArchiveLimits::default(),
+        )?;
+        tracing::info!(
+            target: "sugarsubstitute::pack_install",
+            operation = "install_phases",
+            extract_ms = extract.as_secs_f64() * 1000.0,
+            "The downloaded SugarCubes release is extracted"
+        );
         let identity = read_identity(&self.staging)?;
         if !identity.is_pack(pack_id) || identity.version != offer.version {
             return Err(PackInstallError::format(

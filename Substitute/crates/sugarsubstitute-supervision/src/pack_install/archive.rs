@@ -83,7 +83,8 @@ pub(crate) fn extract_registry_archive(
 
 /// Extract a validated archive read from `source` (a file or memory) into `target`, an empty
 /// folder the caller owns. Each member streams to its file in bounded chunks, so memory use
-/// does not grow with the archive.
+/// does not grow with the archive. The files are not yet durable: the install flushes them
+/// together before it puts them in place.
 pub(crate) fn extract_registry_source<R: Read + Seek>(
     source: R,
     target: &PackTree,
@@ -104,7 +105,7 @@ pub(crate) fn extract_registry_source<R: Read + Seek>(
         }
         let mut digest = None;
         let mut refusal = None;
-        let written = target.replace_with(entry.path(), |output| {
+        let written = target.create_file(entry.path(), |output| {
             match copy_member(&mut archive, *index, output, &mut total, limits) {
                 Ok(value) => {
                     digest = Some(value);
@@ -125,6 +126,17 @@ pub(crate) fn extract_registry_source<R: Read + Seek>(
     }
     let entries = members.into_iter().map(|(_, entry)| entry).collect();
     Ok(ExtractedArchive { entries, file_digests })
+}
+
+/// [`extract_registry_source`], also returning how long the extraction took.
+pub(crate) fn extract_registry_source_timed<R: Read + Seek>(
+    source: R,
+    target: &PackTree,
+    limits: ArchiveLimits,
+) -> Result<(ExtractedArchive, std::time::Duration)> {
+    let started = std::time::Instant::now();
+    let extracted = extract_registry_source(source, target, limits)?;
+    Ok((extracted, started.elapsed()))
 }
 
 /// Return each file's SHA-256 as `source` would extract, validating it exactly as extraction

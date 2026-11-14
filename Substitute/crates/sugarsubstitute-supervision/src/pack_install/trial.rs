@@ -142,7 +142,8 @@ impl TrackedReplacement {
         };
         let reason = match (journal.phase, ending) {
             (JournalPhase::BackingUp, _) => {
-                self.discard_unstarted()?;
+                // Cut off while setting the old files aside: put back what moved, no verdict.
+                self.roll_back(target)?;
                 return Ok(None);
             }
             (

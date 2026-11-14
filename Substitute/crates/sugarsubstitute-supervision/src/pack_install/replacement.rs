@@ -95,6 +95,7 @@ pub(super) struct Journal {
 struct Faults {
     fail_at: Option<usize>,
     halt_in: Option<JournalPhase>,
+    halt_at: Option<usize>,
 }
 
 /// How long each phase of putting the previous files back took, and how they came back.
@@ -123,6 +124,41 @@ impl RestoreTimings {
             "restoreRecordsMs": ms(self.restore_records),
             "removeDirectoriesMs": ms(self.remove_directories),
             "discardTransactionMs": ms(self.discard_transaction),
+            "moved": self.moved,
+            "copied": self.copied,
+        })
+    }
+}
+
+/// How long each phase of putting a new version's files in place took.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct InstallTimings {
+    /// Setting the files the update changes aside in the backup.
+    pub(crate) back_up: Duration,
+    /// Making the extracted files' bytes durable, all together.
+    pub(crate) flush_staged: Duration,
+    /// Putting the new files in place.
+    pub(crate) place_new: Duration,
+    /// Writing the ownership and digest records.
+    pub(crate) records: Duration,
+    /// Making the new names durable, once.
+    pub(crate) flush_names: Duration,
+    /// Files moved by name on the same drive.
+    pub(crate) moved: usize,
+    /// Files copied because they were on another drive.
+    pub(crate) copied: usize,
+}
+
+impl InstallTimings {
+    /// The timings in milliseconds, for a log line or a measurement record.
+    pub(crate) fn to_json(&self) -> serde_json::Value {
+        let ms = |duration: Duration| duration.as_secs_f64() * 1000.0;
+        serde_json::json!({
+            "backUpMs": ms(self.back_up),
+            "flushStagedMs": ms(self.flush_staged),
+            "placeNewMs": ms(self.place_new),
+            "recordsMs": ms(self.records),
+            "flushNamesMs": ms(self.flush_names),
             "moved": self.moved,
             "copied": self.copied,
         })
@@ -158,7 +194,13 @@ impl TrackedReplacement {
         fail_at: Option<usize>,
         halt_in: Option<JournalPhase>,
     ) -> Self {
-        Self { faults: Faults { fail_at, halt_in }, ..Self::new(root) }
+        Self { faults: Faults { fail_at, halt_in, halt_at: None }, ..Self::new(root) }
+    }
+
+    /// Stop before the `step`-th pack effect as a power cut would, leaving everything as it is.
+    #[cfg(test)]
+    pub(crate) fn cut_before(root: PackTree, step: usize) -> Self {
+        Self { faults: Faults { halt_at: Some(step), ..Faults::default() }, ..Self::new(root) }
     }
 
     /// Return how many pack effects ran so far.
@@ -182,29 +224,57 @@ impl TrackedReplacement {
     /// Returns `busy` when an earlier replacement is unsettled. Any other failure restores
     /// the previous files before it is returned.
     pub(crate) fn apply(&self, plan: &ReplacementPlan<'_>) -> Result<()> {
+        let timings = self.apply_timed(plan)?;
+        tracing::info!(
+            target: "sugarsubstitute::pack_install",
+            operation = "install_phases",
+            timings = %timings.to_json(),
+            "The new SugarCubes files are in place"
+        );
+        Ok(())
+    }
+
+    /// [`Self::apply`], returning how long each phase took.
+    ///
+    /// The files the update changes are moved aside into the backup by name, after the two
+    /// ownership records are copied there durably and the journal names every file it will
+    /// move. The extracted files' bytes are flushed together, then moved into place by name,
+    /// and one flush makes all the new names durable before the journal says the version is
+    /// applied. A cut at any point leaves a journal the restore finishes from, or no journal
+    /// and an untouched pack.
+    pub(crate) fn apply_timed(&self, plan: &ReplacementPlan<'_>) -> Result<InstallTimings> {
+        let mut timings = InstallTimings::default();
         if self.root.root_kind()? != NodeKind::Missing {
-            return Err(PackInstallError::format(
-                ErrorCode::Busy,
-                "An earlier update has not been settled.",
-            ));
+            if self.journal()?.is_some() {
+                return Err(PackInstallError::format(
+                    ErrorCode::Busy,
+                    "An earlier update has not been settled.",
+                ));
+            }
+            // A transaction cut off before its journal existed never touched the pack.
+            self.discard_unstarted()?;
         }
         self.root.create()?;
-        let backed_up = match self
-            .write_journal(plan, JournalPhase::BackingUp, &[])
-            .and_then(|()| self.back_up(plan))
-        {
-            Ok(backed_up) => backed_up,
+        let phase = Instant::now();
+        let planned = match self.plan_backup(plan).and_then(|planned| {
+            self.keep_records(plan)?;
+            self.write_journal(plan, JournalPhase::BackingUp, &planned)?;
+            self.back_up(plan, &planned, &mut timings)?;
+            Ok(planned)
+        }) {
+            Ok(planned) => planned,
             Err(cause) => {
                 if !self.halted.get() {
-                    self.discard_unstarted()?;
+                    self.abandon(plan.target)?;
                 }
                 return Err(cause);
             }
         };
-        self.write_journal(plan, JournalPhase::Replacing, &backed_up)?;
+        timings.back_up = phase.elapsed();
         let replaced = self
-            .replace(plan)
-            .and_then(|()| self.write_journal(plan, JournalPhase::Applied, &backed_up));
+            .write_journal(plan, JournalPhase::Replacing, &planned)
+            .and_then(|()| self.replace(plan, &mut timings))
+            .and_then(|()| self.write_journal(plan, JournalPhase::Applied, &planned));
         if let Err(cause) = replaced {
             if !self.halted.get() {
                 tracing::warn!(
@@ -219,9 +289,14 @@ impl TrackedReplacement {
             }
             return Err(cause);
         }
-        Ok(())
+        Ok(timings)
     }
 
+    /// Undo a replacement that failed before its new files were placed: restore what was
+    /// moved aside when the journal exists, otherwise the pack was never touched.
+    fn abandon(&self, target: &PackTree) -> Result<()> {
+        if self.journal()?.is_some() { self.roll_back(target) } else { self.discard_unstarted() }
+    }
     /// Record that an applied replacement reached a later point of its trial.
     pub(crate) fn advance(&self, phase: JournalPhase) -> Result<()> {
         let Some(mut journal) = self.journal()? else {
@@ -333,7 +408,9 @@ impl TrackedReplacement {
     fn step(&self) -> Result<()> {
         let step = self.steps.get() + 1;
         self.steps.set(step);
-        if self.faults.halt_in.is_some() && self.faults.halt_in == self.phase.get() {
+        if (self.faults.halt_in.is_some() && self.faults.halt_in == self.phase.get())
+            || self.faults.halt_at == Some(step)
+        {
             self.halted.set(true);
             return Err(
                 io::Error::new(io::ErrorKind::Interrupted, "halted like a power cut").into()
@@ -345,17 +422,17 @@ impl TrackedReplacement {
         Ok(())
     }
 
-    fn back_up(&self, plan: &ReplacementPlan<'_>) -> Result<Vec<String>> {
+    /// Every file the update may change that is in the pack now: the backup's contents, named
+    /// in the journal before anything moves.
+    fn plan_backup(&self, plan: &ReplacementPlan<'_>) -> Result<Vec<String>> {
         let new_files: BTreeSet<String> = plan
             .new_entries
             .iter()
             .filter(|entry| !entry.is_directory())
             .map(EntryName::folded)
             .collect();
-        let backup = self.root.child(BACKUP_FILES)?;
-        backup.create()?;
         let mut seen = BTreeSet::new();
-        let mut backed_up = Vec::new();
+        let mut planned = Vec::new();
         let candidates = plan.old_entries.iter().chain(plan.new_entries);
         for entry in candidates.filter(|entry| !entry.is_directory()) {
             if !seen.insert(entry.folded()) {
@@ -368,34 +445,58 @@ impl TrackedReplacement {
                         "A folder sits where the update puts a file.",
                     ));
                 }
-                NodeKind::File => {
-                    self.step()?;
-                    if let Some((parent, _)) = entry.path().rsplit_once('/') {
-                        backup.create_directories(parent)?;
-                    }
-                    backup.copy_from(entry.path(), plan.target, entry.path())?;
-                    backed_up.push(entry.path().to_owned());
-                }
+                NodeKind::File => planned.push(entry.path().to_owned()),
                 _ => {}
             }
         }
+        Ok(planned)
+    }
+
+    /// Copy the ownership records into the transaction durably, before anything moves.
+    fn keep_records(&self, plan: &ReplacementPlan<'_>) -> Result<()> {
         for (name, kept) in BACKUP_RECORDS {
             if plan.target.kind(name)? == NodeKind::File {
                 self.step()?;
                 self.root.copy_from(kept, plan.target, name)?;
             }
         }
-        Ok(backed_up)
+        Ok(())
     }
 
-    fn replace(&self, plan: &ReplacementPlan<'_>) -> Result<()> {
-        let new_keys: BTreeSet<String> = plan.new_entries.iter().map(EntryName::folded).collect();
-        for entry in plan.old_entries.iter().filter(|entry| !entry.is_directory()) {
-            if !new_keys.contains(&entry.folded()) {
-                self.step()?;
-                plan.target.remove_file(entry.path())?;
+    /// Move each planned file aside by name; their bytes are already on the disk.
+    fn back_up(
+        &self,
+        plan: &ReplacementPlan<'_>,
+        planned: &[String],
+        timings: &mut InstallTimings,
+    ) -> Result<()> {
+        let backup = self.root.child(BACKUP_FILES)?;
+        backup.create()?;
+        for path in planned {
+            if plan.target.kind(path)? != NodeKind::File {
+                continue;
+            }
+            self.step()?;
+            if let Some((parent, _)) = path.rsplit_once('/') {
+                backup.create_directories(parent)?;
+            }
+            match backup.move_from(path, plan.target, path)? {
+                Transfer::Moved => timings.moved += 1,
+                Transfer::Copied => timings.copied += 1,
             }
         }
+        Ok(())
+    }
+
+    fn replace(&self, plan: &ReplacementPlan<'_>, timings: &mut InstallTimings) -> Result<()> {
+        let phase = Instant::now();
+        for entry in plan.new_entries.iter().filter(|entry| !entry.is_directory()) {
+            self.step()?;
+            plan.source.flush_file(entry.path())?;
+        }
+        timings.flush_staged = phase.elapsed();
+        let phase = Instant::now();
+        // Every file of the old version is in the backup now, so only its folders remain.
         remove_empty_directories(plan.target, plan.old_entries, plan.new_entries)?;
         let mut digests = FileDigests::new();
         for entry in plan.new_entries {
@@ -407,13 +508,24 @@ impl TrackedReplacement {
                 plan.target.create_directories(parent)?;
             }
             self.step()?;
-            plan.target.copy_from(entry.path(), plan.source, entry.path())?;
-            digests.insert(entry.path().to_owned(), plan.target.sha256(entry.path())?);
+            let digest = plan.source.sha256(entry.path())?;
+            match plan.target.move_from(entry.path(), plan.source, entry.path())? {
+                Transfer::Moved => timings.moved += 1,
+                Transfer::Copied => timings.copied += 1,
+            }
+            digests.insert(entry.path().to_owned(), digest);
         }
+        timings.place_new = phase.elapsed();
+        let phase = Instant::now();
         self.step()?;
-        write_ownership_records(plan.target, plan.new_entries, plan.to_version, &digests)
+        write_ownership_records(plan.target, plan.new_entries, plan.to_version, &digests)?;
+        timings.records = phase.elapsed();
+        let phase = Instant::now();
+        plan.target.flush_names()?;
+        self.root.flush_names()?;
+        timings.flush_names = phase.elapsed();
+        Ok(())
     }
-
     fn write_journal(
         &self,
         plan: &ReplacementPlan<'_>,
