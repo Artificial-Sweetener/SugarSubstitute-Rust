@@ -234,3 +234,94 @@ fn a_fresh_install_is_owned_and_refuses_another_pack() -> TestResult {
     assert_eq!(refused.err().as_ref().map(code), Some("pack-identity"));
     Ok(())
 }
+
+/// A pack with `count` extra files of about 16 KB, installed as `version`.
+fn sized_pack(version: &str, count: usize) -> BTreeMap<String, String> {
+    let mut files = pack_files(version);
+    for index in 0..count {
+        files.insert(
+            format!("web/part{:02}/file{index:04}.js", index % 40),
+            format!("// {version} {index}\n{}\n", "x".repeat(16_000)),
+        );
+    }
+    files
+}
+
+/// Measures putting the previous version of a pack back, by phase. The timings are recorded,
+/// never judged. Setting `SUGARSUBSTITUTE_RESTORE_TIMINGS` to a file keeps them and measures a
+/// pack the size of SugarCubes (2,000 files); `SUGARSUBSTITUTE_RESTORE_ROOT` picks the drive.
+/// Otherwise a 200-file pack keeps the suite quick.
+#[test]
+fn a_restore_records_its_phases_and_moves_every_file_back() -> TestResult {
+    let root = match std::env::var_os("SUGARSUBSTITUTE_RESTORE_ROOT") {
+        Some(base) => tempfile::tempdir_in(base)?,
+        None => tempfile::tempdir()?,
+    };
+    let timings_file = std::env::var_os("SUGARSUBSTITUTE_RESTORE_TIMINGS");
+    let count = if timings_file.is_some() { 2000 } else { 200 };
+    let pack = install_registry_pack(root.path(), &sized_pack("1.0.0", count))?;
+    let original = folder_files(&pack)?;
+    let staged = PackTree::at(&root.path().join("staged"))?;
+    let archive = zip_bytes(&file_members(&sized_pack("1.1.0", count)))?;
+    let new_entries =
+        archive::extract_registry_archive(&archive, &staged, ArchiveLimits::default())?.entries;
+    let target = PackTree::at(&pack)?;
+    let ownership::PackOwnership::Owned(owned) = ownership::inspect_pack_folder(&target)? else {
+        return Err("fixture is not owned".into());
+    };
+    let transaction =
+        replacement::TrackedReplacement::new(PackTree::at(&root.path().join("transaction"))?);
+    transaction.apply(&replacement::ReplacementPlan {
+        target: &target,
+        source: &staged,
+        old_entries: &owned.entries,
+        new_entries: &new_entries,
+        from_version: "1.0.0",
+        to_version: "1.1.0",
+    })?;
+    let timings = transaction.roll_back_timed(&target)?.ok_or("nothing was restored")?;
+    assert_eq!(folder_files(&pack)?, original);
+    assert!(!exists(&root.path().join("transaction")));
+    assert!(timings.moved >= count, "the backup sits beside the pack, so every file is moved");
+    let record = serde_json::json!({
+        "files": original.len(),
+        "restore": timings.to_json(),
+    });
+    if let Some(path) = timings_file {
+        std::fs::write(path, serde_json::to_vec_pretty(&record)?)?;
+    }
+    Ok(())
+}
+/// A restore cut off before any of its effects finishes the same restore when it runs again,
+/// so files already moved back are never lost.
+#[test]
+fn a_restore_cut_off_at_any_point_finishes_when_repeated() -> TestResult {
+    let clean = Update::new()?;
+    let counted = replacement::TrackedReplacement::with_faults(
+        PackTree::at(&clean.transaction_root())?,
+        None,
+        None,
+    );
+    clean.apply(&counted)?;
+    let applied = counted.effects();
+    counted.roll_back(&PackTree::at(&clean.pack())?)?;
+    assert_eq!(folder_files(&clean.pack())?, clean.original);
+    let restoring = counted.effects() - applied;
+    assert!(restoring > 3);
+    for cut in 1..=restoring {
+        let update = Update::new()?;
+        let transaction = replacement::TrackedReplacement::with_faults(
+            PackTree::at(&update.transaction_root())?,
+            Some(applied + cut),
+            None,
+        );
+        update.apply(&transaction)?;
+        let target = PackTree::at(&update.pack())?;
+        assert!(transaction.roll_back(&target).is_err(), "effect {cut} did not fail");
+        replacement::TrackedReplacement::new(PackTree::at(&update.transaction_root())?)
+            .roll_back(&target)?;
+        assert_eq!(folder_files(&update.pack())?, update.original, "effect {cut}");
+        assert!(!exists(&update.transaction_root()), "effect {cut} left its transaction");
+    }
+    Ok(())
+}

@@ -20,9 +20,14 @@ use super::digest_record::FileDigests;
 use super::entry::{DIGEST_RECORD_NAME, EntryName, TRACKING_FILE_NAME, parse_entry};
 use super::error::{ErrorCode, PackInstallError, Result};
 use super::ownership::write_ownership_records;
-use crate::durable_storage::pack_tree::{NodeKind, PackTree};
+use crate::durable_storage::pack_tree::{NodeKind, PackTree, Transfer};
 use serde::{Deserialize, Serialize};
-use std::{cell::Cell, collections::BTreeSet, io};
+use std::{
+    cell::Cell,
+    collections::BTreeSet,
+    io,
+    time::{Duration, Instant},
+};
 
 const JOURNAL: &str = "journal.json";
 const BACKUP_FILES: &str = "files";
@@ -90,6 +95,38 @@ pub(super) struct Journal {
 struct Faults {
     fail_at: Option<usize>,
     halt_in: Option<JournalPhase>,
+}
+
+/// How long each phase of putting the previous files back took, and how they came back.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct RestoreTimings {
+    pub(crate) remove_new: Duration,
+    pub(crate) restore_files: Duration,
+    pub(crate) flush: Duration,
+    pub(crate) restore_records: Duration,
+    pub(crate) remove_directories: Duration,
+    pub(crate) discard_transaction: Duration,
+    /// Files renamed back from the backup on the same drive.
+    pub(crate) moved: usize,
+    /// Files copied back because the backup is on another drive.
+    pub(crate) copied: usize,
+}
+
+impl RestoreTimings {
+    /// The timings in milliseconds, for a log line or a measurement record.
+    pub(crate) fn to_json(&self) -> serde_json::Value {
+        let ms = |duration: Duration| duration.as_secs_f64() * 1000.0;
+        serde_json::json!({
+            "removeNewMs": ms(self.remove_new),
+            "restoreFilesMs": ms(self.restore_files),
+            "flushMs": ms(self.flush),
+            "restoreRecordsMs": ms(self.restore_records),
+            "removeDirectoriesMs": ms(self.remove_directories),
+            "discardTransactionMs": ms(self.discard_transaction),
+            "moved": self.moved,
+            "copied": self.copied,
+        })
+    }
 }
 
 /// The journaled replacement transaction kept in one transaction folder.
@@ -219,32 +256,80 @@ impl TrackedReplacement {
 
     /// Restore the backed-up files; safe to repeat after an interruption.
     pub(crate) fn roll_back(&self, target: &PackTree) -> Result<()> {
+        if let Some(timings) = self.roll_back_timed(target)? {
+            tracing::info!(
+                target: "sugarsubstitute::pack_install",
+                operation = "restore_phases",
+                timings = %timings.to_json(),
+                "The previous SugarCubes files are back in place"
+            );
+        }
+        Ok(())
+    }
+
+    /// [`Self::roll_back`], returning how long each phase took when a journal was found.
+    ///
+    /// The backup lives in the host's storage beside the pack, so each backed-up file is
+    /// renamed back rather than copied: its bytes reached the disk when it was backed up, and
+    /// one flush makes all the renames durable before the transaction is removed. A file
+    /// already moved back before an interruption is no longer in the backup and is left as it
+    /// is, and only files the new version added are removed, so a repeat after a power cut
+    /// finishes the same restore.
+    pub(crate) fn roll_back_timed(&self, target: &PackTree) -> Result<Option<RestoreTimings>> {
         let Some(journal) = self.journal()? else {
-            return Ok(());
+            return Ok(None);
         };
+        let mut timings = RestoreTimings::default();
         let old_entries = entries(&journal.old_entries)?;
         let new_entries = entries(&journal.new_entries)?;
+        let backed_up = entries(&journal.backed_up)?;
+        let restored: BTreeSet<String> = backed_up.iter().map(EntryName::folded).collect();
         let backup = self.root.child(BACKUP_FILES)?;
-        for entry in new_entries.iter().filter(|entry| !entry.is_directory()) {
+        let phase = Instant::now();
+        for entry in new_entries
+            .iter()
+            .filter(|entry| !entry.is_directory() && !restored.contains(&entry.folded()))
+        {
+            self.step()?;
             target.remove_file(entry.path())?;
         }
-        for path in &journal.backed_up {
-            if let Some((parent, _)) = path.rsplit_once('/') {
+        timings.remove_new = phase.elapsed();
+        let phase = Instant::now();
+        for entry in &backed_up {
+            if backup.kind(entry.path())? != NodeKind::File {
+                continue;
+            }
+            self.step()?;
+            if let Some((parent, _)) = entry.path().rsplit_once('/') {
                 target.create_directories(parent)?;
             }
-            target.copy_from(path, &backup, path)?;
+            match target.move_from(entry.path(), &backup, entry.path())? {
+                Transfer::Moved => timings.moved += 1,
+                Transfer::Copied => timings.copied += 1,
+            }
         }
+        timings.restore_files = phase.elapsed();
+        let phase = Instant::now();
         for (name, kept) in BACKUP_RECORDS {
+            self.step()?;
             if self.root.kind(kept)? == NodeKind::File {
                 target.copy_from(name, &self.root, kept)?;
             } else {
                 target.remove_file(name)?;
             }
         }
+        timings.restore_records = phase.elapsed();
+        let phase = Instant::now();
         remove_empty_directories(target, &new_entries, &old_entries)?;
-        self.root.remove_all().map_err(PackInstallError::from)
+        timings.remove_directories = phase.elapsed();
+        let phase = Instant::now();
+        target.flush_names()?;
+        timings.flush = phase.elapsed();
+        let phase = Instant::now();
+        self.root.remove_all().map_err(PackInstallError::from)?;
+        timings.discard_transaction = phase.elapsed();
+        Ok(Some(timings))
     }
-
     fn step(&self) -> Result<()> {
         let step = self.steps.get() + 1;
         self.steps.set(step);
