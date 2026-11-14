@@ -214,3 +214,117 @@ fn late_original_grace_admission_progresses_actual_inert_cleanup_without_another
     }
     Ok(())
 }
+
+/// A SugarCubes observation admitted while an attempt ends, here for its failed page after
+/// "Cancel loading", finishes in the cleanup scope. Its terminal result is taken only by the
+/// pack owner, so the attempt's record must stay unsettled until it is: a record that settled
+/// first left that finished job unacknowledged, and the execution owner, and with it the
+/// coordinator, could never stop.
+#[test]
+fn an_attempt_settles_only_after_its_finished_sugarcubes_job_is_acknowledged() -> Result<()> {
+    let clock = Arc::new(tests::TestClock::default());
+    let wake = Arc::new(crate::updates::test_support::Wake::default());
+    let mut executor = sugarsubstitute_execution::ExecutionOwner::new(clock.clone(), wake.clone())?;
+    let client = executor.client();
+    let scopes = ScopeSequence::new();
+    let native =
+        client.create_native_scope(ScopeSpec { id: scopes.allocate()?, deadline: None }, None)?;
+    let cleanup =
+        client.create_scope(ScopeSpec { id: scopes.allocate()?, deadline: None }, None)?;
+    let scope =
+        client.create_scope(ScopeSpec { id: scopes.allocate()?, deadline: None }, Some(&native))?;
+    let jobs = JobSequence::new();
+    let mut authority = CoordinatorAuthority::new(
+        sugarsubstitute_contracts::coordinator_entry::EntrySetupBudget::new(Moment::from_nanos(0))?,
+        None,
+    )?;
+    let mut held = tests::unadmitted_policy()?;
+    let backend = held.backend.as_mut();
+    let run = RunKey {
+        owner: tests::key()?,
+        instance: InstanceId::new(1)?,
+        generation: RunGeneration::new(1)?,
+    };
+    let connection = ConnectionId::new(1)?;
+    let peer_registration = ClientRegistration {
+        run,
+        connection,
+        launch: sugarsubstitute_contracts::startup::LaunchId::new(1)?,
+        profile: sugarsubstitute_contracts::configuration::ProfileId::new("Pack_1".into())?,
+    };
+    backend.policy.enroll_run(sugarsubstitute_contracts::lifecycle::RunEnrollment {
+        run: peer_registration.run,
+        launch: peer_registration.launch,
+        profile: peer_registration.profile.clone(),
+    })?;
+    backend.register_run(peer_registration)?;
+    let target = BackendTarget::Attached(LoopbackOrigin::parse("http://127.0.0.1:8188", 8188)?);
+    let produced = backend.policy.request(
+        ClientBinding { run, connection },
+        ResourceRequest {
+            run,
+            connection,
+            id: RequestId::new(1)?,
+            command: ResourceCommand::Acquire(target.clone()),
+        },
+    )?;
+    let Some(ResourceEffect::Prepare { resource: key, .. }) = produced.effects.first() else {
+        return Err("Actual preparation generation absent".into());
+    };
+    let key = *key;
+    backend.records[0] = Some(cutoff_tests::creator(
+        key,
+        target,
+        ConnectionBudget::new(ConnectionBudgetKind::Attached, Moment::from_nanos(0))?,
+        scope,
+    )?);
+    backend.begin_delivery()?;
+    backend.observe(ResourceObservation::Failed {
+        resource: key,
+        failure: LifecycleFailure::new(
+            LifecycleFailureCode::Preparation,
+            Box::new(std::io::Error::from_raw_os_error(122)),
+        ),
+    })?;
+    // Past grace, before the settle cutoff: cleanup runs at once.
+    clock.set(Moment::from_nanos(13_000_000_000));
+    let mut resources = BackendResources {
+        client: &client,
+        native: &native,
+        cleanup: &cleanup,
+        jobs: &jobs,
+        scopes: &scopes,
+        authority: &mut authority,
+        capture: None,
+    };
+    let spec = CoordinatorBackend::spec(
+        &resources,
+        Operation::Infrastructure,
+        JobClass::InfrastructureLifecycle,
+        1024 * 1024,
+        Some(Moment::from_nanos(43_000_000_000)),
+    )?;
+    let job = client
+        .submit_blocking(&cleanup, spec, |_| Ok(super::pack_update::PackJobResult::Observed))?;
+    backend.pack.hold(job, cleanup.id(), spec);
+    let original = ShutdownBudget::new(Moment::from_nanos(0))?;
+    backend.begin_cleanup(key, Some(original), &mut resources)?;
+    let mut turns = 0;
+    crate::updates::test_support::observe(&wake, || {
+        if backend.attempt_settled(key) {
+            return Ok(true);
+        }
+        assert!(!backend.pack.idle(), "the record settles only after the job is taken");
+        turns += 1;
+        client.drain_completions(std::num::NonZeroUsize::MIN.saturating_add(31))?;
+        backend.cleanup(0, &mut resources).map_err(|cause| -> Box<dyn Error> { cause })?;
+        Ok(backend.attempt_settled(key))
+    })
+    .map_err(|cause| cause.to_string())?;
+    assert!(turns > 0, "the record waited for the running SugarCubes job");
+    assert!(backend.pack.idle());
+    executor.request_shutdown(Moment::from_nanos(14_000_000_000));
+    let progress = executor.poll_shutdown()?;
+    assert!(progress.unresolved_job_ids.is_empty(), "no job is left unacknowledged");
+    Ok(())
+}

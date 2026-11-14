@@ -80,6 +80,9 @@ impl CoordinatorBackend {
         }
         record.cleanup_failure.observe(now, budget);
         self.pack.cancel(record.key);
+        // A SugarCubes job admitted for this attempt, such as the observation of its failed
+        // page, is acknowledged here; the record settles only once none is outstanding.
+        self.pack.advance(resources)?;
         if now >= budget.settle_until {
             return self.finish_cleanup(at, resources);
         }
@@ -232,6 +235,7 @@ impl CoordinatorBackend {
         });
         if record.source_closed
             && !self.pack.gates(record.key)
+            && self.pack.idle()
             && record.campaign.settled()
             && output_settled
             && record.resolution.is_none()

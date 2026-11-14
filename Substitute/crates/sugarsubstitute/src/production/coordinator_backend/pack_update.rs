@@ -128,6 +128,24 @@ impl PackUpdates {
         self.schedule.gates(key)
     }
 
+    /// Whether no SugarCubes job is outstanding: none was admitted, or its terminal result was
+    /// taken. Only this owner takes it, so the backend settles no record before then; a result
+    /// left untaken keeps the execution owner, and so the coordinator, from ever stopping.
+    pub(super) fn idle(&self) -> bool {
+        self.running.is_none()
+    }
+
+    /// Hold `job` as the running SugarCubes job, as `pump` admits one.
+    #[cfg(test)]
+    pub(super) fn hold(
+        &mut self,
+        job: OwnedJob<PackJobResult, PackJobError>,
+        scope: sugarsubstitute_contracts::execution::ScopeId,
+        spec: JobSpec,
+    ) {
+        self.running = Some(Running { job, scope, spec });
+    }
+
     /// `key` is being stopped: cancel the running job if it is the one holding `key`. It
     /// observes cancellation between steps, never mid-replace; other jobs run on.
     pub(super) fn cancel(&self, key: ResourceKey) {
