@@ -353,3 +353,31 @@ fn a_restored_sugarcubes_shows_the_previous_version_line_with_its_report() {
     assert_eq!(caption.activate(DISMISS), (true, None));
     assert_eq!(shown(&caption.view(en)), vec![UPDATE], "the report stays available");
 }
+
+/// An app update and a SugarCubes rollback in one start each get their line, in turn: the app
+/// update first, then, once dismissed, the previous SugarCubes version line with its report.
+#[test]
+fn an_app_update_and_a_sugarcubes_rollback_show_their_lines_in_turn() {
+    use sugarsubstitute_contracts::update::pack::{PackOutcome, PackUpdateReport};
+    let restored = PackUpdateReport {
+        from: Some("0.15.6".into()),
+        to: Some("0.15.3".into()),
+        reason: Some("did-not-start".into()),
+        ..PackUpdateReport::new(PackOutcome::Restored)
+    };
+    let mut caption = CaptionUpdates::default();
+    assert!(caption.notify(Notice::update(crate::UpdateNotice::Updated {
+        version: "0.5.0".into(),
+        changelog: None,
+    })));
+    assert!(!caption.notify(Notice::update(crate::UpdateNotice::Sugarcubes(restored.clone()))));
+    let en = messages("en");
+    assert_eq!(caption.view(en).line.text, "Updated to version 0.5.0");
+    assert_eq!(shown(&caption.view(en)), vec![LINE, DISMISS]);
+    assert_eq!(caption.activate(DISMISS), (true, None));
+    let view = caption.view(en);
+    assert_eq!(Some(view.line.text.to_string()), restored.notice(en.pack_updates));
+    assert_eq!(shown(&view), vec![LINE, LINK, DISMISS]);
+    assert_eq!(caption.activate(DISMISS), (true, None));
+    assert_eq!(shown(&caption.view(en)), Vec::<u16>::new());
+}

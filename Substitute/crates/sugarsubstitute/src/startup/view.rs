@@ -26,6 +26,8 @@ pub(crate) struct StartupView {
     messages: &'static Messages,
     controls: [AccessibleControl; 3],
     retry_requested: bool,
+    /// A retry replaced the launch's first attempt, so its update has already been applied.
+    retried: bool,
     published_reveal: f64,
     disclosure: disclosure::Disclosure,
     wait_started: Duration,
@@ -67,6 +69,7 @@ impl StartupView {
             reduced_motion: presentation.reduced_motion(),
             pressed: None,
             retry_requested: false,
+            retried: false,
             published_reveal: 0.0,
             disclosure: disclosure::Disclosure::new(),
             messages,
@@ -189,6 +192,16 @@ impl StartupView {
                 _ => sugarsubstitute_splash::StartupStatus::Loading,
             },
         };
+    }
+    /// A retry replaced the launch's first attempt.
+    pub(crate) fn begin_retry(&mut self) {
+        self.retried = true;
+        self.phase(StartupPhase::SplashFirstFrame);
+    }
+    /// Whether a retry replaced the launch's first attempt; the version this launch updated to
+    /// is then already running, so its "Updating to version" line is not shown again.
+    pub(crate) const fn retried(&self) -> bool {
+        self.retried
     }
     /// Show `status` in place of the phase's own line; the Retry control is offered only while
     /// the shown line offers retry.
