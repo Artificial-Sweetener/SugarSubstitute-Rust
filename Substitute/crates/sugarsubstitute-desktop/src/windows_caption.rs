@@ -193,7 +193,7 @@ fn paint_button(item: &DRAWITEMSTRUCT, caption: Caption, hot: bool) -> Result<()
         } else if item.CtlID == u32::from(crate::main_updates::UPDATE) {
             let warning = caption.update == crate::main_updates::UpdateGlyph::Warning;
             pixels::with_pixels(handle, item.rcItem, |pixels| {
-                glyphs::update(pixels, dpi, glyphs::update_tint(warning, caption.dark));
+                glyphs::update(pixels, dpi, warning, glyphs::update_tint(warning, caption.dark));
                 Ok(())
             })?;
         } else {

@@ -31,13 +31,14 @@ use super::*;
 use std::{path::PathBuf, time::Duration};
 use sugarsubstitute_supervision::{
     pack_install::{
-        HttpReleaseSources, PackSchedule, PackWork, PackWorkEnded, Restored,
+        HttpReleaseSources, PackSchedule, PackWork, PackWorkEnded, PackWorkKind, Restored,
         STARTUP_UPDATE_RESERVATION_BYTES, StartupOutcome, StartupStep, StartupUpdate, TrialEvent,
     },
     update_http::{self, Http},
 };
 
-/// The longest the splash waits for a SugarCubes update before starting without it.
+/// The longest the splash waits for a SugarCubes update, or a restore of the previous
+/// version, before starting without it.
 pub(super) const PACK_UPDATE_LIMIT: Duration = Duration::from_secs(300);
 /// The longest one trial observation may take; it writes one small journal.
 const PACK_OBSERVATION_LIMIT: Duration = Duration::from_secs(30);
@@ -260,12 +261,13 @@ impl PackUpdates {
             && let (Some(folder), Some(storage)) = (self.folder.clone(), self.storage.clone())
             && let Some((work, gates)) = self.schedule.start_next()
         {
-            let (bytes, limit) = match work {
-                PackWork::Update { .. } => (
+            let (bytes, limit) = match work.kind() {
+                PackWorkKind::Download => (
                     STARTUP_UPDATE_RESERVATION_BYTES + update_http::RESERVATION_BYTES,
                     PACK_UPDATE_LIMIT,
                 ),
-                _ => (PACK_OBSERVATION_BYTES, PACK_OBSERVATION_LIMIT),
+                PackWorkKind::Replace => (STARTUP_UPDATE_RESERVATION_BYTES, PACK_UPDATE_LIMIT),
+                PackWorkKind::Record => (PACK_OBSERVATION_BYTES, PACK_OBSERVATION_LIMIT),
             };
             let limit = resources.client.now()?.checked_add(limit)?;
             let deadline = match self.until {

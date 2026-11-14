@@ -345,3 +345,30 @@ pub(super) fn updating<B: StartupBackend>(
     }
     sugarsubstitute_splash::UpdateVersion::new(status.applying()?).map(StartupStatus::Updating)
 }
+
+/// The retry line when the attempt's page failed because SugarCubes could not load: it names
+/// SugarCubes, and says the retry starts the previous version when this start had just updated
+/// SugarCubes, since that update is then restored before the retry. Other failures keep the
+/// ordinary retry line.
+pub(super) fn sugarcubes_retry<B: StartupBackend>(
+    child: &B,
+    session: &sugarsubstitute_application::startup::StartupSession,
+    current: sugarsubstitute_splash::StartupStatus,
+) -> Option<sugarsubstitute_splash::StartupStatus> {
+    use sugarsubstitute_contracts::{startup::PageFailure, update::pack::PackOutcome};
+    use sugarsubstitute_splash::StartupStatus;
+    if current != StartupStatus::RetryReady
+        || session.failure().map(|failure| failure.page_failure()) != Some(PageFailure::Sugarcubes)
+    {
+        return None;
+    }
+    let updated = child
+        .update_status()
+        .and_then(|status| status.sugarcubes().report())
+        .is_some_and(|report| report.outcome == PackOutcome::Updated);
+    Some(if updated {
+        StartupStatus::SugarcubesRetryPrevious
+    } else {
+        StartupStatus::SugarcubesRetryReady
+    })
+}

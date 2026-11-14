@@ -177,3 +177,12 @@ fn a_cancelled_startup_judges_nothing_in_an_attached_comfyui() {
     assert_eq!(schedule.start_next(), None);
     assert!(!schedule.prepare(2, false));
 }
+
+#[test]
+fn a_restore_is_given_an_installs_budget_and_only_observations_are_records() {
+    assert_eq!(PackWork::Update { managed: true }.kind(), PackWorkKind::Download);
+    assert_eq!(PackWork::Update { managed: false }.kind(), PackWorkKind::Download);
+    assert_eq!(PackWork::BackendStopped.kind(), PackWorkKind::Replace);
+    assert_eq!(PackWork::RestoreFailedPage.kind(), PackWorkKind::Replace);
+    assert_eq!(PackWork::Observe(TrialEvent::PageFailed).kind(), PackWorkKind::Record);
+}

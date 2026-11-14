@@ -43,6 +43,20 @@ pub enum StartupStatus {
     Starting,
     /// SugarCubes is being updated before the backend loads it.
     UpdatingSugarcubes,
+    /// The page failed because SugarCubes could not load, and the application can accept retry.
+    SugarcubesRetryReady,
+    /// SugarCubes, just updated, could not load; a retry starts the version before the update.
+    SugarcubesRetryPrevious,
+}
+
+impl StartupStatus {
+    /// Whether the status line offers the retry the application can accept now.
+    pub const fn offers_retry(self) -> bool {
+        matches!(
+            self,
+            Self::RetryReady | Self::SugarcubesRetryReady | Self::SugarcubesRetryPrevious
+        )
+    }
 }
 
 /// Supply portable appearance state; process and connection state stay elsewhere.

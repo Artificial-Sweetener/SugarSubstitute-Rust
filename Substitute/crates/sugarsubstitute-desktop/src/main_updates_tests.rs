@@ -289,8 +289,9 @@ fn a_sugarcubes_update_shows_one_plain_line_and_opens_its_report() {
     caption.notify(Notice::update(crate::UpdateNotice::Sugarcubes(could_not_check.clone())));
     let en = messages("en");
     let view = caption.view(en);
-    assert_eq!(shown(&view), vec![LINE, DISMISS]);
+    assert_eq!(shown(&view), vec![LINE, LINK, DISMISS]);
     assert_eq!(view.line.text, "Couldn't check for a SugarCubes update.");
+    assert_eq!(view.link.label, "Show the report");
     for locale in sugarsubstitute_contracts::localization::LOCALES {
         assert_eq!(
             caption.view(locale).line.text,
@@ -313,4 +314,39 @@ fn a_sugarcubes_update_shows_one_plain_line_and_opens_its_report() {
     let mut caption = CaptionUpdates::default();
     caption.notify(Notice::update(crate::UpdateNotice::Sugarcubes(updated)));
     assert_eq!(caption.view(en).line.text, "SugarCubes updated to version 1.1.0");
+}
+
+/// A restored SugarCubes says the previous version is running in plain words, and the report
+/// stays available from that line; the warning button opens the same report.
+#[test]
+fn a_restored_sugarcubes_shows_the_previous_version_line_with_its_report() {
+    use sugarsubstitute_contracts::update::pack::{
+        PackOutcome, PackUpdateReport, PackUpdateStatus,
+    };
+    let restored = PackUpdateReport {
+        from: Some("0.15.7".into()),
+        to: Some("0.15.3".into()),
+        reason: Some("page-did-not-load".into()),
+        ..PackUpdateReport::new(PackOutcome::Restored)
+    };
+    let mut status = UpdateStatus::default();
+    status.observe_sugarcubes(PackUpdateStatus::Finished(restored.clone()));
+    let mut caption = CaptionUpdates::default();
+    caption.observe(feed(Some(&status)));
+    caption.notify(Notice::update(crate::UpdateNotice::Sugarcubes(restored)));
+    let en = messages("en");
+    let view = caption.view(en);
+    assert_eq!(shown(&view), vec![UPDATE, LINE, LINK, DISMISS]);
+    assert_eq!(view.glyph, UpdateGlyph::Warning);
+    assert_eq!(view.line.text, "The previous SugarCubes version is running.");
+    assert_eq!(view.link.label, "Show the report");
+    for locale in sugarsubstitute_contracts::localization::LOCALES {
+        let view = caption.view(locale);
+        assert_eq!(view.line.text, locale.pack_updates.previous_running, "{}", locale.id);
+        assert_eq!(view.link.label, locale.pack_updates.show_report, "{}", locale.id);
+    }
+    assert_eq!(caption.activate(LINK), (false, Some(UpdateIntent::OpenReport)));
+    assert_eq!(caption.activate(UPDATE), (false, Some(UpdateIntent::OpenReport)));
+    assert_eq!(caption.activate(DISMISS), (true, None));
+    assert_eq!(shown(&caption.view(en)), vec![UPDATE], "the report stays available");
 }

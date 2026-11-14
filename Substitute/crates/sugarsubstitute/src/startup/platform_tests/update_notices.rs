@@ -172,3 +172,79 @@ fn a_coordinator_close_request_closes_the_window_normally() -> BackendResult<()>
     assert_eq!(host.close_reason, CloseReason::Close, "one close");
     Ok(())
 }
+
+/// A session whose page reported `code` and whose cleanup settled, ready for retry.
+fn failed_page(code: &str) -> BackendResult<StartupSession> {
+    use sugarsubstitute_contracts::{
+        configuration::{
+            ConnectionConfiguration, LoopbackOrigin, Presentation, StartupConfiguration,
+        },
+        execution::Generation,
+        startup::{LaunchId, ReadinessReceipt, StartupEvent, StartupObservation},
+    };
+    let launch = LaunchId::new(1)?;
+    let origin = LoopbackOrigin::parse("http://127.0.0.1:8188", 8188)?;
+    let mut session = StartupSession::new(
+        launch,
+        Generation::new(1)?,
+        StartupConfiguration::new(
+            ConnectionConfiguration::Attach(origin),
+            sugarsubstitute_contracts::configuration::ProfileId::new("retry-line".into())?,
+            Presentation::new("en", sugarsubstitute_contracts::configuration::Theme::Dark, true)?,
+        ),
+    );
+    let receipt = ReadinessReceipt::parse(format!(r#"{{"schema_version":1,"launch_id":1,"navigation_generation":1,"outcome":{{"status":"failed","failure":{{"code":"{code}","detail":"fixture"}}}}}}"#).as_bytes())?;
+    for observation in [
+        StartupObservation::SplashPresented,
+        StartupObservation::ConnectionReady(origin),
+        StartupObservation::FrontendNavigationStarted(Generation::new(1)?),
+        StartupObservation::FrontendReceipt(receipt),
+        StartupObservation::ConnectionSettled,
+    ] {
+        session.observe(StartupEvent::new(launch, observation))?;
+    }
+    Ok(session)
+}
+
+/// When SugarCubes could not load, the retry line says so; after this start updated SugarCubes
+/// it also says the retry starts the previous version. Any other failure keeps the ordinary
+/// line, and lines other than the retry are left alone.
+#[test]
+fn the_retry_line_names_sugarcubes_when_it_could_not_load() -> BackendResult<()> {
+    let mut host = host()?;
+    let sugarcubes = failed_page("sugarcubes_unavailable")?;
+    assert_eq!(
+        window_content::sugarcubes_retry(&host.child, &sugarcubes, StartupStatus::RetryReady),
+        Some(StartupStatus::SugarcubesRetryReady)
+    );
+    let mut status = UpdateStatus::default();
+    status.observe_sugarcubes(PackUpdateStatus::Finished(PackUpdateReport {
+        from: Some("0.15.3".into()),
+        to: Some("0.15.7".into()),
+        ..PackUpdateReport::new(PackOutcome::Updated)
+    }));
+    host.child.update_status = Some(status);
+    for code in ["sugarcubes_unavailable", "sugarcubes_failed"] {
+        assert_eq!(
+            window_content::sugarcubes_retry(
+                &host.child,
+                &failed_page(code)?,
+                StartupStatus::RetryReady
+            ),
+            Some(StartupStatus::SugarcubesRetryPrevious),
+            "{code}"
+        );
+    }
+    let other = failed_page("frontend_unavailable")?;
+    assert_eq!(
+        window_content::sugarcubes_retry(&host.child, &other, StartupStatus::RetryReady),
+        None
+    );
+    for current in [StartupStatus::Settling, StartupStatus::CleanupFailed, StartupStatus::Loading] {
+        assert_eq!(window_content::sugarcubes_retry(&host.child, &sugarcubes, current), None);
+    }
+    assert!(StartupStatus::SugarcubesRetryPrevious.offers_retry());
+    assert!(StartupStatus::SugarcubesRetryReady.offers_retry());
+    assert!(!StartupStatus::Settling.offers_retry());
+    Ok(())
+}

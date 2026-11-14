@@ -112,6 +112,16 @@ impl Notice {
         }
     }
 
+    /// Whether the line offers a link: the release notes of a new version, or the report of a
+    /// SugarCubes update that needs attention, such as the previous version running again.
+    fn links(&self) -> bool {
+        match self {
+            Self::Updated { changelog, .. } => changelog.is_some(),
+            Self::Sugarcubes(report) => report.needs_attention(),
+            Self::NotSaved { .. } | Self::PreviousVersionRunning | Self::Repairing => false,
+        }
+    }
+
     /// The line for a start-up update message.
     pub(crate) fn update(notice: crate::UpdateNotice) -> Self {
         match notice {
@@ -226,6 +236,9 @@ impl CaptionUpdates {
                 Some(Notice::Updated { changelog: Some(url), .. }) => {
                     (false, Some(UpdateIntent::OpenChangelog(url.clone())))
                 }
+                Some(Notice::Sugarcubes(report)) if report.needs_attention() => {
+                    (false, Some(UpdateIntent::OpenReport))
+                }
                 _ => (false, None),
             },
             (DISMISS, _) => {
@@ -243,13 +256,7 @@ impl CaptionUpdates {
             UPDATE => quiet && self.feed.glyph != UpdateGlyph::Hidden,
             OFFER => quiet && self.feed.glyph == UpdateGlyph::Ready && self.offer_open,
             LINE => !quiet || !self.notices.is_empty(),
-            LINK => {
-                quiet
-                    && matches!(
-                        self.notices.front(),
-                        Some(Notice::Updated { changelog: Some(_), .. })
-                    )
-            }
+            LINK => quiet && self.notices.front().is_some_and(Notice::links),
             DISMISS => quiet && !self.notices.is_empty(),
             _ => false,
         }
@@ -300,7 +307,14 @@ impl CaptionUpdates {
             ),
             offer: PeerView::shown(self.shows(OFFER), restart),
             line,
-            link: PeerView::shown(self.shows(LINK), updates.whats_new),
+            link: PeerView::shown(
+                self.shows(LINK),
+                if matches!(self.notices.front(), Some(Notice::Sugarcubes(_))) {
+                    words.pack_updates.show_report
+                } else {
+                    updates.whats_new
+                },
+            ),
             dismiss: PeerView::shown(self.shows(DISMISS), updates.dismiss),
         }
     }
