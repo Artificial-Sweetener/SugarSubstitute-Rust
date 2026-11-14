@@ -10,10 +10,15 @@ pub mod bulk_channel_diagnostic;
 #[allow(unsafe_code)]
 mod windows_activation;
 #[cfg(target_os = "windows")]
+#[allow(unsafe_code)]
+mod windows_handoff;
+#[cfg(target_os = "windows")]
 pub use windows_activation::{
     ProcessError, ProcessResponsiveness, activate_desktop_process, end_process,
     probe_process_responsiveness,
 };
+#[cfg(target_os = "windows")]
+pub use windows_handoff::{application_window_shown_since, system_time_100ns};
 #[allow(unsafe_code)]
 mod file_dialog;
 pub use file_dialog::SelectionKind;

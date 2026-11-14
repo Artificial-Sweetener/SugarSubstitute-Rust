@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Prepare the launcher's "Starting…" notice from the splash when a launch takes a while.
+//! Prepare a small waiting notice from the splash: the launcher's "Starting…" notice when a
+//! launch takes a while, and the coordinator's "Updating to version X…" while it restarts into
+//! an update until the next copy shows its first window.
 //!
 //! [`StartingNotice`] decides from the injected clock when the notice is wanted. Once the
 //! desktop pump reports the notice window's surface, one splash frame is prepared for it on
@@ -33,7 +35,7 @@ type Initialization = OwnedJob<Result<SplashRenderer, RenderError>, PreparationE
 type Preparation = OwnedJob<SplashPreparationResult, PreparationError>;
 
 /// What the launcher lends the notice for one turn.
-pub(super) struct Resources<'a> {
+pub(crate) struct Resources<'a> {
     pub client: &'a ExecutionClient,
     pub scope: &'a Scope,
     pub jobs: &'a crate::job_sequence::JobSequence,
@@ -41,7 +43,7 @@ pub(super) struct Resources<'a> {
     pub until: Moment,
 }
 
-pub(super) struct Notice {
+pub(crate) struct Notice {
     policy: StartingNotice,
     /// What the notice says: starting, or updating to the version this launch starts.
     status: StartupStatus,
@@ -54,28 +56,43 @@ pub(super) struct Notice {
     frame: Option<PreparedFrame>,
     /// A frame was already prepared for the reported surface.
     prepared: bool,
+    /// The pump took a frame: it shows the window in the same turn.
+    presented: bool,
     failed: bool,
 }
 
 impl Notice {
     /// A notice that may appear at the budget's notice moment.
-    pub(super) fn new(budget: LauncherBudget) -> Self {
+    pub(crate) fn new(budget: LauncherBudget) -> Self {
+        Self::waiting(
+            StartingNotice::new(budget),
+            Instant::now().checked_add(LauncherBudget::NOTICE_DELAY),
+        )
+    }
+
+    /// A notice that appears as soon as its surface is drawn, from `now` on.
+    pub(crate) fn immediate(now: Moment) -> Self {
+        Self::waiting(StartingNotice::at(now), Some(Instant::now()))
+    }
+
+    fn waiting(policy: StartingNotice, wake: Option<Instant>) -> Self {
         Self {
-            policy: StartingNotice::new(budget),
+            policy,
             status: StartupStatus::Starting,
-            wake: Instant::now().checked_add(LauncherBudget::NOTICE_DELAY),
+            wake,
             surface: None,
             initialization: None,
             preparation: None,
             frame: None,
             prepared: false,
+            presented: false,
             failed: false,
         }
     }
 
     /// Say `Updating to version X…` while this launch starts ersion as a trial, or starting
     /// when it starts the accepted version. A change prepares the frame again.
-    pub(super) fn show_update(&mut self, version: Option<&str>) {
+    pub(crate) fn show_update(&mut self, version: Option<&str>) {
         let status = version
             .and_then(UpdateVersion::new)
             .map_or(StartupStatus::Starting, StartupStatus::Updating);
@@ -88,12 +105,12 @@ impl Notice {
 
     /// What the notice says now.
     #[cfg(test)]
-    pub(super) const fn status(&self) -> StartupStatus {
+    pub(crate) const fn status(&self) -> StartupStatus {
         self.status
     }
 
     /// Observe the clock and whether the launcher still owns startup.
-    pub(super) fn observe(&mut self, now: Moment, owns_startup: bool) {
+    pub(crate) fn observe(&mut self, now: Moment, owns_startup: bool) {
         if self.policy.observe(now, owns_startup) == Some(NoticeChange::Withdraw) {
             self.frame = None;
         }
@@ -103,22 +120,22 @@ impl Notice {
     }
 
     /// Whether the notice is on screen now: the launcher then lets the pump build its loop.
-    pub(super) fn shown(&self) -> bool {
+    pub(crate) fn shown(&self) -> bool {
         self.policy.phase() == NoticePhase::Shown && !self.failed
     }
 
     /// The native wake for the notice moment while it is still waiting.
-    pub(super) const fn next_wake(&self) -> Option<Instant> {
+    pub(crate) const fn next_wake(&self) -> Option<Instant> {
         self.wake
     }
 
     /// Whether a notice job still runs; the launcher's executor cannot settle before it ends.
-    pub(super) fn busy(&self) -> bool {
+    pub(crate) fn busy(&self) -> bool {
         self.initialization.is_some() || self.preparation.is_some()
     }
 
     /// Stop preparing frames; running jobs observe cancellation and end.
-    pub(super) fn cancel(&self) {
+    pub(crate) fn cancel(&self) {
         if let Some(job) = &self.initialization {
             job.cancel();
         }
@@ -128,29 +145,44 @@ impl Notice {
     }
 
     /// The notice for the pump while it is shown; its frame is handed over once.
-    pub(super) fn wanted(&mut self) -> Option<HeadlessNotice> {
-        self.shown().then(|| HeadlessNotice {
-            title: crate::APPLICATION_NAME,
-            logical_size: [LOGICAL_SIZE; 2],
-            frame: self.frame.take(),
+    pub(crate) fn wanted(&mut self) -> Option<HeadlessNotice> {
+        self.shown().then(|| {
+            let frame = self.frame.take();
+            self.presented |= frame.is_some();
+            HeadlessNotice {
+                title: crate::APPLICATION_NAME,
+                logical_size: [LOGICAL_SIZE; 2],
+                frame,
+            }
         })
     }
 
+    /// Whether the notice is on the screen, or can never be: the pump took a frame for its
+    /// window, or the notice failed.
+    pub(crate) fn on_screen_or_unavailable(&self) -> bool {
+        (self.presented && self.shown()) || self.failed
+    }
+
+    /// End the notice after its owner failed to advance it; running jobs observe cancellation.
+    pub(crate) fn abandon(&mut self) {
+        self.failed = true;
+        self.frame = None;
+        self.cancel();
+    }
+
     /// Prepare frames for the window the pump created.
-    pub(super) fn surface(&mut self, surface: NoticeSurface) {
+    pub(crate) fn surface(&mut self, surface: NoticeSurface) {
         self.surface = Some(surface);
         self.prepared = false;
         self.frame = None;
     }
 
     /// Consume finished notice jobs and, while shown, admit the next one. Closing only drains.
-    pub(super) fn advance(&mut self, resources: &Resources<'_>, closing: bool) {
+    pub(crate) fn advance(&mut self, resources: &Resources<'_>, closing: bool) {
         if let Err(cause) = self.step(resources, closing) {
             tracing::warn!(operation = "launcher_notice", cause = %crate::failure_details::Details(cause.as_ref()),
                 "The starting notice could not be prepared; startup continues without it");
-            self.failed = true;
-            self.frame = None;
-            self.cancel();
+            self.abandon();
         }
     }
 
@@ -256,5 +288,5 @@ fn outcome<T>(outcome: JobOutcome<T, PreparationError>) -> Result<T, Box<dyn Err
 }
 
 #[cfg(test)]
-#[path = "notice_tests.rs"]
+#[path = "waiting_notice_tests.rs"]
 mod tests;

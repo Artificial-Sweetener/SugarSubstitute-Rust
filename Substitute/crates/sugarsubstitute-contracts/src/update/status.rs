@@ -86,6 +86,8 @@ pub struct UpdateStatus {
     channel: Channel,
     #[serde(default)]
     checks: bool,
+    #[serde(default)]
+    restart_covered: bool,
 }
 impl UpdateStatus {
     /// The channel the installation's subscription follows; a new installation follows
@@ -132,6 +134,11 @@ impl UpdateStatus {
     /// window must stay hidden.
     pub fn restarting(&self) -> bool {
         matches!(self.launch, Some(LaunchVersion::Restarting(_)))
+    }
+    /// Whether a restarting window may close now: the coordinator's own "Updating to
+    /// version X…" notice is on screen to stay until the next copy shows, or it cannot show one.
+    pub fn restart_covered(&self) -> bool {
+        self.restarting() && self.restart_covered
     }
     /// The version this launch started for the first time and confirmed.
     pub fn updated_to(&self) -> Option<&str> {
@@ -232,7 +239,13 @@ impl UpdateStatus {
     pub fn withdraw_restart(&mut self) {
         if self.restarting() {
             self.launch = None;
+            self.restart_covered = false;
         }
+    }
+    /// Adopt whether the coordinator's restart notice covers the screen, so a restarting window
+    /// may close without leaving the screen empty.
+    pub fn observe_restart_cover(&mut self, covered: bool) {
+        self.restart_covered = covered;
     }
 
     /// Encode for another process after checking the bounds `decode` enforces.
@@ -472,8 +485,12 @@ mod tests {
         assert!(status.restarting());
         assert_eq!((status.applying(), status.updated_to()), (Some("2.0.0"), None));
         assert!(status.startup_notices().is_empty());
+        assert!(!status.restart_covered(), "the window closes only once the restart is covered");
+        status.observe_restart_cover(true);
+        assert!(status.restart_covered());
         assert_eq!(UpdateStatus::decode(&status.encode()?)?, status);
         status.withdraw_restart();
+        assert!(!status.restart_covered());
         assert!(!status.restarting());
         assert_eq!(status.applying(), None);
         status.observe_launch(LaunchVersion::Applying("2.0.0".into()));

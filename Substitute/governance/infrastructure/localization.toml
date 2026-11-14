@@ -60,7 +60,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute/src/production/entry_runner.rs"
-source_sha256 = "sha256:50802389ea32ab3621315da7ce3a4c113318614ed52e7f95600702c3fabbb243"
+source_sha256 = "sha256:46c3e3d29655f1d4f94ecc5439dd84ffa23a303c36c13d6e3589aa4f9bd2d00b"
 kind = "presentation"
 rationale = "Host composition of localized native startup/profile-conflict feedback. Authenticated configuration/selected installer language is retained when available; failures before configuration use canonical English. Original causes remain diagnostic details. Retain real entry, authority, child and execution lifetimes through native pumping."
 
@@ -84,7 +84,7 @@ rationale = "Host composition of localized native startup/profile-conflict feedb
 
 [[records]]
 path = "crates/sugarsubstitute/src/stable_launcher.rs"
-source_sha256 = "sha256:78ceb286f0a96e18b3a948ea0929cae4bf6a7822b57aebe44f47cf9119c8b57a"
+source_sha256 = "sha256:613e329e6e9c145ae55598e0f1a1ccdbae71aea81dea47e95957b05eb614b26c"
 kind = "presentation"
 rationale = "Host composition of localized native startup/profile-conflict feedback. Authenticated configuration/selected installer language is retained when available; failures before configuration use canonical English. Original causes remain diagnostic details. Stable installed entry point; the selected application owns the only visible startup window."
 
@@ -138,7 +138,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/lib.rs"
-source_sha256 = "sha256:1afb15da07cfddeef5650a1d50d91eaf1fef5adb6a17f1281d034023a8fd7b87"
+source_sha256 = "sha256:5238f5276446d4468529d5699f9c65e485ad2e5ca7858295433cba6d9167e1dc"
 kind = "native"
 rationale = "Native boundary: Own native window lifetime and CPU frame presentation independently of UI content.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -213,6 +213,12 @@ path = "crates/sugarsubstitute-desktop/src/windows_activation.rs"
 source_sha256 = "sha256:ed819390755ea986b4d375f0d930040b7ea368cff7109855748628bd15ff71fb"
 kind = "native"
 rationale = "Native boundary: Restore an authenticated desktop process's existing top-level window.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
+
+[[records]]
+path = "crates/sugarsubstitute-desktop/src/windows_handoff.rs"
+source_sha256 = "sha256:de35949356a56f6c1ef9948d7ec5fd00bd41f9b014341ccd90d02da60c16b55f"
+kind = "native"
+rationale = "Native boundary: Observe that a restarted copy shows its first window by enumerating top-level windows.. It shows nothing; the matched title is the application's technical window identity, and product labels arrive from the typed catalog."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/windows_caption_hover_tests.rs"
@@ -390,7 +396,7 @@ rationale = "Pure invalid-dimension qualification uses an empty title and unreac
 
 [[records]]
 path = "crates/sugarsubstitute/src/lib.rs"
-source_sha256 = "sha256:f6c65654d84b75c89a7355371ecd7651db3a4015f56e43b8b04a409998df1d39"
+source_sha256 = "sha256:48b7dcdfaa9f45d29402b11fa7b4eda8683585fc31b2da344f18fce9966d664b"
 kind = "presentation"
 rationale = "The explicit splash demo composes DesktopOptions.title from messages(options.locale).loading; diagnostic and protocol values do not become UI labels."
 
@@ -738,7 +744,7 @@ rationale = "The bounded dedicated WebView session transport defines technical J
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/headless/notice.rs"
-source_sha256 = "sha256:c02da5306be11140d51b87ef3cd3c65a5264b91abe3b61f6965f45133c948261"
+source_sha256 = "sha256:ee5c14b0feb8b58fa9f05a5dc7047ab45715ebf9dd9fd1dfc3ac1e1c3c65aef0"
 kind = "native"
 rationale = "The headless notice window takes its title from the role's HeadlessNotice; the launcher passes the product name. Its words are drawn from the typed catalog into prepared pixels; it adds no product text."
 

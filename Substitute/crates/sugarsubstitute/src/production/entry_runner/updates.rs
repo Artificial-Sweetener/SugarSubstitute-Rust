@@ -112,6 +112,7 @@ impl<C: EntryActivation> EntryRunner<C> {
             );
             self.announce_restart()?;
         }
+        self.observe_restart_notice();
         // A finished check may have prepared an update.
         self.submit_record_read()?;
         self.update_wake = match self.update_schedule.as_ref().and_then(CheckSchedule::due) {
@@ -180,6 +181,7 @@ impl<C: EntryActivation> EntryRunner<C> {
         if let Some(launch) = self.launch_version() {
             self.update_status.observe_launch(launch);
         }
+        self.update_status.observe_restart_cover(self.restart_covered());
         let (revision, status) = self.update_status.snapshot();
         self.child.publish_update_status(revision, status)
     }

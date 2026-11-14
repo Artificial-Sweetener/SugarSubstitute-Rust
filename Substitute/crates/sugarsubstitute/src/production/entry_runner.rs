@@ -359,6 +359,8 @@ pub(crate) struct EntryRunner<C: EntryActivation> {
     post_exit: Option<post_exit::Deadline>,
     /// The one restart-to-apply relaunch, after a normal close the child asked for.
     relaunch: relaunch::Relaunch,
+    /// The "Updating to version X…" notice shown while this run restarts into an update.
+    restart_notice: Option<relaunch::RestartNotice>,
     command: Option<ProductionCommand>,
     executable: PathBuf,
     installation: PathBuf,
@@ -428,6 +430,7 @@ impl<C: EntryActivation> EntryRunner<C> {
             update_status_scope: None,
             post_exit: None,
             relaunch: relaunch::Relaunch::Idle,
+            restart_notice: None,
             command: Some(command),
             executable,
             installation,

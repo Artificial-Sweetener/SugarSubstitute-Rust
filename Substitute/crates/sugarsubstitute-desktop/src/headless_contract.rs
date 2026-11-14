@@ -27,7 +27,8 @@ pub struct HeadlessPresentation {
 /// The small notice window a headless role may show while it waits, such as the launcher's
 /// "Starting…" notice. It is drawn only from prepared pixels, has no controls, never takes
 /// focus and grants the role no window authority. The pump opens it on its own loop, keeps
-/// the role pumping, and closes it once the role stops asking for it or begins shutdown.
+/// the role pumping, and closes it once the role stops asking for it, which may be after the
+/// role's shutdown began: a restarting role keeps its notice until the next copy shows.
 pub struct HeadlessNotice {
     /// Operating-system window title, already localized.
     pub title: &'static str,

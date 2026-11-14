@@ -102,7 +102,7 @@ pub fn run_headless(lifetime: &mut impl HeadlessLifetime) -> Result<(), DesktopE
                     #[cfg(target_os = "windows")]
                     surface.turn(lifetime, _target, &form_proxy, state.closing());
                     #[cfg(target_os = "windows")]
-                    notice.turn(lifetime, _target, state.closing());
+                    notice.turn(lifetime, _target);
                 }
                 #[cfg(target_os = "windows")]
                 other => {

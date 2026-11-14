@@ -4,8 +4,8 @@
 //!
 //! The window is the splash's borderless, transparent shape with the splash presenter. It is
 //! created hidden when the role first asks, shown once a frame prepared for its exact shape
-//! arrives, never takes focus and has no controls. It closes when the role stops asking or
-//! begins shutdown, and never reopens in the same pump. A notice failure is logged and ends
+//! arrives, never takes focus and has no controls. It closes when the role stops asking, which a
+//! role may do after its shutdown began, and never reopens in the same pump. A notice failure is logged and ends
 //! the notice; it never fails the role.
 use crate::{HeadlessLifetime, HeadlessNotice, NoticeSurface, windows::Presenter};
 use std::rc::Rc;
@@ -31,14 +31,13 @@ impl Notice {
         Self { window: None, presenter: None, shape: None, shown: false, retired: false }
     }
 
-    /// Open, update or close the notice for this turn. `closing` closes it at once.
+    /// Open, update or close the notice for this turn, as the role asks.
     pub(super) fn turn<T: 'static>(
         &mut self,
         lifetime: &mut impl HeadlessLifetime,
         target: &EventLoopWindowTarget<T>,
-        closing: bool,
     ) {
-        let wanted = if closing || self.retired { None } else { lifetime.notice() };
+        let wanted = if self.retired { None } else { lifetime.notice() };
         let Some(notice) = wanted else {
             self.close();
             return;

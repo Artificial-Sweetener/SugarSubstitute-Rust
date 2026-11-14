@@ -77,7 +77,12 @@ fn original_cleanup_wake_is_consumed_before_unsettled_owner_returns() -> Result<
         cutoff.checked_sub(Duration::from_nanos(1)).ok_or("Cutoff projection underflow")?
     ));
     assert!(owner.consume_cleanup_cutoff(cutoff));
-    assert!(owner.next_deadline().is_none());
+    // Work retained past the cutoff may settle without a completion wake: the runner keeps
+    // observing it, at once and then every five seconds, so it exits once it has settled.
+    owner.native_now = frozen_native_now;
+    assert_eq!(owner.next_deadline(), Some(cutoff), "the retained shutdown is observed at once");
+    owner.shutdown_diagnostic = Some(cutoff);
+    assert_eq!(owner.next_deadline(), cutoff.checked_add(Duration::from_secs(5)));
     assert!(!owner.consume_cleanup_cutoff(
         cutoff.checked_add(Duration::from_secs(100)).ok_or("Cutoff projection overflow")?
     ));
