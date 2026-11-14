@@ -3313,7 +3313,7 @@ rationale = "Repository tooling artifact-files.mjs: artifact-files Reads declare
 [[records]]
 path = "installer/release/build-qualification.test.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:da7539a1e5944b4e1f342cf22de09f8c5f641f19f54afe9c2b234341d6e202be"
+source_sha256 = "sha256:93fde1f67dbbf98f24adb2236a14934281e6f462539c213ba407d55a737f81ea"
 capabilities = ["node:fs", "readFileSync"]
 disposition = "tooling"
 rationale = "Repository tooling build-qualification.test.mjs: reads the declared application manifest to prove ordinary installer builds ship its default features; writes nothing and runtime crates do not depend on this source."
