@@ -39,7 +39,6 @@ impl MainActor {
         let mut completed_probe = None;
         let mut completed_delivery = None;
         let mut completed_transport = None;
-        let mut link = None;
         // The pure decoder/readiness owner performs no native calls while queue storage is borrowed.
         let consumed = events.consume(|observation| {
             if observation.kind == Kind::PanelBinding {
@@ -47,10 +46,6 @@ impl MainActor {
                     .decode_panel_ingress(observation.payload)?
                     .map(Effect::Ingress)
                     .unwrap_or(Effect::None);
-                return Ok(());
-            }
-            if observation.kind == Kind::OpenLink {
-                link = Some(observation.payload.to_owned());
                 return Ok(());
             }
             #[cfg(feature = "k1-native-qualification")]
@@ -100,10 +95,6 @@ impl MainActor {
             }
             Ok(())
         })?;
-        // The shell is asked only after the queue borrow ends, between native callbacks.
-        if let Some(link) = link {
-            crate::windows_open_link::hand_to_browser(&link, crate::windows_open_link::open);
-        }
         if let Some((context, action)) = completed_transport {
             self.panel_transport.action_completed(context, action)?;
         }
@@ -248,7 +239,6 @@ fn observation_kind(kind: Kind, command: Option<Command>) -> &'static str {
         Kind::ReloadRequested => "NavigationStarting",
         Kind::Navigation { .. } => "Navigation",
         Kind::ProcessFailed { .. } => "ProcessFailed",
-        Kind::OpenLink => "NewWindowRequested",
         Kind::Command => match command {
             Some(Command::Runtime) => "Runtime",
             Some(Command::Page) => "Page",

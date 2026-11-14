@@ -47,14 +47,8 @@ pub(crate) enum Kind {
     Console,
     NavigationStarting,
     ReloadRequested,
-    Navigation {
-        succeeded: bool,
-    },
-    ProcessFailed {
-        kind: i32,
-    },
-    /// The page asked for a new window; the payload is the link it would open.
-    OpenLink,
+    Navigation { succeeded: bool },
+    ProcessFailed { kind: i32 },
     Command,
 }
 

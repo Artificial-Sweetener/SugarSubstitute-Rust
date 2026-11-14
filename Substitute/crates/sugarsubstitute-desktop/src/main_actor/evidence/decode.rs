@@ -101,8 +101,6 @@ pub(super) fn consume(
         }
         Kind::NavigationStarting => Ok(()),
         Kind::ReloadRequested => Err(ReadinessFault::SetupFailed),
-        // The evidence owner hands links to the browser before readiness decoding.
-        Kind::OpenLink => Err(ReadinessFault::MalformedObservation),
         Kind::Navigation { succeeded } => owner.navigation_completed(succeeded),
         Kind::Command => match observation
             .command

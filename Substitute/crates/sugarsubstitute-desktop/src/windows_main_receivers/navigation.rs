@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Guard actual top navigation, route browser downloads through their retained owner, and keep
-//! new windows out of the embedded browser.
+//! Guard actual top navigation and route browser downloads through their retained owner.
 
 use super::*;
 use std::cell::Cell;
@@ -10,10 +9,10 @@ use sugarsubstitute_contracts::configuration::LoopbackOrigin;
 use webview2_com::ContentLoadingEventHandler;
 use webview2_com::{
     DownloadStartingEventHandler, NavigationCompletedEventHandler, NavigationStartingEventHandler,
-    NewWindowRequestedEventHandler, PermissionRequestedEventHandler, ProcessFailedEventHandler,
+    PermissionRequestedEventHandler, ProcessFailedEventHandler,
 };
 
-const EVENT_COUNT: usize = if cfg!(feature = "k1-native-qualification") { 7 } else { 6 };
+const EVENT_COUNT: usize = if cfg!(feature = "k1-native-qualification") { 6 } else { 5 };
 
 struct State {
     origin: LoopbackOrigin,
@@ -242,48 +241,8 @@ impl Navigation {
                         &mut token,
                     )
                 }),
-                // A new window never opens inside the app; its link is queued for the browser,
-                // which the evidence owner asks the shell to open between callbacks.
-                5 => core.add_NewWindowRequested(
-                    &NewWindowRequestedEventHandler::create(Box::new(move |_, args| {
-                        let _callback = captured.callback();
-                        let Some(args) = args else {
-                            captured.fail(DesktopError::new(
-                                "native_new_window_input",
-                                windows::core::Error::from(E_POINTER),
-                            ));
-                            return Ok(());
-                        };
-                        if let Err(cause) =
-                            args.SetHandled(!crate::windows_open_link::EMBEDDED_WINDOWS)
-                        {
-                            captured.fail(DesktopError::new("cancel_native_new_window", cause));
-                            return Ok(());
-                        }
-                        let mut pointer = PWSTR::null();
-                        let status = args.Uri(&mut pointer);
-                        let returned = NativeString(pointer);
-                        match status {
-                            Ok(()) if !returned.0.is_null() => {
-                                captured.record(Kind::OpenLink, |text| {
-                                    crate::main_events::copy_utf16(text, |index| {
-                                        returned.0.as_ptr().add(index).read()
-                                    })
-                                });
-                            }
-                            Ok(()) => tracing::warn!(
-                                operation = "native_new_window_input",
-                                "A new-window request named no link"
-                            ),
-                            Err(cause) => tracing::warn!(operation = "native_new_window_input",
-                                %cause, "A new-window request's link could not be read"),
-                        }
-                        Ok(())
-                    })),
-                    &mut token,
-                ),
                 #[cfg(feature = "k1-native-qualification")]
-                6 => core.add_ContentLoading(
+                5 => core.add_ContentLoading(
                     &ContentLoadingEventHandler::create(Box::new(move |_, args| {
                         let _callback = captured.callback();
                         let mut id = 0;
@@ -369,9 +328,8 @@ impl Navigation {
                 4 => core
                     .cast::<ICoreWebView2_4>()
                     .and_then(|core| core.remove_DownloadStarting(token)),
-                5 => core.remove_NewWindowRequested(token),
                 #[cfg(feature = "k1-native-qualification")]
-                6 => core.remove_ContentLoading(token),
+                5 => core.remove_ContentLoading(token),
                 _ => {
                     return Err(DesktopError::message(
                         "remove_main_browser_events",
