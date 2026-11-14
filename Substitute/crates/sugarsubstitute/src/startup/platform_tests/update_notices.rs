@@ -97,58 +97,56 @@ fn restarting() -> UpdateStatus {
     status
 }
 
-/// While the coordinator restarts into an update prepared before the window opened, the splash
-/// stays, the window commits to staying hidden and only then acknowledges the status; when the
-/// coordinator withdraws the restart, the held step runs.
+/// A window that was never revealed, told the app restarts into an update prepared before it
+/// opened, says which version it updates to and closes itself to restart, through the same close
+/// as every other restart; a close already under way is left alone.
 #[test]
-fn the_window_stays_hidden_and_acknowledges_while_the_app_restarts_into_its_update()
--> BackendResult<()> {
-    use sugarsubstitute_contracts::startup::StartupEffect;
-    use sugarsubstitute_desktop::DesktopStartupCommand;
+fn a_window_never_revealed_closes_itself_to_restart_into_the_update() -> BackendResult<()> {
+    use sugarsubstitute_application::workspace_session::close_save::CloseReason;
     let mut host = host()?;
-    let launch = host.launch_id();
     host.child.update_status = Some(restarting());
-    host.child.update_revision = 3;
     assert_eq!(
         window_content::updating(&host.child, StartupStatus::Loading),
         UpdateVersion::new("2.4.1").map(StartupStatus::Updating),
         "the splash says which version it updates to"
     );
     host.advance_restart_hold()?;
-    assert_eq!(host.child.acknowledged, [3], "never revealed: it commits and acknowledges");
-    host.route(super::policy::StartupRoute::Effect(StartupEffect::RetireSplash { launch }))?;
-    assert!(host.commands.take().is_none(), "the splash stays");
+    assert!(host.closing, "the hidden window closes itself");
+    assert_eq!(host.close_reason, CloseReason::RestartToApply);
     host.advance_restart_hold()?;
-    assert!(host.commands.take().is_none(), "still restarting");
-    assert_eq!(host.child.acknowledged, [3], "each revision is acknowledged once");
-    let mut withdrawn = restarting();
-    withdrawn.withdraw_restart();
-    host.child.update_status = Some(withdrawn);
-    host.child.update_revision = 4;
-    host.advance_restart_hold()?;
-    assert!(
-        matches!(host.commands.take(), Some(DesktopStartupCommand::RetireSplash(held)) if held == launch),
-        "the withdrawn restart lets the window open"
-    );
-    assert_eq!(host.child.acknowledged, [3, 4]);
+    assert_eq!(host.close_reason, CloseReason::RestartToApply, "one close, once");
     Ok(())
 }
 
-/// A window revealed before it applied the restarting status can no longer stay hidden, so it
-/// never acknowledges that status; the coordinator never closes it.
+/// A window revealed before it applied the restarting status stays open and holds its next step
+/// while the restart stands; once the coordinator withdraws it, the held step runs.
 #[test]
-fn a_window_revealed_before_the_restart_never_acknowledges_it() -> BackendResult<()> {
+fn a_window_revealed_before_the_restart_stays_open_until_the_restart_is_withdrawn()
+-> BackendResult<()> {
+    use sugarsubstitute_contracts::startup::StartupEffect;
+    use sugarsubstitute_desktop::DesktopStartupCommand;
     let mut host = host()?;
+    let launch = host.launch_id();
     let identity = sugarsubstitute_contracts::startup::MainIdentity {
         run: host.run_key(),
-        launch: host.launch_id(),
+        launch,
         navigation: sugarsubstitute_contracts::execution::Generation::new(1)?,
     };
     host.commands.reveal_main(identity)?;
     assert!(host.commands.take().is_some(), "the reveal went to the window");
     host.child.update_status = Some(restarting());
-    host.child.update_revision = 7;
     host.advance_restart_hold()?;
-    assert!(host.child.acknowledged.is_empty());
+    assert!(!host.closing, "a seen window is never closed for the restart");
+    host.route(super::policy::StartupRoute::Effect(StartupEffect::RetireSplash { launch }))?;
+    assert!(host.commands.take().is_none(), "held while the restart stands");
+    let mut withdrawn = restarting();
+    withdrawn.withdraw_restart();
+    host.child.update_status = Some(withdrawn);
+    host.advance_restart_hold()?;
+    assert!(
+        matches!(host.commands.take(), Some(DesktopStartupCommand::RetireSplash(held)) if held == launch),
+        "the withdrawn restart lets the held step run"
+    );
+    assert!(!host.closing);
     Ok(())
 }

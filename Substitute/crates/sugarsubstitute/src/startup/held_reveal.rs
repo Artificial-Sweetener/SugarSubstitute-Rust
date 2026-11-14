@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Keep the splash and the hidden window while the coordinator restarts into an update it
+//! Close a window that was never revealed when the coordinator restarts into an update it
 //! prepared before the window opened, so the user never sees a window that then closes.
 use super::*;
 use policy::StartupRoute;
@@ -22,12 +22,29 @@ impl<B: StartupBackend> StartupHost<B> {
         holds
     }
 
-    /// Acknowledge the newest update status to the coordinator, then carry out a held step once
-    /// the coordinator withdrew its restart; the update then starts on the next launch.
+    /// Follow the coordinator's restart into its update. A window that was never revealed
+    /// closes itself to restart, through the same close as every other restart, so the
+    /// coordinator relaunches as soon as it exits; the splash first shows which version it
+    /// updates to. A window revealed first stays open: its MainRevealed makes the coordinator
+    /// withdraw the restart, and a held step is then carried out; the update starts on the next
+    /// launch.
     pub(super) fn advance_restart_hold(&mut self) -> Result<(), Box<dyn Error>> {
-        self.acknowledge_update_status()?;
-        if self.closing || self.restarting() {
+        if self.closing {
             return Ok(());
+        }
+        if self.restarting() {
+            if self.commands.revealed() {
+                return Ok(());
+            }
+            if !self.update_line_shown() {
+                self.invalidate(true);
+                return Ok(());
+            }
+            tracing::info!(
+                operation = "startup_restart_before_window",
+                "The window was never shown; closing to restart into the prepared update"
+            );
+            return self.restart_to_apply();
         }
         match self.held_reveal.take() {
             Some(effect) => self.route(StartupRoute::Effect(effect)),
@@ -35,18 +52,21 @@ impl<B: StartupBackend> StartupHost<B> {
         }
     }
 
-    /// Tell the coordinator the window applied its newest status. A status saying the app
-    /// restarts is acknowledged only while the window has never been revealed: from then on
-    /// every reveal is held, so the coordinator may close it. A window revealed first never
-    /// acknowledges it, and its MainRevealed makes the coordinator withdraw the restart.
-    fn acknowledge_update_status(&mut self) -> Result<(), Box<dyn Error>> {
-        let revision = self.child.update_status_revision();
-        if revision <= self.status_acknowledged || (self.restarting() && self.commands.revealed()) {
-            return Ok(());
+    /// Whether the splash already shows its update line in place of the loading line, or
+    /// shows nothing that could: it is not drawn yet, not visible, or the version is one it
+    /// cannot show.
+    fn update_line_shown(&self) -> bool {
+        use sugarsubstitute_splash::StartupStatus::{Loading, LoadingExtended, LoadingLong};
+        if !self.prepared
+            || !self.visible
+            || window_content::updating(&self.child, Loading).is_none()
+        {
+            return true;
         }
-        self.child.acknowledge_update_status(revision)?;
-        self.status_acknowledged = revision;
-        Ok(())
+        self.preparation
+            .as_ref()
+            .and_then(crate::preparation::PreparationDriver::published_appearance)
+            .is_some_and(|shown| !matches!(shown.status, Loading | LoadingLong | LoadingExtended))
     }
 
     fn restarting(&self) -> bool {
