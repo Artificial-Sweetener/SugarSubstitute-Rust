@@ -79,6 +79,8 @@ mod transcript_snapshot;
 #[cfg(all(windows, feature = "windows-native-host"))]
 pub mod updates;
 #[cfg(all(windows, feature = "windows-native-host"))]
+mod waiting_notice;
+#[cfg(all(windows, feature = "windows-native-host"))]
 mod worker_environment;
 pub mod workspace_session;
 pub use transcript_snapshot::{OutputSnapshot, SourceCustody};

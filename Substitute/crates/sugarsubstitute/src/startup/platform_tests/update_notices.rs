@@ -98,8 +98,9 @@ fn restarting() -> UpdateStatus {
 }
 
 /// A window that was never revealed, told the app restarts into an update prepared before it
-/// opened, says which version it updates to and closes itself to restart, through the same close
-/// as every other restart; a close already under way is left alone.
+/// opened, says which version it updates to and keeps its splash until the coordinator's own
+/// notice covers the screen; it then closes itself to restart, through the same close as every
+/// other restart; a close already under way is left alone.
 #[test]
 fn a_window_never_revealed_closes_itself_to_restart_into_the_update() -> BackendResult<()> {
     use sugarsubstitute_application::workspace_session::close_save::CloseReason;
@@ -110,6 +111,11 @@ fn a_window_never_revealed_closes_itself_to_restart_into_the_update() -> Backend
         UpdateVersion::new("2.4.1").map(StartupStatus::Updating),
         "the splash says which version it updates to"
     );
+    host.advance_restart_hold()?;
+    assert!(!host.closing, "the splash stays until the coordinator's notice covers the screen");
+    let mut covered = restarting();
+    covered.observe_restart_cover(true);
+    host.child.update_status = Some(covered);
     host.advance_restart_hold()?;
     assert!(host.closing, "the hidden window closes itself");
     assert_eq!(host.close_reason, CloseReason::RestartToApply);

@@ -96,6 +96,7 @@ fn a_notice_that_cannot_be_prepared_ends_without_affecting_startup() -> Result {
         Ok(!notice.busy() && !notice.shown())
     })?;
     assert!(notice.wanted().is_none());
+    assert!(notice.on_screen_or_unavailable(), "a failed notice never holds anything back");
     assert!(jobs.allocate()?.get() >= 3, "initialization and preparation both ran");
     owner.request_shutdown(clock.now().checked_add(LauncherBudget::EXIT_GRACE)?);
     observe(&wake, || Ok(owner.poll_shutdown()?.settled))?;
@@ -123,8 +124,10 @@ fn a_shown_notice_prepares_one_frame_for_the_reported_window() -> Result {
         notice.advance(&resources, false);
         Ok(!notice.busy())
     })?;
+    assert!(!notice.on_screen_or_unavailable(), "prepared is not yet on screen");
     let frame = notice.wanted().and_then(|wanted| wanted.frame).ok_or("no frame prepared")?;
     assert_eq!(frame.shape(), shape);
+    assert!(notice.on_screen_or_unavailable(), "the pump shows the frame it took");
     assert!(notice.wanted().is_some_and(|wanted| wanted.frame.is_none()), "handed over once");
     notice.advance(&resources, false);
     assert!(!notice.busy(), "one frame per window");

@@ -25,7 +25,8 @@ impl<B: StartupBackend> StartupHost<B> {
     /// Follow the coordinator's restart into its update. A window that was never revealed
     /// closes itself to restart, through the same close as every other restart, so the
     /// coordinator relaunches as soon as it exits; the splash first shows which version it
-    /// updates to. A window revealed first stays open: its MainRevealed makes the coordinator
+    /// updates to, and it closes only once the coordinator's own notice covers the screen until
+    /// the next copy shows. A window revealed first stays open: its MainRevealed makes the coordinator
     /// withdraw the restart, and a held step is then carried out; the update starts on the next
     /// launch.
     pub(super) fn advance_restart_hold(&mut self) -> Result<(), Box<dyn Error>> {
@@ -38,6 +39,9 @@ impl<B: StartupBackend> StartupHost<B> {
             }
             if !self.update_line_shown() {
                 self.invalidate(true);
+                return Ok(());
+            }
+            if !self.restart_covered() {
                 return Ok(());
             }
             tracing::info!(
@@ -67,6 +71,14 @@ impl<B: StartupBackend> StartupHost<B> {
             .as_ref()
             .and_then(crate::preparation::PreparationDriver::published_appearance)
             .is_some_and(|shown| !matches!(shown.status, Loading | LoadingLong | LoadingExtended))
+    }
+
+    /// Whether the coordinator's own restart notice is on screen, so closing this splash never
+    /// leaves the screen empty before the next copy shows.
+    fn restart_covered(&self) -> bool {
+        self.child
+            .update_status()
+            .is_some_and(sugarsubstitute_contracts::update::status::UpdateStatus::restart_covered)
     }
 
     fn restarting(&self) -> bool {

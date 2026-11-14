@@ -111,7 +111,11 @@ pub struct StartingNotice {
 impl StartingNotice {
     /// A notice that may appear at the budget's notice moment.
     pub const fn new(budget: LauncherBudget) -> Self {
-        Self { at: budget.notice_at, phase: NoticePhase::Waiting }
+        Self::at(budget.notice_at)
+    }
+    /// A notice that may appear from `at`.
+    pub const fn at(at: Moment) -> Self {
+        Self { at, phase: NoticePhase::Waiting }
     }
     /// The current phase.
     pub const fn phase(self) -> NoticePhase {

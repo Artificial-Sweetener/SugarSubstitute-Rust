@@ -1,12 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Start the installation's entry once more after a restart to apply an update.
+//! Start the installation's entry once more after a restart to apply an update, and keep a
+//! waiting surface on screen until the new copy shows its first window.
 //!
 //! The desktop child asks for this only after its close save finished. The runner acts only when
 //! that child then completed a normal close and the coordinator released the installation, so
 //! the new process starts against a free installation and its own launch picks the prepared
 //! version. A beta-eager launch that prepared an update before its window opened closes and
-//! relaunches the same way, without asking. A crash, a failure or a close without that intent never relaunches.
+//! relaunches the same way, without asking. A crash, a failure or a close without that intent
+//! never relaunches.
+//!
+//! From the moment the restart is owed, the runner shows the splash's "Updating to version X…"
+//! notice. A window that restarts before it was ever shown keeps its own splash until that
+//! notice is on screen, and the notice stays until a visible window of the new copy is observed,
+//! or the relaunch failed, so the user never looks at an empty screen between the two copies.
 use super::*;
 use std::os::windows::ffi::OsStrExt;
 use sugarsubstitute_contracts::execution::{
@@ -17,22 +24,54 @@ use sugarsubstitute_supervision::{
     application_launch::{ApplicationLaunch, CREATION_RESERVATION_BYTES},
 };
 
+/// How often the runner looks for the new copy's first window while it waits.
+pub(super) const HANDOFF_OBSERVATION: Duration = Duration::from_millis(100);
+
+/// How long the restart notice's frame jobs may run; far beyond any restart.
+const NOTICE_JOBS: Duration = Duration::from_secs(120);
+
 /// Progress of the one relaunch.
 #[derive(Default)]
 pub(super) enum Relaunch {
     /// Not started; it may never start.
     #[default]
     Idle,
-    /// The launch job is running.
-    Launching(OwnedJob<(), sugarsubstitute_supervision::ClaimError>),
-    /// The launch finished, whatever its outcome; it is never retried.
+    /// The launch job is running; the system time it began, for the new copy's windows.
+    Launching(OwnedJob<(), sugarsubstitute_supervision::ClaimError>, u64),
+    /// The new copy started at or after this system time; its first window is awaited.
+    Launched(u64),
+    /// The new copy shows a window, or the launch failed; it is never retried.
     Done,
+}
+
+/// The coordinator's "Updating to version X…" notice while it restarts, with its own scope.
+pub(super) struct RestartNotice {
+    pub(super) notice: crate::waiting_notice::Notice,
+    scope: Scope,
+    until: Moment,
+}
+
+impl RestartNotice {
+    /// The native wake at the notice moment while it is still waiting.
+    pub(super) fn next_wake(&self) -> Option<Instant> {
+        self.notice.next_wake()
+    }
 }
 
 /// Whether the runner should relaunch: a normal shutdown with no failure, and a restart owed to
 /// a child that asked to restart to apply, or to an update prepared before the window opened.
 pub(super) fn wanted(normal_shutdown: bool, failed: bool, restart_requested: bool) -> bool {
     normal_shutdown && !failed && restart_requested
+}
+
+/// Whether the waiting notice is still owed for `relaunch`: until the new copy's window shows
+/// or the launch failed.
+pub(super) fn notice_owed(restart_owed: bool, relaunch: &Relaunch) -> bool {
+    match relaunch {
+        Relaunch::Idle => restart_owed,
+        Relaunch::Launching(..) | Relaunch::Launched(_) => true,
+        Relaunch::Done => false,
+    }
 }
 
 /// The installation's stable entry and root for the directory this run's image executes from.
@@ -54,8 +93,17 @@ impl<C: EntryActivation> EntryRunner<C> {
         wanted(self.normal_shutdown, self.failure_source().is_some(), restart)
     }
 
+    /// Whether a restart into an update is owed now: decided before the window opened, or a
+    /// normal close that relaunches.
+    fn restart_pending(&self) -> bool {
+        (self.launch_update.restart().is_some()
+            && !self.authority.as_ref().is_some_and(CoordinatorAuthority::window_opened))
+            || self.relaunch_wanted()
+    }
+
     /// Advance the relaunch; true once nothing more is owed. Call only after the installation
-    /// was released. A failed launch is logged and never retried.
+    /// was released. A failed launch is logged and never retried; a started one is awaited until
+    /// the new copy shows a window.
     /// # Errors
     /// Returns admission and clock failures of the launch job.
     pub(super) fn advance_relaunch(&mut self, until: Moment) -> Result<bool, Box<dyn Error>> {
@@ -72,6 +120,7 @@ impl<C: EntryActivation> EntryRunner<C> {
             let launch = ApplicationLaunch::new(command);
             let client = self.client()?;
             let cleanup = self.cleanup.as_ref().ok_or("Production cleanup scope missing")?;
+            let since = sugarsubstitute_desktop::system_time_100ns();
             let job = client.submit_blocking(
                 cleanup,
                 JobSpec {
@@ -94,32 +143,151 @@ impl<C: EntryActivation> EntryRunner<C> {
                 operation = "restart_to_apply_relaunch",
                 "Starting SugarSubstitute again so the prepared update applies"
             );
-            self.relaunch = Relaunch::Launching(job);
+            self.relaunch = Relaunch::Launching(job, since);
         }
-        if let Relaunch::Launching(job) = &mut self.relaunch {
+        if let Relaunch::Launching(job, since) = &mut self.relaunch {
+            let since = *since;
             let Some(completion) = job.try_take_completion() else { return Ok(false) };
-            match completion.outcome {
-                JobOutcome::Success(()) => {}
-                JobOutcome::Failure(cause) => tracing::error!(
-                    operation = "restart_to_apply_relaunch_failed",
-                    cause = %cause,
-                    "SugarSubstitute could not be started again; the update applies at the next start"
+            self.relaunch = match completion.outcome {
+                JobOutcome::Success(()) => Relaunch::Launched(since),
+                JobOutcome::Failure(cause) => {
+                    tracing::error!(
+                        operation = "restart_to_apply_relaunch_failed",
+                        cause = %cause,
+                        "SugarSubstitute could not be started again; the update applies at the next start"
+                    );
+                    Relaunch::Done
+                }
+                other => {
+                    tracing::error!(
+                        operation = "restart_to_apply_relaunch_failed",
+                        outcome = ?other.kind(),
+                        "SugarSubstitute could not be started again; the update applies at the next start"
+                    );
+                    Relaunch::Done
+                }
+            };
+        }
+        if let Relaunch::Launched(since) = self.relaunch {
+            match sugarsubstitute_desktop::application_window_shown_since(
+                crate::APPLICATION_NAME,
+                since,
+            ) {
+                Ok(false) => return Ok(false),
+                Ok(true) => tracing::info!(
+                    operation = "restart_to_apply_handoff",
+                    "The new copy shows its first window; this copy's notice closes"
                 ),
-                other => tracing::error!(
-                    operation = "restart_to_apply_relaunch_failed",
-                    outcome = ?other.kind(),
-                    "SugarSubstitute could not be started again; the update applies at the next start"
+                Err(cause) => tracing::error!(
+                    operation = "restart_to_apply_handoff_unobserved",
+                    cause = %cause,
+                    "The new copy's window could not be looked for; this copy's notice closes"
                 ),
             }
             self.relaunch = Relaunch::Done;
         }
         Ok(true)
     }
+
+    /// The native wake that looks for the new copy's first window while it is awaited.
+    pub(super) fn relaunch_wake(&self) -> Option<Instant> {
+        matches!(self.relaunch, Relaunch::Launched(_))
+            .then(|| (self.native_now)().checked_add(HANDOFF_OBSERVATION))
+            .flatten()
+    }
+
+    /// Show the restart notice while a restart is owed and until the new copy's window shows;
+    /// drain its jobs once it is no longer owed. True while a notice job still runs.
+    /// # Errors
+    /// Returns execution admission and clock failures of the notice's scope.
+    pub(super) fn advance_restart_notice(&mut self) -> Result<bool, Box<dyn Error>> {
+        let owed = notice_owed(self.restart_pending(), &self.relaunch);
+        if owed && self.restart_notice.is_none() {
+            let client = self.client()?;
+            let now = client.now()?;
+            let scope = client
+                .create_scope(ScopeSpec { id: self.scopes.allocate()?, deadline: None }, None)?;
+            self.restart_notice = Some(RestartNotice {
+                notice: crate::waiting_notice::Notice::immediate(now),
+                scope,
+                until: now.checked_add(NOTICE_JOBS)?,
+            });
+        }
+        let version = self
+            .launch_update
+            .restart()
+            .map(str::to_owned)
+            .or_else(|| self.update_status.snapshot().1.ready().map(str::to_owned));
+        let now = self.client()?.now()?;
+        let Some(restart) = &mut self.restart_notice else { return Ok(false) };
+        restart.notice.show_update(version.as_deref());
+        restart.notice.observe(now, owed);
+        if !owed {
+            restart.notice.cancel();
+        }
+        let client = self.client.as_ref().ok_or("Production client missing")?;
+        restart.notice.advance(
+            &crate::waiting_notice::Resources {
+                client,
+                scope: &restart.scope,
+                jobs: &self.jobs,
+                until: restart.until,
+            },
+            !owed,
+        );
+        Ok(restart.notice.busy())
+    }
+
+    /// Whether a window that restarts may close now: this run's restart notice is on screen to
+    /// stay until the new copy shows, or it can never show.
+    pub(super) fn restart_covered(&self) -> bool {
+        self.restart_notice
+            .as_ref()
+            .is_some_and(|restart| restart.notice.on_screen_or_unavailable())
+    }
+
+    /// A turn at once while the window has not yet been told the restart is covered.
+    pub(super) fn restart_cover_wake(&self) -> Option<Instant> {
+        (self.restart_covered() && !self.update_status.snapshot().1.restart_covered())
+            .then(|| (self.native_now)())
+    }
+
+    /// The restart notice for the pump while it is shown.
+    pub(super) fn restart_notice(&mut self) -> Option<sugarsubstitute_desktop::HeadlessNotice> {
+        self.restart_notice.as_mut().and_then(|restart| restart.notice.wanted())
+    }
+
+    /// The pump drew the restart notice's window; prepare frames for it.
+    pub(super) fn restart_notice_surface(
+        &mut self,
+        surface: sugarsubstitute_desktop::NoticeSurface,
+    ) {
+        if let Some(restart) = &mut self.restart_notice {
+            restart.notice.surface(surface);
+        }
+        self.observe_restart_notice();
+    }
+
+    /// Advance the restart notice; a failure is logged and never affects the restart. True while
+    /// a notice job still runs.
+    pub(super) fn observe_restart_notice(&mut self) -> bool {
+        match self.advance_restart_notice() {
+            Ok(busy) => busy,
+            Err(cause) => {
+                tracing::warn!(operation = "restart_notice", cause = %crate::failure_details::Details(cause.as_ref()),
+                    "The restart notice could not be prepared; the restart continues without it");
+                if let Some(restart) = &mut self.restart_notice {
+                    restart.notice.abandon();
+                }
+                self.restart_notice.as_ref().is_some_and(|restart| restart.notice.busy())
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{stable_entry, wanted};
+    use super::{Relaunch, notice_owed, stable_entry, wanted};
     use std::path::Path;
 
     /// An installed run relaunches the root's stable entry, which routes to the prepared update,
@@ -138,5 +306,15 @@ mod tests {
         assert!(!wanted(true, false, false), "a normal close without intent");
         assert!(!wanted(false, false, true), "a crash or forced exit is not a normal shutdown");
         assert!(!wanted(true, true, true), "a failure during shutdown");
+    }
+
+    /// The notice is owed from the restart decision through the launch until the new copy's
+    /// window shows; a started copy keeps it even though nothing more is owed by this run.
+    #[test]
+    fn the_restart_notice_stays_until_the_new_copy_shows_a_window() {
+        assert!(!notice_owed(false, &Relaunch::Idle));
+        assert!(notice_owed(true, &Relaunch::Idle));
+        assert!(notice_owed(false, &Relaunch::Launched(7)), "awaiting the new copy's window");
+        assert!(!notice_owed(true, &Relaunch::Done), "shown or failed: the notice closes");
     }
 }

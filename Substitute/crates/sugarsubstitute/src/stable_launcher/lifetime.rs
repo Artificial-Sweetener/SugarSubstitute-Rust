@@ -107,7 +107,7 @@ pub(super) struct Launcher {
     update_failure: Option<Box<dyn Error>>,
     budget: Option<LauncherBudget>,
     /// The "Starting…" notice shown while this launch takes more than a moment.
-    notice: Option<super::notice::Notice>,
+    notice: Option<crate::waiting_notice::Notice>,
     /// Native wake at the update cutoff, until that cutoff has been observed.
     update_wake: Option<Instant>,
     until: Option<Moment>,
@@ -305,7 +305,7 @@ impl HeadlessLifetime for Launcher {
         })
     }
     fn notice(&mut self) -> Option<sugarsubstitute_desktop::HeadlessNotice> {
-        self.notice.as_mut().and_then(super::notice::Notice::wanted)
+        self.notice.as_mut().and_then(crate::waiting_notice::Notice::wanted)
     }
     fn notice_surface(&mut self, surface: sugarsubstitute_desktop::NoticeSurface) {
         if let Some(notice) = &mut self.notice {
@@ -324,7 +324,7 @@ impl HeadlessLifetime for Launcher {
         [
             self.wake_at,
             self.update_wake,
-            self.notice.as_ref().and_then(super::notice::Notice::next_wake),
+            self.notice.as_ref().and_then(crate::waiting_notice::Notice::next_wake),
             self.recovery_wake,
             self.cached.as_ref().and_then(cached::Cached::next_deadline),
         ]

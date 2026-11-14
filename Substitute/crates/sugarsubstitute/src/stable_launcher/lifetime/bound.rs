@@ -10,7 +10,7 @@ impl Launcher {
         self.until = Some(budget.until());
         self.wake_at = native_wake(now, budget.until());
         self.update_wake = native_wake(now, budget.update_until());
-        self.notice = Some(crate::stable_launcher::notice::Notice::new(budget));
+        self.notice = Some(crate::waiting_notice::Notice::new(budget));
         self.budget = Some(budget);
     }
 
@@ -27,7 +27,7 @@ impl Launcher {
             return;
         };
         notice.advance(
-            &crate::stable_launcher::notice::Resources { client, scope, jobs: &self.jobs, until },
+            &crate::waiting_notice::Resources { client, scope, jobs: &self.jobs, until },
             self.closing,
         );
     }
@@ -50,12 +50,12 @@ impl Launcher {
 
     /// Whether the notice is on screen now.
     pub(super) fn notice_shown(&self) -> bool {
-        self.notice.as_ref().is_some_and(crate::stable_launcher::notice::Notice::shown)
+        self.notice.as_ref().is_some_and(crate::waiting_notice::Notice::shown)
     }
 
     /// Whether a notice job still runs.
     pub(super) fn notice_busy(&self) -> bool {
-        self.notice.as_ref().is_some_and(crate::stable_launcher::notice::Notice::busy)
+        self.notice.as_ref().is_some_and(crate::waiting_notice::Notice::busy)
     }
 
     /// Whether `task` would begin optional update work that may no longer begin. A refused step

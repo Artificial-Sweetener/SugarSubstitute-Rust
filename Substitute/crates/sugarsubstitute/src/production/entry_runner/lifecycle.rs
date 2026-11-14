@@ -31,7 +31,11 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
         self.drain(max)?;
         Ok(if self.closing {
             StartupPreparationStep::Closing
-        } else if self.intake_ready || self.forward_presentation_due() {
+        } else if self.intake_ready
+            || self.forward_presentation_due()
+            || self.restart_notice.is_some()
+        {
+            // A restart notice needs the native loop to reach the screen.
             StartupPreparationStep::Ready
         } else {
             StartupPreparationStep::Waiting
@@ -69,6 +73,9 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
             self.child.next_deadline(),
             self.updater.as_ref().and_then(crate::updates::parent::Parent::next_deadline),
             (!self.closing).then_some(self.update_wake).flatten(),
+            self.relaunch_wake(),
+            self.restart_notice.as_ref().and_then(|restart| restart.next_wake()),
+            self.restart_cover_wake(),
         ]
         .into_iter()
         .flatten()
@@ -137,6 +144,12 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
             return Err(cause);
         }
         Ok(())
+    }
+    fn notice(&mut self) -> Option<sugarsubstitute_desktop::HeadlessNotice> {
+        self.restart_notice()
+    }
+    fn notice_surface(&mut self, surface: sugarsubstitute_desktop::NoticeSurface) {
+        self.restart_notice_surface(surface);
     }
     fn take_presentation(&mut self) -> Option<sugarsubstitute_desktop::HeadlessPresentation> {
         self.take_forward_presentation()
@@ -232,7 +245,7 @@ impl<C: EntryActivation> HeadlessLifetime for EntryRunner<C> {
         {
             return Ok(false);
         }
-        if !self.advance_relaunch(budget.settle_until)? {
+        if !self.advance_relaunch(budget.settle_until)? || self.observe_restart_notice() {
             return Ok(false);
         }
         if self.updater.as_ref().is_some_and(|updater| !updater.settled()) {

@@ -40,7 +40,7 @@ pub(super) struct Root {
     scope: Option<Scope>,
     job: Option<OwnedJob<(), io::Error>>,
     jobs: crate::job_sequence::JobSequence,
-    notice: Option<super::notice::Notice>,
+    notice: Option<crate::waiting_notice::Notice>,
     until: Option<Moment>,
     closing: bool,
     /// When the process exits even if the root job never returns, with its native wake.
@@ -83,7 +83,7 @@ impl Root {
         let started = client.now()?;
         let deadline = started.checked_add(BUDGET)?;
         self.until = Some(deadline);
-        self.notice = Some(super::notice::Notice::new(LauncherBudget::new(started)?));
+        self.notice = Some(crate::waiting_notice::Notice::new(LauncherBudget::new(started)?));
         let exit_at = LauncherBudget::exit_at(deadline)?;
         self.exit_at =
             Some((exit_at, Instant::now().checked_add(BUDGET + LauncherBudget::EXIT_GRACE)));
@@ -157,13 +157,13 @@ impl Root {
         notice.observe(now, owns);
         if let (Some(client), Some(scope), Some(until)) = (&self.client, &self.scope, self.until) {
             notice.advance(
-                &super::notice::Resources { client, scope, jobs: &self.jobs, until },
+                &crate::waiting_notice::Resources { client, scope, jobs: &self.jobs, until },
                 self.closing || self.done,
             );
         }
     }
     fn notice_busy(&self) -> bool {
-        self.notice.as_ref().is_some_and(super::notice::Notice::busy)
+        self.notice.as_ref().is_some_and(crate::waiting_notice::Notice::busy)
     }
 }
 impl HeadlessLifetime for Root {
@@ -175,7 +175,8 @@ impl HeadlessLifetime for Root {
     }
     /// The pump builds a native loop only once the notice is due.
     fn prepare_native_runtime(&mut self, max: NonZeroUsize) -> Result<StartupPreparationStep> {
-        let shown = |root: &Self| root.notice.as_ref().is_some_and(super::notice::Notice::shown);
+        let shown =
+            |root: &Self| root.notice.as_ref().is_some_and(crate::waiting_notice::Notice::shown);
         Ok(match self.advance(max)? {
             HeadlessStep::Active if shown(self) => StartupPreparationStep::Ready,
             HeadlessStep::Active => StartupPreparationStep::Waiting,
@@ -183,7 +184,7 @@ impl HeadlessLifetime for Root {
         })
     }
     fn notice(&mut self) -> Option<sugarsubstitute_desktop::HeadlessNotice> {
-        self.notice.as_mut().and_then(super::notice::Notice::wanted)
+        self.notice.as_mut().and_then(crate::waiting_notice::Notice::wanted)
     }
     fn notice_surface(&mut self, surface: sugarsubstitute_desktop::NoticeSurface) {
         if let Some(notice) = &mut self.notice {
@@ -200,7 +201,7 @@ impl HeadlessLifetime for Root {
         }
         [
             self.exit_at.and_then(|(_, wake)| wake),
-            self.notice.as_ref().and_then(super::notice::Notice::next_wake),
+            self.notice.as_ref().and_then(crate::waiting_notice::Notice::next_wake),
         ]
         .into_iter()
         .flatten()

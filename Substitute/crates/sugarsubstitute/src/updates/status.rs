@@ -75,6 +75,11 @@ impl StatusSource {
         self.change(UpdateStatus::withdraw_restart);
     }
 
+    /// Adopt whether this run's restart notice covers the screen.
+    pub(crate) fn observe_restart_cover(&mut self, covered: bool) {
+        self.change(|status| status.observe_restart_cover(covered));
+    }
+
     /// Adopt what this launch observed about the version it starts for the first time.
     pub(crate) fn observe_launch(&mut self, launch: LaunchVersion) {
         self.change(|status| status.observe_launch(launch));

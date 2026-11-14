@@ -190,6 +190,7 @@ fn a_restart_before_the_window_leaves_a_live_desktop_to_close_itself() -> Result
     assert!(status.restarting(), "the window is told to stay hidden");
     assert_eq!(status.applying(), Some("2.0.0"));
     assert_eq!(runner.launch_version(), Some(LaunchVersion::Restarting("2.0.0".into())));
+    assert!(!status.restart_covered(), "the window keeps its splash until this run's notice shows");
     let fences = Cell::new(0);
     runner.close_after_fence(admission(&runner, true), |_| {
         fences.set(fences.get() + 1);
@@ -198,6 +199,44 @@ fn a_restart_before_the_window_leaves_a_live_desktop_to_close_itself() -> Result
     assert_eq!(fences.get(), 0, "the coordinator never cuts off a live window");
     assert!(!runner.closing);
     assert!(runner.launch_update.restart().is_some(), "the restart still stands");
+    Ok(())
+}
+
+/// From the restart decision this run asks for its own "Updating to version X…" notice at once.
+/// The window is told it may close only once that notice is on screen, or can never be; and
+/// after the relaunch the notice stays until the new copy's window is observed, never on a
+/// delay.
+#[test]
+fn the_restart_notice_covers_the_screen_from_the_decision_until_the_new_copy_shows()
+-> Result<(), Box<dyn Error>> {
+    let mut runner = runner()?;
+    runner.initialize_execution(Arc::new(crate::completion_wake::Wake::default()))?;
+    runner.initial_completed = true;
+    runner.intake_ready = true;
+    assert!(runner.restart_notice().is_none(), "no restart, no notice");
+    decide_restart(&mut runner)?;
+    runner.observe_restart_notice();
+    let asked = runner.restart_notice().ok_or("the notice is asked for at once")?;
+    assert_eq!(asked.title, crate::APPLICATION_NAME);
+    assert!(!runner.restart_covered(), "no frame on screen yet");
+    runner.publish_update_status()?;
+    assert!(!runner.update_status.snapshot().1.restart_covered());
+    assert!(runner.restart_cover_wake().is_none());
+
+    // A notice that can never show releases the window rather than holding it forever.
+    runner.restart_notice.as_mut().ok_or("notice absent")?.notice.abandon();
+    assert!(runner.restart_covered());
+    assert!(runner.restart_cover_wake().is_some(), "the window is told at once");
+    runner.publish_update_status()?;
+    assert!(runner.update_status.snapshot().1.restart_covered());
+    assert!(runner.restart_cover_wake().is_none());
+
+    // A started copy keeps this run waiting until one of its windows is on screen.
+    let future = sugarsubstitute_desktop::system_time_100ns().saturating_add(10_000_000_000);
+    runner.relaunch = super::super::relaunch::Relaunch::Launched(future);
+    let until = runner.client()?.now()?;
+    assert!(!runner.advance_relaunch(until)?, "no window of the new copy yet");
+    assert!(runner.relaunch_wake().is_some(), "it keeps looking");
     Ok(())
 }
 
