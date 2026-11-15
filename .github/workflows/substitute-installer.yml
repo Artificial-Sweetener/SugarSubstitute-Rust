@@ -165,10 +165,10 @@ jobs:
       - name: Attach the package to the setup program
         run: |
           receipt="$RUNNER_TEMP/installer-distribution-receipt.json"
-          mkdir "$RUNNER_TEMP/installer"
+          mkdir "$RUNNER_TEMP/published-installer"
           digest="$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).packageSha256" "$receipt")"
           node Substitute/installer/seal.mjs --attach "$SETUP_BUILD/sugarsubstitute-setup.exe" "$PACKAGE" "$digest" \
-            "$RUNNER_TEMP/installer/SugarSubstitute-Setup-$VERSION.exe" > "$RUNNER_TEMP/attached.json"
+            "$RUNNER_TEMP/published-installer/SugarSubstitute-Setup-$VERSION.exe" > "$RUNNER_TEMP/attached.json"
           # The installer shows its first page from the inventory digest compiled into it.
           compiled="$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).manifestSha256" "$receipt")"
           attached="$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).manifestSha256" "$RUNNER_TEMP/attached.json")"
@@ -181,7 +181,7 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: substitute-installer
-          path: ${{ runner.temp }}/installer/
+          path: ${{ runner.temp }}/published-installer/
           if-no-files-found: error
           retention-days: 7
 
@@ -197,14 +197,14 @@ jobs:
         uses: actions/download-artifact@v5
         with:
           name: substitute-installer
-          path: ${{ runner.temp }}/installer
+          path: ${{ runner.temp }}/published-installer
 
       - name: Upload the installer and confirm the digest GitHub recorded
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           name="SugarSubstitute-Setup-$VERSION.exe"
-          file="$RUNNER_TEMP/installer/$name"
+          file="$RUNNER_TEMP/published-installer/$name"
           gh release upload "substitute-v$VERSION" "$file" --repo "$GITHUB_REPOSITORY"
           expected="sha256:$(sha256sum "$file" | cut -d ' ' -f 1)"
           recorded="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/substitute-v$VERSION" \
