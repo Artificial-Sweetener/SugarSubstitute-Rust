@@ -204,7 +204,7 @@ pub(in crate::setup_storage) fn prepare(
         Err(cause) if crate::durable_storage::protection::held(&cause) => {
             check(context)?;
             tracing::info!(operation = "stable_launcher_replacement_deferred", cause = %cause,
-                "The installation is in use; the launcher is replaced at a later preparation");
+                "The installation is in use; the launcher is replaced once no copy is running");
             Ok(())
         }
         advanced => advanced,
