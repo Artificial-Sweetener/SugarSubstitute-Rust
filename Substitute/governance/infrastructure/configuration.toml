@@ -505,7 +505,7 @@ rationale = "Tooling build, source inspection or isolated qualification input; n
 [[records]]
 path = "tools/xtask/src/main.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:6819bf400054ada7178b94b2b196dbf624679d01aad1657d8342c2520c1a7419"
+source_sha256 = "sha256:dddd65e996777d64d5b7548cbebfb2e3104d8a529c3788820d093a7979db151b"
 capabilities = ["arguments"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
 

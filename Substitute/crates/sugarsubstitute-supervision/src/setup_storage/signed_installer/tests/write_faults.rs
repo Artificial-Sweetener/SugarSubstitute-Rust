@@ -323,6 +323,47 @@ fn faulted_at(
     })
 }
 
+/// Run `case` for every index below `count` on a few threads. Each case faults its own fresh
+/// installation, so the cases share nothing; every failed case is reported.
+fn side_by_side(count: usize, case: impl Fn(usize) -> TestResult + Sync) -> TestResult {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    const WALKERS: usize = 4;
+    let next = AtomicUsize::new(0);
+    let failures: Vec<String> = std::thread::scope(|scope| {
+        let walkers: Vec<_> = (0..WALKERS.min(count))
+            .map(|_| {
+                scope.spawn(|| {
+                    let mut failures = Vec::new();
+                    loop {
+                        let index = next.fetch_add(1, Ordering::SeqCst);
+                        if index >= count {
+                            return failures;
+                        }
+                        if let Err(cause) = case(index) {
+                            failures.push(cause.to_string());
+                        }
+                    }
+                })
+            })
+            .collect();
+        walkers
+            .into_iter()
+            .flat_map(|walker| {
+                walker.join().unwrap_or_else(|panic| {
+                    vec![
+                        panic
+                            .downcast_ref::<String>()
+                            .cloned()
+                            .or_else(|| panic.downcast_ref::<&str>().map(|text| (*text).to_owned()))
+                            .unwrap_or_else(|| "A faulted update panicked".to_owned()),
+                    ]
+                })
+            })
+            .collect()
+    });
+    if failures.is_empty() { Ok(()) } else { Err(failures.join("\n").into()) }
+}
+
 /// Walk every write of `walk`'s update with one fault class.
 fn walk(walk: Walk, fault: Fault) -> TestResult {
     let clean = baseline(walk)?;
@@ -330,10 +371,7 @@ fn walk(walk: Walk, fault: Fault) -> TestResult {
     {
         assert!(clean.writes.iter().any(|write| write.kind == kind), "{kind:?} never written");
     }
-    for index in 0..clean.writes.len() {
-        faulted(walk, index, fault, &clean)?;
-    }
-    Ok(())
+    side_by_side(clean.writes.len(), |index| faulted(walk, index, fault, &clean))
 }
 
 #[test]
@@ -390,8 +428,13 @@ fn every_fault_at_the_launch_pointer_write_keeps_the_installation_starting() -> 
         .iter()
         .position(|write| write.kind == UpdateFile::LaunchPointer)
         .ok_or("The first update never wrote the launch pointer")?;
-    for fault in Fault::ALL {
-        faulted_at(Walk::First, Target::Named(UpdateFile::LaunchPointer, 0), index, fault, &clean)?;
-    }
-    Ok(())
+    side_by_side(Fault::ALL.len(), |fault| {
+        faulted_at(
+            Walk::First,
+            Target::Named(UpdateFile::LaunchPointer, 0),
+            index,
+            Fault::ALL[fault],
+            &clean,
+        )
+    })
 }

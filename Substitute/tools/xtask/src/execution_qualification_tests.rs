@@ -6,7 +6,7 @@ use super::*;
 #[test]
 fn qualification_constructor_cannot_hide_in_aliases_macros_or_tests() -> Result<()> {
     let fixture = Repository::new()?;
-    let policy = Policy { schema_version: 1, owner: None };
+    let policy = Policy { schema_version: 1, owner: None, test_scheduling: Vec::new() };
     for source in [
         "fn forge() { AuthenticatedDesktopCreator::from_authenticated(binding); }",
         "use owner::AuthenticatedDesktopCreator as Seal; fn forge() { Seal::from_authenticated(binding); }",
@@ -31,7 +31,8 @@ fn even_registered_execution_owner_cannot_move_creator_issuance_to_another_file(
     let mut fixture = Repository::new()?;
     fixture.architecture.owners[0].layer = "adapter".into();
     fixture.architecture.owners[0].concern = "Application execution and task lifetime".into();
-    let policy = Policy { schema_version: 1, owner: Some("host".into()) };
+    let policy =
+        Policy { schema_version: 1, owner: Some("host".into()), test_scheduling: Vec::new() };
     write(
         fixture.root(),
         "crates/host/src/alternate.rs",
@@ -48,7 +49,7 @@ fn even_registered_execution_owner_cannot_move_creator_issuance_to_another_file(
 #[test]
 fn preview_fixture_producers_reject_alias_macro_and_test_escapes() -> Result<()> {
     let fixture = Repository::new()?;
-    let policy = Policy { schema_version: 1, owner: None };
+    let policy = Policy { schema_version: 1, owner: None, test_scheduling: Vec::new() };
     for source in [
         "fn forge() { AuthenticatedDesktopCreator::owner_fixture(core,scope,run); }",
         "use owner::AuthenticatedDesktopCreator as Seal; fn forge() { Seal::owner_fixture(core,scope,run); }",
@@ -80,7 +81,7 @@ fn preview_exact_workspace_source_access_and_public_exports_remain_enforced() ->
 #[test]
 fn report_copy_fixture_rejects_production_alias_macro_and_counterfeit_test_access() -> Result<()> {
     let fixture = Repository::new()?;
-    let policy = Policy { schema_version: 1, owner: None };
+    let policy = Policy { schema_version: 1, owner: None, test_scheduling: Vec::new() };
     for source in [
         "fn issue() { sugarsubstitute_desktop::report::copy_fixture::with_pending_report_copy(a,b,callback); }",
         "use sugarsubstitute_desktop::report::copy_fixture::with_pending_report_copy as issue; fn main(){ issue(a,b,callback); }",
@@ -125,7 +126,7 @@ fn copy_consumer_fixture() -> Result<Repository> {
 #[test]
 fn exact_report_copy_consumer_requires_actual_test_module_and_dev_only_edge() -> Result<()> {
     let fixture = copy_consumer_fixture()?;
-    let policy = Policy { schema_version: 1, owner: None };
+    let policy = Policy { schema_version: 1, owner: None, test_scheduling: Vec::new() };
     check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace)?;
     for declaration in [
         "#[path=\"control/tests.rs\"] mod tests;",
@@ -166,7 +167,7 @@ fn report_copy_consumer_permission_cannot_borrow_private_preview_producer() -> R
     assert!(
         check(
             fixture.root(),
-            &Policy { schema_version: 1, owner: None },
+            &Policy { schema_version: 1, owner: None, test_scheduling: Vec::new() },
             &fixture.architecture,
             &fixture.workspace
         )
@@ -196,7 +197,7 @@ fn exact_report_copy_producer_requires_default_off_feature_and_exact_feature_mod
         "crates/sugarsubstitute-desktop/src/report/copy_fixture.rs",
         "pub fn with_pending_report_copy() {}",
     )?;
-    let policy = Policy { schema_version: 1, owner: None };
+    let policy = Policy { schema_version: 1, owner: None, test_scheduling: Vec::new() };
     check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace)?;
     write(
         fixture.root(),
@@ -225,7 +226,7 @@ fn exact_report_copy_producer_requires_default_off_feature_and_exact_feature_mod
 fn report_copy_cross_parent_import_is_rejected_even_with_legitimate_original_test_gate()
 -> Result<()> {
     let fixture = copy_consumer_fixture()?;
-    let policy = Policy { schema_version: 1, owner: None };
+    let policy = Policy { schema_version: 1, owner: None, test_scheduling: Vec::new() };
     check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace)?;
     write(fixture.root(), "crates/sugarsubstitute/src/inline/marker.rs", "fn ordinary() {}")?;
     // The genuine consumer contains the same accepted fixture use throughout this test.
@@ -273,7 +274,7 @@ fn report_copy_cross_parent_producer_import_cannot_enable_default_off_fixture() 
         "crates/sugarsubstitute-desktop/src/report/copy_fixture.rs",
         "pub fn with_pending_report_copy() {}",
     )?;
-    let policy = Policy { schema_version: 1, owner: None };
+    let policy = Policy { schema_version: 1, owner: None, test_scheduling: Vec::new() };
     check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace)?;
     write(
         fixture.root(),
@@ -306,7 +307,7 @@ fn report_copy_cross_parent_producer_import_cannot_enable_default_off_fixture() 
 #[test]
 fn report_copy_consumer_rejects_every_target_and_build_production_feature_edge() -> Result<()> {
     let fixture = copy_consumer_fixture()?;
-    let policy = Policy { schema_version: 1, owner: None };
+    let policy = Policy { schema_version: 1, owner: None, test_scheduling: Vec::new() };
     check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace)?;
     let dev = "[target.'cfg(windows)'.dev-dependencies]\nsugarsubstitute-desktop={features=['boundary-fixtures']}\n";
     for table in [
@@ -328,7 +329,7 @@ fn report_copy_consumer_rejects_every_target_and_build_production_feature_edge()
 #[test]
 fn report_copy_consumer_rejects_production_package_aliases_with_accepted_dev_edge() -> Result<()> {
     let fixture = copy_consumer_fixture()?;
-    let policy = Policy { schema_version: 1, owner: None };
+    let policy = Policy { schema_version: 1, owner: None, test_scheduling: Vec::new() };
     let dev = "[target.'cfg(windows)'.dev-dependencies]\nsugarsubstitute-desktop={features=['boundary-fixtures']}\n";
     check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace)?;
     for table in [

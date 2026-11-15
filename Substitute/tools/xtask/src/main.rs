@@ -26,6 +26,8 @@ mod execution_exports_resolution_tests;
 mod execution_exports_tests;
 mod execution_source;
 #[cfg(test)]
+mod execution_test_scheduling_tests;
+#[cfg(test)]
 mod execution_tests;
 mod fingerprints;
 #[cfg(test)]

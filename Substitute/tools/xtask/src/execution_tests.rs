@@ -73,7 +73,7 @@ fn scheduling_capabilities_include_async_pools_and_native_ffi() -> Result<()> {
 #[test]
 fn native_wait_registration_cannot_escape_execution_ownership() -> Result<()> {
     let fixture = Repository::new()?;
-    let policy = Policy { schema_version: 1, owner: None };
+    let policy = Policy { schema_version: 1, owner: None, test_scheduling: Vec::new() };
     for source in [
         "fn wait() { unsafe { windows::Win32::System::Threading::RegisterWaitForSingleObject(); } }",
         "use windows::Win32::System::Threading::RegisterWaitForSingleObject as register; fn wait() { unsafe { register(); } }",
@@ -122,7 +122,7 @@ fn ordinary_logic_and_process_creation_are_not_thread_scheduling() -> Result<()>
 #[test]
 fn repository_gate_rejects_ad_hoc_scheduling_without_an_owner() -> Result<()> {
     let fixture = Repository::new()?;
-    let policy = Policy { schema_version: 1, owner: None };
+    let policy = Policy { schema_version: 1, owner: None, test_scheduling: Vec::new() };
     check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace)?;
     write(fixture.root(), "crates/host/src/jobs.rs", "fn job() { std::thread::spawn(|| {}); }")?;
     let error = check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace)
@@ -148,7 +148,7 @@ fn dependency_identity_cannot_hide_an_unused_or_renamed_runtime() -> Result<()> 
                     crate::error::Failure::external("construct dependency fixture", error)
                 })?,
             );
-            let policy = Policy { schema_version: 1, owner: None };
+            let policy = Policy { schema_version: 1, owner: None, test_scheduling: Vec::new() };
             let error = check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace)
                 .err()
                 .map(|error| error.to_string())
@@ -166,7 +166,8 @@ fn dependency_identity_cannot_hide_an_unused_or_renamed_runtime() -> Result<()> 
 #[test]
 fn execution_owner_must_be_registered_at_the_adapter_boundary() -> Result<()> {
     let mut fixture = Repository::new()?;
-    let mut policy = Policy { schema_version: 1, owner: Some("missing".into()) };
+    let mut policy =
+        Policy { schema_version: 1, owner: Some("missing".into()), test_scheduling: Vec::new() };
     assert!(check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace).is_err());
     policy.owner = Some("host".into());
     assert!(check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace).is_err());
@@ -204,7 +205,8 @@ fn registered_owner_does_not_exempt_other_runtime_crates() -> Result<()> {
         "crates/execution/src/lib.rs",
         "fn job() { std::thread::spawn(|| {}); }",
     )?;
-    let policy = Policy { schema_version: 1, owner: Some("execution".into()) };
+    let policy =
+        Policy { schema_version: 1, owner: Some("execution".into()), test_scheduling: Vec::new() };
     check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace)?;
     write(fixture.root(), "crates/host/src/jobs.rs", "fn job() { std::thread::spawn(|| {}); }")?;
     assert!(check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace).is_err());
@@ -231,7 +233,7 @@ fn execution_policy_rejects_future_schemas_and_undeclared_exemptions() -> Result
 #[test]
 fn overlapped_pipe_lifetimes_cannot_escape_execution_ownership() -> Result<()> {
     let fixture = Repository::new()?;
-    let policy = Policy { schema_version: 1, owner: None };
+    let policy = Policy { schema_version: 1, owner: None, test_scheduling: Vec::new() };
     for name in ["ConnectNamedPipe", "CancelIoEx", "GetOverlappedResult", "GetOverlappedResultEx"] {
         for source in [
             format!("fn io() {{ unsafe {{ windows::Win32::System::IO::{name}(); }} }}"),
@@ -262,7 +264,7 @@ fn overlapped_pipe_lifetimes_cannot_escape_execution_ownership() -> Result<()> {
 #[test]
 fn symbol_resource_producers_cannot_hide_outside_contract_or_execution_owners() -> Result<()> {
     let fixture = Repository::new()?;
-    let policy = Policy { schema_version: 1, owner: None };
+    let policy = Policy { schema_version: 1, owner: None, test_scheduling: Vec::new() };
     for source in [
         "fn forged() { sugarsubstitute_contracts::execution::JobContext::new(); }",
         "use sugarsubstitute_contracts::execution::JobContext as Context; fn forged() { Context::new(); }",
@@ -303,7 +305,7 @@ fn symbol_resource_producers_cannot_hide_outside_contract_or_execution_owners() 
 #[test]
 fn original_memory_observation_cannot_be_forged_outside_its_owners() -> Result<()> {
     let fixture = Repository::new()?;
-    let policy = Policy { schema_version: 1, owner: None };
+    let policy = Policy { schema_version: 1, owner: None, test_scheduling: Vec::new() };
     for source in [
         "fn forge() { MemoryLeaseObservation::new(memory); }",
         "use sugarsubstitute_contracts::execution::MemoryLeaseObservation as O; fn forge() { O::new(memory); }",
@@ -328,7 +330,7 @@ fn original_memory_observation_cannot_be_forged_outside_its_owners() -> Result<(
 #[test]
 fn capture_resource_producers_cannot_hide_outside_contract_or_execution_owners() -> Result<()> {
     let fixture = Repository::new()?;
-    let policy = Policy { schema_version: 1, owner: None };
+    let policy = Policy { schema_version: 1, owner: None, test_scheduling: Vec::new() };
     for source in [
         "fn forged() { sugarsubstitute_contracts::execution::MemoryLeaseObservation::new(memory); }",
         "use sugarsubstitute_contracts::execution::MemoryLeaseObservation as Identity; fn forged() { Identity::new(memory); }",
@@ -364,7 +366,7 @@ fn capture_resource_producers_cannot_hide_outside_contract_or_execution_owners()
 #[test]
 fn report_export_producers_reject_nonowners_and_preserve_consumers() -> Result<()> {
     let fixture = Repository::new()?;
-    let policy = Policy { schema_version: 1, owner: None };
+    let policy = Policy { schema_version: 1, owner: None, test_scheduling: Vec::new() };
     for source in [
         "fn forge() { sugarsubstitute_execution::ReportExportAdmission::new(); }",
         "use sugarsubstitute_execution::ReportExportOrigin as Origin; fn forge() { Origin::new(); }",
@@ -413,7 +415,7 @@ mod registered_startup;
 fn authenticated_capture_input_producers_reject_nonowners_and_allow_owned_consumption() -> Result<()>
 {
     let fixture = Repository::new()?;
-    let policy = Policy { schema_version: 1, owner: None };
+    let policy = Policy { schema_version: 1, owner: None, test_scheduling: Vec::new() };
     for source in [
         "fn forge() { InheritedCaptureAttachInput::authenticated(); }",
         "use sugarsubstitute_execution::InheritedCaptureAttachInput as I; fn forge() { I::authenticated(); }",

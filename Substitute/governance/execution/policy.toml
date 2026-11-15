@@ -1,3 +1,9 @@
 schema_version = 1
 
 owner = "sugarsubstitute-execution"
+
+# Tests run side by side on scoped threads only in the files registered here.
+
+[[test_scheduling]]
+path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/write_faults.rs"
+runs = "One faulted update for each write, each in its own installation."

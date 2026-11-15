@@ -74,6 +74,13 @@ implementation plans, or workstation configuration.
   thread. Never wait for a job on the UI thread or publish stale-generation work.
 - Tests use the same execution boundary and deterministic clocks/boundary fakes.
   Test modules, platform conditionals and repository tooling are not exemptions.
+- Running test cases side by side has its own rule. A test file may fan
+  independent cases out with `std::thread::scope` once it is registered under
+  `test_scheduling` in `governance/execution/policy.toml` with what it runs. A
+  scoped thread ends before its function returns, so nothing outlives the test.
+  No other scheduling primitive is allowed there, application code cannot be
+  registered, and the code under test still schedules through the execution
+  owner.
 - The execution gate checks known scheduler dependency identities and source
   access, including aliases and macro tokens. Review new scheduling libraries,
   native entry points and exported execution contracts, and extend the gate with

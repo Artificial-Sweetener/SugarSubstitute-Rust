@@ -126,7 +126,8 @@ fn repository_owner_gate_enforces_export_contracts() -> Result<()> {
     fixture.architecture.layers.insert(1, "adapter".into());
     fixture.architecture.owners[0].layer = "adapter".into();
     fixture.architecture.owners[0].concern = "Application execution and task lifetime".into();
-    let policy = Policy { schema_version: 1, owner: Some("host".into()) };
+    let policy =
+        Policy { schema_version: 1, owner: Some("host".into()), test_scheduling: Vec::new() };
     write(fixture.root(), "crates/host/src/lib.rs", "fn work() { tokio::spawn(async {}); }")?;
     check(fixture.root(), &policy, &fixture.architecture, &fixture.workspace)?;
     write(fixture.root(), "crates/host/src/lib.rs", "pub use tokio::runtime::Handle;")?;

@@ -4323,7 +4323,7 @@ rationale = "Repository tooling tests.rs: Adversarial capability, copy-provenanc
 [[records]]
 path = "tools/xtask/src/main.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:6819bf400054ada7178b94b2b196dbf624679d01aad1657d8342c2520c1a7419"
+source_sha256 = "sha256:dddd65e996777d64d5b7548cbebfb2e3104d8a529c3788820d093a7979db151b"
 capabilities = ["method canonicalize"]
 disposition = "tooling"
 rationale = "Repository tooling main.rs: Provide the same portable verification entry point for local work, hooks and CI. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
@@ -5340,7 +5340,7 @@ rationale = "Durable filesystem owner: Test fault plans that fail one update wri
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/write_faults.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:76f7b41ec93d2f407a27e7cf2331873dc85d3dd989e468c5334dbdb4e77fcdc2"
+source_sha256 = "sha256:0694daa3f32e99878c04d1d96f306fcfb095f5d16fab1b96cc0baf35e04cb67c"
 capabilities = ["method metadata", "std::fs::read_dir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Section 7 done criteria with a fault at every update write. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

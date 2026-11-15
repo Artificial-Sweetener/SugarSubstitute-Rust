@@ -3,7 +3,7 @@
 
 //! Enforce one execution adapter before application-owned concurrency can grow.
 
-use std::path::Path;
+use std::{collections::BTreeSet, path::Path};
 
 use serde::Deserialize;
 
@@ -12,6 +12,7 @@ use crate::{
     execution_exports, execution_source,
     policy::Architecture,
     source::{resolve, rust_files},
+    testing_scope,
     workspace::Workspace,
 };
 
@@ -24,7 +25,28 @@ mod copy_fixture;
 pub(crate) struct Policy {
     pub(crate) schema_version: u32,
     pub(crate) owner: Option<String>,
+    /// The files that run tests side by side on scoped threads.
+    #[serde(default)]
+    pub(crate) test_scheduling: Vec<TestScheduling>,
 }
+
+/// One file that runs tests side by side, and what it runs.
+///
+/// A registered file may use `std::thread::scope` and no other scheduling primitive: a scoped
+/// thread ends before the function that started it returns, so no thread outlives its test.
+/// The file's scheduling is in test-only source. Code under test still schedules through the
+/// execution owner.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct TestScheduling {
+    /// The file, relative to the workspace root, with `/` separators.
+    pub(crate) path: String,
+    /// What the file runs side by side.
+    pub(crate) runs: String,
+}
+
+/// The only scheduling primitive a registered test-scheduling file may use.
+const SCOPED_THREADS: &str = "std::thread::scope";
 
 /// Require a dedicated adapter and scan all authored sources, including tests and other targets.
 pub(crate) fn check(
@@ -44,6 +66,16 @@ pub(crate) fn check(
             "execution: owner must be one registered dedicated adapter with concern 'Application execution and task lifetime'",
         )?;
     }
+    for entry in &policy.test_scheduling {
+        require(
+            !entry.runs.trim().is_empty(),
+            format!(
+                "execution: test scheduling of {} must say what it runs side by side",
+                entry.path
+            ),
+        )?;
+    }
+    let mut scheduled = BTreeSet::new();
     for owner in &architecture.owners {
         let permitted = policy.owner.as_deref() == Some(owner.package.as_str());
         let package = workspace.packages.iter().find(|package| package.name == owner.package);
@@ -135,17 +167,61 @@ pub(crate) fn check(
                 )?;
             }
             let findings = execution_source::findings(&source)?;
-            if !permitted {
+            if !permitted && !findings.is_empty() {
+                let relative = relative(root, &path);
                 require(
-                    findings.is_empty(),
+                    policy.test_scheduling.iter().any(|entry| entry.path == relative),
                     format!(
                         "execution: {} uses scheduling primitives outside the execution owner: {}",
                         path.strip_prefix(root).unwrap_or(&path).display(),
                         findings.join(", ")
                     ),
                 )?;
+                require(
+                    findings.iter().all(|finding| finding == SCOPED_THREADS),
+                    format!(
+                        "execution: {relative} is registered for test scheduling and may use only {SCOPED_THREADS}: {}",
+                        findings.join(", ")
+                    ),
+                )?;
+                require(
+                    test_only(&resolve(root, &owner.root)?, &path, &findings)?,
+                    format!(
+                        "execution: {relative} is registered for test scheduling but schedules outside test-only code"
+                    ),
+                )?;
+                scheduled.insert(relative);
             }
         }
     }
+    for entry in &policy.test_scheduling {
+        require(
+            scheduled.contains(&entry.path),
+            format!(
+                "execution: {} is registered for test scheduling but does not use {SCOPED_THREADS}; remove its registration",
+                entry.path
+            ),
+        )?;
+    }
     Ok(())
+}
+
+/// `path` relative to the workspace root, with `/` separators, as policies spell files.
+fn relative(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .components()
+        .map(|component| component.as_os_str().to_string_lossy())
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+/// Whether every scheduling use in `path` is in source only test builds compile.
+fn test_only(crate_root: &Path, path: &Path, findings: &[String]) -> Result<bool> {
+    for scoped in testing_scope::scoped_sources(crate_root)? {
+        if scoped.path == path {
+            return Ok(execution_source::findings(&scoped.source)? == findings);
+        }
+    }
+    Ok(false)
 }

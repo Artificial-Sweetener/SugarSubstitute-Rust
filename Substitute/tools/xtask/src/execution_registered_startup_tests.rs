@@ -6,7 +6,7 @@ use super::*;
 #[test]
 fn registered_startup_producer_remains_with_execution_owner() -> Result<()> {
     let fixture = Repository::new()?;
-    let policy = Policy { schema_version: 1, owner: None };
+    let policy = Policy { schema_version: 1, owner: None, test_scheduling: Vec::new() };
     for source in [
         "fn forge() { sugarsubstitute_execution::RegisteredStartupSource::new(); }",
         "fn forge() { sugarsubstitute_execution::coordinator_entry::RegisteredRestartAdmission::new(); }",
