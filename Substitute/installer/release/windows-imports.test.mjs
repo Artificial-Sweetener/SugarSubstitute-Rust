@@ -3,7 +3,13 @@
 /** Decode the pinned inspector's regular, delayed and forwarded dependency formats. */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseImage, libraryName, requireBootstrapDependencies } from './windows-imports.mjs'
+import { parseImage, libraryName, requireBootstrapDependencies, reviewedInspector } from './windows-imports.mjs'
+
+test('the inspector is LLVM 19.1 at any patch release and no other series', () => {
+  const banner = version => `LLVM (http://llvm.org/):\r\n  LLVM version ${version}\r\n  Optimized build.\r\n`
+  for (const version of ['19.1.1', '19.1.5', '19.1.12']) assert.match(banner(version), reviewedInspector)
+  for (const version of ['19.2.0', '20.1.8', '18.1.8', '19.1', '119.1.1', '19.1.1git']) assert.doesNotMatch(banner(version), reviewedInspector)
+})
 
 const header = 'Format: COFF-x86-64\nImageFileHeader {\n  Machine: IMAGE_FILE_MACHINE_AMD64 (0x8664)\n}\nImageOptionalHeader {\n  ExportTableRVA: 0x3000\n  ImportTableRVA: 0x1000\n  DelayImportDescriptorRVA: 0x2000\n}\n'
 const imports = 'Import {\n  Name: KERNEL32.dll\n  Symbol: CloseHandle (1)\n}\nDelayImport {\n  Name: runtime.dll\n  Import {\n    Symbol: DeferredCall (0)\n  }\n}\nExport {\n  Ordinal: 1\n  Name: Forwarded\n  ForwardedTo: OtherLibrary.Function\n}\n'

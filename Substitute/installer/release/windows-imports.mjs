@@ -106,6 +106,12 @@ export function parseImage(text, platform) {
   return { imports, exports }
 }
 
+/**
+ * The inspector output this module decodes is LLVM 19.1's. Its patch releases keep that output,
+ * and Visual Studio 2022 ships a different one with each of its own versions.
+ */
+export const reviewedInspector = /^\s*LLVM version 19\.1\.\d+\s*$/m
+
 /** Select and version-check a build tool explicitly; never discover a replacement through PATH. */
 export async function windowsInspector(executable, platform) {
   if (!path.isAbsolute(executable) || !machines[platform]) throw new Error('Explicit inspector and Windows platform required')
@@ -116,7 +122,7 @@ export async function windowsInspector(executable, platform) {
     if (result.status !== 0 || result.stderr.trim()) throw new Error(`Native inspection failed: ${result.stderr}`)
     return result.stdout
   }
-  if (!/^\s*LLVM version 19\.1\.1\s*$/m.test(invoke(['--version']))) throw new Error('Review the native inspector version before packaging')
+  if (!reviewedInspector.test(invoke(['--version']))) throw new Error('Review the native inspector version before packaging')
   return async file => {
     await regularArtifact(file)
     return parseImage(invoke(['--file-header', '--coff-imports', '--coff-exports', file]), platform)

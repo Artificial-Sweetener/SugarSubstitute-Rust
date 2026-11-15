@@ -43,6 +43,13 @@ finding none above it.
   only when dispatched. It publishes only when the dispatch asks to and the repository
   variable `RELEASES_ENABLED` is `true`; otherwise it is a dry run in a disposable clone with no
   credentials. The Comfy Registry upload of a SugarCubes release needs the repository variable
-  `COMFY_REGISTRY_ENABLED` to be `true` as well. Test the tooling with `npm test` and `npm run format:check` from that folder, and
+  `COMFY_REGISTRY_ENABLED` to be `true` as well. Test the tooling with `npm test` and
+  `npm run format:check` from that folder, and
   `python -m unittest discover -s tests -p "test_*.py"` with SugarCubes and the pinned
   comfy-cli installed. Never publish from a local checkout.
+- A SugarSubstitute release publishes its update package to the signed update repository (the
+  assets of the `substitute-updates` release) and its installer,
+  `SugarSubstitute-Setup-<version>.exe`, to its own GitHub release. The package carries the
+  SugarCubes archive released as the version the released commit declares.
+  `.github/workflows/substitute-installer.yml` builds the installer from the signed state the
+  update repository publishes; dispatch it with the version to build that installer again.

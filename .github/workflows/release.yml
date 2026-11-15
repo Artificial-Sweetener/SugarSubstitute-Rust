@@ -15,6 +15,9 @@ name: Release
 # from that version's changelog and the committed release anchor compiled in, signs the release
 # manifest with the RELEASE_MANIFEST_KEY secret, assembles and seals the update package with its
 # channel descriptor, and the update repository workflow signs them with the release lifetimes.
+# The package carries the SugarCubes archive released as the version the released commit
+# declares. Once the update repository publishes the release, the installer workflow builds its
+# installer from that signed state and attaches it to the SugarSubstitute release.
 # Every signing key is a secret of the protected `release` environment, which only these jobs
 # use; .github/release/key-ceremony.mjs creates them once, offline. Signing is gated like the
 # scheduled re-sign: RELEASES_ENABLED, the committed root and the committed release anchor.
@@ -316,6 +319,21 @@ jobs:
             --dir "$crash/host-tools" --pattern 'gn.exe' --pattern 'ninja.exe'
           echo "CRASHPAD_BUNDLE=$crash" >> "$GITHUB_ENV"
 
+      # The package carries SugarCubes as the archive its own release published: the version the
+      # released commit declares, which the SugarCubes release of this run or an earlier one made.
+      - name: Download the released SugarCubes archive the package carries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(python -c "import tomllib; print(tomllib.load(open('Sugar/pyproject.toml', 'rb'))['project']['version'])")"
+          mkdir "$RUNNER_TEMP/sugarcubes"
+          if ! gh release download "sugarcubes-v$version" --repo "$GITHUB_REPOSITORY" \
+            --dir "$RUNNER_TEMP/sugarcubes" --pattern "SugarCubes-$version.zip"; then
+            echo "::error::SugarCubes $version has no released archive in this repository, so the package cannot carry it."
+            exit 1
+          fi
+          echo "SUGARCUBES_ARCHIVE=$RUNNER_TEMP/sugarcubes/SugarCubes-$version.zip" >> "$GITHUB_ENV"
+
       - name: Prepare the repository-pinned Rust
         working-directory: Substitute
         run: rustup show active-toolchain
@@ -381,7 +399,7 @@ jobs:
       - name: Assemble the release bundle
         run: |
           bundle="$RUNNER_TEMP/bundle"
-          node Substitute/installer/package.mjs "$RUNNER_TEMP/signed" "$GITHUB_WORKSPACE/Sugar" "$bundle" \
+          node Substitute/installer/package.mjs "$RUNNER_TEMP/signed" "$SUGARCUBES_ARCHIVE" "$bundle" \
             "$RELEASE_ID" windows-x86_64 "$LLVM_READOBJ" > "$RUNNER_TEMP/bundle.json"
           echo "RELEASE_BUNDLE=$bundle" >> "$GITHUB_ENV"
 
@@ -424,3 +442,16 @@ jobs:
       operation: release
       targets_artifact: substitute-update-targets
     secrets: inherit
+
+  substitute-installer:
+    name: Build and attach SugarSubstitute's installer
+    needs: [authorize, substitute, substitute-update-repository]
+    if: >-
+      always() &&
+      needs.authorize.outputs.publish == 'true' &&
+      needs.substitute-update-repository.result == 'success'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/substitute-installer.yml
+    with:
+      version: ${{ needs.substitute.outputs.version }}

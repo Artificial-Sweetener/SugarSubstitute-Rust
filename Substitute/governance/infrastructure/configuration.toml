@@ -1124,3 +1124,10 @@ owner = "sugarsubstitute-supervision"
 source_sha256 = "sha256:6beb9faf3d13be28ba795973e3051ab37b7525496f34850b1c9b798e0a1f2c1d"
 capabilities = ["environment"]
 rationale = "The restore measurement harness reads where to measure and where to keep its phase timings; the timings are recorded, never judged."
+
+[[records]]
+path = "installer/release/published-release.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:8d3363d646134cda4246f27037e9fd18a6ede23d3c7a08ea0069ebe19f5ade7e"
+capabilities = ["arguments"]
+rationale = "Tooling build, source inspection or isolated qualification input; not product settings."

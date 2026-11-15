@@ -1,0 +1,215 @@
+name: SugarSubstitute installer
+
+# Builds the installer of the release the update repository publishes and attaches it to that
+# release on GitHub as SugarSubstitute-Setup-<version>.exe. The installer is the setup program
+# compiled from the released commit with the repository's signed metadata for that release,
+# followed by the release's update package, byte for byte as installations download it.
+#
+# The release workflow calls this once the update repository has signed a release. Dispatch it
+# with a version to build that release's installer again; the update repository must still
+# publish that version, because only the published release is described by its metadata.
+#
+# Attaching an installer is publication like any release: `authorize` lets it happen only while
+# the repository variable RELEASES_ENABLED is exactly "true". No job here reads a secret, and
+# only `publish` may write.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "The released SugarSubstitute version the update repository publishes"
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        description: "The released SugarSubstitute version the update repository publishes"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: substitute-installer
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "24"
+  VERSION: ${{ inputs.version }}
+  PLATFORM: windows-x86_64
+  UPDATE_REPOSITORY_RELEASE: substitute-updates
+  TRUSTED_ROOT: .github/update-repository/root.json
+  RELEASE_ANCHOR: Substitute/installer/release/release-anchor.bin
+  WINDOWS_SDK: "10.0.26100.0"
+
+jobs:
+  authorize:
+    name: Decide whether this run may publish
+    runs-on: ubuntu-24.04
+    outputs:
+      publish: ${{ steps.decide.outputs.publish }}
+    steps:
+      - name: Decide
+        id: decide
+        env:
+          RELEASES_ENABLED: ${{ vars.RELEASES_ENABLED }}
+        run: |
+          if ! [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::\"$VERSION\" is not a released version such as 1.2.3."
+            exit 1
+          fi
+          if [ "$RELEASES_ENABLED" != "true" ]; then
+            echo "::error::Publication is switched off: the repository variable RELEASES_ENABLED is not \"true\"."
+            exit 1
+          fi
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build the installer
+    needs: authorize
+    if: needs.authorize.outputs.publish == 'true'
+    runs-on: windows-2022
+    # A hang guard only: a cold release build of the setup program must finish.
+    timeout-minutes: 240
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout the released commit
+        uses: actions/checkout@v6
+        with:
+          ref: substitute-v${{ inputs.version }}
+          persist-credentials: false
+
+      - name: Require the trusted root and release anchor installations ship with
+        run: |
+          for file in "$TRUSTED_ROOT" "$RELEASE_ANCHOR"; do
+            if [ ! -f "$file" ]; then
+              echo "::error::$file is missing, so no installation could trust this release. Run .github/release/key-ceremony.mjs offline first."
+              exit 1
+            fi
+          done
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download the update repository's metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          repository="$RUNNER_TEMP/update-repository"
+          mkdir "$repository"
+          gh release download "$UPDATE_REPOSITORY_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --dir "$repository" --pattern '*.json'
+          echo "REPOSITORY=$repository" >> "$GITHUB_ENV"
+
+      - name: Download the package the repository offers as this version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          name="$(node Substitute/installer/release/published-release.mjs package "$REPOSITORY" "$VERSION" "$PLATFORM")"
+          mkdir "$RUNNER_TEMP/package"
+          gh release download "$UPDATE_REPOSITORY_RELEASE" --repo "$GITHUB_REPOSITORY" \
+            --dir "$RUNNER_TEMP/package" --pattern "$name"
+          echo "PACKAGE=$RUNNER_TEMP/package/$name" >> "$GITHUB_ENV"
+
+      # The installer authenticates the signed metadata and the attached package when it runs;
+      # these files only carry them into the build.
+      - name: Write the distributions the installer is compiled with
+        run: |
+          setup="$RUNNER_TEMP/installer-distribution.json"
+          update="$RUNNER_TEMP/update-distribution.json"
+          node Substitute/installer/release/published-release.mjs distribution "$REPOSITORY" "$VERSION" \
+            "$PLATFORM" "$PACKAGE" "$setup" > "$RUNNER_TEMP/installer-distribution-receipt.json"
+          node Substitute/installer/release/update-distribution.mjs "$update"
+          echo "SUGARSUBSTITUTE_SETUP_DISTRIBUTION=$setup" >> "$GITHUB_ENV"
+          echo "SUGARSUBSTITUTE_UPDATE_DISTRIBUTION=$update" >> "$GITHUB_ENV"
+
+      - name: Prepare the repository-pinned Rust
+        working-directory: Substitute
+        run: rustup show active-toolchain
+
+      # The same Visual Studio instance, Windows SDK, release anchor and crash parser as the
+      # application build of the release workflow.
+      - name: Build the setup program in release mode
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $instance = & $vswhere -version '[17.0,18.0)' -products Microsoft.VisualStudio.Product.Enterprise -property installationPath
+          if (-not $instance -or @($instance).Count -ne 1) {
+            throw 'Expected one Visual Studio 2022 Enterprise instance on the Windows runner.'
+          }
+          $reader = Join-Path $instance 'VC\Tools\Llvm\x64\bin\llvm-readobj.exe'
+          if (-not (Test-Path -LiteralPath $reader -PathType Leaf)) { throw "The selected instance has no $reader." }
+
+          Import-Module (Join-Path $instance 'Common7\Tools\Microsoft.VisualStudio.DevShell.dll')
+          Enter-VsDevShell -VsInstallPath $instance -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64 -winsdk=$env:WINDOWS_SDK" | Out-Null
+          $parser = Join-Path $env:GITHUB_WORKSPACE 'Substitute\tools\crashpad\prebuilt\x86_64-pc-windows-msvc'
+          $expected = (Get-Content -LiteralPath (Join-Path $parser 'committed_dump_parser.lib.sha256') -TotalCount 1).Split(' ')[0]
+          $actual = (Get-FileHash -LiteralPath (Join-Path $parser 'committed_dump_parser.lib') -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "committed_dump_parser.lib is $actual, but its recorded SHA-256 is $expected." }
+          $env:SUGAR_COMMITTED_PARSER_LIB = $parser
+          $env:CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER = (Get-Command link.exe).Source
+          $env:CARGO_TARGET_DIR = Join-Path $env:RUNNER_TEMP 'target'
+          $env:SUGARSUBSTITUTE_RELEASE_ANCHOR = Join-Path $env:GITHUB_WORKSPACE $env:RELEASE_ANCHOR
+          $setup = Join-Path $env:RUNNER_TEMP 'setup'
+          node Substitute/installer/release/build-setup.mjs $setup release $env:PLATFORM $reader
+
+          "SETUP_BUILD=$setup" >> $env:GITHUB_ENV
+
+      - name: Attach the package to the setup program
+        run: |
+          receipt="$RUNNER_TEMP/installer-distribution-receipt.json"
+          mkdir "$RUNNER_TEMP/installer"
+          digest="$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).packageSha256" "$receipt")"
+          node Substitute/installer/seal.mjs --attach "$SETUP_BUILD/sugarsubstitute-setup.exe" "$PACKAGE" "$digest" \
+            "$RUNNER_TEMP/installer/SugarSubstitute-Setup-$VERSION.exe" > "$RUNNER_TEMP/attached.json"
+          # The installer shows its first page from the inventory digest compiled into it.
+          compiled="$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).manifestSha256" "$receipt")"
+          attached="$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1], 'utf8')).manifestSha256" "$RUNNER_TEMP/attached.json")"
+          if [ "$attached" != "$compiled" ]; then
+            echo "::error::The attached package's inventory is $attached, but the installer was compiled for $compiled."
+            exit 1
+          fi
+
+      - name: Hand the installer to the publishing job
+        uses: actions/upload-artifact@v5
+        with:
+          name: substitute-installer
+          path: ${{ runner.temp }}/installer/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Attach the installer to the release
+    needs: [authorize, build]
+    if: needs.authorize.outputs.publish == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Receive the installer
+        uses: actions/download-artifact@v5
+        with:
+          name: substitute-installer
+          path: ${{ runner.temp }}/installer
+
+      - name: Upload the installer and confirm the digest GitHub recorded
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          name="SugarSubstitute-Setup-$VERSION.exe"
+          file="$RUNNER_TEMP/installer/$name"
+          gh release upload "substitute-v$VERSION" "$file" --repo "$GITHUB_REPOSITORY"
+          expected="sha256:$(sha256sum "$file" | cut -d ' ' -f 1)"
+          recorded="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/substitute-v$VERSION" \
+            --jq ".assets[] | select(.name == \"$name\") | .digest")"
+          if [ "$recorded" != "$expected" ]; then
+            echo "::error::GitHub recorded $name as \"$recorded\", but the built installer is $expected."
+            exit 1
+          fi

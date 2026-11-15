@@ -5407,3 +5407,19 @@ source_sha256 = "sha256:aaa5bbd39cdd789a2475b72fefab00f66d6ed9b958e5592f979326c2
 capabilities = ["GetFileSecurityW", "SetFileSecurityW", "windows::Win32::Security::GetFileSecurityW", "windows::Win32::Security::SetFileSecurityW"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Rewrite a real file's DACL the way permission tools and restores do, for qualification. Native access and its adversarial qualification remain within this owner."
+
+[[records]]
+path = "installer/release/published-release.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:8d3363d646134cda4246f27037e9fd18a6ede23d3c7a08ea0069ebe19f5ade7e"
+capabilities = ["createReadStream", "fs", "node:fs", "node:fs/promises", "readFile"]
+disposition = "tooling"
+rationale = "Repository tooling published-release.mjs: published-release Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
+
+[[records]]
+path = "installer/release/published-release.test.mjs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:5c1e61dbd6cf93aad758fdd615781b3fd6df312ee50df6e899505a79ac88201d"
+capabilities = ["fs", "mkdir", "mkdtemp", "node:fs/promises", "readFile", "writeFile"]
+disposition = "tooling"
+rationale = "Repository tooling published-release.test.mjs: published-release.test Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."

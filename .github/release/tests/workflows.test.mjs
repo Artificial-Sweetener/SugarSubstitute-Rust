@@ -100,6 +100,7 @@ describe('release workflow', () => {
     const privilegedJobs = Object.entries(release.jobs).filter(([, job]) => privileged(job));
     assert.deepEqual(privilegedJobs.map(([name]) => name).sort(), [
       'substitute',
+      'substitute-installer',
       'substitute-update-repository',
       'substitute-update-targets',
       'substitute-verify',
@@ -182,6 +183,15 @@ describe('release workflow', () => {
     assert.match(build.run, /Microsoft\.VisualStudio\.Product\.Enterprise/);
     const sign = targets.steps.find((entry) => String(entry.run).includes('sign-release.mjs'));
     const assemble = targets.steps.find((entry) => String(entry.run).includes('package.mjs'));
+    // The package carries SugarCubes as its released archive, never the source folder.
+    const cubes = targets.steps.find((entry) => String(entry.run).includes('SUGARCUBES_ARCHIVE='));
+    assert.match(cubes.run, /gh release download "sugarcubes-v\$version"/);
+    assert.match(cubes.run, /--pattern "SugarCubes-\$version\.zip"/);
+    assert.ok(names.indexOf(cubes.name) < names.indexOf(assemble.name));
+    assert.match(
+      assemble.run,
+      /package\.mjs "\$RUNNER_TEMP\/signed" "\$SUGARCUBES_ARCHIVE" "\$bundle"/,
+    );
     assert.match(assemble.run, /RELEASE_BUNDLE=\$bundle/);
     assert.match(assemble.run, />\s*"\$RUNNER_TEMP\/bundle\.json"/);
     const describe = targets.steps.find((entry) => String(entry.run).includes('" offer '));
@@ -211,6 +221,156 @@ describe('release workflow', () => {
     assert.equal(signing.uses, './.github/workflows/substitute-update-repository.yml');
     assert.deepEqual(signing.with, { operation: 'release', targets_artifact: upload.with.name });
     assert.equal(signing.secrets, 'inherit');
+  });
+
+  it('builds and attaches the installer once the update repository publishes the release', () => {
+    const installer = release.jobs['substitute-installer'];
+    assert.deepEqual(installer.needs, ['authorize', 'substitute', 'substitute-update-repository']);
+    assert.ok(String(installer.if).includes(PUBLISH));
+    assert.ok(
+      String(installer.if).includes("needs.substitute-update-repository.result == 'success'"),
+    );
+    assert.equal(installer.uses, './.github/workflows/substitute-installer.yml');
+    assert.deepEqual(installer.with, { version: '${{ needs.substitute.outputs.version }}' });
+    assert.deepEqual(installer.permissions, { contents: 'write' });
+    assert.equal(installer.secrets, undefined);
+  });
+});
+
+describe('installer workflow', () => {
+  const installer = workflow('substitute-installer.yml');
+  const release = workflow('release.yml');
+
+  function authorize(env) {
+    const folder = mkdtempSync(join(tmpdir(), 'installer-workflow-'));
+    try {
+      const output = join(folder, 'output');
+      writeFileSync(output, '');
+      const [step] = installer.jobs.authorize.steps;
+      const result = spawnSync('bash', ['-e', '-c', step.run], {
+        env: { PATH: process.env.PATH, GITHUB_OUTPUT: output, ...env },
+        encoding: 'utf8',
+      });
+      return { status: result.status, output: readFileSync(output, 'utf8') };
+    } finally {
+      rmSync(folder, { recursive: true, force: true });
+    }
+  }
+
+  it('publishes only a plain released version while RELEASES_ENABLED is exactly "true"', () => {
+    assert.deepEqual(Object.keys(installer.on).sort(), ['workflow_call', 'workflow_dispatch']);
+    for (const trigger of Object.values(installer.on)) {
+      assert.deepEqual(Object.keys(trigger.inputs), ['version']);
+      assert.equal(trigger.inputs.version.required, true);
+    }
+    assert.equal(installer.env.VERSION, '${{ inputs.version }}');
+    assert.deepEqual(authorize({ VERSION: '0.2.0', RELEASES_ENABLED: 'true' }), {
+      status: 0,
+      output: 'publish=true\n',
+    });
+    for (const env of [
+      { VERSION: '0.2.0' },
+      { VERSION: '0.2.0', RELEASES_ENABLED: 'TRUE' },
+      { VERSION: '0.2', RELEASES_ENABLED: 'true' },
+      { VERSION: 'v0.2.0', RELEASES_ENABLED: 'true' },
+      { VERSION: '0.2.0-rc.1', RELEASES_ENABLED: 'true' },
+      { VERSION: '0.2.0\n1.0.0', RELEASES_ENABLED: 'true' },
+      { VERSION: '0.02.0', RELEASES_ENABLED: 'true' },
+      { VERSION: '', RELEASES_ENABLED: 'true' },
+    ]) {
+      const outcome = authorize(env);
+      assert.notEqual(outcome.status, 0, JSON.stringify(env));
+      assert.equal(outcome.output, '', JSON.stringify(env));
+    }
+  });
+
+  it('reads no secret and lets only the publishing job write', () => {
+    assert.deepEqual(installer.permissions, { contents: 'read' });
+    assert.ok(!JSON.stringify(installer).includes('secrets.'));
+    const privilegedJobs = Object.entries(installer.jobs).filter(([, job]) => privileged(job));
+    assert.deepEqual(
+      privilegedJobs.map(([name]) => name),
+      ['publish'],
+    );
+    const { build, publish } = installer.jobs;
+    assert.equal(build.needs, 'authorize');
+    assert.equal(build.if, PUBLISH);
+    assert.deepEqual(publish.needs, ['authorize', 'build']);
+    assert.equal(publish.if, PUBLISH);
+    assert.deepEqual(publish.permissions, { contents: 'write' });
+  });
+
+  it('compiles the published signed state into the setup program and attaches its package', () => {
+    const steps = installer.jobs.build.steps;
+    const names = steps.map((entry) => entry.name);
+    const checkout = steps[0];
+    assert.equal(checkout.with.ref, 'substitute-v${{ inputs.version }}');
+    assert.equal(checkout.with['persist-credentials'], false);
+    assert.equal(
+      names.indexOf('Require the trusted root and release anchor installations ship with'),
+      1,
+    );
+    const step = (text) => steps.find((entry) => String(entry.run).includes(text));
+    const metadata = step('REPOSITORY=$repository');
+    assert.match(
+      metadata.run,
+      /gh release download "\$UPDATE_REPOSITORY_RELEASE"[\s\S]*--pattern '\*\.json'/,
+    );
+    const download = step('published-release.mjs package');
+    assert.match(download.run, /--pattern "\$name"/);
+    const distributions = step('published-release.mjs distribution');
+    assert.match(distributions.run, /SUGARSUBSTITUTE_SETUP_DISTRIBUTION=\$setup/);
+    assert.match(distributions.run, /update-distribution\.mjs "\$update"/);
+    assert.match(distributions.run, /SUGARSUBSTITUTE_UPDATE_DISTRIBUTION=\$update/);
+    const build = step('release/build-setup.mjs');
+    assert.equal(build.shell, 'pwsh');
+    assert.match(build.run, /build-setup\.mjs \$setup release \$env:PLATFORM \$reader/);
+    const attach = step('seal.mjs --attach');
+    assert.match(attach.run, /SugarSubstitute-Setup-\$VERSION\.exe/);
+    assert.match(attach.run, /"\$attached" != "\$compiled"/);
+    const order = [metadata, download, distributions, build, attach].map((entry) =>
+      names.indexOf(entry.name),
+    );
+    assert.deepEqual(
+      [...order].sort((a, b) => a - b),
+      order,
+    );
+    const upload = steps.at(-1);
+    assert.match(upload.uses, /^actions\/upload-artifact@/);
+    assert.equal(upload.with['if-no-files-found'], 'error');
+
+    const publish = installer.jobs.publish.steps;
+    assert.equal(publish[0].with.name, upload.with.name);
+    assert.match(publish.at(-1).run, /gh release upload "substitute-v\$VERSION" "\$file"/);
+    assert.match(publish.at(-1).run, /"\$recorded" != "\$expected"/);
+  });
+
+  it('builds in the same environment as the application of the release it installs', () => {
+    const application = release.jobs['substitute-update-targets'];
+    const applicationBuild = application.steps.find((entry) =>
+      String(entry.run).includes('release/build-application.mjs'),
+    );
+    const setupBuild = installer.jobs.build.steps.find((entry) =>
+      String(entry.run).includes('release/build-setup.mjs'),
+    );
+    const shared = [
+      "$instance = & $vswhere -version '[17.0,18.0)' -products Microsoft.VisualStudio.Product.Enterprise -property installationPath",
+      "$reader = Join-Path $instance 'VC\\Tools\\Llvm\\x64\\bin\\llvm-readobj.exe'",
+      'Enter-VsDevShell -VsInstallPath $instance -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64 -winsdk=$env:WINDOWS_SDK" | Out-Null',
+      '$env:SUGAR_COMMITTED_PARSER_LIB = $parser',
+      '$env:CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER = (Get-Command link.exe).Source',
+      "$env:CARGO_TARGET_DIR = Join-Path $env:RUNNER_TEMP 'target'",
+      '$env:SUGARSUBSTITUTE_RELEASE_ANCHOR = Join-Path $env:GITHUB_WORKSPACE $env:RELEASE_ANCHOR',
+    ];
+    for (const line of shared) {
+      assert.ok(applicationBuild.run.includes(line), `application build: ${line}`);
+      assert.ok(setupBuild.run.includes(line), `setup build: ${line}`);
+    }
+    for (const name of ['TRUSTED_ROOT', 'RELEASE_ANCHOR', 'WINDOWS_SDK']) {
+      assert.equal(installer.env[name], application.env[name], name);
+    }
+    assert.equal(installer.env.NODE_VERSION, release.env.NODE_VERSION);
+    assert.equal(installer.jobs.build['runs-on'], application['runs-on']);
   });
 });
 
