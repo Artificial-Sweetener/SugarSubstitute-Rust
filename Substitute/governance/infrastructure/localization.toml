@@ -318,7 +318,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "installer/worker/integration.ts"
-source_sha256 = "sha256:51952b5b46bc9adbab52ae0c0b956c62745f76ad87814f18452053d5745dddbe"
+source_sha256 = "sha256:d27cbe5be061b5979d8ca2148374f9131bfb2f5cca62dffb3d27a8a82453f9e2"
 kind = "presentation"
 rationale = "SugarCubes dependency preparation emits only the closed checkingSugarCubes, installingSugarCubes and sugarCubesReady product codes; errors remain diagnostic causes."
 

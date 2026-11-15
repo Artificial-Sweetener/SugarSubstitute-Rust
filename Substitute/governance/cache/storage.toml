@@ -27,9 +27,22 @@ rationale = "Owned disposable archive fixtures verify bundled-pack staging and i
 role = "fixture"
 
 [[script_boundaries]]
+path = "installer/worker/existing-pack.mjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:aa4faaa8a3ebde8fac694e9eebf276644a03942cd30b853c13a185b59ceaeb58"
+rationale = "Read whether the SugarCubes already in the selected ComfyUI carries what the application works with, and its bounded metadata; nothing is written and no cached download is acquired."
+role = "external_runtime"
+
+[[script_boundaries]]
+path = "installer/tests/existing-pack.test.mjs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:cf969a19c118a0223c243e46e47dd76942826108bd4e49fdd412539ce327bcbd"
+rationale = "Owned disposable pack folders verify that setup accepts a current SugarCubes and refuses one that predates the application; they perform no runtime cache acquisition."
+role = "fixture"
+[[script_boundaries]]
 path = "installer/worker/integration.ts"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:51952b5b46bc9adbab52ae0c0b956c62745f76ad87814f18452053d5745dddbe"
+source_sha256 = "sha256:d27cbe5be061b5979d8ca2148374f9131bfb2f5cca62dffb3d27a8a82453f9e2"
 rationale = "Probe the external SugarCubes requirements file before invoking its installed Python owner."
 role = "external_runtime"
 

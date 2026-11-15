@@ -9,6 +9,7 @@ import { getActiveUvPath } from '@upstream/lib/pythonEnv'
 import { inspectProgram } from './dependency-inspection.mjs'
 import { configureModelRoot } from './model-root.mjs'
 import { bundledArchive, stageBundledPack } from './bundled-pack.mjs'
+import { requireSupportedPack } from './existing-pack.mjs'
 import { path7za } from '7zip-bin'
 import { stateDir } from './paths'
 import type { ProgressSink } from './product-messages'
@@ -36,11 +37,15 @@ export async function integrate(input: Runtime & { version: 2; models: string; s
   const existing = path.join(runtime.directory, 'custom_nodes', 'SugarCubes', 'pyproject.toml')
   let project = existing
   let staged: { folder: string; dispose: () => Promise<void> } | undefined
+  let installed = true
   try { await fs.access(existing) } catch (cause) {
     if ((cause as NodeJS.ErrnoException).code !== 'ENOENT') throw cause
+    installed = false
     staged = await stageBundledPack(path.join(__dirname, '..', '..', '..', bundledArchive), stateDir(), path7za, signal)
     project = path.join(staged.folder, 'pyproject.toml')
   }
+  // A pack that predates this application is named and left alone before anything runs it.
+  if (installed) await requireSupportedPack(path.dirname(existing))
   try {
     return await integrateWith(project, runtime, models, storageBase, signal, send)
   } finally {
