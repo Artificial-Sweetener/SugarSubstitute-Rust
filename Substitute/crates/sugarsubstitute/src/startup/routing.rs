@@ -62,8 +62,9 @@ impl<B: StartupBackend> StartupHost<B> {
         }
         self.advance_coordinator_close()?;
         self.advance_restart_hold()?;
-        self.advance_deferred_close()?;
         self.deliver_startup_events()?;
+        // After the events: the one that settles a failed start is what lets a waiting close go.
+        self.advance_deferred_close()?;
         self.advance_workflow_restart()?;
         #[cfg(all(windows, feature = "native-composition"))]
         self.advance_workspace()?;

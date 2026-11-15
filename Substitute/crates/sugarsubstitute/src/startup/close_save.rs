@@ -75,12 +75,26 @@ impl<B: StartupBackend> StartupHost<B> {
         self.close_owned()
     }
 
-    /// Begin a close that waited for a SugarCubes install or restore, once that ended.
+    /// Begin a close that waited for a SugarCubes install or restore, once that ended and the
+    /// start it failed has settled. The coordinator goes on retiring the failed start for a
+    /// moment after the previous files are back; a window that left in between was reported
+    /// as a failed start.
     pub(super) fn advance_deferred_close(&mut self) -> Result<(), Box<dyn Error>> {
         match self.deferred_close {
-            Some(reason) if !self.sugarcubes_installing() => self.request_close(reason),
+            Some(reason) if !self.sugarcubes_installing() && !self.failed_start_settling() => {
+                self.request_close(reason)
+            }
             _ => Ok(()),
         }
+    }
+
+    /// Whether a failed start is still being settled and nothing says it cannot be.
+    fn failed_start_settling(&self) -> bool {
+        !self.child.cleanup_failed()
+            && self.startup.as_ref().is_some_and(|startup| {
+                startup.session().phase()
+                    == sugarsubstitute_application::startup::StartupPhase::Failed
+            })
     }
 
     /// Whether SugarCubes files are being installed or put back now, as the coordinator says.

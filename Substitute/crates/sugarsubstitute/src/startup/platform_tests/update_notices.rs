@@ -370,6 +370,50 @@ fn the_users_close_during_a_sugarcubes_install_keeps_the_window_until_it_finishe
     Ok(())
 }
 
+/// A close during a restore waits for the failed start to settle as well. The previous files
+/// are back a moment before the coordinator has retired the start that failed; a window that
+/// left in between was reported as a failed start.
+#[test]
+fn a_close_during_a_restore_also_waits_for_the_failed_start_to_settle() -> BackendResult<()> {
+    let mut host = host()?;
+    let launch = host.launch_id();
+    let mut session = StartupSession::new(
+        launch,
+        Generation::new(1)?,
+        StartupConfiguration::new(
+            ConnectionConfiguration::Attach(LoopbackOrigin::parse("http://127.0.0.1:8188", 8188)?),
+            ProfileId::new("restore-close-test".into())?,
+            Presentation::new("en", Theme::Dark, true)?,
+        ),
+    );
+    session.observe(StartupEvent::new(launch, StartupObservation::SplashPresented))?;
+    session.observe(StartupEvent::new(
+        launch,
+        StartupObservation::Failed(StartupFailure::new(
+            StartupFailureCode::ProcessExited,
+            Box::new(std::io::Error::other("the new SugarCubes version did not start")),
+        )),
+    ))?;
+    assert_eq!(session.phase(), StartupPhase::Failed);
+    host.startup = Some(Prepared { session, released: false });
+    let mut restoring = UpdateStatus::default();
+    restoring.observe_sugarcubes(PackUpdateStatus::Restoring);
+    host.child.update_status = Some(restoring.clone());
+    host.observe(DesktopStartupObservation::CloseRequested)?;
+    assert!(!host.closing, "the close waits for the restore");
+    restoring.observe_sugarcubes(PackUpdateStatus::Finished(could_not_check()));
+    host.child.update_status = Some(restoring);
+    host.advance_deferred_close()?;
+    assert!(!host.closing, "the previous files are back, the failed start is not settled yet");
+    let mut prepared = host.startup.take().ok_or("Startup absent")?;
+    prepared.session.observe(StartupEvent::new(launch, StartupObservation::ConnectionSettled))?;
+    assert_eq!(prepared.session.phase(), StartupPhase::Stopped);
+    host.startup = Some(prepared);
+    host.advance_deferred_close()?;
+    assert!(host.closing, "the failed start settled: the close begins");
+    Ok(())
+}
+
 /// A close asked for while SugarCubes files are installed or put back waits for that to end:
 /// the splash says "Finishing the SugarCubes update…", a second close request forces nothing,
 /// and the ordinary close begins once the coordinator says the install ended. A session end
