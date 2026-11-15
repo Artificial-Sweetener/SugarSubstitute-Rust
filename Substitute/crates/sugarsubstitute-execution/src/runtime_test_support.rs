@@ -219,6 +219,14 @@ impl Rig {
             self.wake.wait_after(observed)?;
         }
     }
+    /// Block until the scope's reservation is `bytes`. A finished worker gives back the charge
+    /// for its own storage when the executor frees it, which follows the completion a test has
+    /// just consumed; real work under load only makes this slower.
+    pub(crate) fn reservation_settles_at(&self, bytes: u64) {
+        while self.scope.snapshot().reserved_bytes != bytes {
+            std::thread::yield_now();
+        }
+    }
 }
 
 pub(crate) fn spec(id: u64, class: JobClass, bytes: u64) -> TestResult<JobSpec> {

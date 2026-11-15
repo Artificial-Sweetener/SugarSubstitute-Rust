@@ -277,6 +277,9 @@ fn delegated_creation_uses_actual_successful_source_once_and_rejects_foreign_or_
     assert!(repeated.is_some());
     drop(completed);
     drop(creation);
+    // The creation's worker still holds the charge for its own storage until the executor
+    // frees it, on its own thread, after the completion consumed above.
+    rig.reservation_settles_at(BYTES);
     assert_eq!(rig.scope.snapshot().reserved_bytes, BYTES);
     let alias = prepared.origin.clone();
     drop(prepared);
