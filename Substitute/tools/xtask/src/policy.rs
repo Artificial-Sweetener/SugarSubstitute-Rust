@@ -116,6 +116,19 @@ pub(crate) struct Testing {
     pub(crate) owners: Vec<TestOwner>,
     /// Reviewed test-scope files whose real time decides no outcome.
     pub(crate) real_time: Vec<crate::testing_time::RealTime>,
+    /// Tests that qualify hardware a hosted CI runner lacks; see [`crate::hosted_runner`].
+    pub(crate) hosted_runner: Vec<HostedRunnerTest>,
+}
+
+/// Name one test a hosted CI runner cannot run, and the hardware it needs.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct HostedRunnerTest {
+    pub(crate) package: String,
+    /// The test's full path inside its package, as the test harness prints it.
+    pub(crate) test: String,
+    /// What the test needs that a hosted runner does not have, in plain words.
+    pub(crate) requires: String,
 }
 
 /// Assign one package's tests to its behavioral concern.

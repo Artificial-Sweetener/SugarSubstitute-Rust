@@ -34,6 +34,7 @@ mod fingerprints;
 mod fixtures;
 mod gates;
 mod governance;
+mod hosted_runner;
 mod infrastructure;
 mod localization;
 mod metrics;
@@ -120,8 +121,18 @@ fn run() -> Result<()> {
         command::cargo(root, leg, false)?;
     }
     if task == "verify" {
+        let testing: policy::Testing = policy::load(root, "governance/testing/policy.toml")?;
+        let hosted = hosted_runner::declared();
+        let skips = hosted_runner::skips(&testing, hosted);
+        if hosted {
+            for notice in hosted_runner::notices(&testing.hosted_runner) {
+                eprintln!("{notice}");
+            }
+        }
         for leg in gates::TESTS {
-            command::cargo(root, leg, false)?;
+            let arguments: Vec<&str> =
+                leg.iter().copied().chain(skips.iter().map(String::as_str)).collect();
+            command::cargo(root, &arguments, false)?;
         }
         command::cargo(root, gates::DOCUMENTATION, true)?;
     }

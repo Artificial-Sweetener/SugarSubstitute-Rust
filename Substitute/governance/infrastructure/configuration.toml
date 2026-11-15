@@ -475,6 +475,13 @@ capabilities = ["environment"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
 
 [[records]]
+path = "tools/xtask/src/hosted_runner.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:5c2c678f02198f3d5ac798c29c0ae6d21892d251665e9b7b1431f6d0b79e4687"
+capabilities = ["environment"]
+rationale = "Verification reads whether its workflow declared a hosted CI runner, to skip exactly the tests the testing policy lists for one; not product settings."
+
+[[records]]
 path = "tools/xtask/src/configuration/access.rs"
 owner = "sugarsubstitute-xtask"
 source_sha256 = "sha256:1af8a916add1f6ab4621c30667de6974c49e50c1df81b496897698b574df5013"
@@ -505,14 +512,14 @@ rationale = "Tooling build, source inspection or isolated qualification input; n
 [[records]]
 path = "tools/xtask/src/main.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:2a592a455641f18c857e2170a3b7f8962f0e61c647c037bc420d222cb55e6b1a"
+source_sha256 = "sha256:2f98b2bae693e9ecda3380dbf941332d4e05ebaef95bc812806431df649bba8a"
 capabilities = ["arguments"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
 
 [[records]]
 path = "tools/xtask/src/policy.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:80b506c6eafaa94ffc1f7477a443ba04318416832f46976941b4cea808d924c8"
+source_sha256 = "sha256:417709cfbdd0bc871a77654766f82560613ff0a5a7a3bd0a0e64feb0920c946c"
 capabilities = ["codec"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
 

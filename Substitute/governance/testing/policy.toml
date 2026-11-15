@@ -205,3 +205,32 @@ reason = "The memory governor stamps its first sample with its own Instant::now(
 path = "crates/sugarsubstitute/src/startup/memory/page/tests.rs"
 source_sha256 = "sha256:8a54830c84358f4ea1d88b161cc43311adab43427d4671622fccea52fa58a34f"
 reason = "A page report stamps its measurement due time with the product's own Instant::now(), so these tests pass a real instant at or after that stamp and then derive later moments by adding durations."
+
+# Tests that qualify hardware a hosted CI runner does not have. `cargo xtask verify` runs every
+# one of them wherever that hardware exists. On a runner whose workflow sets
+# SUGARSUBSTITUTE_HOSTED_RUNNER=1 it skips exactly these, by full path, and names each one in the
+# log with what it needs, so a green hosted run is never read as proof of them.
+[[hosted_runner]]
+package = "sugarsubstitute"
+test = "native_canvas::session::tests::source_io::retained::composition::each_adapter_policy_presents_shared_frames_and_keeps_previews_on_the_cpu"
+requires = "a hardware Vulkan adapter that shares composition textures"
+
+[[hosted_runner]]
+package = "sugarsubstitute"
+test = "native_canvas::session::tests::source_io::retained::composition::overview_grids_render_on_the_gpu_and_resize_withdraws_the_pending_shared_frame"
+requires = "a hardware Vulkan adapter that shares composition textures"
+
+[[hosted_runner]]
+package = "sugarsubstitute"
+test = "setup::controller::native::qualification::tests::native_qualification_visits_fresh_route_and_observes_full_console_before_retirement"
+requires = "a desktop session that displays windows"
+
+[[hosted_runner]]
+package = "sugarsubstitute"
+test = "setup::controller::native::tests::console::native_installer_console_retains_output_through_disclosure_and_retires_execution"
+requires = "a desktop session that displays windows"
+
+[[hosted_runner]]
+package = "sugarsubstitute"
+test = "setup::controller::native::tests::real_native_installer_navigates_and_applies_picker_without_browser"
+requires = "a desktop session that displays windows"

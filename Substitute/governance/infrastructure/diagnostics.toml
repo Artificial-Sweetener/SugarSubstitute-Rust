@@ -317,7 +317,7 @@ rationale = "Release-CI signing tool output: the files it wrote and what the app
 [[records]]
 path = "tools/xtask/src/main.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:2a592a455641f18c857e2170a3b7f8962f0e61c647c037bc420d222cb55e6b1a"
+source_sha256 = "sha256:2f98b2bae693e9ecda3380dbf941332d4e05ebaef95bc812806431df649bba8a"
 disposition = "developer"
 rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
 
@@ -331,7 +331,7 @@ rationale = "Repository build or verification diagnostics remain developer outpu
 [[records]]
 path = "tools/xtask/src/testing.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:f5f193c8657b6cbac119a9914037a0ae5492b5b2dfacfe7526405dca2db4bad9"
+source_sha256 = "sha256:3c96d06b6883d57e28f7241a7c3455ce9f8207f52a9dd50a05c0393e1edbe843"
 disposition = "developer"
 rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
 

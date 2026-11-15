@@ -70,6 +70,9 @@ jobs:
     timeout-minutes: 240
     env:
       CARGO_TERM_COLOR: always
+      # A hosted runner has no hardware GPU and displays no window. Verify skips exactly the
+      # tests Substitute/governance/testing/policy.toml lists for that, and names each one.
+      SUGARSUBSTITUTE_HOSTED_RUNNER: '1'
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

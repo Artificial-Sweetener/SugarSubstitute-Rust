@@ -18,6 +18,7 @@ use crate::{
 struct Inventory {
     count: usize,
     ignored: Vec<String>,
+    names: BTreeSet<String>,
 }
 
 impl<'ast> Visit<'ast> for Inventory {
@@ -27,6 +28,7 @@ impl<'ast> Visit<'ast> for Inventory {
             attribute.path().segments.last().is_some_and(|segment| segment.ident == "test")
         }) {
             self.count += 1;
+            self.names.insert(item.sig.ident.to_string());
             if item.attrs.iter().any(|attribute| ignores_test(&attribute.meta)) {
                 self.ignored.push(item.sig.ident.to_string());
             }
@@ -52,8 +54,9 @@ fn ignores_test(meta: &syn::Meta) -> bool {
     false
 }
 
-/// Parse test source rather than mistaking comments or strings for executable tests.
-pub(crate) fn test_count(source: &str) -> Result<usize> {
+/// Discover one source file's tests, rejecting any that is ignored. The source is parsed, so
+/// comments and strings are never mistaken for executable tests.
+fn inventory(source: &str) -> Result<Inventory> {
     let parsed = syn::parse_file(source)
         .map_err(|error| Failure::external("parse Rust test inventory", error))?;
     let mut inventory = Inventory::default();
@@ -62,7 +65,34 @@ pub(crate) fn test_count(source: &str) -> Result<usize> {
         inventory.ignored.is_empty(),
         format!("ignored tests require an implemented exception policy: {:?}", inventory.ignored),
     )?;
-    Ok(inventory.count)
+    Ok(inventory)
+}
+
+/// Require each test a hosted runner skips to exist in its package under that name, once,
+/// with the hardware it needs said, so the list cannot outlive or misname a test.
+fn check_hosted_runner(policy: &Testing, names: &[(String, BTreeSet<String>)]) -> Result<()> {
+    let mut listed = BTreeSet::new();
+    for test in &policy.hosted_runner {
+        let function = test.test.rsplit("::").next().unwrap_or_default();
+        require(
+            names
+                .iter()
+                .any(|(package, found)| package == &test.package && found.contains(function)),
+            format!("{}: hosted-runner test {} does not exist", test.package, test.test),
+        )?;
+        require(
+            test.test.contains("::") && !test.requires.trim().is_empty(),
+            format!(
+                "{}: hosted-runner test {} needs its full path and what it needs",
+                test.package, test.test
+            ),
+        )?;
+        require(
+            listed.insert((test.package.as_str(), test.test.as_str())),
+            format!("{}: hosted-runner test {} is listed twice", test.package, test.test),
+        )?;
+    }
+    Ok(())
 }
 
 /// Bind every workspace package to owner-local tests and the three product platforms.
@@ -81,6 +111,7 @@ pub(crate) fn check(root: &Path, policy: &Testing, architecture: &Architecture) 
         expected == actual && actual.len() == policy.owners.len(),
         "testing: each crate requires exactly one current test owner",
     )?;
+    let mut names = Vec::new();
     for owner in &policy.owners {
         require(
             owner.minimum_tests > 0 && !owner.concern.trim().is_empty(),
@@ -94,9 +125,13 @@ pub(crate) fn check(root: &Path, policy: &Testing, architecture: &Architecture) 
             format!("{}: test root must match the authoritative crate", owner.package),
         )?;
         let mut count = 0;
+        let mut found = BTreeSet::new();
         for path in rust_files(&resolve(root, &owner.root)?)? {
-            count += test_count(&read(&path)?)?;
+            let inventory = inventory(&read(&path)?)?;
+            count += inventory.count;
+            found.extend(inventory.names);
         }
+        names.push((owner.package.clone(), found));
         require(
             count >= owner.minimum_tests,
             format!(
@@ -106,12 +141,17 @@ pub(crate) fn check(root: &Path, policy: &Testing, architecture: &Architecture) 
         )?;
         eprintln!("test inventory: {} ({count} functions)", owner.package);
     }
+    check_hosted_runner(policy, &names)?;
     crate::testing_time::check(root, &policy.real_time, architecture)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_count(source: &str) -> Result<usize> {
+        Ok(inventory(source)?.count)
+    }
 
     /// Reject missing test owners, empty proof requirements and absent platform scope.
     #[test]
@@ -127,6 +167,7 @@ mod tests {
                 minimum_tests: 1,
             }],
             real_time: Vec::new(),
+            hosted_runner: Vec::new(),
         };
         check(fixture.root(), &policy, &fixture.architecture)?;
         policy.owners[0].minimum_tests = 0;
@@ -136,6 +177,42 @@ mod tests {
         policy.owners[0].minimum_tests = 1;
         policy.platforms.pop();
         assert!(check(fixture.root(), &policy, &fixture.architecture).is_err());
+        Ok(())
+    }
+
+    /// A test a hosted runner skips must exist in its package under its full path, once, and
+    /// say what it needs, so the list can neither outlive a test nor hide one.
+    #[test]
+    fn hosted_runner_tests_must_exist_and_say_what_they_need() -> Result<()> {
+        use crate::policy::HostedRunnerTest;
+        let fixture = crate::fixtures::Repository::new()?;
+        let listed = |test: &str, requires: &str| HostedRunnerTest {
+            package: "host".into(),
+            test: test.into(),
+            requires: requires.into(),
+        };
+        let policy = |hosted_runner| Testing {
+            schema_version: 1,
+            platforms: vec!["windows".into(), "macos".into(), "linux".into()],
+            owners: vec![crate::policy::TestOwner {
+                package: "host".into(),
+                root: "crates/host".into(),
+                concern: "fixture".into(),
+                minimum_tests: 1,
+            }],
+            real_time: Vec::new(),
+            hosted_runner,
+        };
+        let verdict = |tests| check(fixture.root(), &policy(tests), &fixture.architecture);
+        verdict(vec![listed("tests::behavior", "a hardware Vulkan adapter")])?;
+        for refused in [
+            vec![listed("tests::removed", "a hardware Vulkan adapter")],
+            vec![listed("behavior", "a hardware Vulkan adapter")],
+            vec![listed("tests::behavior", " ")],
+            vec![listed("tests::behavior", "a display"), listed("tests::behavior", "a display")],
+        ] {
+            assert!(verdict(refused).is_err());
+        }
         Ok(())
     }
 
