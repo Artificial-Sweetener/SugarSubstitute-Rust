@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { COMPONENTS } from '../lib/components.mjs';
-import { plan, requirePublicationEnabled } from '../release.mjs';
+import { RELEASE_IDENTITY, plan, requirePublicationEnabled } from '../release.mjs';
 import {
   SYNTHETIC_REPOSITORY,
   git,
@@ -148,6 +148,12 @@ describe('per-component semantic-release', () => {
       git(root, ['log', '-1', '--format=%s']),
       'chore(release): substitute 0.2.0 [skip ci]',
     );
+    // A release commit belongs to the project's automation identity, whoever runs the release.
+    // Its tag is lightweight and names no one.
+    const daisy = `${RELEASE_IDENTITY.name} <${RELEASE_IDENTITY.email}>`;
+    assert.equal(daisy, 'Daisy <daisy@artificialsweetener.ai>');
+    assert.equal(git(root, ['log', '-1', '--format=%an <%ae>|%cn <%ce>']), `${daisy}|${daisy}`);
+    assert.equal(git(root, ['cat-file', '-t', 'substitute-v0.2.0']), 'commit');
     assert.deepEqual(git(root, ['show', '--name-only', '--format=', 'HEAD']).split('\n').sort(), [
       'Substitute/CHANGELOG.md',
       'Substitute/Cargo.lock',

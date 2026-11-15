@@ -31,6 +31,11 @@ const VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const FULL_HASH = /^[0-9a-f]{40}([0-9a-f]{24})?$/;
 /** The only branch semantic-release publishes from. */
 const RELEASE_BRANCH = 'main';
+/** Who authors and commits every release commit: the project's automation identity. */
+export const RELEASE_IDENTITY = Object.freeze({
+  name: 'Daisy',
+  email: 'daisy@artificialsweetener.ai',
+});
 /** Variables that would let a dry run detect CI, authenticate or push. */
 const DRY_RUN_WITHHELD = ['CI', 'GITHUB_ACTIONS', 'GH_TOKEN', 'GITHUB_TOKEN', 'GIT_ASKPASS'];
 
@@ -210,7 +215,14 @@ async function semanticRelease(repository, entry, settings) {
     { ...options, dryRun: Boolean(settings.dryRun), ci: settings.ci ?? true },
     {
       cwd: join(repository, entry.directory),
-      env: settings.env ?? process.env,
+      // semantic-release commits and tags as its own bot unless the environment names someone.
+      env: {
+        ...(settings.env ?? process.env),
+        GIT_AUTHOR_NAME: RELEASE_IDENTITY.name,
+        GIT_AUTHOR_EMAIL: RELEASE_IDENTITY.email,
+        GIT_COMMITTER_NAME: RELEASE_IDENTITY.name,
+        GIT_COMMITTER_EMAIL: RELEASE_IDENTITY.email,
+      },
       stdout: settings.log ?? process.stdout,
       stderr: settings.log ?? process.stderr,
     },
