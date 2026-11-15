@@ -411,6 +411,11 @@ fn a_close_during_a_restore_also_waits_for_the_failed_start_to_settle() -> Backe
     host.startup = Some(prepared);
     host.advance_deferred_close()?;
     assert!(host.closing, "the failed start settled: the close begins");
+    assert_eq!(
+        host.child.close_phase,
+        Some(StartupPhase::Stopped),
+        "the child classifies the exit by the settled start, not by the phase it last sampled"
+    );
     Ok(())
 }
 

@@ -154,6 +154,9 @@ impl StartupBackend for ProductionChild {
     fn begin_workspace_close(&mut self) -> BackendResult<ShutdownInitiation> {
         ProductionChild::begin_workspace_close(self)
     }
+    fn observe_close_phase(&mut self, phase: sugarsubstitute_application::startup::StartupPhase) {
+        self.phase = Some(phase);
+    }
     fn begin_shutdown(&mut self) -> BackendResult<ShutdownInitiation> {
         ProductionChild::begin_shutdown(self)
     }

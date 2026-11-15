@@ -30,6 +30,8 @@ pub(super) struct Platform {
     /// Update checks the window asked this fake child to request from the coordinator.
     pub(in crate::startup) check_requests: usize,
     pub(in crate::startup) shutdown_starts: usize,
+    /// The startup phase the window said its close began in.
+    pub(in crate::startup) close_phase: Option<StartupPhase>,
     retired: bool,
     finished: bool,
     effects: Vec<&'static str>,
@@ -155,6 +157,9 @@ impl StartupBackend for Platform {
     }
     fn begin_workspace_close(&mut self) -> BackendResult<ShutdownInitiation> {
         Ok(self.budget.map_or(ShutdownInitiation::NoCapture, ShutdownInitiation::Captured))
+    }
+    fn observe_close_phase(&mut self, phase: StartupPhase) {
+        self.close_phase = Some(phase);
     }
     fn begin_shutdown(&mut self) -> BackendResult<ShutdownInitiation> {
         self.shutdown_starts += 1;

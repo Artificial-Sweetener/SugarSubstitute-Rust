@@ -42,7 +42,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute/src/production/child/retirement/tests.rs"
-source_sha256 = "sha256:3078c2aa4ea43075e01b2953838439ca4184838f72e9c1be9637c600a3fad3cd"
+source_sha256 = "sha256:803176d764a7011e6e5dd3bbe7d6d3480e41c21e286b8920ee1c45a028fe8bca"
 kind = "fixture"
 rationale = "Behavioral fixture explicitly exercises native presentation, input validation, or original dynamic text; it grants no production text route. Verify the real transaction queue and immutable cleanup budget without native authority fakes."
 

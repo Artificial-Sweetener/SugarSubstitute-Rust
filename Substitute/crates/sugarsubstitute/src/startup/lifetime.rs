@@ -48,6 +48,9 @@ impl<B: StartupBackend> StartupHost<B> {
         }
         self.closing = true;
         self.visible = false;
+        if let Some(startup) = &self.startup {
+            self.child.observe_close_phase(startup.session().phase());
+        }
         #[cfg(not(all(windows, feature = "native-composition")))]
         self.commands.close();
         let mut failure = None;

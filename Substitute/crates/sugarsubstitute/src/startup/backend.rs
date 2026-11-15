@@ -209,6 +209,10 @@ pub trait StartupBackend {
     fn advance_reload(&mut self, prepared: &mut Self::Prepared) -> BackendResult<()>;
     /// Start only the existing capture measurement while retaining the current page for final workspace capture.
     fn begin_workspace_close(&mut self) -> BackendResult<ShutdownInitiation>;
+    /// Take the startup phase a close begins in; the exit is classified by it. The phase taken
+    /// with the last completion batch predates the events delivered since, so a close in the
+    /// turn a failed start settled would otherwise be classified as that start still failing.
+    fn observe_close_phase(&mut self, phase: sugarsubstitute_application::startup::StartupPhase);
     /// Request capture shutdown without substituting a new measurement for pending evidence.
     fn begin_shutdown(&mut self) -> BackendResult<ShutdownInitiation>;
     /// Borrow the original shutdown transaction without sampling or renewing its cutoff.

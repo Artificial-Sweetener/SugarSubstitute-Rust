@@ -328,6 +328,25 @@ fn closing_a_presented_settled_failure_cancels_startup_without_a_crash_report() 
     }
     Ok(())
 }
+/// The phase a close begins in classifies the exit. A failed start that settled in the turn the
+/// close began is a cancelled startup, though the phase taken with that turn's batch still said
+/// the start was settling; classifying by that sample reported the close as a crash.
+#[test]
+fn a_close_in_the_turn_a_failed_start_settled_cancels_startup_without_a_crash_report() -> Result<()>
+{
+    use crate::startup::StartupBackend;
+    use sugarsubstitute_application::startup::StartupPhase;
+    let (mut child, _) = inert_whole_close_child()?;
+    child.phase = Some(StartupPhase::Failed);
+    child.failed = true;
+    child.attempt =
+        Some(super::super::attempt::AttemptCleanup::boundary_fixture(true, true, false));
+    assert_eq!(child.completion_intent(), CompletionIntent::StartupFailed);
+    StartupBackend::observe_close_phase(&mut child, StartupPhase::Stopped);
+    child.begin_shutdown()?;
+    assert_eq!(child.shutdown.intent, Some(CompletionIntent::StartupCancelled));
+    Ok(())
+}
 #[test]
 fn first_whole_close_intent_survives_phase_failure_registration_and_queue_delay_in_actual_payload()
 -> Result<()> {
