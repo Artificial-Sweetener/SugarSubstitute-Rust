@@ -47,6 +47,9 @@ pub enum StartupStatus {
     SugarcubesRetryReady,
     /// SugarCubes, just updated, could not load; a retry starts the version before the update.
     SugarcubesRetryPrevious,
+    /// The start failed and the installed SugarCubes predates the application; the user
+    /// updates it, and the application can accept retry.
+    SugarcubesOutdated,
     /// The previous SugarCubes version is being put back; retry waits until it is.
     RestoringSugarcubes,
     /// A close waits for a SugarCubes install or restore to end.
@@ -58,7 +61,10 @@ impl StartupStatus {
     pub const fn offers_retry(self) -> bool {
         matches!(
             self,
-            Self::RetryReady | Self::SugarcubesRetryReady | Self::SugarcubesRetryPrevious
+            Self::RetryReady
+                | Self::SugarcubesRetryReady
+                | Self::SugarcubesRetryPrevious
+                | Self::SugarcubesOutdated
         )
     }
 }

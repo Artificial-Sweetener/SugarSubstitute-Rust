@@ -275,6 +275,49 @@ fn the_retry_line_names_sugarcubes_when_it_could_not_load() -> BackendResult<()>
     Ok(())
 }
 
+/// A SugarCubes that predates the application does not describe its release sources, so the
+/// host cannot update it, and its page cannot load in this host. When such a start fails,
+/// whatever the page reported, the retry line says SugarCubes is out of date instead of
+/// "Connection failed". The same update failure with a start that did not fail, or another
+/// update failure, changes nothing.
+#[test]
+fn the_retry_line_says_an_outdated_sugarcubes_is_out_of_date() -> BackendResult<()> {
+    let mut host = host()?;
+    let failed = |code: &str| PackUpdateReport {
+        step: Some("checking".into()),
+        code: Some(code.into()),
+        ..PackUpdateReport::new(PackOutcome::Failed)
+    };
+    let mut status = UpdateStatus::default();
+    status.observe_sugarcubes(PackUpdateStatus::Finished(failed("release-source")));
+    host.child.update_status = Some(status);
+    for code in ["frontend_unavailable", "sugarcubes_unavailable", "timed_out"] {
+        assert_eq!(
+            window_content::sugarcubes_retry(
+                &host.child,
+                &failed_page(code)?,
+                StartupStatus::RetryReady
+            ),
+            Some(StartupStatus::SugarcubesOutdated),
+            "{code}"
+        );
+    }
+    assert!(StartupStatus::SugarcubesOutdated.offers_retry());
+    let other = failed_page("frontend_unavailable")?;
+    for current in [StartupStatus::Settling, StartupStatus::Loading, StartupStatus::Failed] {
+        assert_eq!(window_content::sugarcubes_retry(&host.child, &other, current), None);
+    }
+    let mut status = UpdateStatus::default();
+    status.observe_sugarcubes(PackUpdateStatus::Finished(failed("io")));
+    host.child.update_status = Some(status);
+    assert_eq!(
+        window_content::sugarcubes_retry(&host.child, &other, StartupStatus::RetryReady),
+        None,
+        "another update failure says nothing about the pack's age"
+    );
+    Ok(())
+}
+
 /// While the previous SugarCubes version is put back the splash says so instead of offering
 /// Retry, and the ordinary lines return once it finished.
 #[test]

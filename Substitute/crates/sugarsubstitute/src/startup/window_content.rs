@@ -364,8 +364,14 @@ pub(super) fn updating<B: StartupBackend>(
 
 /// The retry line when the attempt's page failed because SugarCubes could not load: it names
 /// SugarCubes, and says the retry starts the previous version when this start had just updated
-/// SugarCubes, since that update is then restored before the retry. Other failures keep the
-/// ordinary retry line.
+/// SugarCubes, since that update is then restored before the retry. A start that failed with a
+/// SugarCubes that does not describe its release sources says it is out of date: that pack
+/// predates the application, which can neither update it nor load its page. Other failures
+/// keep the ordinary retry line.
+/// The failure code of a SugarCubes update whose installed pack has no description of its
+/// release sources, as every SugarCubes older than the application's update support.
+const OUTDATED_PACK_CODE: &str = "release-source";
+
 pub(super) fn sugarcubes_retry<B: StartupBackend>(
     child: &B,
     session: &sugarsubstitute_application::startup::StartupSession,
@@ -373,15 +379,21 @@ pub(super) fn sugarcubes_retry<B: StartupBackend>(
 ) -> Option<sugarsubstitute_splash::StartupStatus> {
     use sugarsubstitute_contracts::{startup::PageFailure, update::pack::PackOutcome};
     use sugarsubstitute_splash::StartupStatus;
-    if current != StartupStatus::RetryReady
-        || session.failure().map(|failure| failure.page_failure()) != Some(PageFailure::Sugarcubes)
-    {
+    if current != StartupStatus::RetryReady {
         return None;
     }
-    let updated = child
-        .update_status()
-        .and_then(|status| status.sugarcubes().report())
-        .is_some_and(|report| report.outcome == PackOutcome::Updated);
+    let status = child.update_status();
+    let report = status.as_ref().and_then(|status| status.sugarcubes().report());
+    let outdated = report.is_some_and(|report| {
+        report.outcome == PackOutcome::Failed && report.code.as_deref() == Some(OUTDATED_PACK_CODE)
+    });
+    if outdated && session.failure().is_some() {
+        return Some(StartupStatus::SugarcubesOutdated);
+    }
+    if session.failure().map(|failure| failure.page_failure()) != Some(PageFailure::Sugarcubes) {
+        return None;
+    }
+    let updated = report.is_some_and(|report| report.outcome == PackOutcome::Updated);
     Some(if updated {
         StartupStatus::SugarcubesRetryPrevious
     } else {

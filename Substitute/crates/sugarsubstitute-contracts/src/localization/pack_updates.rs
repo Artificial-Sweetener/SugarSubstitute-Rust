@@ -61,11 +61,14 @@ pub struct PackUpdateMessages {
     /// Splash line when SugarCubes, just updated, could not load; selecting it retries with
     /// the version before the update.
     pub retry_previous: &'static str,
+    /// Splash line when the start failed and the installed SugarCubes predates the
+    /// application, so the host cannot update it; selecting it retries.
+    pub retry_outdated: &'static str,
 }
 
 impl PackUpdateMessages {
     /// Enumerate every owned label for complete registry coverage checks.
-    pub const fn labels(&self) -> [&'static str; 27] {
+    pub const fn labels(&self) -> [&'static str; 28] {
         let s = self.steps;
         [
             self.updating,
@@ -95,6 +98,7 @@ impl PackUpdateMessages {
             self.show_report,
             self.retry,
             self.retry_previous,
+            self.retry_outdated,
         ]
     }
 }
@@ -131,6 +135,7 @@ pub static EN: PackUpdateMessages = PackUpdateMessages {
     show_report: "Show the report",
     retry: "SugarCubes couldn't load. Select here to retry",
     retry_previous: "SugarCubes couldn't load. Select here to retry with the previous version",
+    retry_outdated: "SugarCubes is out of date. Update it, then select here to retry",
 };
 
 /// Simplified Chinese words.
@@ -165,6 +170,7 @@ pub static ZH_HANS: PackUpdateMessages = PackUpdateMessages {
     show_report: "查看报告",
     retry: "SugarCubes 无法加载，点击此处重试",
     retry_previous: "SugarCubes 无法加载，点击此处使用之前的版本重试",
+    retry_outdated: "SugarCubes 版本过旧，请更新后点击此处重试",
 };
 
 /// Japanese words.
@@ -199,6 +205,7 @@ pub static JA: PackUpdateMessages = PackUpdateMessages {
     show_report: "レポートを表示",
     retry: "SugarCubes を読み込めませんでした。ここを選択して再試行",
     retry_previous: "SugarCubes を読み込めませんでした。ここを選択して以前のバージョンで再試行",
+    retry_outdated: "SugarCubes が古すぎます。更新してから、ここを選択して再試行",
 };
 
 /// Korean words.
@@ -233,6 +240,7 @@ pub static KO: PackUpdateMessages = PackUpdateMessages {
     show_report: "보고서 보기",
     retry: "SugarCubes를 불러올 수 없습니다. 여기를 선택하여 다시 시도",
     retry_previous: "SugarCubes를 불러올 수 없습니다. 여기를 선택하여 이전 버전으로 다시 시도",
+    retry_outdated: "SugarCubes가 너무 오래되었습니다. 업데이트한 후 여기를 선택하여 다시 시도",
 };
 
 /// Spanish words.
@@ -267,4 +275,5 @@ pub static ES: PackUpdateMessages = PackUpdateMessages {
     show_report: "Ver el informe",
     retry: "No se pudo cargar SugarCubes. Selecciona aquí para reintentar",
     retry_previous: "No se pudo cargar SugarCubes. Selecciona aquí para reintentar con la versión anterior",
+    retry_outdated: "SugarCubes está desactualizado. Actualízalo y selecciona aquí para reintentar",
 };

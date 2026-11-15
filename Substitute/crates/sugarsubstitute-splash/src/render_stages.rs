@@ -232,6 +232,7 @@ impl RenderStages {
                     crate::StartupStatus::SugarcubesRetryPrevious => {
                         copy.pack_updates.retry_previous
                     }
+                    crate::StartupStatus::SugarcubesOutdated => copy.pack_updates.retry_outdated,
                     crate::StartupStatus::CleanupFailed => copy.cleanup_failed,
                     crate::StartupStatus::Starting => copy.starting,
                 };
