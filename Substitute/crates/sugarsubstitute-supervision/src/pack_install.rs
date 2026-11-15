@@ -177,6 +177,16 @@ impl PackTransaction {
         })
     }
 
+    /// [`Self::at`], with a replacement that stops at its first effect in `phase` as a power
+    /// cut would.
+    #[cfg(test)]
+    pub(crate) fn cut_in(root: &Path, phase: JournalPhase) -> io::Result<Self> {
+        let mut transaction = Self::at(root)?;
+        transaction.replacement =
+            TrackedReplacement::with_faults(PackTree::at(root)?, None, Some(phase));
+        Ok(transaction)
+    }
+
     /// Return the phase and versions of an unsettled replacement, if any.
     ///
     /// # Errors

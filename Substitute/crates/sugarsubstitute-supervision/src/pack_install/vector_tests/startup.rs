@@ -140,6 +140,54 @@ fn a_page_failure_restores_at_the_next_start() -> TestResult {
     Ok(())
 }
 
+/// A run cut off while it placed the new files leaves the pack without its own records. The
+/// next start puts the previous version back before it reads the pack and reports the
+/// interruption, and that version is installed at a later start: an interruption says nothing
+/// about the version.
+#[test]
+fn an_install_cut_off_while_replacing_is_undone_before_the_pack_is_read() -> TestResult {
+    let host = Host::new()?;
+    let storage = host.root.path().join("host-storage");
+    let before = tracked_files(&host.pack())?;
+    host.publish("1.1.0")?;
+    let cut = StartupUpdate::cut_in(&host.pack(), &storage, JournalPhase::Replacing)?;
+    assert!(matches!(
+        cut.run(&host.sources, &|| true),
+        StartupOutcome::Failed { step: StartupStep::Installing, .. }
+    ));
+    assert!(host.version().is_err(), "the cut left the pack without its own description");
+    let restored = match host.update()?.settle_cut_off() {
+        Some(StartupOutcome::Restored(restored)) => restored,
+        other => return Err(format!("not restored: {other:?}").into()),
+    };
+    assert_eq!(restored.reason, RestoreReason::Interrupted);
+    assert_eq!((restored.version.as_str(), restored.restored_version.as_str()), ("1.1.0", "1.0.0"));
+    assert_eq!(host.version()?, "1.0.0");
+    assert_eq!(tracked_files(&host.pack())?, before);
+    assert_eq!(host.update()?.settle_cut_off(), None, "nothing is left to undo");
+    assert!(matches!(host.run()?, StartupOutcome::Updated { .. }));
+    assert_eq!(host.version()?, "1.1.0");
+    Ok(())
+}
+
+/// A run cut off while it was still setting the old files aside is undone without a verdict,
+/// and the same start goes on to install the version.
+#[test]
+fn an_install_cut_off_while_backing_up_is_undone_and_the_start_goes_on() -> TestResult {
+    let host = Host::new()?;
+    let storage = host.root.path().join("host-storage");
+    let before = tracked_files(&host.pack())?;
+    host.publish("1.1.0")?;
+    let cut = StartupUpdate::cut_in(&host.pack(), &storage, JournalPhase::BackingUp)?;
+    assert!(matches!(cut.run(&host.sources, &|| true), StartupOutcome::Failed { .. }));
+    assert_eq!(host.update()?.settle_cut_off(), None);
+    assert_eq!(tracked_files(&host.pack())?, before);
+    assert!(!storage.join("transaction").exists(), "the cut-off transaction is gone");
+    assert!(matches!(host.run()?, StartupOutcome::Updated { .. }));
+    assert_eq!(host.version()?, "1.1.0");
+    Ok(())
+}
+
 /// A page that never loaded for an unattributed cause (a frontend that never became usable,
 /// a probe out of time) restores the previous version at the second launch, says so in the
 /// report, and the version whose page never loaded is not installed again.

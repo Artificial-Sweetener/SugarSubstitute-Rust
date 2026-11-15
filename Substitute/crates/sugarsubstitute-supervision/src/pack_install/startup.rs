@@ -10,9 +10,11 @@
 //!
 //! While it changes the folder, the run holds the same lock SugarCubes' own updater takes
 //! (`.sugarcubes/updates/.lock` inside the pack), so the two implementations of the format
-//! never change one folder at once. A version that was restored is not installed again;
-//! only a newer one is. All of this is blocking file and network work, run on a worker the
-//! execution owner admitted; `proceed` reports that worker's cancellation and deadline.
+//! never change one folder at once. A version that failed its judgement and was restored is
+//! not installed again; only a newer one is. A replacement that was cut off is undone before
+//! anything reads the pack, and its version is installed at a later start. All of this is
+//! blocking file and network work, run on a worker the execution owner admitted; `proceed`
+//! reports that worker's cancellation and deadline.
 
 use super::digest_record::is_sha256;
 use super::error::{ErrorCode, PackInstallError, Result};
@@ -20,7 +22,7 @@ use super::identity::ReleaseVersion;
 use super::ownership::NotOwnedReason;
 use super::selection::{ReleaseSources, SourceFailure, UpdateDecision, newest_offer};
 use super::sources::{ReleaseOffer, ReleaseSourceConfig, ReleaseSourceKind};
-use super::trial::{Restored, TrialEnding, TrialEvent};
+use super::trial::{RestoreReason, Restored, TrialEnding, TrialEvent};
 use super::{JournalPhase, Ownership, PackFolder, PackTransaction};
 use crate::durable_storage::pack_tree::PackLock;
 use crate::durable_storage::pack_tree::{NodeKind, PackTree};
@@ -157,6 +159,45 @@ impl StartupUpdate {
         })
     }
 
+    /// [`Self::at`], with a replacement that stops at its first effect in `phase` as a power
+    /// cut would.
+    #[cfg(test)]
+    pub(crate) fn cut_in(folder: &Path, storage: &Path, phase: JournalPhase) -> io::Result<Self> {
+        Ok(Self {
+            folder: PackFolder::at(folder)?,
+            transaction: PackTransaction::cut_in(&storage.join(TRANSACTION), phase)?,
+            storage: PackTree::at(storage)?,
+        })
+    }
+
+    /// Put the previous files back when the last run was cut off while it replaced them.
+    ///
+    /// Until that is done the pack's own records, and with them its release-source
+    /// description, may be in the backup. Call this before anything reads the pack: before its
+    /// release sources are read, before [`Self::run`] and before a backend loads the folder.
+    /// Returns the outcome to report when a replacement that had begun placing new files was
+    /// undone, or a failure to undo it; a replacement cut off while it was still setting files
+    /// aside is undone without a verdict, and `None` lets the start go on.
+    pub fn settle_cut_off(&self) -> Option<StartupOutcome> {
+        match self.transaction.pending() {
+            Ok(Some((JournalPhase::BackingUp | JournalPhase::Replacing, _, _))) => {}
+            Ok(_) => return None,
+            Err(cause) => return Some(failed(StartupStep::Installing, &cause)),
+        }
+        let _lock = match self.folder.tree.try_lock(UPDATE_LOCK_FILE) {
+            Ok(Some(lock)) => lock,
+            Ok(None) => return Some(StartupOutcome::Busy),
+            Err(_) => {
+                return Some(StartupOutcome::Failed { step: StartupStep::Installing, code: "io" });
+            }
+        };
+        match self.transaction.settle(&self.folder, TrialEnding::Unwitnessed) {
+            Ok(Some(restored)) => Some(StartupOutcome::Restored(restored)),
+            Ok(None) => None,
+            Err(cause) => Some(failed(StartupStep::Installing, &cause)),
+        }
+    }
+
     /// Settle the previous start's judgement, then install the newest version if one exists.
     ///
     /// `proceed` returns false once the worker is cancelled or past its deadline; the run then
@@ -209,7 +250,7 @@ impl StartupUpdate {
         };
         match self.transaction.settle(&self.folder, TrialEnding::Unwitnessed) {
             Ok(Some(restored)) => {
-                return match self.remember_restored(&restored.version) {
+                return match self.remember_failed(&restored) {
                     Ok(()) => StartupOutcome::Restored(restored),
                     Err(cause) => failed(StartupStep::Installing, &cause),
                 };
@@ -333,7 +374,7 @@ impl StartupUpdate {
     pub fn backend_stopped(&self) -> Result<Option<Restored>> {
         let restored = self.transaction.settle(&self.folder, TrialEnding::BackendStopped)?;
         if let Some(restored) = &restored {
-            self.remember_restored(&restored.version)?;
+            self.remember_failed(restored)?;
             self.record(StartupOutcome::Restored(restored.clone()));
         }
         Ok(restored)
@@ -394,6 +435,15 @@ impl StartupUpdate {
 
     fn discard_download(&self) -> io::Result<()> {
         self.storage.child(DOWNLOAD)?.remove_all()
+    }
+
+    /// Keep the version that failed its judgement from being installed again. A replacement
+    /// that was only interrupted says nothing about its version, so it is not remembered.
+    fn remember_failed(&self, restored: &Restored) -> Result<()> {
+        if restored.reason == RestoreReason::Interrupted {
+            return Ok(());
+        }
+        self.remember_restored(&restored.version)
     }
 
     fn remember_restored(&self, version: &str) -> Result<()> {

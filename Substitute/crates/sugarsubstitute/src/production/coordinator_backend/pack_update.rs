@@ -462,6 +462,11 @@ fn run_update(
         Ok(update) => update,
         Err(_) => return StartupOutcome::Failed { step: StartupStep::Checking, code: "io" },
     };
+    // An install the last run was cut off in is undone first: until then the pack's own
+    // description of its release sources may be in the backup.
+    if managed && let Some(outcome) = update.settle_cut_off() {
+        return update.record(outcome);
+    }
     let config = match update.release_sources() {
         Ok(config) => config,
         Err(outcome) => return update.record(outcome),
