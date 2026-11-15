@@ -38,16 +38,20 @@ impl<B: StartupBackend> StartupHost<B> {
     /// Preserves the close transaction's first measurement or cleanup failure.
     pub fn request_close(&mut self, reason: CloseReason) -> Result<(), Box<dyn Error>> {
         // A close while SugarCubes files are installed or put back waits for that to end, the
-        // window saying so; a further request does not force it. Only a session end, which
-        // the system will not wait for, closes at once.
+        // window saying so; a further request does not force it. So does a close in the moment
+        // between a start failing and the coordinator settling it: a window that left then was
+        // reported as a failed start instead of a close. Only a session end, which the system
+        // will not wait for, closes at once.
+        let installing = self.sugarcubes_installing();
         if !self.closing
             && !matches!(reason, CloseReason::SessionEnding { .. })
-            && self.sugarcubes_installing()
+            && (installing || self.failed_start_settling())
         {
             if self.deferred_close.is_none() {
                 tracing::info!(
-                    operation = "startup_close_waits_for_sugarcubes",
-                    "The close waits for the SugarCubes update to finish"
+                    operation = "startup_close_waits",
+                    sugarcubes_installing = installing,
+                    "The close waits for the SugarCubes update or the failed start to settle"
                 );
                 self.deferred_close = Some(reason);
                 self.invalidate(true);

@@ -370,19 +370,16 @@ fn the_users_close_during_a_sugarcubes_install_keeps_the_window_until_it_finishe
     Ok(())
 }
 
-/// A close during a restore waits for the failed start to settle as well. The previous files
-/// are back a moment before the coordinator has retired the start that failed; a window that
-/// left in between was reported as a failed start.
-#[test]
-fn a_close_during_a_restore_also_waits_for_the_failed_start_to_settle() -> BackendResult<()> {
-    let mut host = host()?;
-    let launch = host.launch_id();
+/// A start that failed and that the coordinator has not settled yet.
+fn failed_session(
+    launch: sugarsubstitute_contracts::startup::LaunchId,
+) -> BackendResult<StartupSession> {
     let mut session = StartupSession::new(
         launch,
         Generation::new(1)?,
         StartupConfiguration::new(
             ConnectionConfiguration::Attach(LoopbackOrigin::parse("http://127.0.0.1:8188", 8188)?),
-            ProfileId::new("restore-close-test".into())?,
+            ProfileId::new("failed-start-close-test".into())?,
             Presentation::new("en", Theme::Dark, true)?,
         ),
     );
@@ -391,11 +388,61 @@ fn a_close_during_a_restore_also_waits_for_the_failed_start_to_settle() -> Backe
         launch,
         StartupObservation::Failed(StartupFailure::new(
             StartupFailureCode::ProcessExited,
-            Box::new(std::io::Error::other("the new SugarCubes version did not start")),
+            Box::new(std::io::Error::other("the backend did not start")),
         )),
     ))?;
     assert_eq!(session.phase(), StartupPhase::Failed);
-    host.startup = Some(Prepared { session, released: false });
+    Ok(session)
+}
+
+/// A close pressed in the moment between a start failing and the coordinator settling it
+/// waits for the settlement, with no SugarCubes install or restore running: a window that left
+/// in that moment was reported as a failed start. A second request forces nothing, and a
+/// session end, which the system will not wait for, still closes at once.
+#[test]
+fn a_close_before_a_failed_start_settled_waits_for_it_with_nothing_installing() -> BackendResult<()>
+{
+    use sugarsubstitute_application::workspace_session::close_save::CloseReason;
+    let mut host = host()?;
+    let launch = host.launch_id();
+    host.startup = Some(Prepared { session: failed_session(launch)?, released: false });
+    for _ in 0..2 {
+        host.observe(DesktopStartupObservation::CloseRequested)?;
+        assert!(!host.closing, "the failed start is not settled yet");
+        assert_eq!(host.deferred_close, Some(CloseReason::Close));
+    }
+    host.advance_deferred_close()?;
+    assert!(!host.closing);
+    let mut prepared = host.startup.take().ok_or("Startup absent")?;
+    prepared.session.observe(StartupEvent::new(launch, StartupObservation::ConnectionSettled))?;
+    host.startup = Some(prepared);
+    host.advance_deferred_close()?;
+    assert!(host.closing, "the failed start settled: the close begins");
+    assert_eq!(host.child.close_phase, Some(StartupPhase::Stopped));
+
+    let mut ending = super::host()?;
+    let launch = ending.launch_id();
+    ending.startup = Some(Prepared { session: failed_session(launch)?, released: false });
+    ending.request_close(CloseReason::SessionEnding { critical: false })?;
+    assert!(ending.closing, "a session end does not wait");
+
+    // A start whose cleanup failed never settles; its close is not held for it.
+    let mut stuck = super::host()?;
+    let launch = stuck.launch_id();
+    stuck.startup = Some(Prepared { session: failed_session(launch)?, released: false });
+    stuck.child.cleanup_failed = true;
+    stuck.request_close(CloseReason::Close)?;
+    assert!(stuck.closing, "nothing will settle this start");
+    Ok(())
+}
+/// A close during a restore waits for the failed start to settle as well. The previous files
+/// are back a moment before the coordinator has retired the start that failed; a window that
+/// left in between was reported as a failed start.
+#[test]
+fn a_close_during_a_restore_also_waits_for_the_failed_start_to_settle() -> BackendResult<()> {
+    let mut host = host()?;
+    let launch = host.launch_id();
+    host.startup = Some(Prepared { session: failed_session(launch)?, released: false });
     let mut restoring = UpdateStatus::default();
     restoring.observe_sugarcubes(PackUpdateStatus::Restoring);
     host.child.update_status = Some(restoring.clone());

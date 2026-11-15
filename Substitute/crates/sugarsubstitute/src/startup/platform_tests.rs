@@ -32,6 +32,8 @@ pub(super) struct Platform {
     pub(in crate::startup) shutdown_starts: usize,
     /// The startup phase the window said its close began in.
     pub(in crate::startup) close_phase: Option<StartupPhase>,
+    /// Whether this fake child's cleanup failed, so a failed start never settles.
+    pub(in crate::startup) cleanup_failed: bool,
     retired: bool,
     finished: bool,
     effects: Vec<&'static str>,
@@ -144,7 +146,7 @@ impl StartupBackend for Platform {
         None
     }
     fn cleanup_failed(&self) -> bool {
-        false
+        self.cleanup_failed
     }
     fn ensure_retry_ready(&self, _: MainIdentity) -> BackendResult<()> {
         Err("unsettled native owner".into())
