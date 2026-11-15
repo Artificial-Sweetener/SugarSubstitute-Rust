@@ -120,14 +120,17 @@ impl BackendCustodyProcessWatch {
         if self.signaled() || self.termination_issued {
             return Ok(None);
         }
-        let now = crate::windows::process::Lease::active_time()?;
-        let remaining =
-            self.watchdog.as_mut().ok_or_else(|| failure("parent_watchdog_member"))?.remaining(now);
+        let lease = self.lease.as_ref();
+        let remaining = self
+            .watchdog
+            .as_mut()
+            .ok_or_else(|| failure("parent_watchdog_member"))?
+            .enforce(crate::windows::process::Lease::active_time, || {
+                lease
+                    .ok_or_else(|| failure("parent_watchdog_owner"))?
+                    .terminate_unresponsive_parent()
+            })?;
         if remaining == Some(std::time::Duration::ZERO) {
-            self.lease
-                .as_ref()
-                .ok_or_else(|| failure("parent_watchdog_owner"))?
-                .terminate_unresponsive_parent()?;
             self.termination_issued = true;
             tracing::error!(
                 operation = "coordinator_watchdog_expired",

@@ -283,7 +283,7 @@ consumer = "execution_metadata"
 [[records]]
 path = "crates/sugarsubstitute-execution/src/backend_custody/native_watch.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:2fc4057e5f01c5b505f69c7de02ead431d9fe3e75a0229ae3367d587a33184a7"
+source_sha256 = "sha256:f150a4432f9d65d7d4188cf8e18cc41792a83639b09ddf5142d26fb7881cb5be"
 capabilities = ["export public restricted capability std::os::windows::io::OwnedHandle", "method metadata"]
 disposition = "boundary"
 rationale = "Execution-owned native pipe, shared section, process or handle lifetime: Reuse the original process wait owner under actual custody metadata/slot credit. Native object custody and original queue, memory and shutdown limits remain with the execution owner."
