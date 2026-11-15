@@ -73,6 +73,32 @@ fn an_attached_comfyui_is_only_checked_and_never_waits_or_is_judged() -> TestRes
 }
 
 #[test]
+fn a_page_that_loads_with_the_restore_shown_records_once_that_the_user_was_told() -> TestResult {
+    let loaded = TrialEvent::PageLoaded { nodes_registered: true };
+    let mut schedule = PackSchedule::default();
+    schedule.prepare(1, true);
+    schedule.start_next();
+    schedule.ended(PackWorkEnded::Updated(StartupOutcome::Restored(restored())));
+    for told in [true, false] {
+        schedule.observe(loaded);
+        assert_eq!(schedule.start_next(), Some((PackWork::Observe(loaded), None)));
+        schedule.ended(PackWorkEnded::Observed);
+        assert_eq!(schedule.start_next(), told.then_some((PackWork::RestoreTold, None)));
+        schedule.ended(PackWorkEnded::Observed);
+    }
+    // A start that shows anything else records nothing.
+    let mut schedule = PackSchedule::default();
+    schedule.prepare(1, true);
+    schedule.start_next();
+    schedule.ended(PackWorkEnded::Updated(updated()?));
+    schedule.observe(loaded);
+    assert_eq!(schedule.start_next(), Some((PackWork::Observe(loaded), None)));
+    schedule.ended(PackWorkEnded::Observed);
+    assert_eq!(schedule.start_next(), None);
+    Ok(())
+}
+
+#[test]
 fn a_failed_page_holds_the_retry_behind_a_restore_of_the_previous_version() -> TestResult {
     let mut schedule = PackSchedule::default();
     schedule.prepare(1, true);
@@ -187,6 +213,7 @@ fn a_restore_is_given_an_installs_budget_and_only_observations_are_records() {
     assert_eq!(PackWork::BackendStopped.kind(), PackWorkKind::Replace);
     assert_eq!(PackWork::RestoreFailedPage.kind(), PackWorkKind::Replace);
     assert_eq!(PackWork::Observe(TrialEvent::PageFailed).kind(), PackWorkKind::Record);
+    assert_eq!(PackWork::RestoreTold.kind(), PackWorkKind::Record);
 }
 
 /// A retry that arrives while a backend-failure restore runs waits for it, and stopping that

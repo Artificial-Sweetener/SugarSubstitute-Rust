@@ -48,6 +48,9 @@ const DOWNLOAD: &str = "download";
 const ARCHIVE: &str = "release.zip";
 const RESTORED_RECORD: &str = "restored.json";
 const RESTORED_SCHEMA: u32 = 1;
+/// A restore no main window has shown yet; see [`StartupUpdate::restore_told`].
+const UNTOLD_RESTORE_RECORD: &str = "untold-restore.json";
+const UNTOLD_RESTORE_SCHEMA: u32 = 1;
 /// The update report of the last startup update, in the host's storage for this pack.
 pub const REPORT_RECORD: &str = "report.json";
 const MAX_RECORD_BYTES: usize = 64 * 1024;
@@ -207,7 +210,31 @@ impl StartupUpdate {
         sources: &dyn ReleaseDownloads,
         proceed: &dyn Fn() -> bool,
     ) -> StartupOutcome {
-        self.record(self.run_locked(sources, proceed))
+        let outcome = match self.run_locked(sources, proceed) {
+            // A start with nothing new to say tells a restore no main window has shown yet:
+            // the start it happened in ended before its page loaded.
+            StartupOutcome::UpToDate => {
+                self.untold_restore().map_or(StartupOutcome::UpToDate, StartupOutcome::Restored)
+            }
+            outcome @ StartupOutcome::Updated { .. } => {
+                self.forget_untold_restore();
+                outcome
+            }
+            outcome => outcome,
+        };
+        self.record(outcome)
+    }
+
+    /// The main window loaded while this start's report said the previous version runs again:
+    /// the user has been shown it, so later starts no longer repeat it.
+    ///
+    /// # Errors
+    /// Returns a filesystem failure; the restore is then told once more at the next start.
+    pub fn restore_told(&self) -> Result<()> {
+        if self.storage.kind(UNTOLD_RESTORE_RECORD)? != NodeKind::Missing {
+            self.storage.remove_file(UNTOLD_RESTORE_RECORD)?;
+        }
+        Ok(())
     }
 
     /// Log `outcome` and keep it as the update report in this pack's host storage, replacing
@@ -443,7 +470,58 @@ impl StartupUpdate {
         if restored.reason == RestoreReason::Interrupted {
             return Ok(());
         }
-        self.remember_restored(&restored.version)
+        self.remember_restored(&restored.version)?;
+        let untold = UntoldRestore {
+            schema: UNTOLD_RESTORE_SCHEMA,
+            version: restored.version.clone(),
+            restored_version: restored.restored_version.clone(),
+            reason: restored.reason.as_str().to_owned(),
+        };
+        let bytes = serde_json::to_vec(&untold).map_err(io::Error::other)?;
+        Ok(self.replace_record(UNTOLD_RESTORE_RECORD, &bytes)?)
+    }
+
+    /// The restore no main window has shown yet, while the version it put back is still the
+    /// one installed. An unreadable record, or one about another installed version, is dropped:
+    /// it would say something that is no longer true.
+    fn untold_restore(&self) -> Option<Restored> {
+        if self.storage.kind(UNTOLD_RESTORE_RECORD).ok()? == NodeKind::Missing {
+            return None;
+        }
+        let restored = self
+            .storage
+            .read(UNTOLD_RESTORE_RECORD, MAX_RECORD_BYTES)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<UntoldRestore>(&bytes).ok())
+            .filter(|record| record.schema == UNTOLD_RESTORE_SCHEMA)
+            .and_then(|record| {
+                Some(Restored {
+                    reason: RestoreReason::parse(&record.reason)?,
+                    version: record.version,
+                    restored_version: record.restored_version,
+                })
+            })
+            .filter(|restored| match self.folder.ownership() {
+                Ok(Ownership::Owned(identity)) => {
+                    identity.version.to_string() == restored.restored_version
+                }
+                _ => false,
+            });
+        if restored.is_none() {
+            self.forget_untold_restore();
+        }
+        restored
+    }
+
+    fn forget_untold_restore(&self) {
+        if let Err(cause) = self.restore_told() {
+            tracing::warn!(
+                target: "sugarsubstitute::pack_install",
+                operation = "forget_untold_restore",
+                error = %cause,
+                "The record of a restore not yet shown could not be removed"
+            );
+        }
     }
 
     fn remember_restored(&self, version: &str) -> Result<()> {
@@ -477,6 +555,16 @@ impl StartupUpdate {
 struct RestoredRecord {
     schema: u32,
     version: String,
+}
+
+/// A restore the user has not been shown, as the update report spells it.
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct UntoldRestore {
+    schema: u32,
+    version: String,
+    restored_version: String,
+    reason: String,
 }
 
 enum Refusal {

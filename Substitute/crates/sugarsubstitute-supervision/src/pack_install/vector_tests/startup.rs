@@ -113,11 +113,51 @@ fn a_backend_that_stops_before_ready_restores_the_previous_version_for_good() ->
     assert_eq!(host.version()?, "1.0.0");
     assert_eq!(tracked_files(&host.pack())?, before);
     // The version that failed is not installed again; a newer one is.
+    host.update()?.restore_told()?;
     assert_eq!(host.run()?, StartupOutcome::UpToDate);
     assert_eq!(host.version()?, "1.0.0");
     host.publish("1.2.0")?;
     assert!(matches!(host.run()?, StartupOutcome::Updated { .. }));
     assert_eq!(host.version()?, "1.2.0");
+    Ok(())
+}
+
+/// A start that ends before its main window loads never showed the user the restore, as when
+/// they press Cancel loading while the previous version is put back. Every later start says it
+/// until a main window has loaded with it shown.
+#[test]
+fn a_restore_no_window_showed_is_told_at_later_starts_until_one_does() -> TestResult {
+    use sugarsubstitute_contracts::localization::pack_updates::EN;
+    let host = Host::new()?;
+    host.publish("1.1.0")?;
+    assert!(matches!(host.run()?, StartupOutcome::Updated { .. }));
+    let restored = host.update()?.backend_stopped()?.ok_or("nothing restored")?;
+    for _ in 0..2 {
+        let outcome = host.run()?;
+        assert_eq!(outcome, StartupOutcome::Restored(restored.clone()));
+        assert_eq!(outcome.report().notice(&EN).as_deref(), Some(EN.restored_did_not_start));
+        assert_eq!(host.version()?, "1.0.0", "the failed version is not installed again");
+    }
+    host.update()?.restore_told()?;
+    assert_eq!(host.run()?, StartupOutcome::UpToDate);
+    Ok(())
+}
+
+/// News of a restore nobody saw gives way to a newer version, and is dropped when another
+/// version than the restored one is installed: it would no longer be true.
+#[test]
+fn a_restore_nobody_saw_is_not_told_once_another_version_is_installed() -> TestResult {
+    let host = Host::new()?;
+    host.publish("1.1.0")?;
+    host.run()?;
+    host.update()?.backend_stopped()?.ok_or("nothing restored")?;
+    host.publish("1.2.0")?;
+    assert!(matches!(host.run()?, StartupOutcome::Updated { .. }));
+    let update = host.update()?;
+    update.observe(TrialEvent::BackendStartUnobservable)?;
+    update.observe(TrialEvent::PageLoaded { nodes_registered: true })?;
+    assert_eq!(host.run()?, StartupOutcome::UpToDate);
+    assert!(!host.root.path().join("host-storage/untold-restore.json").exists());
     Ok(())
 }
 
@@ -210,6 +250,8 @@ fn a_page_that_never_loaded_runs_the_previous_version_at_the_second_launch() -> 
         host.root.path().join("host-storage").join(REPORT_RECORD),
     )?)?;
     assert_eq!(report.notice(&EN).as_deref(), Some(EN.restored_page));
+    // That launch's page loads with the line shown; later starts have nothing to say.
+    host.update()?.restore_told()?;
     assert_eq!(host.run()?, StartupOutcome::UpToDate);
     assert_eq!(host.version()?, "1.0.0");
     Ok(())
@@ -457,7 +499,9 @@ fn a_failed_page_restores_the_previous_version_before_the_next_attempt() -> Test
     )?)?;
     assert_eq!(report.outcome, PackOutcome::Restored);
     assert_eq!(report.reason.as_deref(), Some("page-did-not-load"));
-    // The failed version is not tried again; the next start is up to date.
+    // The retry's page loads with the line shown. The failed version is not tried again; the
+    // next start is up to date.
+    update.restore_told()?;
     assert_eq!(host.run()?, StartupOutcome::UpToDate);
     Ok(())
 }

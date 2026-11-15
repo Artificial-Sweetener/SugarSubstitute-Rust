@@ -447,6 +447,9 @@ fn run(
         PackWork::RestoreFailedPage => {
             update.restore_failed_page().map(PackJobResult::Stopped).map_err(failed)
         }
+        PackWork::RestoreTold => {
+            update.restore_told().map(|()| PackJobResult::Observed).map_err(failed)
+        }
         PackWork::Update { .. } => Err(PackJobError("The update ran above".into())),
     }
 }

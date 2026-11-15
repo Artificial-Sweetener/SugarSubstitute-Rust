@@ -16,7 +16,7 @@
 use super::startup::StartupOutcome;
 use super::trial::{Restored, TrialEvent};
 use std::collections::VecDeque;
-use sugarsubstitute_contracts::update::pack::PackUpdateStatus;
+use sugarsubstitute_contracts::update::pack::{PackOutcome, PackUpdateStatus};
 
 /// One unit of SugarCubes work for the coordinator to run.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -32,6 +32,9 @@ pub enum PackWork {
     BackendStopped,
     /// The judged version's page failed and its backend stopped: restore the previous version.
     RestoreFailedPage,
+    /// The page loaded while the status said the previous version runs again: the user has
+    /// been shown it, so later starts stop repeating it.
+    RestoreTold,
 }
 
 /// What a job of the schedule does, which decides how much time and memory it is given.
@@ -52,7 +55,7 @@ impl PackWork {
         match self {
             Self::Update { .. } => PackWorkKind::Download,
             Self::BackendStopped | Self::RestoreFailedPage => PackWorkKind::Replace,
-            Self::Observe(_) => PackWorkKind::Record,
+            Self::Observe(_) | Self::RestoreTold => PackWorkKind::Record,
         }
     }
 }
@@ -88,6 +91,8 @@ pub struct PackSchedule<K> {
     /// The launch-time update waits: this launch may still restart into an application
     /// update, and then the restarted copy runs it.
     update_held: bool,
+    /// The record that the shown restore was seen is queued or written.
+    restore_told: bool,
 }
 
 impl<K> Default for PackSchedule<K> {
@@ -102,6 +107,7 @@ impl<K> Default for PackSchedule<K> {
             before_restore: None,
             revision: 0,
             update_held: false,
+            restore_told: false,
         }
     }
 }
@@ -149,10 +155,20 @@ impl<K: Copy + Eq> PackSchedule<K> {
         }
     }
 
-    /// Record an observation of the judged version; ignored when nothing is judged here.
+    /// Record an observation of the judged version; ignored when nothing is judged here. A
+    /// page that loads while the status says the previous version runs again has shown the
+    /// user that line, which is recorded once so later starts stop repeating it.
     pub fn observe(&mut self, event: TrialEvent) {
         if self.judging {
             self.queued.push_back((PackWork::Observe(event), None));
+        }
+        let restored = matches!(
+            &self.status,
+            PackUpdateStatus::Finished(report) if report.outcome == PackOutcome::Restored
+        );
+        if restored && !self.restore_told && matches!(event, TrialEvent::PageLoaded { .. }) {
+            self.restore_told = true;
+            self.queued.push_back((PackWork::RestoreTold, None));
         }
     }
 

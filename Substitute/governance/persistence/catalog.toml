@@ -1968,12 +1968,13 @@ compatibility = "reject"
 migrations = []
 
 # The host's own SugarCubes update folder, kept in the installation's state: the replacement
-# journal beside its backup, the restored-version record and the update report (each schema 1).
+# journal beside its backup, the restored-version record, the record of a restore no main window
+# has shown yet and the update report (each schema 1).
 [[formats]]
 id = "sugarcubes-pack-update-journal-v1"
 owner = "sugarsubstitute-supervision"
 sources = ["crates/sugarsubstitute-supervision/src/pack_install/replacement.rs", "crates/sugarsubstitute-supervision/src/pack_install/startup.rs", "crates/sugarsubstitute-supervision/src/pack_install/trial.rs"]
-source_sha256 = "sha256:4499caf6ecc5ccc42beef8c727c440654e4517cd8dccb01180ed2bd17610a82b"
+source_sha256 = "sha256:4eee9da408f8ab3b8fc9dd42f006dab0c6bc3c9c4f08dd56228a3fa13e47435c"
 classification = "authoritative_state"
 preservation = "must_preserve"
 current_version = 1

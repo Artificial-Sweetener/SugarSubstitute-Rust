@@ -72,6 +72,13 @@ impl RestoreReason {
             Self::Interrupted => "interrupted",
         }
     }
+
+    /// Read the shared spelling.
+    pub fn parse(spelling: &str) -> Option<Self> {
+        [Self::DidNotStart, Self::PageDidNotLoad, Self::Interrupted]
+            .into_iter()
+            .find(|reason| reason.as_str() == spelling)
+    }
 }
 
 /// A previous version put back because the version installed after it failed its judgement.
