@@ -53,7 +53,11 @@ fn admitted(
 
 fn directory() -> Result<PathBuf, ClaimError> {
     let id = GUID::new().map_err(|cause| ClaimError::new("fixture_id", cause))?;
-    let path = std::env::temp_dir().join(format!("preview-{id:?}"));
+    // The artifact owner pins the canonical name of what it creates, and a machine may spell
+    // its temporary folder with a short name, so the fixture starts from the resolved folder.
+    let temporary = fs::canonicalize(std::env::temp_dir())
+        .map_err(|cause| ClaimError::new("fixture_temporary", cause))?;
+    let path = temporary.join(format!("preview-{id:?}"));
     fs::create_dir(&path).map_err(|cause| ClaimError::new("fixture_directory", cause))?;
     Ok(path)
 }

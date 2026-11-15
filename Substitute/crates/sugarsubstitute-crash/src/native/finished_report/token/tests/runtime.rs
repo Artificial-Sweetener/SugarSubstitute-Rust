@@ -23,9 +23,7 @@ pub(super) fn owner() -> Result<CoordinatorKey, TestError> {
 pub(super) fn create(harness: &mut Harness) -> Result<ProtectedCaptureSourceFixture, TestError> {
     // SAFETY: CoCreateGuid writes/returns a fresh scalar identifier and owns no handles.
     let id = unsafe { windows::Win32::System::Com::CoCreateGuid() }?;
-    let path = std::path::PathBuf::from(format!(
-        "D:/SugarSubstitute-Rust/artifacts/k1/incident-host01/finished-token-{id:?}"
-    ));
+    let path = std::env::temp_dir().join(format!("finished-token-{id:?}"));
     harness.run(1, ProtectedCaptureSourceFixture::required_reservation_bytes(), move |context| {
         Ok(ProtectedCaptureSourceFixture::create(&context, owner()?, path)?)
     })

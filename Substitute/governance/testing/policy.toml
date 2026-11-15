@@ -234,3 +234,83 @@ requires = "a desktop session that displays windows"
 package = "sugarsubstitute"
 test = "setup::controller::native::tests::real_native_installer_navigates_and_applies_picker_without_browser"
 requires = "a desktop session that displays windows"
+
+[[hosted_runner]]
+package = "sugarsubstitute-desktop"
+test = "installer::native::windows::tests::capture::native_installer_capture_contains_original_text_and_scroll_pixels"
+requires = "a desktop session that displays windows"
+
+[[hosted_runner]]
+package = "sugarsubstitute-desktop"
+test = "installer::native::windows::tests::a_released_window_retires_before_its_lifetime_settles"
+requires = "a desktop session that displays windows"
+
+[[hosted_runner]]
+package = "sugarsubstitute-desktop"
+test = "installer::native::windows::tests::native_installer_invalid_page_retires_before_first_reveal"
+requires = "a desktop session that displays windows"
+
+[[hosted_runner]]
+package = "sugarsubstitute-desktop"
+test = "installer::native::windows::tests::native_installer_failure_still_retires_original_window_and_field"
+requires = "a desktop session that displays windows"
+
+[[hosted_runner]]
+package = "sugarsubstitute-desktop"
+test = "installer::native::windows::tests::original_native_installer_window_presents_edits_clips_and_retires"
+requires = "a desktop session that displays windows"
+
+[[hosted_runner]]
+package = "sugarsubstitute-desktop"
+test = "installer::native::windows::tests::scales::the_installer_keeps_its_logical_size_at_every_display_scale"
+requires = "a display large enough for the installer window"
+
+[[hosted_runner]]
+package = "sugarsubstitute-desktop"
+test = "installer::native::windows::tests::scrolling::native_installer_scroll_uses_shared_gestures_and_releases_drag_on_close"
+requires = "a desktop session that displays windows"
+
+[[hosted_runner]]
+package = "sugarsubstitute-desktop"
+test = "main_actor::composition::canvas::tests::shared::every_vulkan_adapter_draws_shared_textures_that_composition_copies_exactly"
+requires = "a hardware Vulkan adapter that shares composition textures"
+
+[[hosted_runner]]
+package = "sugarsubstitute-desktop"
+test = "main_actor::placement::tests::native_cases::placement_native_hidden_restore_and_final_capture_retain_exact_peer"
+requires = "a desktop session that displays windows"
+
+[[hosted_runner]]
+package = "sugarsubstitute-desktop"
+test = "report::surface::native_tests::hosted::update_report_opens_over_the_main_window_on_its_own_loop_and_settles"
+requires = "a desktop session that displays windows"
+
+[[hosted_runner]]
+package = "sugarsubstitute-desktop"
+test = "report::surface::native_tests::crash_report::crash_report_offers_dump_consent_and_settles_after_its_window_retires"
+requires = "a desktop session that displays windows"
+
+[[hosted_runner]]
+package = "sugarsubstitute-desktop"
+test = "report::surface::native_tests::startup_failure_report_presents_reveals_details_and_closes"
+requires = "a desktop session that displays windows"
+
+[[hosted_runner]]
+package = "sugarsubstitute-desktop"
+test = "report::surface::native_tests::unresponsive_window_question_closes_it_and_escape_cancels"
+requires = "a desktop session that displays windows"
+
+[[hosted_runner]]
+package = "sugarsubstitute-desktop"
+test = "windows_controls::caption::frame_tests::the_system_draws_no_caption_buttons_under_the_main_caption"
+requires = "desktop composition"
+
+[[hosted_runner]]
+package = "sugarsubstitute-desktop"
+test = "windows_controls::caption::hit_tests::the_strip_above_the_page_answers_a_real_hit_test_as_caption"
+requires = "desktop composition"
+
+[[hosted_runner]]
+package = "sugarsubstitute-desktop"
+test = "windows_controls::caption::tests::every_update_caption_state_shows_on_the_real_caption_peers"
+requires = "desktop composition"

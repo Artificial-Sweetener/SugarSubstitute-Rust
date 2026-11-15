@@ -1639,8 +1639,8 @@ boundary = "native_custody"
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/qualification_artifact/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:0fb8ba725e4dcf2d100bcae85450b565241b86a19ebb98a65e5a05429fb0d44b"
-capabilities = ["std::fs::create_dir", "std::fs::read", "std::fs::remove_dir", "std::fs::remove_file"]
+source_sha256 = "sha256:c2b5b617393af16f0120da46a341021dbd202cf9ea324035e8470400b77b26ec"
+capabilities = ["std::fs::canonicalize", "std::fs::create_dir", "std::fs::read", "std::fs::remove_dir", "std::fs::remove_file"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Exercise actual create-only files and checked owner retirement in ordinary finite jobs. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
 
