@@ -54,7 +54,11 @@ pub struct UpdatesCommand {
     identity: MainIdentity,
     revision: Option<u64>,
     payload: Vec<u8>,
+    #[cfg(target_os = "windows")]
     claim: MemoryClaim,
+    /// Only the Windows host delivers the command; elsewhere it keeps its admission until drop.
+    #[cfg(not(target_os = "windows"))]
+    _claim: MemoryClaim,
 }
 
 impl UpdatesCommand {
@@ -80,7 +84,15 @@ impl UpdatesCommand {
             UpdatesHostMessage::State { revision, .. } => Some(*revision),
             UpdatesHostMessage::Accepted(_) | UpdatesHostMessage::Rejected { .. } => None,
         };
-        Ok(Self { identity, revision, payload, claim })
+        Ok(Self {
+            identity,
+            revision,
+            payload,
+            #[cfg(target_os = "windows")]
+            claim,
+            #[cfg(not(target_os = "windows"))]
+            _claim: claim,
+        })
     }
 
     /// Borrow the addressed main-navigation identity.
@@ -106,6 +118,7 @@ impl UpdatesCommand {
     }
 
     /// Drop encoded storage before recovering its original noncloneable allocation claim.
+    #[cfg(target_os = "windows")]
     pub(crate) fn into_claim(self) -> MemoryClaim {
         drop(self.payload);
         self.claim
