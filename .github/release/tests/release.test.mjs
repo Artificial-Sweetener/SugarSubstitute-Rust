@@ -6,6 +6,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { hasSection } from '../lib/changelog.mjs';
 import { COMPONENTS } from '../lib/components.mjs';
 import { RELEASE_IDENTITY, plan, requirePublicationEnabled } from '../release.mjs';
 import {
@@ -173,6 +174,26 @@ describe('per-component semantic-release', () => {
     assert.ok(existsSync(record));
     assert.equal(JSON.parse(readFileSync(record, 'utf8')).gitTag, 'substitute-v0.2.0');
     assert.equal(git(root, ['remote']), '');
+    assert.equal(git(root, ['status', '--porcelain']), '');
+  });
+
+  it('completes a release whose commit landed but was never tagged, without a second commit', () => {
+    const head = git(root, ['rev-parse', 'HEAD']);
+    const changelogFile = join(root, 'Substitute', 'CHANGELOG.md');
+    const changelog = readFileSync(changelogFile, 'utf8');
+    assert.ok(hasSection(changelog, '0.2.0'));
+    assert.ok(!hasSection(changelog, '0.2.1') && !hasSection(changelog, '10.2.0'));
+    // The state a refused tag push leaves: the release commit on the branch, no release tag.
+    git(root, ['tag', '-d', 'substitute-v0.2.0']);
+    const record = join(root, '..', 'completed.json');
+    const outcome = run(root, 'substitute', { dryRun: false, record });
+    assert.equal(outcome.released, true);
+    assert.equal(outcome.version, '0.2.0');
+    assert.equal(outcome.tag, 'substitute-v0.2.0');
+    assert.equal(git(root, ['rev-parse', 'HEAD']), head);
+    assert.equal(git(root, ['rev-list', '-n', '1', 'substitute-v0.2.0']), head);
+    assert.equal(readFileSync(changelogFile, 'utf8'), changelog);
+    assert.equal(JSON.parse(readFileSync(record, 'utf8')).gitTag, 'substitute-v0.2.0');
     assert.equal(git(root, ['status', '--porcelain']), '');
   });
 

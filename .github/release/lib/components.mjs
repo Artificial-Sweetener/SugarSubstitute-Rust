@@ -12,6 +12,7 @@
  */
 import { fileURLToPath } from 'node:url';
 
+const CHANGELOG = fileURLToPath(new URL('./changelog.mjs', import.meta.url));
 const COMPONENT_COMMITS = fileURLToPath(new URL('./component-commits.mjs', import.meta.url));
 const GITHUB_RELEASE = fileURLToPath(new URL('./github-release.mjs', import.meta.url));
 const SUBSTITUTE_VERSION = fileURLToPath(new URL('./substitute-version.mjs', import.meta.url));
@@ -60,7 +61,7 @@ export const COMPONENTS = Object.freeze({
       versionFiles: ['pyproject.toml', 'Sugar/pyproject.toml'],
     },
     plugins: () => [
-      ['@semantic-release/changelog', { changelogFile: 'CHANGELOG.md' }],
+      [CHANGELOG, { changelogFile: 'CHANGELOG.md' }],
       [
         '@semantic-release/exec',
         {
@@ -107,7 +108,7 @@ export const COMPONENTS = Object.freeze({
       versionFiles: ['Cargo.toml', 'Substitute/Cargo.toml'],
     },
     plugins: () => [
-      ['@semantic-release/changelog', { changelogFile: 'CHANGELOG.md' }],
+      [CHANGELOG, { changelogFile: 'CHANGELOG.md' }],
       [
         '@semantic-release/exec',
         { prepareCmd: `node ${JSON.stringify(SUBSTITUTE_VERSION)} \${nextRelease.version}` },

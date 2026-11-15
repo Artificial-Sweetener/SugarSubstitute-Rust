@@ -46,7 +46,9 @@ finding none above it.
   `COMFY_REGISTRY_ENABLED` to be `true` as well. Test the tooling with `npm test` and
   `npm run format:check` from that folder, and
   `python -m unittest discover -s tests -p "test_*.py"` with SugarCubes and the pinned
-  comfy-cli installed. Never publish from a local checkout.
+  comfy-cli installed. Never publish from a local checkout. A release that stopped after its
+  commit reached `main` is completed by dispatching the workflow again: the run tags and
+  publishes that commit.
 - A SugarSubstitute release publishes its update package to the signed update repository (the
   assets of the `substitute-updates` release) and its installer,
   `SugarSubstitute-Setup-<version>.exe`, to its own GitHub release. The package carries the
