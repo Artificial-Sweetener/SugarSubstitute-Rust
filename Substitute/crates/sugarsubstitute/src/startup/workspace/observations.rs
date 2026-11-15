@@ -6,6 +6,11 @@ use super::*;
 impl WorkspaceWork {
     fn retire_native(&mut self, identity: MainIdentity, now: Moment) -> Result<(), Box<dyn Error>> {
         self.retired = true;
+        // A retired window answers no final placement request, and its page no final capture.
+        self.close_sample = None;
+        if let Some(driver) = &mut self.driver {
+            driver.retire_peer();
+        }
         #[cfg(feature = "native-composition")]
         self.deferred_surface.clear();
         self.media.retire(identity);

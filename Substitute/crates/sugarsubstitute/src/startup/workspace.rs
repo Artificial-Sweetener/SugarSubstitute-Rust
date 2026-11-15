@@ -363,12 +363,15 @@ impl WorkspaceWork {
                 return Ok(());
             }
             driver.begin_close(now, cutoff)?;
-            let capture_id = std::num::NonZeroU64::MIN;
-            self.close_sample = Some(capture_id);
-            self.messages.push_back(DesktopStartupCommand::CaptureMainPlacement {
-                identity: self.context.as_ref().ok_or("Workspace main absent")?.identity,
-                capture_id,
-            });
+            // A retired window has no placement left to sample; the last checked one is kept.
+            if !self.retired {
+                let capture_id = std::num::NonZeroU64::MIN;
+                self.close_sample = Some(capture_id);
+                self.messages.push_back(DesktopStartupCommand::CaptureMainPlacement {
+                    identity: self.context.as_ref().ok_or("Workspace main absent")?.identity,
+                    capture_id,
+                });
+            }
         } else if let Some(job) = &self.load {
             job.cancel();
         }

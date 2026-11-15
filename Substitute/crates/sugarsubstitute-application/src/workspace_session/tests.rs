@@ -233,3 +233,53 @@ fn rename_preserves_occurrence_and_duplicate_cannot_steal_its_runtime() -> Resul
     fixture.owner.observe(&duplicated, at(20))?;
     Ok(())
 }
+
+/// A page that never became live authored nothing in this run: its close is ready at once and
+/// kept everything, instead of waiting out the cutoff for a capture that cannot be taken.
+#[test]
+fn a_page_that_never_became_live_closes_at_once_with_nothing_unsaved() -> Result {
+    // A restored workspace whose materialization the page never completed.
+    let mut fixture = Fixture::new(true, false)?;
+    fixture.owner.begin_close(at(10), at(1000))?;
+    assert!(fixture.owner.close_ready(at(10)));
+    assert!(matches!(fixture.owner.close_verdict(at(10)), Some(close_save::SaveVerdict::Saved)));
+    // A live page is still asked for its final capture.
+    let mut live = Fixture::new(false, false)?;
+    live.owner.begin_close(at(10), at(1000))?;
+    assert!(!live.owner.close_ready(at(10)));
+    Ok(())
+}
+
+/// A retired peer can supply no final capture. A close after it retired is ready at once: with
+/// nothing changed it kept everything, and changes that were never captured are reported as
+/// not kept rather than waited for until the cutoff.
+#[test]
+fn a_close_after_the_peer_retired_does_not_wait_for_a_capture() -> Result {
+    let mut clean = Fixture::new(false, false)?;
+    let saved = clean.capture(250, 100)?;
+    clean.owner.publish(&saved, &clean.content(&saved))?;
+    clean.owner.finished(&saved, true, at(260))?;
+    clean.owner.retire_peer();
+    clean.owner.begin_close(at(270), at(1000))?;
+    assert!(clean.owner.close_ready(at(270)));
+    assert!(matches!(clean.owner.close_verdict(at(270)), Some(close_save::SaveVerdict::Saved)));
+
+    let mut changed = Fixture::new(false, false)?;
+    changed.owner.retire_peer();
+    changed.owner.begin_close(at(10), at(1000))?;
+    assert!(changed.owner.close_ready(at(10)));
+    assert!(matches!(
+        changed.owner.close_verdict(at(10)),
+        Some(close_save::SaveVerdict::Stale { .. })
+    ));
+
+    // A capture already running when the peer retired is still awaited.
+    let mut running = Fixture::new(false, false)?;
+    let ticket = running.capture(250, 100)?;
+    running.owner.retire_peer();
+    running.owner.begin_close(at(260), at(1000))?;
+    assert!(!running.owner.close_ready(at(260)));
+    running.owner.finished(&ticket, false, at(270))?;
+    assert!(running.owner.close_ready(at(270)));
+    Ok(())
+}

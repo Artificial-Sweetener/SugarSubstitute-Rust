@@ -80,6 +80,8 @@ pub struct WorkspaceSession {
     close_failed: bool,
     /// Oldest change carried by the running capture, until its publication is durable.
     unsaved_since: Option<Moment>,
+    /// The frontend/native peer is gone, so no further capture can be taken from it.
+    peer_retired: bool,
 }
 impl WorkspaceSession {
     /// Bind independently trusted scope/origin and the host-granted fresh webview UUID.
@@ -131,6 +133,7 @@ impl WorkspaceSession {
             closing: None,
             close_failed: false,
             unsaved_since: None,
+            peer_retired: false,
         })
     }
 
@@ -264,10 +267,22 @@ impl WorkspaceSession {
 
     /// Whether the final store result or original cutoff permits native close dispatch.
     /// Execution jobs still require observed retirement after this policy allows close.
+    /// A page that never became live or never reported a committed state authored nothing in
+    /// this run, and a retired peer can supply no final capture: neither is waited for until
+    /// the cutoff.
     pub fn close_ready(&self, now: Moment) -> bool {
         self.closing.is_some_and(|cutoff| {
-            now >= cutoff || self.close_failed || (!self.schedule.dirty() && self.active.is_none())
+            now >= cutoff
+                || self.close_failed
+                || !(self.live() && self.frontend.committed)
+                || (self.active.is_none() && (self.peer_retired || !self.schedule.dirty()))
         })
+    }
+
+    /// The frontend/native peer retired. No capture can follow, so a close no longer waits
+    /// for a final one; what it did not keep is reported by [`Self::close_verdict`].
+    pub fn retire_peer(&mut self) {
+        self.peer_retired = true;
     }
 
     /// What the close kept, once close is ready at `now`; `None` while the final save runs.
@@ -309,7 +324,10 @@ impl WorkspaceSession {
             return Err(SessionError::Stale.into());
         }
         self.closing = Some(self.closing.map_or(cutoff, |original| original.min(cutoff)));
-        self.schedule.force(now);
+        // A final capture is forced only from a peer that still exists to answer it.
+        if !self.peer_retired {
+            self.schedule.force(now);
+        }
         Ok(())
     }
 }

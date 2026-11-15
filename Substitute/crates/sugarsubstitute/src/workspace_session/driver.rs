@@ -89,6 +89,8 @@ pub struct WorkspaceDriver {
     media_bindings: Vec<SessionBinding>,
     close_cutoff: Option<Moment>,
     last_ack: Option<(String, String, u64, Vec<SessionBinding>, bool)>,
+    /// The page and its native window retired; see [`Self::retire_peer`].
+    peer_retired: bool,
     originals: native::RecordedOutputs,
 }
 impl WorkspaceDriver {
@@ -144,6 +146,7 @@ impl WorkspaceDriver {
             media_bindings: vec![],
             close_cutoff: None,
             last_ack: None,
+            peer_retired: false,
             originals,
         })
     }
@@ -248,11 +251,18 @@ impl WorkspaceDriver {
         self.close_cutoff = Some(self.close_cutoff.map_or(cutoff, |previous| previous.min(cutoff)));
         self.policy.begin_close(now, cutoff).map_err(application)
     }
-    /// Whether acknowledged final state or the original cutoff permits actual native close.
+    /// Whether acknowledged final state or the original cutoff permits actual native close. A
+    /// retired peer acknowledges nothing more, so its last acknowledgement is not waited for.
     pub fn close_ready(&self, now: Moment) -> bool {
         self.policy.close_ready(now)
-            && (self.last_ack.as_ref().is_none_or(|ack| ack.4)
+            && (self.peer_retired
+                || self.last_ack.as_ref().is_none_or(|ack| ack.4)
                 || self.close_cutoff.is_some_and(|cutoff| now >= cutoff))
+    }
+    /// The page and its native window retired: no capture or acknowledgement can follow.
+    pub fn retire_peer(&mut self) {
+        self.peer_retired = true;
+        self.policy.retire_peer();
     }
     /// What the close kept, once actual native close is permitted; see
     /// [`WorkspaceSession::close_verdict`].

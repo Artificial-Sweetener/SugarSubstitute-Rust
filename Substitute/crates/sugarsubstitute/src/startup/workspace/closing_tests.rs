@@ -404,3 +404,23 @@ fn poll_frame_keeps_native_peer_until_exact_final_durable_delivery() -> TestResu
     assert!(driver.receive(delivery.message().clone(), now)?.is_none());
     fixture.finish(budget, 1)
 }
+
+/// A close after the main window retired, as on a failed start, asks the gone window for no
+/// final placement and its page for no final capture, and reaches its exit intent without
+/// waiting out the cutoff. The clock never moves in this test.
+#[test]
+fn a_close_after_the_main_window_retired_asks_it_for_nothing_and_exits_at_once() -> TestResult {
+    let mut fixture = Fixture::new(true)?;
+    let identity = fixture.host.main_identity().ok_or("Main identity")?;
+    let workspace = fixture.host.workspace.as_mut().ok_or("Workspace")?;
+    let retired =
+        workspace.observe(DesktopStartupObservation::MainRetired(identity), fixture.clock.now())?;
+    assert!(matches!(retired, Some(DesktopStartupObservation::MainRetired(_))));
+    fixture.host.observe(DesktopStartupObservation::CloseRequested)?;
+    let workspace = fixture.host.workspace.as_mut().ok_or("Workspace")?;
+    assert!(workspace.next_command()?.is_none(), "a retired window was asked for something");
+    assert!(workspace.close_ready(fixture.clock.now()), "the close waits for a gone window");
+    let budget = fixture.exit_intent()?;
+    assert!(fixture.clock.now() < budget.graceful_until, "the close waited out its cutoff");
+    Ok(())
+}
