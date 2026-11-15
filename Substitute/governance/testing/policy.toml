@@ -302,7 +302,22 @@ requires = "a desktop session that displays windows"
 
 [[hosted_runner]]
 package = "sugarsubstitute-desktop"
+test = "report::surface::native_tests::escape_closes_the_report_while_a_large_report_is_still_preparing"
+requires = "a desktop session that displays windows"
+
+[[hosted_runner]]
+package = "sugarsubstitute-desktop"
+test = "report::surface::native_tests::update_failure_report_presents_copies_and_closes"
+requires = "a desktop session that displays windows"
+
+[[hosted_runner]]
+package = "sugarsubstitute-desktop"
 test = "windows_controls::caption::frame_tests::the_system_draws_no_caption_buttons_under_the_main_caption"
+requires = "desktop composition"
+
+[[hosted_runner]]
+package = "sugarsubstitute-desktop"
+test = "windows_controls::caption::hit_tests::pressing_the_message_line_drags_the_window_while_its_buttons_stay_clickable"
 requires = "desktop composition"
 
 [[hosted_runner]]
