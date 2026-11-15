@@ -123,6 +123,8 @@ describe('release workflow', () => {
       String(entry.run).includes('sugarcubes_registry.py publish'),
     );
     assert.match(registry.if, /vars\.RELEASES_ENABLED == 'true'/);
+    // The registry upload needs its own switch as well, so a repository can release on GitHub alone.
+    assert.match(registry.if, /vars\.COMFY_REGISTRY_ENABLED == 'true'/);
   });
 
   it('signs each SugarSubstitute release into the update repository, behind the root', () => {

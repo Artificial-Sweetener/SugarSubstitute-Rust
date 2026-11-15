@@ -42,6 +42,7 @@ finding none above it.
   publication and the SugarCubes registry archive); `.github/workflows/release.yml` runs it,
   only when dispatched. It publishes only when the dispatch asks to and the repository
   variable `RELEASES_ENABLED` is `true`; otherwise it is a dry run in a disposable clone with no
-  credentials. Test the tooling with `npm test` and `npm run format:check` from that folder, and
+  credentials. The Comfy Registry upload of a SugarCubes release needs the repository variable
+  `COMFY_REGISTRY_ENABLED` to be `true` as well. Test the tooling with `npm test` and `npm run format:check` from that folder, and
   `python -m unittest discover -s tests -p "test_*.py"` with SugarCubes and the pinned
   comfy-cli installed. Never publish from a local checkout.
