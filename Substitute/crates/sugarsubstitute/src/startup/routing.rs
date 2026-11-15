@@ -289,7 +289,11 @@ impl<B: StartupBackend> StartupHost<B> {
                     self.child.advance_reload(prepared)?;
                 }
             }
-            StartupRoute::Close => self.close_owned()?,
+            // The user's close of the splash or the window is an ordinary close request, so it
+            // waits for a SugarCubes install or restore like every other close.
+            StartupRoute::Close => self.request_close(
+                sugarsubstitute_application::workspace_session::close_save::CloseReason::Close,
+            )?,
             StartupRoute::None => {}
             StartupRoute::Effect(effect) if self.holds_reveal(&effect) => {
                 self.held_reveal = Some(effect)

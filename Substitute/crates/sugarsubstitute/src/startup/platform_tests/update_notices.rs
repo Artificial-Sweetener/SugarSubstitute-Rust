@@ -342,6 +342,34 @@ fn a_retry_drops_the_app_update_line_that_was_already_applied() -> BackendResult
     Ok(())
 }
 
+/// The user's own close, "Cancel loading" on the splash or the window's close button, arrives as
+/// a close request from the window. While SugarCubes files are installed it waits like every
+/// other close: the window stays open and says "Finishing the SugarCubes update…", and it
+/// closes once the coordinator says the install ended.
+#[test]
+fn the_users_close_during_a_sugarcubes_install_keeps_the_window_until_it_finishes()
+-> BackendResult<()> {
+    use sugarsubstitute_application::workspace_session::close_save::CloseReason;
+    let mut host = host()?;
+    let mut installing = UpdateStatus::default();
+    installing.observe_sugarcubes(PackUpdateStatus::Updating);
+    host.child.update_status = Some(installing.clone());
+    host.observe(DesktopStartupObservation::CloseRequested)?;
+    assert!(!host.closing, "the user's close waits for the install");
+    assert_eq!(host.deferred_close, Some(CloseReason::Close));
+    host.observe(DesktopStartupObservation::CloseRequested)?;
+    assert!(!host.closing, "pressing close again forces nothing");
+    installing.observe_sugarcubes(PackUpdateStatus::Finished(could_not_check()));
+    host.child.update_status = Some(installing);
+    host.advance_deferred_close()?;
+    assert!(host.closing, "the install ended: the close begins");
+
+    let mut idle = super::host()?;
+    idle.observe(DesktopStartupObservation::CloseRequested)?;
+    assert!(idle.closing, "with nothing installing the user's close begins at once");
+    Ok(())
+}
+
 /// A close asked for while SugarCubes files are installed or put back waits for that to end:
 /// the splash says "Finishing the SugarCubes update…", a second close request forces nothing,
 /// and the ordinary close begins once the coordinator says the install ended. A session end
