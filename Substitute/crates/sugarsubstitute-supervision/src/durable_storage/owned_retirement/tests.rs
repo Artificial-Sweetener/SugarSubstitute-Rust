@@ -312,3 +312,81 @@ fn interrupted_stage_files_in_owned_folders_are_removed_and_lookalikes_are_kept(
         Ok(())
     })
 }
+
+/// Deny everyone the right to delete `file`, through the file and through its folder, until
+/// this is dropped. The entries are lifted from everything below `root`, wherever a
+/// retirement has renamed the file's ancestors to by then.
+struct DeleteDenied(PathBuf);
+
+impl DeleteDenied {
+    fn on(root: &Path, file: &Path) -> std::io::Result<Self> {
+        let folder = file.parent().ok_or_else(|| std::io::Error::other("no parent"))?;
+        let denied = Self(root.to_owned());
+        icacls(file, &["/deny", "*S-1-1-0:(DE)"])?;
+        icacls(folder, &["/deny", "*S-1-1-0:(DC)"])?;
+        Ok(denied)
+    }
+}
+
+impl Drop for DeleteDenied {
+    fn drop(&mut self) {
+        let _ = icacls(&self.0, &["/remove:d", "*S-1-1-0", "/T"]);
+    }
+}
+
+fn icacls(path: &Path, arguments: &[&str]) -> std::io::Result<()> {
+    let output = std::process::Command::new("icacls.exe").arg(path).args(arguments).output()?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(std::io::Error::other(String::from_utf8_lossy(&output.stdout).into_owned()))
+    }
+}
+
+/// Access denied while deleting, as a deny entry or security software produces it, is a file
+/// that cannot be removed yet: the retirement keeps its records, is retried, and finishes once
+/// the file can be deleted. It never fails the turn.
+#[test]
+fn a_file_that_refuses_deletion_is_retried_until_access_returns() -> TestResult {
+    test_worker::run(|context, _| {
+        let (installation, folder) = owned(context)?;
+        let root = owned_retirement_root(installation.path(), &folder, context)?;
+        let generation = generation(&folder)?;
+        let denied = DeleteDenied::on(&folder, &generation.join("app").join("one.dll"))?;
+        let retired = root.retire("generation", &RetirementUnit::Tree(inventory()?), context)?;
+        assert_eq!(retired.outcome, RetirementOutcome::Retained { preserved: 0, busy: 1 });
+        let name = entries(&folder)?.pop().ok_or("no tombstone")?;
+        assert!(folder.join(&name).join("app").join("one.dll").exists());
+        assert!(folder.join(&name).join("manifest.json").exists(), "kept for the resume");
+        let report = root.resume(&mut |tombstone| from_manifest(tombstone, context), context)?;
+        assert_eq!((report.removed, report.retained, report.busy), (0, 1, 1));
+        drop(denied);
+        let report = root.resume(&mut |tombstone| from_manifest(tombstone, context), context)?;
+        assert_eq!((report.removed, report.retained, report.preserved, report.busy), (1, 0, 0, 0));
+        assert!(entries(&folder)?.is_empty());
+        Ok(())
+    })
+}
+
+/// A read-only attribute on an inventoried file or its folder does not keep a retired entry.
+#[test]
+fn read_only_files_and_folders_are_removed_with_their_generation() -> TestResult {
+    test_worker::run(|context, _| {
+        let (installation, folder) = owned(context)?;
+        let root = owned_retirement_root(installation.path(), &folder, context)?;
+        let generation = generation(&folder)?;
+        for path in [
+            generation.join("app").join("one.dll"),
+            generation.join("app").join("nested"),
+            generation.join("manifest.json"),
+        ] {
+            let mut permissions = std::fs::metadata(&path)?.permissions();
+            permissions.set_readonly(true);
+            std::fs::set_permissions(&path, permissions)?;
+        }
+        let retired = root.retire("generation", &RetirementUnit::Tree(inventory()?), context)?;
+        assert_eq!(retired.outcome, RetirementOutcome::Removed);
+        assert!(entries(&folder)?.is_empty());
+        Ok(())
+    })
+}

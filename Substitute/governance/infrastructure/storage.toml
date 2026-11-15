@@ -1524,7 +1524,7 @@ rationale = "Durable filesystem owner: Exercise actual selected-folder custody t
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/retirement.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:874717aef744e86e64572a2edbce3fef4519dd3cb95357c24d94174888f10b0e"
+source_sha256 = "sha256:8c05a1c378a6ee5473bba6ff1f7b8b1b17af8efd8d203a993eee4345ac70654f"
 capabilities = ["DeleteFile", "NtSetInformationFile", "SetFileInformationByHandle", "method metadata", "std::fs::File", "std::fs::OpenOptions", "std::fs::OpenOptions::new", "windows::Wdk::Storage::FileSystem", "windows::Wdk::Storage::FileSystem::NtSetInformationFile", "windows::Win32::Storage::FileSystem", "windows::Win32::Storage::FileSystem::SetFileInformationByHandle"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Retire one exact regular file or empty directory under its retained parent. Native access and its adversarial qualification remain within this owner."
@@ -1532,8 +1532,8 @@ rationale = "Durable filesystem owner: Retire one exact regular file or empty di
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/retirement/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:1f9a61be1ee09c145279585d6bac69d65ec3d3eeb72fe8e9c9c232806b9e6070"
-capabilities = ["std::fs::create_dir", "std::fs::hard_link", "std::fs::read", "std::fs::remove_file", "std::fs::write", "tempfile::tempdir"]
+source_sha256 = "sha256:1b2110b04d0b5aae032f37fdfcfbc4187e5679bae2fbcce5d5aca34a0d8cf268"
+capabilities = ["std::fs::create_dir", "std::fs::hard_link", "std::fs::metadata", "std::fs::read", "std::fs::remove_file", "std::fs::set_permissions", "std::fs::write", "tempfile::tempdir"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Qualify exact native identity, retained ancestry and conservative retirement. Native access and its adversarial qualification remain within this owner."
 
@@ -5252,8 +5252,8 @@ rationale = "Durable filesystem owner: Name, find and empty retirement tombstone
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/durable_storage/owned_retirement/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:05bf14a53b8f4b011f52cd8cb1969908f570ffef089208c56517516465efa56c"
-capabilities = ["std::fs::File::open", "std::fs::create_dir", "std::fs::create_dir_all", "std::fs::hard_link", "std::fs::read", "std::fs::read_dir", "std::fs::remove_dir_all", "std::fs::remove_file", "std::fs::rename", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir"]
+source_sha256 = "sha256:ff3e604277da4988cd37be45a6f01fd22775ef7ce1fc43c4710d681be2e6647d"
+capabilities = ["std::fs::File::open", "std::fs::create_dir", "std::fs::create_dir_all", "std::fs::hard_link", "std::fs::metadata", "std::fs::read", "std::fs::read_dir", "std::fs::remove_dir_all", "std::fs::remove_file", "std::fs::rename", "std::fs::set_permissions", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "implementation"
 rationale = "Durable filesystem owner: Qualify ownership admission, exact deletion, preservation, junction refusal and tombstone resumption. Native access and its adversarial qualification remain within this owner."
 

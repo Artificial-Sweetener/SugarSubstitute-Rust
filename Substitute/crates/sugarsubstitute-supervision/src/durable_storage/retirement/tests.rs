@@ -52,3 +52,31 @@ fn directory_retirement_requires_original_empty_object_and_released_child_pin() 
         Ok(())
     })
 }
+
+/// Windows refuses to delete a read-only object. The owner's own verified file or folder is
+/// retired all the same, so one read-only file never keeps an old version on disk for good.
+#[test]
+fn a_read_only_file_or_folder_is_retired_like_any_other() -> TestResult {
+    test_worker::run(|_, _| {
+        let temporary = tempfile::tempdir()?;
+        let parent = Directory::open(temporary.path(), false)?;
+        let read_only = |path: &std::path::Path| {
+            let mut permissions = std::fs::metadata(path)?.permissions();
+            permissions.set_readonly(true);
+            std::fs::set_permissions(path, permissions)
+        };
+        let path = parent.path().join("record");
+        std::fs::write(&path, b"bytes")?;
+        read_only(&path)?;
+        let identity = files::file_identity(&parent.read("record")?)?;
+        file(&parent, "record", identity)?;
+        assert!(!path.exists());
+        let folder = parent.path().join("generation");
+        std::fs::create_dir(&folder)?;
+        read_only(&folder)?;
+        let identity = parent.child("generation")?.identity()?;
+        directory(&parent, "generation", identity)?;
+        assert!(!folder.exists());
+        Ok(())
+    })
+}

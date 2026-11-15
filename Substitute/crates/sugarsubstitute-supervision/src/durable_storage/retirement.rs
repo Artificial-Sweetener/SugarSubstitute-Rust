@@ -19,12 +19,20 @@ use windows::{
     Win32::{
         Foundation::{HANDLE, RtlNtStatusToDosError},
         Storage::FileSystem::{
-            DELETE, FILE_DISPOSITION_INFO, FILE_READ_ATTRIBUTES, FILE_RENAME_INFO,
-            FileDispositionInfo, SYNCHRONIZE, SetFileInformationByHandle,
+            DELETE, FILE_BASIC_INFO, FILE_DISPOSITION_INFO, FILE_READ_ATTRIBUTES, FILE_RENAME_INFO,
+            FILE_WRITE_ATTRIBUTES, FileBasicInfo, FileDispositionInfo, SYNCHRONIZE,
+            SetFileInformationByHandle,
         },
         System::IO::IO_STATUS_BLOCK,
     },
 };
+
+/// `ERROR_ACCESS_DENIED`.
+const ACCESS_DENIED: i32 = 5;
+/// `FILE_ATTRIBUTE_READONLY`.
+const READ_ONLY: u32 = 0x1;
+/// `FILE_ATTRIBUTE_NORMAL`.
+const NORMAL: u32 = 0x80;
 
 #[cfg(test)]
 mod tests;
@@ -53,11 +61,20 @@ fn object(
         return Err(invalid("Retirement requires one child of its retained parent"));
     }
     let path = parent.path().join(leaf);
-    let file = OpenOptions::new()
-        .access_mode((DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE).0)
-        .share_mode(0)
-        .custom_flags(0x0020_0000 | if directory { 0x0200_0000 } else { 0 })
-        .open(path)?;
+    let open = |access: u32| {
+        OpenOptions::new()
+            .access_mode(access)
+            .share_mode(0)
+            .custom_flags(0x0020_0000 | if directory { 0x0200_0000 } else { 0 })
+            .open(&path)
+    };
+    let access = (DELETE | FILE_READ_ATTRIBUTES | SYNCHRONIZE).0;
+    // The right to change attributes is asked for only to clear a read-only attribute below.
+    // An object that refuses that right is still deleted when it is not read-only.
+    let file = match open(access | FILE_WRITE_ATTRIBUTES.0) {
+        Err(cause) if cause.raw_os_error() == Some(ACCESS_DENIED) => open(access)?,
+        opened => opened?,
+    };
     let metadata = file.metadata()?;
     if (if directory { !metadata.is_dir() } else { !metadata.is_file() })
         || metadata.file_attributes() & 0x400 != 0
@@ -67,6 +84,30 @@ fn object(
     }
     if !directory {
         files::single_link(&file)?;
+    }
+    // Windows refuses to delete a read-only object. This is the owner's own verified object,
+    // so the attribute is cleared on this exact handle first. A handle without the right to
+    // change attributes fails here with access denied, which callers retry like a held file.
+    let attributes = metadata.file_attributes();
+    if attributes & READ_ONLY != 0 {
+        let cleared = attributes & !READ_ONLY;
+        // Zero timestamps leave the object's times as they are; an object left with no
+        // attribute at all is a normal one.
+        let basic = FILE_BASIC_INFO {
+            FileAttributes: if cleared == 0 { NORMAL } else { cleared },
+            ..Default::default()
+        };
+        // SAFETY: The exclusive handle owns the verified native object. The initialized ABI
+        // record and its exact byte size remain live through this synchronous call.
+        unsafe {
+            SetFileInformationByHandle(
+                HANDLE(file.as_raw_handle()),
+                FileBasicInfo,
+                (&basic as *const FILE_BASIC_INFO).cast(),
+                std::mem::size_of_val(&basic) as u32,
+            )
+        }
+        .map_err(native)?;
     }
     let disposition = FILE_DISPOSITION_INFO { DeleteFile: true };
     // SAFETY: The exclusive handle owns the verified native object. The initialized ABI record
@@ -80,7 +121,18 @@ fn object(
             std::mem::size_of_val(&disposition) as u32,
         )
     }
-    .map_err(io::Error::other)
+    .map_err(native)
+}
+
+/// Keep a native failure's Win32 code, so a refusal such as access denied is told from other
+/// failures. An HRESULT that wraps a Win32 error carries it in its low word.
+fn native(cause: windows::core::Error) -> io::Error {
+    let code = cause.code().0;
+    if code as u32 & 0xFFFF_0000 == 0x8007_0000 {
+        io::Error::from_raw_os_error(code & 0xFFFF)
+    } else {
+        io::Error::other(cause)
+    }
 }
 
 /// Exclusively open one child of `parent` for renaming or deletion without following a link.
