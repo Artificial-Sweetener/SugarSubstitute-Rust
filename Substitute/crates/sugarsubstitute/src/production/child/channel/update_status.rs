@@ -9,8 +9,9 @@
 //! This is the child's one update-status source. The window reads it through `StartupHost`; the
 //! host side of SugarCubes' `sugarcubes.updates` protocol is meant to read the same snapshot, so
 //! both surfaces always agree.
+use sugarsubstitute_contracts::lifecycle::WorkflowQueue;
 use sugarsubstitute_contracts::update::status::{StartupNotice, UpdateStatus};
-use sugarsubstitute_supervision::lifecycle_protocol::{DecodedPayload, WorkflowQueue};
+use sugarsubstitute_supervision::lifecycle_protocol::DecodedPayload;
 
 /// What the coordinator last said about updates and the backend's workflow queue.
 #[derive(Debug)]

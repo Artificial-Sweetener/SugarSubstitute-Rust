@@ -22,6 +22,7 @@ pub struct ReleaseNotesObservation {
 impl ReleaseNotesObservation {
     /// Retain the parse's actual admission alongside the attributed message.
     #[cfg(any(target_os = "windows", test))]
+    #[cfg(target_os = "windows")]
     pub(crate) fn new(
         identity: MainIdentity,
         message: ReleaseNotesClientMessage,

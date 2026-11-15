@@ -14,13 +14,13 @@
 //! for a waiting restart.
 use std::time::Duration;
 use sugarsubstitute_comfy::queue_watch::{self, QueueActivity, QueueObservation};
+use sugarsubstitute_contracts::lifecycle::WorkflowQueue;
 use sugarsubstitute_contracts::{
     configuration::LoopbackOrigin,
     execution::{
         ExecutionPort, JobClass, JobOutcome, JobSpec, Moment, Operation, OwnedJob, Scope, ScopeSpec,
     },
 };
-use sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue;
 
 use crate::production::coordinator_backend::BackendResources;
 

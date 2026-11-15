@@ -118,9 +118,9 @@ fn payload(
             }
             writer.u64(revision.get())?;
             writer.u8(match workflow {
-                super::WorkflowQueue::Idle => 1,
-                super::WorkflowQueue::Busy => 2,
-                super::WorkflowQueue::Unobserved => 3,
+                sugarsubstitute_contracts::lifecycle::WorkflowQueue::Idle => 1,
+                sugarsubstitute_contracts::lifecycle::WorkflowQueue::Busy => 2,
+                sugarsubstitute_contracts::lifecycle::WorkflowQueue::Unobserved => 3,
             })?;
             writer.u32(u32::try_from(status.len()).map_err(|_| ProtocolError::Length)?)?;
             writer.put(status)

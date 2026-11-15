@@ -176,8 +176,8 @@ impl StartupBackend for Platform {
     fn coordinator_close_requested(&self) -> bool {
         self.close_requested_by_coordinator
     }
-    fn workflow_queue(&self) -> sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue {
-        sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue::Unobserved
+    fn workflow_queue(&self) -> sugarsubstitute_contracts::lifecycle::WorkflowQueue {
+        sugarsubstitute_contracts::lifecycle::WorkflowQueue::Unobserved
     }
     fn take_update_notice(
         &mut self,

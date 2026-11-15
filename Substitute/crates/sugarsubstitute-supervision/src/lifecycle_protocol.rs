@@ -126,7 +126,7 @@ pub use main_types::{
     BackendPeer, GrantedContext, MainFailureCode, MainStage, MainStageFailure, VersionLabel,
 };
 pub use output::OutputDelivery;
-pub use payload::{CapabilityRef, DecodedPayload, LeaseReference, WirePayload, WorkflowQueue};
+pub use payload::{CapabilityRef, DecodedPayload, LeaseReference, WirePayload};
 pub use raw_windows::{
     FolderFragment, MAX_FOLDER_FRAGMENT_UNITS, MAX_PROFILE_FOLDER_UNITS, RawWindowsUnits,
 };

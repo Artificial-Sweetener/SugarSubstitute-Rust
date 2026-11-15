@@ -25,3 +25,14 @@ pub use watchdog::{
     UI_CHALLENGE_CADENCE, UI_SUSPICION_THRESHOLD, UiChallengeId, UiChallengeKey,
     UiWatchdogActivity, UiWatchdogEffect, UiWatchdogObservation,
 };
+
+/// What the coordinator observes of the backend's workflow queue.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WorkflowQueue {
+    /// No workflow is queued or running.
+    Idle,
+    /// A workflow is queued or running.
+    Busy,
+    /// The coordinator has no current connection to the backend's queue.
+    Unobserved,
+}

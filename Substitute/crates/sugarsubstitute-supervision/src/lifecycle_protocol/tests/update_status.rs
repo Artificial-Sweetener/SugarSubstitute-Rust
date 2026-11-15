@@ -3,6 +3,7 @@
 //! The coordinator's update status and the child's restart-to-apply and check requests on the wire.
 use super::*;
 use std::num::NonZeroU64;
+use sugarsubstitute_contracts::lifecycle::WorkflowQueue;
 
 #[test]
 fn update_status_and_restart_intent_round_trip_with_their_identity_rules() -> TestResult {

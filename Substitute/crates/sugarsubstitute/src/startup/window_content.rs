@@ -115,11 +115,11 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
 
     fn workflow_activity(&self) -> sugarsubstitute_desktop::WorkflowActivity {
         match self.child.workflow_queue() {
-            sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue::Busy => {
+            sugarsubstitute_contracts::lifecycle::WorkflowQueue::Busy => {
                 sugarsubstitute_desktop::WorkflowActivity::Running
             }
-            sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue::Idle
-            | sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue::Unobserved => {
+            sugarsubstitute_contracts::lifecycle::WorkflowQueue::Idle
+            | sugarsubstitute_contracts::lifecycle::WorkflowQueue::Unobserved => {
                 sugarsubstitute_desktop::WorkflowActivity::Idle
             }
         }

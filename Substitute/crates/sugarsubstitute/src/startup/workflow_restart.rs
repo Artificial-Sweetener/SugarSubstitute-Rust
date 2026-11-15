@@ -6,11 +6,11 @@
 //! requested while the queue is busy waits; it starts the normal close once the queue reads
 //! idle. When the coordinator loses track of the queue while a restart waits, the restart is
 //! dropped rather than risk ending a workflow, and the window says so. Nothing restarts blindly.
+use sugarsubstitute_contracts::lifecycle::WorkflowQueue;
 use sugarsubstitute_contracts::update::{
     attempt::{AttemptOutcome, AttemptPhase, UpdateReport},
     status::UpdateStatus,
 };
-use sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue;
 
 use super::{StartupBackend, StartupHost};
 

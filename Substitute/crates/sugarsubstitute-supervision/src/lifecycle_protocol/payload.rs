@@ -8,7 +8,7 @@ use std::{
 };
 use sugarsubstitute_contracts::lifecycle::{
     CompletionIntent, LeaseId, RequestId, ResourceGeneration, ResourceId, ShutdownId,
-    UiChallengeId, UiWatchdogActivity,
+    UiChallengeId, UiWatchdogActivity, WorkflowQueue,
 };
 use sugarsubstitute_contracts::startup::MainIdentity;
 
@@ -154,16 +154,7 @@ pub enum WirePayload<'a> {
     /// Tag25: the coordinator asks the window to close through its ordinary close.
     CloseRequest,
 }
-/// What the coordinator observes of the backend's workflow queue.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum WorkflowQueue {
-    /// Wire 1: no workflow is queued or running.
-    Idle,
-    /// Wire 2: a workflow is queued or running.
-    Busy,
-    /// Wire 3: the coordinator has no current connection to the backend's queue.
-    Unobserved,
-}
+
 impl WirePayload<'_> {
     pub(super) const fn kind(&self) -> u16 {
         match self {

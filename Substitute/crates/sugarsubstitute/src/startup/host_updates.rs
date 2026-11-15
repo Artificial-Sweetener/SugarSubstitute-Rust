@@ -12,11 +12,11 @@ use std::error::Error;
 use sugarsubstitute_application::updates_panel::{
     UpdateSnapshot, UpdateStatusPort, WorkflowActivitySource,
 };
+use sugarsubstitute_contracts::lifecycle::WorkflowQueue;
 use sugarsubstitute_contracts::{
     host_updates::{UpdatesRejection, UpdatesRestartTiming},
     update::status::{UpdateActivity, UpdateStatus},
 };
-use sugarsubstitute_supervision::lifecycle_protocol::WorkflowQueue;
 
 /// Asks the coordinator to check for updates now.
 pub(super) type CheckRequest<'a> = &'a mut dyn FnMut() -> Result<(), Box<dyn Error>>;

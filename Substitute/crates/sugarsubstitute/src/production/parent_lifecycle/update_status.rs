@@ -11,11 +11,12 @@
 //! request is kept until the entry runner takes it; repeated requests before then are one.
 use super::{ParentLifecycle, ParentResources, Result, types::WritePurpose, workflow_watch};
 use std::{num::NonZeroU64, time::Duration};
+use sugarsubstitute_contracts::lifecycle::WorkflowQueue;
 use sugarsubstitute_contracts::{
     execution::Moment,
     update::status::{MAX_STATUS_BYTES, UpdateStatus},
 };
-use sugarsubstitute_supervision::lifecycle_protocol::{WireHeader, WirePayload, WorkflowQueue};
+use sugarsubstitute_supervision::lifecycle_protocol::{WireHeader, WirePayload};
 
 /// How long one snapshot write may wait for the child to read.
 const WRITE: Duration = Duration::from_secs(30);

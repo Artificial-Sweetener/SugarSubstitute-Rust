@@ -31,6 +31,7 @@ fn every_start_up_message_reaches_the_window_once_in_its_own_form() -> BackendRe
     Ok(())
 }
 
+#[cfg(windows)]
 #[test]
 fn whats_new_waits_for_a_page_that_shows_the_release_notes() -> BackendResult<()> {
     let mut host = host()?;
@@ -42,6 +43,7 @@ fn whats_new_waits_for_a_page_that_shows_the_release_notes() -> BackendResult<()
     Ok(())
 }
 
+#[cfg(windows)]
 #[test]
 fn the_release_notes_scope_is_unbounded_follows_the_startup_scopes_and_is_configured_once()
 -> BackendResult<()> {

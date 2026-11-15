@@ -136,9 +136,9 @@ pub(super) fn frame(source: &[u8]) -> Result<DecodedFrame<'_>, ProtocolError> {
         22 => {
             let revision = main_fields::read_positive(&mut input)?;
             let workflow = match input.u8()? {
-                1 => super::WorkflowQueue::Idle,
-                2 => super::WorkflowQueue::Busy,
-                3 => super::WorkflowQueue::Unobserved,
+                1 => sugarsubstitute_contracts::lifecycle::WorkflowQueue::Idle,
+                2 => sugarsubstitute_contracts::lifecycle::WorkflowQueue::Busy,
+                3 => sugarsubstitute_contracts::lifecycle::WorkflowQueue::Unobserved,
                 _ => return Err(ProtocolError::UnsupportedTag),
             };
             let length = usize::try_from(input.u32()?).map_err(|_| ProtocolError::Length)?;

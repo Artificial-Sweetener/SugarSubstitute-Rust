@@ -4672,7 +4672,7 @@ rationale = "Owned temporary PNG outputs are read into the fixture cache as enco
 [[records]]
 path = "crates/sugarsubstitute/src/startup/platform_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:16eacac0d12c69762036e36803d1011fe70ae99c03f9b7baff4ef98b694c3036"
+source_sha256 = "sha256:fc0af32cddd31b3b7d71a67eef0cab5e5ff89cffbe57af012ae16590ac935c18"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
 rationale = "An owned temporary cache anchor verifies platform startup rejects invalid canvas scope and path configurations."
