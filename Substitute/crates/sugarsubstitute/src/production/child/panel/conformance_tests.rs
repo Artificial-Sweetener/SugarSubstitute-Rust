@@ -255,3 +255,40 @@ fn the_host_answers_the_conformance_kit_as_recorded() -> Result<()> {
     }
     Ok(())
 }
+
+/// Every SugarCubes release up to 0.15.3 predates the host protocols. Its page never says it is
+/// ready, never asks about the surface and never watches memory, updates or release notes.
+/// Replayed against this host, that page is sent nothing, since it listens for none of it,
+/// whatever the host's own state does meanwhile. Its panel session ends as failed at the
+/// startup limit instead of waiting for a page that will never answer.
+#[test]
+fn a_page_older_than_the_host_protocols_is_sent_nothing_and_its_panel_ends_at_the_limit()
+-> Result<()> {
+    fn silent(host: &mut Host) -> Result<bool> {
+        let mut panel = Vec::new();
+        host.drain_panel(&mut panel)?;
+        Ok(panel.is_empty()
+            && host.deliveries.take_command(host.identity).is_none()
+            && host.memory.take_command().is_none()
+            && host.updates.take_command().is_none()
+            && host.release_notes.take_command().is_none())
+    }
+    let mut host = Host::new()?;
+    assert!(silent(&mut host)?, "the host spoke before the page did");
+    // The host's update status is read again and its memory sampled while the page stays silent.
+    host.updates.refresh(&IdleUpdateStatus, &IdleWorkflowActivity)?;
+    let due = host.memory.next_deadline();
+    host.memory.poll(due, host.now, 0, false)?;
+    assert!(silent(&mut host)?, "a page that watches nothing was sent a state");
+    assert!(!host.release_notes.watching());
+
+    let second = 1_000_000_000;
+    host.panel.tick(Moment::from_nanos(30 * second - 1))?;
+    assert_eq!(host.panel.policy.state(), PanelState::Loading);
+    host.panel.tick(Moment::from_nanos(30 * second))?;
+    assert_eq!(host.panel.policy.state(), PanelState::Failed, "the handshake has a limit");
+    assert!(silent(&mut host)?, "a failed handshake sends the page nothing");
+    host.panel.tick(Moment::from_nanos(3_600 * second))?;
+    assert!(silent(&mut host)?, "nothing is sent to a failed session later either");
+    Ok(())
+}
