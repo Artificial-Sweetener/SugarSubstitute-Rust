@@ -47,7 +47,8 @@ impl Parent {
     /// with the result it delivered. A probe and a helper finishing after the application closed
     /// keep their own outer cutoff.
     /// # Errors
-    /// Returns the failed check; the caller records it, which closes the helper.
+    /// Returns the failed check for the caller to record; its helper is already being stopped,
+    /// without a grace interval.
     pub(super) fn observe_limit(&mut self, now: Moment) -> Result<()> {
         if self.probe
             || self.continuation.is_some()
@@ -74,18 +75,30 @@ impl Parent {
         self.limit = None;
         self.wake_at = None;
         match wait {
-            Wait::Check => Err(io::Error::new(
-                io::ErrorKind::TimedOut,
-                if phase == Some(AttemptPhase::Checking) {
-                    format!("The update server did not answer within {} seconds", CHECK.as_secs())
-                } else {
-                    format!(
-                        "Update preparation did not start checking within {} seconds",
-                        CHECK.as_secs()
-                    )
-                },
-            )
-            .into()),
+            Wait::Check => {
+                // A check has written nothing a stop could cut short, so the helper is stopped
+                // now instead of after a close's grace: the failed check is reported at the
+                // limit, not seconds after it.
+                self.close(Some(ShutdownBudget {
+                    graceful_until: now,
+                    ..ShutdownBudget::new(now)?
+                }))?;
+                Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    if phase == Some(AttemptPhase::Checking) {
+                        format!(
+                            "The update server did not answer within {} seconds",
+                            CHECK.as_secs()
+                        )
+                    } else {
+                        format!(
+                            "Update preparation did not start checking within {} seconds",
+                            CHECK.as_secs()
+                        )
+                    },
+                )
+                .into())
+            }
             Wait::Leave => {
                 tracing::warn!(
                     operation = "update_helper_overstayed",

@@ -2,7 +2,18 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Verify the installed executable before admitting its contained preparation role.
 use super::*;
-use sugarsubstitute_contracts::update::attempt::codec::{UpdateAttemptChannel, UpdateAttemptKey};
+use std::sync::{Mutex, PoisonError};
+use sugarsubstitute_contracts::{
+    execution::AdmissionError,
+    update::attempt::codec::{UpdateAttemptChannel, UpdateAttemptKey},
+};
+use sugarsubstitute_execution::OwnedInputError;
+use sugarsubstitute_supervision::UpdateAttemptPins;
+
+/// The attempt channel's pins, kept by this owner until the job that composes the helper is
+/// admitted and takes them.
+pub(super) type Pins = Arc<Mutex<Option<UpdateAttemptPins>>>;
+
 impl Parent {
     /// Each phase retains actual partial admission; closing never starts a later phase.
     pub(super) fn launch(&mut self, jobs: &JobSequence) -> Result<()> {
@@ -42,15 +53,21 @@ impl Parent {
             )?);
         }
         // The helper is composed only once its channel's endpoint exists.
-        let pins = if self.preparing.is_none()
+        let pins: Option<Pins> = if self.preparing.is_none()
             && self.retained.as_ref().is_some_and(|held| held.source.is_some())
         {
-            self.attempt.as_mut().and_then(AttemptChannel::take_pins)
+            self.composing.take().or_else(|| {
+                self.attempt.as_mut().and_then(AttemptChannel::take_pins).map(
+                    |(bootstrap, enrollment)| {
+                        Arc::new(Mutex::new(Some(UpdateAttemptPins { bootstrap, enrollment })))
+                    },
+                )
+            })
         } else {
             None
         };
-        if let Some((bootstrap, enrollment)) = pins {
-            let pins = sugarsubstitute_supervision::UpdateAttemptPins { bootstrap, enrollment };
+        if let Some(pins) = pins {
+            let handed = Arc::clone(&pins);
             let key = self.key;
             let spec = self.spec(
                 jobs,
@@ -59,18 +76,33 @@ impl Parent {
                 Some(self.step_deadline()?),
             )?;
             let source = &mut self.retained.as_mut().ok_or("Update custody absent")?.source;
-            self.preparing = Some(self.client.submit_blocking_owned_input(
+            let submitted = self.client.submit_blocking_owned_input(
                 &self.work,
                 spec,
                 source,
                 move |application, context| {
+                    let pins = handed
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .take()
+                        .ok_or_else(|| io::Error::other("Update attempt pins already taken"))?;
                     let image = application.pin_preparation(&context)?;
                     let workspace = image.installation().join(".update-workspace");
                     let environment =
                         crate::worker_environment::capture().map_err(io::Error::other)?;
                     WindowsLaunchInput::preparation(key, image, &workspace, environment, Some(pins))
                 },
-            )?);
+            );
+            match submitted {
+                Ok(job) => self.preparing = Some(job),
+                // Another startup job holds the memory this one reserves. The check starts once
+                // that job finishes, which wakes this owner; its limit still bounds the wait.
+                Err(OwnedInputError::Admission(AdmissionError::MemorySaturated { .. })) => {
+                    self.composing = Some(pins);
+                    return Ok(());
+                }
+                Err(cause) => return Err(cause.into()),
+            }
         }
         let held = self.retained.as_ref().ok_or("Update custody absent")?;
         if self.process.is_none()

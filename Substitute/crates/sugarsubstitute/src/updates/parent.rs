@@ -52,6 +52,8 @@ pub(crate) struct Parent {
     retained: Option<Retained>,
     constructing: Option<OwnedJob<WindowsProcessRegistry, RegistryError>>,
     preparing: Option<OwnedJob<WindowsLaunchInput, io::Error>>,
+    /// The attempt channel's pins while composing the helper waits for execution memory.
+    composing: Option<launch::Pins>,
     retiring: Option<OwnedJob<(), io::Error>>,
     retiring_application: bool,
     process: Option<ProcessKey>,

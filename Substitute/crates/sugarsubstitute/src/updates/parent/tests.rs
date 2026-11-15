@@ -32,6 +32,7 @@ fn partial(client: ExecutionClient) -> Result<Parent> {
         retiring_application: false,
         process: None,
         until: None,
+        composing: None,
         limit: None,
         wake_at: None,
         shutdown: None,

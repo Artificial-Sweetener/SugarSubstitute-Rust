@@ -45,6 +45,10 @@ fn a_check_that_reaches_its_limit_closes_the_helper_and_is_a_failed_check() -> T
     clock.0.store(limit, Ordering::SeqCst);
     advance(&mut parent, &jobs)?;
     assert!(parent.shutdown.is_some(), "a check at its limit left the helper open");
+    assert!(
+        parent.shutdown.is_some_and(|budget| budget.graceful_until == budget.started),
+        "a check at its limit waited out a grace interval before stopping its helper"
+    );
     assert_eq!(
         parent
             .failure

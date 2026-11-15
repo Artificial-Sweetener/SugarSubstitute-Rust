@@ -83,6 +83,7 @@ impl Parent {
             retiring_application: false,
             process: None,
             until: None,
+            composing: None,
             limit: None,
             wake_at,
             shutdown: None,
