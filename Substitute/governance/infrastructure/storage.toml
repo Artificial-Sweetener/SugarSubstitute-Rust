@@ -11,7 +11,7 @@ owner = "sugarsubstitute"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:a7edea1ca920cc743ea59848cc92a84551f011435eed4b442a8237e0dc2cd74d"
+source_sha256 = "sha256:c9cb67182be5628753c446ea8c48d11b9e6d2cb2a2efbb0f9cee3127db146b4b"
 rationale = "Isolated test fixture directories for sugarsubstitute; each authored acquisition still requires an exact source review."
 
 [[dependencies]]
@@ -19,7 +19,7 @@ owner = "sugarsubstitute-comfy"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:68148d6ef196b6d634105ed26e39bc1554870c57b5d1726b90184540f70dda99"
+source_sha256 = "sha256:1e937353f7af8d09fd09c4f72b42dfc0c98100a403016fb4f490cec09c603121"
 rationale = "An isolated temporary cache scope qualifies the actual bounded Comfy output transfer without accessing user data."
 
 [[dependencies]]
@@ -27,7 +27,7 @@ owner = "sugarsubstitute-comfy"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:68148d6ef196b6d634105ed26e39bc1554870c57b5d1726b90184540f70dda99"
+source_sha256 = "sha256:1e937353f7af8d09fd09c4f72b42dfc0c98100a403016fb4f490cec09c603121"
 rationale = "Native OS adapter bindings for sugarsubstitute-comfy; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -35,7 +35,7 @@ owner = "sugarsubstitute-crash"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:9ddf05f96f9a9c186beb67ecefe2310107140e189f7a3fcd42b09b43a6cdd438"
+source_sha256 = "sha256:46f903dfa316bf6cb4bbaae0d61975dee9783e2b7ff87c013dba81b0706181d3"
 rationale = "Native OS adapter bindings for sugarsubstitute-crash; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -43,7 +43,7 @@ owner = "sugarsubstitute-desktop"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:bdfc391fd9aa3903d91d96669f43a96987c2bdb9b9f783e835817843c3d194c3"
+source_sha256 = "sha256:45f2464291eb5b81522e252cfd41f9150afc9cc3806703407fb6d1b97711ee27"
 rationale = "Native OS adapter bindings for sugarsubstitute-desktop; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -51,7 +51,7 @@ owner = "sugarsubstitute-image-gpu"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:78fa4c46f4d615703e0c2b1ac64547032ec648f113fab085908f0e1da912ca5c"
+source_sha256 = "sha256:34f78170311630200547e86ecc500ef6b0fb63ed64e55257263c3495d6279a7d"
 rationale = "Win32 handle type for importing composition-owned D3D11 textures into Vulkan; the crate performs no filesystem access."
 
 [[dependencies]]
@@ -59,7 +59,7 @@ owner = "sugarsubstitute-execution"
 identity = "tokio"
 binding = "tokio"
 kind = "normal"
-source_sha256 = "sha256:0b5907cb7ef93b7955c162dbae0c02dc08d34c74d5fb888a62d1475642f9a99a"
+source_sha256 = "sha256:20545f7a605176bc98b87716be6a40a240173d228a581d75c119a63bb4313f5a"
 rationale = "Execution-owned async runtime and network integration; filesystem APIs remain restricted by authored source reviews."
 
 [[dependencies]]
@@ -67,7 +67,7 @@ owner = "sugarsubstitute-execution"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:0b5907cb7ef93b7955c162dbae0c02dc08d34c74d5fb888a62d1475642f9a99a"
+source_sha256 = "sha256:20545f7a605176bc98b87716be6a40a240173d228a581d75c119a63bb4313f5a"
 rationale = "Native OS adapter bindings for sugarsubstitute-execution; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -75,7 +75,7 @@ owner = "sugarsubstitute-networking"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:e93055d301f726c3c35ae9694410816ddab6e60cc69d7010b45cf3415524ee56"
+source_sha256 = "sha256:ab2dbe26f4679122a28e324f9edc124ef6933f6e873907425b6ee428b2dad25a"
 rationale = "Native OS adapter bindings for sugarsubstitute-networking; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -83,7 +83,7 @@ owner = "sugarsubstitute-splash"
 identity = "tiny-skia"
 binding = "tiny-skia"
 kind = "normal"
-source_sha256 = "sha256:2bd27ec07391f9a93ef39370ccf0f14be5c4f242ee998f86662e699f5933bac9"
+source_sha256 = "sha256:b6c60480d52bb05e6d00609542d0b6aa53d341d97d232b2da9e3de8cea596903"
 rationale = "CPU raster composition and in-memory PNG encoding; public path-capable backing raster values must remain private."
 
 [[dependencies]]
@@ -91,7 +91,7 @@ owner = "sugarsubstitute-execution"
 identity = "libc"
 binding = "libc"
 kind = "normal"
-source_sha256 = "sha256:0b5907cb7ef93b7955c162dbae0c02dc08d34c74d5fb888a62d1475642f9a99a"
+source_sha256 = "sha256:20545f7a605176bc98b87716be6a40a240173d228a581d75c119a63bb4313f5a"
 rationale = "Unix CLOCK_MONOTONIC sampling for the shared system counter; no filesystem access."
 
 [[dependencies]]
@@ -99,7 +99,7 @@ owner = "sugarsubstitute-supervision"
 identity = "libc"
 binding = "libc"
 kind = "normal"
-source_sha256 = "sha256:9305ed5e8ff4775571e3a96c8d83a092eab6e466e9f771b54067c37f8a5d76b0"
+source_sha256 = "sha256:fabd030fb4aeba4d072736fea4b95c9f664ec255d2fd20a70998de1d57e4d01b"
 rationale = "Unix durable-storage descriptor acquisition, relative atomic publication and checked close; exact authored access remains governed."
 
 [[dependencies]]
@@ -107,7 +107,7 @@ owner = "sugarsubstitute-supervision"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:9305ed5e8ff4775571e3a96c8d83a092eab6e466e9f771b54067c37f8a5d76b0"
+source_sha256 = "sha256:fabd030fb4aeba4d072736fea4b95c9f664ec255d2fd20a70998de1d57e4d01b"
 rationale = "Isolated test fixture directories for sugarsubstitute-supervision; each authored acquisition still requires an exact source review."
 
 [[dependencies]]
@@ -115,7 +115,7 @@ owner = "sugarsubstitute-supervision"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:9305ed5e8ff4775571e3a96c8d83a092eab6e466e9f771b54067c37f8a5d76b0"
+source_sha256 = "sha256:fabd030fb4aeba4d072736fea4b95c9f664ec255d2fd20a70998de1d57e4d01b"
 rationale = "Native OS adapter bindings for sugarsubstitute-supervision; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -123,7 +123,7 @@ owner = "sugarsubstitute-update-repository"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:629969d246c10fae782a24efaa436674fa2fc85e0cb3127a8945a3dbe4a28707"
+source_sha256 = "sha256:09bbf7ef1b453e6793c67f470f06fc564fff76ffa9c896b9e1fbe5731bee623a"
 rationale = "Isolated test fixture directories for sugarsubstitute-update-repository; each authored acquisition still requires an exact source review."
 
 [[dependencies]]
@@ -131,7 +131,7 @@ owner = "sugarsubstitute-xtask"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:d0fb0fccfa5037211762f22a76a32acdafc936e5e028dba182235b3758c44165"
+source_sha256 = "sha256:24f863152fe7bd153c8684a08214c51771299aa1a52796551e3c1ea2e8b7c5f0"
 rationale = "Isolated test fixture directories for sugarsubstitute-xtask; each authored acquisition still requires an exact source review."
 
 [[records]]
@@ -4426,7 +4426,7 @@ owner = "sugarsubstitute-ui"
 identity = "tiny-skia"
 binding = "tiny-skia"
 kind = "normal"
-source_sha256 = "sha256:ef0fecde2e37464ce9d8e1594f120becc763afcd1fbe5f3384724d14c42db5fc"
+source_sha256 = "sha256:1b8e29e2bdfb5917702f160dfccf1de2b2a68cab000d94b972fdb482b7bd3da0"
 rationale = "Shared pixel preparation uses private raster backing and fixed system UI APIs; public bitmap and mask values expose only data and supported painting, while source-level construction remains independently checked."
 
 [[dependencies]]
@@ -4434,7 +4434,7 @@ owner = "sugarsubstitute-ui"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:ef0fecde2e37464ce9d8e1594f120becc763afcd1fbe5f3384724d14c42db5fc"
+source_sha256 = "sha256:1b8e29e2bdfb5917702f160dfccf1de2b2a68cab000d94b972fdb482b7bd3da0"
 rationale = "Shared pixel preparation uses private raster backing and fixed system UI APIs; public bitmap and mask values expose only data and supported painting, while source-level construction remains independently checked."
 
 [[records]]
@@ -4506,7 +4506,7 @@ owner = "sugarsubstitute-image-io"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:d5f5747c122393f0fc75bd58f3d2fb1a01a77c7af8ae9df85291dee6079964c6"
+source_sha256 = "sha256:a776429125596803179c4233670ba383e251ce083daa0d08fe16a4acd5366db3"
 rationale = "Owned temporary source/cache fixtures; production streams and publication use the existing durable storage owner."
 
 [[records]]
