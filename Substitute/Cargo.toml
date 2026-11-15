@@ -72,8 +72,12 @@ unimplemented = "deny"
 unwrap_used = "deny"
 
 # Third-party code keeps line tables for backtraces; full variable info stays with workspace crates.
+# It is optimized in development and test builds: hashing, signature checks, compression and image
+# codecs dominate the test run, and unoptimized they run many times slower. Each dependency is
+# compiled once and cached; workspace crates stay unoptimized so edits rebuild quickly.
 [profile.dev.package."*"]
 debug = "line-tables-only"
+opt-level = 3
 
 [profile.dev.package.sugarsubstitute-xtask]
 opt-level = 3
