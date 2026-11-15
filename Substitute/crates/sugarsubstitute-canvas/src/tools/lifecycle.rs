@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Tool lifecycle: geometry, document and policy changes, temporary navigation, cancellation
 //! and switching the effective tool.

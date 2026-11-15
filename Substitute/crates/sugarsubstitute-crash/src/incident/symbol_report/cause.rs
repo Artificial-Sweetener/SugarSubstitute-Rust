@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Keep typed original source, worker and retirement causes without sensitive diagnostics.
 use super::source::{DataOwner, Source};

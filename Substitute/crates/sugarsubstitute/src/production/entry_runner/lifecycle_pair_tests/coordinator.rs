@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! The coordinator peer: the real entry runner on its own thread, with the activation adapter
 //! and the pump that takes its restart notice's frames.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 
 //! Build isolated synthetic repositories for governance rejection proof.
@@ -48,7 +48,7 @@ impl Repository {
         write(
             root,
             "crates/host/src/lib.rs",
-            "// SPDX-License-Identifier: GPL-3.0-or-later\n// Copyright (C) 2026 Artificial Sweetener and contributors\n//! Fixture host.\n#[cfg(test)] mod tests { #[test] fn behavior() {} }\n",
+            "// SPDX-License-Identifier: AGPL-3.0-or-later\n// Copyright (C) 2026 Artificial Sweetener and contributors\n//! Fixture host.\n#[cfg(test)] mod tests { #[test] fn behavior() {} }\n",
         )?;
         let workspace: Workspace = serde_json::from_value(serde_json::json!({
             "workspace_members": ["fixture-host"],

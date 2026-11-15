@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compare actual hardware evaluation with CPU DAG semantics, including hidden failing branches.
 use std::{error::Error, sync::Arc, time::Instant};

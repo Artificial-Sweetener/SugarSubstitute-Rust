@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! A selection on a hidden committed attachment defers until it is shown, and every way the
 //! page or host ends that wait answers it exactly once.

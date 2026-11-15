@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! The update report opened over a main-like window on that window's own event loop: owned by
 //! and centred on it, captured from the frames it presents, closed by the user, settled while

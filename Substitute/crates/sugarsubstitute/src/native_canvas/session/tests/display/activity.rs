@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Native activity is coalesced demand, never a new authored image or a permanent repaint timer.
 use super::presentation::{consume_present, presenting};

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Shape gesture modes, constraints, snapping, outline dragging and mask shapes, applied through
 //! the deferred-work boundary the host runs.

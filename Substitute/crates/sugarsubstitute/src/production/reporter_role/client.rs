@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Adopt only the actual inherited Reporter bootstrap and authenticate its original parent.
 use std::num::NonZeroUsize;

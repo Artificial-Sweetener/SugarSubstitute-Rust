@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Localized words for starting while a previous SugarSubstitute window is still open.
 /// Complete copy for verified profile-conflict resolution.

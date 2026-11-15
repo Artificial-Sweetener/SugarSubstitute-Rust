@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 
 //! Verify exact, expiring ownership assessments and structural limits.
@@ -101,7 +101,7 @@ pub(crate) fn check(
             )?;
         } else {
             require(
-                source.lines().next() == Some("// SPDX-License-Identifier: GPL-3.0-or-later")
+                source.lines().next() == Some("// SPDX-License-Identifier: AGPL-3.0-or-later")
                     && source.lines().nth(1).is_some_and(|line| {
                         line.starts_with("// Copyright (C) ")
                             && line.ends_with("Artificial Sweetener and contributors")

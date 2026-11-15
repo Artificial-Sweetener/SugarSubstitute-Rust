@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! A damaged or missing record, or a missing accepted release, never blocks the launch, and only
 //! accepted releases start from a rebuilt record.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Bind elected entry custody to actual claims and the admitted process registry.
 #[path = "coordinator_authority/admission.rs"]

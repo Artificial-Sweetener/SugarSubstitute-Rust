@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Recognize native filesystem and dynamic-entry-point identities.
 /// Shell file dialog configuration methods. They describe what the user may choose and never

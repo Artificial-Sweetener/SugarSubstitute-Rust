@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Propagate deliberate current-role close through original budgets and actual pending owners.
 #[cfg(any(test, feature = "k1-native-qualification"))]

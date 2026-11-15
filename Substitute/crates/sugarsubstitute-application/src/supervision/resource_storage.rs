@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Size actual policy custody and a projected operation before its first allocation.
 use super::{resource_outage::RetainedOutage, resource_state::*, resources::ResourceCoordinator};

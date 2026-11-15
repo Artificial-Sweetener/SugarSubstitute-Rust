@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! The window half of the two-peer lifecycle harness: the real startup host with its close
 //! save, restart hold and coordinator close, speaking lifecycle frames to the coordinator.

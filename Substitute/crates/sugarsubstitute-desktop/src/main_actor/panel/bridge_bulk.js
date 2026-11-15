@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 // Move oversized panel messages as exact JSON text through the host-intercepted reserved path
 // on this document's own origin, which a `connect-src 'self'` policy admits. The host invokes

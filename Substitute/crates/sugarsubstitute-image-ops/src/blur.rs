@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Shared finite Gaussian support and coefficients for CPU and GPU image evaluation.
 use crate::{Extent, ImageError, Region};

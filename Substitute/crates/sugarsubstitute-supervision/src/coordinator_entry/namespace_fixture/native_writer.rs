@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Discover real token/private-directory outputs while substituting installation/image observations.
 //! The Account selector uses this D-local external discovery root; this fixture does not query or

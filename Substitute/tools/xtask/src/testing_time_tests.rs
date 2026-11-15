@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 
 //! Prove the real-time rule rejects every known form and admits only exact registrations.
@@ -6,7 +6,7 @@
 use super::*;
 use crate::fixtures::{Repository, write};
 
-const HEADER: &str = "// SPDX-License-Identifier: GPL-3.0-or-later\n";
+const HEADER: &str = "// SPDX-License-Identifier: AGPL-3.0-or-later\n";
 
 /// Write `files` into a fixture host and check its test scope against `registered`.
 fn checked(files: &[(&str, &str)], registered: &[RealTime]) -> Result<Repository> {

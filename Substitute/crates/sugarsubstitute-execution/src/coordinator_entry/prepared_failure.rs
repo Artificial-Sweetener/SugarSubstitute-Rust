@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Reuse one bounded raw operation ledger while escaped aliases retain whole custody outside it.
 use super::{EntryPreparedCause, EntryTransportError};

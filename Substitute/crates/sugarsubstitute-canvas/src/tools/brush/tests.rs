@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Brush and Eraser strokes through the tool manager: live staging, one undo step, cancel,
 //! erasing, pressure, selection clipping, wheel sizing and cursor feedback.

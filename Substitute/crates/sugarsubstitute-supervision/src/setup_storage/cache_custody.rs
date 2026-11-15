@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Match cache consumers to private named containment jobs without acquiring stop authority.
 //! Job creation, admission and shutdown remain with the native process adapter. An existing job,

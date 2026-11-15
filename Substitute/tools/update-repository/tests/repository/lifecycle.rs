@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! A year and more of scheduled signing, checked every day by an installation that runs the
 //! application's own verifier and keeps its trust checkpoint, from the root it shipped with.

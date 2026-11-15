@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compile shared image semantics and retain every dispatch resource through native retirement.
 use crate::{
@@ -221,7 +221,7 @@ impl Kernels {
     }
 }
 
-const SOURCE: &str = r#"// SPDX-License-Identifier: GPL-3.0-or-later
+const SOURCE: &str = r#"// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 // Canonical linear-premultiplied image kernels; sampling coefficients come from image-ops.
 struct Parameters {

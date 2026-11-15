@@ -10,84 +10,84 @@ rationale = "Execution owns authenticated IPC readiness and isolated native HTTP
 [[records]]
 path = "crates/sugarsubstitute-networking/src/native.rs"
 owner = "sugarsubstitute-networking"
-source_sha256 = "sha256:2549cb3e543c1f66b2cf417b77fbdd68fdddf54cb5107f3793b81f2285c3851d"
+source_sha256 = "sha256:37c7e5df17202d5ca0da94ebe2b5d412e12213183e603d1a1570700bf1a2d746"
 boundary = "implementation"
 rationale = "Exclusive synchronous WinHTTP construction, fixed request controls and checked child-before-parent handle retirement."
 
 [[records]]
 path = "crates/sugarsubstitute-networking/src/native/io.rs"
 owner = "sugarsubstitute-networking"
-source_sha256 = "sha256:a85eea34f8f4204caa683fabe0fda15243acb55e551d7a88bb8fdf6e22ab5962"
+source_sha256 = "sha256:c61460afa82de3ea318d301bd76044913de969d7a193645566460b4543bd9f78"
 boundary = "implementation"
 rationale = "Bounded WinHTTP headers/body reads, original finite phase deadlines and exact connected loopback tuple observations."
 
 [[records]]
 path = "crates/sugarsubstitute-execution/src/http_fixture.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:0a03596fc36607da04582303f927b8859848be6893c1209648a853cac6e621a4"
+source_sha256 = "sha256:6307a66322a04da1a738de4a73c86932c7fdf53091714f053d96ef78e4857fab"
 boundary = "fixture"
 rationale = "Execution-owned isolated HTTP server qualifies real native requests, hostile responses and actual client socket closure."
 
 [[records]]
 path = "crates/sugarsubstitute-execution/src/http_fixture/tests.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:53119ea1174008026f60de3e69bd2b2e98b35585ec0b38e6ae72c804f87eddfb"
+source_sha256 = "sha256:f4ab5a6e42076f67eaa5de0063e16105061a9d03d8d44b501010714dfca1ae0e"
 boundary = "fixture"
 rationale = "Real loopback client sockets exercise the isolated HTTP fixture's event-driven request, response, deadline and cancellation handling."
 
 [[records]]
 path = "crates/sugarsubstitute-execution/src/provisioning_transport/socket.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:03fab3002b9dc1ec8503fff03610770e76bca7e8f92335b8be707663f04d8423"
+source_sha256 = "sha256:610a6e6f97e9f65c4b623a23b2d349daee461f1bbf941d9175d5873d37ba2bdd"
 boundary = "execution_ipc"
 rationale = "Execution owns authenticated finite loopback IPC, readiness, queue admission, cancellation and actual socket shutdown; this is not an HTTP downloader."
 
 [[records]]
 path = "crates/sugarsubstitute-execution/src/loopback_websocket.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:daba6aed3b1e7a1091011c5bc81556d412ba922cda0f3cc4b2668be5e99e471f"
+source_sha256 = "sha256:eb18069ba01d9018005ad269ecf215a41e926c4d658784ac9a6a717c5ec3c8f7"
 boundary = "loopback_client"
 rationale = "Execution owns the one client WebSocket to a validated loopback service inside an admitted async job: bounded opening, frames and writes, its memory claim, cancellation and the job deadline."
 
 [[records]]
 path = "crates/sugarsubstitute-execution/src/loopback_websocket/tests.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:52bb330625db96756c4c149d226b00ec51c4bb7fd2a70194652e0d52a7fffac0"
+source_sha256 = "sha256:e9161140d5ae46806b8a9f54f3e5e06389c1bdeb5e284d311adf4644ca4cc220"
 boundary = "fixture"
 rationale = "A scripted loopback server exercises the real upgrade, framing, ping, close, discard and cancellation handling."
 
 [[records]]
 path = "crates/sugarsubstitute-execution/src/provisioning_transport/tests.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:2e48bd0d65f9c9f06b3af96514cf3ab7731bf2d5b19905a2dca662866df4ff95"
+source_sha256 = "sha256:ebecc3650498d4d19a2f332913844fd8f8eacef912ee7f65cae87af9cd3a6974"
 boundary = "fixture"
 rationale = "Real loopback peers test execution-owned authentication, bounds and actual socket closure."
 
 [[records]]
 path = "crates/sugarsubstitute-execution/src/provisioning_transport/native_tests.rs"
 owner = "sugarsubstitute-execution"
-source_sha256 = "sha256:198727a6497747b15957f16dc68ea78acb0af19dc37fa2fe5e0bb96b04bedc55"
+source_sha256 = "sha256:66f0f86ecb8a84bd90f398bdbab19876023817f47a656b8a36a12ced4d7abc67"
 boundary = "fixture"
 rationale = "Native storage-lane tests preserve original execution memory and explicitly shut down actual fixture peers."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/render_preview/downloads.js"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:a8e58e09e542d0a315fdcae488c7486f50ea5db50452fb8ac7bf7e24bc3808fc"
+source_sha256 = "sha256:b20fe9f6d1728195cc0d461b220bdc83a1cdeaaf5b22e21109cde4fbd9bdaeea"
 boundary = "browser"
 rationale = "Isolated installed-ComfyUI browser qualification uses its supported export/download APIs and same-origin bounded PNG read with original cutoff and AbortController teardown."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge_bulk.js"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:c37b552f226cbddafd351a0d93026e530482f082b896e41ee241ad5173cebf9e"
+source_sha256 = "sha256:60a047315535be0184cbd9c3074bcc373b3dcbb0bd1a4c14acbbbfc9234662f2"
 boundary = "browser"
 rationale = "The panel bridge fetches only the host-intercepted reserved path on its own document origin with host-issued single-use tokens, same-origin mode, no credentials, no cache, no redirects and AbortController teardown; WebView2 answers every request under that path in-process and none reaches the network or the ComfyUI server."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:e9a4a20ac7df256a1afe267b4d67f366dbf0b56e9afbd63e4bbd0fdac813721c"
+source_sha256 = "sha256:a0dcb20d92cc441f2b0a5aa716c12d3d63c143d103fbef55dd4304b74205d6d7"
 boundary = "fixture"
 rationale = "The isolated JavaScript VM fixture fakes the browser fetch boundary to exercise the production bulk channel upload, download, same-origin URL construction, ordering and teardown without any network access."
 
@@ -129,7 +129,7 @@ rationale = "Worker connects only to the execution-owned authenticated loopback 
 [[records]]
 path = "crates/sugarsubstitute-networking/src/native/tests/qualification.rs"
 owner = "sugarsubstitute-networking"
-source_sha256 = "sha256:e9112a64ac3bdbbd7fb36152c2d7148f9150f660dd903c3940788015291bed2f"
+source_sha256 = "sha256:db7483f6efe190858ef7dcf07718ec238f06ca0073fb480878c02604fe1760a2"
 boundary = "implementation"
 rationale = "Actual native policy queries qualify closed transport controls and cancellation retirement inside admitted execution lifetimes."
 
@@ -158,14 +158,14 @@ rationale = "Registered upstream HTTP sources are checked against the pinned com
 [[records]]
 path = "tools/xtask/src/networking/access.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:3ffcb7c05fab97ac8330686bca81917d158d216c4f3172087b0c722dab6796dd"
+source_sha256 = "sha256:397a339dc5c222d23b349a1c2aa3bbe5aa1a113bac91cbad8865517effac559c"
 boundary = "inspection"
 rationale = "Parsed network capability classification data contains literal native symbol names; this disposition permits no direct transport effects."
 
 [[records]]
 path = "tools/xtask/src/networking/tests.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:da59f7f0a6039502d892faa7de5cb9ed9ce343383a77790c36dab504c21ce516"
+source_sha256 = "sha256:6f9908d14a8fe7892324ddbcc278421d5b08510f3e8e1ccba4dd4bbe75669fdb"
 boundary = "fixture"
 rationale = "Deliberately invalid embedded JavaScript and native-symbol literals prove rejection across macro, wrapper, alias and inactive-target cases."
 
@@ -173,7 +173,7 @@ rationale = "Deliberately invalid embedded JavaScript and native-symbol literals
 [[records]]
 path = "tools/xtask/src/networking/external/tests.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:278c21d3f5b8182b4ce98128965f950dcf70c6feb7f42195490ee237e6ba59da"
+source_sha256 = "sha256:2ae3fdf1bfab51e5ab797ca91310442a5810aaca40d33d706503e9f05a634f6d"
 boundary = "fixture"
 rationale = "Pure external-source fixtures deliberately contain Electron HTTP calls to verify missing, stale and foreign component rejection."
 
@@ -181,7 +181,7 @@ rationale = "Pure external-source fixtures deliberately contain Electron HTTP ca
 [[records]]
 path = "tools/xtask/src/networking.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:394d893eef1586a27f9d648e3459a3a7455257973e082c3975e9c7cad1fa64ee"
+source_sha256 = "sha256:99319b9c04b19c01990ffe2607e366ba41851d20d9a190d4d94cd86f35213d7d"
 boundary = "inspection"
 rationale = "Boundary-category classification data includes literal network module identifiers; direct transport construction remains forbidden in inspection sources."
 
@@ -202,7 +202,7 @@ rationale = "Exact pristine upstream HTTP sources are consumed through registere
 [[records]]
 path = "crates/sugarsubstitute/src/setup/worker/downloads/native_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:11826d404736ef1d6bc19464e422b5b99ea2ea2039e1819638e11e44d2a0ec1a"
+source_sha256 = "sha256:9a5836352efc2b30de81fe8f45488f602dee56360b2775ecc88780d1e7494edb"
 boundary = "fixture"
 rationale = "An isolated external worker actor connects to the authenticated literal-loopback transport while production storage batches retain their original job and prepared grant custody."
 
@@ -230,49 +230,49 @@ rationale = "The adapter delegates requests to the supported upstream download A
 [[records]]
 path = "tools/test_updater_feed_fixture.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:3a9ab5f1175d49f2edf6ae81e3c8b9dcdd1a8a6218225224b2bd719b8345039f"
+source_sha256 = "sha256:c9873595ab9db410f652711dc48d303cd77165f7c26890baf32fc244aef1efa2"
 boundary = "fixture"
 rationale = "Feed rejection fixtures mock the standard-library HTTPServer boundary to verify exact literal-loopback and requested-port binding without opening a network listener."
 
 [[records]]
 path = "tools/updater_feed_fixture.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:7f3ffd8a1ff7f405a9bbc80f7240f130dc97db2e52ee7319785f0edce360b57c"
+source_sha256 = "sha256:babfe64ba6fc48166b13f3752fd06ec893b00973ab168ec77bb97922894b8021"
 boundary = "fixture"
 rationale = "The standalone signed-QA feed binds literal loopback in one owned process, serves explicit immutable routes and records bounded-campaign requests; it grants no application trust override."
 
 [[records]]
 path = "tools/updater_qualification.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:1959bba67010ea44062e55c7e0a966bb64ff0018f617bacb014a332d4b338c19"
+source_sha256 = "sha256:4cc5b05a0052d577c5d7744c1e5378bce3bddc9d1cb5449cd775bfae4d04ef1f"
 boundary = "fixture"
 rationale = "The private-desktop updater harness uses deadline-bounded scoped sockets to check the actual literal-loopback backend listener before launch and after retirement; it observes authenticated application behavior."
 
 [[records]]
 path = "crates/sugarsubstitute-networking/src/system_proxy/native.rs"
 owner = "sugarsubstitute-networking"
-source_sha256 = "sha256:f6d0a6b8b8ffb323b2149ea61de3b7f29651471e005bcdb048bd39a5a135e6bd"
+source_sha256 = "sha256:50f477b89ddf7342efeeaead426e96dce165239ab1ddb5fbf52f26a3d092cd78"
 boundary = "implementation"
 rationale = "Own asynchronous WinHTTP proxy resolver handles, original deadlines, callback admission and final native retirement."
 
 [[records]]
 path = "crates/sugarsubstitute-networking/src/system_proxy/native/settings.rs"
 owner = "sugarsubstitute-networking"
-source_sha256 = "sha256:b8aaf3c06181dad9c0d22442269860b7bd9d780dab2c59375909568d538d8f1a"
+source_sha256 = "sha256:839db2d0e0afb5f8d21582954f853955e32726d690b31c4cf90372588bcaa9ed"
 boundary = "implementation"
 rationale = "Read Windows proxy/PAC configuration and validate ordered HTTP(S) routes while freeing every native result and configuration allocation."
 
 [[records]]
 path = "crates/sugarsubstitute-networking/src/system_proxy/native/callback.rs"
 owner = "sugarsubstitute-networking"
-source_sha256 = "sha256:4a87c2e0228b2bc80201cd6ca4aa98092718901fc57f2c06412e58129f3ee4de"
+source_sha256 = "sha256:4f8e229a3d9fb05e4ac7d99df92f1dcc85b0f5a539185bd6142b6cfe0edd257d"
 boundary = "implementation"
 rationale = "The bounded resolver callback owns its shared state until the final HANDLE_CLOSING observation releases native custody."
 
 [[records]]
 path = "crates/sugarsubstitute-networking/src/system_proxy/tests.rs"
 owner = "sugarsubstitute-networking"
-source_sha256 = "sha256:5a01b8730a32091c9a6d2460a08b81f91000e838c9c5d6e0394efeb02cd11d44"
+source_sha256 = "sha256:028d4b2aa37e211d731de1f3d9c309f928137f0e43dd828c4308ac27de2fbe91"
 boundary = "implementation"
 rationale = "Isolated real Windows PAC qualification uses admitted HTTP fixtures and an observed unanswered local connection to prove expiry and actual callback retirement."
 

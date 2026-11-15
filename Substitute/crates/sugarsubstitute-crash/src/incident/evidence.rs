@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Format an explicit allowlist of owned facts without arbitrary errors, arguments or environment.
 use super::{HostFailureFact, IncidentStoreError};

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Preserve a direct native no-queue cutoff rejection for the exact authored finite write.
 use super::super::requests::Purpose;

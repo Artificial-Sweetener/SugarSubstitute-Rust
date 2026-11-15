@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Settle verified installation defaults before the separate sealed environment capture.
 //! Original launch bytes and native input pins remain owned until capture or original failure

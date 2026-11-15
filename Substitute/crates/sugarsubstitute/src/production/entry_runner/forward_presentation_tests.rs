@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! A forwarding launch never activates its own server, so its pump admits the native loop when
 //! the wait on the other copy must be shown, on the manual execution clock.

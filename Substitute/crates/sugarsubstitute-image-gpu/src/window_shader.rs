@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Present already-encoded premultiplied sRGB display bytes through a native unorm target.
 use crate::{
@@ -215,7 +215,7 @@ impl Blitter {
     }
 }
 
-const SOURCE: &str = r#"// SPDX-License-Identifier: GPL-3.0-or-later
+const SOURCE: &str = r#"// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 @group(0) @binding(0) var image: texture_2d<f32>;
 @group(0) @binding(1) var<storage, read> mapping: array<u32>;

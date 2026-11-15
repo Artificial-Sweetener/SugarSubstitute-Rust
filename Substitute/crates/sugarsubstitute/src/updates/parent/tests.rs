@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Actual executor and empty native registry exercise partial-admission teardown without launching processes.
 use super::super::test_support::{Manual, Wake, observe};

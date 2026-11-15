@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Preserve the existing Parent exit transaction through its shared adapter transition.
 //! These tests supply external exit facts; they construct no authenticated recovery member.

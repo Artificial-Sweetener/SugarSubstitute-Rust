@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Prepare explicit Windows executable/cwd and CRT-compatible argv without shell execution.
 //! CreateProcessW requires a mutable command line of at most 32767 UTF-16 units

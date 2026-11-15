@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Shared native widget rendering. Callers own layout and submit bounded preparation
 //! through the execution adapter; this crate does not create windows or schedule work.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise installation-local account runtime storage and protected namespace custody.
 /// A real directory junction cannot enroll an account namespace or alter its authored target.

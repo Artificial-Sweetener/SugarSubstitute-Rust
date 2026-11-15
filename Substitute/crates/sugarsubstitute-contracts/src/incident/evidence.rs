@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Describe bounded diagnostic evidence without paths, attachment data or native authority.
 use super::{DumpId, IncidentError, MAX_ATTACHMENTS, MAX_PAYLOAD_BYTES, MAX_TEXT_ATTACHMENT_BYTES};

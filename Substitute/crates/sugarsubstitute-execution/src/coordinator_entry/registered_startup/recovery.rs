@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Issue a once-only recovery grant from the genuine completed Root startup archive.
 //! Serialized keys remain inert. This source retains actual issuer, memory, Root Entry

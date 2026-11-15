@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Opaque overlay pixels, such as selection outlines, drawn as points over a native display.
 //!
@@ -137,7 +137,7 @@ pub(crate) fn pipeline(device: &GpuDevice, format: wgpu::TextureFormat) -> wgpu:
     })
 }
 
-const SOURCE: &str = r#"// SPDX-License-Identifier: GPL-3.0-or-later
+const SOURCE: &str = r#"// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 @group(0) @binding(0) var<storage, read> batch: array<u32>;
 struct Point {

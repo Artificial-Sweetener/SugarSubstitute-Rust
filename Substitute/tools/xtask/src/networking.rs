@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Enforce one native HTTP adapter and exact external network boundaries across authored roots.
 //! Rust imports/macros and Cargo identities are parsed; auxiliary languages receive conservative

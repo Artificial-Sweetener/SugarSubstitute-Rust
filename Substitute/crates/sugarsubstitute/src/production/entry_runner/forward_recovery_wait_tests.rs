@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! A launch waiting on another copy shows something at two seconds on a manual clock, keeps
 //! forwarding behind it, and asks its question only when a probe finds that copy hung.

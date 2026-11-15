@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Qualify the fixture waits themselves: a timer-held answer arrives on injected time, and an
 //! answer nothing can deliver fails at once instead of waiting out the wall-clock backstop.

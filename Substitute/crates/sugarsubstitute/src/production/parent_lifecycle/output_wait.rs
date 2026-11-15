@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Park an authentic pull only while an external native loan prevents safe output admission.
 use super::{ParentError, ParentLifecycle, ParentResources, Result};

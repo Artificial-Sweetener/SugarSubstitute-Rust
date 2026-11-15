@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 // The creating-STA caller supplies only the sealed origin, PNG identity and remaining cutoff.
 const abort = new AbortController();

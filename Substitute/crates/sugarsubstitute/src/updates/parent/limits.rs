@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Limit the two waits of a preparation helper that its own deadlines cannot end: the check
 //! before any download, and leaving after its result. A download and the preparation after it

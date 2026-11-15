@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! What the update control shows. Activity and the last result come from the attempt channel;
 //! whether an update is ready, or the previous version is running, comes only from the selection

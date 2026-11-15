@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Seal one bounded development preview from the actual retained Desktop capture source.
 //! Loans are inert until a real ordinary worker binds its original admission; neither

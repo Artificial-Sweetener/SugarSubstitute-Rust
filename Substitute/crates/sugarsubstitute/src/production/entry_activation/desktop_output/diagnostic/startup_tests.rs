@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Qualify exact enriched first-failure grammar under unchanged scratch and observation limits.
 use super::super::{Diagnostic, Observation, parse_failure};

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Own the independently enrolled Reporter process and its actual authenticated diagnostic channel.
 #[path = "reporter_role/channel.rs"]

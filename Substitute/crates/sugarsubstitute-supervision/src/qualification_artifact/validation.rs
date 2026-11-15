@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Validate the original finite worker, bounded lexical namespace and native PNG extent.
 use super::{IMAGE_BYTES, OUTPUT_SLOTS};

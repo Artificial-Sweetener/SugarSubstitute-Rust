@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Restart, close and cancel flows end to end: the real entry runner and the window's real
 //! startup host, each on its own thread, exchanging lifecycle frames.

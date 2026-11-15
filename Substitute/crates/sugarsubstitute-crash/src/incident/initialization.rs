@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Publish the first strict ledger using the actual fresh-directory observation.
 use super::{IncidentRepository, IncidentStoreError, IncidentStoreState, codec_ledger::digest};

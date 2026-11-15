@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Tell the desktop child the coordinator's update status and the backend's workflow queue, and
 //! keep its restart-to-apply intent and its requests to check now.

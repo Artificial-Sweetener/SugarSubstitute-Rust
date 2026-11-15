@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Move the same eight original backend causes and their charged allocation between retired and fresh roles.
 use super::{ParentError, ParentLifecycle, attempt::SettledAttemptFailure};

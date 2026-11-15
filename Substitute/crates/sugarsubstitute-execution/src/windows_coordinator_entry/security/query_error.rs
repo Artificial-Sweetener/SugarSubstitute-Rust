@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Preserve kernel-query peer loss as a terminal disposition for only its connected slot.
 use crate::{coordinator_entry::EntryTransportError, windows::NativeObservationError};

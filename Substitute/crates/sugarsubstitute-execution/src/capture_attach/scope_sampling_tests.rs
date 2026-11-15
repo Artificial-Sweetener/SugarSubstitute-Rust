@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Observe the concurrent first cleanup sample through the actual timer registration.
 use super::{custody_tests::SamplingClock, test_support::*, *};

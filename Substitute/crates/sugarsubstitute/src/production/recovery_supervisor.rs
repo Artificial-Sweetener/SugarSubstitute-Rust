@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Run the fresh subordinate without creating a product window or coordinator authority.
 #[path = "recovery_supervisor/capture.rs"]

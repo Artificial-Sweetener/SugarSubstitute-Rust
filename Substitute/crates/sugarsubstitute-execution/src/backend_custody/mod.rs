@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Own authenticated backend custody transport through the admitted native pipe worker.
 //! The native custody driver owns Jobs and exclusions; transport facts do not prove settlement.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Authoritative trust checkpoint; never treat accepted keys or rollback floors as disposable cache.
 use crate::{Error, MAX_CHECKPOINT_BYTES, MAX_METADATA_BYTES};

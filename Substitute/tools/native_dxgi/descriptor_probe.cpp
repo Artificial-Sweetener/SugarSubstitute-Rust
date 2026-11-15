@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 // Descriptor-only default. Root may explicitly request one bounded format-only
 // acquisition; neither path copies/maps/emits pixels or establishes color fidelity.

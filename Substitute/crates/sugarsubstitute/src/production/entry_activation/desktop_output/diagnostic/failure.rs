@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Own generic first-failure decoding and run-bound relay without exposing raw stderr.
 use super::{Failure, console, consume, startup};

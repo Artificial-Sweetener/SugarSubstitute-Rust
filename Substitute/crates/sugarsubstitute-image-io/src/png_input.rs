@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Decode PNG scanlines into bounded original-precision RGBA archive stripes.
 use crate::{ImportError, Packing, RasterDescriptor, Transfer, buffer::Buffer, write_raster};

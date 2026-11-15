@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Drive preview transport through real image work and exact native frame/hide acknowledgements.
 use super::viewport::fixture::Fixture;

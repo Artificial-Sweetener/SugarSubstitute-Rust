@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Ask whether to close an unresponsive previous window through the shared report surface
 //! while the conflict controller owns process authority and its asynchronous native work.

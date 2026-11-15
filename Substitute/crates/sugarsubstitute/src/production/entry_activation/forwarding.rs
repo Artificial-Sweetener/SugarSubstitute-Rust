@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Keep actual producer replies through failed recipient delivery without replaying effects.
 use super::{Result, retirement::RetiredDesktop};

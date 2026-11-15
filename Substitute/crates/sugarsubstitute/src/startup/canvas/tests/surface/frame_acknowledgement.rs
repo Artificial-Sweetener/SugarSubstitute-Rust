@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! A frame acknowledgement the canvas cannot accept never ends the application: stale, foreign and
 //! hide-pending acknowledgements change nothing, a frame that cannot be accepted is dropped while the

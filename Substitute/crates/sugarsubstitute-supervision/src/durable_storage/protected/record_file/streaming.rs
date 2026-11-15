@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Extend the authoritative record-file owner with retained bounded streaming custody.
 /// Fixed native rendezvous leaf; an inert preserved copy never acquires this writer.

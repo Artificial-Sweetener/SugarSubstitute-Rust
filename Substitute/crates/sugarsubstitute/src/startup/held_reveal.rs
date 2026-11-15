@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Close a window that was never revealed when the coordinator restarts into an update it
 //! prepared before the window opened, so the user never sees a window that then closes.

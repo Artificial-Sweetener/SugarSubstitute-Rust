@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Semantic owner flow with bounded byte reads and inert external symbol/store facts.
 //! Native committed-lease authentication, CNG, DbgHelp and process presentation are separate proofs.

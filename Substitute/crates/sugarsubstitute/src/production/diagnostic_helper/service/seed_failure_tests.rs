@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise actual source loans, finite completion capture and checked cleanup with external storage fakes.
 //! The inert service fixture supplies no namespace capability and qualifies no native path.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Real cause/claim/actor ownership through the exact replacement and construction owners.
 //! Native bootstrap is the external boundary; these shape-only constructor facts confer no native authority.

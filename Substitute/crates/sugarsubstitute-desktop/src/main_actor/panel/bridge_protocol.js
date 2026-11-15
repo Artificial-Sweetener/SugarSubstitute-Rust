@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 // Match transport custody to the shared canvas protocol; payloads remain native-owned.
 // What the host serves and declares travels in its host description, never on the bridge.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Create only a same-executable held descendant in its parent's existing Job chain.
 //! No new Job, breakaway, arbitrary target, signal, wait or process termination exists

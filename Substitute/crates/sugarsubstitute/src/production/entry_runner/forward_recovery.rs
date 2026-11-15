@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Return a forwarded launch source to election after checked transport retirement, and
 //! decide when forwarding to a running copy needs something on screen.

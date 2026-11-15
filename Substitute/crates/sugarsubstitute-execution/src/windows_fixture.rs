@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Own four-event fixture protocols through central admission and native retirement.
 //! Protocol observations prove event progress only; process and family exits remain

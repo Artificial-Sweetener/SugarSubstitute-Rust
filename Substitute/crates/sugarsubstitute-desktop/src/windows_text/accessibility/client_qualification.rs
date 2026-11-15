@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Qualify a real UIA client on an execution-owned MTA while its native STA pumps messages.
 use crate::windows_text::Engine;

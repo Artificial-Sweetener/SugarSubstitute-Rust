@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Report one update attempt to the process that launched this helper over its inherited
 //! update-attempt channel: live progress, then exactly one result. The only message the parent

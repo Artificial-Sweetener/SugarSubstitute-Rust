@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! A region's seed file lands in its mask wherever presentation custody holds the document while
 //! the file loads, including right after a restart restored the Input route, and a region that

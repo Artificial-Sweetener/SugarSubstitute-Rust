@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compose installer pages from the shared native widgets and application-owned navigation.
 //! Geometry is logical; the desktop owns native peers and the execution adapter owns preparation.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise the built library's producing-feed decoder, including production feature gating.
 use sugarsubstitute_update::distribution::{Distribution, MAX_BYTES, UpdatePolicy};

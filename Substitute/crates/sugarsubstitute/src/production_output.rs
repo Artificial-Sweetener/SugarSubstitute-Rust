@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Ingest actual coordinator output off the UI thread with one pull/frame/job in flight.
 //! The composing host owns channel authentication, scopes and execution shutdown.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Show every update caption state on real Main caption peers on a private desktop and keep
 //! what the caption paints: each visible peer's owner-drawn frame, prepared into this test's

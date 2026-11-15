@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Preserve allocation causes while keeping launch paths and arguments out of diagnostics.
 use std::{collections::TryReserveError, error::Error, fmt};

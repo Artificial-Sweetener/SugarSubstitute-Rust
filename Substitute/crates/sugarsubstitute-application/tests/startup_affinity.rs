@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Preserve owner-thread diagnostics through the real acknowledged startup session.
 use std::{cell::Cell, error::Error, fmt, rc::Rc};

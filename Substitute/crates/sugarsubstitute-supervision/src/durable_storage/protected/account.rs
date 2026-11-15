@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Resolve actual primary-account and pinned installation namespace authority.
 //! Account runtime records are stored below the installation root of the running image.

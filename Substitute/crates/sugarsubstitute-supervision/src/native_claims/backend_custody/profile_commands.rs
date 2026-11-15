@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Adopt genuine profile outputs and publish receipts through the original shared custody table.
 use super::{entry::Entry, profile_registration::ProfileRegistration, source::State};

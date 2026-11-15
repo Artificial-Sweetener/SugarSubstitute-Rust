@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compare pinned directories by actual filesystem identity rather than caller path spelling.
 use crate::durable_storage::files::{Directory, invalid};

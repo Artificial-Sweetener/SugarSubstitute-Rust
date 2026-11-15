@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! The launching process's end of one update-attempt channel: authenticate the helper, then
 //! validate and keep its progress and its one result. The parent sends only a cancel request.

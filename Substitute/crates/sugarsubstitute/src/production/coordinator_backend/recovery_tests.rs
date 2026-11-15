@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise real recovery policy and inert cleanup owners with external registry facts.
 //! No process, native watch, launch ticket, readiness source or family proof is fabricated.

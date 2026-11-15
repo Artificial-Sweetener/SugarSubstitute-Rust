@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Admit complete authenticated frames before allocating or invoking actual owners.
 use super::{ParentError, ParentLifecycle, ParentResources, Reply, Result};

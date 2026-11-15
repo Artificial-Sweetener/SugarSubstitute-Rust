@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! The one surface a headless role may show beside its pump: a hosted report form on the
 //! pump's own loop, with no owner window. The role keeps pumping while it is open; the form's

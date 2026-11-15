@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Loan the genuine Reporter parent outside a fixed original-funded relay cell.
 #[path = "parent_source/controller.rs"]

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Charge the coverage an edit carries to the document that keeps it.
 use super::{DocumentEdit, Layer, LayerContent};

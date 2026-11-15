@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain exact source lineage, cohort returns and original finite retry inputs.
 //! Supplied policy observations do not construct a verified Ready/native proof.

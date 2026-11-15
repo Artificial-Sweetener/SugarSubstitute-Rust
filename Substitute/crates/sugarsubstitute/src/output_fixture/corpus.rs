@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Fixed raw bytes exercise source-write splits independently of native read boundaries.
 pub(super) const OUT_PARTS: &[&[u8]] = &[

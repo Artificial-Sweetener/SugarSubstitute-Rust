@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise managed timing with real campaign/execution/cleanup owners and external HTTP fixtures.
 //! The read-only HTTP fixture grants no managed family authority; Root owns native-start qualification.

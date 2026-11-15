@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Move, Transform and Resize shared edges through `edit.request`: fractional and snapped moves
 //! with smart guides, nudges, edit sessions whose undo and redo stay inside them, apply and

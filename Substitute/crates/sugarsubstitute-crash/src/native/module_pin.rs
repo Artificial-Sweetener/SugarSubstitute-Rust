@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Loan one original preclaimed capsule while every provider and finite native call runs unlocked.
 use super::desktop_driver::{invalid, loader::Api};

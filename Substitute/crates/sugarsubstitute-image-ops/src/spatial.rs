@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Spatial contracts shared by evaluation, dirty-region propagation and backend planning.
 use crate::{Extent, Filter, Graph, ImageError, NodeId, Operation, Region, Sampling};

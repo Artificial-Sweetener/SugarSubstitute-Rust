@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain the genuine pre-capture controller and one bounded incident effect batch.
 #[path = "incident_host/admission.rs"]

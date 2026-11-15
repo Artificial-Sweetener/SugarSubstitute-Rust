@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Keep traced selection boundaries per coverage fingerprint, so pans, zooms, previews and undo
 //! steps reuse them and only new selections are traced, off the input thread.

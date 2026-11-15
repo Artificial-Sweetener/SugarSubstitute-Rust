@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! The window's start-up update messages and the splash's "Updating SugarCubes…" and
 //! "Updating to version X…" lines come from the coordinator's status as the child received it.

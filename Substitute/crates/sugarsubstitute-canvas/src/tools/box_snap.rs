@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Snap a moving box to the canvas, other layers and the selection, as CuteCanvas's movement
 //! snapping does for Move and for Transform's move handle.

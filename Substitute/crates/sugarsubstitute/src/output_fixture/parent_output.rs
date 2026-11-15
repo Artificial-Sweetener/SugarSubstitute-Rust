@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Transfer exact charged source guards and preserve metadata across fallible validation.
 use super::{Result, evidence::Case, options::Role};

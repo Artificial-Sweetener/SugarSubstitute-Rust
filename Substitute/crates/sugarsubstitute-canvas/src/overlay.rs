@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Presentation-only marks drawn over prepared canvas frames: the committed selection's marching
 //! ants, the outline of a shape being drawn, transform and shared-edge guides, and the smart

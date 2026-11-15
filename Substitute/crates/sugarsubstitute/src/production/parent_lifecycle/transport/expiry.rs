@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retire only a direct original-cutoff rejection that returned the never-issued allocation.
 use super::super::{ParentError, ParentLifecycle, Reply, Result, types::WritePurpose};

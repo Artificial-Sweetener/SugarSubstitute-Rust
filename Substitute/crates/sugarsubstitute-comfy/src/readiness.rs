@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Decode observed ComfyUI HTTP layouts without granting listener or process trust.
 //! `server.py` serves `/system_stats` as a system/devices object and `/extensions`

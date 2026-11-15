@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Name the native profile lifecycle controls independently of copied browser data.
 use sugarsubstitute_contracts::lifecycle::RunKey;

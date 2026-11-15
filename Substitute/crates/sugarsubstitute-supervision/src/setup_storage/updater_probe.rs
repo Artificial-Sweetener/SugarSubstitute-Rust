@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Capture updater exclusion before local resources exist and bind it to the protected trial.
 use super::{disk_inheritance::capture_disk, invalid};

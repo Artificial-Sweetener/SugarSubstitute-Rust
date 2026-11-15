@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Describe the stable launcher's selection reader and the application entry it produces.
 use super::{ApplicationContract, MAX_CONTRACT_BYTES, Rejection, valid_versions};

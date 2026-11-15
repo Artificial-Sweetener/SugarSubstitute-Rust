@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Dispatch versioned installed entry before any local native handle owners are initialized.
 use super::{InheritedSelection, InheritedTrial, capture_launch_selection, capture_trial_custody};

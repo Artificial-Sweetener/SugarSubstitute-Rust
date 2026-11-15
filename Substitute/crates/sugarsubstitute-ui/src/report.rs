@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! One report surface for every native failure presentation: crash, startup failure, an
 //! unresponsive previous window, and update failure. The model is plain data; composition produces shared scene

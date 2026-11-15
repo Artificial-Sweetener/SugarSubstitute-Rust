@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compose two actual Parents, actual Pending leases, one real output job and independent parsers.
 //! These tests authenticate no peer and create no Granted, process or readiness proof.

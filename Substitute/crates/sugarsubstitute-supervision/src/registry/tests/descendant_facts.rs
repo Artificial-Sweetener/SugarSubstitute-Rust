@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Typed cached facts use real registry transitions and controlled native effects.
 //! The watch fake cancels an unbound reservation; these tests prove identity/cache

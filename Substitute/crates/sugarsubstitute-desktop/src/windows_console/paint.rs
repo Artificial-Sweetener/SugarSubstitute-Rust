@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Translate semantic colors inside one guarded native paint without changing layout or text.
 use super::render_proxy::{MAX_PAINT_COLORS, PaintColor, Proxy};

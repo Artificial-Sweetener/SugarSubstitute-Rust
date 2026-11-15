@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! The masks a shared-edge session reshapes: their original convex boundaries, the mappings
 //! they went through, and the work that resamples them.

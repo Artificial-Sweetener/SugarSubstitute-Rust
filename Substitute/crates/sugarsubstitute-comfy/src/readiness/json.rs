@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Validate duplicate keys and bounded collection nesting before typed conversion.
 use super::{MAX_EXTENSION_PATHS, ReadinessError};

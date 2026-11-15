@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Define in-process supervision facts without native handles or authentication claims.
 //! IPC, native containment and process registry adapters remain separate boundaries.

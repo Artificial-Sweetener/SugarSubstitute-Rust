@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 // Compile exact generated initialization/commit/installer and helper bodies.
 // Fake only class declaration/storage and external OS/CRT/allocation boundaries.

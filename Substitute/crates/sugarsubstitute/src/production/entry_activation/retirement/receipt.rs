@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain only the sole desktop retirement producer's completed run identity.
 use crate::production::parent_lifecycle::RetiredRegistration;

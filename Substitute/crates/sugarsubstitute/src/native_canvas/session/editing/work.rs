@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Run deferred coverage work and selection tracing as owned blocking jobs, one of each at a
 //! time, beside the frame pipeline's CPU lanes.

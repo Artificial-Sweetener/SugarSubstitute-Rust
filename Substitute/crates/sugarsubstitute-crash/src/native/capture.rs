@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain partial outputs before status and close only after actual kernel facts.
 use super::{BindFailed, CaptureLease, WatchJob, bridge, pins};

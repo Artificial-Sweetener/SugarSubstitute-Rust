@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Install each selected physical cell before its existing native producer runs.
 use super::super::{image, manifest::Pair, names::CapturePathRole};

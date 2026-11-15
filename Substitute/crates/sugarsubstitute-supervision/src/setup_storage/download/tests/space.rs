@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! A full disk is a typed shortage: checked before writing, reclaimed first, kept apart from the
 //! cache's own budget, and the received prefix survives for a later attempt.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! What the main window's caption shows besides its window buttons: localized names, backend
 //! recovery and whether a workflow is running, as the application reports them.

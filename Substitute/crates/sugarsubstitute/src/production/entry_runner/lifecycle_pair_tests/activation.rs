@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! The activation adapter of the coordinator peer: one desktop's real actor until its process
 //! exits, then what the production activation keeps of it.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Versioned, bounded wire form of update-attempt messages between the preparation helper and
 //! the process that launched it. The helper writes progress and its result; its parent validates

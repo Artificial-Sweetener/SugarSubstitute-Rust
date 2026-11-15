@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! A mask shape whose job an undo or a brush stroke outdates runs again and lands after that
 //! change as its own undo step. Completions are observed only when the fixture settles, so each

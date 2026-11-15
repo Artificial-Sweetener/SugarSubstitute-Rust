@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Distinguish durable semantic identities from titles, paths and runtime session keys.
 use super::{SessionError, primitives::uuid};

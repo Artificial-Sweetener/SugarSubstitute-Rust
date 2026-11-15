@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Decide whether an early-ended package response resumes within the current attempt.
 use crate::{setup_storage::DownloadFailure, update_http};

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain at most two actual DPI fonts through partial replacement and child destruction.
 use super::{NativeUiError, text_style::TextStyle};

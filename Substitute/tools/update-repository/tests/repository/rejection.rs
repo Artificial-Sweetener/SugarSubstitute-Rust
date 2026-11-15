@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Nothing is signed on top of an unauthenticated state, with an unauthorized key, or into a
 //! state the application's verifier would refuse.

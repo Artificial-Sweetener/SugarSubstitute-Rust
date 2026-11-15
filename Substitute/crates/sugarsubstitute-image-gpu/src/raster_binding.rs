@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Bind a complete bounded local canonical raster to one explicitly selected device.
 use crate::{GpuDevice, GpuError, GpuEvaluator, GpuTile, evaluate::image_error};

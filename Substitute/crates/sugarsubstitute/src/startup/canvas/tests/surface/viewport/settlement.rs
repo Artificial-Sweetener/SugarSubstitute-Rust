@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Every viewport request reaches one terminal reply, and only an observed event decides which:
 //! a display that no longer shows the current source draws again, a camera that cannot yet be

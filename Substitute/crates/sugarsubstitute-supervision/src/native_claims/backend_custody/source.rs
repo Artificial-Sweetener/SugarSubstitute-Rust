@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Retain durable native state before callbacks and restore it on every unwind.
 use super::{control::WitnessControl, entry::Entry, pool::WitnessPool};

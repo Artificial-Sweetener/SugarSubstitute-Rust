@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Local-update qualification builds only: a proof serves SugarSubstitute's changelog from a
 //! loopback fixture and names its port through one environment variable, so a proof never

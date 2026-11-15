@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Decide when the running application checks for an update: at a first moment its launch
 //! chooses, then periodically while it stays open, with growing backoff after a failed check, and

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Show one Fluent report through the shared native form window. The report owner decides what
 //! each command means; this surface owns layout, details, clipboard and export selection.

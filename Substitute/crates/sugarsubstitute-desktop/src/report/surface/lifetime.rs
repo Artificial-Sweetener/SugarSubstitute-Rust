@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Drive one report inside the shared form window: owner turns, details motion and frame
 //! preparation in bounded slices on the window's thread. Report surfaces must work when the

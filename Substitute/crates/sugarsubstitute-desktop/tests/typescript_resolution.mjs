@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 // Let Node load the SugarCubes conformance kit from its TypeScript sources without a build.
 // SugarCubes imports its modules by their compiled `.js` names; a `.js` import from a `.ts` module

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Distinguish scoped lifecycle facts from authentication and native authority.
 use std::{error::Error, fmt, num::NonZeroU64};

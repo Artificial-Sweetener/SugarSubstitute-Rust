@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Qualify only issued environment/browser privileges against live native profile proofs.
 use super::super::{ParentError, ParentLifecycle, ParentResources, Reply, Result};

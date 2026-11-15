@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Submit the actual boxed constructor using a genuine consumed entry namespace.
 //! Only the entry fixture's external native boundary is inert; no native qualification is claimed.

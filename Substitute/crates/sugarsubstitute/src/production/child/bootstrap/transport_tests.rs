@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Preserve a real queued-Core failed outcome before pre-UI expiration without creating a pipe peer.
 use super::super::{ChildBootstrapIssue, tests::bootstrap};

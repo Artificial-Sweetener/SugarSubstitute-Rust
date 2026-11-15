@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Authored Windows x64 breakpoint on the actual qualification worker only.
 //! The private armed borrow retains original capture custody through every call.

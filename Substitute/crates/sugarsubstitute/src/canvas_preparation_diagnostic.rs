@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Closed observational canvas preparation facts; no pixels, paths or execution authority.
 use crate::canvas_surface_diagnostic::tokens;

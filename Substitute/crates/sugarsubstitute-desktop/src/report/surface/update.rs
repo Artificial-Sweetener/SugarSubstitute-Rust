@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! An update failure report offers Copy and Export; nothing restarts and nothing is uploaded.
 //! Export writes exactly the text Copy copies. The update owner writes the export through its

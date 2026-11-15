@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Artificial Sweetener and contributors
 """Derive the public compiled local-K1 identity from owned workspace build inputs.
 
@@ -108,7 +108,7 @@ def produce(workspace: Path, public_anchor: Path, output_parent: Path, output_na
     build = identity(anchor, revision, records)
     output = parent / output_name
     output.mkdir(exist_ok=False)
-    literal = ("// SPDX-License-Identifier: GPL-3.0-or-later\n"
+    literal = ("// SPDX-License-Identifier: AGPL-3.0-or-later\n"
                "// Copyright (C) 2026 Artificial Sweetener and contributors\n"
                "//! Bind the signed local-K1 manifest to its compiled source inventory.\n\n"
                "/// Reproducible development build identity; regenerated before final image creation.\n"

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Match QColor's float HSV conversion and quantization at the RGB/HSV boundaries.
 //! qfluentwidgets applies its scale factors in double precision between these boundaries.

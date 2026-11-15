@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Shared Fluent scrollbar gestures; the native host retains document positions and timers.
 use super::scrollbar::{self, Model, Part};

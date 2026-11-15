@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Copyright (C) 2026 Artificial Sweetener and contributors
 # Resolve explicit local task roots before temporary compilation or private effects.
 function Resolve-TaskRoot([string]$Path) {

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Inject deterministic external clocks into the real execution owner: a regression targeted at its
 //! actual callback without racing execution guardians, and manual time that moves only when advanced.

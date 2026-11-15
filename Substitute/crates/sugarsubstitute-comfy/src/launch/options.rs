@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Bound extra argv using the installed ComfyUI CLI's complete names and arities.
 //! These are input-shape metadata, not a second implementation of option values.

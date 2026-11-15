@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Relay the owned child's closed bulk channel refusals as the parent's own structured events.
 use sugarsubstitute_contracts::lifecycle::RunKey;

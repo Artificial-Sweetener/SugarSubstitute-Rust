@@ -65,7 +65,7 @@ sources = [
     "crates/sugarsubstitute-splash/src/render.rs",
     "crates/sugarsubstitute-splash/src/render_stages.rs",
 ]
-source_sha256 = "sha256:ac9694ec562a5c17d0f5c81e2d2aaa2e0518c3d857cf3cfaa82451c8d6897a37"
+source_sha256 = "sha256:8c535b6097f26c8d1aacb9f3ca42f7b6c3362424dd230b327e5f138b4fd047e8"
 
 [[boundaries]]
 owner = "sugarsubstitute-desktop"
@@ -153,7 +153,7 @@ sources = [
     "crates/sugarsubstitute-desktop/src/windows_text/field_tests.rs",
     "crates/sugarsubstitute-desktop/src/windows_text/renderer.rs",
 ]
-source_sha256 = "sha256:1955114517ffeadf098fdb7b15aeaac6a64df3fd229225c9e0f55596dfa87563"
+source_sha256 = "sha256:dd6c649fcd586b64019a9e55bd99cee48d8c31321d80c9e12536024d910fbeea"
 
 [[boundaries]]
 owner = "sugarsubstitute-image-gpu"
@@ -190,7 +190,7 @@ sources = [
     "crates/sugarsubstitute-image-gpu/src/window_patch.rs",
     "crates/sugarsubstitute-image-gpu/src/window_shader.rs",
 ]
-source_sha256 = "sha256:410f2cca8f7c875d4a5d1899f21069089196991a1fc0745b737d2f5fc0ef0a80"
+source_sha256 = "sha256:e5809776768c94c0b5bc0ec6529ab37663c8ac22d60bbbe077b2576c5e3f0a73"
 
 [[boundaries]]
 owner = "sugarsubstitute-desktop"
@@ -199,7 +199,7 @@ capabilities = ["modal"]
 sources = [
     "crates/sugarsubstitute-desktop/src/file_dialog.rs",
 ]
-source_sha256 = "sha256:c288ead2e07e0584be556159cc4d4e9e411eeb4faf8aa25be1d596ba68b7be12"
+source_sha256 = "sha256:b98ec9eb62a079b87bd4b19fb7eda83101ca35d5937c05f61b122adcbfb11f81"
 
 [[boundaries]]
 owner = "sugarsubstitute-desktop"
@@ -208,7 +208,7 @@ capabilities = ["window"]
 sources = [
     "crates/sugarsubstitute-desktop/src/windows_thread_target_tests.rs",
 ]
-source_sha256 = "sha256:3dae7f6185b7ee83c39b0f0f0521aed76b2d15d28930e87fa8a5a295ba283589"
+source_sha256 = "sha256:adaabeca0a2ffff5b5e0cade7adc74ca47827c1ddfe37fbbd987024002809b6b"
 
 [[boundaries]]
 owner = "sugarsubstitute-desktop"
@@ -217,4 +217,4 @@ capabilities = ["window"]
 sources = [
     "crates/sugarsubstitute-desktop/src/windows_session_end_tests.rs",
 ]
-source_sha256 = "sha256:3b09d180c2e517064ff2497389dfafc90de64643df1ff3cbab6fc9e051536e98"
+source_sha256 = "sha256:012ac1790c095c27d6687be23435edaf569088f3a664663637974cb4a8494e6d"

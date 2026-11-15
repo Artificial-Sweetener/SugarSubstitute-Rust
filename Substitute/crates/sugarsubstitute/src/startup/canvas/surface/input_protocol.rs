@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Translate between the session's input documents and native protocol values: document and
 //! layer identities, synced key maps, failures, appearance and resize modes. Identity text

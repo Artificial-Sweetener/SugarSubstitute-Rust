@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Compose one fixed campaign with retained execution, authenticated channels and registry.
 use super::{Result, evidence::Case, options::CaseKind};

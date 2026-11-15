@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Dedicated updater process entry shares the admitted preparation session with historical hosts.
 use std::{error::Error, ffi::OsString, io, process::ExitCode, sync::Arc};

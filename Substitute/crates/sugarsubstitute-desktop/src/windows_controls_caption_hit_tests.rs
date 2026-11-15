@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Hit-test the real Main caption on a private desktop: the strip above a page that starts
 //! below it, and the message line's words, move the window; the caption's buttons stay

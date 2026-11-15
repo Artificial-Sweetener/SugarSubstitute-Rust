@@ -99,32 +99,32 @@ role = "fixture"
 [[script_boundaries]]
 path = "crates/sugarsubstitute-desktop/tests/frontend_startup_probe.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:98f0fae32cec39e8901e426ec83d55e3f7c89146d7effaccba59872336eef3b1"
+source_sha256 = "sha256:432f1de65a51048c44aacf37e054e51f4e7e31d982fc88239ca25863550f965a"
 rationale = "Read the actual Rust frontend readiness sample into an isolated JavaScript VM and exercise it with external document and owner-export fixtures."
 role = "fixture"
 
 [[namespace_reviews]]
 path = "tools/xtask/src/cache_storage.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:af5613da96d552f1bf9db9a84f276caa4491235c2e4f8f74da8f323746cd81ea"
+source_sha256 = "sha256:4fac5ac0062d6c2e20e8c9e2d72f38d07048226ba09d9d853692930d1d6a37ed"
 rationale = "Authoritative checker names and literal negative-test inputs; no runtime storage implementation."
 
 [[namespace_reviews]]
 path = "tools/xtask/src/cache_storage/tests.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:661af1e7c41a588f07c4087be624b00c5c0c654fbb17e6cace7e01d33fb909ea"
+source_sha256 = "sha256:51f922019630b08c7dfe2aceddcf68dcf579654a00ee3fee3dfda98fd1234df3"
 rationale = "Isolated repository fixtures deliberately contain registered and adversarial namespace spellings."
 
 [[namespace_reviews]]
 path = "tools/xtask/src/cache_storage/registry.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:3ad2b5343eb02de7f0449c47ac48cbebd1ae4f4f65990fab6f3c21d19290704c"
+source_sha256 = "sha256:55a3055eaf995b9020adb0d55bdb39f536c57d16caae63fb4338b365fb12a4b5"
 rationale = "Registry parser rejection fixtures and exact expected scope-directory data."
 
 [[namespace_reviews]]
 path = "tools/test_updater_qualification.py"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:4b0c48bd4ffa55421df6024ad8aa3f993d81c2cb12081899832e0d013b854ab9"
+source_sha256 = "sha256:c0f3ff89c728a03396bcc2cde0abd1be02f1ac984684d7e797b64eef2107e665"
 rationale = "The isolated publication observer regression deliberately creates legacy payload namespace bytes to prove that only registered shared generations count and unrelated original content is preserved."
 
 [[script_boundaries]]
@@ -137,21 +137,21 @@ role = "fixture"
 [[script_boundaries]]
 path = "crates/sugarsubstitute-desktop/tests/host_conformance.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:221701db582d3f930d787bc023394b8ad3d17f9db86184ebe5f0507147611a38"
+source_sha256 = "sha256:34d532204c25d01b0a4d2fcb7c14f8f185ad8bd56fb0a5b6cdff042937cc6121"
 rationale = "Run the SugarCubes conformance kit over the actual panel bridge in an isolated JavaScript VM and compare or record this host's profile; it acquires no runtime cache."
 role = "fixture"
 
 [[script_boundaries]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:e9a4a20ac7df256a1afe267b4d67f366dbf0b56e9afbd63e4bbd0fdac813721c"
+source_sha256 = "sha256:a0dcb20d92cc441f2b0a5aa716c12d3d63c143d103fbef55dd4304b74205d6d7"
 rationale = "Exercise the actual bounded panel transport in an isolated JavaScript VM with native and browser boundary fixtures."
 role = "fixture"
 
 [[script_boundaries]]
 path = "crates/sugarsubstitute-desktop/tests/typescript_resolution.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:35aaffd6ce8fd21f30943ab30afa3a714efc2dcfdaed9af869f5b112f41d98cf"
+source_sha256 = "sha256:88068164da55775929e4a54d4295a796cb8a91c78b767eea32218fab76666dd6"
 rationale = "Resolve the SugarCubes kit's TypeScript sources for the conformance harness; it only checks that a source file exists and acquires no runtime cache."
 role = "fixture"
 

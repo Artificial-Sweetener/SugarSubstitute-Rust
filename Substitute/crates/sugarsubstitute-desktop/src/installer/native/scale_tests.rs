@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! The installer window keeps its logical client size at every display scale: from its first
 //! frame, and after each move to a monitor with another scale, whatever size the move left it.

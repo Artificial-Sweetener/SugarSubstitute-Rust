@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! A desktop child's bulk channel refusal crosses the framed stderr relay into the parent log.
 use super::super::{BULK_RECORDS, Diagnostic, Observation};

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Borrow the genuine namespace lifetime without reconstructing it from public facts.
 use crate::coordinator_entry::{EntryError, VerifiedEntryNamespace};

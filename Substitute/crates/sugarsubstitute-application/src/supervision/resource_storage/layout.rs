@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Conservative Global allocation layouts for the pinned Rust 1.93.1 collections.
 use crate::supervision::resource_state::REQUEST_HISTORY;

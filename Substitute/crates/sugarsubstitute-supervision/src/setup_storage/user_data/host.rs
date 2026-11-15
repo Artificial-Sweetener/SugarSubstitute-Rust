@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Settle desktop profiles and native archive containers without copying lifetime authority.
 use super::{HistoricalArchiveDisposition, installation::InstallationData};

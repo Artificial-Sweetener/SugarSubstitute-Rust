@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Initial installed startup values; existing settings are preserved by the storage owner.
 use crate::startup::{MAX_STARTUP_CONFIGURATION_BYTES, parse_startup_configuration};

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Ask whether to close an unresponsive previous SugarSubstitute window and start. The
 //! conflict controller owns process authority, waiting and timing; this adapter only offers

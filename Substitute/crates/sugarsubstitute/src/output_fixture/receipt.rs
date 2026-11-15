@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Emit fixed schema-one four-case evidence only after actual complete teardown.
 use super::{Result, evidence::Case, parent::Parent};

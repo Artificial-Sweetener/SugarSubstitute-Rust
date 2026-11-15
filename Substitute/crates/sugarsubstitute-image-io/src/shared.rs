@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Share immutable source identity while keeping mutable stream cursors on admitted workers.
 use crate::{ArchiveStats, ImportError, RasterArchive, RasterDescriptor};

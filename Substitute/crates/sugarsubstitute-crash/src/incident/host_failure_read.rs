@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Read only a verified committed host-failure appendix under repository custody.
 use super::{CommittedIncident, HostFailureFact, IncidentRepository, IncidentStoreError};

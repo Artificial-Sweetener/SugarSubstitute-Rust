@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Expose immutable foreign text and UTF-8 byte style ranges through borrowed access.
 use super::{MAX_RECORD_BYTES, MAX_RECORD_RUNS, OutputStream, TranscriptError};

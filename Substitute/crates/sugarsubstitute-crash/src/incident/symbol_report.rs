@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Resolve one committed exception through genuine paired finite Symbol jobs.
 //! Selection, protected reads and DbgHelp run on the blocking execution boundary.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Keep the final authenticated observation pending until its exact router completion is consumed.
 use sugarsubstitute_crash::diagnostic_client::{DiagnosticRequestId, DiagnosticWireError};

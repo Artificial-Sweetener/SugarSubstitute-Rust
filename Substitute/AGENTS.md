@@ -211,7 +211,7 @@ implementation plans, or workstation configuration.
   source URL, license, license file, and exact runtime files. Store license text in
   `third_party/licenses/`; add NOTICE when material is actually vendored. Cargo
   dependency provenance is owned by manifests and the committed lockfile.
-- First-party Rust source carries GPL-3.0-or-later SPDX and copyright headers.
+- First-party Rust source carries AGPL-3.0-or-later SPDX and copyright headers.
 
 ## Observability and security
 

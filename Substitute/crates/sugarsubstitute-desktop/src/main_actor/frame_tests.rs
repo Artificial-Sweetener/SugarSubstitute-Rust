@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Check the exact public presentation contract, and lay the caption and the page out through
 //! their real owners at the scales users run, in physical client pixels.

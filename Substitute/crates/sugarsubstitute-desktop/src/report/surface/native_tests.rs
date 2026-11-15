@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Show each report kind in the real form window on a private desktop: capture the frames it
 //! presents (renderer output and native overlays, through the host's pixel capture, never the

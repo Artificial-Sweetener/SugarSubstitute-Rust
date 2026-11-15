@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Serve `workflow.request`: provision a workflow's input surfaces, show them on the Input
 //! route, and change their mask appearance, canvas size and hover emphasis.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise the retirement owner with typed external terminal/family/Finished boundary data.
 //! These policy facts create no native acknowledgement, family exit or pipe retirement proof.

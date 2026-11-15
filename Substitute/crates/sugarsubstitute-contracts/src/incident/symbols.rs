@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Bound exact release associations and one failing-frame result, not an unwound stack.
 use super::{BuildIdentity, DumpId, IncidentError};

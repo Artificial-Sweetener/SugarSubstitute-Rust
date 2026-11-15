@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Assemble bounded GPU halos with device copies, preserving aligned source and pyramid reuse.
 use crate::{GpuError, GpuEvaluator, GpuTile, evaluate::image_error};

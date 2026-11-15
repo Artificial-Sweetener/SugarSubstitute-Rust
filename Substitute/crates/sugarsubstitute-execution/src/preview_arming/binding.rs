@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Mint only from actual retained source and consume original inputs after cumulative preclaim.
 use super::{PreviewArmingError, PreviewArmingSeal, PreviewSourceLoan, source};

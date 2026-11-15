@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Answer the embedded page's `sugarcubes.release-notes` requests for the current navigation,
 //! and carry "What's new" from the caption to the page.

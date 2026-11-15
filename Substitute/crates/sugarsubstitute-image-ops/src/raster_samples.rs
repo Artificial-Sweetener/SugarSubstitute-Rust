@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Describe sparse immutable source reads without delegating sampling mathematics to I/O adapters.
 use crate::{Extent, Filter, ImageError, Region, Sampling, TILE_EDGE, kernel::nearest_coordinate};

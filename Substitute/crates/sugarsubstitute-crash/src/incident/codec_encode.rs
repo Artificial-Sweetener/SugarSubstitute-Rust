@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Serialize canonical incident envelopes into the caller's retained output owner.
 use super::{IncidentStoreError, codec::Record};

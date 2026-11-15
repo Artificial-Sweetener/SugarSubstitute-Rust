@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Apply codec effects only after the original bound run and actual peer authenticate.
 use super::{Result, evidence::Case, failure, options::CaseKind, protocol};

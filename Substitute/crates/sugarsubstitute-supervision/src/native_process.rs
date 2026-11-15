@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Keep each owned Job/process/thread and complete inventory alive through partial failure.
 //! Integer handle slots are unique owned identities, never caller-supplied authority.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! The launch stays inside its seconds budget on the injected clock: late update work gives way
 //! to the accepted release, a busy record falls back to it, and the process always exits.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Convert the authenticated startup loan on the existing finite worker owner.
 //! Prepared application intent retains the original mapping and its allocation claim.

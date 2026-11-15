@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Independently enroll the exact still-suspended recovery Desktop in Root's physical family.
 //! Carrier membership, actual UI lifetime and handler lifetime remain distinct facts.

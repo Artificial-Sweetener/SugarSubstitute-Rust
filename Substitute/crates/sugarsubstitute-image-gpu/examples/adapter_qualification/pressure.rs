@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Reproduce batch admission at a bounded halo copy while an unrelated cached tile is evictable.
 use super::image::{ASSET, Pattern};

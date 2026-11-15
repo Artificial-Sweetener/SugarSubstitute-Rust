@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Make diagnostic text safe to hand over: local paths, network addresses and anything that
 //! looks like a credential are replaced before text reaches an update report.

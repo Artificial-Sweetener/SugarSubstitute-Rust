@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Carry the Incident owner's concrete cause with its original outside control loan.
 use crate::diagnostic_storage::DiagnosticIncidentValidationCauseLoan;

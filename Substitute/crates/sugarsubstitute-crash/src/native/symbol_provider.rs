@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Own one serialized DbgHelp session under genuine original Provider1MiB/4 authority.
 //! DLL lookup is System32-only. Paths come only from the authenticated selected pair;

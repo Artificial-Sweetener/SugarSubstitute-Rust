@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Workspace work no executor can ever admit ends at once as a failure its owner reports.
 use super::closing_tests::{Fixture, terminal};

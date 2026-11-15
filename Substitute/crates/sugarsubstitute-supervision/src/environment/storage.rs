@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Confine delegated tool storage to an explicit directory supplied by its storage owner.
 use super::{EnvironmentOverride, LaunchEnvironment, LaunchEnvironmentError};

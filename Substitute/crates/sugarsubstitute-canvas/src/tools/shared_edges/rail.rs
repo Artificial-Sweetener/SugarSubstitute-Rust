@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Snap a pivoting seam endpoint along its rail, as CuteCanvas's rail snap resolver does: to
 //! crossings with other edges, to 0°, 45° and 90° lines through the seam's fixed end, and to
