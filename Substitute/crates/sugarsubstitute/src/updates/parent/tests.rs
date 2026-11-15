@@ -10,8 +10,9 @@ use sugarsubstitute_contracts::{
 };
 use sugarsubstitute_execution::ExecutionOwner;
 mod check_limit;
+mod memory_wait;
 mod prepared;
-type TestResult = std::result::Result<(), Box<dyn Error>>;
+type TestResult<T = ()> = std::result::Result<T, Box<dyn Error>>;
 
 /// Model the point before an image is supplied; all subsequent registry and execution work is real.
 fn partial(client: ExecutionClient) -> Result<Parent> {

@@ -14,6 +14,31 @@ use sugarsubstitute_supervision::UpdateAttemptPins;
 /// admitted and takes them.
 pub(super) type Pins = Arc<Mutex<Option<UpdateAttemptPins>>>;
 
+/// Submit the job that composes the helper from `source`. Returns `None`, with `source` still
+/// in place, while another startup job holds the memory this one reserves: the caller submits
+/// it again once that job finishes, which wakes it, and the check's limit still bounds the
+/// wait. Every other refusal is the caller's failure.
+pub(super) fn compose<I, T, M>(
+    client: &ExecutionClient,
+    work: &Scope,
+    spec: JobSpec,
+    source: &mut Option<I>,
+    factory: M,
+) -> Result<Option<OwnedJob<T, io::Error>>>
+where
+    I: Send + 'static,
+    T: Send + 'static,
+    M: FnOnce(I, sugarsubstitute_contracts::execution::JobContext) -> io::Result<T>
+        + Send
+        + 'static,
+{
+    match client.submit_blocking_owned_input(work, spec, source, factory) {
+        Ok(job) => Ok(Some(job)),
+        Err(OwnedInputError::Admission(AdmissionError::MemorySaturated { .. })) => Ok(None),
+        Err(cause) => Err(cause.into()),
+    }
+}
+
 impl Parent {
     /// Each phase retains actual partial admission; closing never starts a later phase.
     pub(super) fn launch(&mut self, jobs: &JobSequence) -> Result<()> {
@@ -76,11 +101,12 @@ impl Parent {
                 Some(self.step_deadline()?),
             )?;
             let source = &mut self.retained.as_mut().ok_or("Update custody absent")?.source;
-            let submitted = self.client.submit_blocking_owned_input(
+            let composed = compose(
+                &self.client,
                 &self.work,
                 spec,
                 source,
-                move |application, context| {
+                move |application: Arc<RunningApplication>, context| {
                     let pins = handed
                         .lock()
                         .unwrap_or_else(PoisonError::into_inner)
@@ -92,16 +118,13 @@ impl Parent {
                         crate::worker_environment::capture().map_err(io::Error::other)?;
                     WindowsLaunchInput::preparation(key, image, &workspace, environment, Some(pins))
                 },
-            );
-            match submitted {
-                Ok(job) => self.preparing = Some(job),
-                // Another startup job holds the memory this one reserves. The check starts once
-                // that job finishes, which wakes this owner; its limit still bounds the wait.
-                Err(OwnedInputError::Admission(AdmissionError::MemorySaturated { .. })) => {
+            )?;
+            match composed {
+                Some(job) => self.preparing = Some(job),
+                None => {
                     self.composing = Some(pins);
                     return Ok(());
                 }
-                Err(cause) => return Err(cause.into()),
             }
         }
         let held = self.retained.as_ref().ok_or("Update custody absent")?;
