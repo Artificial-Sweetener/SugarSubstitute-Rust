@@ -279,6 +279,59 @@ fn an_update_with_a_new_launcher_is_prepared_under_a_running_copy_and_published_
     })
 }
 
+/// An update applied by restarting never finds the installation free: the copy that restarts is
+/// still closing while the new one starts. The replacement stays journaled through the trial
+/// and through the accepted copy's own launch-entry repair, and the next start with no copy
+/// running publishes the new launcher before it reserves the application.
+#[test]
+fn a_launcher_replacement_deferred_through_a_restart_is_published_at_the_next_cold_start()
+-> TestResult {
+    const NEXT_LAUNCHER: &[u8] = b"inert launcher of the next release";
+    const JOURNAL: &str = "state/selection/.launcher-transition-v1.json";
+    worker::run_reserved(SIGNED_INSTALLER_RESERVATION_BYTES, |context, _| {
+        let fixture = installed(context)?;
+        let root = fixture.installation.path();
+        let running_launcher = std::fs::read(root.join(ENTRY))?;
+        let (manifest, compressed) = test_package::distribution_with_launcher_image(
+            Some(CURRENT_CONTRACT),
+            CURRENT_LAUNCHER_CONTRACT,
+            NEXT_LAUNCHER,
+        )?;
+        let archive = test_package::seal(&manifest, &compressed);
+        let pin = running_copy_pin(root)?;
+        let candidate = prepare_archive(&fixture, &archive, 2, context)?;
+        let generation = candidate.candidate.generation().id.as_str().to_owned();
+        drop(candidate);
+        assert!(root.join(JOURNAL).exists(), "the replacement is journaled");
+        // The restarted copy is accepted and repairs its launch entry while it pins the folder.
+        test_package::maintenance::accept_pending(root, context)?;
+        let store = Arc::new(SelectionStore::open(root, context)?);
+        let mut run = InstallationRun::acquire(store, context)?;
+        let InstallationLaunch::Application(application) = run.select_launch(None, context)? else {
+            return Err("Accepted update missing".into());
+        };
+        application.repair_launch_entry(context)?;
+        assert_eq!(std::fs::read(root.join(ENTRY))?, running_launcher);
+        assert!(root.join(JOURNAL).exists(), "a running copy cannot finish the replacement");
+        drop(application);
+        drop(run);
+        drop(pin);
+        // The next start finds no copy running.
+        let crate::setup_storage::ReservedLaunch::Application(reserved) =
+            crate::setup_storage::reserve_installed_launch(root, context)?
+        else {
+            return Err("The accepted update was not reserved".into());
+        };
+        assert_eq!(reserved.generation().id.as_str(), generation);
+        assert_eq!(std::fs::read(root.join(ENTRY))?, NEXT_LAUNCHER);
+        let owner: serde_json::Value = serde_json::from_slice(&std::fs::read(root.join(RECORD))?)?;
+        assert_eq!(owner["source"]["id"], generation.as_str());
+        assert!(!root.join(JOURNAL).exists());
+        require_self_contained_root(root)?;
+        fixture.preserved()
+    })
+}
+
 /// Every preservation case has its own native operation and observation budget.
 fn modified_owned_entry(leaf: &'static str) -> TestResult {
     worker::run_reserved(SIGNED_INSTALLER_RESERVATION_BYTES, move |context, _| {

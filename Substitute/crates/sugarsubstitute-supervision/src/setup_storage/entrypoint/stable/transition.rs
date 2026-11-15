@@ -56,6 +56,15 @@ pub(super) fn begin(
         .ok_or_else(|| invalid("Published launcher transition is absent"))
 }
 
+/// Whether a replacement intent is on disk, without validating it.
+pub(super) fn journaled(state: &Directory) -> io::Result<bool> {
+    match state.read(JOURNAL) {
+        Ok(_) => Ok(true),
+        Err(cause) if cause.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(cause) => Err(cause),
+    }
+}
+
 /// Resume either side of executable publication without treating unknown bytes as ours.
 pub(super) fn recover(
     root: &Directory,

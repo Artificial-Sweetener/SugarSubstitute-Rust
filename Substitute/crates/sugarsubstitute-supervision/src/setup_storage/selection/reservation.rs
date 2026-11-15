@@ -126,6 +126,7 @@ impl SelectionStore {
 /// Resolve an existing installed selection for the stable launcher without creating state.
 /// Offline accepted selection is sufficient. Abandoned trials are resolved without a verdict
 /// under exclusive run ownership before pinning the accepted selection. No payloads or user files are retired.
+/// A launcher replacement that a running copy had journaled is finished first when no copy runs.
 /// A live trial supplies a verified invocation for coordinator forwarding without transferring
 /// its run custody or claiming health. Its snapshot permits the original owner's publication.
 /// # Errors
@@ -139,7 +140,8 @@ pub fn reserve_installed_launch(
         Some(store) => {
             let store = Arc::new(store);
             match store.load_recovered(context) {
-                Ok(_) => {}
+                // No copy is running, so a launcher replacement one had to defer can finish.
+                Ok(_) => store.resume_launcher(context),
                 Err(SelectionFailure::RunBusy(_)) => return store.reserve_forwarding(context),
                 Err(cause) => return Err(cause),
             }

@@ -2468,7 +2468,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Ret
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/entrypoint.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:04442aac77df0fa534aa59da4304e532ddf78375dbe82251b04fdec9823c0e77"
+source_sha256 = "sha256:ee63c5a6e76f559791ad449ef392b3e356f8bb6612726a65589ac38f972a82a2"
 capabilities = ["std::fs::File", "std::fs::OpenOptions::new", "std::fs::read", "std::fs::read_dir", "std::fs::remove_file", "std::fs::write", "windows::Win32::Storage::FileSystem"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Signed maintenance restores established launcher ownership before an optional application run. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

@@ -69,6 +69,37 @@ impl SelectionStore {
         })
     }
 
+    /// Finish a launcher replacement a running copy had deferred, at a start that found no copy
+    /// running. A launch never fails for it: a replacement that still cannot be published stays
+    /// journaled for a later start, and the published launcher keeps starting every release.
+    pub(in crate::setup_storage) fn resume_launcher(&self, context: &JobContext) {
+        let resumed = (|| -> Result<bool, SelectionFailure> {
+            if !entrypoint::stable::replacement_pending(&self.root)? {
+                return Ok(false);
+            }
+            self.protected(context, |protection| {
+                let _writer = writer(&self.root, protection, context)?;
+                match entrypoint::stable::resume(
+                    &self._installation,
+                    &self.root,
+                    protection,
+                    context,
+                ) {
+                    Err(cause) if crate::durable_storage::protection::held(&cause) => {
+                        tracing::info!(operation = "stable_launcher_replacement_deferred", cause = %cause,
+                            "The installation is still in use; the launcher is replaced at a later start");
+                        Ok(false)
+                    }
+                    resumed => Ok(resumed?),
+                }
+            })
+        })();
+        if let Err(cause) = resumed {
+            tracing::warn!(operation = "stable_launcher_replacement_failed", cause = %cause,
+                "The journaled launcher replacement could not be finished at this start");
+        }
+    }
+
     /// Check while the caller retains setup or run custody; the shared lock excludes launcher
     /// installation, which writes stable entries under the exclusive lock.
     pub(in crate::setup_storage) fn require_launcher(

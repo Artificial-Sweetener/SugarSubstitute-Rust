@@ -62,7 +62,16 @@ pub(in crate::setup_storage) fn repair(
     protection: &mut Protection,
     context: &JobContext,
 ) -> io::Result<bool> {
-    recover(root, state, protection, context)?;
+    // A running copy cannot finish a replacement it deferred: it keeps its own folder in use.
+    // Its published launcher stays owned and valid, and a later start finishes the replacement.
+    match recover(root, state, protection, context) {
+        Err(cause) if crate::durable_storage::protection::held(&cause) => {
+            check(context)?;
+            tracing::info!(operation = "stable_launcher_replacement_deferred", cause = %cause,
+                "The installation is in use; the launcher is replaced at a start with no copy running");
+        }
+        recovered => recovered?,
+    }
     let existing = record::read(state, protection, context)?;
     if existing.is_none() && !application.payload.compatibility.has_launcher() {
         return Ok(false);
@@ -179,9 +188,11 @@ fn initialize(
 ///
 /// A running copy of the application keeps the installation folder pinned for as long as it
 /// runs, so the root entry cannot change under it. A replacement that finds the installation in
-/// use is therefore left for a later preparation: the previous launcher stays published and
-/// owned, it starts every generation's launch engine, and reopening this candidate at the next
-/// launch publishes the new launcher before its trial is admitted.
+/// use is therefore journaled and left: the previous launcher stays published and owned, and it
+/// starts every generation's launch engine. Reopening this candidate at a launch that finds the
+/// installation free publishes the new launcher before its trial is admitted; an update applied
+/// by restarting never finds it free, because the copy that restarts is still closing, so
+/// [`resume`] publishes it at the next start with no copy running.
 pub(in crate::setup_storage) fn prepare(
     root: &Directory,
     state: &Directory,
@@ -198,6 +209,35 @@ pub(in crate::setup_storage) fn prepare(
         }
         advanced => advanced,
     }
+}
+
+/// Whether a launcher replacement is journaled and unfinished. Reads no protected content.
+pub(in crate::setup_storage) fn replacement_pending(state: &Directory) -> io::Result<bool> {
+    transition::journaled(state)
+}
+
+/// Finish a launcher replacement that was journaled while a copy of the application kept the
+/// installation in use. Run under the installation writer by a start that found no copy
+/// running, before it reserves the application. Returns whether a replacement was finished.
+/// # Errors
+/// A destination still in use, and every failure of the journaled recovery; the journal stays
+/// for a later start and the published launcher is untouched.
+pub(in crate::setup_storage) fn resume(
+    root: &Directory,
+    state: &Directory,
+    protection: &mut Protection,
+    context: &JobContext,
+) -> io::Result<bool> {
+    recover_publications(root, state, protection, context)?;
+    let Some(record) = transition::recover(root, state, protection, context)? else {
+        return Ok(false);
+    };
+    tracing::info!(
+        operation = "stable_launcher_replaced",
+        generation = record.source.id.as_str(),
+        "Published the launcher whose replacement a running copy had deferred"
+    );
+    Ok(true)
 }
 
 /// Publish the candidate's launcher as the root entry, or republish the owned one.
