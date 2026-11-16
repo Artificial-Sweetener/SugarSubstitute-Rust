@@ -116,31 +116,3 @@ export function planWorkflowScenes(
     }),
   );
 }
-
-/**
- * Give a serialized workflow one scene's prompt texts, wherever its nodes hold them.
- *
- * Serialized Cubes hold a prompt on the Cube's face and in its definition, both as ordered widget
- * values and as SugarCubes' named widget values, so every such value equal to an authored
- * scene-bearing text becomes that text's scene materialization; a
- * materialization depends only on the text, so equal texts always agree.
- */
-export function sceneWorkflow(workflow: unknown, texts: ReadonlyMap<string, string>): unknown {
-  const scene = (item: unknown): unknown =>
-    typeof item === 'string' ? (texts.get(item) ?? item) : item;
-  const rewrite = (value: unknown, depth: number): unknown => {
-    if (depth > 64) return value;
-    if (Array.isArray(value)) return value.map((entry) => rewrite(entry, depth + 1));
-    if (!isRecord(value)) return value;
-    const copy: Record<string, unknown> = {};
-    for (const [key, entry] of Object.entries(value))
-      copy[key] =
-        key === 'widgets_values' && Array.isArray(entry)
-          ? entry.map(scene)
-          : key === 'sugarcubes_widget_values' && isRecord(entry)
-            ? Object.fromEntries(Object.entries(entry).map(([name, item]) => [name, scene(item)]))
-            : rewrite(entry, depth + 1);
-    return copy;
-  };
-  return texts.size ? rewrite(workflow, 0) : workflow;
-}

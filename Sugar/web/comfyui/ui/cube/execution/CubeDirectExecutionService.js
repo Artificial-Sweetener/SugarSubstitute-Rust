@@ -45,9 +45,12 @@ export class CubeDirectExecutionService {
         const proximityMatches = this.options.getProximityMatches();
         const proximityConnections = proximityMatches.flatMap(toConnection);
         const serialized = enrichWorkflowPayload(serialize.call(graph), graph);
-        const authored = this.options.sceneWorkflow
+        const scene = this.options.sceneWorkflow
             ? this.options.sceneWorkflow(comfyPayload, serialized)
             : serialized;
+        const authored = this.options.resolveWorkflow
+            ? await this.options.resolveWorkflow(comfyPayload, scene)
+            : scene;
         const preparation = this.options.prepareInputs
             ? await this.options.prepareInputs({ workflow: authored })
             : { payload: { workflow: authored } };
@@ -99,6 +102,7 @@ export function createCubeDirectExecution(options) {
         getProximityMatches: options.getProximityMatches,
         ...(options.prepareInputs ? { prepareInputs: options.prepareInputs } : {}),
         ...(options.sceneWorkflow ? { sceneWorkflow: options.sceneWorkflow } : {}),
+        ...(options.resolveWorkflow ? { resolveWorkflow: options.resolveWorkflow } : {}),
     });
 }
 /** Describe non-sensitive endpoint shape for actionable projection diagnostics. */

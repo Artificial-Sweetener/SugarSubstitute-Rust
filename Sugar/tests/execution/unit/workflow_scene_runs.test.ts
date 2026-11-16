@@ -19,9 +19,9 @@ import { WorkflowResultStore } from '../../../frontend/comfyui/ui/execution/appl
 import { WorkflowRunRegistry } from '../../../frontend/comfyui/ui/execution/application/WorkflowRunRegistry.js';
 import {
   planWorkflowScenes,
-  sceneWorkflow,
   type WorkflowScenePromptField,
 } from '../../../frontend/comfyui/ui/execution/application/WorkflowScenePlan.js';
+import { workflowWithPromptTexts } from '../../../frontend/comfyui/ui/execution/application/WorkflowPromptTexts.js';
 import {
   outputSourceId,
   promptId,
@@ -182,7 +182,7 @@ test('a directly executed Cube workflow takes the scene text on its face and in 
     },
     extra: { note: POSITIVE },
   };
-  const scene = sceneWorkflow(workflow, night?.texts ?? new Map()) as typeof workflow;
+  const scene = workflowWithPromptTexts(workflow, night?.texts ?? new Map()) as typeof workflow;
   expect(scene.nodes[0]?.widgets_values).toEqual([
     'castle, oil painting\n\nmoonlit, stars',
     'blurry\n\noverexposed',

@@ -16,6 +16,12 @@
 /** Compose the shared execution lifetime while keeping host registration and cube queue policy thin. */
 
 import { ComfyWorkflowScenePrompts, type ComfySceneApp } from './ComfyWorkflowScenePrompts.js';
+import { WildcardLibrary } from '../../wildcards/application/WildcardLibrary.js';
+import {
+  ComfyWildcardFiles,
+  type WildcardApiFetch,
+} from '../../wildcards/infrastructure/ComfyWildcardFiles.js';
+import { ComfyWildcardPrompts } from '../../wildcards/infrastructure/ComfyWildcardPrompts.js';
 import { WorkflowSessionStore } from '../application/WorkflowSessionStore.js';
 import { WorkflowResultStore } from '../application/WorkflowResultStore.js';
 import { WorkflowSeedHistory } from '../application/WorkflowSeedHistory.js';
@@ -77,6 +83,11 @@ export class ComfyWorkflowExecutionRuntime {
   readonly submissionObserver: ComfyPromptSubmissionObserver;
   /** Split constructed prompts into one prompt per authored prompt scene. */
   readonly scenes: ComfyWorkflowScenePrompts;
+  /** The user's wildcard folder: its files, its catalog for editors and its candidates. */
+  readonly wildcardFiles: ComfyWildcardFiles;
+  readonly wildcardLibrary: WildcardLibrary;
+  /** Resolve the wildcards of each queued run's prompt texts. */
+  readonly wildcards: ComfyWildcardPrompts;
   readonly canvases: WorkflowCanvasCoordinator<Blob>;
   /** Expose only supported document-boundary access while this runtime retains adapter lifecycle ownership. */
   readonly workflowDocuments = Object.freeze({
@@ -148,6 +159,19 @@ export class ComfyWorkflowExecutionRuntime {
       () => options.app as ComfySceneApp | null | undefined,
       this.#contexts,
       { pushToast: (severity, title, message) => options.notify?.(severity, title, message) },
+    );
+    this.wildcardFiles = new ComfyWildcardFiles((path, init) => {
+      const api = options.api;
+      if (!isRecord(api) || typeof api.fetchApi !== 'function')
+        throw new Error('The Comfy API is unavailable for wildcard files.');
+      return (api.fetchApi as WildcardApiFetch).call(api, path, init);
+    });
+    this.wildcardLibrary = new WildcardLibrary(this.wildcardFiles, (error) =>
+      options.logger.error('SugarCubes could not read the wildcard folder.', { error }),
+    );
+    this.wildcards = new ComfyWildcardPrompts(
+      () => options.app as ComfySceneApp | null | undefined,
+      this.wildcardLibrary,
     );
     this.previews = new ComfyWorkflowPreviewDelivery(this.results, options.logger, (frame) =>
       this.canvases.preview(frame),

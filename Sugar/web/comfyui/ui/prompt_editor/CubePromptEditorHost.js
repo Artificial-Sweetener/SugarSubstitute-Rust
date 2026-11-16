@@ -21,6 +21,8 @@ export class CubePromptEditorHost {
     #stopCatalog = null;
     #canvasKeys = null;
     #sceneQueue = null;
+    #wildcards = null;
+    #stopWildcards = null;
     /** Inject existing model catalog and feedback ownership. */
     constructor(document, catalog, report, appearance) {
         this.appearance = appearance;
@@ -31,8 +33,31 @@ export class CubePromptEditorHost {
     /** Enable prompt enhancement, regional links and the canvas key boundary before Cube fields render. */
     setup(regions = null, canvas = null) {
         this.#release ??= registerPromptEditorSurfaceOwner(this.#document, this);
-        const scenes = canvas?.scenes;
+        const scenes = canvas?.prompts?.scenes;
         this.#sceneQueue ??= scenes ? (scene) => scenes.queueScene(scene) : null;
+        const wildcards = canvas?.prompts?.wildcards;
+        if (wildcards && !this.#wildcards) {
+            this.#wildcards = wildcards;
+            this.#stopWildcards = wildcards.subscribe(() => {
+                for (const session of this.#sessions.values())
+                    session.editor?.setWildcardCatalog(wildcards.catalog);
+            });
+            // The folder is read again whenever the person returns to the page, so files added in a
+            // file manager are decorated and completed without a reload.
+            const refresh = () => {
+                if (this.#document.visibilityState === 'visible')
+                    void wildcards.refresh().catch(this.#report);
+            };
+            this.#document.addEventListener('visibilitychange', refresh);
+            this.#document.defaultView?.addEventListener('focus', refresh);
+            const stop = this.#stopWildcards;
+            this.#stopWildcards = () => {
+                stop();
+                this.#document.removeEventListener('visibilitychange', refresh);
+                this.#document.defaultView?.removeEventListener('focus', refresh);
+            };
+            refresh();
+        }
         if (canvas && !this.#canvasKeys) {
             this.#canvasKeys = new ComfyCanvasEditorKeyBoundary(canvas.app, this.#document, (error) => canvas.logger.error('[SugarCubes] Prompt editor canvas key boundary unavailable.', {
                 error,
@@ -187,6 +212,9 @@ export class CubePromptEditorHost {
         this.#regions = null;
         this.#stopCatalog?.();
         this.#stopCatalog = null;
+        this.#stopWildcards?.();
+        this.#stopWildcards = null;
+        this.#wildcards = null;
         this.beforeConfigureGraph();
     }
     /** Release one session's editor, value observation, measured height and borrowed surfaces. */
@@ -224,6 +252,7 @@ export class CubePromptEditorHost {
             appearance: this.appearance,
             regionAccent: this.#regions?.accent.current() ?? null,
             sceneQueue: this.#sceneQueue,
+            wildcardCatalog: this.#wildcards?.catalog ?? null,
             regionHover: (ordinal) => {
                 try {
                     this.#regions?.hoverPrompt(session.node, ordinal);

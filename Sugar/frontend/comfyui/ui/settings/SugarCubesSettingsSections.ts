@@ -20,6 +20,7 @@ export const sugarCubesSettingsSections = {
   memory: { label: 'Memory', priority: 850 },
   canvas: { label: 'Image canvas', priority: 800 },
   output: { label: 'Output files', priority: 700 },
+  prompts: { label: 'Prompt editor', priority: 650 },
   models: { label: 'Model library', priority: 600 },
   metadata: { label: 'Model metadata', priority: 500 },
   previews: { label: 'Model previews', priority: 400 },

@@ -629,6 +629,19 @@ proofs = ["unit", "contract", "integration"]
 isolated_proofs = ["integration"]
 
 [[area]]
+name = "wildcards"
+sources = ["frontend/comfyui/ui/wildcards/**", "web/comfyui/ui/wildcards/**"]
+proofs = ["unit", "integration"]
+
+[[boundary]]
+name = "wildcard_folder"
+area = "wildcards"
+
+[[subscription]]
+boundary = "wildcard_folder"
+groups = ["execution/unit", "execution/integration", "prompt_editor/integration", "frontend_core/integration"]
+
+[[area]]
 name = "editor_integrations"
 sources = ["integrations/AGENTS.md", "integrations/.eslintrc.json", "integrations/contracts/**", "integrations/shared/**", "scripts/integrations/**", "tsconfig.integrations.json", "tsconfig.integration-tools.json"]
 proofs = ["contract"]

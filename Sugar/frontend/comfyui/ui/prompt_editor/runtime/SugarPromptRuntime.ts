@@ -30,6 +30,7 @@ import { parseScenes } from '../../../../sugarprompt/core/src/index.js';
 import type {
   LoraResourceAdapter,
   LoraResourceSnapshot,
+  WildcardCatalog,
 } from '../../../../sugarprompt/services/src/index.js';
 import { SugarPromptMenu } from './SugarPromptMenu.js';
 import { SugarPromptTooltip } from './SugarPromptTooltip.js';
@@ -60,6 +61,8 @@ export interface SugarPromptMountOptions {
   readonly regionAccent: string | null;
   /** Queue one prompt scene of the workflow, or null when the host cannot queue scenes. */
   readonly sceneQueue: PromptSceneQueue | null;
+  /** The wildcard folder's catalog when the editor mounts, or null before it was read. */
+  readonly wildcardCatalog: WildcardCatalog | null;
 }
 
 /** Queue one scene by its normalized key and report how the host admitted it. */
@@ -121,7 +124,7 @@ export class SugarPromptEditor {
     const profile = resolveFeatureProfile(defaultPreferences, {
       mode: 'workflow',
       loraScheduling: false,
-      unavailableFeatures: ['danbooru_url_import', 'wildcard_autocomplete', 'spellcheck'],
+      unavailableFeatures: ['danbooru_url_import', 'spellcheck'],
     });
     const tagCatalog = bundledPromptTagCatalog();
     this.#api = mountEditor(this.#content, {
@@ -134,6 +137,7 @@ export class SugarPromptEditor {
       richRendering: true,
       featureProfile: profile,
       tagCompletionCatalog: tagCatalog,
+      wildcardCatalog: options.wildcardCatalog,
       tagLexicon: tagCatalog.lexicon,
       onUpdate: (snapshot) => this.#observe(snapshot),
       onLayout: (metrics) => this.#layout(metrics),
@@ -179,6 +183,11 @@ export class SugarPromptEditor {
       if (generation === this.#resourceGeneration) this.#resourceChanged(snapshot);
     });
     this.#queueResources();
+  }
+
+  /** Follow the wildcard folder: decorate and complete the wildcards it holds now. */
+  setWildcardCatalog(catalog: WildcardCatalog | null): void {
+    if (!this.#disposed) this.#api.setWildcardCatalog(catalog);
   }
 
   /** Recolour separators from a new theme accent, retrying after unfinished composition. */

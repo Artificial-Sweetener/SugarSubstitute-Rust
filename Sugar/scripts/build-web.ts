@@ -274,6 +274,25 @@ async function main(): Promise<void> {
     target: 'es2022',
     legalComments: 'inline',
   });
+  // Wildcards are catalogued and resolved through SugarPrompt, bundled privately with one shared
+  // chunk so its catalog and generation code load once.
+  const wildcardsRoot = path.join(repositoryRoot, 'frontend/comfyui/ui/wildcards');
+  await build({
+    ...browserDependencyResolution,
+    entryPoints: [
+      'application/WildcardLibrary.ts',
+      'application/WildcardPromptResolution.ts',
+      'domain/WildcardSource.ts',
+    ].map((entry) => path.join(wildcardsRoot, entry)),
+    outbase: wildcardsRoot,
+    outdir: path.join(generatedRoot, 'comfyui/ui/wildcards'),
+    bundle: true,
+    splitting: true,
+    format: 'esm',
+    platform: 'browser',
+    target: 'es2022',
+    legalComments: 'inline',
+  });
   rmSync(path.join(generatedRoot, 'sugarprompt'), { force: true, recursive: true });
   // The canvas editing chrome mounts beside the output overlay, so both share one Vue runtime.
   await bundleVueSurface(

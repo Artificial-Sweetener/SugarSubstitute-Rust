@@ -6,6 +6,7 @@ import { createCubeDirectExecution } from './CubeDirectExecutionService.js';
 /** Preserve existing execution sequencing while adding a common relation boundary for both queue paths. */
 export function createCubeHostExecution(options) {
     const scenes = options.execution.scenes;
+    const wildcards = options.execution.wildcards;
     const outputAdapter = new CubeOutputPromptAdapter({
         getCubes: options.getCubes,
         boundaryResolver: options.boundaryResolver,
@@ -21,6 +22,7 @@ export function createCubeHostExecution(options) {
         getProximityMatches: options.getProximityMatches,
         ...(options.prepareCanvasInputs ? { prepareInputs: options.prepareCanvasInputs } : {}),
         sceneWorkflow: (payload, workflow) => scenes.workflow(payload, workflow),
+        resolveWorkflow: (payload, workflow) => wildcards.workflow(payload, workflow),
     });
     const transport = new ComfyDirectPromptTransport({ api: options.api });
     const queue = new ComfyPromptQueueBridge({
@@ -30,7 +32,8 @@ export function createCubeHostExecution(options) {
         expand: (payload) => scenes.expand(payload),
         prepare: options.prepareRelations,
         transform: async (payload) => {
-            const candidate = await pipeline.transform(payload);
+            // Scenes are already materialized, so each scene's own text is what gets resolved.
+            const candidate = await wildcards.prompt(await pipeline.transform(payload));
             return options.prepareCanvasInputs
                 ? await options.prepareCanvasInputs(candidate)
                 : { payload: candidate };

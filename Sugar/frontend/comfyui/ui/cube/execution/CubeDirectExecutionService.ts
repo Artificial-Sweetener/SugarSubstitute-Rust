@@ -28,6 +28,8 @@ export interface CubeDirectExecutionServiceOptions {
   prepareInputs?(payload: unknown): Promise<WorkflowPromptPreparation>;
   /** Give the serialized workflow the prompt texts of the scene its queued prompt renders. */
   sceneWorkflow?(payload: unknown, workflow: unknown): unknown;
+  /** Resolve what the workflow's prompt texts name for this run, such as wildcards. */
+  resolveWorkflow?(payload: unknown, workflow: unknown): Promise<unknown>;
   client: CubeExecutionApiClient;
   hostApi?: ComfyHostApi;
   logger?: Pick<Console, 'debug'>;
@@ -38,6 +40,8 @@ export interface CubeDirectExecutionServiceOptions {
 export interface CreateCubeDirectExecutionOptions {
   prepareInputs?(payload: unknown): Promise<WorkflowPromptPreparation>;
   sceneWorkflow?(payload: unknown, workflow: unknown): unknown;
+  /** Resolve what the workflow's prompt texts name for this run, such as wildcards. */
+  resolveWorkflow?(payload: unknown, workflow: unknown): Promise<unknown>;
   api: unknown;
   logger?: Pick<Console, 'debug'>;
   getGraph(): ComfyGraph | null | undefined;
@@ -72,9 +76,12 @@ export class CubeDirectExecutionService {
     const proximityMatches = this.options.getProximityMatches();
     const proximityConnections = proximityMatches.flatMap(toConnection);
     const serialized = enrichWorkflowPayload(serialize.call(graph), graph);
-    const authored = this.options.sceneWorkflow
+    const scene = this.options.sceneWorkflow
       ? this.options.sceneWorkflow(comfyPayload, serialized)
       : serialized;
+    const authored = this.options.resolveWorkflow
+      ? await this.options.resolveWorkflow(comfyPayload, scene)
+      : scene;
     const preparation = this.options.prepareInputs
       ? await this.options.prepareInputs({ workflow: authored })
       : { payload: { workflow: authored } };
@@ -131,6 +138,7 @@ export function createCubeDirectExecution(
     getProximityMatches: options.getProximityMatches,
     ...(options.prepareInputs ? { prepareInputs: options.prepareInputs } : {}),
     ...(options.sceneWorkflow ? { sceneWorkflow: options.sceneWorkflow } : {}),
+    ...(options.resolveWorkflow ? { resolveWorkflow: options.resolveWorkflow } : {}),
   });
 }
 

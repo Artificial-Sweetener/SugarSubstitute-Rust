@@ -94,7 +94,7 @@ const logger = adapter.getConsole() ?? console;
 const hostFeedback = new CubeHostFeedback({ toast: ui.toast });
 const cubePreconfiguration = ui.workflowPreconfiguration;
 const cubeRuntimeLifecycle = new ComfyCubeRuntimeLifecycle(createCubeRuntime);
-const { workflowExecution, workflowFields, canvasInputs, editorDimensions, scenes, workspace: createWorkflowWorkspace, } = createWorkflowCanvasComposition({
+const { workflowExecution, workflowFields, canvasInputs, editorDimensions, prompts, workspace: createWorkflowWorkspace, } = createWorkflowCanvasComposition({
     api,
     notify: (severity, title, message) => pushToastMessage(severity, title, message),
     app: appRef,
@@ -415,7 +415,7 @@ export const sugarCubesExtension = {
         return canvasInputs.surfaces.withNodeMenuItems(node, cubeAffordances.getNodeMenuItems(node));
     },
     setup: announcedSetup(documentRef ?? document, async () => {
-        promptEditors.setup(canvasInputs.surfaces.regions, { app: appRef, logger, scenes });
+        promptEditors.setup(canvasInputs.surfaces.regions, { app: appRef, logger, prompts });
         await extensionSetupLifecycle.setup();
         workflowHistory.install();
         relations.setup();

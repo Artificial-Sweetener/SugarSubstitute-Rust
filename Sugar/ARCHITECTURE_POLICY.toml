@@ -94,6 +94,16 @@ forbidden_typescript_paths = [
 ]
 
 [[dependency]]
+name = "TYPESCRIPT_WILDCARDS_DOMAIN"
+paths = ["frontend/comfyui/ui/wildcards/domain/*.ts"]
+forbidden_typescript_paths = ["frontend/comfyui/ui/wildcards/application", "frontend/comfyui/ui/wildcards/infrastructure", "frontend/comfyui/ui/wildcards/presentation", "frontend/comfyui/ui/surface", "frontend/comfyui/ui/types/graph", "types/comfyui", "/scripts", "node_modules"]
+
+[[dependency]]
+name = "TYPESCRIPT_WILDCARDS_APPLICATION"
+paths = ["frontend/comfyui/ui/wildcards/application/*.ts"]
+forbidden_typescript_paths = ["frontend/comfyui/ui/wildcards/infrastructure", "frontend/comfyui/ui/wildcards/presentation", "frontend/comfyui/ui/surface", "frontend/comfyui/ui/types/graph", "types/comfyui", "/scripts", "node_modules"]
+
+[[dependency]]
 name = "TYPESCRIPT_INPUT_CANVAS_DOMAIN"
 paths = ["frontend/comfyui/ui/input_canvas/domain/*.ts"]
 forbidden_typescript_paths = ["frontend/comfyui/ui/input_canvas/application", "frontend/comfyui/ui/input_canvas/infrastructure", "frontend/comfyui/ui/input_canvas/presentation", "frontend/comfyui/ui/surface", "frontend/comfyui/ui/types/graph", "types/comfyui", "/scripts", "node_modules"]

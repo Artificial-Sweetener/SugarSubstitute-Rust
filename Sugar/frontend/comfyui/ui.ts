@@ -108,7 +108,7 @@ const {
   workflowFields,
   canvasInputs,
   editorDimensions,
-  scenes,
+  prompts,
   workspace: createWorkflowWorkspace,
 } = createWorkflowCanvasComposition({
   api,
@@ -498,7 +498,7 @@ export const sugarCubesExtension: SugarCubesExtension = {
     return canvasInputs.surfaces.withNodeMenuItems(node, cubeAffordances.getNodeMenuItems(node));
   },
   setup: announcedSetup(documentRef ?? document, async () => {
-    promptEditors.setup(canvasInputs.surfaces.regions, { app: appRef, logger, scenes });
+    promptEditors.setup(canvasInputs.surfaces.regions, { app: appRef, logger, prompts });
     await extensionSetupLifecycle.setup();
     workflowHistory.install();
     relations.setup();

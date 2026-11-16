@@ -38,6 +38,11 @@ import {
   type SeenReleaseStore,
 } from '../core/release_notes/WhatsNewPresenter.js';
 import { WhatsNewModal } from '../dialogs/WhatsNewModal.js';
+import { InputModal } from '../dialogs/InputModal.js';
+import {
+  registerWildcardSettings,
+  type WildcardSettingsOptions,
+} from '../wildcards/presentation/WildcardSettings.js';
 import { WhatsNewSeenSetting } from '../settings/WhatsNewSeenSetting.js';
 
 export interface WorkflowFieldHostOptions
@@ -51,6 +56,8 @@ export interface WorkflowFieldHostOptions
   subscribeConnection(listener: (connected: boolean) => void): () => void;
   /** The page's cache registry, joined to a desktop host's memory budget when one exists. */
   memory: MemoryBudgetRegistry;
+  /** The wildcard folder's file actions, offered in SugarCubes' settings. */
+  wildcards: Omit<WildcardSettingsOptions, 'app' | 'document' | 'prompt'>;
 }
 
 /** Share seed reuse across actual native field mounts and the override toolbar. */
@@ -77,6 +84,12 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
     options.reportPresentationError,
   );
   const canvas = new EmbeddedCanvasConnection();
+  const wildcardNames = new InputModal({
+    adapter: {
+      getDocument: () => options.document,
+      getWindow: () => options.document.defaultView,
+    },
+  });
   const relations: RelationHostLifecycle = new RelationHostLifecycle({
     ...options,
     reportError: options.reportRelationError,
@@ -128,6 +141,12 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
     relations.setupOverridePresentation(embedded);
     editorNavigation.setup();
     settingsWorkspace.setup();
+    registerWildcardSettings({
+      ...options.wildcards,
+      app: options.app,
+      document: options.document,
+      prompt: (prompt) => wildcardNames.open(prompt),
+    });
     const windowRef = options.document.defaultView;
     if (windowRef)
       startEmbeddedPanel({

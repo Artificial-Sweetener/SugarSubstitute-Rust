@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose workflow execution, native fields and optional canvas inputs at their shared host boundary. */
+import { wildcardFile } from '../wildcards/domain/WildcardSource.js';
 import { createComfyWorkflowExecutionRuntime } from '../execution/infrastructure/ComfyWorkflowExecutionRuntime.js';
 import {
   createWorkflowFieldHost,
@@ -39,7 +40,13 @@ import type { DesktopSessionFailedOperation } from '../workflow/domain/DesktopSe
 export function createWorkflowCanvasComposition(
   options: Omit<
     WorkflowFieldHostOptions,
-    'seeds' | 'activity' | 'progress' | 'connected' | 'subscribeConnection' | 'sessions'
+    | 'seeds'
+    | 'activity'
+    | 'progress'
+    | 'connected'
+    | 'subscribeConnection'
+    | 'sessions'
+    | 'wildcards'
   > & {
     api: unknown;
     logger: Pick<Console, 'error' | 'warn'>;
@@ -48,8 +55,11 @@ export function createWorkflowCanvasComposition(
   },
 ): {
   workflowExecution: ReturnType<typeof createComfyWorkflowExecutionRuntime>;
-  /** Prompt-scene queueing for the queue bridge and each prompt editor's "Queue this scene". */
-  scenes: ReturnType<typeof createComfyWorkflowExecutionRuntime>['scenes'];
+  /** What prompt editors take from execution: "Queue this scene" and the wildcard folder. */
+  prompts: {
+    scenes: ReturnType<typeof createComfyWorkflowExecutionRuntime>['scenes'];
+    wildcards: ReturnType<typeof createComfyWorkflowExecutionRuntime>['wildcardLibrary'];
+  };
   workflowFields: ReturnType<typeof createWorkflowFieldHost>;
   canvasInputs: ReturnType<typeof createCanvasInputs>;
   /** Compose presentation from these same execution, route, settings and page owners. */
@@ -83,6 +93,20 @@ export function createWorkflowCanvasComposition(
     progress: workflowExecution.progress,
     connected: () => workflowExecution.connected,
     subscribeConnection: (listener) => workflowExecution.subscribeConnection(listener),
+    wildcards: {
+      files: () => workflowExecution.wildcardLibrary.files,
+      refresh: () => workflowExecution.wildcardLibrary.refresh(),
+      admit: (path) => wildcardFile(path, ''),
+      create: (path, text) => workflowExecution.wildcardFiles.create(path, text),
+      rename: (from, to) => workflowExecution.wildcardFiles.rename(from, to),
+      openFolder: () => workflowExecution.wildcardFiles.openFolder(),
+      report: (error) =>
+        options.notify(
+          'error',
+          'Wildcards',
+          error instanceof Error ? error.message : 'The wildcard folder is unavailable.',
+        ),
+    },
   });
   const selfUpdate = comfySelfUpdateTransport(options.api);
   // SugarCubes updates itself only on a page whose host does not; the page lives as long as this.
@@ -131,7 +155,7 @@ export function createWorkflowCanvasComposition(
   });
   return {
     workflowExecution,
-    scenes: workflowExecution.scenes,
+    prompts: { scenes: workflowExecution.scenes, wildcards: workflowExecution.wildcardLibrary },
     workflowFields,
     canvasInputs,
     workspace: (canvas, masonry) =>

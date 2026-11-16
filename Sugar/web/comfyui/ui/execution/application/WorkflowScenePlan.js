@@ -1055,20 +1055,6 @@ function planWorkflowScenes(fields, stackOrder, nodes, runId, only = null) {
     })
   );
 }
-function sceneWorkflow(workflow, texts) {
-  const scene = (item) => typeof item === "string" ? texts.get(item) ?? item : item;
-  const rewrite = (value, depth) => {
-    if (depth > 64) return value;
-    if (Array.isArray(value)) return value.map((entry) => rewrite(entry, depth + 1));
-    if (!isRecord(value)) return value;
-    const copy = {};
-    for (const [key, entry] of Object.entries(value))
-      copy[key] = key === "widgets_values" && Array.isArray(entry) ? entry.map(scene) : key === "sugarcubes_widget_values" && isRecord(entry) ? Object.fromEntries(Object.entries(entry).map(([name, item]) => [name, scene(item)])) : rewrite(entry, depth + 1);
-    return copy;
-  };
-  return texts.size ? rewrite(workflow, 0) : workflow;
-}
 export {
-  planWorkflowScenes,
-  sceneWorkflow
+  planWorkflowScenes
 };

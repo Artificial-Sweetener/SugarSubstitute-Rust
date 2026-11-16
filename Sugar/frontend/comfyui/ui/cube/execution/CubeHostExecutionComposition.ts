@@ -28,10 +28,11 @@ import type { WorkflowPromptPreparation } from '../../execution/domain/WorkflowP
 
 export interface CubeHostExecutionOptions {
   api: unknown;
-  /** The execution runtime: its queue observer and its prompt-scene expansion. */
+  /** The execution runtime: its queue observer, prompt-scene expansion and wildcard resolution. */
   execution: {
     readonly submissionObserver: PromptQueueObserver;
     readonly scenes: CubeHostScenePrompts;
+    readonly wildcards: CubeHostWildcardPrompts;
   };
   logger: Pick<Console, 'debug' | 'warn' | 'error'>;
   boundaryResolver: NativeSubgraphBoundaryResolver;
@@ -49,6 +50,12 @@ export interface CubeHostScenePrompts {
   expand(payload: unknown): readonly unknown[] | null;
   workflow(payload: unknown, workflow: unknown): unknown;
 }
+
+/** Resolve the wildcards of a queued prompt and of a workflow sent to run directly. */
+export interface CubeHostWildcardPrompts {
+  prompt(payload: unknown): Promise<unknown>;
+  workflow(payload: unknown, workflow: unknown): Promise<unknown>;
+}
 export interface CubeHostExecution {
   readonly queue: ComfyPromptQueueBridge;
   prepareAnalysisPrompt(payload: unknown): Promise<unknown>;
@@ -57,6 +64,7 @@ export interface CubeHostExecution {
 /** Preserve existing execution sequencing while adding a common relation boundary for both queue paths. */
 export function createCubeHostExecution(options: CubeHostExecutionOptions): CubeHostExecution {
   const scenes = options.execution.scenes;
+  const wildcards = options.execution.wildcards;
   const outputAdapter = new CubeOutputPromptAdapter({
     getCubes: options.getCubes,
     boundaryResolver: options.boundaryResolver,
@@ -72,6 +80,7 @@ export function createCubeHostExecution(options: CubeHostExecutionOptions): Cube
     getProximityMatches: options.getProximityMatches,
     ...(options.prepareCanvasInputs ? { prepareInputs: options.prepareCanvasInputs } : {}),
     sceneWorkflow: (payload, workflow) => scenes.workflow(payload, workflow),
+    resolveWorkflow: (payload, workflow) => wildcards.workflow(payload, workflow),
   });
   const transport = new ComfyDirectPromptTransport({ api: options.api });
   const queue = new ComfyPromptQueueBridge({
@@ -81,7 +90,8 @@ export function createCubeHostExecution(options: CubeHostExecutionOptions): Cube
     expand: (payload) => scenes.expand(payload),
     prepare: options.prepareRelations,
     transform: async (payload) => {
-      const candidate = await pipeline.transform(payload);
+      // Scenes are already materialized, so each scene's own text is what gets resolved.
+      const candidate = await wildcards.prompt(await pipeline.transform(payload));
       return options.prepareCanvasInputs
         ? await options.prepareCanvasInputs(candidate)
         : { payload: candidate };

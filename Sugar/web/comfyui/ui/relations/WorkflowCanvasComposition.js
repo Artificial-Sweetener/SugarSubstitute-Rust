@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose workflow execution, native fields and optional canvas inputs at their shared host boundary. */
+import { wildcardFile } from '../wildcards/domain/WildcardSource.js';
 import { createComfyWorkflowExecutionRuntime } from '../execution/infrastructure/ComfyWorkflowExecutionRuntime.js';
 import { createWorkflowFieldHost, } from './WorkflowFieldComposition.js';
 import { createCanvasInputs } from '../input_canvas/infrastructure/CanvasInputComposition.js';
@@ -36,6 +37,15 @@ export function createWorkflowCanvasComposition(options) {
         progress: workflowExecution.progress,
         connected: () => workflowExecution.connected,
         subscribeConnection: (listener) => workflowExecution.subscribeConnection(listener),
+        wildcards: {
+            files: () => workflowExecution.wildcardLibrary.files,
+            refresh: () => workflowExecution.wildcardLibrary.refresh(),
+            admit: (path) => wildcardFile(path, ''),
+            create: (path, text) => workflowExecution.wildcardFiles.create(path, text),
+            rename: (from, to) => workflowExecution.wildcardFiles.rename(from, to),
+            openFolder: () => workflowExecution.wildcardFiles.openFolder(),
+            report: (error) => options.notify('error', 'Wildcards', error instanceof Error ? error.message : 'The wildcard folder is unavailable.'),
+        },
     });
     const selfUpdate = comfySelfUpdateTransport(options.api);
     // SugarCubes updates itself only on a page whose host does not; the page lives as long as this.
@@ -80,7 +90,7 @@ export function createWorkflowCanvasComposition(options) {
     });
     return {
         workflowExecution,
-        scenes: workflowExecution.scenes,
+        prompts: { scenes: workflowExecution.scenes, wildcards: workflowExecution.wildcardLibrary },
         workflowFields,
         canvasInputs,
         workspace: (canvas, masonry) => new ComfyWorkflowWorkspace({

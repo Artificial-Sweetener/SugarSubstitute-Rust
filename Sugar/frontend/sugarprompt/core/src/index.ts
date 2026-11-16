@@ -85,7 +85,7 @@ export { prepareDocumentSemantics, validateDocumentKind } from './document/seman
 export type { PromptDocumentKind, PreparedDocumentSemantics } from './document/contracts.js';
 export { materializeScenePrompt, prepareSceneContexts } from './scenes/context.js';
 export type { ScenePositionContext, PreparedSceneContexts } from './scenes/context.js';
-export { caseFold } from './prompt/text.js';
+export { caseFold, strip } from './prompt/text.js';
 export { prepareDuplicateSegments } from './diagnostics/duplicate-segments.js';
 export type {
   DuplicateOwnership,

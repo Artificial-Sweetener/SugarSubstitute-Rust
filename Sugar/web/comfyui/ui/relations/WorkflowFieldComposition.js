@@ -30,6 +30,8 @@ import { EmbeddedCanvasConnection } from '../core/embedded/EmbeddedCanvasConnect
 import { MemoryBudgetSettings } from '../settings/MemoryBudgetSettings.js';
 import { WhatsNewPresenter, } from '../core/release_notes/WhatsNewPresenter.js';
 import { WhatsNewModal } from '../dialogs/WhatsNewModal.js';
+import { InputModal } from '../dialogs/InputModal.js';
+import { registerWildcardSettings, } from '../wildcards/presentation/WildcardSettings.js';
 import { WhatsNewSeenSetting } from '../settings/WhatsNewSeenSetting.js';
 /** Share seed reuse across actual native field mounts and the override toolbar. */
 export function createWorkflowFieldHost(options) {
@@ -39,6 +41,12 @@ export function createWorkflowFieldHost(options) {
     const updates = new UpdateSourceSlot();
     const whatsNew = new WhatsNewPresenter(new WhatsNewModal({ document: options.document }), seenReleases(options.app, options.reportPresentationError), options.reportPresentationError);
     const canvas = new EmbeddedCanvasConnection();
+    const wildcardNames = new InputModal({
+        adapter: {
+            getDocument: () => options.document,
+            getWindow: () => options.document.defaultView,
+        },
+    });
     const relations = new RelationHostLifecycle({
         ...options,
         reportError: options.reportRelationError,
@@ -90,6 +98,12 @@ export function createWorkflowFieldHost(options) {
         relations.setupOverridePresentation(embedded);
         editorNavigation.setup();
         settingsWorkspace.setup();
+        registerWildcardSettings({
+            ...options.wildcards,
+            app: options.app,
+            document: options.document,
+            prompt: (prompt) => wildcardNames.open(prompt),
+        });
         const windowRef = options.document.defaultView;
         if (windowRef)
             startEmbeddedPanel({

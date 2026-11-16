@@ -16,7 +16,8 @@
 /** Queue one Comfy prompt per authored prompt scene through the existing submission ownership. */
 import { isRecord } from '../../types/common.js';
 import { cubeFacePromptRole } from '../../surface/CubeFacePromptPolicy.js';
-import { planWorkflowScenes, sceneWorkflow, } from '../application/WorkflowScenePlan.js';
+import { planWorkflowScenes, } from '../application/WorkflowScenePlan.js';
+import { workflowWithPromptTexts } from '../application/WorkflowPromptTexts.js';
 /**
  * Mark a scene prompt with its scene texts. Preparation steps copy prompts by spreading them,
  * which keeps this enumerable symbol, and Comfy serializes only named fields, never symbols.
@@ -60,7 +61,7 @@ export class ComfyWorkflowScenePrompts {
     /** Give a serialized workflow queued for one scene prompt that scene's prompt texts. */
     workflow(payload, workflow) {
         const texts = isRecord(payload) ? payload[SCENE_TEXTS] : undefined;
-        return texts ? sceneWorkflow(workflow, texts) : workflow;
+        return texts ? workflowWithPromptTexts(workflow, texts) : workflow;
     }
     /** Return the scene prompts to queue in place of this prompt, or null to queue it unchanged. */
     expand(payload) {
@@ -71,7 +72,7 @@ export class ComfyWorkflowScenePrompts {
         const graph = this.app()?.graph;
         if (!graph)
             return null;
-        const { fields, stacks } = sceneFields(graph, payload.output);
+        const { fields, stacks } = queuedPromptFields(graph, payload.output);
         let prompts;
         try {
             prompts = planWorkflowScenes(fields, stacks, payload.output, this.nextId(), only);
@@ -91,7 +92,7 @@ export class ComfyWorkflowScenePrompts {
     }
 }
 /** Collect every prompt editor field the queued prompt carries, in graph order. */
-function sceneFields(root, output) {
+export function queuedPromptFields(root, output) {
     const fields = [];
     const stacks = [];
     const visit = (graph, prefix, seen) => {
