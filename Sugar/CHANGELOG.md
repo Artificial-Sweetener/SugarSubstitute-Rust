@@ -1,3 +1,18 @@
+## [0.17.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.16.3...sugarcubes-v0.17.0) (2026-11-16)
+
+### Features
+
+* **surface:** select Fluent and Nodes 2.0 the first time a desktop host presents an install ([7b4aaa3](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/7b4aaa323ecc610845f3b3685afc53138ea38cff))
+
+### Bug Fixes
+
+* **editor-actions:** keep presets in the user's sugar folder ([d84b873](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/d84b873135baa4312f9676bd83ab6d1243d14bff))
+* **editor-actions:** state why a sizing is unavailable in its submenu, not as a failure on hover ([eda7551](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/eda7551640db9f4bf6a2f77de5a0c74093a3474e))
+* **input-canvas:** bring back the masks a generated image was queued with ([d8c8ba0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/d8c8ba09f6ee255b8360da8452b3488acc0bff7f))
+* **input-canvas:** keep a reopened or opened workflow's masks and view ([681ebd5](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/681ebd5b0a1f45855ee9fe604be9c8a259798ca4))
+* **surface:** close a tab only on its own middle click and reopen closed workflows from the tab bar ([a156002](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/a156002d402e1cfa08fb1efa53617378f3d97fea))
+* **surface:** keep workflow undo from also running on a shortcut the canvas took ([afdeb5e](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/afdeb5e3084da3f0fcc20fb242db7b112737f584))
+
 ## [0.16.3](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.16.2...sugarcubes-v0.16.3) (2026-11-16)
 
 ### Bug Fixes
