@@ -18,7 +18,8 @@
 The Registry is authoritative and comes first. It publishes no digest, so its
 archives are accepted only from its fixed CDN host over verified TLS, and only
 for releases it still offers (active or flagged). The GitHub fallback reads the registry-layout asset
-of a per-component release and requires the SHA-256 digest GitHub records for it.
+of a per-component release and requires the SHA-256 digest GitHub records for it. It finds
+SugarCubes' releases by their tag prefix, apart from every other release in the repository.
 """
 
 from __future__ import annotations
@@ -42,6 +43,12 @@ INSTALLABLE_REGISTRY_STATUSES = frozenset(
     {"NodeVersionStatusActive", "NodeVersionStatusFlagged"}
 )
 _SHA256_DIGEST = re.compile(r"^sha256:([0-9a-f]{64})$")
+_TAG_REF = "refs/tags/"
+_TAGS_PER_PAGE = 100
+_MAX_TAG_PAGES = 20
+# A tag whose release is a draft, a prerelease or still uploading is passed over for the
+# next newest; a release is never more than a few tags behind the newest tag.
+_NEWEST_TAGS_TRIED = 5
 
 
 class ReleaseSourceKind(str, Enum):
@@ -182,33 +189,53 @@ class GitHubReleases:
         )
 
     def latest(self) -> ReleaseOffer | None:
-        """Return the newest published, non-prerelease SugarCubes release."""
+        """Return the newest published, non-prerelease SugarCubes release.
 
-        payload = self._http.get_json(
-            f"{self._config.api_root}/repos/{self._config.repository}/releases?per_page=50",
-            allowed_hosts=self._api_hosts,
-            max_bytes=4 * _MAX_METADATA_BYTES,
-        )
-        if not isinstance(payload, list):
-            raise ReleaseMetadataError("The GitHub reply is not a list.")
-        candidates: list[tuple[ReleaseVersion, dict[str, object]]] = []
-        for release in payload:
-            if (
-                not isinstance(release, dict)
-                or release.get("draft")
-                or release.get("prerelease")
-            ):
+        SugarCubes' releases are found by their own tags, so the other releases the
+        repository holds are never read, however many there are.
+        """
+
+        for version in self._tagged_versions()[:_NEWEST_TAGS_TRIED]:
+            release = self._release(version)
+            if release is None or release.get("prerelease"):
                 continue
-            version = self._tag_version(release.get("tag_name"))
-            if version is not None:
-                candidates.append((version, release))
-        if not candidates:
-            return None
-        version, release = max(candidates, key=lambda candidate: candidate[0])
-        return self._offer(version, release)
+            offer = self._offer(version, release)
+            if offer is not None:
+                return offer
+        return None
 
     def exact(self, version: ReleaseVersion) -> ReleaseOffer | None:
         """Return the asset of one exact release, or `None` when it is absent."""
+
+        release = self._release(version)
+        return None if release is None else self._offer(version, release)
+
+    def _tagged_versions(self) -> list[ReleaseVersion]:
+        """Return every version a SugarCubes tag names, newest first."""
+
+        prefix = urllib.parse.quote(self._config.tag_prefix, safe="")
+        versions: list[ReleaseVersion] = []
+        for page in range(1, _MAX_TAG_PAGES + 1):
+            payload = self._http.get_json(
+                f"{self._config.api_root}/repos/{self._config.repository}"
+                f"/git/matching-refs/tags/{prefix}?per_page={_TAGS_PER_PAGE}&page={page}",
+                allowed_hosts=self._api_hosts,
+                max_bytes=_MAX_METADATA_BYTES,
+            )
+            if not isinstance(payload, list):
+                raise ReleaseMetadataError("The GitHub reply is not a list.")
+            for item in payload:
+                ref = item.get("ref") if isinstance(item, dict) else None
+                if isinstance(ref, str) and ref.startswith(_TAG_REF):
+                    version = self._tag_version(ref.removeprefix(_TAG_REF))
+                    if version is not None:
+                        versions.append(version)
+            if len(payload) < _TAGS_PER_PAGE:
+                break
+        return sorted(versions, reverse=True)
+
+    def _release(self, version: ReleaseVersion) -> dict[str, object] | None:
+        """Return the published release of one version, or `None` when absent or a draft."""
 
         tag = urllib.parse.quote(self._config.tag_for(str(version)), safe="")
         try:
@@ -223,7 +250,7 @@ class GitHubReleases:
             raise
         if not isinstance(payload, dict) or payload.get("draft"):
             return None
-        return self._offer(version, payload)
+        return payload
 
     def _tag_version(self, tag: object) -> ReleaseVersion | None:
         """Return the version a SugarCubes tag names, ignoring other components."""

@@ -47,8 +47,9 @@ from sugarcubes.backend.self_update.release_sources import (
 from sugarcubes.backend.self_update.update_messages import describe_notice
 from tests.self_update.support.fake_release_web import (
     CONFIG,
-    GITHUB_API,
+    GITHUB_TAGS,
     FakeReleaseWeb,
+    github_tags_page,
 )
 
 _REPOSITORY = Path(__file__).resolve().parents[3]
@@ -136,39 +137,20 @@ def test_redirect_to_an_unlisted_host_is_refused() -> None:
         )
 
 
-def test_github_latest_ignores_drafts_prereleases_and_other_components() -> None:
-    """Only published SugarCubes tags count; Substitute tags share the repository."""
+def test_github_latest_is_found_by_sugarcubes_tags_alone() -> None:
+    """Only a published release under a SugarCubes tag counts, and nothing else is read."""
 
     web = FakeReleaseWeb()
     web.publish_github("1.1.0", {"__init__.py": ""})
-    listing = web.json[f"{GITHUB_API}/releases?per_page=50"]
-    assert isinstance(listing, list)
-    listing.extend(
+    web.publish_github("9.0.0", {"__init__.py": ""}, draft=True)
+    web.publish_github("8.0.0", {"__init__.py": ""}, prerelease=True)
+    tags = web.json[GITHUB_TAGS]
+    assert isinstance(tags, list)
+    # A tag that names no version, and a tag whose release was never published.
+    tags.extend(
         [
-            {
-                "tag_name": "sugarcubes-v9.0.0",
-                "draft": True,
-                "prerelease": False,
-                "assets": [],
-            },
-            {
-                "tag_name": "sugarcubes-v8.0.0",
-                "draft": False,
-                "prerelease": True,
-                "assets": [],
-            },
-            {
-                "tag_name": "substitute-v7.0.0",
-                "draft": False,
-                "prerelease": False,
-                "assets": [],
-            },
-            {
-                "tag_name": "sugarcubes-vnext",
-                "draft": False,
-                "prerelease": False,
-                "assets": [],
-            },
+            {"ref": "refs/tags/sugarcubes-vnext"},
+            {"ref": "refs/tags/sugarcubes-v7.0.0"},
         ]
     )
     offer = GitHubReleases(config=CONFIG.github_release, http=web).latest()
@@ -176,6 +158,35 @@ def test_github_latest_ignores_drafts_prereleases_and_other_components() -> None
     assert offer.version == parse_release_version("1.1.0")
     assert offer.source is ReleaseSourceKind.GITHUB_RELEASE
     assert offer.sha256 is not None
+    # Releases of other components in the repository are never listed or fetched.
+    assert web.requests[0] == GITHUB_TAGS
+    assert all("/releases/tags/sugarcubes-v" in url for url in web.requests[1:])
+    assert not any("/releases?" in url for url in web.requests)
+
+
+def test_github_latest_reads_every_page_of_sugarcubes_tags() -> None:
+    """The newest tag is found when SugarCubes has more tags than one page holds."""
+
+    web = FakeReleaseWeb()
+    web.publish_github("2.0.0", {"__init__.py": ""})
+    web.json[GITHUB_TAGS] = [
+        {"ref": f"refs/tags/sugarcubes-v1.0.{patch}"} for patch in range(100)
+    ]
+    web.json[github_tags_page(2)] = [{"ref": "refs/tags/sugarcubes-v2.0.0"}]
+    offer = GitHubReleases(config=CONFIG.github_release, http=web).latest()
+    assert offer is not None
+    assert offer.version == parse_release_version("2.0.0")
+    assert web.requests[:2] == [GITHUB_TAGS, github_tags_page(2)]
+
+
+def test_github_latest_is_absent_without_a_published_sugarcubes_release() -> None:
+    """A repository with no SugarCubes tag, or only unpublished ones, offers nothing."""
+
+    web = FakeReleaseWeb()
+    web.publish_empty_github()
+    assert GitHubReleases(config=CONFIG.github_release, http=web).latest() is None
+    web.json[GITHUB_TAGS] = [{"ref": "refs/tags/sugarcubes-v3.0.0"}]
+    assert GitHubReleases(config=CONFIG.github_release, http=web).latest() is None
 
 
 @pytest.mark.parametrize("kind", list(StartupOutcomeKind))

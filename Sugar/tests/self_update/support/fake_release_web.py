@@ -39,8 +39,18 @@ REGISTRY_VERSIONS = f"{REGISTRY_NODE}/versions"
 GITHUB_API = (
     f"{CONFIG.github_release.api_root}/repos/{CONFIG.github_release.repository}"
 )
+_GITHUB_TAGS = f"{GITHUB_API}/git/matching-refs/tags/{CONFIG.github_release.tag_prefix}"
 ACTIVE = "NodeVersionStatusActive"
 FLAGGED = "NodeVersionStatusFlagged"
+
+
+def github_tags_page(page: int) -> str:
+    """Return the address of one page of the repository's SugarCubes tags."""
+
+    return f"{_GITHUB_TAGS}?per_page=100&page={page}"
+
+
+GITHUB_TAGS = github_tags_page(1)
 
 
 def zip_bytes(files: Mapping[str, str]) -> bytes:
@@ -133,8 +143,10 @@ class FakeReleaseWeb:
         files: Mapping[str, str],
         *,
         digest: Callable[[bytes], str] | None = None,
+        draft: bool = False,
+        prerelease: bool = False,
     ) -> str:
-        """Publish one GitHub release with its registry-layout asset."""
+        """Publish one tagged GitHub release with its registry-layout asset."""
 
         content = zip_bytes(files)
         tag = CONFIG.github_release.tag_for(version)
@@ -147,8 +159,8 @@ class FakeReleaseWeb:
         )
         release = {
             "tag_name": tag,
-            "draft": False,
-            "prerelease": False,
+            "draft": draft,
+            "prerelease": prerelease,
             "assets": [
                 {
                     "name": asset_name,
@@ -160,9 +172,9 @@ class FakeReleaseWeb:
             ],
         }
         self.json[f"{GITHUB_API}/releases/tags/{tag}"] = release
-        listing = self.json.setdefault(f"{GITHUB_API}/releases?per_page=50", [])
-        assert isinstance(listing, list)
-        listing.append(release)
+        tags = self.json.setdefault(GITHUB_TAGS, [])
+        assert isinstance(tags, list)
+        tags.append({"ref": f"refs/tags/{tag}"})
         self.blobs[url] = content
         return url
 
@@ -174,7 +186,7 @@ class FakeReleaseWeb:
     def publish_empty_github(self) -> None:
         """Publish a repository with no SugarCubes releases."""
 
-        self.json.setdefault(f"{GITHUB_API}/releases?per_page=50", [])
+        self.json.setdefault(GITHUB_TAGS, [])
 
 
 class InlineRunner:
@@ -193,9 +205,12 @@ __all__ = [
     "ACTIVE",
     "CONFIG",
     "FLAGGED",
+    "GITHUB_API",
+    "GITHUB_TAGS",
     "REGISTRY_API",
     "REGISTRY_VERSIONS",
     "FakeReleaseWeb",
     "InlineRunner",
+    "github_tags_page",
     "zip_bytes",
 ]

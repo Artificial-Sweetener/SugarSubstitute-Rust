@@ -67,13 +67,11 @@ from tests.pack_install.support.pack_fixture import (
 )
 from tests.self_update.support.fake_release_web import (
     CONFIG,
-    GITHUB_API,
+    GITHUB_TAGS,
     REGISTRY_VERSIONS,
     FakeReleaseWeb,
     InlineRunner,
 )
-
-_GITHUB_LIST = f"{GITHUB_API}/releases?per_page=50"
 
 
 def _expect(vector: JsonObject) -> JsonObject:
@@ -134,14 +132,16 @@ def _publish_answers(web: FakeReleaseWeb, vector: JsonObject) -> None:
             )
     github = cast(JsonObject, vector["github"])
     if github.get("unavailable"):
-        web.failures[_GITHUB_LIST] = HttpFailureKind.UNREACHABLE
+        web.failures[GITHUB_TAGS] = HttpFailureKind.UNREACHABLE
         return
     web.publish_empty_github()
-    listing = cast(list[JsonObject], web.json[_GITHUB_LIST])
     for item in cast(list[JsonObject], github["releases"]):
-        web.publish_github(str(item["version"]), pack_files(str(item["version"])))
-        listing[-1]["draft"] = bool(item.get("draft", False))
-        listing[-1]["prerelease"] = bool(item.get("prerelease", False))
+        web.publish_github(
+            str(item["version"]),
+            pack_files(str(item["version"])),
+            draft=bool(item.get("draft", False)),
+            prerelease=bool(item.get("prerelease", False)),
+        )
 
 
 @drive("sourceSelection")
