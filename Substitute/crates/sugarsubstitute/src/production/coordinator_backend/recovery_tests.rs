@@ -153,6 +153,47 @@ impl Fixture {
         backend.cleanup(0, &mut resources)?;
         Ok(())
     }
+    /// End this backend's claim job without a result, as a cancelled or failed job does.
+    fn end_claim(&mut self) -> Result<()> {
+        let mut resources = BackendResources {
+            client: &self.client,
+            native: &self.native,
+            cleanup: &self.cleanup,
+            jobs: &self.jobs,
+            scopes: &self.scopes,
+            authority: &mut self.authority,
+            capture: None,
+        };
+        let target = ClaimTarget::Backend(self.leases[0].resource);
+        let cause = Box::new(std::io::Error::other("The claim job was cancelled"));
+        self.held.backend.as_mut().claim_work_ended(0, &target, cause, &mut resources)?;
+        Ok(())
+    }
+}
+
+/// Cleanup cancels the record's scope, so a claim still being prepared ends cancelled. Filed as
+/// a failed cleanup, that made a start whose first failure was recoverable end as fatal. Only
+/// work cleanup itself submitted can fail a cleanup.
+#[test]
+fn a_claim_cancelled_by_its_own_cleanup_is_not_a_cleanup_failure() -> Result<()> {
+    let mut fixture = Fixture::new(true)?;
+    fixture.exit()?;
+    let key = fixture.leases[0].resource;
+    {
+        let record = fixture.held.backend.records[0].as_mut().ok_or("Original record absent")?;
+        record.failure_published = true;
+        record.claim_pending = true;
+    }
+    fixture.retire_inert()?;
+    fixture.end_claim()?;
+    assert!(fixture.held.backend.cleanup_failure(key).is_none());
+    let record = fixture.held.backend.records[0].as_mut().ok_or("Original record absent")?;
+    assert!(!record.claim_pending);
+    // The release cleanup submits afterwards is cleanup's own step: its failure stays fatal.
+    record.release_pending = true;
+    fixture.end_claim()?;
+    assert!(fixture.held.backend.cleanup_failure(key).is_some());
+    Ok(())
 }
 
 #[test]

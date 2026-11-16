@@ -88,46 +88,61 @@ impl CoordinatorBackend {
                 record.resolution_retiring = false;
             }
             ClaimObservation::Failed { target, cause } => {
-                match target {
-                    ClaimTarget::Resolution(_) => {
-                        record.resolution_pending = false;
-                        tracing::info!(operation="backend_preparation_transition",resource=?key,stage="ResolutionTerminal",
-                            "Original backend preparation advanced");
-                    }
-                    ClaimTarget::Backend(_) => {
-                        if record.claim_pending {
-                            tracing::info!(operation="backend_preparation_transition",resource=?key,stage="ClaimTerminal",
-                                "Original backend preparation advanced");
-                        }
-                        record.claim_pending = false;
-                        record.release_pending = false;
-                    }
-                    ClaimTarget::Coordinator => {}
-                }
-                transition = self.failed(key, Box::new(cause), resources)?;
+                transition = self.claim_work_ended(at, &target, Box::new(cause), resources)?;
             }
             ClaimObservation::Stopped { target, kind } => {
-                match target {
-                    ClaimTarget::Resolution(_) => {
-                        record.resolution_pending = false;
-                        tracing::info!(operation="backend_preparation_transition",resource=?key,stage="ResolutionTerminal",
-                            "Original backend preparation advanced");
-                    }
-                    ClaimTarget::Backend(_) => {
-                        if record.claim_pending {
-                            tracing::info!(operation="backend_preparation_transition",resource=?key,stage="ClaimTerminal",
-                                "Original backend preparation advanced");
-                        }
-                        record.claim_pending = false;
-                        record.release_pending = false;
-                    }
-                    ClaimTarget::Coordinator => {}
-                }
-                transition = self.failed(key, Box::new(Stopped(kind)), resources)?;
+                transition =
+                    self.claim_work_ended(at, &target, Box::new(Stopped(kind)), resources)?;
             }
             other => return Ok((transition, Some(other))),
         }
         Ok((self.undelivered.take().unwrap_or(transition), None))
+    }
+
+    /// Take the end of a claim or resolution job that produced no result. Preparation work the
+    /// record's own cleanup cancelled is noted; anything else is this record's failure.
+    pub(super) fn claim_work_ended(
+        &mut self,
+        at: usize,
+        target: &ClaimTarget,
+        cause: Box<dyn Error + Send + Sync>,
+        resources: &mut BackendResources<'_>,
+    ) -> Result<ResourceTransition> {
+        let record = self.records[at].as_mut().ok_or(LifecycleRejection::StaleIdentity)?;
+        let key = record.key;
+        if Self::end_claim_work(record, target) {
+            tracing::info!(operation="backend_preparation_cancelled",resource=?key,cause=%cause,
+                "Backend preparation ended by its own cleanup");
+            return Ok(ResourceTransition::default());
+        }
+        self.failed(key, cause, resources)
+    }
+
+    /// Record that a claim or resolution job ended without its result, and say whether it was
+    /// preparation work this record's own cleanup had cancelled.
+    ///
+    /// Cleanup cancels the record's scope, so a claim or resolution still being prepared ends
+    /// stopped or failed. That is the cancellation taking effect, not a failed cleanup step:
+    /// the release and retirement cleanup submits afterwards report on their own.
+    fn end_claim_work(record: &mut Backend, target: &ClaimTarget) -> bool {
+        let key = record.key;
+        let preparing = match target {
+            ClaimTarget::Resolution(_) => {
+                tracing::info!(operation="backend_preparation_transition",resource=?key,stage="ResolutionTerminal",
+                    "Original backend preparation advanced");
+                std::mem::take(&mut record.resolution_pending)
+            }
+            ClaimTarget::Backend(_) => {
+                if record.claim_pending {
+                    tracing::info!(operation="backend_preparation_transition",resource=?key,stage="ClaimTerminal",
+                        "Original backend preparation advanced");
+                }
+                record.release_pending = false;
+                std::mem::take(&mut record.claim_pending)
+            }
+            ClaimTarget::Coordinator => false,
+        };
+        preparing && record.shutdown.is_some()
     }
 
     /// Advance one retained generation using the same immutable central batch.
