@@ -601,7 +601,11 @@ describe('composed browser canvas attachment', () => {
       expect(f.root.querySelector('.sc-output-image-layer')).toBeNull();
       expect(f.loader.requests).toHaveLength(0);
       expect(document.getElementById('sugarcubes-output-browser-styles')).toBeNull();
-      expect(document.getElementById('sugarcubes-output-viewport-styles')).not.toBeNull();
+      const viewportStyles = document.getElementById('sugarcubes-output-viewport-styles');
+      expect(viewportStyles).not.toBeNull();
+      // The canvas takes keyboard focus whenever it is used and is never ringed for it.
+      expect(viewportStyles?.textContent).not.toContain('.sc-output-viewport:focus');
+      expect(viewportStyles?.textContent).toMatch(/\.sc-output-viewport \{[^}]*outline:none/);
 
       const second = f.catalog.entries[1]!;
       const selected = f.command(surface, {

@@ -18,7 +18,9 @@
 /**
  * Install the geometry and native transparency rules shared by output surfaces. The viewport sets
  * no cursor: a native host chooses every cursor over its canvas from the canvas's own interaction
- * state, and the browser canvas styles only its own viewport.
+ * state, and the browser canvas styles only its own viewport. The viewport never draws a focus
+ * outline: it takes keyboard focus whenever the canvas is used, and a ring around the whole
+ * canvas would mark it as highlighted.
  */
 export function ensureCanvasViewportStyles(document: Document): void {
   if (document.getElementById('sugarcubes-output-viewport-styles')) return;
@@ -28,7 +30,6 @@ export function ensureCanvasViewportStyles(document: Document): void {
     .sc-output-viewport { position:absolute; inset:0; overflow:hidden; touch-action:none;
       background:var(--sugarcubes-canvas-background,#151515); outline:none;
       overscroll-behavior:contain; user-select:none; }
-    .sc-output-viewport:focus-visible { outline:2px solid var(--p-primary-color,var(--ring,#df258e)); outline-offset:-2px; }
     .sc-output-workspace-pane:has(.sc-output-viewport.sc-output-native),
     .sc-output-viewport.sc-output-native { background:transparent; }
   `;
