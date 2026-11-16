@@ -34,6 +34,7 @@ import type {
 import {
   DesktopSessionCancellation,
   DesktopSessionRefusal,
+  type DesktopSessionFailedOperation,
   type DesktopSessionRuntime,
   type DesktopSessionTransport,
 } from '../domain/DesktopSession.js';
@@ -52,7 +53,8 @@ export interface DesktopSessionClientOptions {
   readonly runtime: DesktopSessionRuntime;
   readonly nextId: () => string;
   readonly digest: (text: string) => Promise<string>;
-  readonly report: (error: unknown) => void;
+  /** Receive each failure the user needs to see once, with the work it interrupted. */
+  readonly report: (error: unknown, operation: DesktopSessionFailedOperation) => void;
 }
 
 const capabilities: SessionCapabilities = Object.freeze({
@@ -75,6 +77,8 @@ export class DesktopSessionClient {
     readonly reject: (error: unknown) => void;
   }>();
   #pendingReady: SessionOperation | null = null;
+  /** The capture failure already shown; the host's retries of that same failure stay quiet. */
+  #reportedCapture: string | null = null;
   #awaitingAcknowledgement: {
     readonly requestId: string;
     readonly checkpointId: string;
@@ -95,7 +99,7 @@ export class DesktopSessionClient {
       this.#stops.push(this.options.runtime.bindObservationDelivery(() => this.#flushReady()));
     this.#stops.push(
       this.options.transport.subscribe((value) => {
-        void this.receive(value).catch(this.options.report);
+        void this.receive(value).catch((error: unknown) => this.options.report(error, 'protocol'));
       }),
       this.options.runtime.subscribe(() => this.ready()),
     );
@@ -117,7 +121,8 @@ export class DesktopSessionClient {
     if (signature === this.#readySignature) return;
     this.#readySignature = signature;
     this.#pendingReady = operation;
-    if (!this.#readySending) void this.#sendReady().catch(this.options.report);
+    if (!this.#readySending)
+      void this.#sendReady().catch((error: unknown) => this.options.report(error, 'protocol'));
   }
 
   /** Admit origin/scope/shape and full fences before retaining chunks or invoking semantic owners. */
@@ -182,7 +187,8 @@ export class DesktopSessionClient {
         operation.kind === 'capture' &&
         cause instanceof DesktopSessionRefusal &&
         (cause.code === 'not-committed' || cause.code === 'stale');
-      if (!captureRetried) this.options.report(cause);
+      const failed = operation.kind === 'capture' ? 'capture' : 'materialize';
+      if (!captureRetried && this.#unreported(failed, cause)) this.options.report(cause, failed);
       await this.#error(
         value.requestId,
         cause instanceof DesktopSessionRefusal ? cause.code : 'invalid',
@@ -275,6 +281,7 @@ export class DesktopSessionClient {
           bindings: operation.fence.bindings,
         });
         active.answered = true;
+        this.#reportedCapture = null;
       } else {
         const checkpoint = await this.#transfer.take(message.requestId, operation.transferId);
         if (!this.#current(active)) return;
@@ -318,6 +325,21 @@ export class DesktopSessionClient {
         this.ready();
       }
     }
+  }
+
+  /**
+   * Admit a failure for reporting unless it repeats the capture failure already shown. The host
+   * retries a refused capture on its own schedule and the same refusal recurs each time; a capture
+   * that succeeds, or one that fails differently, makes the next failure new again.
+   */
+  #unreported(operation: DesktopSessionFailedOperation, cause: unknown): boolean {
+    if (operation !== 'capture') return true;
+    const code = cause instanceof DesktopSessionRefusal ? cause.code : 'invalid';
+    const signature = `${code}
+${cause instanceof Error ? cause.message : String(cause)}`;
+    if (signature === this.#reportedCapture) return false;
+    this.#reportedCapture = signature;
+    return true;
   }
 
   /** Send one terminal refusal for the active request. */

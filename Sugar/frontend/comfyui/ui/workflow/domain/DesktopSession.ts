@@ -80,6 +80,12 @@ export class DesktopSessionCancellation {
   }
 }
 
+/**
+ * Name the desktop session work a failure interrupted: saving the workspace (`capture`), restoring
+ * it (`materialize`, including the transfer that delivers its checkpoint), or the handshake itself.
+ */
+export type DesktopSessionFailedOperation = 'capture' | 'materialize' | 'protocol';
+
 /** Preserve actionable portable refusal and its underlying cause across frontend adapter boundaries. */
 export class DesktopSessionRefusal extends Error {
   /** Receive a G0 machine-readable code; localized product feedback remains with the host owner. */

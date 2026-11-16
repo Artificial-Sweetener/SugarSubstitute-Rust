@@ -59,7 +59,7 @@ export class ComfyWorkflowWorkspace {
                 canvas: this.canvas.sessionSnapshots,
                 presentation: this.#presentation,
                 ...(options.route ? { route: options.route } : {}),
-                report: options.report,
+                report: options.reportSession,
                 ...(options.settingsRoute ? { settingsRoute: options.settingsRoute } : {}),
             })
             : null;
@@ -73,7 +73,7 @@ export class ComfyWorkflowWorkspace {
             this.#desktop?.setup();
         }
         catch (error) {
-            this.options.report(error);
+            this.options.reportSession(error, 'protocol');
         }
         this.options.document.defaultView?.addEventListener('pagehide', this.#pagehide);
     }

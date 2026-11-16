@@ -52,7 +52,7 @@ export class ComfyDesktopSessionRuntime {
                 this.#refresh(true);
                 this.bindings.changed();
             },
-            report: options.report,
+            report: (error) => options.report(error, 'protocol'),
         });
         this.#readiness = new ComfyDesktopReadiness(options.app, options.execution.sessions);
         this.#capture = new ComfyDesktopCapture({
@@ -322,7 +322,7 @@ export class ComfyDesktopSessionRuntime {
                 this.#available = false;
                 this.bindings.changed();
             }
-            this.options.report(error);
+            this.options.report(error, 'protocol');
         }
         finally {
             this.#refreshing = false;

@@ -28,6 +28,7 @@ import { WORKFLOW_MASONRY_DEFAULT_EDITOR_WIDTH } from './masonry/WorkflowMasonry
 import { isRecord } from '../types/common.js';
 import { ComfyDesktopSessionHost } from '../workflow/infrastructure/ComfyDesktopSessionHost.js';
 import type { SettingsWorkspaceRoute } from '../settings/SettingsWorkspaceRoute.js';
+import type { DesktopSessionFailedOperation } from '../workflow/domain/DesktopSession.js';
 
 /** Keep presentation lifecycle registration outside the host extension entry point. */
 export class ComfyWorkflowWorkspace {
@@ -41,7 +42,11 @@ export class ComfyWorkflowWorkspace {
     private readonly options: Omit<
       ComfyCanvasHostOptions,
       'presentation' | 'defaultEditorWidth'
-    > & { readonly settingsRoute?: SettingsWorkspaceRoute },
+    > & {
+      readonly settingsRoute?: SettingsWorkspaceRoute;
+      /** Receive desktop session failures apart from the canvas's own. */
+      readonly reportSession: (error: unknown, operation: DesktopSessionFailedOperation) => void;
+    },
     masonry: Omit<WorkflowMasonryHostLifecycleOptions, 'presentation' | 'getContainer'>,
     logger: Pick<Console, 'warn'>,
   ) {
@@ -79,7 +84,7 @@ export class ComfyWorkflowWorkspace {
           canvas: this.canvas.sessionSnapshots,
           presentation: this.#presentation,
           ...(options.route ? { route: options.route } : {}),
-          report: options.report,
+          report: options.reportSession,
           ...(options.settingsRoute ? { settingsRoute: options.settingsRoute } : {}),
         })
       : null;
@@ -93,7 +98,7 @@ export class ComfyWorkflowWorkspace {
     try {
       this.#desktop?.setup();
     } catch (error: unknown) {
-      this.options.report(error);
+      this.options.reportSession(error, 'protocol');
     }
     this.options.document.defaultView?.addEventListener('pagehide', this.#pagehide);
   }

@@ -66,6 +66,7 @@ import { ModelDiscoveryClient } from './ui/model_library/ModelDiscoveryClient.js
 import { CivitaiCredentialClient } from './ui/model_library/CivitaiCredentialClient.js';
 import { ModelRootClient } from './ui/model_library/ModelRootClient.js';
 import { ModelLibrarySettings } from './ui/model_library/ModelLibrarySettings.js';
+import { desktopSessionFailureReporter } from './ui/workflow/application/DesktopSessionFailureNotice.js';
 export { buildShiftedPlacementPayload };
 let invalidateCubeCatalogs = async () => undefined;
 /** Provide the authoritative UI service graph for this host extension instance. */
@@ -272,6 +273,7 @@ const workflowWorkspace = createWorkflowWorkspace({
         logger.error('SugarCubes output canvas failed', { error });
         pushToastMessage('error', 'Output canvas unavailable', readErrorMessage(error));
     },
+    reportSession: desktopSessionFailureReporter(logger, pushToastMessage, readErrorMessage),
 }, {
     stack: createCubeStackCommands({
         document: documentRef ?? document,

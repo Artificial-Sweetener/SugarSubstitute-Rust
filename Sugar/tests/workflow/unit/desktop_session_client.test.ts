@@ -341,6 +341,64 @@ test('an unexpected capture error is reported with its original cause and correl
   host.client.dispose();
 });
 
+test('a save refused for the same reason on every retry is reported once, and again only after a save succeeds or the reason changes', async () => {
+  const host = fixture();
+  const operations: string[] = [];
+  const client = new DesktopSessionClient({
+    transport: host.transport,
+    runtime: host.runtime,
+    nextId: () => '00000000-0000-4000-8000-0000000000aa',
+    digest,
+    report: (error, operation) => {
+      host.errors.push(error);
+      operations.push(operation);
+    },
+  });
+  const capture = host.runtime.capture;
+  const refuse = (reason: string) => {
+    host.runtime.capture = async () => {
+      throw new DesktopSessionRefusal('invalid', reason);
+    };
+  };
+  const request = (revision: number) =>
+    client.receive(
+      host.message({
+        kind: 'capture',
+        fence: host.fence,
+        checkpointId: host.checkpoint.id,
+        revision,
+      }),
+    );
+  const reported = () => host.errors.map((error) => (error as Error).message);
+  refuse('Desktop checkpoint failed semantic admission: entry submissions.');
+  await request(20);
+  await request(21);
+  await request(22);
+  expect(reported()).toEqual(['Desktop checkpoint failed semantic admission: entry submissions.']);
+  expect(operations).toEqual(['capture']);
+  expect(
+    host.sent.filter(
+      (message) =>
+        message.operation.kind === 'error' && message.operation.failure.code === 'invalid',
+    ),
+  ).toHaveLength(3);
+  refuse('Desktop workspace exceeds checkpoint admission.');
+  await request(23);
+  await request(24);
+  expect(reported()).toEqual([
+    'Desktop checkpoint failed semantic admission: entry submissions.',
+    'Desktop workspace exceeds checkpoint admission.',
+  ]);
+  host.runtime.capture = capture;
+  await request(25);
+  expect(host.sent.some((message) => message.operation.kind === 'commit')).toBe(true);
+  refuse('Desktop workspace exceeds checkpoint admission.');
+  await request(26);
+  expect(reported()).toHaveLength(3);
+  client.dispose();
+  host.client.dispose();
+});
+
 test('materializes only after exact chunks digest and full checkpoint admission', async () => {
   const host = fixture();
   const transferId = '00000000-0000-4000-8000-0000000000fe';

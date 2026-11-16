@@ -39,6 +39,7 @@ import { DesktopStartupIntent } from '../application/DesktopStartupIntent.js';
 import {
   DesktopSessionRefusal,
   type DesktopSessionCancellation,
+  type DesktopSessionFailedOperation,
   type DesktopSessionRuntime,
 } from '../domain/DesktopSession.js';
 import { ComfyDesktopDocuments } from './ComfyDesktopDocuments.js';
@@ -62,7 +63,7 @@ export interface ComfyDesktopSessionOptions {
   readonly settingsRoute?: SettingsWorkspaceRoute;
   readonly artifacts: DesktopOutputArtifacts;
   readonly versions: () => Promise<{ readonly frontend: string; readonly sugarcubes: string }>;
-  readonly report: (error: unknown) => void;
+  readonly report: (error: unknown, operation: DesktopSessionFailedOperation) => void;
 }
 
 /** Keep desktop capture independent of graph generation, history routing and editor insertion. */
@@ -108,7 +109,7 @@ export class ComfyDesktopSessionRuntime implements DesktopSessionRuntime {
         this.#refresh(true);
         this.bindings.changed();
       },
-      report: options.report,
+      report: (error) => options.report(error, 'protocol'),
     });
     this.#readiness = new ComfyDesktopReadiness(options.app, options.execution.sessions);
     this.#capture = new ComfyDesktopCapture({
@@ -437,7 +438,7 @@ export class ComfyDesktopSessionRuntime implements DesktopSessionRuntime {
         this.#available = false;
         this.bindings.changed();
       }
-      this.options.report(error);
+      this.options.report(error, 'protocol');
     } finally {
       this.#refreshing = false;
     }

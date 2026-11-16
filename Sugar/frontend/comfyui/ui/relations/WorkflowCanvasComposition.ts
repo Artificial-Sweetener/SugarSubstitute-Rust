@@ -33,6 +33,7 @@ import type { ContextMenuEntry } from '../menus/ContextMenu.js';
 import { ComfyWorkflowWorkspace } from '../surface/ComfyWorkflowWorkspace.js';
 import type { ComfyCanvasHostOptions } from '../output_canvas/infrastructure/ComfyCanvasHost.js';
 import type { WorkflowMasonryHostLifecycleOptions } from '../surface/masonry/WorkflowMasonryHostLifecycle.js';
+import type { DesktopSessionFailedOperation } from '../workflow/domain/DesktopSession.js';
 
 /** Bind peer canvas capabilities without teaching the web output viewer about native document editing. */
 export function createWorkflowCanvasComposition(
@@ -53,7 +54,9 @@ export function createWorkflowCanvasComposition(
   canvasInputs: ReturnType<typeof createCanvasInputs>;
   /** Compose presentation from these same execution, route, settings and page owners. */
   workspace(
-    canvas: Pick<ComfyCanvasHostOptions, 'saving' | 'report'>,
+    canvas: Pick<ComfyCanvasHostOptions, 'saving' | 'report'> & {
+      readonly reportSession: (error: unknown, operation: DesktopSessionFailedOperation) => void;
+    },
     masonry: Omit<
       WorkflowMasonryHostLifecycleOptions,
       'app' | 'document' | 'presentation' | 'getContainer'
