@@ -15,7 +15,8 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Resolve Comfy's active node renderer from its authoritative host setting. */
 import { isRecord } from '../types/common.js';
-const VUE_NODES_SETTING_ID = 'Comfy.VueNodes.Enabled';
+/** Comfy's own setting selecting its Vue node renderer. */
+export const VUE_NODES_SETTING_ID = 'Comfy.VueNodes.Enabled';
 const VUE_NODES_CHANGE_EVENT = `${VUE_NODES_SETTING_ID}.change`;
 /** Read renderer state without allowing stale LiteGraph compatibility flags to win. */
 export function resolveComfyRendererMode(app, liteGraph, documentRef) {

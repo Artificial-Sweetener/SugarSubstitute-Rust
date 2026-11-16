@@ -19,7 +19,8 @@ import { isRecord } from '../types/common.js';
 
 export type ComfyRendererMode = 'litegraph' | 'vue';
 
-const VUE_NODES_SETTING_ID = 'Comfy.VueNodes.Enabled';
+/** Comfy's own setting selecting its Vue node renderer. */
+export const VUE_NODES_SETTING_ID = 'Comfy.VueNodes.Enabled';
 const VUE_NODES_CHANGE_EVENT = `${VUE_NODES_SETTING_ID}.change`;
 
 export interface ComfyRendererModeChangeSource {

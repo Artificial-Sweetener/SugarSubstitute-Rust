@@ -25,6 +25,7 @@ import { substituteFrameCss } from './SubstituteFrameStyles.js';
 import { GenerationStripHost } from './GenerationStripHost.js';
 import { SubstituteToolbarLayout } from './SubstituteToolbarLayout.js';
 import { DesktopFramePresentation } from './DesktopFramePresentation.js';
+import { DesktopPresentationDefaults } from './DesktopPresentationDefaults.js';
 import { desktopFrameCss } from './DesktopFrameStyles.js';
 import { DesktopGraphBackdrop, browserGridTileDeriver } from './DesktopGraphBackdrop.js';
 import { readPluginMode, subscribePluginMode } from '../../core/PluginMode.js';
@@ -38,6 +39,7 @@ export class SubstituteFrameHost {
     #style;
     #desktop = new DesktopFramePresentation();
     #closed = new ClosedWorkflowHistory();
+    #desktopDefaults;
     #graphBackdrop;
     #presence = null;
     #mount = null;
@@ -54,6 +56,7 @@ export class SubstituteFrameHost {
     /** Prepare collaborators without choosing presentation before settings are restored. */
     constructor(options) {
         this.options = options;
+        this.#desktopDefaults = new DesktopPresentationDefaults(options.app, options.report);
         this.#renamePrompt = new InputModal({
             adapter: {
                 getDocument: () => options.document,
@@ -78,6 +81,7 @@ export class SubstituteFrameHost {
             throw new Error('Desktop frame configuration was not retained.');
         this.options.hostColorScheme.follow(receipt.darkTheme);
         this.mode.setDesktop(true);
+        this.#desktopDefaults.apply();
         this.#reconcile();
         return this.#desktop.read() ?? receipt;
     }

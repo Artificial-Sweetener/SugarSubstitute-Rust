@@ -71,6 +71,7 @@ async function settle(): Promise<void> {
 }
 
 test('mode restores host presentation and preserves native controls, graph, and renderer choice', async () => {
+  const setSettingValue = jest.fn(async (_id: string, _value: unknown) => undefined);
   jest.spyOn(AppOrbView.prototype, 'update').mockResolvedValue(undefined);
   const outer = document.createElement('div');
   outer.className = 'workflow-tabs-container';
@@ -94,7 +95,13 @@ test('mode restores host presentation and preserves native controls, graph, and 
   const app = {
     graph,
     extensionManager: { workflow: store, command: { execute } },
-    ui: { settings: { addSetting: () => undefined, getSettingValue: () => false } },
+    ui: {
+      settings: {
+        addSetting: () => undefined,
+        getSettingValue: () => false,
+        setSettingValue,
+      },
+    },
   };
   const report = jest.fn();
   const hostColorScheme = { follow: jest.fn(), release: jest.fn() };
@@ -243,6 +250,12 @@ test('mode restores host presentation and preserves native controls, graph, and 
   expect(host.readDesktopFrame()?.mounted).toBe(true);
   expect(outer.style.getPropertyValue('--sc-native-caption-width')).toBe('138px');
   expect(app.graph).toBe(graph);
+  // The first desktop configuration applied the desktop defaults once; later ones did not.
+  expect(setSettingValue.mock.calls).toEqual([
+    ['SugarCubes.Appearance.VisualStyle', 'fluent'],
+    ['Comfy.VueNodes.Enabled', true],
+    ['SugarCubes.Desktop.PresentationDefaults', 1],
+  ]);
   expect(report).not.toHaveBeenCalled();
   expect(hostColorScheme.release).not.toHaveBeenCalled();
   host.dispose();
