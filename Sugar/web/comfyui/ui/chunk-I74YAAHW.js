@@ -1,6 +1,6 @@
 import {
   CANVAS_EDIT_TEXT
-} from "./chunk-2WJX4EBF.js";
+} from "./chunk-OJDBLLHY.js";
 
 // frontend/comfyui/ui/canvas_editing/presentation/CanvasEditContextMenu.ts
 import { ContextMenu } from "./menus/ContextMenu.js";

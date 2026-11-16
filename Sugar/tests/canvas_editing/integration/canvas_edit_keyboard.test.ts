@@ -95,7 +95,28 @@ describe('canvas editing keyboard', () => {
     expect(press(button, ' ')).toBe(false);
     expect(press(button, ' ', {}, 'keyup')).toBe(false);
     expect(press(button, 'Enter')).toBe(false);
-    expect(press(button, 'z', { ctrlKey: true })).toBe(false);
+    expect(press(button, 'ArrowRight')).toBe(false);
+    await flush();
+    expect(f.host.sent()).toEqual([]);
+  });
+
+  test('walks document history from a focused chrome button, never the workflow underneath', async () => {
+    const f = await mountEditing();
+    const button = f.query<HTMLButtonElement>('[data-canvas-slot="move"]')!;
+    button.focus();
+    expect(press(button, 'z', { ctrlKey: true })).toBe(true);
+    expect(press(button, 'y', { ctrlKey: true })).toBe(true);
+    await flush();
+    expect(f.host.sent()).toEqual([
+      { type: 'history', action: 'undo' },
+      { type: 'history', action: 'redo' },
+    ]);
+  });
+
+  test('keeps undo from the workflow while the coverage editor is open', async () => {
+    const f = await mountEditing(editState({ mode: 'coverage', activeMask: 'layer-2' }));
+    expect(press(document.body, 'z', { ctrlKey: true })).toBe(true);
+    expect(press(document.body, 'y', { ctrlKey: true })).toBe(true);
     await flush();
     expect(f.host.sent()).toEqual([]);
   });

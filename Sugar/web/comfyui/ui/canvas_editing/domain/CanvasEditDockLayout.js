@@ -20,7 +20,7 @@ export const CANVAS_EDIT_CHROME_GAP = 8;
 /**
  * Place the top bar beside, and the rail below, the host surfaces they would cover.
  *
- * Both start at the chrome inset. The top bar (history, then the active tool's options) moves
+ * Both start at the chrome inset. The top bar (the active tool's options) moves
  * right past each intersecting host surface, so a host surface in the corner and the options
  * share the top row. The rail then moves down past each intersecting host surface that reaches
  * its top, including the top bar. A host surface further down the rail's column, such as the

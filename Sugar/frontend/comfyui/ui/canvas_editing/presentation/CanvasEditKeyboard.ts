@@ -32,8 +32,10 @@ const TEXT_ENTRY =
  *
  * A key belongs to the canvas only while focus rests in the canvas attachment or nowhere at all,
  * so graph, dialog and other panel shortcuts keep their owners. Text entry keeps its keys; the
- * editing chrome's own amount fields still pass Enter and Esc. Releasing Space, or the window
- * losing focus, always ends temporary navigation.
+ * editing chrome's own amount fields still pass Enter and Esc, and its buttons pass Esc and the
+ * Ctrl shortcuts, so undo pressed right after choosing a tool walks the document's history and
+ * never the workflow's. Releasing Space, or the window losing focus, always ends temporary
+ * navigation.
  */
 export class CanvasEditKeyboard {
   readonly #window: Window | null;
@@ -101,14 +103,16 @@ export class CanvasEditKeyboard {
   /**
    * Leave typing to text fields and activation keys to the chrome's own controls.
    *
-   * Within the editing chrome only Esc, and Enter in its amount fields, reach the canvas, so
-   * Enter and Space still press a focused button. Outside text entry every shortcut applies.
+   * Within the editing chrome Esc always reaches the canvas. Its amount fields also pass Enter
+   * and keep every other key for typing. Its buttons keep Enter, Space and the arrows for their
+   * own activation and pass the Ctrl shortcuts. Outside text entry every shortcut applies.
    */
   #admits(event: KeyboardEvent): boolean {
     const origin = event.target;
     if (!(origin instanceof Element)) return true;
     const typing = origin.closest(TEXT_ENTRY) !== null;
     if (!this.chrome.contains(origin)) return !typing;
-    return event.key === 'Escape' || (typing && event.key === 'Enter');
+    if (event.key === 'Escape') return true;
+    return typing ? event.key === 'Enter' : event.ctrlKey || event.metaKey;
   }
 }

@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Prove the mounted dock lays its history, options and rail out around the route tabs. */
+/** Prove the mounted dock lays its tool options and rail out around the route tabs. */
 import { afterEach, describe, expect, jest, test } from '@jest/globals';
 import { editState } from '../support/CanvasEditHostFixture.js';
 import {
@@ -38,13 +38,13 @@ const ROUTE_TABS = clientRect({
   height: 40,
 });
 
-/** Size the top bar from its content (the open Brush options grow it) and the rail fixed. */
+/** Size the top bar from its content (empty without tool options; open Brush options grow it) and the rail fixed. */
 function sizeChrome(): void {
   const size = (element: HTMLElement): { width: number; height: number } => {
     if (element.classList.contains('sc-canvas-edit-rail-dock')) return { width: 40, height: 260 };
     if (!element.classList.contains('sc-canvas-edit-topbar')) return { width: 200, height: 36 };
     const options = element.querySelector('.sc-canvas-edit-options');
-    if (!options) return { width: 64, height: 36 };
+    if (!options) return { width: 0, height: 0 };
     return { width: 260, height: options.querySelector('input[type="range"]') ? 150 : 36 };
   };
   jest.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (
@@ -64,14 +64,14 @@ function placement(root: HTMLElement, selector: string): string | undefined {
 }
 
 describe('editing dock layout', () => {
-  test('history follows the route tabs along the top row and the rail starts below them', async () => {
+  test('with no tool options the top bar is empty and the rail starts below the route tabs', async () => {
     const f = await mountEditing(editState(), () => [ROUTE_TABS]);
     sizeChrome();
     f.mounted.geometryChanged();
     await flush();
-    expect(placement(f.root, '.sc-canvas-edit-topbar')).toBe('156,8');
+    expect(f.query('.sc-canvas-edit-topbar')?.childElementCount).toBe(0);
+    expect(placement(f.root, '.sc-canvas-edit-topbar')).toBe('8,8');
     expect(placement(f.root, '.sc-canvas-edit-rail-dock')).toBe('8,56');
-    expect(f.query('.sc-canvas-edit-topbar')?.style.transform).toBe('translate(156px, 8px)');
   });
 
   test('the open Brush options sit beside the route tabs instead of covering Output', async () => {
@@ -90,7 +90,7 @@ describe('editing dock layout', () => {
     expect(placement(f.root, '.sc-canvas-edit-rail-dock')).toBe('8,56');
   });
 
-  test('the rail follows the history bar as the open options grow it', async () => {
+  test('the rail follows the top bar as the open options grow it', async () => {
     const observed = new Set<Element>();
     const resizes: (() => void)[] = [];
     class RecordingResizeObserver implements ResizeObserver {
@@ -135,12 +135,12 @@ describe('editing dock layout', () => {
     }
   });
 
-  test('without route tabs the dock keeps the corner with the rail beneath the history', async () => {
+  test('without route tabs or tool options the rail keeps the corner', async () => {
     const f = await mountEditing(editState());
     sizeChrome();
     f.mounted.geometryChanged();
     await flush();
     expect(placement(f.root, '.sc-canvas-edit-topbar')).toBe('8,8');
-    expect(placement(f.root, '.sc-canvas-edit-rail-dock')).toBe('8,52');
+    expect(placement(f.root, '.sc-canvas-edit-rail-dock')).toBe('8,8');
   });
 });

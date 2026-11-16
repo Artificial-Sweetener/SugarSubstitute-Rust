@@ -1,19 +1,15 @@
 import {
   CanvasToolRail
-} from "./chunk-AWHG7O74.js";
+} from "./chunk-SLI4UFVA.js";
 import {
   CanvasBrushOptions
-} from "./chunk-CSZBNOIR.js";
+} from "./chunk-HXRUOFZ6.js";
 import {
   CANVAS_EDIT_CHROME_INSET
 } from "./chunk-3HDL7XRD.js";
 import {
-  canvasEditToolAvailable,
-  iconButton
-} from "./chunk-KA4VBPJE.js";
-import {
-  CANVAS_EDIT_TEXT
-} from "./chunk-2WJX4EBF.js";
+  canvasEditToolAvailable
+} from "./chunk-SITYEXXI.js";
 import {
   defineComponent,
   h,
@@ -95,30 +91,6 @@ var CanvasEditDock = defineComponent({
       const tool = state.tool === "brush" || state.tool === "eraser" ? state.tool : null;
       return h("div", { class: "sc-canvas-edit-dock" }, [
         h("div", { ref: topBar, class: "sc-canvas-edit-topbar" }, [
-          h(
-            "div",
-            {
-              class: "sc-canvas-edit-chrome sc-canvas-edit-row",
-              role: "group",
-              "aria-label": CANVAS_EDIT_TEXT.history
-            },
-            [
-              iconButton(
-                "undo",
-                CANVAS_EDIT_TEXT.undo,
-                "undo",
-                () => edit.execute({ type: "history", action: "undo" }),
-                state.history.undo
-              ),
-              iconButton(
-                "redo",
-                CANVAS_EDIT_TEXT.redo,
-                "redo",
-                () => edit.execute({ type: "history", action: "redo" }),
-                state.history.redo
-              )
-            ]
-          ),
           tool && canvasEditToolAvailable(state, tool) ? h(CanvasBrushOptions, {
             key: "options",
             tool,

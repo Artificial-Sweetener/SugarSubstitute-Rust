@@ -10,22 +10,32 @@ const NUDGES = {
  * Space holds temporary navigation; Ctrl+Z, Ctrl+Shift+Z and Ctrl+Y walk document history;
  * Enter commits and Esc cancels; Delete clears the selected area; arrows nudge by one pixel, or
  * ten with Shift, while moving or transforming. The coverage panel blocks every key except Esc,
- * and a selection modification preview admits only navigation, Enter and Esc.
+ * and a selection modification preview admits only navigation, Enter and Esc. Both keep the
+ * history shortcuts without acting on them, so undo never reaches the workflow underneath while
+ * a canvas panel is open.
  */
 export function canvasEditKeyIntent(key, state, surface) {
-    if (surface.kind === 'coverage')
-        return key.phase === 'down' && key.key === 'Escape' ? { kind: 'close-coverage' } : null;
+    const history = (key.ctrl || key.meta) && !key.alt ? historyCommand(key) : null;
+    if (surface.kind === 'coverage') {
+        if (key.phase === 'down' && key.key === 'Escape')
+            return { kind: 'close-coverage' };
+        return history ? { kind: 'withheld' } : null;
+    }
     // Auto-repeat still restates the hold, so the page never scrolls; the owner sends changes only.
     if (key.key === ' ' && !key.ctrl && !key.meta && !key.alt)
         return { kind: 'command', command: { type: 'navigation', held: key.phase === 'down' } };
-    if (key.phase !== 'down')
-        return null;
     if (surface.kind === 'modify') {
+        if (history)
+            return { kind: 'withheld' };
+        if (key.phase !== 'down')
+            return null;
         if (key.key === 'Escape')
             return { kind: 'cancel-modify' };
         return key.key === 'Enter' ? { kind: 'apply-modify' } : null;
     }
-    const command = (key.ctrl || key.meta) && !key.alt ? historyCommand(key) : plainCommand(key, state);
+    if (key.phase !== 'down')
+        return null;
+    const command = (key.ctrl || key.meta) && !key.alt ? history : plainCommand(key, state);
     return command ? { kind: 'command', command } : null;
 }
 function historyCommand(key) {

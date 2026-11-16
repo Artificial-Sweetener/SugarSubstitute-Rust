@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Dock the history bar, tool options and tool rail beside the host's canvas chrome. */
+/** Dock the active tool's options and the tool rail beside the host's canvas chrome. */
 import { defineComponent, h, onBeforeUnmount, onMounted, onUpdated, ref, type PropType } from 'vue';
 import type {
   CanvasEditController,
@@ -27,13 +27,12 @@ import {
   type CanvasEditRect,
 } from '../domain/CanvasToolbarPlacement.js';
 import { CanvasBrushOptions } from './CanvasBrushOptions.js';
-import { iconButton } from './CanvasEditPages.js';
-import { CANVAS_EDIT_TEXT } from './CanvasEditText.js';
 import { CanvasToolRail } from './CanvasToolRail.js';
 
 /**
- * Render the top bar (document history, then the active tool's options) and the vertical rail,
- * then place both around the host's chrome after layout.
+ * Render the top bar (the active tool's options) and the vertical rail, then place both around
+ * the host's chrome after layout. Document history has no buttons here: it is walked from the
+ * keyboard.
  *
  * Placement follows every render, every size change of either surface (the options expand in
  * place), and `layoutRevision`, which the owner advances when the canvas allocation changes.
@@ -87,30 +86,6 @@ export const CanvasEditDock = defineComponent({
       const tool = state.tool === 'brush' || state.tool === 'eraser' ? state.tool : null;
       return h('div', { class: 'sc-canvas-edit-dock' }, [
         h('div', { ref: topBar, class: 'sc-canvas-edit-topbar' }, [
-          h(
-            'div',
-            {
-              class: 'sc-canvas-edit-chrome sc-canvas-edit-row',
-              role: 'group',
-              'aria-label': CANVAS_EDIT_TEXT.history,
-            },
-            [
-              iconButton(
-                'undo',
-                CANVAS_EDIT_TEXT.undo,
-                'undo',
-                () => edit.execute({ type: 'history', action: 'undo' }),
-                state.history.undo,
-              ),
-              iconButton(
-                'redo',
-                CANVAS_EDIT_TEXT.redo,
-                'redo',
-                () => edit.execute({ type: 'history', action: 'redo' }),
-                state.history.redo,
-              ),
-            ],
-          ),
           tool && canvasEditToolAvailable(state, tool)
             ? h(CanvasBrushOptions, {
                 key: 'options',

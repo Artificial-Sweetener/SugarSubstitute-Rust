@@ -51,7 +51,6 @@ export const CANVAS_EDIT_TEXT = Object.freeze({
   close: 'Close',
   undo: 'Undo',
   redo: 'Redo',
-  history: 'History',
   apply: 'Apply',
   cancel: 'Cancel',
   modifySelection: 'Modify selection',

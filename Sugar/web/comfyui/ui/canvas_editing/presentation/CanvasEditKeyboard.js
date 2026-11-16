@@ -1,6 +1,6 @@
 import {
   CanvasEditKeyboard
-} from "../../chunk-BQYNHRW2.js";
+} from "../../chunk-6PAZAR2W.js";
 export {
   CanvasEditKeyboard
 };

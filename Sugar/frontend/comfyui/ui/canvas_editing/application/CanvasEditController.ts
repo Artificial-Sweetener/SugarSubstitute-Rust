@@ -196,6 +196,7 @@ export class CanvasEditController {
     if (!snapshot) return false;
     const intent = canvasEditKeyIntent(key, snapshot.state, snapshot.surface);
     if (!intent) return false;
+    if (intent.kind === 'withheld') return true;
     if (intent.kind === 'close-coverage') this.closeCoverage();
     else if (intent.kind === 'cancel-modify') this.cancelModify();
     else if (intent.kind === 'apply-modify') void this.applyModify();

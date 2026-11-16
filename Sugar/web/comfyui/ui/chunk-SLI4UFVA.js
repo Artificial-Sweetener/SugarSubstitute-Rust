@@ -1,7 +1,7 @@
 import {
   CANVAS_EDIT_TEXT,
   CANVAS_TOOL_LABELS
-} from "./chunk-2WJX4EBF.js";
+} from "./chunk-OJDBLLHY.js";
 import {
   CANVAS_TOOL_ICONS,
   canvasEditIcon,

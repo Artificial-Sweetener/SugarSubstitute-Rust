@@ -1,7 +1,7 @@
 import {
   CanvasEditContextMenu
-} from "../../chunk-ZWY52QO3.js";
-import "../../chunk-2WJX4EBF.js";
+} from "../../chunk-I74YAAHW.js";
+import "../../chunk-OJDBLLHY.js";
 export {
   CanvasEditContextMenu
 };

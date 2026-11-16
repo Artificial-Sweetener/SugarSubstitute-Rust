@@ -52,15 +52,17 @@ var CanvasEditKeyboard = class {
   /**
    * Leave typing to text fields and activation keys to the chrome's own controls.
    *
-   * Within the editing chrome only Esc, and Enter in its amount fields, reach the canvas, so
-   * Enter and Space still press a focused button. Outside text entry every shortcut applies.
+   * Within the editing chrome Esc always reaches the canvas. Its amount fields also pass Enter
+   * and keep every other key for typing. Its buttons keep Enter, Space and the arrows for their
+   * own activation and pass the Ctrl shortcuts. Outside text entry every shortcut applies.
    */
   #admits(event) {
     const origin = event.target;
     if (!(origin instanceof Element)) return true;
     const typing = origin.closest(TEXT_ENTRY) !== null;
     if (!this.chrome.contains(origin)) return !typing;
-    return event.key === "Escape" || typing && event.key === "Enter";
+    if (event.key === "Escape") return true;
+    return typing ? event.key === "Enter" : event.ctrlKey || event.metaKey;
   }
 };
 

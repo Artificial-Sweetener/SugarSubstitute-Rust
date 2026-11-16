@@ -61,7 +61,7 @@ const measure = (occlusions: NativeCanvasOcclusions) =>
   );
 
 describe('editing chrome occlusions', () => {
-  test('reports the rail, history and contextual toolbar as covering the canvas', async () => {
+  test('reports the rail and contextual toolbar as covering the canvas', async () => {
     const f = await mountEditing(
       editState({ selection: { bounds: { left: 300, top: 100, width: 200, height: 200 } } }),
     );
@@ -70,12 +70,11 @@ describe('editing chrome occlusions', () => {
     expect(measure(occlusions)).toEqual({
       occlusions: expect.arrayContaining([
         { x: 8, y: 52, width: 40, height: 260 },
-        { x: 8, y: 8, width: 64, height: 36 },
         { x: 300, y: 312, width: 200, height: 36 },
       ]),
       modal: false,
     });
-    expect(measure(occlusions).occlusions).toHaveLength(3);
+    expect(measure(occlusions).occlusions).toHaveLength(2);
   });
 
   test('blocks the whole canvas while the coverage editor is open', async () => {

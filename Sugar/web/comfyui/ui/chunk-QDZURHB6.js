@@ -1,17 +1,17 @@
 import {
-  CanvasToolbarPlacement,
-  canvasEditSafeArea
-} from "./chunk-3HDL7XRD.js";
-import {
   modifyPage,
   selectionPage,
   sessionPage,
   transformPage
-} from "./chunk-KA4VBPJE.js";
+} from "./chunk-YS23D6EK.js";
+import {
+  CanvasToolbarPlacement,
+  canvasEditSafeArea
+} from "./chunk-3HDL7XRD.js";
 import {
   CANVAS_EDIT_TEXT,
   CANVAS_TOOL_LABELS
-} from "./chunk-2WJX4EBF.js";
+} from "./chunk-OJDBLLHY.js";
 import {
   defineComponent,
   h,

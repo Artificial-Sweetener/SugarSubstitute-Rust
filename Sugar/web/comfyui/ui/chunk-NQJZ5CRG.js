@@ -1,18 +1,18 @@
 import {
   CanvasContextualToolbar
-} from "./chunk-A3QVOJMG.js";
-import {
-  CanvasEditDock
-} from "./chunk-GJM3NOUL.js";
+} from "./chunk-QDZURHB6.js";
 import {
   iconButton
-} from "./chunk-KA4VBPJE.js";
+} from "./chunk-YS23D6EK.js";
 import {
   CanvasCoverageControls
-} from "./chunk-TPZEQNX7.js";
+} from "./chunk-RBMNCV5O.js";
+import {
+  CanvasEditDock
+} from "./chunk-74DLBBMV.js";
 import {
   CANVAS_EDIT_TEXT
-} from "./chunk-2WJX4EBF.js";
+} from "./chunk-OJDBLLHY.js";
 import {
   defineComponent,
   h,

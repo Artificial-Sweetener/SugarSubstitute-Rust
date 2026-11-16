@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Prove the rail, its flyouts, tool options and history render host state and emit commands. */
+/** Prove the rail, its flyouts and tool options render host state and emit commands. */
 import { afterEach, describe, expect, jest, test } from '@jest/globals';
 import { editState } from '../support/CanvasEditHostFixture.js';
 import { disposeEditing, flush, mountEditing } from '../support/CanvasEditOverlayFixture.js';
@@ -135,14 +135,12 @@ describe('canvas tool rail', () => {
     expect(f.query('[data-canvas-options]')).toBeNull();
   });
 
-  test('reflects document history in Undo and Redo', async () => {
+  test('offers no document Undo or Redo button, whatever history the document has', async () => {
     const f = await mountEditing();
-    const undo = () => f.query<HTMLButtonElement>('[data-canvas-action="undo"]')!;
-    expect(undo().disabled).toBe(true);
-    await f.push({ history: { undo: true, redo: false } });
-    expect(undo().disabled).toBe(false);
-    expect(f.query<HTMLButtonElement>('[data-canvas-action="redo"]')!.disabled).toBe(true);
-    await f.click('[data-canvas-action="undo"]');
-    expect(f.host.sent()).toEqual([{ type: 'history', action: 'undo' }]);
+    await f.push({ history: { undo: true, redo: true } });
+    expect(f.query('[data-canvas-action="undo"]')).toBeNull();
+    expect(f.query('[data-canvas-action="redo"]')).toBeNull();
+    expect(f.query('.sc-canvas-edit-topbar')?.childElementCount).toBe(0);
+    expect(f.host.sent()).toEqual([]);
   });
 });

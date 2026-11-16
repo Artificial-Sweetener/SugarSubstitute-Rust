@@ -83,10 +83,14 @@ describe('canvas editing shortcuts', () => {
     expect(canvasEditKeyIntent(key('Escape'), state, { kind: 'coverage' })).toEqual({
       kind: 'close-coverage',
     });
-    for (const name of [' ', 'Enter', 'Delete', 'z'])
-      expect(
-        canvasEditKeyIntent(key(name, { ctrl: name === 'z' }), state, { kind: 'coverage' }),
-      ).toBeNull();
+    for (const name of [' ', 'Enter', 'Delete'])
+      expect(canvasEditKeyIntent(key(name), state, { kind: 'coverage' })).toBeNull();
+    // Undo and redo stay with the canvas, unused, so they never reach the workflow underneath.
+    for (const surface of [{ kind: 'coverage' }, { kind: 'modify' }] as const)
+      for (const name of ['z', 'y'])
+        expect(canvasEditKeyIntent(key(name, { ctrl: true }), state, surface)).toEqual({
+          kind: 'withheld',
+        });
     const modify: CanvasEditSurface = { kind: 'modify' };
     expect(canvasEditKeyIntent(key('Escape'), editState(), modify)).toEqual({
       kind: 'cancel-modify',
@@ -94,7 +98,6 @@ describe('canvas editing shortcuts', () => {
     expect(canvasEditKeyIntent(key('Enter'), editState(), modify)).toEqual({
       kind: 'apply-modify',
     });
-    expect(canvasEditKeyIntent(key('z', { ctrl: true }), editState(), modify)).toBeNull();
     expect(canvasEditKeyIntent(key(' '), editState(), modify)).toEqual({
       kind: 'command',
       command: { type: 'navigation', held: true },

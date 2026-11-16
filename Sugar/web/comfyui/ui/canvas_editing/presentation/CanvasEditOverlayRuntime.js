@@ -1,31 +1,32 @@
 import {
   CanvasEditKeyboard
-} from "../../chunk-BQYNHRW2.js";
+} from "../../chunk-6PAZAR2W.js";
 import {
   CanvasEditOverlay,
   canvasEditSurface
-} from "../../chunk-J5S5ZY6K.js";
+} from "../../chunk-NQJZ5CRG.js";
 import {
   ensureCanvasEditStyles
 } from "../../chunk-CETUOIZM.js";
-import "../../chunk-A3QVOJMG.js";
+import "../../chunk-QDZURHB6.js";
+import "../../chunk-YS23D6EK.js";
+import "../../chunk-RBMNCV5O.js";
 import {
   CanvasEditContextMenu
-} from "../../chunk-ZWY52QO3.js";
-import "../../chunk-GJM3NOUL.js";
-import "../../chunk-AWHG7O74.js";
-import "../../chunk-CSZBNOIR.js";
+} from "../../chunk-I74YAAHW.js";
+import "../../chunk-74DLBBMV.js";
+import "../../chunk-SLI4UFVA.js";
+import "../../chunk-HXRUOFZ6.js";
 import "../../chunk-3HDL7XRD.js";
 import {
   canvasEditSlotOf,
   canvasEditSlotViews,
   canvasEditToolAvailable
-} from "../../chunk-KA4VBPJE.js";
-import "../../chunk-TPZEQNX7.js";
+} from "../../chunk-SITYEXXI.js";
 import {
   DEFAULT_COVERAGE_MODIFICATION
 } from "../../chunk-EFQNN4SR.js";
-import "../../chunk-2WJX4EBF.js";
+import "../../chunk-OJDBLLHY.js";
 import "../../chunk-X5ULNSRV.js";
 import {
   createApp,
@@ -41,16 +42,21 @@ var NUDGES = {
   ArrowDown: [0, 1]
 };
 function canvasEditKeyIntent(key, state, surface) {
-  if (surface.kind === "coverage")
-    return key.phase === "down" && key.key === "Escape" ? { kind: "close-coverage" } : null;
+  const history = (key.ctrl || key.meta) && !key.alt ? historyCommand(key) : null;
+  if (surface.kind === "coverage") {
+    if (key.phase === "down" && key.key === "Escape") return { kind: "close-coverage" };
+    return history ? { kind: "withheld" } : null;
+  }
   if (key.key === " " && !key.ctrl && !key.meta && !key.alt)
     return { kind: "command", command: { type: "navigation", held: key.phase === "down" } };
-  if (key.phase !== "down") return null;
   if (surface.kind === "modify") {
+    if (history) return { kind: "withheld" };
+    if (key.phase !== "down") return null;
     if (key.key === "Escape") return { kind: "cancel-modify" };
     return key.key === "Enter" ? { kind: "apply-modify" } : null;
   }
-  const command = (key.ctrl || key.meta) && !key.alt ? historyCommand(key) : plainCommand(key, state);
+  if (key.phase !== "down") return null;
+  const command = (key.ctrl || key.meta) && !key.alt ? history : plainCommand(key, state);
   return command ? { kind: "command", command } : null;
 }
 function historyCommand(key) {
@@ -247,6 +253,7 @@ var CanvasEditController = class {
     if (!snapshot) return false;
     const intent = canvasEditKeyIntent(key, snapshot.state, snapshot.surface);
     if (!intent) return false;
+    if (intent.kind === "withheld") return true;
     if (intent.kind === "close-coverage") this.closeCoverage();
     else if (intent.kind === "cancel-modify") this.cancelModify();
     else if (intent.kind === "apply-modify") void this.applyModify();
