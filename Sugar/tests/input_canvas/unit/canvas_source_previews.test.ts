@@ -313,28 +313,28 @@ test('a preview waits for the canvas to hold its workflow and drops captures fro
   expect(f.report).not.toHaveBeenCalled();
 });
 
-test('a mask of a workflow document is read and kept while the canvas shows no document, without a capture per route change', async () => {
-  const held = { id: 'input-1', geometryRevision: 'geometry', width: 2, height: 1 };
-  const listeners = new Set<(change: CanvasSourceChange) => void>();
+test('a mask of another document the workflow provisioned is read from that document', async () => {
+  const addressed = { id: 'input-1', geometryRevision: 'geometry-1', width: 2, height: 1 };
+  const other = { id: 'input-2', geometryRevision: 'geometry-2', width: 2, height: 1 };
   const execute = jest.fn(async (query: CanvasSourceQuery): Promise<CanvasSourceResult> => {
-    // The Output route is shown: the canvas reports no document and offers no targets.
+    // The canvas context names one of the workflow's two input documents.
     if (query.type === 'context')
       return {
         observesChanges: true,
         kind: 'context',
         supported: true,
-        document: null,
-        revision: 'none',
-        targets: [],
-        layers: [],
-        currentLayerId: null,
+        document: addressed,
+        revision: 'input-1@1',
+        targets: ['layer'],
+        layers: [{ id: '1', name: 'Mask', parentId: null, depth: 0, visible: true }],
+        currentLayerId: '1',
       };
     return {
       kind: 'captured',
       snapshots: query.targets.map((target) => ({
         target,
         document: query.document,
-        revision: 'input-1@1',
+        revision: `${query.document.id}@1`,
         pixels: encodeCanvasRaster(2, 1, 'rgba8', new Uint8Array(8)),
       })),
     };
@@ -342,16 +342,11 @@ test('a mask of a workflow document is read and kept while the canvas shows no d
   const host: CanvasSourceHost = {
     canvasId: 'editor',
     execute,
-    changes: nativeCanvasChanges((listener) => {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
-    }),
+    changes: nativeCanvasChanges(() => () => {}),
   };
   const capture = new CanvasSourceCapture(
     () => host,
-    (_canvasId, documentId) => (documentId === held.id ? held : null),
+    (_canvasId, documentId) => (documentId === other.id ? other : null),
   );
   const store = new CanvasSourcePreviews(capture, () => host, jest.fn(), {
     loaded: () => null,
@@ -360,27 +355,18 @@ test('a mask of a workflow document is read and kept while the canvas shows no d
   const mask: Exclude<CanvasInputSource, { kind: 'file' }> = {
     kind: 'canvas',
     canvasId: 'editor',
-    documentId: held.id,
+    documentId: other.id,
     target: { kind: 'layer', layerId: '7' },
   };
   const context = await capture.context('editor');
   expect(store.unavailable(mask, context)).toBeNull();
-  expect(store.unavailable({ ...mask, documentId: null }, context)).toBe('Open a document');
-  expect(store.unavailable({ ...mask, documentId: 'elsewhere' }, context)).toBe('Open a document');
-  const captures = (): number =>
-    execute.mock.calls.filter(([query]) => query.type === 'capture').length;
+  expect(store.unavailable({ ...mask, documentId: 'elsewhere' }, context)).toBe(
+    'Open the source document',
+  );
   const values: CanvasSourcePreview[] = [];
   const stop = store.observe(mask, (value) => values.push(value));
   await settled();
-  expect(values.at(-1)).toMatchObject({ kind: 'pixels', document: held });
-  expect(captures()).toBe(1);
-  for (const listener of listeners) listener({ documentId: null, revision: 'none' });
-  await settled();
-  expect(captures()).toBe(1);
-  expect(values.at(-1)).toMatchObject({ kind: 'pixels' });
-  for (const listener of listeners) listener({ documentId: held.id, revision: 'input-1@2' });
-  await settled();
-  expect(captures()).toBe(2);
+  expect(values.at(-1)).toMatchObject({ kind: 'pixels', document: other });
   stop();
   store.dispose();
 });

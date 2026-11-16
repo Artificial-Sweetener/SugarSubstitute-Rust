@@ -51,16 +51,16 @@ export class CanvasSourceCapture {
         return result;
     }
     /**
-     * Explain why a source cannot be captured now, or return null when it can. A document the
-     * workflow provisioned stays capturable while the canvas shows another document or the Output
-     * route, so its sources never wait for the Input route to be shown.
+     * Explain why a source cannot be captured now, or return null when it can. The canvas context
+     * names one input document, and a workflow may provision several: a source of another
+     * provisioned document is captured from that document directly.
      */
     unavailable(source, context) {
         if (source.kind !== 'file' && context?.supported && this.#held(source, context))
             return null;
         return canvasSourceUnavailable(source, context);
     }
-    /** The provisioned document a source names when the canvas is not currently showing it. */
+    /** The provisioned document a source names when the canvas context names another one. */
     #held(source, context) {
         return source.documentId !== null && source.documentId !== context.document?.id
             ? this.documents(source.canvasId, source.documentId)
