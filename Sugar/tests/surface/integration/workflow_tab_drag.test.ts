@@ -108,6 +108,8 @@ test.each([true, false])(
         menu: async () => [],
         reorder,
         create: jest.fn(),
+        reopen: jest.fn(),
+        reopenAvailable: () => false,
         report: jest.fn(),
       },
       viewport,
@@ -179,35 +181,70 @@ test('stationary captured presses retain the native control as the browser click
   }
 });
 
-test('middle-button release closes once even when the host omits auxclick', async () => {
+test('a middle click closes its tab once, even when the host omits auxclick, and never activates it', async () => {
   const viewport = document.createElement('div');
   document.body.append(viewport);
   const close = jest.fn();
+  const activate = jest.fn();
   const id = workflowSessionId('middle-close');
+  const other = workflowSessionId('middle-other');
   const view = new WorkflowTabsView(
     document,
     {
-      activate: jest.fn(),
+      activate,
       close,
       menu: async () => [],
       reorder: jest.fn(),
       create: jest.fn(),
+      reopen: jest.fn(),
+      reopenAvailable: () => false,
       report: jest.fn(),
     },
     viewport,
   );
   viewport.append(view.element);
-  view.update([{ id, title: 'Close me', selected: true, modified: false }], () => false);
+  view.update(
+    [
+      { id: other, title: 'Shown', selected: true, modified: false },
+      { id, title: 'Close me', selected: false, modified: false },
+    ],
+    () => false,
+  );
   await Updates.next();
   const tab = document.getElementById(`sc-workflow-${id}`)!;
+  const shown = document.getElementById(`sc-workflow-${other}`)!;
+  const mouse = (target: Element, type: string, button: number): MouseEvent => {
+    const event = new MouseEvent(type, { button, bubbles: true, cancelable: true });
+    target.dispatchEvent(event);
+    return event;
+  };
   try {
-    tab.dispatchEvent(new MouseEvent('mouseup', { button: 0, bubbles: true }));
-    tab.dispatchEvent(new MouseEvent('mouseup', { button: 2, bubbles: true }));
+    mouse(tab, 'mouseup', 0);
+    mouse(tab, 'mouseup', 2);
     expect(close).not.toHaveBeenCalled();
-    tab.dispatchEvent(new MouseEvent('mouseup', { button: 1, bubbles: true }));
-    expect(close).toHaveBeenCalledWith(id);
-    tab.dispatchEvent(new MouseEvent('auxclick', { button: 1, bubbles: true }));
+    // A release with no press on this tab ends a gesture begun elsewhere, as a middle-button
+    // pan of the canvas released over the tab strip does.
+    mouse(tab, 'mouseup', 1);
+    expect(close).not.toHaveBeenCalled();
+    // A press on one tab released on another closes neither.
+    mouse(shown, 'mousedown', 1);
+    mouse(tab, 'mouseup', 1);
+    expect(close).not.toHaveBeenCalled();
+    // The press must not focus the tab: Fluent would select it and load its workflow.
+    expect(mouse(tab, 'mousedown', 1).defaultPrevented).toBe(true);
+    mouse(tab, 'mouseup', 1);
     expect(close).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledWith(id);
+    mouse(tab, 'auxclick', 1);
+    mouse(tab, 'mouseup', 1);
+    expect(close).toHaveBeenCalledTimes(1);
+    // A browser that honours the cancelled pointer press delivers no mouse events for it: the
+    // pointer release alone closes the tab, once, even if a mouse release follows.
+    expect(mouse(tab, 'pointerdown', 1).defaultPrevented).toBe(true);
+    mouse(tab, 'pointerup', 1);
+    mouse(tab, 'mouseup', 1);
+    expect(close).toHaveBeenCalledTimes(2);
+    expect(activate).not.toHaveBeenCalled();
   } finally {
     view.dispose();
   }

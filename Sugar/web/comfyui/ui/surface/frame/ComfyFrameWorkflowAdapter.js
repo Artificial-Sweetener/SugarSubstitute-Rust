@@ -20,6 +20,7 @@ import { ComfyWorkflowTabMenuAdapter } from './ComfyWorkflowTabMenuAdapter.js';
 /** Keep external component compatibility isolated from the Fluent view and session identity owner. */
 export class ComfyFrameWorkflowAdapter {
     native;
+    #app;
     #manager;
     #workflow;
     #menus;
@@ -30,6 +31,7 @@ export class ComfyFrameWorkflowAdapter {
         const manager = isRecord(app) && isRecord(app.extensionManager) ? app.extensionManager : null;
         if (!manager || !isRecord(manager.workflow))
             throw new Error('Comfy workflow controls are unavailable.');
+        this.#app = isRecord(app) ? app : {};
         this.#manager = manager;
         this.#workflow = manager.workflow;
         this.#menus = new ComfyWorkflowTabMenuAdapter(native.ownerDocument);
@@ -67,6 +69,46 @@ export class ComfyFrameWorkflowAdapter {
             throw new Error('Comfy workflow close event is unavailable.');
         // Vue compiles WorkflowTab @click.middle to mouseup; click opens its hover preview instead.
         tab.dispatchEvent(new MouseEventType('mouseup', { button: 1, bubbles: true, cancelable: true }));
+    }
+    /**
+     * Capture every open workflow's document as a close is requested, keyed by the host's own
+     * workflow object, so whichever of them the host closes can be opened again.
+     *
+     * A tab Comfy restored in the background holds no document until Comfy reads it. Such a
+     * workflow is read first through Comfy's own load, which neither activates the tab nor loads
+     * its graph, because closing it unread would discard a workflow nobody could bring back.
+     */
+    async snapshots(sessions) {
+        const captured = new Map();
+        for (const workflow of this.#open()) {
+            let graph = this.#document(workflow);
+            if (!isRecord(graph) && workflow.isLoading !== true && typeof workflow.load === 'function') {
+                await workflow.load();
+                graph = this.#document(workflow);
+            }
+            if (!isRecord(graph))
+                continue;
+            const session = sessions.find((candidate) => candidate.path === workflow.path);
+            const named = typeof workflow.filename === 'string' ? workflow.filename : 'Workflow';
+            captured.set(workflow, {
+                title: session?.title ?? named,
+                graphJson: JSON.stringify(graph),
+            });
+        }
+        return captured;
+    }
+    /** The host's open workflow objects, for comparing against an earlier capture. */
+    opened() {
+        return new Set(this.#open());
+    }
+    /** Open a closed workflow again in a new tab through Comfy's own graph loading. */
+    async reopen(record) {
+        const load = this.#app.loadGraphData;
+        if (typeof load !== 'function')
+            throw new Error('Comfy workflow loading is unavailable.');
+        const graph = JSON.parse(record.graphJson);
+        // A title makes Comfy open the graph as a new unsaved workflow beside the open ones.
+        await load.call(this.#app, graph, true, true, record.title);
     }
     /** Project the retained native tab's complete action model without changing the active workflow. */
     async menu(id, sessions, report) {
@@ -123,6 +165,26 @@ export class ComfyFrameWorkflowAdapter {
         if (!session || index < 0 || tabs.length !== open.length || !tab || label !== session.title)
             throw new Error('Comfy workflow action surface changed; retry after tabs finish updating.');
         return tab;
+    }
+    /** Read one workflow's current document: the live graph when shown, else its tracked state. */
+    #document(workflow) {
+        if (workflow === this.#workflow.activeWorkflow) {
+            const root = isRecord(this.#app.rootGraph) ? this.#app.rootGraph : this.#app.graph;
+            if (isRecord(root) && typeof root.serialize === 'function')
+                return root.serialize();
+        }
+        const tracker = isRecord(workflow.changeTracker) ? workflow.changeTracker : null;
+        if (tracker && isRecord(tracker.activeState))
+            return tracker.activeState;
+        if (typeof workflow.content !== 'string')
+            return null;
+        try {
+            return JSON.parse(workflow.content);
+        }
+        catch {
+            // Content Comfy itself could not parse has no document to reopen.
+            return null;
+        }
     }
     /** Narrow the dynamic host collection before exposing any workflow facts. */
     #open() {

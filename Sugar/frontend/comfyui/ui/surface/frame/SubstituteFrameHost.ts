@@ -25,6 +25,7 @@ import type { WorkflowProgressStore } from '../../execution/application/Workflow
 import type { CubeStackFrameControls } from '../stack/CubeStackHost.js';
 import { SubstituteFrameMode } from './SubstituteFrameMode.js';
 import { ComfyFrameWorkflowAdapter } from './ComfyFrameWorkflowAdapter.js';
+import { ClosedWorkflowHistory } from './ClosedWorkflowHistory.js';
 import { SubstituteFrameView } from './SubstituteFrameView.js';
 import { substituteFrameCss } from './SubstituteFrameStyles.js';
 import { GenerationStripHost } from './GenerationStripHost.js';
@@ -57,6 +58,7 @@ export class SubstituteFrameHost {
   readonly #stops: (() => void)[] = [];
   readonly #style: HTMLStyleElement;
   readonly #desktop = new DesktopFramePresentation();
+  readonly #closed = new ClosedWorkflowHistory();
   readonly #graphBackdrop: DesktopGraphBackdrop;
   #presence: HostSurfaceObserver | null = null;
   #mount: HTMLElement | null = null;
@@ -199,6 +201,7 @@ export class SubstituteFrameHost {
       if (!document.documentElement.hasAttribute('data-sc-substitute-frame'))
         document.documentElement.setAttribute('data-sc-substitute-frame', '');
       this.options.setOverridesInline(true);
+      this.#settleClosed();
       this.#view?.update(this.#adapter?.read(this.options.sessions.read().open) ?? [], (id) =>
         this.options.activity.unread(id),
       );
@@ -212,6 +215,54 @@ export class SubstituteFrameHost {
       this.#unmount();
       document.documentElement.removeAttribute('data-sc-substitute-frame');
     }
+  }
+
+  /**
+   * Capture every open workflow, then run an action that may close some of them. A capture that
+   * fails is reported and the action still runs: the person asked for it.
+   */
+  #afterCapture(action: () => void): void {
+    const adapter = this.#adapter;
+    if (!adapter) return;
+    void adapter
+      .snapshots(this.options.sessions.read().open)
+      .then(
+        (open) => this.#closed.capture(open),
+        (error: unknown) => this.options.report(error),
+      )
+      .then(() => {
+        if (this.#adapter !== adapter) return;
+        try {
+          action();
+        } catch (error: unknown) {
+          this.options.report(error);
+        }
+      });
+  }
+
+  /**
+   * Record captured workflows the host has now closed. Comfy announces a closed tab through
+   * more than one owner, so the host's open workflows are compared whenever the frame refreshes
+   * and again when the reopen action is about to be offered or used.
+   */
+  #settleClosed(): void {
+    try {
+      if (this.#adapter) this.#closed.settle(this.#adapter.opened());
+    } catch (error: unknown) {
+      this.options.report(error);
+    }
+  }
+
+  /** Open the most recently closed workflow again; one that fails to open stays reopenable. */
+  #reopen(): void {
+    const adapter = this.#adapter;
+    this.#settleClosed();
+    const record = adapter ? this.#closed.take() : null;
+    if (!adapter || !record) return;
+    void adapter.reopen(record).catch((error: unknown) => {
+      this.#closed.restore(record);
+      this.options.report(error);
+    });
   }
 
   /** Bind typed intents once per native frame replacement. */
@@ -235,10 +286,27 @@ export class SubstituteFrameHost {
     this.#view = new SubstituteFrameView(this.options.document, {
       workflows: {
         activate: (id) => this.#adapter?.activate(id, this.options.sessions.read().open),
-        close: (id) => this.#adapter?.close(id, this.options.sessions.read().open),
-        menu: (id) =>
-          this.#adapter?.menu(id, this.options.sessions.read().open, this.options.report) ??
-          Promise.reject(new Error('Comfy workflow controls are unavailable.')),
+        close: (id) =>
+          this.#afterCapture(() => this.#adapter?.close(id, this.options.sessions.read().open)),
+        menu: async (id) => {
+          if (!this.#adapter) throw new Error('Comfy workflow controls are unavailable.');
+          const entries = await this.#adapter.menu(
+            id,
+            this.options.sessions.read().open,
+            this.options.report,
+          );
+          // Any of Comfy's tab actions may close workflows, so each one captures them first.
+          return entries.map((entry) => {
+            const select = entry.select;
+            if (!select) return entry;
+            return { ...entry, select: () => this.#afterCapture(select) };
+          });
+        },
+        reopen: () => this.#reopen(),
+        reopenAvailable: () => {
+          this.#settleClosed();
+          return this.#closed.available;
+        },
         reorder: (from, to) => this.#adapter?.reorder(from, to),
         create: () => command('Comfy.NewBlankWorkflow'),
         report: this.options.report,

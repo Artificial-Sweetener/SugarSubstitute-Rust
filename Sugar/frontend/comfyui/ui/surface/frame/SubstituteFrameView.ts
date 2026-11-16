@@ -70,6 +70,10 @@ export class SubstituteFrameView {
     viewport.id = 'sc-workflow-strip';
     viewport.setAttribute('data-sc-scrollbar-managed', '');
     this.#tabs = new WorkflowTabsView(document, actions.workflows, viewport);
+    // Empty space on the bar beside the tabs is tab-bar space too.
+    this.element.addEventListener('contextmenu', (event) => {
+      if (event.target === this.element) this.#tabs.offerReopen(event);
+    });
     this.#orb = new AppOrbView(
       document,
       () => [

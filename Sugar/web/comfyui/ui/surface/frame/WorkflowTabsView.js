@@ -36,6 +36,8 @@ export class WorkflowTabsView {
     #menuTarget = null;
     #paintKey = '';
     #orbVisible = true;
+    /** The tab a middle press landed on; only a release on that same tab closes it. */
+    #middlePress = null;
     /** Bind interaction intents without retaining host workflow objects in presentation. */
     constructor(document, actions, viewport) {
         this.document = document;
@@ -47,6 +49,9 @@ export class WorkflowTabsView {
         this.element.setAttribute('aria-label', 'Workflows');
         this.viewport.addEventListener('scroll', this.#scrolled);
         this.viewport.addEventListener('wheel', this.#wheel, { passive: false });
+        this.viewport.addEventListener('contextmenu', this.offerReopen);
+        for (const type of ['pointerup', 'mouseup'])
+            document.addEventListener(type, this.#released);
     }
     /** Update values in place and animate only a newly accepted unread transition. */
     update(tabs, unread, animate = true) {
@@ -171,9 +176,42 @@ export class WorkflowTabsView {
         this.#menu.close();
         this.viewport.removeEventListener('scroll', this.#scrolled);
         this.viewport.removeEventListener('wheel', this.#wheel);
+        this.viewport.removeEventListener('contextmenu', this.offerReopen);
+        for (const type of ['pointerup', 'mouseup'])
+            this.document.removeEventListener(type, this.#released);
         this.element.remove();
         this.#tabs.clear();
     }
+    /** Undo the latest close; offered on every tab's menu and on empty tab-bar space. */
+    #reopenEntry() {
+        return {
+            label: 'Reopen Closed Workflow',
+            disabled: !this.actions.reopenAvailable(),
+            select: () => this.#run(() => this.actions.reopen()),
+        };
+    }
+    /**
+     * Offer reopening alone at a context press on empty tab-bar space; tabs open their own menu.
+     * The frame calls this for the empty part of its bar beside the strip.
+     */
+    offerReopen = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.#menuRequest++;
+        this.#menuTarget = null;
+        this.#menu.open({
+            label: 'Workflow tabs',
+            focusReturn: this.document.getElementById(this.element.activeid),
+            returnFocusOnSelect: false,
+            anchor: { kind: 'pointer', x: event.clientX, y: event.clientY },
+            entries: [this.#reopenEntry()],
+        });
+    };
+    /** Forget a middle press once its button is released anywhere, after the tab saw the release. */
+    #released = (event) => {
+        if (event instanceof MouseEvent && event.button === 1)
+            this.#middlePress = null;
+    };
     /** Create one official tab with a reserved close slot and literal title content. */
     #create(id) {
         const element = createWorkflowTab(this.document);
@@ -208,21 +246,31 @@ export class WorkflowTabsView {
             this.#run(() => this.actions.close(id));
         });
         close.addEventListener('focusin', (event) => event.stopPropagation());
-        // Fluent selects a tab on focus; a context press must preserve the active workflow.
+        // Fluent selects a tab on focus; a context or middle press must preserve the active workflow.
         for (const type of ['pointerdown', 'mousedown'])
             element.addEventListener(type, (event) => {
-                if (event instanceof MouseEvent && event.button === 2) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                }
-            });
-        // Match Comfy's mouse-release boundary; embedded hosts may omit auxclick.
-        element.addEventListener('mouseup', (event) => {
-            if (event.button === 1) {
+                if (!(event instanceof MouseEvent) || (event.button !== 1 && event.button !== 2))
+                    return;
                 event.preventDefault();
-                this.#run(() => this.actions.close(id));
-            }
-        });
+                event.stopPropagation();
+                if (event.button === 1)
+                    this.#middlePress = id;
+            });
+        // A middle click closes the tab it was pressed and released on. A release that ends a
+        // gesture begun elsewhere, such as a middle-button pan of the canvas, closes nothing.
+        // Cancelling the pointer press suppresses the browser's mouse events for that press, so the
+        // release is taken from whichever of the two families the host delivers; the press is
+        // consumed by the first, and embedded hosts may omit auxclick altogether.
+        for (const type of ['pointerup', 'mouseup'])
+            element.addEventListener(type, (event) => {
+                if (!(event instanceof MouseEvent) || event.button !== 1)
+                    return;
+                event.preventDefault();
+                const pressed = this.#middlePress;
+                this.#middlePress = null;
+                if (pressed === id)
+                    this.#run(() => this.actions.close(id));
+            });
         element.addEventListener('contextmenu', (event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -261,7 +309,11 @@ export class WorkflowTabsView {
         try {
             const entries = await this.actions.menu(id);
             if (request === this.#menuRequest && element.isConnected && this.#menu.isOpen())
-                this.#menu.updateEntries(entries);
+                this.#menu.updateEntries([
+                    ...entries,
+                    ...(entries.length ? [{ label: '', separator: true }] : []),
+                    this.#reopenEntry(),
+                ]);
         }
         catch (error) {
             if (request === this.#menuRequest)

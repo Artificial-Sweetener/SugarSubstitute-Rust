@@ -260,6 +260,8 @@ test('literal titles and keyed tabs survive reorder and activity refresh without
     menu: async () => [],
     reorder: jest.fn(),
     create: jest.fn(),
+    reopen: jest.fn(),
+    reopenAvailable: () => false,
     report: jest.fn(),
   };
   const viewport = document.createElement('div');
@@ -300,6 +302,8 @@ test('background restored tabs never activate a workflow before Comfy loads its 
     menu: async () => [],
     reorder: jest.fn(),
     create: jest.fn(),
+    reopen: jest.fn(),
+    reopenAvailable: () => false,
     report: jest.fn(),
   };
   const view = new WorkflowTabsView(document, actions, viewport);
@@ -356,6 +360,8 @@ test('unchanged workflow activity performs no tab scroll geometry reads', () => 
       menu: async () => [],
       reorder: jest.fn(),
       create: jest.fn(),
+      reopen: jest.fn(),
+      reopenAvailable: () => false,
       report: jest.fn(),
     },
     viewport,
@@ -392,6 +398,8 @@ test('frame actions retain stack policy, settings access, override anchor and un
       menu: async () => [],
       reorder: jest.fn(),
       create: jest.fn(),
+      reopen: jest.fn(),
+      reopenAvailable: () => false,
       report: jest.fn(),
     },
     command,
@@ -482,6 +490,8 @@ test('overflow activation reveals the selected tab and activity preserves delibe
       menu: async () => [],
       reorder: jest.fn(),
       create: jest.fn(),
+      reopen: jest.fn(),
+      reopenAvailable: () => false,
       report: jest.fn(),
     },
     viewport,
@@ -529,6 +539,8 @@ test('new-workflow control follows the tabs and overflow appears only when the s
       menu: async () => [],
       reorder: jest.fn(),
       create,
+      reopen: jest.fn(),
+      reopenAvailable: () => false,
       report: jest.fn(),
     },
     command: jest.fn(),
@@ -603,6 +615,8 @@ test('condensed selection and both wheel axes use allocated geometry without reb
       menu: async () => [],
       reorder: jest.fn(),
       create: jest.fn(),
+      reopen: jest.fn(),
+      reopenAvailable: () => false,
       report: jest.fn(),
     },
     viewport,
@@ -644,6 +658,8 @@ test('tab menus retain the inactive target and use shared rendering and outside 
     close: jest.fn(),
     reorder: jest.fn(),
     create: jest.fn(),
+    reopen: jest.fn(),
+    reopenAvailable: () => false,
     report: jest.fn(),
     menu: jest.fn(async () => [
       { label: '<img src=x>', disabled: true },
@@ -676,6 +692,9 @@ test('tab menus retain the inactive target and use shared rendering and outside 
   expect(menu.textContent).toContain('<img src=x>');
   expect(menu.querySelector('img')).toBeNull();
   expect(menu.querySelector('[aria-disabled="true"]')).not.toBeNull();
+  // Every tab's menu ends with the undo for a close, after the host's own actions.
+  const labels = [...menu.querySelectorAll('[role="menuitem"]')].map((row) => row.textContent);
+  expect(labels.at(-1)).toBe('Reopen Closed Workflow');
   target.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
   expect(document.querySelector('[role="menu"]')).toBeNull();
   expect(actions.activate).not.toHaveBeenCalled();
@@ -697,6 +716,8 @@ test.each(['dismiss', 'remove', 'dispose'] as const)(
         close: jest.fn(),
         reorder: jest.fn(),
         create: jest.fn(),
+        reopen: jest.fn(),
+        reopenAvailable: () => false,
         report: jest.fn(),
         menu: () => pending,
       },
