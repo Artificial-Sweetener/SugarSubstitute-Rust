@@ -20,6 +20,7 @@ import { inputLoaderSettings } from '../domain/InputLoaderSettings.js';
 import { InputBindingController } from '../application/InputBindingController.js';
 import { readInputBinding, withInputBinding } from './InputBindingMetadata.js';
 import { observeInputLoaderWidgets } from './ComfyInputWidgetObserver.js';
+import { forgetGeneratedSources, generatedSources, withGeneratedSources, } from './GeneratedMaskSources.js';
 /** Identify source fields authored by a native link instead of a selectable file or canvas. */
 export function isComfyInputSourceLinked(node, field) {
     return Boolean(node.inputs?.some((input) => input.name === field && input.link !== null && input.link !== undefined));
@@ -39,6 +40,61 @@ export function createComfyInputBinding(node, loader, ports) {
         selected: null,
     };
     const state = { ...initial, selected: initial.entries[0]?.id ?? null };
+    /** Persist a binding on the node and mirror its files into the native field. */
+    const write = (value) => {
+        const widget = node.widgets?.find((widget) => widget.name === loader.field);
+        const canvas = value.entries.some((entry) => entry.source.kind === 'canvas');
+        const files = canvas
+            ? []
+            : value.entries.flatMap((entry) => entry.source.kind === 'file' && entry.source.file ? [entry.source.file] : []);
+        const normalized = { ...value, files };
+        const nativeValue = loader.ordered ? files : (files[0] ?? '');
+        const choices = widget?.options?.values;
+        if (Array.isArray(choices))
+            for (const file of files)
+                if (ports.verifiedFile(file) && !choices.includes(file))
+                    choices.push(file);
+        if (JSON.stringify(readInputBinding(node.properties, loader.kind, loader.field)) ===
+            JSON.stringify(normalized) &&
+            JSON.stringify(widget?.value) === JSON.stringify(nativeValue))
+            return;
+        const graph = node.graph;
+        graph?.beforeChange?.();
+        try {
+            node.properties = withInputBinding(node.properties, loader.kind, normalized);
+            if (widget) {
+                widget.value = nativeValue;
+            }
+        }
+        finally {
+            graph?.afterChange?.();
+        }
+    };
+    /**
+     * Give a mask loader loaded from a generated image the files it was queued with.
+     *
+     * The binding is read again once the files are verified, because provisioning can rebind its
+     * entries meanwhile, and it is written at once: the controller discards a load that such a
+     * rebinding overtook.
+     */
+    const restoreGenerated = async (saved) => {
+        const files = generatedSources(node, loader.field);
+        const provisions = (canvasId) => ports.canvases.provisions(canvasId);
+        if (!files ||
+            !saved.entries.some((entry) => entry.source.kind === 'canvas' && provisions(entry.source.canvasId)))
+            return saved;
+        forgetGeneratedSources(node, loader.field);
+        const available = await Promise.all(files.map((file) => ports.verifyFile(file).catch((error) => {
+            ports.report(error);
+            return false;
+        })));
+        const current = readInputBinding(node.properties, loader.kind, loader.field) ?? saved;
+        const restored = withGeneratedSources(current, loader.ordered, files, available, provisions);
+        if (!restored)
+            return current;
+        write(restored);
+        return readInputBinding(node.properties, loader.kind, loader.field) ?? restored;
+    };
     return new InputBindingController(loader, {
         read: () => readInputBinding(node.properties, loader.kind, loader.field),
         load: async () => {
@@ -53,37 +109,9 @@ export function createComfyInputBinding(node, loader, ports) {
                     entry.source.file &&
                     !(await ports.verifyFile(entry.source.file)))
                     throw new Error('The selected input source file is unavailable.');
-            return saved;
+            return saved && loader.kind === 'mask' ? await restoreGenerated(saved) : saved;
         },
-        write: (value) => {
-            const widget = node.widgets?.find((widget) => widget.name === loader.field);
-            const canvas = value.entries.some((entry) => entry.source.kind === 'canvas');
-            const files = canvas
-                ? []
-                : value.entries.flatMap((entry) => entry.source.kind === 'file' && entry.source.file ? [entry.source.file] : []);
-            const normalized = { ...value, files };
-            const nativeValue = loader.ordered ? files : (files[0] ?? '');
-            const choices = widget?.options?.values;
-            if (Array.isArray(choices))
-                for (const file of files)
-                    if (ports.verifiedFile(file) && !choices.includes(file))
-                        choices.push(file);
-            if (JSON.stringify(readInputBinding(node.properties, loader.kind, loader.field)) ===
-                JSON.stringify(normalized) &&
-                JSON.stringify(widget?.value) === JSON.stringify(nativeValue))
-                return;
-            const graph = node.graph;
-            graph?.beforeChange?.();
-            try {
-                node.properties = withInputBinding(node.properties, loader.kind, normalized);
-                if (widget) {
-                    widget.value = nativeValue;
-                }
-            }
-            finally {
-                graph?.afterChange?.();
-            }
-        },
+        write,
         files: () => sourceFiles(node, loader.field),
         settings: () => inputLoaderSettings(loader, Object.fromEntries((node.widgets ?? []).flatMap((widget) => widget.name &&
             isSerializedWidget(widget) &&

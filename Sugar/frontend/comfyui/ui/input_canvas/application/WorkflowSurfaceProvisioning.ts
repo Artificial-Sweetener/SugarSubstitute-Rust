@@ -22,6 +22,7 @@ import type {
 import type { CanvasSurfaceFileReference } from '../../../../../integrations/contracts/CanvasSurfaceProtocol.generated.js';
 import {
   planWorkflowSurfaces,
+  workflowMaskKey,
   workflowSyncSurfaces,
   type PlannedSurface,
   type PlannedSurfaceMask,
@@ -215,7 +216,7 @@ export class WorkflowSurfaceProvisioning {
       const dropped = planned.surfaces.some((surface) =>
         surface.masks.some((mask) => mask.initial !== null),
       );
-      if (dropped && this.#state) this.#bind(this.#state.canvasId, this.#state.surfaces);
+      if (dropped && this.#state) this.#bind(this.#state.canvasId, this.#state.surfaces, planned);
       return;
     }
     await this.#followAuthoritySizes(host, workflow, plan);
@@ -248,7 +249,7 @@ export class WorkflowSurfaceProvisioning {
       surfaces: provisioned,
       rejected: plan.rejected,
     });
-    this.#bind(host.canvasId, provisioned);
+    this.#bind(host.canvasId, provisioned, planned);
   }
 
   /**
@@ -290,11 +291,35 @@ export class WorkflowSurfaceProvisioning {
     }
   }
 
-  /** Bind each mask loader's entries to their layers through the loader's own binding owner. */
-  #bind(canvasId: string, surfaces: readonly ProvisionedSurface[]): void {
+  /**
+   * Bind each mask loader's entries to their layers through the loader's own binding owner.
+   *
+   * A layer was synced for the file its entry named when the sync was planned. An entry given
+   * another file since then stays on that file: binding it now would discard a file no sync has
+   * imported, and the change that named the file already has the next sync waiting.
+   */
+  #bind(
+    canvasId: string,
+    surfaces: readonly ProvisionedSurface[],
+    planned: WorkflowSurfacePlan,
+  ): void {
+    const synced = new Map(
+      planned.surfaces.flatMap((surface) =>
+        surface.masks.map((mask) => [mask.key, JSON.stringify(mask.initial)] as const),
+      ),
+    );
+    const awaiting = new Set(
+      this.graph.facts().masks.flatMap((mask) =>
+        mask.entries.flatMap((entry) => {
+          const key = workflowMaskKey(mask.key, entry.entry);
+          return entry.initial && JSON.stringify(entry.initial) !== synced.get(key) ? [key] : [];
+        }),
+      ),
+    );
     const endpoints = new Map<string, Map<string | null, CanvasInputSource>>();
     for (const surface of surfaces)
       for (const mask of surface.masks) {
+        if (awaiting.has(mask.key)) continue;
         const sources = endpoints.get(mask.endpoint) ?? new Map<string | null, CanvasInputSource>();
         sources.set(mask.entry, {
           kind: 'canvas',

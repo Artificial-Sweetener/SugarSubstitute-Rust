@@ -298,3 +298,50 @@ test('a directly edited size authority resizes its existing mask-only surface be
     mode: { kind: 'canvas', anchor: 'center' },
   });
 });
+
+test('a mask given a file while a sync is in flight keeps the file until a sync imports it', async () => {
+  const { host, fake, report, service } = provisioning(paired, {
+    'photo.png': { width: 64, height: 32 },
+    'mask.png': { width: 64, height: 32 },
+  });
+  const filed: WorkflowSurfaceFacts = {
+    ...paired,
+    masks: paired.masks.map((mask) => ({
+      ...mask,
+      entries: [{ entry: null, label: 'Load Mask', initial: picked }],
+    })),
+  };
+  // The loader names its file after the first sync was sent and before the canvas answers it.
+  const execute = host.execute as jest.MockedFunction<typeof host.execute>;
+  const answer = execute.getMockImplementation()!;
+  execute.mockImplementationOnce(async (command) => {
+    const result = await answer(command);
+    fake.change(filed);
+    return result;
+  });
+  // Record how many syncs had been sent each time the loader was bound to a layer.
+  const bound: number[] = [];
+  const binding = fake.port.binding;
+  fake.port.binding = (endpoint) => {
+    const owner = binding(endpoint);
+    return (
+      owner && {
+        provision: (sources) => {
+          bound.push(host.commands.filter((command) => command.type === 'sync').length);
+          owner.provision(sources);
+        },
+      }
+    );
+  };
+  await service.request();
+  // The first answer bound nothing: binding then would have discarded the file unimported.
+  expect(bound).toEqual([2]);
+  const syncs = host.commands.filter((command) => command.type === 'sync');
+  expect(syncs).toHaveLength(2);
+  expect(syncs[0]).toMatchObject({ surfaces: [{ masks: [{ initial: null }] }] });
+  expect(syncs[1]).toMatchObject({ surfaces: [{ masks: [{ initial: picked }] }] });
+  expect(fake.provisioned.get('mask')?.get(null)).toMatchObject({
+    target: { kind: 'layer', layerId: 'layer:mask' },
+  });
+  expect(report).not.toHaveBeenCalled();
+});
