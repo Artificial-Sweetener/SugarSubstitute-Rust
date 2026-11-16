@@ -242,8 +242,11 @@ fn shared_surface_waits_for_current_pixels_and_native_acceptance() -> Result<(),
         return Err("The tool reply is missing".into());
     };
     let value: Value = serde_json::from_slice(brush.payload())?;
-    assert_eq!(value["result"]["kind"], "failure");
-    assert_eq!(value["result"]["status"], "unavailable");
+    // With no input document on screen there are no tools to choose: the state is unchanged.
+    assert_eq!(value["result"]["kind"], "state");
+    let unchanged = &value["result"]["state"];
+    assert_eq!((&unchanged["document"], &unchanged["tool"]), (&Value::Null, &json!("pan-zoom")));
+    assert_eq!(unchanged["revision"], 1);
     canvas.surface(
         identity,
         request(&panel, 1, "surface.prepare", json!({}))?,

@@ -359,7 +359,7 @@ fn workflow_sync_maps_every_key_to_a_document_and_layer_after_its_work_settles()
 }
 
 #[test]
-fn activation_shows_input_documents_in_the_context_until_the_output_route_returns()
+fn activation_names_the_workflow_input_document_in_the_context_on_either_route()
 -> Result<(), Box<dyn Error>> {
     let directory = anchor()?;
     let mut inputs = Inputs::start(directory.path())?;
@@ -384,7 +384,12 @@ fn activation_shows_input_documents_in_the_context_until_the_output_route_return
     inputs.workflow(activate(Some("latent"), Some("region"), "input"))?;
     inputs.context_until(|document| document["id"] == latent["document"]["id"])?;
     assert_eq!(inputs.workflow(activate(None, None, "output"))?, json!({"kind":"activated"}));
-    inputs.context_until(Value::is_null)?;
+    inputs.until("The Output route was never shown", |inputs| {
+        inputs.canvas.session.as_ref().is_some_and(|session| !session.input_shown())
+    })?;
+    // The Output route leaves the workflow's input document its document.
+    let context = inputs.ask("context.request", None)?;
+    assert_eq!(context["context"]["document"], latent["document"]);
     // Appearance and hover apply to synced masks; unknown masks are stale.
     let appearance = json!({"type":"appearance", "workflow":WORKFLOW, "masks":[
         {"surface":"image", "mask":"painted", "color":"#123456", "opacity":0.25}]});

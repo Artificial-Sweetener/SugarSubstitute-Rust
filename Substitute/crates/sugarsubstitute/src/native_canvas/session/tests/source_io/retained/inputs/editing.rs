@@ -84,7 +84,9 @@ fn every_tool_is_offered_and_mask_tools_need_an_editable_target() -> Result<(), 
     {
         let empty = fixture.session.edit_state()?;
         assert_eq!((empty.document, empty.tool), (None, CanvasToolId::PanZoom));
-        assert!(rejected(fixture.edit(CanvasEditCommand::Tool(CanvasToolId::Brush))).is_some());
+        // With no input document on screen there are no tools to choose: nothing changes.
+        let unchanged = fixture.edit(CanvasEditCommand::Tool(CanvasToolId::Brush))?;
+        assert_eq!((unchanged.document, unchanged.tool), (None, CanvasToolId::PanZoom));
         let image = show(&mut fixture, Some("second"))?;
         let state = fixture.session.edit_state()?;
         assert_eq!(state.document, Some(image.document));

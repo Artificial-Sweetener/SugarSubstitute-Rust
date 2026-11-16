@@ -217,28 +217,95 @@ fn previews_follow_a_stroke_while_it_is_drawn_and_watching_reports_each_step()
 }
 
 #[test]
-fn watching_reports_a_document_the_input_route_shows_again() -> Result<(), Box<dyn Error>> {
+fn the_workflow_input_document_stays_available_while_the_output_route_is_shown()
+-> Result<(), Box<dyn Error>> {
+    let directory = anchor()?;
+    let mut inputs = Inputs::start(directory.path())?;
+    let result = inputs.workflow(sync(Some("mask.png")))?;
+    let image = synced(&result, "image")?.clone();
+    let painted = layer(&image, "painted")?;
+    inputs.workflow(activate(Some("image"), Some("painted"), "input"))?;
+    inputs.context_until(|document| document["id"] == image["document"]["id"])?;
+    let source = |inputs: &mut Inputs| -> Result<Value, Box<dyn Error>> {
+        Ok(inputs.ask("source.request", Some(json!({"type":"context"})))?["result"].take())
+    };
+    let geometry = |inputs: &mut Inputs| -> Result<Value, Box<dyn Error>> {
+        Ok(inputs.ask("geometry.request", Some(json!({"type":"context"})))?["result"].take())
+    };
+    let shown = (source(&mut inputs)?, geometry(&mut inputs)?);
+    assert_eq!(shown.0["document"], image["document"]);
+    assert_eq!(shown.1["document"], image["document"]);
+    inputs.ask("source.request", Some(json!({"type":"watch", "enabled":true})))?;
+    let watched = inputs.changes.len();
+    // Neither an Output activation that names the surface nor one that names none takes the
+    // workflow's input document away.
+    for surface in [Some("image"), None] {
+        inputs.workflow(activate(surface, None, "output"))?;
+        inputs.until("The Output route was never shown", |inputs| {
+            inputs.canvas.session.as_ref().is_some_and(|session| !session.input_shown())
+        })?;
+        let context = inputs.ask("context.request", None)?;
+        assert_eq!(context["context"]["document"], image["document"]);
+        assert_eq!((source(&mut inputs)?, geometry(&mut inputs)?), shown);
+        let targets = json!([{"kind":"layer", "layerId":painted}, {"kind":"current-layer"}]);
+        let captured =
+            inputs.ask("source.request", Some(capture(&image["document"], targets, 8)))?;
+        assert_eq!(captured["result"]["kind"], "captured", "{captured}");
+    }
+    assert!(
+        inputs.changes[watched..].iter().all(|change| !change["change"]["documentId"].is_null()),
+        "the workflow never lost its input document: {:?}",
+        &inputs.changes[watched..]
+    );
+    inputs.close()
+}
+
+#[test]
+fn an_edit_command_sent_as_the_output_route_takes_the_screen_reports_the_state()
+-> Result<(), Box<dyn Error>> {
+    let directory = anchor()?;
+    let mut inputs = Inputs::start(directory.path())?;
+    let result = inputs.workflow(sync(Some("mask.png")))?;
+    let image = synced(&result, "image")?.clone();
+    inputs.workflow(activate(Some("image"), Some("painted"), "input"))?;
+    inputs.context_until(|document| document["id"] == image["document"]["id"])?;
+    let shown = inputs.ask("edit.request", Some(json!({"type":"state"})))?;
+    assert_eq!(shown["result"]["state"]["document"], image["document"]["id"], "{shown}");
+    inputs.workflow(activate(Some("image"), Some("painted"), "output"))?;
+    inputs.until("The Output route was never shown", |inputs| {
+        inputs.canvas.session.as_ref().is_some_and(|session| !session.input_shown())
+    })?;
+    for command in [
+        json!({"type":"history", "action":"undo"}),
+        json!({"type":"tool", "tool":"brush"}),
+        json!({"type":"navigation", "held":false}),
+    ] {
+        let reply = inputs.ask("edit.request", Some(command))?;
+        assert_eq!(reply["result"]["kind"], "state", "{reply}");
+        assert!(reply["result"]["state"]["document"].is_null(), "{reply}");
+    }
+    inputs.close()
+}
+
+#[test]
+fn watching_reports_a_document_that_becomes_the_workflow_input_document()
+-> Result<(), Box<dyn Error>> {
     let directory = anchor()?;
     let mut inputs = Inputs::start(directory.path())?;
     let result = inputs.workflow(sync(None))?;
     let image = synced(&result, "image")?.clone();
+    let latent = synced(&result, "latent")?.clone();
     inputs.workflow(activate(Some("image"), Some("painted"), "input"))?;
     inputs.context_until(|document| document["id"] == image["document"]["id"])?;
     inputs.ask("source.request", Some(json!({"type":"watch", "enabled":true})))?;
-    let until = |inputs: &mut Inputs,
-                 since: usize,
-                 document: &Value|
-     -> Result<(), Box<dyn Error>> {
-        inputs.until(&format!("No change named {document}"), |inputs| {
-            inputs.changes[since..].iter().any(|change| change["change"]["documentId"] == *document)
-        })
-    };
-    let hidden = inputs.changes.len();
-    inputs.workflow(activate(None, None, "output"))?;
-    until(&mut inputs, hidden, &Value::Null)?;
-    // Showing the unchanged document again lets sources that failed without it resolve.
-    let shown = inputs.changes.len();
-    inputs.workflow(activate(Some("image"), Some("painted"), "input"))?;
-    until(&mut inputs, shown, &image["document"]["id"])?;
+    // The unchanged document is reported so sources that resolve against the workflow's input
+    // document are read again.
+    let since = inputs.changes.len();
+    inputs.workflow(activate(Some("latent"), Some("region"), "output"))?;
+    inputs.until("No change named the adopted document", |inputs| {
+        inputs.changes[since..]
+            .iter()
+            .any(|change| change["change"]["documentId"] == latent["document"]["id"])
+    })?;
     inputs.close()
 }

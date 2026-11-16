@@ -135,6 +135,8 @@ pub(super) struct InputDocuments {
     unsettled: VecDeque<Arc<dyn acquisition::SourceAcquirer>>,
     retiring: Retiring,
     route: Option<route::Pending>,
+    /// The active workflow's input document, whichever route is on screen.
+    addressed: Option<InputDocumentId>,
     captures: capture::Captures,
     persistence: Option<archive::Persistence>,
     /// What the last input memory report described.
@@ -375,12 +377,15 @@ impl Session {
         self.document.draws(self.selection)
     }
 
-    /// The input document the Input route shows, once its swap has completed.
-    pub(crate) fn shown_input(&self) -> Option<ShownInput> {
-        let document = self.document.input?;
+    /// The active workflow's input document once it has loaded, wherever the session holds it:
+    /// on screen under the Input route, or off screen while the Output route is shown. Showing
+    /// the output never makes the workflow's input document unavailable.
+    pub(crate) fn workflow_input(&self) -> Option<WorkflowInput> {
+        let document = self.inputs.addressed?;
         self.inputs.by_identity(document).filter(|surface| surface.loaded)?;
-        let snapshot = self.document.scene.as_ref()?.document.snapshot();
-        Some(ShownInput { document, snapshot, target: self.document.tools.target() })
+        let held = self.input_document(document)?;
+        let snapshot = held.scene.as_ref()?.document.snapshot();
+        Some(WorkflowInput { document, snapshot, target: held.tools.target() })
     }
 
     /// What every loaded synced document shows, current or parked: see [`ShownRevision`].

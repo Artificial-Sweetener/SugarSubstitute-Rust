@@ -133,6 +133,9 @@ impl NativeSurface {
         storage: CanvasNativeRequestStorage,
         session: &mut Session,
     ) -> Result<(), Box<dyn Error>> {
+        if let CanvasWorkflowCommand::Activate { workflow, surface, .. } = request.command() {
+            session.address_input(workflow.as_str(), surface.as_ref().map(|key| key.as_str()));
+        }
         if let Some(replay) = self.required_replay(request.command()) {
             if self.workflow.held.len() >= MAX_HELD {
                 let failure = failure(CanvasFailureStatus::Unavailable, "Too many requests wait");

@@ -376,6 +376,7 @@ impl Session {
         if let Some((document, target)) = restored.active
             && self.inputs.by_identity(document).is_some()
         {
+            self.inputs.addressed = Some(document);
             self.inputs.route = Some(route::Pending::Input { surface: document, target });
         }
         Ok(())

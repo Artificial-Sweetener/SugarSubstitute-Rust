@@ -53,8 +53,10 @@ pub(crate) fn layer_from_protocol_id(text: &str) -> Option<LayerId> {
     LayerId::new(digits.parse().ok()?).ok()
 }
 
-/// The input document the Input route shows, with its content and editing target.
-pub(crate) struct ShownInput {
+/// The active workflow's input document, with its content and editing target. It is the
+/// document the Input route shows; while the Output route is on screen it stays the workflow's
+/// input document, held off screen.
+pub(crate) struct WorkflowInput {
     /// Its identity.
     pub(crate) document: InputDocumentId,
     /// Its current content.

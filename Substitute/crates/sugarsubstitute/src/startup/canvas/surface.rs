@@ -468,12 +468,12 @@ impl NativeSurface {
         session.offer_acquirer(&mut Some(owner), CacheReuse::Compatible)
     }
 
-    /// Answer waiting context reads with the capabilities and the input document the Input
-    /// route shows, if any.
+    /// Answer waiting context reads with the capabilities and the active workflow's input
+    /// document, if it has one.
     fn flush_contexts(&mut self, session: &Session) -> Result<(), Box<dyn Error>> {
         let document = session
-            .shown_input()
-            .map(|shown| input_protocol::canvas_document(shown.document, shown.snapshot.extent()))
+            .workflow_input()
+            .map(|input| input_protocol::canvas_document(input.document, input.snapshot.extent()))
             .transpose()?;
         for index in 0..self.contexts.len() {
             if self.contexts[index].as_ref().is_none_or(|context| !self.available(context.identity))

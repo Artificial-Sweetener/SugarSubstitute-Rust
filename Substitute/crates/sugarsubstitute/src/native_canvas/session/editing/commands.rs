@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Carry out `edit.request` commands on the shown input document.
+//! Carry out `edit.request` commands with the editing tools of the input document on screen.
 use super::{registry::tool_id, *};
 use std::fmt;
 use sugarsubstitute_canvas::{
@@ -13,10 +13,10 @@ use sugarsubstitute_contracts::canvas_native::{
     CanvasSelectionAction, CanvasSessionAction, CanvasTransformAction,
 };
 
-/// An edit command the shown document cannot carry out; nothing changed.
+/// An edit command the document on screen cannot carry out; nothing changed.
 #[derive(Debug)]
 pub(crate) enum EditRejection {
-    /// No editable input document is shown, or the command has nothing to act on now.
+    /// The command has nothing to act on now.
     Unavailable(&'static str),
     /// A tool this host does not offer.
     Unsupported,
@@ -51,19 +51,22 @@ pub(super) fn brush_options(options: CanvasBrushOptions) -> Result<BrushOptions,
 }
 
 impl Session {
-    /// Carry out one editing command on the shown input document. Reading the state changes
-    /// nothing and always succeeds.
+    /// Carry out one editing command with the tools of the input document on screen. Reading
+    /// the state changes nothing and always succeeds.
+    ///
+    /// The editing tools act on the canvas viewport, so they exist only while the workflow's
+    /// input document is on screen. A command that arrives while the Output route is on screen,
+    /// as one sent just before the route changed, changes nothing and succeeds: its reply
+    /// carries the current state, which tells the editing UI that no tools are on screen. The
+    /// workflow's input document itself stays available throughout.
     ///
     /// # Errors
-    /// Rejects commands without an editable input document, unavailable tools and commands a
-    /// tool cannot apply now with [`EditRejection`], changing nothing; preserves document,
-    /// tool and job admission failures.
+    /// Rejects unavailable tools and commands a tool cannot apply now with [`EditRejection`],
+    /// changing nothing; preserves document, tool and job admission failures.
     pub(crate) fn edit(&mut self, command: CanvasEditCommand) -> Result<(), Box<dyn Error>> {
-        if command == CanvasEditCommand::State {
+        if command == CanvasEditCommand::State || self.closing || self.editable_document().is_none()
+        {
             return Ok(());
-        }
-        if self.closing || self.editable_document().is_none() {
-            return Err(Box::new(EditRejection::Unavailable("No editable input document")));
         }
         self.register_editing_tools()?;
         let now = self.navigation_time();

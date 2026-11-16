@@ -2,13 +2,14 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Serve `source.request` from the session's input documents.
 //!
-//! The context describes the input document the Input route shows. Captures read any synced
-//! input document, current or parked, and run as session jobs that encode their reply on the
-//! worker; the reply reaches the page through the bulk channel when it is large. Captures read
-//! what the canvas shows, including a stroke while it is drawn, so card previews stay live.
+//! The context describes the active workflow's input document, whichever route is on screen:
+//! showing the output leaves the workflow's input document its document. Captures read any
+//! synced input document, current or parked, and run as session jobs that encode their reply on
+//! the worker; the reply reaches the page through the bulk channel when it is large. Captures
+//! read what the canvas shows, including a stroke while it is drawn, so card previews stay live.
 //! Watching reports `source.changed` whenever what a synced document shows changes, and when
-//! the Input route shows a document again or stops showing one, one notification at a time, so
-//! a newer change of one document supersedes an undelivered older one.
+//! the workflow's input document becomes another one or none, one notification at a time, so a
+//! newer change of one document supersedes an undelivered older one.
 use super::input_protocol::{
     canvas_document, document_id, document_of, failure, layer_key, layer_of,
 };
@@ -54,10 +55,11 @@ struct Held {
 /// One navigation's `source.changed` subscription.
 struct Watch {
     identity: MainIdentity,
-    /// Last reported revision of every synced document, and the shown document.
+    /// Last reported revision of every synced document, and the workflow's input document.
     revisions: Vec<(InputDocumentId, ShownRevision)>,
-    shown: Option<InputDocumentId>,
-    /// Changes not yet notified, oldest first; `None` reports that no document is shown.
+    addressed: Option<InputDocumentId>,
+    /// Changes not yet notified, oldest first; `None` reports that the workflow has no input
+    /// document.
     changes: VecDeque<(Option<InputDocumentId>, ShownRevision)>,
 }
 
@@ -101,7 +103,8 @@ fn revision(
 }
 
 impl NativeSurface {
-    /// Serve `source.request`: the shown document's layers, captures and change watching.
+    /// Serve `source.request`: the workflow's input document's layers, captures and change
+    /// watching.
     pub(super) fn receive_source(
         &mut self,
         identity: MainIdentity,
@@ -121,10 +124,10 @@ impl NativeSurface {
             }
             CanvasSourceCommand::Watch { enabled } => {
                 if *enabled {
-                    let shown = session.shown_input().map(|shown| shown.document);
+                    let addressed = session.workflow_input().map(|input| input.document);
                     let revisions = session.input_revisions();
                     let changes = VecDeque::new();
-                    self.sources.watch = Some(Watch { identity, revisions, shown, changes });
+                    self.sources.watch = Some(Watch { identity, revisions, addressed, changes });
                 } else if self
                     .sources
                     .watch
@@ -256,23 +259,24 @@ impl NativeSurface {
     fn notify_sources(&mut self, session: &Session) -> Result<(), Box<dyn Error>> {
         let Some(watch) = &mut self.sources.watch else { return Ok(()) };
         let current = session.input_revisions();
-        let shown = session.shown_input().map(|shown| shown.document);
+        let addressed = session.workflow_input().map(|input| input.document);
         for (document, value) in &current {
             let known = watch.revisions.iter().find(|(known, _)| known == document);
-            // A document the route shows again changes the context sources resolve against,
-            // so sources that could not resolve without it are read again.
-            let reshown = shown == Some(*document) && watch.shown != shown;
-            if reshown || known.is_none_or(|(_, known)| known != value) {
+            // A document that becomes the workflow's input document changes the context
+            // sources resolve against, so sources that could not resolve without it are read
+            // again.
+            let adopted = addressed == Some(*document) && watch.addressed != addressed;
+            if adopted || known.is_none_or(|(_, known)| known != value) {
                 watch.changes.retain(|(change, _)| *change != Some(*document));
                 watch.changes.push_back((Some(*document), *value));
             }
         }
         watch.revisions = current;
-        if shown.is_none() && watch.shown.is_some() {
+        if addressed.is_none() && watch.addressed.is_some() {
             watch.changes.retain(|(change, _)| change.is_some());
             watch.changes.push_back((None, ShownRevision::published(0)));
         }
-        watch.shown = shown;
+        watch.addressed = addressed;
         if self.sources.notification.is_some() {
             return Ok(());
         }
@@ -318,9 +322,9 @@ impl NativeSurface {
     }
 }
 
-/// The context of the input document the Input route shows; with none shown, no targets.
+/// The context of the active workflow's input document; a workflow without one has no targets.
 fn source_context(session: &Session) -> Result<CanvasSourceContext, Box<dyn Error>> {
-    let Some(shown) = session.shown_input() else {
+    let Some(input) = session.workflow_input() else {
         return Ok(CanvasSourceContext {
             supported: true,
             document: None,
@@ -331,7 +335,7 @@ fn source_context(session: &Session) -> Result<CanvasSourceContext, Box<dyn Erro
             observes_changes: true,
         });
     };
-    let snapshot = &shown.snapshot;
+    let snapshot = &input.snapshot;
     let layers = snapshot
         .layers()
         .iter()
@@ -348,11 +352,11 @@ fn source_context(session: &Session) -> Result<CanvasSourceContext, Box<dyn Erro
         .collect::<Result<_, Box<dyn Error>>>()?;
     Ok(CanvasSourceContext {
         supported: true,
-        document: Some(canvas_document(shown.document, snapshot.extent())?),
-        revision: revision(shown.document, ShownRevision::published(snapshot.revision()))?,
+        document: Some(canvas_document(input.document, snapshot.extent())?),
+        revision: revision(input.document, ShownRevision::published(snapshot.revision()))?,
         targets: TARGETS.to_vec(),
         layers,
-        current_layer: shown.target.map(layer_key).transpose()?,
+        current_layer: input.target.map(layer_key).transpose()?,
         observes_changes: true,
     })
 }

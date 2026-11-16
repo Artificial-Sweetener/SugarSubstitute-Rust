@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Serve `edit.request` and report `edit.changed` for the shown input document.
+//! Serve `edit.request` and report `edit.changed` for the input document on screen.
 //!
 //! Every successful command replies with the resulting state. The navigation that last sent a
 //! request subscribes to changes: whenever the state differs from what it last received, it
@@ -78,8 +78,8 @@ fn brush(options: BrushOptions) -> Result<CanvasBrushOptions, Box<dyn Error>> {
 }
 
 impl NativeSurface {
-    /// Serve `edit.request`: carry out the command on the shown input document and reply with
-    /// the resulting state, or a typed failure that changed nothing.
+    /// Serve `edit.request`: carry out the command with the tools of the input document on
+    /// screen and reply with the resulting state, or a typed failure that changed nothing.
     pub(super) fn receive_edit(
         &mut self,
         identity: MainIdentity,

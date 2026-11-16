@@ -4600,7 +4600,7 @@ rationale = "Owned temporary PNG fixtures stand in for ComfyUI input files while
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface/inputs.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:b2e0e97fb62d95cf6c88fe81af7b802054cd66ce27b6141a7659f74318f90e73"
+source_sha256 = "sha256:ea1fa0e522ca46d57cb4a0e4d5ab7f0ad2de1b340f22db418da038416af6ef27"
 capabilities = ["std::fs::File::create", "std::fs::create_dir", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary PNG fixtures stand in for ComfyUI input files while workflow surfaces sync, capture and restore through the native protocol."
@@ -4624,7 +4624,7 @@ rationale = "Owned temporary cache anchors exercise the embedded canvas lifetime
 [[records]]
 path = "crates/sugarsubstitute/src/startup/canvas/tests/surface.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:5d88296563986ed7e53be0f3bee24dde1bc067eddd1775134568178afffe0d58"
+source_sha256 = "sha256:89046db0ab412ddaffe204966eaf3e03285251d9b5b6250bf2eba9b1008fb00e"
 capabilities = ["std::fs::File::create", "std::fs::create_dir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary PNG fixtures exercise current output selection and native presentation acknowledgement without accessing user storage."

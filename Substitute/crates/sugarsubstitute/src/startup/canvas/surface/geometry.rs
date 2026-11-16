@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Serve `geometry.request` from the input document the Input route shows.
+//! Serve `geometry.request` from the active workflow's input document.
 //!
-//! Geometry reports the shown document and its selection bounds in document pixels. Resizing
+//! Geometry reports that document and its selection bounds in document pixels, whichever route
+//! is on screen: a workflow's input document stays its document under the Output route. Resizing
 //! is not offered: a geometry resize names only an extent, while an input document's size
 //! belongs to its workflow's size authority, which changes it through `workflow.request`
 //! resizes with an explicit anchor or resampling.
@@ -14,7 +15,7 @@ use sugarsubstitute_contracts::canvas_native::{
 };
 
 impl NativeSurface {
-    /// Serve `geometry.request`: the shown document and its selection bounds.
+    /// Serve `geometry.request`: the workflow's input document and its selection bounds.
     pub(super) fn receive_geometry(
         &mut self,
         identity: MainIdentity,
@@ -24,12 +25,12 @@ impl NativeSurface {
     ) -> Result<(), Box<dyn Error>> {
         let payload = match request.command() {
             CanvasGeometryCommand::Context => {
-                let shown = session
+                let input = session
                     .filter(|session| session.initialized())
-                    .and_then(|session| session.shown_input());
-                let (document, selection) = match shown {
-                    Some(shown) => {
-                        let snapshot = &shown.snapshot;
+                    .and_then(|session| session.workflow_input());
+                let (document, selection) = match input {
+                    Some(input) => {
+                        let snapshot = &input.snapshot;
                         let selection =
                             match snapshot.selection().and_then(|coverage| coverage.bounds()) {
                                 Some(bounds) => Some(CanvasSelectionBounds::new(
@@ -39,7 +40,7 @@ impl NativeSurface {
                                 )?),
                                 None => None,
                             };
-                        (Some(canvas_document(shown.document, snapshot.extent())?), selection)
+                        (Some(canvas_document(input.document, snapshot.extent())?), selection)
                     }
                     None => (None, None),
                 };

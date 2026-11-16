@@ -48,6 +48,7 @@ impl Session {
             None => None,
         };
         let identity = record.identity;
+        self.inputs.addressed = Some(identity);
         if self.document.input == Some(identity) {
             self.document.tools.set_target(target);
             self.inputs.route = None;
@@ -55,6 +56,19 @@ impl Session {
             self.inputs.route = Some(Pending::Input { surface: identity, target });
         }
         self.request_host_graphics()
+    }
+
+    /// Name `workflow`'s input document for the route about to be shown: `surface` when the
+    /// workflow has it, else the document the workflow already had, else its first surface,
+    /// else none. The document stays the workflow's input document while the Output route is
+    /// on screen.
+    pub(crate) fn address_input(&mut self, workflow: &str, surface: Option<&str>) {
+        let current = self.inputs.addressed;
+        self.inputs.addressed = self.inputs.surfaces(workflow).and_then(|surfaces| {
+            let named = surface.and_then(|key| surfaces.iter().find(|item| &*item.key == key));
+            let kept = surfaces.iter().find(|item| Some(item.identity) == current);
+            named.or(kept).or(surfaces.first()).map(|surface| surface.identity)
+        });
     }
 
     /// Return to the Output route. Returns whether it shows the output that was showing before

@@ -112,6 +112,9 @@ impl Session {
     /// leaves the screen through the Output route and then retires.
     fn retire_surface(&mut self, mut surface: Surface) {
         self.inputs.withdraw(surface.identity, None);
+        if self.inputs.addressed == Some(surface.identity) {
+            self.inputs.addressed = None;
+        }
         if let Some(document) = surface.document.take() {
             self.inputs.retiring.documents.push(document);
         }
