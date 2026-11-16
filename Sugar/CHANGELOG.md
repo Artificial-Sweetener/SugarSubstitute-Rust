@@ -1,3 +1,9 @@
+## [0.18.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.17.0...sugarcubes-v0.18.0) (2026-11-16)
+
+### Features
+
+* **prompt-editor:** wildcards from the user's sugar/wildcards folder, as in the Python application ([5038e0e](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/5038e0ebe1951fcaef997a4e2474b9509c0ff975))
+
 ## [0.17.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.16.3...sugarcubes-v0.17.0) (2026-11-16)
 
 ### Features
