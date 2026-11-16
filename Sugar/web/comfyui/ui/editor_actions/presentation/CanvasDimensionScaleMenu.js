@@ -12,6 +12,8 @@ export class CanvasDimensionScaleMenu {
     #refresh = () => { };
     #close = () => { };
     #submitted = false;
+    /** Whether the person asked for discovery or application since the submenu opened. */
+    #acted = false;
     /** Borrow the application command without owning graph, geometry or probe policy. */
     constructor(action, execute, run) {
         this.action = action;
@@ -95,7 +97,13 @@ export class CanvasDimensionScaleMenu {
             },
         ];
     }
-    /** Cancel abandoned interactions, while an explicit Apply finishes its captured command. */
+    /**
+     * Cancel abandoned interactions, while an explicit Apply finishes its captured command.
+     *
+     * Opening the submenu only reads the canvas. A read that cannot be answered, such as a
+     * selection sizing with no selected area, is stated in the submenu's own status row; it is an
+     * action failure only once the person has asked to discover or apply.
+     */
     opened = (refresh, close) => {
         const cancellation = new CanvasCancellation();
         this.#request = null;
@@ -103,6 +111,7 @@ export class CanvasDimensionScaleMenu {
         this.#output = null;
         this.#message = 'Reading canvas dimensions…';
         this.#submitted = false;
+        this.#acted = false;
         this.#refresh = refresh;
         this.#close = close;
         const configure = (request) => {
@@ -129,7 +138,8 @@ export class CanvasDimensionScaleMenu {
                 this.#pending = null;
                 this.#message = error instanceof Error ? error.message : 'Dimensions are unavailable.';
                 refresh();
-                throw error;
+                if (this.#acted)
+                    throw error;
             }
         }));
         return () => {
@@ -154,6 +164,7 @@ export class CanvasDimensionScaleMenu {
         if (!pending || !this.#request)
             return;
         const scale = this.#size() ? this.#scale : this.#request.scale;
+        this.#acted = true;
         this.#pending = null;
         this.#message = choice === 'discover' ? 'Discovering scale factor…' : 'Applying dimensions…';
         pending({ choice, scale, output: this.#output });

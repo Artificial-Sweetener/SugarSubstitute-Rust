@@ -25,7 +25,7 @@ import type {
 } from '../../../integrations/contracts/CanvasProtocol.generated.js';
 
 /** Retain real command and menu owners while substituting the external native canvas and probe. */
-function fixture() {
+function fixture(canvas: { selected?: boolean; outputs?: boolean } = {}) {
   const values = { width: 768, height: 512 };
   const context = {
     kind: 'context',
@@ -33,7 +33,7 @@ function fixture() {
     resize: true,
     selectionSupported: true,
     document: { id: 'doc', geometryRevision: 'frame', width: 1920, height: 1080 },
-    selection: { left: 10, top: 20, width: 400, height: 240 },
+    selection: canvas.selected === false ? null : { left: 10, top: 20, width: 400, height: 240 },
   } as const;
   const commands: CanvasGeometryCommand[] = [];
   const execute = async (command: CanvasGeometryCommand): Promise<CanvasGeometryResult> => {
@@ -45,10 +45,13 @@ function fixture() {
   const discover = jest.fn<() => Promise<number>>().mockResolvedValue(2);
   const dispose = jest.fn<() => void>();
   const prepare = jest.fn(async () => ({
-    outputs: [
-      { id: 'first', label: 'First <output>' },
-      { id: 'second', label: 'Second output' },
-    ],
+    outputs:
+      canvas.outputs === false
+        ? []
+        : [
+            { id: 'first', label: 'First <output>' },
+            { id: 'second', label: 'Second output' },
+          ],
     discover,
     dispose,
   }));
@@ -191,4 +194,29 @@ test('dismissal cancels pending sizing and invalid input disables Apply without 
   await Promise.all(f.pending);
   expect(f.values).toEqual({ width: 768, height: 512 });
   expect(f.commands).toHaveLength(1);
+});
+
+test('opening a sizing the canvas cannot answer states why in the submenu without failing an action', async () => {
+  const f = fixture({ selected: false });
+  f.click('Set size from selection with scaling');
+  // Opening only reads the canvas: the reason is the submenu's status row, never a raised failure.
+  await expect(Promise.all(f.pending)).resolves.toBeDefined();
+  expect(f.pending).toHaveLength(1);
+  const rows = Array.from(document.querySelectorAll('[role=menuitem]')).map(
+    (row) => row.textContent,
+  );
+  expect(rows).toContain('Select an area in the connected canvas.');
+  expect(f.values).toEqual({ width: 768, height: 512 });
+});
+
+test('a sizing that fails after the person asked for discovery is raised as an action failure', async () => {
+  const f = fixture({ outputs: false });
+  const ready = f.next();
+  f.click('Set size from canvas with scaling');
+  await ready;
+  f.click('Discover scale factor');
+  await expect(Promise.all(f.pending)).rejects.toThrow(
+    'No measurable output is connected to these dimension fields.',
+  );
+  expect(f.values).toEqual({ width: 768, height: 512 });
 });
