@@ -43,7 +43,7 @@ test('treats only a 404 as an empty library and rejects unsupported schemas', as
 test('writes the common schema under the current Comfy user without browser-local storage', async () => {
   let request: RequestInit | undefined;
   const repository = new ComfyPresetRepository(async (path, options) => {
-    expect(path).toBe('/userdata/SugarCubes%2Fpresets.json');
+    expect(path).toBe('/userdata/sugar%2Fpresets.json');
     request = options;
     return { ok: true, status: 200, json: async () => null };
   });

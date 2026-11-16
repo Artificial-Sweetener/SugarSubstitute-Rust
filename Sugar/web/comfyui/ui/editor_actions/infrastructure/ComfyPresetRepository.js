@@ -1,5 +1,5 @@
 import { decodePresetDocument, encodePresetDocument } from '../domain/PresetCodec.js';
-const path = '/userdata/SugarCubes%2Fpresets.json';
+const path = '/userdata/sugar%2Fpresets.json';
 /** Keep libraries portable across browsers by storing them with the current Comfy user. */
 export class ComfyPresetRepository {
     #fetch;

@@ -19,7 +19,7 @@ import type { UserPreset } from '../domain/UserPreset.js';
 import { decodePresetDocument, encodePresetDocument } from '../domain/PresetCodec.js';
 import type { UserPresetRepository } from '../application/UserPresetLibrary.js';
 export type PresetApiFetch = (path: string, options?: RequestInit) => Promise<ApiResponse>;
-const path = '/userdata/SugarCubes%2Fpresets.json';
+const path = '/userdata/sugar%2Fpresets.json';
 
 /** Keep libraries portable across browsers by storing them with the current Comfy user. */
 export class ComfyPresetRepository implements UserPresetRepository {

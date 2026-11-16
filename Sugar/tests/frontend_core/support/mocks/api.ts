@@ -42,7 +42,7 @@ function createMockApi(): MockApi {
     get: () => {
       const implementation = fetchImplementation;
       return async (path: string, options?: RequestInit) =>
-        path === '/userdata/SugarCubes%2Fpresets.json'
+        path === '/userdata/sugar%2Fpresets.json'
           ? { ok: false, status: 404, json: async () => null }
           : path === '/sugarcubes/status'
             ? {
