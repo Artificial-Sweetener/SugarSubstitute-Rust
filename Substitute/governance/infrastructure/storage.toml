@@ -5307,7 +5307,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: the
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/pack_install/vector_tests/decisions.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:abfbe158fb1df268630f936c88150eb7efc8e72f7b12d2439abc7594ce0bc87a"
+source_sha256 = "sha256:c43ef09f51dfa17649311fe23fe2b737c4d6f534dd00f015a47085fb0f50bb43"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: the shared SugarCubes registry-install vectors and the host's pack update faults. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -5331,7 +5331,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: the
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/pack_install/vector_tests/startup.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:d7bcd2b64536254391471605872e5bf2226c19173c318db37e7f79c68107846d"
+source_sha256 = "sha256:0b723f2b77763cbb43fce6673a7fd5f89183db64ab8acf81ad36b69e720f8181"
 capabilities = ["std::fs::File::options", "std::fs::create_dir", "std::fs::create_dir_all", "std::fs::read", "std::fs::read_to_string", "std::fs::remove_dir", "std::fs::remove_file", "std::fs::write", "tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: the host's splash-time SugarCubes update against faked and loopback release sources. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

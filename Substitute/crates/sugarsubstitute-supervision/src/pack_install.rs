@@ -46,7 +46,7 @@ pub use schedule::{PackSchedule, PackWork, PackWorkEnded, PackWorkKind};
 pub use selection::{ReleaseSources, SourceFailure, UpdateDecision, newest_offer};
 pub use sources::{
     MAX_ARCHIVE_BYTES, MetadataError, ReleaseOffer, ReleaseSourceConfig, ReleaseSourceKind,
-    github_exact, github_latest, registry_exact, registry_latest,
+    github_exact, github_published, github_tag_versions, registry_exact, registry_latest,
 };
 pub use startup::{
     MAX_RELEASE_SOURCE_BYTES, RELEASE_SOURCE_FILE, REPORT_RECORD, ReleaseDownloads,

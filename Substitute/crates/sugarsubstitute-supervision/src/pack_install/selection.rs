@@ -3,8 +3,8 @@
 //! Decide what one SugarCubes update check installs, without touching the installed pack.
 //!
 //! Order of work: prove the folder is a registry install this host may replace; find the
-//! newest release across the Registry's version list and the GitHub release assets (the
-//! Registry's copy when both have it); then prove no tracked file was changed locally,
+//! newest release across the Registry's version list and the GitHub releases under
+//! SugarCubes' own tags (the Registry's copy when both have it); then prove no tracked file was changed locally,
 //! offline from the pack's digest record or, for a pack ComfyUI Manager installed, against
 //! the published release of the installed version. Both sources are always asked. A source
 //! that does not answer is reported, and with nothing newer from the other the check fails
@@ -18,8 +18,9 @@ use super::ownership::{
     inspect_pack_folder, installed_file_digests, read_digest_record,
 };
 use super::sources::{
-    MetadataError, ReleaseOffer, ReleaseSourceConfig, ReleaseSourceKind, github_exact,
-    github_latest, registry_exact, registry_latest,
+    GITHUB_NEWEST_TAGS_TRIED, GITHUB_TAG_PAGES, MetadataError, ReleaseOffer, ReleaseSourceConfig,
+    ReleaseSourceKind, github_exact, github_published, github_tag_versions, registry_exact,
+    registry_latest,
 };
 use crate::durable_storage::pack_tree::PackTree;
 use serde_json::Value;
@@ -115,9 +116,57 @@ pub(crate) fn plan_update(
     Ok(UpdateDecision::Install { offer, from: current, installed, unchecked })
 }
 
-/// Read one source's release list into its newest installable offer.
-type ReadLatest =
-    fn(&ReleaseSourceConfig, &Value) -> std::result::Result<Option<ReleaseOffer>, MetadataError>;
+/// A source's newest installable offer, or that the source did not answer usably.
+type Newest = std::result::Result<Option<ReleaseOffer>, Unanswered>;
+
+/// A source gave no usable answer; which one is reported by its kind.
+struct Unanswered;
+impl From<SourceFailure> for Unanswered {
+    fn from(_: SourceFailure) -> Self {
+        Self
+    }
+}
+impl From<MetadataError> for Unanswered {
+    fn from(_: MetadataError) -> Self {
+        Self
+    }
+}
+
+fn registry_newest(config: &ReleaseSourceConfig, sources: &dyn ReleaseSources) -> Newest {
+    Ok(registry_latest(config, &sources.fetch_json(&config.registry_versions_url())?)?)
+}
+
+/// The newest published GitHub release above `current`. SugarCubes' releases are found by
+/// their own tags, newest first, and each is then asked for by its tag, so the other releases
+/// the repository holds are never read, however many there are.
+fn github_newest(
+    config: &ReleaseSourceConfig,
+    sources: &dyn ReleaseSources,
+    current: ReleaseVersion,
+) -> Newest {
+    let mut newer = Vec::new();
+    for page in 1..=GITHUB_TAG_PAGES {
+        let (versions, more) =
+            github_tag_versions(config, &sources.fetch_json(&config.github_tags_url(page))?)?;
+        newer.extend(versions.into_iter().filter(|version| *version > current));
+        if !more {
+            break;
+        }
+    }
+    newer.sort_unstable_by(|left, right| right.cmp(left));
+    for version in newer.into_iter().take(GITHUB_NEWEST_TAGS_TRIED) {
+        let release = match sources.fetch_json(&config.github_release_url(version)) {
+            Ok(release) => release,
+            // A tag without a release: the release was never published.
+            Err(SourceFailure::NotFound) => continue,
+            Err(failure) => return Err(failure.into()),
+        };
+        if let Some(offer) = github_published(config, &release, version)? {
+            return Ok(Some(offer));
+        }
+    }
+    Ok(None)
+}
 
 /// Return the newest offer above `current` and the sources that did not answer.
 pub fn newest_offer(
@@ -125,21 +174,17 @@ pub fn newest_offer(
     sources: &dyn ReleaseSources,
     current: ReleaseVersion,
 ) -> (Option<ReleaseOffer>, Vec<ReleaseSourceKind>) {
-    let asks: [(ReleaseSourceKind, String, ReadLatest); 2] = [
-        (ReleaseSourceKind::Registry, config.registry_versions_url(), registry_latest),
-        (ReleaseSourceKind::GitHubRelease, config.github_releases_url(), github_latest),
+    let asks = [
+        (ReleaseSourceKind::Registry, registry_newest(config, sources)),
+        (ReleaseSourceKind::GitHubRelease, github_newest(config, sources, current)),
     ];
     let mut offers = Vec::new();
     let mut unchecked = Vec::new();
-    for (kind, url, read) in asks {
-        match sources
-            .fetch_json(&url)
-            .map_err(|_| ())
-            .and_then(|reply| read(config, &reply).map_err(|_| ()))
-        {
+    for (kind, newest) in asks {
+        match newest {
             Ok(Some(offer)) if offer.version > current => offers.push(offer),
             Ok(_) => {}
-            Err(()) => {
+            Err(Unanswered) => {
                 tracing::warn!(
                     target: "sugarsubstitute::pack_install",
                     operation = "check_source",

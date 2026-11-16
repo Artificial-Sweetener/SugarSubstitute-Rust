@@ -42,10 +42,13 @@ pub(super) struct FakeSources {
     pub(super) down: RefCell<BTreeSet<String>>,
     /// Archive URLs whose download arrives with one extra byte.
     pub(super) corrupt: RefCell<BTreeSet<String>>,
+    /// Every metadata URL asked for, in order.
+    asked: RefCell<Vec<String>>,
 }
 
 impl ReleaseSources for FakeSources {
     fn fetch_json(&self, url: &str) -> std::result::Result<Value, SourceFailure> {
+        self.asked.borrow_mut().push(url.to_owned());
         if self.down.borrow().iter().any(|prefix| url.starts_with(prefix)) {
             return Err(SourceFailure::Unavailable);
         }
@@ -119,9 +122,9 @@ impl FakeSources {
             "name": asset, "state": "uploaded", "size": archive.len(),
             "digest": format!("sha256:{}", sha256(&archive)), "browser_download_url": url}]});
         let mut replies = self.replies.borrow_mut();
-        replies.insert(config.github_release_url(ReleaseVersion::parse(version)?), release.clone());
-        let listing = replies.entry(config.github_releases_url()).or_insert_with(|| json!([]));
-        listing.as_array_mut().ok_or("listing")?.push(release);
+        replies.insert(config.github_release_url(ReleaseVersion::parse(version)?), release);
+        let tags = replies.entry(config.github_tags_url(1)).or_insert_with(|| json!([]));
+        tags.as_array_mut().ok_or("tags")?.push(json!({"ref": format!("refs/tags/{tag}")}));
         self.archives.borrow_mut().insert(url, files);
         Ok(())
     }
@@ -173,9 +176,9 @@ fn source_selection_vectors() -> TestResult {
         }
         let github = field(&vector, "github")?;
         if github.get("unavailable").is_some() {
-            sources.down.borrow_mut().insert(config.github_releases_url());
+            sources.down.borrow_mut().insert(config.github_tags_url(1));
         } else {
-            sources.empty(config.github_releases_url());
+            sources.empty(config.github_tags_url(1));
             for item in list(github, "releases")? {
                 let flag = |key: &str| item.get(key).and_then(Value::as_bool).unwrap_or(false);
                 sources.publish_github(
@@ -247,7 +250,7 @@ fn update_refusal_vectors() -> TestResult {
             }
             apply_edits(&pack, field(&vector, "edits")?)?;
             let sources = FakeSources::default();
-            sources.empty(config.github_releases_url());
+            sources.empty(config.github_tags_url(1));
             let files = field(installed, "files")?;
             if !recorded {
                 sources.publish_registry(
@@ -370,5 +373,53 @@ fn rollback_trigger_vectors() -> TestResult {
             other => return Err(format!("{name}: unknown verdict {other}").into()),
         }
     }
+    Ok(())
+}
+
+/// SugarCubes' releases are found by their own tags. Every page of them is read, a tag whose
+/// release is unpublished, a prerelease or a draft is passed over for the next newest, and no
+/// other release of the repository is ever asked for.
+#[test]
+fn github_releases_are_found_by_sugarcubes_tags_alone() -> TestResult {
+    let config = config()?;
+    let sources = FakeSources::default();
+    sources.empty(config.registry_versions_url());
+    sources.publish_github(&config, "2.0.0", false, false)?;
+    sources.publish_github(&config, "3.0.0", true, false)?;
+    sources.publish_github(&config, "4.0.0", false, true)?;
+    {
+        let mut replies = sources.replies.borrow_mut();
+        let mut newest = replies.remove(&config.github_tags_url(1)).ok_or("tags")?;
+        let tags = newest.as_array_mut().ok_or("tags")?;
+        // A tag that names no version, and a tag whose release was never published.
+        tags.push(json!({"ref": "refs/tags/sugarcubes-vnext"}));
+        tags.push(json!({"ref": "refs/tags/sugarcubes-v5.0.0"}));
+        let older: Vec<Value> = (0..100)
+            .map(|patch| json!({"ref": format!("refs/tags/sugarcubes-v1.0.{patch}")}))
+            .collect();
+        replies.insert(config.github_tags_url(1), Value::Array(older));
+        replies.insert(config.github_tags_url(2), newest);
+    }
+    let (offer, unchecked) = newest_offer(&config, &sources, ReleaseVersion::parse("1.5.0")?);
+    assert!(unchecked.is_empty());
+    let offer = offer.ok_or("The published release was not found")?;
+    assert!(offer.version == ReleaseVersion::parse("2.0.0")?);
+    assert!(offer.source == ReleaseSourceKind::GitHubRelease);
+    let asked = sources.asked.borrow();
+    let release = |version: &str| -> std::result::Result<String, Failure> {
+        Ok(config.github_release_url(ReleaseVersion::parse(version)?))
+    };
+    assert_eq!(
+        *asked,
+        [
+            config.registry_versions_url(),
+            config.github_tags_url(1),
+            config.github_tags_url(2),
+            release("5.0.0")?,
+            release("4.0.0")?,
+            release("3.0.0")?,
+            release("2.0.0")?,
+        ]
+    );
     Ok(())
 }

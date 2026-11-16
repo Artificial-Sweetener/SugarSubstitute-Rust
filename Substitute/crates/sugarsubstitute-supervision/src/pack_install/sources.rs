@@ -132,9 +132,13 @@ impl ReleaseSourceConfig {
         format!("{}/nodes/{}/install?version={version}", self.registry_api_root, self.pack_id)
     }
 
-    /// The repository's release list.
-    pub fn github_releases_url(&self) -> String {
-        format!("{}/repos/{}/releases?per_page=50", self.github_api_root, self.github_repository)
+    /// One page of the repository's SugarCubes tags, counted from 1. SugarCubes' releases are
+    /// found by their own tags, so the other releases the repository holds are never read.
+    pub fn github_tags_url(&self, page: usize) -> String {
+        format!(
+            "{}/repos/{}/git/matching-refs/tags/{}?per_page={GITHUB_TAGS_PER_PAGE}&page={page}",
+            self.github_api_root, self.github_repository, self.tag_prefix
+        )
     }
 
     /// The repository's release of one exact version.
@@ -282,28 +286,48 @@ fn registry_offer(
     }))
 }
 
-/// Return the newest published, non-prerelease SugarCubes release on GitHub.
+/// How many tags GitHub returns on one page.
+const GITHUB_TAGS_PER_PAGE: usize = 100;
+/// How many pages of SugarCubes tags one check reads.
+pub(super) const GITHUB_TAG_PAGES: usize = 20;
+/// How many of the newest tags one check asks for a release. A tag whose release is a draft,
+/// a prerelease or still uploading is passed over for the next newest.
+pub(super) const GITHUB_NEWEST_TAGS_TRIED: usize = 5;
+
+/// Read one page of the repository's SugarCubes tags: the versions they name, and whether
+/// another page follows.
 ///
 /// # Errors
-/// Refuses a reply that is not a list, or a newest release whose asset is malformed.
-pub fn github_latest(
+/// Refuses a reply that is not a list.
+pub fn github_tag_versions(
     config: &ReleaseSourceConfig,
     payload: &Value,
-) -> Result<Option<ReleaseOffer>, MetadataError> {
+) -> Result<(Vec<ReleaseVersion>, bool), MetadataError> {
     let list = payload.as_array().ok_or(MetadataError("The GitHub reply is not a list."))?;
-    let flag =
-        |release: &Value, key: &str| release.get(key).and_then(Value::as_bool).unwrap_or(false);
-    let newest = list
+    let versions = list
         .iter()
-        .filter(|release| {
-            release.is_object() && !flag(release, "draft") && !flag(release, "prerelease")
+        .filter_map(|tag| {
+            let name = tag.get("ref")?.as_str()?.strip_prefix("refs/tags/")?;
+            ReleaseVersion::parse(name.strip_prefix(&config.tag_prefix)?).ok()
         })
-        .filter_map(|release| Some((tag_version(config, release)?, release)))
-        .max_by_key(|(version, _)| *version);
-    match newest {
-        Some((version, release)) => github_offer(config, version, release),
-        None => Ok(None),
+        .collect();
+    Ok((versions, list.len() >= GITHUB_TAGS_PER_PAGE))
+}
+
+/// Return the GitHub asset of one published release, or `None` when it is absent, a draft or
+/// a prerelease.
+///
+/// # Errors
+/// Refuses a malformed asset.
+pub fn github_published(
+    config: &ReleaseSourceConfig,
+    payload: &Value,
+    version: ReleaseVersion,
+) -> Result<Option<ReleaseOffer>, MetadataError> {
+    if payload.get("prerelease").and_then(Value::as_bool).unwrap_or(false) {
+        return Ok(None);
     }
+    github_exact(config, payload, version)
 }
 
 /// Return the GitHub asset of one exact release, or `None` when it is absent or a draft.
@@ -319,11 +343,6 @@ pub fn github_exact(
         return Ok(None);
     }
     github_offer(config, version, payload)
-}
-
-fn tag_version(config: &ReleaseSourceConfig, release: &Value) -> Option<ReleaseVersion> {
-    let tag = release.get("tag_name")?.as_str()?;
-    ReleaseVersion::parse(tag.strip_prefix(&config.tag_prefix)?).ok()
 }
 
 fn github_offer(

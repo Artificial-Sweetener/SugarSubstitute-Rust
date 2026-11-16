@@ -34,7 +34,7 @@ impl Host {
             "NodeVersionStatusActive",
             pack_files("1.0.0"),
         )?;
-        host.sources.empty(host.config.github_releases_url());
+        host.sources.empty(host.config.github_tags_url(1));
         Ok(host)
     }
 
@@ -380,7 +380,10 @@ fn a_real_http_check_installs_the_registry_release_over_loopback() -> TestResult
         let (api, api_policy) = Running::start(
             vec![
                 complete("nodes/SugarCubes/versions", versions.as_bytes()),
-                complete("repos/Artificial-Sweetener/SugarCubes/releases?per_page=50", b"[]"),
+                complete(
+                    "repos/Artificial-Sweetener/SugarCubes/git/matching-refs/tags/sugarcubes-v?per_page=100&page=1",
+                    b"[]",
+                ),
             ],
             context,
         )?;
