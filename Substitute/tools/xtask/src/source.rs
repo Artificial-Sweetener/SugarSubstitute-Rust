@@ -95,14 +95,24 @@ pub(crate) fn fingerprint_resolved(
     sources: &[String],
     locate: impl Fn(&str) -> Result<PathBuf>,
 ) -> Result<String> {
+    let contents = sources
+        .iter()
+        .map(|relative| Ok((relative.clone(), read(&locate(relative)?)?)))
+        .collect::<Result<Vec<_>>>()?;
+    fingerprint_contents(&contents)
+}
+
+/// Fingerprint recorded paths with the contents a caller read for them, in sorted path order.
+pub(crate) fn fingerprint_contents(sources: &[(String, String)]) -> Result<String> {
     require(!sources.is_empty(), "reviewed source inventory must not be empty")?;
-    let mut sorted = sources.to_vec();
-    sorted.sort();
-    sorted.dedup();
-    require(sorted.len() == sources.len(), "reviewed source inventory contains duplicate paths")?;
+    let mut sorted: Vec<&(String, String)> = sources.iter().collect();
+    sorted.sort_by(|left, right| left.0.cmp(&right.0));
+    require(
+        sorted.windows(2).all(|pair| pair[0].0 != pair[1].0),
+        "reviewed source inventory contains duplicate paths",
+    )?;
     let mut digest = Sha256::new();
-    for relative in sorted {
-        let source = read(&locate(&relative)?)?;
+    for (relative, source) in sorted {
         digest.update(relative.as_bytes());
         digest.update([0]);
         digest.update(source.as_bytes());

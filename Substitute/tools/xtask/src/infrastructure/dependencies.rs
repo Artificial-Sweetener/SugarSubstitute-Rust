@@ -4,7 +4,7 @@
 use crate::{
     error::{Failure, Result, read, require},
     policy::Architecture,
-    source::fingerprint,
+    source::{fingerprint, fingerprint_contents, resolve},
     workspace::Workspace,
 };
 use serde::{Deserialize, Serialize};
@@ -91,13 +91,66 @@ fn node(identity: &str) -> bool {
     ) || identity.starts_with("@nodelib/fs.")
 }
 
-/// Inventory actual declarations; fingerprints include shared pins and committed lockfiles.
+/// What the release version reads as in a fingerprint, so every release fingerprints alike.
+const RELEASE_VERSION: &str = "version = \"<release>\"";
+
+fn declares_version(line: &str) -> bool {
+    line.strip_prefix("version").is_some_and(|rest| rest.trim_start().starts_with('='))
+}
+
+/// The workspace manifest without the version its packages release as. That version is not a
+/// dependency declaration, and every release rewrites it.
+fn without_release_version(manifest: &str) -> String {
+    let mut section = "";
+    manifest
+        .lines()
+        .map(|line| {
+            if line.starts_with('[') {
+                section = line.trim_end();
+            }
+            if section == "[workspace.package]" && declares_version(line) {
+                RELEASE_VERSION
+            } else {
+                line
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// The lockfile without the release version of the workspace's own packages. Every other
+/// entry, and each member's dependency list, is fingerprinted as locked.
+fn without_member_versions(lock: &str, members: &[&str]) -> String {
+    lock.split("\n\n")
+        .map(|entry| {
+            let name =
+                entry.lines().find_map(|line| line.strip_prefix("name = \"")?.strip_suffix('"'));
+            let member = entry.lines().any(|line| line == "[[package]]")
+                && !entry.lines().any(|line| line.starts_with("source = "))
+                && name.is_some_and(|name| members.contains(&name));
+            if !member {
+                return entry.to_owned();
+            }
+            entry
+                .lines()
+                .map(|line| if declares_version(line) { RELEASE_VERSION } else { line })
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
+/// Inventory actual declarations; fingerprints include shared pins and committed lockfiles,
+/// except the workspace's own release version.
 pub(super) fn inventory(
     root: &Path,
     architecture: &Architecture,
     workspace: &Workspace,
 ) -> Result<Vec<Access>> {
     let mut found = Vec::new();
+    let members: Vec<&str> =
+        workspace.packages.iter().map(|package| package.name.as_str()).collect();
     for package in &workspace.packages {
         if !package.dependencies.iter().any(|dependency| cargo(&dependency.name)) {
             continue;
@@ -113,8 +166,14 @@ pub(super) fn inventory(
             .map_err(|cause| Failure::external("resolve storage manifest", cause))?
             .to_string_lossy()
             .replace('\\', "/");
-        let sources = vec!["Cargo.toml".into(), "Cargo.lock".into(), manifest];
-        let digest = fingerprint(root, &sources)?;
+        let digest = fingerprint_contents(&[
+            ("Cargo.toml".into(), without_release_version(&read(&resolve(root, "Cargo.toml")?)?)),
+            (
+                "Cargo.lock".into(),
+                without_member_versions(&read(&resolve(root, "Cargo.lock")?)?, &members),
+            ),
+            (manifest.clone(), read(&resolve(root, &manifest)?)?),
+        ])?;
         for dependency in package.dependencies.iter().filter(|dependency| cargo(&dependency.name)) {
             found.push(Access {
                 owner: package.name.clone(),

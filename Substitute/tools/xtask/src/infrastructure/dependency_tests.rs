@@ -75,6 +75,62 @@ fn cargo_dependency_reviews_reject_alias_owner_kind_and_manifest_drift() -> Resu
     Ok(())
 }
 
+/// A release rewrites the workspace version in the manifest and in each member's lock entry.
+/// That declares no dependency, so the reviews stand; every other change still voids them.
+#[test]
+fn a_release_version_change_leaves_cargo_dependency_reviews_standing() -> Result<()> {
+    let (mut repository, _) = fixture()?;
+    let member = repository.workspace.packages[0].name.clone();
+    let manifest = |version: &str, pin: &str| {
+        format!(
+            "[workspace]\nmembers=['crates/host']\n\n[workspace.package]\nversion = \
+             \"{version}\"\nedition = \"2024\"\n\n[workspace.dependencies]\nfs2 = \"={pin}\"\n"
+        )
+    };
+    let lock = |version: &str, locked: &str, extra: &str| {
+        format!(
+            "version = 4\n\n[[package]]\nname = \"fs2\"\nversion = \"{locked}\"\nsource = \
+             \"registry+https://github.com/rust-lang/crates.io-index\"\n\n[[package]]\nname = \
+             \"{member}\"\nversion = \"{version}\"\ndependencies = [\n \"fs2\",{extra}\n]\n"
+        )
+    };
+    repository.workspace.packages[0].dependencies.push(Dependency {
+        name: "fs2".into(),
+        rename: None,
+        kind: None,
+        path: None,
+    });
+    let inventory = |manifest: String, lock: String| {
+        fixtures::write(repository.root(), "Cargo.toml", &manifest)?;
+        fixtures::write(repository.root(), "Cargo.lock", &lock)?;
+        dependencies::inventory(repository.root(), &repository.architecture, &repository.workspace)
+    };
+    let reviewed = inventory(manifest("0.1.0", "0.4.3"), lock("0.1.0", "0.4.3", ""))?;
+    let reviews: Vec<_> = reviewed
+        .iter()
+        .map(|item| dependencies::Review {
+            owner: item.owner.clone(),
+            identity: item.identity.clone(),
+            binding: item.binding.clone(),
+            kind: item.kind.clone(),
+            source_sha256: item.source_sha256.clone(),
+            rationale: "Fixture reviews a locked file-locking dependency".into(),
+        })
+        .collect();
+    assert_eq!(reviews.len(), 1);
+    let released = inventory(manifest("0.2.0", "0.4.3"), lock("0.2.0", "0.4.3", ""))?;
+    dependencies::check(&released, &reviews)?;
+    for (changed_manifest, changed_lock) in [
+        (manifest("0.2.0", "0.4.4"), lock("0.2.0", "0.4.3", "")),
+        (manifest("0.2.0", "0.4.3"), lock("0.2.0", "0.4.4", "")),
+        (manifest("0.2.0", "0.4.3"), lock("0.2.0", "0.4.3", "\n \"tempfile\",")),
+    ] {
+        let changed = inventory(changed_manifest, changed_lock)?;
+        assert!(dependencies::check(&changed, &reviews).is_err());
+    }
+    Ok(())
+}
+
 /// npm alias syntax cannot conceal file-capable dependencies or changes to their lockfile.
 #[test]
 fn npm_aliases_and_exact_manifest_fingerprints_are_reviewed() -> Result<()> {
