@@ -29,6 +29,10 @@ export class CanvasSourcePreviews {
         this.report = report;
         this.workflows = workflows;
     }
+    /** Ask the capture owner whether a source can be read now, so previews admit what it can read. */
+    unavailable(source, context) {
+        return this.capture.unavailable(source, context);
+    }
     /** Share raw source pixels so a channel change can reinterpret them without a native round trip. */
     observe(source, listener, maximumSize = 288, representation = 'raw', cohort = null) {
         if (this.#disposed)
@@ -69,7 +73,7 @@ export class CanvasSourcePreviews {
         listener(entry.value);
         const host = this.host(source.canvasId);
         if (host && !this.#hosts.has(host)) {
-            const lease = host.changes?.subscribe(() => this.refresh(host.canvasId));
+            const lease = host.changes?.subscribe((change) => this.#changed(host.canvasId, change));
             this.#hosts.set(host, lease ? () => lease.stop() : () => { });
         }
         if (entry.value.kind === 'loading')
@@ -111,6 +115,22 @@ export class CanvasSourcePreviews {
     refresh(canvasId) {
         for (const [key, entry] of this.#entries)
             if (entry.source.canvasId === canvasId)
+                this.#invalidate(key, entry);
+        this.#schedule();
+    }
+    /**
+     * React to one native change. A change naming no document says only that the canvas stopped
+     * showing one, as on the Output route. Pixels already captured for a source that names its own
+     * document are still that document's, so they are kept and no capture is requested for them.
+     */
+    #changed(canvasId, change) {
+        if (change.documentId !== null) {
+            this.refresh(canvasId);
+            return;
+        }
+        for (const [key, entry] of this.#entries)
+            if (entry.source.canvasId === canvasId &&
+                (entry.source.documentId === null || entry.value.kind !== 'pixels'))
                 this.#invalidate(key, entry);
         this.#schedule();
     }

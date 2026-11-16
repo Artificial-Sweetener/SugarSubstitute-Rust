@@ -1,4 +1,3 @@
-import { canvasSourceUnavailable } from '../domain/CanvasSourceAvailability.js';
 import { canvasInputSourceKey, } from '../../core/embedded/CanvasRuntime.js';
 /** Own asynchronous source work independently of preview geometry and relationships. */
 export class InputSourcePreview {
@@ -13,19 +12,19 @@ export class InputSourcePreview {
     #serial = 0;
     #alive = true;
     /** Keep availability policy shared by source admission and lifetime invalidation. */
-    static unavailable(binding, entry) {
+    static unavailable(binding, entry, previews) {
         return entry.source.kind === 'canvas'
-            ? canvasSourceUnavailable(entry.source, binding.context)
+            ? previews.unavailable(entry.source, binding.context)
             : entry.source.file
                 ? null
                 : 'Choose a file';
     }
     /** Reuse source work across interpretation edits while file codecs keep their authored settings. */
-    static reference(binding, entry, maximumSize) {
+    static reference(binding, entry, maximumSize, previews) {
         return JSON.stringify([
             canvasInputSourceKey(entry.source),
             maximumSize,
-            this.unavailable(binding, entry),
+            this.unavailable(binding, entry, previews),
             entry.source.kind === 'file' ? binding.preview.settings : null,
         ]);
     }
@@ -37,7 +36,7 @@ export class InputSourcePreview {
         this.publish = publish;
         this.report = report;
         this.#stop = () => { };
-        const reason = InputSourcePreview.unavailable(binding, entry);
+        const reason = InputSourcePreview.unavailable(binding, entry, previews);
         if (reason) {
             publish({ kind: 'error', message: reason });
             return;

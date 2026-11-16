@@ -19,6 +19,8 @@ import type {
   CanvasInputSource,
   CanvasPixelRaster,
   CanvasDocument,
+  CanvasSourceChange,
+  CanvasSourceContext,
 } from '../../../../../integrations/contracts/CanvasProtocol.generated.js';
 import { CanvasSourceUnavailable } from '../domain/CanvasSourceAvailability.js';
 import type { CanvasSourceCapture } from './CanvasSourceCapture.js';
@@ -88,6 +90,11 @@ export class CanvasSourcePreviews {
     private readonly workflows: CanvasPreviewWorkflows,
   ) {}
 
+  /** Ask the capture owner whether a source can be read now, so previews admit what it can read. */
+  unavailable(source: CanvasInputSource, context: CanvasSourceContext | null): string | null {
+    return this.capture.unavailable(source, context);
+  }
+
   /** Share raw source pixels so a channel change can reinterpret them without a native round trip. */
   observe(
     source: Exclude<CanvasInputSource, { kind: 'file' }>,
@@ -133,7 +140,7 @@ export class CanvasSourcePreviews {
     listener(entry.value);
     const host = this.host(source.canvasId);
     if (host && !this.#hosts.has(host)) {
-      const lease = host.changes?.subscribe(() => this.refresh(host.canvasId));
+      const lease = host.changes?.subscribe((change) => this.#changed(host.canvasId, change));
       this.#hosts.set(host, lease ? () => lease.stop() : () => {});
     }
     if (entry.value.kind === 'loading') this.#invalidate(key, entry);
@@ -174,6 +181,25 @@ export class CanvasSourcePreviews {
   refresh(canvasId: string): void {
     for (const [key, entry] of this.#entries)
       if (entry.source.canvasId === canvasId) this.#invalidate(key, entry);
+    this.#schedule();
+  }
+
+  /**
+   * React to one native change. A change naming no document says only that the canvas stopped
+   * showing one, as on the Output route. Pixels already captured for a source that names its own
+   * document are still that document's, so they are kept and no capture is requested for them.
+   */
+  #changed(canvasId: string, change: CanvasSourceChange): void {
+    if (change.documentId !== null) {
+      this.refresh(canvasId);
+      return;
+    }
+    for (const [key, entry] of this.#entries)
+      if (
+        entry.source.canvasId === canvasId &&
+        (entry.source.documentId === null || entry.value.kind !== 'pixels')
+      )
+        this.#invalidate(key, entry);
     this.#schedule();
   }
 

@@ -50,6 +50,22 @@ export class CanvasSourceCapture {
             throw new CanvasSourceUnavailable('Source unavailable');
         return result;
     }
+    /**
+     * Explain why a source cannot be captured now, or return null when it can. A document the
+     * workflow provisioned stays capturable while the canvas shows another document or the Output
+     * route, so its sources never wait for the Input route to be shown.
+     */
+    unavailable(source, context) {
+        if (source.kind !== 'file' && context?.supported && this.#held(source, context))
+            return null;
+        return canvasSourceUnavailable(source, context);
+    }
+    /** The provisioned document a source names when the canvas is not currently showing it. */
+    #held(source, context) {
+        return source.documentId !== null && source.documentId !== context.document?.id
+            ? this.documents(source.canvasId, source.documentId)
+            : null;
+    }
     /** Freeze each requested source against one document revision before returning any captured pixels. */
     async capture(entries, maximumSize) {
         if (!Number.isSafeInteger(maximumSize) || maximumSize < 0 || maximumSize > 1024)
@@ -66,15 +82,10 @@ export class CanvasSourceCapture {
             const documents = new Map();
             for (const entry of group) {
                 const { source } = entry;
-                const provisioned = source.documentId !== null && source.documentId !== context.document?.id
-                    ? this.documents(canvasId, source.documentId)
-                    : null;
-                if (!provisioned) {
-                    const reason = canvasSourceUnavailable(source, context);
-                    if (reason)
-                        throw new CanvasSourceUnavailable(reason, source);
-                }
-                const document = provisioned ?? context.document;
+                const reason = this.unavailable(source, context);
+                if (reason)
+                    throw new CanvasSourceUnavailable(reason, source);
+                const document = this.#held(source, context) ?? context.document;
                 if (!document)
                     throw new CanvasSourceUnavailable('Open a document');
                 const scope = documents.get(document.id) ?? { document, group: [] };

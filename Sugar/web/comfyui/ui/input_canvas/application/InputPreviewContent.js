@@ -27,8 +27,8 @@ export class InputPreviewContent {
     #edited;
     #captureCohort;
     /** Keep the primary source lifetime independent of relationship and associated image value changes. */
-    static reference(binding, entry, maximumSize) {
-        return InputSourcePreview.reference(binding, entry, maximumSize);
+    static reference(binding, entry, maximumSize, previews) {
+        return InputSourcePreview.reference(binding, entry, maximumSize, previews);
     }
     /** Observe graph relationships and exact image binding changes without graph discovery from presentation. */
     constructor(binding, previews, entry, maximumSize, publish, report, association, mode) {
@@ -94,14 +94,14 @@ export class InputPreviewContent {
                 image.busy ||
                 image.error ||
                 !entry ||
-                InputSourcePreview.unavailable(image, entry)) {
+                InputSourcePreview.unavailable(image, entry, this.previews)) {
                 this.#coverageAlone();
                 return;
             }
             const imageSize = this.maximumSize;
             const reference = JSON.stringify([
                 entry.id,
-                InputSourcePreview.reference(image, entry, imageSize),
+                InputSourcePreview.reference(image, entry, imageSize, this.previews),
                 this.#captureCohort ? this.binding.preview.captureSize(this.#captureSize()) : null,
             ]);
             this.#withoutImage = false;

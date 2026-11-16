@@ -87,7 +87,7 @@ export class InputPreviewRows {
             const size = row.resolution.resolution;
             if (!size)
                 continue;
-            const reference = InputPreviewContent.reference(this.binding, entry, size);
+            const reference = InputPreviewContent.reference(this.binding, entry, size, this.previews);
             if (row.reference !== reference) {
                 const previous = row.content;
                 row.reference = reference;

@@ -312,3 +312,75 @@ test('a preview waits for the canvas to hold its workflow and drops captures fro
   stop();
   expect(f.report).not.toHaveBeenCalled();
 });
+
+test('a mask of a workflow document is read and kept while the canvas shows no document, without a capture per route change', async () => {
+  const held = { id: 'input-1', geometryRevision: 'geometry', width: 2, height: 1 };
+  const listeners = new Set<(change: CanvasSourceChange) => void>();
+  const execute = jest.fn(async (query: CanvasSourceQuery): Promise<CanvasSourceResult> => {
+    // The Output route is shown: the canvas reports no document and offers no targets.
+    if (query.type === 'context')
+      return {
+        observesChanges: true,
+        kind: 'context',
+        supported: true,
+        document: null,
+        revision: 'none',
+        targets: [],
+        layers: [],
+        currentLayerId: null,
+      };
+    return {
+      kind: 'captured',
+      snapshots: query.targets.map((target) => ({
+        target,
+        document: query.document,
+        revision: 'input-1@1',
+        pixels: encodeCanvasRaster(2, 1, 'rgba8', new Uint8Array(8)),
+      })),
+    };
+  });
+  const host: CanvasSourceHost = {
+    canvasId: 'editor',
+    execute,
+    changes: nativeCanvasChanges((listener) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    }),
+  };
+  const capture = new CanvasSourceCapture(
+    () => host,
+    (_canvasId, documentId) => (documentId === held.id ? held : null),
+  );
+  const store = new CanvasSourcePreviews(capture, () => host, jest.fn(), {
+    loaded: () => null,
+    holds: () => true,
+  });
+  const mask: Exclude<CanvasInputSource, { kind: 'file' }> = {
+    kind: 'canvas',
+    canvasId: 'editor',
+    documentId: held.id,
+    target: { kind: 'layer', layerId: '7' },
+  };
+  const context = await capture.context('editor');
+  expect(store.unavailable(mask, context)).toBeNull();
+  expect(store.unavailable({ ...mask, documentId: null }, context)).toBe('Open a document');
+  expect(store.unavailable({ ...mask, documentId: 'elsewhere' }, context)).toBe('Open a document');
+  const captures = (): number =>
+    execute.mock.calls.filter(([query]) => query.type === 'capture').length;
+  const values: CanvasSourcePreview[] = [];
+  const stop = store.observe(mask, (value) => values.push(value));
+  await settled();
+  expect(values.at(-1)).toMatchObject({ kind: 'pixels', document: held });
+  expect(captures()).toBe(1);
+  for (const listener of listeners) listener({ documentId: null, revision: 'none' });
+  await settled();
+  expect(captures()).toBe(1);
+  expect(values.at(-1)).toMatchObject({ kind: 'pixels' });
+  for (const listener of listeners) listener({ documentId: held.id, revision: 'input-1@2' });
+  await settled();
+  expect(captures()).toBe(2);
+  stop();
+  store.dispose();
+});

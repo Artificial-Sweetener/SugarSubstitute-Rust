@@ -17,7 +17,6 @@
 import type { InputEditorBinding } from './InputEditorPorts.js';
 import type { CanvasSourcePreviews, CanvasSourcePreview } from './CanvasSourcePreviews.js';
 import type { InputEntry } from '../domain/InputBinding.js';
-import { canvasSourceUnavailable } from '../domain/CanvasSourceAvailability.js';
 import {
   canvasInputSourceKey,
   type CanvasPixelRaster,
@@ -47,19 +46,28 @@ export class InputSourcePreview {
   #alive = true;
 
   /** Keep availability policy shared by source admission and lifetime invalidation. */
-  static unavailable(binding: InputEditorBinding, entry: InputEntry): string | null {
+  static unavailable(
+    binding: InputEditorBinding,
+    entry: InputEntry,
+    previews: Pick<CanvasSourcePreviews, 'unavailable'>,
+  ): string | null {
     return entry.source.kind === 'canvas'
-      ? canvasSourceUnavailable(entry.source, binding.context)
+      ? previews.unavailable(entry.source, binding.context)
       : entry.source.file
         ? null
         : 'Choose a file';
   }
   /** Reuse source work across interpretation edits while file codecs keep their authored settings. */
-  static reference(binding: InputEditorBinding, entry: InputEntry, maximumSize: number): string {
+  static reference(
+    binding: InputEditorBinding,
+    entry: InputEntry,
+    maximumSize: number,
+    previews: Pick<CanvasSourcePreviews, 'unavailable'>,
+  ): string {
     return JSON.stringify([
       canvasInputSourceKey(entry.source),
       maximumSize,
-      this.unavailable(binding, entry),
+      this.unavailable(binding, entry, previews),
       entry.source.kind === 'file' ? binding.preview.settings : null,
     ]);
   }
@@ -76,7 +84,7 @@ export class InputSourcePreview {
     captureMaximum: number | null = null,
   ) {
     this.#stop = () => {};
-    const reason = InputSourcePreview.unavailable(binding, entry);
+    const reason = InputSourcePreview.unavailable(binding, entry, previews);
     if (reason) {
       publish({ kind: 'error', message: reason });
       return;
