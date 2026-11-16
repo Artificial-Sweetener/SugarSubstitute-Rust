@@ -1,3 +1,9 @@
+## [0.2.3](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.2.2...substitute-v0.2.3) (2026-11-16)
+
+### Bug Fixes
+
+* **startup:** keep a start recoverable when its cleanup cancels a claim still being prepared ([12a9bb0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/12a9bb0a78bc41bb0c262e7f828df7471c79e5f1))
+
 ## [0.2.2](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.2.1...substitute-v0.2.2) (2026-11-16)
 
 ### Bug Fixes
