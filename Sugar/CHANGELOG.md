@@ -1,3 +1,11 @@
+## [0.16.3](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.16.2...sugarcubes-v0.16.3) (2026-11-16)
+
+### Bug Fixes
+
+* **canvas-editing:** keep undo with the canvas and on the keyboard ([14a64e7](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/14a64e791d06d0f20d3bf989c3a586d9077caa37))
+* **input-canvas:** refresh mask previews on every canvas change, with no Output special case ([b99b6d3](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/b99b6d3b0c10e7beba9b29913ba0df9f5e6469c6))
+* **output-canvas:** never outline the canvas when it takes keyboard focus ([0e27fb6](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/0e27fb63a01a453dc5243f4bcedffe3834dfbbf5))
+
 ## [0.16.2](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.16.1...sugarcubes-v0.16.2) (2026-11-16)
 
 ### Bug Fixes
