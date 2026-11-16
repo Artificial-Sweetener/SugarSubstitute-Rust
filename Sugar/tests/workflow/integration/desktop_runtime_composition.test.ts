@@ -30,6 +30,7 @@ import { utf8Bytes } from '../../../integrations/shared/SessionPrimitives.js';
 import { isDesktopCheckpoint } from '../../../integrations/shared/SessionSnapshot.js';
 import { outputSourceId } from '../../../frontend/comfyui/ui/execution/domain/ExecutionIdentity.js';
 import { canvasInspectionSlot } from '../../../frontend/comfyui/ui/output_canvas/application/CanvasInspectionSlots.js';
+import { buildCubeOutputExecutionId } from '../../../frontend/comfyui/ui/cube/execution/CubeOutputExecutionIdentity.js';
 
 test('fresh temp scene finals request one verified asset while saved PNG and animated WebP keep their backend originals', async () => {
   const f = await desktopRuntimeFixture();
@@ -352,6 +353,44 @@ test('production runtime installs before startup commitment and retains accepted
   expect(
     (await f.runtime.capture(f.nextId(), 46, new DesktopSessionCancellation())).previousId,
   ).toBe(final.id);
+  f.dispose();
+  expect(f.errors).toEqual([]);
+});
+
+test('a Cube run stays checkpointable: its accepted prompt records one source per Cube output, never its inner nodes', async () => {
+  const f = await desktopRuntimeFixture();
+  f.host.committed();
+  const payload = await f.host.app.graphToPrompt();
+  const observation = f.execution.submissionObserver.capture(payload);
+  if (!observation) throw new Error('Missing actual queue observation.');
+  const marker = buildCubeOutputExecutionId(23, 0);
+  observation.accepted({
+    prompt_id: 'cube-run',
+    execution_prompt: {
+      'instance:loader': { class_type: 'CheckpointLoaderSimple' },
+      'instance:sampler': { class_type: 'KSampler' },
+      'instance:decode': { class_type: 'VAEDecode' },
+      [marker]: {
+        class_type: 'SugarCubes.CubeOutput',
+        inputs: { instance_id: 'instance', value: ['instance:decode', 0] },
+        _meta: { title: 'image' },
+      },
+    },
+  });
+  const accepted = await f.runtime.capture(f.nextId(), 60, new DesktopSessionCancellation());
+  expect(isDesktopCheckpoint(accepted)).toBe(true);
+  const sources = accepted.entries[0]?.submissions[0]?.sources ?? [];
+  expect(sources.map((source) => [source.nodeId, source.executionPath])).toEqual([
+    [marker, marker],
+  ]);
+  f.api.emit('executed', {
+    prompt_id: 'cube-run',
+    node: marker,
+    output: { images: [{ filename: 'cube-final.png' }] },
+  });
+  const final = await f.runtime.capture(f.nextId(), 61, new DesktopSessionCancellation());
+  expect(isDesktopCheckpoint(final)).toBe(true);
+  expect(final.entries[0]?.outputs.map((output) => output.sourceId)).toEqual([sources[0]?.id]);
   f.dispose();
   expect(f.errors).toEqual([]);
 });

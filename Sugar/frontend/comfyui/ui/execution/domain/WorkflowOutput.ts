@@ -15,11 +15,12 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Describe attributable workflow media without decoded images or host values. */
 
-import type {
-  OutputResultId,
-  OutputSourceId,
-  PromptId,
-  WorkflowSessionId,
+import {
+  outputSourceId,
+  type OutputResultId,
+  type OutputSourceId,
+  type PromptId,
+  type WorkflowSessionId,
 } from './ExecutionIdentity.js';
 import type {
   SessionBinding,
@@ -87,6 +88,30 @@ export interface WorkflowOutputSource {
   readonly order: number;
   /** Route intermediate execution frames without treating their other media as the bound final. */
   readonly transientOnly?: true;
+}
+
+/**
+ * Reduce execution-path attributions to one entry per output source.
+ *
+ * A Cube routes every node inside it to its exposed output so their previews appear there, which
+ * gives several paths one source identity. Only the path that delivers the source's finals
+ * describes the source itself: the path the identity names, else a path whose finals it accepts.
+ */
+export function finalOutputSources(
+  values: readonly WorkflowOutputSource[],
+): readonly WorkflowOutputSource[] {
+  const chosen = new Map<OutputSourceId, WorkflowOutputSource>();
+  for (const value of values) {
+    const current = chosen.get(value.id);
+    if (!current || finalPathRank(value) < finalPathRank(current)) chosen.set(value.id, value);
+  }
+  return Object.freeze([...chosen.values()]);
+}
+
+/** Order one source's paths by how directly each delivers its final media. */
+function finalPathRank(source: WorkflowOutputSource): number {
+  if (source.id === outputSourceId(source.executionPath)) return 0;
+  return source.transientOnly ? 2 : 1;
 }
 
 export interface WorkflowOutputSet {

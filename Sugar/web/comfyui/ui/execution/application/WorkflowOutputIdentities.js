@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Preserve immutable durable execution identities across checkpoint captures and runtime rebinding. */
 import { sessionUuid } from '../../core/embedded/SessionRuntime.js';
+import { finalOutputSources } from '../domain/WorkflowOutput.js';
 /** Allocate identities from immutable source/run facts rather than node labels or output filenames. */
 export class WorkflowOutputIdentities {
     nextId;
@@ -24,10 +25,13 @@ export class WorkflowOutputIdentities {
     constructor(nextId) {
         this.nextId = nextId;
     }
-    /** Freeze the submitted graph's source identity even if a reused node later changes metadata. */
+    /**
+     * Freeze the submitted graph's source identity even if a reused node later changes metadata.
+     * Several execution paths attributed to one source yield that one source, never a repeat.
+     */
     sources(binding, values) {
         const entry = this.#entry(binding.entryId);
-        return Object.freeze(values.map((source) => {
+        return Object.freeze(finalOutputSources(values).map((source) => {
             const key = JSON.stringify([binding.graphRevision, source.id]);
             let captured = entry.sources.get(key);
             if (!captured) {

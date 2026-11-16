@@ -22,7 +22,7 @@ import type {
   SessionOutput,
 } from '../../../../../integrations/contracts/SessionProtocol.generated.js';
 
-import type { WorkflowOutputSource } from '../domain/WorkflowOutput.js';
+import { finalOutputSources, type WorkflowOutputSource } from '../domain/WorkflowOutput.js';
 
 interface EntryIdentities {
   readonly sources: Map<string, SessionSource>;
@@ -39,14 +39,17 @@ export class WorkflowOutputIdentities {
   /** Supply UUID generation at the infrastructure boundary. */
   constructor(private readonly nextId: () => string) {}
 
-  /** Freeze the submitted graph's source identity even if a reused node later changes metadata. */
+  /**
+   * Freeze the submitted graph's source identity even if a reused node later changes metadata.
+   * Several execution paths attributed to one source yield that one source, never a repeat.
+   */
   sources(
     binding: SessionBinding,
     values: readonly WorkflowOutputSource[],
   ): readonly SessionSource[] {
     const entry = this.#entry(binding.entryId);
     return Object.freeze(
-      values.map((source) => {
+      finalOutputSources(values).map((source) => {
         const key = JSON.stringify([binding.graphRevision, source.id]);
         let captured = entry.sources.get(key);
         if (!captured) {
