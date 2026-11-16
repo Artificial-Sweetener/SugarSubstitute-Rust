@@ -41,7 +41,7 @@ function fixture(legacy: boolean) {
   const workflow = { changeTracker: tracker };
   const app = { canvas, extensionManager: { workflow: { activeWorkflow: workflow } } };
   const beforeCommit = jest.fn();
-  const adapter = new ComfyCanvasHistoryAdapter(app, document, beforeCommit);
+  const adapter = new ComfyCanvasHistoryAdapter(app, document, beforeCommit, jest.fn());
   adapter.install();
   return {
     tracker,
@@ -162,3 +162,52 @@ test.each(['before', 'after'])(
     }
   },
 );
+
+test('a shortcut another surface consumed never walks workflow history', async () => {
+  const undo = jest.fn();
+  /** Stand in for Comfy's tracker class: its shortcut entry point reports whether it acted. */
+  class Tracker {
+    _restoringState = false;
+    beforeChange(): void {}
+    afterChange(): void {}
+    async undoRedo(event: KeyboardEvent): Promise<boolean | undefined> {
+      if (!event.ctrlKey || event.key.toLowerCase() !== 'z') return undefined;
+      undo();
+      return true;
+    }
+  }
+  const tracker = new Tracker();
+  const canvas = { emitBeforeChange: jest.fn(), emitAfterChange: jest.fn() };
+  const app = {
+    canvas,
+    extensionManager: { workflow: { activeWorkflow: { changeTracker: tracker } } },
+  };
+  const report = jest.fn();
+  const adapter = new ComfyCanvasHistoryAdapter(app, document, jest.fn(), report);
+  adapter.install();
+  /** Deliver one Ctrl+Z as Comfy does: its capture listener walks history after surfaces ran. */
+  const press = async (consume: boolean): Promise<unknown> => {
+    const event = new KeyboardEvent('keydown', {
+      key: 'z',
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    const surface = (received: Event): void => {
+      if (consume) received.preventDefault();
+    };
+    document.addEventListener('keydown', surface, true);
+    document.body.dispatchEvent(event);
+    document.removeEventListener('keydown', surface, true);
+    return tracker.undoRedo(event);
+  };
+  await expect(press(true)).resolves.toBe(true);
+  expect(undo).not.toHaveBeenCalled();
+  await expect(press(false)).resolves.toBe(true);
+  expect(undo).toHaveBeenCalledTimes(1);
+  adapter.dispose();
+  // Disposal restores the host's own entry point.
+  await expect(press(true)).resolves.toBe(true);
+  expect(undo).toHaveBeenCalledTimes(2);
+  expect(report).not.toHaveBeenCalled();
+});

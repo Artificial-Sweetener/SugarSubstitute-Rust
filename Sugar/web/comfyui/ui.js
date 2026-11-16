@@ -305,7 +305,7 @@ const workflowWorkspace = createWorkflowWorkspace({
         pushToastMessage('error', 'Masonry unavailable', readErrorMessage(error));
     },
 });
-const workflowHistory = new ComfyCanvasHistoryAdapter(appRef, documentRef ?? document, relations.commitNativeTransaction);
+const workflowHistory = new ComfyCanvasHistoryAdapter(appRef, documentRef ?? document, relations.commitNativeTransaction, (error) => logger.error('SugarCubes workflow history shortcuts failed', { error }));
 /** Compose theme-independent native scroll input once for the host document. */
 const scrollSurfaceInput = new ScrollSurfaceWheelHost(documentRef ?? document);
 /** Compose shared model presentation while preserving the native widget owner. */
