@@ -163,14 +163,18 @@ export class ComfyWorkflowSessionAdapter {
     }
     /**
      * Record the workflow a starting graph load configures: the host's target workflow object, or
-     * none when the load creates a new workflow (an opened file) that the host commits only after
-     * configuration. Until the load settles, the live graph belongs to that target, not to the
-     * workflow the store still reports as active.
+     * none when the load opens a workflow of its own (an opened file, a reopened tab), which the
+     * host adds to its open workflows only after configuration and activates later still. Until
+     * the load settles, the live graph belongs to that workflow, not to the one the store still
+     * reports as active.
      */
     beginLoad(sequence, args) {
         this.#lastLoadSequence = sequence;
         const target = args[3];
-        this.#loads.set(sequence, isRecord(target) ? target : null);
+        this.#loads.set(sequence, {
+            target: isRecord(target) ? target : null,
+            open: new Set(this.#opened().map((workflow) => text(workflow.path))),
+        });
     }
     /** Forget a settled load; the store's committed active workflow owns the graph again. */
     endLoad(sequence) {
@@ -180,10 +184,14 @@ export class ComfyWorkflowSessionAdapter {
      * Read the stored serialized state of every open workflow other than the one owning the live
      * graph, including restored workflows the host has not loaded yet, whose serialized content is
      * all they hold.
+     *
+     * The host's store is read directly: it does not announce a closed tab to its subscribers, so
+     * the sessions this adapter last synchronized can still name a workflow the host has closed,
+     * and a closed workflow is nobody's peer.
      */
     readPeerWorkflowStates() {
         const owner = this.#graphOwner();
-        return [...this.#open.values()].flatMap((workflow) => {
+        return this.#opened().flatMap((workflow) => {
             if (owner && sameWorkflow(workflow, owner))
                 return [];
             const state = this.#storedState(workflow);
@@ -202,12 +210,27 @@ export class ComfyWorkflowSessionAdapter {
         if (typeof check === 'function')
             check.call(tracker);
     }
-    /** The workflow owning the live graph: the latest pending load's target, else the active one. */
+    /**
+     * The workflow owning the live graph. With no load pending it is the active workflow. During a
+     * load it is the load's target; a load that names none owns the workflow the host has opened
+     * since it began, and nothing until the host opens one.
+     */
     #graphOwner() {
-        if (this.#loads.size > 0)
-            return [...this.#loads.values()].at(-1) ?? null;
-        const active = this.#workflow.activeWorkflow;
-        return isRecord(active) ? active : null;
+        const load = [...this.#loads.values()].at(-1);
+        if (!load) {
+            const active = this.#workflow.activeWorkflow;
+            return isRecord(active) ? active : null;
+        }
+        if (load.target)
+            return load.target;
+        return (this.#opened()
+            .filter((workflow) => !load.open.has(text(workflow.path)))
+            .at(-1) ?? null);
+    }
+    /** The host's open workflows as its store holds them now. */
+    #opened() {
+        const workflows = this.#workflow.openWorkflows;
+        return Array.isArray(workflows) ? workflows.filter(isRecord) : [];
     }
     /** A loaded workflow's tracked state, or an unloaded workflow's parsed serialized content. */
     #storedState(workflow) {

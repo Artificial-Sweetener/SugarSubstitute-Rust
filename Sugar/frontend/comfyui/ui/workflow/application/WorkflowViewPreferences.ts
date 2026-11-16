@@ -142,10 +142,18 @@ export class WorkflowViewPreferences {
     return true;
   }
 
-  /** Release closed in-memory bindings while keeping bounded reopen metadata. */
+  /**
+   * Release closed in-memory bindings while keeping bounded reopen metadata. A closed workflow's
+   * choices are kept under its path, including ones a session restore supplied without
+   * publishing them, so the workflow reopens the way it was left.
+   */
   retain(ids: readonly string[]): void {
     const open = new Set(ids);
-    for (const id of this.#live.keys()) if (!open.has(id)) this.#live.delete(id);
+    for (const [id, closed] of this.#live) {
+      if (open.has(id)) continue;
+      this.#live.delete(id);
+      if (closed.path && this.#stored.get(closed.path) !== closed.view) this.#persist(closed);
+    }
     if (this.#selected && !open.has(this.#selected)) this.#selected = null;
   }
 

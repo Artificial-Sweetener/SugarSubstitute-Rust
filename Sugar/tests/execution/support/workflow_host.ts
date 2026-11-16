@@ -61,6 +61,8 @@ export class WorkflowHostFixture {
   beforeConfigure: () => void = () => undefined;
   afterConfigure: () => void = () => undefined;
   pauseAfterConfigure: (() => Promise<void>) | null = null;
+  /** Pause once a file load's own workflow is open and before the host activates it. */
+  pauseBeforeActivate: (() => Promise<void>) | null = null;
 
   /** Bind an explicit subscriber lifecycle resembling the public Pinia store contract. */
   constructor(initial: WorkflowFixture) {
@@ -100,6 +102,9 @@ export class WorkflowHostFixture {
     if (opened) {
       const created = workflowFixture(workflow);
       created.changeTracker.activeState = typeof data === 'object' && data !== null ? data : {};
+      // Comfy lists the workflow it creates among the open ones before it activates it.
+      this.extensionManager.workflow.openWorkflows.push(created);
+      if (this.pauseBeforeActivate) await this.pauseBeforeActivate();
       this.#commit(created);
       return;
     }

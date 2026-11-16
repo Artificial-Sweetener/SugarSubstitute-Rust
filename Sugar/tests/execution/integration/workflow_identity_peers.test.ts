@@ -151,3 +151,25 @@ test('switching to an open tab keeps its own identity while its graph configures
   f.observer.dispose();
   f.adapter.dispose();
 });
+
+test('an opened file keeps its identity while the host lists its workflow before activating it', async () => {
+  const f = fixture();
+  const opened = { nodes: [], extra: extra(AUTHORED) };
+  const pending = deferred();
+  f.host.pauseBeforeActivate = () => pending.promise;
+  f.host.beforeConfigure = () => {
+    f.root.extra = { ...opened.extra };
+  };
+  const load = f.host.loadGraphData(opened, true, true, 'reopened');
+  // Comfy has opened the load's own workflow, holding the loaded document, and still names the
+  // previous tab active: the document is not a copy of itself.
+  expect(f.host.extensionManager.workflow.openWorkflows).toHaveLength(2);
+  expect(f.host.extensionManager.workflow.activeWorkflow).toBe(f.active);
+  expect(f.state.workflow(true)).toBe(AUTHORED);
+  pending.finish();
+  await load;
+  expect(f.state.workflow(true)).toBe(AUTHORED);
+  expect(recorded(f.root)).toBe(AUTHORED);
+  f.observer.dispose();
+  f.adapter.dispose();
+});

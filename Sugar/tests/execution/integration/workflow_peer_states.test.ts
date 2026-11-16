@@ -17,6 +17,7 @@
 import { jest } from '@jest/globals';
 import { WorkflowSessionStore } from '../../../frontend/comfyui/ui/execution/application/WorkflowSessionStore.js';
 import { ComfyWorkflowSessionAdapter } from '../../../frontend/comfyui/ui/execution/infrastructure/ComfyWorkflowSessionAdapter.js';
+import { createComfyWorkflowLoadObserver } from '../../../frontend/comfyui/ui/execution/infrastructure/ComfyWorkflowLoadObserver.js';
 import { WorkflowHostFixture, workflowFixture } from '../support/workflow_host.js';
 
 test('reads every open workflow except the active one and commits only the active tracker', async () => {
@@ -41,5 +42,61 @@ test('reads every open workflow except the active one and commits only the activ
   Object.assign(a.changeTracker, { checkState: jest.fn() });
   adapter.commitLoadedWorkflowState();
   expect(checkState).toHaveBeenCalledTimes(1);
+  adapter.dispose();
+});
+
+test('a workflow the host closed without announcing it is nobody’s peer', async () => {
+  const a = workflowFixture('a');
+  const b = workflowFixture('b');
+  const host = new WorkflowHostFixture(a);
+  let key = 0;
+  const adapter = new ComfyWorkflowSessionAdapter({
+    app: host,
+    sessions: new WorkflowSessionStore(),
+    nextKey: () => String(++key),
+    logger: { error: jest.fn() },
+  });
+  adapter.install();
+  await host.loadGraphData({}, true, true, b);
+  a.changeTracker.activeState = { extra: { name: 'a' } };
+  expect(adapter.readPeerWorkflowStates()).toHaveLength(1);
+  // Comfy removes a closed tab from its store without notifying store subscribers.
+  const store = host.extensionManager.workflow;
+  store.openWorkflows = store.openWorkflows.filter((workflow) => workflow !== a);
+  expect(adapter.readPeerWorkflowStates()).toEqual([]);
+  adapter.dispose();
+});
+
+test('the workflow a file load opens owns the live graph before the host activates it', async () => {
+  const a = workflowFixture('a');
+  const host = new WorkflowHostFixture(a);
+  let key = 0;
+  const sessions = new WorkflowSessionStore();
+  const adapter = new ComfyWorkflowSessionAdapter({
+    app: host,
+    sessions,
+    nextKey: () => String(++key),
+    logger: { error: jest.fn() },
+  });
+  adapter.install();
+  const load = createComfyWorkflowLoadObserver(host, sessions, adapter, { error: jest.fn() });
+  load.install();
+  a.changeTracker.activeState = { extra: { name: 'a' } };
+  const opened = { extra: { name: 'opened' } };
+  const seen: unknown[][] = [];
+  const commits: string[] = [];
+  Object.assign(a.changeTracker, { checkState: () => commits.push('a') });
+  // After configuration nothing is open for the load yet: the workflow still active is a peer.
+  host.afterConfigure = () => seen.push([...adapter.readPeerWorkflowStates()]);
+  // Once Comfy has opened the load's own workflow, it is the owner and never its own peer.
+  host.pauseBeforeActivate = async () => {
+    seen.push([...adapter.readPeerWorkflowStates()]);
+    adapter.commitLoadedWorkflowState();
+  };
+  await host.loadGraphData(opened, true, true, 'opened');
+  expect(seen).toEqual([[a.changeTracker.activeState], [a.changeTracker.activeState]]);
+  expect(commits).toEqual([]);
+  expect(adapter.readPeerWorkflowStates()).toEqual([a.changeTracker.activeState]);
+  load.dispose();
   adapter.dispose();
 });

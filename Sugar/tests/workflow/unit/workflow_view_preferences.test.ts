@@ -121,3 +121,21 @@ test('restores entries stored before editor widths with the default width and ke
     editorWidth: 1000,
   });
 });
+
+test('a closed workflow reopens with the choices a session restore gave it', () => {
+  const write = jest.fn<(value: unknown) => void>();
+  const views = new WorkflowViewPreferences([], write);
+  const restored = { id: 'restored', path: 'workflows/restored.json' };
+  // A session restore binds choices without publishing them to browser persistence.
+  views.restore(restored, { canvas: true, masonry: true, editorWidth: 640 });
+  expect(write).not.toHaveBeenCalled();
+  views.retain([]);
+  expect(write).toHaveBeenCalledTimes(1);
+  // Releasing again, or a workflow whose stored choices are current, writes nothing more.
+  views.retain([]);
+  expect(write).toHaveBeenCalledTimes(1);
+  views.activate({ id: 'reopened', path: restored.path }, () => true);
+  expect(views.snapshot).toEqual({ canvas: true, masonry: true, editorWidth: 640 });
+  views.retain([]);
+  expect(write).toHaveBeenCalledTimes(1);
+});
