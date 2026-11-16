@@ -1,3 +1,11 @@
+## [0.16.2](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.16.1...sugarcubes-v0.16.2) (2026-11-16)
+
+### Bug Fixes
+
+* **execution:** keep the workspace saveable after a Cube run ([57d98b9](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/57d98b94bbd54fd8b1db6ad581ad4d2b8a517da4))
+* **input-canvas:** keep mask previews while the canvas shows Output ([65eeb71](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/65eeb7157eba64c9560d800add7a3c6f764536ae))
+* **workflow:** report a refused workspace save once, as a save failure ([88076a4](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/88076a49b59b231e3fc5a44149c94b6ac6f9abfa))
+
 ## [0.16.1](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.16.0...sugarcubes-v0.16.1) (2026-11-16)
 
 ### Bug Fixes
