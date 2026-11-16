@@ -1,3 +1,9 @@
+## [0.2.4](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.2.3...substitute-v0.2.4) (2026-11-16)
+
+### Bug Fixes
+
+* **canvas:** keep a workflow's input document available while the canvas shows Output ([591989d](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/591989dfb54c6acd159919e909718552118ec22e))
+
 ## [0.2.3](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.2.2...substitute-v0.2.3) (2026-11-16)
 
 ### Bug Fixes
