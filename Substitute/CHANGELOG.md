@@ -1,3 +1,9 @@
+## [0.2.2](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.2.1...substitute-v0.2.2) (2026-11-16)
+
+### Bug Fixes
+
+* **updates:** find SugarCubes releases on GitHub by their own tags ([d41015d](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/d41015d8839da0b1f438096eba5cfd5e3626d820))
+
 ## [0.2.1](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.2.0...substitute-v0.2.1) (2026-11-16)
 
 ### Bug Fixes
