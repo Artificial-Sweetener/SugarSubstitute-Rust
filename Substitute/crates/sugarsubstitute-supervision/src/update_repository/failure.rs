@@ -20,15 +20,17 @@ pub enum Failure {
     /// Admission or native I/O failure.
     Io(std::io::Error),
 }
+/// States which repository operation failed. The cause is the error's source, so a report that
+/// lists every cause says each one once.
 impl std::fmt::Display for Failure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Http(cause) => write!(f, "Update repository transport failed: {cause}"),
-            Self::Trust(cause) => write!(f, "Update repository trust failed: {cause}"),
-            Self::Verification(cause) => write!(f, "Update preparation rejected: {cause}"),
-            Self::Download(cause) => write!(f, "Update repository download failed: {cause}"),
-            Self::Io(cause) => write!(f, "Update repository I/O failed: {cause}"),
-        }
+        f.write_str(match self {
+            Self::Http(_) => "Update repository transport failed",
+            Self::Trust(_) => "Update repository trust failed",
+            Self::Verification(_) => "Update preparation rejected",
+            Self::Download(_) => "Update repository download failed",
+            Self::Io(_) => "Update repository I/O failed",
+        })
     }
 }
 impl std::error::Error for Failure {
@@ -65,5 +67,20 @@ impl From<DownloadFailure> for Failure {
 impl From<std::io::Error> for Failure {
     fn from(cause: std::io::Error) -> Self {
         Self::Io(cause)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Failure;
+    use sugarsubstitute_contracts::update::attempt::{AttemptPhase, UpdateReport};
+
+    /// The update report lists the failed operation, then its cause, each exactly once.
+    #[test]
+    fn a_report_states_the_failed_operation_and_its_cause_once_each() {
+        let failure = Failure::Io(std::io::Error::other("The disk is gone"));
+        assert_eq!(failure.to_string(), "Update repository I/O failed");
+        let report = UpdateReport::from_error(None, AttemptPhase::Checking, &failure);
+        assert_eq!(report.causes, ["Update repository I/O failed", "The disk is gone"]);
     }
 }
