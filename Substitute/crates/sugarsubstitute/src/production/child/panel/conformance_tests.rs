@@ -39,7 +39,28 @@ use sugarsubstitute_execution::memory_budget::{
 
 /// What this host answered to each page message when its profile was recorded.
 const RECORDED: &str = include_str!("conformance_answers.json");
+/// The application version the recording was made with. The host states its own version in its
+/// updates and release notes answers, and every release changes that version; the recording
+/// and the SugarCubes profile made from it keep this one.
+const RECORDED_VERSION: &str = "0.1.0";
 const GIB: u64 = 1024 * 1024 * 1024;
+
+/// State the recorded version wherever the host states this build's as its current version.
+fn with_recorded_version(value: &mut Value) {
+    match value {
+        Value::Object(fields) => {
+            for (name, field) in fields {
+                if name == "currentVersion" && field.as_str() == Some(env!("CARGO_PKG_VERSION")) {
+                    *field = Value::String(RECORDED_VERSION.into());
+                } else {
+                    with_recorded_version(field);
+                }
+            }
+        }
+        Value::Array(items) => items.iter_mut().for_each(with_recorded_version),
+        _ => {}
+    }
+}
 
 struct Release;
 impl MemoryRelease for Release {
@@ -243,7 +264,8 @@ fn the_host_answers_the_conformance_kit_as_recorded() -> Result<()> {
         let host_answers = host.answer(&page)?;
         exchanges.push(json!({ "page": page, "host": host_answers }));
     }
-    let answered = json!({ "session": session.as_str(), "exchanges": exchanges });
+    let mut answered = json!({ "session": session.as_str(), "exchanges": exchanges });
+    with_recorded_version(&mut answered);
     if serde_json::from_str::<Value>(RECORDED).ok().as_ref() != Some(&answered) {
         return Err(format!(
             "The host answers the conformance kit differently from its recording. Save this as \
