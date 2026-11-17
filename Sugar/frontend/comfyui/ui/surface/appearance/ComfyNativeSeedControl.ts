@@ -19,16 +19,20 @@ import type { UnknownRecord } from '../../types/common.js';
 
 import { isSeedMode, isComfySeedModeControl } from '../../graph/ComfySeedMode.js';
 import type { SeedMode } from '../../graph/ComfySeedMode.js';
-import type { SeedReuseControl } from '../../execution/domain/WorkflowSeed.js';
+import type { SeedReuseControl, ExactSeedText } from '../../execution/domain/WorkflowSeed.js';
 
 export type NativeSeedReuseResolver = (
   node: UnknownRecord,
   name: string,
 ) => SeedReuseControl | null;
 
+export type NativeExactSeedResolver = (node: UnknownRecord, name: string) => ExactSeedText | null;
+
 export interface NativeSeedControl {
   readonly modes: readonly SeedMode[];
   readonly reuse?: SeedReuseControl;
+  /** The exact digits of this seed, where its workflow records them. */
+  readonly exact?: ExactSeedText;
   readMode(): SeedMode;
   writeMode(mode: SeedMode, notifyGraph?: boolean): void;
 }
@@ -44,6 +48,7 @@ export class ComfyNativeSeedControlAdapter {
   constructor(
     app: unknown,
     private readonly reuse?: NativeSeedReuseResolver,
+    private readonly exact?: NativeExactSeedResolver,
   ) {
     this.#app = app;
   }
@@ -87,8 +92,10 @@ export class ComfyNativeSeedControlAdapter {
     const node = typeof locator === 'string' ? this.#nodes.get(locator) : undefined;
     if (!node) return null;
     const control = readNativeSeedControl(node, widget.name, spec.control_after_generate === true);
+    if (!control) return null;
     const reuse = this.reuse?.(node, widget.name);
-    return control && reuse ? { ...control, reuse } : control;
+    const exact = this.exact?.(node, widget.name);
+    return { ...control, ...(reuse ? { reuse } : {}), ...(exact ? { exact } : {}) };
   }
 }
 

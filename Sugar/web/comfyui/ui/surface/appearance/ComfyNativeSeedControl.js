@@ -20,11 +20,13 @@ const seedNames = new Set(['seed', 'noise_seed', 'variation_seed']);
 /** Resolve native numeric owners by scoped locator, retaining subgraph identity. */
 export class ComfyNativeSeedControlAdapter {
     reuse;
+    exact;
     #app;
     #nodes = new Map();
     /** Bind the application graph boundary without relying on browser globals. */
-    constructor(app, reuse) {
+    constructor(app, reuse, exact) {
         this.reuse = reuse;
+        this.exact = exact;
         this.#app = app;
     }
     /** Index each live graph once per coalesced appearance batch. */
@@ -72,8 +74,11 @@ export class ComfyNativeSeedControlAdapter {
         if (!node)
             return null;
         const control = readNativeSeedControl(node, widget.name, spec.control_after_generate === true);
+        if (!control)
+            return null;
         const reuse = this.reuse?.(node, widget.name);
-        return control && reuse ? { ...control, reuse } : control;
+        const exact = this.exact?.(node, widget.name);
+        return { ...control, ...(reuse ? { reuse } : {}), ...(exact ? { exact } : {}) };
     }
 }
 /** Share native promoted seed ownership with execution controls and relation coordination. */

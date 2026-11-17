@@ -16,11 +16,15 @@
 /** Keep the digits of whole numbers a page cannot hold, on the workflow that uses them. */
 import { isRecord } from '../types/common.js';
 
-/** One Cube input whose value is a whole number beyond a page's exact range. */
-export interface ExactIntegerField {
+/** One input of one node of one Cube instance. */
+export interface ExactIntegerTarget {
   readonly instanceId: string;
   readonly nodeSymbol: string;
   readonly inputName: string;
+}
+
+/** One Cube input whose value is a whole number beyond a page's exact range. */
+export interface ExactIntegerField extends ExactIntegerTarget {
   /** The whole number as decimal digits. */
   readonly digits: string;
 }
@@ -52,6 +56,9 @@ export function readExactIntegerFields(value: unknown): readonly ExactIntegerFie
   });
 }
 
+/** How many digit records one input keeps; older ones belong to seeds long since replaced. */
+const RECORDS_PER_INPUT = 8;
+
 /**
  * Record each field's digits as an `exact_integer` relation in the workflow's own metadata.
  *
@@ -60,39 +67,79 @@ export function readExactIntegerFields(value: unknown): readonly ExactIntegerFie
  * while the field still holds exactly that rounding, so the run uses the original seed. A field
  * the person has changed holds another number and keeps it. The relations travel with the
  * workflow, including in the images it generates.
+ *
+ * An input keeps one record per rounding. A shared seed and a Cube's own seed are two values
+ * the same input alternates between, and each keeps its digits; digits recorded for a rounding
+ * replace the ones that rounding had.
  */
 export function recordExactIntegers(root: object, fields: readonly ExactIntegerField[]): void {
   if (!fields.length) return;
   const held: unknown = Reflect.get(root, 'extra');
   const extra = isRecord(held) ? held : {};
   const composition = isRecord(extra[COMPOSITION_KEY]) ? extra[COMPOSITION_KEY] : {};
-  const existing = Array.isArray(composition.value_relations)
+  let kept: unknown[] = Array.isArray(composition.value_relations)
     ? (composition.value_relations as unknown[])
     : [];
-  const recorded = fields.map((field) => ({
-    relation_id: `exact:${field.instanceId}:${field.nodeSymbol}:${field.inputName}`,
-    kind: 'exact_integer',
-    digits: field.digits,
-    targets: [
+  for (const field of fields) {
+    const rounding = Number(field.digits);
+    const others = kept.filter((relation) => !records(relation, field));
+    const own = kept.filter(
+      (relation) => records(relation, field) && Number(relation.digits) !== rounding,
+    );
+    kept = [
+      ...others,
+      ...own.slice(-(RECORDS_PER_INPUT - 1)),
       {
-        instance_id: field.instanceId,
-        node_symbol: field.nodeSymbol,
-        input_name: field.inputName,
+        relation_id: `exact:${field.instanceId}:${field.nodeSymbol}:${field.inputName}:${field.digits}`,
+        kind: 'exact_integer',
+        digits: field.digits,
+        targets: [
+          {
+            instance_id: field.instanceId,
+            node_symbol: field.nodeSymbol,
+            input_name: field.inputName,
+          },
+        ],
       },
-    ],
-  }));
-  const replaced = new Set(recorded.map((relation) => relation.relation_id));
+    ];
+  }
   Reflect.set(root, 'extra', {
     ...extra,
-    [COMPOSITION_KEY]: {
-      ...composition,
-      schema_version: 1,
-      value_relations: [
-        ...existing.filter(
-          (relation) => !isRecord(relation) || !replaced.has(String(relation.relation_id)),
-        ),
-        ...recorded,
-      ],
-    },
+    [COMPOSITION_KEY]: { ...composition, schema_version: 1, value_relations: kept },
   });
+}
+
+/** Return the digits recorded for the value one input holds, or null when it has none. */
+export function readExactDigits(
+  root: object,
+  target: ExactIntegerTarget,
+  value: number,
+): string | null {
+  const extra: unknown = Reflect.get(root, 'extra');
+  const composition = isRecord(extra) ? extra[COMPOSITION_KEY] : null;
+  const relations: unknown[] =
+    isRecord(composition) && Array.isArray(composition.value_relations)
+      ? (composition.value_relations as unknown[])
+      : [];
+  for (const relation of relations)
+    if (records(relation, target) && Number(relation.digits) === value) return relation.digits;
+  return null;
+}
+
+/** Tell whether a relation is the digit record of exactly this one input. */
+function records(
+  relation: unknown,
+  target: ExactIntegerTarget,
+): relation is { digits: string } & Record<string, unknown> {
+  if (!isRecord(relation) || relation.kind !== 'exact_integer') return false;
+  if (typeof relation.digits !== 'string' || !Array.isArray(relation.targets)) return false;
+  const targets = relation.targets as unknown[];
+  const only = targets[0];
+  return (
+    targets.length === 1 &&
+    isRecord(only) &&
+    only.instance_id === target.instanceId &&
+    only.node_symbol === target.nodeSymbol &&
+    only.input_name === target.inputName
+  );
 }

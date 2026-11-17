@@ -26,18 +26,25 @@ import type {
 import { commonFieldDomain } from './FieldCompatibility.js';
 import { linkedFieldMembers, resolveRelations } from './RelationResolver.js';
 
+/** The host's own rule for the value a controlled number takes next. */
+export type SeedStep = (
+  domain: Extract<FieldDomain, { kind: 'number' }>,
+  current: number,
+  mode: Exclude<RelationSeedMode, 'fixed'>,
+) => number;
+
 /** Update globals and linked masters once while leaving native independent seeds to Comfy. */
 export function advanceSharedSeeds(
   fields: readonly FieldContract[],
   nodes: readonly NodeContract[],
   groups: readonly OverrideGroup[],
   state: RelationState,
-  random: () => number,
+  step: SeedStep,
 ): void {
   for (const group of groups) {
     if (!group.enabled || group.members[0]?.semantic !== 'seed') continue;
     const override = state.overrides[group.key];
-    if (override) override.value = advanceSeed(group.domain, group.value, group.seedMode, random);
+    if (override) override.value = advanceSeed(group.domain, group.value, group.seedMode, step);
   }
   const resolved = resolveRelations(fields, nodes, state, groups);
   for (const item of resolved) {
@@ -45,23 +52,24 @@ export function advanceSharedSeeds(
     const members = linkedFieldMembers(item.field.id, fields, nodes, state);
     if (members.length < 2) continue;
     const mode = state.localSeedModes[item.field.id] ?? item.field.seedMode ?? 'fixed';
-    state.locals[item.field.id] = advanceSeed(commonFieldDomain(members), item.value, mode, random);
+    state.locals[item.field.id] = advanceSeed(commonFieldDomain(members), item.value, mode, step);
   }
 }
 
-/** Keep every generated value on the common step grid and wrap within its safe integer range. */
+/**
+ * Give one shared seed its next value by the host's rule, so a shared seed and an unshared one
+ * are rolled and stepped identically.
+ *
+ * A seed beyond a page number's exact range was not rolled here: it came from an image or was
+ * typed. One step from it cannot be held, so stepping leaves it as it is.
+ */
 function advanceSeed(
   domain: FieldDomain | null,
   current: FieldValue,
   mode: RelationSeedMode,
-  random: () => number,
+  step: SeedStep,
 ): FieldValue {
   if (domain?.kind !== 'number' || typeof current !== 'number' || mode === 'fixed') return current;
-  const { minimum, maximum, step } = domain;
-  const ceiling = Math.min(maximum, Number.MAX_SAFE_INTEGER);
-  const last = minimum + Math.floor((ceiling - minimum) / step) * step;
-  if (mode === 'randomize')
-    return minimum + Math.floor(random() * (Math.floor((ceiling - minimum) / step) + 1)) * step;
-  if (mode === 'increment') return current + step > ceiling ? minimum : current + step;
-  return current - step < minimum ? last : current - step;
+  if (mode !== 'randomize' && !Number.isSafeInteger(current)) return current;
+  return step(domain, current, mode);
 }

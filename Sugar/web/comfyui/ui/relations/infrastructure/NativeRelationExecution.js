@@ -16,22 +16,25 @@
 /** Project resolved relation values into the existing outgoing Comfy queue candidate. */
 import { isRecord } from '../../types/common.js';
 import { NativeSubgraphBoundaryResolver } from '../../cube/graph/NativeSubgraphBoundaryResolver.js';
+import { comfyValueControl } from './ComfyValueControl.js';
 /** Resolve editable facades to exact native prompt fields without enrolling hidden leaves. */
 export class NativeRelationExecution {
     relations;
     inventory;
     getWorkflow;
+    step;
     #boundary;
     /** Share the live candidate inventory with execution and renderer-independent policy. */
-    constructor(relations, inventory, logger, getWorkflow = () => undefined) {
+    constructor(relations, inventory, logger, getWorkflow = () => undefined, step = comfyValueControl()) {
         this.relations = relations;
         this.inventory = inventory;
         this.getWorkflow = getWorkflow;
+        this.step = step;
         this.#boundary = new NativeSubgraphBoundaryResolver(logger);
     }
     /** Advance shared seeds once and rewrite only explicit eligible scalar prompt inputs. */
     prepare(payload) {
-        this.relations.advanceSeeds(() => (crypto.getRandomValues(new Uint32Array(1))[0] ?? 0) / 0x100000000);
+        this.relations.advanceSeeds(this.step);
         const snapshot = this.relations.reconcile();
         if (!isRecord(payload) || !isRecord(payload.output))
             return payload;

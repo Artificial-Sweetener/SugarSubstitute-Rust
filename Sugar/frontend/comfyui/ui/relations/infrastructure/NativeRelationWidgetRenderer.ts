@@ -31,7 +31,7 @@ import { NativeChoiceRestrictions } from '../../surface/NativeChoiceRestrictions
 import { prepareNativePresentation } from '../../surface/NativePresentationReady.js';
 import type { NativeChoiceRestriction } from '../../surface/NativeChoiceRestrictions.js';
 import type { NativeSeedControl } from '../../surface/appearance/ComfyNativeSeedControl.js';
-import type { SeedReuseControl } from '../../execution/domain/WorkflowSeed.js';
+import type { SeedReuseControl, ExactSeedText } from '../../execution/domain/WorkflowSeed.js';
 import { choiceRestrictions } from '../domain/FieldCompatibility.js';
 import type { FieldValue, OverrideGroup, RelationSeedMode } from '../domain/RelationContracts.js';
 import type {
@@ -60,6 +60,7 @@ export class NativeRelationWidgetRenderer implements RelationWidgetRenderer {
     private readonly reportError: (error: unknown) => void,
     private readonly reuse?: (key: string) => SeedReuseControl,
     private readonly appearance?: () => AppearanceSource,
+    private readonly exact?: (key: string) => ExactSeedText,
   ) {
     this.#labelLayout = new NativeLinkLabelLayout(document, reportError);
   }
@@ -80,6 +81,7 @@ export class NativeRelationWidgetRenderer implements RelationWidgetRenderer {
             readMode: () => group.seedMode,
             writeMode: changeMode,
             ...(this.reuse ? { reuse: this.reuse(initial.key) } : {}),
+            ...(this.exact ? { exact: this.exact(initial.key) } : {}),
           }
         : null;
     const mount = this.#mount(

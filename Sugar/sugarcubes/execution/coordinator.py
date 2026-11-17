@@ -31,6 +31,7 @@ from ..workflow import (
     read_canonical_workflow,
     WorkflowNormalizer,
 )
+from ..workflow.composed_values import restore_exact_prompt_integers
 from ..serialized_cube_proximity import SerializedCubeProximityMatcher
 from .errors import CubeQueueError, CubeWorkflowError
 from .inheritance import CubeInheritanceResolver
@@ -141,6 +142,7 @@ class CubeExecutionCoordinator:
         )
         measurements.finish("topology")
         lowered = self._lowerer.lower(workflow, topology)
+        restore_exact_prompt_integers(workflow.payload, lowered.prompt)
         if self._live_defaults is not None:
             self._live_defaults.apply(lowered.prompt)
         prepared_inputs = self._prepared_inputs.lower(lowered, request.prepared_inputs)

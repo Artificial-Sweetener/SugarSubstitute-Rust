@@ -24,7 +24,7 @@ import type {
   ResolvedField,
 } from '../domain/RelationContracts.js';
 import { commonFieldDomain } from '../domain/FieldCompatibility.js';
-import { advanceSharedSeeds } from '../domain/SharedSeedAdvancement.js';
+import { advanceSharedSeeds, type SeedStep } from '../domain/SharedSeedAdvancement.js';
 import { resolveLinkedNodeModes } from '../domain/LinkedNodeState.js';
 import { reconcileRelationMembership } from '../domain/RelationMembership.js';
 import {
@@ -216,6 +216,33 @@ export class WorkflowRelations {
     });
   }
 
+  /**
+   * Keep the seeds of the named Cubes as they are when a run is queued.
+   *
+   * A shared seed takes its generation choice from its first member the moment that member is
+   * discovered, so Cubes arriving with a seed to reproduce would otherwise have it rolled by the
+   * shared seed they joined. Every shared and linked owner of their seeds is fixed in one edit.
+   */
+  holdSeeds(cubeIds: readonly string[]): void {
+    const held = new Set(cubeIds);
+    this.reconcile();
+    this.#edit((state) => {
+      const snapshot = this.snapshot();
+      const holds = (field: FieldContract): boolean =>
+        field.semantic === 'seed' && field.cubeId !== null && held.has(field.cubeId);
+      for (const group of snapshot.groups) {
+        const override = state.overrides[group.key];
+        if (override && group.members.some(holds)) override.seedMode = 'fixed';
+      }
+      for (const field of snapshot.fields.filter(holds)) {
+        if (Object.hasOwn(state.localSeedModes, field.id)) state.localSeedModes[field.id] = 'fixed';
+        this.#inventory?.fields
+          .find((candidate) => candidate.contract.id === field.id)
+          ?.writeSeedMode?.('fixed');
+      }
+    });
+  }
+
   /** Link one configurable field to another Cube while rejecting incompatible groups and cycles. */
   linkField(targetId: string, sourceId: string | null): void {
     this.#edit((state) => {
@@ -268,10 +295,10 @@ export class WorkflowRelations {
   }
 
   /** Advance each shared seed exactly once before a queue request is projected. */
-  advanceSeeds(random: () => number): void {
+  advanceSeeds(step: SeedStep): void {
     const snapshot = this.reconcile();
     this.#edit((state) =>
-      advanceSharedSeeds(snapshot.fields, snapshot.nodes, snapshot.groups, state, random),
+      advanceSharedSeeds(snapshot.fields, snapshot.nodes, snapshot.groups, state, step),
     );
   }
 

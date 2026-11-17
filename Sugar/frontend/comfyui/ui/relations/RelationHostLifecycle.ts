@@ -26,6 +26,7 @@ import { NativeRelationExecution } from './infrastructure/NativeRelationExecutio
 import { NativeRelationViews } from './infrastructure/NativeRelationViews.js';
 import { NativeSharedSeedModes } from './infrastructure/NativeSharedSeedModes.js';
 import { NativeWorkflowSeedReuse } from './infrastructure/NativeWorkflowSeedReuse.js';
+import { NativeExactSeeds } from './infrastructure/NativeExactSeeds.js';
 import { NativeSeedMenuHost } from '../surface/appearance/NativeSeedMenuHost.js';
 import type { AppearanceSource } from '../surface/appearance/AppearanceState.js';
 import type { WorkflowSeedHistory } from '../execution/application/WorkflowSeedHistory.js';
@@ -61,6 +62,7 @@ export class RelationHostLifecycle {
   readonly #port: NativeRelationWorkflowPort;
   readonly relations: WorkflowRelations;
   readonly seedReuse: NativeWorkflowSeedReuse;
+  readonly exactSeeds: NativeExactSeeds;
   readonly #seedMenus: NativeSeedMenuHost;
   readonly #execution: NativeRelationExecution;
   readonly #toolbar: GlobalOverrideToolbar;
@@ -101,6 +103,11 @@ export class RelationHostLifecycle {
       options.document,
       options.reportError,
     );
+    this.exactSeeds = new NativeExactSeeds(
+      () => options.app?.graph,
+      this.relations,
+      this.#port.inventorySource,
+    );
     this.#seedMenus = new NativeSeedMenuHost(
       options.app,
       options.document,
@@ -118,6 +125,7 @@ export class RelationHostLifecycle {
       options.reportError,
       (key) => this.seedReuse.group(key),
       options.appearance,
+      (key) => this.exactSeeds.group(key),
     );
     this.#views = new NativeRelationViews(options.document);
     this.#overrideGraph = new NativeOverrideGraphSurface(

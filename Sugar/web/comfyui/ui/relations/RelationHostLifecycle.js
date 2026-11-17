@@ -8,6 +8,7 @@ import { NativeRelationExecution } from './infrastructure/NativeRelationExecutio
 import { NativeRelationViews } from './infrastructure/NativeRelationViews.js';
 import { NativeSharedSeedModes } from './infrastructure/NativeSharedSeedModes.js';
 import { NativeWorkflowSeedReuse } from './infrastructure/NativeWorkflowSeedReuse.js';
+import { NativeExactSeeds } from './infrastructure/NativeExactSeeds.js';
 import { NativeSeedMenuHost } from '../surface/appearance/NativeSeedMenuHost.js';
 import { NativeRelationWidgetRenderer } from './infrastructure/NativeRelationWidgetRenderer.js';
 import { NativeRelationVisibility } from './infrastructure/NativeRelationVisibility.js';
@@ -24,6 +25,7 @@ export class RelationHostLifecycle {
     #port;
     relations;
     seedReuse;
+    exactSeeds;
     #seedMenus;
     #execution;
     #toolbar;
@@ -50,9 +52,10 @@ export class RelationHostLifecycle {
         this.#port = new NativeRelationWorkflowPort(() => options.app?.graph, options.document, options.logger, options.getCardState, options.getConnections);
         this.relations = new WorkflowRelations(this.#port);
         this.seedReuse = new NativeWorkflowSeedReuse(options.app, options.sessions, options.seeds, this.relations, this.#port.inventorySource, options.document, options.reportError);
+        this.exactSeeds = new NativeExactSeeds(() => options.app?.graph, this.relations, this.#port.inventorySource);
         this.#seedMenus = new NativeSeedMenuHost(options.app, options.document, (node, name) => this.seedReuse.field(node, name), options.reportError);
         this.#execution = new NativeRelationExecution(this.relations, this.#port.inventorySource, options.logger, () => options.app?.graph?.serialize?.());
-        const widgets = new NativeRelationWidgetRenderer(options.document, options.reportError, (key) => this.seedReuse.group(key), options.appearance);
+        const widgets = new NativeRelationWidgetRenderer(options.document, options.reportError, (key) => this.seedReuse.group(key), options.appearance, (key) => this.exactSeeds.group(key));
         this.#views = new NativeRelationViews(options.document);
         this.#overrideGraph = new NativeOverrideGraphSurface(options.document, () => options.app, () => options.getLiteGraph?.());
         this.#toolbar = new GlobalOverrideToolbar(options.document, this.relations, options.reportError, widgets, new NativeOverrideToolbarHost(options.document, this.#overrideGraph), createNativeOverrideToolbarState(options.document, options.logger));

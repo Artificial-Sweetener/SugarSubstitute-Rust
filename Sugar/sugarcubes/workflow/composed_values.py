@@ -136,6 +136,54 @@ def _restore_exact_integer(
     return True
 
 
+def restore_exact_prompt_integers(
+    workflow: Mapping[str, object],
+    prompt: Mapping[str, Mapping[str, object]],
+) -> int:
+    """Give a lowered prompt the whole numbers its workflow records as digits.
+
+    A Cube that runs from its native graph takes its values from widgets the page
+    holds as doubles, so its embedded document is not what executes. The same
+    rule as for documents applies to the lowered nodes of the target field: an
+    input still holding exactly the rounding of the recorded digits receives the
+    whole number, and any other value is left alone.
+
+    Returns:
+        How many prompt inputs received their whole number.
+    """
+
+    restored = 0
+    for relation in _relations(workflow):
+        digits = relation.get("digits")
+        if (
+            relation.get("kind") != "exact_integer"
+            or not isinstance(digits, str)
+            or not _EXACT_DIGITS.fullmatch(digits)
+        ):
+            continue
+        exact = int(digits)
+        for target in _endpoints(relation.get("targets")):
+            owner = f"{target.instance_id}:{target.node_symbol}"
+            for node_id, node in prompt.items():
+                # A node kept as a nested native graph lowers beneath its symbol.
+                if node_id != owner and not node_id.startswith(f"{owner}:"):
+                    continue
+                inputs = node.get("inputs")
+                value = (
+                    inputs.get(target.input_name) if isinstance(inputs, dict) else None
+                )
+                if (
+                    isinstance(inputs, dict)
+                    and isinstance(value, (int, float))
+                    and not isinstance(value, bool)
+                    and value != exact
+                    and float(value) == float(exact)
+                ):
+                    inputs[target.input_name] = exact
+                    restored += 1
+    return restored
+
+
 def _relations(workflow: Mapping[str, object]) -> tuple[Mapping[str, object], ...]:
     """Return schema-one relation records without rejecting unrelated workflows."""
 
@@ -254,4 +302,5 @@ __all__ = [
     "COMPOSITION_METADATA_KEY",
     "ComposedValueMaterializer",
     "StableFieldEndpoint",
+    "restore_exact_prompt_integers",
 ]

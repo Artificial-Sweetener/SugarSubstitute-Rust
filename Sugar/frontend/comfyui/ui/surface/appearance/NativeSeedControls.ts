@@ -20,6 +20,7 @@ import type { SeedMode } from '../../graph/ComfySeedMode.js';
 import { nativeSeedMenuEntries, modeLabels } from './SeedMenuEntries.js';
 import { seedIconImage } from './SeedActionIcons.js';
 import { ContextMenu } from '../../menus/ContextMenu.js';
+import { bindExactSeedEntry } from './NativeExactSeedEntry.js';
 
 export interface NativeSeedField {
   numeric: NativeNumericField;
@@ -143,9 +144,14 @@ export class NativeSeedControls {
         }),
       });
     };
+    const exactEntry = bindExactSeedEntry(field.numeric.input, () => ({
+      numeric: binding.field.numeric,
+      exact: binding.field.control.exact,
+    }));
     const binding: SeedBinding = {
       field,
       synchronize: () => {
+        exactEntry.synchronize();
         const control = binding.field.control;
         const mode = control.readMode();
         const disabled = binding.field.numeric.disabled();
@@ -169,6 +175,7 @@ export class NativeSeedControls {
       release: () => {
         close();
         unsubscribe();
+        exactEntry.release();
         split.remove();
         delete spinner.dataset.scSeedBox;
         primary.removeEventListener('click', toggle);

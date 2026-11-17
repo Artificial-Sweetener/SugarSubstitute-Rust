@@ -27,3 +27,11 @@ export interface SeedReuseControl {
   readLast(): number | null;
   reuse(): void;
 }
+
+/** The exact digits of a seed whose box can only hold their rounding. */
+export interface ExactSeedText {
+  /** The digits recorded for the number the box holds, or null when it is an ordinary number. */
+  read(value: number): string | null;
+  /** Record the digits typed into the box. */
+  write(digits: string): void;
+}

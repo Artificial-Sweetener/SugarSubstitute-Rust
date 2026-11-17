@@ -32,7 +32,7 @@ import type { NativeFieldDescriptor } from './NativeFieldPresentation.js';
 import { readNativeNumericField } from './ComfyNativeNumericField.js';
 import type { NativeNumericField } from './ComfyNativeNumericField.js';
 import { ComfyNativeSeedControlAdapter } from './ComfyNativeSeedControl.js';
-import type { NativeSeedReuseResolver } from './ComfyNativeSeedControl.js';
+import type { NativeExactSeedResolver, NativeSeedReuseResolver } from './ComfyNativeSeedControl.js';
 import type { NativeSeedField } from './NativeSeedControls.js';
 import { readNativeWidgetMount } from '../NativeWidgetMountBoundary.js';
 import { NativeCardAnnotations, type NativeCardAnnotationPlan } from './NativeCardAnnotations.js';
@@ -58,8 +58,12 @@ export class NativeCardAdapter {
   readonly #seeds: ComfyNativeSeedControlAdapter;
 
   /** Resolve native execution controls through the supplied Comfy application boundary. */
-  constructor(app: unknown = null, reuse?: NativeSeedReuseResolver) {
-    this.#seeds = new ComfyNativeSeedControlAdapter(app, reuse);
+  constructor(
+    app: unknown = null,
+    reuse?: NativeSeedReuseResolver,
+    exact?: NativeExactSeedResolver,
+  ) {
+    this.#seeds = new ComfyNativeSeedControlAdapter(app, reuse, exact);
   }
 
   /** Index graph component roots once for a coalesced host update. */

@@ -27,7 +27,7 @@ import {
   createBooleanCheckbox,
   createBooleanSegments,
 } from './ControlFactory.js';
-import type { NativeSeedReuseResolver } from './ComfyNativeSeedControl.js';
+import type { NativeExactSeedResolver, NativeSeedReuseResolver } from './ComfyNativeSeedControl.js';
 
 /** Retain owned widget controls while the native graph's independent presentation is suspended. */
 export class NativeFieldAppearance {
@@ -45,8 +45,9 @@ export class NativeFieldAppearance {
     app: unknown,
     private readonly kind: 'card' | 'widget',
     reuse?: NativeSeedReuseResolver,
+    exact?: NativeExactSeedResolver,
   ) {
-    this.#adapter = new NativeCardAdapter(app, reuse);
+    this.#adapter = new NativeCardAdapter(app, reuse, exact);
   }
 
   /** Index only native graph cards whose identified presentation is being refreshed. */

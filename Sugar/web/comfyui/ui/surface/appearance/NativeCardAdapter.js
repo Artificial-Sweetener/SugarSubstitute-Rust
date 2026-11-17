@@ -28,8 +28,8 @@ export class NativeCardAdapter {
     #graphNodes = new Map();
     #seeds;
     /** Resolve native execution controls through the supplied Comfy application boundary. */
-    constructor(app = null, reuse) {
-        this.#seeds = new ComfyNativeSeedControlAdapter(app, reuse);
+    constructor(app = null, reuse, exact) {
+        this.#seeds = new ComfyNativeSeedControlAdapter(app, reuse, exact);
     }
     /** Index graph component roots once for a coalesced host update. */
     beginBatch(roots) {

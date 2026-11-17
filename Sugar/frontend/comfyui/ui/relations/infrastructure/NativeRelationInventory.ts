@@ -50,6 +50,8 @@ export class NativeRelationInventory {
       cubeId: string | null;
       executionId: string;
       nodeId: string;
+      /** The input the field reaches on the node that executes it. */
+      inputName: string;
     }
   >();
 
@@ -208,7 +210,8 @@ export class NativeRelationInventory {
     if (!domain) return [];
     const id = JSON.stringify([nodeId, name]);
     if (this.owners.has(id)) return [];
-    this.owners.set(id, { node, widget, face, cubeId, executionId, nodeId });
+    const inputName = origins[0]?.inputName ?? name;
+    this.owners.set(id, { node, widget, face, cubeId, executionId, nodeId, inputName });
     const seedMode =
       semantic === 'seed' ? readNativeSeedControl(node, widget.name)?.readMode() : undefined;
     return [

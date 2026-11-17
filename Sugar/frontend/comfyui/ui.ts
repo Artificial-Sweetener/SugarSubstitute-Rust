@@ -278,9 +278,7 @@ const hostSettingsController = createHostSettingsComposition({
   logger,
   pushToast: pushToastMessage,
   readErrorMessage,
-  invalidateDependentCatalogs: () => {
-    void cubeCatalogInvalidation.invalidate();
-  },
+  invalidateDependentCatalogs: () => void cubeCatalogInvalidation.invalidate(),
 });
 
 const importHostCoordinator = new CubeImportHostCoordinator({
@@ -289,6 +287,7 @@ const importHostCoordinator = new CubeImportHostCoordinator({
   feedback: hostFeedback,
   getRuntime: requireCubeRuntime,
   logger,
+  holdSeeds: (instanceIds) => relations.relations.holdSeeds(instanceIds),
 });
 const extensionSetupLifecycle = new CubeExtensionSetupLifecycle({
   api,

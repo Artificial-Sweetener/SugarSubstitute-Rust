@@ -31,14 +31,16 @@ export class NativeRelationWidgetRenderer {
     reportError;
     reuse;
     appearance;
+    exact;
     #labelLayout;
     #runtime = null;
     /** Bind the host; resolve its native capabilities when the first surface mounts. */
-    constructor(document, reportError, reuse, appearance) {
+    constructor(document, reportError, reuse, appearance, exact) {
         this.document = document;
         this.reportError = reportError;
         this.reuse = reuse;
         this.appearance = appearance;
+        this.exact = exact;
         this.#labelLayout = new NativeLinkLabelLayout(document, reportError);
     }
     /** Mount one native field backed by an automatically discovered shared value. */
@@ -51,6 +53,7 @@ export class NativeRelationWidgetRenderer {
                 readMode: () => group.seedMode,
                 writeMode: changeMode,
                 ...(this.reuse ? { reuse: this.reuse(initial.key) } : {}),
+                ...(this.exact ? { exact: this.exact(initial.key) } : {}),
             }
             : null;
         const mount = this.#mount(root, () => {

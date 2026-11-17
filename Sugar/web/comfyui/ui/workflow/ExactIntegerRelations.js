@@ -39,6 +39,8 @@ export function readExactIntegerFields(value) {
         ];
     });
 }
+/** How many digit records one input keeps; older ones belong to seeds long since replaced. */
+const RECORDS_PER_INPUT = 8;
 /**
  * Record each field's digits as an `exact_integer` relation in the workflow's own metadata.
  *
@@ -47,6 +49,10 @@ export function readExactIntegerFields(value) {
  * while the field still holds exactly that rounding, so the run uses the original seed. A field
  * the person has changed holds another number and keeps it. The relations travel with the
  * workflow, including in the images it generates.
+ *
+ * An input keeps one record per rounding. A shared seed and a Cube's own seed are two values
+ * the same input alternates between, and each keeps its digits; digits recorded for a rounding
+ * replace the ones that rounding had.
  */
 export function recordExactIntegers(root, fields) {
     if (!fields.length)
@@ -54,31 +60,58 @@ export function recordExactIntegers(root, fields) {
     const held = Reflect.get(root, 'extra');
     const extra = isRecord(held) ? held : {};
     const composition = isRecord(extra[COMPOSITION_KEY]) ? extra[COMPOSITION_KEY] : {};
-    const existing = Array.isArray(composition.value_relations)
+    let kept = Array.isArray(composition.value_relations)
         ? composition.value_relations
         : [];
-    const recorded = fields.map((field) => ({
-        relation_id: `exact:${field.instanceId}:${field.nodeSymbol}:${field.inputName}`,
-        kind: 'exact_integer',
-        digits: field.digits,
-        targets: [
+    for (const field of fields) {
+        const rounding = Number(field.digits);
+        const others = kept.filter((relation) => !records(relation, field));
+        const own = kept.filter((relation) => records(relation, field) && Number(relation.digits) !== rounding);
+        kept = [
+            ...others,
+            ...own.slice(-(RECORDS_PER_INPUT - 1)),
             {
-                instance_id: field.instanceId,
-                node_symbol: field.nodeSymbol,
-                input_name: field.inputName,
+                relation_id: `exact:${field.instanceId}:${field.nodeSymbol}:${field.inputName}:${field.digits}`,
+                kind: 'exact_integer',
+                digits: field.digits,
+                targets: [
+                    {
+                        instance_id: field.instanceId,
+                        node_symbol: field.nodeSymbol,
+                        input_name: field.inputName,
+                    },
+                ],
             },
-        ],
-    }));
-    const replaced = new Set(recorded.map((relation) => relation.relation_id));
+        ];
+    }
     Reflect.set(root, 'extra', {
         ...extra,
-        [COMPOSITION_KEY]: {
-            ...composition,
-            schema_version: 1,
-            value_relations: [
-                ...existing.filter((relation) => !isRecord(relation) || !replaced.has(String(relation.relation_id))),
-                ...recorded,
-            ],
-        },
+        [COMPOSITION_KEY]: { ...composition, schema_version: 1, value_relations: kept },
     });
+}
+/** Return the digits recorded for the value one input holds, or null when it has none. */
+export function readExactDigits(root, target, value) {
+    const extra = Reflect.get(root, 'extra');
+    const composition = isRecord(extra) ? extra[COMPOSITION_KEY] : null;
+    const relations = isRecord(composition) && Array.isArray(composition.value_relations)
+        ? composition.value_relations
+        : [];
+    for (const relation of relations)
+        if (records(relation, target) && Number(relation.digits) === value)
+            return relation.digits;
+    return null;
+}
+/** Tell whether a relation is the digit record of exactly this one input. */
+function records(relation, target) {
+    if (!isRecord(relation) || relation.kind !== 'exact_integer')
+        return false;
+    if (typeof relation.digits !== 'string' || !Array.isArray(relation.targets))
+        return false;
+    const targets = relation.targets;
+    const only = targets[0];
+    return (targets.length === 1 &&
+        isRecord(only) &&
+        only.instance_id === target.instanceId &&
+        only.node_symbol === target.nodeSymbol &&
+        only.input_name === target.inputName);
 }

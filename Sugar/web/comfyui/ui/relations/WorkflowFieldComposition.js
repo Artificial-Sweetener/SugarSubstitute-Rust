@@ -56,6 +56,7 @@ export function createWorkflowFieldHost(options) {
         app: options.app,
         document: options.document,
         seedReuse: (node, name) => relations.seedReuse.field(node, name),
+        exactSeeds: (node, name) => relations.exactSeeds.field(node, name),
         reportError: options.reportPresentationError,
         embedded,
         hostAccent,

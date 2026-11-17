@@ -26,7 +26,7 @@ import { nativeVisualStyleCss } from './ThemeService.js';
 import { NativeFieldAppearance } from './NativeFieldAppearance.js';
 import { NativeComboPopupAppearance } from './NativeComboPopupAppearance.js';
 import { acquireComboToggle } from './ComboToggleController.js';
-import type { NativeSeedReuseResolver } from './ComfyNativeSeedControl.js';
+import type { NativeExactSeedResolver, NativeSeedReuseResolver } from './ComfyNativeSeedControl.js';
 import { readOwnedDarkTheme } from './OwnedColorScheme.js';
 import { OverlayScrollbarHost } from './OverlayScrollbarHost.js';
 import { isBorrowedNativeCardPresentation } from '../NativeCardPresentationOwner.js';
@@ -59,6 +59,7 @@ export interface AppearanceHostOptions {
   /** What the connected host declares, such as a system accent. */
   host?: HostDescriptionSource;
   seedReuse?: NativeSeedReuseResolver;
+  exactSeeds?: NativeExactSeedResolver;
   getSlotLayoutSync?(): Promise<() => void>;
   reportError(error: unknown): void;
 }
@@ -119,8 +120,18 @@ export class AppearanceHost {
     );
     this.#iconAppearance = new CubeIconAppearanceHost(options.document, this.state);
     this.#scrollbars = new OverlayScrollbarHost(options.document, options.reportError);
-    this.#nodes = new NativeFieldAppearance(options.app, 'card', options.seedReuse);
-    this.#widgets = new NativeFieldAppearance(options.app, 'widget', options.seedReuse);
+    this.#nodes = new NativeFieldAppearance(
+      options.app,
+      'card',
+      options.seedReuse,
+      options.exactSeeds,
+    );
+    this.#widgets = new NativeFieldAppearance(
+      options.app,
+      'widget',
+      options.seedReuse,
+      options.exactSeeds,
+    );
     this.#graphGeometry = new NativeCardGraphGeometry({
       document: options.document,
       ...(options.getSlotLayoutSync ? { getSynchronizer: options.getSlotLayoutSync } : {}),

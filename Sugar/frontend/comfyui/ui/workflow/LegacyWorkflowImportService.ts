@@ -28,16 +28,19 @@ export class LegacyWorkflowImportService {
   readonly #api: LegacyWorkflowAuthoringApi;
   readonly #materializer: NativeWorkflowMaterializer;
   readonly #recordExact: (fields: readonly ExactIntegerField[]) => void;
+  readonly #fixSeeds: (instanceIds: readonly string[]) => void;
 
   /** Bind transport, graph mutation and the workflow's record of exact whole numbers. */
   constructor(
     api: LegacyWorkflowAuthoringApi,
     materializer: NativeWorkflowMaterializer,
     recordExact: (fields: readonly ExactIntegerField[]) => void,
+    fixSeeds: (instanceIds: readonly string[]) => void,
   ) {
     this.#api = api;
     this.#materializer = materializer;
     this.#recordExact = recordExact;
+    this.#fixSeeds = fixSeeds;
   }
 
   /**
@@ -52,6 +55,9 @@ export class LegacyWorkflowImportService {
     const response = await this.#api.compile(workflow, source);
     if (!response.plan) throw new Error('Persisted Cube workflow produced no native plan.');
     const result = this.#materializer.materializeWorkflow(response.plan, origin);
+    // A workflow sent as its saved text was carried as Cube documents, which record no seed
+    // mode: its seeds stay as the image recorded them.
+    if (source !== undefined) this.#fixSeeds(result.instanceIds);
     if (response.exactIntegers.length) this.#recordExact(response.exactIntegers);
     return result;
   }

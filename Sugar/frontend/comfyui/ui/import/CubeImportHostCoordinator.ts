@@ -37,6 +37,7 @@ import { NativeWorkflowMaterializer } from '../workflow/NativeWorkflowMaterializ
 import { LegacyWorkflowAuthoringApi } from '../workflow/LegacyWorkflowAuthoringApi.js';
 import { LegacyWorkflowImportService } from '../workflow/LegacyWorkflowImportService.js';
 import { recordExactIntegers } from '../workflow/ExactIntegerRelations.js';
+import { fixImportedSeeds } from '../workflow/ImportedSeedModes.js';
 
 interface ImportLogger {
   warn(...values: unknown[]): void;
@@ -48,6 +49,8 @@ interface CubeImportHostCoordinatorOptions {
   feedback: CubeHostFeedback;
   getRuntime: () => ComfyCubeRuntime;
   logger: ImportLogger;
+  /** Keep the seeds of the named Cube instances from being rolled by a shared seed. */
+  holdSeeds: (instanceIds: readonly string[]) => void;
 }
 
 /** Own native workflow import entrypoints and their file adapters. */
@@ -56,6 +59,7 @@ export class CubeImportHostCoordinator {
   readonly #app: ComfyApplication | null;
   readonly #feedback: CubeHostFeedback;
   readonly #getRuntime: () => ComfyCubeRuntime;
+  readonly #holdSeeds: (instanceIds: readonly string[]) => void;
   readonly #dropOrigin: ComfyCanvasDropOriginAdapter;
   readonly #sugarScriptApi: SugarScriptAuthoringApi;
   readonly #legacyWorkflowApi: LegacyWorkflowAuthoringApi;
@@ -67,6 +71,7 @@ export class CubeImportHostCoordinator {
     this.#app = options.app;
     this.#feedback = options.feedback;
     this.#getRuntime = options.getRuntime;
+    this.#holdSeeds = options.holdSeeds;
     const { adapter } = this.#ui;
     this.#dropOrigin = new ComfyCanvasDropOriginAdapter({
       getCanvas: () => adapter.getCanvas() as CubePlacementCanvas | null,
@@ -137,6 +142,10 @@ export class CubeImportHostCoordinator {
       this.#legacyWorkflowApi,
       this.#nativeWorkflowMaterializer(runtime, graph),
       (fields) => recordExactIntegers(graph, fields),
+      (instanceIds) => {
+        fixImportedSeeds(graph, instanceIds);
+        this.#holdSeeds(instanceIds);
+      },
     ).import(workflow, origin, source);
   }
 

@@ -35,9 +35,9 @@ export class NativeFieldAppearance {
     #numeric = new NativeNumericControls(createNumericSlider);
     #seeds = new NativeSeedControls();
     /** Bind one disjoint mount scope to the common component adapters and seed value owner. */
-    constructor(app, kind, reuse) {
+    constructor(app, kind, reuse, exact) {
         this.kind = kind;
-        this.#adapter = new NativeCardAdapter(app, reuse);
+        this.#adapter = new NativeCardAdapter(app, reuse, exact);
     }
     /** Index only native graph cards whose identified presentation is being refreshed. */
     beginBatch(roots) {

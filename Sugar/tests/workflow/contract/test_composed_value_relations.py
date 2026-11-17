@@ -24,6 +24,7 @@ from copy import deepcopy
 from typing import cast
 
 from sugarcubes.workflow import COMPOSITION_METADATA_KEY, ComposedValueMaterializer
+from sugarcubes.workflow.composed_values import restore_exact_prompt_integers
 from sugarcubes.cube_model.native_subgraph_defaults import native_subgraph_defaults
 from tests.execution.support.execution_fixtures import cube_document, cube_workflow
 
@@ -191,6 +192,46 @@ def test_stale_relation_is_inert_instead_of_rejecting_workflow() -> None:
 
     assert _prompt_value(materialized, "first") == "first"
     assert _prompt_value(materialized, "second") == "second"
+
+
+def test_lowered_prompt_receives_the_recorded_digits_of_a_rounded_seed() -> None:
+    digits = "17066688399168319613"
+    rounded = float(int(digits))
+    workflow: dict[str, object] = {
+        "extra": {
+            COMPOSITION_METADATA_KEY: {
+                "schema_version": 1,
+                "value_relations": [
+                    {
+                        "relation_id": "exact:cube-a:ksampler:seed",
+                        "kind": "exact_integer",
+                        "digits": digits,
+                        "targets": [_endpoint("cube-a", "ksampler", "seed")],
+                    }
+                ],
+            }
+        }
+    }
+    prompt: dict[str, dict[str, dict[str, object]]] = {
+        "cube-a:ksampler": {"inputs": {"seed": rounded, "steps": 8}},
+        "cube-a:ksampler:ksampler": {"inputs": {"seed": int(rounded)}},
+        "cube-a:ksampler_two": {"inputs": {"seed": rounded}},
+        "cube-b:ksampler": {"inputs": {"seed": rounded}},
+        "cube-a:ksampler:changed": {"inputs": {"seed": 42}},
+        "cube-a:ksampler:linked": {"inputs": {"seed": ["cube-a:other", 0]}},
+    }
+
+    assert restore_exact_prompt_integers(workflow, prompt) == 2
+
+    assert prompt["cube-a:ksampler"]["inputs"] == {"seed": int(digits), "steps": 8}
+    assert prompt["cube-a:ksampler:ksampler"]["inputs"]["seed"] == int(digits)
+    assert type(prompt["cube-a:ksampler"]["inputs"]["seed"]) is int
+    assert prompt["cube-a:ksampler_two"]["inputs"]["seed"] == rounded
+    assert type(prompt["cube-a:ksampler_two"]["inputs"]["seed"]) is float
+    assert type(prompt["cube-b:ksampler"]["inputs"]["seed"]) is float
+    assert prompt["cube-a:ksampler:changed"]["inputs"]["seed"] == 42
+    assert prompt["cube-a:ksampler:linked"]["inputs"]["seed"] == ["cube-a:other", 0]
+    assert restore_exact_prompt_integers(workflow, prompt) == 0
 
 
 def _two_prompt_workflow(first: str, second: str) -> dict[str, object]:

@@ -84,8 +84,8 @@ export class AppearanceHost {
         this.#accent = new AccentThemeHost(options.document, options.app, options.reportError, options.embedded, options.hostAccent, options.host);
         this.#iconAppearance = new CubeIconAppearanceHost(options.document, this.state);
         this.#scrollbars = new OverlayScrollbarHost(options.document, options.reportError);
-        this.#nodes = new NativeFieldAppearance(options.app, 'card', options.seedReuse);
-        this.#widgets = new NativeFieldAppearance(options.app, 'widget', options.seedReuse);
+        this.#nodes = new NativeFieldAppearance(options.app, 'card', options.seedReuse, options.exactSeeds);
+        this.#widgets = new NativeFieldAppearance(options.app, 'widget', options.seedReuse, options.exactSeeds);
         this.#graphGeometry = new NativeCardGraphGeometry({
             document: options.document,
             ...(options.getSlotLayoutSync ? { getSynchronizer: options.getSlotLayoutSync } : {}),

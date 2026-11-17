@@ -19,11 +19,13 @@ export class LegacyWorkflowImportService {
     #api;
     #materializer;
     #recordExact;
+    #fixSeeds;
     /** Bind transport, graph mutation and the workflow's record of exact whole numbers. */
-    constructor(api, materializer, recordExact) {
+    constructor(api, materializer, recordExact, fixSeeds) {
         this.#api = api;
         this.#materializer = materializer;
         this.#recordExact = recordExact;
+        this.#fixSeeds = fixSeeds;
     }
     /**
      * Reconcile and import one workflow without queueing execution. Digits of whole numbers this
@@ -34,6 +36,10 @@ export class LegacyWorkflowImportService {
         if (!response.plan)
             throw new Error('Persisted Cube workflow produced no native plan.');
         const result = this.#materializer.materializeWorkflow(response.plan, origin);
+        // A workflow sent as its saved text was carried as Cube documents, which record no seed
+        // mode: its seeds stay as the image recorded them.
+        if (source !== undefined)
+            this.#fixSeeds(result.instanceIds);
         if (response.exactIntegers.length)
             this.#recordExact(response.exactIntegers);
         return result;

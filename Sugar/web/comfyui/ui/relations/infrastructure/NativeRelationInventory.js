@@ -132,7 +132,8 @@ export class NativeRelationInventory {
         const id = JSON.stringify([nodeId, name]);
         if (this.owners.has(id))
             return [];
-        this.owners.set(id, { node, widget, face, cubeId, executionId, nodeId });
+        const inputName = origins[0]?.inputName ?? name;
+        this.owners.set(id, { node, widget, face, cubeId, executionId, nodeId, inputName });
         const seedMode = semantic === 'seed' ? readNativeSeedControl(node, widget.name)?.readMode() : undefined;
         return [
             {

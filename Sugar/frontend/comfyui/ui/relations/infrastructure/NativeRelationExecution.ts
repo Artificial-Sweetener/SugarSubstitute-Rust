@@ -17,6 +17,8 @@
 import { isRecord } from '../../types/common.js';
 import { NativeSubgraphBoundaryResolver } from '../../cube/graph/NativeSubgraphBoundaryResolver.js';
 import type { WorkflowRelations } from '../application/WorkflowRelations.js';
+import type { SeedStep } from '../domain/SharedSeedAdvancement.js';
+import { comfyValueControl } from './ComfyValueControl.js';
 import type { NativeRelationInventory } from './NativeRelationInventory.js';
 
 /** Resolve editable facades to exact native prompt fields without enrolling hidden leaves. */
@@ -29,15 +31,14 @@ export class NativeRelationExecution {
     private readonly inventory: NativeRelationInventory,
     logger: Pick<Console, 'warn'>,
     private readonly getWorkflow: () => unknown = () => undefined,
+    private readonly step: SeedStep = comfyValueControl(),
   ) {
     this.#boundary = new NativeSubgraphBoundaryResolver(logger);
   }
 
   /** Advance shared seeds once and rewrite only explicit eligible scalar prompt inputs. */
   prepare(payload: unknown): unknown {
-    this.relations.advanceSeeds(
-      () => (crypto.getRandomValues(new Uint32Array(1))[0] ?? 0) / 0x100000000,
-    );
+    this.relations.advanceSeeds(this.step);
     const snapshot = this.relations.reconcile();
     if (!isRecord(payload) || !isRecord(payload.output)) return payload;
     const output = Object.fromEntries(

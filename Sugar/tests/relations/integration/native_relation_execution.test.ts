@@ -80,8 +80,12 @@ test('queues one shared seed and current workflow metadata while preserving real
   expect(cubeFacePresentedWidgets(first)).toHaveLength(0);
   expect(first.widgets?.[1]?.value).toBe('fixed');
   expect(connected.widgets?.[1]?.value).toBe('increment');
-  const execution = new NativeRelationExecution(relations, port.inventorySource, console, () =>
-    graph.serialize?.(),
+  const execution = new NativeRelationExecution(
+    relations,
+    port.inventorySource,
+    console,
+    () => graph.serialize?.(),
+    (domain, current, mode) => (mode === 'increment' ? current + domain.step : current),
   );
   const payload = {
     output: {

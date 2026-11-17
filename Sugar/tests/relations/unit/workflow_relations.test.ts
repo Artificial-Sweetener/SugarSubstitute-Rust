@@ -22,10 +22,11 @@ import type {
   FieldContract,
   RelationState,
 } from '../../../frontend/comfyui/ui/relations/domain/RelationContracts.js';
+import type { SeedStep } from '../../../frontend/comfyui/ui/relations/domain/SharedSeedAdvancement.js';
 import type { RelationWorkflowPort } from '../../../frontend/comfyui/ui/relations/application/RelationPorts.js';
 
 /** Provide a real in-memory workflow boundary with serialized state isolation. */
-function workflow(name = 'sampler_name') {
+function workflow(name = 'sampler_name', maximum = 100) {
   let state = emptyRelationState();
   const values = new Map<string, string | number | boolean>([
     ['a', name === 'seed' ? 42 : 'euler'],
@@ -45,7 +46,7 @@ function workflow(name = 'sampler_name') {
           value,
           domain:
             name === 'seed'
-              ? { kind: 'number', minimum: 0, maximum: 100, integer: true, step: 1 }
+              ? { kind: 'number', minimum: 0, maximum, integer: true, step: 1 }
               : { kind: 'choice', values: ['euler', 'heun'] },
         };
         return { contract, read: () => values.get(id)!, write: (next) => values.set(id, next) };
@@ -147,18 +148,69 @@ test('retains links under globals and restores follower independence deliberatel
   expect([...fixture.values.values()]).toEqual(['euler', 'heun']);
 });
 
-test('randomizes and increments once per shared seed, including wraparound', () => {
+/** Stand in for the host's rule: a fixed roll, and steps that stop at the range's ends. */
+const hostStep: SeedStep = (domain, current, mode) =>
+  mode === 'randomize'
+    ? 50
+    : Math.min(
+        domain.maximum,
+        Math.max(domain.minimum, current + (mode === 'increment' ? domain.step : -domain.step)),
+      );
+
+test('a shared seed takes each next value once from the host rule, over the shared range', () => {
+  const fixture = workflow('seed');
+  fixture.relations.reconcile();
+  const step = jest.fn(hostStep);
+  fixture.relations.setSeedMode('seed', 'randomize');
+  fixture.relations.advanceSeeds(step);
+  expect([...fixture.values.values()]).toEqual([50, 50]);
+  expect(step).toHaveBeenCalledTimes(1);
+  expect(step).toHaveBeenLastCalledWith(
+    { kind: 'number', minimum: 0, maximum: 100, integer: true, step: 1 },
+    42,
+    'randomize',
+  );
+  fixture.relations.setSeedMode('seed', 'increment');
+  fixture.relations.advanceSeeds(step);
+  expect([...fixture.values.values()]).toEqual([51, 51]);
+  fixture.relations.setOverrideValue('seed', 100);
+  fixture.relations.advanceSeeds(step);
+  expect([...fixture.values.values()]).toEqual([100, 100]);
+  fixture.relations.setSeedMode('seed', 'fixed');
+  fixture.relations.advanceSeeds(() => {
+    throw new Error('a fixed seed asks for no next value');
+  });
+  expect([...fixture.values.values()]).toEqual([100, 100]);
+});
+
+test('a seed beyond the exact range is rolled but never stepped', () => {
+  const fixture = workflow('seed', 2 ** 64);
+  const big = Number('17066688399168319613');
+  fixture.values.set('a', big);
+  fixture.values.set('b', big);
+  fixture.relations.reconcile();
+  fixture.relations.setSeedMode('seed', 'increment');
+  fixture.relations.advanceSeeds(() => {
+    throw new Error('one step from this seed cannot be held');
+  });
+  expect([...fixture.values.values()]).toEqual([big, big]);
+  fixture.relations.setSeedMode('seed', 'randomize');
+  fixture.relations.advanceSeeds(hostStep);
+  expect([...fixture.values.values()]).toEqual([50, 50]);
+});
+
+test('held Cubes keep their seed when a run is queued, and only a seed they share is fixed', () => {
   const fixture = workflow('seed');
   fixture.relations.reconcile();
   fixture.relations.setSeedMode('seed', 'randomize');
-  fixture.relations.advanceSeeds(() => 0.5);
-  expect([...fixture.values.values()]).toEqual([50, 50]);
-  fixture.relations.setSeedMode('seed', 'increment');
-  fixture.relations.advanceSeeds(() => 0);
-  expect([...fixture.values.values()]).toEqual([51, 51]);
-  fixture.relations.setOverrideValue('seed', 100);
-  fixture.relations.advanceSeeds(() => 0);
-  expect([...fixture.values.values()]).toEqual([0, 0]);
+  fixture.relations.holdSeeds(['elsewhere']);
+  expect(fixture.state().overrides.seed?.seedMode).toBe('randomize');
+  fixture.relations.holdSeeds(['b']);
+  expect(fixture.state().overrides.seed?.seedMode).toBe('fixed');
+  fixture.relations.advanceSeeds(() => {
+    throw new Error('a held seed asks for no next value');
+  });
+  expect([...fixture.values.values()]).toEqual([42, 42]);
 });
 
 test('removes connected or deleted fields from membership without continuing to write them', () => {
@@ -176,8 +228,8 @@ test('advances one linked seed master once after its global override is disabled
   fixture.relations.setOverrideEnabled('seed', false);
   fixture.relations.linkField('b', 'a');
   fixture.state().localSeedModes.a = 'increment';
-  fixture.relations.advanceSeeds(() => {
-    throw new Error('increment does not sample randomness');
-  });
+  const step = jest.fn(hostStep);
+  fixture.relations.advanceSeeds(step);
   expect([...fixture.values.values()]).toEqual([43, 43]);
+  expect(step).toHaveBeenCalledTimes(1);
 });
