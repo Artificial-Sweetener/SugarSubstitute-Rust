@@ -1,3 +1,10 @@
+## [0.19.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.18.0...sugarcubes-v0.19.0) (2026-11-17)
+
+### Features
+
+* **import:** load workflows the Python application saved, with their seeds exact ([6553d19](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/6553d1988120ecd005f771fe8c90740ecbb72c45))
+* **seed:** seeds beyond the page's exact range are shown, typed and run exactly ([da7a607](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/da7a607adccf6bc4420da6e83a804eb66f22d136))
+
 ## [0.18.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.17.0...sugarcubes-v0.18.0) (2026-11-16)
 
 ### Features
