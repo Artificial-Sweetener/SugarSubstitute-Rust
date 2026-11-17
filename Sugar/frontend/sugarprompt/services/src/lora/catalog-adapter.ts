@@ -20,17 +20,24 @@ import { LoraCatalogIndex } from './catalog-index.js';
 import { prepareLoraCompletion } from './completion-catalog.js';
 import type { LoraCompletionOptions } from './contracts.js';
 
+/** The validated catalog behind each adapter this module made, for the adapter that replaces it. */
+const catalogs = new WeakMap<LoraResourceAdapter, LoraCatalogSnapshot>();
+
 /** Validate/copy one immutable host catalog, build derived indexes once and expose exact-name resource resolution.
  * The host retains media URL ownership. Replace this adapter for catalog, authority or media changes.
  * Explicit completion options add ranked suggestions over the same captured model metadata.
+ * Pass the adapter being replaced as `previous`: media it already described, unchanged in address
+ * and size, keeps its descriptor, so a component's prepared pixels survive the replacement and
+ * only media that changed is prepared again. An adapter this module did not make is ignored.
  */
 export function createLoraCatalogAdapter(
   input: LoraCatalogSnapshot,
   completion?: LoraCompletionOptions,
+  previous?: LoraResourceAdapter,
 ): LoraResourceAdapter {
-  const catalog = readLoraCatalog(input),
+  const catalog = readLoraCatalog(input, previous ? catalogs.get(previous) : undefined),
     index = new LoraCatalogIndex(catalog.items);
-  return Object.freeze({
+  const adapter: LoraResourceAdapter = Object.freeze({
     revision: catalog.revision,
     ...(completion === undefined
       ? {}
@@ -64,4 +71,6 @@ export function createLoraCatalogAdapter(
       );
     },
   });
+  catalogs.set(adapter, catalog);
+  return adapter;
 }

@@ -283,7 +283,7 @@ export class CubePromptEditorHost {
             this.#loraCatalog = preparePromptLoraCatalog(snapshot, this.#document.baseURI, (items) => {
                 if (items.length)
                     void this.#catalog.prioritize(items).catch(this.#report);
-            });
+            }, this.#loraCatalog ?? undefined);
             for (const current of this.#sessions.values())
                 current.editor?.setLoraCatalog(this.#loraCatalog);
         }

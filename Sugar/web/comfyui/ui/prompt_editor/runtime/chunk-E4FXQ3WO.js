@@ -6240,12 +6240,17 @@ function prepareWildcardDiagnostic(span, resolution) {
 }
 
 // frontend/sugarprompt/services/src/lora/catalog-validation.ts
-function readLoraCatalog(value) {
+function mediaKey(image) {
+  return JSON.stringify([image.url, image.width, image.height]);
+}
+function readLoraCatalog(value, continued) {
   const raw = loraRecord(value, ["revision", "authoritative", "items"]);
   if (typeof raw.authoritative !== "boolean" || !Array.isArray(raw.items) || raw.items.length > 1e5)
     throw new TypeError("Invalid LoRA catalog");
   const physical = /* @__PURE__ */ new Set();
   const thumbnails = /* @__PURE__ */ new Map();
+  for (const item of continued?.items ?? [])
+    if (item.thumbnail.status === "ready") thumbnails.set(mediaKey(item.thumbnail), item.thumbnail);
   const items = raw.items.map((item) => {
     const prepared = readLoraItemFields(loraRecord(item, loraItemKeys));
     if (physical.has(prepared.model.backendValue))
@@ -6253,7 +6258,7 @@ function readLoraCatalog(value) {
     physical.add(prepared.model.backendValue);
     if (prepared.thumbnail.status === "ready") {
       const image = prepared.thumbnail;
-      const key = JSON.stringify([image.url, image.width, image.height]);
+      const key = mediaKey(image);
       const existing = thumbnails.get(key);
       if (existing) return Object.freeze({ ...prepared, thumbnail: existing });
       thumbnails.set(key, image);
@@ -6484,9 +6489,10 @@ function prepareLoraCompletion(catalog, options, resolution) {
 }
 
 // frontend/sugarprompt/services/src/lora/catalog-adapter.ts
-function createLoraCatalogAdapter(input, completion) {
-  const catalog = readLoraCatalog(input), index = new LoraCatalogIndex(catalog.items);
-  return Object.freeze({
+var catalogs = /* @__PURE__ */ new WeakMap();
+function createLoraCatalogAdapter(input, completion, previous) {
+  const catalog = readLoraCatalog(input, previous ? catalogs.get(previous) : void 0), index = new LoraCatalogIndex(catalog.items);
+  const adapter = Object.freeze({
     revision: catalog.revision,
     ...completion === void 0 ? {} : {
       completionCatalog: prepareLoraCompletion(catalog, completion, index)
@@ -6512,6 +6518,8 @@ function createLoraCatalogAdapter(input, completion) {
       );
     }
   });
+  catalogs.set(adapter, catalog);
+  return adapter;
 }
 
 // frontend/sugarprompt/services/src/lora/thumbnail-menu.ts

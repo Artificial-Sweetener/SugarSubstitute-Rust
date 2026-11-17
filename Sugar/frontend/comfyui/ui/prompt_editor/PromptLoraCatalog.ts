@@ -18,43 +18,62 @@ import { createLoraCatalogAdapter } from '../../../sugarprompt/services/src/inde
 import type { LoraResourceAdapter } from '../../../sugarprompt/services/src/index.js';
 import type { ModelCatalogSnapshot, ModelCatalogItem } from '../model_library/ModelCatalog.js';
 
-/** Preserve installed identities and prefer the model's authored banner artwork. */
+/** What each prepared catalog showed the editor, and the adapter that resolves it. */
+const prepared = new WeakMap<
+  LoraResourceAdapter,
+  { readonly adapter: LoraResourceAdapter; readonly content: string }
+>();
+
+/**
+ * Preserve installed identities and prefer the model's authored banner artwork.
+ *
+ * The model library publishes a new snapshot for every change to any model. Pass the catalog
+ * being replaced as `previous`: a snapshot that changes nothing a prompt shows returns that same
+ * catalog, so no editor is disturbed, and one that does change keeps the descriptor of every
+ * banner whose image is unchanged, so only changed banners are decoded again.
+ */
 export function preparePromptLoraCatalog(
   snapshot: ModelCatalogSnapshot,
   baseUrl: string,
   prioritize?: (items: readonly ModelCatalogItem[]) => void,
+  previous?: LoraResourceAdapter,
 ): LoraResourceAdapter {
   const models = new Map(
     snapshot.items.filter((item) => item.kind === 'loras').map((item) => [item.value, item]),
   );
-  const adapter = createLoraCatalogAdapter({
-    revision: `models:${String(snapshot.revision)}`,
-    authoritative: !snapshot.scanning,
-    items: snapshot.items
-      .filter((item) => item.kind === 'loras')
-      .map((item) => {
-        const name = item.value.replace(/\.(safetensors|ckpt|pt|pth|bin)$/i, '');
-        const thumbnail =
-          item.thumbnails.find((image) => image.role === 'banner') ?? item.thumbnails[0];
-        const url = thumbnail ? safeHttpUrl(thumbnail.url, baseUrl) : null;
-        return {
-          model: {
-            promptName: name,
-            backendValue: item.value,
-            basename: name.split(/[\\/]/).pop() ?? name,
-          },
-          title: item.title || item.value,
-          subtitle: item.version || null,
-          triggerWords: item.trainedWords,
-          thumbnail:
-            thumbnail && url && thumbnail.width > 0 && thumbnail.height > 0
-              ? { status: 'ready' as const, url, width: thumbnail.width, height: thumbnail.height }
-              : { status: 'unavailable' as const },
-          modelPageUrl: modelPage(item, baseUrl),
-        };
-      }),
-  });
-  return {
+  const authoritative = !snapshot.scanning;
+  const items = snapshot.items
+    .filter((item) => item.kind === 'loras')
+    .map((item) => {
+      const name = item.value.replace(/\.(safetensors|ckpt|pt|pth|bin)$/i, '');
+      const thumbnail =
+        item.thumbnails.find((image) => image.role === 'banner') ?? item.thumbnails[0];
+      const url = thumbnail ? safeHttpUrl(thumbnail.url, baseUrl) : null;
+      return {
+        model: {
+          promptName: name,
+          backendValue: item.value,
+          basename: name.split(/[\\/]/).pop() ?? name,
+        },
+        title: item.title || item.value,
+        subtitle: item.version || null,
+        triggerWords: item.trainedWords,
+        thumbnail:
+          thumbnail && url && thumbnail.width > 0 && thumbnail.height > 0
+            ? { status: 'ready' as const, url, width: thumbnail.width, height: thumbnail.height }
+            : { status: 'unavailable' as const },
+        modelPageUrl: modelPage(item, baseUrl),
+      };
+    });
+  const content = JSON.stringify([authoritative, items]);
+  const replaced = previous ? prepared.get(previous) : undefined;
+  if (previous && replaced?.content === content) return previous;
+  const adapter = createLoraCatalogAdapter(
+    { revision: `models:${String(snapshot.revision)}`, authoritative, items },
+    undefined,
+    replaced?.adapter,
+  );
+  const catalog: LoraResourceAdapter = {
     ...adapter,
     /** Prioritize only names resolved by the native catalog; never acquire metadata from rendering. */
     async resolve(names, signal) {
@@ -71,6 +90,8 @@ export function preparePromptLoraCatalog(
       return resources;
     },
   };
+  prepared.set(catalog, { adapter, content });
+  return catalog;
 }
 
 /** Admit only browser-safe media and model pages from validated catalog addresses. */

@@ -83,3 +83,56 @@ test('retains ambiguous aliases and unavailable media without inventing successf
   expect(resources[0]).toMatchObject({ resolution: 'ambiguous', candidateCount: 2 });
   expect(resources[1]).toMatchObject({ resolution: 'found', thumbnail: { status: 'unavailable' } });
 });
+
+test('a library update that changes nothing about LoRAs keeps the catalog an editor already has', () => {
+  const snapshot = promptCatalogFixture();
+  const first = preparePromptLoraCatalog(snapshot, 'http://localhost/');
+  const later = preparePromptLoraCatalog(
+    { ...snapshot, revision: snapshot.revision + 1 },
+    'http://localhost/',
+    undefined,
+    first,
+  );
+  expect(later).toBe(first);
+});
+
+test('an unchanged banner keeps its descriptor across a catalog update and a changed one gets a new one', async () => {
+  const snapshot = promptCatalogFixture();
+  const lora = snapshot.items[0];
+  if (!lora) throw new Error('Missing catalog fixture');
+  const banner = async (catalog: ReturnType<typeof preparePromptLoraCatalog>): Promise<unknown> => {
+    const [resource] = await catalog.resolve(['folder/example'], new AbortController().signal);
+    if (resource?.resolution !== 'found') throw new Error('Fixture LoRA did not resolve');
+    return resource.thumbnail;
+  };
+  const first = preparePromptLoraCatalog(snapshot, 'http://localhost/');
+  const grown = preparePromptLoraCatalog(
+    {
+      ...snapshot,
+      revision: snapshot.revision + 1,
+      items: [...snapshot.items, { ...lora, id: 'another', value: 'another/model.safetensors' }],
+    },
+    'http://localhost/',
+    undefined,
+    first,
+  );
+  expect(grown).not.toBe(first);
+  expect(await banner(grown)).toBe(await banner(first));
+  const repainted = preparePromptLoraCatalog(
+    {
+      ...snapshot,
+      revision: snapshot.revision + 2,
+      items: [
+        {
+          ...lora,
+          thumbnails: lora.thumbnails.map((image) => ({ ...image, url: `${image.url}?changed` })),
+        },
+      ],
+    },
+    'http://localhost/',
+    undefined,
+    grown,
+  );
+  expect(await banner(repainted)).not.toBe(await banner(first));
+  expect(await banner(repainted)).toMatchObject({ status: 'ready' });
+});

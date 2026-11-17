@@ -17,8 +17,19 @@
 import type { LoraCatalogSnapshot, LoraThumbnail } from './contracts.js';
 import { loraItemKeys, loraRecord, loraText, readLoraItemFields } from './metadata-validation.js';
 
-/** Reject malformed catalogs and duplicate backend identities; normalized aliases may remain legitimately ambiguous. */
-export function readLoraCatalog(value: unknown): LoraCatalogSnapshot {
+/** Name media by what it shows: its address and intrinsic size. */
+function mediaKey(image: Extract<LoraThumbnail, { status: 'ready' }>): string {
+  return JSON.stringify([image.url, image.width, image.height]);
+}
+
+/** Reject malformed catalogs and duplicate backend identities; normalized aliases may remain legitimately ambiguous.
+ * Media that `continued`, the validated catalog this one replaces, already described keeps that
+ * catalog's descriptor, so pixels prepared for it stay valid. Changed media gets a new descriptor.
+ */
+export function readLoraCatalog(
+  value: unknown,
+  continued?: LoraCatalogSnapshot,
+): LoraCatalogSnapshot {
   const raw = loraRecord(value, ['revision', 'authoritative', 'items']);
   if (
     typeof raw.authoritative !== 'boolean' ||
@@ -28,6 +39,8 @@ export function readLoraCatalog(value: unknown): LoraCatalogSnapshot {
     throw new TypeError('Invalid LoRA catalog');
   const physical = new Set<string>();
   const thumbnails = new Map<string, LoraThumbnail>();
+  for (const item of continued?.items ?? [])
+    if (item.thumbnail.status === 'ready') thumbnails.set(mediaKey(item.thumbnail), item.thumbnail);
   const items = raw.items.map((item: unknown) => {
     const prepared = readLoraItemFields(loraRecord(item, loraItemKeys));
     if (physical.has(prepared.model.backendValue))
@@ -35,7 +48,7 @@ export function readLoraCatalog(value: unknown): LoraCatalogSnapshot {
     physical.add(prepared.model.backendValue);
     if (prepared.thumbnail.status === 'ready') {
       const image = prepared.thumbnail;
-      const key = JSON.stringify([image.url, image.width, image.height]);
+      const key = mediaKey(image);
       const existing = thumbnails.get(key);
       if (existing) return Object.freeze({ ...prepared, thumbnail: existing });
       thumbnails.set(key, image);

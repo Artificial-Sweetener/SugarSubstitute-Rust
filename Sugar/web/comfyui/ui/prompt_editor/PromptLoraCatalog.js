@@ -1008,14 +1008,14 @@ function thumbnail(value) {
   for (const size of [raw.width, raw.height])
     if (typeof size !== "number" || !Number.isSafeInteger(size) || size < 1 || size > 8192)
       throw new TypeError("Invalid LoRA thumbnail dimensions");
-  const prepared = Object.freeze({
+  const prepared2 = Object.freeze({
     status: "ready",
     url,
     width: raw.width,
     height: raw.height
   });
-  validatedThumbnails.add(prepared);
-  return prepared;
+  validatedThumbnails.add(prepared2);
+  return prepared2;
 }
 function readLoraModelIdentity(value) {
   const raw = loraRecord(value, ["promptName", "backendValue", "basename"]);
@@ -1069,25 +1069,30 @@ var defaultPreferences = Object.freeze({
 });
 
 // frontend/sugarprompt/services/src/lora/catalog-validation.ts
-function readLoraCatalog(value) {
+function mediaKey(image) {
+  return JSON.stringify([image.url, image.width, image.height]);
+}
+function readLoraCatalog(value, continued) {
   const raw = loraRecord(value, ["revision", "authoritative", "items"]);
   if (typeof raw.authoritative !== "boolean" || !Array.isArray(raw.items) || raw.items.length > 1e5)
     throw new TypeError("Invalid LoRA catalog");
   const physical = /* @__PURE__ */ new Set();
   const thumbnails = /* @__PURE__ */ new Map();
+  for (const item of continued?.items ?? [])
+    if (item.thumbnail.status === "ready") thumbnails.set(mediaKey(item.thumbnail), item.thumbnail);
   const items = raw.items.map((item) => {
-    const prepared = readLoraItemFields(loraRecord(item, loraItemKeys));
-    if (physical.has(prepared.model.backendValue))
+    const prepared2 = readLoraItemFields(loraRecord(item, loraItemKeys));
+    if (physical.has(prepared2.model.backendValue))
       throw new TypeError("Duplicate LoRA backend identity");
-    physical.add(prepared.model.backendValue);
-    if (prepared.thumbnail.status === "ready") {
-      const image = prepared.thumbnail;
-      const key = JSON.stringify([image.url, image.width, image.height]);
+    physical.add(prepared2.model.backendValue);
+    if (prepared2.thumbnail.status === "ready") {
+      const image = prepared2.thumbnail;
+      const key = mediaKey(image);
       const existing = thumbnails.get(key);
-      if (existing) return Object.freeze({ ...prepared, thumbnail: existing });
+      if (existing) return Object.freeze({ ...prepared2, thumbnail: existing });
       thumbnails.set(key, image);
     }
-    return prepared;
+    return prepared2;
   });
   return Object.freeze({
     revision: loraText(raw.revision, 256),
@@ -1313,9 +1318,10 @@ function prepareLoraCompletion(catalog, options, resolution) {
 }
 
 // frontend/sugarprompt/services/src/lora/catalog-adapter.ts
-function createLoraCatalogAdapter(input, completion) {
-  const catalog = readLoraCatalog(input), index = new LoraCatalogIndex(catalog.items);
-  return Object.freeze({
+var catalogs = /* @__PURE__ */ new WeakMap();
+function createLoraCatalogAdapter(input, completion, previous) {
+  const catalog = readLoraCatalog(input, previous ? catalogs.get(previous) : void 0), index = new LoraCatalogIndex(catalog.items);
+  const adapter = Object.freeze({
     revision: catalog.revision,
     ...completion === void 0 ? {} : {
       completionCatalog: prepareLoraCompletion(catalog, completion, index)
@@ -1341,6 +1347,8 @@ function createLoraCatalogAdapter(input, completion) {
       );
     }
   });
+  catalogs.set(adapter, catalog);
+  return adapter;
 }
 
 // frontend/sugarprompt/services/src/regions/context.ts
@@ -1350,48 +1358,56 @@ var unresolvedConditioning = Object.freeze({
 });
 
 // frontend/comfyui/ui/prompt_editor/PromptLoraCatalog.ts
-function preparePromptLoraCatalog(snapshot, baseUrl, prioritize) {
+var prepared = /* @__PURE__ */ new WeakMap();
+function preparePromptLoraCatalog(snapshot, baseUrl, prioritize, previous) {
   const models = new Map(
     snapshot.items.filter((item) => item.kind === "loras").map((item) => [item.value, item])
   );
-  const adapter = createLoraCatalogAdapter({
-    revision: `models:${String(snapshot.revision)}`,
-    authoritative: !snapshot.scanning,
-    items: snapshot.items.filter((item) => item.kind === "loras").map((item) => {
-      const name = item.value.replace(/\.(safetensors|ckpt|pt|pth|bin)$/i, "");
-      const thumbnail2 = item.thumbnails.find((image) => image.role === "banner") ?? item.thumbnails[0];
-      const url = thumbnail2 ? safeHttpUrl(thumbnail2.url, baseUrl) : null;
-      return {
-        model: {
-          promptName: name,
-          backendValue: item.value,
-          basename: name.split(/[\\/]/).pop() ?? name
-        },
-        title: item.title || item.value,
-        subtitle: item.version || null,
-        triggerWords: item.trainedWords,
-        thumbnail: thumbnail2 && url && thumbnail2.width > 0 && thumbnail2.height > 0 ? { status: "ready", url, width: thumbnail2.width, height: thumbnail2.height } : { status: "unavailable" },
-        modelPageUrl: modelPage(item, baseUrl)
-      };
-    })
+  const authoritative = !snapshot.scanning;
+  const items = snapshot.items.filter((item) => item.kind === "loras").map((item) => {
+    const name = item.value.replace(/\.(safetensors|ckpt|pt|pth|bin)$/i, "");
+    const thumbnail2 = item.thumbnails.find((image) => image.role === "banner") ?? item.thumbnails[0];
+    const url = thumbnail2 ? safeHttpUrl(thumbnail2.url, baseUrl) : null;
+    return {
+      model: {
+        promptName: name,
+        backendValue: item.value,
+        basename: name.split(/[\\/]/).pop() ?? name
+      },
+      title: item.title || item.value,
+      subtitle: item.version || null,
+      triggerWords: item.trainedWords,
+      thumbnail: thumbnail2 && url && thumbnail2.width > 0 && thumbnail2.height > 0 ? { status: "ready", url, width: thumbnail2.width, height: thumbnail2.height } : { status: "unavailable" },
+      modelPageUrl: modelPage(item, baseUrl)
+    };
   });
-  return {
+  const content = JSON.stringify([authoritative, items]);
+  const replaced = previous ? prepared.get(previous) : void 0;
+  if (previous && replaced?.content === content) return previous;
+  const adapter = createLoraCatalogAdapter(
+    { revision: `models:${String(snapshot.revision)}`, authoritative, items },
+    void 0,
+    replaced?.adapter
+  );
+  const catalog = {
     ...adapter,
     /** Prioritize only names resolved by the native catalog; never acquire metadata from rendering. */
     async resolve(names, signal) {
       const resources = await adapter.resolve(names, signal);
       if (!signal.aborted) {
-        const items = /* @__PURE__ */ new Set();
+        const items2 = /* @__PURE__ */ new Set();
         for (const resource of resources) {
           if (resource.resolution !== "found") continue;
           const model = models.get(resource.model.backendValue);
-          if (model) items.add(model);
+          if (model) items2.add(model);
         }
-        prioritize?.([...items]);
+        prioritize?.([...items2]);
       }
       return resources;
     }
   };
+  prepared.set(catalog, { adapter, content });
+  return catalog;
 }
 function safeHttpUrl(value, baseUrl) {
   if (!value) return null;

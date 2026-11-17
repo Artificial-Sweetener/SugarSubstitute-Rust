@@ -1,6 +1,6 @@
 import {
   bundledPromptTagCatalog
-} from "./chunk-D7XPJW4K.js";
+} from "./chunk-7JFCUO4K.js";
 import {
   markComfyPromptInput
 } from "./chunk-74D7X3OT.js";
@@ -112,7 +112,7 @@ import {
   wildcardDelimiters,
   wildcardGhostText,
   wildcardReplacement
-} from "./chunk-6WIFWSU6.js";
+} from "./chunk-E4FXQ3WO.js";
 import {
   SugarPromptMenu
 } from "./chunk-QTBJ64DI.js";
