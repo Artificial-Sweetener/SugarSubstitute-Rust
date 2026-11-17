@@ -282,3 +282,24 @@ fn refuse_redirected_parent(selected: &Path, context: &JobContext) -> TestResult
     }
     Ok(())
 }
+
+#[test]
+fn a_folder_directly_inside_a_drive_root_is_an_ordinary_selection() -> TestResult {
+    worker::run_reserved(4 * 1024 * 1024, |context, _| {
+        let temporary = tempfile::tempdir()?;
+        let root = temporary.path().ancestors().last().ok_or("Temporary drive root absent")?;
+        let selected = root.join(format!("sugarsubstitute-absent-{}", std::process::id()));
+        assert!(!selected.exists());
+        assert!(RecordDirectory::record_absent(&selected, "record", context)?);
+        let cause = RecordDirectory::open(&selected, false, false, context)
+            .err()
+            .ok_or("An absent folder was opened")?;
+        assert_eq!(cause.kind(), io::ErrorKind::NotFound);
+        super::super::tree::remove_directory(&selected, context)?;
+        assert!(!selected.exists());
+        // The root holds a selection; it is never one itself.
+        assert!(RecordDirectory::record_absent(root, "record", context).is_err());
+        assert!(RecordDirectory::open(root, false, false, context).is_err());
+        Ok(())
+    })
+}

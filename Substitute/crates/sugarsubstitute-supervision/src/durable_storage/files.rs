@@ -13,6 +13,7 @@ mod identity;
 mod lexical_tests;
 mod observations;
 mod ordinary;
+mod parent;
 #[cfg(test)]
 #[allow(unsafe_code)]
 pub(crate) mod reparse_fixture;
@@ -115,7 +116,7 @@ impl Directory {
 
     /// Retain this exact native parent independently of its current borrow or originating job.
     pub(crate) fn retained(&self) -> io::Result<Self> {
-        let retained = Self::open(self.path(), false)?;
+        let retained = Self::reopen(self.path())?;
         if retained.identity()? != self.identity()? {
             return Err(invalid("Retained directory identity changed"));
         }
@@ -134,9 +135,18 @@ impl Directory {
         create: bool,
         creator: &mut dyn FnMut(&Path) -> io::Result<()>,
     ) -> io::Result<Self> {
+        lexical(path)?;
+        Self::pin(path, create, creator)
+    }
+
+    /// Pin every component of a location its caller validated.
+    fn pin(
+        path: &Path,
+        create: bool,
+        creator: &mut dyn FnMut(&Path) -> io::Result<()>,
+    ) -> io::Result<Self> {
         let _operation =
             tracing::trace_span!(target: "sugarsubstitute::storage", "directory_open").entered();
-        lexical(path)?;
         let mut current = PathBuf::new();
         let mut pins = Vec::new();
         for component in path.components() {

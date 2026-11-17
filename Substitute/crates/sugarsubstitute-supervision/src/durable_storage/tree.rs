@@ -184,8 +184,8 @@ impl Visit for OwnedDirectories<'_> {
 /// Preserves native, cancellation and deadline causes; refuses links and changed objects.
 pub(crate) fn remove_file(path: &Path, context: &JobContext) -> io::Result<()> {
     check(context)?;
-    let parent =
-        Directory::open(path.parent().ok_or_else(|| invalid("Deletion parent absent"))?, false)?;
+    let parent = Directory::parent_of(path)?;
+
     let leaf = path
         .file_name()
         .and_then(|value| value.to_str())
@@ -207,8 +207,8 @@ pub(crate) fn remove_file(path: &Path, context: &JobContext) -> io::Result<()> {
 /// Preserves native, cancellation and deadline causes; a nonempty directory stays.
 pub(crate) fn remove_directory(path: &Path, context: &JobContext) -> io::Result<()> {
     check(context)?;
-    let parent =
-        Directory::open(path.parent().ok_or_else(|| invalid("Deletion parent absent"))?, false)?;
+    let parent = Directory::parent_of(path)?;
+
     let child = match Directory::open(path, false) {
         Ok(child) => child,
         Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(()),

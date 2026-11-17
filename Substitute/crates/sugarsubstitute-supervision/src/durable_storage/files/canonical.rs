@@ -27,7 +27,7 @@ impl Directory {
         for component in canonical.components().skip(1) {
             path.push(component);
         }
-        let resolved = Self::open(&path, false)?;
+        let resolved = Self::reopen(&path)?;
         if resolved.identity()? != self.identity()? {
             return Err(invalid("Resolved directory identity changed"));
         }

@@ -255,10 +255,7 @@ impl RecordDirectory {
 /// (as in a `TEMP` of `C:\Users\RUNNER~1\...`), letter case or the verbatim prefix is accepted,
 /// and the returned parent always carries the resolved long spelling.
 fn selected_parent(path: &Path) -> io::Result<Directory> {
-    files::lexical(path)?;
-    let requested_parent: PathBuf =
-        path.parent().ok_or_else(|| invalid("Record parent absent"))?.components().collect();
-    let requested = Directory::open(&requested_parent, false)?;
+    let requested = Directory::parent_of(path)?;
     let location = requested.location()?;
     let parent = requested.resolved()?;
     if parent.location()? != location {

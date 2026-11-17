@@ -240,8 +240,7 @@ fn attempts(parent: &Directory, prefix: &str, context: &JobContext) -> io::Resul
 
 /// Remove `path`, a protected regular single-link file, by its current identity.
 fn remove_file(path: &Path, protection: &mut Protection, context: &JobContext) -> io::Result<()> {
-    let parent =
-        Directory::open(path.parent().ok_or_else(|| invalid("Stage parent missing"))?, false)?;
+    let parent = Directory::parent_of(path)?;
     let leaf =
         path.file_name().and_then(|leaf| leaf.to_str()).ok_or_else(|| invalid("Stage leaf"))?;
     let identity = match parent.read(leaf) {
