@@ -1,3 +1,12 @@
+## [0.19.2](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.19.1...sugarcubes-v0.19.2) (2026-11-17)
+
+### Bug Fixes
+
+* **import:** an image or workflow the Python application saved opens in its own workflow ([201d182](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/201d1820c2176dd227c0fda933ab7a3d3111f4b7))
+* **models:** a library update no longer makes every model consumer start over ([b1861fa](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/b1861fa3477d4fddc22c2f619c92904c61d70375))
+* **prompt:** LoRA banners stay in place while the model library updates ([f371dc1](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/f371dc111bc9346004cc1ddc1e725d978d463f65))
+* **surface:** a node pack's strip no longer displaces Substitute's title bar ([844d0eb](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/844d0ebd0ba764d6a57860b11662e3b88c2e5ca8))
+
 ## [0.19.1](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.19.0...sugarcubes-v0.19.1) (2026-11-17)
 
 ### Bug Fixes
