@@ -89,6 +89,71 @@ impl Recovery {
         Ok(())
     }
 
+    /// Replace a record that names no earlier lifetime with a Released one for this store.
+    ///
+    /// Such a record is absent beside a claim that already existed, empty or zero bytes: what
+    /// an interrupted first start, a disk fault or another program leaves. The caller holds the writer; this acquires the witness, which the helper keeping
+    /// a desktop's kill-on-close Job alive holds for that desktop's whole life. Holding both
+    /// proves no earlier desktop or browser lifetime remains. Stored bytes are moved beside the
+    /// record with a fresh name and kept; the Released record lets the caller continue through
+    /// its ordinary successor rules.
+    /// # Errors
+    /// A surviving witness refuses the exclusion, and the profile stays refused as before.
+    pub(super) fn admit_nameless(
+        &mut self,
+        writer: &HeldFile<160>,
+        folder: &Path,
+        sid: &[u8],
+        next: record::Record,
+        budget: Budget,
+        context: &JobContext,
+    ) -> Result<(), ClaimError> {
+        check(context)?;
+        if !writer.is_locked() {
+            return Err(ClaimError::invalid("profile_recovery_writer"));
+        }
+        HeldFile::acquire_into(
+            ExclusionOpen::CreateOrOpen,
+            &mut self.custody,
+            NativeName::Ordinary(folder.join(crate::profiles::locations::CUSTODY)),
+            NativeName::Ordinary(folder.join(crate::profiles::locations::RECORD)),
+            NativeSid::Ordinary(sid.to_vec()),
+            budget.clone(),
+            &mut NativePhase::ordinary(&budget)?,
+        )?;
+        let stored = record_file::read_shape(writer, context)?;
+        if !names_no_predecessor(&stored, writer.created) {
+            return Err(ClaimError::invalid("profile_recovery_changed_predecessor"));
+        }
+        let aside = match stored {
+            record_file::RecordRead::Missing => None,
+            _ => Some(record_file::set_aside(writer, context)?),
+        };
+        let released = record::Record { state: record::State::Released, ..next }.encode();
+        let witness =
+            self.custody.as_ref().ok_or_else(|| ClaimError::invalid("profile_recovery_witness"))?;
+        let published = record_file::publish(
+            writer,
+            &released,
+            record_file::PublicationAuthority::Witnessed(witness),
+            context,
+            |previous| match previous {
+                record_file::RecordRead::Missing => Ok(()),
+                _ => Err(ClaimError::invalid("profile_recovery_changed_predecessor")),
+            },
+        );
+        if published.is_err() {
+            // A stage this publication left behind is settled before either exclusion closes.
+            let settled =
+                record_file::retire_publication(writer, Some(&released), context).map(|_| ());
+            return ClaimError::finish(published, settled);
+        }
+        self.close()?;
+        tracing::warn!(operation="profile_nameless_record_replaced", set_aside=?aside,
+            "Replaced a profile record that named no earlier lifetime after acquiring writer and witness exclusions");
+        Ok(())
+    }
+
     /// Settle partial backup publication before releasing either native output.
     pub(super) fn retire(&mut self, context: &JobContext) -> Result<(), ClaimError> {
         if let Some(backup) = &mut self.backup {
@@ -107,6 +172,17 @@ impl Recovery {
         }
         self.custody = None;
         Ok(())
+    }
+}
+
+/// Decide whether what is stored where a profile record belongs names no earlier lifetime.
+/// A record absent beside a claim this acquisition created is a first use, which names none
+/// either but needs no recovery.
+pub(super) fn names_no_predecessor(stored: &record_file::RecordRead<160>, created: bool) -> bool {
+    match stored {
+        record_file::RecordRead::Empty => true,
+        record_file::RecordRead::Missing => !created,
+        record_file::RecordRead::Present(bytes) => bytes.iter().all(|byte| *byte == 0),
     }
 }
 

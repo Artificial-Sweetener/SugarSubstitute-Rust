@@ -62,7 +62,12 @@ pub(super) fn acquire(
     })?;
     check(context)?;
     let file = state.file.as_ref().ok_or_else(|| ClaimError::invalid("profile_exclusion"))?;
-    let previous = match record_file::read_shape(file, context)? {
+    let mut read = record_file::read_shape(file, context)?;
+    if recovery::names_no_predecessor(&read, file.created) {
+        state.recovery.admit_nameless(file, folder, sid, record, budget.clone(), context)?;
+        read = record_file::read_shape(file, context)?;
+    }
+    let previous = match read {
         record_file::RecordRead::Missing => None,
         record_file::RecordRead::Empty => {
             return Err(ClaimError::invalid("empty_profile_record"));

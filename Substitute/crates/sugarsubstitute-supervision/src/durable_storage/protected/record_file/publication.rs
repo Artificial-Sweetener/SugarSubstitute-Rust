@@ -11,6 +11,20 @@ pub(crate) enum PublicationAuthority<'a> {
     Ordinary,
     /// Require the actual sealed election and claim lifetime as well.
     ElectedCoordinator(&'a ElectedCoordinatorPublication<'a>),
+    /// Require the locked exclusion and a held witness: the second exclusion that every earlier
+    /// lifetime of this record's owner holds for its whole life. Holding both proves no earlier
+    /// lifetime remains, so an absent record beside an existing claim is published as new.
+    Witnessed(&'a dyn Witness),
+}
+/// A second native exclusion whose holder outlives the record owner it witnesses.
+pub(crate) trait Witness {
+    /// Report whether this exclusion is still actually held.
+    fn is_held(&self) -> bool;
+}
+impl<const N: usize> Witness for HeldFile<N> {
+    fn is_held(&self) -> bool {
+        self.is_locked()
+    }
 }
 /// Retain admission before reads can leave a failed-close output without a stage.
 pub(crate) struct PublicationBinding<const N: usize> {
@@ -27,7 +41,7 @@ impl PublicationAuthority<'_> {
     ) -> Result<PublicationBinding<N>, ClaimError> {
         let context = context::PublicationContext::new(current, budget)?;
         let elected = match self {
-            Self::Ordinary => None,
+            Self::Ordinary | Self::Witnessed(_) => None,
             Self::ElectedCoordinator(proof) => Some(proof.binding()?),
         };
         if elected.as_ref().is_some_and(|proof| proof.execution_owner() != current.owner_id()) {
@@ -38,6 +52,7 @@ impl PublicationAuthority<'_> {
     fn validate_retained<const N: usize>(&self, file: &HeldFile<N>) -> Result<(), ClaimError> {
         match self {
             Self::Ordinary if file.is_locked() => Ok(()),
+            Self::Witnessed(witness) if file.is_locked() && witness.is_held() => Ok(()),
             Self::ElectedCoordinator(proof) => proof.validate_retained(file),
             _ => Err(ClaimError::invalid("publication_without_exclusion")),
         }
@@ -55,6 +70,11 @@ impl PublicationAuthority<'_> {
                     Err(ClaimError::invalid("missing_claim_record"))
                 }
                 _ => Ok(()),
+            },
+            // A witnessed publication only ever replaces a record that is absent.
+            Self::Witnessed(_) => match old {
+                RecordRead::Missing => Ok(()),
+                _ => Err(ClaimError::invalid("witnessed_claim_record_present")),
             },
             Self::ElectedCoordinator(proof) => proof.validate(file, old),
         }
@@ -99,6 +119,8 @@ impl<const N: usize> PublicationBinding<N> {
         }
         match (&self.elected, authority) {
             (None, PublicationAuthority::Ordinary) if file.is_locked() => (),
+            (None, PublicationAuthority::Witnessed(witness))
+                if file.is_locked() && witness.is_held() => {}
             (Some(original), PublicationAuthority::ElectedCoordinator(next)) => {
                 original.validate(file, next)?
             }

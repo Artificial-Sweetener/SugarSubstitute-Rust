@@ -134,3 +134,114 @@ fn abandoned_profile_recovers_without_deleting_browser_data_and_live_witness_blo
     assert_eq!(harness.scope.snapshot().reserved_bytes, 0);
     Ok(())
 }
+
+/// What an interrupted first start, a disk fault or another program leaves for a profile record.
+#[derive(Clone, Copy, Debug)]
+enum Nameless {
+    Empty,
+    Zeroed,
+    Absent,
+}
+
+#[test]
+fn a_record_naming_no_earlier_lifetime_is_replaced_only_without_a_live_witness()
+-> Result<(), Box<dyn std::error::Error>> {
+    let mut harness = Harness::new()?;
+    let until = Moment::from_nanos(15_000_000_000);
+    let mut spec = harness.spec(until)?;
+    spec.reservation_bytes = crate::profiles::PROFILE_OPERATION_BYTES;
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let stem = std::env::temp_dir().join(format!(
+        "sugarsubstitute-nameless-profile-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    let mut job = harness.client.submit_blocking(&harness.scope, spec, move |context| {
+        let port = WindowsProfilePort;
+        let run = super::super::tests::generation(1)?.run;
+        let damages = [Nameless::Empty, Nameless::Zeroed, Nameless::Absent];
+        for (index, damage) in damages.iter().enumerate() {
+            let base = crate::durable_storage::protected::profile_fixture::create(
+                &std::path::PathBuf::from(format!("{}-{index}", stem.display())),
+                &context,
+            )?;
+            let profile = base.join("profile");
+            let marker = profile.join(".sugarsubstitute-profile-v1.record");
+            let mut prior = NativeState::new();
+            port.acquire(&mut prior, &profile, run, &context)?;
+            let writer = prior.file.as_ref().ok_or_else(|| ClaimError::invalid("test_writer"))?;
+            let budget = writer.handle.budget();
+            let sid = writer.account_sid.bytes()?.to_vec();
+            let mut witness = None;
+            HeldFile::<160>::acquire_into(
+                ExclusionOpen::CreateOrOpen,
+                &mut witness,
+                NativeName::Ordinary(profile.join(".sugarsubstitute-profile-v2.custody")),
+                NativeName::Ordinary(marker.clone()),
+                NativeSid::Ordinary(sid),
+                budget.clone(),
+                &mut NativePhase::ordinary(&budget)?,
+            )?;
+            port.release(&mut prior, &context)?;
+            drop(prior);
+            // Writing in place keeps the file and its security; only its bytes change.
+            let stored: Option<Vec<u8>> = match damage {
+                Nameless::Empty => Some(Vec::new()),
+                Nameless::Zeroed => Some(vec![0; 160]),
+                Nameless::Absent => None,
+            };
+            match &stored {
+                Some(bytes) => std::fs::write(&marker, bytes),
+                None => std::fs::remove_file(&marker),
+            }
+            .map_err(|cause| ClaimError::new("test_damage", cause))?;
+            let browser_data = profile.join("preferences.json");
+            std::fs::write(&browser_data, b"user preferences")
+                .map_err(|cause| ClaimError::new("test_preferences", cause))?;
+
+            let mut denied = NativeState::new();
+            assert!(port.acquire(&mut denied, &profile, run, &context).is_err(), "{damage:?}");
+            port.release(&mut denied, &context)?;
+            drop(denied);
+            assert_eq!(std::fs::read(&marker).ok(), stored, "{damage:?}");
+
+            witness.as_mut().ok_or_else(|| ClaimError::invalid("test_witness"))?.close()?;
+            drop((witness, budget));
+            let mut next = NativeState::new();
+            let successor = super::super::tests::generation(2)?.run;
+            port.acquire(&mut next, &profile, successor, &context)?;
+            assert!(next.held, "{damage:?}");
+            let aside = std::fs::read_dir(&profile)
+                .map_err(|cause| ClaimError::new("test_aside", cause))?
+                .filter_map(Result::ok)
+                .filter(|entry| entry.file_name().to_string_lossy().ends_with(".unreadable"))
+                .map(|entry| std::fs::read(entry.path()))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|cause| ClaimError::new("test_aside", cause))?;
+            assert_eq!(aside, stored.into_iter().collect::<Vec<_>>(), "{damage:?}");
+            port.release(&mut next, &context)?;
+            drop(next);
+            assert_eq!(
+                std::fs::read(&browser_data)
+                    .map_err(|cause| ClaimError::new("test_read", cause))?,
+                b"user preferences"
+            );
+            let mut reopened = NativeState::new();
+            port.acquire(&mut reopened, &profile, run, &context)?;
+            assert!(reopened.held, "{damage:?}");
+            port.release(&mut reopened, &context)?;
+            drop(reopened);
+            std::fs::remove_dir_all(&base)
+                .map_err(|cause| ClaimError::new("test_cleanup", cause))?;
+        }
+        Ok::<_, ClaimError>(())
+    })?;
+    let done = harness.consume_job(&mut job)?;
+    assert!(matches!(done.outcome, JobOutcome::Success(())), "{done:?}");
+    drop((done.memory, done.native_handles));
+    drop(job);
+    harness.close(until)?;
+    harness.join_execution_after_retirement()?;
+    assert_eq!(harness.scope.snapshot().reserved_bytes, 0);
+    Ok(())
+}
