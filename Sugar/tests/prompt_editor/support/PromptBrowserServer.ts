@@ -82,13 +82,15 @@ export async function mountPrompt(
   renderer: 'nodes-1' | 'nodes-2',
   source: string,
   scale = 1,
+  promptControl = false,
 ): Promise<Page> {
   const page = await fixture.browser.newPage();
   await page.goto(fixture.address);
   await page.waitForFunction(() => !!window.promptBrowserProof);
   await page.evaluate(
-    ({ renderer, scale, source }) => window.promptBrowserProof.mount(renderer, scale, source),
-    { renderer, scale, source },
+    ({ renderer, scale, source, promptControl }) =>
+      window.promptBrowserProof.mount(renderer, scale, source, false, promptControl),
+    { renderer, scale, source, promptControl },
   );
   await page.locator('[data-sc-prompt-editor] .cm-content').waitFor({ state: 'visible' });
   return page;

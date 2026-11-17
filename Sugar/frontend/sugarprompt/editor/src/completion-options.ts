@@ -28,12 +28,13 @@ import {
   tagCompletionCatalog,
   loraCompletionCatalog,
   sceneTitleCatalog,
-  type PreparedCompletion,
+  type WordCompletion,
   type PreparedCompletionResult,
   type CompletionEditPreparation,
 } from './prompt-completion-model.js';
 import { featureProfile } from './features.js';
 import { loraCompletionOptions } from './lora-completion-options.js';
+import { modelCompletionPopupHost } from './model-completion-popup.js';
 import {
   completionPosition,
   prepareCompletionScope,
@@ -59,7 +60,9 @@ export function prepareCompletionOptions(state: EditorState): PreparedCompletion
   if (!routed) return null;
   if (routed.kind === 'lora') {
     const catalog = state.facet(loraCompletionCatalog);
-    return catalog ? loraCompletionOptions(state, scope, routed.query, caret, catalog) : null;
+    return catalog && state.facet(modelCompletionPopupHost)
+      ? loraCompletionOptions(state, scope, routed.query, caret, catalog)
+      : null;
   }
   if (routed.kind === 'wildcard') {
     const catalog = state.facet(wildcardCatalog);
@@ -85,7 +88,7 @@ export function prepareCompletionOptions(state: EditorState): PreparedCompletion
     from = completionPosition(scope, result.query.replacementRange.from),
     to = completionPosition(scope, result.query.activeTagEnd);
   if (!result.matches.length || from === null || to === null) return null;
-  const options: PreparedCompletion[] = [];
+  const options: WordCompletion[] = [];
   for (const row of result.matches) {
     const word = row.kind === 'tag' ? row.value.tag : row.value.word;
     /** Build the accepted edit only on acceptance; right text the typed prefix already spells is replaced too. */
@@ -123,6 +126,7 @@ export function prepareCompletionOptions(state: EditorState): PreparedCompletion
   }
   return options.length
     ? Object.freeze({
+        surface: 'words' as const,
         from,
         to: caret,
         query: Object.freeze({

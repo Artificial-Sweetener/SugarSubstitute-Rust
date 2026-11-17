@@ -81,23 +81,48 @@ export type CompletionEditPreparation = (
   state: EditorState,
   activation: CompletionActivation,
 ) => PreparedDocumentValueEdit | null;
-/** One immutable candidate carries its literal display input and its deferred edit preparation. */
-export type PreparedCompletion = CompletionProposal &
+/** One immutable word candidate carries its literal display input and its deferred edit preparation. */
+export type WordCompletion = CompletionProposal &
   (
     | { readonly kind: 'tag' }
     | { readonly kind: 'wildcard' }
     | { readonly kind: 'scene' }
     | { readonly kind: 'trigger'; readonly backendValue: string }
-    | { readonly kind: 'lora'; readonly item: LoraCatalogItem }
   );
 
+/** One immutable model candidate carries the catalog item the host's gallery presents. */
+export type ModelCompletion = CompletionProposal & {
+  readonly kind: 'lora';
+  readonly item: LoraCatalogItem;
+};
+
+/** Any candidate of the one native completion session. */
+export type PreparedCompletion = WordCompletion | ModelCompletion;
+
 /** Logical-document UTF-16 anchors locate one source-current native suggestion session. */
-export interface PreparedCompletionResult {
+interface PreparedCompletionAnchors {
   readonly from: number;
   readonly to: number;
   readonly query: CompletionQuery;
-  readonly options: readonly PreparedCompletion[];
 }
+
+/** Word candidates are listed in the completion panel. */
+export interface PreparedWordCompletions extends PreparedCompletionAnchors {
+  readonly surface: 'words';
+  readonly options: readonly WordCompletion[];
+}
+
+/** Model candidates are shown in the host's picker gallery. */
+export interface PreparedModelCompletions extends PreparedCompletionAnchors {
+  readonly surface: 'models';
+  readonly options: readonly ModelCompletion[];
+}
+
+/**
+ * One result holds words or models, never both: a model name is completed only inside its own
+ * syntax, and each kind has its own surface.
+ */
+export type PreparedCompletionResult = PreparedWordCompletions | PreparedModelCompletions;
 
 /** Prepared logical-document UTF-16 query bounds distinguish its opener, editable content and final content boundary. */
 export interface CompletionQuery {

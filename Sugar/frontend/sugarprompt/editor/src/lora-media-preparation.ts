@@ -28,7 +28,6 @@ import { loraMedia, installLoraMedia } from './lora-media-state.js';
 import { LoraMediaPool } from './lora-media-pool.js';
 import { decodeLoraMedia } from './lora-media-decoder.js';
 import type { LoraMediaReference } from './lora-media-contracts.js';
-import { completionWall } from './completion-wall-state.js';
 
 /** One host boundary observes unexpected current preparation errors without logging names, image URLs or causes. */
 export const loraMediaErrors = Facet.define<(cause: unknown) => void>();
@@ -44,7 +43,6 @@ class LoraMediaPreparation {
     readonly snapshot: LoraPresentation['snapshot'];
     readonly sourceIdentity: symbol;
     readonly enabled: boolean;
-    readonly wallReferences: readonly LoraMediaReference[] | null;
   } | null = null;
   /** Bind finite decoding and unexpected-error publication to the mounted native view. */
   constructor(view: EditorView) {
@@ -74,8 +72,6 @@ class LoraMediaPreparation {
     }
     if (
       invalidated ||
-      update.startState.field(completionWall)?.references !==
-        update.state.field(completionWall)?.references ||
       update.startState.field(richProjection).sourceIdentity !==
         update.state.field(richProjection).sourceIdentity
     )
@@ -123,28 +119,20 @@ class LoraMediaPreparation {
       state.facet(richRendering) && featureEnabled(state.facet(featureProfile), 'lora_syntax');
     const presentation = state.field(loraPresentation),
       sourceIdentity = state.field(editorFreshness).source;
-    const wallReferences = state.field(completionWall)?.references ?? null;
     if (state.field(richProjection).sourceIdentity !== sourceIdentity) return;
     if (enabled && presentation.sourceIdentity !== sourceIdentity) return;
     if (
       !this.input ||
       this.input.snapshot !== presentation.snapshot ||
       this.input.sourceIdentity !== sourceIdentity ||
-      this.input.enabled !== enabled ||
-      this.input.wallReferences !== wallReferences
+      this.input.enabled !== enabled
     ) {
-      this.input = {
-        snapshot: presentation.snapshot,
-        sourceIdentity,
-        enabled,
-        wallReferences,
-      };
+      this.input = { snapshot: presentation.snapshot, sourceIdentity, enabled };
       const references: LoraMediaReference[] = [];
       if (enabled && presentation.snapshot.status === 'ready')
         for (const resource of presentation.snapshot.resources)
           if (resource.resolution === 'found' && resource.thumbnail.status === 'ready')
             references.push(resource.thumbnail);
-      if (wallReferences) references.push(...wallReferences);
       this.pool.select(references);
     }
     const media = this.pool.snapshot();

@@ -18,6 +18,7 @@ import { requireValue } from '../../core/src/required.js';
 import type { HostConfiguration } from './host-update.js';
 import { validateSavedSegmentHost } from './saved-segment-menu.js';
 import { validateFieldActionUtilities } from './field-action-utilities.js';
+import { validateModelCompletionPopupHost } from './model-completion-popup.js';
 import {
   captureConditioningContext,
   featureDefinitions,
@@ -33,6 +34,7 @@ import { isSpellcheckSession } from '../../services/src/diagnostics/spelling-ses
 /** Admit supplied configuration through its domain owners before capture, equality or native preparation. */
 export function validateConfigurationValues(input: HostConfiguration): void {
   validateFieldActionUtilities(input.fieldActionUtilities);
+  validateModelCompletionPopupHost(input.modelCompletionPopupHost);
   validatePreparedConfiguration(input);
   if ('savedSegmentHost' in input) validateSavedSegmentHost(input.savedSegmentHost);
   if ('documentKind' in input)

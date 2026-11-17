@@ -78,6 +78,34 @@ test('keeps transfer text readable on a stable backdrop even without a thumbnail
   style.remove();
 });
 
+test('a gallery shown while field pickers are off is styled, and native model controls stay visible', () => {
+  const appearance = new ModelPickerAppearance(document, {
+    ui: { settings: { getSettingValue: () => true } },
+  });
+  const sheet = (): HTMLStyleElement | null =>
+    document.getElementById('sugarcubes-model-picker') as HTMLStyleElement | null;
+  expect(sheet()).toBeNull();
+  const gallery = document.createElement('div');
+  document.body.append(gallery);
+  appearance.track(gallery);
+  expect(gallery.dataset.scModelAppearance).toBe('fluent');
+  expect(sheet()?.textContent).toContain('.sc-model-tile');
+  // Only enabled field pickers replace Comfy's own model controls.
+  expect(sheet()?.textContent).not.toContain('[data-sc-model-native]');
+  appearance.activate();
+  expect(sheet()?.textContent).toContain('[data-sc-model-native]{display:none!important}');
+  expect(gallery.dataset.scModelAppearance).toBe('fluent');
+  appearance.deactivate();
+  expect(sheet()).toBeNull();
+  // The style leaves with the last surface when field pickers are off.
+  appearance.track(gallery);
+  expect(sheet()).not.toBeNull();
+  appearance.release(gallery);
+  expect(sheet()).toBeNull();
+  expect(gallery.dataset.scModelAppearance).toBeUndefined();
+  appearance.dispose();
+});
+
 test('shares the active palette across new fields and refreshes it after a host theme change', async () => {
   const readStyle = jest.spyOn(window, 'getComputedStyle');
   const appearance = new ModelPickerAppearance(document, {

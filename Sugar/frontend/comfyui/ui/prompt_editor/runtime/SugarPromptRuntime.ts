@@ -20,6 +20,7 @@ import type {
   EditorSnapshot,
   EditorLayoutMetrics,
 } from '../../../../sugarprompt/editor/src/contracts.js';
+import type { ModelCompletionPopupHost } from '../../../../sugarprompt/editor/src/model-completion-popup.js';
 import {
   LoraResourceSession,
   resolveFeatureProfile,
@@ -63,6 +64,10 @@ export interface SugarPromptMountOptions {
   readonly sceneQueue: PromptSceneQueue | null;
   /** The wildcard folder's catalog when the editor mounts, or null before it was read. */
   readonly wildcardCatalog: WildcardCatalog | null;
+  /** Whether this prompt reaches an encoder that loads the LoRAs written in it. */
+  readonly promptControl: boolean;
+  /** The model library gallery that presents LoRA candidates, or null when it is unavailable. */
+  readonly modelCompletions: ModelCompletionPopupHost | null;
 }
 
 /** Queue one scene by its normalized key and report how the host admitted it. */
@@ -123,8 +128,13 @@ export class SugarPromptEditor {
     }
     const profile = resolveFeatureProfile(defaultPreferences, {
       mode: 'workflow',
-      loraScheduling: false,
-      unavailableFeatures: ['danbooru_url_import', 'spellcheck'],
+      loraScheduling: options.promptControl,
+      unavailableFeatures: [
+        'danbooru_url_import',
+        'spellcheck',
+        'lora_picker',
+        'lora_trigger_words',
+      ],
     });
     const tagCatalog = bundledPromptTagCatalog();
     this.#api = mountEditor(this.#content, {
@@ -138,6 +148,7 @@ export class SugarPromptEditor {
       featureProfile: profile,
       tagCompletionCatalog: tagCatalog,
       wildcardCatalog: options.wildcardCatalog,
+      modelCompletionPopupHost: options.modelCompletions,
       tagLexicon: tagCatalog.lexicon,
       onUpdate: (snapshot) => this.#observe(snapshot),
       onLayout: (metrics) => this.#layout(metrics),
@@ -182,6 +193,7 @@ export class SugarPromptEditor {
     this.#resources = new LoraResourceSession(adapter, (snapshot) => {
       if (generation === this.#resourceGeneration) this.#resourceChanged(snapshot);
     });
+    this.#api.setLoraCompletionCatalog(adapter.completionCatalog ?? null);
     this.#queueResources();
   }
 

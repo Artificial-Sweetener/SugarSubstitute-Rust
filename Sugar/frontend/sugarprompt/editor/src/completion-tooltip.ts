@@ -14,7 +14,6 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Supported CodeMirror tooltip placement projects one native session into bounded, independently scrollable owned DOM. */
-import { requireValue } from '../../core/src/required.js';
 import { captureFocusHandoff } from './focus-handoff.js';
 import { Transaction, type Extension } from '@codemirror/state';
 import {
@@ -29,20 +28,16 @@ import {
   type CompletionSession,
   requestCompletionAcceptance,
 } from './completion-session.js';
-import { completionWall, installCompletionWall } from './completion-wall-state.js';
-import { prepareLoraWallLayout, loraWallVisibleRange } from './lora-wall-layout.js';
 import {
   createCompletionOption,
   relabelCompletionRow,
-  paintCompletionMedia,
   type CompletionOptionDOM,
 } from './completion-option-dom.js';
 import { acceptCompletionOption } from './prompt-completion-acceptance.js';
-import type { PreparedCompletionResult } from './prompt-completion-model.js';
-import { loraMedia } from './lora-media-state.js';
+import type { PreparedWordCompletions } from './prompt-completion-model.js';
 import { completionTheme } from './completion-theme.js';
 import { CompletionScrollbar } from './completion-scrollbar.js';
-import { CompletionTitleMarquee } from './completion-title-marquee.js';
+import { createModelCompletionTooltip } from './model-completion-tooltip.js';
 import { readCompletionHeight, applyCompletionHeight } from './completion-space.js';
 /** Geometry is read in CodeMirror measurement phases, compiled off input/paint, and published with candidate identity. */
 class CompletionTooltip implements TooltipView {
@@ -57,9 +52,8 @@ class CompletionTooltip implements TooltipView {
   private readonly nodes = new Map<number, CompletionOptionDOM>();
   private readonly view: EditorView;
   private readonly observer: ResizeObserver;
-  private readonly titles: CompletionTitleMarquee;
   private readonly scrollbar: CompletionScrollbar;
-  private result: PreparedCompletionResult | null = null;
+  private result: PreparedWordCompletions | null = null;
   private presentation: symbol | null = null;
   private disposed = false;
   private ensureSelected = true;
@@ -75,15 +69,10 @@ class CompletionTooltip implements TooltipView {
     this.viewport.tabIndex = 0;
     this.content.className = 'sp-completion-content';
     this.scrollbar = new CompletionScrollbar(this.viewport, () => this.measure());
-    let titles: CompletionTitleMarquee | null = null;
     let observer: ResizeObserver | null = null;
     try {
       this.viewport.append(this.scrollbar.dom, this.content);
       this.dom.append(this.viewport);
-      this.titles = titles = new CompletionTitleMarquee(view, this.viewport, () => {
-        const selected = view.state.field(completionSession)?.selected;
-        return selected === undefined ? null : (this.nodes.get(selected)?.dom ?? null);
-      });
       this.viewport.addEventListener('scroll', this.scrolled);
       this.viewport.addEventListener('mousedown', this.pressed);
       this.viewport.addEventListener('focus', this.focused);
@@ -91,7 +80,6 @@ class CompletionTooltip implements TooltipView {
         try {
           this.scrollbar.invalidate();
           this.measure();
-          this.titles.refresh(true);
         } catch (error) {
           this.fail(error);
         }
@@ -102,7 +90,6 @@ class CompletionTooltip implements TooltipView {
       const causes: unknown[] = [error];
       for (const release of [
         () => this.scrollbar.destroy(),
-        () => titles?.destroy(),
         () => observer?.disconnect(),
         () => this.viewport.removeEventListener('scroll', this.scrolled),
         () => this.viewport.removeEventListener('mousedown', this.pressed),
@@ -139,11 +126,7 @@ class CompletionTooltip implements TooltipView {
         if (before?.selected !== after?.selected) this.scrollbar.invalidate();
         this.project();
         this.measure();
-      } else if (update.startState.field(completionWall) !== update.state.field(completionWall)) {
-        this.project();
-        if (this.ensureSelected) this.measure();
-      } else if (update.startState.field(loraMedia) !== update.state.field(loraMedia))
-        this.paintMedia();
+      }
     } catch (error) {
       this.fail(error);
     }
@@ -163,7 +146,6 @@ class CompletionTooltip implements TooltipView {
     const causes: unknown[] = [];
     for (const release of [
       () => this.scrollbar.destroy(),
-      () => this.titles.destroy(),
       () => this.observer.disconnect(),
       () => this.viewport.removeEventListener('scroll', this.scrolled),
       () => this.viewport.removeEventListener('mousedown', this.pressed),
@@ -178,7 +160,7 @@ class CompletionTooltip implements TooltipView {
     if (causes.length === 1) throw causes[0];
     if (causes.length > 1) throw new AggregateError(causes, 'Completion tooltip retirement failed');
   }
-  /** Independent wall scrolling changes only derived viewport membership. */
+  /** Independent list scrolling changes only the derived scrollbar. */
   private readonly scrolled = (): void => {
     this.measure();
   };
@@ -269,12 +251,9 @@ class CompletionTooltip implements TooltipView {
                 return;
               }
             }
-            const wall = this.view.state.field(completionWall);
             let top = measurement.top;
-            const box =
-              wall?.result === session.result ? wall.layout.boxes[session.selected] : undefined;
-            const optionTop = box?.y ?? measurement.optionTop,
-              optionHeight = box?.height ?? measurement.optionHeight;
+            const optionTop = measurement.optionTop,
+              optionHeight = measurement.optionHeight;
             if (this.ensureSelected && optionTop !== undefined && optionHeight !== undefined) {
               if (optionTop < top) top = optionTop;
               else if (optionTop + optionHeight > top + measurement.height)
@@ -287,27 +266,6 @@ class CompletionTooltip implements TooltipView {
             }
             if (!current()) return;
             this.scrollbar.project(measurement.scrollbar && { ...measurement.scrollbar, top });
-            if (
-              this.disposed ||
-              this.measurementRevision !== measurement.revision ||
-              this.view.state.field(completionSession) !== session
-            )
-              return;
-            if (requireValue(session.result.options[0], 'completion-tooltip').kind === 'lora')
-              queueMicrotask(() => {
-                try {
-                  this.prepareWall(
-                    session.result,
-                    session.presentation,
-                    measurement.revision,
-                    measurement.width,
-                    measurement.height,
-                    top,
-                  );
-                } catch (error) {
-                  this.fail(error);
-                }
-              });
           } catch (error) {
             this.fail(error);
           }
@@ -326,103 +284,27 @@ class CompletionTooltip implements TooltipView {
     }
     throw primary;
   }
-  /** Compile geometry only after a real width change and prepare only visible/overscan thumbnail descriptors. */
-  private prepareWall(
-    result: PreparedCompletionResult,
-    presentation: symbol,
-    revision: number,
-    width: number,
-    height: number,
-    top: number,
-  ): void {
-    if (
-      this.disposed ||
-      width <= 0 ||
-      this.measurementRevision !== revision ||
-      this.view.state.field(completionSession)?.presentation !== presentation ||
-      this.view.state.field(completionSession)?.result !== result
-    )
-      return;
-    const previous = this.view.state.field(completionWall);
-    const layout =
-      previous?.result === result && previous.layout.width === width
-        ? previous.layout
-        : prepareLoraWallLayout(
-            result.options.map((option) =>
-              option.kind === 'lora' && option.item.thumbnail.status === 'ready'
-                ? option.item.thumbnail.width / option.item.thumbnail.height
-                : 0.72,
-            ),
-            width,
-          );
-    const range = loraWallVisibleRange(layout, top, height);
-    if (previous?.layout === layout && previous.from === range.from && previous.to === range.to)
-      return;
-    const references = result.options
-      .slice(range.from, range.to)
-      .flatMap((option) =>
-        option.kind === 'lora' && option.item.thumbnail.status === 'ready'
-          ? [option.item.thumbnail]
-          : [],
-      );
-    if (
-      this.disposed ||
-      this.measurementRevision !== revision ||
-      this.view.state.field(completionSession)?.result !== result ||
-      this.view.state.field(completionSession)?.presentation !== presentation
-    )
-      return;
-    this.view.dispatch({
-      effects: installCompletionWall.of({
-        result,
-        layout,
-        ...range,
-        references,
-      }),
-      annotations: Transaction.addToHistory.of(false),
-    });
-  }
-  /** Keep only viewport/overscan tiles plus the selected accessible option; scrolling never truncates the ranked candidate set. */
+  /** Relabel the plain rows in place for the session's current word candidates. */
   private project(): void {
     if (this.disposed) return;
     const session = this.view.state.field(completionSession);
-    if (!session) return;
+    if (!session || session.result.surface !== 'words') return;
     this.scrollbar.session(session.result, session.presentation);
     if (this.disposed || this.view.state.field(completionSession) !== session) return;
-    const model = requireValue(session.result.options[0], 'completion-tooltip').kind === 'lora';
-    // Plain rows survive a new presentation and are relabeled in place below; model walls rebuild.
+    // Rows survive a new presentation and are relabeled in place below.
     const relabel = this.presentation !== session.presentation;
-    if (relabel && (model || this.dom.classList.contains('sp-completion-wall'))) {
-      this.nodes.clear();
-      this.content.replaceChildren();
-    }
     this.presentation = session.presentation;
-    this.dom.classList.toggle('sp-completion-wall', model);
     this.result = session.result;
     this.viewport.id = session.id;
-    const wall = this.view.state.field(completionWall);
-    const indices = new Set<number>();
-    if (model) {
-      this.content.style.height = `${wall?.layout.height ?? 0}px`;
-      if (wall?.result === session.result)
-        for (let index = wall.from; index < wall.to; index++) indices.add(index);
-      indices.add(session.selected);
-    } else for (let index = 0; index < session.result.options.length; index++) indices.add(index);
+    const count = session.result.options.length;
     for (const [index, node] of this.nodes)
-      if (!indices.has(index)) {
+      if (index >= count) {
         node.dom.remove();
         this.nodes.delete(index);
       }
-    for (const index of indices) {
-      const option = requireValue(session.result.options[index], 'completion-tooltip');
-      const count = session.result.options.length;
+    for (const [index, option] of session.result.options.entries()) {
       let node = this.nodes.get(index);
-      if (node && relabel && !relabelCompletionRow(node, option, session.id, index, count)) {
-        const replaced = node.dom;
-        node = createCompletionOption(option, session.id, index, count);
-        this.nodes.set(index, node);
-        replaced.replaceWith(node.dom);
-      }
+      if (node && relabel) relabelCompletionRow(node, option, session.id, index, count);
       if (!node) {
         node = createCompletionOption(option, session.id, index, count);
         this.nodes.set(index, node);
@@ -430,25 +312,7 @@ class CompletionTooltip implements TooltipView {
       }
       node.option = option;
       node.dom.setAttribute('aria-selected', String(index === session.selected));
-      const box = model && wall?.result === session.result ? wall.layout.boxes[index] : null;
-      if (model) {
-        node.dom.style.visibility = box ? 'visible' : 'hidden';
-        if (box)
-          Object.assign(node.dom.style, {
-            left: `${box.x}px`,
-            top: `${box.y}px`,
-            width: `${box.width}px`,
-            height: `${box.height}px`,
-          });
-      }
     }
-    this.paintMedia();
-    this.titles.refresh();
-  }
-  /** Paint only changed actual prepared raster identities, never decode or traverse catalog metadata. */
-  private paintMedia(): void {
-    const media = this.view.state.field(loraMedia);
-    for (const node of this.nodes.values()) paintCompletionMedia(node, media);
   }
 }
 /** Stable tooltip factory permits CodeMirror to reuse the finite DOM owner across native selection changes. */
@@ -457,10 +321,16 @@ function createTooltip(view: EditorView): TooltipView {
 }
 /** The logical-document UTF-16 caret anchors supported tooltip placement; query bounds retain source-edit authority. */
 export const completionTooltips: Extension = [
-  completionWall,
+  // Words and models each have one surface; a session shows the one its result names.
   showTooltip.compute([completionSession, 'selection'], (state) => {
     const session = state.field(completionSession);
-    return session ? { pos: state.selection.main.head, create: createTooltip } : null;
+    return session
+      ? {
+          pos: state.selection.main.head,
+          create:
+            session.result.surface === 'models' ? createModelCompletionTooltip : createTooltip,
+        }
+      : null;
   }),
   EditorView.contentAttributes.compute([completionSession], (state): Record<string, string> => {
     const session: CompletionSession | null = state.field(completionSession);

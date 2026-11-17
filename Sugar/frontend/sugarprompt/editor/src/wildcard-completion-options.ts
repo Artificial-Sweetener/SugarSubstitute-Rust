@@ -25,7 +25,7 @@ import type { WildcardCatalog } from '../../services/src/index.js';
 import { editorFreshness } from './freshness.js';
 import { completionPosition, prepareScopedCompletionEdit } from './completion-splice.js';
 import type {
-  PreparedCompletion,
+  WordCompletion,
   PreparedCompletionResult,
   PreparedCompletionScope,
 } from './prompt-completion-model.js';
@@ -46,7 +46,7 @@ export function wildcardCompletionOptions(
     contentFrom = completionPosition(scope, query.contentRange.from),
     to = completionPosition(scope, query.contentFieldRange.to);
   if (from === null || contentFrom === null || to === null) return null;
-  const options: PreparedCompletion[] = [];
+  const options: WordCompletion[] = [];
   for (const row of result.suggestions) {
     const style = row.sourceLabel === 'TXT wildcard' ? 'simple' : 'csv';
     if (!isWildcardCompletionBody(row.tag, style)) continue;
@@ -66,6 +66,7 @@ export function wildcardCompletionOptions(
   }
   return options.length
     ? Object.freeze({
+        surface: 'words' as const,
         from,
         to: caret,
         query: Object.freeze({

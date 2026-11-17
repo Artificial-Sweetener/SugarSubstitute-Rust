@@ -24,8 +24,6 @@ import {
   installCompletion,
   selectCompletion,
 } from '../../../../../../frontend/sugarprompt/editor/src/completion-session.ts';
-import { completionWall } from '../../../../../../frontend/sugarprompt/editor/src/completion-wall-state.ts';
-import { loraMedia } from '../../../../../../frontend/sugarprompt/editor/src/lora-media-state.ts';
 import { completionState, sessionResult } from '../transaction/completion-session-fixture.ts';
 import { CompletionDocument, CompletionNode } from './completion-dom-fixture.ts';
 
@@ -98,12 +96,12 @@ function fixture() {
       value: (callback: VoidFunction) => microtasks.push(callback),
       configurable: true,
     });
-    let state = completionState('<lora:ha', undefined, [completionTooltips, loraMedia]);
+    let state = completionState('ha', undefined, [completionTooltips]);
     const rows = Array.from({ length: 12 }, (_, index) => ({
       name: `ha${index}`,
       backend: `ha${index}.pt`,
     }));
-    let result = sessionResult(state, rows, 'lora');
+    let result = sessionResult(state, rows);
     state = state.update({ effects: installCompletion.of(result) }).state;
     const view = {
       get state() {
@@ -127,7 +125,10 @@ function fixture() {
     assert.ok(factory);
     tooltip = factory.create(view);
     const root = tooltip.dom as unknown as CompletionNode,
-      viewport = root.children[0]!;
+      viewport = root.children[0]!,
+      content = viewport.children[1]!;
+    // Rows stack at a literal pitch so ensure-visible scrolling has real offsets to follow.
+    for (const [index, row] of content.children.entries()) row.offsetTop = index * 60;
     viewport.clientWidth = 390;
     viewport.clientHeight = 100;
     viewport.scrollHeight = 720;
@@ -140,7 +141,7 @@ function fixture() {
         doc.readsAllowed = false;
       }
     };
-    /** Select only the public factory's actual tooltip request, leaving title requests independent. */
+    /** Select only the public factory's actual tooltip request, leaving scrollbar requests independent. */
     const take = (): Job => {
       const index = jobs.findIndex((job) => job.key === tooltip);
       assert.ok(index >= 0);
@@ -158,7 +159,7 @@ function fixture() {
     };
     /** Publish genuine newly prepared candidates through the same native session state field. */
     const replace = (): void => {
-      result = sessionResult(state, rows, 'lora');
+      result = sessionResult(state, rows);
       view.dispatch({ effects: installCompletion.of(result) });
     };
     tooltip.mount?.(view);
@@ -194,58 +195,35 @@ function fixture() {
   }
 }
 
-test('a replaced result between native READ and WRITE cannot publish the previous wall dimensions', () => {
+test('a replaced result between native READ and WRITE discards the stale measurement and measures again', () => {
   const f = fixture();
   try {
     const old = f.take(),
       measured = f.read(old);
-    f.viewport.clientWidth = 558;
     f.replace();
+    const top = f.viewport.scrollTop,
+      height = f.tooltip.dom.style.height;
     old.write?.(measured, f.view);
-    f.deferred();
-    assert.equal(f.state().field(completionWall) === null, true);
+    assert.equal(f.viewport.scrollTop, top);
+    assert.equal(f.tooltip.dom.style.height, height);
+    assert.ok(f.jobs.some((job) => job.key === f.tooltip));
     f.flush();
     f.deferred();
-    const wall = f.state().field(completionWall);
-    assert.ok(wall);
-    assert.equal(wall.result === f.result(), true);
-    assert.equal(wall.layout.width, 558);
+    assert.equal(f.state().field(completionSession)?.result, f.result());
   } finally {
     f.restore();
   }
 });
 
-test('retired and reinstalled identical candidates cannot adopt an older deferred presentation', () => {
-  const f = fixture();
-  try {
-    f.flush();
-    assert.equal(f.microtasks.length, 1);
-    const result = f.result(),
-      previous = f.state().field(completionSession)!.presentation;
-    f.view.dispatch({ effects: installCompletion.of(null) });
-    f.view.dispatch({ effects: installCompletion.of(result) });
-    assert.notEqual(f.state().field(completionSession)!.presentation, previous);
-    f.deferred();
-    assert.equal(f.state().field(completionWall) === null, true);
-    f.flush();
-    f.deferred();
-    assert.equal(f.state().field(completionWall)?.result === result, true);
-  } finally {
-    f.restore();
-  }
-});
-
-test('resize rejects deferred geometry and a repeated unchanged placement notification retains an admitted thumb capture', () => {
+test('resize re-measures and a repeated unchanged placement notification retains an admitted thumb capture', () => {
   const f = fixture();
   try {
     f.flush();
     f.viewport.clientWidth = 558;
     f.resize[0]!();
-    f.deferred();
-    assert.equal(f.state().field(completionWall) === null, true);
+    assert.ok(f.jobs.some((job) => job.key === f.tooltip));
     f.flush();
     f.deferred();
-    assert.equal(f.state().field(completionWall)?.layout.width, 558);
     f.tooltip.positioned?.({ left: 0, right: 800, top: 0, bottom: 800 });
     f.flush();
     f.flush();
@@ -333,7 +311,7 @@ test("reentrant native scroll assignment cannot consume the newer selected row's
     assert.equal(f.state().field(completionSession)?.selected, 10);
     f.flush();
     f.deferred();
-    assert.equal(top, 620);
+    assert.equal(top, 520);
   } finally {
     f.restore();
   }
@@ -344,7 +322,7 @@ test('later native observer scheduling failure retires all output and preserves 
   try {
     f.flush();
     f.deferred();
-    const wall = f.state().field(completionWall),
+    const state = f.state(),
       carrier = f.viewport.children[0]!;
     f.failScheduling(null, undefined);
     assert.throws(
@@ -359,7 +337,7 @@ test('later native observer scheduling failure retires all output and preserves 
     assert.equal(carrier.parentElement, null);
     f.tooltip.positioned?.({ left: 0, right: 800, top: 0, bottom: 800 });
     f.deferred();
-    assert.equal(f.state().field(completionWall) === wall, true);
+    assert.equal(f.state(), state);
   } finally {
     f.restore();
   }

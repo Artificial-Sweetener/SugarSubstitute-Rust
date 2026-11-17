@@ -25,8 +25,17 @@ const prepared = new WeakMap<
     readonly adapter: LoraResourceAdapter;
     readonly authoritative: boolean;
     readonly loras: readonly ModelCatalogItem[];
+    readonly models: ReadonlyMap<string, ModelCatalogItem>;
   }
 >();
+
+/** The installed model a prepared catalog made one LoRA from, by its backend value. */
+export function promptLoraModel(
+  catalog: LoraResourceAdapter,
+  backendValue: string,
+): ModelCatalogItem | null {
+  return prepared.get(catalog)?.models.get(backendValue) ?? null;
+}
 
 /**
  * Preserve installed identities and prefer the model's authored banner artwork.
@@ -77,7 +86,24 @@ export function preparePromptLoraCatalog(
   });
   const adapter = createLoraCatalogAdapter(
     { revision: `models:${String(snapshot.revision)}`, authoritative, items },
-    undefined,
+    // Everything a person may know a LoRA by finds it when they type its name.
+    {
+      searchMetadata: loras.map((item) => ({
+        backendValue: item.value,
+        text: [
+          item.title,
+          item.version,
+          item.value,
+          item.relativePath,
+          item.folder,
+          item.baseModel,
+          ...item.trainedWords,
+          ...(item.tags ?? []),
+        ]
+          .filter(Boolean)
+          .join(' '),
+      })),
+    },
     replaced?.adapter,
   );
   const catalog: LoraResourceAdapter = {
@@ -97,7 +123,7 @@ export function preparePromptLoraCatalog(
       return resources;
     },
   };
-  prepared.set(catalog, { adapter, authoritative, loras });
+  prepared.set(catalog, { adapter, authoritative, loras, models });
   return catalog;
 }
 

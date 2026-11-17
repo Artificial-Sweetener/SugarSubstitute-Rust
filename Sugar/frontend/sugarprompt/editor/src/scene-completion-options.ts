@@ -20,7 +20,7 @@ import type { SceneTitleCatalog } from '../../services/src/index.js';
 import { editorFreshness } from './freshness.js';
 import { completionPosition, prepareScopedCompletionEdit } from './completion-splice.js';
 import type {
-  PreparedCompletion,
+  WordCompletion,
   PreparedCompletionResult,
   PreparedCompletionScope,
 } from './prompt-completion-model.js';
@@ -39,7 +39,7 @@ export function sceneCompletionOptions(
     titles = catalog.search(query.prefix),
     from = completionPosition(scope, query.replacementRange.from);
   if (!titles.length || from === null) return null;
-  const options: PreparedCompletion[] = [];
+  const options: WordCompletion[] = [];
   for (const title of titles) {
     const replacement = sceneReplacement(source, query, title);
     options.push(
@@ -57,6 +57,7 @@ export function sceneCompletionOptions(
   }
   return options.length
     ? Object.freeze({
+        surface: 'words' as const,
         from,
         to: caret,
         query: Object.freeze({

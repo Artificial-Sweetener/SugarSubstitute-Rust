@@ -43,6 +43,10 @@ import { featureProfile } from './features.js';
 import { invalidateCommandContext } from './freshness.js';
 import { savedSegmentHost } from './saved-segment-menu.js';
 import { captureFieldActionUtilities, fieldActionUtilities } from './field-action-utilities.js';
+import {
+  captureModelCompletionPopupHost,
+  modelCompletionPopupHost,
+} from './model-completion-popup.js';
 /** Fully captured final values; no compartment or mutable buffer is exposed to consumers. */
 export type NativeConfigurationValues = Required<
   Omit<HostConfiguration, 'readOnly' | 'tagLexicon' | 'featureProfile' | 'conditioningContext'>
@@ -74,6 +78,7 @@ export class NativeConfiguration {
       wheelMode: 'hover_dwell',
       tagCompletionCatalog: null,
       loraCompletionCatalog: null,
+      modelCompletionPopupHost: null,
       wildcardCatalog: null,
       booruPostLookup: null,
       spellcheckSession: null,
@@ -111,6 +116,7 @@ export class NativeConfiguration {
       wheelMode: initialWheelMode(input.wheelMode),
       tagCompletionCatalog: input.tagCompletionCatalog ?? null,
       loraCompletionCatalog: input.loraCompletionCatalog ?? null,
+      modelCompletionPopupHost: input.modelCompletionPopupHost ?? null,
       wildcardCatalog: input.wildcardCatalog ?? null,
       booruPostLookup: input.booruPostLookup ?? null,
       spellcheckSession: input.spellcheckSession ?? null,
@@ -157,6 +163,10 @@ export class NativeConfiguration {
         return tagCompletionCatalog.of(values.tagCompletionCatalog);
       case 'loraCompletionCatalog':
         return loraCompletionCatalog.of(values.loraCompletionCatalog);
+      case 'modelCompletionPopupHost':
+        return modelCompletionPopupHost.of(
+          captureModelCompletionPopupHost(values.modelCompletionPopupHost),
+        );
       case 'wildcardCatalog':
         return wildcardCatalog.of(values.wildcardCatalog);
       case 'booruPostLookup':
@@ -262,6 +272,7 @@ export class NativeConfiguration {
             'savedSegmentHost',
             'fieldActionUtilities',
             'loraCompletionCatalog',
+            'modelCompletionPopupHost',
             'wildcardCatalog',
             'booruPostLookup',
             'sceneTitleCatalog',

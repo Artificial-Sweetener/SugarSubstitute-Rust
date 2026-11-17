@@ -79,6 +79,7 @@ export function continuationFixture(kind: 'prompt' | 'wildcard-csv' = 'prompt', 
   const from = kind === 'prompt' ? 3 : 16,
     to = caret;
   const result: PreparedCompletionResult = {
+    surface: 'words',
     from,
     to,
     query: { scope: target.scope, kind: 'tag', from, contentFrom: from, to },

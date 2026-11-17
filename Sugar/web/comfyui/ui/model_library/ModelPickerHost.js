@@ -23,6 +23,7 @@ import { readComfyModelFields } from './ComfyModelFieldAdapter.js';
 import { ComfyNodeVNodeIndex } from '../surface/ComfyVueTree.js';
 import { modelPickerChoices } from './ModelPickerChoices.js';
 import { mountModelPicker } from './vue/ModelPickerVueRuntime.js';
+import { mountModelGallery } from './vue/ModelGalleryVueRuntime.js';
 import { ModelPickerSessions } from './ModelPickerSessions.js';
 import { ModelEmptyPickerDiscovery } from './ModelEmptyPickerDiscovery.js';
 import { ModelPageActivity } from './ModelPageActivity.js';
@@ -133,6 +134,28 @@ export class ModelPickerHost {
     /** Contribute mounted field actions without rediscovering models or duplicating commands. */
     contextContributions(root) {
         return mountedModelContextContributions(this.#mounts.values(), root, this.#options.app, this.#snapshot, () => this.#resolveCubeFields());
+    }
+    /**
+     * Mount the picker's popup surface and wall for an owner that keeps its own candidates.
+     *
+     * The surface is laid out by its container and themed like every picker popup, whether or not
+     * field pickers are enabled.
+     */
+    mountGallery(events) {
+        const element = this.#options.document.createElement('div');
+        element.className = 'sc-model-popup sc-model-popup-inline';
+        const gallery = mountModelGallery(element, events);
+        this.#appearance.track(element);
+        return {
+            element,
+            update: (items, active) => gallery.update(items, active),
+            neighbor: (active, key) => gallery.neighbor(active, key),
+            dispose: () => {
+                gallery.dispose();
+                this.#appearance.release(element);
+                element.remove();
+            },
+        };
     }
     /** Release mounted Vue apps, pending discovery, and temporary native-control annotations. */
     dispose() {

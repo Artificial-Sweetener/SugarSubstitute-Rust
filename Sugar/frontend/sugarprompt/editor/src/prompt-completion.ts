@@ -14,7 +14,6 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** One native completion lifetime prepares cached prompt semantics and routes keys through CodeMirror state. */
-import { requireValue } from '../../core/src/required.js';
 import { Prec, Transaction, type Extension } from '@codemirror/state';
 import { ViewPlugin, keymap, type EditorView, type ViewUpdate } from '@codemirror/view';
 import { editorFreshness, type EditorFreshness } from './freshness.js';
@@ -32,8 +31,8 @@ import { prepareCompletionOptions } from './completion-options.js';
 import { acceptCompletionOption } from './prompt-completion-acceptance.js';
 import { completionGhostProjection } from './completion-ghost.js';
 import { completionTooltips } from './completion-tooltip.js';
-import { completionWall } from './completion-wall-state.js';
-import { loraWallVerticalIndex } from './lora-wall-layout.js';
+import { modelCompletionNeighbor } from './model-completion-tooltip.js';
+import type { ModelCompletionArrow } from './model-completion-popup.js';
 import { loraPresentation } from './lora-presentation.js';
 import { loraSchedulingHost, nativeLoraSchedule } from './lora-schedule.js';
 import { featureEnabled } from '../../services/src/index.js';
@@ -225,37 +224,31 @@ function acceptSelected(view: EditorView): boolean {
   }
   return false;
 }
-/** Ordinary rows wrap; model linear navigation clamps and never changes the source caret. */
-function moveSelection(
-  view: EditorView,
-  delta: number,
-  modelsOnly = false,
-  vertical = false,
-): boolean {
+/** Word rows wrap through the list; the source caret never moves. */
+function moveWordSelection(view: EditorView, delta: number): boolean {
   const session = view.state.field(completionSession);
-  if (
-    !session ||
-    (modelsOnly && requireValue(session.result.options[0], 'prompt-completion').kind !== 'lora')
-  )
-    return false;
+  if (!session || session.result.surface !== 'words') return false;
   const count = session.result.options.length;
-  const wall = view.state.field(completionWall);
-  if (
-    vertical &&
-    requireValue(session.result.options[0], 'prompt-completion').kind === 'lora' &&
-    !wall
-  )
-    return true;
-  const index =
-    requireValue(session.result.options[0], 'prompt-completion').kind !== 'lora'
-      ? (session.selected + delta + count) % count
-      : vertical && wall
-        ? loraWallVerticalIndex(wall.layout, session.selected, delta < 0 ? -1 : 1)
-        : Math.max(0, Math.min(count - 1, session.selected + delta));
   view.dispatch({
-    effects: selectCompletion.of({ result: session.result, index }),
+    effects: selectCompletion.of({
+      result: session.result,
+      index: (session.selected + delta + count) % count,
+    }),
     annotations: Transaction.addToHistory.of(false),
   });
+  return true;
+}
+/** Model candidates move across the host gallery's own rows; the source caret never moves. */
+function moveModelSelection(view: EditorView, key: ModelCompletionArrow): boolean {
+  const session = view.state.field(completionSession);
+  if (!session || session.result.surface !== 'models') return false;
+  const index = modelCompletionNeighbor(view, session.selected, key);
+  // The key belongs to the gallery even before it has mounted.
+  if (index !== null && index !== session.selected && session.result.options[index])
+    view.dispatch({
+      effects: selectCompletion.of({ result: session.result, index }),
+      annotations: Transaction.addToHistory.of(false),
+    });
   return true;
 }
 /** Native document/caret navigation continues after dismissing suggestions. */
@@ -294,19 +287,25 @@ export const promptCompletions: Extension = [
     keymap.of([
       {
         key: 'ArrowDown',
-        run: (view) => moveSelection(view, 1, false, true) || dismissAndNavigate(view),
+        run: (view) =>
+          moveModelSelection(view, 'ArrowDown') ||
+          moveWordSelection(view, 1) ||
+          dismissAndNavigate(view),
       },
       {
         key: 'ArrowUp',
-        run: (view) => moveSelection(view, -1, false, true) || dismissAndNavigate(view),
+        run: (view) =>
+          moveModelSelection(view, 'ArrowUp') ||
+          moveWordSelection(view, -1) ||
+          dismissAndNavigate(view),
       },
       {
         key: 'ArrowLeft',
-        run: (view) => moveSelection(view, -1, true) || dismissAndNavigate(view),
+        run: (view) => moveModelSelection(view, 'ArrowLeft') || dismissAndNavigate(view),
       },
       {
         key: 'ArrowRight',
-        run: (view) => moveSelection(view, 1, true) || dismissAndNavigate(view),
+        run: (view) => moveModelSelection(view, 'ArrowRight') || dismissAndNavigate(view),
       },
       { key: 'Tab', run: acceptSelected },
       { key: 'Escape', run: dismissCompletion },

@@ -23,6 +23,7 @@ import {
 } from './ModelRecommendationPreviewStyles.js';
 import { modelKeyRequiredBadgeCss } from './vue/ModelKeyRequiredBadge.js';
 import { CONTROL_HEIGHT } from '../surface/appearance/ControlGeometry.js';
+import { MODEL_PICKER_POPUP_HEIGHT, MODEL_PICKER_POPUP_WIDTH } from './ModelPickerPlacement.js';
 /** Style only picker-owned fields, navigation, menus, and reference galleries. */
 export const modelPickerCss =
   modelRecommendationPreviewCss +
@@ -77,6 +78,7 @@ export const modelPickerCss =
 .sc-model-popup[data-sc-model-appearance="native"] { background:var(--p-popover-background); color:var(--p-popover-color); border-color:var(--p-popover-border-color); border-radius:var(--p-popover-border-radius); box-shadow:var(--p-popover-shadow); font:12px/16px var(--font-sans,Inter,Arial,sans-serif); --sc-brand-fill:var(--primary-background); --sc-text-secondary:var(--component-node-foreground-secondary); --sc-surface-hover:var(--component-node-widget-background-hovered); }
 .sc-model-chevron { width:7px; height:7px; border-right:1.5px solid currentColor; border-bottom:1.5px solid currentColor; transform:translateY(-2px) rotate(45deg); }
 .sc-model-popup { position:fixed; z-index:12000; display:flex; flex-direction:column; box-sizing:border-box; padding:10px; overflow:hidden; border:1px solid var(--sc-border,#404040); border-radius:5px; background:var(--sc-surface,#282828); color:var(--sc-text,#eee); box-shadow:0 8px 24px #0006; font:12px var(--sc-font-family,"Segoe UI Variable","Segoe UI",sans-serif); }
+.sc-model-popup-inline { position:relative; z-index:auto; width:min(${String(MODEL_PICKER_POPUP_WIDTH)}px,calc(100vw - 16px)); height:${String(MODEL_PICKER_POPUP_HEIGHT)}px; }
 .sc-model-routes { display:flex; flex-direction:column; gap:4px; flex:none; min-width:0; padding-bottom:4px; }
 .sc-model-breadcrumbs,.sc-model-folder-strip { display:flex; align-items:center; gap:4px; min-width:0; min-height:24px; box-sizing:border-box; padding-bottom:0; overflow-x:auto; overscroll-behavior:contain; }
 /* Keep floating horizontal scrollbar hit targets below buttons in overflowing rows. */

@@ -22,6 +22,8 @@ import { ComfyLiteGraphCubeDomWidgetHost } from '../../../frontend/comfyui/ui/su
 import type { CubeCanvasLayout } from '../../../frontend/comfyui/ui/surface/CubeCanvasLayout.js';
 import type { ComfyNode, ComfyWidget } from '../../../frontend/comfyui/ui/types/graph.js';
 import { promptCatalogFixture } from './PromptCatalogFixture.js';
+import { mountModelGallery } from '../../../frontend/comfyui/ui/model_library/vue/ModelGalleryVueRuntime.js';
+import { modelPickerCss } from '../../../frontend/comfyui/ui/model_library/ModelPickerStyles.js';
 import type { ModelCatalogSnapshot } from '../../../frontend/comfyui/ui/model_library/ModelCatalog.js';
 import { NativeReorderAxes } from '../../../frontend/sugarprompt/editor/src/reorder-native-axes.js';
 import { AppearanceState } from '../../../frontend/comfyui/ui/surface/appearance/AppearanceState.js';
@@ -34,7 +36,14 @@ import { nativeInteractionCss } from '../../../frontend/comfyui/ui/surface/appea
 
 /** Browser observations expose committed host values and lifecycle counts without private editing access. */
 export interface PromptBrowserProof {
-  mount(renderer: 'nodes-1' | 'nodes-2', scale: number, source: string, promoted?: boolean): void;
+  /** Mount one prompt; `promptControl` wires its text to an encoder that loads written LoRAs. */
+  mount(
+    renderer: 'nodes-1' | 'nodes-2',
+    scale: number,
+    source: string,
+    promoted?: boolean,
+    promptControl?: boolean,
+  ): void;
   switchRenderer(renderer: 'nodes-1' | 'nodes-2', scale: number): void;
   replace(source: string): void;
   refresh(): void;
@@ -102,7 +111,30 @@ const host = new CubePromptEditorHost(
   (error) => errors.push(error instanceof Error ? error.message : String(error)),
   new OwnedSurfaceAppearance(document, appearance),
 );
-host.setup();
+// LoRA candidates are drawn by the model library's real wall in its popup surface.
+const pickerStyle = document.createElement('style');
+pickerStyle.textContent = modelPickerCss;
+document.head.append(pickerStyle);
+host.setup(null, {
+  app: null,
+  logger: { error: () => undefined },
+  models: {
+    mountGallery: (events) => {
+      const element = document.createElement('div');
+      element.className = 'sc-model-popup sc-model-popup-inline';
+      const gallery = mountModelGallery(element, events);
+      return {
+        element,
+        update: (items, active) => gallery.update(items, active),
+        neighbor: (active, key) => gallery.neighbor(active, key),
+        dispose: () => {
+          gallery.dispose();
+          element.remove();
+        },
+      };
+    },
+  },
+});
 const root = document.createElement('main');
 document.body.append(root);
 let textarea: HTMLTextAreaElement;
@@ -208,7 +240,7 @@ window.promptBrowserProof = {
     appearance.update(style, dark);
   },
   /** Begin one independent workflow with exact stored text and real native callbacks. */
-  mount(renderer, scale, source, promoted = false): void {
+  mount(renderer, scale, source, promoted = false, promptControl = false): void {
     release?.();
     release = null;
     host.beforeConfigureGraph();
@@ -240,6 +272,13 @@ window.promptBrowserProof = {
         },
       },
     };
+    if (promptControl && node.graph) {
+      const encoder: ComfyNode = { id: 'encode', type: 'PCTextEncode', graph: node.graph };
+      node.graph._nodes = [node, encoder];
+      node.graph.links = [
+        { id: 1, origin_id: 'prompt', origin_slot: 0, target_id: 'encode', target_slot: 0 },
+      ];
+    }
     sources = [];
     if (promoted) {
       const internal = { ...widget, name: 'text', value: 'internal source' };

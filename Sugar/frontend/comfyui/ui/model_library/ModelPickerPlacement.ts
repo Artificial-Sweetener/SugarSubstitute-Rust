@@ -25,8 +25,10 @@ export interface ModelPickerPlacement extends ModelPickerRectangle {
   readonly mode: 'above' | 'below';
 }
 
-const PREFERRED_WIDTH = 560;
-const PREFERRED_HEIGHT = 630;
+/** The picker popup's width wherever its boundary leaves room for it. */
+export const MODEL_PICKER_POPUP_WIDTH = 560;
+/** The picker popup's height wherever its boundary leaves room for it. */
+export const MODEL_PICKER_POPUP_HEIGHT = 630;
 const MARGIN = 8;
 
 /** Drop the margin when it would consume the whole boundary, as the Qt reference does. */
@@ -44,17 +46,17 @@ export function modelPickerPlacement(
 ): ModelPickerPlacement {
   const [safeLeft, safeRight] = safeAxis(boundary.left, boundary.width);
   const [safeTop, safeBottom] = safeAxis(boundary.top, boundary.height);
-  const width = Math.min(PREFERRED_WIDTH, Math.max(1, safeRight - safeLeft));
+  const width = Math.min(MODEL_PICKER_POPUP_WIDTH, Math.max(1, safeRight - safeLeft));
   const left = Math.max(safeLeft, Math.min(anchor.left, safeRight - width));
   const bottom = anchor.top + anchor.height;
   const below = Math.max(0, safeBottom - bottom);
   const above = Math.max(0, anchor.top - safeTop);
   const mode =
-    below >= PREFERRED_HEIGHT
+    below >= MODEL_PICKER_POPUP_HEIGHT
       ? 'below'
-      : above >= PREFERRED_HEIGHT || above > below
+      : above >= MODEL_PICKER_POPUP_HEIGHT || above > below
         ? 'above'
         : 'below';
-  const height = Math.min(PREFERRED_HEIGHT, Math.max(1, mode === 'below' ? below : above));
+  const height = Math.min(MODEL_PICKER_POPUP_HEIGHT, Math.max(1, mode === 'below' ? below : above));
   return { left, top: mode === 'below' ? bottom : anchor.top - height, width, height, mode };
 }

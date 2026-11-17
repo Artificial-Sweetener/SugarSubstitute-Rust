@@ -14,7 +14,10 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove installed model identities, literal labels and banner artwork cross the editor boundary unchanged. */
-import { preparePromptLoraCatalog } from '../../../frontend/comfyui/ui/prompt_editor/PromptLoraCatalog.js';
+import {
+  preparePromptLoraCatalog,
+  promptLoraModel,
+} from '../../../frontend/comfyui/ui/prompt_editor/PromptLoraCatalog.js';
 import { promptCatalogFixture } from '../support/PromptCatalogFixture.js';
 
 test('prioritizes canonical installed identities only after native resolution and respects cancellation', async () => {
@@ -135,4 +138,20 @@ test('an unchanged banner keeps its descriptor across a catalog update and a cha
   );
   expect(await banner(repainted)).not.toBe(await banner(first));
   expect(await banner(repainted)).toMatchObject({ status: 'ready' });
+});
+
+test('installed LoRAs are completed by anything a person knows them by and map back to their record', () => {
+  const snapshot = promptCatalogFixture();
+  const adapter = preparePromptLoraCatalog(snapshot, 'http://localhost/');
+  const catalog = adapter.completionCatalog;
+  if (!catalog) throw new Error('The prompt catalog offers no LoRA completion');
+  // Name, folder, base model and trigger words all find the model; nothing else does.
+  for (const query of ['', 'exam', 'folder/ex', 'sdxl', 'example trigger'])
+    expect(catalog.search(query).map((row) => row.item.model.backendValue)).toEqual([
+      'folder/example.safetensors',
+    ]);
+  expect(catalog.search('no such model')).toEqual([]);
+  expect(catalog.search('exam')[0]?.scheduleName).toBe('folder/example');
+  expect(promptLoraModel(adapter, 'folder/example.safetensors')).toBe(snapshot.items[0]);
+  expect(promptLoraModel(adapter, 'missing.safetensors')).toBeNull();
 });

@@ -13485,9 +13485,9 @@ var Tree = class _Tree {
   @internal
   */
   toString() {
-    let mounted3 = MountedTree.get(this);
-    if (mounted3 && !mounted3.overlay)
-      return mounted3.tree.toString();
+    let mounted4 = MountedTree.get(this);
+    if (mounted4 && !mounted4.overlay)
+      return mounted4.tree.toString();
     let children = "";
     for (let ch of this.children) {
       let str = ch.toString();
@@ -13828,8 +13828,8 @@ var TreeNode = class _TreeNode extends BaseNode {
   nextChild(i, dir, pos, side, mode = 0) {
     for (let parent = this; ; ) {
       for (let { children, positions } = parent._tree, e = dir > 0 ? children.length : -1; i != e; i += dir) {
-        let next = children[i], start = positions[i] + parent.from, mounted3;
-        if (!(mode & IterMode.EnterBracketed && next instanceof Tree && (mounted3 = MountedTree.get(next)) && !mounted3.overlay && mounted3.bracketed && pos >= start && pos <= start + next.length) && !checkSide(side, pos, start, start + next.length))
+        let next = children[i], start = positions[i] + parent.from, mounted4;
+        if (!(mode & IterMode.EnterBracketed && next instanceof Tree && (mounted4 = MountedTree.get(next)) && !mounted4.overlay && mounted4.bracketed && pos >= start && pos <= start + next.length) && !checkSide(side, pos, start, start + next.length))
           continue;
         if (next instanceof TreeBuffer) {
           if (mode & IterMode.ExcludeBuffers)
@@ -13838,9 +13838,9 @@ var TreeNode = class _TreeNode extends BaseNode {
           if (index > -1)
             return new BufferNode(new BufferContext(parent, next, i, start), null, index);
         } else if (mode & IterMode.IncludeAnonymous || (!next.type.isAnonymous || hasChild(next))) {
-          let mounted4;
-          if (!(mode & IterMode.IgnoreMounts) && (mounted4 = MountedTree.get(next)) && !mounted4.overlay)
-            return new _TreeNode(mounted4.tree, start, i, parent);
+          let mounted5;
+          if (!(mode & IterMode.IgnoreMounts) && (mounted5 = MountedTree.get(next)) && !mounted5.overlay)
+            return new _TreeNode(mounted5.tree, start, i, parent);
           let inner = new _TreeNode(next, start, i, parent);
           return mode & IterMode.IncludeAnonymous || !inner.type.isAnonymous ? inner : inner.nextChild(dir < 0 ? next.children.length - 1 : 0, dir, pos, side, mode);
         }
@@ -13896,12 +13896,12 @@ var TreeNode = class _TreeNode extends BaseNode {
     return this._tree.prop(prop);
   }
   enter(pos, side, mode = 0) {
-    let mounted3;
-    if (!(mode & IterMode.IgnoreOverlays) && (mounted3 = MountedTree.get(this._tree)) && mounted3.overlay) {
-      let rPos = pos - this.from, enterBracketed = mode & IterMode.EnterBracketed && mounted3.bracketed;
-      for (let { from, to } of mounted3.overlay) {
+    let mounted4;
+    if (!(mode & IterMode.IgnoreOverlays) && (mounted4 = MountedTree.get(this._tree)) && mounted4.overlay) {
+      let rPos = pos - this.from, enterBracketed = mode & IterMode.EnterBracketed && mounted4.bracketed;
+      for (let { from, to } of mounted4.overlay) {
         if ((side > 0 || enterBracketed ? from <= rPos : from < rPos) && (side < 0 || enterBracketed ? to >= rPos : to > rPos))
-          return new _TreeNode(mounted3.tree, mounted3.overlay[0].from + this.from, -1, this);
+          return new _TreeNode(mounted4.tree, mounted4.overlay[0].from + this.from, -1, this);
       }
     }
     return this.nextChild(0, 1, pos, side, mode);
@@ -18181,8 +18181,8 @@ function current(held, state) {
   const freshness = state.field(editorFreshness);
   return held.freshness.source === freshness.source && held.freshness.context === freshness.context && state.facet(richRendering);
 }
-function currentAdmission(candidate2, state) {
-  return current(candidate2, state) && candidate2.prepared.sourceIdentity === state.field(editorFreshness).source && candidate2.prepared.loraPresentation === state.field(loraPresentation) && candidate2.prepared.loraMedia === state.field(loraMedia) && candidate2.prepared.wildcardCatalog === state.facet(wildcardCatalog) && candidate2.prepared.sceneErrors === state.field(sceneErrors) && (candidate2.prepared.regionPalette === null || candidate2.prepared.regionPalette === state.facet(regionPalette));
+function currentAdmission(candidate, state) {
+  return current(candidate, state) && candidate.prepared.sourceIdentity === state.field(editorFreshness).source && candidate.prepared.loraPresentation === state.field(loraPresentation) && candidate.prepared.loraMedia === state.field(loraMedia) && candidate.prepared.wildcardCatalog === state.facet(wildcardCatalog) && candidate.prepared.sceneErrors === state.field(sceneErrors) && (candidate.prepared.regionPalette === null || candidate.prepared.regionPalette === state.facet(regionPalette));
 }
 var heldProjection = StateField.define({
   /** Mounted rendering begins without a pointer reservation. */
@@ -18197,16 +18197,16 @@ var heldProjection = StateField.define({
       if (effect.is(retireRichProjection)) held = null;
       else if (effect.is(releaseProjectionToken) && held?.session === effect.value) held = null;
       else if (effect.is(holdProjectionToken) && currentAdmission(effect.value, transaction.state)) {
-        const candidate2 = effect.value;
-        candidate2.prepared.tokens.between(
-          candidate2.range.from,
-          candidate2.range.to,
+        const candidate = effect.value;
+        candidate.prepared.tokens.between(
+          candidate.range.from,
+          candidate.range.to,
           (from, to, token) => {
-            if (from === candidate2.range.from && to === candidate2.range.to)
+            if (from === candidate.range.from && to === candidate.range.to)
               held = {
-                session: candidate2.session,
-                freshness: candidate2.freshness,
-                range: candidate2.range,
+                session: candidate.session,
+                freshness: candidate.freshness,
+                range: candidate.range,
                 exposesSyntax: token.exposesSyntaxOnHold
               };
           }
@@ -19372,9 +19372,9 @@ function prepareNativeReorderTargets(prepared4, output, mapping, key2) {
         "data-reorder-gap": String(gap.index),
         "data-reorder-blank": String(blank)
       });
-  for (const partition2 of emptyValueReorderPartitions(prepared4, order))
-    target(carrierStart(partition2.carrier, partition2.slot) + partition2.offset, {
-      "data-reorder-partition": String(partition2.partition)
+  for (const partition of emptyValueReorderPartitions(prepared4, order))
+    target(carrierStart(partition.carrier, partition.slot) + partition.offset, {
+      "data-reorder-partition": String(partition.partition)
     });
   return ranges;
 }
@@ -21238,13 +21238,13 @@ function spellingPaintVisibility(value, state) {
 }
 function reconcileSpellingPaint(value, state, prepared4) {
   const candidates = prepared4.groups.flatMap(
-    (group) => group.candidates.map((candidate2) => {
-      const range = decodedRangeToSource(group.scope.mapping, candidate2.range);
+    (group) => group.candidates.map((candidate) => {
+      const range = decodedRangeToSource(group.scope.mapping, candidate.range);
       if (!range) throw new Error("spelling-range-unmapped");
-      const next = group.scope.mapping.text.codePointAt(candidate2.range.to);
+      const next = group.scope.mapping.text.codePointAt(candidate.range.to);
       return {
         range,
-        text: candidate2.text,
+        text: candidate.text,
         committedAtEnd: isDiagnosticCommitBoundary(
           next === void 0 ? "" : String.fromCodePoint(next)
         )
@@ -21257,19 +21257,19 @@ function reconcileSpellingPaint(value, state, prepared4) {
     candidates.flatMap(({ range }) => [range.from, range.to])
   );
   const eligible = new Map(
-    candidates.map((candidate2, index) => [
+    candidates.map((candidate, index) => [
       `${positions[index * 2]}:${positions[index * 2 + 1]}`,
-      candidate2
+      candidate
     ])
   );
   const retained = [];
   value.paint.between(0, state.doc.length, (from, to, item) => {
-    const candidate2 = eligible.get(`${from}:${to}`);
-    if (candidate2?.text !== item.text) return;
+    const candidate = eligible.get(`${from}:${to}`);
+    if (candidate?.text !== item.text) return;
     retained.push({
       from,
       to,
-      value: candidate2.committedAtEnd === item.committedAtEnd ? item : Object.freeze(new SpellingPaint(item.text, candidate2.committedAtEnd))
+      value: candidate.committedAtEnd === item.committedAtEnd ? item : Object.freeze(new SpellingPaint(item.text, candidate.committedAtEnd))
     });
   });
   return {
@@ -22671,9 +22671,9 @@ function prepareRegionProjection(state, prepared4) {
       );
       tokens.push(token.range(from, to));
     }
-    for (const partition2 of structure.partitions) {
-      if (partition2.isGlobal) continue;
-      const from = position(partition2.sourceRange.from), to = position(partition2.sourceRange.to);
+    for (const partition of structure.partitions) {
+      if (partition.isGlobal) continue;
+      const from = position(partition.sourceRange.from), to = position(partition.sourceRange.to);
       if (from === to && state.doc.lineAt(from).length !== 0) continue;
       for (let number2 = state.doc.lineAt(from).number; number2 <= state.doc.lines; number2++) {
         const line = state.doc.line(number2);
@@ -22681,14 +22681,14 @@ function prepareRegionProjection(state, prepared4) {
         const clippedFrom = prepared4.kind === "prompt" ? line.from : Math.max(line.from, from), clippedTo = Math.min(line.to, to);
         const content2 = rail(clippedFrom, clippedTo, {
           class: "sp-region-content",
-          style: requireValue(palette[partition2.index - 1], "region-projection")
+          style: requireValue(palette[partition.index - 1], "region-projection")
         });
         const highlight = rail(clippedFrom, clippedTo, {
           class: "sp-region-hover"
         });
         if (content2) decorations2.push(content2);
         if (highlight)
-          requireValue(hovered[partition2.index - 1], "region-projection").push(highlight);
+          requireValue(hovered[partition.index - 1], "region-projection").push(highlight);
         if (from === to) break;
       }
     }
@@ -25353,6 +25353,7 @@ function configurationHistoryIntent(changedKeys, effects) {
     "tagLexicon",
     "tagCompletionCatalog",
     "loraCompletionCatalog",
+    "modelCompletionPopupHost",
     "wildcardCatalog",
     "sceneTitleCatalog",
     "sceneQueueHost",
@@ -26152,6 +26153,22 @@ var NativeHostUpdates = class {
   }
 };
 
+// frontend/sugarprompt/editor/src/model-completion-popup.ts
+var modelCompletionPopupHost = Facet.define({ combine: (values) => values.at(-1) ?? null });
+function validateModelCompletionPopupHost(value) {
+  if (value == null) return;
+  if (typeof captureRecord(value, ["mount"]).mount !== "function")
+    throw new TypeError("invalid-model-completion-popup-host");
+}
+function captureModelCompletionPopupHost(value) {
+  if (value === null) return null;
+  const mount = captureRecord(value, ["mount"]).mount;
+  if (typeof mount !== "function") throw new TypeError("invalid-model-completion-popup-host");
+  return Object.freeze({
+    mount: (events) => Reflect.apply(mount, value, [events])
+  });
+}
+
 // frontend/sugarprompt/editor/src/source-line-contracts.ts
 function validateSourceLineChrome(options) {
   if (!options || typeof options.enabled !== "boolean" || !Number.isFinite(options.contentLeftInset) || options.contentLeftInset < 0 || options.contentLeftInset > 1e5)
@@ -26161,6 +26178,7 @@ function validateSourceLineChrome(options) {
 // frontend/sugarprompt/editor/src/host-configuration-validation.ts
 function validateConfigurationValues(input) {
   validateFieldActionUtilities(input.fieldActionUtilities);
+  validateModelCompletionPopupHost(input.modelCompletionPopupHost);
   validatePreparedConfiguration(input);
   if ("savedSegmentHost" in input) validateSavedSegmentHost(input.savedSegmentHost);
   if ("documentKind" in input)
@@ -26621,11 +26639,11 @@ function renderReorderFragment(view, root, literal2, range, decorations2, rowPai
     root.textContent = range.from === range.to ? "" : literal2(range);
     return;
   }
-  const mounted3 = [];
-  mounts.set(root, mounted3);
+  const mounted4 = [];
+  mounts.set(root, mounted4);
   const finish = () => {
-    if (rowPaint && mounts.get(root) === mounted3)
-      mountCanonicalRowEdges(view, root, rowPaint, () => mounts.get(root) === mounted3);
+    if (rowPaint && mounts.get(root) === mounted4)
+      mountCanonicalRowEdges(view, root, rowPaint, () => mounts.get(root) === mounted4);
   };
   if (range.from === range.to || decorations2 === Decoration.none) {
     try {
@@ -26633,7 +26651,7 @@ function renderReorderFragment(view, root, literal2, range, decorations2, rowPai
       finish();
     } catch (primary) {
       try {
-        retireReorderFragment(root, mounted3);
+        retireReorderFragment(root, mounted4);
       } catch (cleanup) {
         throw new AggregateError([primary, cleanup], "Reorder rich paint cleanup failed");
       }
@@ -26680,7 +26698,7 @@ function renderReorderFragment(view, root, literal2, range, decorations2, rowPai
         const widget = value.spec.widget;
         if (!(widget instanceof SourceWidget)) throw new Error("reorder-projection-invalid-widget");
         const dom = media ? widget.toReadonlyDOM(view, media) : widget.toDOM(view);
-        mounted3.push({ widget, dom });
+        mounted4.push({ widget, dom });
         dom.contentEditable = "false";
         append(
           [document2.createElement("wbr"), dom, document2.createElement("wbr")],
@@ -26692,7 +26710,7 @@ function renderReorderFragment(view, root, literal2, range, decorations2, rowPai
     finish();
   } catch (cause) {
     try {
-      retireReorderFragment(root, mounted3);
+      retireReorderFragment(root, mounted4);
     } catch (cleanup) {
       throw new AggregateError([cause, cleanup], "Reorder rich paint cleanup failed");
     }
@@ -26700,11 +26718,11 @@ function renderReorderFragment(view, root, literal2, range, decorations2, rowPai
   }
 }
 function releaseReorderFragment(root) {
-  const mounted3 = mounts.get(root);
-  if (mounted3) retireReorderFragment(root, mounted3);
+  const mounted4 = mounts.get(root);
+  if (mounted4) retireReorderFragment(root, mounted4);
 }
-function retireReorderFragment(root, mounted3) {
-  if (mounts.get(root) !== mounted3) return;
+function retireReorderFragment(root, mounted4) {
+  if (mounts.get(root) !== mounted4) return;
   mounts.delete(root);
   const failures = [];
   try {
@@ -26712,7 +26730,7 @@ function retireReorderFragment(root, mounted3) {
   } catch (cause) {
     failures.push(cause);
   }
-  for (const { widget, dom } of mounted3) {
+  for (const { widget, dom } of mounted4) {
     try {
       widget.destroy(dom);
     } catch (cause) {
@@ -27310,7 +27328,7 @@ function sameCarrier(a, b) {
   });
 }
 function sameReorderOrder(a, b) {
-  return a === b || a.order.length === b.order.length && a.order.every((id, at2) => id === b.order[at2]) && a.partitions.length === b.partitions.length && a.partitions.every((partition2, at2) => partition2 === b.partitions[at2]) && sameCarrier(a.prefix, b.prefix) && sameCarrier(a.suffix, b.suffix) && a.slots.length === b.slots.length && a.slots.every(
+  return a === b || a.order.length === b.order.length && a.order.every((id, at2) => id === b.order[at2]) && a.partitions.length === b.partitions.length && a.partitions.every((partition, at2) => partition === b.partitions[at2]) && sameCarrier(a.prefix, b.prefix) && sameCarrier(a.suffix, b.suffix) && a.slots.length === b.slots.length && a.slots.every(
     (slot, at2) => sameCarrier(slot, requireValue(b.slots[at2], "reorder-preview-preparation"))
   );
 }
@@ -27520,19 +27538,19 @@ function retainedReorderSiblingIndices(root, desired) {
   }
   return retained;
 }
-function reconcileReorderBlocks(root, mounted3, preview, mask, ports) {
+function reconcileReorderBlocks(root, mounted4, preview, mask, ports) {
   const { view, plan, admission, current: current6 } = ports;
   current6();
   const previous = /* @__PURE__ */ new Map();
-  for (const block of mounted3.blocks) {
+  for (const block of mounted4.blocks) {
     const bucket = previous.get(block.identity) ?? [];
     bucket.push(block);
     previous.set(block.identity, bucket);
   }
   const selected = reorderMountedPlans(plan).map((block) => {
     const bucket = previous.get(reorderMountedIdentity(block));
-    const retained2 = bucket?.find((candidate2) => {
-      const intact = candidate2.intact();
+    const retained2 = bucket?.find((candidate) => {
+      const intact = candidate.intact();
       current6();
       return intact;
     });
@@ -27546,7 +27564,7 @@ function reconcileReorderBlocks(root, mounted3, preview, mask, ports) {
   for (const bucket of previous.values())
     for (const block of bucket) {
       current6();
-      mounted3.blocks.delete(block);
+      mounted4.blocks.delete(block);
       block.destroy();
       current6();
     }
@@ -27555,9 +27573,9 @@ function reconcileReorderBlocks(root, mounted3, preview, mask, ports) {
   const paint = (target, parts) => owner.paintParts(target, parts, {
     view,
     plan,
-    lines: mounted3.lines,
+    lines: mounted4.lines,
     decorations: (part) => admission.decorations(part),
-    media: mounted3.media,
+    media: mounted4.media,
     current: current6
   });
   for (const { block, retained: retained2 } of selected) {
@@ -27572,7 +27590,7 @@ function reconcileReorderBlocks(root, mounted3, preview, mask, ports) {
       continue;
     }
     owner = new ReorderMountedBlock(block);
-    mounted3.blocks.add(owner);
+    mounted4.blocks.add(owner);
     desired.push(owner);
     if (block.kind === "literal") {
       owner.adopt(root.ownerDocument.createTextNode(block.value));
@@ -27641,9 +27659,9 @@ function reconcileReorderBlocks(root, mounted3, preview, mask, ports) {
     current6();
     anchor = node;
   }
-  mounted3.blocks.clear();
-  for (const block of desired) mounted3.blocks.add(block);
-  mounted3.targets.splice(0, mounted3.targets.length, ...desired.flatMap((block) => block.targets));
+  mounted4.blocks.clear();
+  for (const block of desired) mounted4.blocks.add(block);
+  mounted4.targets.splice(0, mounted4.targets.length, ...desired.flatMap((block) => block.targets));
   current6();
 }
 
@@ -27949,12 +27967,12 @@ function prepareReorderRowPaint(preview, lines, layout, emptyPartitions) {
     }
     return low;
   };
-  const assign = (from, to, partition2) => {
+  const assign = (from, to, partition) => {
     for (let at2 = first(from); at2 < lines.length && requireValue(lines[at2], "reorder-row-paint").range.from <= to; at2++) {
       const line = requireValue(lines[at2], "reorder-row-paint"), existing = partitions.get(line);
-      if (existing !== void 0 && existing !== partition2)
+      if (existing !== void 0 && existing !== partition)
         throw new Error("canonical-row-partition-conflict");
-      partitions.set(line, partition2);
+      partitions.set(line, partition);
     }
   };
   if (paints.length) {
@@ -27975,7 +27993,7 @@ function prepareReorderRowPaint(preview, lines, layout, emptyPartitions) {
     }
   }
   for (const line of lines) {
-    const sceneFill = sceneBandIntersectsLine(bands, line.range.from, line.range.to), partition2 = partitions.get(line), region = partition2 === void 0 || partition2 === 0 ? null : paints[partition2 - 1] ?? null;
+    const sceneFill = sceneBandIntersectsLine(bands, line.range.from, line.range.to), partition = partitions.get(line), region = partition === void 0 || partition === 0 ? null : paints[partition - 1] ?? null;
     if (sceneFill || region) result2.set(line, Object.freeze({ sceneFill, region }));
   }
   return result2;
@@ -28879,26 +28897,26 @@ var ReorderMountedLayout = class {
 var mountedPaint = /* @__PURE__ */ new WeakMap();
 var mountedViews = /* @__PURE__ */ new WeakMap();
 function currentReorderPaintLease(view, preview) {
-  const mounted3 = mountedViews.get(view);
-  if (!mounted3 || !samePreparedReorderPaint(mounted3.preview, preview)) return null;
-  if (mounted3.completeIssue !== mounted3.issue) return null;
-  return mountedReorderLease(view, mounted3);
+  const mounted4 = mountedViews.get(view);
+  if (!mounted4 || !samePreparedReorderPaint(mounted4.preview, preview)) return null;
+  if (mounted4.completeIssue !== mounted4.issue) return null;
+  return mountedReorderLease(view, mounted4);
 }
-function mountedReorderLease(view, mounted3) {
-  const stamp = mounted3.preview, issue2 = mounted3.issue;
-  return () => mountedViews.get(view) === mounted3 && mounted3.preview === stamp && mounted3.issue === issue2 && mounted3.completeIssue === issue2 && mounted3.root.isConnected;
+function mountedReorderLease(view, mounted4) {
+  const stamp = mounted4.preview, issue2 = mounted4.issue;
+  return () => mountedViews.get(view) === mounted4 && mounted4.preview === stamp && mounted4.issue === issue2 && mounted4.completeIssue === issue2 && mounted4.root.isConnected;
 }
 function currentReorderPaintTargets(view) {
-  const mounted3 = mountedViews.get(view);
-  return mounted3?.completeIssue === mounted3?.issue && mounted3?.root.isConnected ? mounted3.targets : null;
+  const mounted4 = mountedViews.get(view);
+  return mounted4?.completeIssue === mounted4?.issue && mounted4?.root.isConnected ? mounted4.targets : null;
 }
 function measuredReorderWidget(view, preview) {
-  const mounted3 = mountedViews.get(view);
-  return mounted3 && mounted3.completeIssue === mounted3.issue && samePreparedReorderPaint(mounted3.preview, preview) ? mounted3.layout.measure(mounted3.targets) : null;
+  const mounted4 = mountedViews.get(view);
+  return mounted4 && mounted4.completeIssue === mounted4.issue && samePreparedReorderPaint(mounted4.preview, preview) ? mounted4.layout.measure(mounted4.targets) : null;
 }
 function measuredReorderMarker(view, preview, witnesses) {
-  const mounted3 = mountedViews.get(view);
-  return mounted3 && mounted3.completeIssue === mounted3.issue && samePreparedReorderPaint(mounted3.preview, preview) ? mounted3.layout.marker(mounted3.targets, witnesses) : null;
+  const mounted4 = mountedViews.get(view);
+  return mounted4 && mounted4.completeIssue === mounted4.issue && samePreparedReorderPaint(mounted4.preview, preview) ? mounted4.layout.marker(mounted4.targets, witnesses) : null;
 }
 var ReorderWidget = class _ReorderWidget extends WidgetType {
   preview;
@@ -28925,23 +28943,23 @@ var ReorderWidget = class _ReorderWidget extends WidgetType {
   }
   /** The canonical painter may materialize a separate collision scene without stealing the live CM mount. */
   mountPassive(view, media) {
-    const node = this.mount(view, false, media), mounted3 = requireValue(mountedPaint.get(node), "reorder-widget");
+    const node = this.mount(view, false, media), mounted4 = requireValue(mountedPaint.get(node), "reorder-widget");
     return Object.freeze({
       node,
-      current: () => mountedPaint.get(node) === mounted3 && mounted3.completeIssue === mounted3.issue && node.isConnected,
+      current: () => mountedPaint.get(node) === mounted4 && mounted4.completeIssue === mounted4.issue && node.isConnected,
       reconcile: (preview) => new _ReorderWidget(preview, null).updateMounted(node, view, true),
-      targets: () => mountedPaint.get(node) === mounted3 && mounted3.completeIssue === mounted3.issue ? mounted3.targets : [],
-      measure: () => mountedPaint.get(node) === mounted3 && mounted3.completeIssue === mounted3.issue ? mounted3.layout.measure(mounted3.targets) : null,
+      targets: () => mountedPaint.get(node) === mounted4 && mounted4.completeIssue === mounted4.issue ? mounted4.targets : [],
+      measure: () => mountedPaint.get(node) === mounted4 && mounted4.completeIssue === mounted4.issue ? mounted4.layout.measure(mounted4.targets) : null,
       observe: (authority, readTargets, coverage) => {
-        const issue2 = mounted3.issue, preview = mounted3.preview;
-        const issued3 = () => mountedPaint.get(node) === mounted3 && mounted3.issue === issue2 && mounted3.completeIssue === issue2 && mounted3.preview === preview;
+        const issue2 = mounted4.issue, preview = mounted4.preview;
+        const issued3 = () => mountedPaint.get(node) === mounted4 && mounted4.issue === issue2 && mounted4.completeIssue === issue2 && mounted4.preview === preview;
         const owned = () => issued3() && node.isConnected && issued3();
         const available = () => owned() && authority.available() && owned() && authority.available();
         const guard = (predicate) => authority.guard(predicate) && owned() && authority.available();
-        return guard(available) ? mounted3.layout.observe(mounted3.targets, { available, guard }, readTargets, coverage) : null;
+        return guard(available) ? mounted4.layout.observe(mounted4.targets, { available, guard }, readTargets, coverage) : null;
       },
-      physical: (rects) => mountedPaint.get(node) === mounted3 && mounted3.completeIssue === mounted3.issue && node.isConnected ? mounted3.layout.physical(mounted3.targets, rects) : null,
-      invalidateMeasurement: () => mounted3.layout.invalidate(),
+      physical: (rects) => mountedPaint.get(node) === mounted4 && mounted4.completeIssue === mounted4.issue && node.isConnected ? mounted4.layout.physical(mounted4.targets, rects) : null,
+      invalidateMeasurement: () => mounted4.layout.invalidate(),
       destroy: () => this.destroy(node)
     });
   }
@@ -28950,7 +28968,7 @@ var ReorderWidget = class _ReorderWidget extends WidgetType {
     const root = view.dom.ownerDocument.createElement("span");
     root.className = live ? "sp-reorder-preview sp-reorder-pointer-underlay" : "sp-reorder-preview";
     root.contentEditable = "false";
-    const mounted3 = {
+    const mounted4 = {
       root,
       media,
       view,
@@ -28963,21 +28981,21 @@ var ReorderWidget = class _ReorderWidget extends WidgetType {
       mask: this.mask,
       layout: new ReorderMountedLayout(view)
     };
-    mountedPaint.set(root, mounted3);
-    if (live) mountedViews.set(view, mounted3);
-    const issue2 = mounted3.issue;
+    mountedPaint.set(root, mounted4);
+    if (live) mountedViews.set(view, mounted4);
+    const issue2 = mounted4.issue;
     try {
       const plan = prepareReorderWidgetPlan(this.preview);
-      if (mountedPaint.get(root) !== mounted3 || mounted3.issue !== issue2)
+      if (mountedPaint.get(root) !== mounted4 || mounted4.issue !== issue2)
         throw new ReorderPaintRetired();
       const admission = new ReorderPaintAdmission(
         plan,
-        () => mountedPaint.get(root) === mounted3 && mounted3.issue === issue2
+        () => mountedPaint.get(root) === mounted4 && mounted4.issue === issue2
       );
       return this.paint(root, view, plan, admission);
     } catch (cause) {
       try {
-        if (mountedPaint.get(root) === mounted3 && mounted3.issue === issue2) this.destroy(root);
+        if (mountedPaint.get(root) === mounted4 && mounted4.issue === issue2) this.destroy(root);
       } catch (cleanup) {
         throw new AggregateError([cause, cleanup], "Reorder preview mount cleanup failed");
       }
@@ -28986,15 +29004,15 @@ var ReorderWidget = class _ReorderWidget extends WidgetType {
   }
   /** A genuine same-capture replacement reuses mounted canonical paint through CodeMirror's supported callback. */
   updateDOM(root, view) {
-    const mounted3 = mountedPaint.get(root);
-    if (mounted3 && mounted3.view === view && mounted3.mask !== this.mask && samePreparedReorderPaint(mounted3.preview, this.preview)) {
-      const issue2 = mounted3.issue;
-      if (mounted3.completeIssue !== issue2) return false;
-      mounted3.mask = this.mask;
-      const owned = () => mountedPaint.get(root) === mounted3 && mounted3.issue === issue2 && mounted3.mask === this.mask && mounted3.completeIssue === issue2;
+    const mounted4 = mountedPaint.get(root);
+    if (mounted4 && mounted4.view === view && mounted4.mask !== this.mask && samePreparedReorderPaint(mounted4.preview, this.preview)) {
+      const issue2 = mounted4.issue;
+      if (mounted4.completeIssue !== issue2) return false;
+      mounted4.mask = this.mask;
+      const owned = () => mountedPaint.get(root) === mounted4 && mounted4.issue === issue2 && mounted4.mask === this.mask && mounted4.completeIssue === issue2;
       const current6 = () => owned() && root.isConnected && owned();
       return updateReorderChipPresentation(
-        mounted3.targets,
+        mounted4.targets,
         this.preview,
         this.mask,
         current6,
@@ -29007,40 +29025,40 @@ var ReorderWidget = class _ReorderWidget extends WidgetType {
   }
   /** Warm passive admission preflights every missing canonical fragment and retains exact original resource-bearing output. */
   updateMounted(root, view, existingOnly) {
-    const mounted3 = mountedPaint.get(root);
-    if (!mounted3 || mounted3.view !== view || mounted3.preview.token !== this.preview.token || mounted3.preview.capture !== this.preview.capture)
+    const mounted4 = mountedPaint.get(root);
+    if (!mounted4 || mounted4.view !== view || mounted4.preview.token !== this.preview.token || mounted4.preview.capture !== this.preview.capture)
       return "retired";
-    const issue2 = {}, previousIssue = mounted3.issue;
+    const issue2 = {}, previousIssue = mounted4.issue;
     try {
       const plan = prepareReorderWidgetPlan(this.preview);
-      if (mountedPaint.get(root) !== mounted3 || mounted3.issue !== previousIssue)
+      if (mountedPaint.get(root) !== mounted4 || mounted4.issue !== previousIssue)
         throw new ReorderPaintRetired();
       const admission = new ReorderPaintAdmission(
         plan,
-        () => mountedPaint.get(root) === mounted3 && mounted3.issue === previousIssue
+        () => mountedPaint.get(root) === mounted4 && mounted4.issue === previousIssue
       );
       const update = () => {
-        if (mountedPaint.get(root) !== mounted3 || mounted3.issue !== previousIssue)
+        if (mountedPaint.get(root) !== mounted4 || mounted4.issue !== previousIssue)
           throw new ReorderPaintRetired();
-        mounted3.issue = issue2;
-        mounted3.completeIssue = null;
-        mounted3.preview = this.preview;
-        mounted3.mask = this.mask;
+        mounted4.issue = issue2;
+        mounted4.completeIssue = null;
+        mounted4.preview = this.preview;
+        mounted4.mask = this.mask;
         this.paint(root, view, plan, admission);
-        if (mountedPaint.get(root) !== mounted3 || mounted3.issue !== issue2 || mounted3.mask !== this.mask)
+        if (mountedPaint.get(root) !== mounted4 || mounted4.issue !== issue2 || mounted4.mask !== this.mask)
           throw new ReorderPaintRetired();
       };
       if (existingOnly) {
-        const admitted = mounted3.lines.reconcilePrepared(plan.keys, admission.allowMissing, update);
-        if (!admitted && (mountedPaint.get(root) !== mounted3 || mounted3.issue !== previousIssue))
+        const admitted = mounted4.lines.reconcilePrepared(plan.keys, admission.allowMissing, update);
+        if (!admitted && (mountedPaint.get(root) !== mounted4 || mounted4.issue !== previousIssue))
           throw new ReorderPaintRetired();
         return admitted ? "ready" : "miss";
       }
-      mounted3.lines.reconcile(update);
+      mounted4.lines.reconcile(update);
       return "ready";
     } catch (cause) {
       try {
-        if (mountedPaint.get(root) === mounted3 && mounted3.issue === issue2 && mounted3.mask === this.mask)
+        if (mountedPaint.get(root) === mounted4 && mounted4.issue === issue2 && mounted4.mask === this.mask)
           this.destroy(root);
       } catch (cleanup) {
         throw new AggregateError([cause, cleanup], "Reorder preview update cleanup failed");
@@ -29051,23 +29069,23 @@ var ReorderWidget = class _ReorderWidget extends WidgetType {
   }
   /** Literal target wrappers preserve native inline flow; cached inner paint is cut only at canonical projected hard lines. */
   paint(root, view, plan, admission) {
-    const mounted3 = requireValue(mountedPaint.get(root), "reorder-widget"), issue2 = mounted3.issue;
+    const mounted4 = requireValue(mountedPaint.get(root), "reorder-widget"), issue2 = mounted4.issue;
     const current6 = () => {
-      if (mountedPaint.get(root) !== mounted3 || mounted3.issue !== issue2 || mounted3.mask !== this.mask)
+      if (mountedPaint.get(root) !== mounted4 || mounted4.issue !== issue2 || mounted4.mask !== this.mask)
         throw new ReorderPaintRetired();
     };
     try {
-      reconcileReorderBlocks(root, mounted3, this.preview, this.mask, {
+      reconcileReorderBlocks(root, mounted4, this.preview, this.mask, {
         view,
         plan,
         admission,
         current: current6
       });
-      mounted3.completeIssue = issue2;
+      mounted4.completeIssue = issue2;
       return root;
     } catch (cause) {
       try {
-        if (mountedPaint.get(root) === mounted3 && mounted3.issue === issue2 && mounted3.mask === this.mask)
+        if (mountedPaint.get(root) === mounted4 && mounted4.issue === issue2 && mounted4.mask === this.mask)
           this.destroy(root);
       } catch (cleanup) {
         throw new AggregateError([cause, cleanup], "Reorder preview paint cleanup failed");
@@ -29090,19 +29108,19 @@ var ReorderWidget = class _ReorderWidget extends WidgetType {
   }
   /** Retire every separately mounted shared widget when CodeMirror replaces this preview. */
   destroy(dom) {
-    const mounted3 = mountedPaint.get(dom);
+    const mounted4 = mountedPaint.get(dom);
     mountedPaint.delete(dom);
-    if (!mounted3) return;
-    if (mountedViews.get(mounted3.view) === mounted3) mountedViews.delete(mounted3.view);
-    mounted3.layout.destroy();
+    if (!mounted4) return;
+    if (mountedViews.get(mounted4.view) === mounted4) mountedViews.delete(mounted4.view);
+    mounted4.layout.destroy();
     const failures = [];
     try {
-      this.release(mounted3);
+      this.release(mounted4);
     } catch (cause) {
       failures.push(cause);
     }
     try {
-      mounted3.lines.destroy();
+      mounted4.lines.destroy();
     } catch (cause) {
       failures.push(cause);
     }
@@ -29110,9 +29128,9 @@ var ReorderWidget = class _ReorderWidget extends WidgetType {
     if (failures.length) throw new AggregateError(failures, "Reorder preview cleanup failed");
   }
   /** Retire borrowing before any subsequent target can acquire these exact line nodes. */
-  release(mounted3) {
-    const blocks = Array.from(mounted3.blocks), failures = [];
-    mounted3.blocks.clear();
+  release(mounted4) {
+    const blocks = Array.from(mounted4.blocks), failures = [];
+    mounted4.blocks.clear();
     for (const block of blocks)
       try {
         block.destroy();
@@ -29218,14 +29236,14 @@ var reorderPreview = StateField.define({
       else if (effect.is(fallbackPointerPaint) && pointer === effect.value.pointer && next === effect.value.preview)
         pointer = Object.freeze({ ...pointer, mode: "fallback" });
       else if (effect.is(setReorderMotionMask)) {
-        const candidate2 = effect.value;
-        if (candidate2.ids.length > 64 || new Set(candidate2.ids).size !== candidate2.ids.length || candidate2.ids.some(
-          (id) => !Number.isSafeInteger(id) || id < 0 || !candidate2.capture.prepared.chips[id]
+        const candidate = effect.value;
+        if (candidate.ids.length > 64 || new Set(candidate.ids).size !== candidate.ids.length || candidate.ids.some(
+          (id) => !Number.isSafeInteger(id) || id < 0 || !candidate.capture.prepared.chips[id]
         ))
           throw new TypeError("reorder-motion-mask-invalid");
         mask = Object.freeze({
-          ...candidate2,
-          ids: Object.freeze([...candidate2.ids])
+          ...candidate,
+          ids: Object.freeze([...candidate.ids])
         });
       } else if (effect.is(releaseReorderMotionMask) && mask?.issue === effect.value) mask = null;
     }
@@ -29683,6 +29701,7 @@ var NativeConfiguration = class {
       wheelMode: "hover_dwell",
       tagCompletionCatalog: null,
       loraCompletionCatalog: null,
+      modelCompletionPopupHost: null,
       wildcardCatalog: null,
       booruPostLookup: null,
       spellcheckSession: null,
@@ -29720,6 +29739,7 @@ var NativeConfiguration = class {
       wheelMode: initialWheelMode(input.wheelMode),
       tagCompletionCatalog: input.tagCompletionCatalog ?? null,
       loraCompletionCatalog: input.loraCompletionCatalog ?? null,
+      modelCompletionPopupHost: input.modelCompletionPopupHost ?? null,
       wildcardCatalog: input.wildcardCatalog ?? null,
       booruPostLookup: input.booruPostLookup ?? null,
       spellcheckSession: input.spellcheckSession ?? null,
@@ -29762,6 +29782,10 @@ var NativeConfiguration = class {
         return tagCompletionCatalog.of(values.tagCompletionCatalog);
       case "loraCompletionCatalog":
         return loraCompletionCatalog.of(values.loraCompletionCatalog);
+      case "modelCompletionPopupHost":
+        return modelCompletionPopupHost.of(
+          captureModelCompletionPopupHost(values.modelCompletionPopupHost)
+        );
       case "wildcardCatalog":
         return wildcardCatalog.of(values.wildcardCatalog);
       case "booruPostLookup":
@@ -29835,6 +29859,7 @@ var NativeConfiguration = class {
           "savedSegmentHost",
           "fieldActionUtilities",
           "loraCompletionCatalog",
+          "modelCompletionPopupHost",
           "wildcardCatalog",
           "booruPostLookup",
           "sceneTitleCatalog",
@@ -31723,11 +31748,11 @@ function mutateEmphasisWeight(document2, selection, change) {
   const source = document2.sourceText;
   validateRange(source, selection);
   const outer = document2.emphasisSpans.find(
-    (candidate2) => candidate2.outerRange.from === selection.from && candidate2.outerRange.to === selection.to
+    (candidate) => candidate.outerRange.from === selection.from && candidate.outerRange.to === selection.to
   );
   const content2 = outer?.contentRange ?? selection;
   const span = document2.emphasisSpans.find(
-    (candidate2) => candidate2.contentRange.from === content2.from && candidate2.contentRange.to === content2.to
+    (candidate) => candidate.contentRange.from === content2.from && candidate.contentRange.to === content2.to
   );
   if (span) {
     const weight = changedWeight(span.weight, change);
@@ -31749,7 +31774,7 @@ function mutateLoraWeight(document2, outer, change) {
   const source = document2.sourceText;
   validateRange(source, outer);
   const span = document2.loraSpans.find(
-    (candidate2) => candidate2.outerRange.from === outer.from && candidate2.outerRange.to === outer.to
+    (candidate) => candidate.outerRange.from === outer.from && candidate.outerRange.to === outer.to
   );
   if (!span) return null;
   const weight = changedWeight(span.firstWeight, change);
@@ -33554,12 +33579,14 @@ function loraCompletionOptions(state, scope, query, caret, catalog) {
         item: row.item,
         freshness: state.field(editorFreshness),
         caret,
-        ghost: loraCompletionSuffix(query.queryText, row.display, row.scheduleName),
+        // The rest of a name is previewed only where typing would continue it: at the name's end.
+        ghost: caret === to ? loraCompletionSuffix(query.queryText, row.display, row.scheduleName) : "",
         prepareEdit: (current6) => prepareScopedCompletionEdit(current6, scope, replacement.range, replacement.text)
       })
     );
   }
   return options.length ? Object.freeze({
+    surface: "models",
     from,
     to: caret,
     query: Object.freeze({
@@ -33598,6 +33625,7 @@ function wildcardCompletionOptions(state, scope, query, caret, catalog) {
     );
   }
   return options.length ? Object.freeze({
+    surface: "words",
     from,
     to: caret,
     query: Object.freeze({
@@ -33633,6 +33661,7 @@ function sceneCompletionOptions(state, scope, query, caret, catalog) {
     );
   }
   return options.length ? Object.freeze({
+    surface: "words",
     from,
     to: caret,
     query: Object.freeze({
@@ -33659,7 +33688,7 @@ function prepareCompletionOptions(state) {
   if (!routed) return null;
   if (routed.kind === "lora") {
     const catalog2 = state.facet(loraCompletionCatalog);
-    return catalog2 ? loraCompletionOptions(state, scope, routed.query, caret, catalog2) : null;
+    return catalog2 && state.facet(modelCompletionPopupHost) ? loraCompletionOptions(state, scope, routed.query, caret, catalog2) : null;
   }
   if (routed.kind === "wildcard") {
     const catalog2 = state.facet(wildcardCatalog);
@@ -33703,6 +33732,7 @@ function prepareCompletionOptions(state) {
     );
   }
   return options.length ? Object.freeze({
+    surface: "words",
     from,
     to: caret,
     query: Object.freeze({
@@ -33833,172 +33863,6 @@ var completionGhostProjection = [
   })
 ];
 
-// frontend/sugarprompt/editor/src/completion-wall-state.ts
-var installCompletionWall = StateEffect.define();
-var completionWall = StateField.define({
-  /** New native sessions have no measured wall. */
-  create() {
-    return null;
-  },
-  /** Selection-only transactions reuse actual geometry; candidate replacement retires all derived membership. */
-  update(wall, transaction) {
-    const session = transaction.state.field(completionSession);
-    if (wall && wall.result !== session?.result) {
-      const previous = transaction.startState.field(completionSession);
-      wall = session && previous?.presentation === session.presentation ? { ...wall, result: session.result } : null;
-    }
-    for (const effect of transaction.effects)
-      if (effect.is(installCompletionWall) && effect.value.result === session?.result)
-        wall = effect.value;
-    return wall;
-  }
-});
-
-// frontend/sugarprompt/editor/src/round-to-even.ts
-function roundToEven(value) {
-  const lower = Math.floor(value);
-  return value - lower === 0.5 ? lower + lower % 2 : Math.round(value);
-}
-
-// frontend/sugarprompt/editor/src/lora-wall-layout.ts
-function aspect(value) {
-  return Number.isFinite(value) && value > 0 ? Math.max(0.2, Math.min(6, value)) : 0.72;
-}
-function candidate(aspects, from, to, width, relaxed, ragged) {
-  const final = to === aspects.length, count = to - from;
-  if (ragged && !final) return null;
-  let sum = 0;
-  for (let index = from; index < to; index++)
-    sum += requireValue(aspects[index], "lora-wall-layout");
-  const available = width - (count - 1) * 4, natural = available / Math.max(sum, 1e-3);
-  const needsBounds = natural < 156 || natural > 258;
-  if (!ragged && needsBounds && (final || !relaxed)) return null;
-  const height = ragged ? Math.max(1, Math.min(258, Math.min(198, natural))) : needsBounds ? Math.max(156, Math.min(258, natural)) : natural;
-  const widths = aspects.slice(from, to).map((ratio) => ragged ? Math.max(1, ratio * height) : ratio * height);
-  if (!ragged)
-    widths[count - 1] = Math.max(
-      1,
-      requireValue(widths[count - 1], "lora-wall-layout") + available - widths.reduce((total, value) => total + value, 0)
-    );
-  const coverage = (widths.reduce((total, value) => total + value, 0) + (count - 1) * 4) / Math.max(width, 1);
-  if (!final && Math.abs(coverage - 1) > 0.01) return null;
-  let cost = Math.abs(height - 198);
-  if (final)
-    cost += Math.max(0, (1 - coverage) * width) * 0.18 + Math.max(0, Math.max(156 * 0.9, 198 * 0.82) - height) * 6.5 + Math.max(0, count - 7) * 65 + (ragged ? 18 : 0);
-  else cost += Math.abs(height - natural) * 12 + (count === 1 ? 24 : 0);
-  return { to, height, widths, cost };
-}
-function partition(aspects, width, relaxed) {
-  const limit = Math.max(1, Math.floor((width + 4) / 130));
-  const costs = Array(aspects.length + 1).fill(Infinity);
-  const choices = Array(aspects.length + 1).fill(null);
-  costs[aspects.length] = 0;
-  for (let from = aspects.length - 1; from >= 0; from--) {
-    for (let to = from + 1; to <= Math.min(aspects.length, from + limit); to++) {
-      for (const ragged of [false, true]) {
-        const row = candidate(aspects, from, to, width, relaxed, ragged);
-        if (!row || costs[to] === Infinity) continue;
-        const next = choices[to];
-        const transition = next ? Math.abs(row.height - next.height) * (next.to === aspects.length ? 1.1 : 0.18) : 0;
-        const cost = row.cost + transition + requireValue(costs[to], "lora-wall-layout");
-        if (cost < requireValue(costs[from], "lora-wall-layout") - 1e-3) {
-          costs[from] = cost;
-          choices[from] = row;
-        }
-      }
-    }
-  }
-  if (costs[0] === Infinity) return null;
-  const rows = [];
-  for (let from = 0; from < aspects.length; ) {
-    const row = choices[from];
-    if (!row) throw new Error("LoRA wall partition invariant violated");
-    rows.push(row);
-    from = row.to;
-  }
-  return rows;
-}
-function prepareLoraWallLayout(ratios, width) {
-  if (!Number.isFinite(width) || width < 0 || width > 16384 || ratios.length > 1e5)
-    throw new RangeError("Invalid LoRA wall bounds");
-  if (!ratios.length || width === 0)
-    return Object.freeze({
-      width,
-      height: 0,
-      boxes: Object.freeze([]),
-      rows: Object.freeze([])
-    });
-  const aspects = ratios.map(aspect), safeWidth = Math.max(1, width);
-  const chosen = partition(aspects, safeWidth, false) ?? partition(aspects, safeWidth, true);
-  if (!chosen) throw new Error("LoRA wall layout unavailable");
-  const boxes = [], rows = [];
-  let from = 0, y = 0;
-  for (const [rowIndex, row] of chosen.entries()) {
-    const height = Math.max(1, roundToEven(row.height));
-    rows.push(Object.freeze({ from, to: row.to, top: y, height }));
-    let x = 0;
-    for (let index = from; index < row.to; index++) {
-      const tileWidth = Math.max(
-        1,
-        roundToEven(requireValue(row.widths[index - from], "lora-wall-layout"))
-      );
-      boxes.push(Object.freeze({ index, row: rowIndex, x, y, width: tileWidth, height }));
-      x += tileWidth + 4;
-    }
-    from = row.to;
-    y += height + 4;
-  }
-  return Object.freeze({
-    width,
-    height: Math.max(0, y - 4),
-    boxes: Object.freeze(boxes),
-    rows: Object.freeze(rows)
-  });
-}
-function loraWallVerticalIndex(layout, index, delta) {
-  const box = layout.boxes[index];
-  if (!box) return delta > 0 ? 0 : layout.boxes.length - 1;
-  const target = requireValue(
-    layout.rows[(box.row + delta + layout.rows.length) % layout.rows.length],
-    "lora-wall-layout"
-  );
-  const centre = box.x + Math.floor((box.width - 1) / 2);
-  let selected = target.from, distance = Infinity;
-  for (let candidateIndex = target.from; candidateIndex < target.to; candidateIndex++) {
-    const candidateBox = requireValue(layout.boxes[candidateIndex], "lora-wall-layout");
-    const nextDistance = Math.abs(
-      candidateBox.x + Math.floor((candidateBox.width - 1) / 2) - centre
-    );
-    if (nextDistance < distance) {
-      distance = nextDistance;
-      selected = candidateIndex;
-    }
-  }
-  return selected;
-}
-function loraWallVisibleRange(layout, top2, height) {
-  let low = 0, high = layout.rows.length;
-  while (low < high) {
-    const middle = low + high >>> 1;
-    const row = requireValue(layout.rows[middle], "lora-wall-layout");
-    if (row.top + row.height < top2) low = middle + 1;
-    else high = middle;
-  }
-  const first = Math.max(0, low - 1);
-  low = 0;
-  high = layout.rows.length;
-  while (low < high) {
-    const middle = low + high >>> 1;
-    if (requireValue(layout.rows[middle], "lora-wall-layout").top <= top2 + height) low = middle + 1;
-    else high = middle;
-  }
-  const last2 = Math.min(layout.rows.length, low + 1);
-  return {
-    from: layout.rows[first]?.from ?? 0,
-    to: layout.rows[last2 - 1]?.to ?? 0
-  };
-}
-
 // frontend/sugarprompt/editor/src/completion-option-dom.ts
 function createCompletionOption(option, id, index, count) {
   const dom = document.createElement("div");
@@ -34013,65 +33877,22 @@ function createCompletionOption(option, id, index, count) {
   label2.textContent = option.label;
   detail.className = "cm-completionDetail";
   detail.textContent = option.detail;
-  let backing = null;
-  if (option.kind === "lora") {
-    detail.textContent = option.item.subtitle ?? "";
-    dom.dataset.subtitle = String(!!option.item.subtitle);
-    dom.className = "sp-completion-tile";
-    const titleText = document.createElement("span");
-    titleText.className = "sp-completion-title-text";
-    titleText.dir = "auto";
-    titleText.textContent = option.label;
-    label2.replaceChildren(titleText);
-    dom.title = `${option.label}${option.item.subtitle ? ` - ${option.item.subtitle}` : ""}
-${option.item.model.backendValue}`;
-    backing = document.createElement("div");
-    backing.className = "sp-completion-backing";
-    backing.setAttribute("aria-hidden", "true");
-    const initial = document.createElement("span");
-    initial.className = "sp-completion-initial";
-    initial.textContent = "No image";
-    initial.setAttribute("aria-hidden", "true");
-    dom.append(backing, initial);
-  } else dom.className = "sp-completion-row";
+  dom.className = "sp-completion-row";
   dom.append(label2, detail);
-  return { dom, label: label2, detail, option, backing, media: null };
+  return { dom, label: label2, detail, option };
 }
 function relabelCompletionRow(node, option, id, index, count) {
-  if (node.option.kind === "lora" || option.kind === "lora") return false;
   node.dom.id = `${id}-${index}`;
   node.dom.setAttribute("aria-setsize", String(count));
   node.dom.setAttribute("aria-label", option.label + (option.detail ? `, ${option.detail}` : ""));
   writeText(node.label, option.label);
   writeText(node.detail, option.detail);
   node.option = option;
-  return true;
 }
 function writeText(element, text) {
   const only = element.firstChild;
   if (only?.nodeType === Node.TEXT_NODE && only === element.lastChild) only.nodeValue = text;
   else element.textContent = text;
-}
-function paintCompletionMedia(node, media) {
-  if (node.option.kind !== "lora" || !node.backing) return;
-  const thumbnail = node.option.item.thumbnail;
-  const prepared4 = thumbnail.status === "ready" ? media.get(thumbnail) ?? pendingLoraMedia : unavailableLoraMedia;
-  if (node.media === prepared4) return;
-  node.media = prepared4;
-  node.dom.dataset.media = prepared4.status;
-  node.dom.setAttribute(
-    "aria-label",
-    `${node.option.label}, ${node.option.item.model.backendValue}${node.option.item.subtitle ? `, ${node.option.item.subtitle}` : ""}, thumbnail ${prepared4.status}`
-  );
-  node.backing.replaceChildren();
-  if (prepared4.status === "ready") {
-    const canvas = document.createElement("canvas"), raster = prepared4.raster;
-    canvas.width = raster.width;
-    canvas.height = raster.height;
-    canvas.setAttribute("aria-hidden", "true");
-    raster.paint(canvas);
-    node.backing.append(canvas);
-  }
 }
 
 // frontend/sugarprompt/editor/src/completion-theme.ts
@@ -34079,7 +33900,9 @@ var completionTheme = EditorView.baseTheme({
   ".cm-tooltip.cm-tooltip-autocomplete": {
     overflow: "hidden",
     boxSizing: "border-box",
-    border: "1px solid light-dark(#00000011, #0000002d)",
+    border: "0",
+    padding: "0 1px",
+    boxShadow: "inset 0 0 0 1px light-dark(#00000011, #0000002d)",
     borderRadius: "8px",
     backgroundColor: "light-dark(#f8f8f8, #282828)",
     color: "light-dark(black, white)"
@@ -34128,15 +33951,10 @@ var completionTheme = EditorView.baseTheme({
   },
   ".sp-completion-scroll-thumb:hover::before": { width: "6px" },
   ".sp-completion-content": { position: "relative" },
-  ".cm-tooltip-autocomplete:not(.sp-completion-wall) .sp-completion-viewport": {
+  ".cm-tooltip-autocomplete .sp-completion-viewport": {
     maxHeight: "min(338px, var(--sp-completion-inner-height, 338px))"
   },
-  ".cm-tooltip.cm-tooltip-autocomplete:not(.sp-completion-wall)": {
-    border: "0",
-    padding: "0 1px",
-    boxShadow: "inset 0 0 0 1px light-dark(#00000011, #0000002d)"
-  },
-  ".cm-tooltip-autocomplete:not(.sp-completion-wall) .sp-completion-content": {
+  ".cm-tooltip-autocomplete .sp-completion-content": {
     paddingTop: "3px",
     paddingBottom: "5px",
     boxSizing: "border-box"
@@ -34183,109 +34001,21 @@ var completionTheme = EditorView.baseTheme({
     overflow: "hidden",
     textOverflow: "ellipsis"
   },
-  ".cm-tooltip-autocomplete.sp-completion-wall": {
-    padding: "2px 0 6px",
-    width: "min(560px, calc(100vw - 8px))",
-    maxWidth: "calc(100vw - 8px)",
-    height: "min(630px, calc(100vh - 16px), var(--sp-completion-outer-height, 630px))"
-  },
-  ".sp-completion-wall .sp-completion-viewport": {
-    backgroundColor: "light-dark(#ffffff, #202020)",
-    maxHeight: "min(630px, var(--sp-completion-inner-height, 630px))",
-    minWidth: "0",
-    position: "relative"
-  },
-  ".sp-completion-tile": {
-    position: "absolute",
+  // The host's picker gallery brings its whole surface: the wrapper adds no panel chrome and only
+  // bounds the surface to the space the caret line leaves.
+  ".cm-tooltip.sp-model-completions": {
+    display: "flex",
+    flexDirection: "column",
     boxSizing: "border-box",
-    overflow: "hidden",
+    maxWidth: "calc(100vw - 8px)",
+    maxHeight: "var(--sp-completion-outer-height, none)",
+    padding: "0",
     border: "0",
-    backgroundColor: "light-dark(#ffffffaa, #ffffff0d)",
-    cursor: "pointer"
+    borderRadius: "0",
+    background: "none",
+    boxShadow: "none"
   },
-  ".sp-completion-tile[aria-selected=true]::after": {
-    boxShadow: "inset 0 0 0 2px light-dark(#0067c0dc, #299cffeb)"
-  },
-  ".sp-completion-tile:not([aria-selected=true]):hover": {
-    outline: "1px solid light-dark(#00000050, #ffffff5a)",
-    outlineOffset: "-2px"
-  },
-  ".sp-completion-tile::after": {
-    content: '""',
-    position: "absolute",
-    inset: "0",
-    pointerEvents: "none",
-    background: "linear-gradient(transparent, #0000000c 42%, #000000b2)"
-  },
-  ".sp-completion-tile[aria-selected=true]::after, .sp-completion-tile:hover::after": {
-    background: "linear-gradient(transparent, #00000018 42%, #000000dc)"
-  },
-  ".sp-completion-backing, .sp-completion-backing canvas": {
-    position: "absolute",
-    width: "100%",
-    height: "100%",
-    inset: "0",
-    objectFit: "cover"
-  },
-  ".sp-completion-initial": {
-    position: "absolute",
-    inset: "0",
-    display: "grid",
-    placeItems: "center",
-    color: "light-dark(#00000096, #ffffff96)",
-    fontSize: "inherit"
-  },
-  ".sp-completion-tile[data-media=ready] .sp-completion-initial": {
-    display: "none"
-  },
-  // The native 19px font metric is centered in 21px areas, separated by 22px.
-  ".sp-completion-tile .cm-completionLabel": {
-    position: "absolute",
-    bottom: "26px",
-    left: "8px",
-    right: "8px",
-    lineHeight: "21px",
-    fontSize: "14px",
-    zIndex: "1",
-    color: "#ffffffeb",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap"
-  },
-  ".sp-completion-tile[data-subtitle=false] .cm-completionLabel": {
-    bottom: "5px"
-  },
-  ".sp-completion-title-text": {
-    display: "inline",
-    whiteSpace: "nowrap"
-  },
-  ".sp-completion-tile .cm-completionLabel[data-marquee=scroll]": {
-    textOverflow: "clip"
-  },
-  ".sp-completion-tile .cm-completionLabel[data-marquee=scroll] .sp-completion-title-text": {
-    display: "inline-block"
-  },
-  ".sp-completion-tile .cm-completionLabel[data-marquee=end]": {
-    direction: "rtl",
-    textAlign: "right"
-  },
-  ".sp-completion-tile[data-subtitle=false] .cm-completionDetail": {
-    display: "none"
-  },
-  ".sp-completion-tile .cm-completionDetail": {
-    position: "absolute",
-    bottom: "4px",
-    left: "8px",
-    right: "8px",
-    margin: "0",
-    lineHeight: "21px",
-    fontSize: "14px",
-    zIndex: "1",
-    color: "#ffffffaf",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap"
-  }
+  ".sp-model-completions > *": { minHeight: "0", maxHeight: "100%" }
 });
 
 // frontend/sugarprompt/editor/src/completion-scrollbar.ts
@@ -34528,173 +34258,6 @@ var CompletionScrollbar = class {
   }
 };
 
-// frontend/sugarprompt/editor/src/title-marquee.ts
-function titleMarqueeState(elapsedMs, overflow) {
-  if (overflow <= 0)
-    return {
-      phase: "start",
-      offset: 0,
-      showLeftFade: false,
-      showRightFade: false
-    };
-  const duration = Math.max(1, roundToEven(overflow / 44 * 1e3)), position = elapsedMs % (900 + duration + 700);
-  if (position < 900)
-    return {
-      phase: "start",
-      offset: 0,
-      showLeftFade: false,
-      showRightFade: true
-    };
-  if (position < 900 + duration) {
-    const offset = overflow * ((position - 900) / duration);
-    return {
-      phase: "scroll",
-      offset,
-      showLeftFade: offset > 0.5,
-      showRightFade: offset < overflow - 0.5
-    };
-  }
-  return {
-    phase: "end",
-    offset: overflow,
-    showLeftFade: true,
-    showRightFade: false
-  };
-}
-
-// frontend/sugarprompt/editor/src/completion-title-marquee.ts
-var CompletionTitleMarquee = class {
-  view;
-  root;
-  selected;
-  window;
-  hovered = null;
-  lastSelected = null;
-  active = null;
-  started = 0;
-  frame = null;
-  queued = false;
-  restart = false;
-  disposed = false;
-  /** Observe only owned tile hover and the document's finite visibility lifetime. */
-  constructor(view, root, selected) {
-    this.view = view;
-    this.root = root;
-    this.selected = selected;
-    const window2 = root.ownerDocument.defaultView;
-    if (!window2) throw new Error("Completion title window unavailable");
-    this.window = window2;
-    root.addEventListener("mousemove", this.moved);
-    root.addEventListener("mouseleave", this.left);
-    root.ownerDocument.addEventListener("visibilitychange", this.visibility);
-  }
-  /** Selection, candidate membership and resize publication request bounded current-title measurement. */
-  refresh(restart = false) {
-    this.restart ||= restart;
-    if (this.disposed || this.queued) return;
-    this.queued = true;
-    this.view.requestMeasure({
-      key: this,
-      /** Read one current title after native wall placement; no catalog walk or font measurement occurs in input. */
-      read: () => {
-        const selected = this.selected();
-        const tile = this.hovered && this.root.contains(this.hovered) ? this.hovered : selected;
-        const label2 = tile?.querySelector(".cm-completionLabel"), text = label2?.querySelector(".sp-completion-title-text");
-        return {
-          selected,
-          measured: tile && label2 && text && tile.style.visibility !== "hidden" ? {
-            tile,
-            label: label2,
-            text,
-            overflow: text.getBoundingClientRect().width * label2.clientWidth / label2.getBoundingClientRect().width - label2.clientWidth,
-            fadeWidth: Math.min(18, Math.max(1, Math.floor(label2.clientWidth / 2)))
-          } : null
-        };
-      },
-      /** Superseded nodes cannot revive after candidate replacement or tooltip teardown. */
-      write: ({ selected, measured }) => {
-        this.queued = false;
-        if (this.disposed) return;
-        if (this.hovered && !this.root.contains(this.hovered)) this.hovered = null;
-        if (selected !== this.selected() || measured && !this.root.contains(measured.tile)) {
-          this.refresh();
-          return;
-        }
-        const next = measured && measured.overflow > 0 ? measured : null;
-        if (this.restart || selected !== this.lastSelected || next?.tile !== this.active?.tile || next?.overflow !== this.active?.overflow) {
-          this.reset();
-          this.active = next;
-          this.started = this.window.performance.now();
-        }
-        this.lastSelected = selected;
-        this.restart = false;
-        this.animate();
-      }
-    });
-  }
-  /** Cancel frames and listeners, releasing all retained title nodes; pending native measurements become inert. */
-  destroy() {
-    this.disposed = true;
-    this.reset();
-    this.hovered = null;
-    this.lastSelected = null;
-    this.root.removeEventListener("mousemove", this.moved);
-    this.root.removeEventListener("mouseleave", this.left);
-    this.root.ownerDocument.removeEventListener("visibilitychange", this.visibility);
-  }
-  /** Pointer hover is a visual observation, never a selected-row or caret mutation. */
-  moved = (event) => {
-    const tile = event.target instanceof Element ? event.target.closest(".sp-completion-tile") : null;
-    const next = tile && this.root.contains(tile) ? tile : null;
-    if (next !== this.hovered) {
-      this.hovered = next;
-      this.refresh();
-    }
-  };
-  /** Leaving the viewport returns title animation to the native selected option. */
-  left = () => {
-    this.hovered = null;
-    this.refresh();
-  };
-  /** Hidden documents retain no animation work; returning resumes a readable start hold. */
-  visibility = () => {
-    this.reset();
-    this.refresh();
-  };
-  /** Static elision resumes whenever animation ownership moves or retires. */
-  reset() {
-    if (this.frame !== null) this.window.cancelAnimationFrame(this.frame);
-    this.frame = null;
-    if (this.active) {
-      delete this.active.label.dataset.marquee;
-      this.active.label.style.maskImage = "";
-      this.active.text.style.transform = "";
-    }
-    this.active = null;
-  }
-  /** Paint only prepared scalar phases; frame callbacks perform no DOM geometry reads. */
-  animate() {
-    if (this.disposed || !this.active || this.frame !== null || this.root.ownerDocument.hidden)
-      return;
-    const active = this.active;
-    if (!this.root.contains(active.tile)) {
-      this.reset();
-      return;
-    }
-    const state = titleMarqueeState(
-      Math.round(this.window.performance.now() - this.started),
-      active.overflow
-    );
-    active.label.dataset.marquee = state.phase;
-    active.text.style.transform = state.phase === "scroll" ? `translateX(${-state.offset}px)` : "";
-    active.label.style.maskImage = state.phase === "scroll" ? `linear-gradient(to right, ${state.showLeftFade ? `transparent, black ${active.fadeWidth}px` : "black"}, ${state.showRightFade ? `black calc(100% - ${active.fadeWidth}px), transparent` : "black"})` : "";
-    this.frame = this.window.requestAnimationFrame(() => {
-      this.frame = null;
-      this.animate();
-    });
-  }
-};
-
 // frontend/sugarprompt/editor/src/completion-space.ts
 function completionHeight(space, caret, above, scale, border, lineHeight) {
   const available = (above ? caret.top - space.top : space.bottom - caret.bottom) - 6;
@@ -34738,6 +34301,126 @@ function applyCompletionHeight(dom, height, current6) {
   return current6() ? "changed" : "retired";
 }
 
+// frontend/sugarprompt/editor/src/model-completion-tooltip.ts
+var mounted3 = /* @__PURE__ */ new WeakMap();
+function modelCompletionNeighbor(view, selected, key2) {
+  return mounted3.get(view)?.neighbor(selected, key2) ?? null;
+}
+var ModelCompletionTooltip = class {
+  dom = document.createElement("div");
+  /** Keep the completion gap from the caret line; CodeMirror chooses the side. */
+  offset = { x: 0, y: 6 };
+  /** The surface is bounded through its own height variable rather than native resizing. */
+  resize = false;
+  view;
+  popup;
+  space = null;
+  shown = null;
+  selected = -1;
+  queued = false;
+  disposed = false;
+  /** Mount the host's gallery once for this completion lifetime. */
+  constructor(view) {
+    this.view = view;
+    this.dom.className = "sp-model-completions";
+    const host = view.state.facet(modelCompletionPopupHost);
+    if (!host) throw new Error("Model completions require a host gallery");
+    this.popup = host.mount({ activate: (index) => this.activate(index) });
+    this.dom.append(this.popup.element);
+    this.dom.addEventListener("mousedown", this.pressed);
+    this.dom.addEventListener("focusin", this.focused);
+    mounted3.set(view, this.popup);
+    this.project();
+  }
+  /** Bound the surface once it is in the document. */
+  mount() {
+    this.measure();
+  }
+  /** Follow the session's ranked models and current candidate. */
+  update(update) {
+    if (this.disposed) return;
+    const before = update.startState.field(completionSession), after = update.state.field(completionSession);
+    if (before?.result !== after?.result || before?.selected !== after?.selected) {
+      this.project();
+      this.measure();
+    }
+  }
+  /** Retain the native available space; the caret geometry is read in a measurement phase. */
+  positioned(space) {
+    this.space = { ...space };
+    this.measure();
+  }
+  /** Release the gallery with the tooltip. */
+  destroy() {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.dom.removeEventListener("mousedown", this.pressed);
+    this.dom.removeEventListener("focusin", this.focused);
+    if (mounted3.get(this.view) === this.popup) mounted3.delete(this.view);
+    this.popup.dispose();
+  }
+  /** Pressing a candidate never takes the caret out of the prompt. */
+  pressed = (event) => {
+    if (event.button === 0) event.preventDefault();
+  };
+  /** Focus that reaches the gallery returns to the prompt, which keeps the one caret. */
+  focused = () => {
+    if (!this.disposed) void captureFocusHandoff(this.view).restore();
+  };
+  /** Hand the session's models to the gallery only when they or the current one changed. */
+  project() {
+    const session = this.view.state.field(completionSession);
+    if (!session || session.result.surface !== "models") return;
+    if (this.shown === session.result && this.selected === session.selected) return;
+    this.shown = session.result;
+    this.selected = session.selected;
+    this.popup.update(
+      session.result.options.map((option) => option.item),
+      session.selected
+    );
+  }
+  /** Accept the pointed candidate now, or as soon as a refreshing session is current again. */
+  activate(index) {
+    if (this.disposed) return;
+    const session = this.view.state.field(completionSession);
+    if (!session || session.result !== this.shown || !session.result.options[index]) return;
+    if (acceptCompletionOption(this.view, session.result, index, "pointer")) return;
+    if (session.phase === "refreshing")
+      this.view.dispatch({
+        effects: requestCompletionAcceptance.of({
+          result: session.result,
+          index,
+          activation: "pointer"
+        }),
+        annotations: Transaction.addToHistory.of(false)
+      });
+  }
+  /** Bound the surface to the space left on the side CodeMirror chose. */
+  measure() {
+    if (this.disposed || this.queued) return;
+    this.queued = true;
+    this.view.requestMeasure({
+      key: this,
+      read: () => {
+        const session = this.view.state.field(completionSession);
+        return session && this.space ? {
+          session,
+          height: readCompletionHeight(this.view, this.dom, this.space, session.caret)
+        } : null;
+      },
+      write: (measured) => {
+        this.queued = false;
+        if (this.disposed || !measured) return;
+        const current6 = () => !this.disposed && this.view.state.field(completionSession) === measured.session;
+        if (applyCompletionHeight(this.dom, measured.height, current6) === "changed") this.measure();
+      }
+    });
+  }
+};
+function createModelCompletionTooltip(view) {
+  return new ModelCompletionTooltip(view);
+}
+
 // frontend/sugarprompt/editor/src/completion-tooltip.ts
 var CompletionTooltip = class {
   dom = document.createElement("div");
@@ -34751,7 +34434,6 @@ var CompletionTooltip = class {
   nodes = /* @__PURE__ */ new Map();
   view;
   observer;
-  titles;
   scrollbar;
   result = null;
   presentation = null;
@@ -34769,15 +34451,10 @@ var CompletionTooltip = class {
     this.viewport.tabIndex = 0;
     this.content.className = "sp-completion-content";
     this.scrollbar = new CompletionScrollbar(this.viewport, () => this.measure());
-    let titles = null;
     let observer = null;
     try {
       this.viewport.append(this.scrollbar.dom, this.content);
       this.dom.append(this.viewport);
-      this.titles = titles = new CompletionTitleMarquee(view, this.viewport, () => {
-        const selected = view.state.field(completionSession)?.selected;
-        return selected === void 0 ? null : this.nodes.get(selected)?.dom ?? null;
-      });
       this.viewport.addEventListener("scroll", this.scrolled);
       this.viewport.addEventListener("mousedown", this.pressed);
       this.viewport.addEventListener("focus", this.focused);
@@ -34785,7 +34462,6 @@ var CompletionTooltip = class {
         try {
           this.scrollbar.invalidate();
           this.measure();
-          this.titles.refresh(true);
         } catch (error) {
           this.fail(error);
         }
@@ -34796,7 +34472,6 @@ var CompletionTooltip = class {
       const causes = [error];
       for (const release of [
         () => this.scrollbar.destroy(),
-        () => titles?.destroy(),
         () => observer?.disconnect(),
         () => this.viewport.removeEventListener("scroll", this.scrolled),
         () => this.viewport.removeEventListener("mousedown", this.pressed),
@@ -34832,11 +34507,7 @@ var CompletionTooltip = class {
         if (before?.selected !== after?.selected) this.scrollbar.invalidate();
         this.project();
         this.measure();
-      } else if (update.startState.field(completionWall) !== update.state.field(completionWall)) {
-        this.project();
-        if (this.ensureSelected) this.measure();
-      } else if (update.startState.field(loraMedia) !== update.state.field(loraMedia))
-        this.paintMedia();
+      }
     } catch (error) {
       this.fail(error);
     }
@@ -34856,7 +34527,6 @@ var CompletionTooltip = class {
     const causes = [];
     for (const release of [
       () => this.scrollbar.destroy(),
-      () => this.titles.destroy(),
       () => this.observer.disconnect(),
       () => this.viewport.removeEventListener("scroll", this.scrolled),
       () => this.viewport.removeEventListener("mousedown", this.pressed),
@@ -34871,7 +34541,7 @@ var CompletionTooltip = class {
     if (causes.length === 1) throw causes[0];
     if (causes.length > 1) throw new AggregateError(causes, "Completion tooltip retirement failed");
   }
-  /** Independent wall scrolling changes only derived viewport membership. */
+  /** Independent list scrolling changes only the derived scrollbar. */
   scrolled = () => {
     this.measure();
   };
@@ -34952,10 +34622,8 @@ var CompletionTooltip = class {
                 return;
               }
             }
-            const wall = this.view.state.field(completionWall);
             let top2 = measurement.top;
-            const box = wall?.result === session.result ? wall.layout.boxes[session.selected] : void 0;
-            const optionTop = box?.y ?? measurement.optionTop, optionHeight = box?.height ?? measurement.optionHeight;
+            const optionTop = measurement.optionTop, optionHeight = measurement.optionHeight;
             if (this.ensureSelected && optionTop !== void 0 && optionHeight !== void 0) {
               if (optionTop < top2) top2 = optionTop;
               else if (optionTop + optionHeight > top2 + measurement.height)
@@ -34968,23 +34636,6 @@ var CompletionTooltip = class {
             }
             if (!current6()) return;
             this.scrollbar.project(measurement.scrollbar && { ...measurement.scrollbar, top: top2 });
-            if (this.disposed || this.measurementRevision !== measurement.revision || this.view.state.field(completionSession) !== session)
-              return;
-            if (requireValue(session.result.options[0], "completion-tooltip").kind === "lora")
-              queueMicrotask(() => {
-                try {
-                  this.prepareWall(
-                    session.result,
-                    session.presentation,
-                    measurement.revision,
-                    measurement.width,
-                    measurement.height,
-                    top2
-                  );
-                } catch (error) {
-                  this.fail(error);
-                }
-              });
           } catch (error) {
             this.fail(error);
           }
@@ -35003,75 +34654,26 @@ var CompletionTooltip = class {
     }
     throw primary;
   }
-  /** Compile geometry only after a real width change and prepare only visible/overscan thumbnail descriptors. */
-  prepareWall(result2, presentation2, revision, width, height, top2) {
-    if (this.disposed || width <= 0 || this.measurementRevision !== revision || this.view.state.field(completionSession)?.presentation !== presentation2 || this.view.state.field(completionSession)?.result !== result2)
-      return;
-    const previous = this.view.state.field(completionWall);
-    const layout = previous?.result === result2 && previous.layout.width === width ? previous.layout : prepareLoraWallLayout(
-      result2.options.map(
-        (option) => option.kind === "lora" && option.item.thumbnail.status === "ready" ? option.item.thumbnail.width / option.item.thumbnail.height : 0.72
-      ),
-      width
-    );
-    const range = loraWallVisibleRange(layout, top2, height);
-    if (previous?.layout === layout && previous.from === range.from && previous.to === range.to)
-      return;
-    const references = result2.options.slice(range.from, range.to).flatMap(
-      (option) => option.kind === "lora" && option.item.thumbnail.status === "ready" ? [option.item.thumbnail] : []
-    );
-    if (this.disposed || this.measurementRevision !== revision || this.view.state.field(completionSession)?.result !== result2 || this.view.state.field(completionSession)?.presentation !== presentation2)
-      return;
-    this.view.dispatch({
-      effects: installCompletionWall.of({
-        result: result2,
-        layout,
-        ...range,
-        references
-      }),
-      annotations: Transaction.addToHistory.of(false)
-    });
-  }
-  /** Keep only viewport/overscan tiles plus the selected accessible option; scrolling never truncates the ranked candidate set. */
+  /** Relabel the plain rows in place for the session's current word candidates. */
   project() {
     if (this.disposed) return;
     const session = this.view.state.field(completionSession);
-    if (!session) return;
+    if (!session || session.result.surface !== "words") return;
     this.scrollbar.session(session.result, session.presentation);
     if (this.disposed || this.view.state.field(completionSession) !== session) return;
-    const model = requireValue(session.result.options[0], "completion-tooltip").kind === "lora";
     const relabel = this.presentation !== session.presentation;
-    if (relabel && (model || this.dom.classList.contains("sp-completion-wall"))) {
-      this.nodes.clear();
-      this.content.replaceChildren();
-    }
     this.presentation = session.presentation;
-    this.dom.classList.toggle("sp-completion-wall", model);
     this.result = session.result;
     this.viewport.id = session.id;
-    const wall = this.view.state.field(completionWall);
-    const indices = /* @__PURE__ */ new Set();
-    if (model) {
-      this.content.style.height = `${wall?.layout.height ?? 0}px`;
-      if (wall?.result === session.result)
-        for (let index = wall.from; index < wall.to; index++) indices.add(index);
-      indices.add(session.selected);
-    } else for (let index = 0; index < session.result.options.length; index++) indices.add(index);
+    const count = session.result.options.length;
     for (const [index, node] of this.nodes)
-      if (!indices.has(index)) {
+      if (index >= count) {
         node.dom.remove();
         this.nodes.delete(index);
       }
-    for (const index of indices) {
-      const option = requireValue(session.result.options[index], "completion-tooltip");
-      const count = session.result.options.length;
+    for (const [index, option] of session.result.options.entries()) {
       let node = this.nodes.get(index);
-      if (node && relabel && !relabelCompletionRow(node, option, session.id, index, count)) {
-        const replaced = node.dom;
-        node = createCompletionOption(option, session.id, index, count);
-        this.nodes.set(index, node);
-        replaced.replaceWith(node.dom);
-      }
+      if (node && relabel) relabelCompletionRow(node, option, session.id, index, count);
       if (!node) {
         node = createCompletionOption(option, session.id, index, count);
         this.nodes.set(index, node);
@@ -35079,35 +34681,20 @@ var CompletionTooltip = class {
       }
       node.option = option;
       node.dom.setAttribute("aria-selected", String(index === session.selected));
-      const box = model && wall?.result === session.result ? wall.layout.boxes[index] : null;
-      if (model) {
-        node.dom.style.visibility = box ? "visible" : "hidden";
-        if (box)
-          Object.assign(node.dom.style, {
-            left: `${box.x}px`,
-            top: `${box.y}px`,
-            width: `${box.width}px`,
-            height: `${box.height}px`
-          });
-      }
     }
-    this.paintMedia();
-    this.titles.refresh();
-  }
-  /** Paint only changed actual prepared raster identities, never decode or traverse catalog metadata. */
-  paintMedia() {
-    const media = this.view.state.field(loraMedia);
-    for (const node of this.nodes.values()) paintCompletionMedia(node, media);
   }
 };
 function createTooltip(view) {
   return new CompletionTooltip(view);
 }
 var completionTooltips = [
-  completionWall,
+  // Words and models each have one surface; a session shows the one its result names.
   showTooltip.compute([completionSession, "selection"], (state) => {
     const session = state.field(completionSession);
-    return session ? { pos: state.selection.main.head, create: createTooltip } : null;
+    return session ? {
+      pos: state.selection.main.head,
+      create: session.result.surface === "models" ? createModelCompletionTooltip : createTooltip
+    } : null;
   }),
   EditorView.contentAttributes.compute([completionSession], (state) => {
     const session = state.field(completionSession);
@@ -35250,19 +34837,28 @@ function acceptSelected(view) {
   }
   return false;
 }
-function moveSelection(view, delta, modelsOnly = false, vertical = false) {
+function moveWordSelection(view, delta) {
   const session = view.state.field(completionSession);
-  if (!session || modelsOnly && requireValue(session.result.options[0], "prompt-completion").kind !== "lora")
-    return false;
+  if (!session || session.result.surface !== "words") return false;
   const count = session.result.options.length;
-  const wall = view.state.field(completionWall);
-  if (vertical && requireValue(session.result.options[0], "prompt-completion").kind === "lora" && !wall)
-    return true;
-  const index = requireValue(session.result.options[0], "prompt-completion").kind !== "lora" ? (session.selected + delta + count) % count : vertical && wall ? loraWallVerticalIndex(wall.layout, session.selected, delta < 0 ? -1 : 1) : Math.max(0, Math.min(count - 1, session.selected + delta));
   view.dispatch({
-    effects: selectCompletion.of({ result: session.result, index }),
+    effects: selectCompletion.of({
+      result: session.result,
+      index: (session.selected + delta + count) % count
+    }),
     annotations: Transaction.addToHistory.of(false)
   });
+  return true;
+}
+function moveModelSelection(view, key2) {
+  const session = view.state.field(completionSession);
+  if (!session || session.result.surface !== "models") return false;
+  const index = modelCompletionNeighbor(view, session.selected, key2);
+  if (index !== null && index !== session.selected && session.result.options[index])
+    view.dispatch({
+      effects: selectCompletion.of({ result: session.result, index }),
+      annotations: Transaction.addToHistory.of(false)
+    });
   return true;
 }
 function dismissAndNavigate(view) {
@@ -35298,19 +34894,19 @@ var promptCompletions = [
     keymap.of([
       {
         key: "ArrowDown",
-        run: (view) => moveSelection(view, 1, false, true) || dismissAndNavigate(view)
+        run: (view) => moveModelSelection(view, "ArrowDown") || moveWordSelection(view, 1) || dismissAndNavigate(view)
       },
       {
         key: "ArrowUp",
-        run: (view) => moveSelection(view, -1, false, true) || dismissAndNavigate(view)
+        run: (view) => moveModelSelection(view, "ArrowUp") || moveWordSelection(view, -1) || dismissAndNavigate(view)
       },
       {
         key: "ArrowLeft",
-        run: (view) => moveSelection(view, -1, true) || dismissAndNavigate(view)
+        run: (view) => moveModelSelection(view, "ArrowLeft") || dismissAndNavigate(view)
       },
       {
         key: "ArrowRight",
-        run: (view) => moveSelection(view, 1, true) || dismissAndNavigate(view)
+        run: (view) => moveModelSelection(view, "ArrowRight") || dismissAndNavigate(view)
       },
       { key: "Tab", run: acceptSelected },
       { key: "Escape", run: dismissCompletion },
@@ -35720,7 +35316,7 @@ var LoraMediaPreparation = class {
       this.input = null;
       this.pool.pause();
     }
-    if (invalidated || update.startState.field(completionWall)?.references !== update.state.field(completionWall)?.references || update.startState.field(richProjection).sourceIdentity !== update.state.field(richProjection).sourceIdentity)
+    if (invalidated || update.startState.field(richProjection).sourceIdentity !== update.state.field(richProjection).sourceIdentity)
       this.queue();
   }
   /** Native preedit cancels publication and retains existing pixels until the projection leaves them. */
@@ -35762,23 +35358,16 @@ var LoraMediaPreparation = class {
       return;
     const enabled2 = state.facet(richRendering) && featureEnabled(state.facet(featureProfile), "lora_syntax");
     const presentation2 = state.field(loraPresentation), sourceIdentity = state.field(editorFreshness).source;
-    const wallReferences = state.field(completionWall)?.references ?? null;
     if (state.field(richProjection).sourceIdentity !== sourceIdentity) return;
     if (enabled2 && presentation2.sourceIdentity !== sourceIdentity) return;
-    if (!this.input || this.input.snapshot !== presentation2.snapshot || this.input.sourceIdentity !== sourceIdentity || this.input.enabled !== enabled2 || this.input.wallReferences !== wallReferences) {
-      this.input = {
-        snapshot: presentation2.snapshot,
-        sourceIdentity,
-        enabled: enabled2,
-        wallReferences
-      };
+    if (!this.input || this.input.snapshot !== presentation2.snapshot || this.input.sourceIdentity !== sourceIdentity || this.input.enabled !== enabled2) {
+      this.input = { snapshot: presentation2.snapshot, sourceIdentity, enabled: enabled2 };
       const references = [];
       if (enabled2 && presentation2.snapshot.status === "ready") {
         for (const resource of presentation2.snapshot.resources)
           if (resource.resolution === "found" && resource.thumbnail.status === "ready")
             references.push(resource.thumbnail);
       }
-      if (wallReferences) references.push(...wallReferences);
       this.pool.select(references);
     }
     const media = this.pool.snapshot();
@@ -37389,7 +36978,7 @@ var RegionNames = class {
           this.finish(true, true);
           return;
         }
-        const mounted3 = this.input === null;
+        const mounted4 = this.input === null;
         if (!this.input)
           this.input = new RegionNameInput(
             target.target.separator.name ?? "",
@@ -37397,7 +36986,7 @@ var RegionNames = class {
             this.layout
           );
         this.input.place(geometry);
-        if (mounted3) {
+        if (mounted4) {
           this.input.focus();
           if (this.disposed || generation !== this.generation || this.target !== target || !this.input)
             return;
@@ -39291,9 +38880,9 @@ function createReorderBaseScene(view, context) {
 // frontend/sugarprompt/editor/src/reorder-native-projection.ts
 var owners2 = /* @__PURE__ */ new WeakMap();
 function targetMetadata(read) {
-  const chip = read("data-reorder-chip"), gap = read("data-reorder-gap"), partition2 = read("data-reorder-partition");
-  const kind = chip !== null ? "chip" : partition2 !== null ? "partition" : "gap";
-  const raw = chip ?? partition2 ?? gap;
+  const chip = read("data-reorder-chip"), gap = read("data-reorder-gap"), partition = read("data-reorder-partition");
+  const kind = chip !== null ? "chip" : partition !== null ? "partition" : "gap";
+  const raw = chip ?? partition ?? gap;
   if (raw === null || !/^(0|[1-9][0-9]*)$/.test(raw)) return null;
   const index = Number(raw), blank = read("data-reorder-blank");
   if (!Number.isSafeInteger(index)) return null;
@@ -40869,10 +40458,10 @@ function reorderKeyboardTarget(order, hidden, held, topology, key2, preferredX, 
   } else {
     const lane = origin.lane + direction, candidates = all.filter((o) => o.lane === lane), x = preferredX ?? origin.x;
     if (candidates.length) {
-      const candidate2 = requireValue(
+      const candidate = requireValue(
         [...candidates].sort((a, b) => Math.abs(a.x - x) - Math.abs(b.x - x))[0],
         "reorder-keyboard-geometry"
-      ), target = valueReorderAdjacentTarget(hidden, origin.target, candidate2.target, direction);
+      ), target = valueReorderAdjacentTarget(hidden, origin.target, candidate.target, direction);
       destination = target ? candidates.find((occurrence) => sameReorderTarget(occurrence.target, target)) : void 0;
     } else
       destination = direction < 0 ? all.find((o) => o.lane === origin.lane) : all.filter((o) => o.lane === origin.lane).at(-1);
@@ -42846,7 +42435,7 @@ var ReorderMotionPeerCarriers = class _ReorderMotionPeerCarriers {
   /** The next canonical READ must reproduce the exact original source identities and complete endpoint geometry. */
   matches(chips) {
     return this.peers.every((peer) => {
-      const chip = chips.find((candidate2) => candidate2.id === peer.source.id);
+      const chip = chips.find((candidate) => candidate.id === peer.source.id);
       return chip?.roots.length === 1 && requireValue(chip.roots[0], "reorder-motion-peer-carriers").node === peer.root && chip.rects.length === peer.source.rects.length && chip.rects.every((rect, index) => {
         const expected = requireValue(peer.source.rects[index], "reorder-motion-peer-carriers");
         return rect.left === expected.left && rect.right === expected.right && rect.top === expected.top && rect.bottom === expected.bottom;
@@ -44747,10 +44336,10 @@ function prepareReorderLandingContour(fragments) {
         break;
       }
       let next;
-      for (const candidate2 of starts.get(ending) ?? []) {
+      for (const candidate of starts.get(ending) ?? []) {
         if (++work > landingStageWorkLimit) return { status: "unavailable", reason: "work-budget" };
-        if (remaining.has(candidate2)) {
-          next = candidate2;
+        if (remaining.has(candidate)) {
+          next = candidate;
           break;
         }
       }
@@ -44786,11 +44375,11 @@ function reorderLandingFragments(rects, held, viewport) {
   let work = 0;
   for (const rect of fragments) {
     let row;
-    for (const candidate2 of rows) {
+    for (const candidate of rows) {
       if (++work > landingStageWorkLimit) return Object.freeze([]);
-      const first = requireValue(candidate2[0], "reorder-landing-paint");
+      const first = requireValue(candidate[0], "reorder-landing-paint");
       if (Math.abs((first.top + first.bottom - rect.top - rect.bottom) / 2) <= Math.max(1, Math.min(first.bottom - first.top, rect.bottom - rect.top)) / 2) {
-        row = candidate2;
+        row = candidate;
         break;
       }
     }
@@ -48202,8 +47791,13 @@ var SugarPromptEditor = class {
     }
     const profile = resolveFeatureProfile(defaultPreferences, {
       mode: "workflow",
-      loraScheduling: false,
-      unavailableFeatures: ["danbooru_url_import", "spellcheck"]
+      loraScheduling: options.promptControl,
+      unavailableFeatures: [
+        "danbooru_url_import",
+        "spellcheck",
+        "lora_picker",
+        "lora_trigger_words"
+      ]
     });
     const tagCatalog = bundledPromptTagCatalog();
     this.#api = mountEditor(this.#content, {
@@ -48217,6 +47811,7 @@ var SugarPromptEditor = class {
       featureProfile: profile,
       tagCompletionCatalog: tagCatalog,
       wildcardCatalog: options.wildcardCatalog,
+      modelCompletionPopupHost: options.modelCompletions,
       tagLexicon: tagCatalog.lexicon,
       onUpdate: (snapshot) => this.#observe(snapshot),
       onLayout: (metrics) => this.#layout(metrics),
@@ -48258,6 +47853,7 @@ var SugarPromptEditor = class {
     this.#resources = new LoraResourceSession(adapter, (snapshot) => {
       if (generation === this.#resourceGeneration) this.#resourceChanged(snapshot);
     });
+    this.#api.setLoraCompletionCatalog(adapter.completionCatalog ?? null);
     this.#queueResources();
   }
   /** Follow the wildcard folder: decorate and complete the wildcards it holds now. */

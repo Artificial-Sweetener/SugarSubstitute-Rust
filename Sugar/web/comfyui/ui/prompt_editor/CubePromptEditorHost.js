@@ -1,6 +1,8 @@
 import { PromptWidgetBinding } from './PromptWidgetBinding.js';
 import { ComfyCanvasEditorKeyBoundary } from './ComfyCanvasEditorKeyBoundary.js';
-import { preparePromptLoraCatalog } from './PromptLoraCatalog.js';
+import { preparePromptLoraCatalog, promptLoraModel } from './PromptLoraCatalog.js';
+import { feedsPromptControl } from './PromptControlSupport.js';
+import { promptModelCompletions } from './PromptModelCompletions.js';
 import { registerPromptEditorSurfaceOwner } from './PromptEditorSurface.js';
 import { setCubePromptWidgetHeight, clearCubePromptWidgetHeight, } from '../surface/CubePromptWidgetHeightStore.js';
 /** Share native documents while renderer mounts and workflow ownership remain explicit. */
@@ -23,6 +25,7 @@ export class CubePromptEditorHost {
     #sceneQueue = null;
     #wildcards = null;
     #stopWildcards = null;
+    #modelCompletions = null;
     /** Inject existing model catalog and feedback ownership. */
     constructor(document, catalog, report, appearance) {
         this.appearance = appearance;
@@ -35,6 +38,10 @@ export class CubePromptEditorHost {
         this.#release ??= registerPromptEditorSurfaceOwner(this.#document, this);
         const scenes = canvas?.prompts?.scenes;
         this.#sceneQueue ??= scenes ? (scene) => scenes.queueScene(scene) : null;
+        const models = canvas?.models;
+        this.#modelCompletions ??= models
+            ? promptModelCompletions(models, (backendValue) => this.#loraCatalog ? promptLoraModel(this.#loraCatalog, backendValue) : null)
+            : null;
         const wildcards = canvas?.prompts?.wildcards;
         if (wildcards && !this.#wildcards) {
             this.#wildcards = wildcards;
@@ -253,6 +260,8 @@ export class CubePromptEditorHost {
             regionAccent: this.#regions?.accent.current() ?? null,
             sceneQueue: this.#sceneQueue,
             wildcardCatalog: this.#wildcards?.catalog ?? null,
+            promptControl: feedsPromptControl(session.node),
+            modelCompletions: this.#modelCompletions,
             regionHover: (ordinal) => {
                 try {
                     this.#regions?.hoverPrompt(session.node, ordinal);

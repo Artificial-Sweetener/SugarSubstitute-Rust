@@ -28,15 +28,10 @@ import {
   requestCompletionAcceptance,
 } from '../../../../../../frontend/sugarprompt/editor/src/completion-session.ts';
 import {
-  completionWall,
-  installCompletionWall,
-} from '../../../../../../frontend/sugarprompt/editor/src/completion-wall-state.ts';
-import {
   completionState,
   sessionResult,
   refreshCompletionState,
 } from './completion-session-fixture.ts';
-import { prepareLoraWallLayout } from '../../../../../../frontend/sugarprompt/editor/src/lora-wall-layout.ts';
 import { exactSourceExtension } from '../../../../../../frontend/sugarprompt/editor/src/exact-source.ts';
 import { completionAcceptanceTransaction } from '../../../../../../frontend/sugarprompt/editor/src/prompt-completion-acceptance.ts';
 
@@ -48,17 +43,9 @@ function fixture() {
   return { state, result };
 }
 
-test('same-session selection is bounded, caret-independent and reuses actual prepared geometry', () => {
+test('same-session selection is bounded and caret-independent; dismissal rejects later selection', () => {
   let { state } = fixture();
   const session = state.field(completionSession)!;
-  const wall = {
-    result: session.result,
-    layout: prepareLoraWallLayout([0.72, 0.72], 560),
-    from: 0,
-    to: 2,
-    references: [],
-  };
-  state = state.update({ effects: installCompletionWall.of(wall) }).state;
   for (const index of [NaN, -1, 2, 0.5]) {
     const next = state.update({
       effects: selectCompletion.of({ result: session.result, index }),
@@ -69,19 +56,13 @@ test('same-session selection is bounded, caret-independent and reuses actual pre
     effects: selectCompletion.of({ result: session.result, index: 1 }),
   }).state;
   assert.equal(state.field(completionSession)!.selected, 1);
-  assert.equal(state.field(completionWall), wall);
   assert.equal(state.selection.main.head, 2);
   assert.equal(state.doc.toString(), 'ha');
   state = state.update({ effects: installCompletion.of(null) }).state;
-  assert.equal(state.field(completionWall), null);
   state = state.update({
-    effects: [
-      selectCompletion.of({ result: session.result, index: 0 }),
-      installCompletionWall.of(wall),
-    ],
+    effects: selectCompletion.of({ result: session.result, index: 0 }),
   }).state;
   assert.equal(state.field(completionSession), null);
-  assert.equal(state.field(completionWall), null);
 });
 
 test('compatible typing and deletion retain rows and selected identity, but never make old edits current', () => {
@@ -91,16 +72,6 @@ test('compatible typing and deletion retain rows and selected identity, but neve
     effects: selectCompletion.of({ result, index: 1 }),
   }).state;
   const original = state.field(completionSession)!;
-  const layout = prepareLoraWallLayout([0.72, 0.72], 560);
-  state = state.update({
-    effects: installCompletionWall.of({
-      result,
-      layout,
-      from: 0,
-      to: 2,
-      references: [],
-    }),
-  }).state;
   state = state.update({
     changes: { from: 2, insert: 'n' },
     selection: { anchor: 3 },
@@ -111,7 +82,6 @@ test('compatible typing and deletion retain rows and selected identity, but neve
   assert.equal(retained.result, result);
   assert.equal(retained.selected, 1);
   assert.equal(retained.phase, 'refreshing');
-  assert.equal(state.field(completionWall)!.layout, layout);
   assert.equal(completionAcceptanceTransaction(state, result.options[1]!, 'keyboard'), null);
   assert.equal(
     state.update({ effects: installCompletion.of(result) }).state.field(completionSession),
@@ -133,8 +103,7 @@ test('compatible typing and deletion retain rows and selected identity, but neve
   state = state.update({ effects: installCompletion.of(next) }).state;
   assert.equal(state.field(completionSession)!.selected, 1);
   assert.equal(state.field(completionSession)!.presentation, original.presentation);
-  assert.equal(state.field(completionWall)!.layout, layout);
-  assert.equal(state.field(completionWall)!.result, next);
+  assert.equal(state.field(completionSession)!.result, next);
   state = state.update({
     changes: { from: 2, to: 3 },
     selection: { anchor: 2 },
@@ -150,7 +119,6 @@ test('compatible typing and deletion retain rows and selected identity, but neve
   state = state.update({ effects: installCompletion.of(reordered) }).state;
   assert.equal(state.field(completionSession)!.selected, 0);
   assert.notEqual(state.field(completionSession)!.presentation, original.presentation);
-  assert.equal(state.field(completionWall), null);
 });
 
 test('missing candidates reset selection and incompatible query owners start a fresh session', () => {
@@ -236,7 +204,6 @@ test('source, context, caret, directional selection and permission retire candid
         exactSourceExtension('ha'),
         editorFreshness,
         completionSession,
-        completionWall,
         EditorState.readOnly.of(true),
       ]),
     },

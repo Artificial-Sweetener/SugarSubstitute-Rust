@@ -377,10 +377,10 @@ const graphConfigurationLifecycle = new CubeGraphConfigurationLifecycle({
 });
 const modelUpdates = new ModelUpdateClient((path, options) => api.fetchApi(path, options));
 const modelDetectors = new ModelDetectorClient((path, options) => api.fetchApi(path, options));
-/** Route update failures through the established SugarCubes feedback owner. */
-const reportModelUpdateError = (error: unknown): void => {
-  logger.error('SugarCubes model update failed', { error });
-  pushToastMessage('error', 'Model updates unavailable', readErrorMessage(error));
+/** Route one kind of model failure through the established SugarCubes feedback owner. */
+const reportModelFailure = (failure: string, title: string) => (error: unknown) => {
+  logger.error(failure, { error });
+  pushToastMessage('error', title, readErrorMessage(error));
 };
 const modelUpdateLifecycle = new ModelUpdateLifecycle(
   window,
@@ -390,23 +390,17 @@ const modelUpdateLifecycle = new ModelUpdateLifecycle(
 const modelUpdateSettings = new ModelUpdateSettings(
   documentRef ?? document,
   modelUpdates,
-  reportModelUpdateError,
+  reportModelFailure('SugarCubes model update failed', 'Model updates unavailable'),
 );
 const modelProviderSettings = new ModelProviderSettings(
   documentRef ?? document,
   new ModelProviderPreferenceClient((path, options) => api.fetchApi(path, options)),
-  (error) => {
-    logger.error('SugarCubes model provider settings failed', { error });
-    pushToastMessage('error', 'Model provider settings', readErrorMessage(error));
-  },
+  reportModelFailure('SugarCubes model provider settings failed', 'Model provider settings'),
 );
 const modelProviderCacheSettings = new ModelProviderCacheSettings(
   documentRef ?? document,
   new ModelProviderCacheClient((path, options) => api.fetchApi(path, options)),
-  (error) => {
-    logger.error('SugarCubes model cache settings failed', { error });
-    pushToastMessage('error', 'Model cache', readErrorMessage(error));
-  },
+  reportModelFailure('SugarCubes model cache settings failed', 'Model cache'),
 );
 const modelPickers = new ModelPickerHost({
   app: appRef,
@@ -498,7 +492,12 @@ export const sugarCubesExtension: SugarCubesExtension = {
     return canvasInputs.surfaces.withNodeMenuItems(node, cubeAffordances.getNodeMenuItems(node));
   },
   setup: announcedSetup(documentRef ?? document, async () => {
-    promptEditors.setup(canvasInputs.surfaces.regions, { app: appRef, logger, prompts });
+    promptEditors.setup(canvasInputs.surfaces.regions, {
+      app: appRef,
+      logger,
+      prompts,
+      models: modelPickers,
+    });
     await extensionSetupLifecycle.setup();
     workflowHistory.install();
     relations.setup();

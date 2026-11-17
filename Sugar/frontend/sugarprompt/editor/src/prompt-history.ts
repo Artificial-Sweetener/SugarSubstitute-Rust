@@ -51,6 +51,7 @@ export function configurationHistoryIntent(
     'tagLexicon',
     'tagCompletionCatalog',
     'loraCompletionCatalog',
+    'modelCompletionPopupHost',
     'wildcardCatalog',
     'sceneTitleCatalog',
     'sceneQueueHost',

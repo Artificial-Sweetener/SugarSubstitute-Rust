@@ -158,3 +158,59 @@ test.each(['nodes-1', 'nodes-2'] as const)(
     }
   },
 );
+
+test.each(['nodes-1', 'nodes-2'] as const)(
+  '%s completes a LoRA name in the model picker popup only where the prompt loads LoRAs',
+  async (renderer) => {
+    const page = await mountPrompt(fixture, renderer, '', 1, true);
+    try {
+      await page.locator('.cm-content').focus();
+      // Before the opener is complete the word list is the only completion.
+      await page.keyboard.type('blue_ey');
+      await suggests(page, /^blue eyes,/, 'es');
+      await page.keyboard.type(', <lora:ex');
+      const popup = page.locator('.sp-model-completions .sc-model-popup');
+      await popup.locator('.sc-model-tile.sc-model-active').waitFor();
+      // Models and words are never shown together.
+      await page.locator('.cm-tooltip-autocomplete').waitFor({ state: 'detached' });
+      expect(await popup.locator('.sp-completion-row').count()).toBe(0);
+      expect(await popup.locator('.sc-model-tile').getAttribute('data-model-value')).toBe(
+        'folder/example.safetensors',
+      );
+      // The ghost previews the model's name as literal text.
+      await page.locator('.cm-content .cm-tag-ghost', { hasText: 'ample <b>model</b>' }).waitFor();
+      // Enter is ordinary typing; Tab accepts with the default weight.
+      await page.keyboard.press('Tab');
+      await expectSource(page, 'blue_ey, <lora:folder/example:1.00>');
+      await popup.waitFor({ state: 'detached' });
+
+      // A click on the tile accepts too, keeping a weight already typed.
+      await page.keyboard.press('Control+a');
+      await page.keyboard.type('<lora::0.6>');
+      for (let step = 0; step < 5; step++) await page.keyboard.press('ArrowLeft');
+      await page.keyboard.type('e');
+      await popup.locator('.sc-model-tile').click();
+      await expectSource(page, '<lora:folder/example:0.6>');
+      expect(await page.evaluate(() => !!document.activeElement?.closest('.cm-editor'))).toBe(true);
+      const observed = await page.evaluate(() => window.promptBrowserProof.read());
+      expect(observed.errors).toEqual([]);
+    } finally {
+      await page.close();
+    }
+
+    // A prompt that reaches no LoRA-loading encoder is never offered model names.
+    const plain = await mountPrompt(fixture, renderer, '');
+    try {
+      await plain.locator('.cm-content').focus();
+      await plain.keyboard.type('<lora:ex');
+      await plain.waitForTimeout(600);
+      expect(await plain.locator('.sp-model-completions').count()).toBe(0);
+      await plain.keyboard.press('Tab');
+      expect((await plain.evaluate(() => window.promptBrowserProof.read())).source).not.toContain(
+        'folder/example',
+      );
+    } finally {
+      await plain.close();
+    }
+  },
+);

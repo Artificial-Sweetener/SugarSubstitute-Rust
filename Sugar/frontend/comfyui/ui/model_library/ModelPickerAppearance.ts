@@ -62,10 +62,18 @@ export class ModelPickerAppearance {
     this.#refresh();
   }
 
-  /** Theme one new field or portalled popup using the current host preference. */
+  /**
+   * Theme one new field, portalled popup or inline gallery using the current host preference.
+   *
+   * A tracked surface is styled whether or not field pickers are enabled, so a gallery another
+   * owner shows keeps the picker's look.
+   */
   track(surface: HTMLElement): void {
     this.#surfaces.add(surface);
-    this.#apply(surface);
+    if (!this.#style.isConnected) {
+      this.#document.head.append(this.#style);
+      this.#refresh();
+    } else this.#apply(surface);
   }
 
   /** Release scoped tokens before removing an owned surface. */
@@ -73,13 +81,14 @@ export class ModelPickerAppearance {
     this.#surfaces.delete(surface);
     applyOwnedTheme(surface, null);
     delete surface.dataset.scModelAppearance;
+    if (!this.#active && !this.#surfaces.size) this.#style.remove();
   }
 
   /** Restore host appearance when the supported renderer lifetime ends. */
   deactivate(): void {
     this.#active = false;
-    this.#style.remove();
     for (const surface of [...this.#surfaces]) this.release(surface);
+    this.#style.remove();
   }
 
   /** Remove preference observers after releasing all scoped presentation. */
@@ -106,10 +115,14 @@ export class ModelPickerAppearance {
 
   /** Refresh live surfaces in place so search, focus and keyboard selection survive theme changes. */
   readonly #refresh = (): void => {
-    if (!this.#active) return;
+    if (!this.#style.isConnected) return;
     this.#dark = readOwnedDarkTheme(this.#document);
     const style = this.#visualStyle();
-    this.#style.textContent = `${modelPickerCss}\n[data-sc-model-appearance="${style}"]{${style === 'comfy' ? '' : visualStyleTokens(style, this.#dark)}}\n[data-sc-model-native]{display:none!important}.sc-model-mount{width:100%;min-width:0}`;
+    // Native model controls are replaced only while field pickers are enabled.
+    const fields = this.#active
+      ? '[data-sc-model-native]{display:none!important}.sc-model-mount{width:100%;min-width:0}'
+      : '';
+    this.#style.textContent = `${modelPickerCss}\n[data-sc-model-appearance="${style}"]{${style === 'comfy' ? '' : visualStyleTokens(style, this.#dark)}}\n${fields}`;
     for (const surface of this.#surfaces) this.#apply(surface);
   };
 

@@ -1359,6 +1359,9 @@ var unresolvedConditioning = Object.freeze({
 
 // frontend/comfyui/ui/prompt_editor/PromptLoraCatalog.ts
 var prepared = /* @__PURE__ */ new WeakMap();
+function promptLoraModel(catalog, backendValue) {
+  return prepared.get(catalog)?.models.get(backendValue) ?? null;
+}
 function preparePromptLoraCatalog(snapshot, baseUrl, prioritize, previous) {
   const loras = snapshot.items.filter((item) => item.kind === "loras");
   const authoritative = !snapshot.scanning;
@@ -1385,7 +1388,22 @@ function preparePromptLoraCatalog(snapshot, baseUrl, prioritize, previous) {
   });
   const adapter = createLoraCatalogAdapter(
     { revision: `models:${String(snapshot.revision)}`, authoritative, items },
-    void 0,
+    // Everything a person may know a LoRA by finds it when they type its name.
+    {
+      searchMetadata: loras.map((item) => ({
+        backendValue: item.value,
+        text: [
+          item.title,
+          item.version,
+          item.value,
+          item.relativePath,
+          item.folder,
+          item.baseModel,
+          ...item.trainedWords,
+          ...item.tags ?? []
+        ].filter(Boolean).join(" ")
+      }))
+    },
     replaced?.adapter
   );
   const catalog = {
@@ -1405,7 +1423,7 @@ function preparePromptLoraCatalog(snapshot, baseUrl, prioritize, previous) {
       return resources;
     }
   };
-  prepared.set(catalog, { adapter, authoritative, loras });
+  prepared.set(catalog, { adapter, authoritative, loras, models });
   return catalog;
 }
 function safeHttpUrl(value, baseUrl) {
@@ -1421,5 +1439,6 @@ function modelPage(item, baseUrl) {
   return safeHttpUrl(item.providerLinks[0]?.modelPageUrl ?? item.providerUrl, baseUrl);
 }
 export {
-  preparePromptLoraCatalog
+  preparePromptLoraCatalog,
+  promptLoraModel
 };

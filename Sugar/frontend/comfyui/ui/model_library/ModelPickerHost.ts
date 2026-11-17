@@ -26,10 +26,12 @@ import { readComfyModelFields } from './ComfyModelFieldAdapter.js';
 import { ComfyNodeVNodeIndex } from '../surface/ComfyVueTree.js';
 import type { ComfyModelFieldBinding } from './ComfyModelFieldAdapter.js';
 import { ModelCatalogClient } from './ModelCatalogClient.js';
-import type { ModelCatalogSnapshot } from './ModelCatalog.js';
+import type { ModelCatalogItem, ModelCatalogSnapshot } from './ModelCatalog.js';
 import { modelPickerChoices } from './ModelPickerChoices.js';
 import { mountModelPicker } from './vue/ModelPickerVueRuntime.js';
 import type { MountedModelPicker } from './vue/ModelPickerVueRuntime.js';
+import { mountModelGallery } from './vue/ModelGalleryVueRuntime.js';
+import type { ModelGalleryArrow, ModelGalleryEvents } from './vue/ModelGalleryVueRuntime.js';
 import type { ModelPickerFeedback } from './ModelPickerActions.js';
 import type { ModelUpdatePort } from './ModelUpdates.js';
 import type { ModelDetectorPort } from './ModelDetectors.js';
@@ -75,6 +77,17 @@ interface FieldMount {
   readonly releasePresentation: () => void;
   readonly scanning: boolean;
   readonly compatibilityKey: string;
+}
+
+/** One inline picker surface showing another owner's model candidates. */
+export interface ModelGallerySurface {
+  /** The picker popup surface holding the wall; the caller places it. */
+  readonly element: HTMLElement;
+  /** Show these models in order with one current model. */
+  update(items: readonly ModelCatalogItem[], active: number): void;
+  /** The model one arrow key away from `active` on the wall as it is laid out now. */
+  neighbor(active: number, key: ModelGalleryArrow): number;
+  dispose(): void;
 }
 
 /** Follow node and renderer lifetimes while keeping Comfy authoritative for field values. */
@@ -196,6 +209,29 @@ export class ModelPickerHost {
       this.#snapshot,
       () => this.#resolveCubeFields(),
     );
+  }
+
+  /**
+   * Mount the picker's popup surface and wall for an owner that keeps its own candidates.
+   *
+   * The surface is laid out by its container and themed like every picker popup, whether or not
+   * field pickers are enabled.
+   */
+  mountGallery(events: ModelGalleryEvents): ModelGallerySurface {
+    const element = this.#options.document.createElement('div');
+    element.className = 'sc-model-popup sc-model-popup-inline';
+    const gallery = mountModelGallery(element, events);
+    this.#appearance.track(element);
+    return {
+      element,
+      update: (items, active) => gallery.update(items, active),
+      neighbor: (active, key) => gallery.neighbor(active, key),
+      dispose: () => {
+        gallery.dispose();
+        this.#appearance.release(element);
+        element.remove();
+      },
+    };
   }
 
   /** Release mounted Vue apps, pending discovery, and temporary native-control annotations. */

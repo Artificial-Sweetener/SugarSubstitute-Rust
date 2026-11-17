@@ -506,6 +506,14 @@ area = "model_library"
 boundary = "model_library_editor_contract"
 groups = ["editor_actions/integration", "editor_actions/unit"]
 
+[[boundary]]
+name = "model_library_prompt_contract"
+area = "model_library"
+
+[[subscription]]
+boundary = "model_library_prompt_contract"
+groups = ["prompt_editor/unit", "prompt_editor/contract", "prompt_editor/integration"]
+
 [[subscription]]
 boundary = "native_card_presentation"
 groups = ["frontend_core/integration", "model_library/integration", "editor_actions/integration", "relations/integration", "masonry_search/integration", "graph/unit", "output_canvas/integration", "prompt_editor/integration", "input_canvas/integration"]

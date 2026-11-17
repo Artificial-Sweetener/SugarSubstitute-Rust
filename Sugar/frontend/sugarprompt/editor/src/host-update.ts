@@ -32,6 +32,7 @@ import type { WheelMode } from './wheel-mode.js';
 import type { SceneQueueHost } from './scene-queue.js';
 import type { SavedSegmentHost } from './saved-segment-menu.js';
 import type { FieldActionUtilities } from './field-action-utilities.js';
+import type { ModelCompletionPopupHost } from './model-completion-popup.js';
 import type { DocumentCheckpoint, DocumentCheckpointRejection } from './document-checkpoint.js';
 
 /** One native configuration contract serves mounting and atomic updates; prepared service output remains immutable. */
@@ -53,6 +54,8 @@ export interface HostConfiguration {
   readonly tagLexicon?: TagLexicon | null;
   readonly tagCompletionCatalog?: TagCompletionCatalog | null;
   readonly loraCompletionCatalog?: LoraCompletionCatalog | null;
+  /** The host's picker gallery for model candidates; null leaves model names uncompleted. */
+  readonly modelCompletionPopupHost?: ModelCompletionPopupHost | null;
   readonly wildcardCatalog?: WildcardCatalog | null;
   readonly sceneTitleCatalog?: SceneTitleCatalog | null;
   /** Supported post/image-link lookup runs only through the finite native paste owner. Null retains literal clipboard text. */

@@ -19,7 +19,7 @@ import { loraCompletionSuffix, loraReplacement, type LoraQuery } from '../../cor
 import type { LoraCompletionCatalog } from '../../services/src/index.js';
 import { editorFreshness } from './freshness.js';
 import type {
-  PreparedCompletion,
+  ModelCompletion,
   PreparedCompletionResult,
   PreparedCompletionScope,
 } from './prompt-completion-model.js';
@@ -39,18 +39,20 @@ export function loraCompletionOptions(
     contentFrom = completionPosition(scope, query.nameRange.from),
     to = completionPosition(scope, query.nameFieldRange.to);
   if (!rows.length || from === null || contentFrom === null || to === null) return null;
-  const options: PreparedCompletion[] = [];
+  const options: ModelCompletion[] = [];
   for (const row of rows) {
     const replacement = loraReplacement(source, query, row.scheduleName);
     options.push(
       Object.freeze({
         label: row.display,
         detail: row.scheduleName,
-        kind: 'lora',
+        kind: 'lora' as const,
         item: row.item,
         freshness: state.field(editorFreshness),
         caret,
-        ghost: loraCompletionSuffix(query.queryText, row.display, row.scheduleName),
+        // The rest of a name is previewed only where typing would continue it: at the name's end.
+        ghost:
+          caret === to ? loraCompletionSuffix(query.queryText, row.display, row.scheduleName) : '',
         prepareEdit: (current: EditorState) =>
           prepareScopedCompletionEdit(current, scope, replacement.range, replacement.text),
       }),
@@ -58,6 +60,7 @@ export function loraCompletionOptions(
   }
   return options.length
     ? Object.freeze({
+        surface: 'models' as const,
         from,
         to: caret,
         query: Object.freeze({
