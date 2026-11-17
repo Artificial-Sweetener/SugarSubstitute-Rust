@@ -1,3 +1,14 @@
+## [0.2.5](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.2.4...substitute-v0.2.5) (2026-11-17)
+
+### Bug Fixes
+
+* **diagnostics:** a rejected backend output names the check that refused it ([8f8d1ce](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/8f8d1ce39b460bf8cb46004870fe079ea3d0b202))
+* **profile:** a profile whose record is empty, zeroed or missing starts again ([24a8711](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/24a87119efa72e1def641710b6e5084144ec7422))
+* **report:** a failure after the window opened is reported as the application closing ([26239b4](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/26239b4d8b8a6b55c6ede09721c01519975b584b))
+* **setup:** a ComfyUI folder directly inside a drive root can be connected ([a01c24c](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/a01c24c0ba312fbd5eeb311bc047d8c1018d30e7))
+* **setup:** setup says when it cannot use the selected ComfyUI folder ([1970554](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/1970554195d22452697a795d9eb9fb67a1f88c58))
+* **startup:** launches started in the same instant queue instead of failing ([4ae1e28](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/4ae1e28290682eca0416e931ff3698ff5d41be3b))
+
 ## [0.2.4](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.2.3...substitute-v0.2.4) (2026-11-16)
 
 ### Bug Fixes
