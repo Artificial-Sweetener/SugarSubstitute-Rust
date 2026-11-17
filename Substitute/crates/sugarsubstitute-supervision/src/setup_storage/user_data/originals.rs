@@ -42,6 +42,35 @@ struct Record {
     originals: Vec<Original>,
 }
 
+/// Hold the originals writer for one verification or one first publication.
+///
+/// Every launch of an installation passes through here, so launches started in the same
+/// instant meet at this lock. Each holds it only for a bounded read or one publication; a later
+/// launch waits its turn in the kernel instead of failing its start.
+/// # Errors
+/// `WouldBlock` when a holder kept the lock past the short wait or the job deadline,
+/// `Interrupted` on cancellation, and the native cause otherwise.
+fn writer(
+    owner: &protection::Protection,
+    directory: &Directory,
+    context: &JobContext,
+) -> io::Result<File> {
+    use crate::setup_storage::short_lock::{self, LockKind, Refused};
+    let lock = owner.waitable_rendezvous(&directory.path().join("writer"), context)?;
+    short_lock::acquire(&lock, LockKind::Exclusive, context).map_err(|refused| match refused {
+        Refused::Timeout => io::Error::new(
+            io::ErrorKind::WouldBlock,
+            "Another launch kept the original-inputs writer",
+        ),
+        Refused::Cancelled => io::Error::new(
+            io::ErrorKind::Interrupted,
+            "The launch was cancelled while waiting for the original-inputs writer",
+        ),
+        Refused::Storage(cause) => cause,
+    })?;
+    Ok(lock)
+}
+
 /// The first complete snapshot remains immutable when later valid user edits change startup bytes.
 /// Source paths/native identities are historical provenance, never cleanup or launch authority.
 pub(super) fn preserve(
@@ -69,7 +98,7 @@ pub(super) fn preserve(
         .join(format!("{:x}", key.finalize()));
     let directory = user_paths::create_parents(&installation.root, &path, context)?;
     protection::with(context, |owner| {
-        let _writer = owner.exclusive_rendezvous(&directory.path().join("writer"), context)?;
+        let _writer = writer(owner, &directory, context)?;
         inventory(&directory, context)?;
         match directory.read(MANIFEST) {
             Ok(mut file) => {
