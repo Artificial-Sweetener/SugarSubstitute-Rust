@@ -46,6 +46,8 @@ export interface ComfyCubeNodeLifecycleAdapterOptions {
   createInstanceId(): string;
   discardDefinition(id: string): void;
   nodePackMetadata: CubeWorkflowNodePackMetadata;
+  /** Tell workflow-wide owners that a copied Cube now has an identity of its own. */
+  identitiesAssigned(): void;
   logger: Pick<Console, 'debug' | 'error'>;
 }
 
@@ -56,6 +58,7 @@ export class ComfyCubeNodeLifecycleAdapter {
   readonly #inventory: CubeGraphInventory;
   readonly #events: EventTarget;
   readonly #createInstanceId: () => string;
+  readonly #identitiesAssigned: () => void;
   readonly #logger: Pick<Console, 'debug' | 'error'>;
   readonly #nodePackMetadata: CubeWorkflowNodePackMetadata;
   readonly #unsubscribeNodePackMetadata: () => void;
@@ -72,6 +75,7 @@ export class ComfyCubeNodeLifecycleAdapter {
     this.#inventory = options.inventory;
     this.#events = options.events;
     this.#createInstanceId = options.createInstanceId;
+    this.#identitiesAssigned = options.identitiesAssigned;
     this.#logger = options.logger;
     this.#nodePackMetadata = options.nodePackMetadata;
     this.#definitions = new NativeCubeDefinitionOwnership(
@@ -127,6 +131,7 @@ export class ComfyCubeNodeLifecycleAdapter {
     if (this.#disposed) return;
     const seen = new Map<string, CubeNode>();
     const values = this.#inventory.snapshot().rootCubes;
+    let assigned = false;
     for (const value of values) {
       if (!isCubeNode(value)) continue;
       this.#nodePackMetadata.apply(value);
@@ -135,11 +140,13 @@ export class ComfyCubeNodeLifecycleAdapter {
       const existing = seen.get(instanceId);
       if (existing && existing !== value) {
         instanceId = this.#assignFreshInstanceId(value, seen);
+        assigned = true;
       }
       seen.set(instanceId, value);
     }
     this.#definitions.reconcile([...seen.values()]);
     this.#catalog.replace(values);
+    if (assigned) this.#identitiesAssigned();
   }
 
   /** Replace one copied identity without changing its Cube definition identity. */

@@ -121,7 +121,7 @@ export interface ComfyCubeRuntimeOptions {
   app: unknown;
   api: unknown;
   graphGateway: CubeGraphGateway;
-  reconcileCubeOrder(): void;
+  reconcileCubeMembership(): void;
   liteGraph: unknown;
   document: Document;
   logger: Pick<Console, 'debug' | 'error' | 'warn'>;
@@ -244,6 +244,7 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     catalog: nodes,
     events: legacyCanvas.canvas,
     createInstanceId: createUuid,
+    identitiesAssigned: options.reconcileCubeMembership,
     discardDefinition: (id) => discardNativeCubeDefinition(runtimeGraph, liteGraph, id),
     nodePackMetadata: options.nodePackMetadata,
     logger: options.logger,
@@ -259,7 +260,7 @@ export function createComfyCubeRuntime(options: ComfyCubeRuntimeOptions): ComfyC
     nodes,
     history,
     gateway: options.graphGateway,
-    reconcileOrder: options.reconcileCubeOrder,
+    reconcileOrder: options.reconcileCubeMembership,
     graphChanges: canvasGraphChanges,
     isCurrentRoot: () => graphScope.isCurrentRoot(),
     reportError: (error) => {

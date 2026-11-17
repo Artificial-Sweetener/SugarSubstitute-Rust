@@ -62,6 +62,7 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
     });
     const catalog = new CubeNodeCatalog();
     const adapter = new ComfyCubeNodeLifecycleAdapter({
+      identitiesAssigned: jest.fn(),
       discardDefinition: jest.fn(),
       graph,
       inventory: new CubeGraphInventory(graph),
@@ -88,6 +89,7 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
     };
     const nodePackMetadata = new CubeWorkflowNodePackMetadata();
     const adapter = new ComfyCubeNodeLifecycleAdapter({
+      identitiesAssigned: jest.fn(),
       discardDefinition: jest.fn(),
       graph: withTopology(graph),
       inventory: new CubeGraphInventory(graph),
@@ -137,7 +139,9 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
     const events = new EventTarget();
     const catalog = new CubeNodeCatalog();
     const createInstanceId = jest.fn(() => 'pasted-instance');
+    const identitiesAssigned = jest.fn();
     const adapter = new ComfyCubeNodeLifecycleAdapter({
+      identitiesAssigned,
       discardDefinition: jest.fn(),
       graph: withTopology(graph),
       inventory: new CubeGraphInventory(graph),
@@ -148,9 +152,12 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
       logger: { debug: jest.fn(), error: jest.fn() },
     });
 
+    expect(identitiesAssigned).not.toHaveBeenCalled();
     graph._nodes.push(pasted);
     events.dispatchEvent(graphChangeEvent());
 
+    // Workflow-wide owners hear of the copy only once it has an identity of its own.
+    expect(identitiesAssigned).toHaveBeenCalledTimes(1);
     expect(createInstanceId).toHaveBeenCalledTimes(1);
     expect(pasted.properties.sugarcubes_cube).toMatchObject({
       instance_id: 'pasted-instance',
@@ -169,6 +176,7 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
     const catalog = new CubeNodeCatalog();
     const createInstanceId = jest.fn(() => 'unused-instance');
     const adapter = new ComfyCubeNodeLifecycleAdapter({
+      identitiesAssigned: jest.fn(),
       discardDefinition: jest.fn(),
       graph: withTopology(graph),
       inventory: new CubeGraphInventory(graph),
@@ -205,6 +213,7 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
     for (let restore = 0; restore < 6; restore += 1) {
       const catalog = new CubeNodeCatalog();
       const adapter = new ComfyCubeNodeLifecycleAdapter({
+        identitiesAssigned: jest.fn(),
         discardDefinition: jest.fn(),
         graph: withTopology(graph),
         inventory: new CubeGraphInventory(graph),
@@ -232,6 +241,7 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
     const graph = withTopology({ _nodes: [original] as unknown[] });
     const catalog = new CubeNodeCatalog();
     const adapter = new ComfyCubeNodeLifecycleAdapter({
+      identitiesAssigned: jest.fn(),
       discardDefinition: jest.fn(),
       graph,
       inventory: new CubeGraphInventory(graph),
@@ -259,6 +269,7 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
     const graph = withTopology({ _nodes: [] as unknown[], onConfigure: configured });
     const catalog = new CubeNodeCatalog();
     const adapter = new ComfyCubeNodeLifecycleAdapter({
+      identitiesAssigned: jest.fn(),
       discardDefinition: jest.fn(),
       graph,
       inventory: new CubeGraphInventory(graph),
@@ -290,6 +301,7 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
     const events = new EventTarget();
     const catalog = new CubeNodeCatalog();
     const adapter = new ComfyCubeNodeLifecycleAdapter({
+      identitiesAssigned: jest.fn(),
       discardDefinition: jest.fn(),
       graph: withTopology(graph),
       inventory: new CubeGraphInventory(graph),
@@ -316,6 +328,7 @@ describe('ComfyCubeNodeLifecycleAdapter', () => {
     const events = new EventTarget();
     const catalog = new CubeNodeCatalog();
     const adapter = new ComfyCubeNodeLifecycleAdapter({
+      identitiesAssigned: jest.fn(),
       discardDefinition: jest.fn(),
       graph: withTopology(graph),
       inventory: new CubeGraphInventory(graph),

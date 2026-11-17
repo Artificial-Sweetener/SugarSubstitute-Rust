@@ -3,6 +3,11 @@ import { canLinkField, canShareNodeConfiguration, initializeNodeLinks, resolveRe
 export function reconcileRelationMembership(fields, nodes, state) {
     const nodeIds = new Set(nodes.map((node) => node.id));
     const fieldIds = new Set(fields.map((field) => field.id));
+    // A node recorded as its own source holds no link: forgetting the record lets it be linked as
+    // an added Cube is.
+    for (const [id, sourceId] of Object.entries(state.nodeLinks))
+        if (sourceId === id)
+            Reflect.deleteProperty(state.nodeLinks, id);
     promoteMissingMasters(state.nodeLinks, nodes.map((node) => node.id), (id) => nodes.some((node) => node.id === id && node.linkable && node.fields.length > 0), (id) => {
         for (const field of fields)
             if (field.nodeId === id)

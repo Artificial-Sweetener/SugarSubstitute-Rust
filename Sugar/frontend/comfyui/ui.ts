@@ -227,7 +227,7 @@ function createCubeRuntime(): ComfyCubeRuntime {
     api,
     caches: ui.runtimeCaches,
     graphGateway: ui.workflowGraphAnalyses,
-    reconcileCubeOrder: () => relations.reconcileCubeOrder(),
+    reconcileCubeMembership: () => relations.reconcileCubeMembership(),
     liteGraph,
     document: documentRef,
     logger,

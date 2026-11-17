@@ -23,6 +23,7 @@ import { projectWorkflowMasonry } from '../../../frontend/comfyui/ui/surface/mas
 import type { NativeGraphNode } from '../../../frontend/comfyui/ui/cube/ComfyCubeGraphBuilder.js';
 import type { ComfyGraph } from '../../../frontend/comfyui/ui/types/graph.js';
 import { nativeCube } from '../support/native_cube.js';
+import type { CubeNode } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import {
   CubeRelationPresenter,
   type RelationCardView,
@@ -254,6 +255,99 @@ test('Cubes from a file keep exactly the links it recorded, and a linked prompt 
   expect(bNegative.widgets?.[0]?.value).toBe('b negative');
   expect(aNegative.widgets?.[0]?.value).toBe('a negative');
   visibility.dispose();
+});
+
+/** Supply a Cube whose loader feeds one model patch with a strength of its own. */
+function patchedCube(id: string, strength: number, x: number): [CubeNode, NativeGraphNode] {
+  const loader: NativeGraphNode = {
+    id: 'loader',
+    type: 'ModelLoader',
+    title: 'Models',
+    pos: [0, 0],
+    size: [330, 140],
+    properties: { sugarcubes_symbol: 'loader' },
+    inputs: [],
+    outputs: [{ name: 'MODEL', type: 'MODEL' }],
+    widgets: [],
+    connect() {},
+  };
+  const patch: NativeGraphNode = {
+    id: 'patch',
+    type: 'ModelPatch',
+    title: 'Model Patch',
+    mode: 0,
+    pos: [0, 200],
+    size: [330, 140],
+    properties: { sugarcubes_symbol: 'patch' },
+    inputs: [{ name: 'model', type: 'MODEL', link: 1 }],
+    outputs: [{ name: 'MODEL', type: 'MODEL' }],
+    widgets: [{ name: 'strength', type: 'number', value: strength }],
+    connect() {},
+  };
+  const cube = nativeCube(id, [loader, patch], x);
+  cube.subgraph!.links = new Map([
+    [1, { id: 1, origin_id: 'loader', origin_slot: 0, target_id: 'patch', target_slot: 0 }],
+  ]);
+  return [cube, patch];
+}
+
+test('a linked node that is not a prompt folds to its card and link choice the same way', () => {
+  const [a, aPatch] = patchedCube('a', 0.4, 0);
+  const [b, bPatch] = patchedCube('b', 0.9, 800);
+  const graph: ComfyGraph = { _nodes: [a, b], extra: {} };
+  const port = new NativeRelationWorkflowPort(
+    () => graph,
+    document,
+    console,
+    () => null,
+  );
+  const relations = new WorkflowRelations(port);
+  const nodes = relations.reconcile().nodes;
+  const patchOf = (cubeId: string) =>
+    nodes.find((n) => n.cubeId === cubeId && n.classType === 'ModelPatch')!;
+  const strength = bPatch.widgets![0]!;
+  const visibility = new NativeRelationVisibility();
+
+  relations.linkNode(patchOf('b').id, patchOf('a').id);
+  visibility.reconcile(relations.snapshot(), port.inventorySource);
+  expect(strength.value).toBe(0.4);
+  expect(isNativeWidgetPresented(strength)).toBe(false);
+  expect(isNativeWidgetLocallyRepresented(strength)).toBe(true);
+
+  relations.linkNode(patchOf('b').id, null);
+  visibility.reconcile(relations.snapshot(), port.inventorySource);
+  expect(strength.value).toBe(0.9);
+  expect(isNativeWidgetPresented(strength)).toBe(true);
+  expect(aPatch.widgets![0]!.value).toBe(0.4);
+  visibility.dispose();
+});
+
+test('a pasted Cube joins linking only once it has an identity of its own', () => {
+  const a = nativeCube('a', [prompt('positive', 'Positive', 'a positive')], 0);
+  const b = nativeCube('b', [prompt('positive', 'Positive', 'b positive')], 800);
+  const pasted = nativeCube('b', [prompt('positive', 'Positive', 'b positive')], 1600);
+  const graph: ComfyGraph = { _nodes: [a, b], extra: {} };
+  const port = new NativeRelationWorkflowPort(
+    () => graph,
+    document,
+    console,
+    () => null,
+  );
+  const relations = new WorkflowRelations(port);
+  const id = (cube: string) => JSON.stringify(['cube', cube, 'positive']);
+  expect(relations.reconcile().state.nodeLinks).toEqual({ [id('a')]: null, [id('b')]: id('a') });
+
+  // Comfy adds the copy still carrying the identity it was copied with.
+  graph._nodes!.push(pasted);
+  expect(relations.reconcile().state.nodeLinks).toEqual({ [id('a')]: null, [id('b')]: id('a') });
+
+  // The node lifecycle gives the copy its own identity: it is linked as an added Cube is.
+  pasted.properties.sugarcubes_cube = { instance_id: 'c' };
+  expect(relations.reconcile().state.nodeLinks).toEqual({
+    [id('a')]: null,
+    [id('b')]: id('a'),
+    [id('c')]: id('a'),
+  });
 });
 
 test('excludes connected prompt widgets and resource inheritance while retaining Cube placement order', () => {

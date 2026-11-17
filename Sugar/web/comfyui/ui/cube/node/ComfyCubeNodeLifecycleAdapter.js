@@ -27,6 +27,7 @@ export class ComfyCubeNodeLifecycleAdapter {
     #inventory;
     #events;
     #createInstanceId;
+    #identitiesAssigned;
     #logger;
     #nodePackMetadata;
     #unsubscribeNodePackMetadata;
@@ -42,6 +43,7 @@ export class ComfyCubeNodeLifecycleAdapter {
         this.#inventory = options.inventory;
         this.#events = options.events;
         this.#createInstanceId = options.createInstanceId;
+        this.#identitiesAssigned = options.identitiesAssigned;
         this.#logger = options.logger;
         this.#nodePackMetadata = options.nodePackMetadata;
         this.#definitions = new NativeCubeDefinitionOwnership(options.graph, options.createInstanceId, options.discardDefinition);
@@ -89,6 +91,7 @@ export class ComfyCubeNodeLifecycleAdapter {
             return;
         const seen = new Map();
         const values = this.#inventory.snapshot().rootCubes;
+        let assigned = false;
         for (const value of values) {
             if (!isCubeNode(value))
                 continue;
@@ -99,11 +102,14 @@ export class ComfyCubeNodeLifecycleAdapter {
             const existing = seen.get(instanceId);
             if (existing && existing !== value) {
                 instanceId = this.#assignFreshInstanceId(value, seen);
+                assigned = true;
             }
             seen.set(instanceId, value);
         }
         this.#definitions.reconcile([...seen.values()]);
         this.#catalog.replace(values);
+        if (assigned)
+            this.#identitiesAssigned();
     }
     /** Replace one copied identity without changing its Cube definition identity. */
     #assignFreshInstanceId(node, reserved) {

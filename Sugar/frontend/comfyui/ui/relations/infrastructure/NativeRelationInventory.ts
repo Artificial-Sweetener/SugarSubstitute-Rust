@@ -74,11 +74,16 @@ export class NativeRelationInventory {
     const configurationIdentities = new NativeRelationIdentity();
     const editableNodes: Array<{ id: string; readMode(): number; writeMode(mode: number): void }> =
       [];
+    const cubeIds = new Set<string>();
     for (const root of graph ? orderWorkflowNodes(graph, connections) : []) {
       if (isCubeNode(root)) {
         const identity = requireCubeIdentity(root);
         const cubeId =
           typeof identity.instance_id === 'string' ? identity.instance_id : String(root.id);
+        // A pasted Cube carries the identity it was copied with until the node lifecycle gives
+        // it its own; until then it has no relations to read.
+        if (cubeIds.has(cubeId)) continue;
+        cubeIds.add(cubeId);
         const surface = parseCubeSurfaceState(root.properties.sugarcubes_surface);
         const cards = projectNodeCards(root.subgraph._nodes ?? [], surface, root.subgraph, root);
         for (const card of cards) {

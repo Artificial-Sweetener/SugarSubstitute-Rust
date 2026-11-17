@@ -123,8 +123,11 @@ export class RelationHostLifecycle {
             this.options.reportError(error);
         }
     }
-    /** Reconcile reordered membership inside the graph mutation owner's native history transaction. */
-    reconcileCubeOrder() {
+    /**
+     * Reconcile Cubes that were reordered or given their own identity, inside the graph mutation
+     * owner's native history transaction.
+     */
+    reconcileCubeMembership() {
         this.#port.joinTransaction(() => this.relations.reconcile());
     }
     /** Finish identified topology and value consequences inside the native mutation's history entry. */

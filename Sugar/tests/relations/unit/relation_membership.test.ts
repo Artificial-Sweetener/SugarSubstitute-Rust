@@ -116,6 +116,17 @@ function fixture(choice = false) {
   };
 }
 
+test('a node recorded as its own source is linked again as an added Cube is', () => {
+  const f = fixture();
+  f.relations.reconcile();
+  const saved = f.capture();
+  // A Cube pasted before it had an identity of its own left this record on the original.
+  saved.state.nodeLinks = { a: null, b: 'b', c: 'c' };
+  const snapshot = f.restore(saved);
+  expect(snapshot.state.nodeLinks).toEqual({ a: null, b: 'a', c: 'a' });
+  expect(snapshot.resolved.find((field) => field.field.id === 'b')?.source).toBe('a');
+});
+
 test('the first linked prompt owns visible shared contents after reorder', () => {
   const f = fixture();
   f.relations.reconcile();
