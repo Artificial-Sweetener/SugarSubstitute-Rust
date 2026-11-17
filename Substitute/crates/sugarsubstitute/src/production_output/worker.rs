@@ -35,7 +35,9 @@ pub(super) fn parse(
     let state::State { transcript, frame } = &mut *state;
     let frame = frame.as_ref().ok_or(OutputError::Order)?;
     let decoded = FrameCodec::decode(frame.as_bytes())?;
-    let DecodedPayload::Reply(reply) = decoded.payload else { return Err(OutputError::Identity) };
+    let DecodedPayload::Reply(reply) = decoded.payload else {
+        return Err(OutputError::identity("frame_payload"));
+    };
     if let Some(notice) = recovery::notice(binding, pending, decoded.header, reply)? {
         return Ok(Parsed { delivery: None, change: None, snapshot: None, notice: Some(notice) });
     }
@@ -48,16 +50,16 @@ pub(super) fn parse(
                 || delivery.delivery_id.get()
                     != ack
                         .map_or(Some(1), |v| v.get().checked_add(1))
-                        .ok_or(OutputError::Identity)?
+                        .ok_or_else(|| OutputError::identity("delivery_sequence_overflow"))?
             {
-                return Err(OutputError::Identity);
+                return Err(OutputError::identity("delivery_lease_or_sequence"));
             }
             let parsed = apply_delivery(transcript, binding, delivery, &source.custody)?;
             drop(state);
             check(context)?;
             Ok(parsed)
         }
-        _ => Err(OutputError::Identity),
+        _ => Err(OutputError::identity("reply_kind")),
     }
 }
 

@@ -19,7 +19,7 @@ pub(super) struct Source {
 impl Source {
     pub(super) fn check(&self, context: &JobContext) -> Result<(), OutputError> {
         if context.owner_id() != self.owner || context.scope_id() != self.scope {
-            return Err(OutputError::Identity);
+            return Err(OutputError::identity("job_owner_or_scope"));
         }
         worker::check(context)
     }

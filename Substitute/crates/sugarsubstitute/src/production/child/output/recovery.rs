@@ -195,7 +195,7 @@ impl ProductionChild {
                     replacement.cause = Some(Box::new(if exact {
                         OutputError::Terminal(kind)
                     } else {
-                        OutputError::Identity
+                        OutputError::identity("replacement_completion")
                     }));
                 }
             }

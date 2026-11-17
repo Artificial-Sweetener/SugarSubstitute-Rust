@@ -35,6 +35,21 @@ pub(crate) enum OutputError {
     /// Actual finite worker ended without a success value.
     Terminal(TerminalKind),
 }
+impl OutputError {
+    /// Reject output whose identity differs, recording which check refused it.
+    ///
+    /// Header, lease, delivery and job checks all end in the one closed `Identity` category, so
+    /// the category cannot say which of them failed. The check's name is logged once here, at
+    /// the rejection, and carries no path, text or frame bytes.
+    pub(crate) fn identity(check: &'static str) -> Self {
+        tracing::warn!(
+            operation = "output_identity_rejected",
+            check,
+            "Rejected production output whose identity differs"
+        );
+        Self::Identity
+    }
+}
 impl fmt::Display for OutputError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

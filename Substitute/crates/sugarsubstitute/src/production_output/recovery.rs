@@ -34,7 +34,7 @@ pub(super) fn notice(
     reply: ReplyOutcome<'_>,
 ) -> Result<Option<BackendNotice>, OutputError> {
     if header != pending.header {
-        return Err(OutputError::Identity);
+        return Err(OutputError::identity("notice_header"));
     }
     let result = match reply {
         ReplyOutcome::BackendUnavailable { failed, status, affected_clients, retry_ready }
@@ -65,7 +65,7 @@ pub(super) fn notice(
         {
             return Ok(None);
         }
-        _ => return Err(OutputError::Identity),
+        _ => return Err(OutputError::identity("notice_reply_kind")),
     };
     Ok(Some(result))
 }
@@ -76,7 +76,7 @@ impl OutputOwner {
             || identity.run != self.binding.run
             || self.main_identity.is_some_and(|current| current != identity)
         {
-            return Err(OutputError::Identity);
+            return Err(OutputError::identity("running_main"));
         }
         self.main_identity = Some(identity);
         Ok(())
@@ -90,7 +90,7 @@ impl OutputOwner {
         failed: LeaseReference,
     ) -> Result<WireMessage<'static>, OutputError> {
         if self.main_identity != Some(identity) || failed != self.binding.lease {
-            return Err(OutputError::Identity);
+            return Err(OutputError::identity("retry_main_or_lease"));
         }
         self.prepare_request(header, original, RequestKind::Retry(identity))
     }
@@ -124,7 +124,7 @@ impl OutputOwner {
             || header.request.is_none()
             || header.deadline_qpc <= 0
         {
-            return Err(OutputError::Identity);
+            return Err(OutputError::identity("request_header"));
         }
         self.pending = Some(Pending { header, original, admitted: false, kind });
         self.pending_message().map(|value| value.0).ok_or(OutputError::Order)

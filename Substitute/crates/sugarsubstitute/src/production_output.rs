@@ -88,7 +88,7 @@ impl OutputOwner {
                 || binding.lease.generation != binding.resource.generation
                 || binding.run.owner != binding.resource.owner
             {
-                return Err(OutputError::Identity);
+                return Err(OutputError::identity("binding_lease"));
             }
             Ok(Self {
                 source: state::Source::new(binding, &context)?,
@@ -204,9 +204,10 @@ impl OutputOwner {
         let Some(completion) = job.try_take_completion() else {
             return Ok(None);
         };
-        let matching = completion.scope_id == job.scope_id()
-            && completion.spec == job.spec()
-            && completion.outcome.kind() == noticed;
+        let job_scope = job.scope_id();
+        let same_job = completion.spec == job.spec();
+        let matching =
+            completion.scope_id == job_scope && same_job && completion.outcome.kind() == noticed;
         self.job = None;
         self.noticed = None;
         if !matching || self.closed || completion.outcome.kind() != TerminalKind::Success {
@@ -221,7 +222,15 @@ impl OutputOwner {
                     _ => OutputError::Terminal(kind),
                 }
             } else {
-                OutputError::Identity
+                tracing::warn!(
+                    operation = "output_completion_mismatch",
+                    noticed = ?noticed,
+                    completed = ?kind,
+                    same_scope = completion.scope_id == job_scope,
+                    same_job = same_job,
+                    "The parser completion differs from the notice that announced it"
+                );
+                OutputError::identity("completion_notice")
             };
             self.terminal = Some(completion);
             self.closed = true;
@@ -247,7 +256,7 @@ impl OutputOwner {
         };
         let JobOutcome::Success(parsed) = completion.outcome else {
             self.closed = true;
-            return Err(OutputError::Identity);
+            return Err(OutputError::identity("success_outcome"));
         };
         self.pending = None;
         if let Some(delivery) = parsed.delivery {
@@ -294,7 +303,7 @@ impl OutputOwner {
         let pending = self.pending.filter(|p| p.admitted).ok_or(OutputError::Order)?;
         let message = FrameCodec::decode(bytes)?;
         if message.header != pending.header {
-            return Err(OutputError::Identity);
+            return Err(OutputError::identity("retiring_reply_header"));
         }
         match message.payload {
             DecodedPayload::Reply(ReplyOutcome::OutputIdle(lease))
@@ -306,7 +315,7 @@ impl OutputOwner {
                         == self.acknowledged.map_or(Some(1), |id| id.get().checked_add(1)) => {}
             DecodedPayload::Reply(reply)
                 if recovery::notice(self.binding, pending, message.header, reply)?.is_some() => {}
-            _ => return Err(OutputError::Identity),
+            _ => return Err(OutputError::identity("retiring_reply_kind")),
         }
         Ok(message.header)
     }
@@ -317,7 +326,7 @@ impl OutputOwner {
             return Err(OutputError::Order);
         }
         if self.pending.is_some_and(|pending| pending.header != header) {
-            return Err(OutputError::Identity);
+            return Err(OutputError::identity("retiring_pull_header"));
         }
         if self.source.state.lock().map_err(|_| OutputError::Poisoned)?.frame.is_some() {
             return Err(OutputError::Order);
