@@ -80,4 +80,5 @@ pub(in super::super) const KO: InstallerMessages = InstallerMessages {
     cache_full: "설치 캐시 저장 용량 한도에 도달했습니다. 설치 프로그램을 닫았다가 다시 열어 사용이 끝난 캐시 파일을 정리한 후 다시 시도하세요.",
     checking_python: "Python 환경 확인 중",
     select_python: "이 ComfyUI 설치에서 사용하는 Python 실행 파일을 선택하세요.",
+    comfy_folder_unusable: "설치 프로그램에서 이 ComfyUI 폴더를 사용할 수 없습니다. ComfyUI의 main.py가 들어 있는 폴더를 선택한 후 다시 시도하세요.",
 };

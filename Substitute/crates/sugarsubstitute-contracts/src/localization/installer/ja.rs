@@ -80,4 +80,5 @@ pub(in super::super) const JA: InstallerMessages = InstallerMessages {
     cache_full: "セットアップのキャッシュ容量が上限に達しました。セットアップを閉じて再度開き、使用が終了したキャッシュファイルを削除してから、もう一度お試しください。",
     checking_python: "Python 環境を確認しています",
     select_python: "この ComfyUI で使用する Python 実行ファイルを選択してください。",
+    comfy_folder_unusable: "セットアップはこの ComfyUI フォルダーを使用できませんでした。ComfyUI の main.py が入っているフォルダーを選択して、もう一度お試しください。",
 };

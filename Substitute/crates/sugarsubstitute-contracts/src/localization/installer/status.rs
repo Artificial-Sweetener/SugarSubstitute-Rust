@@ -40,6 +40,8 @@ pub enum FailureMessage {
     CacheFull,
     /// The attached installation needs an explicit Python selection.
     SelectPython,
+    /// The selected ComfyUI folder could not be opened or read.
+    ComfyFolderUnusable,
 }
 impl FailureMessage {
     /// Resolve product feedback without formatting an internal cause into product copy.
@@ -48,6 +50,7 @@ impl FailureMessage {
             Self::SetupFailed => copy.setup_failed,
             Self::CacheFull => copy.cache_full,
             Self::SelectPython => copy.select_python,
+            Self::ComfyFolderUnusable => copy.comfy_folder_unusable,
         }
     }
 }

@@ -80,4 +80,5 @@ pub(in super::super) const ZH_HANS: InstallerMessages = InstallerMessages {
     cache_full: "安装程序已达到缓存存储上限。请关闭并重新打开安装程序以清理已停用的缓存文件，然后重试。",
     checking_python: "正在检查 Python 环境",
     select_python: "请选择此 ComfyUI 安装使用的 Python 可执行文件。",
+    comfy_folder_unusable: "安装程序无法使用此 ComfyUI 文件夹。请选择包含 ComfyUI 的 main.py 的文件夹，然后重试。",
 };

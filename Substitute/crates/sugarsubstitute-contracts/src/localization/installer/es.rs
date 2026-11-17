@@ -80,4 +80,5 @@ pub(in super::super) const ES: InstallerMessages = InstallerMessages {
     cache_full: "La instalación alcanzó el límite de almacenamiento de caché. Cierra y vuelve a abrir el instalador para limpiar los archivos de caché que ya no se usan y vuelve a intentarlo.",
     checking_python: "Comprobando el entorno de Python",
     select_python: "Selecciona el ejecutable de Python que utiliza esta instalación de ComfyUI.",
+    comfy_folder_unusable: "La instalación no pudo usar esta carpeta de ComfyUI. Selecciona la carpeta que contiene el archivo main.py de ComfyUI y vuelve a intentarlo.",
 };

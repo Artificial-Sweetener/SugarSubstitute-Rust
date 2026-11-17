@@ -13,7 +13,7 @@ import { Events } from './events.mjs'
 import { NativeRecords, NativeRecordError, bindNativeRecords } from './records'
 import { NativeMetadata, MetadataError, bindNativeMetadata, metadataRoot } from './metadata'
 import { NativeDownloads, DownloadStorageError, bindNativeDownloads, downloadsRoot } from './downloads'
-import { ProductFailure } from './product-messages'
+import { ProductFailure, type FailureCode } from './product-messages'
 import { connectProxyHost, closeProxyHost, receiveProxyResult } from '../../crates/sugarsubstitute-networking/worker/proxy'
 
 declare const UPSTREAM_REVISION: string
@@ -115,7 +115,9 @@ async function dispatch(command: ReturnType<Decoder['push']>[number]): Promise<v
     await downloads.drain()
     send(command.id, control.signal.aborted ? 'cancelled' : 'failed', {
       message: cause instanceof Error ? cause.message : String(cause),
-      ...(cause instanceof NativeRecordError || cause instanceof MetadataError || cause instanceof DownloadStorageError || cause instanceof ProductFailure ? { statusCode: cause.statusCode } : {}),
+      // A folder the native owner refuses during inspection is the user's ComfyUI choice.
+      ...(command.operation === 'inspect' && cause instanceof NativeRecordError ? { statusCode: 'comfyFolderUnusable' satisfies FailureCode }
+        : cause instanceof NativeRecordError || cause instanceof MetadataError || cause instanceof DownloadStorageError || cause instanceof ProductFailure ? { statusCode: cause.statusCode } : {}),
     })
   } finally {
     await downloads.drain()

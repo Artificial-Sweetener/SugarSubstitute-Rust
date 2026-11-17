@@ -80,4 +80,5 @@ pub(in super::super) const EN: InstallerMessages = InstallerMessages {
     cache_full: "Setup reached its cache storage limit. Close setup and reopen it to reclaim retired cache files, then try again.",
     checking_python: "Checking the Python environment",
     select_python: "Select the Python executable used by this ComfyUI installation.",
+    comfy_folder_unusable: "Setup could not use this ComfyUI folder. Select the folder that contains ComfyUI's main.py, then try again.",
 };

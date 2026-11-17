@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 /** Closed owned-text codes. Rust resolves these through the sole product catalog. */
 export type ProgressCode = 'checkingPython' | 'checkingSugarCubes' | 'installingSugarCubes' | 'sugarCubesReady'
-export type FailureCode = 'selectPython'
+export type FailureCode = 'selectPython' | 'comfyFolderUnusable'
 export type Progress =
   | { phase: string; percent: number; statusCode: ProgressCode }
   | { phase: string; percent: number; status: string; textOwner: 'comfy-desktop' }

@@ -174,6 +174,8 @@ pub struct InstallerMessages {
     pub checking_python: &'static str,
     /// Installer select python copy.
     pub select_python: &'static str,
+    /// Installer comfy folder unusable copy.
+    pub comfy_folder_unusable: &'static str,
 }
 
 /// Resolve through the sole locale registry with canonical English fallback.
@@ -259,6 +261,7 @@ impl InstallerMessages {
             self.cache_full,
             self.checking_python,
             self.select_python,
+            self.comfy_folder_unusable,
         ]
         .into_iter()
     }

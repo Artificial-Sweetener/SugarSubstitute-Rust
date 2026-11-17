@@ -150,6 +150,8 @@ pub enum InstallerText {
     CheckingPython,
     /// Select the select python label.
     SelectPython,
+    /// Select the comfy folder unusable label.
+    ComfyFolderUnusable,
     /// Select the continue action label.
     ContinueAction,
 }
@@ -229,6 +231,7 @@ impl InstallerText {
             Self::CacheFull => copy.cache_full,
             Self::CheckingPython => copy.checking_python,
             Self::SelectPython => copy.select_python,
+            Self::ComfyFolderUnusable => copy.comfy_folder_unusable,
             Self::ContinueAction => copy.continue_action,
         }
     }
