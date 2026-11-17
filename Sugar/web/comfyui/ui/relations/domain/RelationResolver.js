@@ -76,13 +76,6 @@ export function compatibleNodes(left, right) {
             return peer !== undefined && commonFieldDomain([field, peer]) !== null;
         }));
 }
-/**
- * Whether a node shows its fields while it is linked. A prompt does: its box shows the prompt it
- * shares, and typing there edits that prompt. Any other linked node shows its link choice alone.
- */
-export function presentsLinkedFields(node) {
-    return node !== undefined && node.promptRole !== undefined;
-}
 /** Select a compatible master strictly before its follower in the workflow order. */
 export function canLinkNode(target, source, nodes, state) {
     return (nodes.indexOf(source) < nodes.indexOf(target) &&

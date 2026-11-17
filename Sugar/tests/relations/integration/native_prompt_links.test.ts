@@ -30,7 +30,10 @@ import {
 import { ComfyCubeGraphReorderHost } from '../../../frontend/comfyui/ui/workflow/infrastructure/ComfyCubeGraphReorderHost.js';
 import { ensureRelationStyles } from '../../../frontend/comfyui/ui/relations/presentation/RelationStyles.js';
 import { NativeRelationVisibility } from '../../../frontend/comfyui/ui/relations/infrastructure/NativeRelationVisibility.js';
-import { isNativeWidgetPresented } from '../../../frontend/comfyui/ui/surface/NativeWidgetPresentation.js';
+import {
+  isNativeWidgetLocallyRepresented,
+  isNativeWidgetPresented,
+} from '../../../frontend/comfyui/ui/surface/NativeWidgetPresentation.js';
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -183,9 +186,9 @@ test.each([false, true])(
       expect(first.surface.rows.get('value')?.querySelector('textarea')).not.toBeNull();
       expect(first.surface.root.querySelector<HTMLElement>('.sc-node-link')?.hidden).toBe(true);
       expect(later.surface.root.querySelector<HTMLElement>('.sc-node-link')?.hidden).toBe(false);
-      // A linked prompt keeps its box: it shows the prompt it shares.
-      expect(later.surface.rows.get('value')?.hasAttribute('data-sc-relation-hidden')).toBe(false);
-      expect(later.surface.rows.get('value')?.querySelector('textarea')).not.toBeNull();
+      expect(later.surface.rows.get('value')?.hasAttribute('data-sc-relation-hidden')).toBe(
+        !nativeWidgetVisibility,
+      );
     }
     expect(projectWorkflowMasonry(graph, [a, b]).map((section) => section.cube?.id)).toEqual([
       'b',
@@ -206,7 +209,7 @@ test.each([false, true])(
   },
 );
 
-test('Cubes from a file keep exactly the links it recorded, and a linked prompt stays shown and editable', () => {
+test('Cubes from a file keep exactly the links it recorded, and a linked prompt keeps its card', () => {
   const aPositive = prompt('positive', 'Positive', 'a positive');
   const aNegative = prompt('negative', 'Negative', 'a negative');
   const bPositive = prompt('positive', 'Positive', 'b positive');
@@ -236,24 +239,21 @@ test('Cubes from a file keep exactly the links it recorded, and a linked prompt 
   expect(bPositive.widgets?.[0]?.value).toBe('b positive');
   expect(bNegative.widgets?.[0]?.value).toBe('a negative');
 
-  // Both prompts of the later Cube keep their boxes, linked or not.
+  // The linked prompt's box folds away and its card stays for the link choice in its title;
+  // the independent prompt keeps its box.
   const visibility = new NativeRelationVisibility();
   visibility.reconcile(relations.snapshot(), port.inventorySource);
   expect(isNativeWidgetPresented(bPositive.widgets![0]!)).toBe(true);
-  expect(isNativeWidgetPresented(bNegative.widgets![0]!)).toBe(true);
-  visibility.dispose();
+  expect(isNativeWidgetPresented(bNegative.widgets![0]!)).toBe(false);
+  expect(isNativeWidgetLocallyRepresented(bNegative.widgets![0]!)).toBe(true);
 
-  // Typing in the linked box edits the prompt both Cubes share.
-  bNegative.widgets![0]!.value = 'typed in the later Cube';
-  relations.reconcile(false);
-  expect(aNegative.widgets?.[0]?.value).toBe('typed in the later Cube');
-  expect(bNegative.widgets?.[0]?.value).toBe('typed in the later Cube');
-  expect(bPositive.widgets?.[0]?.value).toBe('b positive');
-
-  // Unlinking gives the later Cube the prompt it had of its own.
+  // Unlinking gives the later Cube the prompt it had of its own, in its box again.
   relations.linkNode(node('b', 'negative').id, null);
+  visibility.reconcile(relations.snapshot(), port.inventorySource);
+  expect(isNativeWidgetPresented(bNegative.widgets![0]!)).toBe(true);
   expect(bNegative.widgets?.[0]?.value).toBe('b negative');
-  expect(aNegative.widgets?.[0]?.value).toBe('typed in the later Cube');
+  expect(aNegative.widgets?.[0]?.value).toBe('a negative');
+  visibility.dispose();
 });
 
 test('excludes connected prompt widgets and resource inheritance while retaining Cube placement order', () => {

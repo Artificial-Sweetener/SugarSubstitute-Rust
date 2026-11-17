@@ -1,4 +1,4 @@
-import { canLinkField, canLinkNode, compatibleNodes, linkedFieldMembers, presentsLinkedFields, } from '../domain/RelationResolver.js';
+import { canLinkField, canLinkNode, compatibleNodes, linkedFieldMembers, } from '../domain/RelationResolver.js';
 import { choiceRestrictions } from '../domain/FieldCompatibility.js';
 import { prepareNativePresentation } from '../../surface/NativePresentationReady.js';
 import { setNativeFieldSuppressed } from '../../surface/NativeFieldPresentation.js';
@@ -120,8 +120,7 @@ export class CubeRelationPresenter {
             return;
         }
         if (effective?.source && snapshot.state.nodeLinks[field.nodeId]) {
-            const node = snapshot.nodes.find((candidate) => candidate.id === field.nodeId);
-            if (row && !surface.nativeWidgetVisibility && !presentsLinkedFields(node))
+            if (row && !surface.nativeWidgetVisibility)
                 hidden.add(row);
             return;
         }

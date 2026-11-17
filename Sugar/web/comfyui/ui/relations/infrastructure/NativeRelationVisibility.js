@@ -1,11 +1,10 @@
 import { isRecord } from '../../types/common.js';
 import { NativeWidgetPresentation } from '../../surface/NativeWidgetPresentation.js';
-import { presentsLinkedFields } from '../domain/RelationResolver.js';
 /**
  * Hide fields represented by the toolbar or a linked node while retaining native value owners.
  *
  * A field the toolbar owns has moved off its card. A field a link owns is replaced on its card by
- * the link choice in the card's title, so the card stays. A linked prompt keeps its field.
+ * the link choice in the card's title, so the card stays and the choice can unlink it.
  */
 export class NativeRelationVisibility {
     #overridden = new NativeWidgetPresentation();
@@ -16,12 +15,9 @@ export class NativeRelationVisibility {
         const overridden = new Set();
         const linked = new Set();
         const fields = new Map();
-        const nodes = new Map(snapshot.nodes.map((node) => [node.id, node]));
         for (const item of snapshot.resolved) {
             const followsLink = item.source !== null && Boolean(snapshot.state.nodeLinks[item.field.nodeId]);
             if (!item.override && !followsLink)
-                continue;
-            if (!item.override && presentsLinkedFields(nodes.get(item.field.nodeId)))
                 continue;
             const owner = inventory.owners.get(item.field.id);
             if (!owner)

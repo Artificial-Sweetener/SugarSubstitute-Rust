@@ -34,7 +34,6 @@ import {
   linkedFieldMembers,
   resolveRelations,
   validateSharedEdit,
-  presentsLinkedFields,
 } from '../domain/RelationResolver.js';
 import type { RelationInventory, RelationWorkflowPort } from './RelationPorts.js';
 
@@ -98,8 +97,6 @@ export class WorkflowRelations {
           seedMode: group.seedMode,
         };
       let resolved = resolveRelations(fields, inventory.nodes, state, groups);
-      if (this.#adoptFollowerEdits(bindings, fields, inventory.nodes, resolved, state))
-        resolved = resolveRelations(fields, inventory.nodes, state, groups);
       for (const item of resolved) {
         const controlled = item.source !== null || item.override !== null;
         if (controlled && !Object.hasOwn(state.locals, item.field.id))
@@ -348,38 +345,6 @@ export class WorkflowRelations {
       this.port.save(state);
       this.reconcile(false);
     });
-  }
-
-  /**
-   * Take a value typed into a linked field that still shows its control as an edit of the field
-   * it is linked to, and report whether any was taken. Only a field whose link and shared value
-   * are unchanged since the last snapshot can have been typed into.
-   */
-  #adoptFollowerEdits(
-    bindings: RelationInventory,
-    fields: readonly FieldContract[],
-    nodes: readonly NodeContract[],
-    resolved: readonly ResolvedField[],
-    state: RelationState,
-  ): boolean {
-    const before = this.#snapshot;
-    if (!before) return false;
-    let adopted = false;
-    for (const item of resolved) {
-      if (!item.source || item.override) continue;
-      const previous = before.resolved.find((candidate) => candidate.field.id === item.field.id);
-      if (!previous || previous.source !== item.source || previous.override) continue;
-      if (item.field.value === previous.value || item.value !== previous.value) continue;
-      if (!presentsLinkedFields(nodes.find((node) => node.id === item.field.nodeId))) continue;
-      const owner = fields.find((field) => field.id === item.source);
-      if (!owner) continue;
-      const value = item.field.value;
-      Object.assign(owner, { value });
-      if (Object.hasOwn(state.locals, owner.id)) state.locals[owner.id] = value;
-      bindings.fields.find((field) => field.contract.id === owner.id)?.write(value);
-      adopted = true;
-    }
-    return adopted;
   }
 
   /** Project only validated editable fields; native connections are never mutated. */
