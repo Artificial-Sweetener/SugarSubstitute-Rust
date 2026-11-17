@@ -1,3 +1,9 @@
+## [0.19.1](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.19.0...sugarcubes-v0.19.1) (2026-11-17)
+
+### Bug Fixes
+
+* **import:** the second Cube of a workflow the Python application saved runs ([c07a3b9](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/c07a3b903c3c160c753a10830cb8e3d73824c18a))
+
 ## [0.19.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.18.0...sugarcubes-v0.19.0) (2026-11-17)
 
 ### Features
