@@ -1,3 +1,9 @@
+## [0.19.3](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.19.2...sugarcubes-v0.19.3) (2026-11-17)
+
+### Bug Fixes
+
+* **relations:** a linked prompt keeps its box and its link selector on every Cube ([6b86353](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/6b863535aa176559fcdf55a2285302d53459383b))
+
 ## [0.19.2](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.19.1...sugarcubes-v0.19.2) (2026-11-17)
 
 ### Bug Fixes
