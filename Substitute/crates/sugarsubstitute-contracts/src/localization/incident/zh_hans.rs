@@ -48,6 +48,7 @@ pub static ZH_HANS: ReportMessages = ReportMessages {
     show_report: "显示报告",
     hide_report: "隐藏报告",
     startup_message: "SugarSubstitute 无法启动。您可以复制此报告来分享发生的情况。",
+    stopped_message: "SugarSubstitute 已停止工作。您可以复制此报告来分享发生的情况。",
     update_title: "更新失败",
     update_message: "无法安装更新。您当前的版本仍可继续使用，您可以复制或导出此报告。",
     version: "版本",

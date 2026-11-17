@@ -135,7 +135,7 @@ pub use startup_consume_failure::{
     StartupChildFailure, StartupChildStep, StartupConsumeFailure, StartupConsumeStage,
 };
 #[cfg(target_os = "windows")]
-pub use startup_error_dialog::show_startup_failure;
+pub use startup_error_dialog::{show_running_failure, show_startup_failure};
 mod timing;
 pub use startup_failure::{
     StartupBootstrapCause, StartupCanvasMessageCause, StartupCaptureState, StartupCauseCode,

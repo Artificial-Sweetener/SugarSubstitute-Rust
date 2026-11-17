@@ -204,6 +204,7 @@ pub(crate) fn run_application<C: EntryActivation + 'static>(
     Err(super::entry_failure::report_failure::<C, _>(
         cause,
         sugarsubstitute_desktop::show_startup_failure,
+        sugarsubstitute_desktop::show_running_failure,
     ))
 }
 

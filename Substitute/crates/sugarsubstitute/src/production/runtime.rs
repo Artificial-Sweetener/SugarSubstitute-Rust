@@ -23,6 +23,7 @@ pub(crate) fn execute_inherited(
         super::entry_failure::report_failure::<ProductionActivation, _>(
             Box::new(cause),
             sugarsubstitute_desktop::show_startup_failure,
+            sugarsubstitute_desktop::show_running_failure,
         )
     })?;
     let mut command = super::dispatch::installed_command(std::env::current_exe()?)?;

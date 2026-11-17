@@ -48,6 +48,7 @@ pub static KO: ReportMessages = ReportMessages {
     show_report: "보고서 표시",
     hide_report: "보고서 숨기기",
     startup_message: "SugarSubstitute를 시작할 수 없습니다. 이 보고서를 복사하여 무슨 일이 있었는지 공유할 수 있습니다.",
+    stopped_message: "SugarSubstitute가 작동을 멈췄습니다. 이 보고서를 복사하여 무슨 일이 있었는지 공유할 수 있습니다.",
     update_title: "업데이트 실패",
     update_message: "업데이트를 설치할 수 없습니다. 현재 버전은 계속 작동하며 이 보고서를 복사하거나 내보낼 수 있습니다.",
     version: "버전",

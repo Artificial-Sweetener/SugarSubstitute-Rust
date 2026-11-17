@@ -115,6 +115,19 @@ impl ReportPresentation {
         )
     }
 
+    /// A run that ended in a failure after its window had opened: the same report, explained
+    /// as the application stopping rather than failing to start.
+    pub fn running_failure(
+        copy: &'static Messages,
+        window_title: &str,
+        summary: &str,
+        details: String,
+    ) -> Self {
+        let mut report = Self::startup_failure(copy, window_title, summary, details);
+        report.content.message = copy.report.stopped_message.to_owned();
+        report
+    }
+
     /// A failed update attempt: version and step as summary facts, then the full report.
     pub fn update_failure(
         copy: &'static Messages,

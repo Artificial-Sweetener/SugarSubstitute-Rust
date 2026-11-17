@@ -48,6 +48,7 @@ pub static ES: ReportMessages = ReportMessages {
     show_report: "Mostrar informe",
     hide_report: "Ocultar informe",
     startup_message: "SugarSubstitute no pudo iniciarse. Puedes copiar este informe para compartir lo que ocurrió.",
+    stopped_message: "SugarSubstitute dejó de funcionar. Puedes copiar este informe para compartir lo que ocurrió.",
     update_title: "La actualización falló",
     update_message: "No se pudo instalar la actualización. La versión que tienes sigue funcionando y puedes copiar o exportar este informe.",
     version: "Versión",

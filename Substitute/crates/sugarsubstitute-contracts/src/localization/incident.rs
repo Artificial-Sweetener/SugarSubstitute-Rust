@@ -140,6 +140,8 @@ pub struct ReportMessages {
     pub hide_report: &'static str,
     /// Explain a startup failure report.
     pub startup_message: &'static str,
+    /// Explain a failure report shown after the window had opened.
+    pub stopped_message: &'static str,
     /// Heading of an update failure report.
     pub update_title: &'static str,
     /// Explain that an update failed while the installed version remains usable.
@@ -160,7 +162,7 @@ pub struct ReportMessages {
 
 impl ReportMessages {
     /// Borrow every owned label for complete-coverage validation.
-    pub fn labels(&self) -> [&'static str; 72] {
+    pub fn labels(&self) -> [&'static str; 73] {
         [
             self.title,
             self.explanation,
@@ -222,6 +224,7 @@ impl ReportMessages {
             self.show_report,
             self.hide_report,
             self.startup_message,
+            self.stopped_message,
             self.update_title,
             self.update_message,
             self.version,

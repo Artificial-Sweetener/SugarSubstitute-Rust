@@ -59,10 +59,14 @@ fn only_accepted_normal_shutdown_suppresses_a_nested_failure_dialog() -> Result<
         let reported = crate::production::entry_failure::report_failure::<
             super::super::tests::NoChild,
             std::io::Error,
-        >(failure, |_, _, _, _| {
-            shown.set(true);
-            Ok(())
-        });
+        >(
+            failure,
+            |_, _, _, _| {
+                shown.set(true);
+                Ok(())
+            },
+            |_, _, _, _| Err(std::io::Error::other("Reported as a running failure")),
+        );
         assert_eq!(shown.get(), !normal);
         assert!(std::ptr::eq(original, reported.as_ref() as *const dyn Error));
     }

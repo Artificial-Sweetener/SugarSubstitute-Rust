@@ -25,6 +25,26 @@ pub(in crate::production) fn locale<C: EntryActivation + 'static>(
     localization::messages("en")
 }
 
+/// Whether the failed lifetime had opened its window before it failed: its coordinator observed
+/// authenticated main, browser and backend readiness. A failure before that is a startup failure.
+pub(in crate::production) fn window_opened<C: EntryActivation + 'static>(
+    cause: &(dyn Error + 'static),
+) -> bool {
+    let mut current = Some(cause);
+    for _ in 0..16 {
+        let Some(cause) = current else {
+            break;
+        };
+        if let Some(failure) = cause.downcast_ref::<RunFailure<C>>() {
+            return failure.lifetime.authority.as_ref().is_some_and(
+                crate::production::coordinator_authority::CoordinatorAuthority::window_opened,
+            );
+        }
+        current = cause.source();
+    }
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -66,15 +86,18 @@ mod tests {
             assert_eq!(locale::<NoChild>(failure.as_ref()).id, selected.id);
             let mut shown = false;
             let original = failure.as_ref() as *const dyn Error;
-            let returned = crate::production::entry_failure::report_failure::<
-                NoChild,
-                std::io::Error,
-            >(failure, |_, _, summary, details| {
-                assert_eq!(summary, selected.report.startup_failed);
-                assert!(details.to_string().contains("Original failure"));
-                shown = true;
-                Ok(())
-            });
+            let returned =
+                crate::production::entry_failure::report_failure::<NoChild, std::io::Error>(
+                    failure,
+                    |_, _, summary, details| {
+                        assert_eq!(summary, selected.report.startup_failed);
+                        assert!(details.to_string().contains("Original failure"));
+                        shown = true;
+                        Ok(())
+                    },
+                    // No window had opened, so this failure is never reported as a running one.
+                    |_, _, _, _| Err(std::io::Error::other("Reported as a running failure")),
+                );
             assert!(shown);
             assert!(std::ptr::eq(original, returned.as_ref() as *const dyn Error));
         }

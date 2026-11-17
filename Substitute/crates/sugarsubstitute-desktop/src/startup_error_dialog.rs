@@ -34,6 +34,24 @@ pub fn show_startup_failure(
     .map_err(|cause| DesktopError::boxed("startup_failure_report", cause))
 }
 
+/// Show a failure that ended a run after its window had opened, on the main thread after
+/// native teardown. Same contract as [`show_startup_failure`]; only the explanation differs.
+/// # Errors
+/// Preserves diagnostic formatting, native window and rendering failures.
+pub fn show_running_failure(
+    copy: &'static Messages,
+    title: &str,
+    summary: &str,
+    details: fmt::Arguments<'_>,
+) -> Result<(), DesktopError> {
+    let details = Details::format(MAX_DETAILS_BYTES, copy.report.omitted, details)?;
+    show_report(
+        ReportPresentation::running_failure(copy, title, summary, details),
+        &mut StartupReport,
+    )
+    .map_err(|cause| DesktopError::boxed("running_failure_report", cause))
+}
+
 /// Collect a scalar-safe diagnostic prefix without an unbounded intermediate String.
 struct Details {
     text: String,

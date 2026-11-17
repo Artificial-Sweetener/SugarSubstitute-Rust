@@ -48,6 +48,7 @@ pub static JA: ReportMessages = ReportMessages {
     show_report: "レポートを表示",
     hide_report: "レポートを非表示",
     startup_message: "SugarSubstitute を起動できませんでした。このレポートをコピーして、発生した内容を共有できます。",
+    stopped_message: "SugarSubstitute が動作を停止しました。このレポートをコピーして、発生した内容を共有できます。",
     update_title: "アップデートに失敗しました",
     update_message: "アップデートをインストールできませんでした。現在のバージョンは引き続き使用でき、このレポートをコピーまたはエクスポートできます。",
     version: "バージョン",
