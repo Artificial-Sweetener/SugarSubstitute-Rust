@@ -29,6 +29,12 @@ from .artifact_models import (
     ImportedWorkflowArtifact,
 )
 from .native_workflow_service import SugarScriptWorkflowAuthoringService
+from .composed_workflow_service import (
+    ComposedWorkflowAuthoringService,
+    ComposedWorkflowImport,
+    ComposedWorkflowImportError,
+    ExactIntegerField,
+)
 from .legacy_workflow_service import LegacyWorkflowAuthoringService
 from .legacy_workflow_values import LegacyWorkflowImportError
 from .native_workflow_projection import (
@@ -44,6 +50,10 @@ from .native_workflow_normalization import (
 __all__ = [
     "NativeCubeImport",
     "ArtifactAuthorityState",
+    "ComposedWorkflowAuthoringService",
+    "ComposedWorkflowImport",
+    "ComposedWorkflowImportError",
+    "ExactIntegerField",
     "ArtifactImportAuthority",
     "ArtifactSynchronizationStamp",
     "ImportedArtifactInterpretation",

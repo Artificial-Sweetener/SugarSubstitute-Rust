@@ -23,6 +23,7 @@ import { SugarScriptWorkflowArtifactCompanionService } from '../sugarscript/Suga
 import { NativeWorkflowMaterializer } from '../workflow/NativeWorkflowMaterializer.js';
 import { LegacyWorkflowAuthoringApi } from '../workflow/LegacyWorkflowAuthoringApi.js';
 import { LegacyWorkflowImportService } from '../workflow/LegacyWorkflowImportService.js';
+import { recordExactIntegers } from '../workflow/ExactIntegerRelations.js';
 /** Own native workflow import entrypoints and their file adapters. */
 export class CubeImportHostCoordinator {
     #ui;
@@ -60,7 +61,7 @@ export class CubeImportHostCoordinator {
             ? new SugarScriptImageFileHostAdapter({
                 host: this.#app,
                 importSource: (source) => this.importSugarScript(source),
-                importWorkflow: (workflow) => this.importLegacyWorkflow(workflow),
+                importWorkflow: (workflow, source) => this.importLegacyWorkflow(workflow, this.computeDropOrigin(), source),
                 validateWorkflow: (workflow) => this.#legacyWorkflowApi.compile(workflow),
                 retainWorkflowSource: (source) => new SugarScriptWorkflowArtifactCompanionService(this.#sugarScriptApi, () => this.#app?.graph ?? null).retain(source),
                 feedback: this.#ui.toast,
@@ -83,13 +84,13 @@ export class CubeImportHostCoordinator {
         return new SugarScriptImportService(this.#sugarScriptApi, this.#nativeWorkflowMaterializer(runtime, graph)).import(source, origin);
     }
     /** Reconcile and atomically import a persisted group-era Cube workflow. */
-    async importLegacyWorkflow(workflow, origin = this.computeDropOrigin()) {
+    async importLegacyWorkflow(workflow, origin = this.computeDropOrigin(), source) {
         const runtime = this.#getRuntime();
         runtime.graphScope.assertCurrentRoot('persisted Cube workflow import');
         const graph = this.#app?.graph;
         if (!graph)
             throw new Error('Comfy root graph is unavailable.');
-        return new LegacyWorkflowImportService(this.#legacyWorkflowApi, this.#nativeWorkflowMaterializer(runtime, graph)).import(workflow, origin);
+        return new LegacyWorkflowImportService(this.#legacyWorkflowApi, this.#nativeWorkflowMaterializer(runtime, graph), (fields) => recordExactIntegers(graph, fields)).import(workflow, origin, source);
     }
     /** Build the shared native workflow mutation owner for one root graph. */
     #nativeWorkflowMaterializer(runtime, graph) {

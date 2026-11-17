@@ -36,6 +36,7 @@ import { SugarScriptWorkflowArtifactCompanionService } from '../sugarscript/Suga
 import { NativeWorkflowMaterializer } from '../workflow/NativeWorkflowMaterializer.js';
 import { LegacyWorkflowAuthoringApi } from '../workflow/LegacyWorkflowAuthoringApi.js';
 import { LegacyWorkflowImportService } from '../workflow/LegacyWorkflowImportService.js';
+import { recordExactIntegers } from '../workflow/ExactIntegerRelations.js';
 
 interface ImportLogger {
   warn(...values: unknown[]): void;
@@ -87,7 +88,8 @@ export class CubeImportHostCoordinator {
       ? new SugarScriptImageFileHostAdapter({
           host: this.#app,
           importSource: (source) => this.importSugarScript(source),
-          importWorkflow: (workflow) => this.importLegacyWorkflow(workflow),
+          importWorkflow: (workflow, source) =>
+            this.importLegacyWorkflow(workflow, this.computeDropOrigin(), source),
           validateWorkflow: (workflow) => this.#legacyWorkflowApi.compile(workflow),
           retainWorkflowSource: (source) =>
             new SugarScriptWorkflowArtifactCompanionService(
@@ -125,6 +127,7 @@ export class CubeImportHostCoordinator {
   async importLegacyWorkflow(
     workflow: Record<string, unknown>,
     origin: Vec2 = this.computeDropOrigin(),
+    source?: string,
   ): Promise<NativeWorkflowMaterializationResult> {
     const runtime = this.#getRuntime();
     runtime.graphScope.assertCurrentRoot('persisted Cube workflow import');
@@ -133,7 +136,8 @@ export class CubeImportHostCoordinator {
     return new LegacyWorkflowImportService(
       this.#legacyWorkflowApi,
       this.#nativeWorkflowMaterializer(runtime, graph),
-    ).import(workflow, origin);
+      (fields) => recordExactIntegers(graph, fields),
+    ).import(workflow, origin, source);
   }
 
   /** Build the shared native workflow mutation owner for one root graph. */

@@ -37,7 +37,9 @@ from sugarcubes.backend.self_update.http_client import (
     HttpFailureKind,
 )
 from sugarcubes.authoring import (
+    ComposedWorkflowAuthoringService,
     LegacyWorkflowAuthoringService,
+    NativeWorkflowNormalizer,
     SugarScriptWorkflowAuthoringService,
 )
 from sugarcubes.backend.services import (
@@ -432,6 +434,10 @@ def backend_services_factory() -> BackendServicesFactory:
             resolver=workflow_resolver,
             preparer=workflow_preparer,
         )
+        composed_workflow_authoring = ComposedWorkflowAuthoringService(
+            normalizer=NativeWorkflowNormalizer(workflow_resolver),
+            preparer=workflow_preparer,
+        )
         return BackendServices(
             library=library,
             picker_catalog=picker_catalog,
@@ -451,6 +457,7 @@ def backend_services_factory() -> BackendServicesFactory:
             workflow_source_sync=workflow_source_sync,
             sugarscript_authoring=sugarscript_authoring,
             legacy_workflow_authoring=legacy_workflow_authoring,
+            composed_workflow_authoring=composed_workflow_authoring,
             self_update=offline_self_update(extension_root),
             release_notes=offline_release_notes(),
         )

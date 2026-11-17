@@ -29,6 +29,8 @@ export interface PngArtifactInput {
 export interface PngSugarScriptMetadata {
   sugarScript: string | null;
   workflow: Record<string, unknown> | null;
+  /** The workflow record's own text, whose whole numbers no parse has rounded yet. */
+  workflowSource: string | null;
 }
 
 /** Identify bounded, user-actionable failures at the image adapter boundary. */
@@ -64,6 +66,7 @@ export async function readPngSugarScriptMetadata(
   let sawEnd = false;
   let sugarScript: string | null = null;
   let workflow: Record<string, unknown> | null = null;
+  let workflowSource: string | null = null;
   while (offset < bytes.byteLength) {
     chunks += 1;
     if (chunks > MAX_CHUNKS) {
@@ -89,6 +92,7 @@ export async function readPngSugarScriptMetadata(
         throw artifactError('image.workflow_too_large', 'PNG workflow metadata exceeds 32 MB.');
       }
       workflow = parseWorkflow(text.value);
+      workflowSource = text.value;
     }
     if (text?.keyword === 'sugar_script') {
       if (sugarScript !== null) {
@@ -110,7 +114,7 @@ export async function readPngSugarScriptMetadata(
   if (!sawEnd || offset !== bytes.byteLength) {
     throw artifactError('image.invalid_png', 'PNG chunk stream is incomplete or trailing.');
   }
-  return { sugarScript, workflow };
+  return { sugarScript, workflow, workflowSource };
 }
 
 /** Extract a script-only artifact and refuse to bypass workflow authority. */

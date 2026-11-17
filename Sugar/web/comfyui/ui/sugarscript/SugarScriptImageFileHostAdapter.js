@@ -74,6 +74,18 @@ export class SugarScriptImageFileHostAdapter {
         if (metadata.sugarScript === null && metadata.workflow === null) {
             return this.#delegate(file, arguments_);
         }
+        if (metadata.sugarScript === null && isDocumentCarriedWorkflow(metadata.workflow)) {
+            try {
+                const result = await this.#importWorkflow(metadata.workflow, metadata.workflowSource ?? undefined);
+                this.#feedback?.push?.('success', 'Cube workflow imported', file.name);
+                return result;
+            }
+            catch (error) {
+                // Comfy cannot load Cubes that hold no native nodes, so there is nothing to fall back to.
+                this.#reportFailure(error, 'Cube workflow import failed');
+                return undefined;
+            }
+        }
         if (metadata.sugarScript === null && isManagedCubeWorkflow(metadata.workflow)) {
             try {
                 const result = await this.#importWorkflow(metadata.workflow);
@@ -178,6 +190,35 @@ function isManagedCubeWorkflow(workflow) {
             typeof values.cube_id === 'string' &&
             typeof values.cube_version === 'string');
     });
+}
+/**
+ * Recognize a workflow SugarSubstitute's Python application saved: every Cube definition holds
+ * its Cube document and no native nodes. A workflow this page saved carries native nodes beside
+ * each document and loads through Comfy as it is.
+ */
+function isDocumentCarriedWorkflow(workflow) {
+    const definitions = workflow?.definitions;
+    const subgraphs = typeof definitions === 'object' && definitions !== null
+        ? definitions.subgraphs
+        : null;
+    if (!Array.isArray(subgraphs))
+        return false;
+    let documents = 0;
+    for (const subgraph of subgraphs) {
+        if (typeof subgraph !== 'object' || subgraph === null)
+            continue;
+        const { extra, nodes } = subgraph;
+        const document = typeof extra === 'object' && extra !== null
+            ? extra.sugarcubes_document
+            : null;
+        if (typeof document !== 'object' || document === null)
+            continue;
+        // The Python application wrote an explicit empty node list; anything else is not its form.
+        if (!Array.isArray(nodes) || nodes.length > 0)
+            return false;
+        documents += 1;
+    }
+    return documents > 0;
 }
 /** Consume only failures that prove SugarScript metadata was present. */
 function isRecognizedSugarScriptFailure(error) {

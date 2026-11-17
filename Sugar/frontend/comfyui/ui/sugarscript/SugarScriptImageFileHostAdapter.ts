@@ -31,7 +31,8 @@ interface SugarScriptImageFeedback {
 interface SugarScriptImageFileHostAdapterOptions {
   host: SugarScriptFileHost;
   importSource(source: string): Promise<unknown>;
-  importWorkflow(workflow: Record<string, unknown>): Promise<unknown>;
+  /** `source` is the workflow's saved text when its whole numbers must stay exact. */
+  importWorkflow(workflow: Record<string, unknown>, source?: string): Promise<unknown>;
   validateWorkflow(workflow: Record<string, unknown>): Promise<unknown>;
   retainWorkflowSource(source: string): Promise<unknown>;
   feedback?: SugarScriptImageFeedback | null;
@@ -42,7 +43,10 @@ interface SugarScriptImageFileHostAdapterOptions {
 export class SugarScriptImageFileHostAdapter {
   readonly #host: SugarScriptFileHost;
   readonly #importSource: (source: string) => Promise<unknown>;
-  readonly #importWorkflow: (workflow: Record<string, unknown>) => Promise<unknown>;
+  readonly #importWorkflow: (
+    workflow: Record<string, unknown>,
+    source?: string,
+  ) => Promise<unknown>;
   readonly #validateWorkflow: (workflow: Record<string, unknown>) => Promise<unknown>;
   readonly #retainWorkflowSource: (source: string) => Promise<unknown>;
   readonly #feedback: SugarScriptImageFeedback | null;
@@ -96,6 +100,20 @@ export class SugarScriptImageFileHostAdapter {
     }
     if (metadata.sugarScript === null && metadata.workflow === null) {
       return this.#delegate(file, arguments_);
+    }
+    if (metadata.sugarScript === null && isDocumentCarriedWorkflow(metadata.workflow)) {
+      try {
+        const result = await this.#importWorkflow(
+          metadata.workflow,
+          metadata.workflowSource ?? undefined,
+        );
+        this.#feedback?.push?.('success', 'Cube workflow imported', file.name);
+        return result;
+      } catch (error: unknown) {
+        // Comfy cannot load Cubes that hold no native nodes, so there is nothing to fall back to.
+        this.#reportFailure(error, 'Cube workflow import failed');
+        return undefined;
+      }
     }
     if (metadata.sugarScript === null && isManagedCubeWorkflow(metadata.workflow)) {
       try {
@@ -222,6 +240,36 @@ function isManagedCubeWorkflow(
       typeof values.cube_version === 'string'
     );
   });
+}
+
+/**
+ * Recognize a workflow SugarSubstitute's Python application saved: every Cube definition holds
+ * its Cube document and no native nodes. A workflow this page saved carries native nodes beside
+ * each document and loads through Comfy as it is.
+ */
+function isDocumentCarriedWorkflow(
+  workflow: Record<string, unknown> | null,
+): workflow is Record<string, unknown> {
+  const definitions = workflow?.definitions;
+  const subgraphs =
+    typeof definitions === 'object' && definitions !== null
+      ? (definitions as Record<string, unknown>).subgraphs
+      : null;
+  if (!Array.isArray(subgraphs)) return false;
+  let documents = 0;
+  for (const subgraph of subgraphs as unknown[]) {
+    if (typeof subgraph !== 'object' || subgraph === null) continue;
+    const { extra, nodes } = subgraph as Record<string, unknown>;
+    const document =
+      typeof extra === 'object' && extra !== null
+        ? (extra as Record<string, unknown>).sugarcubes_document
+        : null;
+    if (typeof document !== 'object' || document === null) continue;
+    // The Python application wrote an explicit empty node list; anything else is not its form.
+    if (!Array.isArray(nodes) || nodes.length > 0) return false;
+    documents += 1;
+  }
+  return documents > 0;
 }
 
 /** Consume only failures that prove SugarScript metadata was present. */

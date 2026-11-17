@@ -420,6 +420,51 @@ test('does not remove a host wrapper installed after setup', () => {
   expect(host.handleFile).toBe(laterWrapper);
 });
 
+test('a document-carried Cube workflow is imported from its saved text, never through the host', async () => {
+  const original = jest.fn(async () => 'host');
+  const host: SugarScriptFileHost = { handleFile: original };
+  const push = jest.fn();
+  const importWorkflow = jest.fn(
+    async (_workflow: Record<string, unknown>, _source?: string) => 'rebuilt',
+  );
+  const adapter = new SugarScriptImageFileHostAdapter({
+    host,
+    importSource: async () => undefined,
+    importWorkflow,
+    validateWorkflow: async () => undefined,
+    retainWorkflowSource: async () => undefined,
+    feedback: { push },
+    readErrorMessage: (error) => (error instanceof Error ? error.message : String(error)),
+  });
+  adapter.setup();
+  // The seed is written as text here: parsing it as a number is what loses its last digits.
+  const source =
+    '{"nodes":[],"extra":{"seed":17066688399168319613},"definitions":{"subgraphs":' +
+    '[{"id":"a","nodes":[],"extra":{"sugarcubes_document":{"cube_id":"Example/Pack/A.cube"}}}]}}';
+
+  await expect(host.handleFile(pngFile(textChunk('workflow', source)))).resolves.toBe('rebuilt');
+  expect(importWorkflow).toHaveBeenCalledTimes(1);
+  expect(importWorkflow.mock.calls[0]?.[1]).toBe(source);
+  expect(original).not.toHaveBeenCalled();
+  expect(push).toHaveBeenCalledWith('success', 'Cube workflow imported', expect.any(String));
+
+  // A workflow this page saved carries native nodes beside each document: Comfy loads it.
+  const native = source.replace('"id":"a","nodes":[]', '"id":"a","nodes":[{"id":1}]');
+  await expect(host.handleFile(pngFile(textChunk('workflow', native)))).resolves.toBe('host');
+  expect(importWorkflow).toHaveBeenCalledTimes(1);
+
+  // Comfy cannot load Cubes without native nodes, so a failed rebuild is reported, not passed on.
+  importWorkflow.mockRejectedValueOnce(new Error('The document of Cube A is invalid'));
+  original.mockClear();
+  await expect(host.handleFile(pngFile(textChunk('workflow', source)))).resolves.toBeUndefined();
+  expect(original).not.toHaveBeenCalled();
+  expect(push).toHaveBeenLastCalledWith(
+    'error',
+    'Cube workflow import failed',
+    'The document of Cube A is invalid',
+  );
+});
+
 function createAdapter(
   host: SugarScriptFileHost,
   importSource: (source: string) => Promise<unknown>,

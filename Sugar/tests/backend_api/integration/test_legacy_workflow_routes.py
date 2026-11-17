@@ -26,6 +26,9 @@ from pathlib import Path
 from typing import cast
 
 from sugarcubes.authoring import (
+    ComposedWorkflowAuthoringService,
+    ComposedWorkflowImport,
+    ExactIntegerField,
     LegacyWorkflowAuthoringService,
     LegacyWorkflowImportError,
     NativeCubeImport,
@@ -118,6 +121,60 @@ def test_legacy_workflow_route_rejects_ambiguous_or_missing_payloads(
     assert invalid.status == 400
     assert ambiguous.status == 422
     assert "exact version" in str(_mapping(decode_json_response(ambiguous))["error"])
+
+
+def test_document_carrying_workflow_text_keeps_whole_numbers_exact(
+    tmp_path: Path,
+    backend_services_factory: BackendServicesFactory,
+) -> None:
+    """Read the saved text here so a 64-bit seed never passes through a browser number."""
+
+    recorder = _ComposedRecorder()
+    services = replace(
+        backend_services_factory(tmp_path),
+        composed_workflow_authoring=cast(ComposedWorkflowAuthoringService, recorder),
+    )
+    handler = build_route_handlers(services).compile_legacy_workflow
+    text = (
+        '{"version": 0.4, "extra": {"seed": 17066688399168319613}, "definitions": '
+        '{"subgraphs": [{"nodes": [], "extra": {"sugarcubes_document": {}}}]}}'
+    )
+
+    response = asyncio.run(handler(FakeRequest(body={"workflow_text": text})))
+
+    assert response.status == 200
+    assert recorder.seeds == [17_066_688_399_168_319_613]
+    body = _mapping(decode_json_response(response))
+    assert body["exact_integers"] == [
+        {
+            "instance_id": "instance",
+            "node_symbol": "sampler",
+            "input_name": "seed",
+            "digits": "17066688399168319613",
+        }
+    ]
+    assert _mapping(body["plan"])["semantic_hash"] == "composed"
+    malformed = asyncio.run(handler(FakeRequest(body={"workflow_text": "{"})))
+    assert malformed.status == 400
+
+
+class _ComposedRecorder:
+    """Recognize the document-only form and record the seed it was given."""
+
+    def __init__(self) -> None:
+        """Start with no compiled workflows."""
+
+        self.seeds: list[object] = []
+        self.recognizes = ComposedWorkflowAuthoringService.recognizes
+
+    def compile(self, workflow: Mapping[str, object]) -> ComposedWorkflowImport:
+        """Return a one-field result for the workflow."""
+
+        self.seeds.append(_mapping(workflow["extra"])["seed"])
+        return ComposedWorkflowImport(
+            NativeWorkflowImportPlan("composed", (), ()),
+            (ExactIntegerField("instance", "sampler", "seed", str(self.seeds[-1])),),
+        )
 
 
 def _mapping(value: object) -> Mapping[str, object]:

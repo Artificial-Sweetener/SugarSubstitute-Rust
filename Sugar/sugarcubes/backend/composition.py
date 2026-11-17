@@ -23,6 +23,7 @@ from pathlib import Path
 from ..authoring import (
     LegacyWorkflowAuthoringService,
     NativeWorkflowNormalizer,
+    ComposedWorkflowAuthoringService,
     SugarScriptWorkflowAuthoringService,
 )
 from ..exporter import (
@@ -102,6 +103,7 @@ class BackendServices:
     workflow_source_sync: CubeSourceSyncService
     sugarscript_authoring: SugarScriptWorkflowAuthoringService
     legacy_workflow_authoring: LegacyWorkflowAuthoringService
+    composed_workflow_authoring: ComposedWorkflowAuthoringService
     self_update: SelfUpdateService
     release_notes: ReleaseNotesService
     execution: CubeExecutionCoordinator = field(
@@ -190,6 +192,10 @@ def build_backend_services(
         preparer=workflow_preparer,
     )
     workflow_normalizer = NativeWorkflowNormalizer(workflow_resolver)
+    composed_workflow_authoring = ComposedWorkflowAuthoringService(
+        normalizer=workflow_normalizer,
+        preparer=workflow_preparer,
+    )
     metadata = CubeMetadataService(
         library,
         retarget_cube_payload=retarget_cube_payload,
@@ -269,6 +275,7 @@ def build_backend_services(
         workflow_source_sync=workflow_source_sync,
         sugarscript_authoring=sugarscript_authoring,
         legacy_workflow_authoring=legacy_workflow_authoring,
+        composed_workflow_authoring=composed_workflow_authoring,
         self_update=build_self_update_service(
             pack_folder=extension_root,
             running_version=runtime_version(),

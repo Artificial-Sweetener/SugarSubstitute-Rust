@@ -18,16 +18,24 @@
 export class LegacyWorkflowImportService {
     #api;
     #materializer;
-    /** Bind transport and graph mutation owners. */
-    constructor(api, materializer) {
+    #recordExact;
+    /** Bind transport, graph mutation and the workflow's record of exact whole numbers. */
+    constructor(api, materializer, recordExact) {
         this.#api = api;
         this.#materializer = materializer;
+        this.#recordExact = recordExact;
     }
-    /** Reconcile and import one workflow without queueing execution. */
-    async import(workflow, origin) {
-        const response = await this.#api.compile(workflow);
+    /**
+     * Reconcile and import one workflow without queueing execution. Digits of whole numbers this
+     * page cannot hold are recorded on the workflow only once its Cubes exist.
+     */
+    async import(workflow, origin, source) {
+        const response = await this.#api.compile(workflow, source);
         if (!response.plan)
             throw new Error('Persisted Cube workflow produced no native plan.');
-        return this.#materializer.materializeWorkflow(response.plan, origin);
+        const result = this.#materializer.materializeWorkflow(response.plan, origin);
+        if (response.exactIntegers.length)
+            this.#recordExact(response.exactIntegers);
+        return result;
     }
 }

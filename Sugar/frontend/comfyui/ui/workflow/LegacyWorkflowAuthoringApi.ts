@@ -18,6 +18,7 @@
 import type { CubeLibraryApi } from '../core/CubeLibraryApi.js';
 import { readSugarScriptAuthoringResponse } from '../sugarscript/SugarScriptAuthoringModels.js';
 import type { SugarScriptAuthoringResponse } from '../sugarscript/SugarScriptAuthoringModels.js';
+import { readExactIntegerFields, type ExactIntegerField } from './ExactIntegerRelations.js';
 
 /** Own transport and validation for legacy workflow-to-native authoring. */
 export class LegacyWorkflowAuthoringApi {
@@ -28,17 +29,31 @@ export class LegacyWorkflowAuthoringApi {
     this.#api = api;
   }
 
-  /** Reconcile one persisted workflow without mutating or queueing a graph. */
-  async compile(workflow: Record<string, unknown>): Promise<SugarScriptAuthoringResponse> {
+  /**
+   * Reconcile one persisted workflow without mutating or queueing a graph.
+   *
+   * With `source`, the workflow's saved text is sent instead of the parsed object: a page holds
+   * numbers as doubles, so only the text still has every digit of a 64-bit seed. The reply then
+   * names each whole number this page cannot hold, with its digits.
+   */
+  async compile(
+    workflow: Record<string, unknown>,
+    source?: string,
+  ): Promise<SugarScriptAuthoringResponse & { exactIntegers: readonly ExactIntegerField[] }> {
     const result = await this.#api.fetchJson('/sugarcubes/v2/workflows/compile-legacy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ workflow }),
+      body: JSON.stringify(source === undefined ? { workflow } : { workflow_text: source }),
     });
     if (result.response.status !== 200) {
       throw new Error(readBackendError(result.data, result.response.status));
     }
-    return readSugarScriptAuthoringResponse(result.data);
+    return {
+      ...readSugarScriptAuthoringResponse(result.data),
+      exactIntegers: readExactIntegerFields(
+        'exact_integers' in result.data ? result.data.exact_integers : undefined,
+      ),
+    };
   }
 }
 

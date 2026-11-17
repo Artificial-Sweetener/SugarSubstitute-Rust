@@ -47,6 +47,7 @@ export async function readPngSugarScriptMetadata(input) {
     let sawEnd = false;
     let sugarScript = null;
     let workflow = null;
+    let workflowSource = null;
     while (offset < bytes.byteLength) {
         chunks += 1;
         if (chunks > MAX_CHUNKS) {
@@ -69,6 +70,7 @@ export async function readPngSugarScriptMetadata(input) {
                 throw artifactError('image.workflow_too_large', 'PNG workflow metadata exceeds 32 MB.');
             }
             workflow = parseWorkflow(text.value);
+            workflowSource = text.value;
         }
         if (text?.keyword === 'sugar_script') {
             if (sugarScript !== null) {
@@ -87,7 +89,7 @@ export async function readPngSugarScriptMetadata(input) {
     if (!sawEnd || offset !== bytes.byteLength) {
         throw artifactError('image.invalid_png', 'PNG chunk stream is incomplete or trailing.');
     }
-    return { sugarScript, workflow };
+    return { sugarScript, workflow, workflowSource };
 }
 /** Extract a script-only artifact and refuse to bypass workflow authority. */
 export async function readScriptOnlySugarScript(input) {

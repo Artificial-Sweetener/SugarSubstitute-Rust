@@ -48,6 +48,8 @@ test('reports workflow presence without choosing source over workflow authority'
   await expect(readPngSugarScriptMetadata(image)).resolves.toEqual({
     sugarScript: 'use "demo.cube" as Demo',
     workflow: { nodes: [] },
+    // The record's own text travels with it, so a backend can read whole numbers exactly.
+    workflowSource: '{"nodes":[]}',
   });
   await expect(readScriptOnlySugarScript(image)).rejects.toMatchObject({
     code: 'image.workflow_authority_present',

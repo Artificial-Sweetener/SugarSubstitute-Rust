@@ -23,6 +23,7 @@ from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 import logging
+import re
 from typing import overload
 
 from .stable_document_fields import (
@@ -32,6 +33,7 @@ from .stable_document_fields import (
 )
 
 COMPOSITION_METADATA_KEY = "sugarcubes_composition"
+_EXACT_DIGITS = re.compile(r"-?(?:0|[1-9][0-9]{0,39})")
 _logger = logging.getLogger(__name__)
 
 
@@ -87,6 +89,8 @@ class ComposedValueMaterializer:
         if not targets:
             return False
         kind = relation.get("kind")
+        if kind == "exact_integer":
+            return _restore_exact_integer(relation.get("digits"), targets, documents)
         if kind == "field_link":
             source = _endpoint(relation.get("source"))
             if source is None:
@@ -102,6 +106,34 @@ class ComposedValueMaterializer:
         if any(not _read_value(documents, target).found for target in targets):
             return False
         return all(_write_value(documents, target, value) for target in targets)
+
+
+def _restore_exact_integer(
+    digits: object,
+    targets: Sequence[StableFieldEndpoint],
+    documents: Mapping[str, dict[str, object]],
+) -> bool:
+    """Give back the digits of a whole number that a browser could not hold.
+
+    A page keeps numbers as doubles, so a 64-bit seed reaches it rounded. The
+    relation records the seed's digits. Each target that still holds exactly
+    that rounding receives the whole number; a target the person has since
+    changed holds another number and is left alone.
+    """
+
+    if not isinstance(digits, str) or not _EXACT_DIGITS.fullmatch(digits):
+        return False
+    exact = int(digits)
+    for target in targets:
+        current = _read_value(documents, target)
+        value = current.value if current.found else None
+        if (
+            isinstance(value, (int, float))
+            and not isinstance(value, bool)
+            and float(value) == float(exact)
+        ):
+            _write_value(documents, target, exact)
+    return True
 
 
 def _relations(workflow: Mapping[str, object]) -> tuple[Mapping[str, object], ...]:

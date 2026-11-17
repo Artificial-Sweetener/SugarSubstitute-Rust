@@ -21,25 +21,38 @@ import type {
   NativeWorkflowMaterializationResult,
   NativeWorkflowMaterializer,
 } from './NativeWorkflowMaterializer.js';
+import type { ExactIntegerField } from './ExactIntegerRelations.js';
 
 /** Keep legacy workflow loading behind exact-version reconciliation. */
 export class LegacyWorkflowImportService {
   readonly #api: LegacyWorkflowAuthoringApi;
   readonly #materializer: NativeWorkflowMaterializer;
+  readonly #recordExact: (fields: readonly ExactIntegerField[]) => void;
 
-  /** Bind transport and graph mutation owners. */
-  constructor(api: LegacyWorkflowAuthoringApi, materializer: NativeWorkflowMaterializer) {
+  /** Bind transport, graph mutation and the workflow's record of exact whole numbers. */
+  constructor(
+    api: LegacyWorkflowAuthoringApi,
+    materializer: NativeWorkflowMaterializer,
+    recordExact: (fields: readonly ExactIntegerField[]) => void,
+  ) {
     this.#api = api;
     this.#materializer = materializer;
+    this.#recordExact = recordExact;
   }
 
-  /** Reconcile and import one workflow without queueing execution. */
+  /**
+   * Reconcile and import one workflow without queueing execution. Digits of whole numbers this
+   * page cannot hold are recorded on the workflow only once its Cubes exist.
+   */
   async import(
     workflow: Record<string, unknown>,
     origin: Vec2,
+    source?: string,
   ): Promise<NativeWorkflowMaterializationResult> {
-    const response = await this.#api.compile(workflow);
+    const response = await this.#api.compile(workflow, source);
     if (!response.plan) throw new Error('Persisted Cube workflow produced no native plan.');
-    return this.#materializer.materializeWorkflow(response.plan, origin);
+    const result = this.#materializer.materializeWorkflow(response.plan, origin);
+    if (response.exactIntegers.length) this.#recordExact(response.exactIntegers);
+    return result;
   }
 }
