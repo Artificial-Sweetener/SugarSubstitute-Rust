@@ -16,8 +16,8 @@ export class NativeWidgetPresentation {
     constructor(disposition = 'external') {
         this.disposition = disposition;
     }
-    /** Apply the next resolved presentation and return whether native layout needs refreshing. */
-    reconcile(widgets) {
+    /** Show again every held widget that `widgets` no longer names, so another scope may take it. */
+    release(widgets) {
         let changed = false;
         for (const widget of this.#hidden)
             if (!widgets.has(widget)) {
@@ -26,6 +26,11 @@ export class NativeWidgetPresentation {
                 this.#hidden.delete(widget);
                 changed = true;
             }
+        return changed;
+    }
+    /** Apply the next resolved presentation and return whether native layout needs refreshing. */
+    reconcile(widgets) {
+        let changed = this.release(widgets);
         for (const widget of widgets)
             if (!this.#hidden.has(widget)) {
                 const owner = hiddenWidgets.get(widget);

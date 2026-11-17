@@ -22,6 +22,7 @@ import type {
   NativeWorkflowMaterializer,
 } from './NativeWorkflowMaterializer.js';
 import type { ExactIntegerField } from './ExactIntegerRelations.js';
+import { readImportedNodeLinks, type ImportedNodeLink } from './ImportedNodeLinks.js';
 
 /** Keep legacy workflow loading behind exact-version reconciliation. */
 export class LegacyWorkflowImportService {
@@ -29,6 +30,10 @@ export class LegacyWorkflowImportService {
   readonly #materializer: NativeWorkflowMaterializer;
   readonly #recordExact: (fields: readonly ExactIntegerField[]) => void;
   readonly #fixSeeds: (instanceIds: readonly string[]) => void;
+  readonly #adoptLinks: (
+    instanceIds: readonly string[],
+    links: readonly ImportedNodeLink[],
+  ) => void;
 
   /** Bind transport, graph mutation and the workflow's record of exact whole numbers. */
   constructor(
@@ -36,11 +41,13 @@ export class LegacyWorkflowImportService {
     materializer: NativeWorkflowMaterializer,
     recordExact: (fields: readonly ExactIntegerField[]) => void,
     fixSeeds: (instanceIds: readonly string[]) => void,
+    adoptLinks: (instanceIds: readonly string[], links: readonly ImportedNodeLink[]) => void,
   ) {
     this.#api = api;
     this.#materializer = materializer;
     this.#recordExact = recordExact;
     this.#fixSeeds = fixSeeds;
+    this.#adoptLinks = adoptLinks;
   }
 
   /**
@@ -52,7 +59,7 @@ export class LegacyWorkflowImportService {
     origin: Vec2,
     source?: string,
   ): Promise<NativeWorkflowMaterializationResult> {
-    return this.#materialize(await this.#api.compile(workflow, source), origin, source);
+    return this.#materialize(await this.#api.compile(workflow, source), origin, source, workflow);
   }
 
   /**
@@ -68,7 +75,7 @@ export class LegacyWorkflowImportService {
   ): Promise<NativeWorkflowMaterializationResult> {
     const response = await this.#api.compile(workflow, source);
     if (!response.plan) throw new Error('Persisted Cube workflow produced no native plan.');
-    return this.#materialize(response, await place(), source);
+    return this.#materialize(response, await place(), source, workflow);
   }
 
   /** Create the reconciled workflow's Cubes and record what only they can hold. */
@@ -76,9 +83,13 @@ export class LegacyWorkflowImportService {
     response: Awaited<ReturnType<LegacyWorkflowAuthoringApi['compile']>>,
     origin: Vec2,
     source: string | undefined,
+    workflow: Record<string, unknown>,
   ): NativeWorkflowMaterializationResult {
     if (!response.plan) throw new Error('Persisted Cube workflow produced no native plan.');
     const result = this.#materializer.materializeWorkflow(response.plan, origin);
+    // A workflow that records its own links keeps exactly those; its Cubes are not linked for it.
+    const links = readImportedNodeLinks(workflow);
+    if (links) this.#adoptLinks(result.instanceIds, links);
     // A workflow sent as its saved text was carried as Cube documents, which record no seed
     // mode: its seeds stay as the image recorded them.
     if (source !== undefined) this.#fixSeeds(result.instanceIds);

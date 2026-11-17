@@ -94,6 +94,14 @@ export function compatibleNodes(left: NodeContract, right: NodeContract): boolea
   );
 }
 
+/**
+ * Whether a node shows its fields while it is linked. A prompt does: its box shows the prompt it
+ * shares, and typing there edits that prompt. Any other linked node shows its link choice alone.
+ */
+export function presentsLinkedFields(node: NodeContract | undefined): boolean {
+  return node !== undefined && node.promptRole !== undefined;
+}
+
 /** Select a compatible master strictly before its follower in the workflow order. */
 export function canLinkNode(
   target: NodeContract,

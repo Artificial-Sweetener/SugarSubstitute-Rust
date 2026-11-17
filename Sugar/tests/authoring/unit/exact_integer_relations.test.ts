@@ -96,6 +96,7 @@ test('the saved text is what is sent, and digits are recorded only after the Cub
     } as unknown as NativeWorkflowMaterializer,
     (fields) => order.push('recorded ' + fields.map((field) => field.digits).join()),
     (instanceIds) => order.push('fixed ' + String(instanceIds.length)),
+    (_instanceIds, links) => order.push('linked ' + String(links.length)),
   );
   const text = `{"extra":{"seed":${SEED}}}`;
   await service.import(JSON.parse(text) as Record<string, unknown>, [0, 0], text);
@@ -109,6 +110,12 @@ test('the saved text is what is sent, and digits are recorded only after the Cub
   });
   // A workflow that carried native nodes keeps the seed modes it was saved with.
   expect(order.filter((step) => step.startsWith('fixed'))).toHaveLength(1);
+  // Neither workflow records links of its own, so its Cubes are linked as any added Cube is.
+  expect(order.filter((step) => step.startsWith('linked'))).toHaveLength(0);
+
+  // A workflow the Python application saved records its links: they are handed over, even none.
+  await service.import({ extra: { sugarcubes_composition: { value_relations: [] } } }, [0, 0]);
+  expect(order.filter((step) => step.startsWith('linked'))).toEqual(['linked 0']);
 });
 
 test('a workflow from a file is reconciled before its own workflow opens, and placed there', async () => {
@@ -131,6 +138,7 @@ test('a workflow from a file is reconciled before its own workflow opens, and pl
         return { semanticHash: 'h', instanceIds: [], warnings: [] };
       },
     } as unknown as NativeWorkflowMaterializer,
+    () => undefined,
     () => undefined,
     () => undefined,
   );

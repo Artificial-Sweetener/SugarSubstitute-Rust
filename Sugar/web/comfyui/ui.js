@@ -256,6 +256,7 @@ const importHostCoordinator = new CubeImportHostCoordinator({
     getRuntime: requireCubeRuntime,
     logger,
     holdSeeds: (instanceIds) => relations.relations.holdSeeds(instanceIds),
+    adoptNodeLinks: (instanceIds, links) => relations.relations.adoptNodeLinks(instanceIds, links),
 });
 const extensionSetupLifecycle = new CubeExtensionSetupLifecycle({
     api,

@@ -29,6 +29,8 @@ import {
 } from '../../../frontend/comfyui/ui/relations/presentation/CubeRelationPresenter.js';
 import { ComfyCubeGraphReorderHost } from '../../../frontend/comfyui/ui/workflow/infrastructure/ComfyCubeGraphReorderHost.js';
 import { ensureRelationStyles } from '../../../frontend/comfyui/ui/relations/presentation/RelationStyles.js';
+import { NativeRelationVisibility } from '../../../frontend/comfyui/ui/relations/infrastructure/NativeRelationVisibility.js';
+import { isNativeWidgetPresented } from '../../../frontend/comfyui/ui/surface/NativeWidgetPresentation.js';
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -181,9 +183,9 @@ test.each([false, true])(
       expect(first.surface.rows.get('value')?.querySelector('textarea')).not.toBeNull();
       expect(first.surface.root.querySelector<HTMLElement>('.sc-node-link')?.hidden).toBe(true);
       expect(later.surface.root.querySelector<HTMLElement>('.sc-node-link')?.hidden).toBe(false);
-      expect(later.surface.rows.get('value')?.hasAttribute('data-sc-relation-hidden')).toBe(
-        !nativeWidgetVisibility,
-      );
+      // A linked prompt keeps its box: it shows the prompt it shares.
+      expect(later.surface.rows.get('value')?.hasAttribute('data-sc-relation-hidden')).toBe(false);
+      expect(later.surface.rows.get('value')?.querySelector('textarea')).not.toBeNull();
     }
     expect(projectWorkflowMasonry(graph, [a, b]).map((section) => section.cube?.id)).toEqual([
       'b',
@@ -203,6 +205,56 @@ test.each([false, true])(
     presenter.dispose();
   },
 );
+
+test('Cubes from a file keep exactly the links it recorded, and a linked prompt stays shown and editable', () => {
+  const aPositive = prompt('positive', 'Positive', 'a positive');
+  const aNegative = prompt('negative', 'Negative', 'a negative');
+  const bPositive = prompt('positive', 'Positive', 'b positive');
+  const bNegative = prompt('negative', 'Negative', 'b negative');
+  const a = nativeCube('a', [aPositive, aNegative], 0);
+  const b = nativeCube('b', [bPositive, bNegative], 800);
+  const graph: ComfyGraph = { _nodes: [a, b], extra: {} };
+  const port = new NativeRelationWorkflowPort(
+    () => graph,
+    document,
+    console,
+    () => null,
+  );
+  const relations = new WorkflowRelations(port);
+  const nodes = relations.reconcile().nodes;
+  const node = (cubeId: string, role: string) =>
+    nodes.find((n) => n.cubeId === cubeId && n.promptRole === role)!;
+
+  // The file linked only the negative prompt; the positive prompt is the later Cube's own.
+  relations.adoptNodeLinks(
+    ['b'],
+    [{ target: node('b', 'negative').id, source: node('a', 'negative').id }],
+  );
+  const links = relations.snapshot().state.nodeLinks;
+  expect(links[node('b', 'positive').id]).toBeNull();
+  expect(links[node('b', 'negative').id]).toBe(node('a', 'negative').id);
+  expect(bPositive.widgets?.[0]?.value).toBe('b positive');
+  expect(bNegative.widgets?.[0]?.value).toBe('a negative');
+
+  // Both prompts of the later Cube keep their boxes, linked or not.
+  const visibility = new NativeRelationVisibility();
+  visibility.reconcile(relations.snapshot(), port.inventorySource);
+  expect(isNativeWidgetPresented(bPositive.widgets![0]!)).toBe(true);
+  expect(isNativeWidgetPresented(bNegative.widgets![0]!)).toBe(true);
+  visibility.dispose();
+
+  // Typing in the linked box edits the prompt both Cubes share.
+  bNegative.widgets![0]!.value = 'typed in the later Cube';
+  relations.reconcile(false);
+  expect(aNegative.widgets?.[0]?.value).toBe('typed in the later Cube');
+  expect(bNegative.widgets?.[0]?.value).toBe('typed in the later Cube');
+  expect(bPositive.widgets?.[0]?.value).toBe('b positive');
+
+  // Unlinking gives the later Cube the prompt it had of its own.
+  relations.linkNode(node('b', 'negative').id, null);
+  expect(bNegative.widgets?.[0]?.value).toBe('b negative');
+  expect(aNegative.widgets?.[0]?.value).toBe('typed in the later Cube');
+});
 
 test('excludes connected prompt widgets and resource inheritance while retaining Cube placement order', () => {
   const connected = prompt('connected', 'Positive', 'upstream owns this');

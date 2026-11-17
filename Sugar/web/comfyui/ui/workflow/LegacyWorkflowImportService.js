@@ -14,25 +14,28 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Coordinate persisted-workflow reconciliation and native materialization. */
+import { readImportedNodeLinks } from './ImportedNodeLinks.js';
 /** Keep legacy workflow loading behind exact-version reconciliation. */
 export class LegacyWorkflowImportService {
     #api;
     #materializer;
     #recordExact;
     #fixSeeds;
+    #adoptLinks;
     /** Bind transport, graph mutation and the workflow's record of exact whole numbers. */
-    constructor(api, materializer, recordExact, fixSeeds) {
+    constructor(api, materializer, recordExact, fixSeeds, adoptLinks) {
         this.#api = api;
         this.#materializer = materializer;
         this.#recordExact = recordExact;
         this.#fixSeeds = fixSeeds;
+        this.#adoptLinks = adoptLinks;
     }
     /**
      * Reconcile and import one workflow without queueing execution. Digits of whole numbers this
      * page cannot hold are recorded on the workflow only once its Cubes exist.
      */
     async import(workflow, origin, source) {
-        return this.#materialize(await this.#api.compile(workflow, source), origin, source);
+        return this.#materialize(await this.#api.compile(workflow, source), origin, source, workflow);
     }
     /**
      * Open one workflow from a file as a workflow of its own. It is reconciled first, so a file
@@ -44,13 +47,17 @@ export class LegacyWorkflowImportService {
         const response = await this.#api.compile(workflow, source);
         if (!response.plan)
             throw new Error('Persisted Cube workflow produced no native plan.');
-        return this.#materialize(response, await place(), source);
+        return this.#materialize(response, await place(), source, workflow);
     }
     /** Create the reconciled workflow's Cubes and record what only they can hold. */
-    #materialize(response, origin, source) {
+    #materialize(response, origin, source, workflow) {
         if (!response.plan)
             throw new Error('Persisted Cube workflow produced no native plan.');
         const result = this.#materializer.materializeWorkflow(response.plan, origin);
+        // A workflow that records its own links keeps exactly those; its Cubes are not linked for it.
+        const links = readImportedNodeLinks(workflow);
+        if (links)
+            this.#adoptLinks(result.instanceIds, links);
         // A workflow sent as its saved text was carried as Cube documents, which record no seed
         // mode: its seeds stay as the image recorded them.
         if (source !== undefined)

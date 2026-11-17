@@ -35,6 +35,7 @@ import type { NativeWorkflowMaterializationResult } from '../workflow/NativeWork
 import { SugarScriptWorkflowArtifactCompanionService } from '../sugarscript/SugarScriptWorkflowArtifactCompanionService.js';
 import { NativeWorkflowMaterializer } from '../workflow/NativeWorkflowMaterializer.js';
 import { LegacyWorkflowAuthoringApi } from '../workflow/LegacyWorkflowAuthoringApi.js';
+import type { ImportedNodeLink } from '../workflow/ImportedNodeLinks.js';
 import { LegacyWorkflowImportService } from '../workflow/LegacyWorkflowImportService.js';
 import { recordExactIntegers } from '../workflow/ExactIntegerRelations.js';
 import { fixImportedSeeds } from '../workflow/ImportedSeedModes.js';
@@ -51,6 +52,8 @@ interface CubeImportHostCoordinatorOptions {
   logger: ImportLogger;
   /** Keep the seeds of the named Cube instances from being rolled by a shared seed. */
   holdSeeds: (instanceIds: readonly string[]) => void;
+  /** Give the named Cube instances exactly the node links their file recorded. */
+  adoptNodeLinks: (instanceIds: readonly string[], links: readonly ImportedNodeLink[]) => void;
 }
 
 /** Own native workflow import entrypoints and their file adapters. */
@@ -60,6 +63,7 @@ export class CubeImportHostCoordinator {
   readonly #feedback: CubeHostFeedback;
   readonly #getRuntime: () => ComfyCubeRuntime;
   readonly #holdSeeds: (instanceIds: readonly string[]) => void;
+  readonly #adoptNodeLinks: CubeImportHostCoordinatorOptions['adoptNodeLinks'];
   readonly #dropOrigin: ComfyCanvasDropOriginAdapter;
   readonly #sugarScriptApi: SugarScriptAuthoringApi;
   readonly #legacyWorkflowApi: LegacyWorkflowAuthoringApi;
@@ -72,6 +76,7 @@ export class CubeImportHostCoordinator {
     this.#feedback = options.feedback;
     this.#getRuntime = options.getRuntime;
     this.#holdSeeds = options.holdSeeds;
+    this.#adoptNodeLinks = options.adoptNodeLinks;
     const { adapter } = this.#ui;
     this.#dropOrigin = new ComfyCanvasDropOriginAdapter({
       getCanvas: () => adapter.getCanvas() as CubePlacementCanvas | null,
@@ -176,6 +181,7 @@ export class CubeImportHostCoordinator {
         fixImportedSeeds(graph, instanceIds);
         this.#holdSeeds(instanceIds);
       },
+      (instanceIds, links) => this.#adoptNodeLinks(instanceIds, links),
     );
   }
 

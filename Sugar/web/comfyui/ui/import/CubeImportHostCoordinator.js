@@ -33,6 +33,7 @@ export class CubeImportHostCoordinator {
     #feedback;
     #getRuntime;
     #holdSeeds;
+    #adoptNodeLinks;
     #dropOrigin;
     #sugarScriptApi;
     #legacyWorkflowApi;
@@ -44,6 +45,7 @@ export class CubeImportHostCoordinator {
         this.#feedback = options.feedback;
         this.#getRuntime = options.getRuntime;
         this.#holdSeeds = options.holdSeeds;
+        this.#adoptNodeLinks = options.adoptNodeLinks;
         const { adapter } = this.#ui;
         this.#dropOrigin = new ComfyCanvasDropOriginAdapter({
             getCanvas: () => adapter.getCanvas(),
@@ -122,7 +124,7 @@ export class CubeImportHostCoordinator {
         return new LegacyWorkflowImportService(this.#legacyWorkflowApi, this.#nativeWorkflowMaterializer(runtime, graph), (fields) => recordExactIntegers(graph, fields), (instanceIds) => {
             fixImportedSeeds(graph, instanceIds);
             this.#holdSeeds(instanceIds);
-        });
+        }, (instanceIds, links) => this.#adoptNodeLinks(instanceIds, links));
     }
     /** Build the shared native workflow mutation owner for one root graph. */
     #nativeWorkflowMaterializer(runtime, graph) {

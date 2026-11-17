@@ -29,7 +29,9 @@ export class CubeNodeCatalog {
     const instanceId = readInstanceId(node);
     const existing = this.#nodes.get(instanceId);
     if (existing === node) return;
-    if (existing) {
+    // A workflow replaced on the same graph leaves its Cubes indexed until the next
+    // reconciliation; one the graph no longer holds never blocks the Cube taking its place.
+    if (existing && !hasLeftGraph(existing)) {
       throw new Error(`Cube node '${instanceId}' already exists.`);
     }
     this.#nodes.set(instanceId, node);
@@ -130,4 +132,11 @@ export function readInstanceId(node: CubeNode): string {
     throw new TypeError(`Cube node '${String(node.id)}' has no stable instance identity.`);
   }
   return instanceId;
+}
+
+/** Whether Comfy's graph, the authority on which nodes exist, has dropped this node. */
+function hasLeftGraph(node: CubeNode): boolean {
+  if (node.graph === null) return true;
+  const held = node.graph?._nodes;
+  return Array.isArray(held) && !held.includes(node);
 }
