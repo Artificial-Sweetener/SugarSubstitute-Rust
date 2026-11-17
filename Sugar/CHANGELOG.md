@@ -1,3 +1,9 @@
+## [0.19.5](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.19.4...sugarcubes-v0.19.5) (2026-11-17)
+
+### Bug Fixes
+
+* **relations:** a pasted Cube keeps the original's links and is linked as its own Cube ([4cc50ec](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/4cc50ec772d9843917b5eeb394563d9b65c02df8))
+
 ## [0.19.4](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.19.3...sugarcubes-v0.19.4) (2026-11-17)
 
 ### Bug Fixes
