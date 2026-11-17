@@ -1,3 +1,9 @@
+## [0.19.4](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.19.3...sugarcubes-v0.19.4) (2026-11-17)
+
+### Bug Fixes
+
+* **relations:** a linked prompt folds to its title and link selector ([0570bc2](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/0570bc2cd835f8df24bf80e8889e49a8f2d6e846))
+
 ## [0.19.3](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.19.2...sugarcubes-v0.19.3) (2026-11-17)
 
 ### Bug Fixes

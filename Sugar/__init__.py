@@ -55,7 +55,7 @@ from .sugarcubes.input_canvas.infrastructure.prepared_input_http import (
 )
 
 WEB_DIRECTORY = "web"
-__version__ = "0.19.3"
+__version__ = "0.19.4"
 _EXTENSION_ROOT = extension_root()
 _LOGGER = logging.getLogger(__name__)
 
