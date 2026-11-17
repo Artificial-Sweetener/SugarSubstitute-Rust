@@ -1,7 +1,7 @@
 import {
   MODEL_PICKER_WALL_PROFILE,
   layoutModelGallery
-} from "./chunk-KJVBBJVU.js";
+} from "./chunk-SAXUSPH7.js";
 
 // frontend/comfyui/ui/model_library/ModelPickerNavigation.ts
 function modelWallNeighbor(items, width, active, key, profile = MODEL_PICKER_WALL_PROFILE) {

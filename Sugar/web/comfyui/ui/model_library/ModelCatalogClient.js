@@ -1,5 +1,5 @@
 import { CivitaiCredentialClient } from './CivitaiCredentialClient.js';
-import { decodeModelCatalog } from './ModelCatalog.js';
+import { continueModelCatalog, decodeModelCatalog } from './ModelCatalog.js';
 import { isRecord } from '../types/common.js';
 import { modelApiError } from './ModelApiTransport.js';
 import { ModelJobClient } from './ModelJobClient.js';
@@ -160,7 +160,7 @@ export class ModelCatalogClient {
         if (!response.ok)
             throw new Error(`Model catalog is unavailable (${String(response.status)}).`);
         const payload = await response.json();
-        this.#snapshot = decodeModelCatalog(payload);
+        this.#snapshot = continueModelCatalog(this.#snapshot, decodeModelCatalog(payload));
         return this.#snapshot;
     }
 }

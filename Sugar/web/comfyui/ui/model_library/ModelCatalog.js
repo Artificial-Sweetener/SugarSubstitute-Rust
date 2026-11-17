@@ -144,6 +144,39 @@ function text(value) {
         throw new Error('Expected model catalog text.');
     return value;
 }
+/**
+ * Carry everything a new catalog generation left unchanged over from the one it replaces.
+ *
+ * The library republishes the whole catalog for a change to any one model. Every consumer reads
+ * this one snapshot, so an entry that did not change stays the same object, and `items` stays the
+ * same array when no entry changed: consumers compare identities and redo nothing for the rest.
+ * The revision always advances, because the change subscription follows it.
+ */
+export function continueModelCatalog(previous, next) {
+    if (!previous)
+        return next;
+    const same = (before, after) => JSON.stringify(before) === JSON.stringify(after);
+    const known = new Map(previous.items.map((item) => [item.id, item]));
+    let unchanged = previous.items.length === next.items.length;
+    const items = next.items.map((item, index) => {
+        const before = known.get(item.id);
+        const kept = before && same(before, item) ? before : item;
+        if (kept !== previous.items[index])
+            unchanged = false;
+        return kept;
+    });
+    return {
+        ...next,
+        items: unchanged ? previous.items : items,
+        fieldContracts: same(previous.fieldContracts, next.fieldContracts)
+            ? previous.fieldContracts
+            : next.fieldContracts,
+        ...(previous.relationships !== undefined &&
+            same(previous.relationships, next.relationships ?? null)
+            ? { relationships: previous.relationships }
+            : {}),
+    };
+}
 /** Pick a prepared image large enough for its destination without decoding originals. */
 export function chooseModelThumbnail(item, role, size) {
     const candidates = item.thumbnails

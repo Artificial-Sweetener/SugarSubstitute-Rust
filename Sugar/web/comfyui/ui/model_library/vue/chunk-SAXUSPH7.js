@@ -3,7 +3,7 @@ import {
 } from "./chunk-4DBFGV2O.js";
 import {
   chooseModelThumbnail
-} from "./chunk-HBDMWEN5.js";
+} from "./chunk-EPSDIXQ5.js";
 import {
   ModelGalleryTitle
 } from "./chunk-HRRVXU3H.js";

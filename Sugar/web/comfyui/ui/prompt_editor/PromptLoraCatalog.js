@@ -1360,11 +1360,13 @@ var unresolvedConditioning = Object.freeze({
 // frontend/comfyui/ui/prompt_editor/PromptLoraCatalog.ts
 var prepared = /* @__PURE__ */ new WeakMap();
 function preparePromptLoraCatalog(snapshot, baseUrl, prioritize, previous) {
-  const models = new Map(
-    snapshot.items.filter((item) => item.kind === "loras").map((item) => [item.value, item])
-  );
+  const loras = snapshot.items.filter((item) => item.kind === "loras");
   const authoritative = !snapshot.scanning;
-  const items = snapshot.items.filter((item) => item.kind === "loras").map((item) => {
+  const replaced = previous ? prepared.get(previous) : void 0;
+  if (previous && replaced?.authoritative === authoritative && replaced.loras.length === loras.length && replaced.loras.every((item, index) => item === loras[index]))
+    return previous;
+  const models = new Map(loras.map((item) => [item.value, item]));
+  const items = loras.map((item) => {
     const name = item.value.replace(/\.(safetensors|ckpt|pt|pth|bin)$/i, "");
     const thumbnail2 = item.thumbnails.find((image) => image.role === "banner") ?? item.thumbnails[0];
     const url = thumbnail2 ? safeHttpUrl(thumbnail2.url, baseUrl) : null;
@@ -1381,9 +1383,6 @@ function preparePromptLoraCatalog(snapshot, baseUrl, prioritize, previous) {
       modelPageUrl: modelPage(item, baseUrl)
     };
   });
-  const content = JSON.stringify([authoritative, items]);
-  const replaced = previous ? prepared.get(previous) : void 0;
-  if (previous && replaced?.content === content) return previous;
   const adapter = createLoraCatalogAdapter(
     { revision: `models:${String(snapshot.revision)}`, authoritative, items },
     void 0,
@@ -1406,7 +1405,7 @@ function preparePromptLoraCatalog(snapshot, baseUrl, prioritize, previous) {
       return resources;
     }
   };
-  prepared.set(catalog, { adapter, content });
+  prepared.set(catalog, { adapter, authoritative, loras });
   return catalog;
 }
 function safeHttpUrl(value, baseUrl) {

@@ -18,19 +18,24 @@ import { createLoraCatalogAdapter } from '../../../sugarprompt/services/src/inde
 import type { LoraResourceAdapter } from '../../../sugarprompt/services/src/index.js';
 import type { ModelCatalogSnapshot, ModelCatalogItem } from '../model_library/ModelCatalog.js';
 
-/** What each prepared catalog showed the editor, and the adapter that resolves it. */
+/** The installed LoRAs each prepared catalog was made from, and the adapter that resolves them. */
 const prepared = new WeakMap<
   LoraResourceAdapter,
-  { readonly adapter: LoraResourceAdapter; readonly content: string }
+  {
+    readonly adapter: LoraResourceAdapter;
+    readonly authoritative: boolean;
+    readonly loras: readonly ModelCatalogItem[];
+  }
 >();
 
 /**
  * Preserve installed identities and prefer the model's authored banner artwork.
  *
- * The model library publishes a new snapshot for every change to any model. Pass the catalog
- * being replaced as `previous`: a snapshot that changes nothing a prompt shows returns that same
- * catalog, so no editor is disturbed, and one that does change keeps the descriptor of every
- * banner whose image is unchanged, so only changed banners are decoded again.
+ * The model library publishes a new snapshot for every change to any model, and its catalog
+ * keeps every unchanged model as the same object. Pass the catalog being replaced as `previous`:
+ * a snapshot whose LoRAs are all those same objects returns that same catalog, so no editor is
+ * disturbed, and one that does change keeps the descriptor of every banner whose image is
+ * unchanged, so only changed banners are decoded again.
  */
 export function preparePromptLoraCatalog(
   snapshot: ModelCatalogSnapshot,
@@ -38,36 +43,38 @@ export function preparePromptLoraCatalog(
   prioritize?: (items: readonly ModelCatalogItem[]) => void,
   previous?: LoraResourceAdapter,
 ): LoraResourceAdapter {
-  const models = new Map(
-    snapshot.items.filter((item) => item.kind === 'loras').map((item) => [item.value, item]),
-  );
+  const loras = snapshot.items.filter((item) => item.kind === 'loras');
   const authoritative = !snapshot.scanning;
-  const items = snapshot.items
-    .filter((item) => item.kind === 'loras')
-    .map((item) => {
-      const name = item.value.replace(/\.(safetensors|ckpt|pt|pth|bin)$/i, '');
-      const thumbnail =
-        item.thumbnails.find((image) => image.role === 'banner') ?? item.thumbnails[0];
-      const url = thumbnail ? safeHttpUrl(thumbnail.url, baseUrl) : null;
-      return {
-        model: {
-          promptName: name,
-          backendValue: item.value,
-          basename: name.split(/[\\/]/).pop() ?? name,
-        },
-        title: item.title || item.value,
-        subtitle: item.version || null,
-        triggerWords: item.trainedWords,
-        thumbnail:
-          thumbnail && url && thumbnail.width > 0 && thumbnail.height > 0
-            ? { status: 'ready' as const, url, width: thumbnail.width, height: thumbnail.height }
-            : { status: 'unavailable' as const },
-        modelPageUrl: modelPage(item, baseUrl),
-      };
-    });
-  const content = JSON.stringify([authoritative, items]);
   const replaced = previous ? prepared.get(previous) : undefined;
-  if (previous && replaced?.content === content) return previous;
+  if (
+    previous &&
+    replaced?.authoritative === authoritative &&
+    replaced.loras.length === loras.length &&
+    replaced.loras.every((item, index) => item === loras[index])
+  )
+    return previous;
+  const models = new Map(loras.map((item) => [item.value, item]));
+  const items = loras.map((item) => {
+    const name = item.value.replace(/\.(safetensors|ckpt|pt|pth|bin)$/i, '');
+    const thumbnail =
+      item.thumbnails.find((image) => image.role === 'banner') ?? item.thumbnails[0];
+    const url = thumbnail ? safeHttpUrl(thumbnail.url, baseUrl) : null;
+    return {
+      model: {
+        promptName: name,
+        backendValue: item.value,
+        basename: name.split(/[\\/]/).pop() ?? name,
+      },
+      title: item.title || item.value,
+      subtitle: item.version || null,
+      triggerWords: item.trainedWords,
+      thumbnail:
+        thumbnail && url && thumbnail.width > 0 && thumbnail.height > 0
+          ? { status: 'ready' as const, url, width: thumbnail.width, height: thumbnail.height }
+          : { status: 'unavailable' as const },
+      modelPageUrl: modelPage(item, baseUrl),
+    };
+  });
   const adapter = createLoraCatalogAdapter(
     { revision: `models:${String(snapshot.revision)}`, authoritative, items },
     undefined,
@@ -90,7 +97,7 @@ export function preparePromptLoraCatalog(
       return resources;
     },
   };
-  prepared.set(catalog, { adapter, content });
+  prepared.set(catalog, { adapter, authoritative, loras });
   return catalog;
 }
 

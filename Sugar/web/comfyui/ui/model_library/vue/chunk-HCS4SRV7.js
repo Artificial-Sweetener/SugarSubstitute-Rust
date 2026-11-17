@@ -7,19 +7,19 @@ import {
 import {
   ModelPickerPopupContent,
   filterModelChoices
-} from "./chunk-EYWLUWSB.js";
+} from "./chunk-QNPEZRZX.js";
 import {
   useModelContext
 } from "./chunk-LMZEATZG.js";
 import {
   modelWallNeighbor
-} from "./chunk-ZMF3A2RB.js";
+} from "./chunk-TBEGVYWM.js";
 import {
   ModelUpdateButton
 } from "./chunk-4DBFGV2O.js";
 import {
   chooseModelThumbnail
-} from "./chunk-HBDMWEN5.js";
+} from "./chunk-EPSDIXQ5.js";
 import {
   ModelCatalogImage
 } from "./chunk-RPKXVHLS.js";

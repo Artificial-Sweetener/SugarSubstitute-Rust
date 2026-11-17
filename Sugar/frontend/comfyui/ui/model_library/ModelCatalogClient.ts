@@ -16,7 +16,7 @@
 /** Coalesce prepared catalog requests independently of node cards and picker popups. */
 import type { ModelTransferObserver } from './ModelTransfer.js';
 import { CivitaiCredentialClient } from './CivitaiCredentialClient.js';
-import { decodeModelCatalog } from './ModelCatalog.js';
+import { continueModelCatalog, decodeModelCatalog } from './ModelCatalog.js';
 import type { ModelCatalogSnapshot } from './ModelCatalog.js';
 import type { ModelCatalogItem } from './ModelCatalog.js';
 import { isRecord } from '../types/common.js';
@@ -228,7 +228,7 @@ export class ModelCatalogClient implements ModelPickerActions {
     const response = await this.#fetch('/sugarcubes/v1/models');
     if (!response.ok) throw new Error(`Model catalog is unavailable (${String(response.status)}).`);
     const payload: unknown = await response.json();
-    this.#snapshot = decodeModelCatalog(payload);
+    this.#snapshot = continueModelCatalog(this.#snapshot, decodeModelCatalog(payload));
     return this.#snapshot;
   }
 }
