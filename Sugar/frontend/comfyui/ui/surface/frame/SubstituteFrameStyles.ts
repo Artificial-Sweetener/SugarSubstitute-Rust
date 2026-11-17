@@ -34,6 +34,13 @@ export const substituteFrameCss = `
   :root[data-sc-substitute-frame]:has([data-sc-generation-queue][aria-pressed="false"])
     [data-testid="queue-progress-overlay"] { display:none !important; }
   @media (prefers-reduced-motion:reduce) { .sc-generation-progress > [role="progressbar"] { transition:none; } }
+  /* Node packs add their own strips (a progress bar, a notice) to Comfy's top area, which is the
+     first row of the page. The frame's title bar must be that first row, where the desktop host
+     places the window buttons, so Comfy's top area docks under the workspace, above Comfy's
+     bottom area: whatever a pack shows there stays visible and never displaces the title bar. */
+  :root[data-sc-substitute-frame] .comfyui-body { grid-template-rows:1fr auto auto; }
+  :root[data-sc-substitute-frame] .comfyui-body > :is(.comfyui-body-left,.comfyui-body-right,.graph-canvas-container) { grid-row:1; }
+  :root[data-sc-substitute-frame] .comfyui-body > .comfyui-body-top { grid-row:2; }
   @property --sc-tab-cutout-radius { syntax:'<length>'; inherits:false; initial-value:0px; }
   @property --sc-tab-cutout-x { syntax:'<length>'; inherits:false; initial-value:-17px; }
   .sc-substitute-frame [data-sc-workflow-tab] { transition:--sc-tab-cutout-radius 160ms cubic-bezier(.645,.045,.355,1); }
