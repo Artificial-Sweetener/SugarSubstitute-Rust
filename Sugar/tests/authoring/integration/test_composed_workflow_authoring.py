@@ -300,6 +300,55 @@ def test_a_bypassed_cube_and_an_invalid_document_are_reported() -> None:
         _service(_Preparer()).compile(broken)
 
 
+def test_a_bypassed_encoder_whose_output_a_sampler_needs_is_set_to_run() -> None:
+    workflow = _workflow()
+    document = workflow["definitions"]["subgraphs"][1]["extra"]["sugarcubes_document"]
+    implementation = document["implementation"]
+    implementation["definitions"]["ExampleEncoder"] = {
+        "input": {
+            "required": {"text": ["STRING", {"forceInput": True}], "clip": ["CLIP"]}
+        },
+        "output": ["CLIP", "CONDITIONING,CONDITIONING_BATCH"],
+    }
+    implementation["definitions"]["ExampleLoader"] = {
+        "input": {"required": {}},
+        "output": ["MODEL", "CLIP"],
+    }
+    implementation["definitions"]["ExampleSampler"]["input"]["optional"]["positive"] = [
+        "CONDITIONING"
+    ]
+    implementation["definitions"]["ExampleSampler"]["input"]["optional"]["clip"] = [
+        "CLIP"
+    ]
+    implementation["nodes"]["loader"] = {
+        "class_type": "ExampleLoader",
+        "inputs": {},
+        "mode": 4,
+    }
+    implementation["nodes"]["encoder"] = {
+        "class_type": "ExampleEncoder",
+        "inputs": {"text": ["prompt", 0], "clip": ["loader", 1]},
+        "mode": 4,
+    }
+    implementation["nodes"]["sampler"]["inputs"]["positive"] = ["encoder", 1]
+    implementation["nodes"]["sampler"]["inputs"]["clip"] = ["encoder", 0]
+    preparer = _Preparer()
+
+    _service(preparer).compile(workflow)
+
+    refined = next(
+        document.to_dict()["implementation"]["nodes"]
+        for document in preparer.documents
+        if "encoder" in document.to_dict()["implementation"]["nodes"]
+    )
+    # The encoder's conditioning cannot be passed through or inherited, so it runs.
+    assert "mode" not in refined["encoder"]
+    # The loader's outputs are inherited from the Cube before, so it stays bypassed.
+    assert refined["loader"]["mode"] == 4
+    # The authored document is left as the image recorded it.
+    assert implementation["nodes"]["encoder"]["mode"] == 4
+
+
 def _rounded(workflow: dict[str, Any]) -> dict[str, Any]:
     """Pass a workflow through a browser's number type."""
 

@@ -24,11 +24,14 @@ service turns it into the plan the page materializes as native Cubes.
 
 from __future__ import annotations
 
+from copy import deepcopy
+
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
 from ..cube_model import CubeDocument
+from ..execution.cube_document_lowering import unreplaceable_bypassed_nodes
 from ..language.compiler_models import CompiledCubeConnection
 from ..workflow import (
     ComposedValueMaterializer,
@@ -150,6 +153,7 @@ class ComposedWorkflowAuthoringService:
                 raise ComposedWorkflowImportError(
                     f"Cube '{instance.instance_alias}' carries no Cube document"
                 )
+            document = _with_needed_nodes_running(document)
             try:
                 cube = CubeDocument.from_dict(document)
             except ValueError as error:
@@ -174,6 +178,46 @@ class ComposedWorkflowAuthoringService:
             ),
             tuple(exact),
         )
+
+
+def _with_needed_nodes_running(
+    document: Mapping[str, object],
+) -> Mapping[str, object]:
+    """Run the bypassed nodes whose output a running node needs and nothing supplies.
+
+    A Cube the Python application saved can hold a prompt linked to an earlier
+    Cube's prompt beside a bypassed prompt encoder. The link gives the Cube its
+    prompt text; with the encoder bypassed its sampler receives no conditioning
+    and fails. Such an encoder is set to run, so it encodes the linked prompt
+    with the CLIP the Cube inherits. Nodes whose bypass passes an input through,
+    or whose outputs are inherited, keep their bypass.
+    """
+
+    implementation = document.get("implementation")
+    if not isinstance(implementation, Mapping):
+        return document
+    nodes = implementation.get("nodes")
+    definitions = implementation.get("definitions")
+    if not isinstance(nodes, Mapping) or not isinstance(definitions, Mapping):
+        return document
+    usable = {
+        str(symbol): node for symbol, node in nodes.items() if isinstance(node, Mapping)
+    }
+    revived = unreplaceable_bypassed_nodes(usable, definitions)
+    if not revived:
+        return document
+    running = {
+        symbol: (
+            {key: value for key, value in node.items() if key != "mode"}
+            if symbol in revived
+            else node
+        )
+        for symbol, node in usable.items()
+    }
+    return {
+        **document,
+        "implementation": {**implementation, "nodes": deepcopy(running)},
+    }
 
 
 def _stack_position(instance: CubeInstance) -> tuple[float, float]:

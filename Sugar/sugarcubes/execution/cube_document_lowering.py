@@ -194,6 +194,55 @@ class CubeDocumentLowerer:
         return describe_document_bindings(instance_id, document)
 
 
+_INHERITED_TYPES = frozenset({"MODEL", "CLIP", "VAE"})
+
+
+def unreplaceable_bypassed_nodes(
+    nodes: Mapping[str, Mapping[str, object]],
+    definitions: Mapping[str, object],
+) -> frozenset[str]:
+    """Name bypassed nodes whose output a running node needs and nothing supplies.
+
+    A bypassed node passes an output from its one connected input of the same
+    type, and a Cube inherits a missing MODEL, CLIP or VAE from an earlier
+    Cube. Any other output of a bypassed node reaches its consumer as nothing,
+    so a sampler fed by a bypassed prompt encoder runs with no conditioning.
+    """
+
+    skipped = {
+        symbol: node_mode(node)
+        for symbol, node in nodes.items()
+        if node_mode(node) in {_DISABLED_MODE, _BYPASS_MODE}
+    }
+    replaced = _bypass_sources(nodes, definitions, skipped)
+    needed: set[tuple[str, int]] = set()
+    for symbol, node in nodes.items():
+        inputs = node.get("inputs")
+        if symbol in skipped or not isinstance(inputs, Mapping):
+            continue
+        for value in inputs.values():
+            source = connection(value)
+            if source is not None:
+                needed.add(source)
+    unreplaceable: set[str] = set()
+    for symbol, mode in skipped.items():
+        class_type = nodes[symbol].get("class_type")
+        definition = (
+            definitions.get(class_type) if isinstance(class_type, str) else None
+        )
+        if mode != _BYPASS_MODE or not isinstance(definition, Mapping):
+            continue
+        for index, output_type in enumerate(string_list(definition.get("output"))):
+            inherited = set(output_type.split(",")) <= _INHERITED_TYPES
+            if (
+                (symbol, index) in needed
+                and (symbol, index) not in replaced
+                and not inherited
+            ):
+                unreplaceable.add(symbol)
+    return frozenset(unreplaceable)
+
+
 def _bypass_sources(
     nodes: Mapping[str, Mapping[str, object]],
     definitions: Mapping[str, object],
