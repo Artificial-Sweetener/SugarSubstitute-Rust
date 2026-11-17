@@ -111,6 +111,47 @@ test('the saved text is what is sent, and digits are recorded only after the Cub
   expect(order.filter((step) => step.startsWith('fixed'))).toHaveLength(1);
 });
 
+test('a workflow from a file is reconciled before its own workflow opens, and placed there', async () => {
+  const order: string[] = [];
+  const reply = (plan: unknown) => ({
+    response: { status: 200 },
+    data: { valid: plan !== null, diagnostics: [], plan, exact_integers: [] },
+  });
+  let plan: unknown = { semantic_hash: 'a'.repeat(64), instances: [], connections: [] };
+  const service = new LegacyWorkflowImportService(
+    new LegacyWorkflowAuthoringApi({
+      fetchJson: async () => {
+        order.push('reconciled');
+        return reply(plan);
+      },
+    } as unknown as CubeLibraryApi),
+    {
+      materializeWorkflow: (_plan: unknown, origin: readonly number[]) => {
+        order.push('placed at ' + origin.join());
+        return { semanticHash: 'h', instanceIds: [], warnings: [] };
+      },
+    } as unknown as NativeWorkflowMaterializer,
+    () => undefined,
+    () => undefined,
+  );
+  await service.open({ version: 0.4 }, undefined, async () => {
+    order.push('own workflow opened');
+    return [40, 60];
+  });
+  expect(order).toEqual(['reconciled', 'own workflow opened', 'placed at 40,60']);
+
+  // A file that cannot be imported opens nothing.
+  plan = null;
+  order.length = 0;
+  await expect(
+    service.open({ version: 0.4 }, undefined, async () => {
+      order.push('own workflow opened');
+      return [0, 0];
+    }),
+  ).rejects.toThrow();
+  expect(order).not.toContain('own workflow opened');
+});
+
 test('the seeds of rebuilt Cubes are fixed, and only theirs', () => {
   const control = (value: string) => ({
     name: 'control_after_generate',

@@ -32,7 +32,22 @@ export class LegacyWorkflowImportService {
      * page cannot hold are recorded on the workflow only once its Cubes exist.
      */
     async import(workflow, origin, source) {
+        return this.#materialize(await this.#api.compile(workflow, source), origin, source);
+    }
+    /**
+     * Open one workflow from a file as a workflow of its own. It is reconciled first, so a file
+     * that cannot be imported opens nothing; `place` then opens the workflow that will hold its
+     * Cubes and returns where they go. The Cubes keep the identities the file gave them, which a
+     * workflow already open may also hold, so they never join it.
+     */
+    async open(workflow, source, place) {
         const response = await this.#api.compile(workflow, source);
+        if (!response.plan)
+            throw new Error('Persisted Cube workflow produced no native plan.');
+        return this.#materialize(response, await place(), source);
+    }
+    /** Create the reconciled workflow's Cubes and record what only they can hold. */
+    #materialize(response, origin, source) {
         if (!response.plan)
             throw new Error('Persisted Cube workflow produced no native plan.');
         const result = this.#materializer.materializeWorkflow(response.plan, origin);

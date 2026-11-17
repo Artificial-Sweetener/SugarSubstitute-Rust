@@ -52,7 +52,31 @@ export class LegacyWorkflowImportService {
     origin: Vec2,
     source?: string,
   ): Promise<NativeWorkflowMaterializationResult> {
+    return this.#materialize(await this.#api.compile(workflow, source), origin, source);
+  }
+
+  /**
+   * Open one workflow from a file as a workflow of its own. It is reconciled first, so a file
+   * that cannot be imported opens nothing; `place` then opens the workflow that will hold its
+   * Cubes and returns where they go. The Cubes keep the identities the file gave them, which a
+   * workflow already open may also hold, so they never join it.
+   */
+  async open(
+    workflow: Record<string, unknown>,
+    source: string | undefined,
+    place: () => Promise<Vec2>,
+  ): Promise<NativeWorkflowMaterializationResult> {
     const response = await this.#api.compile(workflow, source);
+    if (!response.plan) throw new Error('Persisted Cube workflow produced no native plan.');
+    return this.#materialize(response, await place(), source);
+  }
+
+  /** Create the reconciled workflow's Cubes and record what only they can hold. */
+  #materialize(
+    response: Awaited<ReturnType<LegacyWorkflowAuthoringApi['compile']>>,
+    origin: Vec2,
+    source: string | undefined,
+  ): NativeWorkflowMaterializationResult {
     if (!response.plan) throw new Error('Persisted Cube workflow produced no native plan.');
     const result = this.#materializer.materializeWorkflow(response.plan, origin);
     // A workflow sent as its saved text was carried as Cube documents, which record no seed

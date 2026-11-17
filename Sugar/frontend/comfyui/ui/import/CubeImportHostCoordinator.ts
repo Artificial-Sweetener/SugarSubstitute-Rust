@@ -19,7 +19,7 @@ import type { SugarCubesUI } from '../SugarCubesUI.js';
 import type { ComfyCubeRuntime } from '../cube/ComfyCubeRuntime.js';
 import { CubeHostFeedback } from '../core/CubeHostFeedback.js';
 import type { ComfyApplication } from '../types/graph.js';
-import type { Vec2 } from '../types/common.js';
+import { isRecord, type Vec2 } from '../types/common.js';
 import {
   ComfyCanvasDropOriginAdapter,
   type CubePlacementCanvas,
@@ -93,8 +93,7 @@ export class CubeImportHostCoordinator {
       ? new SugarScriptImageFileHostAdapter({
           host: this.#app,
           importSource: (source) => this.importSugarScript(source),
-          importWorkflow: (workflow, source) =>
-            this.importLegacyWorkflow(workflow, this.computeDropOrigin(), source),
+          importWorkflow: (workflow, source) => this.openLegacyWorkflow(workflow, source),
           validateWorkflow: (workflow) => this.#legacyWorkflowApi.compile(workflow),
           retainWorkflowSource: (source) =>
             new SugarScriptWorkflowArtifactCompanionService(
@@ -134,6 +133,37 @@ export class CubeImportHostCoordinator {
     origin: Vec2 = this.computeDropOrigin(),
     source?: string,
   ): Promise<NativeWorkflowMaterializationResult> {
+    return this.#legacyWorkflows().import(workflow, origin, source);
+  }
+
+  /**
+   * Open a workflow a file carries in a workflow of its own, as Comfy opens any workflow file.
+   * The file's Cubes keep their identities, so adding them to the workflow already open would
+   * merge two workflows, or fail where both hold the same Cube.
+   */
+  async openLegacyWorkflow(
+    workflow: Record<string, unknown>,
+    source?: string,
+  ): Promise<NativeWorkflowMaterializationResult> {
+    return this.#legacyWorkflows().open(workflow, source, async () => {
+      await this.#openBlankWorkflow();
+      return this.computeDropOrigin();
+    });
+  }
+
+  /** Ask Comfy for a new blank workflow and wait until it is the one on screen. */
+  async #openBlankWorkflow(): Promise<void> {
+    const app: unknown = this.#app;
+    const manager = isRecord(app) && isRecord(app.extensionManager) ? app.extensionManager : null;
+    const command = manager && isRecord(manager.command) ? manager.command : null;
+    const execute = command?.execute;
+    if (!command || typeof execute !== 'function')
+      throw new Error('Comfy cannot open a new workflow for this file.');
+    await Reflect.apply(execute, command, ['Comfy.NewBlankWorkflow']);
+  }
+
+  /** Bind the persisted-workflow import to the current root graph. */
+  #legacyWorkflows(): LegacyWorkflowImportService {
     const runtime = this.#getRuntime();
     runtime.graphScope.assertCurrentRoot('persisted Cube workflow import');
     const graph = this.#app?.graph;
@@ -146,7 +176,7 @@ export class CubeImportHostCoordinator {
         fixImportedSeeds(graph, instanceIds);
         this.#holdSeeds(instanceIds);
       },
-    ).import(workflow, origin, source);
+    );
   }
 
   /** Build the shared native workflow mutation owner for one root graph. */

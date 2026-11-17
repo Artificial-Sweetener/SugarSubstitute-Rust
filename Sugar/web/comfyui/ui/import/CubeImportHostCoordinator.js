@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Coordinate native workflow imports and SugarScript host adapters. */
+import { isRecord } from '../types/common.js';
 import { ComfyCanvasDropOriginAdapter, } from './ComfyCanvasDropOriginAdapter.js';
 import { SugarScriptAuthoringApi } from '../sugarscript/SugarScriptAuthoringApi.js';
 import { SugarScriptFileDropAdapter } from '../sugarscript/SugarScriptFileDropAdapter.js';
@@ -64,7 +65,7 @@ export class CubeImportHostCoordinator {
             ? new SugarScriptImageFileHostAdapter({
                 host: this.#app,
                 importSource: (source) => this.importSugarScript(source),
-                importWorkflow: (workflow, source) => this.importLegacyWorkflow(workflow, this.computeDropOrigin(), source),
+                importWorkflow: (workflow, source) => this.openLegacyWorkflow(workflow, source),
                 validateWorkflow: (workflow) => this.#legacyWorkflowApi.compile(workflow),
                 retainWorkflowSource: (source) => new SugarScriptWorkflowArtifactCompanionService(this.#sugarScriptApi, () => this.#app?.graph ?? null).retain(source),
                 feedback: this.#ui.toast,
@@ -88,6 +89,31 @@ export class CubeImportHostCoordinator {
     }
     /** Reconcile and atomically import a persisted group-era Cube workflow. */
     async importLegacyWorkflow(workflow, origin = this.computeDropOrigin(), source) {
+        return this.#legacyWorkflows().import(workflow, origin, source);
+    }
+    /**
+     * Open a workflow a file carries in a workflow of its own, as Comfy opens any workflow file.
+     * The file's Cubes keep their identities, so adding them to the workflow already open would
+     * merge two workflows, or fail where both hold the same Cube.
+     */
+    async openLegacyWorkflow(workflow, source) {
+        return this.#legacyWorkflows().open(workflow, source, async () => {
+            await this.#openBlankWorkflow();
+            return this.computeDropOrigin();
+        });
+    }
+    /** Ask Comfy for a new blank workflow and wait until it is the one on screen. */
+    async #openBlankWorkflow() {
+        const app = this.#app;
+        const manager = isRecord(app) && isRecord(app.extensionManager) ? app.extensionManager : null;
+        const command = manager && isRecord(manager.command) ? manager.command : null;
+        const execute = command?.execute;
+        if (!command || typeof execute !== 'function')
+            throw new Error('Comfy cannot open a new workflow for this file.');
+        await Reflect.apply(execute, command, ['Comfy.NewBlankWorkflow']);
+    }
+    /** Bind the persisted-workflow import to the current root graph. */
+    #legacyWorkflows() {
         const runtime = this.#getRuntime();
         runtime.graphScope.assertCurrentRoot('persisted Cube workflow import');
         const graph = this.#app?.graph;
@@ -96,7 +122,7 @@ export class CubeImportHostCoordinator {
         return new LegacyWorkflowImportService(this.#legacyWorkflowApi, this.#nativeWorkflowMaterializer(runtime, graph), (fields) => recordExactIntegers(graph, fields), (instanceIds) => {
             fixImportedSeeds(graph, instanceIds);
             this.#holdSeeds(instanceIds);
-        }).import(workflow, origin, source);
+        });
     }
     /** Build the shared native workflow mutation owner for one root graph. */
     #nativeWorkflowMaterializer(runtime, graph) {
