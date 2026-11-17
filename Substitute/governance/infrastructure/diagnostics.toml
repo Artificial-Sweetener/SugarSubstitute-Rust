@@ -52,7 +52,7 @@ rationale = "Bounded operational pages and export through shared protected durab
 [[records]]
 path = "installer/worker/main.ts"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:3831fd0e9cf0d8c8a1b9c144e92b38aa86b3eb16771ec8194944739a8a0658bc"
+source_sha256 = "sha256:c121098570e56dbd4542a5e91e7deca4f379928776468390be2aea5ff742f652"
 disposition = "routing"
 rationale = "Upstream console bridge routes untrusted worker output through bounded local projection and authenticated framing."
 

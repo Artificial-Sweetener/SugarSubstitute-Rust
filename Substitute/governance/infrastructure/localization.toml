@@ -60,7 +60,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute/src/production/entry_runner.rs"
-source_sha256 = "sha256:23d3b4e5bafb8d63822ca0a23a354a9d8dbc7d93b79dc0f31bcc13fbad97931b"
+source_sha256 = "sha256:e5bc9a6988eaaba1ea98e09765cfc619d4d755580251bd7b97060b3b54e8ab82"
 kind = "presentation"
 rationale = "Host composition of localized native startup/profile-conflict feedback. Authenticated configuration/selected installer language is retained when available; failures before configuration use canonical English. Original causes remain diagnostic details. Retain real entry, authority, child and execution lifetimes through native pumping."
 
@@ -72,7 +72,7 @@ rationale = "Host composition of localized native startup/profile-conflict feedb
 
 [[records]]
 path = "crates/sugarsubstitute/src/production/runtime.rs"
-source_sha256 = "sha256:4c74fdc8d2a67eed60f6dd456ccfe48f9eccbaff894412718fedc5c0a8d4c066"
+source_sha256 = "sha256:a3ae84283e78f33a98270a5c85a6c78cb35fed86609ab72e7108d431ff460e3a"
 kind = "presentation"
 rationale = "Host composition of localized native startup/profile-conflict feedback. Authenticated configuration/selected installer language is retained when available; failures before configuration use canonical English. Original causes remain diagnostic details. Select the real coordinator or inherited desktop role and compose its owned runtime."
 
@@ -138,7 +138,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/lib.rs"
-source_sha256 = "sha256:ce7c9116694468cac5bd40af9431ecd68d61b0ca46fdd1155b27d18993b20509"
+source_sha256 = "sha256:8b06bc119ae9ffa25b5abddf6b7f7b71c844dfedd49e7a7b6aa901157cc78b2c"
 kind = "native"
 rationale = "Native boundary: Own native window lifetime and CPU frame presentation independently of UI content.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -198,7 +198,7 @@ rationale = "Native boundary: Keep conflict decisions responsive while the appli
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/startup_error_dialog.rs"
-source_sha256 = "sha256:4b75f508a4bfaf16cffc35d6bffe2a18b0be4ff5536b4741592c2fbc8b10cf5a"
+source_sha256 = "sha256:84752e14b8d1b8ec06eb981f764dc4fa226eb25db6dfcc90fce4ea701a1a3fc0"
 kind = "native"
 rationale = "Native boundary: Present bounded final Root failure details after its native lifetime has retired.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -324,7 +324,7 @@ rationale = "SugarCubes dependency preparation emits only the closed checkingSug
 
 [[records]]
 path = "installer/worker/main.ts"
-source_sha256 = "sha256:3831fd0e9cf0d8c8a1b9c144e92b38aa86b3eb16771ec8194944739a8a0658bc"
+source_sha256 = "sha256:c121098570e56dbd4542a5e91e7deca4f379928776468390be2aea5ff742f652"
 kind = "presentation"
 rationale = "Authenticated worker dispatch reports original error evidence and closed failure statusCode. The host validates textProtocol before readiness and resolves product feedback through its catalog."
 
@@ -336,7 +336,7 @@ rationale = "Native storage/cache error statusCode identifies setupFailed or cac
 
 [[records]]
 path = "installer/worker/product-messages.ts"
-source_sha256 = "sha256:90da33b9bcd97eac954275aa76e78e4f301236fbfd5e7cdc4cab0a7b27f715a0"
+source_sha256 = "sha256:ec73168db61e471b76d1ca384f200e83eb9e56adaaf86499d807981d891b10ae"
 kind = "presentation"
 rationale = "Typed worker-to-host text provenance contract. Owned progress uses closed codes; the external branch carries actual upstream status unchanged; ProductFailure retains its original diagnostic separately."
 
