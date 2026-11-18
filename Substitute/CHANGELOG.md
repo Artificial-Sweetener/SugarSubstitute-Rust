@@ -1,3 +1,9 @@
+## [0.2.6](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.2.5...substitute-v0.2.6) (2026-11-18)
+
+### Bug Fixes
+
+* **notice:** say that the last close lost work in a toast on the page, not a strip above the tabs ([60a71f9](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/60a71f9c55c022639a4b62d38c60b9e93ee066ec))
+
 ## [0.2.5](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.2.4...substitute-v0.2.5) (2026-11-17)
 
 ### Bug Fixes
