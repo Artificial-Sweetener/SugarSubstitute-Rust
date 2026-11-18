@@ -1,3 +1,10 @@
+## [0.3.1](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.3.0...substitute-v0.3.1) (2026-11-18)
+
+### Performance Improvements
+
+* **canvas:** copy a tile's surrounding pixels from three tiles in one GPU pass ([277dfbe](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/277dfbe80b3e28bc6358c432c74dbfddc4050fbd))
+* **canvas:** prepare acrylic blur about twice as fast on GPU and CPU ([e560fd8](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/e560fd88788f977213ebe76997ed78ddab76d252))
+
 ## [0.3.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.2.6...substitute-v0.3.0) (2026-11-18)
 
 ### Features
