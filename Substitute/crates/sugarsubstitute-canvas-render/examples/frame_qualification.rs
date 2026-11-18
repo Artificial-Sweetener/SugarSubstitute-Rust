@@ -13,6 +13,8 @@ use sugarsubstitute_execution::{ExecutionOwner, MonotonicClock};
 use sugarsubstitute_image_gpu::{AdapterCatalog, AdapterDescriptor, AdapterKey, GpuDevice};
 
 type Result<T = ()> = std::result::Result<T, Box<dyn Error>>;
+#[path = "frame_qualification/backdrops.rs"]
+mod backdrops;
 #[path = "frame_qualification/projection.rs"]
 mod projection;
 #[path = "frame_qualification/scale.rs"]
@@ -74,13 +76,16 @@ struct Report {
 }
 fn main() -> Result {
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
-    let (selected, cpu_projection) = match arguments.as_slice() {
-        [] => (None, false),
-        [flag] if flag == "--list" => (None, false),
-        [flag] if flag == "--cpu-projection" => (None, true),
-        [flag, index] if flag == "--adapter" => (Some(index.parse::<AdapterKey>()?), false),
+    let (selected, cpu_projection, acrylic) = match arguments.as_slice() {
+        [] => (None, false, false),
+        [flag] if flag == "--list" => (None, false, false),
+        [flag] if flag == "--cpu-projection" => (None, true, false),
+        [flag, index] if flag == "--adapter" => (Some(index.parse::<AdapterKey>()?), false, false),
+        [flag, index, measure] if flag == "--adapter" && measure == "--backdrops" => {
+            (Some(index.parse::<AdapterKey>()?), false, true)
+        }
         _ => {
-            return Err("Use frame_qualification --list | --adapter <backend:vendor:device> | --cpu-projection".into());
+            return Err("Use frame_qualification --list | --adapter <backend:vendor:device> [--backdrops] | --cpu-projection".into());
         }
     };
     let wake = Arc::new(Wake::default());
@@ -144,15 +149,19 @@ fn main() -> Result {
                     operation: Operation::Infrastructure,
                     class: JobClass::InfrastructureOrdinary,
                     deadline: Some(deadline),
-                    reservation_bytes: 32 * 1024 * 1024,
+                    reservation_bytes: if acrylic { 96 } else { 32 } * 1024 * 1024,
                     replacement: None,
                 },
                 &mut input,
-                |mut report, context| {
+                move |mut report, context| {
                     let device = report
                         .device
                         .take()
                         .ok_or_else(|| io::Error::other("Selected GPU custody absent"))?;
+                    if acrylic {
+                        report.frames = backdrops::qualify(device, &context)?;
+                        return Ok(report);
+                    }
                     report.frames = scene::qualify(device.clone(), &context)?;
                     report.frames += scale::qualify(device, &context)?;
                     Ok::<Report, Box<dyn Error + Send + Sync>>(report)

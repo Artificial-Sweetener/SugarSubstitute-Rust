@@ -1045,7 +1045,7 @@ rationale = "Developer measurement reports brush input-path timings on a 4096 pi
 [[records]]
 path = "crates/sugarsubstitute-canvas-render/examples/frame_qualification.rs"
 owner = "sugarsubstitute-canvas-render"
-source_sha256 = "sha256:59b158f9008509f31a03e93fae28f93807e822a60091e47b08cb57d539d97fb1"
+source_sha256 = "sha256:6be7b096b6a8b6ed0e8ebfd5640d94fb7088baf1d50632bd14629c2b5a2898e2"
 disposition = "fixture"
 rationale = "Isolated native qualification reports observed GPU display, repair and cancellation outcomes through the production execution boundary; runtime diagnostics use structured logging."
 
@@ -1069,6 +1069,13 @@ owner = "sugarsubstitute-canvas-render"
 source_sha256 = "sha256:d2b568777120b787a539b9db0800aaddeaa5aebb21ad77160a9ef14fcd9d5316"
 disposition = "fixture"
 rationale = "Isolated 4K hardware qualification reports actual retained GPU copy, CPU pixel agreement and finite-admission tile eviction through the production execution boundary."
+
+[[records]]
+path = "crates/sugarsubstitute-canvas-render/examples/frame_qualification/backdrops.rs"
+owner = "sugarsubstitute-canvas-render"
+source_sha256 = "sha256:cf43d4b7a6c97513897f2036a9d80dfe70e4db22289eb88cbefb421ae16782d3"
+disposition = "fixture"
+rationale = "Developer measurement reports what acrylic regions add to one presented frame by region count on the selected GPU, through the production projection and patch pipelines, and asserts nothing; runtime diagnostics use structured logging."
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/test_worker/pipeline.rs"
