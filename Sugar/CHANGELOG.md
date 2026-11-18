@@ -1,3 +1,10 @@
+## [0.24.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.23.0...sugarcubes-v0.24.0) (2026-11-18)
+
+### Features
+
+* **projects:** keep a project's masks with it through open and save ([6e337ea](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/6e337ea451ded29b441fbe5fa1817b49eb888d78))
+* **queue:** take a finished job's seeds into the current workflow from its row ([739eae2](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/739eae244c07db555e3f9c9581cb24565751a799))
+
 ## [0.23.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.22.0...sugarcubes-v0.23.0) (2026-11-18)
 
 ### Features
