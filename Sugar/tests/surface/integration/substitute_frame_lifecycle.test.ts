@@ -126,6 +126,7 @@ test('mode restores host presentation and preserves native controls, graph, and 
     report,
     openOverrides: () => undefined,
     setOverridesInline: () => undefined,
+    adoptJobSeeds: () => 0,
   });
   host.setup();
   expect(document.querySelector('.sc-substitute-frame')).toBeNull();

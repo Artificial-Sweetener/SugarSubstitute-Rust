@@ -19,6 +19,9 @@ import { GenerationStripView } from './GenerationStripView.js';
 import { generationStripCss } from './GenerationStripStyles.js';
 import { ComfyGenerationQueueSurface } from './ComfyGenerationQueueSurface.js';
 import { GenerationQueueDock } from './GenerationQueueDock.js';
+import { GenerationQueueRowMenu } from './GenerationQueueRowMenu.js';
+import { ToastService } from '../../core/ToastService.js';
+import { isRecord } from '../../types/common.js';
 import { applyOwnedTheme } from '../appearance/ThemeService.js';
 /** Coordinate stable strip presentation without absorbing host execution or styling policy. */
 export class GenerationStripHost {
@@ -29,8 +32,9 @@ export class GenerationStripHost {
     #stop;
     #queue;
     #dock;
+    #rowMenu;
     /** Mount source-matched generation controls only for the enabled Substitute frame. */
-    constructor(document, frame, app, report) {
+    constructor(document, frame, app, report, adoptJobSeeds) {
         this.frame = frame;
         this.#adapter = new ComfyGenerationAdapter(document, app);
         this.#style = document.createElement('style');
@@ -51,6 +55,23 @@ export class GenerationStripHost {
         frame.append(this.#view.element);
         this.#queue = new ComfyGenerationQueueSurface(document, frame, this.#view.queueSlot);
         this.#dock = new GenerationQueueDock(document, app, report);
+        const toasts = new ToastService({
+            getToast: () => {
+                const manager = isRecord(app) ? app.extensionManager : null;
+                const toast = isRecord(manager) ? manager.toast : null;
+                const add = isRecord(toast) ? toast.add : null;
+                return typeof add === 'function'
+                    ? { add: (message) => void Reflect.apply(add, toast, [message]) }
+                    : null;
+            },
+        });
+        this.#rowMenu = new GenerationQueueRowMenu({
+            document,
+            app,
+            adoptSeeds: adoptJobSeeds,
+            notify: (severity, title, message) => toasts.push(severity, title, message),
+            report,
+        });
         this.#stop = this.#adapter.subscribe(() => this.#refresh());
         this.#refresh();
     }
@@ -58,6 +79,7 @@ export class GenerationStripHost {
     dispose() {
         this.#queue.dispose();
         this.#dock.dispose();
+        this.#rowMenu.dispose();
         this.#stop();
         this.#adapter.dispose();
         this.#view.dispose();

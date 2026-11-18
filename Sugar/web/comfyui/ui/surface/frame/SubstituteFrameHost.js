@@ -279,7 +279,7 @@ export class SubstituteFrameHost {
         native.parentElement?.setAttribute('data-sc-frame-native', '');
         mount.append(this.#view.element);
         this.#desktop.attach(mount);
-        this.#generation = new GenerationStripHost(this.options.document, this.#view.element, this.options.app, this.options.report);
+        this.#generation = new GenerationStripHost(this.options.document, this.#view.element, this.options.app, this.options.report, this.options.adoptJobSeeds);
         this.#toolbarLayout = new SubstituteToolbarLayout(this.options.document, this.#view.element, this.#view.progressElement);
     }
     /** Refresh only the retained progress tracks for the currently presented workflow. */

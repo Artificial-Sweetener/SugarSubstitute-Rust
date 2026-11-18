@@ -29,6 +29,7 @@ import { ClosedWorkflowHistory } from './ClosedWorkflowHistory.js';
 import { SubstituteFrameView } from './SubstituteFrameView.js';
 import { substituteFrameCss } from './SubstituteFrameStyles.js';
 import { generationQueueSkinCss } from './GenerationQueueSkinStyles.js';
+import type { QueueJobSeed } from './GenerationQueueRowMenu.js';
 import { GenerationStripHost } from './GenerationStripHost.js';
 import { SubstituteToolbarLayout } from './SubstituteToolbarLayout.js';
 import { DesktopFramePresentation, type DesktopFrameReceipt } from './DesktopFramePresentation.js';
@@ -51,6 +52,8 @@ export interface SubstituteFrameHostOptions {
   stackControls(): CubeStackFrameControls;
   openOverrides(trigger: HTMLElement): void;
   setOverridesInline(inline: boolean): void;
+  /** Give the shown workflow a job's seeds; returns how many seed fields took one. */
+  adoptJobSeeds(seeds: readonly QueueJobSeed[]): number;
   report(error: unknown): void;
 }
 
@@ -330,6 +333,7 @@ export class SubstituteFrameHost {
       this.#view.element,
       this.options.app,
       this.options.report,
+      this.options.adoptJobSeeds,
     );
     this.#toolbarLayout = new SubstituteToolbarLayout(
       this.options.document,

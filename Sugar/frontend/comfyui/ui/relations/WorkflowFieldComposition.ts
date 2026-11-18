@@ -120,6 +120,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
     stackControls: options.stackControls,
     openOverrides: (trigger) => relations.openOverrideMenu(trigger),
     setOverridesInline: (inline) => relations.setOverridesInline(inline),
+    adoptJobSeeds: (seeds) => relations.jobSeeds.adopt(seeds),
     report: options.reportPresentationError,
   });
   const editorNavigation = new WorkflowEditorNavigationHost({

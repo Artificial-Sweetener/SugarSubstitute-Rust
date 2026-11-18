@@ -28,6 +28,7 @@ from .export_routes import build_export_route_handlers
 from .execution_routes import build_execution_route_handlers
 from .flavor_routes import build_flavor_route_handlers
 from .implementation_save_routes import build_implementation_save_route_handlers
+from .job_seed_routes import read_job_seeds_route
 from .legacy_workflow_routes import build_legacy_workflow_route_handlers
 from .release_notes_routes import build_release_notes_route_handlers
 from .repository_routes import build_repository_route_handlers
@@ -100,6 +101,7 @@ class RouteHandlers:
     compile_sugarscript: RouteHandler
     render_sugarscript: RouteHandler
     compile_legacy_workflow: RouteHandler
+    read_job_seeds: RouteHandler
     get_execution_capabilities: RouteHandler
     queue_execution: RouteHandler
     analyze_workflow: RouteHandler
@@ -187,6 +189,7 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
         compile_sugarscript=sugarscript.compile_sugarscript,
         render_sugarscript=sugarscript.render_sugarscript,
         compile_legacy_workflow=legacy_workflow.compile_legacy_workflow,
+        read_job_seeds=read_job_seeds_route,
         get_execution_capabilities=execution.get_capabilities,
         queue_execution=execution.queue_execution,
         analyze_workflow=workflow_analysis,
@@ -264,6 +267,7 @@ def register_routes(prompt_server: Any, services: BackendServices) -> RouteHandl
     routes.post("/sugarcubes/v2/workflows/compile-legacy")(
         handlers.compile_legacy_workflow
     )
+    routes.post("/sugarcubes/v2/queue/job-seeds")(handlers.read_job_seeds)
     routes.get("/sugarcubes/v2/executions/capabilities")(
         handlers.get_execution_capabilities
     )
