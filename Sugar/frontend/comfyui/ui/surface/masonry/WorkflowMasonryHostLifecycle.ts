@@ -200,6 +200,11 @@ export class WorkflowMasonryHostLifecycle {
     void transition.catch((error: unknown) => this.#options.reportError(error));
   }
 
+  /** Present the shown workflow as its Cubes when it is showing its graph. */
+  show(): void {
+    if (!this.#options.presentation.snapshot.masonry) this.toggle();
+  }
+
   /** Refresh an accepted canonical stack mutation through the existing projected layout owner. */
   refresh(): Promise<void> {
     return this.#controller.graphChanged();

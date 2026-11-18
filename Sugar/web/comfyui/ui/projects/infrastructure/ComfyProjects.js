@@ -139,6 +139,9 @@ export class ComfyProjectWorkflows {
     async importScript(source) {
         await this.options.importScript(source);
     }
+    showCubes() {
+        this.options.showCubes();
+    }
     /** Narrow Comfy's workflow store on every use; it is replaced as Comfy starts. */
     #store() {
         const app = this.options.app;

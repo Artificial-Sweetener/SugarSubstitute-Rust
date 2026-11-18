@@ -51,6 +51,7 @@ export class ProjectScripts {
         const name = uniqueTabName(projectNameOf(text, path), this.workflows.openNames());
         await this.workflows.openEmpty(name);
         await this.workflows.importScript(text);
+        this.workflows.showCubes();
         return name;
     }
     /** Save the shown workflow as its project's script. */

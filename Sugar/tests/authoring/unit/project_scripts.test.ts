@@ -81,6 +81,9 @@ function tabs(active: string | null, open: readonly string[] = active ? [active]
     importScript: async (source) => {
       imported.push(source);
     },
+    showCubes: () => {
+      imported.push('<shown as Cubes>');
+    },
   };
   return { host, opened, imported };
 }
@@ -184,7 +187,10 @@ test('opening builds the script in a new tab named for its project, numbered whe
   expect(await scripts.open('Bune/Bune.sugar')).toBe('Bune (2)');
   expect(t.opened).toEqual(['Bune (2)']);
   // A stored script has Windows line endings; the values it is built from hold plain newlines.
-  expect(t.imported).toEqual(['# Project: Bune\n\nuse "a" as A\nset A.n.v = """x\ny"""\n']);
+  expect(t.imported).toEqual([
+    '# Project: Bune\n\nuse "a" as A\nset A.n.v = """x\ny"""\n',
+    '<shown as Cubes>',
+  ]);
   // A script that cannot be built opens no tab.
   await expect(scripts.open('Broken/Broken.sugar')).rejects.toThrow('Cube not found');
   expect(t.opened).toEqual(['Bune (2)']);
@@ -252,6 +258,7 @@ test('a project opens into Comfy’s own new tab, renamed to the project', async
     },
     checkScript: async () => undefined,
     importScript: async () => undefined,
+    showCubes: () => undefined,
   });
 
   expect(host.activeName()).toBe('Unsaved Workflow');

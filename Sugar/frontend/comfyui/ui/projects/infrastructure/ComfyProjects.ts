@@ -118,6 +118,8 @@ export interface ComfyProjectWorkflowsOptions {
   checkScript(source: string): Promise<void>;
   /** Build the Cubes a script describes in the shown workflow. */
   importScript(source: string): Promise<unknown>;
+  /** Present the shown workflow as its Cubes. */
+  showCubes(): void;
 }
 
 /** Read and drive the workflow tabs Comfy owns, for opening a project into one. */
@@ -174,6 +176,10 @@ export class ComfyProjectWorkflows implements ProjectWorkflowHost {
 
   async importScript(source: string): Promise<void> {
     await this.options.importScript(source);
+  }
+
+  showCubes(): void {
+    this.options.showCubes();
   }
 
   /** Narrow Comfy's workflow store on every use; it is replaced as Comfy starts. */

@@ -58,6 +58,8 @@ export interface ProjectWorkflowHost {
   openEmpty(name: string): Promise<void>;
   /** Build the Cubes a script describes in the shown workflow. */
   importScript(source: string): Promise<void>;
+  /** Present the shown workflow as its Cubes, the way a project is worked on. */
+  showCubes(): void;
 }
 
 /** Turn a workflow into its project script. */
@@ -107,6 +109,7 @@ export class ProjectScripts {
     const name = uniqueTabName(projectNameOf(text, path), this.workflows.openNames());
     await this.workflows.openEmpty(name);
     await this.workflows.importScript(text);
+    this.workflows.showCubes();
     return name;
   }
 

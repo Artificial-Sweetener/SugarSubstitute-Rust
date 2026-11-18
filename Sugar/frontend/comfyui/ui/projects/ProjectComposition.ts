@@ -40,6 +40,8 @@ export interface ProjectCompositionOptions {
   notify(severity: 'success' | 'error', title: string, message: string): void;
   describe(error: unknown): string;
   importScript(source: string): Promise<unknown>;
+  /** Present the shown workflow as its Cubes. */
+  showCubes(): void;
 }
 
 /** Build the four project commands, ready to register with Comfy and to list in a menu. */
@@ -72,6 +74,7 @@ export function createProjectCommands(
         if (!compiled.plan) throw new SugarScriptCompileError(compiled.diagnostics);
       },
       importScript: options.importScript,
+      showCubes: options.showCubes,
     }),
     (workflow) => language.render(workflow),
   );

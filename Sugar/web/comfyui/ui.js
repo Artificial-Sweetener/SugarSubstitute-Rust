@@ -383,6 +383,7 @@ export const sugarCubesExtension = {
             notify: pushToastMessage,
             describe: readErrorMessage,
             importScript: (source) => importHostCoordinator.importSugarScript(source),
+            showCubes: () => workflowWorkspace.masonry.show(),
         }),
     }),
     addCustomNodeDefs(definitions) {

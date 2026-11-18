@@ -47,6 +47,7 @@ export function createProjectCommands(options) {
                 throw new SugarScriptCompileError(compiled.diagnostics);
         },
         importScript: options.importScript,
+        showCubes: options.showCubes,
     }), (workflow) => language.render(workflow));
     return projectCommands({
         scripts,
