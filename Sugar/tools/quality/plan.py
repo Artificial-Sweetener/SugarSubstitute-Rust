@@ -29,10 +29,13 @@ from tools.testing.model import TestPolicy, TestSelection
 
 @dataclass(frozen=True, slots=True)
 class QualityCheck:
-    """Name one validation-only npm script and its affected behavioral areas."""
+    """Name the validation-only npm scripts one concern needs and its affected behavioral areas.
+
+    The scripts are independent of one another, so the gate may run them side by side.
+    """
 
     name: str
-    script: str
+    scripts: tuple[str, ...]
     areas: frozenset[str]
     exclude_areas: frozenset[str]
 
@@ -84,23 +87,30 @@ def load_checks(root: Path, policy: TestPolicy) -> tuple[QualityCheck, ...]:
         raise ValueError("Quality checks must be an array of tables.")
     for value in entries:
         item = _mapping(value)
-        if set(item) != {"name", "script", "areas", "exclude_areas"}:
+        if set(item) != {"name", "scripts", "areas", "exclude_areas"}:
             raise ValueError("Unknown or missing quality profile fields.")
-        name, script = item["name"], item["script"]
+        name, selected = item["name"], item["scripts"]
         if (
             not isinstance(name, str)
-            or not isinstance(script, str)
             or not name
-            or script not in scripts
-            or not isinstance(scripts[script], str)
+            or not isinstance(selected, list)
+            or not selected
+            or not all(
+                isinstance(script, str)
+                and script in scripts
+                and isinstance(scripts[script], str)
+                for script in selected
+            )
         ):
-            raise ValueError("Quality profiles require a name and existing npm script.")
-        if name in names or script in {
-            "check",
-            "check:changed",
-            "check:staged",
-            "check:commit",
-        }:
+            raise ValueError(
+                "Quality profiles require a name and existing npm scripts."
+            )
+        steps = tuple(str(script) for script in selected)
+        if (
+            name in names
+            or len(set(steps)) != len(steps)
+            or set(steps) & {"check", "check:changed", "check:staged", "check:commit"}
+        ):
             raise ValueError("Duplicate or recursive quality profile.")
         names.add(name)
         areas, excluded = _strings(item["areas"]), _strings(item["exclude_areas"])
@@ -111,7 +121,7 @@ def load_checks(root: Path, policy: TestPolicy) -> tuple[QualityCheck, ...]:
             or (excluded and "*" not in areas)
         ):
             raise ValueError("Quality profile references invalid areas or exclusions.")
-        checks.append(QualityCheck(name, script, areas, excluded))
+        checks.append(QualityCheck(name, steps, areas, excluded))
     uncovered = {
         area for area in known if not any(check.covers(area) for check in checks)
     }

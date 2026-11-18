@@ -13,7 +13,11 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Run dependency-aware local quality gates against worktree or exact Git-index source."""
+"""Run dependency-aware local quality gates against worktree or exact Git-index source.
+
+The selected validation profiles and behavioral proofs run side by side within one bounded
+budget; see `tools.testing.parallel`.
+"""
 
 from __future__ import annotations
 
@@ -27,6 +31,7 @@ from pathlib import Path
 
 from tools.architecture.checker import check_repository
 from tools.architecture.snapshot import SnapshotError
+from tools.testing.parallel import Command
 from tools.testing.policy import load_test_policy
 from tools.testing.runner import run_selection
 from tools.testing.selection import changed_paths, select_paths, validate_inventory
@@ -64,7 +69,8 @@ def main(argv: Sequence[str] | None = None, *, project_root: Path | None = None)
             selection = select_paths(policy, paths, removed=removed)
             checks = select_checks(load_checks(snapshot, policy), selection)
             for check in checks:
-                sys.stdout.write(f"CHECK {check.name}: npm run {check.script}\n")
+                for script in check.scripts:
+                    sys.stdout.write(f"CHECK {check.name}: npm run {script}\n")
             for reason in selection.reasons:
                 sys.stdout.write(
                     f"SELECT {reason.group.name}: {reason.path}: {reason.reason}\n"
@@ -85,21 +91,26 @@ def main(argv: Sequence[str] | None = None, *, project_root: Path | None = None)
                     "GIT_COMMON_DIR",
                 ):
                     environment.pop(key, None)
+            validation: tuple[Command, ...] = ()
             if not args.tests_only:
                 npm = shutil.which("npm.cmd" if sys.platform == "win32" else "npm")
                 if npm is None:
                     raise ValueError("npm is unavailable.")
-                for check in checks:
-                    sys.stdout.flush()
-                    result = subprocess.run(
-                        [npm, "run", check.script],
-                        cwd=snapshot,
-                        check=False,
-                        env=environment,
+                validation = tuple(
+                    Command(
+                        f"check {check.name}: {script}", snapshot, (npm, "run", script)
                     )
-                    if result.returncode:
-                        return result.returncode
-            return run_selection(snapshot, policy, selection, environment=environment)
+                    for check in checks
+                    for script in check.scripts
+                )
+            sys.stdout.flush()
+            return run_selection(
+                snapshot,
+                policy,
+                selection,
+                environment=environment,
+                alongside=validation,
+            )
     except (
         OSError,
         ValueError,

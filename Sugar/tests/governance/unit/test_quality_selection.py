@@ -106,17 +106,31 @@ def test_quality_policy_rejects_unknown_fields_and_uncovered_areas(
         '{"scripts":{"check:fixture":"fixture"}}', encoding="utf-8"
     )
     (tmp_path / "QUALITY_POLICY.toml").write_text(
-        'schema=1\n[[check]]\nname="fixture"\nscript="check:fixture"\nareas=["photoshop"]\nexclude_areas=[]\n',
+        'schema=1\n[[check]]\nname="fixture"\nscripts=["check:fixture"]\nareas=["photoshop"]\nexclude_areas=[]\n',
         encoding="utf-8",
     )
     with pytest.raises(ValueError, match="lack quality checks"):
         load_checks(tmp_path, policy)
     (tmp_path / "QUALITY_POLICY.toml").write_text(
-        'schema=1\n[[check]]\nname="fixture"\nscript="check:fixture"\nareas=["*"]\nexclude_areas=[]\nunknown=true\n',
+        'schema=1\n[[check]]\nname="fixture"\nscripts=["check:fixture"]\nareas=["*"]\nexclude_areas=[]\nunknown=true\n',
         encoding="utf-8",
     )
     with pytest.raises(ValueError, match="Unknown or missing"):
         load_checks(tmp_path, policy)
+    for scripts in (
+        "[]",
+        '["check:fixture","check:fixture"]',
+        '["missing"]',
+        '"check:fixture"',
+    ):
+        (tmp_path / "QUALITY_POLICY.toml").write_text(
+            'schema=1\n[[check]]\nname="fixture"\nscripts='
+            + scripts
+            + '\nareas=["*"]\nexclude_areas=[]\n',
+            encoding="utf-8",
+        )
+        with pytest.raises(ValueError, match="existing npm scripts|Duplicate"):
+            load_checks(tmp_path, policy)
 
 
 def _git(root: Path, *arguments: str) -> None:
@@ -200,7 +214,7 @@ def test_staged_plan_accepts_removing_an_unowned_runtime_file(
         "value.py": "value: int = 1\n",
         ".releaserc.json": "{}\n",
         "package.json": '{"scripts":{"verify":"node verify.cjs"}}',
-        "QUALITY_POLICY.toml": 'schema=1\n[[check]]\nname="fixture"\nscript="verify"\nareas=["*"]\nexclude_areas=[]\n',
+        "QUALITY_POLICY.toml": 'schema=1\n[[check]]\nname="fixture"\nscripts=["verify"]\nareas=["*"]\nexclude_areas=[]\n',
         "TEST_POLICY.toml": 'schema=1\ntest_root="tests"\nboundary=[]\nsubscription=[]\n[[area]]\nname="fixture"\nsources=["value.py"]\nproofs=["unit"]\n',
         "ARCHITECTURE_POLICY.toml": 'schema=1\ndependency=[]\n[structure]\nsource_roots=["value.py"]\nextensions=[".py"]\nexcluded_prefixes=["node_modules/"]\nsoft_lines=350\nhard_lines=500\n',
         "ARCHITECTURE_DEBT.toml": "schema=1\ndebt=[]\n",
@@ -244,7 +258,7 @@ def test_staged_gate_executes_indexed_checks_and_tests(
         "value.py": "value: int = 1\n",
         "package.json": '{"scripts":{"verify":"node verify.cjs"}}',
         "verify.cjs": "const fs=require('node:fs');if(process.env.GIT_INDEX_FILE || !fs.readFileSync('value.py','utf8').includes('1'))process.exit(1);",
-        "QUALITY_POLICY.toml": 'schema=1\n[[check]]\nname="fixture"\nscript="verify"\nareas=["*"]\nexclude_areas=[]\n',
+        "QUALITY_POLICY.toml": 'schema=1\n[[check]]\nname="fixture"\nscripts=["verify"]\nareas=["*"]\nexclude_areas=[]\n',
         "TEST_POLICY.toml": 'schema=1\ntest_root="tests"\nboundary=[]\nsubscription=[]\n[[area]]\nname="fixture"\nsources=["value.py", "*.json", "*.toml", "*.cjs"]\nproofs=["unit"]\n',
         "ARCHITECTURE_POLICY.toml": 'schema=1\ndependency=[]\n[structure]\nsource_roots=["value.py"]\nextensions=[".py"]\nexcluded_prefixes=["node_modules/"]\nsoft_lines=350\nhard_lines=500\n',
         "ARCHITECTURE_DEBT.toml": "schema=1\ndebt=[]\n",

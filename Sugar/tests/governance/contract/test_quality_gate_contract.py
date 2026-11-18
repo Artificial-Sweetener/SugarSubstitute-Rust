@@ -46,3 +46,32 @@ def test_check_script_uses_validation_only_formatters() -> None:
     assert scripts["test:isolated"] == "python -m tools.test isolated"
     assert scripts["test:all"] == "python -m tools.test all"
     assert "npm run test:all" in scripts["check"]
+
+
+def _steps(scripts: dict[str, str], name: str) -> list[str]:
+    """Expand one npm script that only chains other npm scripts into the steps it runs."""
+
+    parts = scripts[name].split(" && ")
+    if not all(part.startswith("npm run ") for part in parts):
+        return [name]
+    return [
+        step
+        for part in parts
+        for step in _steps(scripts, part.removeprefix("npm run "))
+    ]
+
+
+def test_the_comfy_profile_runs_exactly_the_steps_of_the_comfy_check() -> None:
+    """Keep the steps the gate runs side by side equal to the chain a person runs by hand."""
+
+    import tomllib
+
+    package = json.loads((PROJECT_ROOT / "package.json").read_text(encoding="utf-8"))
+    policy = tomllib.loads(
+        (PROJECT_ROOT / "QUALITY_POLICY.toml").read_text(encoding="utf-8")
+    )
+    comfy = next(check for check in policy["check"] if check["name"] == "comfy")
+
+    assert comfy["scripts"] == _steps(package["scripts"], "check:comfy")
+    # The complete gate runs every one of those steps too.
+    assert set(comfy["scripts"]) <= set(_steps(package["scripts"], "check"))

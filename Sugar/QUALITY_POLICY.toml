@@ -1,26 +1,38 @@
 schema = 1
 
 # Test ownership and subscriptions select areas; checks consume that same selection.
+# A check's scripts are independent of one another: the gate runs them side by side.
 [[check]]
 name = "comfy"
-script = "check:comfy"
+scripts = [
+  "check:dependencies",
+  "format:check",
+  "lint:python",
+  "audit:standards",
+  "typecheck:frontend",
+  "typecheck:tests",
+  "typecheck:canvas-tests",
+  "typecheck:python",
+  "lint",
+  "build:check",
+]
 areas = ["*"]
 exclude_areas = ["editor_integrations", "photoshop", "gimp"]
 
 [[check]]
 name = "integrations"
-script = "check:integrations"
+scripts = ["check:integrations"]
 areas = ["editor_integrations", "photoshop", "gimp"]
 exclude_areas = []
 
 [[check]]
 name = "gimp"
-script = "check:gimp"
+scripts = ["check:gimp"]
 areas = ["gimp", "editor_integrations"]
 exclude_areas = []
 
 [[check]]
 name = "photoshop"
-script = "check:photoshop"
+scripts = ["check:photoshop"]
 areas = ["photoshop", "editor_integrations"]
 exclude_areas = []

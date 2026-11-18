@@ -18,7 +18,7 @@
 from __future__ import annotations
 
 import subprocess
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 import pytest
@@ -27,6 +27,7 @@ from tools.testing import runner as test_runner
 from tools.testing.model import TestArea as _TestArea
 from tools.testing.model import TestPolicy as _TestPolicy
 from tools.testing.model import TestSelection as _TestSelection
+from tools.testing.parallel import Command as _Command
 from tools.testing.policy import load_test_policy
 from tools.testing.selection import (
     TestSelectionError as _TestSelectionError,
@@ -302,21 +303,24 @@ def test_isolated_gate_runs_each_group_in_a_fresh_process(
             "def test_placeholder() -> None:\n    pass\n",
             encoding="utf-8",
         )
-    commands: list[tuple[str, ...]] = []
+    runs: list[tuple[tuple[str, ...], ...]] = []
 
     def capture(
-        _root: Path, command: list[str], *, environment: Mapping[str, str] | None = None
+        commands: Sequence[_Command],
+        *,
+        jobs: int,
+        environment: Mapping[str, str] | None = None,
     ) -> int:
-        """Capture one isolated subprocess command."""
+        """Capture each group's processes without starting a test runner."""
 
-        commands.append(tuple(command))
+        runs.append(tuple(command.arguments for command in commands))
         return 0
 
-    monkeypatch.setattr(test_runner, "_run", capture)
+    monkeypatch.setattr(test_runner, "run_commands", capture)
 
     assert test_runner.run_isolated_groups(tmp_path, policy) == 0
-    assert len(commands) == 2
-    assert commands[0] != commands[1]
+    assert [len(run) for run in runs] == [1, 1], "one fresh process per group"
+    assert runs[0] != runs[1]
 
 
 def test_isolated_typescript_proofs_use_one_fresh_process_per_module(
@@ -343,27 +347,13 @@ def test_isolated_typescript_proofs_use_one_fresh_process_per_module(
     files = tuple(proof_root / f"{name}.test.ts" for name in ("first", "second"))
     for path in files:
         path.write_text("", encoding="utf-8")
-    commands: list[tuple[str, ...]] = []
-
-    def capture(
-        _root: Path, command: list[str], *, environment: Mapping[str, str] | None = None
-    ) -> int:
-        """Capture subprocess admission without starting a browser."""
-
-        commands.append(tuple(command))
-        return 0
-
-    monkeypatch.setattr(test_runner, "_run", capture)
-
-    assert (
-        test_runner.run_selection(
-            tmp_path, policy, _TestSelection(groups=policy.groups, reasons=())
-        )
-        == 0
+    commands = test_runner.selection_commands(
+        tmp_path, policy, _TestSelection(groups=policy.groups, reasons=()), jobs=8
     )
     assert len(commands) == len(files)
     for command, path in zip(commands, files, strict=True):
-        assert command == (
+        assert command.cwd == tmp_path and command.weight == 1
+        assert command.arguments == (
             "node",
             "--experimental-vm-modules",
             "node_modules/jest/bin/jest.js",
@@ -399,26 +389,15 @@ def test_large_selection_preserves_every_file_within_windows_command_limits(
         / (f"long_behavior_{index:04d}_" + "x" * 100 + ".test.ts")
         for index in range(400)
     )
-    commands: list[list[str]] = []
-
-    def capture(
-        _root: Path, command: list[str], *, environment: Mapping[str, str] | None = None
-    ) -> int:
-        """Capture exact subprocess arguments without starting a test runner."""
-
-        commands.append(command)
-        return 0
-
     monkeypatch.setattr(test_runner, "group_test_files", lambda *_args: files)
-    monkeypatch.setattr(test_runner, "_run", capture)
-    assert (
-        test_runner.run_selection(
-            tmp_path, policy, _TestSelection(groups=policy.groups, reasons=())
+    commands = [
+        list(command.arguments)
+        for command in test_runner.selection_commands(
+            tmp_path, policy, _TestSelection(groups=policy.groups, reasons=()), jobs=8
         )
-        == 0
-    )
+    ]
     assert len(commands) > 1
     assert all(len(subprocess.list2cmdline(command)) < 30000 for command in commands)
-    assert [item for command in commands for item in command[4:]] == [
+    assert [item for command in commands for item in command[5:]] == [
         str(path.relative_to(tmp_path)) for path in files
     ]

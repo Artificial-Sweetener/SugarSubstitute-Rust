@@ -13,17 +13,20 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Execute selected Python, TypeScript and Rust proof groups deterministically."""
+"""Execute selected Python, TypeScript and Rust proof groups side by side, deterministically."""
 
 from __future__ import annotations
 
 import subprocess
 import sys
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from .model import TestGroup, TestPolicy, TestSelection
+from .parallel import Command, gate_jobs, run_commands
 from .rust import rust_test_targets
+
+_JEST = ("node", "--experimental-vm-modules", "node_modules/jest/bin/jest.js")
 
 
 def run_selection(
@@ -32,8 +35,35 @@ def run_selection(
     selection: TestSelection,
     *,
     environment: Mapping[str, str] | None = None,
+    alongside: Sequence[Command] = (),
 ) -> int:
-    """Run selected groups and return the first failing process status."""
+    """Run the selected groups, and any `alongside` validation, within one bounded budget.
+
+    Returns the first failing process status in a fixed order: `alongside` first, then the
+    selection's own processes as `selection_commands` lists them.
+    """
+
+    jobs = gate_jobs(environment)
+    return run_commands(
+        (*alongside, *selection_commands(root, policy, selection, jobs=jobs)),
+        jobs=jobs,
+        environment=environment,
+    )
+
+
+def selection_commands(
+    root: Path,
+    policy: TestPolicy,
+    selection: TestSelection,
+    *,
+    jobs: int,
+) -> tuple[Command, ...]:
+    """List one process per shared run and per isolated proof module, in a fixed order.
+
+    Proofs that may share a process run together, as their runner schedules them; a module of a
+    policy-isolated proof keeps a fresh process of its own. A runner that fans out its own
+    workers is told how many, and occupies that much of the budget.
+    """
 
     ordinary_python: list[str] = []
     ordinary_typescript: list[str] = []
@@ -52,76 +82,52 @@ def run_selection(
             str(path.relative_to(root)) for path in files if path.suffix == ".ts"
         )
         ordinary_rust.extend(path for path in files if path.suffix == ".rs")
-    if ordinary_python:
-        status = _run_paths(
+    workers = max(1, jobs // 2)
+    commands: list[Command] = [
+        *_path_commands(
+            "TypeScript proofs",
             root,
-            [sys.executable, "-m", "pytest", "-q"],
-            ordinary_python,
-            environment=environment,
-        )
-        if status:
-            return status
-    if ordinary_typescript:
-        status = _run_paths(
-            root,
-            [
-                "node",
-                "--experimental-vm-modules",
-                "node_modules/jest/bin/jest.js",
-                "--runTestsByPath",
-            ],
+            (*_JEST, f"--maxWorkers={workers}", "--runTestsByPath"),
             ordinary_typescript,
-            environment=environment,
-        )
-        if status:
-            return status
-    for target in rust_test_targets(root, tuple(ordinary_rust)):
-        status = _run(
-            target.manifest.parent,
-            [
-                *target.runner,
-                "--test",
-                target.name,
-            ],
-            environment=environment,
-        )
-        if status:
-            return status
+            weight=workers,
+        ),
+        *_path_commands(
+            "Python proofs",
+            root,
+            (sys.executable, "-m", "pytest", "-q"),
+            ordinary_python,
+            weight=1,
+        ),
+    ]
     for path in sorted(isolated):
         relative = str(path.relative_to(root))
         if path.suffix == ".py":
-            status = _run(
-                root,
-                [sys.executable, "-m", "pytest", "-q", relative],
-                environment=environment,
+            commands.append(
+                Command(
+                    relative, root, (sys.executable, "-m", "pytest", "-q", relative)
+                )
             )
         elif path.suffix == ".ts":
-            status = _run(
-                root,
-                [
-                    "node",
-                    "--experimental-vm-modules",
-                    "node_modules/jest/bin/jest.js",
-                    "--runInBand",
-                    "--runTestsByPath",
+            commands.append(
+                Command(
                     relative,
-                ],
-                environment=environment,
+                    root,
+                    (*_JEST, "--runInBand", "--runTestsByPath", relative),
+                )
             )
         else:
-            target = rust_test_targets(root, (path,))[0]
-            status = _run(
-                target.manifest.parent,
-                [
-                    *target.runner,
-                    "--test",
-                    target.name,
-                ],
-                environment=environment,
-            )
-        if status:
-            return status
-    return 0
+            ordinary_rust.append(path)
+    # A native build uses every core it finds, so each one takes the whole budget.
+    commands.extend(
+        Command(
+            f"Rust proof {target.name}",
+            target.manifest.parent,
+            (*target.runner, "--test", target.name),
+            weight=jobs,
+        )
+        for target in rust_test_targets(root, tuple(ordinary_rust))
+    )
+    return tuple(commands)
 
 
 def run_isolated_groups(root: Path, policy: TestPolicy) -> int:
@@ -156,45 +162,44 @@ def group_test_files(
     )
 
 
-def _run(
-    root: Path, command: list[str], *, environment: Mapping[str, str] | None = None
-) -> int:
-    """Run one inherited-output test process without shell interpretation."""
-
-    completed = subprocess.run(
-        command, cwd=root, check=False, env=environment
-    )  # noqa: S603
-    return completed.returncode
-
-
-def _run_paths(
+def _path_commands(
+    label: str,
     root: Path,
-    prefix: list[str],
-    paths: list[str],
+    prefix: tuple[str, ...],
+    paths: Sequence[str],
     *,
-    environment: Mapping[str, str] | None = None,
-) -> int:
+    weight: int,
+) -> tuple[Command, ...]:
     """Preserve selected paths while keeping each command below Windows' CreateProcess limit."""
 
-    command = prefix.copy()
+    batches: list[list[str]] = []
+    batch: list[str] = []
     for path in paths:
-        candidate = [*command, path]
-        if len(subprocess.list2cmdline(candidate)) >= 30000:
-            if len(command) == len(prefix):
+        if len(subprocess.list2cmdline([*prefix, *batch, path])) >= 30000:
+            if not batch:
                 raise ValueError(
                     "A selected test path exceeds the subprocess argument budget."
                 )
-            status = _run(root, command, environment=environment)
-            if status:
-                return status
-            command = [*prefix, path]
+            batches.append(batch)
+            batch = [path]
         else:
-            command = candidate
-    return (
-        _run(root, command, environment=environment)
-        if len(command) > len(prefix)
-        else 0
+            batch.append(path)
+    if batch:
+        batches.append(batch)
+    return tuple(
+        Command(
+            label if len(batches) == 1 else f"{label} {number} of {len(batches)}",
+            root,
+            (*prefix, *selected),
+            weight=weight,
+        )
+        for number, selected in enumerate(batches, start=1)
     )
 
 
-__all__ = ["group_test_files", "run_isolated_groups", "run_selection"]
+__all__ = [
+    "group_test_files",
+    "run_isolated_groups",
+    "run_selection",
+    "selection_commands",
+]
