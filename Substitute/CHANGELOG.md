@@ -1,3 +1,9 @@
+## [0.3.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.2.6...substitute-v0.3.0) (2026-11-18)
+
+### Features
+
+* **canvas:** blur behind every acrylic surface over the native canvas ([e49ecce](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/e49ecce249a9f356d6fafeeead040d9a0b790463))
+
 ## [0.2.6](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.2.5...substitute-v0.2.6) (2026-11-18)
 
 ### Bug Fixes

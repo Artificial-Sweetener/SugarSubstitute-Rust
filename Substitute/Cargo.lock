@@ -2647,7 +2647,7 @@ dependencies = [
 
 [[package]]
 name = "sugarsubstitute"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "png",
  "serde",
@@ -2678,7 +2678,7 @@ dependencies = [
 
 [[package]]
 name = "sugarsubstitute-application"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "serde_json",
  "sugarsubstitute-contracts",
@@ -2686,7 +2686,7 @@ dependencies = [
 
 [[package]]
 name = "sugarsubstitute-canvas"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "flate2",
  "sha2",
@@ -2697,7 +2697,7 @@ dependencies = [
 
 [[package]]
 name = "sugarsubstitute-canvas-render"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "sugarsubstitute-canvas",
  "sugarsubstitute-contracts",
@@ -2708,7 +2708,7 @@ dependencies = [
 
 [[package]]
 name = "sugarsubstitute-comfy"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2726,7 +2726,7 @@ dependencies = [
 
 [[package]]
 name = "sugarsubstitute-configuration"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2736,7 +2736,7 @@ dependencies = [
 
 [[package]]
 name = "sugarsubstitute-contracts"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2745,7 +2745,7 @@ dependencies = [
 
 [[package]]
 name = "sugarsubstitute-crash"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2760,7 +2760,7 @@ dependencies = [
 
 [[package]]
 name = "sugarsubstitute-desktop"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "cairo-rs",
  "gtk",
@@ -2786,7 +2786,7 @@ dependencies = [
 
 [[package]]
 name = "sugarsubstitute-execution"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "libc",
  "serde",
@@ -2800,7 +2800,7 @@ dependencies = [
 
 [[package]]
 name = "sugarsubstitute-image-gpu"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "ash",
  "sugarsubstitute-contracts",
@@ -2813,7 +2813,7 @@ dependencies = [
 
 [[package]]
 name = "sugarsubstitute-image-io"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "png",
  "sha2",
@@ -2829,7 +2829,7 @@ dependencies = [
 
 [[package]]
 name = "sugarsubstitute-image-ops"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "sha2",
  "sugarsubstitute-contracts",
@@ -2838,7 +2838,7 @@ dependencies = [
 
 [[package]]
 name = "sugarsubstitute-networking"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "sugarsubstitute-contracts",
  "sugarsubstitute-execution",
@@ -2849,7 +2849,7 @@ dependencies = [
 
 [[package]]
 name = "sugarsubstitute-splash"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "png",
  "sugarsubstitute-application",
@@ -2861,7 +2861,7 @@ dependencies = [
 
 [[package]]
 name = "sugarsubstitute-supervision"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "base64",
  "flate2",
@@ -2885,7 +2885,7 @@ dependencies = [
 
 [[package]]
 name = "sugarsubstitute-ui"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "cosmic-text",
  "resvg",
@@ -2897,7 +2897,7 @@ dependencies = [
 
 [[package]]
 name = "sugarsubstitute-update"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "ring",
@@ -2911,7 +2911,7 @@ dependencies = [
 
 [[package]]
 name = "sugarsubstitute-update-repository"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "ring",
@@ -2925,7 +2925,7 @@ dependencies = [
 
 [[package]]
 name = "sugarsubstitute-xtask"
-version = "0.2.6"
+version = "0.3.0"
 dependencies = [
  "proc-macro2",
  "serde",
