@@ -154,6 +154,7 @@ export function createWorkflowSurfaces(options: WorkflowSurfaceOptions): Workflo
       subscribe: (listener) => route.subscribe(listener),
       choose: (value) => route.chooseRoute(value),
       subscribeFocus: (listener) => route.subscribeFocus(listener),
+      surfaced: () => route.surfaced(),
     },
     cards: new ComfyInputSurfaceCards(
       associations,

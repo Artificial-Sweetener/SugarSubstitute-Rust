@@ -42,6 +42,7 @@ function routePort(initial: CanvasRouteState | null) {
     },
     choose,
     subscribeFocus: () => () => {},
+    surfaced: () => {},
   };
   return {
     port,

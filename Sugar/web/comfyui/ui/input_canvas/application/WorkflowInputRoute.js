@@ -92,6 +92,17 @@ export class WorkflowInputRoute {
         this.#focus();
         return true;
     }
+    /**
+     * Show the route's document on a canvas surface that just took over.
+     *
+     * The canvas keeps a document only for the surface it was shown on. An unchanged selection is
+     * otherwise never sent twice, so without this a canvas that was closed and opened again would
+     * stay empty on the Input route.
+     */
+    surfaced() {
+        this.#activated = null;
+        this.#reconcile();
+    }
     /** Stop following surfaces. */
     dispose() {
         this.#stop();

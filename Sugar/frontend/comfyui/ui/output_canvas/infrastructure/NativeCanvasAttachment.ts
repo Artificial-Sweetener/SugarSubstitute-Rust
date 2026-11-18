@@ -359,6 +359,8 @@ export class NativeCanvasAttachment {
       this.#ready = true;
       this.#resize(this.#geometry.read());
       this.refresh();
+      // This surface starts empty in the host; the route shows its Input document on it again.
+      options.route?.surfaced();
     } catch (error: unknown) {
       this.#ready = false;
       this.#disposed = true;

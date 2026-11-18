@@ -56,6 +56,7 @@ function fixture(staged: boolean, options: { route?: CanvasRouteState; empty?: b
   const card = document.createElement('button');
   document.body.append(card, root);
   const requests = new Set<() => void>();
+  const surfaced = jest.fn<() => void>();
   const route: CanvasRoutePort = {
     read: () => options.route ?? null,
     subscribe: () => () => {},
@@ -64,6 +65,7 @@ function fixture(staged: boolean, options: { route?: CanvasRouteState; empty?: b
       requests.add(listener);
       return () => requests.delete(listener);
     },
+    surfaced,
   };
   const host = nativePreviewHost(options.empty === true);
   const surface = new NativeCanvasAttachment(root, {
@@ -101,11 +103,19 @@ function fixture(staged: boolean, options: { route?: CanvasRouteState; empty?: b
     card,
     retire,
     requests,
+    surfaced,
     request: () => {
       for (const listener of requests) listener();
     },
   };
 }
+
+test('a new native surface tells the route it took over, once, so Input is shown on it again', () => {
+  const f = fixture(false);
+  expect(f.surfaced).toHaveBeenCalledTimes(1);
+  f.surface.refresh();
+  expect(f.surfaced).toHaveBeenCalledTimes(1);
+});
 
 test('a focus request moves keyboard focus from the card to the canvas viewport', () => {
   const f = fixture(false);

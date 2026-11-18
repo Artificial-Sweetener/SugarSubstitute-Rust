@@ -31,4 +31,9 @@ export interface CanvasRoutePort {
   choose(route: CanvasRouteId): void;
   /** Observe requests for the canvas to take keyboard focus, as when a card opens Input. */
   subscribeFocus(listener: () => void): () => void;
+  /**
+   * Tell the route a new canvas surface took over, as when the canvas is closed and opened
+   * again. A new surface starts empty, so the route shows its document there again.
+   */
+  surfaced(): void;
 }

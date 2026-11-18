@@ -271,6 +271,7 @@ test.each([
         for (const listener of listeners) listener();
       },
       subscribeFocus: () => () => {},
+      surfaced: () => {},
     };
     const f = fixture(true, false, route);
     await commit(f, true);

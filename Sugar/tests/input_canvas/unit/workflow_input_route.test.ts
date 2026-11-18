@@ -98,6 +98,26 @@ function fixture(stored: Record<string, WorkflowInputSelection> = {}) {
   };
 }
 
+test('a canvas surface that takes over is shown the same Input document again', () => {
+  const f = fixture({ 'workflow-a': { route: 'input', surface: 'image', mask: 'mask-a' } });
+  f.publish([surface('image', 'image', ['mask-a'])]);
+  const shown = {
+    type: 'activate',
+    workflow: 'workflow-a',
+    route: 'input',
+    surface: 'image',
+    mask: 'mask-a',
+  };
+  expect(f.commands).toEqual([shown]);
+  // An unchanged selection is not sent twice to the surface that already shows it.
+  f.publish([surface('image', 'image', ['mask-a'])]);
+  expect(f.commands).toHaveLength(1);
+  // A canvas closed and opened again starts empty, so its new surface is told what to show.
+  f.route.surfaced();
+  expect(f.commands).toEqual([shown, shown]);
+  expect(f.writes).toEqual([]);
+});
+
 test('Input is unavailable and the view stays on Output without surfaces', () => {
   const f = fixture({ 'workflow-a': { route: 'input', surface: null, mask: null } });
   expect(f.route.read()).toBeNull();
