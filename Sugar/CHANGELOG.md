@@ -1,3 +1,9 @@
+## [0.21.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.20.0...sugarcubes-v0.21.0) (2026-11-18)
+
+### Features
+
+* **prompt:** schedule a LoRA from the prompt menu and insert trigger words ([108ae6d](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/108ae6d624055b48dfa5a05cdcd04c4578e74bb0))
+
 ## [0.20.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.19.5...sugarcubes-v0.20.0) (2026-11-18)
 
 ### Features
