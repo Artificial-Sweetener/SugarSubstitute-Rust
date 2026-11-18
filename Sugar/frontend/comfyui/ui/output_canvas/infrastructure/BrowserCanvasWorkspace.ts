@@ -200,6 +200,16 @@ export class BrowserCanvasWorkspace {
     else this.#motion.restore(visible);
     this.#backdrop.hidden = !this.#motion.present || allocation.mode !== 'drawer';
     this.#backdrop.style.right = this.#pane.style.width;
+    // A drawer lies over the editor. A native canvas is drawn beneath the page and shows through
+    // the drawer, so the editor must not paint there: it would appear on top of the image. A mask
+    // hides the pixels only; a clip would also make the editor's cards count as scrolled out of
+    // view, and the cards that feed the input canvas would unmount.
+    const beneath =
+      this.#motion.present && allocation.mode === 'drawer'
+        ? `linear-gradient(to right,#000 calc(100% - ${this.#pane.style.width}),transparent calc(100% - ${this.#pane.style.width}))`
+        : '';
+    for (const property of ['mask-image', '-webkit-mask-image'])
+      this.content.style.setProperty(property, beneath);
     this.#divider.setAttribute('aria-valuenow', String(Math.round(allocation.canvas.width)));
     this.#divider.setAttribute('aria-valuemin', String(Math.round(allocation.minimumWidth)));
     this.#divider.setAttribute('aria-valuemax', String(Math.round(allocation.maximumWidth)));

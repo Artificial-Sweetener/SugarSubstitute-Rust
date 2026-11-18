@@ -183,11 +183,18 @@ test('requires explicit narrow activation and exposes authoritative keyboard wid
     '640px',
   );
   expect(document.activeElement?.getAttribute('aria-label')).toBe('Workflow output canvas');
+  // The editor paints nothing beneath the open drawer, so it cannot show over a native canvas.
+  expect(f.workspace.content.style.getPropertyValue('mask-image')).toBe(
+    'linear-gradient(to right,#000 calc(100% - 640px),transparent calc(100% - 640px))',
+  );
+  // Clipping would count the editor's cards as out of view and unmount the input canvas's sources.
+  expect(f.workspace.content.style.clipPath).toBe('');
   f.root.querySelector<HTMLButtonElement>('.sc-output-workspace-backdrop')!.click();
   expect(f.actions.close).toHaveBeenCalledTimes(1);
   f.resize(1400);
   f.frames.advance(16);
   expect(f.root.style.marginLeft).toBe('0px');
+  expect(f.workspace.content.style.getPropertyValue('mask-image')).toBe('');
   f.resize(800);
   f.frames.advance(16);
   expect(f.workspace.visible).toBe(false);
