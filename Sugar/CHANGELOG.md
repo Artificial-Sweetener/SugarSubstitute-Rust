@@ -1,3 +1,13 @@
+## [0.26.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.25.0...sugarcubes-v0.26.0) (2026-11-18)
+
+### Features
+
+* **canvas:** make everything over the canvas one solid surface ([c1d3927](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/c1d3927e66b9cf0ded3879e0b61b364714333c36))
+
+### Bug Fixes
+
+* **canvas:** keep the editor from showing over the image in a narrow window ([acf9cbc](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/acf9cbccdea56c2bcd070e6cb3bfb06be0cdac1f))
+
 ## [0.25.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.24.0...sugarcubes-v0.25.0) (2026-11-18)
 
 ### Features
