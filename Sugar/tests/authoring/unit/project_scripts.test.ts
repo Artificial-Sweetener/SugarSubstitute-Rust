@@ -72,6 +72,9 @@ function tabs(active: string | null, open: readonly string[] = active ? [active]
     activeName: () => active,
     openNames: () => [...open, ...opened],
     serialize: () => ({ nodes: [] }),
+    checkScript: async (source) => {
+      if (source.includes('missing')) throw new Error('Cube not found');
+    },
     openEmpty: async (name) => {
       opened.push(name);
     },
@@ -163,22 +166,28 @@ test('a workflow that cannot be written leaves the existing script untouched', a
 });
 
 test('opening builds the script in a new tab named for its project, numbered when taken', async () => {
-  const text = '# Project: Bune\r\n\r\nuse "a" as A\r\n';
+  const text = '# Project: Bune\r\n\r\nuse "a" as A\r\nset A.n.v = """x\r\ny"""\r\n';
   const f = folder({
     'Bune/Bune.sugar': text,
     'Bune/versions/Bune_1.sugar': 'x',
     'Loose.sugar': 'y',
+    'Broken/Broken.sugar': 'use "missing" as A\n',
   });
   const t = tabs('Other', ['Other', 'Bune']);
   const scripts = new ProjectScripts(f.store, t.host, async () => '');
 
   expect((await scripts.scripts()).map((file) => file.path)).toEqual([
+    'Broken/Broken.sugar',
     'Bune/Bune.sugar',
     'Loose.sugar',
   ]);
   expect(await scripts.open('Bune/Bune.sugar')).toBe('Bune (2)');
   expect(t.opened).toEqual(['Bune (2)']);
-  expect(t.imported).toEqual([text]);
+  // A stored script has Windows line endings; the values it is built from hold plain newlines.
+  expect(t.imported).toEqual(['# Project: Bune\n\nuse "a" as A\nset A.n.v = """x\ny"""\n']);
+  // A script that cannot be built opens no tab.
+  await expect(scripts.open('Broken/Broken.sugar')).rejects.toThrow('Cube not found');
+  expect(t.opened).toEqual(['Bune (2)']);
   await expect(scripts.open('Gone/Gone.sugar')).rejects.toThrow('no longer exists');
 });
 
@@ -241,6 +250,7 @@ test('a project opens into Comfy’s own new tab, renamed to the project', async
     command: async (id) => {
       commands.push(id);
     },
+    checkScript: async () => undefined,
     importScript: async () => undefined,
   });
 

@@ -254,14 +254,18 @@ def _activation_command(node: ScriptNode) -> str | None:
 
 
 def _set_block(cube: ScriptCube) -> str:
-    """Write one Cube's node links and field assignments; an inactive node persists none."""
+    """Write one Cube's node links and field assignments.
+
+    A node persists its fields while it runs, and also while the person keeps it revealed: a
+    revealed node's values are theirs to keep although its author left it bypassed.
+    """
 
     alias = encode_segment(cube.alias)
     lines: list[str] = []
     for node in _positive_before_negative(
         cube.nodes, lambda node: (node.key, node.label)
     ):
-        if not node.active:
+        if not node.active and not node.revealed:
             continue
         node_path = f"{alias}.{encode_segment(node.label)}"
         if node.linked_to is not None:

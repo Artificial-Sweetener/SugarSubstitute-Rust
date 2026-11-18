@@ -16,6 +16,7 @@
 /** Compose the project feature over Comfy's file storage, workflow tabs and SugarCubes' dialogs. */
 import { isRecord } from '../types/common.js';
 import { SugarScriptAuthoringApi } from '../sugarscript/SugarScriptAuthoringApi.js';
+import { SugarScriptCompileError } from '../sugarscript/SugarScriptImportService.js';
 import { ProjectScripts } from './application/ProjectScripts.js';
 import { ComfyProjectFiles, ComfyProjectWorkflows, } from './infrastructure/ComfyProjects.js';
 import { projectCommands, } from './presentation/ProjectCommands.js';
@@ -36,7 +37,17 @@ export function createProjectCommands(options) {
             throw new Error('The Comfy API is unavailable for project files.');
         return api.fetchApi.call(api, path, init);
     });
-    const scripts = new ProjectScripts(files, new ComfyProjectWorkflows({ app: options.app, command, importScript: options.importScript }), (workflow) => new SugarScriptAuthoringApi(options.cubeApi).render(workflow));
+    const language = new SugarScriptAuthoringApi(options.cubeApi);
+    const scripts = new ProjectScripts(files, new ComfyProjectWorkflows({
+        app: options.app,
+        command,
+        checkScript: async (source) => {
+            const compiled = await language.compile(source);
+            if (!compiled.plan)
+                throw new SugarScriptCompileError(compiled.diagnostics);
+        },
+        importScript: options.importScript,
+    }), (workflow) => language.render(workflow));
     return projectCommands({
         scripts,
         dialogs: options.dialogs,

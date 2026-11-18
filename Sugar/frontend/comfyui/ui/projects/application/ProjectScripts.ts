@@ -52,6 +52,8 @@ export interface ProjectWorkflowHost {
   openNames(): readonly string[];
   /** The shown workflow as Comfy serializes it. */
   serialize(): unknown;
+  /** Refuse a script whose Cubes cannot be built, before a tab is opened for it. */
+  checkScript(source: string): Promise<void>;
   /** Show a new empty workflow tab under this name. */
   openEmpty(name: string): Promise<void>;
   /** Build the Cubes a script describes in the shown workflow. */
@@ -97,8 +99,11 @@ export class ProjectScripts {
 
   /** Open one script into a new tab named for its project; returns that tab's name. */
   async open(path: string): Promise<string> {
-    const text = await this.files.read(path);
-    if (text === null) throw new Error('The project script no longer exists.');
+    const stored = await this.files.read(path);
+    if (stored === null) throw new Error('The project script no longer exists.');
+    // A script is stored with Windows line endings; a multi-line value holds plain newlines.
+    const text = stored.replace(/\r\n?/g, '\n');
+    await this.workflows.checkScript(text);
     const name = uniqueTabName(projectNameOf(text, path), this.workflows.openNames());
     await this.workflows.openEmpty(name);
     await this.workflows.importScript(text);

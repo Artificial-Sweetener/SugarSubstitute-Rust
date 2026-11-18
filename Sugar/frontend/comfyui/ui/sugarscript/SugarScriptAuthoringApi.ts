@@ -18,6 +18,17 @@
 import type { CubeLibraryApi } from '../core/CubeLibraryApi.js';
 import { readSugarScriptAuthoringResponse } from './SugarScriptAuthoringModels.js';
 import type { SugarScriptAuthoringResponse } from './SugarScriptAuthoringModels.js';
+import { isRecord } from '../types/common.js';
+import {
+  readExactIntegerFields,
+  type ExactIntegerField,
+} from '../workflow/ExactIntegerRelations.js';
+
+/** One compiled script: its plan, its workflow, and the whole numbers a page would round. */
+export interface CompiledSugarScript extends SugarScriptAuthoringResponse {
+  readonly workflow: Record<string, unknown> | null;
+  readonly exactIntegers: readonly ExactIntegerField[];
+}
 
 /** Own transport and response validation for source-to-native authoring. */
 export class SugarScriptAuthoringApi {
@@ -28,8 +39,13 @@ export class SugarScriptAuthoringApi {
     this.#api = api;
   }
 
-  /** Compile bounded source without mutating or queueing a workflow. */
-  async compile(source: string): Promise<SugarScriptAuthoringResponse> {
+  /**
+   * Compile bounded source without mutating or queueing a workflow.
+   *
+   * The reply also carries the compiled workflow, whose metadata records the script's editor
+   * state, and names each whole number this page cannot hold, with its digits.
+   */
+  async compile(source: string): Promise<CompiledSugarScript> {
     const result = await this.#api.fetchJson('/sugarcubes/v2/sugarscript/compile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -38,7 +54,14 @@ export class SugarScriptAuthoringApi {
     if (result.response.status !== 200 && result.response.status !== 422) {
       throw new Error(readBackendError(result.data, result.response.status));
     }
-    return readSugarScriptAuthoringResponse(result.data);
+    const workflow = 'workflow' in result.data ? result.data.workflow : null;
+    return {
+      ...readSugarScriptAuthoringResponse(result.data),
+      workflow: isRecord(workflow) ? workflow : null,
+      exactIntegers: readExactIntegerFields(
+        'exact_integers' in result.data ? result.data.exact_integers : undefined,
+      ),
+    };
   }
 
   /** Write the project script of one serialized workflow, without storing it. */

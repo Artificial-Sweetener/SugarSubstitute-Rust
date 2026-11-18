@@ -23,7 +23,11 @@ import type {
   RelationState,
   ResolvedField,
 } from '../domain/RelationContracts.js';
-import { commonFieldDomain } from '../domain/FieldCompatibility.js';
+import {
+  acceptsFieldValue,
+  commonFieldDomain,
+  semanticFieldName,
+} from '../domain/FieldCompatibility.js';
 import { advanceSharedSeeds, type SeedStep } from '../domain/SharedSeedAdvancement.js';
 import { resolveLinkedNodeModes } from '../domain/LinkedNodeState.js';
 import { reconcileRelationMembership } from '../domain/RelationMembership.js';
@@ -49,6 +53,17 @@ export interface RelationSnapshot {
 export interface AdoptedNodeLink {
   readonly target: string;
   readonly source: string;
+}
+
+/** What a project script says about the values its Cubes share. */
+export interface AdoptedScriptRelations {
+  /** The values the script gives to every Cube, by the input each drives. */
+  readonly overrides: readonly { readonly key: string; readonly value: FieldValue }[];
+  readonly fixedSeedOverrides: readonly string[];
+  /** Fields whose own seed stays fixed, by field identity. */
+  readonly fixedSeedFields: readonly string[];
+  /** The value a following node's field keeps for itself, by field identity. */
+  readonly ownValues: readonly { readonly field: string; readonly value: FieldValue }[];
 }
 
 /** Keep user intentions authoritative while projecting their shared editable values. */
@@ -273,6 +288,49 @@ export class WorkflowRelations {
           canLinkNode(target, source, nodes, state)
         )
           state.nodeLinks[target.id] = source.id;
+      }
+    });
+  }
+
+  /**
+   * Give the named Cubes what their project script says about shared values.
+   *
+   * A script decides the workflow's overrides only when the workflow holds nothing but its
+   * Cubes: an override is on exactly when the script gives every Cube that value, and a shared
+   * seed is rolled unless the script holds it fixed. A field of a following node keeps the
+   * value the script records as its own, and a seed the script holds fixed stays fixed.
+   */
+  adoptScriptRelations(cubeIds: readonly string[], script: AdoptedScriptRelations): void {
+    const adopted = new Set(cubeIds);
+    this.reconcile();
+    this.#edit((state) => {
+      const snapshot = this.snapshot();
+      if (snapshot.fields.every((field) => field.cubeId !== null && adopted.has(field.cubeId)))
+        for (const group of snapshot.groups) {
+          if (group.key !== group.members[0]?.semantic) continue;
+          const given = script.overrides.find(
+            (override) => semanticFieldName(override.key) === group.key,
+          );
+          const fixed = script.fixedSeedOverrides.some(
+            (key) => semanticFieldName(key) === group.key,
+          );
+          state.overrides[group.key] = {
+            enabled: given !== undefined,
+            value:
+              given && acceptsFieldValue(group.domain, given.value) ? given.value : group.value,
+            seedMode: group.key === 'seed' ? (fixed ? 'fixed' : 'randomize') : group.seedMode,
+          };
+        }
+      const owned = (id: string): boolean => {
+        const cube = snapshot.fields.find((field) => field.id === id)?.cubeId;
+        return cube !== null && cube !== undefined && adopted.has(cube);
+      };
+      for (const own of script.ownValues) if (owned(own.field)) state.locals[own.field] = own.value;
+      for (const id of script.fixedSeedFields.filter(owned)) {
+        if (Object.hasOwn(state.localSeedModes, id)) state.localSeedModes[id] = 'fixed';
+        this.#inventory?.fields
+          .find((candidate) => candidate.contract.id === id)
+          ?.writeSeedMode?.('fixed');
       }
     });
   }

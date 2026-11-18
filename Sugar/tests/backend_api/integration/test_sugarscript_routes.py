@@ -150,7 +150,7 @@ def _write_cube(path: Path) -> None:
             "nodes": {
                 "sampler": {
                     "class_type": "KSampler",
-                    "inputs": {"steps": 10},
+                    "inputs": {"steps": 10, "note": ""},
                 }
             },
             "inputs": {},
@@ -254,3 +254,55 @@ def test_render_route_requires_a_workflow() -> None:
     )
 
     assert response.status == 400
+
+
+def test_compile_route_reads_a_stored_script_and_names_numbers_a_page_would_round(
+    tmp_path: Path,
+    backend_services_factory: BackendServicesFactory,
+) -> None:
+    """Take Windows line endings as line endings, and report a 64-bit number's digits."""
+
+    services = backend_services_factory(
+        tmp_path,
+        load_cube_artifact=load_cube,
+        prepare_cube_import=prepare_import,
+    )
+    checkout = ensure_tracked_repo(services)
+    _write_cube(checkout / "contract.cube")
+    handlers = build_route_handlers(services)
+    source = (
+        f'use "{CUBE_ID}" as Native\r\n'
+        "\r\n"
+        'set Native.sampler.note = """first\r\nsecond"""\r\n'
+        "set Native.sampler.steps = 12345678901234567890\r\n"
+    )
+
+    response = asyncio.run(
+        handlers.compile_sugarscript(FakeRequest(body={"source": source}))
+    )
+
+    assert response.status == 200
+    body = _mapping(decode_json_response(response))
+    plan = _mapping(body["plan"])
+    instances = plan["instances"]
+    assert isinstance(instances, list)
+    instance = _mapping(instances[0])
+    document = _mapping(_mapping(instance["payload"])["document"])
+    nodes = _mapping(_mapping(document["implementation"])["nodes"])
+    inputs = _mapping(_mapping(nodes["sampler"])["inputs"])
+    assert inputs["note"] == "first\nsecond"
+    assert body["exact_integers"] == [
+        {
+            "instance_id": instance["instance_id"],
+            "node_symbol": "sampler",
+            "input_name": "steps",
+            "digits": "12345678901234567890",
+        }
+    ]
+    written = asyncio.run(
+        handlers.render_sugarscript(FakeRequest(body={"workflow": body["workflow"]}))
+    )
+    rendered = _mapping(decode_json_response(written))["source"]
+    assert isinstance(rendered, str)
+    assert 'set Native.sampler.note = """first\nsecond"""\n' in rendered
+    assert "set Native.sampler.Steps = 12345678901234567890\n" in rendered

@@ -14,6 +14,8 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Coordinate SugarScript compilation and native workflow materialization. */
+import { readImportedNodeLinks } from '../workflow/ImportedNodeLinks.js';
+import { readImportedScriptRelations, } from '../workflow/ImportedScriptState.js';
 /** Report located compilation failures without collapsing them into plain text. */
 export class SugarScriptCompileError extends Error {
     diagnostics;
@@ -31,16 +33,33 @@ export class SugarScriptCompileError extends Error {
 export class SugarScriptImportService {
     #api;
     #materializer;
-    /** Bind transport and graph mutation owners. */
-    constructor(api, materializer) {
+    #state;
+    /** Bind transport, graph mutation and the owners of a script's state. */
+    constructor(api, materializer, state) {
         this.#api = api;
         this.#materializer = materializer;
+        this.#state = state;
     }
-    /** Compile and import source without queueing execution. */
+    /**
+     * Compile and import source without queueing execution.
+     *
+     * A script records which nodes follow another Cube's and which values every Cube shares.
+     * Its Cubes take exactly that once they exist: a node the script does not link is
+     * independent, and a value it does not share is each Cube's own.
+     */
     async import(source, origin) {
         const response = await this.#api.compile(source);
         if (!response.plan)
             throw new SugarScriptCompileError(response.diagnostics);
-        return this.#materializer.materializeSugarScript(response.plan, source, origin);
+        const result = this.#materializer.materializeSugarScript(response.plan, source, origin);
+        const workflow = response.workflow;
+        if (workflow) {
+            this.#state.carry(workflow);
+            this.#state.adoptNodeLinks(result.instanceIds, readImportedNodeLinks(workflow) ?? []);
+            this.#state.adoptRelations(result.instanceIds, readImportedScriptRelations(workflow));
+        }
+        if (response.exactIntegers.length)
+            this.#state.recordExact(response.exactIntegers);
+        return result;
     }
 }

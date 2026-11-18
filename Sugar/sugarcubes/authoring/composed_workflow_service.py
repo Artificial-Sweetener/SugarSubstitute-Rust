@@ -160,7 +160,7 @@ class ComposedWorkflowAuthoringService:
                 raise ComposedWorkflowImportError(
                     f"Cube '{instance.instance_alias}' document is invalid: {error}"
                 ) from error
-            exact.extend(_exact_integers(instance.instance_id, document))
+            exact.extend(exact_integer_fields(instance.instance_id, document))
             imports.append(
                 NativeCubeImport(
                     instance.instance_id,
@@ -270,7 +270,7 @@ def _stack_connections(
     return tuple(connections)
 
 
-def _exact_integers(
+def exact_integer_fields(
     instance_id: str, document: Mapping[str, object]
 ) -> tuple[ExactIntegerField, ...]:
     """Collect whole-number inputs beyond what a browser holds exactly."""
@@ -301,5 +301,6 @@ __all__ = [
     "ComposedWorkflowImport",
     "ComposedWorkflowImportError",
     "ExactIntegerField",
+    "exact_integer_fields",
     "MAX_BROWSER_INTEGER",
 ]

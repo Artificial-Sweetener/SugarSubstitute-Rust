@@ -26,6 +26,7 @@ from ..cube_model import CubeDocument
 from ..execution.portable_boundary_lowering import document_boundary_ports
 from ..workflow_node_pack import current_workflow_node_pack
 from .native_workflow_models import NativeWorkflowImportPlan
+from .workflow_script_state import script_state_metadata
 
 _CUBE_WIDTH = 320.0
 _CUBE_HEIGHT = 200.0
@@ -44,6 +45,7 @@ def project_native_workflow_plan(
     nodes: list[dict[str, object]] = []
     node_pack_properties = current_workflow_node_pack().node_properties()
     definitions: list[dict[str, object]] = []
+    unsaved = frozenset(plan.script_state.unsaved_output_instance_ids)
     instances: dict[str, tuple[int, list[str], list[str]]] = {}
     for index, instance in enumerate(plan.instances, start=1):
         document = _mapping(instance.payload.get("document"), "instance document")
@@ -76,6 +78,11 @@ def project_native_workflow_plan(
                         "instance_id": instance.instance_id,
                         "instance_alias": instance.alias,
                     },
+                    **(
+                        {"sugarcubes_save_outputs": False}
+                        if instance.instance_id in unsaved
+                        else {}
+                    ),
                 },
             }
         )
@@ -136,6 +143,7 @@ def project_native_workflow_plan(
                     }
                     for annotation in plan.field_annotations
                 ],
+                **script_state_metadata(plan.script_state),
             },
         },
     }

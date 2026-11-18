@@ -133,6 +133,9 @@ export class ComfyProjectWorkflows {
         const next = path.slice(0, path.lastIndexOf('/') + 1) + name + fullFilename.slice(filename.length);
         await Reflect.apply(store.renameWorkflow, store, [workflow, next]);
     }
+    checkScript(source) {
+        return this.options.checkScript(source);
+    }
     async importScript(source) {
         await this.options.importScript(source);
     }

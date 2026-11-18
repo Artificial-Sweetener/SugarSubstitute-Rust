@@ -18,6 +18,12 @@
 import type { Vec2 } from '../types/common.js';
 import type { SugarScriptDiagnostic } from './SugarScriptAuthoringModels.js';
 import type { SugarScriptAuthoringApi } from './SugarScriptAuthoringApi.js';
+import type { ExactIntegerField } from '../workflow/ExactIntegerRelations.js';
+import { readImportedNodeLinks, type ImportedNodeLink } from '../workflow/ImportedNodeLinks.js';
+import {
+  readImportedScriptRelations,
+  type ImportedScriptRelations,
+} from '../workflow/ImportedScriptState.js';
 import type {
   NativeWorkflowMaterializationResult,
   NativeWorkflowMaterializer,
@@ -40,21 +46,53 @@ export class SugarScriptCompileError extends Error {
   }
 }
 
+/** What a script says beyond its Cubes' values, given to the owners that keep it. */
+export interface SugarScriptWorkflowState {
+  /** Record the digits of whole numbers this page cannot hold. */
+  recordExact(fields: readonly ExactIntegerField[]): void;
+  /** Give the script's Cubes exactly the node links it records. */
+  adoptNodeLinks(instanceIds: readonly string[], links: readonly ImportedNodeLink[]): void;
+  /** Give the script's Cubes its overrides, own values and fixed seeds. */
+  adoptRelations(instanceIds: readonly string[], script: ImportedScriptRelations): void;
+  /** Keep on the workflow what only the script's writer reads. */
+  carry(workflow: Record<string, unknown>): void;
+}
+
 /** Keep compilation optional and make the resulting native graph self-contained. */
 export class SugarScriptImportService {
   readonly #api: SugarScriptAuthoringApi;
   readonly #materializer: NativeWorkflowMaterializer;
+  readonly #state: SugarScriptWorkflowState;
 
-  /** Bind transport and graph mutation owners. */
-  constructor(api: SugarScriptAuthoringApi, materializer: NativeWorkflowMaterializer) {
+  /** Bind transport, graph mutation and the owners of a script's state. */
+  constructor(
+    api: SugarScriptAuthoringApi,
+    materializer: NativeWorkflowMaterializer,
+    state: SugarScriptWorkflowState,
+  ) {
     this.#api = api;
     this.#materializer = materializer;
+    this.#state = state;
   }
 
-  /** Compile and import source without queueing execution. */
+  /**
+   * Compile and import source without queueing execution.
+   *
+   * A script records which nodes follow another Cube's and which values every Cube shares.
+   * Its Cubes take exactly that once they exist: a node the script does not link is
+   * independent, and a value it does not share is each Cube's own.
+   */
   async import(source: string, origin: Vec2): Promise<NativeWorkflowMaterializationResult> {
     const response = await this.#api.compile(source);
     if (!response.plan) throw new SugarScriptCompileError(response.diagnostics);
-    return this.#materializer.materializeSugarScript(response.plan, source, origin);
+    const result = this.#materializer.materializeSugarScript(response.plan, source, origin);
+    const workflow = response.workflow;
+    if (workflow) {
+      this.#state.carry(workflow);
+      this.#state.adoptNodeLinks(result.instanceIds, readImportedNodeLinks(workflow) ?? []);
+      this.#state.adoptRelations(result.instanceIds, readImportedScriptRelations(workflow));
+    }
+    if (response.exactIntegers.length) this.#state.recordExact(response.exactIntegers);
+    return result;
   }
 }

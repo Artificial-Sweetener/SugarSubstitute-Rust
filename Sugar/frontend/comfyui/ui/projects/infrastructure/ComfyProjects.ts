@@ -114,6 +114,8 @@ export interface ComfyProjectWorkflowsOptions {
   readonly app: unknown;
   /** Run one Comfy command by its identifier. */
   command(id: string): Promise<void>;
+  /** Refuse a script whose Cubes cannot be built. */
+  checkScript(source: string): Promise<void>;
   /** Build the Cubes a script describes in the shown workflow. */
   importScript(source: string): Promise<unknown>;
 }
@@ -164,6 +166,10 @@ export class ComfyProjectWorkflows implements ProjectWorkflowHost {
     const next =
       path.slice(0, path.lastIndexOf('/') + 1) + name + fullFilename.slice(filename.length);
     await Reflect.apply(store.renameWorkflow, store, [workflow, next]);
+  }
+
+  checkScript(source: string): Promise<void> {
+    return this.options.checkScript(source);
   }
 
   async importScript(source: string): Promise<void> {

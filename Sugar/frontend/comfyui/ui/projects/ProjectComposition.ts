@@ -17,6 +17,7 @@
 import { isRecord } from '../types/common.js';
 import type { CubeLibraryApi } from '../core/CubeLibraryApi.js';
 import { SugarScriptAuthoringApi } from '../sugarscript/SugarScriptAuthoringApi.js';
+import { SugarScriptCompileError } from '../sugarscript/SugarScriptImportService.js';
 import { ProjectScripts } from './application/ProjectScripts.js';
 import {
   ComfyProjectFiles,
@@ -60,10 +61,19 @@ export function createProjectCommands(
       throw new Error('The Comfy API is unavailable for project files.');
     return (api.fetchApi as ProjectApiFetch).call(api, path, init);
   });
+  const language = new SugarScriptAuthoringApi(options.cubeApi);
   const scripts = new ProjectScripts(
     files,
-    new ComfyProjectWorkflows({ app: options.app, command, importScript: options.importScript }),
-    (workflow) => new SugarScriptAuthoringApi(options.cubeApi).render(workflow),
+    new ComfyProjectWorkflows({
+      app: options.app,
+      command,
+      checkScript: async (source) => {
+        const compiled = await language.compile(source);
+        if (!compiled.plan) throw new SugarScriptCompileError(compiled.diagnostics);
+      },
+      importScript: options.importScript,
+    }),
+    (workflow) => language.render(workflow),
   );
   return projectCommands({
     scripts,

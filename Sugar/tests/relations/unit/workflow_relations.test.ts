@@ -233,3 +233,71 @@ test('advances one linked seed master once after its global override is disabled
   expect([...fixture.values.values()]).toEqual([43, 43]);
   expect(step).toHaveBeenCalledTimes(1);
 });
+
+const noScriptState = {
+  overrides: [],
+  fixedSeedOverrides: [],
+  fixedSeedFields: [],
+  ownValues: [],
+};
+
+test('a script that shares no value leaves every Cube its own', () => {
+  const fixture = workflow();
+  fixture.relations.reconcile();
+  expect([...fixture.values.values()]).toEqual(['euler', 'euler']);
+  fixture.relations.adoptScriptRelations(['a', 'b'], noScriptState);
+  expect(fixture.state().overrides.sampler_name?.enabled).toBe(false);
+  expect([...fixture.values.values()]).toEqual(['euler', 'heun']);
+});
+
+test('a value a script gives every Cube is the override, named by its input', () => {
+  const fixture = workflow();
+  fixture.relations.reconcile();
+  fixture.relations.adoptScriptRelations(['a', 'b'], {
+    ...noScriptState,
+    overrides: [{ key: 'sampler', value: 'heun' }],
+  });
+  expect(fixture.state().overrides.sampler_name).toMatchObject({ enabled: true, value: 'heun' });
+  expect([...fixture.values.values()]).toEqual(['heun', 'heun']);
+});
+
+test('a script does not decide the overrides of a workflow that holds other Cubes', () => {
+  const fixture = workflow();
+  fixture.relations.reconcile();
+  fixture.relations.adoptScriptRelations(['b'], noScriptState);
+  expect(fixture.state().overrides.sampler_name?.enabled).toBe(true);
+});
+
+test('a shared seed is rolled unless the script holds it fixed', () => {
+  const rolled = workflow('seed');
+  rolled.relations.reconcile();
+  rolled.relations.adoptScriptRelations(['a', 'b'], {
+    ...noScriptState,
+    overrides: [{ key: 'seed', value: 7 }],
+  });
+  expect(rolled.state().overrides.seed).toEqual({ enabled: true, value: 7, seedMode: 'randomize' });
+  const held = workflow('seed');
+  held.relations.reconcile();
+  held.relations.adoptScriptRelations(['a', 'b'], {
+    ...noScriptState,
+    overrides: [{ key: 'seed', value: 7 }],
+    fixedSeedOverrides: ['seed'],
+  });
+  expect(held.state().overrides.seed?.seedMode).toBe('fixed');
+});
+
+test('a field keeps the value its script records as its own', () => {
+  const fixture = workflow();
+  fixture.relations.reconcile();
+  fixture.relations.adoptScriptRelations(['a', 'b'], {
+    ...noScriptState,
+    overrides: [{ key: 'sampler_name', value: 'euler' }],
+    ownValues: [
+      { field: 'b', value: 'heun' },
+      { field: 'elsewhere', value: 'heun' },
+    ],
+  });
+  expect(fixture.state().locals.b).toBe('heun');
+  expect(fixture.state().locals.elsewhere).toBeUndefined();
+  expect(fixture.values.get('b')).toBe('euler');
+});

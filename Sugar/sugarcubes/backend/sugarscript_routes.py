@@ -17,8 +17,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
+from ..authoring.composed_workflow_service import exact_integer_fields
 from ..authoring.workflow_sugarscript_projection import (
     WorkflowScriptProjectionError,
     project_workflow_script,
@@ -33,6 +35,13 @@ from .workflow_analysis_routes import workflow_analysis_response
 from .workflow_plan_responses import serialize_sugarscript_result
 
 _MAX_SOURCE_BYTES = 1_000_000
+
+
+def _document(payload: Mapping[str, object]) -> Mapping[str, object]:
+    """Read the Cube document one prepared import carries."""
+
+    document = payload.get("document")
+    return document if isinstance(document, Mapping) else {}
 
 
 @dataclass(frozen=True)
@@ -56,7 +65,10 @@ def build_sugarscript_route_handlers(
                 raise BackendError("'source' field is required", status=400)
             if len(source.encode("utf-8")) > _MAX_SOURCE_BYTES:
                 raise BackendError("SugarScript source exceeds 1 MB", status=413)
-            result = services.sugarscript_authoring.compile(source)
+            # A stored script has Windows line endings; its values hold plain newlines.
+            result = services.sugarscript_authoring.compile(
+                source.replace("\r\n", "\n").replace("\r", "\n")
+            )
             payload = serialize_sugarscript_result(result)
             workflow = payload.get("workflow")
             payload["analysis"] = (
@@ -66,6 +78,19 @@ def build_sugarscript_route_handlers(
             )
             if isinstance(payload["analysis"], dict):
                 payload["workflow"] = payload["analysis"]["workflow"]
+            # A page holds numbers as doubles; it is told the digits of each it would round.
+            payload["exact_integers"] = [
+                {
+                    "instance_id": field.instance_id,
+                    "node_symbol": field.node_symbol,
+                    "input_name": field.input_name,
+                    "digits": field.digits,
+                }
+                for instance in (result.plan.instances if result.plan else ())
+                for field in exact_integer_fields(
+                    instance.instance_id, _document(instance.payload)
+                )
+            ]
             return json_success(
                 payload,
                 status=200 if result.is_valid else 422,

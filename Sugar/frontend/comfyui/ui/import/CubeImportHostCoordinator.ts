@@ -39,6 +39,12 @@ import type { ImportedNodeLink } from '../workflow/ImportedNodeLinks.js';
 import { LegacyWorkflowImportService } from '../workflow/LegacyWorkflowImportService.js';
 import { recordExactIntegers } from '../workflow/ExactIntegerRelations.js';
 import { fixImportedSeeds } from '../workflow/ImportedSeedModes.js';
+import {
+  carryScriptComposition,
+  markUnsavedOutputs,
+  readUnsavedOutputInstances,
+  type ImportedScriptRelations,
+} from '../workflow/ImportedScriptState.js';
 
 interface ImportLogger {
   warn(...values: unknown[]): void;
@@ -50,10 +56,18 @@ interface CubeImportHostCoordinatorOptions {
   feedback: CubeHostFeedback;
   getRuntime: () => ComfyCubeRuntime;
   logger: ImportLogger;
+  /** Resolve the owner of the values Cubes share, once the workflow's relations exist. */
+  relations: () => ImportedCubeRelations;
+}
+
+/** What importing Cubes asks of the owner of the values Cubes share. */
+export interface ImportedCubeRelations {
   /** Keep the seeds of the named Cube instances from being rolled by a shared seed. */
-  holdSeeds: (instanceIds: readonly string[]) => void;
+  holdSeeds(instanceIds: readonly string[]): void;
   /** Give the named Cube instances exactly the node links their file recorded. */
-  adoptNodeLinks: (instanceIds: readonly string[], links: readonly ImportedNodeLink[]) => void;
+  adoptNodeLinks(instanceIds: readonly string[], links: readonly ImportedNodeLink[]): void;
+  /** Give the named Cube instances the overrides, own values and fixed seeds of their script. */
+  adoptScriptRelations(instanceIds: readonly string[], script: ImportedScriptRelations): void;
 }
 
 /** Own native workflow import entrypoints and their file adapters. */
@@ -62,8 +76,7 @@ export class CubeImportHostCoordinator {
   readonly #app: ComfyApplication | null;
   readonly #feedback: CubeHostFeedback;
   readonly #getRuntime: () => ComfyCubeRuntime;
-  readonly #holdSeeds: (instanceIds: readonly string[]) => void;
-  readonly #adoptNodeLinks: CubeImportHostCoordinatorOptions['adoptNodeLinks'];
+  readonly #relations: () => ImportedCubeRelations;
   readonly #dropOrigin: ComfyCanvasDropOriginAdapter;
   readonly #sugarScriptApi: SugarScriptAuthoringApi;
   readonly #legacyWorkflowApi: LegacyWorkflowAuthoringApi;
@@ -75,8 +88,7 @@ export class CubeImportHostCoordinator {
     this.#app = options.app;
     this.#feedback = options.feedback;
     this.#getRuntime = options.getRuntime;
-    this.#holdSeeds = options.holdSeeds;
-    this.#adoptNodeLinks = options.adoptNodeLinks;
+    this.#relations = options.relations;
     const { adapter } = this.#ui;
     this.#dropOrigin = new ComfyCanvasDropOriginAdapter({
       getCanvas: () => adapter.getCanvas() as CubePlacementCanvas | null,
@@ -129,6 +141,17 @@ export class CubeImportHostCoordinator {
     return new SugarScriptImportService(
       this.#sugarScriptApi,
       this.#nativeWorkflowMaterializer(runtime, graph),
+      {
+        recordExact: (fields) => recordExactIntegers(graph, fields),
+        adoptNodeLinks: (instanceIds, links) =>
+          this.#relations().adoptNodeLinks(instanceIds, links),
+        adoptRelations: (instanceIds, script) =>
+          this.#relations().adoptScriptRelations(instanceIds, script),
+        carry: (workflow) => {
+          carryScriptComposition(graph, workflow);
+          markUnsavedOutputs(graph, readUnsavedOutputInstances(workflow));
+        },
+      },
     ).import(source, origin);
   }
 
@@ -179,9 +202,9 @@ export class CubeImportHostCoordinator {
       (fields) => recordExactIntegers(graph, fields),
       (instanceIds) => {
         fixImportedSeeds(graph, instanceIds);
-        this.#holdSeeds(instanceIds);
+        this.#relations().holdSeeds(instanceIds);
       },
-      (instanceIds, links) => this.#adoptNodeLinks(instanceIds, links),
+      (instanceIds, links) => this.#relations().adoptNodeLinks(instanceIds, links),
     );
   }
 

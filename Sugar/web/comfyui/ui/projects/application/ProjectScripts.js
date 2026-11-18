@@ -42,9 +42,12 @@ export class ProjectScripts {
     }
     /** Open one script into a new tab named for its project; returns that tab's name. */
     async open(path) {
-        const text = await this.files.read(path);
-        if (text === null)
+        const stored = await this.files.read(path);
+        if (stored === null)
             throw new Error('The project script no longer exists.');
+        // A script is stored with Windows line endings; a multi-line value holds plain newlines.
+        const text = stored.replace(/\r\n?/g, '\n');
+        await this.workflows.checkScript(text);
         const name = uniqueTabName(projectNameOf(text, path), this.workflows.openNames());
         await this.workflows.openEmpty(name);
         await this.workflows.importScript(text);

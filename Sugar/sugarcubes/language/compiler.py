@@ -23,6 +23,8 @@ from typing import Mapping
 from ..cube_model import CubeDocument
 from ..cube_model.merge import materialize_nodes
 from .compiler_models import (
+    MODEL_ASSET_NAMESPACE,
+    PROMPT_LORA_NAMESPACE,
     CompiledCubeConnection,
     CompiledFieldAnnotation,
     CompiledCubeInstance,
@@ -34,6 +36,7 @@ from .expression_evaluator import evaluate_expression
 from .instance_control_values import persist_instance_control_values
 from .node_linking import apply_whole_node_link
 from .parser import SugarScriptParser
+from .script_state import compile_node_links, compile_script_state
 from .resolved_instances import (
     ResolvedCubeInstance,
     expand_path,
@@ -143,6 +146,7 @@ class SugarScriptCompiler:
         # Whole-node links are identity/value declarations rather than ordinary
         # source-ordered assignments. Legacy Sugar-DSL applies them after every
         # field assignment so the canonical workflow captures their final meaning.
+        recorded_links = compile_node_links(parsed.document, instances)
         for statement in node_links:
             try:
                 _apply_node_link(statement, instances)
@@ -153,6 +157,12 @@ class SugarScriptCompiler:
                 _apply_activation(statement, instances)
             except (ValueError, KeyError) as error:
                 diagnostics.append(_semantic_error(statement.span, str(error)))
+
+        for comment in parsed.document.comments:
+            try:
+                _apply_node_state(comment, instances)
+            except (ValueError, KeyError) as error:
+                diagnostics.append(_semantic_error(comment.span, str(error)))
 
         if not ordered_instances and not diagnostics:
             start = SourcePosition(0, 1, 1)
@@ -191,6 +201,16 @@ class SugarScriptCompiler:
                 frozen,
                 tuple(connections),
                 _compile_field_annotations(parsed.document.items, instances),
+                compile_script_state(
+                    parsed.document,
+                    instances,
+                    lambda expression: evaluate_expression(
+                        expression,
+                        variables,
+                        lambda path: read_instance_value(instances, path),
+                    ),
+                    recorded_links,
+                ),
             ),
             tuple(diagnostics),
         )
@@ -266,31 +286,84 @@ def _compile_field_annotations(
     items: tuple[SugarStatement | SugarScriptComment, ...],
     instances: Mapping[str, ResolvedCubeInstance],
 ) -> tuple[CompiledFieldAnnotation, ...]:
-    """Bind adjacent opaque metadata comments to resolved stable field identities."""
+    """Bind the opaque integrity comments beneath an assignment to its stable field identity.
+
+    A model field is followed by its file hash, and a prompt by one line per LoRA it names.
+    """
 
     annotations: list[CompiledFieldAnnotation] = []
-    for index, item in enumerate(items[:-1]):
+    for index, item in enumerate(items):
         if not isinstance(item, SetStatement) or len(item.target.parts) != 3:
             continue
-        comment = items[index + 1]
-        if (
-            not isinstance(comment, SugarScriptComment)
-            or comment.extension_name != "sha256"
-            or not isinstance(comment.extension_payload, str)
-        ):
+        model_sha256: str | None = None
+        loras: list[dict[str, str]] = []
+        for comment in items[index + 1 :]:
+            if not isinstance(comment, SugarScriptComment):
+                break
+            payload = comment.extension_payload
+            if comment.extension_name == "sha256" and isinstance(payload, str):
+                model_sha256 = payload.upper()
+            elif comment.extension_name == "lora_sha256" and isinstance(
+                payload, Mapping
+            ):
+                name, sha256 = payload.get("name"), payload.get("sha256")
+                if isinstance(name, str) and isinstance(sha256, str):
+                    loras.append({"name": name, "sha256": sha256.upper()})
+            else:
+                break
+        if model_sha256 is None and not loras:
             continue
         for path in expand_path(item.target):
             instance, node_symbol, input_name = resolve_field(instances, path.parts)
-            annotations.append(
-                CompiledFieldAnnotation(
-                    instance_id=instance.instance_id,
-                    node_symbol=node_symbol,
-                    input_name=input_name,
-                    namespace="substitute.model_asset",
-                    payload={"sha256": comment.extension_payload.upper()},
+            if model_sha256 is not None:
+                annotations.append(
+                    CompiledFieldAnnotation(
+                        instance_id=instance.instance_id,
+                        node_symbol=node_symbol,
+                        input_name=input_name,
+                        namespace=MODEL_ASSET_NAMESPACE,
+                        payload={"sha256": model_sha256},
+                    )
                 )
-            )
+            if loras:
+                annotations.append(
+                    CompiledFieldAnnotation(
+                        instance_id=instance.instance_id,
+                        node_symbol=node_symbol,
+                        input_name=input_name,
+                        namespace=PROMPT_LORA_NAMESPACE,
+                        payload={"loras": [dict(lora) for lora in loras]},
+                    )
+                )
     return tuple(annotations)
+
+
+def _apply_node_state(
+    comment: SugarScriptComment,
+    instances: Mapping[str, ResolvedCubeInstance],
+) -> None:
+    """Record the editor state a script keeps for one node on that node itself.
+
+    A revealed node is shown although its author left it bypassed, and an enabled node records
+    the person's own activation. Both name the node by its key, not its label.
+    """
+
+    payload = comment.extension_payload
+    if comment.extension_name not in {"node_revealed", "node_enabled"}:
+        return
+    if not isinstance(payload, Mapping):
+        return
+    alias, key = payload.get("alias"), payload.get("node")
+    if not isinstance(alias, str) or not isinstance(key, str):
+        return
+    nodes = implementation_nodes(resolve_instance(instances, alias))
+    node = nodes.get(key)
+    if node is None:
+        raise ValueError(f"Cube '{alias}' has no node '{key}'.")
+    if comment.extension_name == "node_revealed":
+        node["revealed"] = True
+    elif isinstance(payload.get("enabled"), bool):
+        node["enabled"] = payload["enabled"]
 
 
 def _apply_node_link(

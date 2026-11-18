@@ -15,6 +15,8 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Call the additive SugarScript authoring endpoint through Comfy's API. */
 import { readSugarScriptAuthoringResponse } from './SugarScriptAuthoringModels.js';
+import { isRecord } from '../types/common.js';
+import { readExactIntegerFields, } from '../workflow/ExactIntegerRelations.js';
 /** Own transport and response validation for source-to-native authoring. */
 export class SugarScriptAuthoringApi {
     #api;
@@ -22,7 +24,12 @@ export class SugarScriptAuthoringApi {
     constructor(api) {
         this.#api = api;
     }
-    /** Compile bounded source without mutating or queueing a workflow. */
+    /**
+     * Compile bounded source without mutating or queueing a workflow.
+     *
+     * The reply also carries the compiled workflow, whose metadata records the script's editor
+     * state, and names each whole number this page cannot hold, with its digits.
+     */
     async compile(source) {
         const result = await this.#api.fetchJson('/sugarcubes/v2/sugarscript/compile', {
             method: 'POST',
@@ -32,7 +39,12 @@ export class SugarScriptAuthoringApi {
         if (result.response.status !== 200 && result.response.status !== 422) {
             throw new Error(readBackendError(result.data, result.response.status));
         }
-        return readSugarScriptAuthoringResponse(result.data);
+        const workflow = 'workflow' in result.data ? result.data.workflow : null;
+        return {
+            ...readSugarScriptAuthoringResponse(result.data),
+            workflow: isRecord(workflow) ? workflow : null,
+            exactIntegers: readExactIntegerFields('exact_integers' in result.data ? result.data.exact_integers : undefined),
+        };
     }
     /** Write the project script of one serialized workflow, without storing it. */
     async render(workflow) {

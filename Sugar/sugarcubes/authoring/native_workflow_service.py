@@ -98,6 +98,7 @@ class SugarScriptWorkflowAuthoringService:
                 tuple(imports),
                 compiled.plan.connections,
                 compiled.plan.field_annotations,
+                compiled.plan.script_state,
             ),
             compiled.diagnostics,
         )

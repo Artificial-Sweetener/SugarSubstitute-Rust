@@ -26,14 +26,14 @@ import { LegacyWorkflowAuthoringApi } from '../workflow/LegacyWorkflowAuthoringA
 import { LegacyWorkflowImportService } from '../workflow/LegacyWorkflowImportService.js';
 import { recordExactIntegers } from '../workflow/ExactIntegerRelations.js';
 import { fixImportedSeeds } from '../workflow/ImportedSeedModes.js';
+import { carryScriptComposition, markUnsavedOutputs, readUnsavedOutputInstances, } from '../workflow/ImportedScriptState.js';
 /** Own native workflow import entrypoints and their file adapters. */
 export class CubeImportHostCoordinator {
     #ui;
     #app;
     #feedback;
     #getRuntime;
-    #holdSeeds;
-    #adoptNodeLinks;
+    #relations;
     #dropOrigin;
     #sugarScriptApi;
     #legacyWorkflowApi;
@@ -44,8 +44,7 @@ export class CubeImportHostCoordinator {
         this.#app = options.app;
         this.#feedback = options.feedback;
         this.#getRuntime = options.getRuntime;
-        this.#holdSeeds = options.holdSeeds;
-        this.#adoptNodeLinks = options.adoptNodeLinks;
+        this.#relations = options.relations;
         const { adapter } = this.#ui;
         this.#dropOrigin = new ComfyCanvasDropOriginAdapter({
             getCanvas: () => adapter.getCanvas(),
@@ -87,7 +86,15 @@ export class CubeImportHostCoordinator {
         const graph = this.#app?.graph;
         if (!graph)
             throw new Error('Comfy root graph is unavailable.');
-        return new SugarScriptImportService(this.#sugarScriptApi, this.#nativeWorkflowMaterializer(runtime, graph)).import(source, origin);
+        return new SugarScriptImportService(this.#sugarScriptApi, this.#nativeWorkflowMaterializer(runtime, graph), {
+            recordExact: (fields) => recordExactIntegers(graph, fields),
+            adoptNodeLinks: (instanceIds, links) => this.#relations().adoptNodeLinks(instanceIds, links),
+            adoptRelations: (instanceIds, script) => this.#relations().adoptScriptRelations(instanceIds, script),
+            carry: (workflow) => {
+                carryScriptComposition(graph, workflow);
+                markUnsavedOutputs(graph, readUnsavedOutputInstances(workflow));
+            },
+        }).import(source, origin);
     }
     /** Reconcile and atomically import a persisted group-era Cube workflow. */
     async importLegacyWorkflow(workflow, origin = this.computeDropOrigin(), source) {
@@ -123,8 +130,8 @@ export class CubeImportHostCoordinator {
             throw new Error('Comfy root graph is unavailable.');
         return new LegacyWorkflowImportService(this.#legacyWorkflowApi, this.#nativeWorkflowMaterializer(runtime, graph), (fields) => recordExactIntegers(graph, fields), (instanceIds) => {
             fixImportedSeeds(graph, instanceIds);
-            this.#holdSeeds(instanceIds);
-        }, (instanceIds, links) => this.#adoptNodeLinks(instanceIds, links));
+            this.#relations().holdSeeds(instanceIds);
+        }, (instanceIds, links) => this.#relations().adoptNodeLinks(instanceIds, links));
     }
     /** Build the shared native workflow mutation owner for one root graph. */
     #nativeWorkflowMaterializer(runtime, graph) {
