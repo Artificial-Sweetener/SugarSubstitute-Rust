@@ -183,3 +183,74 @@ def _mapping(value: object) -> Mapping[str, object]:
     assert isinstance(value, Mapping)
     assert all(isinstance(key, str) for key in value)
     return value
+
+
+def test_render_route_writes_the_script_of_a_compiled_workflow(
+    tmp_path: Path,
+    backend_services_factory: BackendServicesFactory,
+) -> None:
+    """Write a workflow back as a project script the compile route reads again."""
+
+    services = backend_services_factory(
+        tmp_path,
+        load_cube_artifact=load_cube,
+        prepare_cube_import=prepare_import,
+    )
+    checkout = ensure_tracked_repo(services)
+    _write_cube(checkout / "contract.cube")
+    handlers = build_route_handlers(services)
+    compiled = _mapping(
+        decode_json_response(
+            asyncio.run(
+                handlers.compile_sugarscript(
+                    FakeRequest(
+                        body={
+                            "source": f'use "{CUBE_ID}" as Native\n'
+                            "set Native.sampler.steps = 24\n"
+                        }
+                    )
+                )
+            )
+        )
+    )
+
+    response = asyncio.run(
+        handlers.render_sugarscript(
+            FakeRequest(body={"workflow": compiled["workflow"]})
+        )
+    )
+
+    assert response.status == 200
+    source = _mapping(decode_json_response(response))["source"]
+    assert isinstance(source, str)
+    lines = source.splitlines()
+    assert lines[0].startswith(f'use "{CUBE_ID}"@')
+    assert lines[0].endswith(" as Native")
+    assert any(
+        line.startswith("set Native.sampler.") and line.endswith(" = 24")
+        for line in lines
+    )
+    again = asyncio.run(
+        handlers.compile_sugarscript(FakeRequest(body={"source": source}))
+    )
+    assert again.status == 200
+    assert _mapping(decode_json_response(again))["diagnostics"] == []
+
+
+def test_render_route_requires_a_workflow() -> None:
+    """Refuse a request that names no workflow before any analysis runs."""
+
+    class _Unused:
+        """Fail any access: a malformed request must not reach a service."""
+
+        def __getattr__(self, name: str) -> object:
+            raise AssertionError(name)
+
+    from sugarcubes.backend.sugarscript_routes import build_sugarscript_route_handlers
+
+    handlers = build_sugarscript_route_handlers(_Unused())  # type: ignore[arg-type]
+    response = asyncio.run(
+        handlers.render_sugarscript(FakeRequest(body={"workflow": []}))
+    )
+
+    assert response.status == 400

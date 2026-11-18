@@ -98,6 +98,7 @@ class RouteHandlers:
     fork_workflow_cube: RouteHandler
     sync_workflow_cube_source: RouteHandler
     compile_sugarscript: RouteHandler
+    render_sugarscript: RouteHandler
     compile_legacy_workflow: RouteHandler
     get_execution_capabilities: RouteHandler
     queue_execution: RouteHandler
@@ -184,6 +185,7 @@ def build_route_handlers(services: BackendServices) -> RouteHandlers:
         fork_workflow_cube=workflow_library.fork_workflow_cube,
         sync_workflow_cube_source=workflow_library.sync_workflow_cube_source,
         compile_sugarscript=sugarscript.compile_sugarscript,
+        render_sugarscript=sugarscript.render_sugarscript,
         compile_legacy_workflow=legacy_workflow.compile_legacy_workflow,
         get_execution_capabilities=execution.get_capabilities,
         queue_execution=execution.queue_execution,
@@ -258,6 +260,7 @@ def register_routes(prompt_server: Any, services: BackendServices) -> RouteHandl
     routes.post("/sugarcubes/v2/cubes/forks")(handlers.fork_workflow_cube)
     routes.post("/sugarcubes/v2/cubes/sync-source")(handlers.sync_workflow_cube_source)
     routes.post("/sugarcubes/v2/sugarscript/compile")(handlers.compile_sugarscript)
+    routes.post("/sugarcubes/v2/sugarscript/render")(handlers.render_sugarscript)
     routes.post("/sugarcubes/v2/workflows/compile-legacy")(
         handlers.compile_legacy_workflow
     )

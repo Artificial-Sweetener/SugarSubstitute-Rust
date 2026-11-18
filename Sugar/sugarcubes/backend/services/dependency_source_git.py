@@ -98,7 +98,9 @@ class RegistrySourceGitInstaller:
                     operation="requirements_install",
                     source="python",
                 ):
-                    requirements = self._requirements_installer.install(requirements_path)
+                    requirements = self._requirements_installer.install(
+                        requirements_path
+                    )
                 if requirements.return_code != 0:
                     detail = (requirements.stderr or requirements.stdout).strip()[
                         -2000:

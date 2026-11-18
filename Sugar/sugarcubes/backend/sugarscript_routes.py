@@ -19,6 +19,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+from ..authoring.workflow_sugarscript_projection import (
+    WorkflowScriptProjectionError,
+    project_workflow_script,
+)
+from ..cube_model import CubeSchemaError
+from ..language.substitute_writer import write_substitute_script
 from .composition import BackendServices
 from .responses import BackendError, json_error_from_exception, json_success
 from .route_types import RouteHandler
@@ -34,6 +40,7 @@ class SugarScriptRouteHandlers:
     """Collect the additive SugarScript route family."""
 
     compile_sugarscript: RouteHandler
+    render_sugarscript: RouteHandler
 
 
 def build_sugarscript_route_handlers(
@@ -66,4 +73,26 @@ def build_sugarscript_route_handlers(
         except BackendError as error:
             return json_error_from_exception(error)
 
-    return SugarScriptRouteHandlers(compile_sugarscript=compile_sugarscript)
+    async def render_sugarscript(request: Any) -> Any:
+        """Write the project script of one native workflow, without storing it."""
+
+        try:
+            body = await parse_json_body(request)
+            workflow = body.get("workflow")
+            if not isinstance(workflow, dict):
+                raise BackendError("'workflow' field is required", status=400)
+            try:
+                script = project_workflow_script(
+                    services.workflow_analysis.analyze(workflow)
+                )
+                source = write_substitute_script(script)
+            except (WorkflowScriptProjectionError, CubeSchemaError) as error:
+                raise BackendError(str(error), status=422) from error
+            return json_success({"source": source})
+        except BackendError as error:
+            return json_error_from_exception(error)
+
+    return SugarScriptRouteHandlers(
+        compile_sugarscript=compile_sugarscript,
+        render_sugarscript=render_sugarscript,
+    )

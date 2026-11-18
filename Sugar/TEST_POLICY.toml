@@ -416,6 +416,7 @@ sources = [
   "frontend/comfyui/ui/flavors/**",
   "frontend/comfyui/ui/import/**",
   "frontend/comfyui/ui/packs/**",
+  "frontend/comfyui/ui/projects/**",
   "frontend/comfyui/ui/promotion/**",
   "frontend/comfyui/ui/save/**",
   "frontend/comfyui/ui/sugarscript/**",

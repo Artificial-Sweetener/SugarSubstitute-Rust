@@ -40,13 +40,30 @@ export class SugarScriptAuthoringApi {
     }
     return readSugarScriptAuthoringResponse(result.data);
   }
+
+  /** Write the project script of one serialized workflow, without storing it. */
+  async render(workflow: unknown): Promise<string> {
+    const result = await this.#api.fetchJson('/sugarcubes/v2/sugarscript/render', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workflow }),
+    });
+    const source = 'source' in result.data ? result.data.source : null;
+    if (result.response.status !== 200 || typeof source !== 'string')
+      throw new Error(readBackendError(result.data, result.response.status, 'writing'));
+    return source;
+  }
 }
 
 /** Keep expected backend failures useful without trusting arbitrary response data. */
-function readBackendError(value: object, status: number | undefined): string {
+function readBackendError(
+  value: object,
+  status: number | undefined,
+  action: 'compilation' | 'writing' = 'compilation',
+): string {
   const error =
     'error' in value && typeof value.error === 'object' && value.error ? value.error : {};
   const message =
     'message' in error && typeof error.message === 'string' ? error.message.trim() : '';
-  return message || `SugarScript compilation failed${status ? ` (${String(status)})` : ''}.`;
+  return message || `SugarScript ${action} failed${status ? ` (${String(status)})` : ''}.`;
 }

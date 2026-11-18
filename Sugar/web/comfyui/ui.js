@@ -31,6 +31,8 @@ import { proximityWorkflowConnections } from './ui/overlays/proximity/ProximityW
 import { NativeSubgraphBoundaryResolver } from './ui/cube/graph/NativeSubgraphBoundaryResolver.js';
 import { buildShiftedPlacementPayload } from './ui/import/PlacementPayload.js';
 import { CubeImportHostCoordinator } from './ui/import/CubeImportHostCoordinator.js';
+import { createProjectCommands } from './ui/projects/ProjectComposition.js';
+import { sugarCubesCommandRegistration } from './ui/SugarCubesCommands.js';
 import { createPublicApi, getSugarCubesUI } from './ui/index.js';
 import { createHostSettingsComposition } from './ui/settings/HostSettingsComposition.js';
 import { attachSavingRunContext } from './ui/output_saving/ComfySavingRunContext.js';
@@ -370,23 +372,20 @@ const modelLibrarySettings = new ModelLibrarySettings({
 /** Define the ComfyUI extension lifecycle owned by SugarCubes. */
 export const sugarCubesExtension = {
     name: 'SugarCubes.UI',
-    commands: [
-        {
-            id: 'SugarCubes.CubeStackCart',
-            label: 'Add cubes / edit Cube stack',
-            function: () => cubePicker.openCart(),
-        },
-        {
-            id: 'SugarCubes.ToggleMasonry',
-            label: 'Toggle workflow masonry',
-            function: () => workflowWorkspace.masonry.toggle(),
-        },
-        {
-            id: 'SugarCubes.ToggleOutputCanvas',
-            label: 'Toggle output canvas',
-            function: () => workflowWorkspace.canvas.toggle(),
-        },
-    ],
+    ...sugarCubesCommandRegistration({
+        openCart: () => cubePicker.openCart(),
+        toggleMasonry: () => workflowWorkspace.masonry.toggle(),
+        toggleCanvas: () => workflowWorkspace.canvas.toggle(),
+        projects: createProjectCommands({
+            app: appRef,
+            api,
+            cubeApi: ui.api,
+            dialogs: ui.dialogs,
+            notify: pushToastMessage,
+            describe: readErrorMessage,
+            importScript: (source) => importHostCoordinator.importSugarScript(source),
+        }),
+    }),
     addCustomNodeDefs(definitions) {
         canvasInputs.define(definitions);
         return cubePicker.contribute(definitions);
