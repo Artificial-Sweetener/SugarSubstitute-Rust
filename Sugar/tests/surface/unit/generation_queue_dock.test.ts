@@ -17,6 +17,11 @@
 import { expect, jest, test } from '@jest/globals';
 import { GenerationQueueDock } from '../../../frontend/comfyui/ui/surface/frame/GenerationQueueDock.js';
 import {
+  GENERATION_QUEUE_DOCK_MINIMUM_WIDTH,
+  GENERATION_QUEUE_DOCK_WIDTH_PROPERTY,
+  GenerationQueueDockWidth,
+} from '../../../frontend/comfyui/ui/surface/frame/GenerationQueueDockWidth.js';
+import {
   GENERATION_QUEUE_FLYOUT_WIDTH,
   GENERATION_QUEUE_LIST_SCALE,
   generationQueueSkinCss,
@@ -73,6 +78,75 @@ test('the docked queue carries a button that closes Comfy’s own panel, and los
   expect(document.querySelector('.sc-generation-queue-dock-hide')).toBeNull();
   expect(report).not.toHaveBeenCalled();
   document.body.replaceChildren();
+});
+
+test('the docked queue is resized from its left edge, within bounds, and remembers its width', async () => {
+  const stored = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => stored.get(key) ?? null,
+    setItem: (key: string, value: string) => void stored.set(key, value),
+  } as unknown as Storage;
+  const root = document.documentElement;
+  const width = () => root.style.getPropertyValue(GENERATION_QUEUE_DOCK_WIDTH_PROPERTY);
+  const first = new GenerationQueueDockWidth(document, () => storage, jest.fn());
+  expect(width()).toBe('360px');
+  const drag = (from: number, to: number): void => {
+    first.divider.dispatchEvent(new MouseEvent('pointerdown', { clientX: from, button: 0 }));
+    // The pointer leaves the narrow edge at once; the rest of the drag is heard on the page.
+    document.body.dispatchEvent(new MouseEvent('pointermove', { clientX: to, bubbles: true }));
+    document.body.dispatchEvent(new MouseEvent('pointerup', { clientX: to, bubbles: true }));
+  };
+  // The queue is pinned at the right, so dragging its edge leftwards widens it.
+  drag(900, 800);
+  expect(width()).toBe('460px');
+  expect(first.divider.getAttribute('aria-valuenow')).toBe('460');
+  drag(800, 2000);
+  expect(width()).toBe(`${String(GENERATION_QUEUE_DOCK_MINIMUM_WIDTH)}px`);
+  // jsdom's window is 1024 px wide, and the queue never takes more than six tenths of it.
+  drag(800, -2000);
+  expect(width()).toBe('614px');
+  first.divider.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+  expect(width()).toBe('598px');
+  first.dispose();
+  expect(width()).toBe('');
+
+  const second = new GenerationQueueDockWidth(document, () => storage, jest.fn());
+  expect(second.width).toBe(598);
+  second.divider.dispatchEvent(new MouseEvent('dblclick'));
+  expect(second.width).toBe(360);
+  second.dispose();
+
+  // A browser that refuses storage keeps the default and reports the refusal.
+  const report = jest.fn();
+  const refused = new GenerationQueueDockWidth(
+    document,
+    () => {
+      throw new Error('storage refused');
+    },
+    report,
+  );
+  expect(refused.width).toBe(360);
+  expect(report).toHaveBeenCalledTimes(1);
+  refused.dispose();
+
+  // Docked, the edge sits in the page's own layer, where Comfy's re-renders cannot drop it, and
+  // leaves with the panel.
+  const side = document.createElement('div');
+  side.className = 'side-bar-panel';
+  const panel = dockedPanel();
+  side.append(panel);
+  const dock = new GenerationQueueDock(document, {}, jest.fn());
+  expect(document.querySelector('.sc-generation-queue-dock-divider')).toBeNull();
+  document.body.append(side);
+  await Promise.resolve();
+  expect(document.querySelector('body > .sc-generation-queue-dock-divider')).not.toBeNull();
+  expect(side.querySelector('.sc-generation-queue-dock-divider')).toBeNull();
+  side.remove();
+  await Promise.resolve();
+  expect(document.querySelector('.sc-generation-queue-dock-divider')).toBeNull();
+  dock.dispose();
+  document.body.replaceChildren();
+  window.localStorage.clear();
 });
 
 test('a failing Comfy store is reported and never thrown at the person', () => {

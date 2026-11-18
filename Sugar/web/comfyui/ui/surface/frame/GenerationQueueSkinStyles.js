@@ -24,6 +24,7 @@
  * The fly-out is opaque. It opens over the native canvas, whose pixels the page cannot blur, so
  * a translucent panel would show the image sharp behind its text.
  */
+import { GENERATION_QUEUE_DOCK_WIDTH_PROPERTY } from './GenerationQueueDockWidth.js';
 /** Comfy's queue fly-out. */
 const FLYOUT = ':root[data-sc-substitute-frame] [data-testid="queue-progress-overlay"]';
 /** The job list Comfy shows in its fly-out and in its docked panel. */
@@ -81,8 +82,9 @@ export const generationQueueSkinCss = `
   ${ROW} button { zoom:calc(1 / var(--sc-queue-scale)); font-family:var(--sc-font-family); }
   /* Docked, the queue is Comfy's side panel: the frame shows that one panel, pinned at the right at
      the fly-out's width, and the queue button steps aside so the queue is never offered in two places. */
-  ${DOCK_PANEL} { display:flex!important; order:3; flex:0 0 ${String(GENERATION_QUEUE_FLYOUT_WIDTH)}px!important;
-    width:${String(GENERATION_QUEUE_FLYOUT_WIDTH)}px; min-width:0!important; box-sizing:border-box;
+  ${DOCK_PANEL} { --sc-queue-dock:var(${GENERATION_QUEUE_DOCK_WIDTH_PROPERTY},${String(GENERATION_QUEUE_FLYOUT_WIDTH)}px);
+    display:flex!important; order:3; flex:0 0 var(--sc-queue-dock)!important; position:relative;
+    width:var(--sc-queue-dock); min-width:0!important; box-sizing:border-box;
     background:var(--sc-surface-secondary,#2b2b2b)!important; border-left:1px solid var(--sc-border-subtle,${tint(8.6)});
     color:var(--sc-text,#fff); font-family:var(--sc-font-family); }
   :root[data-sc-substitute-frame]:has([data-testid="job-history-sidebar"]) :is(button[data-sc-generation-queue],.sc-generation-queue-slot) {
@@ -92,6 +94,14 @@ export const generationQueueSkinCss = `
   ${DOCK} .p-toolbar { min-height:44px!important; padding:0 8px 0 14px!important; border-bottom-color:var(--sc-border-subtle,${tint(8.6)})!important; }
   ${DOCK} .p-toolbar-start > span { font-size:0!important; }
   ${DOCK} .p-toolbar-start > span::before { content:'Generation queue'; font:600 14px/20px var(--sc-font-family); color:var(--sc-text,#fff); }
+  /* The docked queue is resized from its left edge: a line over the panel's side, as wide to the
+     pointer as the canvas divider. */
+  :root[data-sc-substitute-frame] .sc-generation-queue-dock-divider { position:fixed; bottom:0; width:2px;
+    right:calc(var(${GENERATION_QUEUE_DOCK_WIDTH_PROPERTY},${String(GENERATION_QUEUE_FLYOUT_WIDTH)}px) - 1px);
+    z-index:1000; cursor:ew-resize; touch-action:none; background:var(--sc-border-subtle,${tint(8.6)}); }
+  :root[data-sc-substitute-frame] .sc-generation-queue-dock-divider::before { content:''; position:absolute; inset:0 -3px; }
+  :root[data-sc-substitute-frame] .sc-generation-queue-dock-divider:is(:hover,:focus-visible) {
+    background:var(--sc-accent-color,#ff4089); outline:none; }
   .sc-generation-queue-dock-hide { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; padding:0;
     margin-left:2px; border:0; border-radius:var(--sc-control-radius,4px); background:transparent; color:inherit; cursor:pointer; }
   .sc-generation-queue-dock-hide::before { content:''; width:10px; height:10px; background:currentColor;

@@ -61,7 +61,7 @@ export class GenerationStripHost {
     frame.setAttribute('data-generation-strip', '');
     frame.append(this.#view.element);
     this.#queue = new ComfyGenerationQueueSurface(document, frame, this.#view.queueSlot);
-    this.#dock = new GenerationQueueDock(document, app, report);
+    this.#dock = new GenerationQueueDock(document, app, report, frame);
     const toasts = new ToastService({
       getToast: (): HostToast | null => {
         const manager = isRecord(app) ? app.extensionManager : null;
