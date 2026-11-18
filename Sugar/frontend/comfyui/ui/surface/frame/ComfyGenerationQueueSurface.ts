@@ -16,9 +16,13 @@
 /** Align the actual Comfy queue trigger with the generation cluster while retaining its native menu and DOM ownership. */
 import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
 
+/** Comfy's control that stops the running job; it is enabled exactly while one runs. */
+const CANCEL_RUN = 'button[aria-label="Cancel current run"]';
+
 /** Keep native queue behavior intact while presenting source-matched geometry, artwork and count. */
 export class ComfyGenerationQueueSurface {
   readonly #presence: HostSurfaceObserver;
+  readonly #running: HostSurfaceObserver;
   readonly #size: ResizeObserver | null;
   readonly #glyph: HTMLElement;
   readonly #badge: HTMLElement;
@@ -55,6 +59,9 @@ export class ComfyGenerationQueueSurface {
         exclude: '.sc-generation-queue-glyph,.sc-generation-queue-badge',
       },
     );
+    this.#running = new HostSurfaceObserver(document.body, CANCEL_RUN, () => this.#reconcile(), {
+      attributes: ['disabled'],
+    });
     const Observer = document.defaultView?.ResizeObserver;
     this.#size = Observer ? new Observer(this.#schedule) : null;
     this.#size?.observe(frame);
@@ -78,6 +85,7 @@ export class ComfyGenerationQueueSurface {
   dispose(): void {
     this.#disposed = true;
     this.#presence.disconnect();
+    this.#running.disconnect();
     this.#size?.disconnect();
     this.document.defaultView?.removeEventListener('resize', this.#schedule);
     if (this.#frameRequest !== null)
@@ -108,7 +116,10 @@ export class ComfyGenerationQueueSurface {
       .filter((node) => node !== this.#glyph && node !== this.#badge)
       .map((node) => node.textContent ?? '')
       .join(' ');
-    const count = /^\s*(\d+)/.exec(text)?.[1] ?? '0';
+    // Comfy counts the running job with the waiting ones; the badge says how many still wait.
+    const active = Number(/^\s*(\d+)/.exec(text)?.[1] ?? '0');
+    const cancel = this.document.querySelector<HTMLButtonElement>(CANCEL_RUN);
+    const count = String(Math.max(0, active - (cancel && !cancel.disabled ? 1 : 0)));
     if (this.#badge.textContent !== count) this.#badge.textContent = count;
     this.#badge.hidden = count === '0';
     this.#position();

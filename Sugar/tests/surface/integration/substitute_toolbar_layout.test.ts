@@ -263,6 +263,22 @@ test('queue keeps its original parent, listeners and popover anchor while counts
   button.replaceChildren(count);
   await Promise.resolve();
   expect(button.querySelector('.sc-generation-queue-badge')?.textContent).toBe('2');
+  // The badge counts the jobs still waiting: the one that is running is not among them.
+  const cancel = document.createElement('button');
+  cancel.setAttribute('aria-label', 'Cancel current run');
+  parent.append(cancel);
+  await Promise.resolve();
+  expect(button.querySelector('.sc-generation-queue-badge')?.textContent).toBe('1');
+  cancel.disabled = true;
+  await Promise.resolve();
+  expect(button.querySelector('.sc-generation-queue-badge')?.textContent).toBe('2');
+  cancel.disabled = false;
+  count.textContent = '1 active';
+  await Promise.resolve();
+  expect(button.querySelector<HTMLElement>('.sc-generation-queue-badge')?.hidden).toBe(true);
+  count.textContent = '2 active';
+  cancel.remove();
+  await Promise.resolve();
   surface.setPalette(false);
   expect(button.dataset.scQueueTheme).toBe('light');
   surface.dispose();

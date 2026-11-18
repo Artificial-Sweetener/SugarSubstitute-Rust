@@ -18,6 +18,7 @@ import { ComfyGenerationAdapter } from './ComfyGenerationAdapter.js';
 import { GenerationStripView } from './GenerationStripView.js';
 import { generationStripCss } from './GenerationStripStyles.js';
 import { ComfyGenerationQueueSurface } from './ComfyGenerationQueueSurface.js';
+import { GenerationQueueDock } from './GenerationQueueDock.js';
 import { applyOwnedTheme } from '../appearance/ThemeService.js';
 
 /** Coordinate stable strip presentation without absorbing host execution or styling policy. */
@@ -27,6 +28,7 @@ export class GenerationStripHost {
   readonly #style: HTMLStyleElement;
   readonly #stop: () => void;
   readonly #queue: ComfyGenerationQueueSurface;
+  readonly #dock: GenerationQueueDock;
 
   /** Mount source-matched generation controls only for the enabled Substitute frame. */
   constructor(
@@ -53,6 +55,7 @@ export class GenerationStripHost {
     frame.setAttribute('data-generation-strip', '');
     frame.append(this.#view.element);
     this.#queue = new ComfyGenerationQueueSurface(document, frame, this.#view.queueSlot);
+    this.#dock = new GenerationQueueDock(document, app, report);
     this.#stop = this.#adapter.subscribe(() => this.#refresh());
     this.#refresh();
   }
@@ -60,6 +63,7 @@ export class GenerationStripHost {
   /** Restore native visibility and release all execution-surface and settings subscriptions. */
   dispose(): void {
     this.#queue.dispose();
+    this.#dock.dispose();
     this.#stop();
     this.#adapter.dispose();
     this.#view.dispose();
