@@ -3160,7 +3160,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Own
 [[records]]
 path = "crates/sugarsubstitute/src/production/entry_runner/lifecycle_pair_tests/coordinator.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:75d9896ba9f6d2ef17c23fdcfde95e3697ba993a5cc265996246c803c93a7f75"
+source_sha256 = "sha256:1b565545972c143abb88e28e555bae26e6aacebfddde997d79ed98362955ce71"
 capabilities = ["tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Give the coordinator peer an isolated installation folder for the paired lifecycle run. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

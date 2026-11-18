@@ -380,14 +380,19 @@ impl LifecyclePeer for CoordinatorPeer {
         progressed |= fingerprint != self.last;
         self.last = fingerprint;
         // Once execution was asked to stop, each running job's end and the last worker's
-        // return deliver a completion wake, so stopping execution with nothing queued is moving.
-        // A job the test holds moves only when the test releases it.
+        // return deliver a completion wake, so stopping execution is moving. A job still queued
+        // when the stop is asked is taken by a worker in real time and ends the same way: it is
+        // moving too, however late a loaded machine starts it. A job the test holds moves only
+        // when the test releases it.
         let workers_returning = self.runner.execution_stopping
             && self.install.is_none()
             && self.runner.execution.as_ref().is_some_and(|execution| {
                 execution.poll_shutdown().is_ok_and(|progress| {
                     !progress.settled
-                        && progress.unresolved_jobs.iter().all(|job| job.phase == JobPhase::Running)
+                        && progress
+                            .unresolved_jobs
+                            .iter()
+                            .all(|job| matches!(job.phase, JobPhase::Queued | JobPhase::Running))
                 })
             });
         let busy = workers_returning
