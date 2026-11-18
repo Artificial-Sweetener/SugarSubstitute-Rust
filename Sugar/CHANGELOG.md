@@ -1,3 +1,9 @@
+## [0.21.2](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.21.1...sugarcubes-v0.21.2) (2026-11-18)
+
+### Bug Fixes
+
+* **session:** save every edit inside a Cube and restore the saved workflow after an unclean exit ([865dac1](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/865dac172779bae52f82bcc2e91104da97adcc26))
+
 ## [0.21.1](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.21.0...sugarcubes-v0.21.1) (2026-11-18)
 
 ### Bug Fixes
