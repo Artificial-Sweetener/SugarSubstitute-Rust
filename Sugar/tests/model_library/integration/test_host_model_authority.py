@@ -30,6 +30,7 @@ import pytest
 from PIL import Image
 
 from sugarcubes.model_library import host_api
+from sugarcubes.model_library.domain.models import ModelCatalogEntry
 from sugarcubes.model_library.infrastructure.comfy_roots import ComfyModelRoots
 from sugarcubes.model_library.infrastructure.runtime import ModelLibraryRuntime
 from sugarcubes.model_library.integration import install_model_library
@@ -127,8 +128,21 @@ def test_desktop_and_browser_share_explicit_fingerprint_execution(
 
     async def exercise() -> None:
         """Drive the shared event loop and verify observable coalescing and committed storage."""
+        # The file is tiny, so its job could finish before the second consumer asks; the job is
+        # held until both have asked, which is the overlap this test observes.
+        both_asked = asyncio.Event()
+        service = type(library.fingerprints)
+        refresh = service.refresh
+
+        async def held(self: object, entry: ModelCatalogEntry) -> str:
+            """Fingerprint the real file once both consumers have asked."""
+            await both_asked.wait()
+            return await refresh(library.fingerprints, entry)
+
+        monkeypatch.setattr(service, "refresh", held)
         desktop = host_api.queue_model_fingerprint(identity)
         browser = await library.refresh_fingerprint(identity)
+        both_asked.set()
         assert desktop["jobId"] == browser.job_id
         active = host_api.active_model_fingerprint(identity)
         assert active is not None and active["jobId"] == browser.job_id
