@@ -41,11 +41,12 @@ const ROW = '[data-testid="job-assets-list"] .h-12 > div';
 export const USE_JOB_SEEDS = 'Use Seeds in Current Workflow';
 
 /**
- * Add a right-click menu to a finished job's row.
+ * Add a right-click menu to a job's row, whether the job is waiting, running, finished or failed.
  *
- * Comfy's rows keep their own buttons and menu; a right-click, which Comfy leaves unused, opens
- * the action the generation queue has always offered there. A row names its job only by the
- * picture it made, so the action is offered when exactly one job made a picture of that name.
+ * Comfy's rows keep their own buttons and menu; a right-click opens the action the generation
+ * queue has always offered there. Comfy marks each row with its job's identifier. A Comfy that
+ * does not is read by the picture a finished job made, and then the action is offered when
+ * exactly one job made a picture of that name.
  */
 export class GenerationQueueRowMenu {
   readonly #menu: ContextMenu;
@@ -85,8 +86,10 @@ export class GenerationQueueRowMenu {
     });
   };
 
-  /** Find the one job whose picture names this row. */
+  /** Read the row's job identifier, or find the one job whose picture names the row. */
   #jobOf(row: HTMLElement): string | null {
+    const marked = row.closest<HTMLElement>('[data-job-id]')?.dataset.jobId;
+    if (marked) return marked;
     const title = row.querySelector('.flex-col > div')?.textContent.trim() ?? '';
     const tasks = this.#queue()?.tasks;
     if (!title || !Array.isArray(tasks)) return null;
@@ -110,10 +113,19 @@ export class GenerationQueueRowMenu {
       Reflect.apply(fetchApi, api, [path, init]) as Promise<Response>;
     const history = await call(`/history/${encodeURIComponent(jobId)}`);
     if (!history.ok) throw new Error('The job record could not be read.');
+    const historyText = await history.text();
+    // Comfy answers with an empty record for a job that has not finished; its prompt is then
+    // still in the queue.
+    let described: Record<string, string> = { history_text: historyText };
+    if (historyText.replace(/\s/g, '') === '{}') {
+      const queue = await call('/queue');
+      if (!queue.ok) throw new Error('The queue could not be read.');
+      described = { queue_text: await queue.text(), job_id: jobId };
+    }
     const reply = await call('/sugarcubes/v2/queue/job-seeds', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ history_text: await history.text() }),
+      body: JSON.stringify(described),
     });
     const body: unknown = reply.ok ? await reply.json() : null;
     const listed: unknown[] = isRecord(body) && Array.isArray(body.seeds) ? body.seeds : [];

@@ -91,6 +91,35 @@ def read_job_seeds(history: object) -> tuple[JobSeed, ...]:
     return tuple(seeds.values())
 
 
+def read_queued_job_seeds(queue: object, job_id: str) -> tuple[JobSeed, ...]:
+    """Return the seeds of one job that is still waiting or running.
+
+    Args:
+        queue: Comfy's queue reply, which lists running and waiting jobs as prompt tuples.
+        job_id: The job's identifier, the second item of its prompt tuple.
+
+    Returns:
+        The job's seeds as :func:`read_job_seeds` reads them, or none when the queue no
+        longer holds the job.
+    """
+
+    if not isinstance(queue, Mapping):
+        return ()
+    for name in ("queue_running", "queue_pending"):
+        items = queue.get(name)
+        if not isinstance(items, Sequence) or isinstance(items, (str, bytes)):
+            continue
+        for item in items:
+            if (
+                isinstance(item, Sequence)
+                and not isinstance(item, (str, bytes))
+                and len(item) >= 4
+                and item[1] == job_id
+            ):
+                return read_job_seeds({"prompt": item})
+    return ()
+
+
 def _job_record(history: object) -> Mapping[str, object] | None:
     """Find the job's own record in a history reply."""
 
@@ -128,4 +157,4 @@ def _instance_aliases(extra: object) -> dict[str, str]:
     return aliases
 
 
-__all__ = ["JobSeed", "read_job_seeds"]
+__all__ = ["JobSeed", "read_job_seeds", "read_queued_job_seeds"]

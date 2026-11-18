@@ -20,7 +20,11 @@ from __future__ import annotations
 import asyncio
 import json
 
-from sugarcubes.authoring.job_seeds import JobSeed, read_job_seeds
+from sugarcubes.authoring.job_seeds import (
+    JobSeed,
+    read_job_seeds,
+    read_queued_job_seeds,
+)
 from sugarcubes.backend.job_seed_routes import read_job_seeds_route
 from tests.backend_api.support.backend_fixtures import (
     FakeRequest,
@@ -98,4 +102,45 @@ def test_the_route_reads_the_reply_text_so_a_large_seed_keeps_its_digits() -> No
         "digits": str(_WHOLE_SEED),
     }
     for bad in ({}, {"history_text": 3}, {"history_text": "{"}):
+        assert asyncio.run(read_job_seeds_route(FakeRequest(body=bad))).status == 400
+
+
+def _queue() -> dict[str, object]:
+    """Build Comfy's queue reply with the Cube job waiting behind another job."""
+
+    waiting = _record()["prompt"]
+    return {
+        "queue_running": [[3, "other", {"17": {"inputs": {"seed": 3}}}, {}, []]],
+        "queue_pending": [waiting],
+    }
+
+
+def test_a_waiting_or_running_job_gives_its_seeds_from_the_queue() -> None:
+    """Find the job by its identifier in either list, and give none for a job that left."""
+
+    seeds = read_queued_job_seeds(_queue(), "job")
+
+    assert seeds[0] == JobSeed("Text to Image", "ksampler", "seed", str(_WHOLE_SEED))
+    assert len(seeds) == 3
+    running = {"queue_running": _queue()["queue_pending"], "queue_pending": []}
+    assert read_queued_job_seeds(running, "job") == seeds
+    assert read_queued_job_seeds(_queue(), "other") == ()
+    assert read_queued_job_seeds(_queue(), "gone") == ()
+    assert read_queued_job_seeds(None, "job") == ()
+    assert read_queued_job_seeds({"queue_pending": "job"}, "job") == ()
+
+
+def test_the_route_reads_a_queued_job_from_the_queue_text() -> None:
+    """Return a queued job's digits, and refuse a queue request that names no job."""
+
+    text = json.dumps(_queue())
+    response = asyncio.run(
+        read_job_seeds_route(FakeRequest(body={"queue_text": text, "job_id": "job"}))
+    )
+
+    assert response.status == 200
+    body = decode_json_response(response)
+    assert isinstance(body, dict)
+    assert body["seeds"][0]["digits"] == str(_WHOLE_SEED)
+    for bad in ({"queue_text": text}, {"queue_text": "{", "job_id": "job"}):
         assert asyncio.run(read_job_seeds_route(FakeRequest(body=bad))).status == 400

@@ -135,6 +135,60 @@ test('a finished row takes its job’s seeds with every digit, read from the rep
   menu.dispose();
 });
 
+test('a waiting row Comfy marks with its job takes that job’s seeds from the queue', async () => {
+  queue([{ jobId: 'job-waiting' }]);
+  const waiting = [...document.querySelectorAll<HTMLElement>('.h-12')].find((slot) =>
+    slot.textContent.includes('Job queued'),
+  );
+  if (waiting) waiting.dataset.jobId = 'job-waiting';
+  const queueText = '{"queue_running":[],"queue_pending":[[1,"job-waiting",{},{},[]]]}';
+  const calls: { path: string; body: string | null }[] = [];
+  const api = {
+    fetchApi: jest.fn(async (path: string, init?: RequestInit) => {
+      calls.push({ path, body: typeof init?.body === 'string' ? init.body : null });
+      if (path.startsWith('/history/')) return { ok: true, text: async () => '{ }\n' };
+      if (path === '/queue') return { ok: true, text: async () => queueText };
+      return {
+        ok: true,
+        json: async () => ({
+          seeds: [{ alias: 'Upscale', node_symbol: 'ksampler', input_name: 'seed', digits: '7' }],
+        }),
+      };
+    }),
+  };
+  const adopted: (readonly QueueJobSeed[])[] = [];
+  const notices: string[] = [];
+  const menu = new GenerationQueueRowMenu({
+    document,
+    app: { api },
+    adoptSeeds: (seeds) => {
+      adopted.push(seeds);
+      return seeds.length;
+    },
+    notify: (severity, title) => notices.push(`${severity}: ${title}`),
+    report: () => undefined,
+  });
+
+  const entry = entryFor('Job queued');
+  expect(entry?.getAttribute('aria-disabled')).not.toBe('true');
+  entry?.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(calls.map((call) => call.path)).toEqual([
+    '/history/job-waiting',
+    '/queue',
+    '/sugarcubes/v2/queue/job-seeds',
+  ]);
+  expect(JSON.parse(calls[2]?.body ?? '{}')).toEqual({
+    queue_text: queueText,
+    job_id: 'job-waiting',
+  });
+  expect(adopted).toEqual([
+    [{ alias: 'Upscale', nodeSymbol: 'ksampler', inputName: 'seed', digits: '7' }],
+  ]);
+  expect(notices).toEqual(['success: Seeds taken from the job']);
+  menu.dispose();
+});
+
 test('a row that names no single job offers nothing to take', () => {
   queue([
     { jobId: 'job-a', previewOutput: { filename: 'twice.png' } },
