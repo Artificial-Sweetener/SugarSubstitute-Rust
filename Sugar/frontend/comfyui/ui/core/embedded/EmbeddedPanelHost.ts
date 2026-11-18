@@ -35,6 +35,10 @@ import { UpdatesHostLink } from '../updates/UpdatesHostLink.js';
 import type { UpdateSourceSlot } from '../updates/UpdateSource.js';
 import { HostReleaseNotesLink } from '../release_notes/HostReleaseNotesLink.js';
 import type { ReleaseNotesHostAttachment } from '../release_notes/WhatsNewPresenter.js';
+import {
+  HostSessionNoticeLink,
+  type SessionNoticePresenter,
+} from '../session_notice/HostSessionNoticeLink.js';
 
 /** Supply the browser lifetime without introducing another connection or preference owner. */
 export interface EmbeddedPanelOptions {
@@ -54,6 +58,8 @@ export interface EmbeddedPanelOptions {
   readonly updates?: UpdateSourceSlot;
   /** Receives the host's release notes when the host declares `sugarcubes.release-notes`. */
   readonly releaseNotes?: ReleaseNotesHostAttachment;
+  /** Shows what the host has to tell about the session when it declares `sugarcubes.session-notice`. */
+  readonly sessionNotice?: SessionNoticePresenter;
   connected(): boolean;
   subscribeConnection?(listener: (connected: boolean) => void): () => void;
   report(error: unknown): void;
@@ -67,6 +73,7 @@ export class EmbeddedPanelHost {
   #memory: MemoryHostLink | null = null;
   #updates: { readonly link: UpdatesHostLink; readonly detach: () => void } | null = null;
   #releaseNotes: { readonly link: HostReleaseNotesLink; readonly detach: () => void } | null = null;
+  #sessionNotice: HostSessionNoticeLink | null = null;
   #stopHost: (() => void) | null = null;
   #timer: number | null = null;
 
@@ -159,6 +166,28 @@ export class EmbeddedPanelHost {
     this.#joinMemoryBudget();
     this.#watchHostUpdates();
     this.#watchHostReleaseNotes();
+    this.#watchHostSessionNotice();
+  }
+
+  /** Show the notice the host owes about the session once the host declares that it has them. */
+  #watchHostSessionNotice(): void {
+    const host = this.options.host.read();
+    if (
+      this.#sessionNotice ||
+      !this.options.sessionNotice ||
+      !host?.serves(HOST_PROTOCOLS.sessionNotice)
+    )
+      return;
+    try {
+      this.#sessionNotice = new HostSessionNoticeLink(
+        this.transport,
+        this.options.sessionNotice,
+        this.options.report,
+      );
+      this.#sessionNotice.start();
+    } catch (error: unknown) {
+      this.options.report(error);
+    }
   }
 
   /** Show the host's release notes in What's new once the host declares that it serves them. */
@@ -228,6 +257,8 @@ export class EmbeddedPanelHost {
     this.#releaseNotes?.detach();
     this.#releaseNotes?.link.dispose();
     this.#releaseNotes = null;
+    this.#sessionNotice?.dispose();
+    this.#sessionNotice = null;
     if (this.#timer !== null) this.options.window.clearInterval(this.#timer);
     this.#timer = null;
     this.options.window.removeEventListener('pagehide', this.dispose);

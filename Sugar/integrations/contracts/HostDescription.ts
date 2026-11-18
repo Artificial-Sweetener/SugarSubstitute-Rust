@@ -36,6 +36,7 @@ export const HOST_PROTOCOLS = Object.freeze({
   memory: Object.freeze({ name: 'sugarcubes.memory', version: 1 }),
   updates: Object.freeze({ name: 'sugarcubes.updates', version: 1 }),
   releaseNotes: Object.freeze({ name: 'sugarcubes.release-notes', version: 1 }),
+  sessionNotice: Object.freeze({ name: 'sugarcubes.session-notice', version: 1 }),
 } as const satisfies Readonly<Record<string, HostProtocol>>);
 
 /** The capabilities SugarCubes reads from a host description. */

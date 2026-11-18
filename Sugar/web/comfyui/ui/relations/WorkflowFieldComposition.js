@@ -26,6 +26,7 @@ import { HostDescriptionState } from '../core/embedded/HostDescriptionState.js';
 import { UpdateSourceSlot } from '../core/updates/UpdateSource.js';
 import { DeclaredHost } from '../core/embedded/PanelRuntime.js';
 import { startEmbeddedPanel } from '../core/embedded/EmbeddedPanelHost.js';
+import { unsavedWorkWords } from '../core/session_notice/UnsavedWorkNotice.js';
 import { EmbeddedCanvasConnection } from '../core/embedded/EmbeddedCanvasConnection.js';
 import { MemoryBudgetSettings } from '../settings/MemoryBudgetSettings.js';
 import { WhatsNewPresenter, } from '../core/release_notes/WhatsNewPresenter.js';
@@ -112,6 +113,10 @@ export function createWorkflowFieldHost(options) {
                 host,
                 updates,
                 releaseNotes: whatsNew,
+                sessionNotice: (lost) => {
+                    const words = unsavedWorkWords(lost);
+                    return options.warnLasting(words.title, words.message);
+                },
                 presentation: embedded,
                 hostAccent,
                 canvas,

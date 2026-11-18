@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://artificialsweetener.ai/schemas/sugarcubes/session-notice/v1",
+  "title": "SugarCubes session notice protocol version 1",
+  "description": "An optional protocol for a host that keeps the person's session and has something to tell them about it at the start. The page sends watch once the host description lists sugarcubes.session-notice and it can show a notice; the host answers every watch with the notice it owes, or with none. not-saved says the host's previous close did not keep the latest workflow changes (workspace), the latest input canvas edits (inputs), or both; at least one is true. The page shows the notice to the person and then sends shown naming it; the host stops owing a notice once it is shown, and owes it again to a later watch until then. A notice number identifies one notice within the host's run.",
+  "$defs": {
+    "SessionNoticeNotSavedMessage": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.session-notice"
+        },
+        "version": {
+          "const": 1
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "type": {
+          "const": "not-saved"
+        },
+        "notice": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "workspace": {
+          "type": "boolean"
+        },
+        "inputs": {
+          "type": "boolean"
+        }
+      },
+      "required": ["protocol", "version", "session", "type", "notice", "workspace", "inputs"],
+      "additionalProperties": false
+    },
+    "SessionNoticeNoneMessage": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.session-notice"
+        },
+        "version": {
+          "const": 1
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "type": {
+          "const": "none"
+        }
+      },
+      "required": ["protocol", "version", "session", "type"],
+      "additionalProperties": false
+    },
+    "SessionNoticeWatchMessage": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.session-notice"
+        },
+        "version": {
+          "const": 1
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "type": {
+          "const": "watch"
+        }
+      },
+      "required": ["protocol", "version", "session", "type"],
+      "additionalProperties": false
+    },
+    "SessionNoticeShownMessage": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.session-notice"
+        },
+        "version": {
+          "const": 1
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "type": {
+          "const": "shown"
+        },
+        "notice": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": ["protocol", "version", "session", "type", "notice"],
+      "additionalProperties": false
+    },
+    "SessionNoticeHostMessage": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/SessionNoticeNotSavedMessage"
+        },
+        {
+          "$ref": "#/$defs/SessionNoticeNoneMessage"
+        }
+      ]
+    },
+    "SessionNoticeClientMessage": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/SessionNoticeWatchMessage"
+        },
+        {
+          "$ref": "#/$defs/SessionNoticeShownMessage"
+        }
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/SessionNoticeNotSavedMessage"
+    },
+    {
+      "$ref": "#/$defs/SessionNoticeNoneMessage"
+    },
+    {
+      "$ref": "#/$defs/SessionNoticeWatchMessage"
+    },
+    {
+      "$ref": "#/$defs/SessionNoticeShownMessage"
+    }
+  ]
+}

@@ -31,6 +31,11 @@
       "sha256": "d2e77c688ce372c916790d998de04dce71f562a33b50f8c936d62f630942e491"
     },
     {
+      "file": "session-notice.schema.json",
+      "id": "https://artificialsweetener.ai/schemas/sugarcubes/session-notice/v1",
+      "sha256": "11fe01965e055827c77799507f4b9d144f3f182a70618e7851f4454a316dadfb"
+    },
+    {
       "file": "session.schema.json",
       "id": "https://sugarcubes.dev/contracts/desktop-session/v1",
       "sha256": "4dea675b60fa4a2695f7a870fb8271c8df778dc42eec08cc6e8ae60279eaaf00"

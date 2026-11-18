@@ -34,6 +34,7 @@ import {
   masksWithoutDocument,
   memoryHost,
   releaseNotesHost,
+  sessionNoticeHost,
   updatesHost,
 } from '../support/ConformanceHosts.js';
 
@@ -61,6 +62,7 @@ test('a host serving every protocol passes every check it declares', async () =>
           HOST_PROTOCOLS.memory,
           HOST_PROTOCOLS.updates,
           HOST_PROTOCOLS.releaseNotes,
+          HOST_PROTOCOLS.sessionNotice,
         ],
         capabilities: [
           { name: HOST_CAPABILITIES.hostStyles },
@@ -74,6 +76,7 @@ test('a host serving every protocol passes every check it declares', async () =>
         memoryHost(send),
         updatesHost(send),
         releaseNotesHost(send),
+        sessionNoticeHost(send),
       ],
     }),
     { session },
@@ -88,6 +91,7 @@ test('a host serving every protocol passes every check it declares', async () =>
     memory: 'passed',
     updates: 'passed',
     'release-notes': 'passed',
+    'session-notice': 'passed',
     'capability.presentation.host-styles': 'passed',
     'capability.presentation.system-accent': 'passed',
     'capability.output.host-surface': 'not-offered',
@@ -116,6 +120,7 @@ test('a host serving only the panel passes, with everything else not offered', a
     memory: 'not-offered',
     updates: 'not-offered',
     'release-notes': 'not-offered',
+    'session-notice': 'not-offered',
   });
 });
 
@@ -134,6 +139,22 @@ test('a release notes state without a product name fails its check', async () =>
   );
   await expect(run).rejects.toThrow(HostConformanceFailure);
   await expect(run).rejects.toMatchObject({ check: 'release-notes' });
+});
+
+test('a notice of unsaved work that names nothing unsaved fails its check', async () => {
+  const run = runHostConformance(
+    inMemoryHostChannel({
+      session,
+      description: {
+        protocols: [HOST_PROTOCOLS.panel, HOST_PROTOCOLS.sessionNotice],
+        capabilities: [],
+      },
+      presentation,
+      handlers: (send) => [sessionNoticeHost(send, { workspace: false, inputs: false })],
+    }),
+    { session },
+  );
+  await expect(run).rejects.toMatchObject({ check: 'session-notice' });
 });
 
 test('an invalid reply fails its check at once', async () => {

@@ -22,7 +22,7 @@ import { isRecord } from '../types/common.js';
 import { resolveComfyRendererMode } from './ComfyRendererMode.js';
 
 export interface HostToast {
-  add(message: { severity: string; summary: string; detail: string; life: number }): void;
+  add(message: { severity: string; summary: string; detail: string; life?: number }): void;
 }
 
 /** Validate a dynamic host service and retain the original store as its method receiver. */

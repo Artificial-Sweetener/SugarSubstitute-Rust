@@ -202,10 +202,11 @@ test('retries readiness, acknowledges applied presentation, reports connectivity
           value.protocol === 'sugarcubes.canvas.masks' ||
           value.protocol === 'sugarcubes.memory' ||
           value.protocol === 'sugarcubes.updates' ||
-          value.protocol === 'sugarcubes.release-notes'
+          value.protocol === 'sugarcubes.release-notes' ||
+          value.protocol === 'sugarcubes.session-notice'
         )
           throw new Error(
-            'Unexpected mask, memory, update or release notes operation during presentation negotiation.',
+            'Unexpected mask, memory, update, release notes or session notice operation during presentation negotiation.',
           );
         messages.push(value);
       },

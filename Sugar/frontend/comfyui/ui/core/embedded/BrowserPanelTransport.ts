@@ -19,6 +19,7 @@ import type { CanvasMessage, CanvasMaskMessage } from './CanvasRuntime.js';
 import type { MemoryClientMessage } from '../memory/MemoryHostProtocol.js';
 import type { NamedUpdatesClientMessage, UpdatesClientMessage } from './UpdatesRuntime.js';
 import type { ReleaseNotesClientMessage } from './ReleaseNotesRuntime.js';
+import type { SessionNoticeClientMessage } from './SessionNoticeRuntime.js';
 
 /** Keep editor transport mechanics outside the embedded application lifecycle. */
 export interface BrowserPanelTransport {
@@ -31,7 +32,8 @@ export interface BrowserPanelTransport {
       | MemoryClientMessage
       | UpdatesClientMessage
       | NamedUpdatesClientMessage
-      | ReleaseNotesClientMessage,
+      | ReleaseNotesClientMessage
+      | SessionNoticeClientMessage,
   ): void;
   subscribe(receive: (value: unknown) => void): () => void;
 }

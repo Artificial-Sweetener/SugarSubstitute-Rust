@@ -33,6 +33,7 @@ import { isMemoryAllowanceMessage } from '../MemoryValidation.generated.js';
 import { isUpdatesHostMessage } from '../UpdatesValidation.generated.js';
 import { isUpdatesHostMessage as isNamedUpdatesHostMessage } from '../UpdatesV2Validation.generated.js';
 import { isReleaseNotesHostMessage } from '../ReleaseNotesValidation.generated.js';
+import { isSessionNoticeHostMessage } from '../SessionNoticeValidation.generated.js';
 import { discoverCanvasSurface } from '../CanvasSurfaceDiscovery.js';
 import type { ConformanceExchange, HostConformanceReport } from './HostConformance.js';
 
@@ -159,7 +160,8 @@ function declaredMessage(message: unknown, declared: DeclaredHost | null): boole
     (isNamedUpdatesHostMessage(message) &&
       declared.serves(HOST_PROTOCOLS.updates) &&
       declared.declares(HOST_CAPABILITIES.namedUpdates)) ||
-    (isReleaseNotesHostMessage(message) && declared.serves(HOST_PROTOCOLS.releaseNotes))
+    (isReleaseNotesHostMessage(message) && declared.serves(HOST_PROTOCOLS.releaseNotes)) ||
+    (isSessionNoticeHostMessage(message) && declared.serves(HOST_PROTOCOLS.sessionNotice))
   );
 }
 

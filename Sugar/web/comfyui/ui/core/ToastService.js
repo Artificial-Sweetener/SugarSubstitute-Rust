@@ -26,6 +26,19 @@ export class ToastService {
         this.adapter = adapter;
         this.dialogs = dialogs || null;
     }
+    /**
+     * Show a notice that stays until the person dismisses it, for something they must not miss.
+     *
+     * Returns whether the host's notifications showed it; a host without them shows nothing.
+     */
+    pushLasting(severity, summary, detail) {
+        const toast = this.adapter?.getToast?.() || null;
+        if (!toast?.add)
+            return false;
+        // The host keeps a notification without a lifetime until it is closed.
+        toast.add({ severity, summary, detail });
+        return true;
+    }
     push(severity, summary, detail) {
         const toast = this.adapter?.getToast?.() || null;
         if (toast?.add) {

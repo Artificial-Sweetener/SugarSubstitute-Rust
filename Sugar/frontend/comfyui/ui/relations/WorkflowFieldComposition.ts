@@ -29,6 +29,7 @@ import { HostDescriptionState } from '../core/embedded/HostDescriptionState.js';
 import { UpdateSourceSlot } from '../core/updates/UpdateSource.js';
 import { DeclaredHost } from '../core/embedded/PanelRuntime.js';
 import { startEmbeddedPanel } from '../core/embedded/EmbeddedPanelHost.js';
+import { unsavedWorkWords } from '../core/session_notice/UnsavedWorkNotice.js';
 import { EmbeddedCanvasConnection } from '../core/embedded/EmbeddedCanvasConnection.js';
 import type { MemoryBudgetRegistry } from '../core/memory/MemoryBudgetRegistry.js';
 import { MemoryBudgetSettings } from '../settings/MemoryBudgetSettings.js';
@@ -49,6 +50,8 @@ export interface WorkflowFieldHostOptions
   extends Omit<RelationHostOptions, 'reportError' | 'appearance'> {
   reportRelationError(error: unknown): void;
   reportPresentationError(error: unknown): void;
+  /** Show a warning that stays until dismissed; answer whether it reached the person. */
+  warnLasting(title: string, message: string): boolean;
   activity: WorkflowOutputActivity;
   progress: WorkflowProgressStore;
   stackControls(): CubeStackFrameControls;
@@ -155,6 +158,10 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
         host,
         updates,
         releaseNotes: whatsNew,
+        sessionNotice: (lost) => {
+          const words = unsavedWorkWords(lost);
+          return options.warnLasting(words.title, words.message);
+        },
         presentation: embedded,
         hostAccent,
         canvas,

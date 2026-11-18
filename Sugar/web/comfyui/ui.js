@@ -97,6 +97,7 @@ const cubeRuntimeLifecycle = new ComfyCubeRuntimeLifecycle(createCubeRuntime);
 const { workflowExecution, workflowFields, canvasInputs, editorDimensions, prompts, workspace: createWorkflowWorkspace, } = createWorkflowCanvasComposition({
     api,
     notify: (severity, title, message) => pushToastMessage(severity, title, message),
+    warnLasting: (title, message) => hostFeedback.pushLastingToast('warn', title, message),
     app: appRef,
     document: documentRef ?? document,
     getLiteGraph: () => adapter.getLiteGraph?.(),

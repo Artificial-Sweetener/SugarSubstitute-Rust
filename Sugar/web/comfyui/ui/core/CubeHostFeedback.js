@@ -28,4 +28,8 @@ export class CubeHostFeedback {
     pushToast(severity, summary, detail) {
         this.#toast?.push?.(severity, summary, detail);
     }
+    /** Push one toast that stays until dismissed; answer whether the host showed it. */
+    pushLastingToast(severity, summary, detail) {
+        return this.#toast?.pushLasting(severity, summary, detail) ?? false;
+    }
 }

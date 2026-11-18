@@ -1,0 +1,173 @@
+[
+  {
+    "label": "workflow changes were not saved",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.session-notice",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "not-saved",
+      "notice": 1,
+      "workspace": true,
+      "inputs": false
+    }
+  },
+  {
+    "label": "workflow changes and input canvas edits were not saved",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.session-notice",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "not-saved",
+      "notice": 2,
+      "workspace": true,
+      "inputs": true
+    }
+  },
+  {
+    "label": "nothing to tell",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.session-notice",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "none"
+    }
+  },
+  {
+    "label": "watch",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.session-notice",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "watch"
+    }
+  },
+  {
+    "label": "shown",
+    "valid": true,
+    "value": {
+      "protocol": "sugarcubes.session-notice",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "shown",
+      "notice": 1
+    }
+  },
+  {
+    "label": "not-saved without a notice number",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.session-notice",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "not-saved",
+      "workspace": true,
+      "inputs": false
+    }
+  },
+  {
+    "label": "not-saved with a zero notice number",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.session-notice",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "not-saved",
+      "notice": 0,
+      "workspace": true,
+      "inputs": false
+    }
+  },
+  {
+    "label": "not-saved with a text flag",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.session-notice",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "not-saved",
+      "notice": 1,
+      "workspace": "yes",
+      "inputs": false
+    }
+  },
+  {
+    "label": "not-saved with an unknown field",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.session-notice",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "not-saved",
+      "notice": 1,
+      "workspace": true,
+      "inputs": false,
+      "reason": "close"
+    }
+  },
+  {
+    "label": "shown without a notice number",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.session-notice",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "shown"
+    }
+  },
+  {
+    "label": "none with a notice number",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.session-notice",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "none",
+      "notice": 1
+    }
+  },
+  {
+    "label": "unknown message type",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.session-notice",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "dismissed",
+      "notice": 1
+    }
+  },
+  {
+    "label": "another protocol",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.release-notes",
+      "version": 1,
+      "session": "panel-0123456789abcdef",
+      "type": "watch"
+    }
+  },
+  {
+    "label": "another version",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.session-notice",
+      "version": 2,
+      "session": "panel-0123456789abcdef",
+      "type": "watch"
+    }
+  },
+  {
+    "label": "a short session",
+    "valid": false,
+    "value": {
+      "protocol": "sugarcubes.session-notice",
+      "version": 1,
+      "session": "short",
+      "type": "watch"
+    }
+  }
+]

@@ -20,6 +20,7 @@ import type { InMemoryHostHandler } from '../../../integrations/shared/conforman
 import { isMemoryUsageMessage } from '../../../integrations/shared/MemoryValidation.generated.js';
 import { isUpdatesClientMessage } from '../../../integrations/shared/UpdatesValidation.generated.js';
 import { isReleaseNotesClientMessage } from '../../../integrations/shared/ReleaseNotesValidation.generated.js';
+import { isSessionNoticeClientMessage } from '../../../integrations/shared/SessionNoticeValidation.generated.js';
 
 export const conformanceSession = 'panel-0123456789abcdef';
 
@@ -121,6 +122,35 @@ export function releaseNotesHost(
       if (value.type === 'watch')
         send({ ...envelope, type: 'state', revision: 1, product, currentVersion: '1.0.0' });
       else send({ ...envelope, type: 'failed', request: value.request, reason: 'not-published' });
+      return true;
+    },
+  };
+}
+
+/** A host that owes one notice of unsaved work until the page says it was shown. */
+export function sessionNoticeHost(
+  send: (message: unknown) => void,
+  lost: { readonly workspace: boolean; readonly inputs: boolean } = {
+    workspace: true,
+    inputs: false,
+  },
+): InMemoryHostHandler {
+  const envelope = {
+    protocol: 'sugarcubes.session-notice',
+    version: 1,
+    session: conformanceSession,
+  };
+  let owed = true;
+  return {
+    receive: (value) => {
+      if (!isSessionNoticeClientMessage(value)) return false;
+      if (value.type === 'shown') owed = false;
+      else
+        send(
+          owed
+            ? { ...envelope, type: 'not-saved', notice: 1, ...lost }
+            : { ...envelope, type: 'none' },
+        );
       return true;
     },
   };
