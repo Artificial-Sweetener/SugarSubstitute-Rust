@@ -64,18 +64,9 @@ impl DisplayProjector {
             .memory()
             .claim(count as u64 * size_of::<crate::GpuTile>() as u64 + 256)
             .map_err(|cause| GpuError::new("gpu_projected_source_inventory", cause))?;
-        let mut tiles = Vec::new();
-        tiles
-            .try_reserve_exact(count)
-            .map_err(|cause| GpuError::new("gpu_projected_source_allocation", cause))?;
-        for tile in extent.region().tiles() {
-            crate::adapter::check(context)?;
-            let viewport =
-                Region::new(crop.x() + tile.x(), crop.y() + tile.y(), tile.width(), tile.height())
-                    .map_err(crate::evaluate::image_error)?;
-            let image = self.project_image(viewport, source, context)?;
-            tiles.push(self.decoder.decode(&image, tile, context)?);
-        }
+        // One draw projects the whole crop and one submission decodes all of its tiles.
+        let image = self.project_image(crop, source, context)?;
+        let tiles = self.decoder.decode_tiles(&image, context)?;
         GpuRasterBinding::from_tiles(asset, extent, tiles, retained, context)
     }
     /// Produce one bounded encoded clean projection image, independent of canonical image tiles.

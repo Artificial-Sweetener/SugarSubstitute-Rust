@@ -1073,7 +1073,7 @@ rationale = "Isolated 4K hardware qualification reports actual retained GPU copy
 [[records]]
 path = "crates/sugarsubstitute-canvas-render/examples/frame_qualification/backdrops.rs"
 owner = "sugarsubstitute-canvas-render"
-source_sha256 = "sha256:cf43d4b7a6c97513897f2036a9d80dfe70e4db22289eb88cbefb421ae16782d3"
+source_sha256 = "sha256:0926169b3c30fa508751a0860d04ffe4406bf142fb80132be6ab4166d82b2a81"
 disposition = "fixture"
 rationale = "Developer measurement reports what acrylic regions add to one presented frame by region count on the selected GPU, through the production projection and patch pipelines, and asserts nothing; runtime diagnostics use structured logging."
 

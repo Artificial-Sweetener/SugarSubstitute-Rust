@@ -190,7 +190,7 @@ sources = [
     "crates/sugarsubstitute-image-gpu/src/window_patch.rs",
     "crates/sugarsubstitute-image-gpu/src/window_shader.rs",
 ]
-source_sha256 = "sha256:f61cc074187b7a29bcbc8baefd42e881ad30402b2aa5a329dd01f72a54a86c81"
+source_sha256 = "sha256:5b0d6c7a840f216e71833925e15ecb6f41542b67aede9c0515026e12d8d9f8dc"
 
 [[boundaries]]
 owner = "sugarsubstitute-desktop"

@@ -277,6 +277,18 @@ impl BackdropCrop {
         let right = left + width;
         let bottom = top + height;
         let radius = self.region.corner_radius;
+        let (x0, y0) = (f64::from(x), f64::from(y));
+        if x0 + 1.0 <= left || x0 >= right || y0 + 1.0 <= top || y0 >= bottom {
+            return 0.0;
+        }
+        // A pixel wholly inside the bar and clear of the corner squares on either axis has every
+        // sample covered, which is nearly all of a bar; only edges and corners need sampling.
+        let inside = x0 >= left && x0 + 1.0 <= right && y0 >= top && y0 + 1.0 <= bottom;
+        let beside_corners = (x0 >= left + radius && x0 + 1.0 <= right - radius)
+            || (y0 >= top + radius && y0 + 1.0 <= bottom - radius);
+        if inside && beside_corners {
+            return 1.0;
+        }
         let mut covered = 0_u32;
         for sy in 0..4 {
             for sx in 0..4 {

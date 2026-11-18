@@ -2,19 +2,23 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Measure what acrylic regions add to one presented frame, by region count, on the selected GPU.
 use std::{error::Error, sync::Arc, time::Instant};
+use sugarsubstitute_canvas::{DamagePlan, FrameStamp, ViewProjection, Viewport};
 use sugarsubstitute_canvas_render::backdrop::{
     BackdropPlan, BackdropRegion, GpuBackdrop, GpuBackdropPatch, MAX_BACKDROPS,
 };
-use sugarsubstitute_contracts::execution::JobContext;
+use sugarsubstitute_canvas_render::{CpuSurface, PreparedUpdate, ProjectionBuffer};
+use sugarsubstitute_contracts::execution::{Generation, JobContext, SurfaceId};
 use sugarsubstitute_image_gpu::{
     DisplayImage, DisplayMapping, DisplayProjection, GpuDevice, boundary_fixtures::OffscreenDisplay,
 };
-use sugarsubstitute_image_ops::{DisplaySample, Extent};
+use sugarsubstitute_image_ops::{DisplaySample, Extent, Pixel};
 
 type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 
 /// Frames drawn per region count; the first compiles pipelines and is reported on its own.
 const FRAMES: usize = 24;
+/// Software frames painted per region count.
+const SOFTWARE_FRAMES: usize = 6;
 /// Blur radius the page asks for, in CSS pixels.
 const SIGMA: f64 = 10.0;
 const MATTE: [u8; 4] = [17, 29, 41, 255];
@@ -48,6 +52,69 @@ fn surfaces(count: usize, scale: f64) -> Result<Vec<BackdropRegion>> {
         .collect()
 }
 
+/// Paint the same region counts over a software projection on this one worker, as a canvas
+/// without a usable GPU does, and report the time the acrylic painting takes.
+fn software(viewport: Extent, scale: f64, context: &JobContext) -> Result<usize> {
+    let stamp = |generation| -> Result<FrameStamp> {
+        Ok(FrameStamp { surface: SurfaceId::new(3)?, generation: Generation::new(generation)? })
+    };
+    let view = Viewport::new(viewport)?;
+    let base = CpuSurface::from_prepared(PreparedUpdate::prepare(
+        stamp(1)?,
+        None,
+        DamagePlan::full(viewport),
+        context.memory(),
+        |region, pixels| {
+            for y in 0..region.height() {
+                for x in 0..region.width() {
+                    pixels[(y * region.width() + x) as usize] =
+                        0xff00_0000 | ((x % 251) << 16) | ((y % 239) << 8) | ((x + y) % 233);
+                }
+            }
+            Ok(())
+        },
+    )?)?;
+    let matte = Pixel::linear(0.018, 0.018, 0.018, 1.0)?;
+    let mut scratch = None;
+    let mut generation = 1;
+    let mut frames = 0;
+    for count in COUNTS.into_iter().filter(|count| *count != 0 && *count != MAX_BACKDROPS) {
+        let plan = BackdropPlan::new(viewport, &surfaces(count, scale)?)?;
+        let mut paints = Vec::new();
+        for frame in 0..SOFTWARE_FRAMES {
+            let mut target = view;
+            target.pan_by([3.0 + frame as f64, 0.0])?;
+            let storage = match scratch.take() {
+                Some(storage) => storage,
+                None => ProjectionBuffer::new(viewport, context.memory(), context)?,
+            };
+            generation += 1;
+            let mut shown = storage.project(
+                stamp(generation)?,
+                &base,
+                ViewProjection::new(view, target)?,
+                matte,
+                context,
+            )?;
+            let started = Instant::now();
+            shown.paint_backdrops(&plan, context)?;
+            paints.push(started.elapsed().as_micros());
+            scratch = Some(shown.into_buffer());
+        }
+        println!(
+            "BACKDROPS_CPU: viewport={}x{} regions={} sigma={} paint_median_us={} paint_max_us={}",
+            viewport.width(),
+            viewport.height(),
+            plan.regions().len(),
+            SIGMA * scale,
+            median(&mut paints),
+            paints.last().copied().unwrap_or(0)
+        );
+        frames += SOFTWARE_FRAMES;
+    }
+    Ok(frames)
+}
+
 fn median(samples: &mut [u128]) -> u128 {
     samples.sort_unstable();
     samples.get(samples.len() / 2).copied().unwrap_or(0)
@@ -69,6 +136,7 @@ pub(super) fn qualify(device: Arc<GpuDevice>, context: &JobContext) -> Result<us
     let mut display = OffscreenDisplay::new(device.clone(), context)?;
     let mut frames = 0;
     for (viewport, scale) in [(Extent::new(1920, 1080)?, 1.0), (Extent::new(3840, 2160)?, 2.0)] {
+        frames += software(viewport, scale, context)?;
         let step = f64::from(image_extent.width()) / f64::from(viewport.width());
         let _maps = context.memory().claim(
             (u64::from(viewport.width()) + u64::from(viewport.height()))

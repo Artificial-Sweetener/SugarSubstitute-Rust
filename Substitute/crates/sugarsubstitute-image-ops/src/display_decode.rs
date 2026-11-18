@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Decode bounded display words without interpreting encoded RGB as linear image data.
 use crate::{ImageError, Pixel, is_premultiplied_word};
+use std::sync::LazyLock;
 
 /// IEC sRGB inverse transfer in sRGB primaries; coverage is not passed through this function.
 /// Source adapters validate their encoded samples before conversion. Negative encoded values
@@ -13,6 +14,11 @@ pub fn srgb_to_linear(encoded: f64) -> f32 {
         ((encoded + 0.055) / 1.055).powf(2.4) as f32
     }
 }
+
+/// Inverse transfer of every opaque 8-bit channel, computed once: display sources are almost
+/// entirely opaque, and three transcendentals per pixel dominate decoding otherwise.
+static OPAQUE: LazyLock<[f32; 256]> =
+    LazyLock::new(|| std::array::from_fn(|channel| srgb_to_linear(channel as f64 / 255.0)));
 
 /// Stateless conversion from retained premultiplied sRGB display pixels to image DAG pixels.
 pub struct SrgbDecoder;
@@ -29,8 +35,41 @@ impl SrgbDecoder {
         if alpha == 0 {
             return Ok(Pixel::TRANSPARENT);
         }
+        if alpha == 255 {
+            let table = &*OPAQUE;
+            return Pixel::linear(
+                table[usize::from(red)],
+                table[usize::from(green)],
+                table[usize::from(blue)],
+                1.0,
+            );
+        }
         let decode = |channel| srgb_to_linear(f64::from(channel) / f64::from(alpha));
         Pixel::linear(decode(red), decode(green), decode(blue), f32::from(alpha) / 255.0)
+    }
+    /// Decode a row of premultiplied `0xAARRGGBB` words into `output`, exactly as [`Self::decode`]
+    /// decodes each. Sources read whole rows through this rather than one word at a time.
+    /// # Errors
+    /// Rejects rows of different lengths and any word whose color exceeds its coverage.
+    pub fn decode_row(words: &[u32], output: &mut [Pixel]) -> Result<(), ImageError> {
+        if words.len() != output.len() {
+            return Err(ImageError::Invalid("Display row and its decoded row differ in length"));
+        }
+        let table = &*OPAQUE;
+        for (pixel, word) in output.iter_mut().zip(words) {
+            let [alpha, red, green, blue] = word.to_be_bytes();
+            *pixel = if alpha == 255 {
+                Pixel([
+                    table[usize::from(red)],
+                    table[usize::from(green)],
+                    table[usize::from(blue)],
+                    1.0,
+                ])
+            } else {
+                Self::decode(*word)?
+            };
+        }
+        Ok(())
     }
 }
 

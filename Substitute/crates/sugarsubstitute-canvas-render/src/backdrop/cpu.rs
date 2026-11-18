@@ -56,19 +56,16 @@ impl RasterSource for Source<'_> {
         {
             return Err(ImageError::Invalid("Foreign presentation backdrop raster"));
         }
-        for y in region.y()..region.bottom() {
+        let width = region.width() as usize;
+        for (y, decoded) in (region.y()..region.bottom()).zip(output.chunks_exact_mut(width)) {
             if context.cancellation_requested() {
                 return Err(ImageError::Cancelled);
             }
             if context.deadline().is_some_and(|deadline| context.now() >= deadline) {
                 return Err(ImageError::Deadline);
             }
-            for x in region.x()..region.right() {
-                output[(y - region.y()) as usize * region.width() as usize
-                    + (x - region.x()) as usize] = SrgbDecoder::decode(
-                    self.pixels[y as usize * self.extent.width() as usize + x as usize],
-                )?;
-            }
+            let start = y as usize * self.extent.width() as usize + region.x() as usize;
+            SrgbDecoder::decode_row(&self.pixels[start..start + width], decoded)?;
         }
         Ok(())
     }

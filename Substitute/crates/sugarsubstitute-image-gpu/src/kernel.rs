@@ -198,6 +198,58 @@ impl Kernels {
         self.device.faults.check()?;
         Ok((output, coverage))
     }
+    /// Copy the `overlap` rectangle of one tile into a wider gathered tile in a single dispatch.
+    /// A buffer-to-buffer copy would need one native command per row, and a halo is assembled
+    /// from hundreds of rows; the GPU spends longer on those commands than on the image work.
+    pub(crate) fn copy(
+        &self,
+        batch: &mut Batch,
+        source: &GpuTile,
+        target: &GpuTile,
+        overlap: Region,
+        context: &JobContext,
+    ) -> Result<(), GpuError> {
+        crate::adapter::check(context)?;
+        let mut parameters = Parameters::new(12, target.region());
+        let from = source.region();
+        parameters.0[4..8].copy_from_slice(&[from.x(), from.y(), from.width(), from.height()]);
+        parameters.0[8..12].copy_from_slice(&[
+            overlap.x(),
+            overlap.y(),
+            overlap.width(),
+            overlap.height(),
+        ]);
+        let uniform =
+            self.upload_words(batch, &parameters.0, wgpu::BufferUsages::UNIFORM, context)?;
+        batch.pin(source.buffer.clone())?;
+        batch.pin(target.buffer.clone())?;
+        let buffers = [
+            &uniform,
+            &source.buffer,
+            &self.dummy,
+            &self.dummy,
+            &target.buffer,
+            &self.dummy,
+            &batch.status,
+        ];
+        let entries = std::array::from_fn::<_, 7, _>(|binding| wgpu::BindGroupEntry {
+            binding: binding as u32,
+            resource: buffers[binding].raw.as_entire_binding(),
+        });
+        let group = self.device.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("SugarSubstitute image halo copy"),
+            layout: &self.pipeline.get_bind_group_layout(0),
+            entries: &entries,
+        });
+        let commands = batch.commands()?;
+        {
+            let mut pass = commands.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
+            pass.set_pipeline(&self.pipeline);
+            pass.set_bind_group(0, &group, &[]);
+            pass.dispatch_workgroups(overlap.width().div_ceil(8), overlap.height().div_ceil(8), 1);
+        }
+        self.device.faults.check()
+    }
     fn upload_words(
         &self,
         batch: &mut Batch,
@@ -337,7 +389,15 @@ fn display_pixel(index: u32) -> u32 {
 fn image(@builtin(global_invocation_id) id: vec3<u32>, @builtin(local_invocation_index) local: u32) {
     if local == 0u { atomicStore(&group_flags, 0u); }
     workgroupBarrier();
-    if id.x < p.output.z && id.y < p.output.w {
+    if p.control.x == 12u {
+        // Halo copy: `b` is the copied rectangle, in the global coordinates `a` and `output` use.
+        if id.x < p.b.z && id.y < p.b.w {
+            let source = (p.b.y - p.a.y + id.y) * p.a.z + (p.b.x - p.a.x + id.x);
+            let target_index =
+                (p.b.y - p.output.y + id.y) * p.output.z + (p.b.x - p.output.x + id.x);
+            output[target_index] = bitcast<vec4<u32>>(a[source]);
+        }
+    } else if id.x < p.output.z && id.y < p.output.w {
         let index = id.y * p.output.z + id.x;
         if p.control.x == 9u {
             let destination_index = id.y * p.control.z + id.x;

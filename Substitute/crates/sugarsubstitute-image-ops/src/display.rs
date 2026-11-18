@@ -2,28 +2,28 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Canonical premultiplied sRGB display encoding with a shared bounded transfer lookup.
 use crate::{ImageError, Pixel};
+use std::sync::LazyLock;
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
 
 const LEVELS: usize = 65536;
+/// The transfer bytes follow from the sRGB definition alone, so the process computes them once
+/// and every encoder reads the same table.
+static TRANSFER: LazyLock<Box<[u8]>> = LazyLock::new(|| (0..LEVELS).map(transfer).collect());
 /// Linear-light to sRGB8 conversion using nearest 16-bit linear samples and rounded 8-bit output.
 /// The same transfer bytes can be uploaded by a GPU adapter; no per-pixel transcendental is needed.
 /// Display clips negative/HDR color to `[0, 1]`; authoritative image pixels retain their precision.
 pub struct SrgbEncoder {
-    table: Vec<u8>,
+    table: &'static [u8],
     _memory: MemoryClaim,
 }
 impl SrgbEncoder {
-    /// Prepare the transfer table once on an admitted worker, retaining its allocation charge.
+    /// Borrow the process's transfer table, charging its bytes to this encoder's owner. Creating
+    /// an encoder is cheap enough to do per frame.
     /// # Errors
-    /// Reports memory admission or allocator failure before exposing partial conversion state.
+    /// Reports memory admission failure.
     pub fn new(memory: &MemoryLease) -> Result<Self, ImageError> {
         let claim = memory.claim(LEVELS as u64 + 128)?;
-        let mut table = Vec::new();
-        table.try_reserve_exact(LEVELS)?;
-        for index in 0..LEVELS {
-            table.push(transfer(index));
-        }
-        Ok(Self { table, _memory: claim })
+        Ok(Self { table: &TRANSFER, _memory: claim })
     }
     /// Convert one already-composited linear premultiplied pixel to premultiplied
     /// `[red, green, blue, alpha]` sRGB8, the display presentation form. Opaque composites encode
@@ -70,7 +70,7 @@ impl SrgbEncoder {
     /// Canonical transfer entries indexed by a nearest 16-bit normalized linear sample.
     /// The borrow cannot outlive the original execution-backed table ownership.
     pub fn table(&self) -> &[u8] {
-        &self.table
+        self.table
     }
 }
 

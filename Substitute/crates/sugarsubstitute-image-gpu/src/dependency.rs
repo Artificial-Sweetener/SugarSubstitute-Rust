@@ -58,26 +58,13 @@ impl<S> GpuEvaluator<S> {
                     .region()
                     .intersection(region)
                     .ok_or_else(|| GpuError::invalid("Missing GPU dependency intersection"))?;
-                let batch = self.ready(context)?;
-                batch.pin(tile.buffer.clone())?;
-                batch.pin(output.clone())?;
-                let commands = batch.commands()?;
-                for row in overlap.y()..overlap.bottom() {
-                    let source = (u64::from(row - tile.region().y())
-                        * u64::from(tile.region().width())
-                        + u64::from(overlap.x() - tile.region().x()))
-                        * 16;
-                    let target = (u64::from(row - region.y()) * u64::from(region.width())
-                        + u64::from(overlap.x() - region.x()))
-                        * 16;
-                    commands.copy_buffer_to_buffer(
-                        &tile.buffer.raw,
-                        source,
-                        &output.raw,
-                        target,
-                        u64::from(overlap.width()) * 16,
-                    );
-                }
+                let gathered = GpuTile { buffer: output.clone(), region };
+                self.ready(context)?;
+                let batch = self
+                    .batch
+                    .as_mut()
+                    .ok_or_else(|| GpuError::invalid("GPU halo batch is unavailable"))?;
+                self.kernels.copy(batch, &tile, &gathered, overlap, context)?;
                 batch.copied();
                 crate::adapter::check(context)?;
             }

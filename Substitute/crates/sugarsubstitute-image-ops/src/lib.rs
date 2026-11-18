@@ -25,6 +25,7 @@ mod raster_source;
 mod reconstruction;
 mod resample;
 mod retention;
+mod rows;
 mod sampling;
 mod spatial;
 

@@ -4,7 +4,7 @@
 use crate::{DisplayImage, GpuDevice, GpuError, GpuTile, buffer::Buffer, transfer::Transfer};
 use std::{borrow::Cow, sync::Arc};
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim};
-use sugarsubstitute_image_ops::{Region, SrgbDecoder};
+use sugarsubstitute_image_ops::SrgbDecoder;
 
 pub(crate) struct DisplayDecoder {
     pipeline: wgpu::ComputePipeline,
@@ -64,69 +64,107 @@ impl DisplayDecoder {
         device.faults.check()?;
         Ok(Self { pipeline, table, _memory: memory })
     }
-    pub(crate) fn decode(
+    /// Decode a whole encoded image into its canonical tiles, in image-local coordinates, with
+    /// one native submission for every tile together.
+    pub(crate) fn decode_tiles(
         &self,
         image: &DisplayImage,
-        region: Region,
         context: &JobContext,
-    ) -> Result<GpuTile, GpuError> {
+    ) -> Result<Vec<GpuTile>, GpuError> {
         crate::adapter::check(context)?;
-        if image.extent().width() != region.width() || image.extent().height() != region.height() {
-            return Err(GpuError::invalid("Projected raster tile dimensions differ"));
-        }
         let device = image.device();
-        let output = device.allocate(
-            region.pixels() * 16,
-            wgpu::BufferUsages::STORAGE
-                | wgpu::BufferUsages::COPY_SRC
-                | wgpu::BufferUsages::COPY_DST,
-            context,
-        )?;
-        let view = image.view();
-        let group = device.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("SugarSubstitute display decode input"),
-            layout: &self.pipeline.get_bind_group_layout(0),
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&view),
-                },
-                wgpu::BindGroupEntry { binding: 1, resource: self.table.raw.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 2, resource: output.raw.as_entire_binding() },
-            ],
-        });
+        let whole = image.extent().region();
+        let count = whole.tile_count() as usize;
         let _commands = context
             .memory()
-            .claim(4096)
+            .claim(count as u64 * 4096)
             .map_err(|cause| GpuError::new("gpu_display_decode_commands", cause))?;
+        let mut tiles = Vec::new();
+        let mut origins = Vec::new();
+        tiles
+            .try_reserve_exact(count)
+            .map_err(|cause| GpuError::new("gpu_display_decode_inventory", cause))?;
+        origins
+            .try_reserve_exact(count)
+            .map_err(|cause| GpuError::new("gpu_display_decode_inventory", cause))?;
+        let view = image.view();
         let mut commands = device.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("SugarSubstitute projected source conversion"),
         });
-        {
-            let mut pass = commands.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("SugarSubstitute canonical source"),
-                timestamp_writes: None,
+        for region in whole.tiles() {
+            crate::adapter::check(context)?;
+            let output = device.allocate(
+                region.pixels() * 16,
+                wgpu::BufferUsages::STORAGE
+                    | wgpu::BufferUsages::COPY_SRC
+                    | wgpu::BufferUsages::COPY_DST,
+                context,
+            )?;
+            let origin = device.allocate(
+                16,
+                wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                context,
+            )?;
+            let mut words = [0_u8; 16];
+            for (slot, value) in words.chunks_exact_mut(4).zip([
+                region.x(),
+                region.y(),
+                region.width(),
+                region.height(),
+            ]) {
+                slot.copy_from_slice(&value.to_le_bytes());
+            }
+            device.write_buffer(&origin, &words);
+            let group = device.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("SugarSubstitute display decode input"),
+                layout: &self.pipeline.get_bind_group_layout(0),
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: self.table.raw.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry { binding: 2, resource: output.raw.as_entire_binding() },
+                    wgpu::BindGroupEntry { binding: 3, resource: origin.raw.as_entire_binding() },
+                ],
             });
-            pass.set_pipeline(&self.pipeline);
-            pass.set_bind_group(0, &group, &[]);
-            pass.dispatch_workgroups(region.width().div_ceil(8), region.height().div_ceil(8), 1);
+            {
+                let mut pass = commands.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                    label: Some("SugarSubstitute canonical source"),
+                    timestamp_writes: None,
+                });
+                pass.set_pipeline(&self.pipeline);
+                pass.set_bind_group(0, &group, &[]);
+                pass.dispatch_workgroups(
+                    region.width().div_ceil(8),
+                    region.height().div_ceil(8),
+                    1,
+                );
+            }
+            tiles.push(GpuTile { buffer: output, region });
+            origins.push(origin);
         }
         device.faults.check()?;
         Transfer::submit(device.clone(), commands, device.submission(context)?).retire()?;
         crate::adapter::check(context)?;
-        Ok(GpuTile { buffer: output, region })
+        Ok(tiles)
     }
 }
 const SOURCE: &str = r#"
 @group(0) @binding(0) var image:texture_2d<f32>;
 @group(0) @binding(1) var<storage,read> table:array<f32>;
 @group(0) @binding(2) var<storage,read_write> output:array<vec4<f32>>;
+// One tile of the image: its origin in the image, then its size.
+@group(0) @binding(3) var<uniform> tile:vec4<u32>;
 @compute @workgroup_size(8,8)
 fn decode(@builtin(global_invocation_id) id:vec3<u32>){
- let size=textureDimensions(image);if id.x>=size.x||id.y>=size.y{return;}
- let encoded=vec4<u32>(floor(textureLoad(image,vec2<i32>(id.xy),0)*255.0+vec4<f32>(0.5)));
+ if id.x>=tile.z||id.y>=tile.w{return;}
+ let encoded=vec4<u32>(floor(textureLoad(image,vec2<i32>(tile.xy+id.xy),0)*255.0+vec4<f32>(0.5)));
  let base=encoded.a*256u;
- output[id.y*size.x+id.x]=vec4<f32>(table[base+encoded.r],table[base+encoded.g],table[base+encoded.b],f32(encoded.a)/255.0);
+ output[id.y*tile.z+id.x]=vec4<f32>(table[base+encoded.r],table[base+encoded.g],table[base+encoded.b],f32(encoded.a)/255.0);
 }
 "#;
 #[cfg(test)]

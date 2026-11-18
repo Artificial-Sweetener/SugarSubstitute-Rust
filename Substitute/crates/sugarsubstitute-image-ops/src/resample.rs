@@ -57,37 +57,35 @@ pub(crate) fn render(
             source.width(),
         )?;
     }
-    for y in input.region.y()..input.region.bottom() {
+    let width = region.width() as usize;
+    let source_width = input.region.width() as usize;
+    let rows = input.pixels.chunks_exact(source_width).zip(scratch.pixels.chunks_exact_mut(width));
+    for (source_row, filtered) in rows {
         crate::check(context)?;
-        let row = (y - input.region.y()) as usize * input.region.width() as usize;
-        for (x, kernel) in horizontal[..region.width() as usize].iter().enumerate() {
+        for (pixel, kernel) in filtered.iter_mut().zip(&horizontal[..width]) {
             let mut value = [0.0; 4];
             for tap in &kernel.taps[..kernel.length] {
-                let pixel = input.pixels[row + (tap.coordinate - input.region.x()) as usize];
-                for (channel, input) in value.iter_mut().zip(pixel.0) {
+                let sample = source_row[(tap.coordinate - input.region.x()) as usize];
+                for (channel, input) in value.iter_mut().zip(sample.0) {
                     *channel += input * tap.weight;
                 }
             }
-            scratch.pixels[(y - input.region.y()) as usize * region.width() as usize + x] =
-                Pixel(value);
+            *pixel = Pixel(value);
         }
     }
-    for y in 0..region.height() {
+    let mut sums = [[0.0_f32; 4]; crate::TILE_EDGE as usize];
+    let sums = &mut sums[..width];
+    for (y, finished) in output.pixels.chunks_exact_mut(width).enumerate() {
         crate::check(context)?;
         let kernel =
-            sampling.axis_kernel(SamplingAxis::Vertical, region.y() + y, source.height())?;
-        for x in 0..region.width() {
-            let mut value = [0.0; 4];
-            for tap in &kernel.taps[..kernel.length] {
-                let pixel = scratch.pixels[(tap.coordinate - input.region.y()) as usize
-                    * region.width() as usize
-                    + x as usize];
-                for (channel, input) in value.iter_mut().zip(pixel.0) {
-                    *channel += input * tap.weight;
-                }
-            }
-            output.pixels[y as usize * region.width() as usize + x as usize] =
-                Pixel::filtered(value)?;
+            sampling.axis_kernel(SamplingAxis::Vertical, region.y() + y as u32, source.height())?;
+        sums.fill([0.0; 4]);
+        for tap in &kernel.taps[..kernel.length] {
+            let start = (tap.coordinate - input.region.y()) as usize * width;
+            crate::rows::accumulate(sums, &scratch.pixels[start..start + width], tap.weight);
+        }
+        for (pixel, sum) in finished.iter_mut().zip(sums.iter()) {
+            *pixel = Pixel::filtered(*sum)?;
         }
     }
     Ok(())
