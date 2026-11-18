@@ -1,3 +1,9 @@
+## [0.20.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.19.5...sugarcubes-v0.20.0) (2026-11-18)
+
+### Features
+
+* **prompt:** complete LoRA names in the model picker's popup ([a521950](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/a5219504cb4d1e1fc09d729283c39ec6cefc3f5d))
+
 ## [0.19.5](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.19.4...sugarcubes-v0.19.5) (2026-11-17)
 
 ### Bug Fixes
