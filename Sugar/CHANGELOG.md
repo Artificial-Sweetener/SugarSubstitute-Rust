@@ -1,3 +1,18 @@
+## [0.23.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.22.0...sugarcubes-v0.23.0) (2026-11-18)
+
+### Features
+
+* **projects:** keep a script's overrides, node links and own values through open and save ([7e1dae5](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/7e1dae5f43f728ace143af57fb7cba0e4a3e3a8f))
+* **projects:** open a project's tab in the Cube view ([f766514](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/f7665147f255ae3620f7e95f17155f9151187f53))
+* **projects:** open and save project scripts from the orb menu, as SugarSubstitute kept them ([802d1fb](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/802d1fb0f675fe49aa9d8fa3e57b97a6e4080f3c))
+* **queue:** give Comfy's job queue the generation queue's Fluent look in the frame ([f1c5b5c](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/f1c5b5c643f2d7afcc275c7f435767bf568b429e))
+* **queue:** pin the generation queue as a sidebar and count only waiting jobs ([6e57c7a](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/6e57c7a57529aa699944f649e7778396d1ad8aa0))
+
+### Bug Fixes
+
+* **projects:** connect a script's Cubes as the stack they are ([7889667](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/788966761e6d70d0034ea4c720096aa781948516))
+* **sugarscript:** read scripts whose bypassed Cubes carry values, hashes and multi-line text ([cd400fa](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/cd400fa7594185817820f2cd7002367cc15016bb))
+
 ## [0.22.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.21.2...sugarcubes-v0.22.0) (2026-11-18)
 
 ### Features
