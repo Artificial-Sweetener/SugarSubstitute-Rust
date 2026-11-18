@@ -32,6 +32,7 @@ import type {
   DesktopArtifactResult,
   DesktopOutputArtifacts,
 } from '../../../frontend/comfyui/ui/execution/domain/DesktopOutputArtifacts.js';
+import type { ComfyDraftTimes } from '../../../frontend/comfyui/ui/workflow/infrastructure/ComfyWorkflowDraftTimes.js';
 import type { SettingsWorkspaceRoute } from '../../../frontend/comfyui/ui/settings/SettingsWorkspaceRoute.js';
 
 /** Keep the behavior under test actual while controlling only host, clock, bytes and UUID generation. */
@@ -138,6 +139,8 @@ export async function desktopRuntimeFixture(
     receipt: (...args) => receipt(...args),
     resolve: (...args) => resolve(...args),
   };
+  let editsSettled: (() => void) | null = null;
+  let draftTimes: ComfyDraftTimes = () => null;
   const runtime = new ComfyDesktopSessionRuntime({
     app: host.app,
     scope: shared.checkpoint.scope,
@@ -151,6 +154,13 @@ export async function desktopRuntimeFixture(
     ...(settingsRoute ? { settingsRoute } : {}),
     versions: async () => ({ frontend: '1.47.11', sugarcubes: '0.15.3' }),
     report: (error) => errors.push(error),
+    draftTimes: (path) => draftTimes(path),
+    observeEdits: (settled) => {
+      editsSettled = settled;
+      return () => {
+        editsSettled = null;
+      };
+    },
   });
   runtime.install();
   return {
@@ -175,6 +185,12 @@ export async function desktopRuntimeFixture(
     coordinator,
     errors,
     nextId,
+    /** Report that a person's input rested, as the page's edit observation does. */
+    editsSettled: () => editsSettled?.(),
+    /** Say when Comfy last kept its own copy of each workflow, as the previous session left it. */
+    setDraftTimes: (value: ComfyDraftTimes) => {
+      draftTimes = value;
+    },
     setResolve: (value: DesktopOutputArtifacts['resolve']) => {
       resolve = value;
     },

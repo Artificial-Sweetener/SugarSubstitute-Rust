@@ -18,6 +18,7 @@ export interface HostWorkflow {
   path: string;
   filename: string;
   size: number;
+  lastModified?: number;
   readonly isTemporary: boolean;
   readonly isLoaded: boolean;
   isLoading: boolean;

@@ -5,6 +5,8 @@ import { ComfyDesktopArtifacts } from './ComfyDesktopArtifacts.js';
 import { OutputArtifactClient } from '../../output_saving/OutputArtifactClient.js';
 import { DesktopSessionClient } from '../application/DesktopSessionClient.js';
 import { ComfyAboutInformation } from '../../settings/ComfyAboutInformation.js';
+import { AuthoredEditObservation } from './AuthoredEditObservation.js';
+import { readComfyDraftTimes } from './ComfyWorkflowDraftTimes.js';
 /** Own only desktop session adapters; ordinary browser workflows keep their existing composition. */
 export class ComfyDesktopSessionHost {
     window;
@@ -30,6 +32,12 @@ export class ComfyDesktopSessionHost {
             webview: transport.webview,
             nextId,
             now: () => Date.now(),
+            draftTimes: readComfyDraftTimes(this.window.localStorage),
+            observeEdits: (settled) => {
+                const edits = new AuthoredEditObservation(this.window, settled);
+                edits.install();
+                return () => edits.dispose();
+            },
             artifacts: new ComfyDesktopArtifacts(new OutputArtifactClient(request), new BrowserDesktopAssets(transport, request, this.window)),
             versions: async () => {
                 const metadata = await new ComfyAboutInformation().load();

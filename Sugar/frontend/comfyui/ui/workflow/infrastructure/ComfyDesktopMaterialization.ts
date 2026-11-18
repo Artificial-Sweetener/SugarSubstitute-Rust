@@ -34,12 +34,14 @@ import {
   DesktopSessionRefusal,
   type DesktopSessionCancellation,
 } from '../domain/DesktopSession.js';
+import type { ComfyDesktopDocumentAdoption } from './ComfyDesktopDocumentAdoption.js';
 import type { ComfyDesktopDocuments } from './ComfyDesktopDocuments.js';
 import type { ComfyWorkflowViewPreferences } from './ComfyWorkflowViewPreferences.js';
 
 export interface ComfyDesktopMaterializationOptions {
   readonly execution: ComfyWorkflowExecutionRuntime;
   readonly documents: ComfyDesktopDocuments;
+  readonly adoption: Pick<ComfyDesktopDocumentAdoption, 'adopt'>;
   readonly bindings: DesktopWorkspaceBindings;
   readonly identities: WorkflowOutputIdentities;
   readonly submissions: WorkflowSubmissionSnapshots;
@@ -78,7 +80,8 @@ export class ComfyDesktopMaterialization {
   /**
    * Bind host-adopted durable entries to the tabs Comfy itself restored, then import references
    * and view intent. Comfy owns the tabs: an entry whose tab Comfy did not reopen is left out, and
-   * the returned bindings name only the entries that were bound.
+   * the returned bindings name only the entries that were bound. A tab Comfy reopened with an
+   * older document than the checkpoint saved takes the checkpoint's document first.
    */
   async materialize(
     checkpoint: SessionCheckpoint,
@@ -88,10 +91,20 @@ export class ComfyDesktopMaterialization {
     this.#cancellation = cancellation;
     this.options.bindings.changed();
     try {
-      const contexts = this.options.documents.match(
-        checkpoint.entries,
-        () => !cancellation.cancelled() && !this.options.retired(),
-      );
+      const current = (): boolean => !cancellation.cancelled() && !this.options.retired();
+      let contexts = this.options.documents.match(checkpoint.entries, current);
+      let adopted = false;
+      for (const entry of checkpoint.entries) {
+        const context = contexts.get(entry.id);
+        if (!context) continue;
+        if (
+          await this.options.adoption.adopt(entry.document, context, checkpoint.capturedAt, current)
+        )
+          adopted = true;
+        this.options.assertCurrent(cancellation);
+      }
+      // Loading an adopted document gives its tab a new occurrence; name the tabs again.
+      if (adopted) contexts = this.options.documents.match(checkpoint.entries, current);
       const entries = checkpoint.entries.filter((entry) => contexts.has(entry.id));
       this.options.assertCurrent(cancellation);
       this.options.bindings.synchronize(this.options.execution.sessions.read());

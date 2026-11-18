@@ -42,6 +42,8 @@ import {
   type DesktopSessionFailedOperation,
   type DesktopSessionRuntime,
 } from '../domain/DesktopSession.js';
+import { ComfyDesktopDocumentAdoption } from './ComfyDesktopDocumentAdoption.js';
+import type { ComfyDraftTimes } from './ComfyWorkflowDraftTimes.js';
 import { ComfyDesktopDocuments } from './ComfyDesktopDocuments.js';
 import { ComfyDesktopDocumentReading } from './ComfyDesktopDocumentReading.js';
 import { ComfyDesktopReadiness } from './ComfyDesktopReadiness.js';
@@ -64,6 +66,13 @@ export interface ComfyDesktopSessionOptions {
   readonly artifacts: DesktopOutputArtifacts;
   readonly versions: () => Promise<{ readonly frontend: string; readonly sugarcubes: string }>;
   readonly report: (error: unknown, operation: DesktopSessionFailedOperation) => void;
+  /**
+   * Observe a person's edits anywhere in the page and call `settled` once each burst rests;
+   * return how to stop. Values inside Cubes change without any change on the workflow's own graph.
+   */
+  readonly observeEdits: (settled: () => void) => () => void;
+  /** When Comfy last kept its own copy of each workflow, read before it restored its tabs. */
+  readonly draftTimes: ComfyDraftTimes;
 }
 
 /** Keep desktop capture independent of graph generation, history routing and editor insertion. */
@@ -127,6 +136,13 @@ export class ComfyDesktopSessionRuntime implements DesktopSessionRuntime {
     this.#materialization = new ComfyDesktopMaterialization({
       ...options,
       documents: this.#documents,
+      adoption: new ComfyDesktopDocumentAdoption({
+        app: options.app,
+        sessions: options.execution.sessions,
+        adapter: options.execution.workflowDocuments,
+        documents: this.#documents,
+        draftTimes: options.draftTimes,
+      }),
       bindings: this.bindings,
       identities: this.#identities,
       submissions: this.#submissions,
@@ -210,7 +226,29 @@ export class ComfyDesktopSessionRuntime implements DesktopSessionRuntime {
         !execution.sessions.read().loading &&
         !this.#materialization.active(),
     );
+    this.#stops.push(this.options.observeEdits(() => this.#edited()));
     this.#refresh(true);
+  }
+
+  /**
+   * Examine the workflow after a person's input rested, and publish what it changed.
+   *
+   * An edit inside a Cube reaches no graph observer. Only a changed document counts as authored
+   * work: input that changed nothing leaves startup recovery and the revisions as they were.
+   */
+  #edited(): void {
+    if (
+      this.#disposed ||
+      !this.#readiness.read().committed ||
+      this.options.execution.sessions.read().loading ||
+      this.#materialization.active()
+    )
+      return;
+    const revisions = (): number =>
+      this.bindings.fence().bindings.reduce((total, binding) => total + binding.graphRevision, 0);
+    const before = revisions();
+    this.#refresh(true);
+    if (revisions() !== before && this.#intent.authored()) this.bindings.changed();
   }
 
   fence(): ReturnType<DesktopWorkspaceBindings['fence']> {

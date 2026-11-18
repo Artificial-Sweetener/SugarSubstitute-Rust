@@ -655,3 +655,40 @@ test('Comfy graph pan and scale are navigation observations with their own revis
   f.dispose();
   expect(f.errors).toEqual([]);
 });
+
+test('an edit that raises no change on the workflow graph is published once input rests', async () => {
+  const f = await desktopRuntimeFixture();
+  f.host.committed();
+  const binding = () => {
+    const current = f.runtime.fence().bindings[0];
+    if (!current) throw new Error('Missing current occurrence binding.');
+    return current;
+  };
+  let published = 0;
+  const stop = f.runtime.subscribe(() => published++);
+
+  // Input that changed nothing leaves the revisions alone and publishes nothing.
+  const before = binding().graphRevision;
+  f.editsSettled();
+  expect(binding().graphRevision).toBe(before);
+  expect(published).toBe(0);
+
+  // A value written inside the graph, as a field inside a Cube is, raises no graph change.
+  f.host.setGraph({
+    nodes: [{ id: 7, type: 'SaveImage', title: 'Edited without a graph change' }],
+    extra: {},
+  });
+  expect(binding().graphRevision).toBe(before);
+  f.editsSettled();
+  expect(binding().graphRevision).toBe(before + 1);
+  expect(published).toBeGreaterThan(0);
+
+  // The same document examined again is not a second edit.
+  const settled = published;
+  f.editsSettled();
+  expect(binding().graphRevision).toBe(before + 1);
+  expect(published).toBe(settled);
+  stop();
+  f.dispose();
+  expect(f.errors).toEqual([]);
+});
