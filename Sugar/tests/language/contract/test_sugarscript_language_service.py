@@ -546,3 +546,59 @@ def _compiled_inputs(node: Mapping[str, object]) -> Mapping[str, object]:
     inputs = node.get("inputs")
     assert isinstance(inputs, Mapping)
     return cast(Mapping[str, object], inputs)
+
+
+def test_a_bypassed_multi_line_string_is_read_back_as_the_text_that_was_persisted() -> (
+    None
+):
+    """Rejoin a value Substitute split over marker lines, blank and indented lines included."""
+
+    source = (
+        '# bypass set Hero.prompt.value = """first line\n'
+        "# bypass\n"
+        "# bypass   indented \\n raw\n"
+        '# bypass last"""\n'
+        "# bypass disable Hero.loader\n"
+    )
+
+    result = SugarScriptLanguageService().parse(source)
+
+    assert result.diagnostics == ()
+    assignment, disabled = result.document.statements
+    assert isinstance(assignment, SetStatement) and assignment.bypassed
+    assert isinstance(assignment.value, LiteralExpression)
+    assert assignment.value.value == "first line\n\n  indented \\n raw\nlast"
+    assert assignment.span.start.line == 1 and assignment.span.start.column == 10
+    assert assignment.span.end.line == 4
+    assert isinstance(disabled, DisableStatement) and disabled.bypassed
+    assert disabled.span.start.line == 5 and disabled.span.start.column == 10
+
+
+def test_a_malformed_bypassed_line_is_located_and_the_next_one_still_parses() -> None:
+    """Recover inside a marker run exactly as outside one."""
+
+    result = SugarScriptLanguageService().parse(
+        "# bypass set = 3\n# bypass disable Hero.loader\n"
+    )
+
+    assert [diagnostic.span.start.line for diagnostic in result.diagnostics] == [1]
+    assert isinstance(result.document.statements[0], DisableStatement)
+
+
+def test_triple_quoted_text_is_raw_and_persisted_floats_may_carry_an_exponent() -> None:
+    """Match the values Substitute writes: raw multi-line text and Python floats."""
+
+    result = SugarScriptLanguageService().parse(
+        'set Hero.prompt.value = """a \\n b"""\n'
+        "set Hero.sampler.rate = 1e-05\n"
+        "set Hero.sampler.limit = 2.5E+3\n"
+    )
+
+    assert result.diagnostics == ()
+    values = [
+        statement.value.value
+        for statement in result.document.statements
+        if isinstance(statement, SetStatement)
+        and isinstance(statement.value, LiteralExpression)
+    ]
+    assert values == ["a \\n b", 1e-05, 2500.0]

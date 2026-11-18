@@ -158,7 +158,9 @@ class SugarExpressionParser:
         if token.kind is TokenKind.NUMBER:
             self._tokens._advance()
             value: int | float = (
-                float(token.value) if "." in token.value else int(token.value)
+                float(token.value)
+                if any(mark in token.value for mark in ".eE")
+                else int(token.value)
             )
             return LiteralExpression(value, token.raw, token.span)
         if token.kind is TokenKind.STRING:

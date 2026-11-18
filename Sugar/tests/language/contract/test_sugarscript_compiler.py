@@ -573,3 +573,26 @@ def _node_inputs(document: CubeDocument, symbol: str) -> dict[str, object]:
     inputs = _node(document, symbol)["inputs"]
     assert isinstance(inputs, dict)
     return inputs
+
+
+def test_a_bypassed_cube_keeps_the_values_and_hashes_persisted_behind_its_marker() -> (
+    None
+):
+    """Read what Substitute writes for a bypassed Cube: every line behind the marker."""
+
+    document = _cube_document("source")
+    sha256 = "B" * 64
+    result = _compile(
+        '# bypass use "local/tests/source.cube" as Cube\n'
+        "\n"
+        "# bypass set Cube.sampler.cfg = 0.5\n"
+        f"# bypass # sha256 {sha256}\n",
+        document,
+    )
+
+    assert result.diagnostics == ()
+    assert result.plan is not None
+    instance = result.plan.instances[0]
+    assert instance.bypassed is True
+    assert _node_inputs(instance.document, "sampler")["cfg"] == 0.5
+    assert result.plan.field_annotations[0].payload == {"sha256": sha256}

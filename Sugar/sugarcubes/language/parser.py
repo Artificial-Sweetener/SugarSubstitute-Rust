@@ -73,61 +73,76 @@ class SugarScriptParser:
             if self._at(TokenKind.COMMENT):
                 self._parse_comment(items)
                 continue
-            try:
-                items.append(self._parse_statement(bypassed=False))
-            except _ParseFailure as failure:
-                self._diagnostics.append(failure.diagnostic)
-                self._recover_line()
+            self._parse_line(items, bypassed=False)
         return SugarScriptParseResult(
             SugarScriptDocument(tuple(items)), tuple(self._diagnostics)
         )
 
+    def _parse_line(self, items: list[SugarScriptItem], *, bypassed: bool) -> None:
+        """Parse one statement and recover at its line boundary when it is malformed."""
+
+        try:
+            items.append(self._parse_statement(bypassed=bypassed))
+        except _ParseFailure as failure:
+            self._diagnostics.append(failure.diagnostic)
+            self._recover_line()
+
     def _parse_comment(self, items: list[SugarScriptItem]) -> None:
-        """Parse bypassed statements or preserve ordinary extension comments."""
+        """Parse a run of bypassed lines or preserve one ordinary extension comment."""
 
         token = self._advance()
-        stripped = token.value.strip()
-        if stripped == "bypass" or stripped.startswith("bypass "):
-            statement_text = stripped.removeprefix("bypass").lstrip()
-            if not statement_text:
-                comment, diagnostic = decode_comment(token)
-                items.append(comment)
-                if diagnostic:
-                    self._diagnostics.append(diagnostic)
-                return
-            self._parse_bypassed_statement(token, statement_text, items)
+        if _bypass_payload(token) is None:
+            self._keep_comment(token, items)
             return
+        run = [token]
+        # A bypassed Cube persists every physical line of its statements behind the marker, so
+        # one statement, such as a multi-line string, may continue over the following lines.
+        while (
+            self._at(TokenKind.NEWLINE)
+            and self._peek(1).kind is TokenKind.COMMENT
+            and _bypass_payload(self._peek(1)) is not None
+        ):
+            self._advance()
+            run.append(self._advance())
+        if all(not _bypass_payload(comment) for comment in run):
+            for comment in run:
+                self._keep_comment(comment, items)
+            return
+        self._parse_bypassed_lines(run, items)
+
+    def _keep_comment(self, token: Token, items: list[SugarScriptItem]) -> None:
+        """Preserve one comment and report a malformed extension payload."""
+
         comment, diagnostic = decode_comment(token)
         items.append(comment)
         if diagnostic:
             self._diagnostics.append(diagnostic)
 
-    def _parse_bypassed_statement(
+    def _parse_bypassed_lines(
         self,
-        comment: Token,
-        statement_text: str,
+        run: list[Token],
         items: list[SugarScriptItem],
     ) -> None:
-        """Parse one persisted bypass statement while retaining its original location."""
+        """Parse the statements a run of bypass lines holds, at their original locations."""
 
-        lexed = SugarScriptLexer(statement_text).lex()
-        payload_offset = comment.raw.find(statement_text)
-        shifted = tuple(
-            _shift_token(token, comment.span.start, payload_offset)
-            for token in lexed.tokens
-        )
+        payloads = [_bypass_payload(comment) or "" for comment in run]
+        lexed = SugarScriptLexer("\n".join(payloads)).lex()
+        relocation = _BypassRelocation(run, payloads)
         nested = SugarScriptParser.__new__(SugarScriptParser)
-        nested._tokens = shifted
+        nested._tokens = tuple(relocation.token(token) for token in lexed.tokens)
         nested._index = 0
         nested._diagnostics = [
-            _shift_diagnostic(diagnostic, comment.span.start, payload_offset)
-            for diagnostic in lexed.diagnostics
+            relocation.diagnostic(diagnostic) for diagnostic in lexed.diagnostics
         ]
         nested._expressions = SugarExpressionParser(nested)
-        try:
-            items.append(nested._parse_statement(bypassed=True))
-        except _ParseFailure as failure:
-            nested._diagnostics.append(failure.diagnostic)
+        while not nested._at(TokenKind.EOF):
+            if nested._at(TokenKind.NEWLINE):
+                nested._advance()
+            elif nested._at(TokenKind.COMMENT):
+                # Companion comments of a bypassed statement, such as its model hash.
+                nested._keep_comment(nested._advance(), items)
+            else:
+                nested._parse_line(items, bypassed=True)
         self._diagnostics.extend(nested._diagnostics)
 
     def _parse_statement(self, *, bypassed: bool) -> SugarStatement:
@@ -323,42 +338,69 @@ class SugarScriptParser:
         )
 
 
-def _shift_token(token: Token, origin: SourcePosition, column_offset: int) -> Token:
-    """Relocate an inline bypass token into its enclosing comment source span."""
-
-    return Token(
-        token.kind,
-        token.value,
-        token.raw,
-        _shift_span(token.span, origin, column_offset),
-    )
+_BYPASS = "bypass"
 
 
-def _shift_diagnostic(
-    diagnostic: SugarScriptDiagnostic,
-    origin: SourcePosition,
-    column_offset: int,
-) -> SugarScriptDiagnostic:
-    """Relocate an inline bypass diagnostic into the enclosing source line."""
+def _bypass_payload(comment: Token) -> str | None:
+    """Return the text one bypass line persists, or `None` for any other comment.
 
-    return SugarScriptDiagnostic(
-        diagnostic.code,
-        diagnostic.message,
-        diagnostic.severity,
-        _shift_span(diagnostic.span, origin, column_offset),
-    )
+    The writer prefixes each physical line with the marker and one space, so exactly that much is
+    removed: whatever follows belongs to the persisted line, including its own indentation.
+    """
+
+    text = comment.value
+    if not text.startswith(_BYPASS):
+        return None
+    rest = text[len(_BYPASS) :]
+    if rest and not rest[0].isspace():
+        return None
+    return rest[1:] if rest.startswith(" ") else rest.strip()
 
 
-def _shift_span(
-    span: SourceSpan, origin: SourcePosition, column_offset: int
-) -> SourceSpan:
-    """Shift a single-line nested span into its original comment coordinates."""
+class _BypassRelocation:
+    """Map positions in the joined text of a bypass run back to its original source lines."""
 
-    def shift(position: SourcePosition) -> SourcePosition:
+    def __init__(self, run: list[Token], payloads: list[str]) -> None:
+        """Record where each persisted line starts in the source and in the joined text."""
+
+        self._origins: list[SourcePosition] = []
+        self._starts: list[int] = []
+        joined = 0
+        for comment, payload in zip(run, payloads, strict=True):
+            lead = len(comment.raw) - len(payload) if payload else len(comment.raw)
+            start = comment.span.start
+            self._origins.append(
+                SourcePosition(start.offset + lead, start.line, start.column + lead)
+            )
+            self._starts.append(joined)
+            joined += len(payload) + 1
+
+    def position(self, position: SourcePosition) -> SourcePosition:
+        """Relocate one position by the line of the run it falls on."""
+
+        index = min(position.line, len(self._origins)) - 1
+        origin = self._origins[index]
+        within = position.offset - self._starts[index]
         return SourcePosition(
-            origin.offset + column_offset + position.offset,
-            origin.line + position.line - 1,
-            origin.column + column_offset + position.column - 1,
+            origin.offset + within, origin.line, origin.column + within
         )
 
-    return SourceSpan(shift(span.start), shift(span.end))
+    def span(self, span: SourceSpan) -> SourceSpan:
+        """Relocate both ends of one span."""
+
+        return SourceSpan(self.position(span.start), self.position(span.end))
+
+    def token(self, token: Token) -> Token:
+        """Relocate one token."""
+
+        return Token(token.kind, token.value, token.raw, self.span(token.span))
+
+    def diagnostic(self, diagnostic: SugarScriptDiagnostic) -> SugarScriptDiagnostic:
+        """Relocate one diagnostic."""
+
+        return SugarScriptDiagnostic(
+            diagnostic.code,
+            diagnostic.message,
+            diagnostic.severity,
+            self.span(diagnostic.span),
+        )

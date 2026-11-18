@@ -206,7 +206,8 @@ class SugarScriptLexer:
                 break
             if not triple and character in "\r\n":
                 break
-            if character == "\\" and not self._at_end:
+            # A triple-quoted string is raw text: its backslashes are the value's own.
+            if character == "\\" and not triple and not self._at_end:
                 value.append(self._decode_escape(self._advance()))
             else:
                 value.append(character)
@@ -231,6 +232,14 @@ class SugarScriptLexer:
             self._advance()
         if self._peek() == "." and self._peek(1).isdigit():
             self._advance()
+            while self._peek().isdigit():
+                self._advance()
+        # Persisted floats may carry an exponent, as in 1e-05.
+        signed = self._peek(1) in "+-" and self._peek(2).isdigit()
+        if self._peek() in "eE" and (self._peek(1).isdigit() or signed):
+            self._advance()
+            if signed:
+                self._advance()
             while self._peek().isdigit():
                 self._advance()
         raw = self._source[start.offset : self._offset]

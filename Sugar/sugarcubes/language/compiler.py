@@ -86,8 +86,6 @@ class SugarScriptCompiler:
         diagnostics = list(parsed.diagnostics)
 
         for statement in parsed.document.statements:
-            if statement.bypassed and not isinstance(statement, UseStatement):
-                continue
             try:
                 if isinstance(statement, UseStatement):
                     self._add_use(
