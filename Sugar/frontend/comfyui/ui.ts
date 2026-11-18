@@ -467,6 +467,7 @@ export const sugarCubesExtension: SugarCubesExtension = {
       describe: readErrorMessage,
       importScript: (source) => importHostCoordinator.importSugarScript(source),
       showCubes: () => workflowWorkspace.masonry.show(),
+      prepareInputs: (payload) => canvasInputs.preparation.prepare(payload),
     }),
   }),
   addCustomNodeDefs(definitions) {

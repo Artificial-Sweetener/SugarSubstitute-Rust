@@ -20,6 +20,7 @@ import {
   namedScriptPath,
   projectDocument,
   projectNameError,
+  maskInputName,
   projectNameOf,
   projectScriptPath,
   uniqueTabName,
@@ -31,21 +32,32 @@ import {
   type ProjectFileStore,
   type ProjectWorkflowHost,
 } from '../../../frontend/comfyui/ui/projects/application/ProjectScripts.js';
+import { ProjectMasks } from '../../../frontend/comfyui/ui/projects/application/ProjectMasks.js';
 import {
   ComfyProjectFiles,
+  ComfyProjectMaskInputs,
   ComfyProjectWorkflows,
 } from '../../../frontend/comfyui/ui/projects/infrastructure/ComfyProjects.js';
 import { projectCommands } from '../../../frontend/comfyui/ui/projects/presentation/ProjectCommands.js';
 
 const created = new Date(2026, 10, 5, 9, 7, 3);
 
+/** A rendering that names no masks. */
+const written = (source: string) => ({ source, maskFiles: [] });
+
 /** Keep project files in memory and record every move and write in order. */
 function folder(initial: Readonly<Record<string, string>> = {}) {
   const texts = new Map(Object.entries(initial));
+  const bytes = new Map<string, Blob>();
   const log: string[] = [];
   const store: ProjectFileStore = {
     list: async (): Promise<ProjectFile[]> =>
-      [...texts.keys()].map((path) => ({ path, modified: created, created })),
+      [...texts.keys(), ...bytes.keys()].map((path) => ({ path, modified: created, created })),
+    readBytes: async (path) => bytes.get(path) ?? null,
+    writeBytes: async (path, content) => {
+      log.push(`write ${path}`);
+      bytes.set(path, content);
+    },
     read: async (path) => texts.get(path) ?? null,
     write: async (path, text) => {
       log.push(`write ${path}`);
@@ -61,7 +73,7 @@ function folder(initial: Readonly<Record<string, string>> = {}) {
       return 'moved';
     },
   };
-  return { store, texts, log };
+  return { store, texts, bytes, log };
 }
 
 /** Stand in for Comfy's tabs: one shown workflow, and a record of what was opened and imported. */
@@ -71,7 +83,7 @@ function tabs(active: string | null, open: readonly string[] = active ? [active]
   const host: ProjectWorkflowHost = {
     activeName: () => active,
     openNames: () => [...open, ...opened],
-    serialize: () => ({ nodes: [] }),
+    serialize: async () => ({ nodes: [] }),
     checkScript: async (source) => {
       if (source.includes('missing')) throw new Error('Cube not found');
     },
@@ -127,7 +139,9 @@ test('saving writes the tab’s own script and first keeps the copy it replaces'
     'Demo/Demo.sugar': 'old',
     'Demo/versions/Demo_20261105_090703.sugar': 'older',
   });
-  const scripts = new ProjectScripts(f.store, tabs('Demo').host, async () => 'use "a" as A\n');
+  const scripts = new ProjectScripts(f.store, tabs('Demo').host, async () =>
+    written('use "a" as A\n'),
+  );
 
   const saved = await scripts.save();
 
@@ -145,7 +159,9 @@ test('saving writes the tab’s own script and first keeps the copy it replaces'
 
 test('a first save keeps nothing, and save-as writes beside the project’s own script', async () => {
   const f = folder();
-  const scripts = new ProjectScripts(f.store, tabs('Demo').host, async () => 'use "a" as A\n');
+  const scripts = new ProjectScripts(f.store, tabs('Demo').host, async () =>
+    written('use "a" as A\n'),
+  );
 
   expect(await scripts.save()).toEqual({ path: 'Demo/Demo.sugar', kept: null });
   expect(await scripts.saveAs('Demo_new')).toEqual({ path: 'Demo/Demo_new.sugar', kept: null });
@@ -161,10 +177,10 @@ test('a workflow that cannot be written leaves the existing script untouched', a
   });
   await expect(failing.save()).rejects.toThrow('named the same');
   expect(f.log).toEqual([]);
-  const unnamed = new ProjectScripts(f.store, tabs('a:b').host, async () => 'x');
+  const unnamed = new ProjectScripts(f.store, tabs('a:b').host, async () => written('x'));
   await expect(unnamed.save()).rejects.toThrow('cannot name a project');
   await expect(
-    new ProjectScripts(f.store, tabs(null).host, async () => 'x').save(),
+    new ProjectScripts(f.store, tabs(null).host, async () => written('x')).save(),
   ).rejects.toThrow('cannot name a project');
 });
 
@@ -177,7 +193,7 @@ test('opening builds the script in a new tab named for its project, numbered whe
     'Broken/Broken.sugar': 'use "missing" as A\n',
   });
   const t = tabs('Other', ['Other', 'Bune']);
-  const scripts = new ProjectScripts(f.store, t.host, async () => '');
+  const scripts = new ProjectScripts(f.store, t.host, async () => written(''));
 
   expect((await scripts.scripts()).map((file) => file.path)).toEqual([
     'Broken/Broken.sugar',
@@ -204,6 +220,7 @@ test('project files travel through Comfy’s per-user file routes', async () => 
     status,
     json: async () => body,
     text: async () => String(body),
+    blob: async () => new Blob([String(body)]),
   });
   const files = new ComfyProjectFiles(async (path, options) => {
     requests.push({ path, method: options?.method ?? 'GET', body: options?.body ?? null });
@@ -251,7 +268,7 @@ test('a project opens into Comfy’s own new tab, renamed to the project', async
   const host = new ComfyProjectWorkflows({
     app: {
       extensionManager: { workflow: store },
-      rootGraph: { serialize: () => ({ nodes: [1] }) },
+      graphToPrompt: async () => ({ workflow: { nodes: [1] }, output: { '1': {} } }),
     },
     command: async (id) => {
       commands.push(id);
@@ -259,11 +276,16 @@ test('a project opens into Comfy’s own new tab, renamed to the project', async
     checkScript: async () => undefined,
     importScript: async () => undefined,
     showCubes: () => undefined,
+    captureInputs: async (payload) => ({
+      workflow: { captured: (payload as { workflow: unknown }).workflow },
+      output: (payload as { output: unknown }).output,
+    }),
   });
 
   expect(host.activeName()).toBe('Unsaved Workflow');
   expect(host.openNames()).toEqual(['Unsaved Workflow', 'Other']);
-  expect(host.serialize()).toEqual({ nodes: [1] });
+  // What the input canvas holds is captured into the workflow a save writes.
+  expect(await host.serialize()).toEqual({ captured: { nodes: [1] } });
   await host.openEmpty('Bune');
   expect(commands).toEqual(['Comfy.NewBlankWorkflow']);
   expect(renamed).toEqual([[active, 'workflows/Bune.json']]);
@@ -275,7 +297,7 @@ test('the four commands keep their names and order and report their own failures
   const notices: string[] = [];
   const exported = jest.fn(async () => undefined);
   const commands = projectCommands({
-    scripts: new ProjectScripts(f.store, t.host, async () => 'use "a" as A\n'),
+    scripts: new ProjectScripts(f.store, t.host, async () => written('use "a" as A\n')),
     dialogs: {
       selectItem: async (options) => options.items?.[0]?.value ?? null,
       promptText: async () => 'a/b',
@@ -298,4 +320,102 @@ test('the four commands keep their names and order and report their own failures
     'success: Sugar script saved: Demo/Demo.sugar',
     'error: Sugar script not saved: Use a name without slashes, colons or control characters.',
   ]);
+});
+
+test('a project’s masks become loadable when it opens and come home when it is saved', async () => {
+  const mask = new Blob(['first']);
+  const other = new Blob(['second']);
+  const f = folder({
+    'Bune/Bune.sugar':
+      '# Project: Bune\r\n\r\nset A.L.image = ["m1.png", "gone.png"]\r\n' +
+      'set A.P.value = "said \\"m1.png\\" aloud"\r\n',
+  });
+  f.bytes.set('Bune/masks/m1.png', mask);
+  f.bytes.set('Bune/masks/unused.png', other);
+  f.bytes.set('Bune/masks/.generation/x/0.png', other);
+  const inputs = new Map<string, Blob>();
+  // A project's mask goes where the input canvas takes masks from, marked with its project.
+  const own = maskInputName('Bune', 'm1.png');
+  expect(own).toMatch(/^sugarcubes\/sources\/project-[0-9a-f]{8}-m1\.png$/u);
+  expect(maskInputName('Other', 'm1.png')).not.toBe(own);
+  const masks = new ProjectMasks(f.store, {
+    put: async (name, bytes) => {
+      inputs.set(name, bytes);
+    },
+    get: async (name) => inputs.get(name) ?? null,
+  });
+  const t = tabs('Bune');
+  const scripts = new ProjectScripts(
+    f.store,
+    t.host,
+    async () => ({
+      source: `set A.L.image = ["${own}", "sugarcubes/sources/source-1.png", "lost.png"]\n`,
+      maskFiles: [
+        { file: own, name: 'm1.png' },
+        { file: 'sugarcubes/sources/source-1.png', name: 'm1.png' },
+        { file: 'lost.png', name: 'A__L-3.png' },
+      ],
+    }),
+    masks,
+  );
+
+  await scripts.open('Bune/Bune.sugar');
+  // Only a mask the script names is made loadable, and only as a value of its own.
+  expect([...inputs.keys()]).toEqual([own]);
+  expect(t.imported[0]).toBe(
+    `# Project: Bune\n\nset A.L.image = ["${own}", "gone.png"]\n` +
+      'set A.P.value = "said \\"m1.png\\" aloud"\n',
+  );
+
+  inputs.set('sugarcubes/sources/source-1.png', other);
+  await scripts.save();
+  // Each mask the host still has is kept beside the script under its bare name; two masks of
+  // one name stay two files, and a mask the host no longer has keeps the name it was used by.
+  expect(f.bytes.get('Bune/masks/m1.png')).toBe(mask);
+  expect(f.bytes.get('Bune/masks/m1__v02.png')).toBe(other);
+  expect(f.texts.get('Bune/Bune.sugar')).toBe(
+    '# Project: Bune\r\n\r\nset A.L.image = ["m1.png", "m1__v02.png", "lost.png"]\r\n',
+  );
+});
+
+test('masks travel through Comfy’s input folder and the project folder as bytes', async () => {
+  const requests: { path: string; method: string; body: unknown }[] = [];
+  const fetchApi = async (path: string, options?: RequestInit) => {
+    requests.push({ path, method: options?.method ?? 'GET', body: options?.body ?? null });
+    const missing = path.includes('absent');
+    return {
+      ok: !missing,
+      status: missing ? 404 : 200,
+      json: async () => null,
+      text: async () => '',
+      blob: async () => new Blob(['pixels']),
+    };
+  };
+  const inputs = new ComfyProjectMaskInputs(fetchApi);
+  const bytes = new Blob(['pixels']);
+
+  await inputs.put('sugarcubes/sources/project-0000abcd-m1.png', bytes);
+  const form = requests[0]?.body as FormData;
+  expect(requests[0]?.path).toBe('/upload/image');
+  expect([form.get('subfolder'), form.get('type'), form.get('overwrite')]).toEqual([
+    'sugarcubes/sources',
+    'input',
+    'true',
+  ]);
+  expect((form.get('image') as File).name).toBe('project-0000abcd-m1.png');
+  expect(await inputs.get('sugarcubes/sources/project-0000abcd-m1.png')).not.toBeNull();
+  expect(requests[1]?.path).toBe(
+    '/view?filename=project-0000abcd-m1.png&subfolder=sugarcubes%2Fsources&type=input',
+  );
+  expect(await inputs.get('absent.png')).toBeNull();
+
+  const files = new ComfyProjectFiles(fetchApi);
+  await files.writeBytes('Bune/masks/m1.png', bytes);
+  expect(requests.at(-1)).toEqual({
+    path: '/userdata/projects%2FBune%2Fmasks%2Fm1.png?overwrite=true',
+    method: 'POST',
+    body: bytes,
+  });
+  expect(await files.readBytes('Bune/masks/m1.png')).not.toBeNull();
+  expect(await files.readBytes('Bune/masks/absent.png')).toBeNull();
 });

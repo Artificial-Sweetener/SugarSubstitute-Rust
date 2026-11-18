@@ -34,6 +34,41 @@ export function projectNameError(name) {
         return 'Use a name without slashes, colons or control characters.';
     return null;
 }
+/** The folder a script's path puts it in, or `null` for a script loose in the projects folder. */
+export function projectOwnerOf(path) {
+    const separator = path.indexOf('/');
+    return separator > 0 ? path.slice(0, separator) : null;
+}
+/**
+ * Where a project's mask sits in the host's input folder, as a mask loader names it.
+ *
+ * It goes where the input canvas keeps its own sources, the one place the canvas takes a mask's
+ * pixels from, under a mark of its project followed by its own name. The backend reads the
+ * name back from that mark when the project is saved.
+ */
+export function maskInputName(owner, name) {
+    let hash = 0x811c9dc5;
+    for (let index = 0; index < owner.length; index += 1)
+        hash = Math.imul(hash ^ owner.charCodeAt(index), 0x01000193);
+    return `sugarcubes/sources/project-${(hash >>> 0).toString(16).padStart(8, '0')}-${name}`;
+}
+/** The file name of a mask a loader names by a path. */
+export function maskLeaf(inputName) {
+    return inputName.slice(inputName.lastIndexOf('/') + 1);
+}
+/** Find a value written as one quoted token; a quote inside another text is preceded by `\`. */
+function quotedToken(token) {
+    const literal = JSON.stringify(token).replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+    return new RegExp(`(?<!\\\\)${literal}`, 'gu');
+}
+/** Tell whether a script holds `token` as a quoted value of its own. */
+export function quotesToken(script, token) {
+    return quotedToken(token).test(script);
+}
+/** Replace every quoted value `from` of a script with the quoted value `to`. */
+export function replaceQuotedToken(script, from, to) {
+    return script.replace(quotedToken(from), () => JSON.stringify(to));
+}
 /** The script a project saves to: `<name>/<name>.sugar`. */
 export function projectScriptPath(name) {
     const folder = name.trim();

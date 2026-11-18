@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Reach the user's projects folder and workflow tabs through Comfy's own services. */
 import { isRecord } from '../../types/common.js';
-import { PROJECTS_FOLDER } from '../domain/ProjectScript.js';
+import { maskLeaf, PROJECTS_FOLDER } from '../domain/ProjectScript.js';
 /** List, read, write and move project files through Comfy's per-user file storage. */
 export class ComfyProjectFiles {
     fetchApi;
@@ -58,6 +58,23 @@ export class ComfyProjectFiles {
         if (!response.ok)
             throw new Error(`The project file could not be written (${String(response.status)}).`);
     }
+    async readBytes(path) {
+        const response = await this.#request(location(path));
+        if (response.status === 404)
+            return null;
+        if (!response.ok)
+            throw new Error(`The project file could not be read (${String(response.status)}).`);
+        return await response.blob();
+    }
+    async writeBytes(path, bytes) {
+        const response = await this.#request(location(path) + '?overwrite=true', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/octet-stream' },
+            body: bytes,
+        });
+        if (!response.ok)
+            throw new Error(`The project file could not be written (${String(response.status)}).`);
+    }
     async move(from, to) {
         const destination = encodeURIComponent(`${PROJECTS_FOLDER}/${to}`);
         const response = await this.#request(`${location(from)}/move/${destination}?overwrite=false`, {
@@ -81,6 +98,37 @@ export class ComfyProjectFiles {
         finally {
             clearTimeout(timeout);
         }
+    }
+}
+/** Put masks into, and read them from, the input folder Comfy's loaders read. */
+export class ComfyProjectMaskInputs {
+    fetchApi;
+    /** Bind the host's configured backend fetch. */
+    constructor(fetchApi) {
+        this.fetchApi = fetchApi;
+    }
+    async put(inputName, bytes) {
+        const form = new FormData();
+        form.append('image', bytes, maskLeaf(inputName));
+        form.append('subfolder', inputName.slice(0, Math.max(0, inputName.lastIndexOf('/'))));
+        form.append('type', 'input');
+        form.append('overwrite', 'true');
+        const response = await this.fetchApi('/upload/image', { method: 'POST', body: form });
+        if (!response.ok)
+            throw new Error(`A project mask could not be made loadable (${String(response.status)}).`);
+    }
+    async get(inputName) {
+        const response = await this.fetchApi('/view?' +
+            new URLSearchParams({
+                filename: maskLeaf(inputName),
+                subfolder: inputName.slice(0, Math.max(0, inputName.lastIndexOf('/'))),
+                type: 'input',
+            }).toString());
+        if (response.status === 404 || response.status === 400)
+            return null;
+        if (!response.ok)
+            throw new Error(`A mask could not be read for the project (${String(response.status)}).`);
+        return await response.blob();
     }
 }
 /** Address one file of the folder; Comfy takes the whole relative path as one encoded segment. */
@@ -107,12 +155,22 @@ export class ComfyProjectWorkflows {
             ? open.flatMap((workflow) => isRecord(workflow) && typeof workflow.filename === 'string' ? [workflow.filename] : [])
             : [];
     }
-    serialize() {
+    /**
+     * Read the workflow as a run would send it, so the input canvas can capture what it holds
+     * exactly as it does for a run: it reads a loader's settings from the prompt beside the
+     * workflow, which the workflow alone does not carry.
+     */
+    async serialize() {
         const app = this.options.app;
-        const graph = isRecord(app) ? (app.rootGraph ?? app.graph) : null;
-        if (!isRecord(graph) || typeof graph.serialize !== 'function')
+        const read = isRecord(app) ? app.graphToPrompt : null;
+        if (typeof read !== 'function')
             throw new Error('The workflow cannot be read.');
-        return Reflect.apply(graph.serialize, graph, []);
+        const payload = await Reflect.apply(read, app, []);
+        const prepared = await this.options.captureInputs(payload);
+        const workflow = isRecord(prepared) ? prepared.workflow : null;
+        if (!isRecord(workflow))
+            throw new Error('The workflow cannot be read.');
+        return workflow;
     }
     /** Let Comfy open its own empty tab, then give that tab the project's name. */
     async openEmpty(name) {

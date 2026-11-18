@@ -18,7 +18,8 @@ import { isRecord } from '../types/common.js';
 import { SugarScriptAuthoringApi } from '../sugarscript/SugarScriptAuthoringApi.js';
 import { SugarScriptCompileError } from '../sugarscript/SugarScriptImportService.js';
 import { ProjectScripts } from './application/ProjectScripts.js';
-import { ComfyProjectFiles, ComfyProjectWorkflows, } from './infrastructure/ComfyProjects.js';
+import { ProjectMasks } from './application/ProjectMasks.js';
+import { ComfyProjectFiles, ComfyProjectMaskInputs, ComfyProjectWorkflows, } from './infrastructure/ComfyProjects.js';
 import { projectCommands, } from './presentation/ProjectCommands.js';
 /** Build the four project commands, ready to register with Comfy and to list in a menu. */
 export function createProjectCommands(options) {
@@ -31,12 +32,13 @@ export function createProjectCommands(options) {
             throw new Error("Comfy's commands are unavailable.");
         await Reflect.apply(commands.execute, commands, [id]);
     };
-    const files = new ComfyProjectFiles((path, init) => {
+    const fetchApi = (path, init) => {
         const api = options.api;
         if (!isRecord(api) || typeof api.fetchApi !== 'function')
             throw new Error('The Comfy API is unavailable for project files.');
         return api.fetchApi.call(api, path, init);
-    });
+    };
+    const files = new ComfyProjectFiles(fetchApi);
     const language = new SugarScriptAuthoringApi(options.cubeApi);
     const scripts = new ProjectScripts(files, new ComfyProjectWorkflows({
         app: options.app,
@@ -48,7 +50,8 @@ export function createProjectCommands(options) {
         },
         importScript: options.importScript,
         showCubes: options.showCubes,
-    }), (workflow) => language.render(workflow));
+        captureInputs: async (payload) => (await options.prepareInputs(payload)).payload,
+    }), (workflow) => language.render(workflow), new ProjectMasks(files, new ComfyProjectMaskInputs(fetchApi)));
     return projectCommands({
         scripts,
         dialogs: options.dialogs,

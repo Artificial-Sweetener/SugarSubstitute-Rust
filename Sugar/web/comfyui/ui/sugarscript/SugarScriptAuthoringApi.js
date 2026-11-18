@@ -46,7 +46,10 @@ export class SugarScriptAuthoringApi {
             exactIntegers: readExactIntegerFields('exact_integers' in result.data ? result.data.exact_integers : undefined),
         };
     }
-    /** Write the project script of one serialized workflow, without storing it. */
+    /**
+     * Write the project script of one serialized workflow, without storing it, and name the
+     * mask files its loaders read.
+     */
     async render(workflow) {
         const result = await this.#api.fetchJson('/sugarcubes/v2/sugarscript/render', {
             method: 'POST',
@@ -56,7 +59,13 @@ export class SugarScriptAuthoringApi {
         const source = 'source' in result.data ? result.data.source : null;
         if (result.response.status !== 200 || typeof source !== 'string')
             throw new Error(readBackendError(result.data, result.response.status, 'writing'));
-        return source;
+        const listed = 'mask_files' in result.data ? result.data.mask_files : [];
+        return {
+            source,
+            maskFiles: (Array.isArray(listed) ? listed : []).flatMap((mask) => isRecord(mask) && typeof mask.file === 'string' && typeof mask.name === 'string'
+                ? [{ file: mask.file, name: mask.name }]
+                : []),
+        };
     }
 }
 /** Keep expected backend failures useful without trusting arbitrary response data. */

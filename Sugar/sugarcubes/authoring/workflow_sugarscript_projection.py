@@ -22,8 +22,9 @@ Cubes, so the language's writer needs no knowledge of workflows or Cube document
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 from ..cube_model import CubeDocument
 from ..execution import ConnectionOrigin
@@ -166,6 +167,79 @@ def project_workflow_script(analysis: CubeGraphAnalysis) -> SubstituteScript:
             and _stated(edge, implied, state)
         ),
     )
+
+
+_MASK_LOADER_INPUTS = {
+    "LoadImageMask": "image",
+    "SimpleSyrup.LoadMaskBatch": "image",
+}
+"""The node classes that load a mask from a file, and the input that names the file."""
+
+
+_PROJECT_MASK_NAME = re.compile(r"^project-[0-9a-f]{8}-(?P<name>.+)$")
+"""The name a project's own mask has in the host's input folder: a mark, then its own name."""
+
+
+@dataclass(frozen=True)
+class ProjectMaskFile:
+    """One file a mask loader reads, and the name a project keeps it under."""
+
+    file: str
+    name: str
+
+
+def project_mask_files(analysis: CubeGraphAnalysis) -> tuple[ProjectMaskFile, ...]:
+    """Name the files the workflow's mask loaders read, each once, in Cube and node order.
+
+    A project keeps these files beside its script. A mask that came from a project keeps the
+    name it had there. Any other, such as one painted on the canvas, is named for the Cube
+    and the node that load it, so saving again replaces it instead of adding another.
+    """
+
+    documents = _documents_by_definition(analysis.normalized_workflow)
+    files: dict[str, ProjectMaskFile] = {}
+    for instance in analysis.instances:
+        document = documents.get(str(instance.payload.get("type")))
+        if document is None:
+            continue
+        for key, node in sorted(document.implementation.nodes.items()):
+            input_name = _MASK_LOADER_INPUTS.get(str(node.get("class_type")))
+            inputs = node.get("inputs")
+            held = (
+                inputs.get(input_name)
+                if input_name and isinstance(inputs, Mapping)
+                else None
+            )
+            ordered = isinstance(held, Sequence) and not isinstance(held, (str, bytes))
+            for index, value in enumerate(held if ordered else (held,)):  # type: ignore[arg-type]
+                if not isinstance(value, str) or not value or value in files:
+                    continue
+                leaf = value.replace("\\", "/").rsplit("/", 1)[-1]
+                own = _PROJECT_MASK_NAME.match(leaf)
+                suffix = leaf[leaf.rfind(".") :] if "." in leaf else ".png"
+                files[value] = ProjectMaskFile(
+                    value,
+                    (
+                        own.group("name")
+                        if own
+                        else "__".join(
+                            (
+                                _file_name_part(instance.instance_alias),
+                                _file_name_part(key)
+                                + (f"-{index + 1}" if ordered else ""),
+                            )
+                        )
+                        + suffix
+                    ),
+                )
+    return tuple(files.values())
+
+
+def _file_name_part(text: str) -> str:
+    """Make one part of a mask's file name from a Cube or node name."""
+
+    safe = re.sub(r'[<>:"/\\|?*\x00-\x1f\s]+', "_", text)
+    return re.sub(r"_+", "_", safe).strip(" ._") or "mask"
 
 
 def _stated(
@@ -391,4 +465,9 @@ def _driven_by(
     return False
 
 
-__all__ = ["WorkflowScriptProjectionError", "project_workflow_script"]
+__all__ = [
+    "ProjectMaskFile",
+    "WorkflowScriptProjectionError",
+    "project_mask_files",
+    "project_workflow_script",
+]

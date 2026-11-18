@@ -19,8 +19,10 @@ import type { CubeLibraryApi } from '../core/CubeLibraryApi.js';
 import { SugarScriptAuthoringApi } from '../sugarscript/SugarScriptAuthoringApi.js';
 import { SugarScriptCompileError } from '../sugarscript/SugarScriptImportService.js';
 import { ProjectScripts } from './application/ProjectScripts.js';
+import { ProjectMasks } from './application/ProjectMasks.js';
 import {
   ComfyProjectFiles,
+  ComfyProjectMaskInputs,
   ComfyProjectWorkflows,
   type ProjectApiFetch,
 } from './infrastructure/ComfyProjects.js';
@@ -42,6 +44,8 @@ export interface ProjectCompositionOptions {
   importScript(source: string): Promise<unknown>;
   /** Present the shown workflow as its Cubes. */
   showCubes(): void;
+  /** Prepare a queue payload's inputs the way a run does: canvas sources captured into files. */
+  prepareInputs(payload: unknown): Promise<{ readonly payload: unknown }>;
 }
 
 /** Build the four project commands, ready to register with Comfy and to list in a menu. */
@@ -57,12 +61,13 @@ export function createProjectCommands(
       throw new Error("Comfy's commands are unavailable.");
     await Reflect.apply(commands.execute, commands, [id]);
   };
-  const files = new ComfyProjectFiles((path, init) => {
+  const fetchApi: ProjectApiFetch = (path, init) => {
     const api = options.api;
     if (!isRecord(api) || typeof api.fetchApi !== 'function')
       throw new Error('The Comfy API is unavailable for project files.');
     return (api.fetchApi as ProjectApiFetch).call(api, path, init);
-  });
+  };
+  const files = new ComfyProjectFiles(fetchApi);
   const language = new SugarScriptAuthoringApi(options.cubeApi);
   const scripts = new ProjectScripts(
     files,
@@ -75,8 +80,10 @@ export function createProjectCommands(
       },
       importScript: options.importScript,
       showCubes: options.showCubes,
+      captureInputs: async (payload) => (await options.prepareInputs(payload)).payload,
     }),
     (workflow) => language.render(workflow),
+    new ProjectMasks(files, new ComfyProjectMaskInputs(fetchApi)),
   );
   return projectCommands({
     scripts,

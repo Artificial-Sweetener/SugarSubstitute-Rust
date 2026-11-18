@@ -20,10 +20,12 @@ import {
   projectDocument,
   projectNameError,
   projectNameOf,
+  projectOwnerOf,
   projectScriptPath,
   uniqueTabName,
   versionPath,
 } from '../domain/ProjectScript.js';
+import type { ProjectMasks } from './ProjectMasks.js';
 
 /** One file of the projects folder: its path inside the folder and its file times. */
 export interface ProjectFile {
@@ -42,6 +44,10 @@ export interface ProjectFileStore {
   write(path: string, text: string): Promise<void>;
   /** Move one file, never replacing another. */
   move(from: string, to: string): Promise<'moved' | 'exists' | 'missing'>;
+  /** One file's bytes, or `null` when it does not exist. */
+  readBytes(path: string): Promise<Blob | null>;
+  /** Write one file's bytes, replacing what is there. */
+  writeBytes(path: string, bytes: Blob): Promise<void>;
 }
 
 /** The workflow tabs a project is opened into and saved from. */
@@ -50,8 +56,11 @@ export interface ProjectWorkflowHost {
   activeName(): string | null;
   /** The names of every open workflow tab. */
   openNames(): readonly string[];
-  /** The shown workflow as Comfy serializes it. */
-  serialize(): unknown;
+  /**
+   * The shown workflow as Comfy serializes it, with what its input canvas holds captured the
+   * way a run captures it, so a mask painted there is a file the project can keep.
+   */
+  serialize(): Promise<unknown>;
   /** Refuse a script whose Cubes cannot be built, before a tab is opened for it. */
   checkScript(source: string): Promise<void>;
   /** Show a new empty workflow tab under this name. */
@@ -62,8 +71,20 @@ export interface ProjectWorkflowHost {
   showCubes(): void;
 }
 
+/** One file a mask loader reads, and the name a project keeps it under. */
+export interface ProjectMaskFile {
+  readonly file: string;
+  readonly name: string;
+}
+
+/** A workflow written as its project script, with the mask files its loaders name. */
+export interface ProjectRendering {
+  readonly source: string;
+  readonly maskFiles: readonly ProjectMaskFile[];
+}
+
 /** Turn a workflow into its project script. */
-export type ProjectScriptRenderer = (workflow: unknown) => Promise<string>;
+export type ProjectScriptRenderer = (workflow: unknown) => Promise<ProjectRendering>;
 
 /** What a save wrote. */
 export interface SavedProject {
@@ -86,6 +107,7 @@ export class ProjectScripts {
     private readonly files: ProjectFileStore,
     private readonly workflows: ProjectWorkflowHost,
     private readonly render: ProjectScriptRenderer,
+    private readonly masks: ProjectMasks | null = null,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
@@ -104,7 +126,9 @@ export class ProjectScripts {
     const stored = await this.files.read(path);
     if (stored === null) throw new Error('The project script no longer exists.');
     // A script is stored with Windows line endings; a multi-line value holds plain newlines.
-    const text = stored.replace(/\r\n?/g, '\n');
+    const plain = stored.replace(/\r\n?/g, '\n');
+    const owner = projectOwnerOf(path);
+    const text = owner && this.masks ? await this.masks.bring(owner, plain) : plain;
     await this.workflows.checkScript(text);
     const name = uniqueTabName(projectNameOf(text, path), this.workflows.openNames());
     await this.workflows.openEmpty(name);
@@ -137,7 +161,10 @@ export class ProjectScripts {
 
   /** Render first, so a workflow that cannot be written leaves the existing script untouched. */
   async #write(name: string, path: string): Promise<SavedProject> {
-    const script = await this.render(this.workflows.serialize());
+    const rendered = await this.render(await this.workflows.serialize());
+    const script = this.masks
+      ? await this.masks.keep(name, rendered.source, rendered.maskFiles)
+      : rendered.source;
     const existing = (await this.files.list()).find((file) => file.path === path);
     let kept: string | null = null;
     if (existing) {

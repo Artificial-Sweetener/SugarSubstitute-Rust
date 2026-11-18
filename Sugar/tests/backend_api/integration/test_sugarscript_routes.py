@@ -305,4 +305,5 @@ def test_compile_route_reads_a_stored_script_and_names_numbers_a_page_would_roun
     rendered = _mapping(decode_json_response(written))["source"]
     assert isinstance(rendered, str)
     assert 'set Native.sampler.note = """first\nsecond"""\n' in rendered
+    assert _mapping(decode_json_response(written))["mask_files"] == []
     assert "set Native.sampler.Steps = 12345678901234567890\n" in rendered

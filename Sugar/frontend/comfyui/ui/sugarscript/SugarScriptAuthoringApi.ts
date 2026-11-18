@@ -64,8 +64,13 @@ export class SugarScriptAuthoringApi {
     };
   }
 
-  /** Write the project script of one serialized workflow, without storing it. */
-  async render(workflow: unknown): Promise<string> {
+  /**
+   * Write the project script of one serialized workflow, without storing it, and name the
+   * mask files its loaders read.
+   */
+  async render(
+    workflow: unknown,
+  ): Promise<{ source: string; maskFiles: readonly { file: string; name: string }[] }> {
     const result = await this.#api.fetchJson('/sugarcubes/v2/sugarscript/render', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -74,7 +79,15 @@ export class SugarScriptAuthoringApi {
     const source = 'source' in result.data ? result.data.source : null;
     if (result.response.status !== 200 || typeof source !== 'string')
       throw new Error(readBackendError(result.data, result.response.status, 'writing'));
-    return source;
+    const listed: unknown = 'mask_files' in result.data ? result.data.mask_files : [];
+    return {
+      source,
+      maskFiles: (Array.isArray(listed) ? (listed as unknown[]) : []).flatMap((mask) =>
+        isRecord(mask) && typeof mask.file === 'string' && typeof mask.name === 'string'
+          ? [{ file: mask.file, name: mask.name }]
+          : [],
+      ),
+    };
   }
 }
 

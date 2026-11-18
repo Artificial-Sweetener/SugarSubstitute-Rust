@@ -23,6 +23,7 @@ from typing import Any
 from ..authoring.composed_workflow_service import exact_integer_fields
 from ..authoring.workflow_sugarscript_projection import (
     WorkflowScriptProjectionError,
+    project_mask_files,
     project_workflow_script,
 )
 from ..cube_model import CubeSchemaError
@@ -107,13 +108,19 @@ def build_sugarscript_route_handlers(
             if not isinstance(workflow, dict):
                 raise BackendError("'workflow' field is required", status=400)
             try:
-                script = project_workflow_script(
-                    services.workflow_analysis.analyze(workflow)
-                )
-                source = write_substitute_script(script)
+                analysis = services.workflow_analysis.analyze(workflow)
+                source = write_substitute_script(project_workflow_script(analysis))
+                mask_files = project_mask_files(analysis)
             except (WorkflowScriptProjectionError, CubeSchemaError) as error:
                 raise BackendError(str(error), status=422) from error
-            return json_success({"source": source})
+            return json_success(
+                {
+                    "source": source,
+                    "mask_files": [
+                        {"file": mask.file, "name": mask.name} for mask in mask_files
+                    ],
+                }
+            )
         except BackendError as error:
             return json_error_from_exception(error)
 

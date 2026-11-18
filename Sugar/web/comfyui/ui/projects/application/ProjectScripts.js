@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Open and save project scripts the way SugarSubstitute did, over ports this owner does not implement. */
-import { isProjectScript, namedScriptPath, projectDocument, projectNameError, projectNameOf, projectScriptPath, uniqueTabName, versionPath, } from '../domain/ProjectScript.js';
+import { isProjectScript, namedScriptPath, projectDocument, projectNameError, projectNameOf, projectOwnerOf, projectScriptPath, uniqueTabName, versionPath, } from '../domain/ProjectScript.js';
 const MOVE_ATTEMPTS = 100;
 /**
  * Open, save and save-as project scripts.
@@ -27,11 +27,13 @@ export class ProjectScripts {
     files;
     workflows;
     render;
+    masks;
     now;
-    constructor(files, workflows, render, now = () => new Date()) {
+    constructor(files, workflows, render, masks = null, now = () => new Date()) {
         this.files = files;
         this.workflows = workflows;
         this.render = render;
+        this.masks = masks;
         this.now = now;
     }
     /** List the scripts a person can open, by path, most recently written first. */
@@ -46,7 +48,9 @@ export class ProjectScripts {
         if (stored === null)
             throw new Error('The project script no longer exists.');
         // A script is stored with Windows line endings; a multi-line value holds plain newlines.
-        const text = stored.replace(/\r\n?/g, '\n');
+        const plain = stored.replace(/\r\n?/g, '\n');
+        const owner = projectOwnerOf(path);
+        const text = owner && this.masks ? await this.masks.bring(owner, plain) : plain;
         await this.workflows.checkScript(text);
         const name = uniqueTabName(projectNameOf(text, path), this.workflows.openNames());
         await this.workflows.openEmpty(name);
@@ -77,7 +81,10 @@ export class ProjectScripts {
     }
     /** Render first, so a workflow that cannot be written leaves the existing script untouched. */
     async #write(name, path) {
-        const script = await this.render(this.workflows.serialize());
+        const rendered = await this.render(await this.workflows.serialize());
+        const script = this.masks
+            ? await this.masks.keep(name, rendered.source, rendered.maskFiles)
+            : rendered.source;
         const existing = (await this.files.list()).find((file) => file.path === path);
         let kept = null;
         if (existing) {
