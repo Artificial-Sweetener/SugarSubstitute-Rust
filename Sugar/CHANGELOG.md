@@ -1,3 +1,9 @@
+## [0.25.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.24.0...sugarcubes-v0.25.0) (2026-11-18)
+
+### Features
+
+* **canvas:** blur behind every acrylic surface over the native canvas ([e49ecce](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/e49ecce249a9f356d6fafeeead040d9a0b790463))
+
 ## [0.24.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.23.0...sugarcubes-v0.24.0) (2026-11-18)
 
 ### Features
