@@ -94,7 +94,7 @@ test('one selection indicator covers the selected tab and slides to the next sel
   mounted.dispose();
 });
 
-test('navigation selectors are plain segments beside the tabs, with the arrow cursor on a glass bar', () => {
+test('navigation selectors are plain segments beside the tabs, with the arrow cursor on a solid bar', () => {
   const root = document.createElement('section');
   document.body.append(root);
   const mounted = mountCanvasOverlay(
@@ -106,8 +106,11 @@ test('navigation selectors are plain segments beside the tabs, with the arrow cu
     'default',
   );
   const bar = rule('.sc-output-tabstrip');
-  expect(bar?.getPropertyValue('backdrop-filter')).toBe('blur(var(--p-toast-blur,10px))');
-  expect(bar?.getPropertyValue('--sc-output-glass')).toContain('transparent');
+  expect(bar?.getPropertyValue('backdrop-filter')).toBe('');
+  expect(bar?.getPropertyValue('background')).toBe('');
+  expect(
+    rule('.sc-output-tabstrip,.sc-output-status')?.getPropertyValue('background'),
+  ).not.toContain('transparent');
   expect(rule('.sc-output-tabs.sc-output-tabs-measure')?.position).toBe('absolute');
   const tab = root.querySelector('[role="tab"]')!;
   const batch = root.querySelector('button[aria-label="Output image"]')!;

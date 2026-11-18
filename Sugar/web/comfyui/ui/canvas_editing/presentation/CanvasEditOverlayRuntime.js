@@ -4,19 +4,19 @@ import {
 import {
   CanvasEditOverlay,
   canvasEditSurface
-} from "../../chunk-CJADDL74.js";
+} from "../../chunk-NQJZ5CRG.js";
 import {
   ensureCanvasEditStyles
-} from "../../chunk-H4WFDVPR.js";
-import "../../chunk-N2LDE2LE.js";
+} from "../../chunk-CETUOIZM.js";
+import "../../chunk-QDZURHB6.js";
 import "../../chunk-YS23D6EK.js";
 import "../../chunk-RBMNCV5O.js";
 import {
   CanvasEditContextMenu
 } from "../../chunk-I74YAAHW.js";
-import "../../chunk-Q23QBZLX.js";
-import "../../chunk-JN3ZJ2G5.js";
-import "../../chunk-UA2LRR7I.js";
+import "../../chunk-74DLBBMV.js";
+import "../../chunk-SLI4UFVA.js";
+import "../../chunk-HXRUOFZ6.js";
 import "../../chunk-3HDL7XRD.js";
 import {
   canvasEditSlotOf,
@@ -395,10 +395,6 @@ function mountCanvasEditOverlay(options) {
     menu.close();
   }
   return {
-    material(state) {
-      if (!disposed && root.dataset.scNativeBackdrop !== state)
-        root.dataset.scNativeBackdrop = state;
-    },
     attach(host) {
       if (disposed || controller.value?.host === host) return;
       retire();

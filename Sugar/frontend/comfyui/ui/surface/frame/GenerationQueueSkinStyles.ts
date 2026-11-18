@@ -18,10 +18,12 @@
  *
  * The queue stays Comfy's component: every tab, filter, sort, row action and menu it offers is
  * the one a person uses. These rules change only how its fly-out and its job list look inside
- * the SugarSubstitute frame: the acrylic surface, the title, and rows with the larger thumbnail,
- * strong title and caption line of the generation queue.
+ * the SugarSubstitute frame: the surface, the title, and rows with the larger thumbnail, strong
+ * title and caption line of the generation queue.
+ *
+ * The fly-out is opaque. It opens over the native canvas, whose pixels the page cannot blur, so
+ * a translucent panel would show the image sharp behind its text.
  */
-const acrylicGrain = new URL('../../../../textures/acrylic-grain.svg', import.meta.url).href;
 
 /** Comfy's queue fly-out. */
 const FLYOUT = ':root[data-sc-substitute-frame] [data-testid="queue-progress-overlay"]';
@@ -53,13 +55,10 @@ const tint = (percent: number): string =>
 export const generationQueueSkinCss = `
   ${FLYOUT} { width:${String(GENERATION_QUEUE_FLYOUT_WIDTH)}px!important; min-width:0!important; max-height:min(60vh,520px)!important;
     box-sizing:border-box; border:1px solid var(--sc-border-subtle,${tint(8.6)})!important; border-radius:8px!important;
-    background:color-mix(in srgb,var(--sc-surface-secondary,#2b2b2b) 78%,transparent)!important; color:var(--sc-text,#fff);
-    -webkit-backdrop-filter:blur(30px) saturate(125%); backdrop-filter:blur(30px) saturate(125%); isolation:isolate;
+    background:var(--sc-surface-secondary,#2b2b2b)!important; color:var(--sc-text,#fff);
+    -webkit-backdrop-filter:none!important; backdrop-filter:none!important;
     box-shadow:var(--sc-shadow-medium,0 8px 16px rgba(0,0,0,.26))!important; font-family:var(--sc-font-family); }
-  ${FLYOUT}::before { content:''; position:absolute; inset:0; z-index:-1; pointer-events:none; border-radius:inherit;
-    background:url("${acrylicGrain}") repeat; opacity:.035; }
-  @supports not (backdrop-filter:blur(1px)) { ${FLYOUT} { background:var(--sc-surface-secondary,#2b2b2b)!important; } }
-  @media (forced-colors:active) { ${FLYOUT} { background:Canvas!important; border-color:CanvasText!important; backdrop-filter:none; } }
+  @media (forced-colors:active) { ${FLYOUT} { background:Canvas!important; border-color:CanvasText!important; } }
   /* The header keeps Comfy's controls; its title reads as the generation queue's. */
   ${FLYOUT} > div > div:first-child { height:44px; padding:0 8px 0 6px; border-bottom-color:var(--sc-border-subtle,${tint(8.6)}); }
   ${FLYOUT} > div > div:first-child > div:first-child { font-size:0!important; }

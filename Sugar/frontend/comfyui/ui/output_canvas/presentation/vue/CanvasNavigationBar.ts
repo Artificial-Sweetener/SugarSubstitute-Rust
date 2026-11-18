@@ -147,8 +147,6 @@ export const CanvasNavigationBar = defineComponent({
         {
           class: 'sc-output-tabstrip sc-output-navigation',
           ref: strip,
-          'data-sc-canvas-backdrop': 'navigation',
-          'data-sc-native-backdrop': snapshot.nativeBackdrop,
         },
         [
           snapshot.view.comparison ? h(CanvasComparisonExit, { send: props.send }) : null,

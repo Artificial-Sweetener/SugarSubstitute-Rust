@@ -116,9 +116,7 @@ var CanvasNavigationBar = defineComponent({
         "div",
         {
           class: "sc-output-tabstrip sc-output-navigation",
-          ref: strip,
-          "data-sc-canvas-backdrop": "navigation",
-          "data-sc-native-backdrop": snapshot.nativeBackdrop
+          ref: strip
         },
         [
           snapshot.view.comparison ? h(CanvasComparisonExit, { send: props.send }) : null,

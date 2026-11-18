@@ -136,7 +136,6 @@ export const CanvasContextualToolbar = defineComponent({
         {
           ref: element,
           class: 'sc-canvas-edit-chrome sc-canvas-edit-row sc-canvas-edit-toolbar',
-          'data-sc-canvas-backdrop': 'editing',
           role: 'toolbar',
           'aria-label': toolbarLabel(props.snapshot),
           'data-canvas-surface': props.snapshot.surface.kind,

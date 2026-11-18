@@ -6,13 +6,13 @@ import {
 } from "./chunk-R73MK26O.js";
 import {
   CanvasComparisonNavigation
-} from "./chunk-M6SR67MM.js";
+} from "./chunk-BNV5TS3I.js";
 import {
   CanvasLoadingIndicator
 } from "./chunk-Z66IIUOP.js";
 import {
   CanvasNavigationBar
-} from "./chunk-JAFCE4SG.js";
+} from "./chunk-YFHAUKRK.js";
 import {
   computed,
   defineComponent,

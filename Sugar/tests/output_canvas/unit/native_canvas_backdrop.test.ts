@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Keep native chrome opaque until frame acknowledgement, with browser material unchanged. */
+/** Keep the canvas navigation solid: no bar or picker over the canvas is translucent or blurred. */
 import { jest } from '@jest/globals';
 import { createApp, nextTick } from 'vue';
 import { mountCanvasOverlay } from '../../../frontend/comfyui/ui/output_canvas/presentation/vue/CanvasOverlayRuntime.js';
@@ -25,29 +25,25 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-test('native readiness alone repaints navigation without a camera or source transition', async () => {
+test('the navigation bar asks the native canvas to blur nothing, whatever its material state', async () => {
   const root = document.createElement('section');
   document.body.append(root);
   const port = new CanvasPortFixture({ ...canvasSnapshot('native'), nativeBackdrop: 'pending' });
   const mounted = mountCanvasOverlay(root, port, jest.fn());
   try {
-    const bar = root.querySelector<HTMLElement>('[data-sc-canvas-backdrop]');
-    expect(bar?.dataset.scNativeBackdrop).toBe('pending');
-    expect(root.querySelector('.sc-output-backdrop')).toBeNull();
-    expect(root.querySelector('.sc-output-backdrop-image')).toBeNull();
+    const bar = root.querySelector<HTMLElement>('.sc-output-tabstrip');
+    expect(bar).not.toBeNull();
     port.publish({ ...port.read(), revision: port.read().revision + 1, nativeBackdrop: 'ready' });
     await nextTick();
-    expect(root.querySelector('[data-sc-canvas-backdrop]')).toBe(bar);
-    expect(bar?.dataset.scNativeBackdrop).toBe('ready');
-    port.publish({ ...port.read(), revision: port.read().revision + 1, nativeBackdrop: 'pending' });
-    await nextTick();
-    expect(bar?.dataset.scNativeBackdrop).toBe('pending');
+    expect(root.querySelector('.sc-output-tabstrip')).toBe(bar);
+    expect(root.querySelector('[data-sc-canvas-backdrop]')).toBeNull();
+    expect(root.querySelector('[data-sc-native-backdrop]')).toBeNull();
   } finally {
     mounted.dispose();
   }
 });
 
-test('both comparison bars use the same acknowledged material state', async () => {
+test('neither comparison bar is offered as an acrylic surface', async () => {
   const root = document.createElement('section');
   document.body.append(root);
   const app = createApp(CanvasComparisonNavigation, {
@@ -58,18 +54,15 @@ test('both comparison bars use the same acknowledged material state', async () =
   try {
     app.mount(root);
     await nextTick();
-    expect(
-      [...root.querySelectorAll<HTMLElement>('[data-sc-canvas-backdrop]')].map(
-        (bar) => bar.dataset.scNativeBackdrop,
-      ),
-    ).toEqual(['ready', 'ready']);
-    expect(root.querySelector('[style*="background-image"]')).toBeNull();
+    expect(root.querySelectorAll('.sc-output-tabstrip')).toHaveLength(2);
+    expect(root.querySelector('[data-sc-canvas-backdrop]')).toBeNull();
+    expect(root.querySelector('[data-sc-native-backdrop]')).toBeNull();
   } finally {
     app.unmount();
   }
 });
 
-test('browser bars retain CSS blur while native readiness uses exactly one translucent tint', () => {
+test('bars and pickers are one solid surface in the browser and over the native canvas', () => {
   const root = document.createElement('section');
   document.body.append(root);
   const mounted = mountCanvasOverlay(
@@ -78,26 +71,24 @@ test('browser bars retain CSS blur while native readiness uses exactly one trans
     jest.fn(),
   );
   try {
-    const rules = [...document.styleSheets].flatMap((sheet) => [...sheet.cssRules]);
-    const rule = (selector: string) =>
-      rules.find(
-        (entry): entry is CSSStyleRule =>
-          entry instanceof CSSStyleRule && entry.selectorText === selector,
-      )?.style;
-    expect(root.querySelector('[data-sc-native-backdrop]')).toBeNull();
-    expect(rule('.sc-output-tabstrip')?.getPropertyValue('backdrop-filter')).toBe(
-      'blur(var(--p-toast-blur,10px))',
+    const rules = [...document.styleSheets]
+      .flatMap((sheet) => [...sheet.cssRules])
+      .filter((entry): entry is CSSStyleRule => entry instanceof CSSStyleRule);
+    const surfaces = rules.filter((entry) =>
+      [
+        '.sc-output-tabstrip,.sc-output-status',
+        '.sc-output-tabstrip',
+        '.sc-output-picker-popup',
+      ].includes(entry.selectorText.replace(/,\s+/g, ',')),
     );
-    expect(
-      rule('.sc-output-tabstrip[data-sc-native-backdrop]')?.getPropertyValue('backdrop-filter'),
-    ).toBe('none');
-    expect(
-      rule('.sc-output-tabstrip[data-sc-native-backdrop]')?.getPropertyValue('background'),
-    ).toContain('Canvas');
-    expect(
-      rule('.sc-output-tabstrip[data-sc-native-backdrop="ready"]')?.getPropertyValue('background'),
-    ).toBe('var(--sc-output-glass)');
-    expect(rule('.sc-output-backdrop-image')).toBeUndefined();
+    expect(surfaces).toHaveLength(3);
+    for (const entry of surfaces) {
+      expect(entry.style.getPropertyValue('backdrop-filter')).toBe('');
+      expect(entry.style.getPropertyValue('background')).not.toContain('transparent');
+    }
+    expect(rules.some((entry) => entry.selectorText.includes('data-sc-native-backdrop'))).toBe(
+      false,
+    );
   } finally {
     mounted.dispose();
   }

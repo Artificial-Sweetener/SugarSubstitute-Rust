@@ -1,6 +1,6 @@
 import {
   CanvasBrushOptions
-} from "../../chunk-UA2LRR7I.js";
+} from "../../chunk-HXRUOFZ6.js";
 import "../../chunk-EFQNN4SR.js";
 import "../../chunk-OJDBLLHY.js";
 import "../../chunk-X5ULNSRV.js";

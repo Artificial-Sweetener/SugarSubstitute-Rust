@@ -97,6 +97,16 @@ test('a failing Comfy store is reported and never thrown at the person', () => {
   document.body.replaceChildren();
 });
 
+test('the queue fly-out is an opaque rounded panel, since the page cannot blur the canvas behind it', () => {
+  const flyout =
+    /\[data-testid="queue-progress-overlay"\] \{([^}]*)\}/.exec(generationQueueSkinCss)?.[1] ?? '';
+  expect(flyout).toContain('background:var(--sc-surface-secondary,#2b2b2b)!important');
+  expect(flyout).toContain('backdrop-filter:none!important');
+  expect(flyout).toContain('border-radius:8px!important');
+  expect(generationQueueSkinCss).not.toContain('blur(');
+  expect(/background:[^;]*transparent/.test(flyout)).toBe(false);
+});
+
 test('the queue’s look applies only inside the frame and scales Comfy’s fixed row slots', () => {
   expect(GENERATION_QUEUE_FLYOUT_WIDTH).toBe(360);
   // Comfy positions rows in 48 px slots; the generation queue's row is 68 px with a 6 px gap.

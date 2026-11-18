@@ -1,6 +1,6 @@
 import {
   CanvasNavigationBar
-} from "../../../chunk-JAFCE4SG.js";
+} from "../../../chunk-YFHAUKRK.js";
 import "../../../chunk-6MZ5BAVS.js";
 import "../../../chunk-HFZ5NECD.js";
 import "../../../chunk-P7TVKFNT.js";

@@ -546,11 +546,7 @@ export class NativeCanvasAttachment {
   #publish(): void {
     if (!this.#ready || this.#disposed) return;
     this.#media.reconcile();
-    const snapshot = this.#snapshot();
-    this.#editing.material(
-      this.#backdrops?.offersEditing ? (snapshot.nativeBackdrop ?? 'unavailable') : 'unavailable',
-    );
-    this.port.publish(snapshot);
+    this.port.publish(this.#snapshot());
   }
 
   /** Describe only capabilities and state supported by the current native surface. */

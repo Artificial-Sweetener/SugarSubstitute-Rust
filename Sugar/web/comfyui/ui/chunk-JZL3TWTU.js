@@ -12,16 +12,10 @@ function ensureCanvasOverlayStyles(document) {
       background:var(--sugarcubes-card-surface,var(--comfy-menu-bg,#202020));
       box-shadow:0 2px 8px #0003; box-sizing:border-box;
     }
+    /* Canvas chrome is one solid surface: nothing over the canvas is translucent or blurred. */
     .sc-output-tabstrip { position:absolute; bottom:8px; left:8px;
-      max-width:calc(100% - 16px); padding:4px; z-index:2; isolation:isolate;
-      --sc-output-glass:color-mix(in srgb,var(--sugarcubes-card-surface,var(--comfy-menu-bg,#202020)) 60%,transparent);
-      background:var(--sc-output-glass);
-      -webkit-backdrop-filter:blur(var(--p-toast-blur,10px)); backdrop-filter:blur(var(--p-toast-blur,10px)); }
+      max-width:calc(100% - 16px); padding:4px; z-index:2; isolation:isolate; }
     .sc-output-choice[data-stable="true"] .sc-output-segment { min-width:calc(var(--sc-choice-label-chars,6) * 1ch + 26px); }
-    .sc-output-tabstrip[data-sc-native-backdrop] {
-      background:linear-gradient(var(--sugarcubes-card-surface,var(--comfy-menu-bg,#202020)),var(--sugarcubes-card-surface,var(--comfy-menu-bg,#202020))),Canvas;
-      -webkit-backdrop-filter:none; backdrop-filter:none; }
-    .sc-output-tabstrip[data-sc-native-backdrop="ready"] { background:var(--sc-output-glass); }
     .sc-output-selection-picker { display:flex; gap:4px; min-width:0; }
     .sc-output-comparison-exit { flex-shrink:0; }
     .sc-output-tabs.sc-output-tabs-measure { position:absolute; visibility:hidden; pointer-events:none; width:max-content; }
@@ -75,8 +69,7 @@ function ensureCanvasOverlayStyles(document) {
       pointer-events:auto; overflow:auto; overscroll-behavior:contain; z-index:10;
       color:var(--fg-color,#ddd); font:14px var(--comfy-font-family,system-ui,sans-serif);
       border:1px solid var(--interface-stroke,#454545); border-radius:8px;
-      background:color-mix(in srgb,var(--sugarcubes-card-surface,var(--comfy-menu-bg,#202020)) 80%,transparent);
-      -webkit-backdrop-filter:blur(var(--p-toast-blur,10px)); backdrop-filter:blur(var(--p-toast-blur,10px));
+      background:var(--sugarcubes-card-surface,var(--comfy-menu-bg,#202020));
       box-shadow:0 4px 16px #0005; scrollbar-width:thin; display:flex; flex-direction:column; gap:2px; }
     .sc-output-picker-popup[popover]:not(:popover-open) { display:none; }
     .sc-output-picker-popup button { flex:0 0 var(--sc-picker-row,30px); min-height:var(--sc-picker-row,30px); width:100%; color:inherit; font:inherit; border-radius:5px; cursor:default;

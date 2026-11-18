@@ -39,8 +39,6 @@ export const CanvasComparisonNavigation = defineComponent({
           'div',
           {
             class: 'sc-output-tabstrip sc-output-compare-first',
-            'data-sc-canvas-backdrop': 'first',
-            'data-sc-native-backdrop': props.snapshot.nativeBackdrop,
           },
           [
             h(CanvasComparisonExit, { send: props.send }),
@@ -59,8 +57,6 @@ export const CanvasComparisonNavigation = defineComponent({
           'div',
           {
             class: 'sc-output-tabstrip sc-output-compare-second',
-            'data-sc-canvas-backdrop': 'second',
-            'data-sc-native-backdrop': props.snapshot.nativeBackdrop,
           },
           [
             h(CanvasSelectionPicker, {
