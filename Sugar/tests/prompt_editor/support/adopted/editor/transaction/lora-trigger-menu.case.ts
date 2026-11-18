@@ -89,7 +89,7 @@ test('canonical CSV trigger leaves preserve actual model identity, encoded inlin
         resolution: 'found',
         model: { promptName: name, backendValue: `${name}.pt`, basename: name },
         modelPageUrl: null,
-        title: name,
+        title: name === 'second' ? 'A very long LoRA display name that goes on' : name,
         subtitle: null,
         triggerWords: [`${name} "word"`],
         thumbnail: { status: 'unavailable' },
@@ -154,7 +154,8 @@ test('canonical CSV trigger leaves preserve actual model identity, encoded inlin
   assert.equal(prepareLoraTriggerMenu(state, second.from, second).leaves.size, 1);
   assert.equal(
     [...prepareLoraTriggerMenu(state, second.from, second).leaves][0]!.label,
-    'Trigger words: second',
+    // A long name is shortened so it cannot widen the menu.
+    'Trigger words: A very long LoRA display na…',
   );
   const edit = leaf.replacement;
   assert.equal(edit.transactions[0]!.isUserEvent('input.exact'), true);

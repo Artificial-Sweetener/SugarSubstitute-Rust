@@ -37,6 +37,23 @@ export interface PreparedTriggerMenu {
     >
   >;
 }
+/** The longest LoRA name a menu row shows before it is shortened. */
+const MENU_LORA_NAME_LENGTH = 28;
+
+/** Split names by what a person reads as one character, so a shortened name never ends in half of one. */
+const menuNameCharacters = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+
+/** Shorten a long LoRA name so it cannot widen the menu; the row's title keeps the whole name. */
+function menuLoraName(display: string): string {
+  const characters = Array.from(menuNameCharacters.segment(display), (part) => part.segment);
+  return characters.length > MENU_LORA_NAME_LENGTH
+    ? `${characters
+        .slice(0, MENU_LORA_NAME_LENGTH - 1)
+        .join('')
+        .trimEnd()}…`
+    : display;
+}
+
 /** General selection must remain in one scope; inline append uses the actual whole chip's admitted scope. */
 export function prepareLoraTriggerMenu(
   state: EditorState,
@@ -121,7 +138,9 @@ export function prepareLoraTriggerMenu(
         kind: 'source-edit',
         purpose: 'trigger',
         // On a LoRA the entry says what it does; in the submenu each entry names its LoRA.
-        label: inline ? `Trigger words: ${model.display}` : model.display,
+        label: inline
+          ? `Trigger words: ${menuLoraName(model.display)}`
+          : menuLoraName(model.display),
         title: `Trigger words: ${model.display}`,
         replacement: outcome.edit,
       }),

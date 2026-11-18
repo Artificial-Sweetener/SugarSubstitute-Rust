@@ -24361,6 +24361,12 @@ function currentContextMenuAction(state, menu, item) {
 }
 
 // frontend/sugarprompt/editor/src/lora-trigger-menu.ts
+var MENU_LORA_NAME_LENGTH = 28;
+var menuNameCharacters = new Intl.Segmenter(void 0, { granularity: "grapheme" });
+function menuLoraName(display) {
+  const characters = Array.from(menuNameCharacters.segment(display), (part) => part.segment);
+  return characters.length > MENU_LORA_NAME_LENGTH ? `${characters.slice(0, MENU_LORA_NAME_LENGTH - 1).join("").trimEnd()}\u2026` : display;
+}
 function prepareLoraTriggerMenu(state, position, inline) {
   const schedule = state.field(nativeLoraSchedule, false) ?? null, semantic = state.field(semanticStructures).native, leaves = /* @__PURE__ */ new Set();
   if (state.readOnly || !schedule || !semantic) return { schedule: null, items: [], leaves };
@@ -24414,7 +24420,7 @@ function prepareLoraTriggerMenu(state, position, inline) {
         kind: "source-edit",
         purpose: "trigger",
         // On a LoRA the entry says what it does; in the submenu each entry names its LoRA.
-        label: inline ? `Trigger words: ${model.display}` : model.display,
+        label: inline ? `Trigger words: ${menuLoraName(model.display)}` : menuLoraName(model.display),
         title: `Trigger words: ${model.display}`,
         replacement: outcome.edit
       })
