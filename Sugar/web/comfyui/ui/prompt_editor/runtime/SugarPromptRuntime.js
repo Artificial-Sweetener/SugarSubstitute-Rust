@@ -1,9 +1,13 @@
 import {
   bundledPromptTagCatalog
-} from "./chunk-7JFCUO4K.js";
+} from "./chunk-CAOCC2WU.js";
 import {
   markComfyPromptInput
 } from "./chunk-74D7X3OT.js";
+import {
+  PromptLoraScheduling
+} from "./chunk-GINX2ITT.js";
+import "./chunk-R7HV2ECX.js";
 import {
   ClipboardSession,
   ConditioningTopology,
@@ -48,6 +52,7 @@ import {
   loraCompletionSuffix,
   loraNameKey,
   loraReplacement,
+  loraScheduleText,
   mapReorderSelection,
   mutateWildcardTag,
   normalizePasteRange,
@@ -112,7 +117,7 @@ import {
   wildcardDelimiters,
   wildcardGhostText,
   wildcardReplacement
-} from "./chunk-E4FXQ3WO.js";
+} from "./chunk-D7JNCOVZ.js";
 import {
   SugarPromptMenu
 } from "./chunk-QTBJ64DI.js";
@@ -24408,7 +24413,8 @@ function prepareLoraTriggerMenu(state, position, inline) {
       Object.freeze({
         kind: "source-edit",
         purpose: "trigger",
-        label: model.display,
+        // On a LoRA the entry says what it does; in the submenu each entry names its LoRA.
+        label: inline ? `Trigger words: ${model.display}` : model.display,
         title: `Trigger words: ${model.display}`,
         replacement: outcome.edit
       })
@@ -24455,9 +24461,9 @@ function prepareLoraMenu(state, position, target) {
 }
 
 // frontend/sugarprompt/editor/src/context-menu-preparation.ts
-function contextMenuTargetAt(state, position) {
+function contextMenuTargetAt(state, position, onLora = true) {
   const duplicateDiagnostic = duplicateMenuTargetAt(state, position);
-  const inline = loraModelTargetAt(state, position), diagnostic = inline ? null : wildcardMenuTargetAt(state, position), documentDiagnostic = documentMenuTargetAt(state, position), spellingDiagnostic = spellingMenuTargetAt(state, position);
+  const inline = onLora ? loraModelTargetAt(state, position) : null, diagnostic = inline ? null : wildcardMenuTargetAt(state, position), documentDiagnostic = documentMenuTargetAt(state, position), spellingDiagnostic = spellingMenuTargetAt(state, position);
   return position >= 0 && position <= state.doc.length ? {
     position,
     inline,
@@ -24481,7 +24487,7 @@ function prepareContextMenu(state, target, surface, clipboard = { readable: fals
   const text = prepareTextMenu(state, clipboard);
   const presets = prepareSavedSegmentMenu(state, target.position);
   const utilities = state.facet(fieldActionUtilities);
-  const scheduleItem = surface === "field" && !state.readOnly && utilities && featureEnabled(state.facet(featureProfile), "lora_picker") ? Object.freeze({ kind: "schedule-lora", label: "Schedule LoRA\u2026" }) : null;
+  const scheduleItem = !state.readOnly && utilities && featureEnabled(state.facet(featureProfile), "lora_picker") ? Object.freeze({ kind: "schedule-lora", label: "Schedule LoRA\u2026" }) : null;
   const renderingItem = Object.freeze({
     kind: "rich-rendering",
     label: "Rich prompt rendering",
@@ -24503,7 +24509,7 @@ function prepareContextMenu(state, target, surface, clipboard = { readable: fals
   for (const group of surface === "field" ? [diagnostic?.items ?? [], mutations, [renderingItem]] : [
     diagnostic?.items ?? [],
     text.items,
-    presets.items,
+    [...presets.items, ...scheduleItem ? [scheduleItem] : []],
     queueItem ? [queueItem] : [],
     actions?.items ?? [],
     actions?.kind === "inline" ? [] : [renderingItem]
@@ -24546,7 +24552,7 @@ function localMenuPointerTarget(view, event) {
     return null;
   const chip = event.target.closest(".sp-lora-chip");
   const position = chip ? view.posAtDOM(chip, 0) : view.posAtCoords({ x: event.clientX, y: event.clientY });
-  return position === null ? null : contextMenuTargetAt(view.state, position);
+  return position === null ? null : contextMenuTargetAt(view.state, position, chip !== null);
 }
 function openLocalPointerMenu(view, target, event, request) {
   const refocus = !view.hasFocus;
@@ -24578,7 +24584,7 @@ function requestLocalMenu(view, target, point, owner) {
         owner.cancel();
         return;
       }
-      const state = view.state, currentTarget = contextMenuTargetAt(state, target.position), clipboard = view.plugin(nativeClipboard);
+      const state = view.state, currentTarget = contextMenuTargetAt(state, target.position, target.inline !== null), clipboard = view.plugin(nativeClipboard);
       if (!currentTarget) {
         owner.cancel();
         return;
@@ -24974,7 +24980,7 @@ var NativeContextMenu = class {
       } else if (opening)
         queueMicrotask(() => {
           if (this.disposed || this.opening !== opening) return;
-          const target = contextMenuTargetAt(this.view.state, opening.position);
+          const target = contextMenuTargetAt(this.view.state, opening.position, opening.lora);
           if (target) this.request(target, opening.point);
         });
     }
@@ -25044,7 +25050,7 @@ var NativeContextMenu = class {
     const handoff = this.beginInvocation(state, supplied);
     if (!handoff) return false;
     const freshness = state.field(editorFreshness), selection = state.selection, generation = ++this.generation;
-    this.opening = { position: target.position, point };
+    this.opening = { position: target.position, point, lora: target.inline !== null };
     const current6 = () => !this.disposed && !this.closeQueued && generation === this.generation && freshness === this.view.state.field(editorFreshness) && selection.eq(this.view.state.selection) && !this.view.composing && !this.view.compositionStarted && currentFocusHandoff(this.view, handoff);
     requestLocalMenu(this.view, target, point, {
       measurementKey: this,
@@ -25090,7 +25096,7 @@ var NativeContextMenu = class {
         status: this.disposed ? "disposed" : "cancelled"
       });
     const generation = ++this.generation;
-    this.opening = { position: selection.main.head, point: void 0 };
+    this.opening = { position: selection.main.head, point: void 0, lora: true };
     const current6 = () => !this.disposed && generation === this.generation && freshness === this.view.state.field(editorFreshness) && selection.eq(this.view.state.selection) && !this.view.composing && !this.view.compositionStarted && currentFocusHandoff(this.view, handoff);
     return new Promise((resolve, reject) => {
       const settlement = { resolve, reject };
@@ -47766,6 +47772,8 @@ var SugarPromptEditor = class {
   #regionAccent;
   #accentPending = false;
   #allocatedHeight = null;
+  #menuPoint = null;
+  #scheduling;
   /** Mount all existing editing, rich projection, weight and Alt-reorder behavior through its public API. */
   constructor(document2, options) {
     installSugarPromptStyles(document2);
@@ -47786,6 +47794,14 @@ var SugarPromptEditor = class {
     options.anchor.before(this.element);
     this.#applyAppearance();
     this.#stopAppearance = options.appearance.subscribeAppearance(() => this.#applyAppearance());
+    this.element.addEventListener(
+      "contextmenu",
+      (event) => {
+        this.#menuPoint = { left: event.clientX, top: event.clientY, width: 1, height: 1 };
+      },
+      true
+    );
+    this.element.addEventListener("focusin", () => this.#publishScheduling());
     for (const type of ["keydown", "keyup", "pointerdown", "contextmenu", "wheel"]) {
       this.element.addEventListener(type, (event) => event.stopPropagation());
     }
@@ -47795,8 +47811,7 @@ var SugarPromptEditor = class {
       unavailableFeatures: [
         "danbooru_url_import",
         "spellcheck",
-        "lora_picker",
-        "lora_trigger_words"
+        ...options.pickLora ? [] : ["lora_picker"]
       ]
     });
     const tagCatalog = bundledPromptTagCatalog();
@@ -47812,6 +47827,7 @@ var SugarPromptEditor = class {
       tagCompletionCatalog: tagCatalog,
       wildcardCatalog: options.wildcardCatalog,
       modelCompletionPopupHost: options.modelCompletions,
+      fieldActionUtilities: options.pickLora ? { scheduleLora: (handoff) => this.#scheduleLora(handoff) } : null,
       tagLexicon: tagCatalog.lexicon,
       onUpdate: (snapshot) => this.#observe(snapshot),
       onLayout: (metrics) => this.#layout(metrics),
@@ -47820,6 +47836,11 @@ var SugarPromptEditor = class {
       regionAccent: options.regionAccent
     });
     this.#regionAccent = options.regionAccent;
+    this.#scheduling = new PromptLoraScheduling(
+      this.#api,
+      options.promptControl,
+      options.loraUpstream
+    );
     markComfyPromptInput(this.element);
   }
   /** Preserve the native document and history when the host moves the same field to another presentation. */
@@ -47854,7 +47875,21 @@ var SugarPromptEditor = class {
       if (generation === this.#resourceGeneration) this.#resourceChanged(snapshot);
     });
     this.#api.setLoraCompletionCatalog(adapter.completionCatalog ?? null);
+    this.#scheduling.reset();
+    this.#publishScheduling();
     this.#queueResources();
+  }
+  /** Republish the models loaded ahead of this prompt's encoder when they or the catalog changed. */
+  #publishScheduling() {
+    if (!this.#disposed && this.#adapter) this.#scheduling.publish(this.#adapter);
+  }
+  /** Insert the LoRA a person picks from the model picker, or hand the caret back unchanged. */
+  async #scheduleLora(handoff) {
+    const box = this.element.getBoundingClientRect();
+    const anchor = this.#menuPoint ?? { left: box.left, top: box.bottom, width: 1, height: 1 };
+    const name2 = await this.#options.pickLora?.(anchor);
+    if (!this.#disposed && name2) this.#api.insertText(loraScheduleText(name2, null), handoff);
+    await handoff.restore();
   }
   /** Follow the wildcard folder: decorate and complete the wildcards it holds now. */
   setWildcardCatalog(catalog) {
@@ -47949,15 +47984,18 @@ var SugarPromptEditor = class {
         return;
       this.#publishSceneQueue(snapshot);
       if (!this.#resources) return;
+      if (this.#inspectionRevision !== snapshot.revision) {
+        const inspected = this.#api.inspectStructure();
+        if (inspected.status !== "ready") return;
+        this.#inspectionRevision = snapshot.revision;
+        const key2 = JSON.stringify(inspected.loraResourceNames);
+        if (key2 !== this.#resourceKey) {
+          this.#resourceKey = key2;
+          void this.#resources.warmupNames(inspected.loraResourceNames).catch(this.#options.report);
+          return;
+        }
+      }
       this.#resourceChanged(this.#resources.snapshot());
-      if (this.#inspectionRevision === snapshot.revision) return;
-      const inspected = this.#api.inspectStructure();
-      if (inspected.status !== "ready") return;
-      this.#inspectionRevision = snapshot.revision;
-      const key2 = JSON.stringify(inspected.loraResourceNames);
-      if (key2 === this.#resourceKey) return;
-      this.#resourceKey = key2;
-      void this.#resources.warmupNames(inspected.loraResourceNames).catch(this.#options.report);
     });
   }
   /**
@@ -47993,6 +48031,7 @@ var SugarPromptEditor = class {
     if (this.#disposed || ["idle", "loading", "disposed"].includes(resources.status)) return;
     const snapshot = this.#api.snapshot();
     if (snapshot.composing) return;
+    if (this.#inspectionRevision !== snapshot.revision) return;
     if (resources === this.#resourceSnapshot && snapshot.revision === this.#resourceRevision)
       return;
     if (this.#api.setLoraResources(resources, snapshot.revision)) {

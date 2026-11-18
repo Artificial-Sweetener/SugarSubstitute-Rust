@@ -57,10 +57,19 @@ export interface MenuTarget {
   readonly duplicateDiagnostic: DuplicateMenuTarget | null;
   readonly spellingDiagnostic: SpellingMenuTarget | null;
 }
-/** Bounded input eligibility consumes prepared identities only. */
-export function contextMenuTargetAt(state: EditorState, position: number): MenuTarget | null {
+/**
+ * Bounded input eligibility consumes prepared identities only.
+ *
+ * A position beside a LoRA is that LoRA's target for the keyboard. A pointer that missed every
+ * LoRA passes `onLora` false: text next to a LoRA, or the empty space after it, is the prompt.
+ */
+export function contextMenuTargetAt(
+  state: EditorState,
+  position: number,
+  onLora = true,
+): MenuTarget | null {
   const duplicateDiagnostic = duplicateMenuTargetAt(state, position);
-  const inline = loraModelTargetAt(state, position),
+  const inline = onLora ? loraModelTargetAt(state, position) : null,
     diagnostic = inline ? null : wildcardMenuTargetAt(state, position),
     documentDiagnostic = documentMenuTargetAt(state, position),
     spellingDiagnostic = spellingMenuTargetAt(state, position);
@@ -117,11 +126,10 @@ export function prepareContextMenu(
   const text = prepareTextMenu(state, clipboard);
   const presets = prepareSavedSegmentMenu(state, target.position);
   const utilities = state.facet(fieldActionUtilities);
+  // Picking a LoRA is a utility of the prompt itself: both the field's menu and the prompt's own
+  // right-click menu offer it.
   const scheduleItem: PreparedContextMenu['scheduleItem'] =
-    surface === 'field' &&
-    !state.readOnly &&
-    utilities &&
-    featureEnabled(state.facet(featureProfile), 'lora_picker')
+    !state.readOnly && utilities && featureEnabled(state.facet(featureProfile), 'lora_picker')
       ? Object.freeze({ kind: 'schedule-lora', label: 'Schedule LoRA…' })
       : null;
   const renderingItem: PreparedContextMenu['renderingItem'] = Object.freeze({
@@ -147,7 +155,7 @@ export function prepareContextMenu(
     : [
         diagnostic?.items ?? [],
         text.items,
-        presets.items,
+        [...presets.items, ...(scheduleItem ? [scheduleItem] : [])],
         queueItem ? [queueItem] : [],
         actions?.items ?? [],
         actions?.kind === 'inline' ? [] : [renderingItem],

@@ -1,25 +1,27 @@
 import {
-  useModelSelectionUpdates
-} from "./chunk-OKMKTXD6.js";
-import {
   ModelTransferView
 } from "./chunk-RR5YCA3U.js";
 import {
-  ModelPickerPopupContent,
-  filterModelChoices
-} from "./chunk-OJGVNLJB.js";
+  useModelSelectionUpdates
+} from "./chunk-OKMKTXD6.js";
 import {
   useModelContext
 } from "./chunk-LMZEATZG.js";
 import {
-  modelWallNeighbor
-} from "./chunk-HJCCIXTJ.js";
+  modelPickerPlacement
+} from "./chunk-JK626FTQ.js";
 import {
-  chooseModelThumbnail
-} from "./chunk-EPSDIXQ5.js";
+  ModelPickerPopupContent
+} from "./chunk-RQAPL6Q4.js";
 import {
   ModelUpdateButton
 } from "./chunk-4DBFGV2O.js";
+import {
+  useModelBrowsing
+} from "./chunk-RTSGBCHV.js";
+import {
+  chooseModelThumbnail
+} from "./chunk-EPSDIXQ5.js";
 import {
   ModelCatalogImage
 } from "./chunk-RPKXVHLS.js";
@@ -69,54 +71,6 @@ function queryModelCatalog(items, query) {
       ].join(" ").toLowerCase().includes(term)
     ) && (!query.compatibleWith || ["full", "partial"].includes(modelCompatibility(item, query.compatibleWith)))
   );
-}
-
-// frontend/comfyui/ui/model_library/ModelPickerCompletion.ts
-function modelChoiceCompletion(item, query) {
-  if (!item) return null;
-  const path = (item.relativePath.trim() || item.value.trim()).replaceAll("\\", "/");
-  const stripped = path.replace(/\.(?:safetensors|ckpt|pt)$/i, "");
-  const filename = stripped.split("/").at(-1) ?? stripped;
-  const normalized = query.toLocaleLowerCase();
-  const hasSeparator = /[\\/]/.test(query);
-  if (hasSeparator && stripped.toLocaleLowerCase().startsWith(normalized.replaceAll("\\", "/"))) {
-    const candidate = query.includes("\\") && !query.includes("/") ? stripped.replaceAll("/", "\\") : stripped;
-    return completion(candidate.slice(query.length), query);
-  }
-  if (filename.toLocaleLowerCase().startsWith(normalized))
-    return completion(filename.slice(query.length), query);
-  if (!hasSeparator && query.trim().length > 0) {
-    const start = filename.toLocaleLowerCase().indexOf(normalized);
-    if (start > 0) return completion(filename.slice(start + query.length), query);
-  }
-  const friendly = [item.title.trim(), item.version.trim()].filter(Boolean).join(" - ");
-  if (friendly.toLocaleLowerCase().startsWith(normalized))
-    return completion(friendly.slice(query.length), query);
-  return filename ? { suffix: ` \u2192 ${filename}`, text: filename } : null;
-}
-function completion(suffix, query) {
-  return suffix ? { suffix, text: query + suffix } : null;
-}
-
-// frontend/comfyui/ui/model_library/ModelPickerPlacement.ts
-var MODEL_PICKER_POPUP_WIDTH = 560;
-var MODEL_PICKER_POPUP_HEIGHT = 630;
-var MARGIN = 8;
-function safeAxis(origin, length) {
-  const bounded = Math.max(0, length);
-  return bounded > MARGIN * 2 ? [origin + MARGIN, origin + bounded - MARGIN] : [origin, origin + bounded];
-}
-function modelPickerPlacement(boundary, anchor) {
-  const [safeLeft, safeRight] = safeAxis(boundary.left, boundary.width);
-  const [safeTop, safeBottom] = safeAxis(boundary.top, boundary.height);
-  const width = Math.min(MODEL_PICKER_POPUP_WIDTH, Math.max(1, safeRight - safeLeft));
-  const left = Math.max(safeLeft, Math.min(anchor.left, safeRight - width));
-  const bottom = anchor.top + anchor.height;
-  const below = Math.max(0, safeBottom - bottom);
-  const above = Math.max(0, anchor.top - safeTop);
-  const mode = below >= MODEL_PICKER_POPUP_HEIGHT ? "below" : above >= MODEL_PICKER_POPUP_HEIGHT || above > below ? "above" : "below";
-  const height = Math.min(MODEL_PICKER_POPUP_HEIGHT, Math.max(1, mode === "below" ? below : above));
-  return { left, top: mode === "below" ? bottom : anchor.top - height, width, height, mode };
 }
 
 // frontend/comfyui/ui/model_library/ModelPickerSession.ts
@@ -334,10 +288,7 @@ var ModelPickerField = defineComponent({
       () => close(),
       session
     );
-    const query = ref("");
-    const folder = ref("");
     const current = ref(props.binding.readValue());
-    const active = ref(0);
     const input = ref(null);
     const surface = ref(null);
     const popup = ref(null);
@@ -355,12 +306,8 @@ var ModelPickerField = defineComponent({
       })
     );
     const offersDiscovery = computed(() => !!props.discoveryAction && !compatible.value.length);
-    const visible = computed(() => filterModelChoices(compatible.value, query.value, folder.value));
-    const navigable = computed(() => filterModelChoices(compatible.value, query.value, ""));
-    const wallWidth = ref(540);
-    const completion2 = computed(
-      () => modelChoiceCompletion(visible.value[active.value], query.value)
-    );
+    const browsing = useModelBrowsing(() => compatible.value);
+    const { query, folder, active, wallWidth, visible, navigable, completion } = browsing;
     const unsubscribe = props.binding.subscribe(() => {
       current.value = props.binding.readValue();
       compatibility.value = props.compatibility?.() ?? null;
@@ -406,12 +353,7 @@ var ModelPickerField = defineComponent({
       compatibility.value = props.compatibility?.() ?? null;
       unfiltered.value = false;
       open.value = true;
-      query.value = "";
-      folder.value = "";
-      active.value = Math.max(
-        0,
-        visible.value.findIndex((item) => item.value === current.value)
-      );
+      browsing.restart(current.value);
       position();
       void nextTick(() => input.value?.focus());
     };
@@ -452,22 +394,14 @@ var ModelPickerField = defineComponent({
         return;
       }
       if (!open.value) return;
-      if (event.key === "Tab" && completion2.value) {
+      if (event.key === "Tab" && completion.value) {
         event.preventDefault();
-        const highlighted = visible.value[active.value]?.value;
-        query.value = completion2.value.text;
-        active.value = Math.max(
-          0,
-          visible.value.findIndex((item) => item.value === highlighted)
-        );
+        browsing.complete();
       } else if (event.key === "Enter") {
         event.preventDefault();
         const item = visible.value[active.value];
         if (item) select(item.value);
-      } else if (["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
-        event.preventDefault();
-        active.value = modelWallNeighbor(visible.value, wallWidth.value, active.value, event.key);
-      }
+      } else if (browsing.move(event.key)) event.preventDefault();
     };
     return () => {
       if (offersDiscovery.value && !transfer.value)
@@ -522,15 +456,12 @@ var ModelPickerField = defineComponent({
             onClick: show,
             onKeydown: key,
             onInput: (event) => {
-              if (event.target instanceof HTMLInputElement) {
-                query.value = event.target.value;
-                active.value = 0;
-              }
+              if (event.target instanceof HTMLInputElement) browsing.search(event.target.value);
             }
           }),
-          open.value && completion2.value ? h("span", { class: "sc-model-completion", "aria-hidden": true }, [
+          open.value && completion.value ? h("span", { class: "sc-model-completion", "aria-hidden": true }, [
             h("span", { class: "sc-model-completion-prefix" }, query.value),
-            completion2.value.suffix
+            completion.value.suffix
           ]) : null,
           item && !open.value && !transfer.value && context.offer(item) ? h(ModelUpdateButton, {
             onOpen: () => {
@@ -571,8 +502,7 @@ var ModelPickerField = defineComponent({
                   unfiltered: unfiltered.value,
                   onToggleFilter: () => {
                     unfiltered.value = !unfiltered.value;
-                    folder.value = "";
-                    active.value = 0;
+                    browsing.open("");
                     input.value?.focus();
                   },
                   visible: visible.value,
@@ -581,8 +511,7 @@ var ModelPickerField = defineComponent({
                   active: active.value,
                   optionPrefix: popupId,
                   onNavigate: (path) => {
-                    folder.value = path;
-                    active.value = 0;
+                    browsing.open(path);
                     input.value?.focus();
                   },
                   onSelect: select,

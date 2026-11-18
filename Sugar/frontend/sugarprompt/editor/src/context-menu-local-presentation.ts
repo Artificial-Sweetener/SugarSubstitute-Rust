@@ -82,7 +82,7 @@ export function localMenuPointerTarget(view: EditorView, event: MouseEvent): Men
   const position = chip
     ? view.posAtDOM(chip, 0)
     : view.posAtCoords({ x: event.clientX, y: event.clientY });
-  return position === null ? null : contextMenuTargetAt(view.state, position);
+  return position === null ? null : contextMenuTargetAt(view.state, position, chip !== null);
 }
 
 /** Capture the existing surface intent before invocation callbacks; refusals and failures retire only that original capability. */
@@ -133,7 +133,7 @@ export function requestLocalMenu(
         return;
       }
       const state = view.state,
-        currentTarget = contextMenuTargetAt(state, target.position),
+        currentTarget = contextMenuTargetAt(state, target.position, target.inline !== null),
         clipboard = view.plugin(nativeClipboard);
       if (!currentTarget) {
         owner.cancel();

@@ -31,6 +31,8 @@ import { modelPickerChoices } from './ModelPickerChoices.js';
 import { mountModelPicker } from './vue/ModelPickerVueRuntime.js';
 import type { MountedModelPicker } from './vue/ModelPickerVueRuntime.js';
 import { mountModelGallery } from './vue/ModelGalleryVueRuntime.js';
+import { openModelChooser } from './vue/ModelChooserVueRuntime.js';
+import type { ModelPickerRectangle } from './ModelPickerPlacement.js';
 import type { ModelGalleryArrow, ModelGalleryEvents } from './vue/ModelGalleryVueRuntime.js';
 import type { ModelPickerFeedback } from './ModelPickerActions.js';
 import type { ModelUpdatePort } from './ModelUpdates.js';
@@ -232,6 +234,29 @@ export class ModelPickerHost {
         element.remove();
       },
     };
+  }
+
+  /**
+   * Let a person choose one installed model of a kind from the picker popup opened at a point.
+   *
+   * The popup has its own search box and folders. It resolves with the chosen model, or null
+   * when it is dismissed or the catalog cannot be read.
+   */
+  async chooseModel(
+    kind: string,
+    label: string,
+    anchor: ModelPickerRectangle,
+  ): Promise<ModelCatalogItem | null> {
+    const snapshot = this.#snapshot ?? (await this.#options.catalog.load());
+    if (this.#disposed) return null;
+    const items = snapshot.items.filter((item) => item.kind === kind);
+    return new Promise((resolve) => {
+      const chooser = openModelChooser(this.#options.document, { items, label, anchor }, (item) => {
+        if (chooser.popup) this.#appearance.release(chooser.popup);
+        resolve(item);
+      });
+      if (chooser.popup) this.#appearance.track(chooser.popup);
+    });
   }
 
   /** Release mounted Vue apps, pending discovery, and temporary native-control annotations. */

@@ -24,6 +24,7 @@ import type { ComfyNode, ComfyWidget } from '../../../frontend/comfyui/ui/types/
 import { promptCatalogFixture } from './PromptCatalogFixture.js';
 import { mountModelGallery } from '../../../frontend/comfyui/ui/model_library/vue/ModelGalleryVueRuntime.js';
 import { modelPickerCss } from '../../../frontend/comfyui/ui/model_library/ModelPickerStyles.js';
+import { openModelChooser } from '../../../frontend/comfyui/ui/model_library/vue/ModelChooserVueRuntime.js';
 import type { ModelCatalogSnapshot } from '../../../frontend/comfyui/ui/model_library/ModelCatalog.js';
 import { NativeReorderAxes } from '../../../frontend/sugarprompt/editor/src/reorder-native-axes.js';
 import { AppearanceState } from '../../../frontend/comfyui/ui/surface/appearance/AppearanceState.js';
@@ -133,6 +134,11 @@ host.setup(null, {
         },
       };
     },
+    chooseModel: (kind, label, anchor) =>
+      new Promise((resolve) => {
+        const items = promptCatalogFixture().items.filter((item) => item.kind === kind);
+        openModelChooser(document, { items, label, anchor }, resolve);
+      }),
   },
 });
 const root = document.createElement('main');

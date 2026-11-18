@@ -120,9 +120,23 @@ test('canonical CSV trigger leaves preserve actual model identity, encoded inlin
     menu = prepareLoraTriggerMenu(state, first.from, first),
     leaf = [...menu.leaves][0]!;
   assert.equal(menu.leaves.size, 1);
-  assert.equal(leaf.label, 'first');
+  // On the LoRA itself the entry says what it does.
+  assert.equal(leaf.label, 'Trigger words: first');
   const aggregateTarget = contextMenuTargetAt(state, first.from)!;
   assert.ok(aggregateTarget.inline);
+  // A pointer that missed every LoRA targets the prompt, even at a LoRA's edge.
+  const beside = contextMenuTargetAt(state, first.from, false)!;
+  assert.equal(beside.inline, null);
+  const prompt = prepareContextMenu(state, beside, 'local')!;
+  assert.equal(prompt.actions?.kind, 'general');
+  const submenu = prompt.items.find(
+    (item) => item.kind === 'submenu' && item.label === 'Insert trigger words',
+  );
+  assert.ok(submenu && submenu.kind === 'submenu');
+  assert.deepEqual(
+    submenu.children.map((item) => ('label' in item ? item.label : '')),
+    ['first'],
+  );
   const aggregate = prepareContextMenu(state, aggregateTarget, 'field')!;
   assert.equal(aggregate.actions?.kind, 'general');
   assert.deepEqual(
@@ -138,7 +152,10 @@ test('canonical CSV trigger leaves preserve actual model identity, encoded inlin
   );
   assert.equal(readExactSource(state), source);
   assert.equal(prepareLoraTriggerMenu(state, second.from, second).leaves.size, 1);
-  assert.equal([...prepareLoraTriggerMenu(state, second.from, second).leaves][0]!.label, 'second');
+  assert.equal(
+    [...prepareLoraTriggerMenu(state, second.from, second).leaves][0]!.label,
+    'Trigger words: second',
+  );
   const edit = leaf.replacement;
   assert.equal(edit.transactions[0]!.isUserEvent('input.exact'), true);
   assert.equal(edit.transactions[0]!.scrollIntoView, true);

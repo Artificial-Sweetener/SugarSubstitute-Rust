@@ -21,19 +21,22 @@ import type {
   EditorLayoutMetrics,
 } from '../../../../sugarprompt/editor/src/contracts.js';
 import type { ModelCompletionPopupHost } from '../../../../sugarprompt/editor/src/model-completion-popup.js';
+import type { FocusHandoff } from '../../../../sugarprompt/editor/src/focus-handoff-contracts.js';
 import {
   LoraResourceSession,
   resolveFeatureProfile,
   defaultPreferences,
   prepareSceneQueue,
 } from '../../../../sugarprompt/services/src/index.js';
-import { parseScenes } from '../../../../sugarprompt/core/src/index.js';
+import { loraScheduleText, parseScenes } from '../../../../sugarprompt/core/src/index.js';
 import type {
+  LoraCatalogItem,
   LoraResourceAdapter,
   LoraResourceSnapshot,
   WildcardCatalog,
 } from '../../../../sugarprompt/services/src/index.js';
 import { SugarPromptMenu } from './SugarPromptMenu.js';
+import { PromptLoraScheduling } from './PromptLoraScheduling.js';
 import { SugarPromptTooltip } from './SugarPromptTooltip.js';
 import { installSugarPromptStyles } from './SugarPromptStyles.js';
 import type { AppearanceSource } from '../../surface/appearance/AppearanceState.js';
@@ -68,6 +71,21 @@ export interface SugarPromptMountOptions {
   readonly promptControl: boolean;
   /** The model library gallery that presents LoRA candidates, or null when it is unavailable. */
   readonly modelCompletions: ModelCompletionPopupHost | null;
+  /**
+   * Let a person pick an installed LoRA from the model picker opened at a viewport point, and
+   * resolve with the name a prompt writes for it; null when nothing was picked or it is unavailable.
+   */
+  readonly pickLora: ((anchor: PromptMenuPoint) => Promise<string | null>) | null;
+  /** The LoRAs loaded ahead of this prompt's encoder, as the current catalog describes them. */
+  readonly loraUpstream: () => readonly LoraCatalogItem[];
+}
+
+/** The viewport rectangle a prompt menu was opened at. */
+export interface PromptMenuPoint {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
 }
 
 /** Queue one scene by its normalized key and report how the host admitted it. */
@@ -101,6 +119,8 @@ export class SugarPromptEditor {
   #regionAccent: string | null;
   #accentPending = false;
   #allocatedHeight: number | null = null;
+  #menuPoint: PromptMenuPoint | null = null;
+  readonly #scheduling: PromptLoraScheduling;
 
   /** Mount all existing editing, rich projection, weight and Alt-reorder behavior through its public API. */
   constructor(document: Document, options: SugarPromptMountOptions) {
@@ -123,6 +143,16 @@ export class SugarPromptEditor {
     options.anchor.before(this.element);
     this.#applyAppearance();
     this.#stopAppearance = options.appearance.subscribeAppearance(() => this.#applyAppearance());
+    // A picked LoRA's popup opens where the prompt's menu was asked for.
+    this.element.addEventListener(
+      'contextmenu',
+      (event) => {
+        this.#menuPoint = { left: event.clientX, top: event.clientY, width: 1, height: 1 };
+      },
+      true,
+    );
+    // Models loaded ahead of the encoder may change while the prompt is not being edited.
+    this.element.addEventListener('focusin', () => this.#publishScheduling());
     for (const type of ['keydown', 'keyup', 'pointerdown', 'contextmenu', 'wheel']) {
       this.element.addEventListener(type, (event) => event.stopPropagation());
     }
@@ -132,8 +162,7 @@ export class SugarPromptEditor {
       unavailableFeatures: [
         'danbooru_url_import',
         'spellcheck',
-        'lora_picker',
-        'lora_trigger_words',
+        ...(options.pickLora ? [] : (['lora_picker'] as const)),
       ],
     });
     const tagCatalog = bundledPromptTagCatalog();
@@ -149,6 +178,9 @@ export class SugarPromptEditor {
       tagCompletionCatalog: tagCatalog,
       wildcardCatalog: options.wildcardCatalog,
       modelCompletionPopupHost: options.modelCompletions,
+      fieldActionUtilities: options.pickLora
+        ? { scheduleLora: (handoff) => this.#scheduleLora(handoff) }
+        : null,
       tagLexicon: tagCatalog.lexicon,
       onUpdate: (snapshot) => this.#observe(snapshot),
       onLayout: (metrics) => this.#layout(metrics),
@@ -157,6 +189,11 @@ export class SugarPromptEditor {
       regionAccent: options.regionAccent,
     });
     this.#regionAccent = options.regionAccent;
+    this.#scheduling = new PromptLoraScheduling(
+      this.#api,
+      options.promptControl,
+      options.loraUpstream,
+    );
     markComfyPromptInput(this.element);
   }
 
@@ -194,7 +231,24 @@ export class SugarPromptEditor {
       if (generation === this.#resourceGeneration) this.#resourceChanged(snapshot);
     });
     this.#api.setLoraCompletionCatalog(adapter.completionCatalog ?? null);
+    this.#scheduling.reset();
+    this.#publishScheduling();
     this.#queueResources();
+  }
+
+  /** Republish the models loaded ahead of this prompt's encoder when they or the catalog changed. */
+  #publishScheduling(): void {
+    if (!this.#disposed && this.#adapter) this.#scheduling.publish(this.#adapter);
+  }
+
+  /** Insert the LoRA a person picks from the model picker, or hand the caret back unchanged. */
+  async #scheduleLora(handoff: FocusHandoff): Promise<void> {
+    const box = this.element.getBoundingClientRect();
+    const anchor = this.#menuPoint ?? { left: box.left, top: box.bottom, width: 1, height: 1 };
+    const name = await this.#options.pickLora?.(anchor);
+    // The insertion keeps the handoff's caret; restoring it then returns focus to the prompt.
+    if (!this.#disposed && name) this.#api.insertText(loraScheduleText(name, null), handoff);
+    await handoff.restore();
   }
 
   /** Follow the wildcard folder: decorate and complete the wildcards it holds now. */
@@ -307,15 +361,19 @@ export class SugarPromptEditor {
         return;
       this.#publishSceneQueue(snapshot);
       if (!this.#resources) return;
+      if (this.#inspectionRevision !== snapshot.revision) {
+        const inspected = this.#api.inspectStructure();
+        if (inspected.status !== 'ready') return;
+        this.#inspectionRevision = snapshot.revision;
+        const key = JSON.stringify(inspected.loraResourceNames);
+        if (key !== this.#resourceKey) {
+          // The resolved models answer other names: resolve these before anything is published.
+          this.#resourceKey = key;
+          void this.#resources.warmupNames(inspected.loraResourceNames).catch(this.#options.report);
+          return;
+        }
+      }
       this.#resourceChanged(this.#resources.snapshot());
-      if (this.#inspectionRevision === snapshot.revision) return;
-      const inspected = this.#api.inspectStructure();
-      if (inspected.status !== 'ready') return;
-      this.#inspectionRevision = snapshot.revision;
-      const key = JSON.stringify(inspected.loraResourceNames);
-      if (key === this.#resourceKey) return;
-      this.#resourceKey = key;
-      void this.#resources.warmupNames(inspected.loraResourceNames).catch(this.#options.report);
     });
   }
 
@@ -355,6 +413,9 @@ export class SugarPromptEditor {
     if (this.#disposed || ['idle', 'loading', 'disposed'].includes(resources.status)) return;
     const snapshot = this.#api.snapshot();
     if (snapshot.composing) return;
+    // Resolved models are published only for a source whose LoRA names they were resolved for;
+    // a source not inspected yet is published once its queued inspection has run.
+    if (this.#inspectionRevision !== snapshot.revision) return;
     if (resources === this.#resourceSnapshot && snapshot.revision === this.#resourceRevision)
       return;
     if (this.#api.setLoraResources(resources, snapshot.revision)) {

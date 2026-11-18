@@ -19,8 +19,9 @@ import type { ModelCatalogClient } from '../model_library/ModelCatalogClient.js'
 import type { ModelCatalogSnapshot } from '../model_library/ModelCatalog.js';
 import { PromptWidgetBinding } from './PromptWidgetBinding.js';
 import { ComfyCanvasEditorKeyBoundary } from './ComfyCanvasEditorKeyBoundary.js';
-import { preparePromptLoraCatalog, promptLoraModel } from './PromptLoraCatalog.js';
-import { feedsPromptControl } from './PromptControlSupport.js';
+import { preparePromptLoraCatalog, promptLoraModel, promptLoraName } from './PromptLoraCatalog.js';
+import { feedsPromptControl, promptUpstreamLoras } from './PromptControlSupport.js';
+import type { PromptMenuPoint } from './runtime/SugarPromptRuntime.js';
 import { promptModelCompletions } from './PromptModelCompletions.js';
 import type { PromptModelGallery } from './PromptModelCompletions.js';
 import type { ModelCompletionPopupHost } from '../../../sugarprompt/editor/src/model-completion-popup.js';
@@ -92,6 +93,7 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
   #wildcards: WildcardCatalogSource | null = null;
   #stopWildcards: (() => void) | null = null;
   #modelCompletions: ModelCompletionPopupHost | null = null;
+  #models: PromptModelGallery | null = null;
 
   /** Inject existing model catalog and feedback ownership. */
   constructor(
@@ -111,6 +113,7 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
     const scenes = canvas?.prompts?.scenes;
     this.#sceneQueue ??= scenes ? (scene) => scenes.queueScene(scene) : null;
     const models = canvas?.models;
+    this.#models ??= models ?? null;
     this.#modelCompletions ??= models
       ? promptModelCompletions(models, (backendValue) =>
           this.#loraCatalog ? promptLoraModel(this.#loraCatalog, backendValue) : null,
@@ -338,6 +341,8 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
       wildcardCatalog: this.#wildcards?.catalog ?? null,
       promptControl: feedsPromptControl(session.node),
       modelCompletions: this.#modelCompletions,
+      pickLora: this.#models ? (anchor) => this.#pickLora(anchor) : null,
+      loraUpstream: () => promptUpstreamLoras(session.node, this.#loraCatalog),
       regionHover: (ordinal) => {
         try {
           this.#regions?.hoverPrompt(session.node, ordinal);
@@ -348,6 +353,12 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
     });
     if (session.active) this.#present(session, session.active);
     void this.#loadCatalog(session).catch(this.#report);
+  }
+
+  /** Open the model picker over the installed LoRAs and name the chosen one as a prompt writes it. */
+  async #pickLora(anchor: PromptMenuPoint): Promise<string | null> {
+    const item = await this.#models?.chooseModel('loras', 'Search LoRA', anchor);
+    return item ? promptLoraName(item.value) : null;
   }
 
   /** Load optional model metadata independently of initial component construction. */

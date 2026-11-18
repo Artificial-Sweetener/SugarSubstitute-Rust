@@ -54,6 +54,8 @@ import { ContextMenuEdits } from './context-menu-edits.js';
 interface MenuOpening {
   readonly position: number;
   readonly point: { readonly x: number; readonly y: number } | undefined;
+  /** Whether the menu was asked for on a LoRA; a pointer that missed one never becomes its menu. */
+  readonly lora: boolean;
 }
 
 /** One mounted view owns outside/viewport listeners, pending measurement and delegated LoRA work. */
@@ -127,7 +129,7 @@ export class NativeContextMenu {
       } else if (opening)
         queueMicrotask(() => {
           if (this.disposed || this.opening !== opening) return;
-          const target = contextMenuTargetAt(this.view.state, opening.position);
+          const target = contextMenuTargetAt(this.view.state, opening.position, opening.lora);
           if (target) this.request(target, opening.point);
         });
     }
@@ -221,7 +223,7 @@ export class NativeContextMenu {
     const freshness = state.field(editorFreshness),
       selection = state.selection,
       generation = ++this.generation;
-    this.opening = { position: target.position, point };
+    this.opening = { position: target.position, point, lora: target.inline !== null };
     const current = () =>
       !this.disposed &&
       !this.closeQueued &&
@@ -280,7 +282,8 @@ export class NativeContextMenu {
         status: this.disposed ? 'disposed' : 'cancelled',
       });
     const generation = ++this.generation;
-    this.opening = { position: selection.main.head, point: undefined };
+    // The keyboard has no pointer: a caret beside a LoRA is that LoRA.
+    this.opening = { position: selection.main.head, point: undefined, lora: true };
     const current = () =>
       !this.disposed &&
       generation === this.generation &&

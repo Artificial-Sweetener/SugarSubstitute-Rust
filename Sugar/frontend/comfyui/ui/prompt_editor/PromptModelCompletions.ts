@@ -24,6 +24,12 @@ import type { ModelGallerySurface } from '../model_library/ModelPickerHost.js';
 /** The model library capability that mounts its picker gallery for another owner's candidates. */
 export interface PromptModelGallery {
   mountGallery(events: { activate(index: number): void }): ModelGallerySurface;
+  /** Let a person choose one installed model of a kind from the picker popup at a point. */
+  chooseModel(
+    kind: string,
+    label: string,
+    anchor: { left: number; top: number; width: number; height: number },
+  ): Promise<ModelCatalogItem | null>;
 }
 
 /**
@@ -34,7 +40,7 @@ export interface PromptModelGallery {
  * positions the editor and the gallery speak in are translated both ways.
  */
 export function promptModelCompletions(
-  gallery: PromptModelGallery,
+  gallery: Pick<PromptModelGallery, 'mountGallery'>,
   model: (backendValue: string) => ModelCatalogItem | null,
 ): ModelCompletionPopupHost {
   return {

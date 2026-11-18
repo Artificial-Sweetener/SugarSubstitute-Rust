@@ -15,7 +15,10 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Adapt the shared model library into SugarPrompt's canonical LoRA and thumbnail catalog. */
 import { createLoraCatalogAdapter } from '../../../sugarprompt/services/src/index.js';
-import type { LoraResourceAdapter } from '../../../sugarprompt/services/src/index.js';
+import type {
+  LoraCatalogItem,
+  LoraResourceAdapter,
+} from '../../../sugarprompt/services/src/index.js';
 import type { ModelCatalogSnapshot, ModelCatalogItem } from '../model_library/ModelCatalog.js';
 
 /** The installed LoRAs each prepared catalog was made from, and the adapter that resolves them. */
@@ -26,8 +29,22 @@ const prepared = new WeakMap<
     readonly authoritative: boolean;
     readonly loras: readonly ModelCatalogItem[];
     readonly models: ReadonlyMap<string, ModelCatalogItem>;
+    readonly items: ReadonlyMap<string, LoraCatalogItem>;
   }
 >();
+
+/** The name a prompt writes for an installed LoRA: its path without the model file extension. */
+export function promptLoraName(backendValue: string): string {
+  return backendValue.replace(/\.(safetensors|ckpt|pt|pth|bin)$/i, '');
+}
+
+/** The editor's record of one installed LoRA in a prepared catalog, by its backend value. */
+export function promptLoraItem(
+  catalog: LoraResourceAdapter,
+  backendValue: string,
+): LoraCatalogItem | null {
+  return prepared.get(catalog)?.items.get(backendValue) ?? null;
+}
 
 /** The installed model a prepared catalog made one LoRA from, by its backend value. */
 export function promptLoraModel(
@@ -64,7 +81,7 @@ export function preparePromptLoraCatalog(
     return previous;
   const models = new Map(loras.map((item) => [item.value, item]));
   const items = loras.map((item) => {
-    const name = item.value.replace(/\.(safetensors|ckpt|pt|pth|bin)$/i, '');
+    const name = promptLoraName(item.value);
     const thumbnail =
       item.thumbnails.find((image) => image.role === 'banner') ?? item.thumbnails[0];
     const url = thumbnail ? safeHttpUrl(thumbnail.url, baseUrl) : null;
@@ -123,7 +140,13 @@ export function preparePromptLoraCatalog(
       return resources;
     },
   };
-  prepared.set(catalog, { adapter, authoritative, loras, models });
+  prepared.set(catalog, {
+    adapter,
+    authoritative,
+    loras,
+    models,
+    items: new Map(items.map((item) => [item.model.backendValue, item])),
+  });
   return catalog;
 }
 

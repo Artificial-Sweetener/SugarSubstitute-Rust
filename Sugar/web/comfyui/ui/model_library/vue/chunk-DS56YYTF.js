@@ -1,7 +1,4 @@
 import {
-  chooseModelThumbnail
-} from "./chunk-EPSDIXQ5.js";
-import {
   ModelRecommendationPreview
 } from "./chunk-6S3EI6RJ.js";
 import {
@@ -10,6 +7,9 @@ import {
 import {
   ModelBusyRing
 } from "./chunk-SYMYA4CE.js";
+import {
+  chooseModelThumbnail
+} from "./chunk-EPSDIXQ5.js";
 import {
   defineComponent,
   h,

@@ -214,3 +214,68 @@ test.each(['nodes-1', 'nodes-2'] as const)(
     }
   },
 );
+
+test.each(['nodes-1', 'nodes-2'] as const)(
+  '%s schedules a LoRA from the prompt menu and offers its trigger words while typing',
+  async (renderer) => {
+    const page = await mountPrompt(fixture, renderer, 'a girl, ', 1, true);
+    try {
+      const content = page.locator('.cm-content');
+      await content.focus();
+      await page.keyboard.press('Control+End');
+      await content.click({ button: 'right', position: { x: 300, y: 8 } });
+      await page.getByRole('menuitem', { name: 'Schedule LoRA' }).first().click();
+      // The model picker opens on its own, with a search box named for what it searches.
+      const search = page.locator('.sc-model-popup:not(.sc-model-popup-inline) input');
+      await search.waitFor();
+      expect(await search.getAttribute('placeholder')).toBe('Search LoRA');
+      await page.keyboard.type('exam');
+      await page.locator('.sc-model-popup .sc-model-tile.sc-model-active').waitFor();
+      await page.keyboard.press('Enter');
+      await expectSource(page, 'a girl, <lora:folder/example:1.00>');
+      await page.locator('.sc-model-popup').waitFor({ state: 'detached' });
+      await page.waitForFunction(() => !!document.activeElement?.closest('.cm-editor'));
+
+      // Its trigger words are offered as words while typing, never as model tiles.
+      await page.locator('.sp-lora-chip').first().waitFor();
+      await page.keyboard.press('Control+End');
+      await page.keyboard.type(', examp');
+      await page
+        .getByRole('option', { name: /^example trigger,/ })
+        .first()
+        .waitFor();
+      expect(await page.locator('.sp-model-completions').count()).toBe(0);
+      const observed = await page.evaluate(() => window.promptBrowserProof.read());
+      expect(observed.errors).toEqual([]);
+    } finally {
+      await page.close();
+    }
+  },
+);
+
+test.each(['nodes-1', 'nodes-2'] as const)(
+  '%s lists the LoRAs affecting a prompt in the menu opened beside a LoRA',
+  async (renderer) => {
+    const page = await mountPrompt(
+      fixture,
+      renderer,
+      'a girl, <lora:folder/example:1.00>',
+      1,
+      true,
+    );
+    try {
+      await page.locator('.sp-lora-chip').first().waitFor();
+      const box = await page.locator('.cm-editor').boundingBox();
+      if (!box) throw new Error('Missing editor geometry');
+      // Empty space after a LoRA is the prompt, not that LoRA.
+      await page.mouse.click(box.x + box.width - 12, box.y + box.height - 6, { button: 'right' });
+      // Its submenu lists them; the entries themselves are proven with the editor's own cases.
+      await page.getByRole('menuitem', { name: 'Insert trigger words' }).first().waitFor();
+      expect(await page.getByRole('menuitem', { name: /^Trigger words:/ }).count()).toBe(0);
+      const observed = await page.evaluate(() => window.promptBrowserProof.read());
+      expect(observed.errors).toEqual([]);
+    } finally {
+      await page.close();
+    }
+  },
+);

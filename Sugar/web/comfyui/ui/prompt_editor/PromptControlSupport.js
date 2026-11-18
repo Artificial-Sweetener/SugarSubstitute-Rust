@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Decide whether a prompt's text reaches an encoder that loads the LoRAs written in it. */
 import { buildLinkIndex } from '../graph/GraphQuery.js';
+import { promptLoraItem } from './PromptLoraCatalog.js';
 /** Prompt Control encoders read `<lora:…>` from their text and load those models themselves. */
 const ENCODER_CLASS_PREFIXES = ['PCLazyTextEncode', 'PCTextEncode'];
 const ENCODER_CLASSES = new Set(['SimpleSyrup.ScheduleAndEncodePromptsWithPromptControl']);
@@ -25,13 +26,74 @@ const ENCODER_CLASSES = new Set(['SimpleSyrup.ScheduleAndEncodePromptsWithPrompt
  * on the way, so every node downstream of the prompt is followed.
  */
 export function feedsPromptControl(node) {
+    return promptControlEncoders(node).length > 0;
+}
+/**
+ * The text values configured on every node that feeds the encoders this prompt reaches.
+ *
+ * A LoRA loaded ahead of the encoder shapes the same conditioning as one written in the prompt.
+ * The caller decides which of these values name installed LoRAs; the prompt's own node and the
+ * nodes between it and the encoder are not sources of models and are left out.
+ */
+export function promptUpstreamValues(node) {
+    const graph = node.graph;
+    const encoders = promptControlEncoders(node);
+    if (!graph || !encoders.length)
+        return [];
+    const nodes = graphNodes(node);
+    const { incoming } = buildLinkIndex(graph);
+    const between = textPath(node);
+    const pending = encoders.map((encoder) => String(encoder.id));
+    const visited = new Set(pending);
+    const values = [];
+    for (let current = pending.pop(); current !== undefined; current = pending.pop())
+        for (const link of incoming.get(current) ?? []) {
+            const originId = link.origin_id ?? link.origin;
+            if (originId == null)
+                continue;
+            const key = String(originId);
+            if (visited.has(key) || between.has(key))
+                continue;
+            visited.add(key);
+            const origin = nodes.get(key);
+            if (!origin)
+                continue;
+            for (const widget of origin.widgets ?? [])
+                if (typeof widget.value === 'string' && widget.value)
+                    values.push(widget.value);
+            pending.push(key);
+        }
+    return values;
+}
+/** The installed LoRAs loaded ahead of this prompt's encoder, as the catalog describes them. */
+export function promptUpstreamLoras(node, catalog) {
+    if (!catalog)
+        return [];
+    return promptUpstreamValues(node).flatMap((value) => {
+        const item = promptLoraItem(catalog, value);
+        return item ? [item] : [];
+    });
+}
+/** The Prompt Control encoders reached by text leaving this node, in discovery order. */
+function promptControlEncoders(node) {
+    const nodes = graphNodes(node);
+    const encoders = [];
+    for (const key of textPath(node)) {
+        const member = nodes.get(key);
+        if (member && member !== node && isPromptControlEncoder(member))
+            encoders.push(member);
+    }
+    return encoders;
+}
+/** The prompt's node and every node its text passes through, stopping at encoders. */
+function textPath(node) {
+    const visited = new Set([String(node.id)]);
     const graph = node.graph;
     if (!graph)
-        return false;
-    const nodes = new Map((graph._nodes ?? graph.nodes ?? []).map((member) => [String(member.id), member]));
+        return visited;
+    const nodes = graphNodes(node);
     const { outgoing } = buildLinkIndex(graph);
     const pending = [String(node.id)];
-    const visited = new Set(pending);
     for (let current = pending.pop(); current !== undefined; current = pending.pop())
         for (const link of outgoing.get(current) ?? []) {
             const targetId = link.target_id ?? link.target;
@@ -42,13 +104,15 @@ export function feedsPromptControl(node) {
                 continue;
             visited.add(key);
             const target = nodes.get(key);
-            if (!target)
-                continue;
-            if (isPromptControlEncoder(target))
-                return true;
-            pending.push(key);
+            if (target && !isPromptControlEncoder(target))
+                pending.push(key);
         }
-    return false;
+    return visited;
+}
+/** Index the members of the node's own graph by identity. */
+function graphNodes(node) {
+    const graph = node.graph;
+    return new Map((graph?._nodes ?? graph?.nodes ?? []).map((member) => [String(member.id), member]));
 }
 /** Match the encoder by its registered class, never by a title a person can rename. */
 function isPromptControlEncoder(node) {

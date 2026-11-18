@@ -120,7 +120,8 @@ export function prepareLoraTriggerMenu(
       Object.freeze({
         kind: 'source-edit',
         purpose: 'trigger',
-        label: model.display,
+        // On a LoRA the entry says what it does; in the submenu each entry names its LoRA.
+        label: inline ? `Trigger words: ${model.display}` : model.display,
         title: `Trigger words: ${model.display}`,
         replacement: outcome.edit,
       }),

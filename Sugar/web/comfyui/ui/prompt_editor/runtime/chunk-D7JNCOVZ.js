@@ -5,214 +5,6 @@ function requireValue(value, owner) {
   return value;
 }
 
-// frontend/sugarprompt/core/src/prompt/unicode-decimal-data.ts
-var decimalZeros = [
-  48,
-  1632,
-  1776,
-  1984,
-  2406,
-  2534,
-  2662,
-  2790,
-  2918,
-  3046,
-  3174,
-  3302,
-  3430,
-  3558,
-  3664,
-  3792,
-  3872,
-  4160,
-  4240,
-  6112,
-  6160,
-  6470,
-  6608,
-  6784,
-  6800,
-  6992,
-  7088,
-  7232,
-  7248,
-  42528,
-  43216,
-  43264,
-  43472,
-  43504,
-  43600,
-  44016,
-  65296,
-  66720,
-  68912,
-  69734,
-  69872,
-  69942,
-  70096,
-  70384,
-  70736,
-  70864,
-  71248,
-  71360,
-  71472,
-  71904,
-  72016,
-  72784,
-  73040,
-  73120,
-  73552,
-  92768,
-  92864,
-  93008,
-  120782,
-  120792,
-  120802,
-  120812,
-  120822,
-  123200,
-  123632,
-  124144,
-  125264,
-  130032
-];
-
-// frontend/sugarprompt/core/src/prompt/weights.ts
-function asciiDigits(text) {
-  let result = "";
-  for (const character of text) {
-    if ("+-.".includes(character)) {
-      result += character;
-      continue;
-    }
-    const point = requireValue(character.codePointAt(0), "weights");
-    const zero = decimalZeros.find((start) => point >= start && point < start + 10);
-    if (zero === void 0) return null;
-    result += String(point - zero);
-  }
-  return result;
-}
-function parseWeight(text, allowPlus) {
-  const ascii = asciiDigits(text);
-  if (ascii === null || !(allowPlus ? /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/u : /^-?(?:\d+(?:\.\d*)?|\.\d+)$/u).test(ascii))
-    return null;
-  const sign = ascii.startsWith("-") ? "-" : "";
-  const unsigned = ascii.replace(/^[+-]/u, "");
-  const [integer = "", fraction = ""] = unsigned.split(".");
-  const coefficient = (integer + fraction).replace(/^0+/u, "") || "0";
-  const adjusted = coefficient.length - 1 - fraction.length;
-  if (adjusted < -6)
-    return sign + String(coefficient[0]) + (coefficient.length > 1 ? "." + coefficient.slice(1) : "") + "E" + String(adjusted);
-  return sign + (integer.replace(/^0+/u, "") || "0") + (fraction ? "." + fraction : "");
-}
-function weightField(source, from, to, lora) {
-  if (lora) while (from < to && /[ \t]/u.test(requireValue(source[from], "weights"))) from++;
-  const value = parseWeight(source.slice(from, to), lora);
-  return value === null ? null : { range: { from, to }, value };
-}
-
-// frontend/sugarprompt/core/src/prompt/lora-fields.ts
-function loraWeightFields(source, separator, bodyEnd) {
-  const fieldEnd = (start) => {
-    const colon = source.indexOf(":", start);
-    return colon < 0 || colon >= bodyEnd ? bodyEnd : colon;
-  };
-  const firstEnd = fieldEnd(separator + 1), first = weightField(source, separator + 1, firstEnd, true);
-  if (!first) return null;
-  let second = null, blockWeightsRange = null;
-  if (firstEnd < bodyEnd) {
-    const secondFrom = firstEnd + 1, secondEnd = fieldEnd(secondFrom);
-    second = weightField(source, secondFrom, secondEnd, true);
-    if (!second) blockWeightsRange = { from: secondFrom, to: bodyEnd };
-    else if (secondEnd < bodyEnd) blockWeightsRange = { from: secondEnd + 1, to: bodyEnd };
-  }
-  return { first, second, blockWeightsRange };
-}
-
-// frontend/sugarprompt/core/src/prompt/lora.ts
-function loraSpan(source, from, close) {
-  if (!source.startsWith("lora:", from + 1)) return null;
-  const nameFrom = from + 6, nameTo = source.indexOf(":", nameFrom);
-  if (nameTo <= nameFrom || nameTo >= close || /[<>:]/u.test(source.slice(nameFrom, nameTo)))
-    return null;
-  const fields = loraWeightFields(source, nameTo, close);
-  if (!fields) return null;
-  return {
-    outerRange: { from, to: close + 1 },
-    nameRange: { from: nameFrom, to: nameTo },
-    firstWeightRange: fields.first.range,
-    firstWeight: fields.first.value,
-    secondWeightRange: fields.second?.range ?? null,
-    secondWeight: fields.second?.value ?? null,
-    blockWeightsRange: fields.blockWeightsRange,
-    depth: 0
-  };
-}
-
-// frontend/sugarprompt/core/src/prompt/regions.ts
-function regionSeparatorAt(source, from) {
-  const token = regionTokenAt(source, from);
-  if (from > 0 && !/[\r\n]/u.test(requireValue(source[from - 1], "regions")) || !token || token.tokenRange.to < source.length && !/[\r\n]/u.test(requireValue(source[token.tokenRange.to], "regions")))
-    return null;
-  const to = token.tokenRange.to;
-  return {
-    ...token,
-    lineRange: {
-      from,
-      to: to + (source.startsWith("\r\n", to) ? 2 : to < source.length ? 1 : 0)
-    }
-  };
-}
-function regionTokenAt(source, from) {
-  if (from < 0 || !source.startsWith("[SEP", from)) return null;
-  let end = from + 4, nameRange = null, name = null;
-  if (source[end] === "|") {
-    const nameFrom = ++end;
-    while (end < source.length && !/[\]\r\n]/u.test(requireValue(source[end], "regions"))) end++;
-    if (end === nameFrom || source[end] !== "]") return null;
-    nameRange = { from: nameFrom, to: end };
-    name = source.slice(nameFrom, end);
-  } else if (source[end] !== "]") return null;
-  const to = end + 1;
-  return {
-    tokenRange: { from, to },
-    nameRange,
-    name
-  };
-}
-function regionTokensInRange(source, from, to) {
-  const tokens = [];
-  let cursor = Math.max(0, from);
-  while (cursor < Math.min(source.length, to)) {
-    const start = source.indexOf("[SEP", cursor);
-    if (start < 0 || start >= to) break;
-    const token = regionTokenAt(source, start);
-    if (token && token.tokenRange.to <= to) {
-      tokens.push(token);
-      cursor = token.tokenRange.to;
-    } else cursor = start + 4;
-  }
-  return tokens;
-}
-function regionStructure(sourceLength, separators) {
-  let from = 0;
-  const partitions = separators.map((separator, index) => {
-    const partition = {
-      index,
-      sourceRange: { from, to: separator.lineRange.from },
-      isGlobal: index === 0
-    };
-    from = separator.lineRange.to;
-    return partition;
-  });
-  partitions.push({
-    index: partitions.length,
-    sourceRange: { from, to: sourceLength },
-    isGlobal: partitions.length === 0
-  });
-  return { separators, partitions };
-}
-
 // frontend/sugarprompt/core/src/prompt/unicode-casefold-data.ts
 var foldRanges = [
   [65, 90, 1, 32],
@@ -710,6 +502,444 @@ function isStructuralQuote(source, index) {
   return !(previous && next);
 }
 
+// frontend/sugarprompt/core/src/prompt/physical-lines.ts
+function* physicalLines(source, emptyRecordPolicy = "omit-eof") {
+  const lines = (
+    // eslint-disable-next-line no-control-regex -- Preserve exact Python-compatible control-code and whitespace boundaries.
+    /[^\n\r\v\f\x1c-\x1e\x85\u2028\u2029]*(\r\n|[\n\r\v\f\x1c-\x1e\x85\u2028\u2029]|$)/gu
+  );
+  let contentAtEof = false;
+  for (const match2 of source.matchAll(lines))
+    if (match2[0]) {
+      const ending = requireValue(match2[1], "physical-lines");
+      contentAtEof = ending === "";
+      yield Object.freeze({
+        from: match2.index,
+        to: match2.index + match2[0].length,
+        text: match2[0],
+        contentTo: match2.index + match2[0].length - ending.length,
+        ending
+      });
+    }
+  if (emptyRecordPolicy === "include-eof" && !contentAtEof)
+    yield Object.freeze({
+      from: source.length,
+      to: source.length,
+      contentTo: source.length,
+      text: "",
+      ending: ""
+    });
+}
+
+// frontend/sugarprompt/core/src/prompt/scenes.ts
+function normalizeSceneTitle(title) {
+  return caseFold(
+    strip(title).replace(
+      // eslint-disable-next-line no-control-regex -- Preserve exact Python-compatible control-code and whitespace boundaries.
+      /[\t-\r\x1c-\x20\x85\xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+/gu,
+      " "
+    )
+  );
+}
+function parseScenes(source, enabled = true) {
+  const candidates = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const record2 of enabled ? physicalLines(source) : []) {
+    const line = record2.text, from = record2.from, lineEnd = record2.to;
+    const contentEnd = lineEnd - (line.endsWith("\r\n") ? 2 : /[\r\n]$/u.test(line) ? 1 : 0);
+    const leading = requireValue(/^[ \t]*/u.exec(line), "scenes")[0].length;
+    const markerFrom = from + leading, markerTo = markerFrom + 2;
+    if (markerTo > contentEnd || source.slice(markerFrom, markerTo) !== "**") continue;
+    const raw = source.slice(markerTo, contentEnd), title = strip(raw);
+    if (!title) continue;
+    const titleFrom = markerTo + raw.length - strip(raw, "left").length;
+    const normalizedKey = normalizeSceneTitle(title);
+    const marker = {
+      title,
+      normalizedKey,
+      markerRange: { from: markerFrom, to: markerTo },
+      titleRange: { from: titleFrom, to: titleFrom + title.length },
+      lineRange: { from, to: contentEnd },
+      duplicate: seen.has(normalizedKey)
+    };
+    candidates.push({ marker, contentFrom: lineEnd });
+    seen.add(normalizedKey);
+  }
+  const universalRange = {
+    from: 0,
+    to: candidates[0]?.marker.lineRange.from ?? source.length
+  };
+  const scenes = candidates.map((candidate, index) => {
+    const contentRange = {
+      from: candidate.contentFrom,
+      to: candidates[index + 1]?.marker.lineRange.from ?? source.length
+    };
+    return {
+      marker: candidate.marker,
+      contentRange,
+      text: source.slice(contentRange.from, contentRange.to)
+    };
+  });
+  return freezeStructure({
+    sourceText: source,
+    universalRange,
+    universalText: source.slice(0, universalRange.to),
+    scenes
+  });
+}
+
+// frontend/sugarprompt/core/src/prompt/unicode-decimal-data.ts
+var decimalZeros = [
+  48,
+  1632,
+  1776,
+  1984,
+  2406,
+  2534,
+  2662,
+  2790,
+  2918,
+  3046,
+  3174,
+  3302,
+  3430,
+  3558,
+  3664,
+  3792,
+  3872,
+  4160,
+  4240,
+  6112,
+  6160,
+  6470,
+  6608,
+  6784,
+  6800,
+  6992,
+  7088,
+  7232,
+  7248,
+  42528,
+  43216,
+  43264,
+  43472,
+  43504,
+  43600,
+  44016,
+  65296,
+  66720,
+  68912,
+  69734,
+  69872,
+  69942,
+  70096,
+  70384,
+  70736,
+  70864,
+  71248,
+  71360,
+  71472,
+  71904,
+  72016,
+  72784,
+  73040,
+  73120,
+  73552,
+  92768,
+  92864,
+  93008,
+  120782,
+  120792,
+  120802,
+  120812,
+  120822,
+  123200,
+  123632,
+  124144,
+  125264,
+  130032
+];
+
+// frontend/sugarprompt/core/src/prompt/weights.ts
+function asciiDigits(text) {
+  let result = "";
+  for (const character of text) {
+    if ("+-.".includes(character)) {
+      result += character;
+      continue;
+    }
+    const point = requireValue(character.codePointAt(0), "weights");
+    const zero = decimalZeros.find((start) => point >= start && point < start + 10);
+    if (zero === void 0) return null;
+    result += String(point - zero);
+  }
+  return result;
+}
+function parseWeight(text, allowPlus) {
+  const ascii = asciiDigits(text);
+  if (ascii === null || !(allowPlus ? /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/u : /^-?(?:\d+(?:\.\d*)?|\.\d+)$/u).test(ascii))
+    return null;
+  const sign = ascii.startsWith("-") ? "-" : "";
+  const unsigned = ascii.replace(/^[+-]/u, "");
+  const [integer = "", fraction = ""] = unsigned.split(".");
+  const coefficient = (integer + fraction).replace(/^0+/u, "") || "0";
+  const adjusted = coefficient.length - 1 - fraction.length;
+  if (adjusted < -6)
+    return sign + String(coefficient[0]) + (coefficient.length > 1 ? "." + coefficient.slice(1) : "") + "E" + String(adjusted);
+  return sign + (integer.replace(/^0+/u, "") || "0") + (fraction ? "." + fraction : "");
+}
+function weightField(source, from, to, lora) {
+  if (lora) while (from < to && /[ \t]/u.test(requireValue(source[from], "weights"))) from++;
+  const value = parseWeight(source.slice(from, to), lora);
+  return value === null ? null : { range: { from, to }, value };
+}
+
+// frontend/sugarprompt/core/src/prompt/lora-fields.ts
+function loraWeightFields(source, separator, bodyEnd) {
+  const fieldEnd = (start) => {
+    const colon = source.indexOf(":", start);
+    return colon < 0 || colon >= bodyEnd ? bodyEnd : colon;
+  };
+  const firstEnd = fieldEnd(separator + 1), first = weightField(source, separator + 1, firstEnd, true);
+  if (!first) return null;
+  let second = null, blockWeightsRange = null;
+  if (firstEnd < bodyEnd) {
+    const secondFrom = firstEnd + 1, secondEnd = fieldEnd(secondFrom);
+    second = weightField(source, secondFrom, secondEnd, true);
+    if (!second) blockWeightsRange = { from: secondFrom, to: bodyEnd };
+    else if (secondEnd < bodyEnd) blockWeightsRange = { from: secondEnd + 1, to: bodyEnd };
+  }
+  return { first, second, blockWeightsRange };
+}
+
+// frontend/sugarprompt/core/src/completion/boundaries.ts
+function assertCompletionBoundary(source, position) {
+  if (!Number.isSafeInteger(position) || position < 0 || position > source.length || position > 0 && position < source.length && /[\uD800-\uDBFF]/u.test(requireValue(source[position - 1], "boundaries")) && /[\uDC00-\uDFFF]/u.test(requireValue(source[position], "boundaries")) || source[position - 1] === "\r" && source[position] === "\n")
+    throw new RangeError("Invalid completion UTF-16 source boundary");
+}
+function assertTagQuery(source, query) {
+  const { from, to } = query.replacementRange;
+  for (const position of [from, to, query.activeTagEnd]) assertCompletionBoundary(source, position);
+  if (from > to || to > query.activeTagEnd) throw new RangeError("Invalid completion source range");
+}
+
+// frontend/sugarprompt/core/src/completion/lora-query.ts
+var querySources = /* @__PURE__ */ new WeakMap();
+function assertPreparedLoraQuery(source, query) {
+  if (querySources.get(query) !== source) throw new TypeError("Stale or unprepared LoRA query");
+}
+function lowerBound(positions, position) {
+  let lower = 0, upper = positions.length;
+  while (lower < upper) {
+    const middle = lower + upper >>> 1;
+    if (requireValue(positions[middle], "lora-query") < position) lower = middle + 1;
+    else upper = middle;
+  }
+  return lower;
+}
+function prepareLoraQueries(source) {
+  if (typeof source !== "string") throw new TypeError("Invalid LoRA completion source");
+  const markers = [], less = [], greater = [], colons = [], endings = [];
+  for (let position = 0; position < source.length; position++) {
+    const character = requireValue(source[position], "lora-query");
+    if (character === "<") {
+      less.push(position);
+      if (/^<lora:$/iu.test(source.slice(position, position + 6))) markers.push(position);
+    } else if (character === ">") greater.push(position);
+    else if (character === ":") colons.push(position);
+    if (",\r\n	 ".includes(character)) endings.push(position);
+  }
+  const next = (positions, position) => positions[lowerBound(positions, position)] ?? -1;
+  const slots = markers.map((from) => {
+    const nameFrom = from + 6, nextGreater = next(greater, nameFrom), nextLess = next(less, from + 1);
+    const closer = nextGreater >= 0 && (nextLess < 0 || nextGreater < nextLess) ? nextGreater : -1;
+    const separator = next(colons, nameFrom);
+    let typedWeightText = null, preservedSuffix = null;
+    if (separator >= 0 && (closer < 0 || separator < closer)) {
+      const openEnd = next(endings, separator), bodyEnd = closer >= 0 ? closer : openEnd < 0 ? source.length : openEnd;
+      const second = next(colons, separator + 1);
+      const firstEnd = second >= 0 && second < bodyEnd ? second : bodyEnd;
+      const weight = strip(source.slice(separator + 1, firstEnd));
+      if (weight && parseWeight(weight, true) !== null) typedWeightText = weight;
+      if (loraWeightFields(source, separator, bodyEnd))
+        preservedSuffix = source.slice(separator, bodyEnd);
+    }
+    return Object.freeze({
+      from,
+      closer,
+      nextGreater,
+      separator,
+      typedWeightText,
+      preservedSuffix
+    });
+  });
+  return Object.freeze({
+    /** Name-only caret lookup preserves exact source offsets even when Unicode case folding expands preceding characters. */
+    queryAt(position, hasSelection) {
+      assertCompletionBoundary(source, position);
+      if (hasSelection) return null;
+      const slot = slots[lowerBound(markers, position - 4) - 1];
+      if (!slot || position < slot.from + 6 || slot.nextGreater >= 0 && position > slot.nextGreater)
+        return null;
+      const openEnd = next(endings, position);
+      const bodyEnd = slot.closer >= 0 ? slot.closer : openEnd < 0 ? source.length : openEnd;
+      const ownsWeight = slot.separator >= 0 && slot.separator < bodyEnd;
+      if (ownsWeight && position > slot.separator) return null;
+      const nameRange = Object.freeze({
+        from: slot.from + 6,
+        to: position
+      });
+      const query = Object.freeze({
+        queryText: source.slice(nameRange.from, nameRange.to),
+        nameRange,
+        nameFieldRange: Object.freeze({
+          from: nameRange.from,
+          to: ownsWeight ? slot.separator : bodyEnd
+        }),
+        replacementRange: Object.freeze({
+          from: slot.from,
+          to: slot.closer >= 0 ? slot.closer + 1 : bodyEnd
+        }),
+        typedWeightText: ownsWeight ? slot.typedWeightText : null,
+        preservedSuffix: ownsWeight ? slot.preservedSuffix : null,
+        hasClosingBracket: slot.closer >= 0
+      });
+      querySources.set(query, source);
+      return query;
+    }
+  });
+}
+
+// frontend/sugarprompt/core/src/completion/lora-text.ts
+function loraScheduleWeight(weight) {
+  if (weight === null || weight === void 0) return "1.00";
+  if (typeof weight !== "string") throw new TypeError("Invalid LoRA weight input");
+  const value = strip(weight);
+  return value && parseWeight(value, true) !== null ? value : "1.00";
+}
+function loraNameContent(text) {
+  return !/[<>:\r\n\u0000]/u.test(text);
+}
+function canonicalName(name) {
+  if (typeof name !== "string" || !strip(name) || name.length > 4096 || !loraNameContent(name))
+    throw new TypeError("Invalid LoRA schedule identity");
+  return name;
+}
+function loraScheduleText(name, weight) {
+  return `<lora:${canonicalName(name)}:${loraScheduleWeight(weight)}>`;
+}
+function loraReplacement(source, query, name) {
+  assertPreparedLoraQuery(source, query);
+  const range = query.replacementRange;
+  for (const position of [range.from, range.to, query.nameRange.from, query.nameRange.to])
+    assertCompletionBoundary(source, position);
+  if (range.from > query.nameRange.from || query.nameRange.from > query.nameRange.to || query.nameRange.to > range.to)
+    throw new RangeError("Invalid LoRA completion range");
+  return Object.freeze({
+    range: Object.freeze({ ...range }),
+    text: query.preservedSuffix === null ? loraScheduleText(name, query.typedWeightText) : `<lora:${canonicalName(name)}${query.preservedSuffix}>`
+  });
+}
+function suffix(candidate, prefix) {
+  const proposed = Array.from(candidate), typed = Array.from(prefix);
+  if (typed.length > proposed.length) return "";
+  for (const [index, character] of typed.entries()) {
+    const left = caseFold(character.replaceAll("\\", "/")), right = caseFold(requireValue(proposed[index], "lora-text").replaceAll("\\", "/"));
+    if (left !== right && !(left === "_" && right === " " || left === " " && right === "_"))
+      return "";
+  }
+  return proposed.slice(typed.length).join("");
+}
+function loraCompletionSuffix(query, display, name) {
+  if (!query) return display;
+  const displaySuffix = suffix(display, query);
+  return displaySuffix || (/[\\/]/u.test(query) ? suffix(name, query) : "");
+}
+
+// frontend/sugarprompt/core/src/prompt/lora.ts
+function loraSpan(source, from, close) {
+  if (!source.startsWith("lora:", from + 1)) return null;
+  const nameFrom = from + 6, nameTo = source.indexOf(":", nameFrom);
+  if (nameTo <= nameFrom || nameTo >= close || /[<>:]/u.test(source.slice(nameFrom, nameTo)))
+    return null;
+  const fields = loraWeightFields(source, nameTo, close);
+  if (!fields) return null;
+  return {
+    outerRange: { from, to: close + 1 },
+    nameRange: { from: nameFrom, to: nameTo },
+    firstWeightRange: fields.first.range,
+    firstWeight: fields.first.value,
+    secondWeightRange: fields.second?.range ?? null,
+    secondWeight: fields.second?.value ?? null,
+    blockWeightsRange: fields.blockWeightsRange,
+    depth: 0
+  };
+}
+
+// frontend/sugarprompt/core/src/prompt/regions.ts
+function regionSeparatorAt(source, from) {
+  const token = regionTokenAt(source, from);
+  if (from > 0 && !/[\r\n]/u.test(requireValue(source[from - 1], "regions")) || !token || token.tokenRange.to < source.length && !/[\r\n]/u.test(requireValue(source[token.tokenRange.to], "regions")))
+    return null;
+  const to = token.tokenRange.to;
+  return {
+    ...token,
+    lineRange: {
+      from,
+      to: to + (source.startsWith("\r\n", to) ? 2 : to < source.length ? 1 : 0)
+    }
+  };
+}
+function regionTokenAt(source, from) {
+  if (from < 0 || !source.startsWith("[SEP", from)) return null;
+  let end = from + 4, nameRange = null, name = null;
+  if (source[end] === "|") {
+    const nameFrom = ++end;
+    while (end < source.length && !/[\]\r\n]/u.test(requireValue(source[end], "regions"))) end++;
+    if (end === nameFrom || source[end] !== "]") return null;
+    nameRange = { from: nameFrom, to: end };
+    name = source.slice(nameFrom, end);
+  } else if (source[end] !== "]") return null;
+  const to = end + 1;
+  return {
+    tokenRange: { from, to },
+    nameRange,
+    name
+  };
+}
+function regionTokensInRange(source, from, to) {
+  const tokens = [];
+  let cursor = Math.max(0, from);
+  while (cursor < Math.min(source.length, to)) {
+    const start = source.indexOf("[SEP", cursor);
+    if (start < 0 || start >= to) break;
+    const token = regionTokenAt(source, start);
+    if (token && token.tokenRange.to <= to) {
+      tokens.push(token);
+      cursor = token.tokenRange.to;
+    } else cursor = start + 4;
+  }
+  return tokens;
+}
+function regionStructure(sourceLength, separators) {
+  let from = 0;
+  const partitions = separators.map((separator, index) => {
+    const partition = {
+      index,
+      sourceRange: { from, to: separator.lineRange.from },
+      isGlobal: index === 0
+    };
+    from = separator.lineRange.to;
+    return partition;
+  });
+  partitions.push({
+    index: partitions.length,
+    sourceRange: { from, to: sourceLength },
+    isGlobal: partitions.length === 0
+  });
+  return { separators, partitions };
+}
+
 // frontend/sugarprompt/core/src/prompt/wildcards.ts
 function wildcardDelimiters(profile) {
   if (profile.style === "curly") return [{ prefix: "{", suffix: "}" }];
@@ -1041,92 +1271,6 @@ function parsePrompt(source, profile = { style: "curly" }) {
   });
 }
 
-// frontend/sugarprompt/core/src/prompt/physical-lines.ts
-function* physicalLines(source, emptyRecordPolicy = "omit-eof") {
-  const lines = (
-    // eslint-disable-next-line no-control-regex -- Preserve exact Python-compatible control-code and whitespace boundaries.
-    /[^\n\r\v\f\x1c-\x1e\x85\u2028\u2029]*(\r\n|[\n\r\v\f\x1c-\x1e\x85\u2028\u2029]|$)/gu
-  );
-  let contentAtEof = false;
-  for (const match2 of source.matchAll(lines))
-    if (match2[0]) {
-      const ending = requireValue(match2[1], "physical-lines");
-      contentAtEof = ending === "";
-      yield Object.freeze({
-        from: match2.index,
-        to: match2.index + match2[0].length,
-        text: match2[0],
-        contentTo: match2.index + match2[0].length - ending.length,
-        ending
-      });
-    }
-  if (emptyRecordPolicy === "include-eof" && !contentAtEof)
-    yield Object.freeze({
-      from: source.length,
-      to: source.length,
-      contentTo: source.length,
-      text: "",
-      ending: ""
-    });
-}
-
-// frontend/sugarprompt/core/src/prompt/scenes.ts
-function normalizeSceneTitle(title) {
-  return caseFold(
-    strip(title).replace(
-      // eslint-disable-next-line no-control-regex -- Preserve exact Python-compatible control-code and whitespace boundaries.
-      /[\t-\r\x1c-\x20\x85\xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+/gu,
-      " "
-    )
-  );
-}
-function parseScenes(source, enabled = true) {
-  const candidates = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (const record2 of enabled ? physicalLines(source) : []) {
-    const line = record2.text, from = record2.from, lineEnd = record2.to;
-    const contentEnd = lineEnd - (line.endsWith("\r\n") ? 2 : /[\r\n]$/u.test(line) ? 1 : 0);
-    const leading = requireValue(/^[ \t]*/u.exec(line), "scenes")[0].length;
-    const markerFrom = from + leading, markerTo = markerFrom + 2;
-    if (markerTo > contentEnd || source.slice(markerFrom, markerTo) !== "**") continue;
-    const raw = source.slice(markerTo, contentEnd), title = strip(raw);
-    if (!title) continue;
-    const titleFrom = markerTo + raw.length - strip(raw, "left").length;
-    const normalizedKey = normalizeSceneTitle(title);
-    const marker = {
-      title,
-      normalizedKey,
-      markerRange: { from: markerFrom, to: markerTo },
-      titleRange: { from: titleFrom, to: titleFrom + title.length },
-      lineRange: { from, to: contentEnd },
-      duplicate: seen.has(normalizedKey)
-    };
-    candidates.push({ marker, contentFrom: lineEnd });
-    seen.add(normalizedKey);
-  }
-  const universalRange = {
-    from: 0,
-    to: candidates[0]?.marker.lineRange.from ?? source.length
-  };
-  const scenes = candidates.map((candidate, index) => {
-    const contentRange = {
-      from: candidate.contentFrom,
-      to: candidates[index + 1]?.marker.lineRange.from ?? source.length
-    };
-    return {
-      marker: candidate.marker,
-      contentRange,
-      text: source.slice(contentRange.from, contentRange.to)
-    };
-  });
-  return freezeStructure({
-    sourceText: source,
-    universalRange,
-    universalText: source.slice(0, universalRange.to),
-    scenes
-  });
-}
-
 // frontend/sugarprompt/core/src/prompt/display.ts
 function mapVisibleSource(source, sourceStart = 0) {
   if (!Number.isSafeInteger(sourceStart) || sourceStart < 0)
@@ -1197,17 +1341,6 @@ function promptWordRange(source, position) {
   }
   if (position < from) return { from: position, to: position };
   return { from, to };
-}
-
-// frontend/sugarprompt/core/src/completion/boundaries.ts
-function assertCompletionBoundary(source, position) {
-  if (!Number.isSafeInteger(position) || position < 0 || position > source.length || position > 0 && position < source.length && /[\uD800-\uDBFF]/u.test(requireValue(source[position - 1], "boundaries")) && /[\uDC00-\uDFFF]/u.test(requireValue(source[position], "boundaries")) || source[position - 1] === "\r" && source[position] === "\n")
-    throw new RangeError("Invalid completion UTF-16 source boundary");
-}
-function assertTagQuery(source, query) {
-  const { from, to } = query.replacementRange;
-  for (const position of [from, to, query.activeTagEnd]) assertCompletionBoundary(source, position);
-  if (from > to || to > query.activeTagEnd) throw new RangeError("Invalid completion source range");
 }
 
 // frontend/sugarprompt/core/src/completion/query.ts
@@ -1315,93 +1448,6 @@ function prepareTagQueries(document) {
         position,
         minimumPrefixLength
       );
-    }
-  });
-}
-
-// frontend/sugarprompt/core/src/completion/lora-query.ts
-var querySources = /* @__PURE__ */ new WeakMap();
-function assertPreparedLoraQuery(source, query) {
-  if (querySources.get(query) !== source) throw new TypeError("Stale or unprepared LoRA query");
-}
-function lowerBound(positions, position) {
-  let lower = 0, upper = positions.length;
-  while (lower < upper) {
-    const middle = lower + upper >>> 1;
-    if (requireValue(positions[middle], "lora-query") < position) lower = middle + 1;
-    else upper = middle;
-  }
-  return lower;
-}
-function prepareLoraQueries(source) {
-  if (typeof source !== "string") throw new TypeError("Invalid LoRA completion source");
-  const markers = [], less = [], greater = [], colons = [], endings = [];
-  for (let position = 0; position < source.length; position++) {
-    const character = requireValue(source[position], "lora-query");
-    if (character === "<") {
-      less.push(position);
-      if (/^<lora:$/iu.test(source.slice(position, position + 6))) markers.push(position);
-    } else if (character === ">") greater.push(position);
-    else if (character === ":") colons.push(position);
-    if (",\r\n	 ".includes(character)) endings.push(position);
-  }
-  const next = (positions, position) => positions[lowerBound(positions, position)] ?? -1;
-  const slots = markers.map((from) => {
-    const nameFrom = from + 6, nextGreater = next(greater, nameFrom), nextLess = next(less, from + 1);
-    const closer = nextGreater >= 0 && (nextLess < 0 || nextGreater < nextLess) ? nextGreater : -1;
-    const separator = next(colons, nameFrom);
-    let typedWeightText = null, preservedSuffix = null;
-    if (separator >= 0 && (closer < 0 || separator < closer)) {
-      const openEnd = next(endings, separator), bodyEnd = closer >= 0 ? closer : openEnd < 0 ? source.length : openEnd;
-      const second = next(colons, separator + 1);
-      const firstEnd = second >= 0 && second < bodyEnd ? second : bodyEnd;
-      const weight = strip(source.slice(separator + 1, firstEnd));
-      if (weight && parseWeight(weight, true) !== null) typedWeightText = weight;
-      if (loraWeightFields(source, separator, bodyEnd))
-        preservedSuffix = source.slice(separator, bodyEnd);
-    }
-    return Object.freeze({
-      from,
-      closer,
-      nextGreater,
-      separator,
-      typedWeightText,
-      preservedSuffix
-    });
-  });
-  return Object.freeze({
-    /** Name-only caret lookup preserves exact source offsets even when Unicode case folding expands preceding characters. */
-    queryAt(position, hasSelection) {
-      assertCompletionBoundary(source, position);
-      if (hasSelection) return null;
-      const slot = slots[lowerBound(markers, position - 4) - 1];
-      if (!slot || position < slot.from + 6 || slot.nextGreater >= 0 && position > slot.nextGreater)
-        return null;
-      const openEnd = next(endings, position);
-      const bodyEnd = slot.closer >= 0 ? slot.closer : openEnd < 0 ? source.length : openEnd;
-      const ownsWeight = slot.separator >= 0 && slot.separator < bodyEnd;
-      if (ownsWeight && position > slot.separator) return null;
-      const nameRange = Object.freeze({
-        from: slot.from + 6,
-        to: position
-      });
-      const query = Object.freeze({
-        queryText: source.slice(nameRange.from, nameRange.to),
-        nameRange,
-        nameFieldRange: Object.freeze({
-          from: nameRange.from,
-          to: ownsWeight ? slot.separator : bodyEnd
-        }),
-        replacementRange: Object.freeze({
-          from: slot.from,
-          to: slot.closer >= 0 ? slot.closer + 1 : bodyEnd
-        }),
-        typedWeightText: ownsWeight ? slot.typedWeightText : null,
-        preservedSuffix: ownsWeight ? slot.preservedSuffix : null,
-        hasClosingBracket: slot.closer >= 0
-      });
-      querySources.set(query, source);
-      return query;
     }
   });
 }
@@ -2757,52 +2803,6 @@ function prepareTriggerInsertionSlot(source, target) {
 function triggerInsertionText(slot, words) {
   const text = strip(words);
   return text ? `${slot.prefix}${text}` : null;
-}
-
-// frontend/sugarprompt/core/src/completion/lora-text.ts
-function loraScheduleWeight(weight) {
-  if (weight === null || weight === void 0) return "1.00";
-  if (typeof weight !== "string") throw new TypeError("Invalid LoRA weight input");
-  const value = strip(weight);
-  return value && parseWeight(value, true) !== null ? value : "1.00";
-}
-function loraNameContent(text) {
-  return !/[<>:\r\n\u0000]/u.test(text);
-}
-function canonicalName(name) {
-  if (typeof name !== "string" || !strip(name) || name.length > 4096 || !loraNameContent(name))
-    throw new TypeError("Invalid LoRA schedule identity");
-  return name;
-}
-function loraScheduleText(name, weight) {
-  return `<lora:${canonicalName(name)}:${loraScheduleWeight(weight)}>`;
-}
-function loraReplacement(source, query, name) {
-  assertPreparedLoraQuery(source, query);
-  const range = query.replacementRange;
-  for (const position of [range.from, range.to, query.nameRange.from, query.nameRange.to])
-    assertCompletionBoundary(source, position);
-  if (range.from > query.nameRange.from || query.nameRange.from > query.nameRange.to || query.nameRange.to > range.to)
-    throw new RangeError("Invalid LoRA completion range");
-  return Object.freeze({
-    range: Object.freeze({ ...range }),
-    text: query.preservedSuffix === null ? loraScheduleText(name, query.typedWeightText) : `<lora:${canonicalName(name)}${query.preservedSuffix}>`
-  });
-}
-function suffix(candidate, prefix) {
-  const proposed = Array.from(candidate), typed = Array.from(prefix);
-  if (typed.length > proposed.length) return "";
-  for (const [index, character] of typed.entries()) {
-    const left = caseFold(character.replaceAll("\\", "/")), right = caseFold(requireValue(proposed[index], "lora-text").replaceAll("\\", "/"));
-    if (left !== right && !(left === "_" && right === " " || left === " " && right === "_"))
-      return "";
-  }
-  return proposed.slice(typed.length).join("");
-}
-function loraCompletionSuffix(query, display, name) {
-  if (!query) return display;
-  const displaySuffix = suffix(display, query);
-  return displaySuffix || (/[\\/]/u.test(query) ? suffix(name, query) : "");
 }
 
 // frontend/sugarprompt/core/src/normalization/lexicon.ts
@@ -5073,48 +5073,6 @@ var SceneQueueSession = class {
   }
 };
 
-// frontend/sugarprompt/services/src/text/substring-index.ts
-function grams(value, size) {
-  const characters = Array.from(value), result = [];
-  for (let start = 0; start <= characters.length - size; start++)
-    result.push(characters.slice(start, start + size).join(""));
-  return result;
-}
-var ScalarSubstringIndex = class {
-  postings = /* @__PURE__ */ new Map();
-  items;
-  /** Build once from bounded captured fields, deduplicating each item across metadata and identity aliases. */
-  constructor(items, fields) {
-    this.items = Object.freeze([...items]);
-    const postings = /* @__PURE__ */ new Map();
-    for (const item of items) {
-      const keys = /* @__PURE__ */ new Set();
-      for (const field of fields(item)) {
-        for (const size of [1, 2, 3])
-          for (const gram of grams(field, size)) keys.add(`${size}:${gram}`);
-      }
-      for (const key of keys) {
-        const posting = postings.get(key);
-        if (posting) posting.push(item);
-        else postings.set(key, [item]);
-      }
-    }
-    for (const [key, values] of postings) this.postings.set(key, Object.freeze(values));
-  }
-  /** Empty queries deliberately include every model; other lookups use the rarest scalar gram, with final exact matching downstream. */
-  candidates(query) {
-    if (!query) return this.items;
-    const size = Math.min(3, Array.from(query).length);
-    let selected = null;
-    for (const gram of grams(query, size)) {
-      const posting = this.postings.get(`${size}:${gram}`);
-      if (!posting) return [];
-      if (!selected || posting.length < selected.length) selected = posting;
-    }
-    return selected ?? [];
-  }
-};
-
 // frontend/sugarprompt/services/src/text/scalar.ts
 function scalarTextLength(value) {
   let length = 0;
@@ -5142,13 +5100,6 @@ function compareScalarText(left, right) {
   }
   return remaining;
 }
-
-// frontend/sugarprompt/services/src/wildcards/catalog.ts
-var noColumns = Object.freeze([]);
-var noMatches = Object.freeze({
-  status: "ready",
-  suggestions: Object.freeze([])
-});
 
 // frontend/sugarprompt/services/src/text/ranked-prefix.ts
 var RankedPrefixIndex = class {
@@ -5310,9 +5261,6 @@ function prepareTagCompletionCatalog(input) {
   });
 }
 
-// frontend/sugarprompt/services/src/completion/scene-catalog.ts
-var empty2 = Object.freeze([]);
-
 // frontend/sugarprompt/services/src/features/registry.ts
 function definition(id, label, aliases, syntax = null, dependencies2 = [], legacyBase = false) {
   return Object.freeze({
@@ -5468,65 +5416,6 @@ function featureEnabled(profile, id) {
   return profile.decisions.some((decision) => decision.feature === id && decision.enabled);
 }
 
-// frontend/sugarprompt/services/src/completion/query-routing.ts
-function resolveCompletionQuery(indexes, profile, position, hasSelection) {
-  if (featureEnabled(profile, "lora_autocomplete")) {
-    const query = indexes.loraQueries.queryAt(position, hasSelection);
-    if (query) return Object.freeze({ kind: "lora", query });
-  }
-  if (featureEnabled(profile, "wildcard_autocomplete")) {
-    const query = indexes.wildcardQueries.queryAt(position, hasSelection);
-    if (query) return Object.freeze({ kind: "wildcard", query });
-  }
-  const scene = indexes.sceneQueries?.queryAt(position, hasSelection);
-  if (scene) return Object.freeze({ kind: "scene", query: scene });
-  const tag2 = indexes.tagQueries.queryAt(position, hasSelection);
-  return tag2 ? Object.freeze({ kind: "tag", query: tag2 }) : null;
-}
-
-// frontend/sugarprompt/services/src/completion/replacement-key.ts
-function completionReplacementKey(word) {
-  return strip(
-    caseFold(
-      tagReplacementText(word).replaceAll("\\(", "(").replaceAll("\\)", ")").replaceAll("_", " ")
-    )
-  );
-}
-
-// frontend/sugarprompt/services/src/completion/result.ts
-function findPromptTextCompletions(catalog, triggers, source, query, limit = 10) {
-  if (!Number.isSafeInteger(limit) || limit < 0 || limit > 50)
-    throw new RangeError("Invalid prompt completion limit");
-  const candidates = [], seen = /* @__PURE__ */ new Set();
-  function add2(row, word) {
-    const key = completionReplacementKey(word);
-    if (seen.has(key)) return;
-    seen.add(key);
-    candidates.push(Object.freeze(row));
-  }
-  for (const value of triggers?.search(query.prefix) ?? []) {
-    if (candidates.length === limit) break;
-    add2({ kind: "trigger", value }, value.word);
-  }
-  if (candidates.length < limit)
-    for (const value of catalog?.search(query.prefix, limit) ?? []) {
-      if (candidates.length === limit) break;
-      add2({ kind: "tag", value }, value.tag);
-    }
-  const result = Object.freeze({
-    query,
-    hadCandidates: candidates.length > 0,
-    matches: Object.freeze(
-      candidates.filter(
-        (row) => !tagIsNoop(source, query, row.kind === "tag" ? row.value.tag : row.value.word)
-      )
-    )
-  });
-  if (result.hadCandidates || !query.fallback) return result;
-  const fallback = findPromptTextCompletions(catalog, triggers, source, query.fallback, limit);
-  return fallback.matches.length ? fallback : result;
-}
-
 // frontend/sugarprompt/services/src/lora/metadata-validation.ts
 var validatedThumbnails = /* @__PURE__ */ new WeakSet();
 function loraRecord(value, keys) {
@@ -5615,99 +5504,50 @@ var loraItemKeys = Object.freeze([
 
 // frontend/sugarprompt/services/src/lora/scheduled-context.ts
 var preparedContexts = /* @__PURE__ */ new WeakSet();
+function modelGroup(value) {
+  if (!Array.isArray(value) || value.length > 1e3)
+    throw new TypeError("Invalid LoRA scheduling models");
+  return Object.freeze(
+    value.map((item) => readLoraItemFields(loraRecord(item, loraItemKeys)))
+  );
+}
+function prepareLoraSchedulingContext(input) {
+  const raw = loraRecord(input, [
+    "revision",
+    "catalogRevision",
+    "mode",
+    "supported",
+    "upstream",
+    "fields"
+  ]);
+  if (!["library", "workflow"].includes(raw.mode) || typeof raw.supported !== "boolean")
+    throw new TypeError("Invalid LoRA scheduling authority");
+  const upstream = modelGroup(raw.upstream), fields = modelGroup(raw.fields);
+  if (raw.mode === "library" && (upstream.length || fields.length))
+    throw new TypeError("Invalid library scheduling context");
+  const result = Object.freeze({
+    revision: loraText(raw.revision, 256),
+    catalogRevision: loraText(raw.catalogRevision, 256),
+    mode: raw.mode,
+    supported: raw.supported,
+    upstream,
+    fields
+  });
+  preparedContexts.add(result);
+  return result;
+}
 function assertPreparedLoraSchedulingContext(context) {
   if (!preparedContexts.has(context)) throw new TypeError("Unprepared LoRA scheduling context");
 }
 
-// frontend/sugarprompt/services/src/lora/names.ts
-function withoutLoraExtension(value) {
-  const folded = caseFold(value);
-  for (const suffix2 of [".safetensors", ".ckpt", ".pt"])
-    if (folded.endsWith(suffix2)) return value.slice(0, -suffix2.length);
-  return value;
-}
-function loraNameKey(value, extensionless = false) {
-  return caseFold((extensionless ? withoutLoraExtension(value) : value).replaceAll("\\", "/"));
-}
-
-// frontend/sugarprompt/services/src/lora/trigger-index.ts
-function lookupKey(text) {
-  return caseFold(text.replaceAll("_", " "));
-}
-function prepareLoraTriggerIndex(models) {
-  const rows = [];
-  let units = 0;
-  for (const model of models)
-    for (const entry of model.triggerWords) {
-      units += entry.length;
-      if (units > 8e6) throw new TypeError("LoRA trigger index exceeds preparation budget");
-      for (const part of entry.split(",")) {
-        const word = strip(part);
-        if (word) {
-          if (rows.length === 1e5)
-            throw new TypeError("LoRA trigger index exceeds preparation budget");
-          rows.push({
-            key: lookupKey(word),
-            replacementKey: completionReplacementKey(word),
-            rank: rows.length,
-            suggestion: Object.freeze({
-              word,
-              display: model.display,
-              backendValue: model.model.backendValue
-            })
-          });
-        }
-      }
-    }
-  rows.sort((a, b) => compareScalarText(a.key, b.key) || a.rank - b.rank);
-  const results = /* @__PURE__ */ new Map(), empty3 = Object.freeze([]);
-  let retainedReferences = 0;
-  return Object.freeze({
-    /** Binary prefix bounds inspect only matching prepared rows; the last 32 normalized queries retain actual frozen output. */
-    search(prefix) {
-      if (typeof prefix !== "string" || prefix.length > 4096)
-        throw new TypeError("Invalid LoRA trigger prefix");
-      const key = lookupKey(prefix);
-      if (!key) return empty3;
-      const cached = results.get(key);
-      if (cached) {
-        results.delete(key);
-        results.set(key, cached);
-        return cached;
-      }
-      let lower = 0, upper = rows.length;
-      while (lower < upper) {
-        const middle = lower + upper >>> 1;
-        if (compareScalarText(requireValue(rows[middle], "trigger-index").key, key) < 0)
-          lower = middle + 1;
-        else upper = middle;
-      }
-      const from = lower;
-      upper = rows.length;
-      while (lower < upper) {
-        const middle = lower + upper >>> 1;
-        if (requireValue(rows[middle], "trigger-index").key.startsWith(key)) lower = middle + 1;
-        else upper = middle;
-      }
-      const seen = /* @__PURE__ */ new Set(), matches = rows.slice(from, lower).sort((a, b) => a.rank - b.rank).filter((row) => {
-        if (seen.has(row.replacementKey)) return false;
-        seen.add(row.replacementKey);
-        return true;
-      }).map((row) => row.suggestion);
-      const result = matches.length ? Object.freeze(matches) : empty3;
-      if (result.length <= 8192) {
-        while (results.size === 32 || retainedReferences + result.length > 8192) {
-          const oldest = requireValue(results.keys().next().value, "trigger-index");
-          retainedReferences -= requireValue(results.get(oldest), "trigger-index").length;
-          results.delete(oldest);
-        }
-        results.set(key, result);
-        retainedReferences += result.length;
-      }
-      return result;
-    }
-  });
-}
+// frontend/sugarprompt/services/src/features/preferences.ts
+var defaultPreferences = Object.freeze({
+  allowed: Object.freeze(
+    Object.fromEntries(featureDefinitions.map(({ id }) => [id, true]))
+  ),
+  wheelMode: "hover_dwell",
+  resolveOnGeneration: true
+});
 
 // frontend/sugarprompt/services/src/lora/validation.ts
 var validatedResources = /* @__PURE__ */ new WeakSet();
@@ -5756,59 +5596,6 @@ function readLoraResources(value, names) {
   );
 }
 
-// frontend/sugarprompt/services/src/lora/scheduled.ts
-function scheduled(item, source) {
-  const title = strip(item.title) || strip(item.model.basename), subtitle = item.subtitle === null ? "" : strip(item.subtitle);
-  return Object.freeze({
-    model: item.model,
-    display: title && subtitle ? `${title} - ${subtitle}` : title || subtitle,
-    triggerWords: item.triggerWords,
-    source,
-    insertionText: item.triggerWords.map((word) => strip(word)).filter(Boolean).join(", ")
-  });
-}
-function prepareEffectiveLoras(names, resources, catalogRevision, context) {
-  const prepared = prepareEffectiveLoraModels(names, resources, catalogRevision, context);
-  return prepared.status === "ready" ? Object.freeze({
-    ...prepared,
-    triggers: prepareLoraTriggerIndex(prepared.models)
-  }) : prepared;
-}
-function prepareEffectiveLoraModels(names, resources, catalogRevision, context) {
-  if (context === null) return Object.freeze({ status: "unavailable", reason: "missing-context" });
-  assertPreparedLoraSchedulingContext(context);
-  if (!context.supported)
-    return Object.freeze({
-      status: "unavailable",
-      reason: "unsupported-scheduling"
-    });
-  if (catalogRevision !== context.catalogRevision)
-    return Object.freeze({ status: "unavailable", reason: "stale-catalog" });
-  if (resources.status !== "ready")
-    return Object.freeze({
-      status: "unavailable",
-      reason: "resources-unavailable"
-    });
-  const resolved = readLoraResources(resources.resources, names), models = [], seen = /* @__PURE__ */ new Set();
-  function add2(item, source) {
-    const key = loraNameKey(
-      strip(item.model.backendValue) ? item.model.backendValue : item.model.promptName
-    );
-    if (seen.has(key)) return;
-    seen.add(key);
-    models.push(scheduled(item, source));
-  }
-  for (const item of resolved) if (item.resolution === "found") add2(item, "inline");
-  for (const item of context.upstream) add2(item, "upstream");
-  for (const item of context.fields) add2(item, "field");
-  const captured = Object.freeze(models);
-  return Object.freeze({
-    status: "ready",
-    context,
-    models: captured
-  });
-}
-
 // frontend/sugarprompt/services/src/lora/resource-names.ts
 function loraResourceNames(document) {
   return Object.freeze([
@@ -5819,50 +5606,6 @@ function loraResourceNames(document) {
     )
   ]);
 }
-
-// frontend/sugarprompt/services/src/lora/scheduled-session.ts
-var EffectiveLoraSession = class {
-  previous = null;
-  disposed = false;
-  /** Capture current input and retain actual output only when every ordered name, validated descriptor and host identity matches. */
-  prepare(document, resources, revision, context) {
-    return this.prepareNames(loraResourceNames(document), resources, revision, context);
-  }
-  /** Reuse this same finite memo for parser-prepared scene names, with exact scoped resource coverage. */
-  prepareNames(names, resources, revision, context) {
-    if (this.disposed) throw new Error("Effective LoRA session disposed");
-    if (!context || !context.supported || context.catalogRevision !== revision || resources.status !== "ready") {
-      this.previous = null;
-      return prepareEffectiveLoras(names, resources, revision, context);
-    }
-    const captured = readLoraResources(resources.resources, names);
-    const previous = this.previous;
-    if (previous && previous.revision === revision && previous.context === context && names.length === previous.names.length && names.every((name, index) => name === previous.names[index]) && captured.every((item, index) => item === previous.resources[index]))
-      return previous.snapshot;
-    const snapshot = prepareEffectiveLoras(
-      names,
-      { status: "ready", resources: captured },
-      revision,
-      context
-    );
-    this.previous = snapshot.status === "ready" ? { revision, context, names, resources: captured, snapshot } : null;
-    return snapshot;
-  }
-  /** Release captured metadata and actual lookup output when the native preparation owner is destroyed. */
-  dispose() {
-    this.disposed = true;
-    this.previous = null;
-  }
-};
-
-// frontend/sugarprompt/services/src/features/preferences.ts
-var defaultPreferences = Object.freeze({
-  allowed: Object.freeze(
-    Object.fromEntries(featureDefinitions.map(({ id }) => [id, true]))
-  ),
-  wheelMode: "hover_dwell",
-  resolveOnGeneration: true
-});
 
 // frontend/sugarprompt/services/src/lora/resource-validity.ts
 function isCatalogStableLoraResource(resource) {
@@ -6002,6 +5745,295 @@ var LoraResourceSession = class {
       resources: Object.freeze(resources)
     });
     this.observe(this.current);
+  }
+};
+
+// frontend/sugarprompt/services/src/text/substring-index.ts
+function grams(value, size) {
+  const characters = Array.from(value), result = [];
+  for (let start = 0; start <= characters.length - size; start++)
+    result.push(characters.slice(start, start + size).join(""));
+  return result;
+}
+var ScalarSubstringIndex = class {
+  postings = /* @__PURE__ */ new Map();
+  items;
+  /** Build once from bounded captured fields, deduplicating each item across metadata and identity aliases. */
+  constructor(items, fields) {
+    this.items = Object.freeze([...items]);
+    const postings = /* @__PURE__ */ new Map();
+    for (const item of items) {
+      const keys = /* @__PURE__ */ new Set();
+      for (const field of fields(item)) {
+        for (const size of [1, 2, 3])
+          for (const gram of grams(field, size)) keys.add(`${size}:${gram}`);
+      }
+      for (const key of keys) {
+        const posting = postings.get(key);
+        if (posting) posting.push(item);
+        else postings.set(key, [item]);
+      }
+    }
+    for (const [key, values] of postings) this.postings.set(key, Object.freeze(values));
+  }
+  /** Empty queries deliberately include every model; other lookups use the rarest scalar gram, with final exact matching downstream. */
+  candidates(query) {
+    if (!query) return this.items;
+    const size = Math.min(3, Array.from(query).length);
+    let selected = null;
+    for (const gram of grams(query, size)) {
+      const posting = this.postings.get(`${size}:${gram}`);
+      if (!posting) return [];
+      if (!selected || posting.length < selected.length) selected = posting;
+    }
+    return selected ?? [];
+  }
+};
+
+// frontend/sugarprompt/services/src/wildcards/catalog.ts
+var noColumns = Object.freeze([]);
+var noMatches = Object.freeze({
+  status: "ready",
+  suggestions: Object.freeze([])
+});
+
+// frontend/sugarprompt/services/src/completion/scene-catalog.ts
+var empty2 = Object.freeze([]);
+
+// frontend/sugarprompt/services/src/completion/query-routing.ts
+function resolveCompletionQuery(indexes, profile, position, hasSelection) {
+  if (featureEnabled(profile, "lora_autocomplete")) {
+    const query = indexes.loraQueries.queryAt(position, hasSelection);
+    if (query) return Object.freeze({ kind: "lora", query });
+  }
+  if (featureEnabled(profile, "wildcard_autocomplete")) {
+    const query = indexes.wildcardQueries.queryAt(position, hasSelection);
+    if (query) return Object.freeze({ kind: "wildcard", query });
+  }
+  const scene = indexes.sceneQueries?.queryAt(position, hasSelection);
+  if (scene) return Object.freeze({ kind: "scene", query: scene });
+  const tag2 = indexes.tagQueries.queryAt(position, hasSelection);
+  return tag2 ? Object.freeze({ kind: "tag", query: tag2 }) : null;
+}
+
+// frontend/sugarprompt/services/src/completion/replacement-key.ts
+function completionReplacementKey(word) {
+  return strip(
+    caseFold(
+      tagReplacementText(word).replaceAll("\\(", "(").replaceAll("\\)", ")").replaceAll("_", " ")
+    )
+  );
+}
+
+// frontend/sugarprompt/services/src/completion/result.ts
+function findPromptTextCompletions(catalog, triggers, source, query, limit = 10) {
+  if (!Number.isSafeInteger(limit) || limit < 0 || limit > 50)
+    throw new RangeError("Invalid prompt completion limit");
+  const candidates = [], seen = /* @__PURE__ */ new Set();
+  function add2(row, word) {
+    const key = completionReplacementKey(word);
+    if (seen.has(key)) return;
+    seen.add(key);
+    candidates.push(Object.freeze(row));
+  }
+  for (const value of triggers?.search(query.prefix) ?? []) {
+    if (candidates.length === limit) break;
+    add2({ kind: "trigger", value }, value.word);
+  }
+  if (candidates.length < limit)
+    for (const value of catalog?.search(query.prefix, limit) ?? []) {
+      if (candidates.length === limit) break;
+      add2({ kind: "tag", value }, value.tag);
+    }
+  const result = Object.freeze({
+    query,
+    hadCandidates: candidates.length > 0,
+    matches: Object.freeze(
+      candidates.filter(
+        (row) => !tagIsNoop(source, query, row.kind === "tag" ? row.value.tag : row.value.word)
+      )
+    )
+  });
+  if (result.hadCandidates || !query.fallback) return result;
+  const fallback = findPromptTextCompletions(catalog, triggers, source, query.fallback, limit);
+  return fallback.matches.length ? fallback : result;
+}
+
+// frontend/sugarprompt/services/src/lora/names.ts
+function withoutLoraExtension(value) {
+  const folded = caseFold(value);
+  for (const suffix2 of [".safetensors", ".ckpt", ".pt"])
+    if (folded.endsWith(suffix2)) return value.slice(0, -suffix2.length);
+  return value;
+}
+function loraNameKey(value, extensionless = false) {
+  return caseFold((extensionless ? withoutLoraExtension(value) : value).replaceAll("\\", "/"));
+}
+
+// frontend/sugarprompt/services/src/lora/trigger-index.ts
+function lookupKey(text) {
+  return caseFold(text.replaceAll("_", " "));
+}
+function prepareLoraTriggerIndex(models) {
+  const rows = [];
+  let units = 0;
+  for (const model of models)
+    for (const entry of model.triggerWords) {
+      units += entry.length;
+      if (units > 8e6) throw new TypeError("LoRA trigger index exceeds preparation budget");
+      for (const part of entry.split(",")) {
+        const word = strip(part);
+        if (word) {
+          if (rows.length === 1e5)
+            throw new TypeError("LoRA trigger index exceeds preparation budget");
+          rows.push({
+            key: lookupKey(word),
+            replacementKey: completionReplacementKey(word),
+            rank: rows.length,
+            suggestion: Object.freeze({
+              word,
+              display: model.display,
+              backendValue: model.model.backendValue
+            })
+          });
+        }
+      }
+    }
+  rows.sort((a, b) => compareScalarText(a.key, b.key) || a.rank - b.rank);
+  const results = /* @__PURE__ */ new Map(), empty3 = Object.freeze([]);
+  let retainedReferences = 0;
+  return Object.freeze({
+    /** Binary prefix bounds inspect only matching prepared rows; the last 32 normalized queries retain actual frozen output. */
+    search(prefix) {
+      if (typeof prefix !== "string" || prefix.length > 4096)
+        throw new TypeError("Invalid LoRA trigger prefix");
+      const key = lookupKey(prefix);
+      if (!key) return empty3;
+      const cached = results.get(key);
+      if (cached) {
+        results.delete(key);
+        results.set(key, cached);
+        return cached;
+      }
+      let lower = 0, upper = rows.length;
+      while (lower < upper) {
+        const middle = lower + upper >>> 1;
+        if (compareScalarText(requireValue(rows[middle], "trigger-index").key, key) < 0)
+          lower = middle + 1;
+        else upper = middle;
+      }
+      const from = lower;
+      upper = rows.length;
+      while (lower < upper) {
+        const middle = lower + upper >>> 1;
+        if (requireValue(rows[middle], "trigger-index").key.startsWith(key)) lower = middle + 1;
+        else upper = middle;
+      }
+      const seen = /* @__PURE__ */ new Set(), matches = rows.slice(from, lower).sort((a, b) => a.rank - b.rank).filter((row) => {
+        if (seen.has(row.replacementKey)) return false;
+        seen.add(row.replacementKey);
+        return true;
+      }).map((row) => row.suggestion);
+      const result = matches.length ? Object.freeze(matches) : empty3;
+      if (result.length <= 8192) {
+        while (results.size === 32 || retainedReferences + result.length > 8192) {
+          const oldest = requireValue(results.keys().next().value, "trigger-index");
+          retainedReferences -= requireValue(results.get(oldest), "trigger-index").length;
+          results.delete(oldest);
+        }
+        results.set(key, result);
+        retainedReferences += result.length;
+      }
+      return result;
+    }
+  });
+}
+
+// frontend/sugarprompt/services/src/lora/scheduled.ts
+function scheduled(item, source) {
+  const title = strip(item.title) || strip(item.model.basename), subtitle = item.subtitle === null ? "" : strip(item.subtitle);
+  return Object.freeze({
+    model: item.model,
+    display: title && subtitle ? `${title} - ${subtitle}` : title || subtitle,
+    triggerWords: item.triggerWords,
+    source,
+    insertionText: item.triggerWords.map((word) => strip(word)).filter(Boolean).join(", ")
+  });
+}
+function prepareEffectiveLoras(names, resources, catalogRevision, context) {
+  const prepared = prepareEffectiveLoraModels(names, resources, catalogRevision, context);
+  return prepared.status === "ready" ? Object.freeze({
+    ...prepared,
+    triggers: prepareLoraTriggerIndex(prepared.models)
+  }) : prepared;
+}
+function prepareEffectiveLoraModels(names, resources, catalogRevision, context) {
+  if (context === null) return Object.freeze({ status: "unavailable", reason: "missing-context" });
+  assertPreparedLoraSchedulingContext(context);
+  if (!context.supported)
+    return Object.freeze({
+      status: "unavailable",
+      reason: "unsupported-scheduling"
+    });
+  if (catalogRevision !== context.catalogRevision)
+    return Object.freeze({ status: "unavailable", reason: "stale-catalog" });
+  if (resources.status !== "ready")
+    return Object.freeze({
+      status: "unavailable",
+      reason: "resources-unavailable"
+    });
+  const resolved = readLoraResources(resources.resources, names), models = [], seen = /* @__PURE__ */ new Set();
+  function add2(item, source) {
+    const key = loraNameKey(
+      strip(item.model.backendValue) ? item.model.backendValue : item.model.promptName
+    );
+    if (seen.has(key)) return;
+    seen.add(key);
+    models.push(scheduled(item, source));
+  }
+  for (const item of resolved) if (item.resolution === "found") add2(item, "inline");
+  for (const item of context.upstream) add2(item, "upstream");
+  for (const item of context.fields) add2(item, "field");
+  const captured = Object.freeze(models);
+  return Object.freeze({
+    status: "ready",
+    context,
+    models: captured
+  });
+}
+
+// frontend/sugarprompt/services/src/lora/scheduled-session.ts
+var EffectiveLoraSession = class {
+  previous = null;
+  disposed = false;
+  /** Capture current input and retain actual output only when every ordered name, validated descriptor and host identity matches. */
+  prepare(document, resources, revision, context) {
+    return this.prepareNames(loraResourceNames(document), resources, revision, context);
+  }
+  /** Reuse this same finite memo for parser-prepared scene names, with exact scoped resource coverage. */
+  prepareNames(names, resources, revision, context) {
+    if (this.disposed) throw new Error("Effective LoRA session disposed");
+    if (!context || !context.supported || context.catalogRevision !== revision || resources.status !== "ready") {
+      this.previous = null;
+      return prepareEffectiveLoras(names, resources, revision, context);
+    }
+    const captured = readLoraResources(resources.resources, names);
+    const previous = this.previous;
+    if (previous && previous.revision === revision && previous.context === context && names.length === previous.names.length && names.every((name, index) => name === previous.names[index]) && captured.every((item, index) => item === previous.resources[index]))
+      return previous.snapshot;
+    const snapshot = prepareEffectiveLoras(
+      names,
+      { status: "ready", resources: captured },
+      revision,
+      context
+    );
+    this.previous = snapshot.status === "ready" ? { revision, context, names, resources: captured, snapshot } : null;
+    return snapshot;
+  }
+  /** Release captured metadata and actual lookup output when the native preparation owner is destroyed. */
+  dispose() {
+    this.disposed = true;
+    this.previous = null;
   }
 };
 
@@ -7399,22 +7431,6 @@ var SavedSegmentSession = class {
   }
 };
 
-// frontend/comfyui/ui/prompt_editor/runtime/PromptTagCatalog.ts
-function preparePromptTagCatalog(source, revision) {
-  const bundled = [];
-  for (const [index, line] of source.split(/\r?\n/u).entries()) {
-    if (!line.trim()) continue;
-    const row = /^([^,]+),(\d+)(?:\s|$)/u.exec(line);
-    const tag2 = row?.[1];
-    const popularity = Number(row?.[2]);
-    if (!tag2 || !Number.isSafeInteger(popularity) || popularity < 0)
-      throw new TypeError(`Invalid bundled prompt tag at line ${String(index + 1)}.`);
-    bundled.push({ tag: tag2, popularity });
-  }
-  if (!bundled.length) throw new TypeError("The bundled prompt tag catalog is empty.");
-  return prepareTagCompletionCatalog({ revision, bundled, customTags: [], censoredTags: [] });
-}
-
 export {
   requireValue,
   parseWeight,
@@ -7451,6 +7467,7 @@ export {
   mutateWildcardTag,
   prepareTriggerInsertionSlot,
   triggerInsertionText,
+  loraScheduleText,
   loraReplacement,
   loraCompletionSuffix,
   tagReplacementText,
@@ -7492,11 +7509,13 @@ export {
   validatePreparedSceneQueue,
   prepareSceneQueue,
   SceneQueueSession,
+  prepareTagCompletionCatalog,
   featureDefinitions,
   resolveFeatureProfile,
   featureEnabled,
   resolveCompletionQuery,
   findPromptTextCompletions,
+  prepareLoraSchedulingContext,
   assertPreparedLoraSchedulingContext,
   loraNameKey,
   defaultPreferences,
@@ -7522,6 +7541,5 @@ export {
   captureRecord,
   captureSavedSegmentContext,
   validateSavedSegmentAdapter,
-  SavedSegmentSession,
-  preparePromptTagCatalog
+  SavedSegmentSession
 };

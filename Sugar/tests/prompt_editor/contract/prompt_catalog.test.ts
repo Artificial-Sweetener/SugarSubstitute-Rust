@@ -16,7 +16,9 @@
 /** Prove installed model identities, literal labels and banner artwork cross the editor boundary unchanged. */
 import {
   preparePromptLoraCatalog,
+  promptLoraItem,
   promptLoraModel,
+  promptLoraName,
 } from '../../../frontend/comfyui/ui/prompt_editor/PromptLoraCatalog.js';
 import { promptCatalogFixture } from '../support/PromptCatalogFixture.js';
 
@@ -154,4 +156,16 @@ test('installed LoRAs are completed by anything a person knows them by and map b
   expect(catalog.search('exam')[0]?.scheduleName).toBe('folder/example');
   expect(promptLoraModel(adapter, 'folder/example.safetensors')).toBe(snapshot.items[0]);
   expect(promptLoraModel(adapter, 'missing.safetensors')).toBeNull();
+});
+
+test('an installed LoRA is named as a prompt writes it and found as the editor describes it', () => {
+  expect(promptLoraName('folder\\example.safetensors')).toBe('folder\\example');
+  expect(promptLoraName('plain.ckpt')).toBe('plain');
+  expect(promptLoraName('no-extension')).toBe('no-extension');
+  const adapter = preparePromptLoraCatalog(promptCatalogFixture(), 'http://localhost/');
+  expect(promptLoraItem(adapter, 'folder/example.safetensors')).toMatchObject({
+    model: { promptName: 'folder/example', backendValue: 'folder/example.safetensors' },
+    triggerWords: ['example trigger'],
+  });
+  expect(promptLoraItem(adapter, 'missing.safetensors')).toBeNull();
 });

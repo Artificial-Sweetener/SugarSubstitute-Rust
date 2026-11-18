@@ -30,13 +30,11 @@ import type { PropType } from 'vue';
 import { chooseModelThumbnail } from '../ModelCatalog.js';
 import type { ModelCatalogItem } from '../ModelCatalog.js';
 import type { ModelPickerBinding } from '../ModelPickerBinding.js';
-import { filterModelChoices } from '../ModelPickerChoices.js';
 import { queryModelCatalog, type ModelCompatibilityContext } from '../ModelCompatibility.js';
-import { modelChoiceCompletion } from '../ModelPickerCompletion.js';
 import { modelPickerPlacement } from '../ModelPickerPlacement.js';
 import { ModelPickerPopupContent } from './ModelPickerPopupContent.js';
 import type { ModelPickerActions, ModelPickerFeedback } from '../ModelPickerActions.js';
-import { modelWallNeighbor } from '../ModelPickerNavigation.js';
+import { useModelBrowsing } from './ModelBrowsing.js';
 import { useModelContext } from './ModelContextState.js';
 import type { ModelUpdatePort } from '../ModelUpdates.js';
 import type { ModelDetectorPort } from '../ModelDetectors.js';
@@ -83,10 +81,7 @@ export const ModelPickerField = defineComponent({
       () => close(),
       session,
     );
-    const query = ref('');
-    const folder = ref('');
     const current = ref(props.binding.readValue());
-    const active = ref(0);
     const input = ref<HTMLInputElement | null>(null);
     const surface = ref<HTMLElement | null>(null);
     const popup = ref<HTMLElement | null>(null);
@@ -104,12 +99,8 @@ export const ModelPickerField = defineComponent({
       }),
     );
     const offersDiscovery = computed(() => !!props.discoveryAction && !compatible.value.length);
-    const visible = computed(() => filterModelChoices(compatible.value, query.value, folder.value));
-    const navigable = computed(() => filterModelChoices(compatible.value, query.value, ''));
-    const wallWidth = ref(540);
-    const completion = computed(() =>
-      modelChoiceCompletion(visible.value[active.value], query.value),
-    );
+    const browsing = useModelBrowsing(() => compatible.value);
+    const { query, folder, active, wallWidth, visible, navigable, completion } = browsing;
     const unsubscribe = props.binding.subscribe(() => {
       current.value = props.binding.readValue();
       compatibility.value = props.compatibility?.() ?? null;
@@ -164,12 +155,7 @@ export const ModelPickerField = defineComponent({
       compatibility.value = props.compatibility?.() ?? null;
       unfiltered.value = false;
       open.value = true;
-      query.value = '';
-      folder.value = '';
-      active.value = Math.max(
-        0,
-        visible.value.findIndex((item) => item.value === current.value),
-      );
+      browsing.restart(current.value);
       position();
       void nextTick(() => input.value?.focus());
     };
@@ -221,22 +207,12 @@ export const ModelPickerField = defineComponent({
       if (!open.value) return;
       if (event.key === 'Tab' && completion.value) {
         event.preventDefault();
-        const highlighted = visible.value[active.value]?.value;
-        query.value = completion.value.text;
-        active.value = Math.max(
-          0,
-          visible.value.findIndex((item) => item.value === highlighted),
-        );
+        browsing.complete();
       } else if (event.key === 'Enter') {
         event.preventDefault();
         const item = visible.value[active.value];
         if (item) select(item.value);
-      } else if (
-        ['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)
-      ) {
-        event.preventDefault();
-        active.value = modelWallNeighbor(visible.value, wallWidth.value, active.value, event.key);
-      }
+      } else if (browsing.move(event.key)) event.preventDefault();
     };
 
     return () => {
@@ -301,10 +277,7 @@ export const ModelPickerField = defineComponent({
             onClick: show,
             onKeydown: key,
             onInput: (event: Event) => {
-              if (event.target instanceof HTMLInputElement) {
-                query.value = event.target.value;
-                active.value = 0;
-              }
+              if (event.target instanceof HTMLInputElement) browsing.search(event.target.value);
             },
           }),
           open.value && completion.value
@@ -356,8 +329,7 @@ export const ModelPickerField = defineComponent({
                       unfiltered: unfiltered.value,
                       onToggleFilter: () => {
                         unfiltered.value = !unfiltered.value;
-                        folder.value = '';
-                        active.value = 0;
+                        browsing.open('');
                         input.value?.focus();
                       },
                       visible: visible.value,
@@ -366,8 +338,7 @@ export const ModelPickerField = defineComponent({
                       active: active.value,
                       optionPrefix: popupId,
                       onNavigate: (path: string) => {
-                        folder.value = path;
-                        active.value = 0;
+                        browsing.open(path);
                         input.value?.focus();
                       },
                       onSelect: select,
