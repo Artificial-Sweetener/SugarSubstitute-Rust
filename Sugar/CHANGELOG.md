@@ -1,3 +1,9 @@
+## [0.21.1](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.21.0...sugarcubes-v0.21.1) (2026-11-18)
+
+### Bug Fixes
+
+* **prompt:** a long LoRA name no longer widens the trigger-word menu ([1d6b789](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/1d6b789ed33db84ee51d4d9fe738d83c5b3145eb))
+
 ## [0.21.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.20.0...sugarcubes-v0.21.0) (2026-11-18)
 
 ### Features
