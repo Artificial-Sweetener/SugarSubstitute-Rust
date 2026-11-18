@@ -180,6 +180,7 @@ export class ComfyCanvasHost {
                         nativeSurface: () => execution.canvases.surfaceHost('embedded-document'),
                         surfacePending: () => presenter.current() === 'pending',
                         editing: () => execution.canvases.editHost(),
+                        declaresBackdropRegions: () => options.host.read()?.declares(HOST_CAPABILITIES.backdropRegions) === true,
                     });
                 return import('./ComfyBrowserCanvasHost.mjs').then(({ ComfyBrowserCanvasHost }) => {
                     if (!acceptsPreparation())

@@ -49,7 +49,7 @@ impl CpuTask<work::preview::ReadyPreview, WorkError> for ReprojectTask {
             .ready
             .as_mut()
             .ok_or_else(|| WorkError::invalid("Preview refit already completed"))?;
-        ready.reproject(self.target, self.extent, self.backdrops, context)?;
+        ready.reproject(self.target, self.extent, self.backdrops.clone(), context)?;
         Ok(CpuStep::Complete(
             *self.ready.take().ok_or_else(|| WorkError::invalid("Preview refit disappeared"))?,
         ))

@@ -67,12 +67,15 @@ pub struct BackdropCrop {
     blur: GaussianBlur,
 }
 
-/// One bounded inventory with no proportional allocation. An empty inventory leaves pixels exact.
-#[derive(Clone, Copy, Debug, PartialEq)]
+/// The most regions one plan admits: the bound the canvas protocol gives a geometry message.
+pub const MAX_BACKDROPS: usize = 64;
+
+/// One bounded inventory, each region blurred over its own crop. An empty inventory leaves
+/// pixels exact. The inventory is shared, so a display request clones a plan without copying it.
+#[derive(Clone, Debug, PartialEq)]
 pub struct BackdropPlan {
     viewport: Extent,
-    regions: [BackdropCrop; 2],
-    count: usize,
+    regions: std::sync::Arc<[BackdropCrop]>,
     scratch: u64,
 }
 
@@ -89,23 +92,20 @@ pub struct BackdropGraph {
 }
 
 impl BackdropPlan {
-    /// Plan at most two physical bars, retaining original mask bounds when a bar is clipped.
+    /// Plan every physical region, retaining original mask bounds when a region is clipped.
     /// Invisible and zero-sigma bars produce no work. Crops include the finite Gaussian support,
     /// every reduction/reconstruction kernel and pixel phase guard, aligned to the global grid.
     /// # Errors
     /// Rejects excessive inventories and dimensions whose admitted workspace cannot be represented.
     pub fn new(viewport: Extent, regions: &[BackdropRegion]) -> Result<Self, RenderError> {
-        if regions.len() > 2 {
+        if regions.len() > MAX_BACKDROPS {
             return Err(RenderError::Invalid("Too many presentation backdrops"));
         }
-        let empty = BackdropCrop {
-            region: BackdropRegion::new([0.0, 0.0, 1.0, 1.0], 0.0, 0.0)?,
-            crop: viewport.region(),
-            inner: viewport.region(),
-            reduction: 4,
-            blur: GaussianBlur::new(0.0)?,
-        };
-        let mut plan = Self { viewport, regions: [empty; 2], count: 0, scratch: 0 };
+        let mut crops = Vec::new();
+        crops
+            .try_reserve_exact(regions.len())
+            .map_err(|_| RenderError::Invalid("Backdrop inventory exceeds addressable memory"))?;
+        let mut scratch = 0_u64;
         let mut captured = 0_u64;
         let mut retained = 0_u64;
         let mut depth = 2_u32;
@@ -124,29 +124,28 @@ impl BackdropPlan {
             // coexist. Retain the largest crop's DAG inventory without evicting its dependencies.
             let tile_bytes = u64::from(TILE_EDGE).pow(2) * size_of::<Pixel>() as u64 + 256;
             retained = retained.max(crop.retained_tiles() as u64 * tile_bytes);
-            plan.regions[plan.count] = crop;
-            plan.count += 1;
+            crops.push(crop);
         }
-        if plan.count != 0 {
+        if !crops.is_empty() {
             // Recursive 128-pixel DAG tiles retain gathered halos while descending the pyramid.
             // Complete retained tiles are charged separately from these gathered buffers,
             // encoder, coefficient/tap tables and graph metadata.
-            plan.scratch = captured
+            scratch = captured
                 .checked_add(retained)
                 .and_then(|bytes| {
                     bytes.checked_add(8 * MIB + u64::from(depth - 2) * 2 * MIB + 128 * 1024)
                 })
                 .ok_or(RenderError::Invalid("Backdrop workspace exceeds addressable memory"))?;
         }
-        Ok(plan)
+        Ok(Self { viewport, regions: crops.into(), scratch })
     }
     /// Physical display extent whose completed projection supplies these crops.
     pub const fn viewport(&self) -> Extent {
         self.viewport
     }
-    /// Visible nonidentity bars in composition order, with at most two entries.
+    /// Visible nonidentity regions in composition order.
     pub fn regions(&self) -> &[BackdropCrop] {
-        &self.regions[..self.count]
+        &self.regions
     }
     /// Conservative CPU job scratch admission in bytes, including all encoded captures.
     /// It excludes the preexisting retained full projection allocation. Sampled DAG tiles retain

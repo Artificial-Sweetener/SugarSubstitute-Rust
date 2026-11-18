@@ -170,7 +170,7 @@ function isCanvasSurfaceOcclusion(value) {
   return isRecord(value) && Object.keys(value).length === 4 && Object.hasOwn(value, "x") && typeof value["x"] === "number" && Number.isFinite(value["x"]) && value["x"] >= -1e6 && value["x"] <= 1e6 && Object.hasOwn(value, "y") && typeof value["y"] === "number" && Number.isFinite(value["y"]) && value["y"] >= -1e6 && value["y"] <= 1e6 && Object.hasOwn(value, "width") && typeof value["width"] === "number" && Number.isFinite(value["width"]) && value["width"] > 0 && value["width"] <= 1e6 && Object.hasOwn(value, "height") && typeof value["height"] === "number" && Number.isFinite(value["height"]) && value["height"] > 0 && value["height"] <= 1e6;
 }
 function isCanvasSurfaceGeometry(value) {
-  return isRecord(value) && Object.keys(value).length === 8 + (Object.hasOwn(value, "occlusions") ? 1 : 0) + (Object.hasOwn(value, "modal") ? 1 : 0) + (Object.hasOwn(value, "backdrops") ? 1 : 0) && Object.hasOwn(value, "coordinateSpace") && value["coordinateSpace"] === "client" && Object.hasOwn(value, "units") && value["units"] === "css-pixels" && Object.hasOwn(value, "origin") && isCanvasSurfacePoint(value["origin"]) && Object.hasOwn(value, "viewport") && isCanvasSurfaceSize(value["viewport"]) && Object.hasOwn(value, "clip") && isCanvasSurfaceClip(value["clip"]) && Object.hasOwn(value, "physicalPixelsPerCssPixel") && typeof value["physicalPixelsPerCssPixel"] === "number" && Number.isFinite(value["physicalPixelsPerCssPixel"]) && value["physicalPixelsPerCssPixel"] > 0 && value["physicalPixelsPerCssPixel"] <= 64 && Object.hasOwn(value, "visible") && typeof value["visible"] === "boolean" && Object.hasOwn(value, "focused") && typeof value["focused"] === "boolean" && (!Object.hasOwn(value, "occlusions") || Array.isArray(value["occlusions"]) && value["occlusions"].length <= 64 && value["occlusions"].every((item) => isCanvasSurfaceOcclusion(item))) && (!Object.hasOwn(value, "modal") || typeof value["modal"] === "boolean") && (!Object.hasOwn(value, "backdrops") || Array.isArray(value["backdrops"]) && value["backdrops"].length <= 2 && value["backdrops"].every((item) => isCanvasSurfaceBackdrop(item)));
+  return isRecord(value) && Object.keys(value).length === 8 + (Object.hasOwn(value, "occlusions") ? 1 : 0) + (Object.hasOwn(value, "modal") ? 1 : 0) + (Object.hasOwn(value, "backdrops") ? 1 : 0) && Object.hasOwn(value, "coordinateSpace") && value["coordinateSpace"] === "client" && Object.hasOwn(value, "units") && value["units"] === "css-pixels" && Object.hasOwn(value, "origin") && isCanvasSurfacePoint(value["origin"]) && Object.hasOwn(value, "viewport") && isCanvasSurfaceSize(value["viewport"]) && Object.hasOwn(value, "clip") && isCanvasSurfaceClip(value["clip"]) && Object.hasOwn(value, "physicalPixelsPerCssPixel") && typeof value["physicalPixelsPerCssPixel"] === "number" && Number.isFinite(value["physicalPixelsPerCssPixel"]) && value["physicalPixelsPerCssPixel"] > 0 && value["physicalPixelsPerCssPixel"] <= 64 && Object.hasOwn(value, "visible") && typeof value["visible"] === "boolean" && Object.hasOwn(value, "focused") && typeof value["focused"] === "boolean" && (!Object.hasOwn(value, "occlusions") || Array.isArray(value["occlusions"]) && value["occlusions"].length <= 64 && value["occlusions"].every((item) => isCanvasSurfaceOcclusion(item))) && (!Object.hasOwn(value, "modal") || typeof value["modal"] === "boolean") && (!Object.hasOwn(value, "backdrops") || Array.isArray(value["backdrops"]) && value["backdrops"].length <= 64 && value["backdrops"].every((item) => isCanvasSurfaceBackdrop(item)));
 }
 function isCanvasSurfaceBackdrop(value) {
   return isRecord(value) && Object.keys(value).length === 6 && Object.hasOwn(value, "x") && typeof value["x"] === "number" && Number.isFinite(value["x"]) && value["x"] >= -1e6 && value["x"] <= 1e6 && Object.hasOwn(value, "y") && typeof value["y"] === "number" && Number.isFinite(value["y"]) && value["y"] >= -1e6 && value["y"] <= 1e6 && Object.hasOwn(value, "width") && typeof value["width"] === "number" && Number.isFinite(value["width"]) && value["width"] > 0 && value["width"] <= 1e6 && Object.hasOwn(value, "height") && typeof value["height"] === "number" && Number.isFinite(value["height"]) && value["height"] > 0 && value["height"] <= 1e6 && Object.hasOwn(value, "cornerRadius") && typeof value["cornerRadius"] === "number" && Number.isFinite(value["cornerRadius"]) && value["cornerRadius"] >= 0 && value["cornerRadius"] <= 1e6 && Object.hasOwn(value, "sigma") && typeof value["sigma"] === "number" && Number.isFinite(value["sigma"]) && value["sigma"] >= 0 && value["sigma"] <= 64;
@@ -790,8 +790,14 @@ function supportsCanvasSurfaceOcclusion(capabilities, command) {
 }
 
 // integrations/shared/CanvasSurfaceBackdrop.ts
+var CANVAS_SURFACE_BACKDROPS = 64;
+var UNDECLARED_BACKDROPS = 2;
 function negotiatesCanvasSurfaceBackdrop(capabilities) {
   return capabilities.schema === 3 && capabilities.backdrop?.schema === 1;
+}
+function canvasSurfaceBackdropLimit(capabilities, declaresRegions) {
+  if (!negotiatesCanvasSurfaceBackdrop(capabilities)) return 0;
+  return declaresRegions ? CANVAS_SURFACE_BACKDROPS : UNDECLARED_BACKDROPS;
 }
 function supportsCanvasSurfaceBackdrop(capabilities, command) {
   return command.type !== "surface.geometry" || command.geometry.backdrops === void 0 || negotiatesCanvasSurfaceBackdrop(capabilities);
@@ -2005,6 +2011,7 @@ export {
   canvasRasterByteLength,
   canvasSizingProposal,
   canvasSourceTargetKey,
+  canvasSurfaceBackdropLimit,
   constrainCanvasDimension,
   cropCanvasImageRegion,
   decodeCanvasRaster,

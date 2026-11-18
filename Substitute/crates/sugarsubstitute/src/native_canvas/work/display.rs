@@ -90,7 +90,7 @@ pub(in crate::native_canvas) struct UnderlayEvidence {
     pub(in crate::native_canvas) projection: ViewProjection,
 }
 /// Exact session material revision and viewport-local effect plan for one display.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(in crate::native_canvas) struct DisplayBackdrops {
     pub(in crate::native_canvas) plan: BackdropPlan,
     pub(in crate::native_canvas) generation: u64,
@@ -245,7 +245,7 @@ impl DrawInput {
                         underlay: underlay.as_ref(),
                         view: self.view,
                         overlay: overlay.as_ref().map_or(&[], OverlayPixels::pixels),
-                        backdrops: self.backdrops,
+                        backdrops: self.backdrops.clone(),
                     },
                     context,
                 )?;

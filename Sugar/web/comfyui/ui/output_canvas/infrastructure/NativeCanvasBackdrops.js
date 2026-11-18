@@ -13,15 +13,19 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Measure the two owned navigation bars for native-frame acrylic, independently of hit testing. */
+/** Measure the owned acrylic surfaces for the native frame, independently of hit testing. */
 import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
 import { HostAncestryObserver } from '../../core/HostAncestryObserver.js';
 import { canvasGeometryAncestry } from './CanvasVisibleClip.js';
-const BARS = '[data-sc-canvas-backdrop]';
+const SURFACES = '[data-sc-canvas-backdrop]';
+const NAVIGATION = '[data-sc-canvas-backdrop]:not([data-sc-canvas-backdrop="editing"])';
+/** The navigation bars a canvas shows at once; a host that takes no more is offered only those. */
+const NAVIGATION_BARS = 2;
 /** Keep material layout observation attached to one canvas and retire it with that attachment. */
 export class NativeCanvasBackdrops {
     root;
     invalidated;
+    limit;
     #bars = [];
     #resize = null;
     #presence = null;
@@ -33,9 +37,24 @@ export class NativeCanvasBackdrops {
     #disposed = false;
     #observing = false;
     /** Inject the owned overlay root and immediate opacity invalidation, without camera events. */
-    constructor(root, invalidated) {
+    constructor(root, invalidated, 
+    /** How many regions the host takes at once; more surfaces than that publish none. */
+    limit) {
         this.root = root;
         this.invalidated = invalidated;
+        this.limit = limit;
+    }
+    /**
+     * Whether the editing toolbars are among the surfaces offered to the host.
+     *
+     * A host that takes only the navigation bars is offered only those, so showing the editing
+     * toolbars never costs the bars their acrylic; the toolbars stay solid there.
+     */
+    get offersEditing() {
+        return this.limit > NAVIGATION_BARS;
+    }
+    get #surfaces() {
+        return this.offersEditing ? SURFACES : NAVIGATION;
     }
     /** Report whether the last measurement still describes every current visible bar. */
     get current() {
@@ -81,7 +100,9 @@ export class NativeCanvasBackdrops {
                 'data-sc-visual-style',
                 'data-theme',
             ]);
-        this.#presence = new HostSurfaceObserver(this.root, BARS, (changes) => {
+        this.#presence = new HostSurfaceObserver(this.root, 
+        // Every marked surface is watched; the inventory keeps only those this host is offered.
+        '[data-sc-canvas-backdrop]', (changes) => {
             if (changes.some((change) => change.kind !== 'content' ||
                 change.relocated ||
                 !this.#bars.includes(change.element) ||
@@ -136,7 +157,7 @@ export class NativeCanvasBackdrops {
     #measure(origin, viewport) {
         const window = this.root.ownerDocument.defaultView;
         const regions = [];
-        this.#complete = !this.#disposed && window !== null && this.#bars.length <= 2;
+        this.#complete = !this.#disposed && window !== null && this.#bars.length <= this.limit;
         if (!this.#complete || !window)
             return Object.freeze([]);
         for (const bar of this.#bars) {
@@ -201,20 +222,21 @@ export class NativeCanvasBackdrops {
     }
     /** Replace the bounded inventory only after identified bars mount or retire. */
     #synchronize() {
-        const bars = [...this.root.querySelectorAll(BARS)].slice(0, 3);
+        // One more than the host takes is kept, so an excess is seen and publishes no regions.
+        const bars = [...this.root.querySelectorAll(this.#surfaces)].slice(0, this.limit + 1);
         const same = bars.length === this.#bars.length && bars.every((bar, index) => bar === this.#bars[index]);
         this.#bars = bars;
         this.#observeAncestry();
         if (same)
             return;
         this.#resize?.disconnect();
-        for (const bar of this.#bars.slice(0, 2))
+        for (const bar of this.#bars.slice(0, this.limit))
             this.#resize?.observe(bar);
     }
     /** Rebind only when the bars' composed CSS ancestry changes, including overlay reparenting. */
     #observeAncestry() {
         const ancestors = new Set();
-        for (const bar of this.#bars.slice(0, 2)) {
+        for (const bar of this.#bars.slice(0, this.limit)) {
             const ancestry = canvasGeometryAncestry(bar);
             for (const element of ancestry?.elements ?? [])
                 ancestors.add(element);

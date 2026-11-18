@@ -211,7 +211,7 @@ impl PreparePreview {
             source_revision: packet.source_revision,
             overlay: None,
             overlay_generation: 0,
-            backdrops: self.backdrops,
+            backdrops: self.backdrops.clone(),
         });
         self.backing = Some(backing);
         self.spare_buffer = Some(spare);

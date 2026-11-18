@@ -34,7 +34,7 @@ impl GpuBackdropPatch {
         }
     }
 }
-/// At most two immutable patches in the shared plan's composition order.
+/// Immutable patches in the shared plan's composition order.
 pub struct GpuBackdropPatches {
     patches: Vec<GpuBackdropPatch>,
     _memory: MemoryClaim,

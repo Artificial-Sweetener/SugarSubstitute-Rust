@@ -36,7 +36,8 @@ const PROTOCOLS: [HostProtocol; 6] = [
 /// The page keeps the user's saved appearance, so `presentation.host-styles` is never declared.
 /// The configured accent is the operating-system accent, offered beside a custom one. Only a
 /// composition-hosted browser can show output on the native canvas; a windowed browser presents
-/// output images itself, so it is not told the host presents them.
+/// output images itself, so it is not told the host presents them. The native canvas blurs every
+/// acrylic region a geometry message admits, which the page learns from `canvas.backdrop-regions`.
 ///
 /// # Errors
 /// Rejects a description the shared schema bounds refuse, which would be a defect here.
@@ -44,6 +45,7 @@ pub(crate) fn description(hosting: MainHosting) -> Result<HostDescription, Panel
     let mut capabilities = vec![HostCapability::SYSTEM_ACCENT];
     if hosting.presents_native_canvas() {
         capabilities.push(HostCapability::HOST_OUTPUT_SURFACE);
+        capabilities.push(HostCapability::BACKDROP_REGIONS);
     }
     capabilities.push(HostCapability::NAMED_UPDATES);
     HostDescription::new(PROTOCOLS.to_vec(), capabilities)

@@ -1,6 +1,6 @@
 import {
   CanvasContextualToolbar
-} from "./chunk-QDZURHB6.js";
+} from "./chunk-N2LDE2LE.js";
 import {
   iconButton
 } from "./chunk-YS23D6EK.js";
@@ -9,7 +9,7 @@ import {
 } from "./chunk-RBMNCV5O.js";
 import {
   CanvasEditDock
-} from "./chunk-74DLBBMV.js";
+} from "./chunk-Q23QBZLX.js";
 import {
   CANVAS_EDIT_TEXT
 } from "./chunk-OJDBLLHY.js";

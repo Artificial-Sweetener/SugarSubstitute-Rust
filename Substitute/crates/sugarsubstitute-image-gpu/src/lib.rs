@@ -72,3 +72,5 @@ pub use video_memory::VideoMemoryBudget;
 pub use window::{NativeWindowHandle, WindowFrame, WindowPresentation, WindowSurface};
 pub use window_overlay::OverlayPixel;
 pub use window_patch::DisplayPatch;
+/// The most material patches one display draw admits: the canvas protocol's bound on regions.
+pub const MAX_DISPLAY_PATCHES: usize = 64;

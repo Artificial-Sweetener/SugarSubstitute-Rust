@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 // Generated from canvas.schema.json by scripts/integrations/generate-canvas-contract.ts.
-// Schema SHA-256 (LF): 1af2a32ed4ccbea2bb6eedacb06b3f752ec351004a6d809482ab2dac83cb71a0
+// Schema SHA-256 (LF): 5e57e3b7e37071661e7f46a2e4a52fab7910999689d72483ffafd5aac0d6ae0d
 
 /// Schema-defined untrusted CanvasSurfaceCapabilities data; validation grants no host authority.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -1119,7 +1119,7 @@ fn valid_canvas_surface_geometry_occlusions(value: Option<&[CanvasSurfaceOcclusi
 }
 
 fn valid_canvas_surface_geometry_backdrops(value: Option<&[CanvasSurfaceBackdrop]>) -> bool {
-    value.is_none_or(|items| items.len() <= 2 && items.iter().all(CanvasSurfaceBackdrop::valid))
+    value.is_none_or(|items| items.len() <= 64 && items.iter().all(CanvasSurfaceBackdrop::valid))
 }
 
 fn valid_canvas_surface_reply_status(value: &str) -> bool {

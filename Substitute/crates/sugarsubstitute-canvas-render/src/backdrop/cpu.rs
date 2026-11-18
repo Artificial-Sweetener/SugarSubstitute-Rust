@@ -75,7 +75,7 @@ impl RasterSource for Source<'_> {
 }
 
 impl CpuProjection {
-    /// Paint at most two acrylic regions over this completed, unpublished display projection.
+    /// Paint the plan's acrylic regions over this completed, unpublished display projection.
     /// Call once after presentation overlays and before native upload. All source crops are
     /// captured before any patch is written, so overlapping bars cannot feed blur back into blur.
     /// Canonical backings, document graphs, frame identities and camera evidence remain unchanged.

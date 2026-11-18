@@ -7,7 +7,7 @@ mod cpu;
 mod gpu;
 mod plan;
 pub use gpu::{GpuBackdrop, GpuBackdropPatch, GpuBackdropPatches};
-pub use plan::{BackdropCrop, BackdropGraph, BackdropPlan, BackdropRegion};
+pub use plan::{BackdropCrop, BackdropGraph, BackdropPlan, BackdropRegion, MAX_BACKDROPS};
 
 #[cfg(test)]
 mod tests;

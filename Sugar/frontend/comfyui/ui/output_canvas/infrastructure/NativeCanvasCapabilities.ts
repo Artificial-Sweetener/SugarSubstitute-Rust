@@ -18,6 +18,7 @@ import type { CanvasSurfaceHost } from '../../../../../integrations/contracts/Ca
 import {
   negotiatesCanvasSurfaceComparison,
   negotiatesCanvasSurfaceInspection,
+  canvasSurfaceBackdropLimit,
   negotiatesCanvasSurfaceBackdrop,
 } from '../../core/embedded/CanvasRuntime.js';
 import type { CanvasCommand } from '../domain/CanvasViewPort.js';
@@ -49,6 +50,14 @@ export function nativeCanvasInput(host: CanvasSurfaceHost | null): boolean {
 /** Admit native-frame material only through the negotiated geometry/frame acknowledgement contract. */
 export function nativeCanvasBackdrop(host: CanvasSurfaceHost | null): boolean {
   return host !== null && negotiatesCanvasSurfaceBackdrop(host.capabilities);
+}
+
+/** How many acrylic regions this host takes at once; none for a host without native acrylic. */
+export function nativeCanvasBackdropLimit(
+  host: CanvasSurfaceHost | null,
+  declaresRegions: boolean,
+): number {
+  return host === null ? 0 : canvasSurfaceBackdropLimit(host.capabilities, declaresRegions);
 }
 
 /**

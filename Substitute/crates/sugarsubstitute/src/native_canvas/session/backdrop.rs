@@ -4,7 +4,7 @@
 use super::*;
 use sugarsubstitute_canvas_render::backdrop::{BackdropPlan, BackdropRegion};
 
-/// At most two host-admitted physical regions and their session-owned monotonic revision.
+/// The host-admitted physical regions and their session-owned monotonic revision.
 #[derive(Default)]
 pub(super) struct Backdrops {
     pub(super) regions: Vec<BackdropRegion>,
@@ -24,7 +24,7 @@ impl Backdrops {
     }
 }
 impl Session {
-    /// Replace at most two physical viewport-local effects, retaining this session's revision.
+    /// Replace the physical viewport-local effects, retaining this session's revision.
     /// Identical geometry/material does no work. Source, view and overlay changes retain their
     /// own fences and reproject the same material over the new clean displayed pixels.
     /// # Errors
@@ -50,9 +50,7 @@ impl Session {
         self.abandon_cpu_frame(now)?;
         #[cfg(windows)]
         self.abandon_composition_frame(now)?;
-        let mut bounded = Vec::with_capacity(2);
-        bounded.extend(regions);
-        self.backdrops.regions = bounded;
+        self.backdrops.regions = regions;
         self.backdrops.generation = generation;
         if let Some(displaying) = &self.displaying {
             displaying.job.cancel();

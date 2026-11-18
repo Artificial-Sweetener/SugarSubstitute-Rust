@@ -11,6 +11,9 @@
               "name": "output.host-surface"
             },
             {
+              "name": "canvas.backdrop-regions"
+            },
+            {
               "name": "updates.product-name"
             }
           ],

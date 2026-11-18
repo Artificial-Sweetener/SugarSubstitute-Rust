@@ -50,7 +50,7 @@ impl StagedDraw {
         output: Extent,
         context: &JobContext,
     ) -> Result<Self, GpuError> {
-        if patches.len() > 2 {
+        if patches.len() > crate::MAX_DISPLAY_PATCHES {
             return Err(GpuError::invalid("Too many bounded display patches"));
         }
         self.patches

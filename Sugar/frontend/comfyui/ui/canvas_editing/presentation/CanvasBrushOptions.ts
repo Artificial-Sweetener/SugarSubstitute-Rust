@@ -97,6 +97,7 @@ export const CanvasBrushOptions = defineComponent({
         'div',
         {
           class: 'sc-canvas-edit-chrome sc-canvas-edit-options',
+          'data-sc-canvas-backdrop': 'editing',
           'data-canvas-options': props.tool,
         },
         [

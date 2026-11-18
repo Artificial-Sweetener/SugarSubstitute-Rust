@@ -18,6 +18,8 @@
 /**
  * Every interactive surface carries `sc-canvas-edit-chrome`, the class the native occlusion
  * reporter measures, so the native canvas yields pointer input exactly where chrome is shown.
+ * The toolbars are acrylic surfaces as well: they turn translucent only while the root says the
+ * native canvas is blurring the image behind them, and are solid at every other moment.
  */
 export function ensureCanvasEditStyles(document: Document): void {
   if (document.getElementById('sugarcubes-canvas-edit-styles')) return;
@@ -34,6 +36,8 @@ export function ensureCanvasEditStyles(document: Document): void {
     .sc-canvas-edit-chrome { pointer-events:auto; box-sizing:border-box;
       border:1px solid var(--interface-stroke,#454545); border-radius:8px;
       background:var(--sugarcubes-card-surface,var(--comfy-menu-bg,#202020)); box-shadow:0 2px 8px #0003; }
+    .sc-canvas-edit-root[data-sc-native-backdrop="ready"] .sc-canvas-edit-chrome[data-sc-canvas-backdrop] {
+      background:color-mix(in srgb,var(--sugarcubes-card-surface,var(--comfy-menu-bg,#202020)) 60%,transparent); }
     .sc-canvas-edit-row { display:flex; align-items:center; gap:4px; padding:3px; }
     .sc-canvas-edit-rail { display:flex; flex-direction:column; gap:2px; padding:2px; }
     .sc-canvas-edit-root button { color:inherit; font:inherit; cursor:pointer; box-sizing:border-box;

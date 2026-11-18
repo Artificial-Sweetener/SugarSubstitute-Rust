@@ -67,6 +67,9 @@ impl HostCapability {
     /// Besides `sugarcubes.updates` version 1, the host answers version 2 on the same channel,
     /// whose states name the product they describe.
     pub const NAMED_UPDATES: Self = Self("updates.product-name");
+    /// The host takes up to 64 acrylic regions in one canvas geometry message, where a host
+    /// without this takes two.
+    pub const BACKDROP_REGIONS: Self = Self("canvas.backdrop-regions");
 
     /// Borrow the capability name.
     pub const fn name(self) -> &'static str {

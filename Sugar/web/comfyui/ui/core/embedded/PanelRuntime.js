@@ -57,7 +57,9 @@ var HOST_CAPABILITIES = Object.freeze({
   /** The host presents output images itself; the page never falls back to browser images. */
   hostOutputSurface: "output.host-surface",
   /** Besides sugarcubes.updates version 1, the host answers version 2 on the same channel, whose states name the product they describe. */
-  namedUpdates: "updates.product-name"
+  namedUpdates: "updates.product-name",
+  /** The host takes up to 64 acrylic regions in one canvas geometry message, where a host without this takes two. */
+  backdropRegions: "canvas.backdrop-regions"
 });
 
 // integrations/shared/HostDescription.ts

@@ -10,7 +10,7 @@ mod pacing;
 mod projection;
 mod surface;
 mod update;
-pub use backdrop::{BackdropCrop, BackdropGraph, BackdropPlan, BackdropRegion};
+pub use backdrop::{BackdropCrop, BackdropGraph, BackdropPlan, BackdropRegion, MAX_BACKDROPS};
 pub use cpu::{CpuPreparation, CpuRenderer};
 pub use gpu::{GpuRenderer, PreparedGpuUpdate};
 pub use gpu_surface::{GpuFrame, GpuSurface};

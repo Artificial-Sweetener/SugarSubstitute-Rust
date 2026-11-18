@@ -78,7 +78,12 @@ fn backdrop_parameters_clip_original_masks_and_bound_adaptive_reduction() -> Res
     assert_eq!(crop.blur().sigma(), 18.75);
     assert_eq!(crop.coverage(0, 15), 1.0);
     assert_eq!(crop.coverage(94, 3), 0.0);
-    assert!(BackdropPlan::new(viewport, &[bar; 3]).is_err());
+    // A plan takes every region the protocol admits, each with its own crop, and no more.
+    let many = BackdropPlan::new(viewport, &[bar; MAX_BACKDROPS])?;
+    assert_eq!(many.regions().len(), MAX_BACKDROPS);
+    assert!(many.cpu_scratch_bytes() > plan.cpu_scratch_bytes());
+    assert_eq!(many.clone(), many);
+    assert!(BackdropPlan::new(viewport, &[bar; MAX_BACKDROPS + 1]).is_err());
     let zero = BackdropRegion::new([0.0, 0.0, 10.0, 10.0], 0.0, 0.0)?;
     assert!(BackdropPlan::new(viewport, &[zero])?.regions().is_empty());
     assert_eq!(BackdropPlan::new(viewport, &[])?.cpu_scratch_bytes(), 0);

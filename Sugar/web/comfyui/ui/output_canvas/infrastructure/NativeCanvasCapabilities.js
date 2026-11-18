@@ -1,4 +1,4 @@
-import { negotiatesCanvasSurfaceComparison, negotiatesCanvasSurfaceInspection, negotiatesCanvasSurfaceBackdrop, } from '../../core/embedded/CanvasRuntime.js';
+import { negotiatesCanvasSurfaceComparison, negotiatesCanvasSurfaceInspection, canvasSurfaceBackdropLimit, negotiatesCanvasSurfaceBackdrop, } from '../../core/embedded/CanvasRuntime.js';
 const CAMERA_COMMANDS = ['fit', 'native', 'zoom', 'pan'];
 const COMPARISON_COMMANDS = ['select-comparison', 'swap', 'wipe'];
 /** Rebuild a staged attachment when discovery changes its immutable command capabilities. */
@@ -20,6 +20,10 @@ export function nativeCanvasInput(host) {
 /** Admit native-frame material only through the negotiated geometry/frame acknowledgement contract. */
 export function nativeCanvasBackdrop(host) {
     return host !== null && negotiatesCanvasSurfaceBackdrop(host.capabilities);
+}
+/** How many acrylic regions this host takes at once; none for a host without native acrylic. */
+export function nativeCanvasBackdropLimit(host, declaresRegions) {
+    return host === null ? 0 : canvasSurfaceBackdropLimit(host.capabilities, declaresRegions);
 }
 /**
  * Advertise camera commands only with the viewport-state contract required by their shared

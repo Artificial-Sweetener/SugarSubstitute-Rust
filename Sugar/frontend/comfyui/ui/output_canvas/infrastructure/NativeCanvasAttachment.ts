@@ -53,6 +53,7 @@ import {
   nativeCanvasInspection,
   nativeCanvasOverview,
   nativeCanvasBackdrop,
+  nativeCanvasBackdropLimit,
 } from './NativeCanvasCapabilities.js';
 import { NativeCanvasInspection } from './NativeCanvasInspection.js';
 import { NativeCanvasOcclusions } from './NativeCanvasOcclusions.js';
@@ -83,6 +84,8 @@ export interface NativeCanvasAttachmentOptions extends CanvasAttachmentOptions {
   acceptsPreparation(): boolean;
   /** Resolve the canvas's editing host; the editing chrome shows while it presents a document. */
   editing?(): CanvasEditHost | null;
+  /** Report whether the host's description declares that it takes every admitted acrylic region. */
+  declaresBackdropRegions?(): boolean;
 }
 
 /** Retain controls and selection while leaving every output pixel to the native host. */
@@ -335,7 +338,11 @@ export class NativeCanvasAttachment {
       });
       cleanup.push(() => this.#editing.dispose());
       if (nativeCanvasBackdrop(host)) {
-        this.#backdrops = new NativeCanvasBackdrops(element, () => this.#publish());
+        this.#backdrops = new NativeCanvasBackdrops(
+          element,
+          () => this.#publish(),
+          nativeCanvasBackdropLimit(host, options.declaresBackdropRegions?.() === true),
+        );
         cleanup.push(() => this.#backdrops?.dispose());
       }
       this.#geometry = new CanvasSurfaceGeometryObserver(
@@ -539,7 +546,11 @@ export class NativeCanvasAttachment {
   #publish(): void {
     if (!this.#ready || this.#disposed) return;
     this.#media.reconcile();
-    this.port.publish(this.#snapshot());
+    const snapshot = this.#snapshot();
+    this.#editing.material(
+      this.#backdrops?.offersEditing ? (snapshot.nativeBackdrop ?? 'unavailable') : 'unavailable',
+    );
+    this.port.publish(snapshot);
   }
 
   /** Describe only capabilities and state supported by the current native surface. */

@@ -328,7 +328,7 @@
           "items": {
             "$ref": "#/$defs/CanvasSurfaceBackdrop"
           },
-          "maxItems": 2
+          "maxItems": 64
         }
       },
       "required": [

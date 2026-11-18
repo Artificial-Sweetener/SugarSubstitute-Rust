@@ -160,9 +160,536 @@
       "valid": true
     },
     {
+      "name": "three backdrops",
+      "path": "backdrops",
+      "value": [
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 258,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 508,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        }
+      ],
+      "valid": true
+    },
+    {
       "name": "excessive backdrops",
       "path": "backdrops",
       "value": [
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
+        {
+          "x": 8,
+          "y": 552,
+          "width": 240,
+          "height": 40,
+          "cornerRadius": 8,
+          "sigma": 10
+        },
         {
           "x": 8,
           "y": 552,

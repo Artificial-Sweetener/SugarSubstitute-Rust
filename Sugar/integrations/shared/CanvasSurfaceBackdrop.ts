@@ -19,9 +19,28 @@ import type {
   CanvasSurfaceCommand,
 } from '../contracts/CanvasSurface.js';
 
+/** The most regions a geometry message may carry. */
+export const CANVAS_SURFACE_BACKDROPS = 64;
+const UNDECLARED_BACKDROPS = 2;
+
 /** Report whether geometry can describe native acrylic behind transparent web controls. */
 export function negotiatesCanvasSurfaceBackdrop(capabilities: CanvasSurfaceCapabilities): boolean {
   return capabilities.schema === 3 && capabilities.backdrop?.schema === 1;
+}
+
+/**
+ * Say how many acrylic regions the host takes in one geometry message.
+ *
+ * A host takes two, and refuses a message that carries more, unless its description declares
+ * `canvas.backdrop-regions`; that host takes as many as the message admits. A host that
+ * negotiates no acrylic takes none.
+ */
+export function canvasSurfaceBackdropLimit(
+  capabilities: CanvasSurfaceCapabilities,
+  declaresRegions: boolean,
+): number {
+  if (!negotiatesCanvasSurfaceBackdrop(capabilities)) return 0;
+  return declaresRegions ? CANVAS_SURFACE_BACKDROPS : UNDECLARED_BACKDROPS;
 }
 
 /** Avoid sending later optional geometry members to hosts that do not implement them. */

@@ -56,6 +56,8 @@ export interface MountedCanvasEditOverlay {
   geometryChanged(): void;
   /** Re-render after appearance such as mask colours changed. */
   refresh(): void;
+  /** State whether the native canvas blurs the image behind the toolbars; absent on a page canvas. */
+  material(state: 'unavailable' | 'pending' | 'ready'): void;
   dispose(): void;
 }
 
@@ -145,6 +147,10 @@ export function mountCanvasEditOverlay(
   }
 
   return {
+    material(state) {
+      if (!disposed && root.dataset.scNativeBackdrop !== state)
+        root.dataset.scNativeBackdrop = state;
+    },
     attach(host) {
       if (disposed || controller.value?.host === host) return;
       retire();

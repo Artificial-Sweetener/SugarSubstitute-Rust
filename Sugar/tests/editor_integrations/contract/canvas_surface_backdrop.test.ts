@@ -3,6 +3,8 @@ import type { CanvasContext } from '../../../integrations/contracts/CanvasProtoc
 import type { CanvasSurfaceCapabilities } from '../../../integrations/contracts/CanvasSurface.js';
 import { CanvasCancellation } from '../../../integrations/shared/CanvasCancellation.js';
 import {
+  CANVAS_SURFACE_BACKDROPS,
+  canvasSurfaceBackdropLimit,
   negotiatesCanvasSurfaceBackdrop,
   supportsCanvasSurfaceBackdrop,
 } from '../../../integrations/shared/CanvasSurfaceBackdrop.js';
@@ -30,6 +32,17 @@ const geometry = {
   backdrops: [{ x: 8, y: 552, width: 240, height: 40, cornerRadius: 8, sigma: 10 }],
 } as const;
 
+test('a host takes two regions, and every admitted region once its description says so', () => {
+  expect(canvasSurfaceBackdropLimit(capabilities, false)).toBe(2);
+  expect(canvasSurfaceBackdropLimit(capabilities, true)).toBe(CANVAS_SURFACE_BACKDROPS);
+  expect(canvasSurfaceBackdropLimit({ ...capabilities, schema: 2 }, true)).toBe(0);
+  expect(canvasSurfaceBackdropLimit(EMPTY_CANVAS_SURFACE_CAPABILITIES, true)).toBe(0);
+  const region = geometry.backdrops[0];
+  const filled = (count: number) => ({ ...geometry, backdrops: Array(count).fill(region) });
+  expect(isCanvasSurfaceGeometry(filled(CANVAS_SURFACE_BACKDROPS))).toBe(true);
+  expect(isCanvasSurfaceGeometry(filled(CANVAS_SURFACE_BACKDROPS + 1))).toBe(false);
+});
+
 test('requires explicit current native material support and bounds every region', () => {
   expect(negotiatesCanvasSurfaceBackdrop(capabilities)).toBe(true);
   expect(negotiatesCanvasSurfaceBackdrop({ ...capabilities, schema: 2 })).toBe(false);
@@ -44,7 +57,7 @@ test('requires explicit current native material support and bounds every region'
   expect(supportsCanvasSurfaceBackdrop(EMPTY_CANVAS_SURFACE_CAPABILITIES, command)).toBe(false);
   expect(isCanvasSurfaceGeometry(geometry)).toBe(true);
   for (const backdrops of [
-    [geometry.backdrops[0], geometry.backdrops[0], geometry.backdrops[0]],
+    Array(CANVAS_SURFACE_BACKDROPS + 1).fill(geometry.backdrops[0]),
     [{ ...geometry.backdrops[0], sigma: Infinity }],
     [{ ...geometry.backdrops[0], sigma: -1 }],
     [{ ...geometry.backdrops[0], nativeHandle: 1 }],

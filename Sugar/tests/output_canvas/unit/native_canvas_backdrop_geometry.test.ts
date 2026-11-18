@@ -72,7 +72,7 @@ function rect(left: number, top: number, width: number, height: number): DOMRect
 }
 
 /** Supply browser-owned allocation while keeping all material arithmetic in the actual owner. */
-function fixture() {
+function fixture(limit = 2) {
   const root = document.createElement('section');
   const viewport = document.createElement('div');
   viewport.dataset.scCanvasGeometry = '';
@@ -86,7 +86,7 @@ function fixture() {
   root.append(bar);
   const bounds = jest.spyOn(bar, 'getBoundingClientRect').mockReturnValue(rect(18, 370, 200, 42));
   const invalidated = jest.fn();
-  const backdrops = new NativeCanvasBackdrops(root, invalidated);
+  const backdrops = new NativeCanvasBackdrops(root, invalidated, limit);
   return { root, viewport, bar, bounds, invalidated, backdrops };
 }
 
@@ -259,6 +259,38 @@ test('unrepresentable or excessive material layouts remain opaque instead of pub
     expect(f.backdrops.current).toBe(false);
   } finally {
     release();
+  }
+});
+
+test('a host publishes as many surfaces as it takes, and none when the page holds more', async () => {
+  for (const [limit, published] of [
+    [64, 3],
+    [3, 3],
+    [2, 0],
+    [0, 0],
+  ] as const) {
+    document.body.replaceChildren();
+    const f = fixture(limit);
+    const release = f.backdrops.observe(() => {});
+    try {
+      for (let index = 0; index < 2; index++) {
+        const bar = f.bar.cloneNode() as HTMLElement;
+        bar.style.borderRadius = '8px';
+        bar.style.setProperty('--p-toast-blur', '12px');
+        jest
+          .spyOn(bar, 'getBoundingClientRect')
+          .mockReturnValue(rect(18, 60 + index * 60, 200, 42));
+        f.root.append(bar);
+      }
+      await Promise.resolve();
+      await Promise.resolve();
+      const regions = f.backdrops.read({ x: 10, y: 20 }, { width: 500, height: 400 });
+      expect(regions).toHaveLength(published);
+      expect(f.backdrops.current).toBe(published > 0);
+      if (published > 0) expect(regions.map((region) => region.y)).toEqual([350, 40, 100]);
+    } finally {
+      release();
+    }
   }
 });
 

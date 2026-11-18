@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise effect revisions at real draw completion, native acceptance and pan-upload boundaries.
 use super::*;
-use sugarsubstitute_canvas_render::backdrop::BackdropRegion;
+use sugarsubstitute_canvas_render::backdrop::{BackdropRegion, MAX_BACKDROPS};
 
 fn region(sigma: f32) -> Result<BackdropRegion, Box<dyn Error>> {
     Ok(BackdropRegion::new([5.5, 6.25, 96.0, 28.0], 8.0, sigma)?)
@@ -16,7 +16,7 @@ fn backdrop_material_revisions_are_session_owned_and_identical_regions_do_no_wor
     session.expose_pending = false;
     assert_eq!(session.set_backdrops(vec![region(4.0)?])?, 1);
     assert!(!session.expose_pending);
-    assert!(session.set_backdrops(vec![region(4.0)?; 3]).is_err());
+    assert!(session.set_backdrops(vec![region(4.0)?; MAX_BACKDROPS + 1]).is_err());
     assert_eq!(session.backdrops.generation, 1);
     assert_eq!(session.set_backdrops(vec![region(6.0)?])?, 2);
     assert_eq!(session.set_backdrops(Vec::new())?, 3);

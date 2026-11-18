@@ -93,7 +93,7 @@ impl SharedSurface {
             context,
         )
     }
-    /// Draw a clean projection and at most two separately prepared rounded material patches.
+    /// Draw a clean projection and its separately prepared rounded material patches.
     /// Patch inputs retain their exact immutable device custody through actual draw completion.
     /// # Errors
     /// Rejects foreign devices, mismatched output/maps/masks and original native/control failures.

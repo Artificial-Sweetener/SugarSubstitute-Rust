@@ -70,6 +70,7 @@ export const CanvasToolRail = defineComponent({
         'div',
         {
           class: 'sc-canvas-edit-chrome sc-canvas-edit-rail',
+          'data-sc-canvas-backdrop': 'editing',
           role: 'toolbar',
           'aria-orientation': 'vertical',
           'aria-label': CANVAS_EDIT_TEXT.tools,

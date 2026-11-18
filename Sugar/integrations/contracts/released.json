@@ -3,7 +3,7 @@
     {
       "file": "canvas.schema.json",
       "id": "https://artificialsweetener.ai/schemas/sugarcubes/canvas/v3",
-      "sha256": "b72372ee8c7760a767d95e3f16a7415300789511c576d3ecf14442d1959c55e7"
+      "sha256": "92a0ac47892fd4559dd55b6716def6106ffedd5c2357b5ddfae229aee8dc0496"
     },
     {
       "file": "host.schema.json",
@@ -67,6 +67,10 @@
     {
       "name": "updates.product-name",
       "meaning": "Besides sugarcubes.updates version 1, the host answers version 2 on the same channel, whose states name the product they describe."
+    },
+    {
+      "name": "canvas.backdrop-regions",
+      "meaning": "The host takes up to 64 acrylic regions in one canvas geometry message, where a host without this takes two."
     }
   ]
 }

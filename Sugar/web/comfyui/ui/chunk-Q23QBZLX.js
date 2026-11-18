@@ -1,9 +1,9 @@
 import {
   CanvasToolRail
-} from "./chunk-SLI4UFVA.js";
+} from "./chunk-JN3ZJ2G5.js";
 import {
   CanvasBrushOptions
-} from "./chunk-HXRUOFZ6.js";
+} from "./chunk-UA2LRR7I.js";
 import {
   CANVAS_EDIT_CHROME_INSET
 } from "./chunk-3HDL7XRD.js";

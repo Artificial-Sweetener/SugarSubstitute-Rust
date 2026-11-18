@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove the native canvas yields pointer input under every editing surface. */
 import { afterEach, describe, expect, jest, test } from '@jest/globals';
+import { NativeCanvasBackdrops } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasBackdrops.js';
 import { NativeCanvasOcclusions } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasOcclusions.js';
 import { editState } from '../support/CanvasEditHostFixture.js';
 import {
@@ -83,5 +84,47 @@ describe('editing chrome occlusions', () => {
     const measured = measure(new NativeCanvasOcclusions(f.scope, f.viewport));
     expect(measured.modal).toBe(true);
     expect(measured.occlusions).toEqual([{ x: 200, y: 550, width: 400, height: 42 }]);
+  });
+
+  test('offers the rail and contextual toolbar to the native canvas as acrylic surfaces', async () => {
+    const f = await mountEditing(
+      editState({ selection: { bounds: { left: 300, top: 100, width: 200, height: 200 } } }),
+    );
+    layout(f.viewport);
+    const read = (limit: number) => {
+      const backdrops = new NativeCanvasBackdrops(f.scope, () => {}, limit);
+      const release = backdrops.observe(() => {});
+      try {
+        const regions = backdrops.read(
+          { x: VIEWPORT.left, y: VIEWPORT.top },
+          { width: VIEWPORT.width, height: VIEWPORT.height },
+        );
+        return { regions, current: backdrops.current };
+      } finally {
+        release();
+      }
+    };
+    const taken = read(64);
+    expect(taken.current).toBe(true);
+    expect(taken.regions.map(({ x, y, width, height }) => ({ x, y, width, height }))).toEqual(
+      expect.arrayContaining([
+        { x: 8, y: 52, width: 40, height: 260 },
+        { x: 300, y: 312, width: 200, height: 36 },
+      ]),
+    );
+    expect(taken.regions).toHaveLength(2);
+    // A host that takes only the navigation bars is not offered the toolbars: they stay solid
+    // and take nothing from the bars' allowance.
+    expect(read(2)).toEqual({ regions: [], current: true });
+  });
+
+  test('the toolbars are told when the native canvas blurs behind them', async () => {
+    const f = await mountEditing();
+    expect(f.root.dataset.scNativeBackdrop).toBeUndefined();
+    f.mounted.material('pending');
+    expect(f.root.dataset.scNativeBackdrop).toBe('pending');
+    f.mounted.material('ready');
+    expect(f.root.dataset.scNativeBackdrop).toBe('ready');
+    expect(f.query('.sc-canvas-edit-rail')?.dataset.scCanvasBackdrop).toBe('editing');
   });
 });

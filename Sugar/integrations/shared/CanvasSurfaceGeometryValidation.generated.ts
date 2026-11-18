@@ -205,7 +205,7 @@ export function isCanvasSurfaceGeometry(value: unknown): value is Contract.Canva
     (!Object.hasOwn(value, 'modal') || typeof value['modal'] === 'boolean') &&
     (!Object.hasOwn(value, 'backdrops') ||
       (Array.isArray(value['backdrops']) &&
-        value['backdrops'].length <= 2 &&
+        value['backdrops'].length <= 64 &&
         value['backdrops'].every((item: unknown) => isCanvasSurfaceBackdrop(item))))
   );
 }
