@@ -198,40 +198,38 @@ impl Kernels {
         self.device.faults.check()?;
         Ok((output, coverage))
     }
-    /// Copy the `overlap` rectangle of one tile into a wider gathered tile in a single dispatch.
-    /// A buffer-to-buffer copy would need one native command per row, and a halo is assembled
-    /// from hundreds of rows; the GPU spends longer on those commands than on the image work.
+    /// Copy into a wider gathered tile every pixel that up to three source tiles hold, in a
+    /// single dispatch. A buffer-to-buffer copy would need one native command per row, and a
+    /// halo is assembled from hundreds of rows; the GPU spends longer on those commands than on
+    /// the image work.
     pub(crate) fn copy(
         &self,
         batch: &mut Batch,
-        source: &GpuTile,
+        sources: [Option<&GpuTile>; 3],
         target: &GpuTile,
-        overlap: Region,
         context: &JobContext,
     ) -> Result<(), GpuError> {
         crate::adapter::check(context)?;
         let mut parameters = Parameters::new(12, target.region());
-        let from = source.region();
-        parameters.0[4..8].copy_from_slice(&[from.x(), from.y(), from.width(), from.height()]);
-        parameters.0[8..12].copy_from_slice(&[
-            overlap.x(),
-            overlap.y(),
-            overlap.width(),
-            overlap.height(),
-        ]);
+        for (index, source) in sources.iter().enumerate() {
+            if let Some(source) = source {
+                let from = source.region();
+                parameters.0[4 + index * 4..8 + index * 4].copy_from_slice(&[
+                    from.x(),
+                    from.y(),
+                    from.width(),
+                    from.height(),
+                ]);
+                batch.pin(source.buffer.clone())?;
+            }
+        }
         let uniform =
             self.upload_words(batch, &parameters.0, wgpu::BufferUsages::UNIFORM, context)?;
-        batch.pin(source.buffer.clone())?;
         batch.pin(target.buffer.clone())?;
-        let buffers = [
-            &uniform,
-            &source.buffer,
-            &self.dummy,
-            &self.dummy,
-            &target.buffer,
-            &self.dummy,
-            &batch.status,
-        ];
+        let input = |index: usize| sources[index].map_or(&self.dummy, |source| &source.buffer);
+        let buffers =
+            [&uniform, input(0), input(1), input(2), &target.buffer, &self.dummy, &batch.status];
+        let overlap = target.region();
         let entries = std::array::from_fn::<_, 7, _>(|binding| wgpu::BindGroupEntry {
             binding: binding as u32,
             resource: buffers[binding].raw.as_entire_binding(),
@@ -390,12 +388,18 @@ fn image(@builtin(global_invocation_id) id: vec3<u32>, @builtin(local_invocation
     if local == 0u { atomicStore(&group_flags, 0u); }
     workgroupBarrier();
     if p.control.x == 12u {
-        // Halo copy: `b` is the copied rectangle, in the global coordinates `a` and `output` use.
-        if id.x < p.b.z && id.y < p.b.w {
-            let source = (p.b.y - p.a.y + id.y) * p.a.z + (p.b.x - p.a.x + id.x);
-            let target_index =
-                (p.b.y - p.output.y + id.y) * p.output.z + (p.b.x - p.output.x + id.x);
-            output[target_index] = bitcast<vec4<u32>>(a[source]);
+        // Halo copy: each output pixel takes its value from whichever source tile holds it, and
+        // stays as it is where none does. An absent source has an empty region.
+        if id.x < p.output.z && id.y < p.output.w {
+            let at = p.output.xy + id.xy;
+            let index = id.y * p.output.z + id.x;
+            if all(at >= p.a.xy) && all(at < p.a.xy + p.a.zw) {
+                output[index] = bitcast<vec4<u32>>(a[(at.y - p.a.y) * p.a.z + (at.x - p.a.x)]);
+            } else if all(at >= p.b.xy) && all(at < p.b.xy + p.b.zw) {
+                output[index] = bitcast<vec4<u32>>(b[(at.y - p.b.y) * p.b.z + (at.x - p.b.x)]);
+            } else if all(at >= p.c.xy) && all(at < p.c.xy + p.c.zw) {
+                output[index] = bitcast<vec4<u32>>(c[(at.y - p.c.y) * p.c.z + (at.x - p.c.x)]);
+            }
         }
     } else if id.x < p.output.z && id.y < p.output.w {
         let index = id.y * p.output.z + id.x;

@@ -45,6 +45,9 @@ impl<S> GpuEvaluator<S> {
             | wgpu::BufferUsages::COPY_DST;
         let output =
             self.retry(|this| this.device.allocate(region.pixels() * 16, storage, context))?;
+        let gathered = GpuTile { buffer: output, region };
+        let mut sources: [Option<GpuTile>; 3] = [None, None, None];
+        let mut held = 0;
         for y in region.y() / TILE_EDGE..=(region.bottom() - 1) / TILE_EDGE {
             for x in region.x() / TILE_EDGE..=(region.right() - 1) / TILE_EDGE {
                 let tile_region = self
@@ -54,21 +57,38 @@ impl<S> GpuEvaluator<S> {
                     .tile_region(x, y)
                     .map_err(image_error)?;
                 let tile = self.computed(node, tile_region, context)?.tile.clone();
-                let overlap = tile
-                    .region()
-                    .intersection(region)
-                    .ok_or_else(|| GpuError::invalid("Missing GPU dependency intersection"))?;
-                let gathered = GpuTile { buffer: output.clone(), region };
-                self.ready(context)?;
-                let batch = self
-                    .batch
-                    .as_mut()
-                    .ok_or_else(|| GpuError::invalid("GPU halo batch is unavailable"))?;
-                self.kernels.copy(batch, &tile, &gathered, overlap, context)?;
-                batch.copied();
+                if tile.region().intersection(region).is_none() {
+                    return Err(GpuError::invalid("Missing GPU dependency intersection"));
+                }
+                sources[held] = Some(tile);
+                held += 1;
+                if held == sources.len() {
+                    self.copy_halo(&sources, &gathered, context)?;
+                    sources = [None, None, None];
+                    held = 0;
+                }
                 crate::adapter::check(context)?;
             }
         }
-        Ok(GpuTile { buffer: output, region })
+        if held > 0 {
+            self.copy_halo(&sources, &gathered, context)?;
+        }
+        Ok(gathered)
+    }
+    /// One dispatch serves up to three source tiles; each takes one step of the current batch.
+    fn copy_halo(
+        &mut self,
+        sources: &[Option<GpuTile>; 3],
+        gathered: &GpuTile,
+        context: &JobContext,
+    ) -> Result<(), GpuError> {
+        self.ready(context)?;
+        let batch = self
+            .batch
+            .as_mut()
+            .ok_or_else(|| GpuError::invalid("GPU halo batch is unavailable"))?;
+        self.kernels.copy(batch, sources.each_ref().map(Option::as_ref), gathered, context)?;
+        batch.copied();
+        Ok(())
     }
 }
