@@ -1,3 +1,9 @@
+## [0.26.1](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.26.0...sugarcubes-v0.26.1) (2026-11-18)
+
+### Bug Fixes
+
+* **canvas:** keep the input canvas's masks when the canvas is closed and opened again ([d2b8d52](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/d2b8d52bbca5115ccf6b33f2a6aa8e3eb8fa56aa))
+
 ## [0.26.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.25.0...sugarcubes-v0.26.0) (2026-11-18)
 
 ### Features
