@@ -22,6 +22,7 @@ import { ComfyFrameWorkflowAdapter } from './ComfyFrameWorkflowAdapter.js';
 import { ClosedWorkflowHistory } from './ClosedWorkflowHistory.js';
 import { SubstituteFrameView } from './SubstituteFrameView.js';
 import { substituteFrameCss } from './SubstituteFrameStyles.js';
+import { generationQueueSkinCss } from './GenerationQueueSkinStyles.js';
 import { GenerationStripHost } from './GenerationStripHost.js';
 import { SubstituteToolbarLayout } from './SubstituteToolbarLayout.js';
 import { DesktopFramePresentation } from './DesktopFramePresentation.js';
@@ -69,7 +70,8 @@ export class SubstituteFrameHost {
         });
         this.#style = options.document.createElement('style');
         this.#style.id = 'sugarcubes-substitute-frame';
-        this.#style.textContent = substituteFrameCss + desktopFrameCss + pluginFrameCss;
+        this.#style.textContent =
+            substituteFrameCss + generationQueueSkinCss + desktopFrameCss + pluginFrameCss;
     }
     /** Configure one desktop document through the presentation protocol without persisting preferences. */
     configureDesktopFrame(configuration) {
