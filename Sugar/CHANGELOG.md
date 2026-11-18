@@ -1,3 +1,9 @@
+## [0.22.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.21.2...sugarcubes-v0.22.0) (2026-11-18)
+
+### Features
+
+* **host:** show a host's notice of unsaved work as a toast that stays until dismissed ([388e856](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/388e8562e2c1c0ee4b881802c69c852dce164680))
+
 ## [0.21.2](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.21.1...sugarcubes-v0.21.2) (2026-11-18)
 
 ### Bug Fixes
