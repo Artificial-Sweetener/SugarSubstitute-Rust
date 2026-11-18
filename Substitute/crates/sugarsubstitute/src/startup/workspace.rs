@@ -114,8 +114,11 @@ pub(super) struct WorkspaceWork {
     retired: bool,
     /// The profile directory holding the close-save record, known once an open began.
     record_directory: Option<PathBuf>,
-    /// What the previous close did not keep, until the window surface takes it.
-    notice: Option<NotSavedLastTime>,
+    /// What the previous close did not keep, once its record was read and until the notice
+    /// owner takes it; the inner `None` is a close that kept everything.
+    previous_close: Option<Option<NotSavedLastTime>>,
+    /// Marking the close-save record after its notice was shown.
+    notice_shown: Option<OwnedJob<(), StoreError>>,
     /// The close-save record write, awaiting its observed terminal outcome.
     record: Option<OwnedJob<(), StoreError>>,
 }
@@ -156,7 +159,8 @@ impl WorkspaceWork {
             retirement_until: None,
             retired: false,
             record_directory: None,
-            notice: None,
+            previous_close: None,
+            notice_shown: None,
             record: None,
         }
     }
@@ -222,7 +226,7 @@ impl WorkspaceWork {
         let client = self.client.as_ref().ok_or("Workspace execution absent")?;
         let scope = self.scope.as_ref().ok_or("Workspace scope absent")?;
         self.load = Some(client.submit_blocking(scope,spec,move |job| {
-            let notice = match workspace_session::close_record::take_notice_worker(&record_directory, &job) {
+            let notice = match workspace_session::close_record::read_notice_worker(&record_directory, &job) {
                 Ok(notice) => notice,
                 Err(cause) => {
                     tracing::warn!(operation="workspace_close_record",cause_chain=%crate::diagnostics::CauseChain(&cause),"The previous close-save record is unreadable; it is kept");
@@ -388,9 +392,26 @@ impl WorkspaceWork {
         driver.close_verdict(now)
     }
 
-    /// Take what the previous close did not keep, once, for the window's notice surface.
-    pub(super) fn take_notice(&mut self) -> Option<NotSavedLastTime> {
-        self.notice.take()
+    /// Take, once it is known, what the previous close did not keep; the inner `None` is a
+    /// close that kept everything.
+    pub(super) fn take_previous_close(&mut self) -> Option<Option<NotSavedLastTime>> {
+        self.previous_close.take()
+    }
+
+    /// Mark the close-save record now that its notice was shown, so no later start owes it.
+    /// One open-ended job; a failed mark is logged and the next start shows the notice again.
+    pub(super) fn submit_notice_shown(&mut self) -> Result<(), Box<dyn Error>> {
+        let Some(directory) = self.record_directory.clone() else { return Ok(()) };
+        if self.notice_shown.is_some() || self.closing.is_some() {
+            return Ok(());
+        }
+        let spec = self.job(64 * 1024, None)?;
+        let client = self.client.as_ref().ok_or("Workspace execution absent")?;
+        let scope = self.scope.as_ref().ok_or("Workspace scope absent")?;
+        self.notice_shown = Some(client.submit_blocking(scope, spec, move |context| {
+            workspace_session::close_record::mark_notified_worker(&directory, &context)
+        })?);
+        Ok(())
     }
 
     /// Durably record an outcome that did not keep everything, ending at `ended`, through one
@@ -435,6 +456,7 @@ impl WorkspaceWork {
 
     pub(super) fn settled(&self) -> bool {
         self.record.is_none()
+            && self.notice_shown.is_none()
             && self.pending_open.is_none()
             && self.load.is_none()
             && self.active.is_none()

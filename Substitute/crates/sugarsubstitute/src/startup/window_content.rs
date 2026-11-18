@@ -163,12 +163,6 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
         Self::close_save_progress(self)
     }
 
-    fn take_unsaved_notice(
-        &mut self,
-    ) -> Option<sugarsubstitute_application::workspace_session::close_save::NotSavedLastTime> {
-        Self::take_unsaved_notice(self)
-    }
-
     /// The configured language once startup has its session; English before then.
     fn locale_messages(&self) -> &'static sugarsubstitute_contracts::localization::Messages {
         let locale = self.startup.as_ref().map_or("en", |startup| {
@@ -303,6 +297,10 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
         }
         #[cfg(all(windows, any(feature = "windows-native-host", test)))]
         if let Some(command) = self.release_notes.take_command() {
+            return Ok(Some(command));
+        }
+        #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+        if let Some(command) = self.session_notice.take_command() {
             return Ok(Some(command));
         }
         #[cfg(all(windows, feature = "native-composition"))]

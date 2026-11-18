@@ -97,9 +97,6 @@ fn states() -> Vec<State> {
     caption.observe(feed(crate::main_updates::UpdateGlyph::Ready, true, WorkflowActivity::Idle));
     states.push(State { name: "caption-saving", caption, shown: &[7] });
     let mut caption = CaptionUpdates::default();
-    caption.notify(Notice::NotSaved { workspace: true, inputs: false });
-    states.push(State { name: "caption-not-saved-notice", caption, shown: &[7, 9] });
-    let mut caption = CaptionUpdates::default();
     caption.observe(UpdateFeed { whats_new: true, ..UpdateFeed::default() });
     caption.notify(Notice::update(crate::UpdateNotice::Updated { version: "2.4.1".into() }));
     states.push(State { name: "caption-updated-to-version", caption, shown: &[7, 8, 9] });

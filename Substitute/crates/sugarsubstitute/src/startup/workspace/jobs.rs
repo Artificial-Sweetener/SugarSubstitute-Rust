@@ -39,7 +39,7 @@ impl WorkspaceWork {
                     self.delivery = Some(loaded.delivery_memory);
                     self.input_plan = loaded.input_plan;
                     self.input_association = None;
-                    self.notice = loaded.notice;
+                    self.previous_close = Some(loaded.notice);
                     self.bootstrap = Some(loaded.bootstrap);
                     self.ready = true;
                 }
@@ -52,6 +52,20 @@ impl WorkspaceWork {
                         outcome.kind()
                     ))
                     .into());
+                }
+            }
+        }
+        if let Some(job) = &mut self.notice_shown
+            && let Some(completion) = job.try_take_completion()
+        {
+            self.notice_shown = None;
+            match completion.outcome {
+                JobOutcome::Success(()) => {}
+                JobOutcome::Failure(cause) => {
+                    tracing::warn!(operation="workspace_close_record",cause_chain=%crate::diagnostics::CauseChain(&cause),"The shown notice of unsaved work could not be marked; the next start shows it again");
+                }
+                outcome => {
+                    tracing::warn!(operation="workspace_close_record",outcome=?outcome.kind(),"Marking the shown notice of unsaved work stopped; the next start shows it again");
                 }
             }
         }

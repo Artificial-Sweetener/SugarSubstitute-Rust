@@ -194,7 +194,7 @@ fn the_update_line_never_covers_the_page_and_dismiss_gives_its_strip_back() -> T
             ..crate::main_updates::UpdateFeed::default()
         });
         caption.notify(Notice::Updated { version: "0.1.0".to_owned() });
-        caption.notify(Notice::NotSaved { workspace: true, inputs: false });
+        caption.notify(Notice::PreviousVersionRunning);
 
         for _ in 0..2 {
             let shown = Window::lay_out(&caption, scale)?;

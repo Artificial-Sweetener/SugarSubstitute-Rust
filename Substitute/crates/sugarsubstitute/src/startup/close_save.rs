@@ -12,7 +12,7 @@
 //! Restart to apply relaunches only after [`StartupHost::close_save_outcome`] exists.
 use super::*;
 use sugarsubstitute_application::workspace_session::close_save::{
-    CloseReason, CloseSave, CloseSaveOutcome, CloseSaveProgress, NotSavedLastTime,
+    CloseReason, CloseSave, CloseSaveOutcome, CloseSaveProgress,
 };
 use sugarsubstitute_contracts::{execution::Moment, lifecycle::ShutdownBudget};
 
@@ -135,14 +135,6 @@ impl<B: StartupBackend> StartupHost<B> {
     /// The close save's final outcome, once its record is durable or none was needed.
     pub fn close_save_outcome(&self) -> Option<CloseSaveOutcome> {
         self.close_save.as_ref().filter(|save| save.settled()).and_then(CloseSave::outcome)
-    }
-
-    /// Take, once, what the previous close did not keep, for the start-up notice surface.
-    pub fn take_unsaved_notice(&mut self) -> Option<NotSavedLastTime> {
-        #[cfg(all(windows, feature = "native-composition"))]
-        return self.workspace.as_mut().and_then(workspace::WorkspaceWork::take_notice);
-        #[cfg(not(all(windows, feature = "native-composition")))]
-        None
     }
 
     /// When the close save must next look, while an owner has yet to answer.

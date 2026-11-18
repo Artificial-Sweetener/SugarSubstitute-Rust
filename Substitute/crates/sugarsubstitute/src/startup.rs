@@ -45,6 +45,10 @@ pub(crate) mod release_notes_page;
 mod routing;
 #[path = "startup/scopes.rs"]
 mod scopes;
+#[cfg(all(windows, any(feature = "windows-native-host", test)))]
+mod session_notice_host;
+#[cfg(all(windows, any(feature = "windows-native-host", test)))]
+pub(crate) mod session_notice_page;
 #[path = "startup/shutdown.rs"]
 mod shutdown;
 #[cfg(windows)]
@@ -123,6 +127,9 @@ pub struct StartupHost<B: StartupBackend> {
     /// The fetches that read the release notes, once process composition assigned their scope.
     #[cfg(all(windows, any(feature = "windows-native-host", test)))]
     release_notes_jobs: Option<release_notes_fetch::ReleaseNotesJobs>,
+    /// What the host owes the user about the previous close, shown by the page.
+    #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+    session_notice: session_notice_page::SessionNoticePage,
     #[cfg(all(windows, feature = "native-composition"))]
     composition: Option<composition::CompositionWork>,
     #[cfg(all(windows, feature = "native-composition"))]
@@ -221,6 +228,8 @@ impl<B: StartupBackend> StartupHost<B> {
             release_notes: release_notes_page::ReleaseNotesPage::new()?,
             #[cfg(all(windows, any(feature = "windows-native-host", test)))]
             release_notes_jobs: None,
+            #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+            session_notice: session_notice_page::SessionNoticePage::new(),
             #[cfg(all(windows, feature = "native-composition"))]
             composition: None,
             #[cfg(all(windows, feature = "native-composition"))]

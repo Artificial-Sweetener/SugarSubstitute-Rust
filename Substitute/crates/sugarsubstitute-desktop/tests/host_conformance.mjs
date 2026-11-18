@@ -94,7 +94,8 @@ test('the kit passes over the real bridge and records this host profile', async 
   assert.deepEqual(Object.fromEntries(report.results.map(({ check, outcome }) => [check, outcome])), {
     'host-description': 'passed', 'panel-presentation': 'passed', 'canvas-discovery': 'passed',
     'canvas-step-down': 'passed', 'canvas-masks': 'not-offered', memory: 'passed', updates: 'passed',
-    'release-notes': 'passed', 'capability.presentation.host-styles': 'not-offered',
+    'release-notes': 'passed', 'session-notice': 'passed',
+    'capability.presentation.host-styles': 'not-offered',
     'capability.presentation.system-accent': 'passed', 'capability.output.host-surface': 'passed',
   });
   const profile = normalize(recordHostProfile('substitute', release, answers.session, report));

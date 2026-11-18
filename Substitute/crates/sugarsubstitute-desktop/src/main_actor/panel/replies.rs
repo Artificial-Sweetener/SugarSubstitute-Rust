@@ -134,6 +134,7 @@ impl Replies {
                 || matches!(&delivery, NativeDelivery::Memory(value) if current != Some(value.identity()))
                 || matches!(&delivery, NativeDelivery::Updates(value) if current != Some(value.identity()))
                 || matches!(&delivery, NativeDelivery::ReleaseNotes(value) if current != Some(value.identity()))
+                || matches!(&delivery, NativeDelivery::SessionNotice(value) if current != Some(value.identity()))
                 || matches!(&delivery, NativeDelivery::CanvasNotification(value) if current != Some(value.identity()))
             {
                 retired = true;

@@ -20,6 +20,7 @@ use crate::startup::{
     memory::MemoryGovernor,
     release_notes_fetch::NoFetches,
     release_notes_page::ReleaseNotesPage,
+    session_notice_page::SessionNoticePage,
     updates_page::{PageRequest, UpdatesPage},
 };
 use serde_json::{Value, json};
@@ -28,6 +29,7 @@ use sugarsubstitute_contracts::{
     canvas_surface::CanvasSurfaceMessage,
     execution::{Generation, MemoryRelease},
     host_release_notes::ReleaseNotesClientMessage,
+    host_session_notice::SessionNoticeClientMessage,
     host_updates::UpdatesClientMessage,
     memory::MemoryMessage,
     startup::LaunchId,
@@ -121,6 +123,7 @@ fn page_script(session: &str) -> Vec<Value> {
             json!({ "type": "check", "request": "conformance-check-v2" }),
         ),
         with(envelope("sugarcubes.release-notes", 1), json!({ "type": "watch" })),
+        with(envelope("sugarcubes.session-notice", 1), json!({ "type": "watch" })),
     ]
 }
 
@@ -133,6 +136,7 @@ struct Host {
     memory: MemoryGovernor,
     updates: UpdatesPage,
     release_notes: ReleaseNotesPage,
+    session_notice: SessionNoticePage,
     now: Moment,
 }
 
@@ -155,6 +159,9 @@ impl Host {
         .ok_or("Panel owner was not admitted")?;
         let mut deliveries = Deliveries::new();
         deliveries.bind(identity, &lease)?;
+        // The recorded host's previous close kept everything.
+        let mut session_notice = SessionNoticePage::new();
+        session_notice.settle(None)?;
         Ok(Self {
             identity,
             lease,
@@ -163,6 +170,7 @@ impl Host {
             memory: MemoryGovernor::new(Box::new(Machine), MemoryPreference::default()),
             updates: UpdatesPage::new()?,
             release_notes: ReleaseNotesPage::new()?,
+            session_notice,
             now: Moment::from_nanos(1),
         })
     }
@@ -237,6 +245,20 @@ impl Host {
                     }
                 }
             }
+            Some("sugarcubes.session-notice") => {
+                let message = SessionNoticeClientMessage::decode(&bytes)?;
+                self.session_notice.observe(
+                    self.identity,
+                    message,
+                    self.lease.clone(),
+                    claim()?,
+                )?;
+                while let Some(command) = self.session_notice.take_command() {
+                    if let DesktopStartupCommand::SendSessionNotice(notice) = command {
+                        answers.push(serde_json::from_slice(notice.payload())?);
+                    }
+                }
+            }
             _ => return Err("The kit sent a protocol this host does not serve".into()),
         }
         Ok(answers)
@@ -279,7 +301,8 @@ fn the_host_answers_the_conformance_kit_as_recorded() -> Result<()> {
 }
 
 /// Every SugarCubes release up to 0.15.3 predates the host protocols. Its page never says it is
-/// ready, never asks about the surface and never watches memory, updates or release notes.
+/// ready, never asks about the surface and never watches memory, updates, release notes or
+/// session notices.
 /// Replayed against this host, that page is sent nothing, since it listens for none of it,
 /// whatever the host's own state does meanwhile. Its panel session ends as failed at the
 /// startup limit instead of waiting for a page that will never answer.
@@ -293,7 +316,8 @@ fn a_page_older_than_the_host_protocols_is_sent_nothing_and_its_panel_ends_at_th
             && host.deliveries.take_command(host.identity).is_none()
             && host.memory.take_command().is_none()
             && host.updates.take_command().is_none()
-            && host.release_notes.take_command().is_none())
+            && host.release_notes.take_command().is_none()
+            && host.session_notice.take_command().is_none())
     }
     let mut host = Host::new()?;
     assert!(silent(&mut host)?, "the host spoke before the page did");

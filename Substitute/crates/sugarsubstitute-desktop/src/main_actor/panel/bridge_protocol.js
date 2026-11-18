@@ -10,23 +10,26 @@
   const updateAnswers = ['state', 'accepted', 'rejected'];
   const notesRequests = ['watch', 'load'];
   const notesAnswers = ['state', 'open', 'notes', 'failed'];
+  const noticeRequests = ['watch', 'shown'];
+  const noticeAnswers = ['not-saved', 'none'];
   const requestTypes = ['context.request', 'source.request', 'geometry.request', 'edit.request',
     'workflow.request', 'surface.capabilities.request', 'surface.viewport.request',
     'surface.presentation.request', 'surface.prepare', 'surface.geometry', 'surface.select',
     'surface.commit', 'surface.release', 'surface.preview.begin', 'surface.preview.chunk',
     'surface.preview.end', 'surface.preview.withdraw', 'surface.overview'];
-  // The host description, memory budget, updates and release notes protocols version
-  // independently of the version-three transport. Updates answers every released version,
+  // The host description, memory budget, updates, release notes and session notice protocols
+  // version independently of the version-three transport. Updates answers every released version,
   // each page in its own.
   const versions = value => value.protocol === 'sugarcubes.updates' ? [1, 2] :
-    ['sugarcubes.host', 'sugarcubes.memory', 'sugarcubes.release-notes'].includes(value.protocol)
-      ? [1] : [3];
+    ['sugarcubes.host', 'sugarcubes.memory', 'sugarcubes.release-notes',
+      'sugarcubes.session-notice'].includes(value.protocol) ? [1] : [3];
   const speaks = value => versions(value).includes(value.version);
   const notification = value => value.protocol === 'sugarcubes.panel' ||
     value.protocol === 'sugarcubes.host' && value.type === 'description' ||
     value.protocol === 'sugarcubes.memory' && value.type === 'allowance' ||
     value.protocol === 'sugarcubes.updates' && updateAnswers.includes(value.type) ||
     value.protocol === 'sugarcubes.release-notes' && notesAnswers.includes(value.type) ||
+    value.protocol === 'sugarcubes.session-notice' && noticeAnswers.includes(value.type) ||
     value.protocol === 'sugarcubes.canvas' && value.requestId === 0 &&
     ['surface.presentation.changed', 'surface.camera.changed', 'source.changed', 'edit.changed']
       .includes(value.type);
@@ -51,7 +54,8 @@
     control: value => value.protocol === 'sugarcubes.panel' && controls.includes(value.type) ||
       value.protocol === 'sugarcubes.memory' && memoryReports.includes(value.type) ||
       value.protocol === 'sugarcubes.updates' && updateRequests.includes(value.type) ||
-      value.protocol === 'sugarcubes.release-notes' && notesRequests.includes(value.type),
+      value.protocol === 'sugarcubes.release-notes' && notesRequests.includes(value.type) ||
+      value.protocol === 'sugarcubes.session-notice' && noticeRequests.includes(value.type),
     speaks,
     // A newer control message replaces a queued one of the same protocol and type, except an
     // update check or restart or a release notes load: the host answers each by its request

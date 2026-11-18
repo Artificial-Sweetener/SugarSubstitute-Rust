@@ -40,6 +40,9 @@ impl HostProtocol {
     /// `sugarcubes.release-notes` version 1: the host's own release notes, and "What's new"
     /// asked for on the host.
     pub const RELEASE_NOTES: Self = Self { name: "sugarcubes.release-notes", version: 1 };
+    /// `sugarcubes.session-notice` version 1: what the host owes the user about their session,
+    /// shown by the page.
+    pub const SESSION_NOTICE: Self = Self { name: "sugarcubes.session-notice", version: 1 };
 
     /// Borrow the protocol's message name.
     pub const fn name(self) -> &'static str {

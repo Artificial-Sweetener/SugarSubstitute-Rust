@@ -22,12 +22,13 @@ use sugarsubstitute_desktop::MainHosting;
 /// `sugarcubes.updates` and `sugarcubes.release-notes` for every navigation, so they are
 /// declared too. Updates is declared at version 1 so every released SugarCubes page finds it;
 /// [`HostCapability::NAMED_UPDATES`] tells a newer page that version 2 is answered as well.
-const PROTOCOLS: [HostProtocol; 5] = [
+const PROTOCOLS: [HostProtocol; 6] = [
     HostProtocol::PANEL,
     HostProtocol::CANVAS,
     HostProtocol::MEMORY,
     HostProtocol::UPDATES,
     HostProtocol::RELEASE_NOTES,
+    HostProtocol::SESSION_NOTICE,
 ];
 
 /// What this host serves and declares to a page in a browser with `hosting`.

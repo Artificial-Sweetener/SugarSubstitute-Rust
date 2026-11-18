@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Record a close's unsaved work once, report it exactly once, and keep unreadable records.
+//! Record a close's unsaved work once, owe its notice until it is shown, and keep unreadable
+//! records.
 use super::*;
 use std::time::Duration;
 use sugarsubstitute_application::workspace_session::close_save::{
@@ -27,7 +28,7 @@ impl Fixture {
     fn notice(&self) -> TestResult<Result<Option<NotSavedLastTime>, StoreError>> {
         let directory = self.directory.path().to_path_buf();
         let job = self.client.submit_blocking(&self.scope, self.spec()?, move |context| {
-            close_record::take_notice_worker(&directory, &context)
+            close_record::read_notice_worker(&directory, &context)
         })?;
         match self.terminal(job)? {
             JobOutcome::Success(notice) => Ok(Ok(notice)),
@@ -35,12 +36,25 @@ impl Fixture {
             other => Err(format!("Notice stopped: {:?}", other.kind()).into()),
         }
     }
+    fn shown(&self) -> TestResult<Result<(), StoreError>> {
+        let directory = self.directory.path().to_path_buf();
+        let job = self.client.submit_blocking(&self.scope, self.spec()?, move |context| {
+            close_record::mark_notified_worker(&directory, &context)
+        })?;
+        match self.terminal(job)? {
+            JobOutcome::Success(()) => Ok(Ok(())),
+            JobOutcome::Failure(cause) => Ok(Err(cause)),
+            other => Err(format!("Mark stopped: {:?}", other.kind()).into()),
+        }
+    }
 }
 
 #[test]
-fn an_unsaved_close_is_reported_once_at_the_next_start_and_its_record_is_kept() -> TestResult {
+fn an_unsaved_close_is_owed_at_every_start_until_shown_and_its_record_is_kept() -> TestResult {
     let fixture = Fixture::new()?;
     assert!(fixture.notice()??.is_none(), "no record means no notice");
+    fixture.shown()??;
+    assert!(!fixture.directory.path().join(close_record::CLOSE_RECORD).exists());
     let outcome = CloseSaveOutcome {
         reason: CloseReason::RestartToApply,
         workspace: SaveVerdict::Stale { since: Moment::from_nanos(1_000_000_000) },
@@ -60,7 +74,10 @@ fn an_unsaved_close_is_reported_once_at_the_next_start_and_its_record_is_kept() 
             ],
         }
     );
-    assert!(fixture.notice()??.is_none(), "the notice appears once");
+    assert_eq!(fixture.notice()??, Some(notice), "a start that did not show it still owes it");
+    fixture.shown()??;
+    assert!(fixture.notice()??.is_none(), "a shown notice is owed no more");
+    fixture.shown()??;
     assert!(fixture.directory.path().join(close_record::CLOSE_RECORD).is_file());
     Ok(())
 }
@@ -72,6 +89,7 @@ fn an_unreadable_close_record_is_refused_and_left_untouched() -> TestResult {
     let future = br#"{"format":"sugarsubstitute.close-save","version":2,"notified":false}"#;
     std::fs::write(&path, future)?;
     assert!(fixture.notice()?.is_err());
+    assert!(fixture.shown()?.is_err());
     assert_eq!(std::fs::read(&path)?, future);
     Ok(())
 }

@@ -455,6 +455,25 @@ test('release notes states, open requests and answers are version-one notificati
     assert.equal(f.deliver(value), true);
   assert.deepEqual(f.received.map(value => value.type), ['state', 'open', 'notes', 'failed']);
 });
+const notice = (type, extra = {}) => ({ protocol: 'sugarcubes.session-notice', version: 1, session, type, ...extra });
+test('session notice messages ride the control lane', () => {
+  const f = fixture();
+  f.receipt('g', 'c', 1);
+  f.bridge.send(notice('watch'));
+  f.bridge.send(notice('shown', { notice: 1 }));
+  f.receipt('a', 'c', 1); f.receipt('g', 'c', 2);
+  assert.deepEqual(posted(f), [notice('watch'), notice('shown', { notice: 1 })]);
+  assert.ok(f.sent.every(value => value.startsWith('1:c:')));
+});
+test('session notices are version-one notifications for the current session only', () => {
+  const f = fixture();
+  const lost = notice('not-saved', { notice: 1, workspace: true, inputs: false });
+  for (const value of [notice('watch'), notice('shown', { notice: 1 }), { ...lost, version: 3 },
+    { ...lost, session: 'another-session' }])
+    assert.equal(f.deliver(value), false);
+  for (const value of [lost, notice('none')]) assert.equal(f.deliver(value), true);
+  assert.deepEqual(f.received.map(value => value.type), ['not-saved', 'none']);
+});
 test('permanent malformed control consumption does not replay or settle the ordinary request', () => {
   const f = fixture();
   f.receipt('g', 'o', 1);

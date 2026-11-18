@@ -122,6 +122,8 @@ pub enum StartupObservationKind {
     UpdatesMessage,
     /// A release notes protocol message.
     ReleaseNotesMessage,
+    /// A session notice protocol message.
+    SessionNoticeMessage,
     /// Browser process facts.
     BrowserProcesses,
     /// A canvas surface protocol message.
@@ -181,6 +183,7 @@ closed_tokens!(StartupObservationKind {
     MemoryMessage,
     UpdatesMessage,
     ReleaseNotesMessage,
+    SessionNoticeMessage,
     BrowserProcesses,
     SurfaceMessage,
     CanvasInput,

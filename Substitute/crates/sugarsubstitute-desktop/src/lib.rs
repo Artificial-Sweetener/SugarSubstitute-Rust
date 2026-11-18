@@ -76,6 +76,7 @@ mod main_session_contract;
 #[cfg(any(windows, test))]
 mod main_session_ingress;
 mod main_session_media;
+mod main_session_notice_contract;
 mod main_surface_contract;
 #[cfg(any(target_os = "windows", test))]
 mod main_updates;
@@ -233,6 +234,7 @@ pub use main_session_media::{
     MAX_MEDIA_BYTES, SessionMediaFailure, SessionMediaObservation, SessionMediaRange,
     SessionMediaReply,
 };
+pub use main_session_notice_contract::{SessionNoticeCommand, SessionNoticeObservation};
 pub use main_surface_contract::{
     SurfaceObservation, SurfacePresentation, SurfaceReply, SurfaceReplyError,
 };

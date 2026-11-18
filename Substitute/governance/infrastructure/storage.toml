@@ -4704,7 +4704,7 @@ rationale = "An owned temporary cache scope qualifies actual PNG/JPEG and author
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/host_conformance.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:34d532204c25d01b0a4d2fcb7c14f8f185ad8bd56fb0a5b6cdff042937cc6121"
+source_sha256 = "sha256:ccbcc6d0bf28a775ba61553a1c4970ab9f0742e810f7854183931fcddeae83f9"
 capabilities = ["node:fs", "readFileSync", "writeFileSync"]
 disposition = "fixture"
 rationale = "Read the bridge scripts, the host's recorded conformance answers and the saved SugarCubes profile, and write that profile only when asked to record it."
@@ -4712,7 +4712,7 @@ rationale = "Read the bridge scripts, the host's recorded conformance answers an
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:a0dcb20d92cc441f2b0a5aa716c12d3d63c143d103fbef55dd4304b74205d6d7"
+source_sha256 = "sha256:a4a687ae2a3b0e65638272eccb7512360bb9aa8cac2108bde586de61ad712929"
 capabilities = ["node:fs", "readFileSync"]
 disposition = "fixture"
 rationale = "Read the injected transport and protocol-policy bootstrap sources for executable envelope and custody regression tests."
@@ -5187,7 +5187,7 @@ rationale = "An owned temporary workspace is seeded with a previous run's checkp
 [[records]]
 path = "crates/sugarsubstitute/src/startup/workspace/close_save_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:e2614f247434e49009e2cc96fe5314eafb7e5fa753a1b5f54860b6ba28298691"
+source_sha256 = "sha256:613d6952205b42bf51ff2cf55b9fce2550c0a5b2d8a5317337bc6b6d67d3c6c8"
 capabilities = ["std::fs::remove_dir_all", "std::fs::write"]
 disposition = "fixture"
 rationale = "The owned temporary workspace's checkpoint folder is replaced by a file to inject a failed final publication, which the close save must record before the exit intent."
@@ -5195,7 +5195,7 @@ rationale = "The owned temporary workspace's checkpoint folder is replaced by a 
 [[records]]
 path = "crates/sugarsubstitute/src/workspace_session/tests/close_records.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:17e077b3673e64c3838aca7c97a5069b7bef8eccfcfb49a82980bd5f3cc8116b"
+source_sha256 = "sha256:dccb34785fef06d1855ed25aaefa40a3ca3a7a0b0d3de8d846aa140619085ccb"
 capabilities = ["std::fs::read", "std::fs::write"]
 disposition = "fixture"
 rationale = "An owned temporary profile directory holds the close-save record: written and reported once through real admitted jobs, and seeded with an unsupported record that must stay untouched."
@@ -5219,7 +5219,7 @@ rationale = "Owned temporary checkpoint files qualify atomic publication, exact 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/workspace/closing_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:70bad112e1c82784a7311d27dd1fd6432409466e2bdc7bd2d9608dfed08c0149"
+source_sha256 = "sha256:e67f8dbcf6ef1880296667e163f2867c48d168568fdd211dc5a21b366d443492"
 capabilities = ["tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "An owned temporary workspace drives actual missing-checkpoint load and durable publication through the execution owner, proving ordinary startup polling retains the native peer until final delivery or the unchanged capture cutoff."

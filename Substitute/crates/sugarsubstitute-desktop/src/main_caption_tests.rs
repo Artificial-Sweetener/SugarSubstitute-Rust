@@ -122,9 +122,10 @@ fn a_message_line_and_its_dismiss_fill_the_left_without_crossing_the_buttons() -
         workflow: WorkflowActivity::Idle,
         whats_new: false,
     });
-    caption.notify(Notice::NotSaved { workspace: true, inputs: true });
+    // A long line, so a narrow window has to shorten it.
+    caption.notify(Notice::StorageSetAside);
     let wide = layout(1600.0, &caption, false)?;
-    let text = messages("en").closing.not_saved_both;
+    let text = messages("en").updates.storage_set_aside;
     assert!(wide[6].visible && wide[8].visible && !wide[7].visible);
     assert_eq!((wide[6].bounds.x, wide[6].bounds.width), (8.0, width(text) + 16.0));
     assert_eq!(wide[8].bounds.x, ends(&wide[6]));
@@ -145,7 +146,7 @@ fn a_message_line_and_its_dismiss_fill_the_left_without_crossing_the_buttons() -
 #[test]
 fn the_backend_retry_takes_the_left_over_a_message() -> TestResult {
     let mut caption = CaptionUpdates::default();
-    caption.notify(Notice::NotSaved { workspace: true, inputs: false });
+    caption.notify(Notice::PreviousVersionRunning);
     let controls = layout(1280.0, &caption, true)?;
     assert!(controls[3].visible);
     assert!(!controls[6].visible && !controls[8].visible);
@@ -178,7 +179,7 @@ fn the_page_leaves_the_caption_strip_only_while_a_peer_beyond_the_window_buttons
     assert_eq!(strip(&retry, 1.0), 34);
 
     let mut caption = CaptionUpdates::default();
-    caption.notify(Notice::NotSaved { workspace: true, inputs: true });
+    caption.notify(Notice::PreviousVersionRunning);
     assert_eq!(strip(&layout(1280.0, &caption, false)?, 1.5), 51);
     caption.activate(crate::main_updates::DISMISS);
     assert_eq!(strip(&layout(1280.0, &caption, false)?, 1.5), 0, "dismiss gives it back");

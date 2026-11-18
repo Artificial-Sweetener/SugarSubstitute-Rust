@@ -362,6 +362,9 @@ pub enum DesktopStartupCommand {
     /// Deliver a release notes state, open request or answer to the current top document; a
     /// newer state replaces an unsent older one, and nothing else is ever replaced.
     SendReleaseNotes(crate::ReleaseNotesCommand),
+    /// Deliver the notice the host owes about the session, or that it owes none, to the current
+    /// top document; nothing is ever replaced.
+    SendSessionNotice(crate::SessionNoticeCommand),
     /// Report the current browser environment's processes as [`DesktopStartupObservation::BrowserProcesses`].
     MeasureBrowser(MainIdentity),
     /// Ask the current browser to trim its memory (`low`) or return to normal use.
@@ -520,6 +523,8 @@ pub enum DesktopStartupObservation {
     UpdatesMessage(crate::UpdatesObservation),
     /// A bounded release notes request from the current native top-document context.
     ReleaseNotesMessage(crate::ReleaseNotesObservation),
+    /// A bounded session notice message from the current native top-document context.
+    SessionNoticeMessage(crate::SessionNoticeObservation),
     /// The processes the current browser environment runs, for the memory budget's footprint.
     BrowserProcesses {
         /// Exact current native document identity.
@@ -776,14 +781,6 @@ pub trait StartupWindowContent: WindowContent {
     fn close_save_progress(
         &self,
     ) -> Option<sugarsubstitute_application::workspace_session::close_save::CloseSaveProgress> {
-        None
-    }
-
-    /// Take, once, what the previous close did not keep. The window shows it as one line the
-    /// user can dismiss; it is taken only once the main window can show it.
-    fn take_unsaved_notice(
-        &mut self,
-    ) -> Option<sugarsubstitute_application::workspace_session::close_save::NotSavedLastTime> {
         None
     }
 

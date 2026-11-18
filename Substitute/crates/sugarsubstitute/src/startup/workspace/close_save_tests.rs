@@ -52,7 +52,7 @@ fn the_input_final_save_is_submitted_before_the_exit_intent_and_its_failure_is_r
             items: vec![UnsavedItem::InputCanvas(UnsavedCause::Failed(SaveFailure::Storage))],
         })
     );
-    assert_eq!(fixture.next_start_notice()?, None, "the notice appears once");
+    assert!(fixture.next_start_notice()?.is_some(), "owed until a page has shown it");
     fixture.retire()
 }
 
@@ -224,7 +224,8 @@ fn a_critical_session_end_saves_within_four_seconds() -> TestResult {
 }
 
 #[test]
-fn the_window_reads_the_close_progress_notice_and_language_the_host_holds() -> TestResult {
+fn the_window_reads_the_close_progress_and_language_the_host_holds_and_the_notice_is_taken_once()
+-> TestResult {
     use sugarsubstitute_desktop::StartupWindowContent;
     let mut fixture = Fixture::new(true)?;
     fixture.host.workspace.as_mut().ok_or("Workspace")?.driver = None;
@@ -233,9 +234,10 @@ fn the_window_reads_the_close_progress_notice_and_language_the_host_holds() -> T
         reason: CloseReason::Close,
         items: vec![UnsavedItem::InputCanvas(UnsavedCause::Failed(SaveFailure::Storage))],
     };
-    fixture.host.workspace.as_mut().ok_or("Workspace")?.notice = Some(notice.clone());
-    assert_eq!(StartupWindowContent::take_unsaved_notice(&mut fixture.host), Some(notice));
-    assert_eq!(StartupWindowContent::take_unsaved_notice(&mut fixture.host), None, "taken once");
+    let workspace = fixture.host.workspace.as_mut().ok_or("Workspace")?;
+    workspace.previous_close = Some(Some(notice.clone()));
+    assert_eq!(workspace.take_previous_close(), Some(Some(notice)));
+    assert_eq!(workspace.take_previous_close(), None, "taken once");
     assert_eq!(StartupWindowContent::close_save_progress(&fixture.host), None, "before close");
     fixture.host.request_restart_to_apply()?;
     fixture.poll()?;

@@ -138,7 +138,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/lib.rs"
-source_sha256 = "sha256:8b06bc119ae9ffa25b5abddf6b7f7b71c844dfedd49e7a7b6aa901157cc78b2c"
+source_sha256 = "sha256:e64fe4c38e3055be7dfda0b0f2b7827c01e7dfdf7397fd35503109109afa5dd3"
 kind = "native"
 rationale = "Native boundary: Own native window lifetime and CPU frame presentation independently of UI content.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -414,7 +414,7 @@ rationale = "Startup View binds output, cancel and retry accessible controls to 
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup.rs"
-source_sha256 = "sha256:6eccd17269fcac2e865ed094251272588ad7e50bbb63d7deb4fa2d399047702c"
+source_sha256 = "sha256:4ce1c38fa6ded85828e9162ed913d11b154f0820cac5afe33e1817254a174575"
 kind = "presentation"
 rationale = "WindowContent returns the authoritative startup View accessible controls. This composing owner introduces no label literals."
 
@@ -444,7 +444,7 @@ rationale = "Validate existing control labels for emptiness/NUL and unique ident
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/host_contract.rs"
-source_sha256 = "sha256:e63318e1c26c75a07f7be24b3baa26b29e35f6dac69e5c56ea29e1eb90d0d214"
+source_sha256 = "sha256:d95d4b4bdf819042dbf6a7054527c91f8488f3fba54ce324aa1b8c1045d2308f"
 kind = "native"
 rationale = "Main caption/recovery contracts borrow localized labels from the host. They define presentation data and no catalog or fallback policy."
 
@@ -708,7 +708,7 @@ rationale = "The bounded WebView transport defines technical JavaScript properti
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge_protocol.js"
-source_sha256 = "sha256:1746b80a54df82236639908df4b9cfe97f6ead37be3f34cbc7c84f24428d9944"
+source_sha256 = "sha256:236df2e7434010b75927b487cb19f94b0ffe1106bf9e10298f04e3e0a2efd4f7"
 kind = "native"
 rationale = "The native bootstrap policy validates session query identities and routes technical canvas protocol reply, cancellation and notification shapes; its message fields are empty protocol data."
 
@@ -720,7 +720,7 @@ rationale = "The bulk channel transport helper moves exact JSON bytes through ho
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
-source_sha256 = "sha256:a0dcb20d92cc441f2b0a5aa716c12d3d63c143d103fbef55dd4304b74205d6d7"
+source_sha256 = "sha256:a4a687ae2a3b0e65638272eccb7512360bb9aa8cac2108bde586de61ad712929"
 kind = "fixture"
 rationale = "The isolated JavaScript VM fixture supplies promptId and sourceId attribution fields to exercise the actual bounded native transport; these technical protocol identities are fixture data and never become product labels or a prompt editor route."
 
@@ -768,7 +768,7 @@ rationale = "Main caption contracts borrow localized labels from the host. They 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_caption_tests.rs"
-source_sha256 = "sha256:7461b429b4be5d9b2b2f5cd97cdb0b768de6ed3f18414986600ca4f2b144ad52"
+source_sha256 = "sha256:a44dbe5f8687b36f441d437d23e74055473af9098d7cd390b137baf40b5a3e37"
 kind = "fixture"
 rationale = "Layout fixtures use short stand-in labels to check geometry; no product copy is defined here."
 [[records]]
@@ -778,7 +778,7 @@ kind = "fixture"
 rationale = "Input mapping fixtures lay the caption out with short stand-in labels to find the page's offset; no product copy is defined here."
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/frame_tests.rs"
-source_sha256 = "sha256:9efac09bb3a7c7e73904c62c455e1c07589de547c09c8a9be4cf3e60ac75ad35"
+source_sha256 = "sha256:02ea08d595ce31d14469ddf405fcde9d1cbe93034b5b93a1189b137899ee8983"
 kind = "fixture"
 rationale = "Caption and page layout fixtures use short stand-in labels to check that no caption peer covers the page; no product copy is defined here."
 
@@ -796,7 +796,7 @@ rationale = "Caption peers show the caption owner's words, which come from the t
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/windows_controls_caption_tests.rs"
-source_sha256 = "sha256:ceec7a8293af7aaa5bafca5aff83463a0adf1ddd0deed358a9cad949bcf0bc2d"
+source_sha256 = "sha256:70c3145715dc442513d824a230e7b7761ce4a5c2246d1b0cddb6effaefe7e859"
 kind = "fixture"
 rationale = "A private-desktop test uses stand-in window-button labels and its own window title; update words come from the catalog."
 

@@ -183,6 +183,11 @@ pub(super) fn drain(
                     owner.send_release_notes(command).map(|()| None)
                 })?;
             }
+            DesktopStartupCommand::SendSessionNotice(command) => {
+                main_operation(session, content, |owner| {
+                    owner.send_session_notice(command).map(|()| None)
+                })?;
+            }
             DesktopStartupCommand::MeasureBrowser(identity) => {
                 main_operation(session, content, |owner| owner.measure_browser(identity))?;
             }

@@ -94,6 +94,23 @@ impl MainActor {
         self.canvas_replies.push(NativeDelivery::ReleaseNotes(command))
     }
 
+    /// Retain a session notice answer until native capacity returns; deliveries for a retired
+    /// navigation retire here.
+    pub(crate) fn send_session_notice(
+        &mut self,
+        command: crate::SessionNoticeCommand,
+    ) -> Result<(), DesktopError> {
+        if command.identity() != self.identity()
+            || self.admission.closing()
+            || !self.revealed
+            || self.readiness.as_ref().and_then(MainReadiness::panel_context).is_none()
+        {
+            return Ok(());
+        }
+        self.admitted_panel_context(command.identity())?;
+        self.canvas_replies.push(NativeDelivery::SessionNotice(command))
+    }
+
     /// Deliver a correlated native canvas reply to the same current document and UI apartment.
     pub(crate) fn send_canvas_native(
         &mut self,

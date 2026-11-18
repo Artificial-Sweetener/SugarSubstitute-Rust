@@ -81,6 +81,7 @@ fn ready_is_answered_with_the_description_of_what_this_browser_is_served() -> Re
             HostProtocol::MEMORY,
             HostProtocol::UPDATES,
             HostProtocol::RELEASE_NOTES,
+            HostProtocol::SESSION_NOTICE,
         ] {
             assert!(description.serves(protocol), "{protocol:?}");
         }

@@ -44,6 +44,11 @@ impl<B: StartupBackend> StartupHost<B> {
             tracing::warn!(operation = "release_notes_answer", %error,
                 "The page's release notes answer could not be funded");
         }
+        #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+        if let Err(error) = self.advance_session_notice() {
+            tracing::warn!(operation = "session_notice_answer", %error,
+                "The page's session notice could not be funded or marked");
+        }
         #[cfg(windows)]
         let canvas = self.canvas.as_mut().map_or(Ok(()), canvas::EmbeddedCanvas::poll);
         #[cfg(not(windows))]
@@ -162,6 +167,10 @@ impl<B: StartupBackend> StartupHost<B> {
                 };
                 #[cfg(all(windows, any(feature = "windows-native-host", test)))]
                 let Some(observation) = self.observe_release_notes(observation)? else {
+                    return Ok(());
+                };
+                #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+                let Some(observation) = self.observe_session_notice(observation)? else {
                     return Ok(());
                 };
                 #[cfg(all(windows, feature = "native-composition"))]

@@ -16,6 +16,7 @@ pub mod diagnostics;
 pub mod execution;
 pub mod host;
 pub mod host_release_notes;
+pub mod host_session_notice;
 pub mod host_updates;
 pub mod incident;
 pub mod installation;

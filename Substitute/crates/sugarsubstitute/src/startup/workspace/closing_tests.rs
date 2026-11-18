@@ -278,7 +278,7 @@ impl Fixture {
                 replacement: None,
             },
             move |context| {
-                workspace_session::close_record::take_notice_worker(&directory, &context)
+                workspace_session::close_record::read_notice_worker(&directory, &context)
             },
         )?;
         match terminal(client, &self.wake, job)? {

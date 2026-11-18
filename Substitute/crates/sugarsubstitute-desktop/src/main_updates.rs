@@ -6,9 +6,7 @@
 //! [`CaptionUpdates::activate`].
 use crate::WorkflowActivity;
 use std::borrow::Cow;
-use sugarsubstitute_application::workspace_session::close_save::{
-    CloseSaveProgress, NotSavedLastTime, UnsavedItem,
-};
+use sugarsubstitute_application::workspace_session::close_save::CloseSaveProgress;
 use sugarsubstitute_contracts::{
     localization::{Messages, updates::UpdateMessages},
     update::{pack::PackUpdateReport, status::UpdateStatus},
@@ -83,13 +81,6 @@ impl UpdateFeed {
 /// A one-time message shown as one line the user can dismiss.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Notice {
-    /// The previous close did not keep these.
-    NotSaved {
-        /// Workflow changes were lost.
-        workspace: bool,
-        /// Input canvas edits were lost.
-        inputs: bool,
-    },
     /// The first start on a new version.
     Updated {
         /// The version now running.
@@ -106,15 +97,6 @@ pub(crate) enum Notice {
 }
 
 impl Notice {
-    /// The line for what the previous close lost.
-    pub(crate) fn not_saved(notice: &NotSavedLastTime) -> Self {
-        let lost = |wanted: fn(&UnsavedItem) -> bool| notice.items.iter().any(wanted);
-        Self::NotSaved {
-            workspace: lost(|item| matches!(item, UnsavedItem::Workspace(_))),
-            inputs: lost(|item| matches!(item, UnsavedItem::InputCanvas(_))),
-        }
-    }
-
     /// What the line's link does, if it offers one: show what is new in a new version of the
     /// application or of SugarCubes while the page can show it, or open the report of a
     /// SugarCubes update that needs attention, such as the previous version running again.
@@ -125,10 +107,7 @@ impl Notice {
             Self::Sugarcubes(report) => (whats_new
                 && report.outcome == sugarsubstitute_contracts::update::pack::PackOutcome::Updated)
                 .then_some(UpdateIntent::OpenWhatsNew),
-            Self::NotSaved { .. }
-            | Self::PreviousVersionRunning
-            | Self::Repairing
-            | Self::StorageSetAside => None,
+            Self::PreviousVersionRunning | Self::Repairing | Self::StorageSetAside => None,
         }
     }
 
@@ -284,13 +263,6 @@ impl CaptionUpdates {
         };
         let line = match self.notices.front().filter(|_| !saving) {
             None => PeerView::shown(self.shows(LINE), words.closing.saving),
-            Some(Notice::NotSaved { workspace, inputs }) => PeerView::shown(
-                true,
-                words
-                    .closing
-                    .not_saved(*workspace, *inputs)
-                    .unwrap_or(words.closing.not_saved_both),
-            ),
             Some(Notice::Updated { version, .. }) => PeerView {
                 visible: true,
                 label: updates.updated,

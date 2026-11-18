@@ -24,7 +24,6 @@ pub(super) fn turn(
         // Every message due now joins the queue in this turn, so a later one never waits for
         // another turn of the event loop.
         notices.extend(std::iter::from_fn(|| content.take_update_notice()).map(Notice::update));
-        notices.extend(content.take_unsaved_notice().map(|notice| Notice::not_saved(&notice)));
     }
     let words = content.locale_messages();
     main_operation(session, content, |main| {

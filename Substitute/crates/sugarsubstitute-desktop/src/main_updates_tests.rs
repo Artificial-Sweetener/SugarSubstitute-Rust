@@ -2,9 +2,8 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Every caption state from fake application facts, in English and in another language.
 use super::*;
-use std::time::Duration;
 use sugarsubstitute_application::workspace_session::close_save::{
-    CloseReason, CloseSaveOutcome, SaveVerdict, UnsavedCause,
+    CloseReason, CloseSaveOutcome, SaveVerdict,
 };
 use sugarsubstitute_contracts::{
     execution::Moment,
@@ -156,7 +155,7 @@ fn saving_replaces_everything_with_one_line_until_the_close_settles() {
     let mut caption = CaptionUpdates::default();
     caption.observe(feed(Some(&ready())));
     caption.activate(UPDATE);
-    caption.notify(Notice::NotSaved { workspace: true, inputs: false });
+    caption.notify(Notice::PreviousVersionRunning);
     assert!(caption.observe(UpdateFeed::read(
         Some(&ready()),
         Some(saving()),
@@ -181,36 +180,6 @@ fn saving_replaces_everything_with_one_line_until_the_close_settles() {
 }
 
 #[test]
-fn the_not_saved_notice_is_one_line_the_user_can_dismiss() {
-    let en = messages("en");
-    let notice = NotSavedLastTime {
-        reason: CloseReason::Close,
-        items: vec![
-            UnsavedItem::Workspace(UnsavedCause::Interrupted { unsaved_for: Duration::ZERO }),
-            UnsavedItem::InputCanvas(UnsavedCause::Interrupted { unsaved_for: Duration::ZERO }),
-        ],
-    };
-    let mut caption = CaptionUpdates::default();
-    assert!(caption.notify(Notice::not_saved(&notice)));
-    assert!(!caption.notify(Notice::not_saved(&notice)));
-    let view = caption.view(en);
-    assert_eq!(shown(&view), vec![LINE, DISMISS]);
-    assert_eq!(view.line.text, en.closing.not_saved_both);
-    assert_eq!(view.dismiss.text, "Dismiss");
-    assert_eq!(caption.activate(DISMISS), (true, None));
-    assert!(shown(&caption.view(en)).is_empty());
-
-    let inputs_only = NotSavedLastTime {
-        reason: CloseReason::Close,
-        items: vec![UnsavedItem::InputCanvas(UnsavedCause::Interrupted {
-            unsaved_for: Duration::ZERO,
-        })],
-    };
-    caption.notify(Notice::not_saved(&inputs_only));
-    assert_eq!(caption.view(messages("ja")).line.text, messages("ja").closing.not_saved_inputs);
-}
-
-#[test]
 fn the_first_start_on_a_new_version_says_so_once_with_what_is_new_in_the_page()
 -> Result<(), Box<dyn std::error::Error>> {
     let en = messages("en");
@@ -219,8 +188,8 @@ fn the_first_start_on_a_new_version_says_so_once_with_what_is_new_in_the_page()
     assert!(
         caption.notify(Notice::update(crate::UpdateNotice::Updated { version: "2.4.1".into() }))
     );
-    // A loss at the same start waits behind the update line.
-    assert!(!caption.notify(Notice::NotSaved { workspace: true, inputs: false }));
+    // Another message at the same start waits behind the update line.
+    assert!(!caption.notify(Notice::StorageSetAside));
     let view = caption.view(en);
     assert_eq!(shown(&view), vec![LINE, LINK, DISMISS]);
     assert_eq!(view.line.text, "Updated to version 2.4.1");
@@ -231,7 +200,7 @@ fn the_first_start_on_a_new_version_says_so_once_with_what_is_new_in_the_page()
     assert_eq!(caption.activate(DISMISS), (true, None));
     let view = caption.view(en);
     assert_eq!(shown(&view), vec![LINE, DISMISS]);
-    assert_eq!(view.line.text, en.closing.not_saved_workspace);
+    assert_eq!(view.line.text, en.updates.storage_set_aside);
     assert_eq!(caption.activate(LINK), (false, None));
     Ok(())
 }

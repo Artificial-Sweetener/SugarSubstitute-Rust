@@ -135,6 +135,7 @@ impl StartupPolicy {
                 | DesktopStartupObservation::MemoryMessage(_)
                 | DesktopStartupObservation::UpdatesMessage(_)
                 | DesktopStartupObservation::ReleaseNotesMessage(_)
+                | DesktopStartupObservation::SessionNoticeMessage(_)
                 | DesktopStartupObservation::BrowserProcesses { .. }
                 | DesktopStartupObservation::SurfaceMessage(_)
                 | DesktopStartupObservation::CanvasNativeMessage(_)
@@ -213,6 +214,9 @@ impl StartupPolicy {
                 session.is_some_and(|session| observed.identity() == self.identity(session))
             }
             DesktopStartupObservation::ReleaseNotesMessage(observed) => {
+                session.is_some_and(|session| observed.identity() == self.identity(session))
+            }
+            DesktopStartupObservation::SessionNoticeMessage(observed) => {
                 session.is_some_and(|session| observed.identity() == self.identity(session))
             }
             DesktopStartupObservation::CanvasNativeMessage(observed) => {

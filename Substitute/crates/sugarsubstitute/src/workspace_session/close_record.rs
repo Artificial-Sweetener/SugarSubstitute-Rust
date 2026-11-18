@@ -4,9 +4,10 @@
 //!
 //! A close whose outcome is not fully saved writes `close-save.json` in the profile directory
 //! (`user\sessions\<profile>`) before the exit intent. The next start reads it on its workspace
-//! load worker, turns it into a [`NotSavedLastTime`] notice and marks the record notified in
-//! place, so the notice appears exactly once and the record itself stays as evidence. A record
-//! this build cannot read is kept untouched and reported as an error for the caller to log.
+//! load worker and turns it into a [`NotSavedLastTime`] notice. The record is marked notified
+//! in place only once the notice has been shown, so a start that could not show it owes it to
+//! the next one, and the record itself stays as evidence. A record this build cannot read is
+//! kept untouched and reported as an error for the caller to log.
 use super::*;
 use std::io::Read;
 use sugarsubstitute_application::workspace_session::close_save::{
@@ -133,15 +134,43 @@ pub fn write_worker(
     publish(profile, &record, context)
 }
 
-/// Read the previous close's record and return its notice once: an unnotified record of
-/// lost work yields the notice and is marked notified in place.
+/// Read the previous close's record and return the notice it still owes: an unnotified
+/// record of lost work. The record is left as it is.
 /// # Errors
 /// Refuses an unreadable or unsupported record, which stays untouched, and preserves
 /// storage failures.
-pub fn take_notice_worker(
+pub fn read_notice_worker(
     profile: &Path,
     context: &JobContext,
 ) -> Result<Option<NotSavedLastTime>, StoreError> {
+    let Some(record) = read(profile, context)? else { return Ok(None) };
+    let reason = parse_reason(&record.reason).ok_or_else(invalid)?;
+    let items: Vec<_> = [
+        record.workspace.cause()?.map(UnsavedItem::Workspace),
+        record.inputs.cause()?.map(UnsavedItem::InputCanvas),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    Ok((!record.notified && !items.is_empty()).then_some(NotSavedLastTime { reason, items }))
+}
+
+/// Mark the previous close's record notified in place, once its notice has been shown, so no
+/// later start owes it. A missing record owes nothing.
+/// # Errors
+/// Refuses an unreadable or unsupported record, which stays untouched, and preserves
+/// storage failures.
+pub fn mark_notified_worker(profile: &Path, context: &JobContext) -> Result<(), StoreError> {
+    let Some(mut record) = read(profile, context)? else { return Ok(()) };
+    if record.notified {
+        return Ok(());
+    }
+    record.notified = true;
+    publish(profile, &record, context)
+}
+
+/// Read the record this build wrote, or `None` when no close recorded one.
+fn read(profile: &Path, context: &JobContext) -> Result<Option<Record>, StoreError> {
     let bytes =
         match with_artifact_input(&profile.join(CLOSE_RECORD), MAX_RECORD_BYTES, context, |input| {
             let mut bytes = Vec::new();
@@ -154,24 +183,11 @@ pub fn take_notice_worker(
             }
             Err(cause) => return Err(files::artifact(cause)),
         };
-    let mut record: Record = serde_json::from_slice(&bytes).map_err(|_| invalid())?;
+    let record: Record = serde_json::from_slice(&bytes).map_err(|_| invalid())?;
     if record.format != FORMAT || record.version != VERSION {
         return Err(invalid());
     }
-    let reason = parse_reason(&record.reason).ok_or_else(invalid)?;
-    let items: Vec<_> = [
-        record.workspace.cause()?.map(UnsavedItem::Workspace),
-        record.inputs.cause()?.map(UnsavedItem::InputCanvas),
-    ]
-    .into_iter()
-    .flatten()
-    .collect();
-    if record.notified || items.is_empty() {
-        return Ok(None);
-    }
-    record.notified = true;
-    publish(profile, &record, context)?;
-    Ok(Some(NotSavedLastTime { reason, items }))
+    Ok(Some(record))
 }
 
 fn publish(profile: &Path, record: &Record, context: &JobContext) -> Result<(), StoreError> {

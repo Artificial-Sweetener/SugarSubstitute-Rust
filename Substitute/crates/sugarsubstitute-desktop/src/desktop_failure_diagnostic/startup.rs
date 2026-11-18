@@ -57,6 +57,7 @@ pub(crate) fn observation_kind(observation: &DesktopStartupObservation) -> Start
         DesktopStartupObservation::MemoryMessage(_) => Kind::MemoryMessage,
         DesktopStartupObservation::UpdatesMessage(_) => Kind::UpdatesMessage,
         DesktopStartupObservation::ReleaseNotesMessage(_) => Kind::ReleaseNotesMessage,
+        DesktopStartupObservation::SessionNoticeMessage(_) => Kind::SessionNoticeMessage,
         DesktopStartupObservation::BrowserProcesses { .. } => Kind::BrowserProcesses,
         DesktopStartupObservation::SurfaceMessage(_) => Kind::SurfaceMessage,
         #[cfg(feature = "native-composition")]
