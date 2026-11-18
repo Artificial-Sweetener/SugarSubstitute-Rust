@@ -1,3 +1,10 @@
+## [0.27.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.26.1...sugarcubes-v0.27.0) (2026-11-18)
+
+### Features
+
+* **queue:** resize the docked generation queue from its left edge ([ff1dad6](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/ff1dad60bdcca7d537d4ccb715b4d0d1a452c122))
+* **queue:** take seeds from a job that is waiting, running or failed ([ab589e6](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/ab589e6fcdf323c6472b7641ae0cc6c0a6329ddc))
+
 ## [0.26.1](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.26.0...sugarcubes-v0.26.1) (2026-11-18)
 
 ### Bug Fixes
