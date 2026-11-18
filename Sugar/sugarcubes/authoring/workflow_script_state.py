@@ -85,6 +85,7 @@ class WorkflowScriptState:
     fixed_seed_fields: tuple[FieldIdentity, ...] = ()
     fixed_seed_overrides: tuple[str, ...] = ()
     authored_fields: frozenset[FieldIdentity] = frozenset()
+    declared_connections: frozenset[tuple[str, str, str, str]] = frozenset()
 
 
 def field_meaning(input_name: str) -> str:
@@ -145,6 +146,15 @@ def script_state_metadata(state: CompiledScriptState) -> dict[str, object]:
         "fixed_seed_fields": [_endpoint(target) for target in state.fixed_seed_fields],
         "fixed_seed_overrides": list(state.fixed_seed_overrides),
         # A script may assign a field twice and in any order; the record is a set.
+        "declared_connections": [
+            [
+                connection.source_instance_id,
+                connection.source_binding,
+                connection.target_instance_id,
+                connection.target_binding,
+            ]
+            for connection in state.declared_connections
+        ],
         "authored_fields": [
             _endpoint(target)
             for target in sorted(
@@ -221,6 +231,14 @@ def read_workflow_script_state(workflow: Mapping[str, object]) -> WorkflowScript
                 _field_identity, _records(carried.get("authored_fields"))
             )
             if identity is not None
+        ),
+        frozenset(
+            (str(item[0]), str(item[1]), str(item[2]), str(item[3]))
+            for item in _records(carried.get("declared_connections"))
+            if isinstance(item, Sequence)
+            and not isinstance(item, (str, bytes))
+            and len(item) == 4
+            and all(isinstance(part, str) for part in item)
         ),
     )
 

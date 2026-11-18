@@ -32,21 +32,19 @@ from typing import Protocol
 
 from ..cube_model import CubeDocument
 from ..execution.cube_document_lowering import unreplaceable_bypassed_nodes
-from ..language.compiler_models import CompiledCubeConnection
 from ..workflow import (
     ComposedValueMaterializer,
     CubeInstance,
     read_canonical_workflow,
 )
 from .native_workflow_models import NativeCubeImport, NativeWorkflowImportPlan
+from .stack_connections import stack_connections
 from .native_workflow_service import NativeCubeImportPreparer
 
 MAX_BROWSER_INTEGER = 2**53 - 1
 """The largest whole number a browser holds exactly."""
 
 _BYPASSED = 4
-_INPUT_PREFIX = "input."
-_OUTPUT_PREFIX = "output."
 
 
 class ComposedWorkflowImportError(ValueError):
@@ -174,7 +172,9 @@ class ComposedWorkflowAuthoringService:
             NativeWorkflowImportPlan(
                 canonical.semantic_hash,
                 tuple(imports),
-                _stack_connections(staged),
+                stack_connections(
+                    [(instance.instance_id, document) for instance, document in staged]
+                ),
             ),
             tuple(exact),
         )
@@ -235,39 +235,6 @@ def _stack_position(instance: CubeInstance) -> tuple[float, float]:
     ):
         return float(position[0]), float(position[1])
     return 0.0, 0.0
-
-
-def _boundary_names(document: Mapping[str, object], key: str) -> tuple[str, ...]:
-    """Read a document's public input or output names in authored order."""
-
-    implementation = document.get("implementation")
-    boundary = implementation.get(key) if isinstance(implementation, Mapping) else None
-    return tuple(boundary) if isinstance(boundary, Mapping) else ()
-
-
-def _stack_connections(
-    staged: Sequence[tuple[CubeInstance, Mapping[str, object]]],
-) -> tuple[CompiledCubeConnection, ...]:
-    """Feed each Cube input from the nearest earlier output of the same name."""
-
-    connections: list[CompiledCubeConnection] = []
-    for index, (target, document) in enumerate(staged):
-        for name in _boundary_names(document, "inputs"):
-            if not name.startswith(_INPUT_PREFIX):
-                continue
-            wanted = _OUTPUT_PREFIX + name[len(_INPUT_PREFIX) :]
-            for source, source_document in reversed(staged[:index]):
-                if wanted in _boundary_names(source_document, "outputs"):
-                    connections.append(
-                        CompiledCubeConnection(
-                            source.instance_id,
-                            wanted,
-                            target.instance_id,
-                            name,
-                        )
-                    )
-                    break
-    return tuple(connections)
 
 
 def exact_integer_fields(

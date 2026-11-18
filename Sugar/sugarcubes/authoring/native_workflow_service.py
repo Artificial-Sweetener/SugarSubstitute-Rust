@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Mapping, Protocol
 
 from ..cube_model import CubeDocument
@@ -31,6 +32,7 @@ from .native_workflow_models import (
     NativeWorkflowAuthoringResult,
     NativeWorkflowImportPlan,
 )
+from .stack_connections import stack_connections
 
 
 class NativeCubeImportPreparer(Protocol):
@@ -92,13 +94,30 @@ class SugarScriptWorkflowAuthoringService:
             for diagnostic in diagnostics
         ):
             return NativeWorkflowAuthoringResult(None, tuple(diagnostics))
+        declared = compiled.plan.connections
+        fed = {
+            (connection.target_instance_id, connection.target_binding)
+            for connection in declared
+        }
+        # A script's Cubes are a stack: an input the script does not connect itself takes the
+        # nearest earlier Cube's output of the same name.
+        implied = tuple(
+            connection
+            for connection in stack_connections(
+                [
+                    (instance.instance_id, instance.document.to_dict())
+                    for instance in compiled.plan.instances
+                ]
+            )
+            if (connection.target_instance_id, connection.target_binding) not in fed
+        )
         return NativeWorkflowAuthoringResult(
             NativeWorkflowImportPlan(
                 compiled.plan.semantic_hash,
                 tuple(imports),
-                compiled.plan.connections,
+                (*declared, *implied),
                 compiled.plan.field_annotations,
-                compiled.plan.script_state,
+                replace(compiled.plan.script_state, declared_connections=declared),
             ),
             compiled.diagnostics,
         )

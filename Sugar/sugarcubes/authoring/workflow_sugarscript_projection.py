@@ -27,6 +27,7 @@ from dataclasses import replace
 
 from ..cube_model import CubeDocument
 from ..execution import ConnectionOrigin
+from ..execution.models import CubeBoundaryConnection
 from ..language.compiler_models import MODEL_ASSET_NAMESPACE, PROMPT_LORA_NAMESPACE
 from ..language.substitute_writer import (
     ScriptConnection,
@@ -39,6 +40,7 @@ from ..language.substitute_writer import (
 )
 from ..workflow_analysis import CubeGraphAnalysis
 from .cube_input_declarations import CubeInputDeclarations
+from .stack_connections import stack_connections
 from .workflow_script_state import WorkflowScriptState, read_workflow_script_state
 
 _DOCUMENT_KEY = "sugarcubes_document"
@@ -109,6 +111,24 @@ def project_workflow_script(analysis: CubeGraphAnalysis) -> SubstituteScript:
         )
     alias_of = {instance.instance_id: instance.instance_alias for instance in ordered}
     instance_ids = list(alias_of)
+    # The stack's order already says these; a script states only what the order does not.
+    implied = {
+        (
+            connection.source_instance_id,
+            connection.source_binding,
+            connection.target_instance_id,
+            connection.target_binding,
+        )
+        for connection in stack_connections(
+            [
+                (
+                    instance.instance_id,
+                    documents[str(instance.payload.get("type"))].to_dict(),
+                )
+                for instance in ordered
+            ]
+        )
+    }
     return SubstituteScript(
         cubes=_with_node_links(cubes, instance_ids, state),
         overrides=(
@@ -143,8 +163,29 @@ def project_workflow_script(analysis: CubeGraphAnalysis) -> SubstituteScript:
             if edge.origin is ConnectionOrigin.EXPLICIT
             and edge.source.instance_id in alias_of
             and edge.target.instance_id in alias_of
+            and _stated(edge, implied, state)
         ),
     )
+
+
+def _stated(
+    edge: CubeBoundaryConnection,
+    implied: set[tuple[str, str, str, str]],
+    state: WorkflowScriptState,
+) -> bool:
+    """Report whether a script states one connection.
+
+    A connection the stack's order implies is left unsaid, unless the script the workflow came
+    from stated it itself.
+    """
+
+    identity = (
+        edge.source.instance_id,
+        edge.source.binding,
+        edge.target.instance_id,
+        edge.target.binding,
+    )
+    return identity not in implied or identity in state.declared_connections
 
 
 def _documents_by_definition(workflow: Mapping[str, object]) -> dict[str, CubeDocument]:

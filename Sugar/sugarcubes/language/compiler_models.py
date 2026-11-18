@@ -136,7 +136,8 @@ class CompiledScriptState:
     None of it changes what the workflow computes: the values it implies are already written
     into the Cube documents. It is what lets the workflow be written back as the same script.
     `authored_fields` names every field the script assigns itself, which includes fields a
-    Cube does not show on its face.
+    Cube does not show on its face. `declared_connections` are the connections the script
+    states, as distinct from those its stack order implies.
     """
 
     overrides: tuple[CompiledOverride, ...] = ()
@@ -147,6 +148,7 @@ class CompiledScriptState:
     fixed_seed_overrides: tuple[str, ...] = ()
     unsaved_output_instance_ids: tuple[str, ...] = ()
     authored_fields: tuple[CompiledFieldEndpoint, ...] = ()
+    declared_connections: tuple[CompiledCubeConnection, ...] = ()
 
 
 @dataclass(frozen=True)

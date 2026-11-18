@@ -305,3 +305,43 @@ def test_the_pages_own_overrides_and_links_decide_once_it_has_edited_the_workflo
         'set Right.sampler.sampler_name = "dpmpp_2m"\n'
         "set Right.sampler.steps = 7",
     )
+
+
+def test_cubes_of_a_script_are_a_stack_each_fed_by_the_cube_above() -> None:
+    """Connect what the order implies, and leave it unsaid when written back."""
+
+    source = _script(_CUBES, _SHARED, _LEFT, _RIGHT)
+
+    workflow = _workflow(source)
+
+    left, right = _instance_ids(workflow)
+    links = cast(list[list[object]], workflow["links"])
+    nodes = cast(list[dict[str, object]], workflow["nodes"])
+    ids = {
+        str(
+            cast(
+                dict[str, object],
+                cast(dict[str, object], node["properties"])["sugarcubes_cube"],
+            )["instance_id"]
+        ): node["id"]
+        for node in nodes
+    }
+    assert [(link[1], link[3]) for link in links] == [(ids[left], ids[right])]
+    assert "connect " not in _written(workflow)
+
+
+def test_a_connection_the_script_states_is_stated_again() -> None:
+    """Keep a script's own connect line although the stack's order implies the same."""
+
+    source = _script(
+        _CUBES,
+        _SHARED,
+        _LEFT,
+        _RIGHT,
+        "connect Left.output.image to Right.input.image",
+    )
+
+    workflow = _workflow(source)
+
+    assert len(cast(list[object], workflow["links"])) == 1
+    assert _written(workflow) == source
