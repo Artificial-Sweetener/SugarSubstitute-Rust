@@ -13,22 +13,31 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Own captured workflow-tab gestures, cancellation and one authoritative release command. */
+/** Reorder workflow tabs by dragging, on the gesture every rearranged list shares. */
+import { ReorderGesture } from '../../interaction/reorder/ReorderGesture.js';
 import { extentPlacement, slotOffsets } from '../../interaction/reorder/ReorderSlots.js';
 import { WorkflowTabDragPreview } from './WorkflowTabDragPreview.js';
-/** Coordinate presentation with host reorder while leaving selection to official Fluent focus. */
+/**
+ * Coordinate presentation with host reorder while leaving selection to official Fluent focus.
+ *
+ * The shared gesture owns the press, the lift, cancellation and the release. This owner adds what
+ * a tab strip needs: the tab keeps the pointer from the press so a stationary release still clicks
+ * it, the dragged tab stays on the strip and follows it as it scrolls, and a drop waits for ComfyUI
+ * to project the accepted order before another drag begins.
+ */
 export class WorkflowTabPointerDrag {
     viewport;
     reorder;
     report;
     tabWidths;
     #preview;
-    #tabs = [];
-    #candidate = null;
-    #suppressClick = false;
-    #scrollFrame = null;
-    #awaitingOrder = false;
+    #gesture;
     #document;
+    #tabs = [];
+    #pressed = null;
+    #awaitingOrder = false;
+    /** The tab list changed under a gesture: it ends without the usual return to accepted order. */
+    #superseded = false;
     /** Bind one delegated pointer lifetime to the scrolling workflow strip. */
     constructor(viewport, list, reorder, report, restored, tabWidths) {
         this.viewport = viewport;
@@ -37,16 +46,30 @@ export class WorkflowTabPointerDrag {
         this.tabWidths = tabWidths;
         this.#document = viewport.ownerDocument;
         this.#preview = new WorkflowTabDragPreview(list, viewport, restored, tabWidths);
+        this.#gesture = new ReorderGesture({
+            document: this.#document,
+            threshold: 6,
+            // A stationary release must keep the compatibility click on the official tab.
+            capture: 'press',
+            propagatePress: true,
+            captureElement: () => this.#pressed?.tab ?? null,
+            admission: () => (this.#awaitingOrder ? 'refuse' : 'ready'),
+            keys: () => this.#tabs.map((tab) => tab.id),
+            project: (card) => this.#project(card),
+            scroll: { viewport: () => this.viewport, axis: 'x', edge: 32, step: 8, lateral: Infinity },
+            lifted: () => undefined,
+            moved: () => undefined,
+            preview: () => undefined,
+            commit: (key, order) => this.#commit(order.indexOf(key)),
+            cancelled: () => this.#ended(),
+        });
         viewport.addEventListener('pointerdown', this.#down);
         viewport.addEventListener('scroll', this.#scrolled);
-        viewport.addEventListener('click', this.#click, true);
+        viewport.addEventListener('click', this.#gesture.click, true);
         viewport.addEventListener('lostpointercapture', this.#lostCapture);
         viewport.addEventListener('contextmenu', this.#cancel, true);
-        this.#document.addEventListener('pointermove', this.#move);
-        this.#document.addEventListener('pointerup', this.#up);
-        this.#document.addEventListener('pointercancel', this.#cancel);
-        this.#document.addEventListener('keydown', this.#key);
-        this.#document.defaultView?.addEventListener('blur', this.#cancel);
+        this.#document.addEventListener('pointermove', this.#released, true);
+        this.#document.addEventListener('pointercancel', this.#pointerCancelled);
     }
     /** Keep canonical updates from overwriting an active preview's orb and outline geometry. */
     get active() {
@@ -55,8 +78,12 @@ export class WorkflowTabPointerDrag {
     /** Cancel invalidated gestures and capture painted positions before keyed DOM projection. */
     beforeUpdate(next) {
         const changed = next.length !== this.#tabs.length || next.some((id, index) => id !== this.#tabs[index]?.id);
-        if (changed && this.#candidate)
-            this.#release();
+        if (changed && this.#gesture.pressed) {
+            // The update itself settles the strip, from the positions captured below.
+            this.#superseded = true;
+            this.#gesture.clear();
+            this.#superseded = false;
+        }
         return this.#preview.active && changed ? this.#preview.capture(this.#tabs) : null;
     }
     /** Settle accepted order while preserving the identity of every official tab control. */
@@ -69,7 +96,7 @@ export class WorkflowTabPointerDrag {
     }
     /** Arm only primary tab-body presses, excluding existing close and menu controls. */
     #down = (event) => {
-        this.#suppressClick = false;
+        this.#gesture.beginInteraction();
         if (event.button !== 0 || !event.isPrimary || this.#awaitingOrder)
             return;
         const path = event.composedPath();
@@ -80,126 +107,67 @@ export class WorkflowTabPointerDrag {
         if (!tab)
             return;
         this.#cancel();
-        const viewportLeft = this.viewport.getBoundingClientRect().left;
-        this.#candidate = {
+        this.#pressed = {
             pointerId: event.pointerId,
             origin,
-            x: event.clientX,
-            y: event.clientY,
-            scroll: this.viewport.scrollLeft,
-            startLeft: tab.getBoundingClientRect().left - viewportLeft + this.viewport.scrollLeft,
-            viewportLeft,
-            pointer: event.clientX,
+            tab,
             tabs: this.#tabs,
             widths: [...this.tabWidths()],
-            started: false,
             target: origin,
         };
         event.preventDefault();
         tab.focus({ preventScroll: true });
-        // A stationary release must keep the compatibility click on the official tab.
-        tab.setPointerCapture(event.pointerId);
+        if (!this.#gesture.press(event, tab.id, tab))
+            this.#pressed = null;
     };
-    /** Resolve pointer motion from immutable slots rather than moving neighbor rectangles. */
-    #move = (event) => {
-        const candidate = this.#candidate;
-        if (!candidate || event.pointerId !== candidate.pointerId)
-            return;
-        if (!(event.buttons & 1)) {
-            this.#cancel();
-            return;
-        }
-        candidate.pointer = event.clientX;
-        if (!candidate.started &&
-            Math.hypot(event.clientX - candidate.x, event.clientY - candidate.y) < 6)
-            return;
-        candidate.started = true;
-        event.preventDefault();
-        this.#project();
-        this.#edgeScroll();
-    };
-    /** Account for scroll movement without changing the original press-relative grab position. */
-    #placement(candidate) {
-        const placement = extentPlacement(candidate.widths, candidate.origin, candidate.pointer -
-            candidate.x +
-            candidate.viewportLeft -
+    /**
+     * Place the dragged tab where the lifted card hangs and name the order a drop there gives.
+     *
+     * The card's left edge is read against the strip as it is now, so the tab keeps its grab
+     * position while the strip scrolls beneath the pointer.
+     */
+    #project(card) {
+        const pressed = this.#pressed;
+        if (!pressed)
+            return null;
+        const placement = extentPlacement(pressed.widths, pressed.origin, card.x -
             this.viewport.getBoundingClientRect().left +
             this.viewport.scrollLeft -
-            candidate.scroll +
-            candidate.startLeft -
-            (slotOffsets(candidate.widths)[candidate.origin] ?? 0), candidate.target);
-        candidate.target = placement.target;
-        return placement;
-    }
-    /** Project the current captured pointer once per input or autoscroll frame. */
-    #project() {
-        const candidate = this.#candidate;
-        if (candidate?.started)
-            this.#preview.show(candidate.tabs, candidate.origin, this.#placement(candidate));
+            (slotOffsets(pressed.widths)[pressed.origin] ?? 0), pressed.target);
+        pressed.target = placement.target;
+        this.#preview.show(pressed.tabs, pressed.origin, placement);
+        const order = pressed.tabs.map((tab) => tab.id);
+        const [moved] = order.splice(pressed.origin, 1);
+        if (moved !== undefined)
+            order.splice(placement.target, 0, moved);
+        return order;
     }
     /** Preserve the grab position when wheel input or host scrolling changes the viewport. */
-    #scrolled = () => this.#project();
+    #scrolled = () => this.#gesture.reproject();
     /** Reproject a captured tab after endpoint controls move the viewport beneath its pointer. */
     viewportChanged() {
-        this.#project();
-    }
-    /** Continue reaching offscreen slots while a held pointer rests at the viewport edge. */
-    #edgeScroll() {
-        if (this.#scrollFrame !== null)
-            return;
-        const window = this.#document.defaultView;
-        if (!window)
-            return;
-        this.#scrollFrame = window.requestAnimationFrame(() => {
-            this.#scrollFrame = null;
-            const candidate = this.#candidate;
-            if (!candidate?.started)
-                return;
-            const rect = this.viewport.getBoundingClientRect();
-            const step = candidate.pointer < rect.left + 32 ? -8 : candidate.pointer > rect.right - 32 ? 8 : 0;
-            const before = this.viewport.scrollLeft;
-            this.viewport.scrollLeft = Math.max(0, Math.min(this.viewport.scrollWidth - this.viewport.clientWidth, before + step));
-            if (this.viewport.scrollLeft !== before) {
-                this.#project();
-                this.#edgeScroll();
-            }
-        });
+        this.#gesture.reproject();
     }
     /** Commit exactly once on release, preserving the preview until Comfy projects accepted order. */
-    #up = (event) => {
-        const candidate = this.#candidate;
-        if (!candidate || event.pointerId !== candidate.pointerId)
+    #commit(target) {
+        const pressed = this.#pressed;
+        this.#pressed = null;
+        if (!pressed)
             return;
-        candidate.pointer = event.clientX;
-        const placement = this.#placement(candidate);
-        this.#project();
-        this.#release();
-        if (!candidate.started)
-            return;
-        this.#suppressClick = true;
-        if (placement.target === candidate.origin) {
-            this.#settle();
-            return;
-        }
         this.#awaitingOrder = true;
         try {
-            this.reorder(candidate.origin, placement.target);
+            this.reorder(pressed.origin, target);
         }
         catch (error) {
             this.#settle();
             this.report(error);
         }
-    };
-    /** Release capture after clearing the candidate so lost-capture cannot cancel a valid commit. */
-    #release() {
-        const candidate = this.#candidate;
-        this.#candidate = null;
-        if (this.#scrollFrame !== null)
-            this.#document.defaultView?.cancelAnimationFrame(this.#scrollFrame);
-        this.#scrollFrame = null;
-        const tab = candidate?.tabs[candidate.origin];
-        if (candidate && tab?.hasPointerCapture(candidate.pointerId))
-            tab.releasePointerCapture(candidate.pointerId);
+    }
+    /** A press or drag ended without a drop: return to the accepted order. */
+    #ended() {
+        this.#pressed = null;
+        if (!this.#superseded)
+            this.#settle();
     }
     /** Return to accepted order on cancellation and host action failure. */
     #settle() {
@@ -207,38 +175,26 @@ export class WorkflowTabPointerDrag {
         if (this.#preview.active)
             this.#preview.settle(this.#tabs, this.#preview.capture(this.#tabs));
     }
-    /** Cancel implicit capture, keyboard escape, menus and focus loss with the same settle path. */
-    #cancel = (event) => {
-        if (event &&
-            'pointerId' in event &&
-            this.#candidate &&
-            event.pointerId !== this.#candidate.pointerId)
-            return;
-        if (this.#candidate?.started)
-            this.#suppressClick = true;
-        this.#release();
-        this.#settle();
+    /** Cancel implicit capture, menus and resizes with the same settle path. */
+    #cancel = () => {
+        if (this.#gesture.pressed)
+            this.#gesture.clear();
+        else
+            this.#settle();
+    };
+    /** A move that arrives without the primary button means its release was never delivered. */
+    #released = (event) => {
+        if (this.#pressed && event.pointerId === this.#pressed.pointerId && !(event.buttons & 1))
+            this.#cancel();
+    };
+    #pointerCancelled = (event) => {
+        if (this.#pressed && event.pointerId === this.#pressed.pointerId)
+            this.#cancel();
     };
     /** Ignore the expected capture-loss event after release has already accepted a command. */
     #lostCapture = (event) => {
-        if (this.#candidate)
-            this.#cancel(event);
-    };
-    /** Preserve keyboard activation while swallowing only the drag's compatibility click. */
-    #click = (event) => {
-        if (this.#suppressClick && event.detail !== 0) {
-            event.preventDefault();
-            event.stopImmediatePropagation();
-            this.#suppressClick = false;
-        }
-    };
-    /** Consume Escape only while this strip owns a pointer candidate. */
-    #key = (event) => {
-        if (event.key === 'Escape' && this.#candidate) {
-            event.preventDefault();
-            event.stopPropagation();
+        if (this.#pressed && event.pointerId === this.#pressed.pointerId)
             this.#cancel();
-        }
     };
     /** Retire a gesture before its slot allocation changes. */
     cancelForResize() {
@@ -250,13 +206,10 @@ export class WorkflowTabPointerDrag {
         this.#preview.dispose();
         this.viewport.removeEventListener('pointerdown', this.#down);
         this.viewport.removeEventListener('scroll', this.#scrolled);
-        this.viewport.removeEventListener('click', this.#click, true);
+        this.viewport.removeEventListener('click', this.#gesture.click, true);
         this.viewport.removeEventListener('lostpointercapture', this.#lostCapture);
         this.viewport.removeEventListener('contextmenu', this.#cancel, true);
-        this.#document.removeEventListener('pointermove', this.#move);
-        this.#document.removeEventListener('pointerup', this.#up);
-        this.#document.removeEventListener('pointercancel', this.#cancel);
-        this.#document.removeEventListener('keydown', this.#key);
-        this.#document.defaultView?.removeEventListener('blur', this.#cancel);
+        this.#document.removeEventListener('pointermove', this.#released, true);
+        this.#document.removeEventListener('pointercancel', this.#pointerCancelled);
     }
 }

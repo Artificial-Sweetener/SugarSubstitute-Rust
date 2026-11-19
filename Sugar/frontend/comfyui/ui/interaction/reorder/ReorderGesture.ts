@@ -49,6 +49,8 @@ export interface ReorderEdgeScroll {
   readonly step: number;
   /** How far beside the viewport the pointer may stray and still scroll it. */
   readonly lateral: number;
+  /** The direction the list runs and scrolls in; a column unless stated. */
+  readonly axis?: 'x' | 'y';
 }
 
 /** What one user of the gesture decides; the gesture itself has no opinion on any of it. */
@@ -58,6 +60,13 @@ export interface ReorderGestureOptions {
   readonly threshold: number;
   /** The element that holds the pointer once a card is lifted. */
   captureElement(): HTMLElement | null;
+  /**
+   * When the pointer is captured: at the lift unless stated. A list whose items must keep the
+   * click of a stationary press on themselves captures at the press.
+   */
+  readonly capture?: 'lift' | 'press';
+  /** Let the press itself reach other listeners; the gesture keeps it to itself unless stated. */
+  readonly propagatePress?: boolean;
   admission(key: string): ReorderAdmission;
   /** The accepted order, read when a card is lifted. */
   keys(): readonly string[];
@@ -135,7 +144,7 @@ export class ReorderGesture {
       return false;
     const bounds = item.getBoundingClientRect();
     // The pointer's later movement belongs to this gesture alone, from the press onwards.
-    event.stopPropagation();
+    if (!this.options.propagatePress) event.stopPropagation();
     this.#candidate = {
       key,
       pointerId: event.pointerId,
@@ -155,7 +164,14 @@ export class ReorderGesture {
     document.addEventListener('pointermove', this.#move, true);
     document.addEventListener('pointerup', this.#finish, true);
     document.defaultView?.addEventListener('blur', this.#blur);
+    if (this.options.capture === 'press')
+      this.options.captureElement()?.setPointerCapture(event.pointerId);
     return true;
+  }
+
+  /** Choose the slot again after the list moved under a lifted card, as when it scrolls. */
+  reproject(): void {
+    this.#project();
   }
 
   /** Lift a held press now that its caller is free, or follow the pointer of a lifted card. */
@@ -176,7 +192,8 @@ export class ReorderGesture {
     const lifting = !this.#card;
     if (lifting) {
       active.original = this.options.keys();
-      this.options.captureElement()?.setPointerCapture(active.pointerId);
+      if (this.options.capture !== 'press')
+        this.options.captureElement()?.setPointerCapture(active.pointerId);
     }
     this.#card = {
       key: active.key,
@@ -341,19 +358,25 @@ export class ReorderGesture {
     if (!this.#card) return;
     if (scroll && viewport) {
       const bounds = viewport.getBoundingClientRect();
+      const row = scroll.axis === 'x';
+      const [along, start, end] = row
+        ? [this.#x, bounds.left, bounds.right]
+        : [this.#y, bounds.top, bounds.bottom];
+      const [across, near, far] = row
+        ? [this.#y, bounds.top, bounds.bottom]
+        : [this.#x, bounds.left, bounds.right];
       const delta =
-        this.#y < bounds.top + scroll.edge
-          ? -scroll.step
-          : this.#y > bounds.bottom - scroll.edge
-            ? scroll.step
-            : 0;
-      if (
-        delta &&
-        this.#x >= bounds.left - scroll.lateral &&
-        this.#x <= bounds.right + scroll.lateral
-      ) {
-        viewport.scrollTop += delta;
-        this.#project();
+        along < start + scroll.edge ? -scroll.step : along > end - scroll.edge ? scroll.step : 0;
+      if (delta && across >= near - scroll.lateral && across <= far + scroll.lateral) {
+        const before = row ? viewport.scrollLeft : viewport.scrollTop;
+        // A row is clamped here; not every host clamps a scroll offset it is handed.
+        if (row)
+          viewport.scrollLeft = Math.max(
+            0,
+            Math.min(viewport.scrollWidth - viewport.clientWidth, before + delta),
+          );
+        else viewport.scrollTop += delta;
+        if ((row ? viewport.scrollLeft : viewport.scrollTop) !== before || !row) this.#project();
       }
     }
     this.#frame = this.#window()?.requestAnimationFrame(this.#edgeScroll) ?? 0;

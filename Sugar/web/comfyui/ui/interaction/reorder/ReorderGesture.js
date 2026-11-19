@@ -54,7 +54,8 @@ export class ReorderGesture {
             return false;
         const bounds = item.getBoundingClientRect();
         // The pointer's later movement belongs to this gesture alone, from the press onwards.
-        event.stopPropagation();
+        if (!this.options.propagatePress)
+            event.stopPropagation();
         this.#candidate = {
             key,
             pointerId: event.pointerId,
@@ -74,7 +75,13 @@ export class ReorderGesture {
         document.addEventListener('pointermove', this.#move, true);
         document.addEventListener('pointerup', this.#finish, true);
         document.defaultView?.addEventListener('blur', this.#blur);
+        if (this.options.capture === 'press')
+            this.options.captureElement()?.setPointerCapture(event.pointerId);
         return true;
+    }
+    /** Choose the slot again after the list moved under a lifted card, as when it scrolls. */
+    reproject() {
+        this.#project();
     }
     /** Lift a held press now that its caller is free, or follow the pointer of a lifted card. */
     resume() {
@@ -94,7 +101,8 @@ export class ReorderGesture {
         const lifting = !this.#card;
         if (lifting) {
             active.original = this.options.keys();
-            this.options.captureElement()?.setPointerCapture(active.pointerId);
+            if (this.options.capture !== 'press')
+                this.options.captureElement()?.setPointerCapture(active.pointerId);
         }
         this.#card = {
             key: active.key,
@@ -259,16 +267,23 @@ export class ReorderGesture {
             return;
         if (scroll && viewport) {
             const bounds = viewport.getBoundingClientRect();
-            const delta = this.#y < bounds.top + scroll.edge
-                ? -scroll.step
-                : this.#y > bounds.bottom - scroll.edge
-                    ? scroll.step
-                    : 0;
-            if (delta &&
-                this.#x >= bounds.left - scroll.lateral &&
-                this.#x <= bounds.right + scroll.lateral) {
-                viewport.scrollTop += delta;
-                this.#project();
+            const row = scroll.axis === 'x';
+            const [along, start, end] = row
+                ? [this.#x, bounds.left, bounds.right]
+                : [this.#y, bounds.top, bounds.bottom];
+            const [across, near, far] = row
+                ? [this.#y, bounds.top, bounds.bottom]
+                : [this.#x, bounds.left, bounds.right];
+            const delta = along < start + scroll.edge ? -scroll.step : along > end - scroll.edge ? scroll.step : 0;
+            if (delta && across >= near - scroll.lateral && across <= far + scroll.lateral) {
+                const before = row ? viewport.scrollLeft : viewport.scrollTop;
+                // A row is clamped here; not every host clamps a scroll offset it is handed.
+                if (row)
+                    viewport.scrollLeft = Math.max(0, Math.min(viewport.scrollWidth - viewport.clientWidth, before + delta));
+                else
+                    viewport.scrollTop += delta;
+                if ((row ? viewport.scrollLeft : viewport.scrollTop) !== before || !row)
+                    this.#project();
             }
         }
         this.#frame = this.#window()?.requestAnimationFrame(this.#edgeScroll) ?? 0;
