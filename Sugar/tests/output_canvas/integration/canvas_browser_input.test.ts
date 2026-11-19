@@ -86,6 +86,7 @@ function fixture(outbound?: (event: MouseEvent) => boolean) {
       navigable = enabled;
     },
     input: {
+      cancel: () => input.cancel(),
       dispose: () => {
         keyboard.dispose();
         input.dispose();
@@ -358,4 +359,18 @@ describe('browser image input ownership', () => {
     expect(drag.defaultPrevented).toBe(true);
     f.input.dispose();
   });
+});
+
+test('an interruption with no drag under way leaves the viewport untouched', async () => {
+  const { element, input, gestures } = fixture();
+  const records: MutationRecord[] = [];
+  const observer = new MutationObserver((batch) => records.push(...batch));
+  observer.observe(element, { attributes: true });
+  input.cancel();
+  input.cancel();
+  await Promise.resolve();
+  expect(records).toEqual([]);
+  expect(gestures.interrupt).toHaveBeenCalledTimes(2);
+  observer.disconnect();
+  input.dispose();
 });

@@ -107,7 +107,10 @@ export class BrowserCanvasInput {
     this.#points.clear();
     for (const id of pointers)
       if (this.element.hasPointerCapture(id)) this.element.releasePointerCapture(id);
-    this.element.classList.remove('sc-output-dragging');
+    // Removing an absent class still rewrites the attribute, which every observer of this
+    // viewport hears; an interruption with no drag under way must stay silent.
+    if (this.element.classList.contains('sc-output-dragging'))
+      this.element.classList.remove('sc-output-dragging');
     this.gestures.interrupt();
   }
 

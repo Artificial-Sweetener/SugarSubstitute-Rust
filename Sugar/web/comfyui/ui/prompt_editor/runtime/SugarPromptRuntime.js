@@ -46952,18 +46952,82 @@ var NativeFocus = class {
   }
 };
 
+// frontend/sugarprompt/editor/src/text-size-retention.ts
+var fontLoads = /* @__PURE__ */ new WeakMap();
+function loadedFonts(document2) {
+  let loads = fontLoads.get(document2);
+  if (!loads) {
+    const counted = { count: 0 };
+    loads = counted;
+    fontLoads.set(document2, counted);
+    document2.fonts?.addEventListener?.("loadingdone", () => {
+      counted.count += 1;
+    });
+  }
+  return loads;
+}
+function fontSignature(view, loads) {
+  const style = view.dom.ownerDocument.defaultView?.getComputedStyle(view.contentDOM);
+  return [
+    loads.count,
+    style?.fontFamily,
+    style?.fontSize,
+    style?.fontWeight,
+    style?.fontStyle,
+    style?.fontStretch,
+    style?.letterSpacing,
+    style?.lineHeight
+  ].join("|");
+}
+function usable(value, scaleX, scaleY) {
+  return scaleX > 0 && scaleY > 0 && [value.lineHeight, value.charWidth, value.textHeight].every(
+    (size) => Number.isFinite(size) && size > 0
+  );
+}
+function retainTextSize(view) {
+  const documentView = view.docView;
+  if (!documentView || typeof documentView.measureTextSize !== "function") return false;
+  const measure = documentView.measureTextSize.bind(documentView);
+  const loads = loadedFonts(view.dom.ownerDocument);
+  let retained = null;
+  documentView.measureTextSize = () => {
+    const signature = fontSignature(view, loads);
+    const scaleX = view.scaleX;
+    const scaleY = view.scaleY;
+    if (retained?.signature === signature && scaleX > 0 && scaleY > 0)
+      return {
+        lineHeight: retained.size.lineHeight * scaleY,
+        charWidth: retained.size.charWidth * scaleX,
+        textHeight: retained.size.textHeight * scaleY
+      };
+    const measured = measure();
+    retained = usable(measured, scaleX, scaleY) ? {
+      signature,
+      size: {
+        lineHeight: measured.lineHeight / scaleY,
+        charWidth: measured.charWidth / scaleX,
+        textHeight: measured.textHeight / scaleY
+      }
+    } : null;
+    return measured;
+  };
+  return true;
+}
+
 // frontend/sugarprompt/editor/src/native-surface.ts
 function createView(parent, state, scrollTo) {
   const root = parent.getRootNode();
-  return new EditorView({
+  const view = new EditorView({
     parent,
     // CodeMirror's inferred root follows assigned slots; native selection belongs to the light-DOM root.
     root: root instanceof ShadowRoot ? root : parent.ownerDocument,
     state: initializeNativeStructure(state),
     ...scrollTo ? { scrollTo } : {},
     /** Publish source and associated native history selection in one supported view update. */
-    dispatchTransactions: (transactions, view) => view.update(historyTransactions(transactions))
+    dispatchTransactions: (transactions, view2) => view2.update(historyTransactions(transactions))
   });
+  retainTextSize(view);
+  return view;
 }
 var NativeSurface = class {
   parent;

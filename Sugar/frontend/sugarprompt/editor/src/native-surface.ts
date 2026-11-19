@@ -25,6 +25,7 @@ import { retireLoraMedia } from './lora-media-state.js';
 import { retireRichProjection } from './projection-exposure.js';
 import { initializeNativeStructure } from './structure.js';
 import { compositionRetirement } from './composition-history.js';
+import { retainTextSize } from './text-size-retention.js';
 
 /** Bind native selection to the actual DOM root, including light-DOM editors assigned to component slots. */
 function createView(
@@ -33,7 +34,7 @@ function createView(
   scrollTo?: ReturnType<EditorView['scrollSnapshot']>,
 ): EditorView {
   const root = parent.getRootNode();
-  return new EditorView({
+  const view = new EditorView({
     parent,
     // CodeMirror's inferred root follows assigned slots; native selection belongs to the light-DOM root.
     root: root instanceof ShadowRoot ? root : parent.ownerDocument,
@@ -42,6 +43,8 @@ function createView(
     /** Publish source and associated native history selection in one supported view update. */
     dispatchTransactions: (transactions, view) => view.update(historyTransactions(transactions)),
   });
+  retainTextSize(view);
+  return view;
 }
 
 /** Supported view construction seam keeps native lifetime transitions testable without a browser or a second editing owner. */
