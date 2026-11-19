@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own masonry layout rules and workspace stacking independently of renderer appearance. */
+import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
 import { MASONRY_SURFACE_Z_INDEX } from '../../core/OverlayStacking.js';
 import { WORKFLOW_MASONRY_INLINE_PADDING, WORKFLOW_MASONRY_TOP_INSET, } from './WorkflowMasonryLayout.js';
 import { packedMasonryRule } from './MasonryPacking.js';
@@ -89,23 +90,18 @@ export function markMasonryMounted(surface) {
         lateChrome.delete(root);
         return;
     }
-    const Observer = root.ownerDocument.defaultView?.MutationObserver;
-    if (watching || !Observer)
+    if (watching)
         return;
-    const observer = new Observer((records) => {
-        for (const record of records)
-            for (const node of record.addedNodes) {
-                if (!(node instanceof Element))
-                    continue;
-                if (node.matches(MOUNTED_HIDES))
-                    markHidden(node);
-                if (node.matches(MOUNTED_STILLS))
-                    mark(node, MASONRY_STILLS_ATTRIBUTE, '');
-                markChrome(node, true);
-            }
-    });
-    observer.observe(root, { childList: true, subtree: true });
-    lateChrome.set(root, observer);
+    lateChrome.set(root, new HostSurfaceObserver(root, `${MOUNTED_HIDES}, ${MOUNTED_STILLS}`, (changes) => {
+        for (const change of changes) {
+            if (change.kind !== 'mounted')
+                continue;
+            if (change.element.matches(MOUNTED_HIDES))
+                markHidden(change.element);
+            if (change.element.matches(MOUNTED_STILLS))
+                mark(change.element, MASONRY_STILLS_ATTRIBUTE, '');
+        }
+    }, { exclude: '.sugarcubes-workflow-masonry' }));
 }
 /** Install layout structure independently of native node theme tokens. */
 export function ensureWorkflowMasonryStyles(documentRef) {
