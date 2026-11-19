@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Install the production desktop checkpoint handshake alongside Comfy's existing workflow workspace. */
+import { RestingChange } from './RestingChange.js';
 import type { ComfyDesktopSessionOptions } from './ComfyDesktopSessionRuntime.js';
 import { ComfyDesktopSessionRuntime } from './ComfyDesktopSessionRuntime.js';
 import { createNativeDesktopSessionTransport } from './NativeDesktopSessionTransport.js';
@@ -24,6 +25,12 @@ import { DesktopSessionClient } from '../application/DesktopSessionClient.js';
 import { ComfyAboutInformation } from '../../settings/ComfyAboutInformation.js';
 import { AuthoredEditObservation } from './AuthoredEditObservation.js';
 import { readComfyDraftTimes } from './ComfyWorkflowDraftTimes.js';
+
+/**
+ * How long the camera and the view must hold still before the host is told where they stopped:
+ * longer than the travel between masonry and graph, so one switch is one report.
+ */
+const NAVIGATION_REST_MS = 1000;
 
 /** Own only desktop session adapters; ordinary browser workflows keep their existing composition. */
 export class ComfyDesktopSessionHost {
@@ -41,6 +48,7 @@ export class ComfyDesktopSessionHost {
       | 'versions'
       | 'artifacts'
       | 'observeEdits'
+      | 'observeNavigation'
       | 'draftTimes'
     >,
   ) {}
@@ -64,6 +72,15 @@ export class ComfyDesktopSessionHost {
         edits.install();
         return () => edits.dispose();
       },
+      observeNavigation: (rested) =>
+        new RestingChange(
+          {
+            setTimeout: (run, milliseconds) => this.window.setTimeout(run, milliseconds),
+            clearTimeout: (timer) => this.window.clearTimeout(timer),
+          },
+          NAVIGATION_REST_MS,
+          rested,
+        ),
       artifacts: new ComfyDesktopArtifacts(
         new OutputArtifactClient(request),
         new BrowserDesktopAssets(transport, request, this.window),

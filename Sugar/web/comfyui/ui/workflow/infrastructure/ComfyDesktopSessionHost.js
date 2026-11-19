@@ -1,3 +1,20 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Install the production desktop checkpoint handshake alongside Comfy's existing workflow workspace. */
+import { RestingChange } from './RestingChange.js';
 import { ComfyDesktopSessionRuntime } from './ComfyDesktopSessionRuntime.js';
 import { createNativeDesktopSessionTransport } from './NativeDesktopSessionTransport.js';
 import { BrowserDesktopAssets } from './BrowserDesktopAssets.js';
@@ -7,6 +24,11 @@ import { DesktopSessionClient } from '../application/DesktopSessionClient.js';
 import { ComfyAboutInformation } from '../../settings/ComfyAboutInformation.js';
 import { AuthoredEditObservation } from './AuthoredEditObservation.js';
 import { readComfyDraftTimes } from './ComfyWorkflowDraftTimes.js';
+/**
+ * How long the camera and the view must hold still before the host is told where they stopped:
+ * longer than the travel between masonry and graph, so one switch is one report.
+ */
+const NAVIGATION_REST_MS = 1000;
 /** Own only desktop session adapters; ordinary browser workflows keep their existing composition. */
 export class ComfyDesktopSessionHost {
     window;
@@ -38,6 +60,10 @@ export class ComfyDesktopSessionHost {
                 edits.install();
                 return () => edits.dispose();
             },
+            observeNavigation: (rested) => new RestingChange({
+                setTimeout: (run, milliseconds) => this.window.setTimeout(run, milliseconds),
+                clearTimeout: (timer) => this.window.clearTimeout(timer),
+            }, NAVIGATION_REST_MS, rested),
             artifacts: new ComfyDesktopArtifacts(new OutputArtifactClient(request), new BrowserDesktopAssets(transport, request, this.window)),
             versions: async () => {
                 const metadata = await new ComfyAboutInformation().load();

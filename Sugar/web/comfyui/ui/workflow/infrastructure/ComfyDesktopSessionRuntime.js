@@ -37,6 +37,7 @@ export class ComfyDesktopSessionRuntime {
     #available = true;
     #intent = new DesktopStartupIntent();
     #publishObservation = null;
+    #navigation = null;
     constructor(options) {
         this.options = options;
         this.bindings = new DesktopWorkspaceBindings(options.webview, options.nextId);
@@ -99,6 +100,7 @@ export class ComfyDesktopSessionRuntime {
         if (this.#disposed || this.#stops.length)
             return;
         const { execution, canvas, presentation, route } = this.options;
+        this.#navigation = this.options.observeNavigation(() => this.#refresh(false));
         this.#readiness.install();
         if (this.#readiness.read().committed)
             this.#intent.committed(this.#contextSignature());
@@ -120,7 +122,7 @@ export class ComfyDesktopSessionRuntime {
             }
             this.#refresh(true);
             this.bindings.changed();
-        }), canvas.subscribe(() => this.#refresh(false)), presentation.subscribe(() => this.#refresh(false)));
+        }), canvas.subscribe(() => this.#navigation?.changed()), presentation.subscribe(() => this.#navigation?.changed()));
         if (route)
             this.#stops.push(route.subscribe(() => this.#refresh(true)));
         if (this.options.settingsRoute)
@@ -199,6 +201,8 @@ export class ComfyDesktopSessionRuntime {
     async capture(id, revision, cancellation) {
         if (!this.readiness().committed)
             throw new DesktopSessionRefusal('not-committed', 'Comfy desktop capture requires committed startup.');
+        // This capture reads where the person is looking now, so a report still waiting is spent.
+        this.#navigation?.settle();
         this.#refresh(true);
         return this.#capture.capture(id, revision, cancellation);
     }
@@ -225,6 +229,8 @@ export class ComfyDesktopSessionRuntime {
             return;
         this.#disposed = true;
         this.#materialization.cancel();
+        this.#navigation?.settle();
+        this.#navigation = null;
         for (const stop of this.#stops.splice(0))
             stop();
         this.#graph?.dispose();

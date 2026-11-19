@@ -161,6 +161,8 @@ export async function desktopRuntimeFixture(
         editsSettled = null;
       };
     },
+    // These fixtures have no clock: a change of place is at rest the moment it is made.
+    observeNavigation: (rested) => ({ changed: rested, settle: () => undefined }),
   });
   runtime.install();
   return {

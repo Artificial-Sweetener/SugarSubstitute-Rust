@@ -73,6 +73,15 @@ export interface ComfyDesktopSessionOptions {
   readonly observeEdits: (settled: () => void) => () => void;
   /** When Comfy last kept its own copy of each workflow, read before it restored its tabs. */
   readonly draftTimes: ComfyDraftTimes;
+  /**
+   * Hear each change of what a person is looking at (the canvas camera, the workflow's view) and
+   * call `rested` once those changes stop; `settle` forgets a report still waiting. A pan or a
+   * switch of view changes the place on every frame, and the host records only where it stops.
+   */
+  readonly observeNavigation: (rested: () => void) => {
+    changed(): void;
+    settle(): void;
+  };
 }
 
 /** Keep desktop capture independent of graph generation, history routing and editor insertion. */
@@ -98,6 +107,7 @@ export class ComfyDesktopSessionRuntime implements DesktopSessionRuntime {
   #available = true;
   readonly #intent = new DesktopStartupIntent();
   #publishObservation: (() => Promise<void>) | null = null;
+  #navigation: ReturnType<ComfyDesktopSessionOptions['observeNavigation']> | null = null;
 
   constructor(private readonly options: ComfyDesktopSessionOptions) {
     this.bindings = new DesktopWorkspaceBindings(options.webview, options.nextId);
@@ -164,6 +174,7 @@ export class ComfyDesktopSessionRuntime implements DesktopSessionRuntime {
   install(): void {
     if (this.#disposed || this.#stops.length) return;
     const { execution, canvas, presentation, route } = this.options;
+    this.#navigation = this.options.observeNavigation(() => this.#refresh(false));
     this.#readiness.install();
     if (this.#readiness.read().committed) this.#intent.committed(this.#contextSignature());
     this.#stops.push(
@@ -194,8 +205,8 @@ export class ComfyDesktopSessionRuntime implements DesktopSessionRuntime {
         this.#refresh(true);
         this.bindings.changed();
       }),
-      canvas.subscribe(() => this.#refresh(false)),
-      presentation.subscribe(() => this.#refresh(false)),
+      canvas.subscribe(() => this.#navigation?.changed()),
+      presentation.subscribe(() => this.#navigation?.changed()),
     );
     if (route) this.#stops.push(route.subscribe(() => this.#refresh(true)));
     if (this.options.settingsRoute)
@@ -293,6 +304,8 @@ export class ComfyDesktopSessionRuntime implements DesktopSessionRuntime {
         'not-committed',
         'Comfy desktop capture requires committed startup.',
       );
+    // This capture reads where the person is looking now, so a report still waiting is spent.
+    this.#navigation?.settle();
     this.#refresh(true);
     return this.#capture.capture(id, revision, cancellation);
   }
@@ -333,6 +346,8 @@ export class ComfyDesktopSessionRuntime implements DesktopSessionRuntime {
     if (this.#disposed) return;
     this.#disposed = true;
     this.#materialization.cancel();
+    this.#navigation?.settle();
+    this.#navigation = null;
     for (const stop of this.#stops.splice(0)) stop();
     this.#graph?.dispose();
     this.#graph = null;
