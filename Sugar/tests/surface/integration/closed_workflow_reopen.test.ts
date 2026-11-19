@@ -197,6 +197,7 @@ function fixture() {
     openOverrides: () => undefined,
     setOverridesInline: () => undefined,
     adoptJobSeeds: () => 0,
+    confirm: async () => true,
   });
   synchronize();
   host.setup();

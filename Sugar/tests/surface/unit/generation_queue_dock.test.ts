@@ -21,11 +21,12 @@ import {
   GENERATION_QUEUE_DOCK_WIDTH_PROPERTY,
   GenerationQueueDockWidth,
 } from '../../../frontend/comfyui/ui/surface/frame/GenerationQueueDockWidth.js';
+import { generationQueueSkinCss } from '../../../frontend/comfyui/ui/surface/frame/GenerationQueueSkinStyles.js';
 import {
+  GENERATION_QUEUE_FLYOUT_MAX_HEIGHT,
   GENERATION_QUEUE_FLYOUT_WIDTH,
-  GENERATION_QUEUE_LIST_SCALE,
-  generationQueueSkinCss,
-} from '../../../frontend/comfyui/ui/surface/frame/GenerationQueueSkinStyles.js';
+  generationQueueViewCss,
+} from '../../../frontend/comfyui/ui/surface/frame/queue/GenerationQueueViewStyles.js';
 
 /** Build Comfy's docked job panel the way it mounts: a side panel holding a header toolbar. */
 function dockedPanel(): HTMLElement {
@@ -171,33 +172,43 @@ test('a failing Comfy store is reported and never thrown at the person', () => {
   document.body.replaceChildren();
 });
 
-test('the queue fly-out is an opaque rounded panel, since the page cannot blur the canvas behind it', () => {
-  const flyout =
-    /\[data-testid="queue-progress-overlay"\] \{([^}]*)\}/.exec(generationQueueSkinCss)?.[1] ?? '';
-  expect(flyout).toContain('background:var(--sc-surface-secondary,#2b2b2b)!important');
-  expect(flyout).toContain('backdrop-filter:none!important');
-  expect(flyout).toContain('border-radius:8px!important');
-  expect(generationQueueSkinCss).not.toContain('blur(');
-  expect(/background:[^;]*transparent/.test(flyout)).toBe(false);
-});
-
-test('the queue’s look applies only inside the frame and scales Comfy’s fixed row slots', () => {
-  expect(GENERATION_QUEUE_FLYOUT_WIDTH).toBe(360);
-  // Comfy positions rows in 48 px slots; the generation queue's row is 68 px with a 6 px gap.
-  expect(48 * GENERATION_QUEUE_LIST_SCALE).toBeCloseTo(74);
+test('inside the frame ComfyUI’s own queue panels give way to the generation queue’s view', () => {
+  const rules = generationQueueSkinCss.replace(/\s+/g, ' ');
+  expect(rules).toContain(
+    ':root[data-sc-substitute-frame] [data-testid="queue-progress-overlay"] { display:none!important; }',
+  );
+  // The pinned panel keeps its place beside the canvas; only the frame's view shows in it.
+  expect(rules).toContain(
+    '> :not(.sc-generation-queue):not(.sc-generation-queue-dock-divider) { display:none!important; }',
+  );
+  // The queue button steps aside while the queue is pinned, so it is never offered twice.
+  expect(generationQueueSkinCss).toContain(
+    ':root[data-sc-substitute-frame]:has([data-testid="job-history-sidebar"]) :is(button[data-sc-generation-queue],.sc-generation-queue-slot)',
+  );
   const selectors = generationQueueSkinCss
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .split('}')
     .map((rule) => rule.split('{')[0]?.trim() ?? '')
     .filter((selector) => selector && !selector.startsWith('@'));
-  expect(selectors.length).toBeGreaterThan(20);
   for (const selector of selectors)
-    expect(
-      selector.includes(':root[data-sc-substitute-frame]') ||
-        selector.startsWith('.sc-generation-queue-dock-hide'),
-    ).toBe(true);
-  // The queue button steps aside while the queue is docked, so it is never offered twice.
-  expect(generationQueueSkinCss).toContain(
-    ':root[data-sc-substitute-frame]:has([data-testid="job-history-sidebar"]) :is(button[data-sc-generation-queue],.sc-generation-queue-slot)',
+    expect(selector.includes(':root[data-sc-substitute-frame]')).toBe(true);
+});
+
+test('the queue keeps SugarSubstitute’s measurements in every visual style', () => {
+  expect(GENERATION_QUEUE_FLYOUT_WIDTH).toBe(360);
+  expect(GENERATION_QUEUE_FLYOUT_MAX_HEIGHT).toBe(420);
+  const rules = generationQueueViewCss.replace(/\s+/g, ' ');
+  // A row is the 52 px thumbnail and 8 px above and below it, six pixels from the next.
+  expect(rules).toContain('flex:0 0 68px; height:68px;');
+  expect(rules).toContain('flex:0 0 52px; width:52px; height:52px;');
+  expect(rules).toContain(
+    '.sc-generation-queue-rows { display:flex; flex-direction:column; gap:6px;',
   );
+  expect(rules).toContain(
+    "[data-surface='flyout'] { width:360px; max-height:420px; padding:12px 14px 14px;",
+  );
+  // Colours and fonts come from the active style's tokens, never from one style's values.
+  expect(rules).toContain('font-family:var(--sc-font-family)');
+  expect(rules).toContain('background:var(--sc-surface-secondary');
+  expect(rules).not.toContain('blur(');
 });

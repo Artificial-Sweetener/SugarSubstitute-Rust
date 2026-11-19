@@ -40,6 +40,7 @@ import {
 } from '../core/release_notes/WhatsNewPresenter.js';
 import { WhatsNewModal } from '../dialogs/WhatsNewModal.js';
 import { InputModal } from '../dialogs/InputModal.js';
+import { ConfirmDialog } from '../dialogs/ConfirmDialog.js';
 import {
   registerWildcardSettings,
   type WildcardSettingsOptions,
@@ -121,6 +122,8 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
     openOverrides: (trigger) => relations.openOverrideMenu(trigger),
     setOverridesInline: (inline) => relations.setOverridesInline(inline),
     adoptJobSeeds: (seeds) => relations.jobSeeds.adopt(seeds),
+    confirm: (title, message, confirmLabel) =>
+      new ConfirmDialog().open({ title, message, confirmLabel }),
     report: options.reportPresentationError,
   });
   const editorNavigation = new WorkflowEditorNavigationHost({

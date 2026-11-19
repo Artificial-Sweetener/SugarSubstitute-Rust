@@ -29,6 +29,7 @@ export class ComfyGenerationQueueSurface {
   #button: HTMLButtonElement | null = null;
   #label: string | null = null;
   #dark = true;
+  #pending: number | null = null;
   #frameRequest: number | null = null;
   #disposed = false;
 
@@ -76,6 +77,13 @@ export class ComfyGenerationQueueSurface {
     if (this.#button) this.#button.dataset.scQueueTheme = dark ? 'dark' : 'light';
   }
 
+  /** Show how many jobs still wait, as counted from ComfyUI's own job list. */
+  setPending(count: number): void {
+    if (this.#pending === count) return;
+    this.#pending = count;
+    this.#reconcile();
+  }
+
   /** Reposition the native queue anchor after its owned generation slot changes parents. */
   refreshPosition(): void {
     this.#schedule();
@@ -119,7 +127,9 @@ export class ComfyGenerationQueueSurface {
     // Comfy counts the running job with the waiting ones; the badge says how many still wait.
     const active = Number(/^\s*(\d+)/.exec(text)?.[1] ?? '0');
     const cancel = this.document.querySelector<HTMLButtonElement>(CANCEL_RUN);
-    const count = String(Math.max(0, active - (cancel && !cancel.disabled ? 1 : 0)));
+    const count = String(
+      this.#pending ?? Math.max(0, active - (cancel && !cancel.disabled ? 1 : 0)),
+    );
     if (this.#badge.textContent !== count) this.#badge.textContent = count;
     this.#badge.hidden = count === '0';
     this.#position();

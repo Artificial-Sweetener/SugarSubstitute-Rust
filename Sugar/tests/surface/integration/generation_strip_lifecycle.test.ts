@@ -56,6 +56,7 @@ function fixture() {
     { extensionManager: { queueSettings, command: { execute } } },
     report,
     () => 0,
+    async () => true,
   );
   return { host, native, frame, cancel, queueSettings, changes, execute, report };
 }

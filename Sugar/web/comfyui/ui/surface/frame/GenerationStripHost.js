@@ -20,6 +20,7 @@ import { generationStripCss } from './GenerationStripStyles.js';
 import { ComfyGenerationQueueSurface } from './ComfyGenerationQueueSurface.js';
 import { GenerationQueueDock } from './GenerationQueueDock.js';
 import { GenerationQueueRowMenu } from './GenerationQueueRowMenu.js';
+import { GenerationQueueController } from './queue/GenerationQueueController.js';
 import { ToastService } from '../../core/ToastService.js';
 import { isRecord } from '../../types/common.js';
 import { applyOwnedTheme } from '../appearance/ThemeService.js';
@@ -33,8 +34,9 @@ export class GenerationStripHost {
     #queue;
     #dock;
     #rowMenu;
+    #queueView;
     /** Mount source-matched generation controls only for the enabled Substitute frame. */
-    constructor(document, frame, app, report, adoptJobSeeds) {
+    constructor(document, frame, app, report, adoptJobSeeds, confirm) {
         this.frame = frame;
         this.#adapter = new ComfyGenerationAdapter(document, app);
         this.#style = document.createElement('style');
@@ -72,6 +74,20 @@ export class GenerationStripHost {
             notify: (severity, title, message) => toasts.push(severity, title, message),
             report,
         });
+        const api = isRecord(app) && isComfyQueueApi(app.api) ? app.api : null;
+        // Without ComfyUI's API client there is nothing to list, and ComfyUI's own queue stays.
+        this.#queueView = api
+            ? new GenerationQueueController({
+                document,
+                app,
+                api,
+                useSeeds: (jobId) => this.#rowMenu.useSeeds(jobId),
+                showPending: (count) => this.#queue.setPending(count),
+                confirm,
+                notify: (severity, title, message) => toasts.push(severity, title, message),
+                report,
+            })
+            : null;
         this.#stop = this.#adapter.subscribe(() => this.#refresh());
         this.#refresh();
     }
@@ -80,6 +96,7 @@ export class GenerationStripHost {
         this.#queue.dispose();
         this.#dock.dispose();
         this.#rowMenu.dispose();
+        this.#queueView?.dispose();
         this.#stop();
         this.#adapter.dispose();
         this.#view.dispose();
@@ -98,9 +115,17 @@ export class GenerationStripHost {
     setPalette(dark) {
         applyOwnedTheme(this.#view.element, dark);
         this.#queue.setPalette(dark);
+        this.#queueView?.setPalette(dark);
     }
     /** Project validated host state onto the existing presentation controls. */
     #refresh() {
         this.#view.update(this.#adapter.read());
     }
+}
+/** Recognize the part of ComfyUI's API client the generation queue reads through. */
+function isComfyQueueApi(value) {
+    return (isRecord(value) &&
+        typeof value.fetchApi === 'function' &&
+        typeof value.addEventListener === 'function' &&
+        typeof value.removeEventListener === 'function');
 }

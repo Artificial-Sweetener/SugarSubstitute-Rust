@@ -54,6 +54,8 @@ export interface SubstituteFrameHostOptions {
   setOverridesInline(inline: boolean): void;
   /** Give the shown workflow a job's seeds; returns how many seed fields took one. */
   adoptJobSeeds(seeds: readonly QueueJobSeed[]): number;
+  /** Ask before something that cannot be undone; resolves true when the person agrees. */
+  confirm(title: string, message: string, agree: string): Promise<boolean>;
   report(error: unknown): void;
 }
 
@@ -334,6 +336,7 @@ export class SubstituteFrameHost {
       this.options.app,
       this.options.report,
       this.options.adoptJobSeeds,
+      this.options.confirm,
     );
     this.#toolbarLayout = new SubstituteToolbarLayout(
       this.options.document,

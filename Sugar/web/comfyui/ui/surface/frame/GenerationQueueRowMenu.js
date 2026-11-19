@@ -60,7 +60,7 @@ export class GenerationQueueRowMenu {
                     disabled: jobId === null,
                     select: () => {
                         if (jobId !== null)
-                            void this.#useSeeds(jobId).catch(this.options.report);
+                            void this.useSeeds(jobId).catch(this.options.report);
                     },
                 },
             ],
@@ -87,7 +87,7 @@ export class GenerationQueueRowMenu {
         return ids.size === 1 ? ([...ids][0] ?? null) : null;
     }
     /** Read the job's record as text, have its seeds read exactly, and apply them. */
-    async #useSeeds(jobId) {
+    async useSeeds(jobId) {
         const api = isRecord(this.options.app) ? this.options.app.api : null;
         const fetchApi = isRecord(api) ? api.fetchApi : null;
         if (typeof fetchApi !== 'function')

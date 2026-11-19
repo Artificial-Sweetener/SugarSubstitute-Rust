@@ -32,6 +32,7 @@ import { MemoryBudgetSettings } from '../settings/MemoryBudgetSettings.js';
 import { WhatsNewPresenter, } from '../core/release_notes/WhatsNewPresenter.js';
 import { WhatsNewModal } from '../dialogs/WhatsNewModal.js';
 import { InputModal } from '../dialogs/InputModal.js';
+import { ConfirmDialog } from '../dialogs/ConfirmDialog.js';
 import { registerWildcardSettings, } from '../wildcards/presentation/WildcardSettings.js';
 import { WhatsNewSeenSetting } from '../settings/WhatsNewSeenSetting.js';
 /** Share seed reuse across actual native field mounts and the override toolbar. */
@@ -76,6 +77,7 @@ export function createWorkflowFieldHost(options) {
         openOverrides: (trigger) => relations.openOverrideMenu(trigger),
         setOverridesInline: (inline) => relations.setOverridesInline(inline),
         adoptJobSeeds: (seeds) => relations.jobSeeds.adopt(seeds),
+        confirm: (title, message, confirmLabel) => new ConfirmDialog().open({ title, message, confirmLabel }),
         report: options.reportPresentationError,
     });
     const editorNavigation = new WorkflowEditorNavigationHost({

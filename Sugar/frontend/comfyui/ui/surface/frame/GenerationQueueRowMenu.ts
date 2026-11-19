@@ -79,7 +79,7 @@ export class GenerationQueueRowMenu {
           label: USE_JOB_SEEDS,
           disabled: jobId === null,
           select: () => {
-            if (jobId !== null) void this.#useSeeds(jobId).catch(this.options.report);
+            if (jobId !== null) void this.useSeeds(jobId).catch(this.options.report);
           },
         },
       ],
@@ -105,7 +105,7 @@ export class GenerationQueueRowMenu {
   }
 
   /** Read the job's record as text, have its seeds read exactly, and apply them. */
-  async #useSeeds(jobId: string): Promise<void> {
+  async useSeeds(jobId: string): Promise<void> {
     const api = isRecord(this.options.app) ? this.options.app.api : null;
     const fetchApi = isRecord(api) ? api.fetchApi : null;
     if (typeof fetchApi !== 'function') throw new Error('The Comfy API is unavailable.');
