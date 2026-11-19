@@ -41,6 +41,10 @@ import {
 } from '../session_notice/HostSessionNoticeLink.js';
 import type { DraggedFiles } from '../file_drag/DraggedFiles.js';
 import { HostBackendLink, type BackendWatcher } from '../backend/HostBackendLink.js';
+import {
+  HostUpdateReportLink,
+  type UpdateReportWatcher,
+} from '../update_report/HostUpdateReportLink.js';
 import { HostFileDragLink } from '../file_drag/HostFileDragLink.js';
 
 /** Supply the browser lifetime without introducing another connection or preference owner. */
@@ -67,6 +71,8 @@ export interface EmbeddedPanelOptions {
   readonly draggedFiles?: DraggedFiles;
   /** Hears how the host's ComfyUI stands when the host declares `sugarcubes.backend`. */
   readonly backend?: BackendWatcher;
+  /** Hears whether the host has an update report when it declares `sugarcubes.update-report`. */
+  readonly updateReport?: UpdateReportWatcher;
   connected(): boolean;
   subscribeConnection?(listener: (connected: boolean) => void): () => void;
   report(error: unknown): void;
@@ -83,6 +89,7 @@ export class EmbeddedPanelHost {
   #sessionNotice: HostSessionNoticeLink | null = null;
   #fileDrag: HostFileDragLink | null = null;
   #backend: HostBackendLink | null = null;
+  #updateReport: HostUpdateReportLink | null = null;
   #stopHost: (() => void) | null = null;
   #timer: number | null = null;
 
@@ -178,6 +185,23 @@ export class EmbeddedPanelHost {
     this.#watchHostSessionNotice();
     this.#followHostFileDrags();
     this.#watchHostBackend();
+    this.#watchHostUpdateReport();
+  }
+
+  /** Learn whether the host has an update report once the host declares that it says so. */
+  #watchHostUpdateReport(): void {
+    if (
+      this.#updateReport ||
+      !this.options.updateReport ||
+      !this.options.host.read()?.serves(HOST_PROTOCOLS.updateReport)
+    )
+      return;
+    this.#updateReport = new HostUpdateReportLink(
+      this.transport,
+      this.options.updateReport,
+      this.options.report,
+    );
+    this.#updateReport.start();
   }
 
   /** Follow the ComfyUI the host runs once the host declares that it reports it. */
@@ -300,6 +324,8 @@ export class EmbeddedPanelHost {
     this.#fileDrag = null;
     this.#backend?.dispose();
     this.#backend = null;
+    this.#updateReport?.dispose();
+    this.#updateReport = null;
     if (this.#timer !== null) this.options.window.clearInterval(this.#timer);
     this.#timer = null;
     this.options.window.removeEventListener('pagehide', this.dispose);

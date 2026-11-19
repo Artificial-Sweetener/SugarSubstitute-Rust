@@ -26,6 +26,7 @@ import { HostDescriptionState } from '../core/embedded/HostDescriptionState.js';
 import { UpdateSourceSlot } from '../core/updates/UpdateSource.js';
 import { DraggedFiles } from '../core/file_drag/DraggedFiles.js';
 import { BackendOutageNotice } from '../core/backend/BackendOutageNotice.js';
+import { HostUpdateReport } from '../core/update_report/HostUpdateReportLink.js';
 import { DeclaredHost } from '../core/embedded/PanelRuntime.js';
 import { startEmbeddedPanel } from '../core/embedded/EmbeddedPanelHost.js';
 import { unsavedWorkWords } from '../core/session_notice/UnsavedWorkNotice.js';
@@ -58,6 +59,7 @@ export function createWorkflowFieldHost(options) {
         lastingToast: (severity, summary, detail) => void options.hostNotices.pushLastingToast(severity, summary, detail),
         report: options.reportPresentationError,
     });
+    const updateReport = new HostUpdateReport();
     const whatsNew = new WhatsNewPresenter(new WhatsNewModal({ document: options.document }), seenReleases(options.app, options.reportPresentationError), options.reportPresentationError);
     const canvas = new EmbeddedCanvasConnection();
     const wildcardNames = new InputModal({
@@ -113,6 +115,7 @@ export function createWorkflowFieldHost(options) {
         palette: appearance.palette,
         updates,
         whatsNew: () => whatsNew.open(),
+        updateReport,
         report: options.reportPresentationError,
     });
     /** Mount field appearance and its frame/navigation presentation after native workspace setup. */
@@ -137,6 +140,7 @@ export function createWorkflowFieldHost(options) {
                 releaseNotes: whatsNew,
                 draggedFiles,
                 backend,
+                updateReport,
                 sessionNotice: {
                     notSaved: (lost) => {
                         const words = unsavedWorkWords(lost);

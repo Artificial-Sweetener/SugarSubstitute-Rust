@@ -275,7 +275,7 @@ pub(super) fn dispatch(
                     DesktopStartupObservation::SplashRetired(session.splash.launch),
                 )?;
             }
-            updates::turn(session, content)?;
+            updates::turn(session, content, target, proxy.clone(), context.title)?;
             commands::drain(session, content, proxy)?;
         }
         _ => {}

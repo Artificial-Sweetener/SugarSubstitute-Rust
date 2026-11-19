@@ -493,6 +493,21 @@ test('the backend state reaches the page, and its watch and retry ride the contr
   assert.equal(f.deliver(state), true);
   assert.deepEqual(f.received.map(value => value.type), ['state']);
 });
+test('the update report state reaches the page, and its watch and open ride the control lane', () => {
+  const f = fixture();
+  const report = (type, extra = {}) => ({ protocol: 'sugarcubes.update-report', version: 1, session, type, ...extra });
+  f.receipt('g', 'c', 1);
+  f.bridge.send(report('watch'));
+  f.bridge.send(report('open', { revision: 2 }));
+  f.receipt('a', 'c', 1); f.receipt('g', 'c', 2);
+  assert.deepEqual(posted(f), [report('watch'), report('open', { revision: 2 })]);
+  assert.ok(f.sent.every(value => value.startsWith('1:c:')));
+  const state = report('state', { revision: 2, available: true });
+  for (const value of [{ ...state, version: 2 }, { ...state, session: 'another-session' }, report('watch')])
+    assert.equal(f.deliver(value), false);
+  assert.equal(f.deliver(state), true);
+  assert.deepEqual(f.received.map(value => value.type), ['state']);
+});
 test('file drag reports reach the current session, and the page sends none', () => {
   const f = fixture();
   const drag = (type, extra = {}) => ({ protocol: 'sugarcubes.file-drag', version: 1, session, type, ...extra });

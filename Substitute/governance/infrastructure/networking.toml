@@ -87,7 +87,7 @@ rationale = "The panel bridge fetches only the host-intercepted reserved path on
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:faf807e878c8caab8fef50d6f41d76e6c3eb12bafaacabeeda0300524b22646f"
+source_sha256 = "sha256:7cb2811d30415d530f34a3c4237a6f82f1741d3a2e840cdb9f94f56904003658"
 boundary = "fixture"
 rationale = "The isolated JavaScript VM fixture fakes the browser fetch boundary to exercise the production bulk channel upload, download, same-origin URL construction, ordering and teardown without any network access."
 

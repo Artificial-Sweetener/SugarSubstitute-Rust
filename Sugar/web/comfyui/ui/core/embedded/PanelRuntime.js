@@ -49,7 +49,8 @@ var HOST_PROTOCOLS = Object.freeze({
   releaseNotes: Object.freeze({ name: "sugarcubes.release-notes", version: 1 }),
   sessionNotice: Object.freeze({ name: "sugarcubes.session-notice", version: 1 }),
   fileDrag: Object.freeze({ name: "sugarcubes.file-drag", version: 1 }),
-  backend: Object.freeze({ name: "sugarcubes.backend", version: 1 })
+  backend: Object.freeze({ name: "sugarcubes.backend", version: 1 }),
+  updateReport: Object.freeze({ name: "sugarcubes.update-report", version: 1 })
 });
 var HOST_CAPABILITIES = Object.freeze({
   /** The host's configured presentation replaces the user's saved appearance while embedded. */

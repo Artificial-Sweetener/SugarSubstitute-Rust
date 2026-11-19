@@ -253,3 +253,32 @@ test('every line names the product its source describes, and an unnamed source n
   for (const line of lines('SugarSubstitute')) expect(line).toContain('SugarSubstitute');
   for (const line of lines(null)) expect(line).not.toMatch(/SugarCubes|SugarSubstitute/);
 });
+
+test("the page offers the host's own update report only while the host has one", () => {
+  const listeners = new Set<() => void>();
+  const offer = {
+    available: false,
+    open: jest.fn(),
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+  const slot = new UpdateSourceSlot();
+  const page = new UpdatesSettingsPage(document, slot, () => undefined, undefined, null, offer);
+  document.body.append(page.element);
+  const button = [...page.element.querySelectorAll('button')].find(
+    (candidate) => candidate.textContent === 'Show report',
+  )!;
+  expect(button.hidden).toBe(true);
+  offer.available = true;
+  for (const listener of listeners) listener();
+  expect(button.hidden).toBe(false);
+  button.click();
+  expect(offer.open).toHaveBeenCalledTimes(1);
+  offer.available = false;
+  for (const listener of listeners) listener();
+  expect(button.hidden).toBe(true);
+  page.dispose();
+  expect(listeners.size).toBe(0);
+});

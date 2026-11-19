@@ -10,6 +10,9 @@ use crate::main_updates::{Notice, UpdateFeed, UpdateIntent};
 pub(super) fn turn(
     session: &mut Session,
     content: &mut impl StartupWindowContent,
+    target: &EventLoopWindowTarget<NativeAction>,
+    proxy: EventLoopProxy<NativeAction>,
+    title: &str,
 ) -> Result<(), DesktopError> {
     super::report::turn(session);
     let Some(main) = &session.main else { return Ok(()) };
@@ -28,7 +31,30 @@ pub(super) fn turn(
     let words = content.locale_messages();
     main_operation(session, content, |main| {
         main.observe_updates(feed, words, notices).map(|()| None)
-    })
+    })?;
+    report_turn(session, content, target, proxy, title)
+}
+
+/// Tell the page whether there is an update report, and open it when the page asked.
+fn report_turn(
+    session: &mut Session,
+    content: &mut impl StartupWindowContent,
+    target: &EventLoopWindowTarget<NativeAction>,
+    proxy: EventLoopProxy<NativeAction>,
+    title: &str,
+) -> Result<(), DesktopError> {
+    if session.main.is_none() {
+        return Ok(());
+    }
+    let available =
+        content.update_status().as_ref().is_some_and(crate::report::surface::has_update_report);
+    let mut asked = false;
+    main_operation(session, content, |main| {
+        main.observe_update_report(available)?;
+        asked = main.take_update_report_request();
+        Ok(None)
+    })?;
+    if asked { super::report::open(session, content, target, proxy, title) } else { Ok(()) }
 }
 
 /// Carry out a click on update caption peer `id`.

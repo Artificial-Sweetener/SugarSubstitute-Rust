@@ -20,6 +20,7 @@ import type { MemoryClientMessage } from '../memory/MemoryHostProtocol.js';
 import type { NamedUpdatesClientMessage, UpdatesClientMessage } from './UpdatesRuntime.js';
 import type { ReleaseNotesClientMessage } from './ReleaseNotesRuntime.js';
 import type { BackendClientMessage } from './BackendRuntime.js';
+import type { UpdateReportClientMessage } from './UpdateReportRuntime.js';
 import type {
   LinedSessionNoticeClientMessage,
   SessionNoticeClientMessage,
@@ -39,7 +40,8 @@ export interface BrowserPanelTransport {
       | ReleaseNotesClientMessage
       | SessionNoticeClientMessage
       | LinedSessionNoticeClientMessage
-      | BackendClientMessage,
+      | BackendClientMessage
+      | UpdateReportClientMessage,
   ): void;
   subscribe(receive: (value: unknown) => void): () => void;
 }

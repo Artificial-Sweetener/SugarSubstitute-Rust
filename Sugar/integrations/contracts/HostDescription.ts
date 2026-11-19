@@ -39,6 +39,7 @@ export const HOST_PROTOCOLS = Object.freeze({
   sessionNotice: Object.freeze({ name: 'sugarcubes.session-notice', version: 1 }),
   fileDrag: Object.freeze({ name: 'sugarcubes.file-drag', version: 1 }),
   backend: Object.freeze({ name: 'sugarcubes.backend', version: 1 }),
+  updateReport: Object.freeze({ name: 'sugarcubes.update-report', version: 1 }),
 } as const satisfies Readonly<Record<string, HostProtocol>>);
 
 /** The capabilities SugarCubes reads from a host description. */

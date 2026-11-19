@@ -9,6 +9,7 @@ use sugarsubstitute_contracts::{
     host_backend::BackendClientMessage,
     host_release_notes::ReleaseNotesClientMessage,
     host_session_notice::SessionNoticeClientMessage,
+    host_update_report::UpdateReportClientMessage,
     host_updates::{UpdatesClientMessage, UpdatesProtocol},
     memory::MemoryMessage,
     panel::{PanelMessage, PanelSession},
@@ -152,6 +153,7 @@ pub(crate) enum ClientMessage {
     ReleaseNotes(ReleaseNotesClientMessage),
     SessionNotice(SessionNoticeClientMessage),
     Backend(BackendClientMessage),
+    UpdateReport(UpdateReportClientMessage),
 }
 
 impl ClientMessage {
@@ -163,7 +165,8 @@ impl ClientMessage {
             | Self::Updates(..)
             | Self::ReleaseNotes(_)
             | Self::SessionNotice(_)
-            | Self::Backend(_) => Lane::Control,
+            | Self::Backend(_)
+            | Self::UpdateReport(_) => Lane::Control,
             Self::Surface(CanvasSurfaceMessage::Cancel { .. }) => Lane::Cancellation,
             Self::Surface(_) | Self::Native(_) => Lane::Ordinary,
         }
@@ -177,7 +180,8 @@ impl ClientMessage {
             | Self::Updates(..)
             | Self::ReleaseNotes(_)
             | Self::SessionNotice(_)
-            | Self::Backend(_) => None,
+            | Self::Backend(_)
+            | Self::UpdateReport(_) => None,
             Self::Surface(CanvasSurfaceMessage::Request(value)) => Some(value.request_id()),
             Self::Surface(CanvasSurfaceMessage::Discovery(value)) => Some(value.request_id()),
             Self::Surface(CanvasSurfaceMessage::Presentation(value)) => Some(value.request_id()),
@@ -240,6 +244,9 @@ pub(crate) fn decode_payload(payload: &str, session: &PanelSession) -> Option<Cl
     }
     if let Ok(message) = BackendClientMessage::decode(payload.as_bytes()) {
         return (message.session() == session).then_some(ClientMessage::Backend(message));
+    }
+    if let Ok(message) = UpdateReportClientMessage::decode(payload.as_bytes()) {
+        return (message.session() == session).then_some(ClientMessage::UpdateReport(message));
     }
     let request = CanvasNativeRequest::decode(payload.as_bytes()).ok()?;
     (request.session() == session).then_some(ClientMessage::Native(request))
@@ -440,6 +447,27 @@ mod tests {
             assert!(decode_payload(&request, &other).is_none());
         }
         let state = r#"{"protocol":"sugarcubes.backend","version":1,"session":"session-12345678","type":"state","revision":1,"status":"running"}"#;
+        assert!(decode_payload(state, &session).is_none(), "a page never sends the host's state");
+        Ok(())
+    }
+
+    #[test]
+    fn update_report_requests_ride_the_control_lane_for_their_own_session_only()
+    -> Result<(), Box<dyn Error>> {
+        let session = PanelSession::new("session-12345678".into())?;
+        let other = PanelSession::new("session-87654321".into())?;
+        for (kind, extra) in [("watch", ""), ("open", r#","revision":4"#)] {
+            let request = format!(
+                r#"{{"protocol":"sugarcubes.update-report","version":1,"session":"session-12345678","type":"{kind}"{extra}}}"#
+            );
+            let message =
+                decode_payload(&request, &session).ok_or("Update report request was inert")?;
+            assert!(matches!(&message, ClientMessage::UpdateReport(_)));
+            assert_eq!(message.lane(), Lane::Control);
+            assert_eq!(message.request_id(), None);
+            assert!(decode_payload(&request, &other).is_none());
+        }
+        let state = r#"{"protocol":"sugarcubes.update-report","version":1,"session":"session-12345678","type":"state","revision":1,"available":true}"#;
         assert!(decode_payload(state, &session).is_none(), "a page never sends the host's state");
         Ok(())
     }

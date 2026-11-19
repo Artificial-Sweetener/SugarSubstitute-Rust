@@ -41,14 +41,14 @@
       "sha256": "d2e77c688ce372c916790d998de04dce71f562a33b50f8c936d62f630942e491"
     },
     {
-      "file": "session-notice.schema.json",
-      "id": "https://artificialsweetener.ai/schemas/sugarcubes/session-notice/v1",
-      "sha256": "11fe01965e055827c77799507f4b9d144f3f182a70618e7851f4454a316dadfb"
-    },
-    {
       "file": "session-notice-v2.schema.json",
       "id": "https://artificialsweetener.ai/schemas/sugarcubes/session-notice/v2",
       "sha256": "10efdf1c50dedc2a3b52448bc741b6fb4d1651bfe392b37f3e32ba622f260f71"
+    },
+    {
+      "file": "session-notice.schema.json",
+      "id": "https://artificialsweetener.ai/schemas/sugarcubes/session-notice/v1",
+      "sha256": "11fe01965e055827c77799507f4b9d144f3f182a70618e7851f4454a316dadfb"
     },
     {
       "file": "session.schema.json",
@@ -56,14 +56,19 @@
       "sha256": "4dea675b60fa4a2695f7a870fb8271c8df778dc42eec08cc6e8ae60279eaaf00"
     },
     {
-      "file": "updates.schema.json",
-      "id": "https://artificialsweetener.ai/schemas/sugarcubes/updates/v1",
-      "sha256": "ef20c40afebe2ed098bc5ba83461a568dce40b1451d6b3fcbcb38ba28ef9f562"
+      "file": "update-report.schema.json",
+      "id": "https://artificialsweetener.ai/schemas/sugarcubes/update-report/v1",
+      "sha256": "77717151435cc905988750caecc6c765b263ecc3700593536eadbd67ae25392c"
     },
     {
       "file": "updates-v2.schema.json",
       "id": "https://artificialsweetener.ai/schemas/sugarcubes/updates/v2",
       "sha256": "9eb680f6538fe229ac1f661dca102122bbf0e3b13020a463103618b73ffc9e7c"
+    },
+    {
+      "file": "updates.schema.json",
+      "id": "https://artificialsweetener.ai/schemas/sugarcubes/updates/v1",
+      "sha256": "ef20c40afebe2ed098bc5ba83461a568dce40b1451d6b3fcbcb38ba28ef9f562"
     }
   ],
   "capabilities": [

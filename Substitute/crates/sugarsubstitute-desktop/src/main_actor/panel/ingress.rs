@@ -21,6 +21,11 @@ pub(in crate::main_actor) enum Ingress {
         message: sugarsubstitute_contracts::host_backend::BackendClientMessage,
         claim: sugarsubstitute_contracts::execution::MemoryClaim,
     },
+    /// An update report watch or open, which this adapter answers itself from its offer.
+    UpdateReport {
+        message: sugarsubstitute_contracts::host_update_report::UpdateReportClientMessage,
+        claim: sugarsubstitute_contracts::execution::MemoryClaim,
+    },
 }
 
 impl MainActor {
@@ -131,6 +136,9 @@ impl MainActor {
             crate::main_panel_ingress::ClientMessage::Backend(message) => {
                 Ingress::Backend { message, claim }
             }
+            crate::main_panel_ingress::ClientMessage::UpdateReport(message) => {
+                Ingress::UpdateReport { message, claim }
+            }
             crate::main_panel_ingress::ClientMessage::Native(request) => {
                 Ingress::Native(crate::CanvasNativeObservation::new(
                     self.identity(),
@@ -152,6 +160,9 @@ impl MainActor {
     ) -> Result<Option<DesktopStartupObservation>, DesktopError> {
         Ok(Some(match ingress {
             Ingress::Backend { message, claim } => return self.answer_backend_page(message, claim),
+            Ingress::UpdateReport { message, claim } => {
+                return self.answer_update_report_page(message, claim).map(|()| None);
+            }
             Ingress::Panel(observation) => DesktopStartupObservation::PanelMessage(observation),
             Ingress::Memory(observation) => DesktopStartupObservation::MemoryMessage(observation),
             Ingress::Updates(observation) => DesktopStartupObservation::UpdatesMessage(observation),

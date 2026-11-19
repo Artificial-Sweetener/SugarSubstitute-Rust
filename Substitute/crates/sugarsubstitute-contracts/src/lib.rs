@@ -19,6 +19,7 @@ pub mod host_backend;
 pub mod host_file_drag;
 pub mod host_release_notes;
 pub mod host_session_notice;
+pub mod host_update_report;
 pub mod host_updates;
 pub mod incident;
 pub mod installation;

@@ -14,6 +14,7 @@
   const noticeAnswers = ['not-saved', 'none', 'line'];
   const fileDragReports = ['entered', 'left'];
   const backendRequests = ['watch', 'retry'];
+  const updateReportRequests = ['watch', 'open'];
   const requestTypes = ['context.request', 'source.request', 'geometry.request', 'edit.request',
     'workflow.request', 'surface.capabilities.request', 'surface.viewport.request',
     'surface.presentation.request', 'surface.prepare', 'surface.geometry', 'surface.select',
@@ -25,7 +26,7 @@
   const versions = value =>
     ['sugarcubes.updates', 'sugarcubes.session-notice'].includes(value.protocol) ? [1, 2] :
     ['sugarcubes.host', 'sugarcubes.memory', 'sugarcubes.release-notes', 'sugarcubes.file-drag',
-      'sugarcubes.backend']
+      'sugarcubes.backend', 'sugarcubes.update-report']
       .includes(value.protocol) ? [1] : [3];
   const speaks = value => versions(value).includes(value.version);
   const notification = value => value.protocol === 'sugarcubes.panel' ||
@@ -36,6 +37,7 @@
     value.protocol === 'sugarcubes.session-notice' && noticeAnswers.includes(value.type) ||
     value.protocol === 'sugarcubes.file-drag' && fileDragReports.includes(value.type) ||
     value.protocol === 'sugarcubes.backend' && value.type === 'state' ||
+    value.protocol === 'sugarcubes.update-report' && value.type === 'state' ||
     value.protocol === 'sugarcubes.canvas' && value.requestId === 0 &&
     ['surface.presentation.changed', 'surface.camera.changed', 'source.changed', 'edit.changed']
       .includes(value.type);
@@ -62,7 +64,8 @@
       value.protocol === 'sugarcubes.updates' && updateRequests.includes(value.type) ||
       value.protocol === 'sugarcubes.release-notes' && notesRequests.includes(value.type) ||
       value.protocol === 'sugarcubes.session-notice' && noticeRequests.includes(value.type) ||
-      value.protocol === 'sugarcubes.backend' && backendRequests.includes(value.type),
+      value.protocol === 'sugarcubes.backend' && backendRequests.includes(value.type) ||
+      value.protocol === 'sugarcubes.update-report' && updateReportRequests.includes(value.type),
     speaks,
     // A newer control message replaces a queued one of the same protocol and type, except an
     // update check or restart or a release notes load: the host answers each by its request

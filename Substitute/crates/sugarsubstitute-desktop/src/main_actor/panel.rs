@@ -142,6 +142,15 @@ impl MainActor {
         self.canvas_replies.push(NativeDelivery::Backend(command))
     }
 
+    /// Retain the newest word on the update report until native capacity returns.
+    pub(super) fn send_update_report_page(
+        &mut self,
+        command: crate::main_update_report_page::UpdateReportCommand,
+    ) -> Result<(), DesktopError> {
+        self.admitted_panel_context(command.identity())?;
+        self.canvas_replies.push(NativeDelivery::UpdateReport(command))
+    }
+
     /// Deliver a correlated native canvas reply to the same current document and UI apartment.
     pub(crate) fn send_canvas_native(
         &mut self,

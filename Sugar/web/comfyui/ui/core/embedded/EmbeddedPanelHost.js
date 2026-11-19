@@ -23,6 +23,7 @@ import { UpdatesHostLink } from '../updates/UpdatesHostLink.js';
 import { HostReleaseNotesLink } from '../release_notes/HostReleaseNotesLink.js';
 import { HostSessionNoticeLink, } from '../session_notice/HostSessionNoticeLink.js';
 import { HostBackendLink } from '../backend/HostBackendLink.js';
+import { HostUpdateReportLink, } from '../update_report/HostUpdateReportLink.js';
 import { HostFileDragLink } from '../file_drag/HostFileDragLink.js';
 /** Keep messaging active only while the owning SugarCubes document is alive. */
 export class EmbeddedPanelHost {
@@ -37,6 +38,7 @@ export class EmbeddedPanelHost {
     #sessionNotice = null;
     #fileDrag = null;
     #backend = null;
+    #updateReport = null;
     #stopHost = null;
     #timer = null;
     /** Receive an identified adapter transport after Comfy and presentation setup have succeeded. */
@@ -134,6 +136,16 @@ export class EmbeddedPanelHost {
         this.#watchHostSessionNotice();
         this.#followHostFileDrags();
         this.#watchHostBackend();
+        this.#watchHostUpdateReport();
+    }
+    /** Learn whether the host has an update report once the host declares that it says so. */
+    #watchHostUpdateReport() {
+        if (this.#updateReport ||
+            !this.options.updateReport ||
+            !this.options.host.read()?.serves(HOST_PROTOCOLS.updateReport))
+            return;
+        this.#updateReport = new HostUpdateReportLink(this.transport, this.options.updateReport, this.options.report);
+        this.#updateReport.start();
     }
     /** Follow the ComfyUI the host runs once the host declares that it reports it. */
     #watchHostBackend() {
@@ -239,6 +251,8 @@ export class EmbeddedPanelHost {
         this.#fileDrag = null;
         this.#backend?.dispose();
         this.#backend = null;
+        this.#updateReport?.dispose();
+        this.#updateReport = null;
         if (this.#timer !== null)
             this.options.window.clearInterval(this.#timer);
         this.#timer = null;

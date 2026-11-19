@@ -83,6 +83,10 @@ mod main_session_media;
 mod main_session_notice_contract;
 mod main_surface_contract;
 #[cfg(any(target_os = "windows", test))]
+#[cfg(any(target_os = "windows", test))]
+mod main_update_report;
+#[cfg(target_os = "windows")]
+mod main_update_report_page;
 mod main_updates;
 mod main_updates_contract;
 /// Bounded observational development trace records; feature-off builds expose none.

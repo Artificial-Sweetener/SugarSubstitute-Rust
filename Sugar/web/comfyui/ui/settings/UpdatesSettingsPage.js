@@ -48,6 +48,7 @@ export class UpdatesSettingsPage {
     report;
     formatTime;
     openWhatsNew;
+    hostReport;
     element;
     #version;
     #channel;
@@ -59,6 +60,8 @@ export class UpdatesSettingsPage {
     #restart;
     #restartLater;
     #whatsNew;
+    #showReport;
+    #stopHostReport;
     #source = null;
     #stopSource = null;
     #stopSlot;
@@ -70,13 +73,15 @@ export class UpdatesSettingsPage {
      *
      * @param formatTime Formats a completed check, given in milliseconds since the Unix epoch.
      * @param openWhatsNew Opens the What's new view; without it the page offers no such button.
+     * @param hostReport The host's own report of an update; the page offers it while it has one.
      */
-    constructor(document, slot, report, formatTime = (epochMs) => new Date(epochMs).toLocaleString(), openWhatsNew = null) {
+    constructor(document, slot, report, formatTime = (epochMs) => new Date(epochMs).toLocaleString(), openWhatsNew = null, hostReport = null) {
         this.document = document;
         this.slot = slot;
         this.report = report;
         this.formatTime = formatTime;
         this.openWhatsNew = openWhatsNew;
+        this.hostReport = hostReport;
         this.element = document.createElement('section');
         this.element.className = 'sc-settings-about sc-settings-updates';
         this.element.setAttribute('aria-label', 'SugarCubes updates');
@@ -101,7 +106,10 @@ export class UpdatesSettingsPage {
         this.#restartLater = this.#button('Restart after this workflow finishes', () => this.#apply('after-workflow'));
         this.#whatsNew = this.#button("What's new", () => this.openWhatsNew?.());
         this.#whatsNew.hidden = this.openWhatsNew === null;
-        actions.append(this.#check, this.#restart, this.#restartLater, this.#whatsNew);
+        this.#showReport = this.#button('Show report', () => this.hostReport?.open());
+        actions.append(this.#check, this.#restart, this.#restartLater, this.#whatsNew, this.#showReport);
+        this.#stopHostReport = hostReport?.subscribe(() => this.#offerHostReport()) ?? null;
+        this.#offerHostReport();
         this.element.append(details, this.#status, this.#notes, this.#causes, actions);
         this.#stopSlot = slot.subscribe(() => this.#follow());
         this.#follow();
@@ -111,6 +119,7 @@ export class UpdatesSettingsPage {
     dispose() {
         this.#disposed = true;
         this.#stopSlot();
+        this.#stopHostReport?.();
         this.#stopSource?.();
         this.#stopSource = null;
         this.#source = null;
@@ -198,6 +207,10 @@ export class UpdatesSettingsPage {
         if (snapshot.restartAfterWorkflow)
             notes.push('The restart will happen when the running workflow finishes.');
         return notes.join(' ');
+    }
+    /** Offer the host's report while it has one, whatever the update source reports. */
+    #offerHostReport() {
+        this.#show(this.#showReport, this.hostReport?.available === true, true);
     }
     #show(button, visible, enabled) {
         button.hidden = !visible;

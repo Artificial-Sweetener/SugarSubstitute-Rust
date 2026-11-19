@@ -81,6 +81,13 @@ export function updateStatusText(
       return UNMANAGED[status.reason];
   }
 }
+/** A host's own report of an update: whether it has one now, and the means to ask for it. */
+export interface HostUpdateReportOffer {
+  readonly available: boolean;
+  open(): void;
+  subscribe(listener: () => void): () => void;
+}
+
 /** Keep one stable page whose rows follow every snapshot the attached source reports. */
 export class UpdatesSettingsPage {
   readonly element: HTMLElement;
@@ -94,6 +101,8 @@ export class UpdatesSettingsPage {
   readonly #restart: HTMLButtonElement;
   readonly #restartLater: HTMLButtonElement;
   readonly #whatsNew: HTMLButtonElement;
+  readonly #showReport: HTMLButtonElement;
+  readonly #stopHostReport: (() => void) | null;
   #source: UpdateSource | null = null;
   #stopSource: (() => void) | null = null;
   readonly #stopSlot: () => void;
@@ -106,6 +115,7 @@ export class UpdatesSettingsPage {
    *
    * @param formatTime Formats a completed check, given in milliseconds since the Unix epoch.
    * @param openWhatsNew Opens the What's new view; without it the page offers no such button.
+   * @param hostReport The host's own report of an update; the page offers it while it has one.
    */
   constructor(
     private readonly document: Document,
@@ -114,6 +124,7 @@ export class UpdatesSettingsPage {
     private readonly formatTime: (epochMs: number) => string = (epochMs) =>
       new Date(epochMs).toLocaleString(),
     private readonly openWhatsNew: (() => void) | null = null,
+    private readonly hostReport: HostUpdateReportOffer | null = null,
   ) {
     this.element = document.createElement('section');
     this.element.className = 'sc-settings-about sc-settings-updates';
@@ -141,7 +152,16 @@ export class UpdatesSettingsPage {
     );
     this.#whatsNew = this.#button("What's new", () => this.openWhatsNew?.());
     this.#whatsNew.hidden = this.openWhatsNew === null;
-    actions.append(this.#check, this.#restart, this.#restartLater, this.#whatsNew);
+    this.#showReport = this.#button('Show report', () => this.hostReport?.open());
+    actions.append(
+      this.#check,
+      this.#restart,
+      this.#restartLater,
+      this.#whatsNew,
+      this.#showReport,
+    );
+    this.#stopHostReport = hostReport?.subscribe(() => this.#offerHostReport()) ?? null;
+    this.#offerHostReport();
     this.element.append(details, this.#status, this.#notes, this.#causes, actions);
     this.#stopSlot = slot.subscribe(() => this.#follow());
     this.#follow();
@@ -152,6 +172,7 @@ export class UpdatesSettingsPage {
   dispose(): void {
     this.#disposed = true;
     this.#stopSlot();
+    this.#stopHostReport?.();
     this.#stopSource?.();
     this.#stopSource = null;
     this.#source = null;
@@ -250,6 +271,11 @@ export class UpdatesSettingsPage {
     if (snapshot.restartAfterWorkflow)
       notes.push('The restart will happen when the running workflow finishes.');
     return notes.join(' ');
+  }
+
+  /** Offer the host's report while it has one, whatever the update source reports. */
+  #offerHostReport(): void {
+    this.#show(this.#showReport, this.hostReport?.available === true, true);
   }
 
   #show(button: HTMLButtonElement, visible: boolean, enabled: boolean): void {

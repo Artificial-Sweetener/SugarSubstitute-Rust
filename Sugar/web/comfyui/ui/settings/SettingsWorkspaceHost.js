@@ -20,7 +20,7 @@ import { ComfySettingsCatalog } from './ComfySettingsCatalog.js';
 import { SettingsWorkspaceSurface } from './SettingsWorkspaceSurface.js';
 import { settingsWorkspaceCss } from './SettingsWorkspaceStyles.js';
 import { AboutSettingsPage } from './AboutSettingsPage.js';
-import { UPDATES_SETTING_ID, UpdatesSettingsPage } from './UpdatesSettingsPage.js';
+import { UPDATES_SETTING_ID, UpdatesSettingsPage, } from './UpdatesSettingsPage.js';
 import { ComfyAboutInformation } from './ComfyAboutInformation.js';
 import { SettingsPopupTheme } from './SettingsPopupTheme.js';
 import { AppearanceState } from '../surface/appearance/AppearanceState.js';
@@ -118,7 +118,7 @@ export class SettingsWorkspaceHost {
             tooltip: 'Current version, update channel, last check, and applying a ready update.',
             defaultValue: '',
             type: () => {
-                this.#updatesPage ??= new UpdatesSettingsPage(this.options.document, updates, this.options.report, undefined, this.options.whatsNew ?? null);
+                this.#updatesPage ??= new UpdatesSettingsPage(this.options.document, updates, this.options.report, undefined, this.options.whatsNew ?? null, this.options.updateReport ?? null);
                 return this.#updatesPage.element;
             },
         });

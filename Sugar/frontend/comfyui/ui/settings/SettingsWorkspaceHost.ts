@@ -25,7 +25,11 @@ import { ComfySettingsCatalog } from './ComfySettingsCatalog.js';
 import { SettingsWorkspaceSurface } from './SettingsWorkspaceSurface.js';
 import { settingsWorkspaceCss } from './SettingsWorkspaceStyles.js';
 import { AboutSettingsPage } from './AboutSettingsPage.js';
-import { UPDATES_SETTING_ID, UpdatesSettingsPage } from './UpdatesSettingsPage.js';
+import {
+  UPDATES_SETTING_ID,
+  UpdatesSettingsPage,
+  type HostUpdateReportOffer,
+} from './UpdatesSettingsPage.js';
 import type { UpdateSourceSlot } from '../core/updates/UpdateSource.js';
 import { ComfyAboutInformation } from './ComfyAboutInformation.js';
 import { SettingsPopupTheme } from './SettingsPopupTheme.js';
@@ -42,6 +46,8 @@ export interface SettingsWorkspaceOptions {
   readonly updates?: UpdateSourceSlot;
   /** Opens the What's new view from the Updates entry. */
   readonly whatsNew?: () => void;
+  /** The host's own report of an update, offered from the Updates entry. */
+  readonly updateReport?: HostUpdateReportOffer;
   report(error: unknown): void;
 }
 
@@ -162,6 +168,7 @@ export class SettingsWorkspaceHost {
           this.options.report,
           undefined,
           this.options.whatsNew ?? null,
+          this.options.updateReport ?? null,
         );
         return this.#updatesPage.element;
       },

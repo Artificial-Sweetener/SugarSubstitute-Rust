@@ -101,6 +101,16 @@ impl Replies {
                 }
             }
         }
+        // A page that has not heard whether there is an update report needs only the newest.
+        if let NativeDelivery::UpdateReport(_) = &reply {
+            for offset in 0..self.len {
+                let index = (self.first + offset) % CAPACITY;
+                if let Some(NativeDelivery::UpdateReport(_)) = &self.slots[index] {
+                    self.slots[index] = Some(reply);
+                    return Ok(());
+                }
+            }
+        }
         // Only the newest word about a file drag matters to a page that has not heard the last.
         #[cfg(feature = "native-composition")]
         if let NativeDelivery::FileDrag(_) = &reply {
@@ -161,6 +171,7 @@ impl Replies {
                 || matches!(&delivery, NativeDelivery::ReleaseNotes(value) if current != Some(value.identity()))
                 || matches!(&delivery, NativeDelivery::SessionNotice(value) if current != Some(value.identity()))
                 || matches!(&delivery, NativeDelivery::Backend(value) if current != Some(value.identity()))
+                || matches!(&delivery, NativeDelivery::UpdateReport(value) if current != Some(value.identity()))
                 || stale_file_drag
                 || matches!(&delivery, NativeDelivery::CanvasNotification(value) if current != Some(value.identity()))
             {

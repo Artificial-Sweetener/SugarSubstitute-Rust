@@ -36,6 +36,7 @@ import { isReleaseNotesHostMessage } from '../ReleaseNotesValidation.generated.j
 import { isSessionNoticeHostMessage } from '../SessionNoticeValidation.generated.js';
 import { isFileDragHostMessage } from '../FileDragValidation.generated.js';
 import { isBackendStateMessage } from '../BackendValidation.generated.js';
+import { isUpdateReportStateMessage } from '../UpdateReportValidation.generated.js';
 import { isSessionNoticeHostMessage as isLinedSessionNoticeHostMessage } from '../SessionNoticeV2Validation.generated.js';
 import { discoverCanvasSurface } from '../CanvasSurfaceDiscovery.js';
 import type { ConformanceExchange, HostConformanceReport } from './HostConformance.js';
@@ -167,6 +168,7 @@ function declaredMessage(message: unknown, declared: DeclaredHost | null): boole
     (isSessionNoticeHostMessage(message) && declared.serves(HOST_PROTOCOLS.sessionNotice)) ||
     (isFileDragHostMessage(message) && declared.serves(HOST_PROTOCOLS.fileDrag)) ||
     (isBackendStateMessage(message) && declared.serves(HOST_PROTOCOLS.backend)) ||
+    (isUpdateReportStateMessage(message) && declared.serves(HOST_PROTOCOLS.updateReport)) ||
     (isLinedSessionNoticeHostMessage(message) &&
       declared.serves(HOST_PROTOCOLS.sessionNotice) &&
       declared.declares(HOST_CAPABILITIES.noticeLines))

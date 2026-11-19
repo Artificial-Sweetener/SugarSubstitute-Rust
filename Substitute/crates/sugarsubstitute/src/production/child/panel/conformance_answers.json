@@ -51,6 +51,10 @@
               "version": 1
             },
             {
+              "name": "sugarcubes.update-report",
+              "version": 1
+            },
+            {
               "name": "sugarcubes.file-drag",
               "version": 1
             }

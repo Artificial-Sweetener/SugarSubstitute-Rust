@@ -23,6 +23,7 @@ mod render_preview;
 mod retirement;
 mod session;
 mod timeout;
+mod update_report;
 mod updates;
 mod window_lifecycle;
 use crate::{
@@ -70,6 +71,8 @@ pub(crate) struct MainActor {
     recovery: crate::main_backend::Recovery,
     /// The caption's update button, restart offer, saving state and one-time messages.
     updates: updates::CaptionText,
+    /// What the page is told of the application's update report, and its request to see it.
+    update_report: crate::main_update_report::ReportOffer,
     stage: ConstructionStage,
     window: Option<Rc<Window>>,
     presenter: Option<Presenter>,
@@ -176,6 +179,7 @@ impl MainActor {
             admission,
             recovery,
             updates: updates::CaptionText::default(),
+            update_report: crate::main_update_report::ReportOffer::default(),
             stage: ConstructionStage::Window,
             window: None,
             presenter: None,

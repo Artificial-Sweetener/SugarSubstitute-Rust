@@ -23,7 +23,9 @@ use sugarsubstitute_desktop::MainHosting;
 /// declared too. Updates is declared at version 1 so every released SugarCubes page finds it;
 /// [`HostCapability::NAMED_UPDATES`] tells a newer page that version 2 is answered as well.
 /// The desktop tells every page how the ComfyUI it talks to stands (`sugarcubes.backend`).
-const PROTOCOLS: [HostProtocol; 7] = [
+/// It tells every page whether it has its own report of an update to show
+/// (`sugarcubes.update-report`).
+const PROTOCOLS: [HostProtocol; 8] = [
     HostProtocol::PANEL,
     HostProtocol::CANVAS,
     HostProtocol::MEMORY,
@@ -31,6 +33,7 @@ const PROTOCOLS: [HostProtocol; 7] = [
     HostProtocol::RELEASE_NOTES,
     HostProtocol::SESSION_NOTICE,
     HostProtocol::BACKEND,
+    HostProtocol::UPDATE_REPORT,
 ];
 
 /// What this host serves and declares to a page in a browser with `hosting`.
