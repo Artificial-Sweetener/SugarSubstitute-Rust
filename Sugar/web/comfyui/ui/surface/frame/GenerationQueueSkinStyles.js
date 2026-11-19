@@ -21,12 +21,15 @@
  * canvas that holds the frame's pinned queue: at the right, at the queue's width, resizable from
  * its left edge.
  */
+import { GENERATION_QUEUE_DOCKED_ATTRIBUTE } from './GenerationQueueDock.js';
 import { GENERATION_QUEUE_DOCK_WIDTH_PROPERTY } from './GenerationQueueDockWidth.js';
 import { GENERATION_QUEUE_FLYOUT_WIDTH } from './queue/GenerationQueueViewStyles.js';
 /** ComfyUI's queue fly-out. */
 const FLYOUT = ':root[data-sc-substitute-frame] [data-testid="queue-progress-overlay"]';
 /** The side panel ComfyUI gives its pinned job panel. */
 const DOCK_PANEL = ':root[data-sc-substitute-frame] .side-bar-panel:has([data-testid="job-history-sidebar"])';
+/** The page while the queue is docked, as the dock's owner marks it on the root. */
+const DOCKED = `:root[data-sc-substitute-frame][${GENERATION_QUEUE_DOCKED_ATTRIBUTE}]`;
 /** Mix the text colour into transparency, which reads right on dark and light surfaces. */
 const tint = (percent) => `color-mix(in srgb,var(--sc-text,#fff) ${String(percent)}%,transparent)`;
 /** The rules that hand ComfyUI's queue surfaces to the frame's own queue. */
@@ -41,10 +44,10 @@ export const generationQueueSkinCss = `
     width:var(--sc-queue-dock); min-width:0!important; box-sizing:border-box;
     background:var(--sc-surface-secondary,#2b2b2b)!important; border-left:1px solid var(--sc-border-subtle,${tint(8.6)});
     color:var(--sc-text,#fff); font-family:var(--sc-font-family); }
-  :root[data-sc-substitute-frame]:has([data-testid="job-history-sidebar"]) :is(button[data-sc-generation-queue],.sc-generation-queue-slot) {
+  ${DOCKED} :is(button[data-sc-generation-queue],.sc-generation-queue-slot) {
     display:none!important; }
-  :root[data-sc-substitute-frame]:has([data-testid="job-history-sidebar"]) .sc-generation-strip { justify-content:flex-end; }
-  :root[data-sc-substitute-frame]:has([data-testid="job-history-sidebar"]) .sc-generation-actions { width:120px; }
+  ${DOCKED} .sc-generation-strip { justify-content:flex-end; }
+  ${DOCKED} .sc-generation-actions { width:120px; }
   /* The docked queue is resized from its left edge: a line over the panel's side, as wide to the
      pointer as the canvas divider. */
   :root[data-sc-substitute-frame] .sc-generation-queue-dock-divider { position:fixed; bottom:0; width:2px;

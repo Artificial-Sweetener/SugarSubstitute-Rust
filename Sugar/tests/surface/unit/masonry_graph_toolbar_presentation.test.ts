@@ -15,7 +15,10 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Verify graph-anchored selection controls follow the complete masonry surface lifetime. */
 import { beforeEach, afterEach, expect, test } from '@jest/globals';
-import { ensureWorkflowMasonryStyles } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryStyles.js';
+import {
+  ensureWorkflowMasonryStyles,
+  markMasonryMounted,
+} from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryStyles.js';
 
 beforeEach(() => {
   const style = document.createElement('style');
@@ -75,6 +78,7 @@ test('suppresses navigation with root masonry state across workspace allocations
   surface.className = 'sugarcubes-workflow-masonry';
   for (const parent of [native.panel, native.workspace]) {
     parent.append(surface);
+    markMasonryMounted(parent);
     root.dataset.sugarcubesMasonry = 'true';
     for (const element of [native.toolbar, native.minimap]) {
       const style = getComputedStyle(element);
@@ -90,6 +94,7 @@ test('suppresses navigation with root masonry state across workspace allocations
     }
     expect(getComputedStyle(native.zoom).pointerEvents).toBe('none');
     surface.remove();
+    markMasonryMounted(parent);
     for (const element of [native.zoom, native.settings])
       expect(getComputedStyle(element).pointerEvents).toBe('auto');
     expect(root.querySelector('[aria-label="Canvas Toolbar"]')).toBe(native.toolbar);
@@ -113,6 +118,7 @@ test('suppresses selection controls throughout preparation, travel and exit with
     expect(getComputedStyle(native.panel).visibility).toBe('visible');
     surface.dataset.scMasonryPreparing = '';
     container.append(surface);
+    markMasonryMounted(container);
     for (const phase of ['preparing', 'enter', 'resting', 'exit']) {
       surface.dataset.scMasonryTransition = phase;
       expect(getComputedStyle(native.wrapper).visibility).toBe('hidden');
@@ -120,6 +126,7 @@ test('suppresses selection controls throughout preparation, travel and exit with
       expect(getComputedStyle(unrelated.panel).visibility).toBe('visible');
     }
     surface.remove();
+    markMasonryMounted(container);
     expect(getComputedStyle(native.panel).visibility).toBe('visible');
     expect(getComputedStyle(native.button).pointerEvents).toBe('auto');
     expect(native.wrapper.getAttribute('style')).toBe(original);
@@ -137,6 +144,7 @@ test('suppresses late toolbox mounts and leaves masonry controls and detached me
   control.textContent = 'Edit Cube';
   surface.append(control);
   root.append(surface);
+  markMasonryMounted(surface);
   document.body.append(root);
   const native = toolbox();
   root.append(native.wrapper);
@@ -145,5 +153,6 @@ test('suppresses late toolbox mounts and leaves masonry controls and detached me
   expect(getComputedStyle(control).visibility).toBe('visible');
   expect(getComputedStyle(control).pointerEvents).not.toBe('none');
   surface.remove();
+  markMasonryMounted(root);
   expect(getComputedStyle(native.button).pointerEvents).toBe('auto');
 });

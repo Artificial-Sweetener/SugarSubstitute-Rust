@@ -31,7 +31,7 @@ export const substituteFrameCss = `
     transition:width 150ms ease-out; background:var(--sc-accent-color); }
   :root[data-sc-substitute-frame] [data-testid="queue-inline-progress"],
   :root[data-sc-substitute-frame] :has(> [data-testid="linear-progress-overall"]) { display:none !important; }
-  :root[data-sc-substitute-frame]:has([data-sc-generation-queue][aria-pressed="false"])
+  :root[data-sc-substitute-frame][data-sc-queue-collapsed]
     [data-testid="queue-progress-overlay"] { display:none !important; }
   @media (prefers-reduced-motion:reduce) { .sc-generation-progress > [role="progressbar"] { transition:none; } }
   /* Node packs add their own strips (a progress bar, a notice) to Comfy's top area, which is the

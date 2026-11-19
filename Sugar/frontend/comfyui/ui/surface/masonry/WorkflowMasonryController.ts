@@ -24,6 +24,7 @@ import { WorkflowMasonryTransition } from './WorkflowMasonryTransition.js';
 import type { WorkflowMasonryLinkMotion } from './WorkflowMasonryLinkMotion.js';
 import { WorkflowMasonryGraphReveal } from './WorkflowMasonryGraphReveal.js';
 import { WorkflowMasonryGraphVisibility } from './WorkflowMasonryGraphVisibility.js';
+import { markMasonryMounted } from './WorkflowMasonryStyles.js';
 import { SurfacePresentationBoundary } from '../motion/SurfacePresentationBoundary.js';
 import {
   measureWorkflowMasonryGraph,
@@ -189,6 +190,7 @@ export class WorkflowMasonryController {
         this.#reveal.reconcile(container, sections);
         const sources = this.#view.prepareSources();
         container.append(this.#view.backdrop, this.#view.element);
+        markMasonryMounted(container);
         this.#options.onSurfaceMounting?.(this.#view, animate);
         this.#graphVisibility.setInert(true);
         this.#mounting = this.#view.mountCards(renderer, sources);

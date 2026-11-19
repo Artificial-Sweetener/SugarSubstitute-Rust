@@ -20,6 +20,13 @@ import { GenerationQueueDockWidth } from './GenerationQueueDockWidth.js';
 
 /** Comfy's docked job panel. */
 export const GENERATION_QUEUE_DOCK = '[data-testid="job-history-sidebar"]';
+/**
+ * Set on the page root while the queue is docked, for the frame's styles to read.
+ *
+ * A rule that asked the root whether it "has" a docked panel made the browser restyle the whole
+ * page after every change anywhere in it; an attribute this owner keeps costs nothing.
+ */
+export const GENERATION_QUEUE_DOCKED_ATTRIBUTE = 'data-sc-queue-docked';
 const SIDEBAR_TAB = 'job-history';
 
 /**
@@ -69,12 +76,20 @@ export class GenerationQueueDock {
     this.#hide.removeEventListener('click', this.#close);
     this.#hide.remove();
     this.#width.dispose();
+    this.#markDocked(false);
+  }
+
+  #markDocked(docked: boolean): void {
+    const root = this.document.documentElement;
+    if (root.hasAttribute(GENERATION_QUEUE_DOCKED_ATTRIBUTE) !== docked)
+      root.toggleAttribute(GENERATION_QUEUE_DOCKED_ATTRIBUTE, docked);
   }
 
   /** Keep the hide button and the resizing edge in the docked panel through Comfy's re-renders. */
   #reconcile(): void {
     if (this.#disposed) return;
     const panel = this.document.querySelector<HTMLElement>(GENERATION_QUEUE_DOCK);
+    this.#markDocked(panel !== null);
     if (!panel) {
       this.#hide.remove();
       this.#width.divider.remove();

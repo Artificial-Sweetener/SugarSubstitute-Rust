@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Present admitted image handles with one coalesced transform write and no decoded copies. */
+import { setHidden } from '../../../core/HiddenAttribute.js';
 /** Own only presentation nodes; the image-resource owner retains release authority. */
 export class BrowserCanvasImages {
     clock;
@@ -65,8 +66,8 @@ export class BrowserCanvasImages {
         if (!target) {
             this.#frame?.();
             this.#frame = null;
-            this.#primaryLayer.hidden = true;
-            this.#secondaryLayer.hidden = true;
+            setHidden(this.#primaryLayer, true);
+            setHidden(this.#secondaryLayer, true);
         }
         else if (this.#unpainted) {
             this.#paint();
@@ -161,7 +162,7 @@ export class BrowserCanvasImages {
             [this.#primaryLayer, this.#primary],
             [this.#secondaryLayer, this.#secondary],
         ]) {
-            layer.hidden = !frame;
+            setHidden(layer, !frame);
             if (!frame)
                 continue;
             const image = frame.handle;

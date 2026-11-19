@@ -21,6 +21,24 @@ import {
 } from './WorkflowMasonryLayout.js';
 import { packedMasonryRule } from './MasonryPacking.js';
 
+/**
+ * Marks the graph container while a masonry surface is mounted inside it.
+ *
+ * The rules that quieten ComfyUI's own canvas chrome under a masonry read this attribute. A rule
+ * that asked the container whether it "has" a masonry instead made the browser restyle the whole
+ * workspace after every change anywhere inside it.
+ */
+export const MASONRY_MOUNTED_ATTRIBUTE = 'data-sc-masonry-mounted';
+
+/** State on `surface`'s graph container whether a masonry surface is mounted inside it. */
+export function markMasonryMounted(surface: HTMLElement): void {
+  const root = surface.closest<HTMLElement>('#graph-canvas-container');
+  if (!root) return;
+  const mounted = root.querySelector('.sugarcubes-workflow-masonry') !== null;
+  if (mounted !== root.hasAttribute(MASONRY_MOUNTED_ATTRIBUTE))
+    root.toggleAttribute(MASONRY_MOUNTED_ATTRIBUTE, mounted);
+}
+
 /** Install layout structure independently of native node theme tokens. */
 export function ensureWorkflowMasonryStyles(documentRef: Document): void {
   if (documentRef.getElementById('sugarcubes-workflow-masonry-styles')) return;
@@ -107,9 +125,9 @@ export function ensureWorkflowMasonryStyles(documentRef: Document): void {
     .sugarcubes-workflow-masonry [data-sc-surface-moving] * { pointer-events:none !important; }
     .sugarcubes-workflow-masonry__card .lg-node-content { content-visibility:visible; }
     .sugarcubes-workflow-masonry__card:has([data-reka-popper-content-wrapper]) { z-index:10; }
-    #graph-canvas-container:has(.sugarcubes-workflow-masonry) > :has(> [data-testid="selection-toolbox"]),
-    #graph-canvas-container:has(.sugarcubes-workflow-masonry) [data-testid="selection-toolbox"],
-    #graph-canvas-container:has(.sugarcubes-workflow-masonry) [data-testid="selection-toolbox"] * {
+    #graph-canvas-container[${MASONRY_MOUNTED_ATTRIBUTE}] > :has(> [data-testid="selection-toolbox"]),
+    #graph-canvas-container[${MASONRY_MOUNTED_ATTRIBUTE}] [data-testid="selection-toolbox"],
+    #graph-canvas-container[${MASONRY_MOUNTED_ATTRIBUTE}] [data-testid="selection-toolbox"] * {
       visibility:hidden !important; pointer-events:none !important;
     }
     #graph-canvas-container[data-sugarcubes-masonry="true"] > #graph-canvas,
@@ -123,10 +141,10 @@ export function ensureWorkflowMasonryStyles(documentRef: Document): void {
     #graph-canvas-container[data-sugarcubes-masonry="true"] .minimap-main-container {
       visibility:hidden !important;
     }
-    #graph-canvas-container:has(.sugarcubes-workflow-masonry) [aria-label="Canvas Toolbar"],
-    #graph-canvas-container:has(.sugarcubes-workflow-masonry) [aria-label="Canvas Toolbar"] *,
-    #graph-canvas-container:has(.sugarcubes-workflow-masonry) .minimap-main-container,
-    #graph-canvas-container:has(.sugarcubes-workflow-masonry) .minimap-main-container * {
+    #graph-canvas-container[${MASONRY_MOUNTED_ATTRIBUTE}] [aria-label="Canvas Toolbar"],
+    #graph-canvas-container[${MASONRY_MOUNTED_ATTRIBUTE}] [aria-label="Canvas Toolbar"] *,
+    #graph-canvas-container[${MASONRY_MOUNTED_ATTRIBUTE}] .minimap-main-container,
+    #graph-canvas-container[${MASONRY_MOUNTED_ATTRIBUTE}] .minimap-main-container * {
       pointer-events:none !important;
     }
     .sugarcubes-workflow-masonry__empty { padding:32px; opacity:.7; }

@@ -20,6 +20,7 @@ import { WorkflowMasonryView } from './WorkflowMasonryView.js';
 import { WorkflowMasonryTransition } from './WorkflowMasonryTransition.js';
 import { WorkflowMasonryGraphReveal } from './WorkflowMasonryGraphReveal.js';
 import { WorkflowMasonryGraphVisibility } from './WorkflowMasonryGraphVisibility.js';
+import { markMasonryMounted } from './WorkflowMasonryStyles.js';
 import { SurfacePresentationBoundary } from '../motion/SurfacePresentationBoundary.js';
 import { measureWorkflowMasonryGraph, workflowMasonryGraphCards, } from './WorkflowMasonryGraphGeometry.js';
 /** Keep layout choice transient and restore graph presentation on every failure path. */
@@ -170,6 +171,7 @@ export class WorkflowMasonryController {
                 this.#reveal.reconcile(container, sections);
                 const sources = this.#view.prepareSources();
                 container.append(this.#view.backdrop, this.#view.element);
+                markMasonryMounted(container);
                 this.#options.onSurfaceMounting?.(this.#view, animate);
                 this.#graphVisibility.setInert(true);
                 this.#mounting = this.#view.mountCards(renderer, sources);

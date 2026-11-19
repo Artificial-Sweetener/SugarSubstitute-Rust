@@ -41,6 +41,7 @@ import {
   restoreNativeCardPresentations,
 } from '../NativeCardPresentationOwner.js';
 import type { WorkflowMasonryTransitionCard } from './WorkflowMasonryTransition.js';
+import { markMasonryMounted } from './WorkflowMasonryStyles.js';
 import {
   DISCLOSURE_LAYOUT_EVENT,
   measureDisclosureCardHeight,
@@ -492,7 +493,9 @@ export class WorkflowMasonryView {
     );
     for (const view of this.#views.values()) view.dispose();
     this.#views.clear();
+    const parent = this.element.parentElement;
     this.element.remove();
     this.backdrop.remove();
+    if (parent) markMasonryMounted(parent);
   }
 }

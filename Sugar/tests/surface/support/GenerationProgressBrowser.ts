@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Exercise the real progress view and native visibility rules in an isolated browser. */
+import { ComfyGenerationQueueSurface } from '../../../frontend/comfyui/ui/surface/frame/ComfyGenerationQueueSurface.js';
 import { GenerationProgressView } from '../../../frontend/comfyui/ui/surface/frame/GenerationProgressView.js';
 import { substituteFrameCss } from '../../../frontend/comfyui/ui/surface/frame/SubstituteFrameStyles.js';
 import { SubstituteToolbarLayout } from '../../../frontend/comfyui/ui/surface/frame/SubstituteToolbarLayout.js';
@@ -46,11 +47,13 @@ fill.dataset.testid = 'linear-progress-overall';
 native.append(fill);
 document.body.append(native);
 const queue = document.createElement('button');
-queue.dataset.scGenerationQueue = '';
+// ComfyUI's own queue toggle; the frame's owner of it states on the root whether it is collapsed.
+queue.dataset.testid = 'queue-overlay-toggle';
 queue.setAttribute('aria-pressed', 'false');
 const overlay = document.createElement('div');
 overlay.dataset.testid = 'queue-progress-overlay';
 document.body.append(queue, overlay);
+new ComfyGenerationQueueSurface(document, frame, frame);
 document.documentElement.setAttribute('data-sc-substitute-frame', '');
 
 // Mirror Comfy's top menu row: the workflow selector and actionbar share one toolbar line.

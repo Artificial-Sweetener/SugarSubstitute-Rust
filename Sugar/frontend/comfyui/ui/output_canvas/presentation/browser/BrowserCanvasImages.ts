@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Present admitted image handles with one coalesced transform write and no decoded copies. */
 
+import { setHidden } from '../../../core/HiddenAttribute.js';
 import type { CanvasFrameClock } from '../../application/CanvasCameraTransition.js';
 import type { CanvasInspectionTarget } from '../../application/CanvasInspectionStore.js';
 import type { CanvasAnchor } from '../../domain/CanvasCamera.js';
@@ -78,8 +79,8 @@ export class BrowserCanvasImages {
     if (!target) {
       this.#frame?.();
       this.#frame = null;
-      this.#primaryLayer.hidden = true;
-      this.#secondaryLayer.hidden = true;
+      setHidden(this.#primaryLayer, true);
+      setHidden(this.#secondaryLayer, true);
     } else if (this.#unpainted) {
       this.#paint();
       this.#unpainted = false;
@@ -178,7 +179,7 @@ export class BrowserCanvasImages {
       [this.#primaryLayer, this.#primary],
       [this.#secondaryLayer, this.#secondary],
     ] as const) {
-      layer.hidden = !frame;
+      setHidden(layer, !frame);
       if (!frame) continue;
       const image = frame.handle;
       image.style.width = `${geometry.image.width}px`;

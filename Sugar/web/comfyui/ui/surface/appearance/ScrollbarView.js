@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Present accessible overlay handles that delegate every value change to native scrolling. */
+import { setHidden } from '../../core/HiddenAttribute.js';
 import { scrollbarDragPosition, scrollbarGeometry } from './ScrollbarGeometry.js';
 import { scrollWheelDistance } from '../ScrollWheelDistance.js';
 import { scrollbarPresentation } from './ScrollbarPresentation.js';
@@ -87,8 +88,8 @@ export class ScrollbarView {
         if (this.#owner !== this.#owner.ownerDocument.scrollingElement &&
             !/auto|scroll/.test(overflow ?? '')) {
             return () => {
-                this.element.hidden = true;
-                this.#trackElement.hidden = true;
+                setHidden(this.element, true);
+                setHidden(this.#trackElement, true);
             };
         }
         this.#rtl = track?.rtl ?? false;
@@ -110,8 +111,8 @@ export class ScrollbarView {
         const geometry = this.#geometry;
         if (!track || !geometry || (vertical && track.verticalEdge === null)) {
             return () => {
-                this.element.hidden = true;
-                this.#trackElement.hidden = true;
+                setHidden(this.element, true);
+                setHidden(this.#trackElement, true);
             };
         }
         const offset = !vertical && this.#rtl ? geometry.travel - geometry.offset : geometry.offset;
@@ -130,16 +131,20 @@ export class ScrollbarView {
             ? `left:0px;top:${(track.top - top) / space.scaleY}px;width:${crossSize / space.scaleX}px;height:${(track.height - corner) / space.scaleY}px`
             : `left:${(track.left - left) / space.scaleX}px;top:0px;width:${(track.width - corner) / space.scaleX}px;height:${crossSize / space.scaleY}px`;
         return () => {
-            this.element.hidden = false;
+            setHidden(this.element, false);
             if (this.element.getAttribute('style') !== css)
                 this.element.setAttribute('style', css);
             if (this.element.getAttribute('data-sc-scrollbar-style') !== presentation.kind)
                 this.element.setAttribute('data-sc-scrollbar-style', presentation.kind);
-            this.#trackElement.hidden = !presentation.preserveOwnerExtent;
+            setHidden(this.#trackElement, !presentation.preserveOwnerExtent);
             if (presentation.preserveOwnerExtent && this.#trackElement.getAttribute('style') !== trackCss)
                 this.#trackElement.setAttribute('style', trackCss);
-            this.element.setAttribute('aria-valuemax', String(Math.round(geometry.maximum)));
-            this.element.setAttribute('aria-valuenow', String(Math.round(position)));
+            const maximum = String(Math.round(geometry.maximum));
+            const now = String(Math.round(position));
+            if (this.element.getAttribute('aria-valuemax') !== maximum)
+                this.element.setAttribute('aria-valuemax', maximum);
+            if (this.element.getAttribute('aria-valuenow') !== now)
+                this.element.setAttribute('aria-valuenow', now);
         };
     }
     /** Release capture and disconnect the owned control. */
@@ -149,8 +154,8 @@ export class ScrollbarView {
     }
     /** Suppress a track while its owner is between stable presentation coordinates. */
     hide() {
-        this.element.hidden = true;
-        this.#trackElement.hidden = true;
+        setHidden(this.element, true);
+        setHidden(this.#trackElement, true);
     }
     /** Read native RTL coordinates as a positive distance from the leading edge. */
     #position() {

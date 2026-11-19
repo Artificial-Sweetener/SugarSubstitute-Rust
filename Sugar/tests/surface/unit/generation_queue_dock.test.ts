@@ -183,7 +183,7 @@ test('inside the frame ComfyUI’s own queue panels give way to the generation q
   );
   // The queue button steps aside while the queue is pinned, so it is never offered twice.
   expect(generationQueueSkinCss).toContain(
-    ':root[data-sc-substitute-frame]:has([data-testid="job-history-sidebar"]) :is(button[data-sc-generation-queue],.sc-generation-queue-slot)',
+    ':root[data-sc-substitute-frame][data-sc-queue-docked] :is(button[data-sc-generation-queue],.sc-generation-queue-slot)',
   );
   const selectors = generationQueueSkinCss
     .replace(/\/\*[\s\S]*?\*\//g, '')

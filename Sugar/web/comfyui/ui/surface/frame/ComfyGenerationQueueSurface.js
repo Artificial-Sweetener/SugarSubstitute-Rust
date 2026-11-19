@@ -17,6 +17,13 @@
 import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
 /** Comfy's control that stops the running job; it is enabled exactly while one runs. */
 const CANCEL_RUN = 'button[aria-label="Cancel current run"]';
+/**
+ * Set on the page root while ComfyUI's queue is collapsed, for the frame's styles to read.
+ *
+ * A rule that asked the root whether it "has" a collapsed queue button made the browser restyle
+ * the whole page after every change anywhere in it.
+ */
+export const GENERATION_QUEUE_COLLAPSED_ATTRIBUTE = 'data-sc-queue-collapsed';
 /** Keep native queue behavior intact while presenting source-matched geometry, artwork and count. */
 export class ComfyGenerationQueueSurface {
     document;
@@ -116,7 +123,14 @@ export class ComfyGenerationQueueSurface {
         if (this.#badge.textContent !== count)
             this.#badge.textContent = count;
         this.#badge.hidden = count === '0';
+        this.#markCollapsed(button?.getAttribute('aria-pressed') === 'false');
         this.#position();
+    }
+    /** State on the page root whether the queue is collapsed, for the frame's styles to read. */
+    #markCollapsed(collapsed) {
+        const root = this.document.documentElement;
+        if (root.hasAttribute(GENERATION_QUEUE_COLLAPSED_ATTRIBUTE) !== collapsed)
+            root.toggleAttribute(GENERATION_QUEUE_COLLAPSED_ATTRIBUTE, collapsed);
     }
     /** Coalesce settled geometry changes independently of previews, graph activity or popup mounts. */
     #schedule = () => {
@@ -144,6 +158,7 @@ export class ComfyGenerationQueueSurface {
     #release() {
         this.#glyph.remove();
         this.#badge.remove();
+        this.#markCollapsed(false);
         if (this.#button) {
             this.#button.removeAttribute('data-sc-generation-queue');
             this.#button.removeAttribute('data-sc-queue-theme');
