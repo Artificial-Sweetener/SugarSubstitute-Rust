@@ -19,8 +19,12 @@
 export const CANVAS_WORKSPACE_MINIMUM_CANVAS_WIDTH = 320;
 /** Keep workflow controls usable however wide the user makes the canvas. */
 export const CANVAS_WORKSPACE_MINIMUM_EDITOR_WIDTH = 360;
-/** Below this workspace width the canvas becomes an explicitly opened drawer. */
-export const CANVAS_WORKSPACE_DRAWER_BREAKPOINT = 960;
+/**
+ * Below this workspace width the canvas becomes an explicitly opened drawer: the editor and the
+ * canvas can no longer both keep their minimum widths side by side.
+ */
+export const CANVAS_WORKSPACE_DRAWER_BREAKPOINT =
+  CANVAS_WORKSPACE_MINIMUM_EDITOR_WIDTH + CANVAS_WORKSPACE_MINIMUM_CANVAS_WIDTH;
 
 export interface CanvasWorkspacePreferences {
   readonly visible: boolean;

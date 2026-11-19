@@ -170,22 +170,22 @@ test('keeps the fixed sibling on the panel client rectangle across allocation an
 });
 
 test('requires explicit narrow activation and exposes authoritative keyboard width bounds', () => {
-  const f = fixture(800);
+  const f = fixture(600);
   expect(f.workspace.visible).toBe(false);
   f.workspace.drawer(true);
   expect(f.workspace.visible).toBe(true);
   expect(f.root.style.marginLeft).toBe('');
   expect(f.workspace.content.style.left).toBe('0px');
   const divider = f.root.querySelector('[role="separator"]')!;
-  expect(divider.getAttribute('aria-valuenow')).toBe('640');
-  expect(divider.getAttribute('aria-valuemax')).toBe('776');
+  expect(divider.getAttribute('aria-valuenow')).toBe('480');
+  expect(divider.getAttribute('aria-valuemax')).toBe('576');
   expect(f.root.querySelector<HTMLElement>('.sc-output-workspace-backdrop')!.style.right).toBe(
-    '640px',
+    '480px',
   );
   expect(document.activeElement?.getAttribute('aria-label')).toBe('Workflow output canvas');
   // The editor paints nothing beneath the open drawer, so it cannot show over a native canvas.
   expect(f.workspace.content.style.getPropertyValue('mask-image')).toBe(
-    'linear-gradient(to right,#000 calc(100% - 640px),transparent calc(100% - 640px))',
+    'linear-gradient(to right,#000 calc(100% - 480px),transparent calc(100% - 480px))',
   );
   // Clipping would count the editor's cards as out of view and unmount the input canvas's sources.
   expect(f.workspace.content.style.clipPath).toBe('');
@@ -195,7 +195,7 @@ test('requires explicit narrow activation and exposes authoritative keyboard wid
   f.frames.advance(16);
   expect(f.root.style.marginLeft).toBe('0px');
   expect(f.workspace.content.style.getPropertyValue('mask-image')).toBe('');
-  f.resize(800);
+  f.resize(600);
   f.frames.advance(16);
   expect(f.workspace.visible).toBe(false);
   f.dispose();

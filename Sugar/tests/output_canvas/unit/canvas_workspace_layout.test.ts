@@ -72,22 +72,39 @@ test('keeps a stored editor width across window widths and clamps it only for th
   expect(() => new CanvasWorkspaceLayout(Infinity)).toThrow(RangeError);
 });
 
+test('keeps the canvas docked wherever it and the editor both keep their minimum widths', () => {
+  const preferences = { visible: true, editorWidth: 0 };
+  // A 1280 px window with a 360 px side panel pinned beside the workspace leaves 916 px.
+  const beside = allocateCanvasWorkspace(916, 766, preferences, false, DEFAULT_EDITOR);
+  expect(beside.mode).toBe('docked');
+  expect(beside.visible).toBe(true);
+  expect(beside.canvas).toEqual({ x: 596, y: 0, width: 320, height: 766 });
+  expect(beside.content.width).toBe(596);
+  const narrowest = allocateCanvasWorkspace(680, 766, preferences, false, DEFAULT_EDITOR);
+  expect([narrowest.mode, narrowest.content.width, narrowest.canvas.width]).toEqual([
+    'docked',
+    360,
+    320,
+  ]);
+  expect(allocateCanvasWorkspace(679, 766, preferences, false, DEFAULT_EDITOR).mode).toBe('drawer');
+});
+
 test('keeps narrow drawers explicitly opened, overlays content, and closes on breakpoint entry', () => {
   const layout = new CanvasWorkspaceLayout(DEFAULT_EDITOR);
-  layout.bounds(800, 600);
+  layout.bounds(600, 600);
   expect(layout.read().visible).toBe(false);
   layout.drawer(true);
   expect(layout.read().mode).toBe('drawer');
-  expect(layout.read().canvas.width).toBe(640);
-  expect(layout.read().canvas.x).toBe(160);
-  expect(layout.read().content).toEqual({ x: 0, y: 0, width: 800, height: 600 });
-  layout.preferences({ visible: true, editorWidth: 300 });
-  expect(layout.read().canvas.width).toBe(500);
-  expect(layout.read().editorWidth).toBe(300);
+  expect(layout.read().canvas.width).toBe(480);
+  expect(layout.read().canvas.x).toBe(120);
+  expect(layout.read().content).toEqual({ x: 0, y: 0, width: 600, height: 600 });
+  layout.preferences({ visible: true, editorWidth: 200 });
+  expect(layout.read().canvas.width).toBe(400);
+  expect(layout.read().editorWidth).toBe(200);
   layout.bounds(1400, 800);
   expect(layout.read().visible).toBe(true);
   expect(layout.read().content.width).toBe(360);
-  layout.bounds(800, 600);
+  layout.bounds(600, 600);
   expect(layout.read().visible).toBe(false);
   layout.drawer(true);
   layout.preferences({ visible: false, editorWidth: 700 });

@@ -155,7 +155,7 @@ test('Plugin Mode closes the canvas and blocks all reopen paths without changing
 });
 
 test('opens a narrow drawer when its accepted desktop visibility is already enabled', async () => {
-  const f = fixture(700);
+  const f = fixture(600);
   await Promise.resolve();
   expect(f.presentation.snapshot.canvas).toBe(true);
   expect(f.host.canvas).toBeNull();
