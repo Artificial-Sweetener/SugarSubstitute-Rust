@@ -45,18 +45,22 @@ export function createWorkflowFieldHost(options) {
     const host = new HostDescriptionState();
     const updates = new UpdateSourceSlot();
     const draggedFiles = new DraggedFiles();
-    const confirm = (title, message, confirmLabel) => 
-    // A dialog is told which page it belongs to; without one it has nowhere to appear.
-    new ConfirmDialog({
-        adapter: {
-            getDocument: () => options.document,
-            getWindow: () => options.document.defaultView,
-        },
-    }).open({ title, message, confirmLabel });
+    const confirm = (title, message, confirmLabel, withdrawn) => {
+        // A dialog is told which page it belongs to; without one it has nowhere to appear.
+        const dialog = new ConfirmDialog({
+            adapter: {
+                getDocument: () => options.document,
+                getWindow: () => options.document.defaultView,
+            },
+        });
+        const answer = dialog.open({ title, message, confirmLabel });
+        withdrawn?.addEventListener('abort', () => dialog.close(false), { once: true });
+        return answer;
+    };
     const backend = new BackendOutageNotice({
         confirm,
         toast: (severity, summary, detail) => options.hostNotices.pushToast(severity, summary, detail),
-        lastingToast: (severity, summary, detail) => void options.hostNotices.pushLastingToast(severity, summary, detail),
+        standingToast: (severity, summary, detail) => options.hostNotices.pushStandingToast(severity, summary, detail),
         report: options.reportPresentationError,
     });
     const updateReport = new HostUpdateReport();

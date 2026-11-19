@@ -32,12 +32,22 @@ export class ToastService {
      * Returns whether the host's notifications showed it; a host without them shows nothing.
      */
     pushLasting(severity, summary, detail) {
+        return this.pushStanding(severity, summary, detail) !== null;
+    }
+    /**
+     * Show a notice that stays until the person dismisses it or its owner withdraws it, for a
+     * condition that can end on its own.
+     *
+     * Returns the withdrawal, or `null` when the host's notifications showed nothing.
+     */
+    pushStanding(severity, summary, detail) {
         const toast = this.adapter?.getToast?.() || null;
         if (!toast?.add)
-            return false;
+            return null;
         // The host keeps a notification without a lifetime until it is closed.
-        toast.add({ severity, summary, detail });
-        return true;
+        const message = { severity, summary, detail };
+        toast.add(message);
+        return () => toast.remove?.(message);
     }
     push(severity, summary, detail) {
         const toast = this.adapter?.getToast?.() || null;

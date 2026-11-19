@@ -29,8 +29,10 @@ function fixture(answer: boolean | Promise<boolean> = true) {
   const notice = new BackendOutageNotice({
     confirm,
     toast: (severity, summary) => void shown.push(`${severity} ${summary}`),
-    lastingToast: (severity, summary, detail) =>
-      void shown.push(`lasting ${severity} ${summary}: ${detail}`),
+    standingToast: (severity, summary, detail) => {
+      shown.push(`lasting ${severity} ${summary}: ${detail}`);
+      return () => void shown.push(`withdrawn ${summary}: ${detail}`);
+    },
     report: (error) => void shown.push(`error ${String(error)}`),
   });
   let receive: ((value: unknown) => void) | null = null;
@@ -118,4 +120,51 @@ test('repeated, stale, malformed and foreign states are ignored', async () => {
   f.link.dispose();
   f.host(9, 'running');
   expect(f.shown.filter((line) => line.startsWith('success'))).toEqual([]);
+});
+
+test('only the newest state stands: an earlier notice or open question is withdrawn', async () => {
+  let ask: { resolve(value: boolean): void; withdrawn: AbortSignal } | null = null;
+  const shown: string[] = [];
+  const notice = new BackendOutageNotice({
+    confirm: (title, _message, _agree, withdrawn) =>
+      new Promise<boolean>((resolve) => {
+        shown.push(`ask ${title}`);
+        ask = { resolve, withdrawn };
+        withdrawn.addEventListener('abort', () => {
+          shown.push('question withdrawn');
+          resolve(false);
+        });
+      }),
+    toast: (severity, summary) => void shown.push(`${severity} ${summary}`),
+    standingToast: (_severity, _summary, detail) => {
+      shown.push(`standing ${detail}`);
+      return () => void shown.push(`withdrawn ${detail}`);
+    },
+    report: (error) => void shown.push(`error ${String(error)}`),
+  });
+  const retry = jest.fn();
+  notice.state({ status: 'stopped', revision: 1 }, retry);
+  notice.state({ status: 'retry-ready', revision: 2 }, retry);
+  expect(shown).toEqual([
+    'standing It cannot be restarted yet.',
+    'withdrawn It cannot be restarted yet.',
+    'ask ComfyUI stopped',
+  ]);
+  // ComfyUI comes back by another road while the question is still open.
+  notice.state({ status: 'running', revision: 3 }, retry);
+  for (let turn = 0; turn < 4; turn += 1) await Promise.resolve();
+  expect(shown.slice(3)).toEqual(['question withdrawn', 'success ComfyUI is running again']);
+  expect(retry).not.toHaveBeenCalled();
+  expect(ask).not.toBeNull();
+  // A declined offer leaves its reminder standing until the state moves on.
+  notice.state({ status: 'retry-ready', revision: 4 }, retry);
+  (ask as unknown as { resolve(value: boolean): void }).resolve(false);
+  for (let turn = 0; turn < 4; turn += 1) await Promise.resolve();
+  notice.state({ status: 'retrying', revision: 5 }, retry);
+  expect(shown.slice(5)).toEqual([
+    'ask ComfyUI stopped',
+    'standing Choose Restart ComfyUI in the application menu when you want it back.',
+    'withdrawn Choose Restart ComfyUI in the application menu when you want it back.',
+    'info Restarting ComfyUI…',
+  ]);
 });

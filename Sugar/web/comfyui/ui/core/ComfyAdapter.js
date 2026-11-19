@@ -23,11 +23,20 @@ function readHostToast(value) {
     if (!isRecord(value) || typeof value.add !== 'function')
         return null;
     const add = value.add;
+    const remove = typeof value.remove === 'function' ? value.remove : null;
     return {
         /** Forward a typed notification through the validated public host boundary. */
         add(message) {
             add.call(value, message);
         },
+        ...(remove
+            ? {
+                /** Withdraw the same notification through the host's own store. */
+                remove(message) {
+                    remove.call(value, message);
+                },
+            }
+            : {}),
     };
 }
 /**

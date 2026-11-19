@@ -21,19 +21,38 @@ import type { ComfyApplication, ComfyCanvas, ComfyGraph, ComfyHostApi } from '..
 import { isRecord } from '../types/common.js';
 import { resolveComfyRendererMode } from './ComfyRendererMode.js';
 
+/** One notification as the host's store takes it; the same object withdraws it. */
+export interface HostToastMessage {
+  severity: string;
+  summary: string;
+  detail: string;
+  life?: number;
+}
+
 export interface HostToast {
-  add(message: { severity: string; summary: string; detail: string; life?: number }): void;
+  add(message: HostToastMessage): void;
+  /** Take back a notification given to `add`; absent on a host that cannot. */
+  remove?(message: HostToastMessage): void;
 }
 
 /** Validate a dynamic host service and retain the original store as its method receiver. */
 function readHostToast(value: unknown): HostToast | null {
   if (!isRecord(value) || typeof value.add !== 'function') return null;
   const add = value.add;
+  const remove = typeof value.remove === 'function' ? value.remove : null;
   return {
     /** Forward a typed notification through the validated public host boundary. */
     add(message): void {
       add.call(value, message);
     },
+    ...(remove
+      ? {
+          /** Withdraw the same notification through the host's own store. */
+          remove(message: HostToastMessage): void {
+            remove.call(value, message);
+          },
+        }
+      : {}),
   };
 }
 

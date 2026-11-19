@@ -58,6 +58,7 @@ export interface WorkflowFieldHostOptions
   /** Shows what the host has to tell the person; each answers whether it reached them. */
   hostNotices: {
     pushLastingToast(severity: 'warn', title: string, message: string): boolean;
+    pushStandingToast(severity: 'warn', title: string, message: string): (() => void) | null;
     pushToast(severity: 'success' | 'info' | 'warn', title: string, message: string): void;
     showHostLine(line: HostLine): boolean;
   };
@@ -91,19 +92,28 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
   const host = new HostDescriptionState();
   const updates = new UpdateSourceSlot();
   const draggedFiles = new DraggedFiles();
-  const confirm = (title: string, message: string, confirmLabel: string): Promise<boolean> =>
+  const confirm = (
+    title: string,
+    message: string,
+    confirmLabel: string,
+    withdrawn?: AbortSignal,
+  ): Promise<boolean> => {
     // A dialog is told which page it belongs to; without one it has nowhere to appear.
-    new ConfirmDialog({
+    const dialog = new ConfirmDialog({
       adapter: {
         getDocument: () => options.document,
         getWindow: () => options.document.defaultView,
       },
-    }).open({ title, message, confirmLabel });
+    });
+    const answer = dialog.open({ title, message, confirmLabel });
+    withdrawn?.addEventListener('abort', () => dialog.close(false), { once: true });
+    return answer;
+  };
   const backend = new BackendOutageNotice({
     confirm,
     toast: (severity, summary, detail) => options.hostNotices.pushToast(severity, summary, detail),
-    lastingToast: (severity, summary, detail) =>
-      void options.hostNotices.pushLastingToast(severity, summary, detail),
+    standingToast: (severity, summary, detail) =>
+      options.hostNotices.pushStandingToast(severity, summary, detail),
     report: options.reportPresentationError,
   });
   const updateReport = new HostUpdateReport();

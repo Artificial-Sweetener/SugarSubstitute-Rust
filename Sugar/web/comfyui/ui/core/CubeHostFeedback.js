@@ -42,4 +42,8 @@ export class CubeHostFeedback {
     pushLastingToast(severity, summary, detail) {
         return this.#toast?.pushLasting(severity, summary, detail) ?? false;
     }
+    /** Push one toast that stays until dismissed or withdrawn; answer with its withdrawal. */
+    pushStandingToast(severity, summary, detail) {
+        return this.#toast?.pushStanding(severity, summary, detail) ?? null;
+    }
 }
