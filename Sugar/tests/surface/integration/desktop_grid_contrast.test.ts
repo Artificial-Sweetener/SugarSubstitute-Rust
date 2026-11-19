@@ -14,7 +14,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Prove Comfy's grid stays clearly visible on the single editor-panel wash in both themes. */
+/** Prove Comfy's grid reads as a quiet guide on the single editor-panel wash in both themes. */
 import { chromium, type Browser, type Page } from '@playwright/test';
 import { build } from 'esbuild';
 import UPNG from 'upng-js';
@@ -120,13 +120,15 @@ describe('Chromium desktop graph grid', () => {
   }
 
   test.each(['dark', 'light'] as const)(
-    '%s theme keeps the grid clearly visible at the default zoom, whichever palette tile is current',
+    '%s theme keeps the grid soft but present at the default zoom, whichever palette tile is current',
     async (theme) => {
       for (const tile of ['dark', 'light'] as const) {
         const { field, minor, major } = await sample(theme, tile, 1);
         const sign = theme === 'dark' ? 1 : -1;
-        expect(sign * (minor - field)).toBeGreaterThanOrEqual(20);
-        expect(sign * (major - field)).toBeGreaterThanOrEqual(30);
+        // Present, and never the harsh lattice a strong ink makes of it.
+        expect(sign * (minor - field)).toBeGreaterThanOrEqual(5);
+        expect(sign * (major - field)).toBeGreaterThanOrEqual(9);
+        expect(sign * (major - field)).toBeLessThanOrEqual(20);
         expect(Math.abs(major - field)).toBeGreaterThan(Math.abs(minor - field));
       }
     },
@@ -136,7 +138,7 @@ describe('Chromium desktop graph grid', () => {
     '%s theme grid remains visible at the zoom a fresh graph opens at',
     async (theme) => {
       const { field, minor } = await sample(theme, theme, 0.9);
-      expect(Math.abs(minor - field)).toBeGreaterThanOrEqual(18);
+      expect(Math.abs(minor - field)).toBeGreaterThanOrEqual(4);
     },
   );
 

@@ -21,11 +21,11 @@ const GRID_IMAGE = 'background_image';
 const GRID_PATTERN = '_pattern';
 /**
  * Opacity of the strongest grid line before LiteGraph fades the whole grid with zoom (it draws the
- * tile at half this strength at the default zoom). At that zoom a major line then differs from the
- * wash by roughly 40 of 255 levels on either theme's body wash and a minor line by two thirds of
- * that: clearly visible without competing with nodes.
+ * tile at half this strength at the default zoom). The grid is a quiet guide beneath the nodes: at
+ * that zoom a major line differs from the wash by roughly 13 of 255 levels and a minor line by two
+ * thirds of that, enough to read as a grid without drawing the eye.
  */
-export const GRID_LINE_PEAK_ALPHA = 0.36;
+export const GRID_LINE_PEAK_ALPHA = 0.12;
 /**
  * Re-express an opaque grid tile as lines alone: the tile's dominant field color becomes fully
  * transparent, so the wash painted beneath the canvas carries Mica, and every other pixel becomes
