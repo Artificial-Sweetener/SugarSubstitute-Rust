@@ -32,10 +32,12 @@ mod tests {
     fn initial_process_failure_cannot_request_reload_or_arm_later_admission() {
         let mut admission = ReloadAdmission::default();
         assert_eq!(admission.request(false, MainReloadReason::ProcessFailed), None);
+        assert!(!admission.pending());
         assert_eq!(
             admission.request(true, MainReloadReason::Navigation),
             Some(MainReloadReason::Navigation)
         );
+        assert!(admission.pending());
     }
     #[test]
     fn navigation_and_process_failure_coalesce_for_one_revealed_actor() {
