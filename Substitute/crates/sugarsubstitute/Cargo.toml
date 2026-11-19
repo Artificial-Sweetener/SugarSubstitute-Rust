@@ -15,8 +15,6 @@ windows-native-host = []
 k1-native-qualification = ["sugarsubstitute-execution/k1-native-qualification", "sugarsubstitute-desktop/k1-native-qualification", "sugarsubstitute-supervision/k1-native-qualification"]
 native-composition = ["sugarsubstitute-desktop/native-composition"]
 composition-qualification = ["k1-native-qualification", "native-composition", "sugarsubstitute-desktop/composition-qualification"]
-# Proof builds only: a proof drives and reads the embedded page over a loopback DevTools port.
-page-automation-qualification = ["sugarsubstitute-supervision/page-automation-qualification", "sugarsubstitute-desktop/page-automation-qualification"]
 
 [dependencies]
 sugarsubstitute-ui = { path = "../sugarsubstitute-ui" }

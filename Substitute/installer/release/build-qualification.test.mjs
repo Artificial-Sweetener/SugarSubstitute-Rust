@@ -37,7 +37,7 @@ test('ordinary installer builds ship the default feature set, including native c
   assert.ok(!args.some(argument => argument.includes('feature')), 'ordinary builds must not select features')
   const shipped = shippedFeatures()
   assert.ok(shipped.includes('native-composition'))
-  for (const qualification of ['k1-native-qualification', 'composition-qualification', 'local-k1-symbol-trust', 'local-update-qualification', 'page-automation-qualification'])
+  for (const qualification of ['k1-native-qualification', 'composition-qualification', 'local-k1-symbol-trust', 'local-update-qualification'])
     assert.ok(!shipped.some(feature => feature.endsWith(qualification)), `${qualification} must stay opt-in`)
 })
 

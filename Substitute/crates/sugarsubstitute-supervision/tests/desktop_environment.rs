@@ -47,22 +47,10 @@ fn the_desktop_child_keeps_the_users_profile_and_drops_browser_overrides() -> Te
     Ok(())
 }
 
-/// A shipped build drops even a lone remote-debugging port, so nothing outside can drive the page.
-#[cfg(not(feature = "page-automation-qualification"))]
+/// A lone remote-debugging port reaches the page so it can be driven and read; the
+/// browser-profile override is still removed.
 #[test]
-fn a_shipped_desktop_child_drops_a_debugging_port() -> TestResult {
-    let mut captured = PROFILE.to_vec();
-    captured.push("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333");
-    let desktop = LaunchEnvironment::for_desktop(&snapshot(&captured))?;
-    assert_eq!(lines(&desktop), PROFILE);
-    Ok(())
-}
-
-/// A qualification build lets a lone remote-debugging port reach the page so a proof can drive
-/// and read it; the browser-profile override is still removed.
-#[cfg(feature = "page-automation-qualification")]
-#[test]
-fn a_qualification_desktop_child_keeps_a_lone_debugging_port() -> TestResult {
+fn the_desktop_child_keeps_a_lone_debugging_port() -> TestResult {
     let port = "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333";
     let mut captured = PROFILE.to_vec();
     captured.push(port);

@@ -83,19 +83,16 @@ impl LaunchEnvironment {
 
 /// The inherited WebView2 overrides a child's environment drops, so they cannot move the
 /// browser profile or change how the browser runs.
-#[cfg_attr(not(feature = "page-automation-qualification"), expect(unused_variables))]
 pub(super) fn removed_browser_overrides(snapshot: &[u16]) -> &'static [&'static str] {
-    #[cfg(feature = "page-automation-qualification")]
     if debugging_port_only(snapshot) {
         return &["WEBVIEW2_USER_DATA_FOLDER"];
     }
     &["WEBVIEW2_USER_DATA_FOLDER", "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"]
 }
 
-/// Qualification builds only: a proof drives and reads the embedded page over a loopback
-/// DevTools port, so an inherited browser argument that is exactly one remote-debugging port
-/// reaches the desktop child. Any other value is removed, as it always is in a shipped build.
-#[cfg(feature = "page-automation-qualification")]
+/// The embedded page can be driven and read over a loopback DevTools port, so an inherited
+/// browser argument that is exactly one remote-debugging port reaches the desktop child. Any
+/// other value is removed.
 fn debugging_port_only(snapshot: &[u16]) -> bool {
     String::from_utf16_lossy(snapshot).split('\0').any(|entry| {
         entry.split_once('=').is_some_and(|(name, value)| {
@@ -107,8 +104,8 @@ fn debugging_port_only(snapshot: &[u16]) -> bool {
     })
 }
 
-#[cfg(all(test, feature = "page-automation-qualification"))]
-mod qualification_tests {
+#[cfg(test)]
+mod debugging_port_tests {
     use super::debugging_port_only;
 
     fn block(entries: &[&str]) -> Vec<u16> {
@@ -122,7 +119,7 @@ mod qualification_tests {
     }
 
     #[test]
-    fn only_a_single_debugging_port_reaches_the_page_in_a_qualification_build() {
+    fn only_a_single_debugging_port_reaches_the_page() {
         assert!(debugging_port_only(&block(&[
             r"PATH=C:\Windows",
             "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333",

@@ -14,9 +14,6 @@ boundary-fixtures = []
 k1-native-qualification = []
 native-composition = []
 composition-qualification = ["k1-native-qualification", "native-composition"]
-# Proof builds only: open the embedded page to the loopback DevTools port a proof names, so it
-# can drive and read the page. Never part of a shipped build.
-page-automation-qualification = []
 
 [dependencies]
 sugarsubstitute-ui = { path = "../sugarsubstitute-ui" }

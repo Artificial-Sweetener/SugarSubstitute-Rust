@@ -133,9 +133,8 @@ impl MainActor {
                     WebContext::new(Some(self.request()?.profile_directory().to_owned()));
                 let captured = proxy;
                 let builder = main_webview_builder(&mut context, self.browser_bounds()?);
-                // Proof builds only: DevTools must be enabled for the browser to open the
-                // remote-debugging port its environment names; shipped builds keep it closed.
-                #[cfg(feature = "page-automation-qualification")]
+                // DevTools must be enabled for the browser to open the remote-debugging port
+                // its environment names.
                 let builder = builder.with_devtools(true);
                 // A windowed rebuild reuses the environment the parent already authorized.
                 #[cfg(feature = "native-composition")]
