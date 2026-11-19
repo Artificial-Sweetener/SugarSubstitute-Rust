@@ -26,8 +26,14 @@ export function ensureCubeStackStyles(documentRef) {
     const style = documentRef.createElement('style');
     style.id = 'sugarcubes-cube-stack-styles';
     style.textContent = `
-    @property --sc-stack-wash-opacity { syntax:'<number>'; inherits:true; initial-value:1; }
-    @property --sc-stack-material-width { syntax:'<length>'; inherits:true; initial-value:0px; }
+    /* The aperture is animated on the element that holds the whole workspace. Inherited, each
+       frame of it restyled every card; only the backdrop and the rail read it, so they alone
+       take it from that element. */
+    @property --sc-stack-wash-opacity { syntax:'<number>'; inherits:false; initial-value:1; }
+    @property --sc-stack-material-width { syntax:'<length>'; inherits:false; initial-value:0px; }
+    .sugarcubes-workflow-masonry__backdrop, .sc-cube-stack-host, .sc-cube-stack-host > .sc-cube-stack {
+      --sc-stack-wash-opacity:inherit; --sc-stack-material-width:inherit;
+    }
     .sc-cube-stack {
       --sc-stack-bg:var(--comfy-menu-bg,#202020);
       --sc-stack-row:var(--secondary-background,#303030);
