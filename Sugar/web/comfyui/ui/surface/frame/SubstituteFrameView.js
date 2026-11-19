@@ -63,6 +63,11 @@ export class SubstituteFrameView {
                 this.#tabs.offerReopen(event);
         });
         this.#orb = new AppOrbView(document, () => [
+            { label: 'Open workflow', select: () => actions.command('Comfy.OpenWorkflow') },
+            { label: 'Save', select: () => actions.command('Comfy.SaveWorkflow') },
+            { label: 'Save as', select: () => actions.command('Comfy.SaveWorkflowAs') },
+            { label: 'Export workflow', select: () => actions.command('Comfy.ExportWorkflow') },
+            { label: '', separator: true },
             {
                 label: 'Open Sugar Script...',
                 select: () => actions.command('SugarCubes.OpenSugarScript'),
