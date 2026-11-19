@@ -1,3 +1,12 @@
+## [0.27.1](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.27.0...sugarcubes-v0.27.1) (2026-11-19)
+
+### Bug Fixes
+
+* **appearance:** keep node cards solid in the desktop app, in masonry and in the graph ([989847f](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/989847fe004c4784c538578c9c4170fe2953d7f7))
+* **appearance:** soften the graph grid in the desktop app ([993db11](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/993db11df029057fac1bbbf74c09a0880341d69b))
+* **frame:** bring back Open workflow, Save, Save as and Export workflow in the application menu ([e5d4d5f](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/e5d4d5fbd06f4d53a45b7d0785403d01b4284a99))
+* **import:** open a workflow file dropped anywhere in the window ([6b849cb](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/6b849cb19635886f6e441aca92c707fe9a6057ee))
+
 ## [0.27.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.26.1...sugarcubes-v0.27.0) (2026-11-18)
 
 ### Features
