@@ -78,10 +78,49 @@ impl PreparedCandidate {
             }
             Err(cause) => return Err(io::Error::other(cause)),
         };
-        let Some(Candidate::Prepared { generation }) = snapshot.candidate() else {
-            return Ok(None);
+        // A record that names nothing to start may still have the release the person installed
+        // on disk. Its files are verified first; only then does it become the candidate again.
+        let readopted = match snapshot.candidate() {
+            Some(Candidate::Prepared { .. }) => None,
+            _ => match store.installed_generation(&snapshot, context) {
+                Ok(Some(generation)) => Some(generation),
+                Ok(None) => return Ok(None),
+                Err(cause) => return Err(io::Error::other(cause)),
+            },
         };
+        let generation = match (&readopted, snapshot.candidate()) {
+            (Some(generation), _) => generation.clone(),
+            (None, Some(Candidate::Prepared { generation })) => generation.clone(),
+            _ => return Ok(None),
+        };
+        let generation = &generation;
         let path = session.directory().join("releases").join(generation.id.as_str());
+        if readopted.is_some() {
+            let verified =
+                super::super::generation::open(&path, generation.package.as_str(), context)
+                    .and_then(|_| {
+                        crate::setup_storage::application::VerifiedApplication::open(
+                            &session.admission.root,
+                            generation.clone(),
+                            context,
+                        )
+                    })
+                    .and_then(|application| application.require_installed_launch());
+            if let Err(cause) = verified {
+                tracing::warn!(
+                    operation = "installation_release_readoption_refused",
+                    cause = %cause,
+                    "The installed release on disk no longer verifies; it is left as it is"
+                );
+                return Ok(None);
+            }
+        }
+        let snapshot = match &readopted {
+            Some(generation) => {
+                store.readopt_installed(&snapshot, generation, context).map_err(io::Error::other)?
+            }
+            None => snapshot,
+        };
         let directory = Directory::open(&path, false)?;
         let Some(authorization) = store
             .installation_authorization(&snapshot, &directory, context)

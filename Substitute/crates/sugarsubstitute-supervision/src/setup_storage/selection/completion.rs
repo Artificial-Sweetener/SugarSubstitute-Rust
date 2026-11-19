@@ -60,7 +60,128 @@ impl InstallationAuthorization {
     }
 }
 
+impl InstallationAuthorization {
+    /// The generation this authorization was written for, when it still belongs to this
+    /// installation, this exact folder and this engine. It says nothing about the record's
+    /// candidate: that is what re-adoption restores.
+    fn installed(
+        &self,
+        installation: &Directory,
+        directory: &Directory,
+    ) -> io::Result<&Generation> {
+        let record = &self.record;
+        if record.schema_version != AUTHORIZATION_SCHEMA
+            || record.installation_directory != installation.identity()?
+            || record.generation_directory != directory.identity()?
+            || record.updater_protocol != sugarsubstitute_update::ENGINE_PROTOCOL
+            || record.minimum_updater_release == 0
+            || record.minimum_updater_release > sugarsubstitute_update::ENGINE_RELEASE
+        {
+            return Err(super::super::invalid(
+                "Installation authorization does not match this folder or engine",
+            ));
+        }
+        Ok(&record.generation)
+    }
+}
+
+/// Most generation folders one re-adoption looks through.
+const MAX_INSTALLED: usize = 64;
+
 impl SelectionStore {
+    /// Name the one installed generation still on disk that setup authorized for this
+    /// installation, when `expected` has nothing accepted and no candidate.
+    ///
+    /// Such a record names nothing to start, yet the release the person installed is still
+    /// there with the choice they made for it: a first release whose own start failed, or a
+    /// record rebuilt from its last good copy. The caller verifies that generation's files and
+    /// then calls [`Self::readopt_installed`]. `None` when the record can start something, when
+    /// no folder carries a matching authorization, or when more than one does.
+    /// # Errors
+    /// Preserves storage failures and a record that changed meanwhile.
+    pub(in crate::setup_storage) fn installed_generation(
+        &self,
+        expected: &InstallationRecord,
+        context: &JobContext,
+    ) -> Result<Option<Generation>, SelectionFailure> {
+        if expected.accepted().is_some() || expected.candidate().is_some() {
+            return Ok(None);
+        }
+        self.protected(context, |protection| {
+            let _reader = reader(&self.root, protection, context)?;
+            if self.read(protection)?.as_ref() != Some(expected) {
+                return Err(SelectionFailure::Changed);
+            }
+            let releases = self._installation.path().join("releases");
+            let listing = match Directory::open(&releases, false) {
+                Ok(listing) => listing,
+                Err(cause) if cause.kind() == io::ErrorKind::NotFound => return Ok(None),
+                Err(cause) => return Err(cause.into()),
+            };
+            let mut found: Option<Generation> = None;
+            for (index, entry) in listing.entries(context)?.enumerate() {
+                check(context)?;
+                if index >= MAX_INSTALLED {
+                    return Ok(None);
+                }
+                let entry = entry?;
+                if !entry.file_type()?.is_dir() {
+                    continue;
+                }
+                let directory = Directory::open(&entry.path(), false)?;
+                let Some(authorization) = read(&directory, protection)? else {
+                    continue;
+                };
+                let Ok(generation) = authorization.installed(&self._installation, &directory)
+                else {
+                    continue;
+                };
+                if &authorization.record.installation != expected.installation()
+                    || entry.file_name().to_str() != Some(generation.id.as_str())
+                {
+                    continue;
+                }
+                if found.is_some() {
+                    // Two authorized releases: nothing here says which the person meant.
+                    return Ok(None);
+                }
+                found = Some(generation.clone());
+            }
+            Ok(found)
+        })
+    }
+
+    /// Make `generation`, named by [`Self::installed_generation`] and verified by the caller,
+    /// the prepared candidate of `expected` again, and return the published record.
+    ///
+    /// It is prepared as a repair, which earlier bad verdicts on the package do not withhold:
+    /// the installation has nothing else to run, and starting its release again is what a
+    /// person launching it expects.
+    /// # Errors
+    /// Rejects a record that changed meanwhile and preserves publication failures.
+    pub(in crate::setup_storage) fn readopt_installed(
+        &self,
+        expected: &InstallationRecord,
+        generation: &Generation,
+        context: &JobContext,
+    ) -> Result<InstallationRecord, SelectionFailure> {
+        let staging = expected.prepare(
+            generation.clone(),
+            sugarsubstitute_contracts::installation::PreparationIntent::Repair,
+            self.strike_clock().now()?,
+        )?;
+        self.compare_exchange(expected, &staging, context)?;
+        let prepared = staging.prepared(generation)?;
+        self.compare_exchange(&staging, &prepared, context)?;
+        tracing::info!(
+            operation = "installation_release_readopted",
+            installation = prepared.installation().as_str(),
+            generation = generation.id.as_str(),
+            "Nothing was startable; the installed release on disk is the candidate again"
+        );
+        Ok(prepared)
+    }
+
     /// Commit only under current signed authority and exact selection writer custody.
     /// The caller retains setup exclusion, runtime files and the repository trust writer.
     /// An existing different record is preserved; retrying the identical choice is idempotent.

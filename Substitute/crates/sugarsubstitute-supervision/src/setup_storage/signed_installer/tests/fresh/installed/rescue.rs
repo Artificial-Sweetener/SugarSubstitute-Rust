@@ -194,7 +194,8 @@ fn missing_owned_shell_entries_do_not_hide_quarantined_first_installation_settin
         let summary = inspect_installation(root, context)?.ok_or("Settings absent")?;
         assert!(summary.selection == choices(temporary.path()));
         assert!(summary.launch_entry_missing);
-        assert!(InstalledCandidate::reopen(root, context)?.is_none());
+        // The installed release is still startable; looking for it creates no shell entry.
+        assert!(InstalledCandidate::reopen(root, context)?.is_some());
         assert!(!root.join("SugarSubstitute.exe").exists());
         Ok(())
     })
@@ -289,6 +290,30 @@ fn a_first_installation_whose_trial_was_killed_is_offered_again_by_the_very_next
             .load(context)?
             .ok_or("State absent")?;
         assert!(record.strikes().is_empty());
+        Ok(())
+    })
+}
+
+#[test]
+fn a_first_installation_struck_by_its_own_failed_starts_is_startable_again_without_setup()
+-> TestResult {
+    worker::run_reserved(SIGNED_INSTALLER_RESERVATION_BYTES, |context, _| {
+        let temporary = tempfile::tempdir()?;
+        let completed = quarantine(temporary.path(), context)?;
+        let root = completed.root();
+        let store = SelectionStore::open(root, context)?;
+        let struck = store.load(context)?.ok_or("State absent")?;
+        assert!(struck.accepted().is_none() && struck.candidate().is_none());
+        // Nothing is accepted and nothing is prepared, yet the installed release is on disk with
+        // the choice setup recorded for it: the launcher starts it rather than refusing.
+        let installed = InstalledCandidate::reopen(root, context)?
+            .ok_or("A struck first installation had nothing to launch")?;
+        let record = store.load(context)?.ok_or("State absent")?;
+        assert!(matches!(record.candidate(), Some(Candidate::Prepared { .. })));
+        assert_eq!(record.strikes(), struck.strikes(), "its history is kept");
+        let mut recovery = None;
+        let transfer = installed.transfer(context, &mut recovery)?;
+        assert!(transfer.directory().join("sugarsubstitute.exe").is_file());
         Ok(())
     })
 }

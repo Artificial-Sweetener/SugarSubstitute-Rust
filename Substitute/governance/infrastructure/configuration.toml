@@ -575,7 +575,7 @@ rationale = "Native first-install publication fixtures observe saved startup doc
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/fresh/installed/rescue.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:92dca792fc46f5ee3200fa687b3ef3cd1921c447820a2443a4e3be7243afa4e9"
+source_sha256 = "sha256:c4c8278d29a3279647bc664ed8b8c7dd448ea5e644ca544df732c655e6890c26"
 capabilities = ["document"]
 rationale = "Lost-trial rescue fixtures preserve exact saved startup bytes and reject reauthorization of failed payloads."
 
