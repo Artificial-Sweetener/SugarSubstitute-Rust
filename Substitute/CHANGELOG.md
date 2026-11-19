@@ -1,3 +1,9 @@
+## [0.4.1](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.4.0...substitute-v0.4.1) (2026-11-19)
+
+### Bug Fixes
+
+* **notices:** tell the page about updates only once the window is up ([095ff21](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/095ff213a6c2b5f89f59060ee9db2f31b38a0397))
+
 ## [0.4.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.3.2...substitute-v0.4.0) (2026-11-19)
 
 ### Features
