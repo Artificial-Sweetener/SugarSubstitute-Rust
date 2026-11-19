@@ -21,6 +21,10 @@ import { ScrollbarGutter } from './ScrollbarGutter.js';
 import { scrollbarPresentation } from './ScrollbarPresentation.js';
 import { ScrollbarLayers, scrollbarCoordinateSpace } from './ScrollbarLayers.js';
 import { SURFACE_GEOMETRY_MOTION_EVENT } from '../motion/SurfaceGeometryMotion.js';
+/** Elements whose overflow one frame always reads, so small changes settle at once. */
+const DISCOVERY_MINIMUM = 96;
+/** How long one frame may go on reading overflow beyond that minimum. */
+const DISCOVERY_BUDGET_MS = 4;
 /** Observe native overflow while leaving the host's layout and scrolling intact. */
 export class OverlayScrollbarHost {
     #document;
@@ -32,6 +36,8 @@ export class OverlayScrollbarHost {
     #shadowStyles = new Map();
     #pending = new Set();
     #changedElements = new Set();
+    /** Elements whose overflow has yet to be read, oldest first. */
+    #unexamined = new Set();
     #dirtyOwners = new Set();
     #observedSizes = new Set();
     #movingRegions = new Set();
@@ -115,6 +121,7 @@ export class OverlayScrollbarHost {
         this.#roots.clear();
         this.#pending.clear();
         this.#changedElements.clear();
+        this.#unexamined.clear();
         this.#dirtyOwners.clear();
         this.#layers.clear();
     }
@@ -136,9 +143,11 @@ export class OverlayScrollbarHost {
             attributeFilter: ['class', 'style', 'hidden'],
         });
     }
-    /** Batch overflow reads across unique changed subtrees before inserting tracks or shadow styles. */
-    #discover(roots, changed) {
-        const elements = new Set(changed.filter((element) => element.isConnected));
+    /** Queue every element of the changed subtrees for an overflow read, without reading any. */
+    #queue(roots, changed) {
+        for (const element of changed)
+            if (element.isConnected)
+                this.#unexamined.add(element);
         const pending = [...roots];
         const scanned = new Set();
         while (pending.length) {
@@ -148,27 +157,49 @@ export class OverlayScrollbarHost {
             scanned.add(root);
             const subtree = [root, ...root.querySelectorAll('*')];
             for (const element of subtree)
-                elements.add(element);
+                this.#unexamined.add(element);
             for (const element of subtree)
                 if (element.shadowRoot)
                     pending.push(...element.shadowRoot.querySelectorAll('*'));
         }
         const scrolling = this.#document.scrollingElement;
         if (scrolling instanceof HTMLElement)
-            elements.add(scrolling);
-        const candidates = [...elements]
-            .filter((element) => !this.#owned(element))
-            .map((element) => {
-            const style = this.#document.defaultView?.getComputedStyle(element);
-            return {
+            this.#unexamined.add(scrolling);
+    }
+    /**
+     * Read the overflow of queued elements for a few milliseconds and leave the rest for the next
+     * frame. Reading a computed style is cheap for one element and a visible stall for the
+     * thousands a workspace remounts at once, so no frame reads more than its share. Returns
+     * whether elements remain.
+     */
+    #discover() {
+        const view = this.#document.defaultView;
+        const scrolling = this.#document.scrollingElement;
+        // A document without a clock reads everything at once.
+        const now = () => view?.performance?.now?.() ?? 0;
+        const started = now();
+        let examined = 0;
+        const candidates = [];
+        for (const element of this.#unexamined) {
+            if (examined >= DISCOVERY_MINIMUM &&
+                examined % 16 === 0 &&
+                now() - started > DISCOVERY_BUDGET_MS)
+                break;
+            this.#unexamined.delete(element);
+            if (!element.isConnected || this.#owned(element))
+                continue;
+            examined += 1;
+            const style = view?.getComputedStyle(element);
+            candidates.push({
                 element,
                 scrollable: element === scrolling ||
                     element.tagName === 'TEXTAREA' ||
                     /auto|scroll/.test(`${style?.overflow} ${style?.overflowX} ${style?.overflowY}`),
-            };
-        });
+            });
+        }
         for (const { element, scrollable } of candidates)
             this.#consider(element, scrollable);
+        return this.#unexamined.size > 0;
     }
     /** Register potential overflow even before asynchronously loaded content fills it. */
     #consider(element, scrollable) {
@@ -333,7 +364,8 @@ export class OverlayScrollbarHost {
                 const changed = [...this.#changedElements].filter((element) => !this.#moving(element));
                 for (const element of changed)
                     this.#changedElements.delete(element);
-                this.#discover(pending, changed);
+                this.#queue(pending, changed);
+                const remaining = this.#discover();
                 for (const element of changed)
                     if (element.isConnected) {
                         this.#invalidateGeometry(element);
@@ -374,6 +406,8 @@ export class OverlayScrollbarHost {
                 }
                 for (const write of writes)
                     write();
+                if (remaining)
+                    this.#schedule();
             }
             catch (error) {
                 this.#reportError(error);

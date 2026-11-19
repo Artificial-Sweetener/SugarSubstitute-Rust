@@ -626,3 +626,42 @@ test('workflow tab navigation remains handle-free through appearance and rendere
   expect(area.hasAttribute('data-sc-scrollbar-managed')).toBe(true);
   global.clear();
 });
+
+test('a large remount is read over several frames and still reaches every scroll owner', async () => {
+  const filler = document.createElement('section');
+  for (let index = 0; index < 600; index += 1) filler.append(document.createElement('span'));
+  const last = scrollArea();
+  document.body.append(filler, last);
+  const frames: FrameRequestCallback[] = [];
+  jest.spyOn(window, 'requestAnimationFrame').mockImplementation((frame) => {
+    frames.push(frame);
+    return frames.length;
+  });
+  // Every look at the clock costs a millisecond, so a frame's share is soon used up.
+  let clock = 0;
+  jest.spyOn(window.performance, 'now').mockImplementation(() => (clock += 1));
+  const styles = window.getComputedStyle.bind(window);
+  const readsPerFrame: number[] = [];
+  let reads = 0;
+  jest.spyOn(window, 'getComputedStyle').mockImplementation((element, pseudo) => {
+    reads += 1;
+    return styles(element, pseudo);
+  });
+  const host = new OverlayScrollbarHost(document, jest.fn());
+  host.enable();
+  let rounds = 0;
+  while (rounds < 40) {
+    await flush(frames);
+    readsPerFrame.push(reads);
+    reads = 0;
+    rounds += 1;
+    if (!frames.length && document.querySelectorAll('.sc-style-scrollbar').length) break;
+  }
+  const reading = readsPerFrame.filter((count) => count > 0);
+  expect(reading.length).toBeGreaterThan(2);
+  // No frame read the whole document at once.
+  expect(Math.max(...reading)).toBeLessThan(400);
+  expect(last.id).toMatch(/^sc-style-scroll-owner-/);
+  expect(document.querySelectorAll('.sc-style-scrollbar').length).toBeGreaterThanOrEqual(2);
+  host.clear();
+});
