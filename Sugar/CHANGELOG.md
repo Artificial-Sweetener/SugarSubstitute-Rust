@@ -1,3 +1,13 @@
+## [0.28.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.27.1...sugarcubes-v0.28.0) (2026-11-19)
+
+### Features
+
+* **cart:** drag Cubes in the cart as lifted cards, and show them as the stack does ([f8cf846](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/f8cf84667a3e1682755a47ab4a5ff71c3c79df89))
+* **queue:** drag a finished job onto the tab bar to open it as a workflow tab ([5ebf065](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/5ebf0655f9fed91ceaaee7cfd582e6403084ff69))
+* **queue:** job details, an asset viewer and run numbers; confirmations that appear ([9c04c58](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/9c04c5869401476fc1b4eeac96dfb0895916b4dd))
+* **queue:** lay the generation queue out as SugarSubstitute's own, on ComfyUI's jobs and actions ([6f35764](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/6f35764aea3d784bb94c7f078122652fe280a60e))
+* **queue:** reorder waiting jobs by dragging, on one drag gesture shared with the Cube stack ([159eb7d](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/159eb7d416a9adb3a646b2e628a63f93479e5b8d))
+
 ## [0.27.1](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.27.0...sugarcubes-v0.27.1) (2026-11-19)
 
 ### Bug Fixes
