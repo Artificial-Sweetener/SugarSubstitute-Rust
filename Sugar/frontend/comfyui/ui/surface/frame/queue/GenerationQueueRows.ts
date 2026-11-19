@@ -293,6 +293,7 @@ function dayLabel(moment: number | null, clock: QueueClock): string {
   return days === 0 ? 'Today' : days === 1 ? 'Yesterday' : clock.date(moment);
 }
 
+/** The clock and wording of the machine the page runs on. */
 export function localClock(): QueueClock {
   return {
     now: Date.now(),

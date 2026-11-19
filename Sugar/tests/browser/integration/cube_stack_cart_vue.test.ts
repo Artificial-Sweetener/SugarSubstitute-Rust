@@ -145,7 +145,9 @@ test('a library Cube carried over the cart is previewed there and added where it
 
 test('a library Cube released away from the cart is not added', async () => {
   const f = fixture();
-  f.libraryButton().closest('li')!.dispatchEvent(pointer('pointerdown', 50, 23));
+  f.libraryButton()
+    .closest('li')!
+    .dispatchEvent(pointer('pointerdown', 50, 23));
   document.dispatchEvent(pointer('pointermove', 400, 60));
   document.dispatchEvent(pointer('pointermove', 60, 60));
   await nextTick();
@@ -173,7 +175,9 @@ test('a lifted cart row previews its new place, and Escape puts it back without 
   expect(reachedDialog).not.toHaveBeenCalled();
   expect(f.cartLabels()).toEqual(['first', 'second']);
   expect(f.actions.reorder).not.toHaveBeenCalled();
-  f.cartButton(0).closest('li')!.dispatchEvent(pointer('pointerdown', 400, 23));
+  f.cartButton(0)
+    .closest('li')!
+    .dispatchEvent(pointer('pointerdown', 400, 23));
   document.dispatchEvent(pointer('pointermove', 400, 80));
   document.dispatchEvent(pointer('pointerup', 400, 80));
   await nextTick();
@@ -269,9 +273,9 @@ function fixture() {
         '[aria-label="Cube library"] .sc-cube-stack-row__activate',
       )!,
     cartLabels: () =>
-      [
-        ...element.querySelectorAll('[aria-label="Cube cart"] .sc-cube-stack-row__label'),
-      ].map((label) => label.textContent),
+      [...element.querySelectorAll('[aria-label="Cube cart"] .sc-cube-stack-row__label')].map(
+        (label) => label.textContent,
+      ),
     cartButton: (index: number) =>
       element.querySelectorAll<HTMLButtonElement>(
         '[aria-label="Cube cart"] .sc-cube-stack-row__activate',

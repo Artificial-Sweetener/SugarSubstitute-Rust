@@ -252,12 +252,7 @@ export class GenerationQueueMenus {
     if (!workflow || typeof load !== 'function')
       throw new Error('ComfyUI kept no workflow for this job.');
     // A title makes ComfyUI open the graph as a new unsaved workflow beside the open ones.
-    await (Reflect.apply(load, this.host.app, [
-      workflow,
-      true,
-      true,
-      jobTabTitle(job),
-    ]) as unknown);
+    await (Reflect.apply(load, this.host.app, [workflow, true, true, jobTabTitle(job)]) as unknown);
   }
 
   async #exportWorkflow(job: QueueJob): Promise<void> {

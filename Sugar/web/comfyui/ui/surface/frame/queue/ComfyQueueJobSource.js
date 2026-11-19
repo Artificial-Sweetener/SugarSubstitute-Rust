@@ -294,5 +294,7 @@ function mediaKind(preview) {
 }
 /** The job's place in ComfyUI's count of queued jobs, when it has one. */
 function runNumber(priority) {
-    return typeof priority === 'number' && Number.isInteger(priority) && priority > 0 ? priority : null;
+    return typeof priority === 'number' && Number.isInteger(priority) && priority > 0
+        ? priority
+        : null;
 }

@@ -87,7 +87,11 @@ test('a finished job says when and how it ended', () => {
     'Total generation time: 12.3s',
     'Output: a.png',
   ]);
-  const failed = job('f', 'failed', { startTime: 2000, endTime: 5000, error: '<b>Out of memory</b>' });
+  const failed = job('f', 'failed', {
+    startTime: 2000,
+    endTime: 5000,
+    error: '<b>Out of memory</b>',
+  });
   expect(jobDetailLines(failed, [failed], clock).slice(3)).toEqual([
     'Failed after: 3.0s',
     'Error message: <b>Out of memory</b>',

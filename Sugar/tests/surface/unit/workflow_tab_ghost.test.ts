@@ -39,7 +39,12 @@ function fixture(scrollLeft = 0) {
     () => tabs,
     () => [180, 180, 180],
   );
-  return { bar, tabs, ghost, shown: () => bar.querySelector<HTMLElement>('.sc-workflow-tab-ghost') };
+  return {
+    bar,
+    tabs,
+    ghost,
+    shown: () => bar.querySelector<HTMLElement>('.sc-workflow-tab-ghost'),
+  };
 }
 
 test('a point on the bar names the tab position a drop would take', () => {

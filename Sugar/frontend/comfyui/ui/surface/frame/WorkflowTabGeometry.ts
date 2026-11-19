@@ -16,7 +16,6 @@
 /** Resolve workflow-tab positions that only the tab strip asks about. */
 import { slotOffsets } from '../../interaction/reorder/ReorderSlots.js';
 
-
 /** Resolve a scroll position against actual tab extents, including unequal name-sized tabs. */
 export function workflowTabAtOffset(widths: readonly number[], position: number): number {
   const offsets = slotOffsets(widths);

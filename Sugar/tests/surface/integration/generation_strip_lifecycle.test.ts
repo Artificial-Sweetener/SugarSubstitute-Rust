@@ -57,6 +57,7 @@ function fixture() {
     report,
     () => 0,
     async () => true,
+    { hit: () => null, preview: () => undefined, place: () => undefined },
   );
   return { host, native, frame, cancel, queueSettings, changes, execute, report };
 }

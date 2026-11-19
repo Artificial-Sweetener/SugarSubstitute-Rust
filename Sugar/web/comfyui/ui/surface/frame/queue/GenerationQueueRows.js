@@ -170,6 +170,7 @@ function dayLabel(moment, clock) {
     const days = Math.round((start(clock.now) - start(moment)) / 86_400_000);
     return days === 0 ? 'Today' : days === 1 ? 'Yesterday' : clock.date(moment);
 }
+/** The clock and wording of the machine the page runs on. */
 export function localClock() {
     return {
         now: Date.now(),

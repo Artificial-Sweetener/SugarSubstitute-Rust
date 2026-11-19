@@ -208,7 +208,9 @@ test('Escape puts a lifted Cube back and leaves the cart open; a second Escape c
   expect(cart.querySelector('.sc-cube-stack__drag-overlay')).not.toBeNull();
   const overlay = document.querySelector('.sugarcubes-modal-overlay')!;
   const escape = (): boolean =>
-    row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    row.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    );
   escape();
   await settle();
   expect(cart.querySelector('.sc-cube-stack__drag-overlay')).toBeNull();
