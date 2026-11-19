@@ -5,7 +5,7 @@
 use super::*;
 use sugarsubstitute_contracts::update::{
     pack::{PackOutcome, PackUpdateReport, PackUpdateStatus},
-    status::{LaunchVersion, StartupNotice, UpdateStatus},
+    status::{LaunchVersion, UpdateStatus},
 };
 use sugarsubstitute_desktop::StartupWindowContent;
 use sugarsubstitute_splash::{StartupStatus, UpdateVersion};
@@ -14,7 +14,9 @@ fn could_not_check() -> PackUpdateReport {
     PackUpdateReport::new(PackOutcome::CouldNotCheck)
 }
 
-fn start_up_messages() -> [StartupNotice; 4] {
+#[cfg(windows)]
+fn start_up_messages() -> [sugarsubstitute_contracts::update::status::StartupNotice; 4] {
+    use sugarsubstitute_contracts::update::status::StartupNotice;
     [
         StartupNotice::Updated("2.4.1".into()),
         StartupNotice::Repairing,
