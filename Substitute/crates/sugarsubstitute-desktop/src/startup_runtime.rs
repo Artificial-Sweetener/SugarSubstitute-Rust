@@ -58,7 +58,7 @@ impl Session {
         custody::ShutdownFacts {
             closing: self.closing,
             splash_retired: self.splash.retired,
-            main_retired: self.main.as_ref().is_none_or(MainActor::retired)
+            main_retired: self.main.as_ref().is_none_or(MainActor::settled)
                 && self.report.is_none()
                 && self.observers.retired()
                 && self.activity.retired(),

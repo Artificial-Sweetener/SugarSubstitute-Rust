@@ -456,7 +456,7 @@ rationale = "Recovery selects supplied canonical retry labels according to curre
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/startup_runtime.rs"
-source_sha256 = "sha256:32c28db257d57ab650606016a8f55906ec6bb66482e200de663af4b1833faf10"
+source_sha256 = "sha256:853e9cc004c36883a7acf11bbf61608c96d10e38853174fe033c69374cffd13f"
 kind = "native"
 rationale = "The native startup session retains DesktopOptions from the host and passes them to the owned splash surface; it does not create product copy."
 
@@ -726,7 +726,7 @@ rationale = "The isolated JavaScript VM fixture supplies promptId and sourceId a
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/placement/tests/native_cases.rs"
-source_sha256 = "sha256:7000e03e793cf5bee6bf0f154be43e4b9cc07f990476cd1e01eb7b128caf13bc"
+source_sha256 = "sha256:d4cbe00be7703ac98f8733296ba9038e078be01777654fcd9a852268abbe559c"
 kind = "fixture"
 rationale = "Native placement fixture uses fixed caption labels only to construct its owned hidden test peer."
 

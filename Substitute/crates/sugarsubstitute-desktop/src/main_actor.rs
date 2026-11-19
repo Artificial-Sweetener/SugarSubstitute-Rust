@@ -13,6 +13,7 @@ mod focus;
 mod frame;
 #[cfg(feature = "native-composition")]
 mod hosting;
+mod kept_frame;
 mod panel;
 mod placement;
 mod probe_diagnostics;
@@ -105,6 +106,11 @@ pub(crate) struct MainActor {
     /// This window takes the place of one the user was looking at, so its frame is shown while
     /// its page loads instead of leaving the screen without a window.
     replacement: bool,
+    /// This lifetime's own frame, kept on screen after its reload retired everything else,
+    /// for the lifetime that replaces it.
+    kept_frame: Option<kept_frame::KeptFrame>,
+    /// The frame of the lifetime this one replaces, retired once this one's frame is shown.
+    inherited_frame: Option<kept_frame::KeptFrame>,
     /// A window owned by this one is open; Windows would destroy it with this window.
     owned_window_open: bool,
     reload: crate::main_reload::ReloadAdmission,
@@ -200,6 +206,8 @@ impl MainActor {
             readiness: Some(readiness),
             revealed: false,
             replacement,
+            kept_frame: None,
+            inherited_frame: None,
             owned_window_open: false,
             reload: crate::main_reload::ReloadAdmission::default(),
             retired: false,
@@ -221,6 +229,36 @@ impl MainActor {
     }
     pub(crate) fn retired(&self) -> bool {
         self.retired
+    }
+    /// Whether nothing native is left: retired, with no frame kept for a successor.
+    pub(crate) fn settled(&self) -> bool {
+        self.retired && self.kept_frame.is_none()
+    }
+    /// Hand this retired lifetime's kept frame to the lifetime replacing it.
+    pub(crate) fn take_kept_frame(&mut self) -> Option<kept_frame::KeptFrame> {
+        self.kept_frame.take()
+    }
+    /// Keep the replaced lifetime's frame on screen until this one's frame is shown.
+    pub(crate) fn inherit_frame(&mut self, frame: Option<kept_frame::KeptFrame>) {
+        self.inherited_frame = frame;
+    }
+    /// Retire a kept frame no successor will take, one native owner per call, as when the
+    /// application closes during a reload. True once none is left.
+    ///
+    /// # Errors
+    /// Returns the native failure; custody stays here for another attempt.
+    pub(crate) fn abandon_kept_frame(&mut self) -> Result<bool, DesktopError> {
+        if let Some(frame) = &mut self.kept_frame
+            && frame.retire_step()?
+        {
+            self.kept_frame = None;
+        }
+        Ok(self.kept_frame.is_none())
+    }
+    /// Whether the replaced lifetime's frame can go: this one's window is on screen.
+    fn inherited_frame_due(&self) -> bool {
+        self.inherited_frame.is_some()
+            && self.window.as_ref().is_some_and(|window| window.is_visible())
     }
     /// Return only the closed kind of the actual failed native observation.
     pub(crate) fn failure_observation(&self) -> &'static str {
@@ -252,6 +290,7 @@ impl MainActor {
     pub(crate) fn needs_progress(&self) -> bool {
         !self.retired
             && (self.admission.closing()
+                || self.inherited_frame_due()
                 || (self.stage != ConstructionStage::Live
                     && self.stage != ConstructionStage::PausedEnvironment)
                 || self.events.as_ref().is_some_and(|events| events.remaining() != 0)
@@ -320,6 +359,14 @@ impl MainActor {
         }
         if self.admission.closing() {
             return self.retire_step();
+        }
+        if self.inherited_frame_due() {
+            if let Some(frame) = &mut self.inherited_frame
+                && frame.retire_step()?
+            {
+                self.inherited_frame = None;
+            }
+            return Ok(None);
         }
         if let Some(cause) = self.events()?.take_failure() {
             return Err(cause);

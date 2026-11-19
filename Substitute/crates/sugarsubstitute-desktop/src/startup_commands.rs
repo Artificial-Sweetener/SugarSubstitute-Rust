@@ -71,12 +71,16 @@ pub(super) fn drain(
                         "splash not submitted or prior main lifetime remains",
                     ));
                 }
-                if let Some(previous) = session.main.take() {
+                let mut kept_frame = None;
+                if let Some(mut previous) = session.main.take() {
                     session.navigations += previous.navigations();
                     session.main_material = previous.material();
+                    kept_frame = previous.take_kept_frame();
                 }
                 session.main_failures_reported = false;
-                session.main = Some(MainActor::new(*request, proxy.clone(), replacement)?);
+                let mut main = MainActor::new(*request, proxy.clone(), replacement)?;
+                main.inherit_frame(kept_frame);
+                session.main = Some(main);
             }
             DesktopStartupCommand::AuthorizeEnvironment(identity) => {
                 #[cfg(feature = "k1-native-qualification")]

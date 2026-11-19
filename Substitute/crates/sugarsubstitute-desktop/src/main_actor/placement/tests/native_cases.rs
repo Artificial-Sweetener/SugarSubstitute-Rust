@@ -245,6 +245,88 @@ fn qualify_replacement_frame() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn a_reloading_main_keeps_its_frame_on_screen_until_its_replacement_shows_one() -> TestResult {
+    crate::windows_test_desktop::run(
+        concat!(
+            module_path!(),
+            "::a_reloading_main_keeps_its_frame_on_screen_until_its_replacement_shows_one"
+        ),
+        qualify_frame_handoff,
+    )
+}
+
+/// Retire a revealed main for its own reload, then build its replacement, with real windows.
+fn qualify_frame_handoff() -> TestResult {
+    use windows::Win32::UI::WindowsAndMessaging::{IsWindow, IsWindowVisible};
+    let _apartment = crate::windows_ui_apartment::UiApartment::enter()?;
+    let mut builder = EventLoopBuilder::<crate::native_action::NativeAction>::with_user_event();
+    let events = builder.with_any_thread(true).build();
+    let released = Arc::new(AtomicU64::new(0));
+    let first_identity = first_identity()?;
+    let mut first =
+        MainActor::new(main_request(first_identity, &released)?, events.create_proxy(), false)?;
+    let mut second = None;
+    let result = (|| -> TestResult {
+        for _ in 0..3 {
+            assert!(first.construct_step(&events, events.create_proxy(), "Reload")?.is_none());
+        }
+        first.show_placed_window()?;
+        first.revealed = true;
+        let old = hwnd(first.window()?);
+        assert!(first.reload.request(true, crate::MainReloadReason::Navigation).is_some());
+        retire(&mut first)?;
+        assert!(first.retired() && !first.settled(), "the frame outlives the retired lifetime");
+        // SAFETY: Queries of a window this thread created; a destroyed handle answers false.
+        assert!(unsafe { IsWindow(Some(old)).as_bool() && IsWindowVisible(old).as_bool() });
+
+        let next = MainIdentity {
+            launch: LaunchId::new(2)?,
+            navigation: Generation::new(2)?,
+            ..first_identity
+        };
+        let replacement = second.insert(MainActor::new(
+            main_request(next, &released)?,
+            events.create_proxy(),
+            true,
+        )?);
+        replacement.inherit_frame(first.take_kept_frame());
+        assert!(first.settled());
+        // The old frame stays until the replacement's own frame is on screen.
+        for _ in 0..2 {
+            assert!(replacement.progress(&events, events.create_proxy(), "Reload")?.is_none());
+            // SAFETY: As above.
+            assert!(unsafe { IsWindowVisible(old).as_bool() });
+        }
+        let mut turns = 0;
+        while replacement.inherited_frame.is_some() {
+            assert!(replacement.progress(&events, events.create_proxy(), "Reload")?.is_none());
+            turns += 1;
+            assert!(turns < 16, "the inherited frame never retired");
+        }
+        assert!(replacement.window()?.is_visible());
+        // SAFETY: As above.
+        assert!(!unsafe { IsWindow(Some(old)).as_bool() });
+        Ok(())
+    })();
+    let mut retirement = Ok(());
+    if !first.retired() {
+        retirement = retire(&mut first);
+    }
+    while !first.abandon_kept_frame()? {}
+    if let Some(mut replacement) = second {
+        let outcome = retire(&mut replacement);
+        if retirement.is_ok() {
+            retirement = outcome;
+        }
+    }
+    drop(first);
+    result?;
+    retirement?;
+    assert_eq!(released.load(Ordering::SeqCst), 2 * MainWindowRequest::RESERVATION_BYTES);
+    Ok(())
+}
+
 /// Dispatch queued native construction messages before sampling the live OS placement.
 fn drain_native(events: &mut EventLoop<crate::native_action::NativeAction>) -> TestResult {
     let exit = events.run_return(|event, _, control| {

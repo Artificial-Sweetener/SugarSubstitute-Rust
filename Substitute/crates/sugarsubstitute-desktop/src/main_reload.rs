@@ -20,6 +20,10 @@ impl ReloadAdmission {
         self.pending = true;
         Some(reason)
     }
+    /// Whether this actor asked for the reload that is retiring it.
+    pub(crate) fn pending(&self) -> bool {
+        self.pending
+    }
 }
 #[cfg(test)]
 mod tests {

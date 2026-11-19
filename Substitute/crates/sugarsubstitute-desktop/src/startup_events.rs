@@ -282,8 +282,15 @@ pub(super) fn dispatch(
     }
     presentation::reconcile(session, content, context.timings)?;
     activity(session, content)?;
+    // A frame kept for a reload that will never finish is retired with the application.
+    if session.closing
+        && let Some(main) = &mut session.main
+        && main.retired()
+    {
+        main.abandon_kept_frame()?;
+    }
     if let Some(observation) = session.activity.retirement(native_activity::RetirementFacts {
-        main: session.main.as_ref().is_none_or(MainActor::retired),
+        main: session.main.as_ref().is_none_or(MainActor::settled),
         splash: session.splash.retired,
         observers: session.observers.retired(),
     }) {
@@ -426,6 +433,7 @@ pub(super) fn wait(
     if session.closing
         || (session.splash.retiring && !session.splash.retired)
         || session.main.as_ref().is_some_and(MainActor::needs_progress)
+        || session.main.as_ref().is_some_and(|main| main.retired() && !main.settled())
     {
         let now = Instant::now();
         match (closing_wait(now), deadline.filter(|deadline| *deadline > now)) {

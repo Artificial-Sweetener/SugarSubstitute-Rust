@@ -51,6 +51,13 @@ impl MainActor {
     pub(super) fn retire_step(
         &mut self,
     ) -> Result<Option<DesktopStartupObservation>, DesktopError> {
+        // A frame still held for the lifetime before this one goes first.
+        if let Some(frame) = &mut self.inherited_frame {
+            if frame.retire_step()? {
+                self.inherited_frame = None;
+            }
+            return Ok(None);
+        }
         if let Some(session) = &mut self.session {
             if let Some(observation) = session.step()? {
                 return Ok(Some(observation));
@@ -115,6 +122,23 @@ impl MainActor {
             {
                 self.view = None;
             }
+            return Ok(None);
+        }
+        // A reload this window asked for keeps its frame on screen for the window replacing it.
+        // A window that owns another stays whole, because Windows destroys the two together.
+        if self.reload.pending()
+            && !self.owned_window_open
+            && let Some(window) = self.window.take()
+        {
+            #[cfg(feature = "k1-native-qualification")]
+            {
+                self.preview = None;
+            }
+            self.kept_frame = Some(kept_frame::KeptFrame::new(
+                window,
+                self.presenter.take(),
+                self.controls.take(),
+            ));
             return Ok(None);
         }
         if let Some(controls) = &mut self.controls {
