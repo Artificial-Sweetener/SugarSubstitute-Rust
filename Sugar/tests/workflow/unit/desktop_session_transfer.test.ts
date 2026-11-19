@@ -86,3 +86,27 @@ test('cancelled delayed hashing cannot revive a materialization transfer', async
   resolveDigest(await digest(text));
   await expect(pending).rejects.toThrow('cancelled');
 });
+
+test('counts UTF-8 bytes exactly as an encoder does and refuses unpaired surrogates', async () => {
+  const { utf8Bytes } = await import('../../../integrations/shared/SessionPrimitives.js');
+  const encoder = new TextEncoder();
+  for (const text of [
+    '',
+    'plain',
+    'é ñ ü',
+    '漢字かな',
+    '𝒳😀a😀',
+    'a\u07ffb\u0800c\uffffd',
+    '😀'.repeat(300),
+  ])
+    expect(utf8Bytes(text)).toBe(encoder.encode(text).length);
+  for (const text of [
+    '\ud83d',
+    'a\ud83d',
+    '\ude00',
+    '\ud83dx',
+    'x\ude00\ud83d',
+    '\ud83d\ud83d\ude00',
+  ])
+    expect(utf8Bytes(text)).toBe(Infinity);
+});

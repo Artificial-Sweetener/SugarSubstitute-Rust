@@ -4,7 +4,7 @@ import {
   sessionDigest,
   sessionFile,
   sessionUuid
-} from "./chunk-NKU7LGRE.js";
+} from "./chunk-2AI3VKIJ.js";
 import {
   MAX_CANVAS_IMAGE_BYTES,
   outputImageDimensions,

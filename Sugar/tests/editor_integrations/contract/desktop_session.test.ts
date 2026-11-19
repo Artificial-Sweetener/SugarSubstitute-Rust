@@ -221,4 +221,11 @@ test('bounds encoded messages, Unicode chunks and Comfy-owned graph envelopes in
   expect(sessionGraph('{"value":1e999}')).toBe(false);
   expect(sessionGraph(`{"value":${'['.repeat(65)}0${']'.repeat(65)}}`)).toBe(false);
   expect(sessionGraph(' '.repeat(33554433))).toBe(false);
+  // The deepest admitted value sits 64 levels below the graph.
+  expect(sessionGraph(`{"value":${'['.repeat(63)}0${']'.repeat(63)}}`)).toBe(true);
+  expect(sessionGraph(`{"value":${'['.repeat(64)}0${']'.repeat(64)}}`)).toBe(false);
+  expect(sessionGraph('{"nodes":[{"text":"\ud83d"}]}')).toBe(false);
+  expect(sessionGraph('{"\ud83d":1}')).toBe(false);
+  expect(sessionGraph('{"nodes":[{"text":"\ud83d\ude00","n":null,"b":false}]}')).toBe(true);
+  expect(sessionGraph('[]')).toBe(false);
 });

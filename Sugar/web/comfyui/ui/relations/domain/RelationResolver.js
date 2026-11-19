@@ -97,7 +97,9 @@ export function canShareNodeConfiguration(target, source, nodes, state) {
     }
     const next = { ...state, nodeLinks: { ...state.nodeLinks, [target.id]: source.id } };
     const fields = nodes.flatMap((node) => node.fields);
-    return target.fields.every((field) => commonFieldDomain(linkedFieldMembers(field.id, fields, nodes, next)) !== null);
+    // One proposed state has one set of edges; every field of the target is checked against it.
+    const edges = relationEdges(fields, nodes, next);
+    return target.fields.every((field) => commonFieldDomain(groupMembers(field.id, fields, edges)) !== null);
 }
 /** Reject indistinguishable endpoints inside one Cube rather than selecting an arbitrary node. */
 function uniqueEndpoint(node, nodes) {
@@ -198,7 +200,11 @@ export function resolveRelations(fields, nodes, state, groups = discoverOverride
 }
 /** Return every linked member whose domain restricts editing this field's master. */
 export function linkedFieldMembers(fieldId, fields, nodes, state) {
-    const edges = relationEdges(fields, nodes, state), ids = new Set([fieldId]);
+    return groupMembers(fieldId, fields, relationEdges(fields, nodes, state));
+}
+/** Return every field joined to `fieldId` through already expanded `edges`. */
+function groupMembers(fieldId, fields, edges) {
+    const ids = new Set([fieldId]);
     let changed = true;
     while (changed) {
         changed = false;
@@ -230,7 +236,7 @@ export function canLinkField(target, source, fields, nodes, state) {
         visited.add(id);
         id = edges.get(id);
     }
-    return commonFieldDomain(linkedFieldMembers(target.id, fields, nodes, next)) !== null;
+    return commonFieldDomain(groupMembers(target.id, fields, edges)) !== null;
 }
 /** Reject an invalid master edit rather than producing divergent clamped member values. */
 export function validateSharedEdit(domain, value) {

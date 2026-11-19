@@ -17,10 +17,17 @@ function isSessionOutput(value) {
 // integrations/shared/SessionPrimitives.ts
 function utf8Bytes(value) {
   let bytes = 0;
-  for (const character of value) {
-    const point = character.codePointAt(0) ?? 0;
-    if (point >= 55296 && point <= 57343) return Infinity;
-    bytes += point < 128 ? 1 : point < 2048 ? 2 : point < 65536 ? 3 : 4;
+  for (let index = 0; index < value.length; index += 1) {
+    const unit = value.charCodeAt(index);
+    if (unit < 128) bytes += 1;
+    else if (unit < 2048) bytes += 2;
+    else if (unit < 55296 || unit > 57343) bytes += 3;
+    else {
+      const low = unit <= 56319 ? value.charCodeAt(index + 1) : Number.NaN;
+      if (!(low >= 56320 && low <= 57343)) return Infinity;
+      bytes += 4;
+      index += 1;
+    }
   }
   return bytes;
 }

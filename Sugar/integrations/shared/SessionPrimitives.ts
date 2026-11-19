@@ -21,11 +21,21 @@ export const SESSION_DOCUMENT_BYTES = 33554432;
 
 /** Count UTF-8 bytes, rejecting unpaired UTF-16 surrogates on the browser boundary. */
 export function utf8Bytes(value: string): number {
+  // Read code units in place: iterating code points allocates a string for each one, and a
+  // session's graph text is several megabytes counted more than once for every capture.
   let bytes = 0;
-  for (const character of value) {
-    const point = character.codePointAt(0) ?? 0;
-    if (point >= 0xd800 && point <= 0xdfff) return Infinity;
-    bytes += point < 0x80 ? 1 : point < 0x800 ? 2 : point < 0x10000 ? 3 : 4;
+  for (let index = 0; index < value.length; index += 1) {
+    const unit = value.charCodeAt(index);
+    if (unit < 0x80) bytes += 1;
+    else if (unit < 0x800) bytes += 2;
+    else if (unit < 0xd800 || unit > 0xdfff) bytes += 3;
+    else {
+      // A high surrogate and the low one after it are one four-byte code point.
+      const low = unit <= 0xdbff ? value.charCodeAt(index + 1) : Number.NaN;
+      if (!(low >= 0xdc00 && low <= 0xdfff)) return Infinity;
+      bytes += 4;
+      index += 1;
+    }
   }
   return bytes;
 }
@@ -100,20 +110,29 @@ export function sessionGraph(encoded: string): boolean {
     return false;
   }
   if (!graph || typeof graph !== 'object' || Array.isArray(graph)) return false;
-  const pending: { value: unknown; depth: number }[] = [{ value: graph, depth: 0 }];
-  while (pending.length) {
-    const item = pending.pop();
-    if (!item || item.depth > 64) return false;
-    const value = item.value;
-    if (typeof value === 'number' && !Number.isFinite(value)) return false;
-    if (typeof value === 'string' && !Number.isFinite(utf8Bytes(value))) return false;
-    if (value && typeof value === 'object') {
-      for (const [key, child] of Object.entries(value)) {
-        if (!Number.isFinite(utf8Bytes(key))) return false;
-        pending.push({ value: child, depth: item.depth + 1 });
-      }
-    }
+  return boundedGraphValue(graph, 0);
+}
+
+/**
+ * Accept finite numbers and well-formed text no deeper than 64 levels below the graph.
+ *
+ * It walks the parsed value in place: a graph holds hundreds of thousands of values, and a
+ * record allocated for each of them made every capture pay for its own garbage collection.
+ */
+function boundedGraphValue(value: unknown, depth: number): boolean {
+  if (depth > 64) return false;
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (typeof value === 'string') return Number.isFinite(utf8Bytes(value));
+  if (value === null || typeof value !== 'object') return true;
+  if (Array.isArray(value)) {
+    for (const child of value as readonly unknown[])
+      if (!boundedGraphValue(child, depth + 1)) return false;
+    return true;
   }
+  const record = value as Record<string, unknown>;
+  for (const key of Object.keys(record))
+    if (!Number.isFinite(utf8Bytes(key)) || !boundedGraphValue(record[key], depth + 1))
+      return false;
   return true;
 }
 

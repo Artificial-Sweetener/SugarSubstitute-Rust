@@ -2,10 +2,17 @@
 var SESSION_DOCUMENT_BYTES = 33554432;
 function utf8Bytes(value) {
   let bytes = 0;
-  for (const character of value) {
-    const point = character.codePointAt(0) ?? 0;
-    if (point >= 55296 && point <= 57343) return Infinity;
-    bytes += point < 128 ? 1 : point < 2048 ? 2 : point < 65536 ? 3 : 4;
+  for (let index = 0; index < value.length; index += 1) {
+    const unit = value.charCodeAt(index);
+    if (unit < 128) bytes += 1;
+    else if (unit < 2048) bytes += 2;
+    else if (unit < 55296 || unit > 57343) bytes += 3;
+    else {
+      const low = unit <= 56319 ? value.charCodeAt(index + 1) : Number.NaN;
+      if (!(low >= 56320 && low <= 57343)) return Infinity;
+      bytes += 4;
+      index += 1;
+    }
   }
   return bytes;
 }
@@ -46,20 +53,22 @@ function sessionGraph(encoded) {
     return false;
   }
   if (!graph || typeof graph !== "object" || Array.isArray(graph)) return false;
-  const pending = [{ value: graph, depth: 0 }];
-  while (pending.length) {
-    const item = pending.pop();
-    if (!item || item.depth > 64) return false;
-    const value = item.value;
-    if (typeof value === "number" && !Number.isFinite(value)) return false;
-    if (typeof value === "string" && !Number.isFinite(utf8Bytes(value))) return false;
-    if (value && typeof value === "object") {
-      for (const [key, child] of Object.entries(value)) {
-        if (!Number.isFinite(utf8Bytes(key))) return false;
-        pending.push({ value: child, depth: item.depth + 1 });
-      }
-    }
+  return boundedGraphValue(graph, 0);
+}
+function boundedGraphValue(value, depth) {
+  if (depth > 64) return false;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (typeof value === "string") return Number.isFinite(utf8Bytes(value));
+  if (value === null || typeof value !== "object") return true;
+  if (Array.isArray(value)) {
+    for (const child of value)
+      if (!boundedGraphValue(child, depth + 1)) return false;
+    return true;
   }
+  const record = value;
+  for (const key of Object.keys(record))
+    if (!Number.isFinite(utf8Bytes(key)) || !boundedGraphValue(record[key], depth + 1))
+      return false;
   return true;
 }
 
