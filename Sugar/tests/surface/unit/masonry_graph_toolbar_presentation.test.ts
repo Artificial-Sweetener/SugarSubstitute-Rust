@@ -134,7 +134,7 @@ test('suppresses selection controls throughout preparation, travel and exit with
   }
 });
 
-test('suppresses late toolbox mounts and leaves masonry controls and detached menus interactive', () => {
+test('suppresses late toolbox mounts and leaves masonry controls and detached menus interactive', async () => {
   ensureWorkflowMasonryStyles(document);
   const root = document.createElement('div');
   root.id = 'graph-canvas-container';
@@ -148,11 +148,15 @@ test('suppresses late toolbox mounts and leaves masonry controls and detached me
   document.body.append(root);
   const native = toolbox();
   root.append(native.wrapper);
+  // The mount is marked before the browser next paints, not within the host's own append.
+  await Promise.resolve();
+  expect(native.panel.getAttribute('data-sc-masonry-hides')).toBe('mounted');
   expect(getComputedStyle(native.wrapper).visibility).toBe('hidden');
   expect(getComputedStyle(native.button).pointerEvents).toBe('none');
   expect(getComputedStyle(control).visibility).toBe('visible');
   expect(getComputedStyle(control).pointerEvents).not.toBe('none');
   surface.remove();
   markMasonryMounted(root);
+  expect(native.panel.hasAttribute('data-sc-masonry-hides')).toBe(false);
   expect(getComputedStyle(native.button).pointerEvents).toBe('auto');
 });

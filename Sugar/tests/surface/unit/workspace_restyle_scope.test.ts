@@ -115,3 +115,68 @@ test('a visibility that has not changed is not written again', () => {
   setHidden(element, false);
   expect(element.hidden).toBe(false);
 });
+
+test('no rule keyed on the workspace container reaches for everything beneath it', () => {
+  // `#graph-canvas-container[state] ... *` is checked against every element in the container each
+  // time the state changes; the state belongs on the element whose subtree the rule is about.
+  const universal = /#graph-canvas-container(?:\[[^\]]*\])+[^{},;`]*[\s>]\*\s*[,{]/;
+  const offenders = sources().filter((file) => universal.test(readFileSync(file, 'utf8')));
+  expect(offenders).toEqual([]);
+});
+
+test('each graph layer carries its own mark while a masonry hides the graph', async () => {
+  const { WorkflowMasonryGraphVisibility } = await import(
+    '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryGraphVisibility.js'
+  );
+  const { MASONRY_HIDES_ATTRIBUTE } = await import(
+    '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryStyles.js'
+  );
+  const root = document.createElement('div');
+  root.id = 'graph-canvas-container';
+  const canvas = document.createElement('canvas');
+  canvas.id = 'graph-canvas';
+  const overlay = document.createElement('div');
+  overlay.className = 'ph-no-capture';
+  const other = document.createElement('div');
+  const panel = document.createElement('div');
+  root.append(canvas, overlay, other, panel);
+  document.body.append(root);
+  const visibility = new WorkflowMasonryGraphVisibility(() => panel);
+  visibility.setHidden(true);
+  expect(canvas.getAttribute(MASONRY_HIDES_ATTRIBUTE)).toBe('graph');
+  expect(overlay.getAttribute(MASONRY_HIDES_ATTRIBUTE)).toBe('graph');
+  expect(other.hasAttribute(MASONRY_HIDES_ATTRIBUTE)).toBe(false);
+  expect(root.dataset.sugarcubesMasonry).toBe('true');
+  // A mark another owner set on a layer is not this owner's to clear.
+  overlay.setAttribute(MASONRY_HIDES_ATTRIBUTE, 'mounted');
+  visibility.setHidden(false);
+  expect(canvas.hasAttribute(MASONRY_HIDES_ATTRIBUTE)).toBe(false);
+  expect(overlay.getAttribute(MASONRY_HIDES_ATTRIBUTE)).toBe('mounted');
+  expect(root.dataset.sugarcubesMasonry).toBeUndefined();
+  root.remove();
+});
+
+test('a stylesheet that is already last in the head is not moved', async () => {
+  const { ensureOwnedControlAppearanceStyles } = await import(
+    '../../../frontend/comfyui/ui/surface/appearance/OwnedControlAppearanceStyles.js'
+  );
+  ensureOwnedControlAppearanceStyles(document);
+  const records: MutationRecord[] = [];
+  const observer = new MutationObserver((batch) => records.push(...batch));
+  observer.observe(document.head, { childList: true });
+  ensureOwnedControlAppearanceStyles(document);
+  ensureOwnedControlAppearanceStyles(document);
+  await Promise.resolve();
+  expect(records).toEqual([]);
+  // A sheet added after it gives it back its place at the end, once.
+  const later = document.createElement('style');
+  document.head.append(later);
+  await Promise.resolve();
+  records.length = 0;
+  ensureOwnedControlAppearanceStyles(document);
+  await Promise.resolve();
+  expect(document.head.lastElementChild?.id).toBe('sugarcubes-owned-control-appearance');
+  expect(records.length).toBeGreaterThan(0);
+  observer.disconnect();
+  later.remove();
+});

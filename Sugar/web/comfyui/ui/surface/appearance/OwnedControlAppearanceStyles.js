@@ -20,7 +20,10 @@ import { CONTROL_HEIGHT, SPINNER_WIDTH } from './ControlGeometry.js';
 export function ensureOwnedControlAppearanceStyles(document) {
     const existing = document.getElementById('sugarcubes-owned-control-appearance');
     if (existing) {
-        document.head.append(existing);
+        // Moving a stylesheet makes the browser restyle the whole document, so one that is already
+        // last stays where it is.
+        if (document.head.lastElementChild !== existing)
+            document.head.append(existing);
         return;
     }
     const style = document.createElement('style');

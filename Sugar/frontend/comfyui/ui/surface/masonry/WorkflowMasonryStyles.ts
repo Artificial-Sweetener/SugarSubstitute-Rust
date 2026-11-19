@@ -30,13 +30,71 @@ import { packedMasonryRule } from './MasonryPacking.js';
  */
 export const MASONRY_MOUNTED_ATTRIBUTE = 'data-sc-masonry-mounted';
 
-/** State on `surface`'s graph container whether a masonry surface is mounted inside it. */
+/**
+ * Marks one element whose whole subtree a masonry hides and takes out of pointer input. Its value
+ * names the owner that set it.
+ *
+ * The attribute sits on the element that is hidden, never on the workspace container: a rule that
+ * hides "everything under the container's graph layer" has to be checked against every element
+ * in the container whenever the container's state changes, and the container holds every card.
+ */
+export const MASONRY_HIDES_ATTRIBUTE = 'data-sc-masonry-hides';
+/** Marks one element whose whole subtree takes no pointer input while a masonry is mounted. */
+export const MASONRY_STILLS_ATTRIBUTE = 'data-sc-masonry-stills';
+
+const MOUNTED_HIDES = '[data-testid="selection-toolbox"]';
+const MOUNTED_STILLS = '[aria-label="Canvas Toolbar"], .minimap-main-container';
+
+/** Set or clear `attribute` on `element` only when that changes it. */
+function mark(element: Element, attribute: string, value: string | null): void {
+  if (element.getAttribute(attribute) === value) return;
+  if (value === null) element.removeAttribute(attribute);
+  else element.setAttribute(attribute, value);
+}
+
+/** Mark the suppressed graph chrome in `scope`, or clear the marks this owner set. */
+function markChrome(scope: ParentNode, mounted: boolean): void {
+  for (const element of scope.querySelectorAll(MOUNTED_HIDES))
+    if (mounted || element.getAttribute(MASONRY_HIDES_ATTRIBUTE) === 'mounted')
+      mark(element, MASONRY_HIDES_ATTRIBUTE, mounted ? 'mounted' : null);
+  for (const element of scope.querySelectorAll(MOUNTED_STILLS))
+    mark(element, MASONRY_STILLS_ATTRIBUTE, mounted ? '' : null);
+}
+
+/** Watches each container with a mounted masonry for graph chrome the host mounts later. */
+const lateChrome = new WeakMap<HTMLElement, MutationObserver>();
+
+/**
+ * State on `surface`'s graph container whether a masonry surface is mounted inside it, and mark
+ * the graph chrome that is suppressed for as long as one is, including chrome the host mounts
+ * while it is.
+ */
 export function markMasonryMounted(surface: HTMLElement): void {
   const root = surface.closest<HTMLElement>('#graph-canvas-container');
   if (!root) return;
   const mounted = root.querySelector('.sugarcubes-workflow-masonry') !== null;
   if (mounted !== root.hasAttribute(MASONRY_MOUNTED_ATTRIBUTE))
     root.toggleAttribute(MASONRY_MOUNTED_ATTRIBUTE, mounted);
+  markChrome(root, mounted);
+  const watching = lateChrome.get(root);
+  if (!mounted) {
+    watching?.disconnect();
+    lateChrome.delete(root);
+    return;
+  }
+  const Observer = root.ownerDocument.defaultView?.MutationObserver;
+  if (watching || !Observer) return;
+  const observer = new Observer((records) => {
+    for (const record of records)
+      for (const node of record.addedNodes) {
+        if (!(node instanceof Element)) continue;
+        if (node.matches(MOUNTED_HIDES)) mark(node, MASONRY_HIDES_ATTRIBUTE, 'mounted');
+        if (node.matches(MOUNTED_STILLS)) mark(node, MASONRY_STILLS_ATTRIBUTE, '');
+        markChrome(node, true);
+      }
+  });
+  observer.observe(root, { childList: true, subtree: true });
+  lateChrome.set(root, observer);
 }
 
 /** Install layout structure independently of native node theme tokens. */
@@ -127,14 +185,11 @@ export function ensureWorkflowMasonryStyles(documentRef: Document): void {
     .sugarcubes-workflow-masonry__card:has([data-reka-popper-content-wrapper]) { z-index:10; }
     #graph-canvas-container[${MASONRY_MOUNTED_ATTRIBUTE}] > :has(> [data-testid="selection-toolbox"]),
     #graph-canvas-container[${MASONRY_MOUNTED_ATTRIBUTE}] [data-testid="selection-toolbox"],
-    #graph-canvas-container[${MASONRY_MOUNTED_ATTRIBUTE}] [data-testid="selection-toolbox"] * {
-      visibility:hidden !important; pointer-events:none !important;
-    }
     #graph-canvas-container[data-sugarcubes-masonry="true"] > #graph-canvas,
     #graph-canvas-container[data-sugarcubes-masonry="true"] > .ph-no-capture,
-    #graph-canvas-container[data-sugarcubes-masonry="true"] > .ph-no-capture *,
     #graph-canvas-container[data-sugarcubes-masonry="true"] > .isolate,
-    #graph-canvas-container[data-sugarcubes-masonry="true"] > .isolate * {
+    [${MASONRY_HIDES_ATTRIBUTE}],
+    [${MASONRY_HIDES_ATTRIBUTE}] * {
       visibility:hidden !important; pointer-events:none !important;
     }
     #graph-canvas-container[data-sugarcubes-masonry="true"] [aria-label="Canvas Toolbar"],
@@ -142,9 +197,9 @@ export function ensureWorkflowMasonryStyles(documentRef: Document): void {
       visibility:hidden !important;
     }
     #graph-canvas-container[${MASONRY_MOUNTED_ATTRIBUTE}] [aria-label="Canvas Toolbar"],
-    #graph-canvas-container[${MASONRY_MOUNTED_ATTRIBUTE}] [aria-label="Canvas Toolbar"] *,
     #graph-canvas-container[${MASONRY_MOUNTED_ATTRIBUTE}] .minimap-main-container,
-    #graph-canvas-container[${MASONRY_MOUNTED_ATTRIBUTE}] .minimap-main-container * {
+    [${MASONRY_STILLS_ATTRIBUTE}],
+    [${MASONRY_STILLS_ATTRIBUTE}] * {
       pointer-events:none !important;
     }
     .sugarcubes-workflow-masonry__empty { padding:32px; opacity:.7; }

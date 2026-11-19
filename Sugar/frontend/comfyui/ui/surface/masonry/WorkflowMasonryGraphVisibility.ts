@@ -15,11 +15,13 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Keep graph layers suppressed across workflow replacement and restore native interaction exactly. */
 import { workflowMasonryGraphLayers } from './WorkflowMasonryGraphGeometry.js';
+import { MASONRY_HIDES_ATTRIBUTE } from './WorkflowMasonryStyles.js';
 
 /** Own graph visibility independently from the lifetime of borrowed masonry cards. */
 export class WorkflowMasonryGraphVisibility {
   readonly #inert = new Map<HTMLElement, boolean>();
   readonly #hidden = new Set<HTMLElement>();
+  readonly #layers = new Set<HTMLElement>();
 
   /** Resolve the current allocation even before a destination masonry surface exists. */
   constructor(private readonly getContainer: () => HTMLElement | null) {}
@@ -30,6 +32,10 @@ export class WorkflowMasonryGraphVisibility {
     if (!hidden) {
       for (const element of this.#hidden) delete element.dataset.sugarcubesMasonry;
       this.#hidden.clear();
+      for (const layer of this.#layers)
+        if (layer.getAttribute(MASONRY_HIDES_ATTRIBUTE) === 'graph')
+          layer.removeAttribute(MASONRY_HIDES_ATTRIBUTE);
+      this.#layers.clear();
       return;
     }
     const container = this.getContainer();
@@ -39,6 +45,12 @@ export class WorkflowMasonryGraphVisibility {
       if (!element) continue;
       this.#hidden.add(element);
       if (element.dataset.sugarcubesMasonry !== 'true') element.dataset.sugarcubesMasonry = 'true';
+    }
+    // Each layer carries its own mark, so hiding what is inside it restyles that layer alone.
+    for (const layer of workflowMasonryGraphLayers(container)) {
+      this.#layers.add(layer);
+      if (layer.getAttribute(MASONRY_HIDES_ATTRIBUTE) !== 'graph')
+        layer.setAttribute(MASONRY_HIDES_ATTRIBUTE, 'graph');
     }
   }
 
