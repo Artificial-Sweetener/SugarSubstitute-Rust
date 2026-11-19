@@ -31,7 +31,9 @@ import {
   GenerationQueueDock,
 } from '../../../frontend/comfyui/ui/surface/frame/GenerationQueueDock.js';
 import {
-  MASONRY_MOUNTED_ATTRIBUTE,
+  MASONRY_HIDES_ATTRIBUTE,
+  MASONRY_STILLS_ATTRIBUTE,
+  ensureWorkflowMasonryStyles,
   markMasonryMounted,
 } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryStyles.js';
 
@@ -51,29 +53,55 @@ test('no rule asks the page root or the workspace container what it has', () => 
   expect(offenders).toEqual([]);
 });
 
-test('the workspace container states whether a masonry is mounted in it', () => {
+test('graph chrome is marked for as long as a masonry is mounted in its container', () => {
   const root = document.createElement('div');
   root.id = 'graph-canvas-container';
   const panel = document.createElement('div');
+  const toolbar = document.createElement('div');
+  toolbar.setAttribute('aria-label', 'Canvas Toolbar');
+  const toolbox = document.createElement('div');
+  toolbox.dataset.testid = 'selection-toolbox';
+  panel.append(toolbar, toolbox);
   root.append(panel);
   document.body.append(root);
+  const marks = (): [boolean, string | null] => [
+    toolbar.hasAttribute(MASONRY_STILLS_ATTRIBUTE),
+    toolbox.getAttribute(MASONRY_HIDES_ATTRIBUTE),
+  ];
   markMasonryMounted(panel);
-  expect(root.hasAttribute(MASONRY_MOUNTED_ATTRIBUTE)).toBe(false);
+  expect(marks()).toEqual([false, null]);
   const masonry = document.createElement('div');
   masonry.className = 'sugarcubes-workflow-masonry';
   panel.append(masonry);
   markMasonryMounted(panel);
-  expect(root.hasAttribute(MASONRY_MOUNTED_ATTRIBUTE)).toBe(true);
+  expect(marks()).toEqual([true, 'mounted']);
   // A second surface may overlap the first while one replaces the other.
   const next = masonry.cloneNode() as HTMLElement;
   panel.append(next);
   masonry.remove();
   markMasonryMounted(panel);
-  expect(root.hasAttribute(MASONRY_MOUNTED_ATTRIBUTE)).toBe(true);
+  expect(marks()).toEqual([true, 'mounted']);
   next.remove();
   markMasonryMounted(panel);
-  expect(root.hasAttribute(MASONRY_MOUNTED_ATTRIBUTE)).toBe(false);
+  expect(marks()).toEqual([false, null]);
+  // The container itself carries no state for a rule to reach down from.
+  expect(root.attributes.length).toBe(1);
   root.remove();
+});
+
+test('no masonry rule reaches from the workspace container to something inside it', () => {
+  ensureWorkflowMasonryStyles(document);
+  const css = document.getElementById('sugarcubes-workflow-masonry-styles')?.textContent ?? '';
+  const reaching = css
+    .split('}')
+    .flatMap((rule) => (rule.split('{')[0] ?? '').split(','))
+    .map((selector) => selector.trim())
+    .filter(
+      (selector) =>
+        /^#graph-canvas-container\[[^\]]*\]\s*\S/.test(selector) &&
+        !/\[aria-label="Canvas Toolbar"\]$|\.minimap-main-container$/.test(selector),
+    );
+  expect(reaching).toEqual([]);
 });
 
 test('the page root states whether the queue is docked, and forgets it with its owner', async () => {

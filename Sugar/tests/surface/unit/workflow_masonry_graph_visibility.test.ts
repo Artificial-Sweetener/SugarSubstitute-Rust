@@ -64,3 +64,40 @@ test('releases suppression on every retained allocation after host replacement',
   expect(first.dataset.sugarcubesMasonry).toBeUndefined();
   expect(second.dataset.sugarcubesMasonry).toBeUndefined();
 });
+
+test('holds input out of the layers without inert while borrowed cards return', () => {
+  const root = document.createElement('div');
+  root.id = 'graph-canvas-container';
+  const container = document.createElement('div');
+  const canvas = document.createElement('canvas');
+  canvas.id = 'graph-canvas';
+  canvas.inert = true;
+  const nodes = document.createElement('div');
+  nodes.className = 'isolate';
+  nodes.inert = false;
+  const button = document.createElement('button');
+  nodes.append(button);
+  root.append(canvas, nodes, container);
+  document.body.append(root);
+  const visibility = new WorkflowMasonryGraphVisibility(() => container);
+  visibility.setInert(true);
+  visibility.holdInput();
+  // A layer that was inert before the masonry stays inert; the other is held instead.
+  expect([canvas.inert, nodes.inert]).toEqual([true, false]);
+  expect(nodes.hasAttribute('data-sc-input-held')).toBe(true);
+  let clicks = 0;
+  button.addEventListener('click', () => (clicks += 1));
+  button.click();
+  expect(clicks).toBe(0);
+  visibility.setInert(false);
+  expect([canvas.inert, nodes.inert]).toEqual([true, false]);
+  expect(nodes.hasAttribute('data-sc-input-held')).toBe(false);
+  button.click();
+  expect(clicks).toBe(1);
+  // Entering again while held goes back to inert.
+  visibility.setInert(true);
+  visibility.holdInput();
+  visibility.setInert(true);
+  expect(nodes.inert).toBe(true);
+  expect(nodes.hasAttribute('data-sc-input-held')).toBe(false);
+});

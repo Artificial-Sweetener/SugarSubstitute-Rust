@@ -16,10 +16,12 @@
 /** Keep graph layers suppressed across workflow replacement and restore native interaction exactly. */
 import { workflowMasonryGraphLayers } from './WorkflowMasonryGraphGeometry.js';
 import { MASONRY_HIDES_ATTRIBUTE } from './WorkflowMasonryStyles.js';
+import { SurfaceInputHold } from '../motion/SurfaceInputHold.js';
 
 /** Own graph visibility independently from the lifetime of borrowed masonry cards. */
 export class WorkflowMasonryGraphVisibility {
   readonly #inert = new Map<HTMLElement, boolean>();
+  readonly #held = new Map<HTMLElement, SurfaceInputHold>();
   readonly #hidden = new Set<HTMLElement>();
   readonly #layers = new Set<HTMLElement>();
 
@@ -56,8 +58,11 @@ export class WorkflowMasonryGraphVisibility {
 
   /** Block native input during card travel while preserving each layer's prior inert state. */
   setInert(inert: boolean): void {
+    for (const hold of this.#held.values()) hold.release();
+    this.#held.clear();
     if (!inert) {
-      for (const [element, previous] of this.#inert) element.inert = previous;
+      for (const [element, previous] of this.#inert)
+        if (element.inert !== previous) element.inert = previous;
       this.#inert.clear();
       return;
     }
@@ -66,6 +71,22 @@ export class WorkflowMasonryGraphVisibility {
     for (const layer of workflowMasonryGraphLayers(container)) {
       if (!this.#inert.has(layer)) this.#inert.set(layer, layer.inert);
       if (!layer.inert) layer.inert = true;
+    }
+  }
+
+  /**
+   * Keep input out of the layers by a hold instead of `inert`, until `setInert` next runs.
+   *
+   * Called before borrowed cards return to a layer: `inert` reaches every descendant's style,
+   * so clearing it once the cards are back restyles every one of them.
+   */
+  holdInput(): void {
+    for (const [layer, previous] of this.#inert) {
+      if (previous || this.#held.has(layer)) continue;
+      if (layer.inert) layer.inert = false;
+      const hold = new SurfaceInputHold();
+      hold.hold(layer);
+      this.#held.set(layer, hold);
     }
   }
 }

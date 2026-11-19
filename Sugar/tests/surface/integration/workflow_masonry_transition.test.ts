@@ -37,10 +37,11 @@ test('fades the background in both directions without replacing native card layo
     fill: 'both',
   });
   expect(setup.surface.style.opacity).toBe('1');
-  expect(setup.surface.inert).toBe(true);
+  expect(setup.surface.hasAttribute('data-sc-input-held')).toBe(true);
+  expect(setup.surface.inert).toBeUndefined();
   setup.effects[0]?.finish();
   await entry;
-  expect(setup.surface.inert).toBeUndefined();
+  expect(setup.surface.hasAttribute('data-sc-input-held')).toBe(false);
   const exit = transition.run(setup.view, false, false);
   expect(setup.frames[1]).toEqual([{ opacity: 1 }, { opacity: 0 }]);
   expect(setup.backdrop.style.opacity).toBe('0');

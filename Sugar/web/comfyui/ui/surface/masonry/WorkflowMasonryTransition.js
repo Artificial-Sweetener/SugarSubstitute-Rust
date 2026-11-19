@@ -17,6 +17,7 @@
 import { surfaceMotion } from '../appearance/SurfaceMotionTokens.js';
 import { NativeGraphCardAssembly } from './NativeGraphCardAssembly.js';
 import { setSurfaceGeometryMoving } from '../motion/SurfaceGeometryMotion.js';
+import { SurfaceInputHold } from '../motion/SurfaceInputHold.js';
 import { rectanglesIntersect, } from './WorkflowMasonryGraphGeometry.js';
 /** Own all temporary effects and source suppression without retaining either presentation. */
 export class WorkflowMasonryTransition {
@@ -24,8 +25,8 @@ export class WorkflowMasonryTransition {
     #marked = new Set();
     #sources = new Set();
     #graphAssemblies = new Map();
+    #input = new SurfaceInputHold();
     #surface = null;
-    #surfaceInert = false;
     #generation = 0;
     /** Measure endpoints before writes and interpolate native width independently of graph zoom. */
     async run(view, entering, reducedMotion) {
@@ -131,8 +132,7 @@ export class WorkflowMasonryTransition {
             return;
         }
         this.#surface = view.surface;
-        this.#surfaceInert = view.surface.inert;
-        view.surface.inert = true;
+        this.#input.hold(view.surface);
         view.surface.dataset.scMasonryTransition = entering ? 'enter' : 'exit';
         const completions = [];
         try {
@@ -195,7 +195,7 @@ export class WorkflowMasonryTransition {
         if (this.#surface) {
             setSurfaceGeometryMoving(this.#surface, false);
             delete this.#surface.dataset.scMasonryTransition;
-            this.#surface.inert = this.#surfaceInert;
+            this.#input.release();
         }
         this.#surface = null;
     }

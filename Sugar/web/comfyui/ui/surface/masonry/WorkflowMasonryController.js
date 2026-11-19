@@ -21,6 +21,7 @@ import { WorkflowMasonryTransition } from './WorkflowMasonryTransition.js';
 import { WorkflowMasonryGraphReveal } from './WorkflowMasonryGraphReveal.js';
 import { WorkflowMasonryGraphVisibility } from './WorkflowMasonryGraphVisibility.js';
 import { markMasonryMounted } from './WorkflowMasonryStyles.js';
+import { prepareNativePresentation } from '../NativePresentationReady.js';
 import { SurfacePresentationBoundary } from '../motion/SurfacePresentationBoundary.js';
 import { measureWorkflowMasonryGraph, workflowMasonryGraphCards, } from './WorkflowMasonryGraphGeometry.js';
 /** Keep layout choice transient and restore graph presentation on every failure path. */
@@ -117,6 +118,7 @@ export class WorkflowMasonryController {
                 if (generation !== this.#generation)
                     return;
                 const renderer = this.#renderer;
+                this.#graphVisibility.holdInput();
                 this.#disposePresentation();
                 renderer?.requestSlotLayoutSync?.();
                 if (this.#links) {
@@ -172,6 +174,9 @@ export class WorkflowMasonryController {
                 const sources = this.#view.prepareSources();
                 container.append(this.#view.backdrop, this.#view.element);
                 markMasonryMounted(container);
+                // Appearance owners mark the surface while it is empty; marked after the cards arrive,
+                // every card is restyled again.
+                prepareNativePresentation(this.#view.element);
                 this.#options.onSurfaceMounting?.(this.#view, animate);
                 this.#graphVisibility.setInert(true);
                 this.#mounting = this.#view.mountCards(renderer, sources);

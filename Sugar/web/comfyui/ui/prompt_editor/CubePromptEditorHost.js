@@ -4,6 +4,7 @@ import { preparePromptLoraCatalog, promptLoraModel, promptLoraName } from './Pro
 import { feedsPromptControl, promptUpstreamLoras } from './PromptControlSupport.js';
 import { promptModelCompletions } from './PromptModelCompletions.js';
 import { registerPromptEditorSurfaceOwner } from './PromptEditorSurface.js';
+import { SURFACE_INPUT_HELD_ATTRIBUTE } from '../surface/motion/SurfaceInputHold.js';
 import { setCubePromptWidgetHeight, clearCubePromptWidgetHeight, } from '../surface/CubePromptWidgetHeightStore.js';
 /** Share native documents while renderer mounts and workflow ownership remain explicit. */
 export class CubePromptEditorHost {
@@ -334,9 +335,9 @@ function belongsToGraph(node) {
     const nodes = graph._nodes ?? graph.nodes;
     return !Array.isArray(nodes) || nodes.includes(node);
 }
-/** Keep late detached or inert graph preparations from taking a connected interactive editor. */
+/** Keep late detached, inert or input-held preparations from taking a connected interactive editor. */
 function availablePromptSurface(surface) {
     return (surface !== null &&
         surface.textarea.isConnected &&
-        !surface.textarea.parentElement?.closest('[inert],[hidden]'));
+        !surface.textarea.parentElement?.closest(`[inert],[hidden],[${SURFACE_INPUT_HELD_ATTRIBUTE}]`));
 }

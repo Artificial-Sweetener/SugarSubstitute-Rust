@@ -17,6 +17,7 @@
 import { surfaceMotion } from '../appearance/SurfaceMotionTokens.js';
 import { NativeGraphCardAssembly } from './NativeGraphCardAssembly.js';
 import { setSurfaceGeometryMoving } from '../motion/SurfaceGeometryMotion.js';
+import { SurfaceInputHold } from '../motion/SurfaceInputHold.js';
 import type { WorkflowMasonryGraphReveal } from './WorkflowMasonryGraphReveal.js';
 import {
   rectanglesIntersect,
@@ -48,8 +49,8 @@ export class WorkflowMasonryTransition {
   readonly #marked = new Set<HTMLElement>();
   readonly #sources = new Set<HTMLElement>();
   readonly #graphAssemblies = new Map<HTMLElement, NativeGraphCardAssembly>();
+  readonly #input = new SurfaceInputHold();
   #surface: HTMLElement | null = null;
-  #surfaceInert = false;
   #generation = 0;
 
   /** Measure endpoints before writes and interpolate native width independently of graph zoom. */
@@ -160,8 +161,7 @@ export class WorkflowMasonryTransition {
       return;
     }
     this.#surface = view.surface;
-    this.#surfaceInert = view.surface.inert;
-    view.surface.inert = true;
+    this.#input.hold(view.surface);
     view.surface.dataset.scMasonryTransition = entering ? 'enter' : 'exit';
     const completions: Array<Promise<PromiseSettledResult<Animation>[]>> = [];
     try {
@@ -218,7 +218,7 @@ export class WorkflowMasonryTransition {
     if (this.#surface) {
       setSurfaceGeometryMoving(this.#surface, false);
       delete this.#surface.dataset.scMasonryTransition;
-      this.#surface.inert = this.#surfaceInert;
+      this.#input.release();
     }
     this.#surface = null;
   }

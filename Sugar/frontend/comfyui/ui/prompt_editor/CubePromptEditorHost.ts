@@ -31,6 +31,7 @@ import type { PromptSceneQueue, SugarPromptEditor } from './runtime/SugarPromptR
 import type { LoraResourceAdapter } from '../../../sugarprompt/services/src/index.js';
 import type { WildcardCatalogSource } from '../wildcards/application/WildcardLibrary.js';
 import type { AppearanceSource } from '../surface/appearance/AppearanceState.js';
+import { SURFACE_INPUT_HELD_ATTRIBUTE } from '../surface/motion/SurfaceInputHold.js';
 import {
   setCubePromptWidgetHeight,
   clearCubePromptWidgetHeight,
@@ -419,11 +420,11 @@ function belongsToGraph(node: ComfyNode): boolean {
   return !Array.isArray(nodes) || nodes.includes(node);
 }
 
-/** Keep late detached or inert graph preparations from taking a connected interactive editor. */
+/** Keep late detached, inert or input-held preparations from taking a connected interactive editor. */
 function availablePromptSurface(surface: PromptEditorSurface | null): boolean {
   return (
     surface !== null &&
     surface.textarea.isConnected &&
-    !surface.textarea.parentElement?.closest('[inert],[hidden]')
+    !surface.textarea.parentElement?.closest(`[inert],[hidden],[${SURFACE_INPUT_HELD_ATTRIBUTE}]`)
   );
 }

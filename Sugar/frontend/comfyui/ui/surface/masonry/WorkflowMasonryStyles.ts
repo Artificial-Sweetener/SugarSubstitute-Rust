@@ -23,21 +23,12 @@ import {
 import { packedMasonryRule } from './MasonryPacking.js';
 
 /**
- * Marks the graph container while a masonry surface is mounted inside it.
- *
- * The rules that quieten ComfyUI's own canvas chrome under a masonry read this attribute. A rule
- * that asked the container whether it "has" a masonry instead made the browser restyle the whole
- * workspace after every change anywhere inside it.
- */
-export const MASONRY_MOUNTED_ATTRIBUTE = 'data-sc-masonry-mounted';
-
-/**
  * Marks one element whose whole subtree a masonry hides and takes out of pointer input. Its value
  * names the owner that set it.
  *
  * The attribute sits on the element that is hidden, never on the workspace container: a rule that
- * hides "everything under the container's graph layer" has to be checked against every element
- * in the container whenever the container's state changes, and the container holds every card.
+ * reaches from the container's state to something inside it has to be checked against every
+ * element in the container whenever that state changes, and the container holds every card.
  */
 export const MASONRY_HIDES_ATTRIBUTE = 'data-sc-masonry-hides';
 /** Marks one element whose whole subtree takes no pointer input while a masonry is mounted. */
@@ -79,16 +70,13 @@ function markHidden(toolbox: Element): void {
 const lateChrome = new WeakMap<HTMLElement, HostSurfaceObserver>();
 
 /**
- * State on `surface`'s graph container whether a masonry surface is mounted inside it, and mark
- * the graph chrome that is suppressed for as long as one is, including chrome the host mounts
- * while it is.
+ * Mark the graph chrome in `surface`'s graph container that is suppressed for as long as a
+ * masonry surface is mounted inside it, including chrome the host mounts while one is.
  */
 export function markMasonryMounted(surface: HTMLElement): void {
   const root = surface.closest<HTMLElement>('#graph-canvas-container');
   if (!root) return;
   const mounted = root.querySelector('.sugarcubes-workflow-masonry') !== null;
-  if (mounted !== root.hasAttribute(MASONRY_MOUNTED_ATTRIBUTE))
-    root.toggleAttribute(MASONRY_MOUNTED_ATTRIBUTE, mounted);
   markChrome(root, mounted);
   const watching = lateChrome.get(root);
   if (!mounted) {
@@ -204,10 +192,6 @@ export function ensureWorkflowMasonryStyles(documentRef: Document): void {
     .sugarcubes-workflow-masonry [data-sc-surface-moving] * { pointer-events:none !important; }
     .sugarcubes-workflow-masonry__card .lg-node-content { content-visibility:visible; }
     .sugarcubes-workflow-masonry__card:has([data-reka-popper-content-wrapper]) { z-index:10; }
-    #graph-canvas-container[${MASONRY_MOUNTED_ATTRIBUTE}] [data-testid="selection-toolbox"],
-    #graph-canvas-container[data-sugarcubes-masonry="true"] > #graph-canvas,
-    #graph-canvas-container[data-sugarcubes-masonry="true"] > .ph-no-capture,
-    #graph-canvas-container[data-sugarcubes-masonry="true"] > .isolate,
     [${MASONRY_HIDES_ATTRIBUTE}],
     [${MASONRY_HIDES_ATTRIBUTE}] * {
       visibility:hidden !important; pointer-events:none !important;
@@ -216,8 +200,6 @@ export function ensureWorkflowMasonryStyles(documentRef: Document): void {
     #graph-canvas-container[data-sugarcubes-masonry="true"] .minimap-main-container {
       visibility:hidden !important;
     }
-    #graph-canvas-container[${MASONRY_MOUNTED_ATTRIBUTE}] [aria-label="Canvas Toolbar"],
-    #graph-canvas-container[${MASONRY_MOUNTED_ATTRIBUTE}] .minimap-main-container,
     [${MASONRY_STILLS_ATTRIBUTE}],
     [${MASONRY_STILLS_ATTRIBUTE}] * {
       pointer-events:none !important;
