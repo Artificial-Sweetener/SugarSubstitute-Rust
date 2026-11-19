@@ -1,3 +1,9 @@
+## [0.3.2](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.3.1...substitute-v0.3.2) (2026-11-19)
+
+### Bug Fixes
+
+* **startup:** accept a SugarCubes folder that is a link to a checkout ([5b32316](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/5b32316ff29dfba6aa359d8428e2d4ab7707da32))
+
 ## [0.3.1](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.3.0...substitute-v0.3.1) (2026-11-18)
 
 ### Performance Improvements
