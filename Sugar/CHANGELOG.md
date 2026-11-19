@@ -1,3 +1,9 @@
+## [0.32.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.31.0...sugarcubes-v0.32.0) (2026-11-19)
+
+### Features
+
+* **updates:** open the update report from the Updates settings page ([18f5f0f](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/18f5f0f9cbdc8b92f9515c99169fdad24ddc9831))
+
 ## [0.31.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.30.0...sugarcubes-v0.31.0) (2026-11-19)
 
 ### Features
