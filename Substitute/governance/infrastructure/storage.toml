@@ -1564,7 +1564,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Dup
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/installed_frontend/native.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:a2caaac690d8fa8e5c4b7d820337aa32036ebe943a859bdc243baa7119251688"
+source_sha256 = "sha256:0a032756302c7ba08bdfc5a87aeeb0de8f9aaffcd3cc19702f9d6a4ee0dff3c3"
 capabilities = ["FindFirstFileW", "FindNextFileW", "GetFileSizeEx", "ReadFile", "windows::Win32::Storage::FileSystem::*"]
 disposition = "boundary"
 rationale = "Original native object identity, admitted buffers, sharing and retirement contract for: Pin local sources for complete bounded hashing, then checked-close inspection custody. This source retains its explicit native security boundary and qualification."

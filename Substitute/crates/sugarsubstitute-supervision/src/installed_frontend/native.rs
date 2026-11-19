@@ -44,7 +44,10 @@ impl SourcePort for SystemPort {
             };
             let package = pin_directory(&input.package, retained, context)?;
             let cube = pin_directory(&input.cube, retained, context)?;
-            if cube.file_name().and_then(|name| name.to_str()) != Some("SugarCubes") {
+            // ComfyUI serves an extension under the name of its `custom_nodes` entry, so the
+            // selected entry carries the name. A development entry is a junction to a checkout
+            // whose own folder is named otherwise; its files are still pinned at their target.
+            if input.cube.file_name().and_then(|name| name.to_str()) != Some("SugarCubes") {
                 return Err(FrontendSourceError::invalid("cube_extension_directory_name"));
             }
             progress.phase(Phase::BackendScript, context.now(), retained.handles.len());
