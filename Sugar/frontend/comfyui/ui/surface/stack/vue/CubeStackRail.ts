@@ -16,7 +16,7 @@
 /** Present a stable Vue navigation rail with canonical drag constraints and keyboard equivalents. */
 import { defineComponent, h, ref, computed, watch, type PropType } from 'vue';
 import { buttonTag } from '../../appearance/ControlFactory.js';
-import { cubeStackRowGap, cubeStackRowStride } from '../CubeStackMetrics.js';
+import { CUBE_STACK_ROW_HEIGHT, cubeStackRowGap, cubeStackRowStride } from '../CubeStackMetrics.js';
 import type {
   CubeStackNavigationRow,
   CubeStackViewActions,
@@ -24,7 +24,8 @@ import type {
 } from '../CubeStackView.js';
 import { CubeStackRow } from './CubeStackRow.js';
 import { useCubeStackFocus } from './CubeStackFocus.js';
-import { useCubeStackPointerDrag } from './CubeStackPointerDrag.js';
+import { strideProjection } from '../../../interaction/reorder/ReorderSlots.js';
+import { useReorderGesture } from '../../../interaction/reorder/vue/useReorderGesture.js';
 import { CubeStackSelectionIndicator } from './CubeStackSelectionIndicator.js';
 
 /** Animate temporary row order while keeping actual graph mutation at the application boundary. */
@@ -42,20 +43,68 @@ export const CubeStackRail = defineComponent({
     const submittedOrder = ref<readonly string[] | null>(null);
     useCubeStackFocus(root);
     const rowStride = computed(() => cubeStackRowStride(props.state.packed));
-    const gesture = useCubeStackPointerDrag({
+    const busy = (): boolean => props.state.pending || awaiting.value;
+    /** How far beside the rail the pointer may stray and still move or drop a Cube. */
+    const REACH = 24;
+    const beside = (x: number): boolean => {
+      const bounds = root.value?.getBoundingClientRect();
+      return !!bounds && x >= bounds.left - REACH && x <= bounds.right + REACH;
+    };
+    const gesture = useReorderGesture({
       root,
-      rows: () => props.state.rows,
-      rowStride: () => rowStride.value,
-      pending: () => props.state.pending || awaiting.value,
-      preview: props.actions.previewOrder,
-      announce: (message) => {
-        announcement.value = message;
+      threshold: 6,
+      // A press made while an earlier drop is still being applied waits for it.
+      admission: (id) =>
+        busy()
+          ? 'defer'
+          : props.state.rows.find((row) => row.id === id)?.reorderable
+            ? 'ready'
+            : 'refuse',
+      keys: () => props.state.rows.map((row) => row.id),
+      project: (card, current) => {
+        const list = root.value?.querySelector<HTMLElement>('.sc-cube-stack__rows');
+        if (!list) return null;
+        const movable = new Set(
+          props.state.rows.filter((row) => row.reorderable).map((row) => row.id),
+        );
+        return strideProjection({
+          current,
+          movable: (id) => movable.has(id),
+          key: card.key,
+          center: card.y + CUBE_STACK_ROW_HEIGHT / 2,
+          listStart: list.getBoundingClientRect().top,
+          stride: rowStride.value,
+          size: CUBE_STACK_ROW_HEIGHT,
+        });
       },
+      projects: (x) => beside(x),
+      accepts: (x, y) => {
+        const viewport = root.value?.parentElement?.getBoundingClientRect();
+        return !!viewport && beside(x) && y >= viewport.top && y <= viewport.bottom;
+      },
+      scroll: {
+        viewport: () => root.value?.parentElement ?? null,
+        edge: 32,
+        step: 8,
+        lateral: REACH,
+      },
+      lifted: (id) => {
+        const label = props.state.rows.find((row) => row.id === id)?.label ?? '';
+        announcement.value = `Moving ${label}. Drop at any Cube position.`;
+      },
+      preview: props.actions.previewOrder,
       commit: (id, order) => {
         submittedOrder.value = order;
         void execute(() => props.actions.reorder(id, order), 'Cube moved.');
       },
+      cancelled: (wasLifted) => {
+        if (wasLifted) announcement.value = 'Move canceled.';
+      },
     });
+    /** The row in the air, as the accepted state describes it. */
+    const liftedRow = computed(
+      () => props.state.rows.find((row) => row.id === gesture.card.value?.key) ?? null,
+    );
     watch(
       () => props.interactive,
       (interactive) => {
@@ -77,7 +126,7 @@ export const CubeStackRail = defineComponent({
     watch(
       () => props.state.rows.map((row) => row.id).join('|'),
       () => {
-        if (!awaiting.value && gesture.lifted.value) gesture.clear();
+        if (!awaiting.value && gesture.card.value) gesture.clear();
       },
     );
     watch(
@@ -154,10 +203,8 @@ export const CubeStackRail = defineComponent({
           'data-kind': 'rail',
           'data-compact': props.state.compact || undefined,
           'data-capture-wheel': 'true',
-          'data-pointer-dragging': gesture.lifted.value ? '' : undefined,
-          onPointerdownCapture: gesture.beginPointerInteraction,
-          onPointermove: gesture.move,
-          onPointerup: gesture.finish,
+          'data-pointer-dragging': gesture.card.value ? '' : undefined,
+          onPointerdownCapture: gesture.beginInteraction,
           onPointercancel: gesture.cancel,
           onLostpointercapture: gesture.cancel,
           onClickCapture: gesture.click,
@@ -202,13 +249,19 @@ export const CubeStackRail = defineComponent({
                   draggable: false,
                   'data-reorderable':
                     (row.reorderable && !props.state.pending && props.interactive) || undefined,
-                  'data-dragging': gesture.lifted.value?.row.id === row.id || undefined,
+                  'data-dragging': gesture.card.value?.key === row.id || undefined,
                   onPointerdown: (event: PointerEvent) => {
-                    if (props.interactive) gesture.start(event, row);
+                    // The remove button is pressed, never dragged.
+                    const pressed = event.target;
+                    if (
+                      props.interactive &&
+                      !(pressed instanceof Element && pressed.closest('.sc-cube-stack-row__remove'))
+                    )
+                      gesture.press(event, row.id);
                   },
                   onKeydown: (event: KeyboardEvent) => keyboard(event, row),
                   activate: () => {
-                    if (!gesture.lifted.value) props.actions.navigate(row.id);
+                    if (!gesture.card.value) props.actions.navigate(row.id);
                   },
                   remove: () => props.actions.remove(row.id),
                   contextMenu: (event: MouseEvent) => props.actions.contextMenu(row.id, event),
@@ -216,7 +269,7 @@ export const CubeStackRail = defineComponent({
               ),
             ],
           ),
-          gesture.lifted.value
+          gesture.card.value && liftedRow.value
             ? h(
                 'div',
                 {
@@ -224,16 +277,16 @@ export const CubeStackRail = defineComponent({
                   'aria-hidden': 'true',
                   inert: true,
                   style: {
-                    width: `${String(gesture.lifted.value.width)}px`,
-                    transform: `translate3d(${String(gesture.lifted.value.x)}px,${String(gesture.lifted.value.y)}px,0)`,
+                    width: `${String(gesture.card.value.width)}px`,
+                    transform: `translate3d(${String(gesture.card.value.x)}px,${String(gesture.card.value.y)}px,0)`,
                   },
                 },
                 [
                   h(CubeStackRow, {
-                    row: gesture.lifted.value.row,
+                    row: liftedRow.value,
                     compact: props.state.compact,
                     style: {
-                      transformOrigin: `${String(gesture.lifted.value.grabX)}px ${String(gesture.lifted.value.grabY)}px`,
+                      transformOrigin: `${String(gesture.card.value.grabX)}px ${String(gesture.card.value.grabY)}px`,
                     },
                     activate: () => undefined,
                     remove: () => undefined,

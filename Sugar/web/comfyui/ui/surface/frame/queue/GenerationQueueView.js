@@ -14,6 +14,8 @@ export class GenerationQueueView {
     #rows;
     #mounted = new Map();
     #shown = new Map();
+    #state = null;
+    #waitingPreview = null;
     constructor(document, surface, actions) {
         this.document = document;
         this.surface = surface;
@@ -49,8 +51,25 @@ export class GenerationQueueView {
         this.element.append(this.#empty, this.#rows);
         this.update({ items: [], pending: 0, summary: '', narrowed: false, details: new Map() });
     }
+    /** The scrolling list, for the owner of dragging within it. */
+    get rows() {
+        return this.#rows;
+    }
+    /** The waiting jobs as shown, top to bottom. */
+    waiting() {
+        return [...this.#shown.values()]
+            .filter((row) => row.role === 'waiting')
+            .map((row) => row.jobId);
+    }
+    /** Show the waiting jobs in `order` while one is being dragged; null shows the accepted order. */
+    previewWaiting(order) {
+        this.#waitingPreview = order;
+        if (this.#state)
+            this.update(this.#state);
+    }
     /** Show the queue as it now stands, keeping each job's row in place across updates. */
     update(state) {
+        this.#state = state;
         this.#title.textContent =
             this.surface === 'panel'
                 ? `Generation Queue :: ${String(state.pending)} Pending Jobs`
@@ -65,7 +84,7 @@ export class GenerationQueueView {
         const kept = new Set();
         const order = [];
         this.#shown.clear();
-        for (const item of state.items) {
+        for (const item of this.#ordered(state.items)) {
             if (item.kind === 'caption') {
                 const caption = this.#make('div', 'sc-generation-queue-caption');
                 caption.textContent = item.text;
@@ -91,6 +110,18 @@ export class GenerationQueueView {
             if (this.#rows.children[index] !== element)
                 this.#rows.insertBefore(element, this.#rows.children[index] ?? null);
         });
+    }
+    /** Put the waiting rows in the previewed order; everything else keeps its place. */
+    #ordered(items) {
+        const preview = this.#waitingPreview;
+        if (!preview)
+            return items;
+        const waiting = items.filter((item) => item.kind === 'row' && item.row.role === 'waiting');
+        const place = (item) => item.kind === 'row' ? preview.indexOf(item.row.jobId) : -1;
+        // A job the preview does not name, queued since the drag began, stays ahead of the others.
+        const sorted = [...waiting].sort((left, right) => place(left) - place(right));
+        let next = 0;
+        return items.map((item) => item.kind === 'row' && item.row.role === 'waiting' ? (sorted[next++] ?? item) : item);
     }
     /** Release the view's listeners and leave the page. */
     dispose() {

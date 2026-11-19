@@ -29,6 +29,19 @@ sources = ["frontend/comfyui/ui/search/**", "web/comfyui/ui/search/**", "fronten
 proofs = ["unit", "integration"]
 
 [[area]]
+name = "interaction"
+sources = ["frontend/comfyui/ui/interaction/**", "web/comfyui/ui/interaction/**"]
+proofs = ["unit"]
+
+[[boundary]]
+name = "reorder_gesture"
+area = "interaction"
+
+[[subscription]]
+boundary = "reorder_gesture"
+groups = ["surface/unit", "surface/integration", "browser/integration"]
+
+[[area]]
 name = "relations"
 sources = ["frontend/comfyui/ui/relations/**", "web/comfyui/ui/relations/**"]
 proofs = ["unit", "integration"]

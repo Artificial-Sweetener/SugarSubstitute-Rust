@@ -299,6 +299,8 @@ async function main(): Promise<void> {
     [
       'surface/stack/vue',
       'picker/vue',
+      // The reorder gesture's Vue adapter is used by the stack and the cart, in their runtime.
+      'interaction/reorder/vue',
       'output_canvas/presentation/vue',
       'canvas_editing/presentation',
     ],

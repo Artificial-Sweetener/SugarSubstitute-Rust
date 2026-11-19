@@ -22,6 +22,10 @@
 export const GENERATION_QUEUE_FLYOUT_WIDTH = 360;
 /** The fly-out's greatest height; a longer list scrolls inside it. */
 export const GENERATION_QUEUE_FLYOUT_MAX_HEIGHT = 420;
+/** One row's height: the 52 px thumbnail with 8 px above and below it. */
+export const GENERATION_QUEUE_ROW_HEIGHT = 68;
+/** The space between two rows. */
+export const GENERATION_QUEUE_ROW_GAP = 6;
 /** The callout arrow's height above the fly-out. */
 export const GENERATION_QUEUE_ARROW_HEIGHT = 7;
 /** Half the width of the callout arrow's base. */
@@ -93,6 +97,15 @@ export const generationQueueViewCss = `
   ${ROW}:is([data-role='active'],[data-role='waiting']:hover)::after { opacity:.098; }
   ${ROW}[data-role='waiting']:active::after { opacity:.2; }
   @media (prefers-reduced-motion:reduce) { ${ROW}::after { transition:none; } }
+  /* A waiting job is picked up by hand; the row it leaves marks where it will land. */
+  ${ROW}[data-role='waiting'] { cursor:grab; touch-action:none; user-select:none; }
+  .sc-generation-queue-rows[data-reordering], .sc-generation-queue-rows[data-reordering] ${ROW} { cursor:grabbing; }
+  ${ROW}[data-dragging] { border:1px dashed rgba(0,159,170,.59); background:rgba(0,159,170,.11); }
+  ${ROW}[data-dragging] > * { visibility:hidden; }
+  ${ROW}[data-dragging]::after { opacity:0; }
+  ${ROW}.sc-generation-queue-lifted { position:fixed; z-index:10; margin:0; pointer-events:none; opacity:.96;
+    background:var(--sc-surface-secondary,#23272b); border-color:var(--sc-gq-row-border-active);
+    box-shadow:0 8px 18px rgba(0,0,0,.45); }
   .sc-generation-queue-thumbnail { box-sizing:border-box; flex:0 0 52px; width:52px; height:52px; overflow:hidden; border:1px solid var(--sc-gq-thumb-border);
     border-radius:5px; background:var(--sc-gq-thumb); }
   .sc-generation-queue-thumbnail > img { display:block; width:100%; height:100%; object-fit:cover; }

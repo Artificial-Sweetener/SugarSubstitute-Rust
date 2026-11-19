@@ -87,6 +87,23 @@ soft_lines = 350
 hard_lines = 500
 
 [[dependency]]
+name = "TYPESCRIPT_REORDER_GESTURE"
+paths = ["frontend/comfyui/ui/interaction/reorder/*.ts"]
+forbidden_typescript_paths = [
+  "node_modules/vue",
+  "frontend/comfyui/ui/interaction/reorder/vue",
+  "frontend/comfyui/ui/surface",
+  "frontend/comfyui/ui/picker",
+  "frontend/comfyui/ui/browser",
+  "frontend/comfyui/ui/menus",
+  "frontend/comfyui/ui/dialogs",
+  "frontend/comfyui/ui/workflow",
+  "frontend/comfyui/ui/execution",
+  "types/comfyui",
+  "/scripts",
+]
+
+[[dependency]]
 name = "TYPESCRIPT_WORKFLOW_DOMAIN"
 paths = ["frontend/comfyui/ui/workflow/domain/*.ts"]
 forbidden_typescript_paths = [

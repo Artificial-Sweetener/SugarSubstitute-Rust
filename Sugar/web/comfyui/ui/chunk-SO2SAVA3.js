@@ -1,11 +1,17 @@
 import {
-  CUBE_STACK_ROW_HEIGHT,
-  cubeStackRowStride
-} from "./chunk-D6BK5OR7.js";
-import {
   defineComponent,
   h
 } from "./chunk-6PAJ5Y37.js";
+
+// frontend/comfyui/ui/surface/stack/CubeStackMetrics.ts
+var CUBE_STACK_ROW_HEIGHT = 46;
+var CUBE_STACK_ROW_GAP = 4;
+function cubeStackRowGap(packed) {
+  return packed ? 0 : CUBE_STACK_ROW_GAP;
+}
+function cubeStackRowStride(packed) {
+  return CUBE_STACK_ROW_HEIGHT + cubeStackRowGap(packed);
+}
 
 // frontend/comfyui/ui/surface/stack/vue/CubeStackSelectionIndicator.ts
 var CubeStackSelectionIndicator = defineComponent({
@@ -27,5 +33,8 @@ var CubeStackSelectionIndicator = defineComponent({
 });
 
 export {
+  CUBE_STACK_ROW_HEIGHT,
+  cubeStackRowGap,
+  cubeStackRowStride,
   CubeStackSelectionIndicator
 };

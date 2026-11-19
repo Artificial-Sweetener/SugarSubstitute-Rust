@@ -20,8 +20,10 @@ import { isRecord } from '../../../types/common.js';
 import { applyOwnedTheme } from '../../appearance/ThemeService.js';
 import { ComfyQueueActions } from './ComfyQueueActions.js';
 import { ComfyQueueJobSource, } from './ComfyQueueJobSource.js';
-import { DEFAULT_QUEUE_VIEW, hasFailedJobs, pendingJobCount, queueItems, queueSummary, } from './GenerationQueueRows.js';
+import { DEFAULT_QUEUE_VIEW, pendingJobCount, queueItems, queueSummary, } from './GenerationQueueRows.js';
 import { GenerationQueueFlyout } from './GenerationQueueFlyout.js';
+import { GenerationQueueMenus } from './GenerationQueueMenus.js';
+import { GenerationQueueReorder } from './GenerationQueueReorder.js';
 import { GenerationQueueView } from './GenerationQueueView.js';
 import { generationQueueViewCss } from './GenerationQueueViewStyles.js';
 /** ComfyUI's queue button, which the frame presents as the generation queue's button. */
@@ -43,6 +45,9 @@ export class GenerationQueueController {
     #flyoutView;
     #panelView;
     #flyout;
+    #menus;
+    #reorders;
+    #reordering = false;
     #dock;
     #style;
     #stop;
@@ -58,13 +63,27 @@ export class GenerationQueueController {
         this.#source = new ComfyQueueJobSource(options.api, options.report, (id) => this.#nodeName(id));
         this.#actions = new ComfyQueueActions(options.api, options.app, () => void this.#source.refresh());
         this.#menu = new ContextMenu(document);
+        this.#menus = new GenerationQueueMenus({
+            document,
+            app: options.app,
+            menu: this.#menu,
+            actions: this.#actions,
+            jobs: () => this.#source.snapshot.jobs,
+            view: () => this.#view,
+            choose: (change) => this.#choose(change),
+            useSeeds: options.useSeeds,
+            confirm: options.confirm,
+            notify: options.notify,
+            report: options.report,
+            run: (failure, action) => this.#run(failure, action),
+        });
         const requests = {
             act: (row) => this.#run(row.action === 'cancel' ? 'Job not cancelled' : 'Job not removed', () => row.action === 'cancel'
                 ? this.#actions.cancel(row.jobId)
                 : this.#actions.remove(row.jobId)),
-            open: (row) => this.#openResult(row),
-            menu: (row, x, y) => this.#rowMenu(row, x, y),
-            more: (anchor) => this.#moreMenu(anchor),
+            open: (row) => this.#menus.openResult(row),
+            menu: (row, x, y) => this.#menus.row(row, x, y),
+            more: (anchor) => this.#menus.more(anchor),
         };
         this.#flyoutView = new GenerationQueueView(document, 'flyout', requests);
         this.#panelView = new GenerationQueueView(document, 'panel', {
@@ -73,6 +92,14 @@ export class GenerationQueueController {
             search: (text) => this.#choose({ search: text }),
         });
         this.#flyout = new GenerationQueueFlyout(this.#flyoutView.element);
+        this.#reorders = [this.#flyoutView, this.#panelView].map((view) => new GenerationQueueReorder({
+            root: view.element,
+            rows: view.rows,
+            waiting: () => view.waiting(),
+            busy: () => this.#reordering,
+            preview: (order) => view.previewWaiting(order),
+            commit: (order) => this.#reorder(view, order),
+        }));
         document.addEventListener('click', this.#onButton, true);
         document.addEventListener('contextmenu', this.#onButtonMenu, true);
         this.#dock = new HostSurfaceObserver(document.body, DOCK, () => this.#mountPanel());
@@ -93,6 +120,8 @@ export class GenerationQueueController {
         this.#dock.disconnect();
         this.options.document.removeEventListener('click', this.#onButton, true);
         this.options.document.removeEventListener('contextmenu', this.#onButtonMenu, true);
+        for (const reorder of this.#reorders)
+            reorder.dispose();
         this.#flyout.hide();
         this.#flyoutView.dispose();
         this.#panelView.dispose();
@@ -122,7 +151,7 @@ export class GenerationQueueController {
             label: 'Generation queue',
             anchor: { kind: 'below', bounds: button.getBoundingClientRect() },
             trigger: button,
-            entries: [this.#panelEntry(), { label: '', separator: true }, this.#clearEntry()],
+            entries: [this.#menus.panelEntry(), { label: '', separator: true }, this.#menus.clearEntry()],
         });
     };
     #buttonOf(event) {
@@ -178,6 +207,9 @@ export class GenerationQueueController {
                 narrowed,
                 details,
             });
+        // A job that started or left while it was being dragged is no longer the person's to move.
+        for (const reorder of this.#reorders)
+            reorder.reconcile();
     }
     /** Read a node's title from the graph on the page, which is the one that was queued. */
     #nodeName(id) {
@@ -193,201 +225,31 @@ export class GenerationQueueController {
         const title = isRecord(node) ? (node.title ?? node.type) : null;
         return typeof title === 'string' && title.trim() ? title.trim() : null;
     }
+    /**
+     * Run the waiting jobs in the order they were dropped into. The list shows the newest job on
+     * top and the next to run at the bottom, so ComfyUI is given the order from the bottom up. The
+     * dropped order stays on screen until ComfyUI's own list has been read again.
+     */
+    #reorder(view, order) {
+        this.#reordering = true;
+        view.previewWaiting(order);
+        void this.#actions
+            .reorder([...order].reverse())
+            .then(() => this.#source.refresh())
+            .catch((error) => {
+            this.options.report(error);
+            this.options.notify('error', 'Queue not reordered', error instanceof Error ? error.message : String(error));
+        })
+            .finally(() => {
+            this.#reordering = false;
+            view.previewWaiting(null);
+            for (const reorder of this.#reorders)
+                reorder.resume();
+        });
+    }
     #choose(change) {
         this.#view = { ...this.#view, ...change };
         this.#render();
-    }
-    /** Everything ComfyUI's queue offers beyond its rows, in one menu. */
-    #moreMenu(anchor) {
-        const jobs = this.#source.snapshot.jobs;
-        const tab = (label, value) => ({
-            label,
-            selection: 'single',
-            checked: this.#view.tab === value,
-            select: () => this.#choose({ tab: value }),
-        });
-        this.#menu.open({
-            label: 'Generation queue options',
-            anchor: { kind: 'below', bounds: anchor.getBoundingClientRect() },
-            trigger: anchor,
-            entries: [
-                { label: 'Show', section: true },
-                tab('All', 'all'),
-                tab('Completed', 'completed'),
-                // ComfyUI offers this view only while a job has failed or been cancelled.
-                ...(hasFailedJobs(jobs) || this.#view.tab === 'failed' ? [tab('Failed', 'failed')] : []),
-                { label: '', separator: true },
-                {
-                    label: 'All workflows',
-                    selection: 'single',
-                    checked: this.#view.workflow === 'all',
-                    select: () => this.#choose({ workflow: 'all' }),
-                },
-                {
-                    label: 'Current workflow',
-                    selection: 'single',
-                    checked: this.#view.workflow === 'current',
-                    select: () => this.#choose({ workflow: 'current' }),
-                },
-                { label: '', separator: true },
-                {
-                    label: 'Most recent',
-                    selection: 'single',
-                    checked: this.#view.sort === 'recent',
-                    select: () => this.#choose({ sort: 'recent' }),
-                },
-                {
-                    label: 'Total generation time (longest first)',
-                    selection: 'single',
-                    checked: this.#view.sort === 'duration',
-                    select: () => this.#choose({ sort: 'duration' }),
-                },
-                { label: '', separator: true },
-                this.#panelEntry(),
-                {
-                    label: 'Show run progress bar',
-                    selection: 'multiple',
-                    checked: this.#actions.progressBar,
-                    select: () => this.#run('Setting not changed', () => this.#actions.setProgressBar(!this.#actions.progressBar)),
-                },
-                { label: 'Show assets', select: () => this.#actions.showAssets() },
-                { label: '', separator: true },
-                this.#clearEntry(),
-                {
-                    label: 'Cancel running jobs',
-                    disabled: !jobs.some((job) => job.status === 'running'),
-                    select: () => this.#run('Jobs not cancelled', () => this.#actions.cancelAll(jobs.filter((job) => job.status === 'running').map((job) => job.id))),
-                },
-                {
-                    label: 'Clear job history',
-                    disabled: !jobs.some((job) => job.status !== 'pending' && job.status !== 'running'),
-                    select: () => this.#run('Job history not cleared', async () => {
-                        if (await this.options.confirm('Clear your job queue history?', 'All the finished or failed jobs will be removed from the generation queue. Assets generated by these jobs are not deleted.', 'Clear'))
-                            await this.#actions.clearFinished();
-                    }),
-                },
-            ],
-        });
-    }
-    #panelEntry() {
-        const shown = this.#actions.panelOpen;
-        return {
-            label: shown ? 'Hide Full Queue Panel' : 'Show Full Queue Panel',
-            select: () => this.#run('Queue panel not changed', () => this.#actions.setDocked(!shown)),
-        };
-    }
-    #clearEntry() {
-        return {
-            label: 'Clear queue',
-            disabled: pendingJobCount(this.#source.snapshot.jobs) === 0,
-            select: () => this.#run('Queue not cleared', () => this.#actions.clearWaiting()),
-        };
-    }
-    /** Everything that can be done with one job: the queue's own two actions, then ComfyUI's. */
-    #rowMenu(row, x, y) {
-        const job = this.#source.snapshot.jobs.find((candidate) => candidate.id === row.jobId);
-        if (!job)
-            return;
-        const finished = job.status === 'completed' || job.status === 'cancelled';
-        const entries = [
-            {
-                label: 'Use Seeds in Current Workflow',
-                select: () => this.#run('Seeds not taken', () => this.options.useSeeds(job.id)),
-            },
-            {
-                label: 'Open as Workflow Tab',
-                // ComfyUI keeps a job's workflow once the job has left the queue.
-                disabled: !finished && job.status !== 'failed',
-                select: () => this.#run('Workflow not opened', () => this.#openWorkflow(job)),
-            },
-            { label: '', separator: true },
-        ];
-        if (job.status === 'completed') {
-            const kind = job.outputKind;
-            entries.push({ label: 'Inspect asset', disabled: !job.previewUrl, select: () => this.#openResult(row) }, {
-                label: 'Add to current workflow',
-                disabled: !job.outputFile || kind === null || kind === 'other',
-                select: () => {
-                    if (!job.outputFile || kind === null || kind === 'other')
-                        return;
-                    if (!this.#actions.addToWorkflow(kind, job.outputFile, job.outputSubfolder))
-                        this.options.notify('error', 'Not added', 'ComfyUI has no loader node for this file.');
-                },
-            }, { label: 'Download', disabled: !job.previewUrl, select: () => this.#download(job) }, {
-                label: 'Export workflow',
-                select: () => this.#run('Workflow not exported', () => this.#exportWorkflow(job)),
-            }, { label: '', separator: true });
-        }
-        entries.push({ label: 'Copy job ID', select: () => this.#copy(job.id) });
-        if (job.error !== null)
-            entries.push({ label: 'Copy error message', select: () => this.#copy(job.error ?? '') }, { label: 'Report error', select: () => this.#actions.reportError(job.errorDetail) });
-        entries.push({ label: '', separator: true });
-        entries.push(row.action === 'cancel'
-            ? {
-                label: 'Cancel job',
-                select: () => this.#run('Job not cancelled', () => this.#actions.cancel(job.id)),
-            }
-            : job.status === 'completed'
-                ? {
-                    label: 'Delete asset',
-                    select: () => this.#run('Asset not deleted', async () => {
-                        if (await this.options.confirm('Delete this asset?', 'This asset will be permanently removed.', 'Delete'))
-                            await this.#actions.remove(job.id);
-                    }),
-                }
-                : {
-                    label: 'Remove job',
-                    select: () => this.#run('Job not removed', () => this.#actions.remove(job.id)),
-                });
-        this.#menu.open({
-            label: 'Generation queue job',
-            anchor: { kind: 'pointer', x, y },
-            entries,
-        });
-    }
-    async #openWorkflow(job) {
-        const workflow = await this.#actions.workflow(job.id);
-        const load = isRecord(this.options.app) ? this.options.app.loadGraphData : null;
-        if (!workflow || typeof load !== 'function')
-            throw new Error('ComfyUI kept no workflow for this job.');
-        // A title makes ComfyUI open the graph as a new unsaved workflow beside the open ones.
-        await Reflect.apply(load, this.options.app, [
-            workflow,
-            true,
-            true,
-            job.workflowName ?? `Job ${job.id.slice(0, 8)}`,
-        ]);
-    }
-    async #exportWorkflow(job) {
-        const workflow = await this.#actions.workflow(job.id);
-        if (!workflow)
-            throw new Error('ComfyUI kept no workflow for this job.');
-        const { document } = this.options;
-        const link = document.createElement('a');
-        const url = URL.createObjectURL(new Blob([JSON.stringify(workflow, null, 2)], { type: 'application/json' }));
-        link.href = url;
-        link.download = `${job.workflowName ?? `Job ${job.id}`}.json`;
-        link.click();
-        URL.revokeObjectURL(url);
-    }
-    #download(job) {
-        if (!job.previewUrl)
-            return;
-        const link = this.options.document.createElement('a');
-        link.href = job.previewUrl;
-        link.download = job.outputFile ?? '';
-        link.click();
-    }
-    /** Show a finished job's result where ComfyUI keeps generated assets. */
-    #openResult(row) {
-        if (row.status === 'completed' && row.previewUrl)
-            this.#actions.showAssets();
-    }
-    #copy(text) {
-        const clipboard = this.options.document.defaultView?.navigator.clipboard;
-        if (!clipboard)
-            return;
-        void clipboard.writeText(text).catch(this.options.report);
     }
     /** Carry out one request, telling the person plainly when ComfyUI refuses it. */
     #run(failure, action) {
