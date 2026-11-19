@@ -14,18 +14,28 @@ fn could_not_check() -> PackUpdateReport {
     PackUpdateReport::new(PackOutcome::CouldNotCheck)
 }
 
-#[test]
-fn every_start_up_message_is_owed_to_the_page_once_and_never_to_the_title_bar() -> BackendResult<()>
-{
-    let mut host = host()?;
-    host.child.notices.extend([
+fn start_up_messages() -> [StartupNotice; 4] {
+    [
         StartupNotice::Updated("2.4.1".into()),
         StartupNotice::Repairing,
         StartupNotice::PreviousVersionRunning,
         StartupNotice::Sugarcubes(could_not_check()),
-    ]);
-    // The window's caption is offered none of them.
+    ]
+}
+
+#[test]
+fn no_start_up_message_is_offered_to_the_title_bar() -> BackendResult<()> {
+    let mut host = host()?;
+    host.child.notices.extend(start_up_messages());
     assert_eq!(host.take_update_notice(), None);
+    Ok(())
+}
+
+#[cfg(windows)]
+#[test]
+fn every_start_up_message_is_owed_to_the_page_once() -> BackendResult<()> {
+    let mut host = host()?;
+    host.child.notices.extend(start_up_messages());
     host.advance_session_notice()?;
     let words = host.locale_messages();
     let owed: Vec<String> =

@@ -162,6 +162,7 @@ pub(crate) struct UpdateCaptionView {
 
 impl UpdateCaptionView {
     /// The same peers with none of them shown.
+    #[cfg(target_os = "windows")]
     pub(crate) fn hidden(mut self) -> Self {
         self.glyph = UpdateGlyph::Hidden;
         for peer in
