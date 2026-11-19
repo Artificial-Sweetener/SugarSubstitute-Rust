@@ -21,6 +21,7 @@ import { applyOwnedTheme } from '../../appearance/ThemeService.js';
 import { ComfyQueueActions } from './ComfyQueueActions.js';
 import { ComfyQueueJobSource, } from './ComfyQueueJobSource.js';
 import { DEFAULT_QUEUE_VIEW, pendingJobCount, queueItems, queueSummary, } from './GenerationQueueRows.js';
+import { GenerationQueueDialogs } from './GenerationQueueDialogs.js';
 import { GenerationQueueFlyout } from './GenerationQueueFlyout.js';
 import { GenerationQueueMenus } from './GenerationQueueMenus.js';
 import { GenerationQueueReorder } from './GenerationQueueReorder.js';
@@ -47,6 +48,7 @@ export class GenerationQueueController {
     #panelView;
     #flyout;
     #menus;
+    #dialogs;
     #reorders;
     #reordering = false;
     #dock;
@@ -64,6 +66,7 @@ export class GenerationQueueController {
         this.#source = new ComfyQueueJobSource(options.api, options.report, (id) => this.#nodeName(id));
         this.#actions = new ComfyQueueActions(options.api, options.app, () => void this.#source.refresh());
         this.#menu = new ContextMenu(document);
+        this.#dialogs = new GenerationQueueDialogs(document);
         this.#menus = new GenerationQueueMenus({
             document,
             app: options.app,
@@ -73,6 +76,8 @@ export class GenerationQueueController {
             view: () => this.#view,
             choose: (change) => this.#choose(change),
             useSeeds: options.useSeeds,
+            inspect: (job) => this.#dialogs.inspect(job),
+            details: (job) => this.#dialogs.details(job, this.#source.snapshot.jobs),
             confirm: options.confirm,
             notify: options.notify,
             report: options.report,
@@ -135,6 +140,7 @@ export class GenerationQueueController {
         this.options.document.removeEventListener('contextmenu', this.#onButtonMenu, true);
         for (const reorder of this.#reorders)
             reorder.dispose();
+        this.#dialogs.dispose();
         this.#flyout.hide();
         this.#flyoutView.dispose();
         this.#panelView.dispose();

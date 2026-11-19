@@ -33,6 +33,7 @@ import {
   type QueueJob,
   type QueueViewOptions,
 } from './GenerationQueueRows.js';
+import { GenerationQueueDialogs } from './GenerationQueueDialogs.js';
 import { GenerationQueueFlyout } from './GenerationQueueFlyout.js';
 import { GenerationQueueMenus } from './GenerationQueueMenus.js';
 import { GenerationQueueReorder } from './GenerationQueueReorder.js';
@@ -76,6 +77,7 @@ export class GenerationQueueController {
   readonly #panelView: GenerationQueueView;
   readonly #flyout: GenerationQueueFlyout;
   readonly #menus: GenerationQueueMenus;
+  readonly #dialogs: GenerationQueueDialogs;
   readonly #reorders: readonly GenerationQueueReorder[];
   #reordering = false;
   readonly #dock: HostSurfaceObserver;
@@ -97,6 +99,7 @@ export class GenerationQueueController {
       () => void this.#source.refresh(),
     );
     this.#menu = new ContextMenu(document);
+    this.#dialogs = new GenerationQueueDialogs(document);
     this.#menus = new GenerationQueueMenus({
       document,
       app: options.app,
@@ -106,6 +109,8 @@ export class GenerationQueueController {
       view: () => this.#view,
       choose: (change) => this.#choose(change),
       useSeeds: options.useSeeds,
+      inspect: (job) => this.#dialogs.inspect(job),
+      details: (job) => this.#dialogs.details(job, this.#source.snapshot.jobs),
       confirm: options.confirm,
       notify: options.notify,
       report: options.report,
@@ -176,6 +181,7 @@ export class GenerationQueueController {
     this.options.document.removeEventListener('click', this.#onButton, true);
     this.options.document.removeEventListener('contextmenu', this.#onButtonMenu, true);
     for (const reorder of this.#reorders) reorder.dispose();
+    this.#dialogs.dispose();
     this.#flyout.hide();
     this.#flyoutView.dispose();
     this.#panelView.dispose();

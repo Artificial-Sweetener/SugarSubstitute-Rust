@@ -189,7 +189,9 @@ export function queueItems(
             ? `Resolved - ${days[index] ?? ''}`
             : (days[index] ?? ''),
       });
-    items.push(row(job, 'resolved', resolvedLine(job), job.outputFile ?? '', job.previewUrl));
+    // A job named after its file already says the file in its title.
+    const file = job.outputFile && title(job) !== job.outputFile.trim() ? job.outputFile : '';
+    items.push(row(job, 'resolved', resolvedLine(job), file, job.previewUrl));
   });
   return items;
 }
@@ -291,7 +293,7 @@ function dayLabel(moment: number | null, clock: QueueClock): string {
   return days === 0 ? 'Today' : days === 1 ? 'Yesterday' : clock.date(moment);
 }
 
-function localClock(): QueueClock {
+export function localClock(): QueueClock {
   return {
     now: Date.now(),
     time: (moment) =>

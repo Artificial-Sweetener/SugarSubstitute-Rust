@@ -108,6 +108,8 @@ test('jobs carry the workflow name their page recorded, read once per job', asyn
     'done:completed:Portrait',
     'bad:failed:null',
   ]);
+  // ComfyUI's own count of queued jobs numbers each run; a job without a place in it has none.
+  expect(jobs.map((job) => job.runNumber)).toEqual([1, 2, null, null]);
   expect(jobs[2]).toMatchObject({
     startTime: 2,
     endTime: 5002,

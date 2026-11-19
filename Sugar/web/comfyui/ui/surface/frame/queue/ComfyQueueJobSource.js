@@ -183,7 +183,8 @@ export class ComfyQueueJobSource {
                 startTime: number(record.execution_start_time),
                 endTime: number(record.execution_end_time),
                 workflowName: this.#names.get(record.id) ?? null,
-                runNumber: null,
+                // ComfyUI numbers jobs as they are queued; a job sent to the front has no place in that count.
+                runNumber: runNumber(record.priority),
                 workflowId: typeof record.workflow_id === 'string' ? record.workflow_id : null,
                 outputFile: preview && typeof preview.filename === 'string' ? preview.filename : null,
                 outputSubfolder: preview && typeof preview.subfolder === 'string' ? preview.subfolder : null,
@@ -290,4 +291,8 @@ function mediaKind(preview) {
     if (/\.(wav|mp3|flac|ogg)$/.test(name))
         return 'audio';
     return 'other';
+}
+/** The job's place in ComfyUI's count of queued jobs, when it has one. */
+function runNumber(priority) {
+    return typeof priority === 'number' && Number.isInteger(priority) && priority > 0 ? priority : null;
 }

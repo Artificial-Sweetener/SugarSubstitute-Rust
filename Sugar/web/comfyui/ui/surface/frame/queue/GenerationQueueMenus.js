@@ -133,7 +133,7 @@ export class GenerationQueueMenus {
                 select: () => this.host.run('Workflow not exported', () => this.#exportWorkflow(job)),
             }, { label: '', separator: true });
         }
-        entries.push({ label: 'Copy job ID', select: () => this.#copy(job.id) });
+        entries.push({ label: 'Job details', select: () => this.host.details(job) }, { label: 'Copy job ID', select: () => this.#copy(job.id) });
         if (job.error !== null)
             entries.push({ label: 'Copy error message', select: () => this.#copy(job.error ?? '') }, { label: 'Report error', select: () => this.host.actions.reportError(job.errorDetail) });
         entries.push({ label: '', separator: true });
@@ -194,10 +194,11 @@ export class GenerationQueueMenus {
         link.download = job.outputFile ?? '';
         link.click();
     }
-    /** Show a finished job's result where ComfyUI keeps generated assets. */
+    /** Show a finished job's result. */
     openResult(row) {
-        if (row.status === 'completed' && row.previewUrl)
-            this.host.actions.showAssets();
+        const job = this.host.jobs().find((candidate) => candidate.id === row.jobId);
+        if (job)
+            this.host.inspect(job);
     }
     #copy(text) {
         const clipboard = this.host.document.defaultView?.navigator.clipboard;

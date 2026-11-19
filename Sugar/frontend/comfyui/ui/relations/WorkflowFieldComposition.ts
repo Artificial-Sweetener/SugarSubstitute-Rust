@@ -123,7 +123,13 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
     setOverridesInline: (inline) => relations.setOverridesInline(inline),
     adoptJobSeeds: (seeds) => relations.jobSeeds.adopt(seeds),
     confirm: (title, message, confirmLabel) =>
-      new ConfirmDialog().open({ title, message, confirmLabel }),
+      // A dialog is told which page it belongs to; without one it has nowhere to appear.
+      new ConfirmDialog({
+        adapter: {
+          getDocument: () => options.document,
+          getWindow: () => options.document.defaultView,
+        },
+      }).open({ title, message, confirmLabel }),
     report: options.reportPresentationError,
   });
   const editorNavigation = new WorkflowEditorNavigationHost({

@@ -36,6 +36,10 @@ export interface GenerationQueueMenuHost {
   view(): QueueViewOptions;
   choose(change: Partial<QueueViewOptions>): void;
   useSeeds(jobId: string): Promise<void>;
+  /** Show a finished job's result; false when it has none to show. */
+  inspect(job: QueueJob): boolean;
+  /** Show everything known about a job. */
+  details(job: QueueJob): void;
   confirm(title: string, message: string, agree: string): Promise<boolean>;
   notify(severity: 'success' | 'warn' | 'error', title: string, message: string): void;
   report(error: unknown): void;
@@ -196,7 +200,10 @@ export class GenerationQueueMenus {
         { label: '', separator: true },
       );
     }
-    entries.push({ label: 'Copy job ID', select: () => this.#copy(job.id) });
+    entries.push(
+      { label: 'Job details', select: () => this.host.details(job) },
+      { label: 'Copy job ID', select: () => this.#copy(job.id) },
+    );
     if (job.error !== null)
       entries.push(
         { label: 'Copy error message', select: () => this.#copy(job.error ?? '') },
@@ -275,9 +282,10 @@ export class GenerationQueueMenus {
     link.click();
   }
 
-  /** Show a finished job's result where ComfyUI keeps generated assets. */
+  /** Show a finished job's result. */
   openResult(row: QueueRow): void {
-    if (row.status === 'completed' && row.previewUrl) this.host.actions.showAssets();
+    const job = this.host.jobs().find((candidate) => candidate.id === row.jobId);
+    if (job) this.host.inspect(job);
   }
 
   #copy(text: string): void {
