@@ -17,6 +17,7 @@
 import { requireCubeIdentity } from '../../cube/node/ComfyCubeNodeFactory.js';
 import { resolveCubeIdentityPresentation, } from '../../cube/CubeIdentityPresentation.js';
 import { orderCanonicalCubeSections } from '../masonry/WorkflowMasonryProjection.js';
+import { cubeStackRowIdentity } from './CubeStackRowIdentity.js';
 /** Present compact stack identity while retaining canonical section order and full tooltips. */
 export function projectCubeStackRows(sections, analysis, selectedId, resolveSource, available) {
     return orderCanonicalCubeSections(sections, analysis).flatMap((section) => {
@@ -35,39 +36,12 @@ export function projectCubeStackRows(sections, analysis, selectedId, resolveSour
         });
         return [
             {
+                ...cubeStackRowIdentity(identity, metadata.cube_id),
                 id,
-                label: identity.instanceModelTitle.nameText,
-                secondary: [identity.versionText, formatStackPackText(metadata.cube_id)]
-                    .filter(Boolean)
-                    .join(' · '),
-                tooltip: [identity.instanceTitle, identity.definitionLine, identity.sourceLine]
-                    .filter(Boolean)
-                    .join('\n'),
-                icon: identity.icon,
-                targetModel: identity.targetModel,
                 bypassed: node.mode === 4,
-                severity: identity.awaitingFirstSave ? 'warning' : 'none',
                 selected: id === selectedId,
                 reorderable: available,
             },
         ];
     });
-}
-/** Show the compact repository or local namespace retained by canonical and legacy Cube ids. */
-function formatStackPackText(cubeId) {
-    if (typeof cubeId !== 'string')
-        return '';
-    const parts = cubeId
-        .replace(/\\/g, '/')
-        .split('/')
-        .map((part) => part.trim())
-        .filter(Boolean);
-    if (parts.length < 2)
-        return '';
-    const pack = parts.length >= 3 ? parts[1] : parts[0];
-    return (pack ?? '')
-        .replace(/[\s_]+/g, '-')
-        .replace(/-+/g, '-')
-        .replace(/^-|-$/g, '')
-        .toLowerCase();
 }

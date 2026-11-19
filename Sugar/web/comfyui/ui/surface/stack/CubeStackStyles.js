@@ -122,12 +122,14 @@ export function ensureCubeStackStyles(documentRef) {
     .sc-cube-stack[data-compact] .sc-cube-stack-row__model { right:0; bottom:0; }
     .sc-cube-stack-row__icon { user-select:none; -webkit-user-drag:none; }
     .sc-cube-stack[data-pointer-dragging],.sc-cube-stack[data-pointer-dragging] * { cursor:default; user-select:none; }
-    .sc-cube-stack[data-kind="rail"] .sc-cube-stack-row[data-dragging] {
+    .sc-cube-stack[data-kind="rail"] .sc-cube-stack-row[data-dragging],
+    .sc-cube-stack[data-kind="cart"] .sc-cube-stack-row[data-dragging] {
       opacity:1; border:1px dashed color-mix(in srgb,var(--sc-stack-accent) 60%,transparent);
       background:color-mix(in srgb,var(--sc-stack-accent) 10%,var(--sc-stack-bg));
       box-shadow:inset 0 2px 6px #0003,0 0 0 1px color-mix(in srgb,var(--sc-stack-accent) 8%,transparent);
     }
-    .sc-cube-stack[data-kind="rail"] .sc-cube-stack-row[data-dragging] > * { opacity:0; }
+    .sc-cube-stack[data-kind="rail"] .sc-cube-stack-row[data-dragging] > *,
+    .sc-cube-stack[data-kind="cart"] .sc-cube-stack-row[data-dragging] > * { opacity:0; }
     .sc-cube-stack__drag-overlay { position:fixed; top:0; left:0; z-index:10; pointer-events:none; list-style:none; }
     .sc-cube-stack__drag-overlay .sc-cube-stack-row { opacity:1; background:var(--sc-stack-row) !important;
       border:1px solid var(--sc-stack-accent) !important; box-shadow:0 8px 24px #0005; transform:scale(1.035); }

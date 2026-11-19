@@ -45,6 +45,8 @@ export function ensureCubeStackCartStyles(document) {
     .sc-cube-stack-cart [aria-label="Cube cart"] .sc-cube-stack-row__remove { opacity:1; }
     .sc-cube-stack-cart__drop { border-radius:5px; }
     .sc-cube-stack-cart__drop:empty { border:1px dashed var(--sc-stack-border); }
+    /* The place held for a Cube being carried in gives way at once to the Cube that lands there. */
+    .sc-cube-stack-cart .sc-cube-stack-row[data-dragging].sc-cube-stack-leave-active { display:none; }
     .sc-cube-stack-cart-dialog .sc-cube-stack-cart-refresh { margin-left:auto; margin-right:8px; }
     .sc-cube-stack-cart-reset { margin-right:auto; }
     .sc-cube-stack-cart-dialog .sugarcubes-modal__footer-actions { width:100%; justify-content:flex-end; }

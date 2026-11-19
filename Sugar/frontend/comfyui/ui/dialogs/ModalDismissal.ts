@@ -115,7 +115,8 @@ export class ModalDismissal {
     )
       return true;
     const popups = this.document?.querySelectorAll<HTMLElement>(
-      '.p-select-overlay, .p-autocomplete-overlay, [data-sc-floating-surface], [role="menu"][data-state="open"], [role="listbox"][data-state="open"]',
+      // A card lifted by a drag is put back by Escape before the dialog around it may close.
+      '.p-select-overlay, .p-autocomplete-overlay, [data-sc-floating-surface], [role="menu"][data-state="open"], [role="listbox"][data-state="open"], [data-pointer-dragging]',
     );
     return [...(popups ?? [])].some((popup) => {
       if (popup.closest('[hidden], [aria-hidden="true"]')) return false;

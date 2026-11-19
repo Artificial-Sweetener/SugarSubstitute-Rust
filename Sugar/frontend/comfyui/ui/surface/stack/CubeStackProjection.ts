@@ -23,6 +23,7 @@ import type { UnknownRecord } from '../../types/common.js';
 import type { CubeGraphAnalysis } from '../../workflow/domain/CubeGraphModels.js';
 import type { WorkflowMasonrySection } from '../masonry/WorkflowMasonryProjection.js';
 import { orderCanonicalCubeSections } from '../masonry/WorkflowMasonryProjection.js';
+import { cubeStackRowIdentity } from './CubeStackRowIdentity.js';
 import type { CubeStackNavigationRow } from './CubeStackView.js';
 
 /** Present compact stack identity while retaining canonical section order and full tooltips. */
@@ -47,38 +48,12 @@ export function projectCubeStackRows(
     });
     return [
       {
+        ...cubeStackRowIdentity(identity, metadata.cube_id),
         id,
-        label: identity.instanceModelTitle.nameText,
-        secondary: [identity.versionText, formatStackPackText(metadata.cube_id)]
-          .filter(Boolean)
-          .join(' · '),
-        tooltip: [identity.instanceTitle, identity.definitionLine, identity.sourceLine]
-          .filter(Boolean)
-          .join('\n'),
-        icon: identity.icon,
-        targetModel: identity.targetModel,
         bypassed: node.mode === 4,
-        severity: identity.awaitingFirstSave ? ('warning' as const) : ('none' as const),
         selected: id === selectedId,
         reorderable: available,
       },
     ];
   });
-}
-
-/** Show the compact repository or local namespace retained by canonical and legacy Cube ids. */
-function formatStackPackText(cubeId: unknown): string {
-  if (typeof cubeId !== 'string') return '';
-  const parts = cubeId
-    .replace(/\\/g, '/')
-    .split('/')
-    .map((part) => part.trim())
-    .filter(Boolean);
-  if (parts.length < 2) return '';
-  const pack = parts.length >= 3 ? parts[1] : parts[0];
-  return (pack ?? '')
-    .replace(/[\s_]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .toLowerCase();
 }

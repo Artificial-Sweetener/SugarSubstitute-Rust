@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Project shared Cube identity into immutable cart and rail row metadata. */
 import { resolveCubeIdentityPresentation } from '../cube/CubeIdentityPresentation.js';
+import { cubeStackRowIdentity } from '../surface/stack/CubeStackRowIdentity.js';
 /** Share normal Cube title, source and icon semantics with the rail and native node chrome. */
 export function cubeStackCartRow(id, metadata, label, bypassed) {
     const identity = resolveCubeIdentityPresentation({
@@ -23,16 +24,9 @@ export function cubeStackCartRow(id, metadata, label, bypassed) {
         fallbackDefinitionTitle: label,
     });
     return {
+        ...cubeStackRowIdentity(identity, metadata.cube_id),
         id,
-        label: identity.instanceTitle,
-        secondary: [identity.versionText, identity.sourceLine].filter(Boolean).join(' · '),
-        tooltip: [identity.instanceTitle, identity.definitionLine, identity.sourceLine]
-            .filter(Boolean)
-            .join('\n'),
-        icon: identity.icon,
-        targetModel: identity.targetModel,
         bypassed,
         selected: false,
-        severity: identity.awaitingFirstSave ? 'warning' : 'none',
     };
 }

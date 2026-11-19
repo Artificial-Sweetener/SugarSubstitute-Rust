@@ -121,30 +121,63 @@ test('uses keyed controls for keyboard draft permutations and keeps busy edits d
   expect(f.actions.remove).not.toHaveBeenCalled();
 });
 
-test('dragging a captured library artifact stages it before an exact cart reference', async () => {
+test('a library Cube carried over the cart is previewed there and added where it is dropped', async () => {
   const f = fixture();
-  f.libraryButton().closest('li')!.dispatchEvent(drag('dragstart'));
-  const target = f.cartButton(0).closest('li')!;
-  target.dispatchEvent(drag('dragover'));
-  target.dispatchEvent(drag('drop'));
+  const source = f.libraryButton().closest('li')!;
+  source.dispatchEvent(pointer('pointerdown', 50, 23));
+  document.dispatchEvent(pointer('pointermove', 60, 60));
   await nextTick();
-  expect(f.actions.add).toHaveBeenCalledWith('artifact', 'first');
+  // Away from the cart the copy follows the pointer and the cart is unchanged.
+  expect(f.element.querySelector('.sc-cube-stack__drag-overlay')?.textContent).toContain(
+    'Library cube',
+  );
+  expect(f.cartLabels()).toEqual(['first', 'second']);
+  document.dispatchEvent(pointer('pointermove', 400, 60));
+  await nextTick();
+  expect(f.cartLabels()).toEqual(['first', '<b>Library cube</b>', 'second']);
+  expect(f.cartButton(1).closest('li')?.hasAttribute('data-dragging')).toBe(true);
+  document.dispatchEvent(pointer('pointerup', 400, 60));
+  await nextTick();
+  expect(f.actions.add).toHaveBeenCalledWith('artifact', 'second');
   expect(f.actions.reorder).not.toHaveBeenCalled();
+  expect(f.element.querySelector('.sc-cube-stack__drag-overlay')).toBeNull();
 });
 
-test('previews cart ordering locally and discards a canceled drag without changing the draft', async () => {
+test('a library Cube released away from the cart is not added', async () => {
+  const f = fixture();
+  f.libraryButton().closest('li')!.dispatchEvent(pointer('pointerdown', 50, 23));
+  document.dispatchEvent(pointer('pointermove', 400, 60));
+  document.dispatchEvent(pointer('pointermove', 60, 60));
+  await nextTick();
+  expect(f.cartLabels()).toEqual(['first', 'second']);
+  document.dispatchEvent(pointer('pointerup', 60, 60));
+  await nextTick();
+  expect(f.actions.add).not.toHaveBeenCalled();
+});
+
+test('a lifted cart row previews its new place, and Escape puts it back without changing the draft', async () => {
   const f = fixture();
   const source = f.cartButton(0).closest('li')!;
-  source.dispatchEvent(drag('dragstart'));
-  f.cartButton(1).closest('li')!.dispatchEvent(drag('dragover'));
+  source.dispatchEvent(pointer('pointerdown', 400, 23));
+  document.dispatchEvent(pointer('pointermove', 400, 80));
   await nextTick();
-  expect(f.cartButton(0).textContent).toContain('second');
-  source.dispatchEvent(drag('dragend'));
+  expect(f.cartLabels()).toEqual(['second', 'first']);
+  expect(f.cartButton(1).closest('li')?.hasAttribute('data-dragging')).toBe(true);
+  const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+  const reachedDialog = jest.fn();
+  document.body.addEventListener('keydown', reachedDialog);
+  document.body.dispatchEvent(escape);
+  document.body.removeEventListener('keydown', reachedDialog);
   await nextTick();
-  expect(f.cartButton(0).textContent).toContain('first');
+  // Escape ends the drag alone; the dialog around the cart never hears it.
+  expect(reachedDialog).not.toHaveBeenCalled();
+  expect(f.cartLabels()).toEqual(['first', 'second']);
   expect(f.actions.reorder).not.toHaveBeenCalled();
-  f.cartButton(0).closest('li')!.dispatchEvent(drag('drop'));
-  expect(f.actions.reorder).not.toHaveBeenCalled();
+  f.cartButton(0).closest('li')!.dispatchEvent(pointer('pointerdown', 400, 23));
+  document.dispatchEvent(pointer('pointermove', 400, 80));
+  document.dispatchEvent(pointer('pointerup', 400, 80));
+  await nextTick();
+  expect(f.actions.reorder).toHaveBeenCalledWith(['second', 'first']);
 });
 
 test('switches appearance while retaining captured rows and search value', async () => {
@@ -218,6 +251,14 @@ function fixture() {
   document.body.append(element);
   const view = mountCubeStackCart(element, state, actions);
   releases.push(view.dispose);
+  // jsdom lays nothing out: the cart's list sits at the top of the page, right of the library.
+  const cart = element.querySelector<HTMLElement>('.sc-cube-stack-cart')!;
+  cart.setPointerCapture = jest.fn();
+  cart.releasePointerCapture = jest.fn();
+  cart.hasPointerCapture = jest.fn(() => true);
+  const drop = element.querySelector<HTMLElement>('.sc-cube-stack-cart__drop')!;
+  drop.getBoundingClientRect = () =>
+    ({ left: 300, right: 524, top: 0, bottom: 400, width: 224, height: 400 }) as DOMRect;
   return {
     element,
     state,
@@ -227,6 +268,10 @@ function fixture() {
       element.querySelector<HTMLButtonElement>(
         '[aria-label="Cube library"] .sc-cube-stack-row__activate',
       )!,
+    cartLabels: () =>
+      [
+        ...element.querySelectorAll('[aria-label="Cube cart"] .sc-cube-stack-row__label'),
+      ].map((label) => label.textContent),
     cartButton: (index: number) =>
       element.querySelectorAll<HTMLButtonElement>(
         '[aria-label="Cube cart"] .sc-cube-stack-row__activate',
@@ -234,12 +279,9 @@ function fixture() {
   };
 }
 
-/** Provide jsdom's missing native drag fields without treating foreign transfer text as session authority. */
-function drag(type: string): Event {
-  const event = new Event(type, { bubbles: true, cancelable: true });
-  Object.defineProperties(event, {
-    dataTransfer: { value: { effectAllowed: 'none', dropEffect: 'none', setData: jest.fn() } },
-    clientY: { value: 100 },
-  });
-  return event;
+/** Build the pointer event jsdom has no constructor for. */
+function pointer(type: string, x: number, y: number): PointerEvent {
+  const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y });
+  Object.defineProperty(event, 'pointerId', { value: 1 });
+  return event as PointerEvent;
 }

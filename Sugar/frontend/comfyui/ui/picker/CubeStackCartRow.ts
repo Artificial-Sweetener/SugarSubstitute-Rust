@@ -16,6 +16,7 @@
 /** Project shared Cube identity into immutable cart and rail row metadata. */
 import { resolveCubeIdentityPresentation } from '../cube/CubeIdentityPresentation.js';
 import type { UnknownRecord } from '../types/common.js';
+import { cubeStackRowIdentity } from '../surface/stack/CubeStackRowIdentity.js';
 import type { CubeStackRowModel } from '../surface/stack/CubeStackView.js';
 
 /** Share normal Cube title, source and icon semantics with the rail and native node chrome. */
@@ -31,16 +32,9 @@ export function cubeStackCartRow(
     fallbackDefinitionTitle: label,
   });
   return {
+    ...cubeStackRowIdentity(identity, metadata.cube_id),
     id,
-    label: identity.instanceTitle,
-    secondary: [identity.versionText, identity.sourceLine].filter(Boolean).join(' · '),
-    tooltip: [identity.instanceTitle, identity.definitionLine, identity.sourceLine]
-      .filter(Boolean)
-      .join('\n'),
-    icon: identity.icon,
-    targetModel: identity.targetModel,
     bypassed,
     selected: false,
-    severity: identity.awaitingFirstSave ? 'warning' : 'none',
   };
 }

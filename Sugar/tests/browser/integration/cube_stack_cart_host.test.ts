@@ -187,6 +187,38 @@ test('Refresh failure remains literal and retryable; closing ignores a late refr
   expect(f.errors).toHaveBeenCalledTimes(1);
 });
 
+test('Escape puts a lifted Cube back and leaves the cart open; a second Escape closes it', async () => {
+  const f = fixture();
+  const host = f.host(async () => f.capture);
+  const result = host.open();
+  await settle();
+  const cart = document.querySelector<HTMLElement>('.sc-cube-stack-cart')!;
+  cart.setPointerCapture = jest.fn();
+  cart.releasePointerCapture = jest.fn();
+  cart.hasPointerCapture = jest.fn(() => true);
+  const row = cart.querySelector<HTMLElement>('.sc-cube-stack-row')!;
+  const pointer = (type: string, y: number): Event => {
+    const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: 5, clientY: y });
+    Object.defineProperty(event, 'pointerId', { value: 1 });
+    return event;
+  };
+  row.dispatchEvent(pointer('pointerdown', 10));
+  document.dispatchEvent(pointer('pointermove', 60));
+  await settle();
+  expect(cart.querySelector('.sc-cube-stack__drag-overlay')).not.toBeNull();
+  const overlay = document.querySelector('.sugarcubes-modal-overlay')!;
+  const escape = (): boolean =>
+    row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  escape();
+  await settle();
+  expect(cart.querySelector('.sc-cube-stack__drag-overlay')).toBeNull();
+  expect(overlay.classList.contains('is-visible')).toBe(true);
+  escape();
+  await result;
+  expect(overlay.classList.contains('is-visible')).toBe(false);
+  expect(f.commit).not.toHaveBeenCalled();
+});
+
 /** Query an actual shared shell control without depending on implementation fields. */
 function button(label: string): HTMLButtonElement {
   const found = [...document.querySelectorAll<HTMLButtonElement>('button')].find(

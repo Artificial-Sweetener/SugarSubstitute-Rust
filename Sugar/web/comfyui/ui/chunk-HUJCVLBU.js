@@ -1,18 +1,23 @@
 import {
+  CubeStackSelectionIndicator
+} from "./chunk-BSL67ZBW.js";
+import {
+  strideProjection
+} from "./chunk-6DJIPVUI.js";
+import {
   useReorderGesture
 } from "./chunk-JDPP5GFL.js";
-import {
-  CUBE_STACK_ROW_HEIGHT,
-  CubeStackSelectionIndicator,
-  cubeStackRowGap,
-  cubeStackRowStride
-} from "./chunk-SO2SAVA3.js";
 import {
   useCubeStackFocus
 } from "./chunk-FMYVNRZD.js";
 import {
   CubeStackRow
 } from "./chunk-O2HTHGXJ.js";
+import {
+  CUBE_STACK_ROW_HEIGHT,
+  cubeStackRowGap,
+  cubeStackRowStride
+} from "./chunk-MGNQRLBB.js";
 import {
   computed,
   defineComponent,
@@ -23,29 +28,6 @@ import {
 
 // frontend/comfyui/ui/surface/stack/vue/CubeStackRail.ts
 import { buttonTag } from "./surface/appearance/ControlFactory.js";
-
-// frontend/comfyui/ui/interaction/reorder/ReorderSlots.ts
-function strideProjection(input) {
-  const { current, key } = input;
-  const movable = new Set(current.filter((item) => input.movable(item)));
-  const remaining = current.filter((item) => movable.has(item) && item !== key);
-  let index = remaining.length;
-  for (const [slot, item] of remaining.entries()) {
-    const destination = current.indexOf(item) * input.stride + input.size / 2;
-    if (input.center < input.listStart + destination) {
-      index = slot;
-      break;
-    }
-  }
-  remaining.splice(index, 0, key);
-  let cursor = 0;
-  const projected = current.map(
-    (item) => movable.has(item) ? remaining[cursor++] ?? item : item
-  );
-  return projected.every((item, slot) => item === current[slot]) ? null : projected;
-}
-
-// frontend/comfyui/ui/surface/stack/vue/CubeStackRail.ts
 var CubeStackRail = defineComponent({
   name: "SugarCubesStackRail",
   props: {

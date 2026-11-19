@@ -13,8 +13,12 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Render an accessible keyed library/cart with safe text, draft drag preview and keyboard ordering. */
-import { computed, defineComponent, h, ref, TransitionGroup, type PropType } from 'vue';
+/** Render an accessible keyed library/cart with safe text, lifted-card dragging and keyboard ordering. */
+import { computed, defineComponent, h, ref, TransitionGroup, watch, type PropType } from 'vue';
+import { fixedOverlayOrigin } from '../../interaction/reorder/ReorderOverlayOrigin.js';
+import { strideProjection } from '../../interaction/reorder/ReorderSlots.js';
+import { useReorderGesture } from '../../interaction/reorder/vue/useReorderGesture.js';
+import { CUBE_STACK_ROW_GAP, CUBE_STACK_ROW_HEIGHT } from '../../surface/stack/CubeStackMetrics.js';
 import { CubeStackRow } from '../../surface/stack/vue/CubeStackRow.js';
 import { useCubeStackFocus } from '../../surface/stack/vue/CubeStackFocus.js';
 import { searchInputTag } from '../../surface/appearance/ControlFactory.js';
@@ -25,7 +29,17 @@ import type {
   CubeStackLibraryRow,
 } from '../CubeStackCartView.js';
 
-/** Keep search and transient pointer preview inside presentation while the session owns accepted draft edits. */
+/** Marks a lifted library Cube in a previewed order: it is a copy on its way in, not a cart row. */
+const INCOMING = 'incoming:';
+const STRIDE = CUBE_STACK_ROW_HEIGHT + CUBE_STACK_ROW_GAP;
+/** How far outside the cart's list the pointer may stray and still place or drop a Cube. */
+const REACH = 24;
+
+/**
+ * Keep search and the transient drag preview inside presentation while the session owns accepted
+ * draft edits. Cart rows and library Cubes are lifted with the gesture every reorderable list
+ * shares: a cart row changes place, a library Cube is carried into the cart as a copy.
+ */
 export const CubeStackCart = defineComponent({
   name: 'SugarCubesStackCart',
   props: {
@@ -36,18 +50,99 @@ export const CubeStackCart = defineComponent({
     const root = ref<HTMLElement | null>(null);
     useCubeStackFocus(root);
     const query = ref('');
-    const dragged = ref<string | null>(null);
-    const artifact = ref<string | null>(null);
-    const preview = ref<readonly string[] | null>(null);
     const selected = ref<string | null>(null);
     const status = ref('');
-    const rows = computed(() => {
-      const order = preview.value;
-      return order
-        ? [...props.state.rows].sort(
-            (left, right) => order.indexOf(left.id) - order.indexOf(right.id),
-          )
-        : props.state.rows;
+    /** Where the dialog around the cart measures a fixed overlay from, read at each lift. */
+    const overlayOrigin = ref({ x: 0, y: 0 });
+    const cartList = (): HTMLElement | null =>
+      root.value?.querySelector<HTMLElement>('.sc-cube-stack-cart__drop .sc-cube-stack__rows') ??
+      null;
+    const dropArea = (): HTMLElement | null =>
+      root.value?.querySelector<HTMLElement>('.sc-cube-stack-cart__drop') ?? null;
+    const overCart = (x: number, y: number): boolean => {
+      const bounds = dropArea()?.getBoundingClientRect();
+      return (
+        !!bounds &&
+        x >= bounds.left - REACH &&
+        x <= bounds.right + REACH &&
+        y >= bounds.top &&
+        y <= bounds.bottom
+      );
+    };
+    const gesture = useReorderGesture({
+      root,
+      threshold: 6,
+      admission: () => (props.state.pending ? 'refuse' : 'ready'),
+      keys: () => props.state.rows.map((row) => row.id),
+      project: (card, current) => {
+        const list = cartList();
+        if (!list) return null;
+        const listStart = list.getBoundingClientRect().top;
+        const center = card.y + CUBE_STACK_ROW_HEIGHT / 2;
+        if (!card.key.startsWith(INCOMING))
+          return strideProjection({
+            current,
+            movable: () => true,
+            key: card.key,
+            center,
+            listStart,
+            stride: STRIDE,
+            size: CUBE_STACK_ROW_HEIGHT,
+          });
+        // A library Cube takes the slot its centre is in while over the cart, and none elsewhere.
+        const projected = current.filter((id) => id !== card.key);
+        if (overCart(card.x + card.grabX, card.y + card.grabY)) {
+          const slot = Math.floor((center - listStart) / STRIDE);
+          projected.splice(Math.max(0, Math.min(projected.length, slot)), 0, card.key);
+        }
+        return projected.every((id, index) => id === current[index]) &&
+          projected.length === current.length
+          ? null
+          : projected;
+      },
+      accepts: overCart,
+      scroll: { viewport: dropArea, edge: 32, step: 8, lateral: REACH },
+      lifted: (key) => {
+        if (root.value) overlayOrigin.value = fixedOverlayOrigin(root.value);
+        status.value = `Moving ${carried(key)?.label ?? 'Cube'}.`;
+      },
+      preview: () => undefined,
+      commit: (key, order) => {
+        if (key.startsWith(INCOMING)) {
+          props.actions.add(key.slice(INCOMING.length), order[order.indexOf(key) + 1] ?? null);
+          status.value = 'Cube added to the cart.';
+        } else {
+          props.actions.reorder(order);
+          status.value = 'Cart reordered.';
+        }
+      },
+      cancelled: (wasLifted) => {
+        if (wasLifted) status.value = 'Move canceled.';
+      },
+    });
+    /** The row a key names: a cart row, or the library Cube being carried in. */
+    const carried = (key: string): CubeStackRowModel | null =>
+      key.startsWith(INCOMING)
+        ? (props.state.library.find((row) => row.id === key.slice(INCOMING.length)) ?? null)
+        : (props.state.rows.find((row) => row.id === key) ?? null);
+    const liftedRow = computed(() => {
+      const card = gesture.card.value;
+      return card ? carried(card.key) : null;
+    });
+    watch(
+      () => props.state.pending,
+      (pending) => {
+        if (pending) gesture.clear();
+      },
+    );
+    const rows = computed((): readonly CubeStackRowModel[] => {
+      const order = gesture.order.value;
+      if (!order) return props.state.rows;
+      return order.flatMap((id) => {
+        const row = carried(id);
+        // The incoming copy is drawn under its preview key so it never collides with a cart row.
+        return row ? [id.startsWith(INCOMING) ? { ...row, id } : row] : [];
+      });
     });
     const groups = computed(() => {
       const found = props.state.library.filter((row) =>
@@ -67,11 +162,6 @@ export const CubeStackCart = defineComponent({
           .filter((group) => group.rows.length > 0),
       }));
     });
-    const clear = (): void => {
-      dragged.value = null;
-      artifact.value = null;
-      preview.value = null;
-    };
     const keyboard = (event: KeyboardEvent, row: CubeStackRowModel): void => {
       if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
       event.preventDefault();
@@ -92,59 +182,20 @@ export const CubeStackCart = defineComponent({
             [index + delta]?.focus();
       }
     };
-    const start = (event: DragEvent, row: CubeStackRowModel, fromLibrary: boolean): void => {
-      if (props.state.pending || !event.dataTransfer) {
-        event.preventDefault();
-        return;
-      }
-      clear();
-      if (fromLibrary) artifact.value = row.id;
-      else {
-        dragged.value = row.id;
-        preview.value = props.state.rows.map((item) => item.id);
-      }
-      event.dataTransfer.effectAllowed = fromLibrary ? 'copy' : 'move';
-      event.dataTransfer.setData('application/x-sugarcubes-cart', row.id);
-    };
-    const over = (event: DragEvent, row: CubeStackRowModel | null): void => {
-      if (props.state.pending || (!dragged.value && !artifact.value)) return;
-      event.preventDefault();
-      if (event.dataTransfer) event.dataTransfer.dropEffect = artifact.value ? 'copy' : 'move';
-      if (!dragged.value || !preview.value || row?.id === dragged.value) return;
-      const order = preview.value.filter((id) => id !== dragged.value);
-      const element = event.currentTarget;
-      const bounds = element instanceof HTMLElement ? element.getBoundingClientRect() : null;
-      const index = row ? order.indexOf(row.id) : order.length;
-      const after = row && bounds && event.clientY >= bounds.top + bounds.height / 2;
-      order.splice(index + (after ? 1 : 0), 0, dragged.value);
-      preview.value = order;
-    };
-    const drop = (event: DragEvent, row: CubeStackRowModel | null): void => {
-      if (props.state.pending || (!dragged.value && !artifact.value)) return;
-      event.preventDefault();
-      event.stopPropagation();
-      if (artifact.value) props.actions.add(artifact.value, row?.id ?? null);
-      else if (preview.value) props.actions.reorder(preview.value);
-      status.value = artifact.value ? 'Cube added to the cart.' : 'Cart reordered.';
-      clear();
-    };
     const renderRow = (row: CubeStackRowModel, library: boolean) =>
       h(CubeStackRow, {
         key: row.id,
         row: { ...row, selected: selected.value === row.id },
         pending: props.state.pending,
         removable: !library,
-        draggable: !props.state.pending,
-        'data-dragging': dragged.value === row.id || undefined,
-        onDragstart: (event: DragEvent) => start(event, row, library),
-        onDragend: clear,
-        onDragover: library
-          ? undefined
-          : (event: DragEvent) => {
-              event.stopPropagation();
-              over(event, row);
-            },
-        onDrop: library ? undefined : (event: DragEvent) => drop(event, row),
+        draggable: false,
+        'data-dragging': (!library && gesture.card.value?.key === row.id) || undefined,
+        onPointerdown: (event: PointerEvent) => {
+          // The remove button is pressed, never dragged.
+          const pressed = event.target;
+          if (!(pressed instanceof Element && pressed.closest('.sc-cube-stack-row__remove')))
+            gesture.press(event, library ? `${INCOMING}${row.id}` : row.id);
+        },
         onKeydown: library ? undefined : (event: KeyboardEvent) => keyboard(event, row),
         activate: () => {
           if (library) {
@@ -168,6 +219,15 @@ export const CubeStackCart = defineComponent({
           class: 'sc-cube-stack-cart sc-cube-stack',
           'data-appearance': props.state.appearance,
           'aria-busy': props.state.pending || undefined,
+          'data-pointer-dragging': gesture.card.value ? '' : undefined,
+          onPointerdownCapture: gesture.beginInteraction,
+          onPointercancel: gesture.cancel,
+          onLostpointercapture: gesture.cancel,
+          onClickCapture: gesture.click,
+          onDragstartCapture: (event: DragEvent) => {
+            event.preventDefault();
+            event.stopPropagation();
+          },
         },
         [
           h('div', { class: 'sc-cube-stack-cart__header' }, [
@@ -239,8 +299,6 @@ export const CubeStackCart = defineComponent({
                 {
                   class: 'sc-cube-stack-cart__scroll sc-cube-stack-cart__drop',
                   'data-capture-wheel': 'true',
-                  onDragover: (event: DragEvent) => over(event, null),
-                  onDrop: (event: DragEvent) => drop(event, null),
                 },
                 [
                   h(
@@ -259,6 +317,33 @@ export const CubeStackCart = defineComponent({
               ),
             ],
           ),
+          gesture.card.value && liftedRow.value
+            ? h(
+                'div',
+                {
+                  class: 'sc-cube-stack sc-cube-stack__drag-overlay',
+                  'data-kind': 'cart',
+                  'data-appearance': props.state.appearance,
+                  'aria-hidden': 'true',
+                  inert: true,
+                  style: {
+                    width: `${String(gesture.card.value.width)}px`,
+                    transform: `translate3d(${String(gesture.card.value.x - overlayOrigin.value.x)}px,${String(gesture.card.value.y - overlayOrigin.value.y)}px,0)`,
+                  },
+                },
+                [
+                  h(CubeStackRow, {
+                    row: liftedRow.value,
+                    style: {
+                      transformOrigin: `${String(gesture.card.value.grabX)}px ${String(gesture.card.value.grabY)}px`,
+                    },
+                    activate: () => undefined,
+                    remove: () => undefined,
+                    contextMenu: () => undefined,
+                  }),
+                ],
+              )
+            : null,
           h(
             'span',
             { class: 'sc-cube-stack__status', role: 'status', 'aria-live': 'polite' },
