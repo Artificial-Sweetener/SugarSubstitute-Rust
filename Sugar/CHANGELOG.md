@@ -1,3 +1,13 @@
+## [0.31.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.30.0...sugarcubes-v0.31.0) (2026-11-19)
+
+### Features
+
+* **recovery:** offer to restart ComfyUI from the page instead of the title bar ([385857d](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/385857dd7a4ea9a8b4053b6578c29be0f9cbbd33))
+
+### Performance Improvements
+
+* **workspace:** switch between masonry and graph about three times faster ([616ad85](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/616ad85edad099cb0a785edbd9ac7fc2e8957e69))
+
 ## [0.30.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.29.0...sugarcubes-v0.30.0) (2026-11-19)
 
 ### Features
