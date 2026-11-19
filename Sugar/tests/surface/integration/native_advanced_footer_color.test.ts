@@ -183,7 +183,8 @@ describe.each([
       const overlap = pixel(x, facts.body.y + facts.body.height - 8);
       const footer = pixel(x, facts.button.y + facts.button.height - 6);
       expect(body).toEqual(
-        explicit ? [64, 80, 96, 255] : dark ? [50, 31, 31, 255] : [191, 185, 185, 255],
+        // A node card keeps the style's own opaque fill on the desktop frame.
+        explicit ? [64, 80, 96, 255] : dark ? [43, 43, 43, 255] : [251, 251, 251, 255],
       );
       expect(overlap).toEqual(body);
       expect(footer).toEqual(explicit ? [112, 71, 71, 255] : body);

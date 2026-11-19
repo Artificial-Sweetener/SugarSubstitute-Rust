@@ -14,7 +14,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Prove a masonry card in Comfy's own style paints Python's translucent Fluent card fill once. */
+/** Prove a masonry card in Comfy's own style keeps Comfy's own opaque fills on the desktop frame. */
 import { chromium, type Browser } from '@playwright/test';
 import { build } from 'esbuild';
 import UPNG from 'upng-js';
@@ -92,47 +92,35 @@ describe('Chromium desktop masonry card in Comfy style', () => {
       [data-testid^="node-header-"], [data-testid^="node-body-"] { height:60px }
     </style>`;
 
-  test.each([true, false])('desktop theme dark=%s paints the card fill once', async (dark) => {
-    const tab = await browser.newPage({ viewport: { width: 900, height: 400 } });
-    try {
-      await tab.setContent(page(dark));
-      await tab.evaluate((value) => Object.assign(globalThis, { darkTheme: value }), dark);
-      await tab.addScriptTag({ content: install, type: 'module' });
-      await tab.waitForFunction(() => Reflect.get(globalThis, 'cardInstalled') === true);
-      const fills = await tab.evaluate(() => {
-        const fill = (selector: string): string =>
-          getComputedStyle(document.querySelector(selector)!).backgroundColor;
-        return {
-          card: fill('.sugarcubes-workflow-masonry__card'),
-          mount: fill('.sugarcubes-cube-face__native-card-mount'),
-          node: fill('.lg-node'),
-          wrapper: fill('[data-testid="node-inner-wrapper"]'),
-          header: fill('[data-testid^="node-header-"]'),
-          body: fill('[data-testid^="node-body-"]'),
-        };
-      });
-      expect(fills.card).toBe(dark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.7)');
-      for (const layer of [fills.mount, fills.node, fills.wrapper, fills.header, fills.body])
-        expect(layer).toBe('rgba(0, 0, 0, 0)');
-      const body = await tab.locator('[data-testid^="node-body-"]').boundingBox();
-      if (!body) throw new Error('The card body has no painted bounds.');
-      const png = await tab.screenshot({
-        clip: { x: Math.floor(body.x) + 40, y: Math.floor(body.y) + 20, width: 1, height: 1 },
-      });
-      const painted = [
-        ...new Uint8Array(UPNG.toRGBA8(UPNG.decode(Uint8Array.from(png).buffer))[0]!),
-      ].slice(0, 3);
-      const mica = [80, 120, 160];
-      const wash = dark ? { value: 32, alpha: 150 / 255 } : { value: 251, alpha: 188 / 255 };
-      const card = dark ? 13 / 255 : 179 / 255;
-      const expected = mica.map((channel) => {
-        const washed = wash.value * wash.alpha + channel * (1 - wash.alpha);
-        return Math.round(255 * card + washed * (1 - card));
-      });
-      for (const [channel, value] of painted.entries())
-        expect(Math.abs(value - expected[channel]!)).toBeLessThanOrEqual(1);
-    } finally {
-      await tab.close();
-    }
-  });
+  test.each([true, false])(
+    'desktop theme dark=%s leaves the card and its layers on the Comfy palette',
+    async (dark) => {
+      const tab = await browser.newPage({ viewport: { width: 900, height: 400 } });
+      try {
+        await tab.setContent(page(dark));
+        await tab.evaluate((value) => Object.assign(globalThis, { darkTheme: value }), dark);
+        await tab.addScriptTag({ content: install, type: 'module' });
+        await tab.waitForFunction(() => Reflect.get(globalThis, 'cardInstalled') === true);
+        const fills = await tab.evaluate(() => {
+          const fill = (selector: string): string =>
+            getComputedStyle(document.querySelector(selector)!).backgroundColor;
+          return {
+            card: fill('.sugarcubes-workflow-masonry__card'),
+            mount: fill('.sugarcubes-cube-face__native-card-mount'),
+            node: fill('.lg-node'),
+            wrapper: fill('[data-testid="node-inner-wrapper"]'),
+            header: fill('[data-testid^="node-header-"]'),
+            body: fill('[data-testid^="node-body-"]'),
+          };
+        });
+        // The desktop frame washes the page beneath the cards, never a card or its rows.
+        expect(fills.card).toBe(dark ? 'rgb(34, 34, 34)' : 'rgb(221, 221, 221)');
+        expect(fills.wrapper).toBe(dark ? 'rgb(32, 33, 33)' : 'rgb(244, 244, 244)');
+        expect(fills.header).toBe(fills.wrapper);
+        expect(fills.body).toBe(dark ? 'rgb(38, 39, 41)' : 'rgb(250, 250, 250)');
+      } finally {
+        await tab.close();
+      }
+    },
+  );
 });

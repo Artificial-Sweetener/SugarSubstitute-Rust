@@ -200,3 +200,18 @@ test('washes reach the selected tab, toolbar, graph and masonry only inside the 
     style.remove();
   }
 });
+
+test('node cards keep their own opaque fill on the desktop frame, in masonry and in the graph', () => {
+  // A node's rows draw their hover, pressed and divider colours against the card's own fill, so
+  // the desktop sheet must not restyle a node or any of its rows.
+  expect(desktopFrameCss).not.toContain('data-sc-style-node');
+  expect(desktopFrameCss).not.toContain('node-header-');
+  expect(desktopFrameCss).not.toContain('node-body-');
+  expect(desktopFrameCss).not.toContain('advanced-inputs-button');
+  expect(desktopFrameCss).not.toContain('sugarcubes-cube-face__node-card');
+  expect(desktopFrameCss).not.toContain(':hover');
+  // Non-node surfaces still take the wash.
+  expect(desktopFrameCss.replace(/\s+/g, ' ')).toContain(
+    '[data-sc-style-surface] { --sc-card-fill:var(--sc-desktop-card-wash); }',
+  );
+});

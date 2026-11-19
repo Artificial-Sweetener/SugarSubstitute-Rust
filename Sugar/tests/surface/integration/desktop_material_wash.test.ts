@@ -124,11 +124,12 @@ describe.each([
       });
       expect(fills.container).toBe('rgba(0, 0, 0, 0)');
       expect(fills.graph).toBe('rgba(0, 0, 0, 0)');
-      expect(fills.card).toBe(dark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.7)');
-      expect(fills.body).toBe('rgba(0, 0, 0, 0)');
+      // A node card keeps the style's own opaque fill: its rows are drawn against it.
+      expect(fills.card).toBe(dark ? 'rgb(43, 43, 43)' : 'rgb(251, 251, 251)');
+      expect(fills.body).toBe(fills.card);
       expect(fills.outerCard).toBe('rgba(0, 0, 0, 0)');
       expect(fills.stack).toBe('rgba(0, 0, 0, 0)');
-      expect(fills.selected).toBe(fills.card);
+      expect(fills.selected).toBe(dark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.7)');
       expect(fills.menu).toBe(dark ? 'rgba(44, 44, 44, 0.59)' : 'rgba(252, 252, 252, 0.77)');
       expect(fills.line).toBe('rgba(0, 0, 0, 0)');
       const bounds = await page.locator('main').boundingBox();

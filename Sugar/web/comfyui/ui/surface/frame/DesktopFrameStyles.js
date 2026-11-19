@@ -39,21 +39,10 @@ export const desktopFrameCss = `
   /* The rail's edge is the aperture's edge, so both travel on the material motion's one curve. */
   :root[data-sc-desktop-frame-surface] .sc-cube-stack-host .sc-cube-stack[data-kind='rail'][data-appearance] {
     width:var(--sc-stack-material-width); transition:none; }
-  :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] :is([data-sc-style-node],[data-sc-style-surface]) {
+  /* Node cards keep the style's own opaque fill, in masonry and in the graph: their rows' hover,
+     pressed and divider colours are drawn against that fill. Only non-node surfaces are washed. */
+  :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] [data-sc-style-surface] {
     --sc-card-fill:var(--sc-desktop-card-wash); }
-  :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] .sugarcubes-native-node-card[data-cube-face-native='nodes-2'] > .lg-node[data-sc-style-node] {
-    background:var(--sc-card-fill); border-radius:var(--sc-node-card-radius); }
-  :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] .sugarcubes-native-node-card[data-cube-face-native='nodes-2'] > .lg-node[data-sc-style-node] > [data-testid='node-inner-wrapper'] {
-    background-color:transparent; }
-  :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] [data-sc-style-node] :is(
-    [data-testid^='node-header-'],[data-testid^='node-body-'],[data-testid='advanced-inputs-button']) {
-    background:transparent; }
-  /* The host presents Comfy's own style: the masonry card is the one place its fill is painted. */
-  :root[data-sc-desktop-frame-surface][data-sc-visual-style='comfy'] .sugarcubes-cube-face__node-card {
-    background:var(--sc-desktop-card-wash); }
-  :root[data-sc-desktop-frame-surface][data-sc-visual-style='comfy'] .sugarcubes-cube-face__node-card :is(
-    .lg-node,[data-testid='node-inner-wrapper'],[data-testid^='node-header-'],[data-testid^='node-body-'],
-    [data-testid='advanced-inputs-button']) { background:transparent; }
   [data-sc-desktop-frame-host] { border:0 !important; box-shadow:none !important; }
   [data-sc-desktop-frame-host] .sc-substitute-frame { app-region:drag; }
   [data-sc-desktop-frame-host] .sc-substitute-frame :is(
