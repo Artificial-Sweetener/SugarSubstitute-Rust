@@ -9,7 +9,7 @@
 //! not be verified is named so the user can close it themselves.
 use super::{StartupBackend, StartupHost, backend::PreparedStartup};
 use crate::{
-    backend_conflict::{BackendPortSession, Finding},
+    backend_conflict::{BackendPortSession, Finding, RESERVATION_BYTES},
     instance_conflict::Service,
 };
 use std::{cell::RefCell, error::Error, rc::Rc, sync::Arc};
@@ -77,7 +77,11 @@ impl<B: StartupBackend> StartupHost<B> {
         ) {
             self.backend_port_checked = true;
             let session = BackendPortSession::new(port);
-            let mut service = Service::admitted_as(session.clone(), Operation::NativeLifecycle);
+            let mut service = Service::admitted_as(
+                session.clone(),
+                Operation::NativeLifecycle,
+                RESERVATION_BYTES,
+            );
             service.start(wake);
             self.backend_port = Some(BackendPortConflict {
                 service: Rc::new(RefCell::new(service)),

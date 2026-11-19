@@ -234,6 +234,16 @@ fn unresponsive(
 }
 
 #[test]
+fn a_backend_conflict_names_comfyui_on_its_buttons_and_in_its_question() {
+    let copy = messages("en");
+    let words = copy.backend_conflict;
+    let shown = ReportPresentation::conflict(copy, words, "SugarSubstitute");
+    assert_eq!((shown.labels.close, shown.labels.cancel), (words.close, words.cancel));
+    assert_eq!(shown.content.title, words.title);
+    assert_ne!(words.close, copy.conflict.close);
+}
+
+#[test]
 fn unresponsive_window_question_offers_close_it_and_start_and_cancel_in_plain_words() -> TestResult
 {
     let origin = Moment::from_nanos(0);

@@ -39,6 +39,9 @@ pub struct ForeignBackend {
 }
 
 impl ForeignBackend {
+    /// The memory `retain` claims from its job for the process list and the handles it keeps.
+    pub const RETAIN_BYTES: u64 = 1024 * 1024;
+
     /// Hold nothing until a verified peer is retained.
     pub fn new() -> Self {
         Self::default()
@@ -64,7 +67,7 @@ impl ForeignBackend {
         let memory = Arc::new(
             context
                 .memory()
-                .claim(1024 * 1024)
+                .claim(Self::RETAIN_BYTES)
                 .map_err(|cause| ClaimError::new("foreign_backend_memory", cause))?,
         );
         let budget = Budget::Protected(memory.clone());

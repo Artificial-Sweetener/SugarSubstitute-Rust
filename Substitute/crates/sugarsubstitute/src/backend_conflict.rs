@@ -21,12 +21,20 @@ use sugarsubstitute_contracts::{
 };
 use sugarsubstitute_networking::Transport;
 use sugarsubstitute_supervision::{
-    backend_listener::{AttachedListenerLease, ConnectedLoopback, TcpOwnerWorkspace},
+    backend_listener::{
+        AttachedListenerLease, ConnectedLoopback, TCP_OWNER_WORKSPACE_BYTES, TcpOwnerWorkspace,
+    },
     foreign_backend::{ForeignBackend, ForeignBackendOwner},
 };
 
 /// The file name of this application's own images.
 const APPLICATION_IMAGE: &str = "sugarsubstitute.exe";
+
+/// The memory one operation's job reserves: the kernel connection table's workspace and the
+/// retained process list, with room for the listener's answer, the peer's handle and the
+/// transport's buffers. A job that reserves less cannot identify any listener.
+pub(crate) const RESERVATION_BYTES: u64 =
+    TCP_OWNER_WORKSPACE_BYTES + ForeignBackend::RETAIN_BYTES + 2 * 1024 * 1024;
 
 /// What asking the listener found.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -167,6 +175,31 @@ fn discover(
     if state.finding != Finding::Unknown {
         return Err(BackendConflictError::invalid("repeated_discovery"));
     }
+    let found = resolve(state, context);
+    match &found {
+        Ok(_) => tracing::info!(
+            operation = "backend_port_discovery",
+            port = state.port,
+            finding = ?state.finding,
+            "A ComfyUI the application did not start holds its port"
+        ),
+        Err(error) => tracing::info!(
+            operation = "backend_port_discovery",
+            port = state.port,
+            finding = ?state.finding,
+            stage = error.stage,
+            cause = error.cause.as_ref().map(tracing::field::display),
+            "The listener on the application's port was resolved"
+        ),
+    }
+    found
+}
+
+/// Set `state.finding` from the listener's answer and the process that gave it.
+fn resolve(
+    state: &mut State,
+    context: &JobContext,
+) -> Result<ConflictObservation, BackendConflictError> {
     let mut http = Transport::default();
     let asked = ask(&mut http, state.port, context);
     let closed = http.close();
@@ -251,4 +284,22 @@ fn ask(
     decode_system_stats(&body).map_err(unverified("not_comfyui"))?;
     http.close_request().map_err(unverified("close_request"))?;
     Ok(peer)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MAX_SYSTEM_STATS_BYTES, RESERVATION_BYTES};
+    use sugarsubstitute_supervision::{
+        backend_listener::TCP_OWNER_WORKSPACE_BYTES, foreign_backend::ForeignBackend,
+    };
+
+    #[test]
+    fn a_job_reserves_enough_to_read_the_connection_table_and_retain_the_listener() {
+        // The peer's handle is charged 64 KiB by the listener lease.
+        let claimed = TCP_OWNER_WORKSPACE_BYTES
+            + ForeignBackend::RETAIN_BYTES
+            + 64 * 1024
+            + MAX_SYSTEM_STATS_BYTES as u64;
+        assert!(RESERVATION_BYTES >= claimed + 1024 * 1024);
+    }
 }

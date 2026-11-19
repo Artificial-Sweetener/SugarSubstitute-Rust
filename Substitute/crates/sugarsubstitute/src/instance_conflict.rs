@@ -23,6 +23,8 @@ pub struct Service<B: ConflictBackend> {
     session: B,
     /// The kind of work each backend operation is admitted as.
     operation: Operation,
+    /// The memory each backend operation's job reserves.
+    reservation_bytes: u64,
     clock: Arc<dyn Clock>,
     relaunch_started: bool,
     replacement: Option<OwnedJob<(), B::Error>>,
@@ -41,14 +43,16 @@ pub struct Service<B: ConflictBackend> {
 impl<B: ConflictBackend> Service<B> {
     /// Retain an inert backend; native work starts only when the surface supplies its wake.
     pub fn new(session: B) -> Self {
-        Self::admitted_as(session, Operation::Infrastructure)
+        Self::admitted_as(session, Operation::Infrastructure, 4 * 1024 * 1024)
     }
-    /// The same, with each backend operation admitted as `operation`: a backend that reads the
-    /// kernel's connection table runs as native lifecycle work.
-    pub fn admitted_as(session: B, operation: Operation) -> Self {
+    /// The same, with each backend operation admitted as `operation` and reserving
+    /// `reservation_bytes`: a backend that reads the kernel's connection table runs as native
+    /// lifecycle work and claims that table's workspace.
+    pub fn admitted_as(session: B, operation: Operation, reservation_bytes: u64) -> Self {
         Self {
             session,
             operation,
+            reservation_bytes,
             clock: MonotonicClock::new(),
             relaunch_started: false,
             replacement: None,
@@ -215,7 +219,7 @@ impl<B: ConflictBackend> Service<B> {
             operation: self.operation,
             class: JobClass::InfrastructureLifecycle,
             deadline: Some(client.now()?.checked_add(Duration::from_secs(30))?),
-            reservation_bytes: 4 * 1024 * 1024,
+            reservation_bytes: self.reservation_bytes,
             replacement: None,
         };
         self.pending = Some((

@@ -220,7 +220,7 @@ impl ReportPresentation {
         words: &'static sugarsubstitute_contracts::localization::conflict::ConflictMessages,
         window_title: &str,
     ) -> Self {
-        Self::new(
+        let mut presentation = Self::new(
             ReportContent {
                 kind: ReportKind::UnresponsiveCopy,
                 severity: ReportSeverity::Warning,
@@ -232,7 +232,11 @@ impl ReportPresentation {
             },
             None,
             copy,
-        )
+        );
+        // The buttons name what this conflict closes, not what another kind of conflict does.
+        presentation.labels.close = words.close;
+        presentation.labels.cancel = words.cancel;
+        presentation
     }
 }
 
