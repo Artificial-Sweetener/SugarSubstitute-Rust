@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Verify graph-anchored selection controls follow the complete masonry surface lifetime. */
+import { WorkflowMasonryGraphVisibility } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryGraphVisibility.js';
 import { beforeEach, afterEach, expect, test } from '@jest/globals';
 import {
   ensureWorkflowMasonryStyles,
@@ -66,7 +67,7 @@ function graphNavigation() {
   return { panel, workspace, toolbar, zoom, minimap, settings };
 }
 
-test('suppresses navigation with root masonry state across workspace allocations and restores native controls', () => {
+test('suppresses navigation with root masonry state across workspace allocations and restores native controls', async () => {
   ensureWorkflowMasonryStyles(document);
   const root = document.createElement('div');
   root.id = 'graph-canvas-container';
@@ -79,7 +80,9 @@ test('suppresses navigation with root masonry state across workspace allocations
   for (const parent of [native.panel, native.workspace]) {
     parent.append(surface);
     markMasonryMounted(parent);
-    root.dataset.sugarcubesMasonry = 'true';
+    const visibility = new WorkflowMasonryGraphVisibility(() => parent);
+    visibility.setHidden(true);
+    expect(root.dataset.sugarcubesMasonry).toBe('true');
     for (const element of [native.toolbar, native.minimap]) {
       const style = getComputedStyle(element);
       expect(style.visibility).toBe('hidden');
@@ -88,7 +91,15 @@ test('suppresses navigation with root masonry state across workspace allocations
       expect(getComputedStyle(element).pointerEvents).toBe('none');
     expect(getComputedStyle(surface).visibility).toBe('visible');
     expect(getComputedStyle(unrelated.toolbar).visibility).toBe('visible');
-    delete root.dataset.sugarcubesMasonry;
+    // Navigation the host mounts while the graph is hidden is hidden with it.
+    const late = graphNavigation();
+    root.append(late.panel);
+    await Promise.resolve();
+    expect(getComputedStyle(late.toolbar).visibility).toBe('hidden');
+    visibility.setHidden(false);
+    expect(root.dataset.sugarcubesMasonry).toBeUndefined();
+    expect(getComputedStyle(late.toolbar).visibility).toBe('visible');
+    late.panel.remove();
     for (const element of [native.toolbar, native.minimap]) {
       expect(getComputedStyle(element).visibility).toBe('visible');
     }

@@ -36,6 +36,16 @@ let masonrySurfaces = 0;
 export class WorkflowMasonryView {
     element;
     backdrop;
+    /**
+     * A hidden element that follows the surface in its container, as another follows the content
+     * inside the surface.
+     *
+     * The browser restyles an element's whole subtree when it starts or stops being its parent's
+     * last child. Scrollbar layers and the Cube stack are appended and removed beside the cards
+     * while the masonry is up; with something empty always last, neither the surface nor its
+     * content ever changes place and the cards are left alone.
+     */
+    tail;
     #content;
     #overrideSlot;
     #options;
@@ -84,7 +94,8 @@ export class WorkflowMasonryView {
         this.#content.className = 'sugarcubes-workflow-masonry__content';
         this.#overrideSlot = options.document.createElement('div');
         this.#overrideSlot.className = 'sc-plugin-overrides-slot';
-        this.element.append(this.#overrideSlot, this.#content);
+        this.element.append(this.#overrideSlot, this.#content, trailing(options.document));
+        this.tail = trailing(options.document);
         this.#geometry = new NativeCardGeometryObserver(options.document, () => {
             if (!this.#mounting)
                 this.#requestLayout();
@@ -435,7 +446,15 @@ export class WorkflowMasonryView {
         const parent = this.element.parentElement;
         this.element.remove();
         this.backdrop.remove();
+        this.tail.remove();
         if (parent)
             markMasonryMounted(parent);
     }
+}
+/** Create an empty element that takes no part in layout, to stay last among its siblings. */
+function trailing(document) {
+    const tail = document.createElement('div');
+    tail.className = 'sugarcubes-workflow-masonry__tail';
+    tail.hidden = true;
+    return tail;
 }

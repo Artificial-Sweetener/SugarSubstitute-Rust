@@ -35,6 +35,7 @@ export const MASONRY_HIDES_ATTRIBUTE = 'data-sc-masonry-hides';
 export const MASONRY_STILLS_ATTRIBUTE = 'data-sc-masonry-stills';
 
 const MOUNTED_HIDES = '[data-testid="selection-toolbox"]';
+/** The graph's own navigation chrome: stilled under a mounted masonry, hidden once it rests. */
 const MOUNTED_STILLS = '[aria-label="Canvas Toolbar"], .minimap-main-container';
 
 /** Set or clear `attribute` on `element` only when that changes it. */
@@ -103,6 +104,40 @@ export function markMasonryMounted(surface: HTMLElement): void {
   );
 }
 
+/** Watches each container whose graph is hidden for navigation chrome the host mounts later. */
+const lateHiddenChrome = new WeakMap<HTMLElement, HostSurfaceObserver>();
+
+/**
+ * Hide the graph's navigation chrome in `root` for as long as its graph is hidden, including
+ * chrome the host mounts meanwhile; or show again what this hid.
+ */
+export function markMasonryGraphChromeHidden(root: HTMLElement, hidden: boolean): void {
+  const watching = lateHiddenChrome.get(root);
+  if (!hidden) {
+    watching?.disconnect();
+    lateHiddenChrome.delete(root);
+    for (const element of root.querySelectorAll(`[${MASONRY_HIDES_ATTRIBUTE}="graph-chrome"]`))
+      element.removeAttribute(MASONRY_HIDES_ATTRIBUTE);
+    return;
+  }
+  for (const element of root.querySelectorAll(MOUNTED_STILLS))
+    mark(element, MASONRY_HIDES_ATTRIBUTE, 'graph-chrome');
+  if (watching) return;
+  lateHiddenChrome.set(
+    root,
+    new HostSurfaceObserver(
+      root,
+      MOUNTED_STILLS,
+      (changes) => {
+        for (const change of changes)
+          if (change.kind === 'mounted')
+            mark(change.element, MASONRY_HIDES_ATTRIBUTE, 'graph-chrome');
+      },
+      { exclude: '.sugarcubes-workflow-masonry' },
+    ),
+  );
+}
+
 /** Install layout structure independently of native node theme tokens. */
 export function ensureWorkflowMasonryStyles(documentRef: Document): void {
   if (documentRef.getElementById('sugarcubes-workflow-masonry-styles')) return;
@@ -151,6 +186,7 @@ export function ensureWorkflowMasonryStyles(documentRef: Document): void {
       transform-origin:0 0;
     }
     .sugarcubes-workflow-masonry__content { position:relative; width:100%; }
+    .sugarcubes-workflow-masonry__tail { display:none !important; }
     /* Retain a measurable scale box with zero flow height, anchored by native scrolling. */
     .sugarcubes-workflow-masonry > .sc-style-scrollbar-layer {
       position:sticky; inset:auto; bottom:0; width:100%; height:1px; margin-top:-1px;
@@ -195,10 +231,6 @@ export function ensureWorkflowMasonryStyles(documentRef: Document): void {
     [${MASONRY_HIDES_ATTRIBUTE}],
     [${MASONRY_HIDES_ATTRIBUTE}] * {
       visibility:hidden !important; pointer-events:none !important;
-    }
-    #graph-canvas-container[data-sugarcubes-masonry="true"] [aria-label="Canvas Toolbar"],
-    #graph-canvas-container[data-sugarcubes-masonry="true"] .minimap-main-container {
-      visibility:hidden !important;
     }
     [${MASONRY_STILLS_ATTRIBUTE}],
     [${MASONRY_STILLS_ATTRIBUTE}] * {

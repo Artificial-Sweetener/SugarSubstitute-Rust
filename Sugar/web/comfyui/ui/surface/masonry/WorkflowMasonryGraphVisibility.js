@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Keep graph layers suppressed across workflow replacement and restore native interaction exactly. */
 import { workflowMasonryGraphLayers } from './WorkflowMasonryGraphGeometry.js';
-import { MASONRY_HIDES_ATTRIBUTE } from './WorkflowMasonryStyles.js';
+import { MASONRY_HIDES_ATTRIBUTE, markMasonryGraphChromeHidden } from './WorkflowMasonryStyles.js';
 import { SurfaceInputHold } from '../motion/SurfaceInputHold.js';
 /** Own graph visibility independently from the lifetime of borrowed masonry cards. */
 export class WorkflowMasonryGraphVisibility {
@@ -24,6 +24,8 @@ export class WorkflowMasonryGraphVisibility {
     #held = new Map();
     #hidden = new Set();
     #layers = new Set();
+    /** The graph containers whose navigation chrome is hidden with their layers. */
+    #chrome = new Set();
     /** Resolve the current allocation even before a destination masonry surface exists. */
     constructor(getContainer) {
         this.getContainer = getContainer;
@@ -39,6 +41,9 @@ export class WorkflowMasonryGraphVisibility {
                 if (layer.getAttribute(MASONRY_HIDES_ATTRIBUTE) === 'graph')
                     layer.removeAttribute(MASONRY_HIDES_ATTRIBUTE);
             this.#layers.clear();
+            for (const root of this.#chrome)
+                markMasonryGraphChromeHidden(root, false);
+            this.#chrome.clear();
             return;
         }
         const container = this.getContainer();
@@ -53,11 +58,18 @@ export class WorkflowMasonryGraphVisibility {
                 element.dataset.sugarcubesMasonry = 'true';
         }
         // Each layer carries its own mark, so hiding what is inside it restyles that layer alone.
-        for (const layer of workflowMasonryGraphLayers(container)) {
-            this.#layers.add(layer);
-            if (layer.getAttribute(MASONRY_HIDES_ATTRIBUTE) !== 'graph')
-                layer.setAttribute(MASONRY_HIDES_ATTRIBUTE, 'graph');
-        }
+        for (const layer of workflowMasonryGraphLayers(container))
+            this.#hide(layer);
+        if (!root || this.#chrome.has(root))
+            return;
+        this.#chrome.add(root);
+        markMasonryGraphChromeHidden(root, true);
+    }
+    /** Mark one layer hidden, remembering it for release. */
+    #hide(element) {
+        this.#layers.add(element);
+        if (element.getAttribute(MASONRY_HIDES_ATTRIBUTE) !== 'graph')
+            element.setAttribute(MASONRY_HIDES_ATTRIBUTE, 'graph');
     }
     /** Block native input during card travel while preserving each layer's prior inert state. */
     setInert(inert) {
@@ -84,10 +96,14 @@ export class WorkflowMasonryGraphVisibility {
     /**
      * Keep input out of the layers by a hold instead of `inert`, until `setInert` next runs.
      *
-     * Called before borrowed cards return to a layer: `inert` reaches every descendant's style,
-     * so clearing it once the cards are back restyles every one of them.
+     * Called while borrowed cards are inside a layer or about to return to it: `inert` reaches
+     * every descendant's style, so setting or clearing it then restyles every one of them.
      */
     holdInput() {
+        const container = this.getContainer();
+        for (const layer of container ? workflowMasonryGraphLayers(container) : [])
+            if (!this.#inert.has(layer))
+                this.#inert.set(layer, layer.inert);
         for (const [layer, previous] of this.#inert) {
             if (previous || this.#held.has(layer))
                 continue;

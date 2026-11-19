@@ -96,11 +96,7 @@ test('no masonry rule reaches from the workspace container to something inside i
     .split('}')
     .flatMap((rule) => (rule.split('{')[0] ?? '').split(','))
     .map((selector) => selector.trim())
-    .filter(
-      (selector) =>
-        /^#graph-canvas-container\[[^\]]*\]\s*\S/.test(selector) &&
-        !/\[aria-label="Canvas Toolbar"\]$|\.minimap-main-container$/.test(selector),
-    );
+    .filter((selector) => /^#graph-canvas-container\[[^\]]*\]\s*\S/.test(selector));
   expect(reaching).toEqual([]);
 });
 
@@ -207,4 +203,30 @@ test('a stylesheet that is already last in the head is not moved', async () => {
   expect(records.length).toBeGreaterThan(0);
   observer.disconnect();
   later.remove();
+});
+
+test('something empty always follows the masonry surface and its content', async () => {
+  const { WorkflowMasonryView } = await import(
+    '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryView.js'
+  );
+  const { CubeFaceCardStateService } = await import(
+    '../../../frontend/comfyui/ui/surface/CubeFaceCardStateService.js'
+  );
+  const { CubeNodeCatalog } = await import(
+    '../../../frontend/comfyui/ui/cube/node/CubeNodeCatalog.js'
+  );
+  const view = new WorkflowMasonryView({
+    document,
+    sections: [],
+    cardState: new CubeFaceCardStateService({ nodes: new CubeNodeCatalog(), history: {} }),
+    openCube() {},
+  });
+  // An element that starts or stops being its parent's last child is restyled with everything
+  // in it; a layer or rail appended beside the cards must displace only something empty.
+  const content = view.element.querySelector('.sugarcubes-workflow-masonry__content');
+  expect(view.element.lastElementChild).not.toBe(content);
+  expect(view.element.lastElementChild?.childElementCount).toBe(0);
+  expect(view.tail.hidden).toBe(true);
+  expect(view.tail.childElementCount).toBe(0);
+  view.dispose();
 });

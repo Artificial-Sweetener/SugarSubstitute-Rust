@@ -172,13 +172,14 @@ export class WorkflowMasonryController {
                 this.#reveal ??= new WorkflowMasonryGraphReveal();
                 this.#reveal.reconcile(container, sections);
                 const sources = this.#view.prepareSources();
-                container.append(this.#view.backdrop, this.#view.element);
+                container.append(this.#view.backdrop, this.#view.element, this.#view.tail);
                 markMasonryMounted(container);
                 // Appearance owners mark the surface while it is empty; marked after the cards arrive,
                 // every card is restyled again.
                 prepareNativePresentation(this.#view.element);
                 this.#options.onSurfaceMounting?.(this.#view, animate);
-                this.#graphVisibility.setInert(true);
+                // The cards are still inside the layers; `inert` would restyle them all before they leave.
+                this.#graphVisibility.holdInput();
                 this.#mounting = this.#view.mountCards(renderer, sources);
             }
             await this.#mounting;

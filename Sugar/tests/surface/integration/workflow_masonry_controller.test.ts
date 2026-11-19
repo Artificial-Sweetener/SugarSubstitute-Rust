@@ -481,12 +481,20 @@ describe('workflow masonry controller', () => {
     const mount = setup.mount.getMockImplementation();
     if (!mount) throw new Error('Native mount fixture missing');
     setup.mount.mockImplementation((...args) => {
-      expect(layers.map((element) => element.inert)).toEqual([true, true]);
+      // Cards are still inside the layers: input is held out without `inert`, which would
+      // restyle every one of them; a layer that was already inert stays so.
+      expect(layers.map((element) => element.inert)).toEqual([false, true]);
+      expect(layers.map((element) => element.hasAttribute('data-sc-input-held'))).toEqual([
+        true,
+        false,
+      ]);
       return mount(...args);
     });
     await setup.controller.toggle();
     expect(layers.map((element) => element.inert)).toEqual([true, true]);
+    expect(root.querySelector('[data-sc-input-held]')).toBeNull();
     await setup.controller.toggle();
+    expect(root.querySelector('[data-sc-input-held]')).toBeNull();
     expect(layers.map((element) => element.inert)).toEqual([false, true]);
     await setup.controller.toggle();
     setup.controller.leaveImmediately();
