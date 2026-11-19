@@ -39,6 +39,8 @@ import {
   HostSessionNoticeLink,
   type SessionNoticePresenter,
 } from '../session_notice/HostSessionNoticeLink.js';
+import type { DraggedFiles } from '../file_drag/DraggedFiles.js';
+import { HostFileDragLink } from '../file_drag/HostFileDragLink.js';
 
 /** Supply the browser lifetime without introducing another connection or preference owner. */
 export interface EmbeddedPanelOptions {
@@ -60,6 +62,8 @@ export interface EmbeddedPanelOptions {
   readonly releaseNotes?: ReleaseNotesHostAttachment;
   /** Shows what the host has to tell about the session when it declares `sugarcubes.session-notice`. */
   readonly sessionNotice?: SessionNoticePresenter;
+  /** Receives the names of files dragged over the window when the host declares `sugarcubes.file-drag`. */
+  readonly draggedFiles?: DraggedFiles;
   connected(): boolean;
   subscribeConnection?(listener: (connected: boolean) => void): () => void;
   report(error: unknown): void;
@@ -74,6 +78,7 @@ export class EmbeddedPanelHost {
   #updates: { readonly link: UpdatesHostLink; readonly detach: () => void } | null = null;
   #releaseNotes: { readonly link: HostReleaseNotesLink; readonly detach: () => void } | null = null;
   #sessionNotice: HostSessionNoticeLink | null = null;
+  #fileDrag: HostFileDragLink | null = null;
   #stopHost: (() => void) | null = null;
   #timer: number | null = null;
 
@@ -167,6 +172,19 @@ export class EmbeddedPanelHost {
     this.#watchHostUpdates();
     this.#watchHostReleaseNotes();
     this.#watchHostSessionNotice();
+    this.#followHostFileDrags();
+  }
+
+  /** Learn what a dragged file is called once the host declares that it says so. */
+  #followHostFileDrags(): void {
+    if (
+      this.#fileDrag ||
+      !this.options.draggedFiles ||
+      !this.options.host.read()?.serves(HOST_PROTOCOLS.fileDrag)
+    )
+      return;
+    this.#fileDrag = new HostFileDragLink(this.transport, this.options.draggedFiles);
+    this.#fileDrag.start();
   }
 
   /** Show the notice the host owes about the session once the host declares that it has them. */
@@ -261,6 +279,8 @@ export class EmbeddedPanelHost {
     this.#releaseNotes = null;
     this.#sessionNotice?.dispose();
     this.#sessionNotice = null;
+    this.#fileDrag?.dispose();
+    this.#fileDrag = null;
     if (this.#timer !== null) this.options.window.clearInterval(this.#timer);
     this.#timer = null;
     this.options.window.removeEventListener('pagehide', this.dispose);

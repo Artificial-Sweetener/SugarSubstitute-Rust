@@ -43,6 +43,13 @@ fn only_a_composition_hosted_browser_is_told_the_host_presents_output() -> Resul
 }
 
 #[test]
+fn only_a_composition_hosted_browser_is_told_the_host_names_dragged_files() -> Result {
+    assert!(description(MainHosting::Composition)?.serves(HostProtocol::FILE_DRAG));
+    assert!(!description(MainHosting::Windowed)?.serves(HostProtocol::FILE_DRAG));
+    Ok(())
+}
+
+#[test]
 fn the_description_names_no_host_styles_and_encodes_as_the_shared_schema_requires() -> Result {
     let encoded = description(MainHosting::Composition)?.encode(&session()?)?;
     let value: serde_json::Value = serde_json::from_slice(&encoded)?;
@@ -58,6 +65,7 @@ fn the_description_names_no_host_styles_and_encodes_as_the_shared_schema_require
                 { "name": "sugarcubes.updates", "version": 1 },
                 { "name": "sugarcubes.release-notes", "version": 1 },
                 { "name": "sugarcubes.session-notice", "version": 1 },
+                { "name": "sugarcubes.file-drag", "version": 1 },
             ],
             "capabilities": [{ "name": "presentation.system-accent" }, { "name": "output.host-surface" }, { "name": "canvas.backdrop-regions" }, { "name": "updates.product-name" }, { "name": "session-notice.lines" }],
         })

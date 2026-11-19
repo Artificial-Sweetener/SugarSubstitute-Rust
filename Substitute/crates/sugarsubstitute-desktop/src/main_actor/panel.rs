@@ -111,6 +111,28 @@ impl MainActor {
         self.canvas_replies.push(NativeDelivery::SessionNotice(command))
     }
 
+    /// Tell the current document what the file drag over the window carries, or that it ended.
+    /// A page that is not revealed, or is closing, is told nothing: it cannot be dragged over.
+    #[cfg(feature = "native-composition")]
+    pub(super) fn forward_file_drag(&mut self) -> Result<(), DesktopError> {
+        let Some(message) = self.take_file_drag() else {
+            return Ok(());
+        };
+        if self.admission.closing()
+            || !self.revealed
+            || self.readiness.as_ref().and_then(MainReadiness::panel_context).is_none()
+        {
+            return Ok(());
+        }
+        let command = crate::main_file_drag_contract::FileDragCommand::new(
+            self.identity(),
+            &message,
+            self.request()?.storage_lease(),
+        )
+        .map_err(|cause| DesktopError::boxed("encode_file_drag", cause))?;
+        self.canvas_replies.push(NativeDelivery::FileDrag(command))
+    }
+
     /// Deliver a correlated native canvas reply to the same current document and UI apartment.
     pub(crate) fn send_canvas_native(
         &mut self,

@@ -159,6 +159,8 @@ fn real_registration_owns_the_window_until_revoked_and_declines_without_a_browse
         active: Cell::new(true),
         entered: Cell::new(false),
         exporting: Cell::new(false),
+        named: Cell::new(false),
+        file_drag: RefCell::new(None),
         callbacks: CallbackFence::default(),
     });
     let target: IDropTarget = Target(state.clone()).into();
@@ -202,6 +204,8 @@ fn an_export_refuses_its_own_drops_and_holds_retirement_until_it_returns()
         active: Cell::new(true),
         entered: Cell::new(true),
         exporting: Cell::new(false),
+        named: Cell::new(false),
+        file_drag: RefCell::new(None),
         callbacks: CallbackFence::default(),
     });
     let exporter = Exporter(state.clone());
@@ -215,5 +219,38 @@ fn an_export_refuses_its_own_drops_and_holds_retirement_until_it_returns()
     assert!(!state.exporting.get());
     assert_eq!(wakes.get(), 1, "the returning export wakes the deferred retirement");
     assert!(retire_when_quiet(&state.callbacks, || Ok(()))?);
+    Ok(())
+}
+
+#[test]
+fn a_page_given_names_is_told_once_that_their_drag_ended_and_only_the_newest_word_waits()
+-> Result<(), Box<dyn std::error::Error>> {
+    let wakes = Rc::new(Cell::new(0));
+    let fixture = fixture_events(wakes.clone())?;
+    let state = State {
+        host: HWND::default(),
+        controller: RefCell::new(None),
+        events: fixture.events.clone(),
+        active: Cell::new(true),
+        entered: Cell::new(true),
+        exporting: Cell::new(false),
+        named: Cell::new(false),
+        file_drag: RefCell::new(None),
+        callbacks: CallbackFence::default(),
+    };
+    // A drag whose files were never named owes the page nothing when it ends.
+    state.unname();
+    assert_eq!(state.file_drag.take(), None);
+    assert_eq!(wakes.get(), 0);
+    // A drag that carries no readable data names nothing either.
+    state.name(None);
+    assert_eq!(state.file_drag.take(), None);
+
+    state.named.set(true);
+    state.file_drag.replace(Some(FileDragHostMessage::Entered { names: vec!["a.json".into()] }));
+    state.unname();
+    state.unname();
+    assert_eq!(state.file_drag.take(), Some(FileDragHostMessage::Left));
+    assert_eq!(wakes.get(), 1);
     Ok(())
 }

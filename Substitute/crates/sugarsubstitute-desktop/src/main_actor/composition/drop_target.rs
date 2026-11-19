@@ -9,6 +9,7 @@
 use super::callbacks::{CallbackFence, retire_when_quiet};
 use super::*;
 use std::cell::{Cell, RefCell};
+use sugarsubstitute_contracts::host_file_drag::FileDragHostMessage;
 use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2CompositionController3;
 use windows::{
     Win32::{
@@ -53,6 +54,10 @@ struct State {
     entered: Cell<bool>,
     /// This window is the source of the current OS drag, which the page must not receive.
     exporting: Cell<bool>,
+    /// The page was told the names of the current drag's files and is owed word of its end.
+    named: Cell<bool>,
+    /// The newest word about a file drag that the main actor has not taken yet.
+    file_drag: RefCell<Option<FileDragHostMessage>>,
     callbacks: CallbackFence,
 }
 
@@ -120,6 +125,27 @@ impl State {
         Ok(effect_within(allowed, DROPEFFECT(chosen)))
     }
 
+    /// Name the files of a drag the browser accepted on entry, for the page that cannot read
+    /// them before the drop.
+    fn name(&self, data: Option<&IDataObject>) {
+        let Some(data) = data.filter(|_| self.entered.get()) else { return };
+        let names = super::drop_names::dragged_names(data);
+        if names.is_empty() {
+            return;
+        }
+        self.named.set(true);
+        self.file_drag.replace(Some(FileDragHostMessage::Entered { names }));
+        self.events.wake();
+    }
+
+    /// Tell a page that was given names that their drag is over.
+    fn unname(&self) {
+        if self.named.replace(false) {
+            self.file_drag.replace(Some(FileDragHostMessage::Left));
+            self.events.wake();
+        }
+    }
+
     /// End a forwarded drag that the browser accepted on entry.
     fn leave(&self) {
         if !self.entered.replace(false) || !self.active.get() || !self.events.accepting() {
@@ -150,7 +176,9 @@ impl IDropTarget_Impl for Target_Impl {
         point: &POINTL,
         effect: *mut DROPEFFECT,
     ) -> windows::core::Result<()> {
-        self.0.forward(Phase::Enter(data.as_ref()), keys, point, effect)
+        self.0.forward(Phase::Enter(data.as_ref()), keys, point, effect)?;
+        self.0.name(data.as_ref());
+        Ok(())
     }
 
     fn DragOver(
@@ -164,6 +192,7 @@ impl IDropTarget_Impl for Target_Impl {
 
     fn DragLeave(&self) -> windows::core::Result<()> {
         self.0.leave();
+        self.0.unname();
         Ok(())
     }
 
@@ -174,7 +203,9 @@ impl IDropTarget_Impl for Target_Impl {
         point: &POINTL,
         effect: *mut DROPEFFECT,
     ) -> windows::core::Result<()> {
-        self.0.forward(Phase::Drop(data.as_ref()), keys, point, effect)
+        let forwarded = self.0.forward(Phase::Drop(data.as_ref()), keys, point, effect);
+        self.0.unname();
+        forwarded
     }
 }
 
@@ -310,11 +341,18 @@ impl DropTarget {
             active: Cell::new(true),
             entered: Cell::new(false),
             exporting: Cell::new(false),
+            named: Cell::new(false),
+            file_drag: RefCell::new(None),
             callbacks: CallbackFence::default(),
         });
         let target: IDropTarget = Target(state.clone()).into();
         let lifecycle = Lifecycle::open(Native { window, target })?;
         Ok(Self { state, lifecycle })
+    }
+
+    /// Take the newest unsent word about a file drag: its files' names, or its end.
+    pub(super) fn take_file_drag(&self) -> Option<FileDragHostMessage> {
+        self.state.file_drag.take()
     }
 
     /// Decline further drags before asynchronous main-window retirement.

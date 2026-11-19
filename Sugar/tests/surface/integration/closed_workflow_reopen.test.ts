@@ -16,6 +16,7 @@
 import { beforeAll, afterAll, afterEach, expect, jest, test } from '@jest/globals';
 import { Updates } from '@microsoft/fast-element';
 import { SubstituteFrameHost } from '../../../frontend/comfyui/ui/surface/frame/SubstituteFrameHost.js';
+import { DraggedFiles } from '../../../frontend/comfyui/ui/core/file_drag/DraggedFiles.js';
 import { AppOrbView } from '../../../frontend/comfyui/ui/surface/frame/AppOrbView.js';
 import { ClosedWorkflowHistory } from '../../../frontend/comfyui/ui/surface/frame/ClosedWorkflowHistory.js';
 import { WorkflowSessionStore } from '../../../frontend/comfyui/ui/execution/application/WorkflowSessionStore.js';
@@ -176,6 +177,7 @@ function fixture() {
   };
   const report = jest.fn();
   const host = new SubstituteFrameHost({
+    draggedFiles: new DraggedFiles(),
     document,
     app,
     sessions,

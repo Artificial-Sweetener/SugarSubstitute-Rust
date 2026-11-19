@@ -27,6 +27,7 @@ import { EmbeddedPresentation } from '../core/embedded/EmbeddedPresentation.js';
 import { HostAccent } from '../core/embedded/HostAccent.js';
 import { HostDescriptionState } from '../core/embedded/HostDescriptionState.js';
 import { UpdateSourceSlot } from '../core/updates/UpdateSource.js';
+import { DraggedFiles } from '../core/file_drag/DraggedFiles.js';
 import { DeclaredHost } from '../core/embedded/PanelRuntime.js';
 import { startEmbeddedPanel } from '../core/embedded/EmbeddedPanelHost.js';
 import type { HostLine } from '../core/session_notice/HostSessionNoticeLink.js';
@@ -86,6 +87,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
   const hostAccent = new HostAccent();
   const host = new HostDescriptionState();
   const updates = new UpdateSourceSlot();
+  const draggedFiles = new DraggedFiles();
   const whatsNew = new WhatsNewPresenter(
     new WhatsNewModal({ document: options.document }),
     seenReleases(options.app, options.reportPresentationError),
@@ -122,6 +124,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
     sessions: options.sessions,
     activity: options.activity,
     progress: options.progress,
+    draggedFiles,
     stackControls: options.stackControls,
     openOverrides: (trigger) => relations.openOverrideMenu(trigger),
     setOverridesInline: (inline) => relations.setOverridesInline(inline),
@@ -172,6 +175,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
         host,
         updates,
         releaseNotes: whatsNew,
+        draggedFiles,
         sessionNotice: {
           notSaved: (lost) => {
             const words = unsavedWorkWords(lost);

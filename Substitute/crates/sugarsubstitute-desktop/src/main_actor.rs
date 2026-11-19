@@ -352,6 +352,8 @@ impl MainActor {
         if self.progress_panel_transport()? || self.progress_panel_messages()? {
             return Ok(None);
         }
+        #[cfg(feature = "native-composition")]
+        self.forward_file_drag()?;
         let reply_was_due = self.canvas_replies.reply_due();
         if reply_was_due && self.progress_canvas_reply()? {
             return Ok(None);

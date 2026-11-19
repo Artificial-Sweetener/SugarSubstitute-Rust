@@ -42,6 +42,7 @@ export class SubstituteFrameView {
     #cluster;
     #plugin = false;
     #presented = [];
+    #placeNextOpened = null;
     #dark = null;
     #initialized = false;
     /** Create provider controls with stable child lifetimes and shared frame artwork. */
@@ -199,12 +200,25 @@ export class SubstituteFrameView {
         this.#tabs.setOrbVisible(!enabled);
         this.#stripLayout.setLeadingInset(enabled ? 0 : FRAME_TAB_START);
     }
+    /**
+     * Put the next workflow that opens at tab position `index`; null withdraws the request.
+     * ComfyUI opens a workflow as the last tab, so the request is met by moving that tab.
+     */
+    placeNextOpened(index) {
+        this.#placeNextOpened = index;
+    }
     /** Retain tab identities through workflow and activity updates. */
     update(tabs, unread) {
+        const opened = tabs.length > this.#presented.length;
         this.#presented = tabs;
         this.#tabs.update(tabs, unread, this.#initialized);
         this.#stripLayout.update(tabs);
         this.#initialized = true;
+        const place = this.#placeNextOpened;
+        if (!opened || place === null)
+            return;
+        this.#placeNextOpened = null;
+        this.tabDrop.place(place);
     }
     /** Project the accepted palette only when it changes and let the orb retain raster variants. */
     setPalette(color, dark) {

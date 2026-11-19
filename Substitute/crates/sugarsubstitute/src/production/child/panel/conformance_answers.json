@@ -45,6 +45,10 @@
             {
               "name": "sugarcubes.session-notice",
               "version": 1
+            },
+            {
+              "name": "sugarcubes.file-drag",
+              "version": 1
             }
           ],
           "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",

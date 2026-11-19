@@ -24,6 +24,7 @@ import { SubstituteFrameView } from './SubstituteFrameView.js';
 import { substituteFrameCss } from './SubstituteFrameStyles.js';
 import { generationQueueSkinCss } from './GenerationQueueSkinStyles.js';
 import { GenerationStripHost } from './GenerationStripHost.js';
+import { WorkflowFileTabDrop } from './WorkflowFileTabDrop.js';
 import { SubstituteToolbarLayout } from './SubstituteToolbarLayout.js';
 import { DesktopFramePresentation } from './DesktopFramePresentation.js';
 import { DesktopPresentationDefaults } from './DesktopPresentationDefaults.js';
@@ -48,6 +49,7 @@ export class SubstituteFrameHost {
     #view = null;
     #renamePrompt;
     #generation = null;
+    #fileTabDrop = null;
     #toolbarLayout = null;
     #pluginToolbar = null;
     #adapter = null;
@@ -280,6 +282,14 @@ export class SubstituteFrameHost {
         mount.append(this.#view.element);
         this.#desktop.attach(mount);
         this.#generation = new GenerationStripHost(this.options.document, this.#view.element, this.options.app, this.options.report, this.options.adoptJobSeeds, this.options.confirm, this.#view.tabDrop);
+        const view = this.#view;
+        this.#fileTabDrop = new WorkflowFileTabDrop({
+            document: this.options.document,
+            dragged: this.options.draggedFiles,
+            tabBar: view.tabDrop,
+            placeNextOpened: (index) => view.placeNextOpened(index),
+        });
+        this.#fileTabDrop.setup();
         this.#toolbarLayout = new SubstituteToolbarLayout(this.options.document, this.#view.element, this.#view.progressElement);
     }
     /** Refresh only the retained progress tracks for the currently presented workflow. */
@@ -305,6 +315,8 @@ export class SubstituteFrameHost {
         this.#toolbarLayout = null;
         this.#generation?.dispose();
         this.#generation = null;
+        this.#fileTabDrop?.dispose();
+        this.#fileTabDrop = null;
         this.#stopWorkflow?.();
         this.#stopWorkflow = null;
         this.#view?.dispose();

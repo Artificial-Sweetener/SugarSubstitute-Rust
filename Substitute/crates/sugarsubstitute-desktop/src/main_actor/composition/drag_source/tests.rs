@@ -250,3 +250,17 @@ fn only_an_absolute_staged_path_backs_dropped_files() {
     assert!(dropped_files(Path::new("C:\\")).is_none());
     assert!(dropped_files(Path::new("C:\\staging\\output.png")).is_some());
 }
+
+#[test]
+fn a_drop_target_reads_a_dragged_files_own_name_and_never_its_folder() -> TestResult {
+    use super::super::drop_names::dragged_names;
+    let _apartment = Apartment::enter()?;
+    let released = Arc::new(AtomicU64::new(0));
+    let mut output = drag("ComfyUI_00042_.png", b"bytes".to_vec(), &released)?;
+    output.staged = Some(std::path::PathBuf::from(r"C:\staging\ComfyUI_00042_.png"));
+    assert_eq!(dragged_names(&data_object(output)?), ["ComfyUI_00042_.png"]);
+    // A drag that offers no file list names nothing.
+    let unstaged = data_object(drag("image.png", b"bytes".to_vec(), &released)?)?;
+    assert!(dragged_names(&unstaged).is_empty());
+    Ok(())
+}

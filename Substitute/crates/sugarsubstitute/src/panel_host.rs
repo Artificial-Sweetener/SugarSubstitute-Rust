@@ -38,6 +38,8 @@ const PROTOCOLS: [HostProtocol; 6] = [
 /// composition-hosted browser can show output on the native canvas; a windowed browser presents
 /// output images itself, so it is not told the host presents them. The native canvas blurs every
 /// acrylic region a geometry message admits, which the page learns from `canvas.backdrop-regions`.
+/// A drag over a composition-hosted browser passes through the host, which can therefore name
+/// its files; a windowed browser takes its drags itself, so `sugarcubes.file-drag` is not served.
 ///
 /// # Errors
 /// Rejects a description the shared schema bounds refuse, which would be a defect here.
@@ -49,7 +51,11 @@ pub(crate) fn description(hosting: MainHosting) -> Result<HostDescription, Panel
     }
     capabilities.push(HostCapability::NAMED_UPDATES);
     capabilities.push(HostCapability::NOTICE_LINES);
-    HostDescription::new(PROTOCOLS.to_vec(), capabilities)
+    let mut protocols = PROTOCOLS.to_vec();
+    if hosting == MainHosting::Composition {
+        protocols.push(HostProtocol::FILE_DRAG);
+    }
+    HostDescription::new(protocols, capabilities)
 }
 
 /// The SugarCubes presentation this host configures; the accent is the operating-system accent,

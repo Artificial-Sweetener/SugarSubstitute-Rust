@@ -443,6 +443,13 @@ impl Input {
         self.state.take_gesture()
     }
 
+    /// Take the newest unsent word about a file drag over the window.
+    pub(super) fn take_file_drag(
+        &self,
+    ) -> Option<sugarsubstitute_contracts::host_file_drag::FileDragHostMessage> {
+        self.drop_target.as_ref()?.take_file_drag()
+    }
+
     /// Queue the OS copy drag of the shown output for this window's next message dispatch.
     ///
     /// The drag runs modally from the window procedure rather than from the caller: OLE's

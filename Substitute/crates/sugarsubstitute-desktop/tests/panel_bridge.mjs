@@ -478,6 +478,17 @@ test('a line reaches a page in version two, and its watch and shown ride the con
   assert.equal(f.deliver({ ...line, session: 'another-session' }), false);
   assert.deepEqual(f.received.map(value => value.type), ['line']);
 });
+test('file drag reports reach the current session, and the page sends none', () => {
+  const f = fixture();
+  const drag = (type, extra = {}) => ({ protocol: 'sugarcubes.file-drag', version: 1, session, type, ...extra });
+  const entered = drag('entered', { files: [{ name: 'Portrait.json' }] });
+  for (const value of [{ ...entered, version: 2 }, { ...entered, session: 'another-session' }, drag('watch')])
+    assert.equal(f.deliver(value), false);
+  assert.equal(f.deliver(entered), true);
+  assert.equal(f.deliver(drag('left')), true);
+  assert.deepEqual(f.received.map(value => value.type), ['entered', 'left']);
+  assert.throws(() => f.bridge.send(drag('watch')));
+});
 test('session notices are notifications in a released version for the current session only', () => {
   const f = fixture();
   const lost = notice('not-saved', { notice: 1, workspace: true, inputs: false });

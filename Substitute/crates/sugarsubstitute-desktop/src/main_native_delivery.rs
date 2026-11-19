@@ -20,6 +20,9 @@ pub(crate) enum NativeDelivery {
     Updates(crate::UpdatesCommand),
     ReleaseNotes(crate::ReleaseNotesCommand),
     SessionNotice(crate::SessionNoticeCommand),
+    /// Only a composition-hosted browser's drags pass through the host.
+    #[cfg(feature = "native-composition")]
+    FileDrag(crate::main_file_drag_contract::FileDragCommand),
 }
 
 impl NativeDelivery {
@@ -35,6 +38,8 @@ impl NativeDelivery {
             Self::Updates(value) => value.identity(),
             Self::ReleaseNotes(value) => value.identity(),
             Self::SessionNotice(value) => value.identity(),
+            #[cfg(feature = "native-composition")]
+            Self::FileDrag(value) => value.identity(),
         }
     }
 
@@ -48,6 +53,8 @@ impl NativeDelivery {
             | Self::Updates(_)
             | Self::ReleaseNotes(_)
             | Self::SessionNotice(_) => None,
+            #[cfg(feature = "native-composition")]
+            Self::FileDrag(_) => None,
             Self::Ingress(value) => Some(match value.kind() {
                 ReceiptKind::Control => Lane::Control,
                 ReceiptKind::Cancellation { .. } => Lane::Cancellation,
@@ -66,6 +73,8 @@ impl NativeDelivery {
             | Self::Updates(_)
             | Self::ReleaseNotes(_)
             | Self::SessionNotice(_) => None,
+            #[cfg(feature = "native-composition")]
+            Self::FileDrag(_) => None,
             Self::Ingress(value) => match value.kind() {
                 ReceiptKind::Control => None,
                 ReceiptKind::Cancellation { request_id } => Some(request_id),
@@ -84,6 +93,8 @@ impl NativeDelivery {
             Self::Updates(value) => Some(value.payload()),
             Self::ReleaseNotes(value) => Some(value.payload()),
             Self::SessionNotice(value) => Some(value.payload()),
+            #[cfg(feature = "native-composition")]
+            Self::FileDrag(value) => Some(value.payload()),
             Self::Ingress(_) => None,
         }
     }
@@ -101,6 +112,8 @@ impl NativeDelivery {
             Self::Updates(value) => Some(value.take_payload()),
             Self::ReleaseNotes(value) => Some(value.take_payload()),
             Self::SessionNotice(value) => Some(value.take_payload()),
+            #[cfg(feature = "native-composition")]
+            Self::FileDrag(value) => Some(value.take_payload()),
             Self::Ingress(_) => None,
         }
     }
@@ -117,6 +130,8 @@ impl NativeDelivery {
             Self::Updates(value) => value.into_claim(),
             Self::ReleaseNotes(value) => value.into_claim(),
             Self::SessionNotice(value) => value.into_claim(),
+            #[cfg(feature = "native-composition")]
+            Self::FileDrag(value) => value.into_claim(),
         }
     }
 }

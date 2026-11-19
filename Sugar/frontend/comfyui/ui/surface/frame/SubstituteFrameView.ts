@@ -53,6 +53,7 @@ export class SubstituteFrameView {
   readonly #cluster: HTMLElement;
   #plugin = false;
   #presented: readonly FrameWorkflowTab[] = [];
+  #placeNextOpened: number | null = null;
   #dark: boolean | null = null;
   #initialized = false;
 
@@ -237,12 +238,25 @@ export class SubstituteFrameView {
     this.#stripLayout.setLeadingInset(enabled ? 0 : FRAME_TAB_START);
   }
 
+  /**
+   * Put the next workflow that opens at tab position `index`; null withdraws the request.
+   * ComfyUI opens a workflow as the last tab, so the request is met by moving that tab.
+   */
+  placeNextOpened(index: number | null): void {
+    this.#placeNextOpened = index;
+  }
+
   /** Retain tab identities through workflow and activity updates. */
   update(tabs: readonly FrameWorkflowTab[], unread: (id: WorkflowSessionId) => boolean): void {
+    const opened = tabs.length > this.#presented.length;
     this.#presented = tabs;
     this.#tabs.update(tabs, unread, this.#initialized);
     this.#stripLayout.update(tabs);
     this.#initialized = true;
+    const place = this.#placeNextOpened;
+    if (!opened || place === null) return;
+    this.#placeNextOpened = null;
+    this.tabDrop.place(place);
   }
 
   /** Project the accepted palette only when it changes and let the orb retain raster variants. */

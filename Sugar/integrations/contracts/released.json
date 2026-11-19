@@ -6,6 +6,11 @@
       "sha256": "92a0ac47892fd4559dd55b6716def6106ffedd5c2357b5ddfae229aee8dc0496"
     },
     {
+      "file": "file-drag.schema.json",
+      "id": "https://artificialsweetener.ai/schemas/sugarcubes/file-drag/v1",
+      "sha256": "60899453bb2809f59e5082e7c58cb33d8eac63919c5cce1883a3464f7a32e585"
+    },
+    {
       "file": "host.schema.json",
       "id": "https://artificialsweetener.ai/schemas/sugarcubes/host/v1",
       "sha256": "cc01b88599a9684deeeb8a0ff995a829f27e213f7c456f1fdf266cf694b2cb5f"

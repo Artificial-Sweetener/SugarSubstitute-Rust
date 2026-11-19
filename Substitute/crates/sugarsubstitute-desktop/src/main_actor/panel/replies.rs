@@ -91,6 +91,17 @@ impl Replies {
                 }
             }
         }
+        // Only the newest word about a file drag matters to a page that has not heard the last.
+        #[cfg(feature = "native-composition")]
+        if let NativeDelivery::FileDrag(_) = &reply {
+            for offset in 0..self.len {
+                let index = (self.first + offset) % CAPACITY;
+                if let Some(NativeDelivery::FileDrag(_)) = &self.slots[index] {
+                    self.slots[index] = Some(reply);
+                    return Ok(());
+                }
+            }
+        }
         // The same holds for release notes states; open requests and answers are never replaced.
         if let NativeDelivery::ReleaseNotes(incoming) = &reply
             && let Some(revision) = incoming.revision()
@@ -130,11 +141,16 @@ impl Replies {
             })?;
             self.first = (self.first + 1) % CAPACITY;
             self.len -= 1;
+            #[cfg(feature = "native-composition")]
+            let stale_file_drag = matches!(&delivery, NativeDelivery::FileDrag(value) if current != Some(value.identity()));
+            #[cfg(not(feature = "native-composition"))]
+            let stale_file_drag = false;
             if matches!(&delivery, NativeDelivery::Presentation(value) if current != Some(value.identity()))
                 || matches!(&delivery, NativeDelivery::Memory(value) if current != Some(value.identity()))
                 || matches!(&delivery, NativeDelivery::Updates(value) if current != Some(value.identity()))
                 || matches!(&delivery, NativeDelivery::ReleaseNotes(value) if current != Some(value.identity()))
                 || matches!(&delivery, NativeDelivery::SessionNotice(value) if current != Some(value.identity()))
+                || stale_file_drag
                 || matches!(&delivery, NativeDelivery::CanvasNotification(value) if current != Some(value.identity()))
             {
                 retired = true;

@@ -17,6 +17,7 @@
 import { beforeAll, afterAll, afterEach, expect, jest, test } from '@jest/globals';
 import { Updates } from '@microsoft/fast-element';
 import { SubstituteFrameHost } from '../../../frontend/comfyui/ui/surface/frame/SubstituteFrameHost.js';
+import { DraggedFiles } from '../../../frontend/comfyui/ui/core/file_drag/DraggedFiles.js';
 import { WorkflowTabsView } from '../../../frontend/comfyui/ui/surface/frame/WorkflowTabsView.js';
 import { AppOrbView } from '../../../frontend/comfyui/ui/surface/frame/AppOrbView.js';
 import { SubstituteFrameView } from '../../../frontend/comfyui/ui/surface/frame/SubstituteFrameView.js';
@@ -106,6 +107,7 @@ test('mode restores host presentation and preserves native controls, graph, and 
   const report = jest.fn();
   const hostColorScheme = { follow: jest.fn(), release: jest.fn() };
   const host = new SubstituteFrameHost({
+    draggedFiles: new DraggedFiles(),
     document,
     app,
     sessions,

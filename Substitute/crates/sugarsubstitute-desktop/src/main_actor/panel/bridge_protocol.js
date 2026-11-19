@@ -12,17 +12,18 @@
   const notesAnswers = ['state', 'open', 'notes', 'failed'];
   const noticeRequests = ['watch', 'shown'];
   const noticeAnswers = ['not-saved', 'none', 'line'];
+  const fileDragReports = ['entered', 'left'];
   const requestTypes = ['context.request', 'source.request', 'geometry.request', 'edit.request',
     'workflow.request', 'surface.capabilities.request', 'surface.viewport.request',
     'surface.presentation.request', 'surface.prepare', 'surface.geometry', 'surface.select',
     'surface.commit', 'surface.release', 'surface.preview.begin', 'surface.preview.chunk',
     'surface.preview.end', 'surface.preview.withdraw', 'surface.overview'];
-  // The host description, memory budget, updates, release notes and session notice protocols
-  // version independently of the version-three transport. Updates and session notices answer
-  // every released version, each page in its own.
+  // The host description, memory budget, updates, release notes, session notice and file drag
+  // protocols version independently of the version-three transport. Updates and session
+  // notices answer every released version, each page in its own.
   const versions = value =>
     ['sugarcubes.updates', 'sugarcubes.session-notice'].includes(value.protocol) ? [1, 2] :
-    ['sugarcubes.host', 'sugarcubes.memory', 'sugarcubes.release-notes']
+    ['sugarcubes.host', 'sugarcubes.memory', 'sugarcubes.release-notes', 'sugarcubes.file-drag']
       .includes(value.protocol) ? [1] : [3];
   const speaks = value => versions(value).includes(value.version);
   const notification = value => value.protocol === 'sugarcubes.panel' ||
@@ -31,6 +32,7 @@
     value.protocol === 'sugarcubes.updates' && updateAnswers.includes(value.type) ||
     value.protocol === 'sugarcubes.release-notes' && notesAnswers.includes(value.type) ||
     value.protocol === 'sugarcubes.session-notice' && noticeAnswers.includes(value.type) ||
+    value.protocol === 'sugarcubes.file-drag' && fileDragReports.includes(value.type) ||
     value.protocol === 'sugarcubes.canvas' && value.requestId === 0 &&
     ['surface.presentation.changed', 'surface.camera.changed', 'source.changed', 'edit.changed']
       .includes(value.type);

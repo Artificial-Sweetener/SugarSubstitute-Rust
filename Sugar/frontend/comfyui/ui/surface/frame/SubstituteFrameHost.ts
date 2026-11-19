@@ -31,6 +31,8 @@ import { substituteFrameCss } from './SubstituteFrameStyles.js';
 import { generationQueueSkinCss } from './GenerationQueueSkinStyles.js';
 import type { QueueJobSeed } from './GenerationQueueRowMenu.js';
 import { GenerationStripHost } from './GenerationStripHost.js';
+import type { DraggedFiles } from '../../core/file_drag/DraggedFiles.js';
+import { WorkflowFileTabDrop } from './WorkflowFileTabDrop.js';
 import { SubstituteToolbarLayout } from './SubstituteToolbarLayout.js';
 import { DesktopFramePresentation, type DesktopFrameReceipt } from './DesktopFramePresentation.js';
 import { DesktopPresentationDefaults } from './DesktopPresentationDefaults.js';
@@ -49,6 +51,8 @@ export interface SubstituteFrameHostOptions {
   readonly sessions: WorkflowSessionStore;
   readonly activity: WorkflowOutputActivity;
   readonly progress: Pick<WorkflowProgressStore, 'read' | 'subscribe'>;
+  /** The names of files dragged over the window, when the host supplies them. */
+  readonly draggedFiles: DraggedFiles;
   stackControls(): CubeStackFrameControls;
   openOverrides(trigger: HTMLElement): void;
   setOverridesInline(inline: boolean): void;
@@ -74,6 +78,7 @@ export class SubstituteFrameHost {
   #view: SubstituteFrameView | null = null;
   readonly #renamePrompt: InputModal;
   #generation: GenerationStripHost | null = null;
+  #fileTabDrop: WorkflowFileTabDrop | null = null;
   #toolbarLayout: SubstituteToolbarLayout | null = null;
   #pluginToolbar: PluginToolbarPlacement | null = null;
   #adapter: ComfyFrameWorkflowAdapter | null = null;
@@ -339,6 +344,14 @@ export class SubstituteFrameHost {
       this.options.confirm,
       this.#view.tabDrop,
     );
+    const view = this.#view;
+    this.#fileTabDrop = new WorkflowFileTabDrop({
+      document: this.options.document,
+      dragged: this.options.draggedFiles,
+      tabBar: view.tabDrop,
+      placeNextOpened: (index) => view.placeNextOpened(index),
+    });
+    this.#fileTabDrop.setup();
     this.#toolbarLayout = new SubstituteToolbarLayout(
       this.options.document,
       this.#view.element,
@@ -371,6 +384,8 @@ export class SubstituteFrameHost {
     this.#toolbarLayout = null;
     this.#generation?.dispose();
     this.#generation = null;
+    this.#fileTabDrop?.dispose();
+    this.#fileTabDrop = null;
     this.#stopWorkflow?.();
     this.#stopWorkflow = null;
     this.#view?.dispose();

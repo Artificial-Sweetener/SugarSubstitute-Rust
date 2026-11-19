@@ -22,6 +22,7 @@ import { MemoryHostLink } from '../memory/MemoryHostLink.js';
 import { UpdatesHostLink } from '../updates/UpdatesHostLink.js';
 import { HostReleaseNotesLink } from '../release_notes/HostReleaseNotesLink.js';
 import { HostSessionNoticeLink, } from '../session_notice/HostSessionNoticeLink.js';
+import { HostFileDragLink } from '../file_drag/HostFileDragLink.js';
 /** Keep messaging active only while the owning SugarCubes document is alive. */
 export class EmbeddedPanelHost {
     options;
@@ -33,6 +34,7 @@ export class EmbeddedPanelHost {
     #updates = null;
     #releaseNotes = null;
     #sessionNotice = null;
+    #fileDrag = null;
     #stopHost = null;
     #timer = null;
     /** Receive an identified adapter transport after Comfy and presentation setup have succeeded. */
@@ -128,6 +130,16 @@ export class EmbeddedPanelHost {
         this.#watchHostUpdates();
         this.#watchHostReleaseNotes();
         this.#watchHostSessionNotice();
+        this.#followHostFileDrags();
+    }
+    /** Learn what a dragged file is called once the host declares that it says so. */
+    #followHostFileDrags() {
+        if (this.#fileDrag ||
+            !this.options.draggedFiles ||
+            !this.options.host.read()?.serves(HOST_PROTOCOLS.fileDrag))
+            return;
+        this.#fileDrag = new HostFileDragLink(this.transport, this.options.draggedFiles);
+        this.#fileDrag.start();
     }
     /** Show the notice the host owes about the session once the host declares that it has them. */
     #watchHostSessionNotice() {
@@ -211,6 +223,8 @@ export class EmbeddedPanelHost {
         this.#releaseNotes = null;
         this.#sessionNotice?.dispose();
         this.#sessionNotice = null;
+        this.#fileDrag?.dispose();
+        this.#fileDrag = null;
         if (this.#timer !== null)
             this.options.window.clearInterval(this.#timer);
         this.#timer = null;

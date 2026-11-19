@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://artificialsweetener.ai/schemas/sugarcubes/file-drag/v1",
+  "title": "SugarCubes file drag protocol version 1",
+  "description": "An optional protocol for a host that sees a drag of files from outside before the page may read it. A page learns that a drag carries files but not what they are called until the drop. A host that lists sugarcubes.file-drag sends entered when such a drag comes over its window, naming the files in the order the drag carries them, and left when the drag goes away or ends in a drop. files holds at most the first sixteen, each by its file name alone, never a folder or a path. The page asks for nothing and answers nothing; a message it receives changes only what it shows while the drag lasts.",
+  "$defs": {
+    "FileDragFile": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 255
+        }
+      },
+      "required": ["name"],
+      "additionalProperties": false
+    },
+    "FileDragEnteredMessage": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.file-drag"
+        },
+        "version": {
+          "const": 1
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "type": {
+          "const": "entered"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FileDragFile"
+          },
+          "minItems": 1,
+          "maxItems": 16
+        }
+      },
+      "required": ["protocol", "version", "session", "type", "files"],
+      "additionalProperties": false
+    },
+    "FileDragLeftMessage": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.file-drag"
+        },
+        "version": {
+          "const": 1
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "type": {
+          "const": "left"
+        }
+      },
+      "required": ["protocol", "version", "session", "type"],
+      "additionalProperties": false
+    },
+    "FileDragHostMessage": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/FileDragEnteredMessage"
+        },
+        {
+          "$ref": "#/$defs/FileDragLeftMessage"
+        }
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/FileDragEnteredMessage"
+    },
+    {
+      "$ref": "#/$defs/FileDragLeftMessage"
+    }
+  ]
+}

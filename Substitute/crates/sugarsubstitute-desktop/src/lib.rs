@@ -50,6 +50,8 @@ mod main_caption_contract;
 #[cfg(any(target_os = "windows", test))]
 mod main_downloads;
 mod main_environment;
+#[cfg(all(target_os = "windows", feature = "native-composition"))]
+mod main_file_drag_contract;
 mod main_hosting;
 mod main_memory_contract;
 mod main_placement;
