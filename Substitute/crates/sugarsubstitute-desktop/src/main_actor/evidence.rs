@@ -146,7 +146,7 @@ impl MainActor {
                 identity: self.identity(),
                 reason,
             }),
-            Effect::Ingress(observation) => Some(self.publish_panel_ingress(observation)),
+            Effect::Ingress(observation) => self.publish_panel_ingress(observation)?,
             Effect::Incomplete(blocked) => {
                 if let Some(target) = completed_probe {
                     self.probe_diagnostics.completed(

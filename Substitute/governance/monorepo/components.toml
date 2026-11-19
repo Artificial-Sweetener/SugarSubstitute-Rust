@@ -8,6 +8,8 @@ id = "sugarcubes-contracts"
 root = "Sugar/integrations/contracts"
 owner = "SugarCubes integrations/contracts: portable editor schemas, generated bindings and shared wire vectors"
 files = [
+  "Sugar/integrations/contracts/backend.schema.json",
+  "Sugar/integrations/contracts/BackendProtocol.generated.rs",
   "Sugar/integrations/contracts/canvas_capability_vectors.json",
   "Sugar/integrations/contracts/canvas_context_vectors.json",
   "Sugar/integrations/contracts/canvas_editing_vectors.json",
@@ -71,6 +73,8 @@ consumers = [
   "crates/sugarsubstitute-contracts/src/desktop_session/wire.rs",
   "crates/sugarsubstitute-contracts/src/host/tests.rs",
   "crates/sugarsubstitute-contracts/src/host/wire.rs",
+  "crates/sugarsubstitute-contracts/src/host_backend/tests.rs",
+  "crates/sugarsubstitute-contracts/src/host_backend/wire.rs",
   "crates/sugarsubstitute-contracts/src/host_file_drag/tests.rs",
   "crates/sugarsubstitute-contracts/src/host_file_drag/wire.rs",
   "crates/sugarsubstitute-contracts/src/host_release_notes/tests.rs",

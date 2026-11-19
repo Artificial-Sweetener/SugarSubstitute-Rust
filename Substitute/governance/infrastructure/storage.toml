@@ -4712,7 +4712,7 @@ rationale = "Read the bridge scripts, the host's recorded conformance answers an
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:37c505e31caf8eac66b80e65f5b7fed561f4f3eca95ade11745b4218e6e409e1"
+source_sha256 = "sha256:faf807e878c8caab8fef50d6f41d76e6c3eb12bafaacabeeda0300524b22646f"
 capabilities = ["node:fs", "readFileSync"]
 disposition = "fixture"
 rationale = "Read the injected transport and protocol-policy bootstrap sources for executable envelope and custody regression tests."

@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Fence one existing Main's native recovery presentation without backend or page authority.
 use crate::{DesktopStartupObservation, MainBackendState, MainIdentity, MainRecoveryLabels};
-use sugarsubstitute_contracts::lifecycle::LeaseKey;
+use sugarsubstitute_contracts::{host_backend::BackendStatus, lifecycle::LeaseKey};
 
 /// Immutable current native action; the local revision never crosses the host boundary.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -19,6 +19,12 @@ pub(crate) struct RetryPresentation {
     pub(crate) visible: bool,
     pub(crate) label: &'static str,
     pub(crate) action: Option<RetryAction>,
+}
+impl RetryPresentation {
+    /// The retry is offered by the page, so the caption never shows or arms its own peer.
+    pub(crate) fn hidden(self) -> Self {
+        Self { visible: false, action: None, ..self }
+    }
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum RecoveryError {
@@ -117,6 +123,21 @@ impl Recovery {
                 Err(RecoveryError::RevisionExhausted)
             }
         }
+    }
+    /// What the page is told: how the backend stands and the revision that names this state.
+    pub(crate) fn page_state(&self) -> (u64, BackendStatus) {
+        let status = match self.outage {
+            _ if self.closed => BackendStatus::Running,
+            None | Some((_, MainBackendState::Recovered)) => BackendStatus::Running,
+            Some((_, MainBackendState::Retiring)) => BackendStatus::Stopped,
+            Some((_, MainBackendState::RetryReady)) => BackendStatus::RetryReady,
+            Some((_, MainBackendState::Retrying)) => BackendStatus::Retrying,
+        };
+        (self.revision, status)
+    }
+    /// The retry the page may ask for by naming `revision`, the state it was shown.
+    pub(crate) fn action_at(&self, revision: u64) -> Option<RetryAction> {
+        self.action().filter(|action| action.revision == revision)
     }
     /// Native callbacks carry this whole immutable tuple, never id4 alone.
     pub(crate) fn action(&self) -> Option<RetryAction> {

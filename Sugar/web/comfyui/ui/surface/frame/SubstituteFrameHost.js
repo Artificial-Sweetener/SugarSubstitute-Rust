@@ -249,6 +249,7 @@ export class SubstituteFrameHost {
             void this.#adapter?.command(id).catch(this.options.report);
         };
         this.#view = new SubstituteFrameView(this.options.document, {
+            backend: this.options.backend,
             workflows: {
                 activate: (id) => this.#adapter?.activate(id, this.options.sessions.read().open),
                 close: (id) => this.#afterCapture(() => this.#adapter?.close(id, this.options.sessions.read().open)),

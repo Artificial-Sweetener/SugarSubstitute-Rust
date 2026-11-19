@@ -178,6 +178,7 @@ function fixture() {
   const report = jest.fn();
   const host = new SubstituteFrameHost({
     draggedFiles: new DraggedFiles(),
+    backend: { canRestart: false, restart: () => undefined },
     document,
     app,
     sessions,

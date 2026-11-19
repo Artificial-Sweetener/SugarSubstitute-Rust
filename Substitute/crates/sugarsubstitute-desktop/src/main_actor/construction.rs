@@ -372,7 +372,7 @@ impl MainActor {
             self.caption_width()?,
             window.is_maximized(),
             settings.labels,
-            self.recovery.presentation(settings.recovery),
+            self.recovery.presentation(settings.recovery).hidden(),
             &self.updates.view(),
             |text| crate::windows_callbacks::caption::measure_text(hwnd, text),
         )

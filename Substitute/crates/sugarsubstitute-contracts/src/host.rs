@@ -43,6 +43,9 @@ impl HostProtocol {
     /// `sugarcubes.session-notice` version 1: what the host owes the user about their session,
     /// shown by the page.
     pub const SESSION_NOTICE: Self = Self { name: "sugarcubes.session-notice", version: 1 };
+    /// `sugarcubes.backend` version 1: whether the ComfyUI the page talks to is running, and the
+    /// page's request to start it again.
+    pub const BACKEND: Self = Self { name: "sugarcubes.backend", version: 1 };
     /// `sugarcubes.file-drag` version 1: the names of files dragged over the window, which the
     /// page cannot read before the drop.
     pub const FILE_DRAG: Self = Self { name: "sugarcubes.file-drag", version: 1 };

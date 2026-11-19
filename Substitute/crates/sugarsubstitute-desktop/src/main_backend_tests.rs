@@ -222,3 +222,27 @@ fn explicit_lineage_replaces_pending_outage_without_false_recovery_or_stale_clic
     assert_eq!(owner.action().ok_or("New failed-interest action missing")?.failed, next);
     Ok(())
 }
+#[test]
+fn the_page_is_told_each_state_and_may_retry_only_the_ready_state_it_was_shown() -> TestResult {
+    use sugarsubstitute_contracts::host_backend::BackendStatus;
+    let current = identity()?;
+    let failed = lease(current, 1)?;
+    let mut owner = Recovery::new(current);
+    assert_eq!(owner.page_state(), (0, BackendStatus::Running));
+    owner.present(current, failed, MainBackendState::Retiring)?;
+    assert_eq!(owner.page_state(), (1, BackendStatus::Stopped));
+    assert!(owner.action_at(1).is_none(), "nothing can be retried until the old backend settled");
+    owner.present(current, failed, MainBackendState::RetryReady)?;
+    assert_eq!(owner.page_state(), (2, BackendStatus::RetryReady));
+    assert!(owner.action_at(1).is_none(), "a retry names the ready state it saw");
+    let action = owner.action_at(2).ok_or("the ready state offers its retry")?;
+    // The caption never shows or arms the peer; the page offers the retry.
+    let shown = owner.presentation(labels()).hidden();
+    assert!(!shown.visible && shown.action.is_none());
+    assert!(owner.consume(action)?.is_some());
+    assert_eq!(owner.page_state(), (3, BackendStatus::Retrying));
+    assert!(owner.action_at(2).is_none() && owner.action_at(3).is_none());
+    owner.present(current, failed, MainBackendState::Recovered)?;
+    assert_eq!(owner.page_state(), (4, BackendStatus::Running));
+    Ok(())
+}

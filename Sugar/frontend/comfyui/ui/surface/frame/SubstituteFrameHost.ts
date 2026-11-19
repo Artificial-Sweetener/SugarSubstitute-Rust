@@ -51,6 +51,8 @@ export interface SubstituteFrameHostOptions {
   readonly sessions: WorkflowSessionStore;
   readonly activity: WorkflowOutputActivity;
   readonly progress: Pick<WorkflowProgressStore, 'read' | 'subscribe'>;
+  /** The host's ComfyUI: whether it can be started again now, and the request to do so. */
+  readonly backend: { readonly canRestart: boolean; restart(): void };
   /** The names of files dragged over the window, when the host supplies them. */
   readonly draggedFiles: DraggedFiles;
   stackControls(): CubeStackFrameControls;
@@ -300,6 +302,7 @@ export class SubstituteFrameHost {
       void this.#adapter?.command(id).catch(this.options.report);
     };
     this.#view = new SubstituteFrameView(this.options.document, {
+      backend: this.options.backend,
       workflows: {
         activate: (id) => this.#adapter?.activate(id, this.options.sessions.read().open),
         close: (id) =>

@@ -40,6 +40,7 @@ import {
   type SessionNoticePresenter,
 } from '../session_notice/HostSessionNoticeLink.js';
 import type { DraggedFiles } from '../file_drag/DraggedFiles.js';
+import { HostBackendLink, type BackendWatcher } from '../backend/HostBackendLink.js';
 import { HostFileDragLink } from '../file_drag/HostFileDragLink.js';
 
 /** Supply the browser lifetime without introducing another connection or preference owner. */
@@ -64,6 +65,8 @@ export interface EmbeddedPanelOptions {
   readonly sessionNotice?: SessionNoticePresenter;
   /** Receives the names of files dragged over the window when the host declares `sugarcubes.file-drag`. */
   readonly draggedFiles?: DraggedFiles;
+  /** Hears how the host's ComfyUI stands when the host declares `sugarcubes.backend`. */
+  readonly backend?: BackendWatcher;
   connected(): boolean;
   subscribeConnection?(listener: (connected: boolean) => void): () => void;
   report(error: unknown): void;
@@ -79,6 +82,7 @@ export class EmbeddedPanelHost {
   #releaseNotes: { readonly link: HostReleaseNotesLink; readonly detach: () => void } | null = null;
   #sessionNotice: HostSessionNoticeLink | null = null;
   #fileDrag: HostFileDragLink | null = null;
+  #backend: HostBackendLink | null = null;
   #stopHost: (() => void) | null = null;
   #timer: number | null = null;
 
@@ -173,6 +177,19 @@ export class EmbeddedPanelHost {
     this.#watchHostReleaseNotes();
     this.#watchHostSessionNotice();
     this.#followHostFileDrags();
+    this.#watchHostBackend();
+  }
+
+  /** Follow the ComfyUI the host runs once the host declares that it reports it. */
+  #watchHostBackend(): void {
+    if (
+      this.#backend ||
+      !this.options.backend ||
+      !this.options.host.read()?.serves(HOST_PROTOCOLS.backend)
+    )
+      return;
+    this.#backend = new HostBackendLink(this.transport, this.options.backend, this.options.report);
+    this.#backend.start();
   }
 
   /** Learn what a dragged file is called once the host declares that it says so. */
@@ -281,6 +298,8 @@ export class EmbeddedPanelHost {
     this.#sessionNotice = null;
     this.#fileDrag?.dispose();
     this.#fileDrag = null;
+    this.#backend?.dispose();
+    this.#backend = null;
     if (this.#timer !== null) this.options.window.clearInterval(this.#timer);
     this.#timer = null;
     this.options.window.removeEventListener('pagehide', this.dispose);

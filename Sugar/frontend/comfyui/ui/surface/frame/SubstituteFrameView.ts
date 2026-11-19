@@ -32,6 +32,8 @@ export interface SubstituteFrameViewActions {
   readonly workflows: WorkflowTabsActions;
   readonly stack: CubeStackFrameControls;
   command(id: string): void;
+  /** The host's ComfyUI: whether it can be started again now, and the request to do so. */
+  readonly backend: { readonly canRestart: boolean; restart(): void };
   openOverrides(trigger: HTMLElement): void;
   report(error: unknown): void;
 }
@@ -105,6 +107,13 @@ export class SubstituteFrameView {
           label: 'Export to Comfy Workflow...',
           select: () => actions.command('SugarCubes.ExportComfyWorkflow'),
         },
+        // Offered only while the host says ComfyUI is stopped and can be started again.
+        ...(actions.backend.canRestart
+          ? [
+              { label: '', separator: true },
+              { label: 'Restart ComfyUI', select: () => actions.backend.restart() },
+            ]
+          : []),
         { label: '', separator: true },
         {
           label: 'Extensions',

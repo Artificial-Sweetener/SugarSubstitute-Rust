@@ -41,6 +41,8 @@ mod headless;
 mod host_contract;
 #[cfg(any(target_os = "windows", test))]
 mod main_backend;
+#[cfg(target_os = "windows")]
+mod main_backend_page;
 #[cfg(any(target_os = "windows", test))]
 mod main_bulk;
 mod main_canvas_native;

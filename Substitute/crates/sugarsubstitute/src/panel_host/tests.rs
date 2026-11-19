@@ -23,6 +23,7 @@ fn every_browser_is_told_the_protocols_served_and_the_system_accent() -> Result 
             HostProtocol::UPDATES,
             HostProtocol::RELEASE_NOTES,
             HostProtocol::SESSION_NOTICE,
+            HostProtocol::BACKEND,
         ] {
             assert!(description.serves(protocol), "{hosting:?} {protocol:?}");
         }
@@ -65,6 +66,7 @@ fn the_description_names_no_host_styles_and_encodes_as_the_shared_schema_require
                 { "name": "sugarcubes.updates", "version": 1 },
                 { "name": "sugarcubes.release-notes", "version": 1 },
                 { "name": "sugarcubes.session-notice", "version": 1 },
+                { "name": "sugarcubes.backend", "version": 1 },
                 { "name": "sugarcubes.file-drag", "version": 1 },
             ],
             "capabilities": [{ "name": "presentation.system-accent" }, { "name": "output.host-surface" }, { "name": "canvas.backdrop-regions" }, { "name": "updates.product-name" }, { "name": "session-notice.lines" }],

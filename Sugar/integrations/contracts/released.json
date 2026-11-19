@@ -1,6 +1,11 @@
 {
   "schemas": [
     {
+      "file": "backend.schema.json",
+      "id": "https://artificialsweetener.ai/schemas/sugarcubes/backend/v1",
+      "sha256": "1ef20e30445d7387961285f8b4b24fe33b329755491a67f5e399dfcc9118ffc5"
+    },
+    {
       "file": "canvas.schema.json",
       "id": "https://artificialsweetener.ai/schemas/sugarcubes/canvas/v3",
       "sha256": "92a0ac47892fd4559dd55b6716def6106ffedd5c2357b5ddfae229aee8dc0496"

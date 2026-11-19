@@ -61,6 +61,10 @@
             "version": 1
           },
           {
+            "name": "sugarcubes.backend",
+            "version": 1
+          },
+          {
             "name": "sugarcubes.file-drag",
             "version": 1
           }

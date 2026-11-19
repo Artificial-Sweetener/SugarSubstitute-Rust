@@ -19,6 +19,7 @@ import type { CanvasMessage, CanvasMaskMessage } from './CanvasRuntime.js';
 import type { MemoryClientMessage } from '../memory/MemoryHostProtocol.js';
 import type { NamedUpdatesClientMessage, UpdatesClientMessage } from './UpdatesRuntime.js';
 import type { ReleaseNotesClientMessage } from './ReleaseNotesRuntime.js';
+import type { BackendClientMessage } from './BackendRuntime.js';
 import type {
   LinedSessionNoticeClientMessage,
   SessionNoticeClientMessage,
@@ -37,7 +38,8 @@ export interface BrowserPanelTransport {
       | NamedUpdatesClientMessage
       | ReleaseNotesClientMessage
       | SessionNoticeClientMessage
-      | LinedSessionNoticeClientMessage,
+      | LinedSessionNoticeClientMessage
+      | BackendClientMessage,
   ): void;
   subscribe(receive: (value: unknown) => void): () => void;
 }

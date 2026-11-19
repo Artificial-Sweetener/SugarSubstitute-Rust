@@ -28,6 +28,7 @@ import { HostAccent } from '../core/embedded/HostAccent.js';
 import { HostDescriptionState } from '../core/embedded/HostDescriptionState.js';
 import { UpdateSourceSlot } from '../core/updates/UpdateSource.js';
 import { DraggedFiles } from '../core/file_drag/DraggedFiles.js';
+import { BackendOutageNotice } from '../core/backend/BackendOutageNotice.js';
 import { DeclaredHost } from '../core/embedded/PanelRuntime.js';
 import { startEmbeddedPanel } from '../core/embedded/EmbeddedPanelHost.js';
 import type { HostLine } from '../core/session_notice/HostSessionNoticeLink.js';
@@ -56,6 +57,7 @@ export interface WorkflowFieldHostOptions
   /** Shows what the host has to tell the person; each answers whether it reached them. */
   hostNotices: {
     pushLastingToast(severity: 'warn', title: string, message: string): boolean;
+    pushToast(severity: 'success' | 'info' | 'warn', title: string, message: string): void;
     showHostLine(line: HostLine): boolean;
   };
   activity: WorkflowOutputActivity;
@@ -88,6 +90,21 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
   const host = new HostDescriptionState();
   const updates = new UpdateSourceSlot();
   const draggedFiles = new DraggedFiles();
+  const confirm = (title: string, message: string, confirmLabel: string): Promise<boolean> =>
+    // A dialog is told which page it belongs to; without one it has nowhere to appear.
+    new ConfirmDialog({
+      adapter: {
+        getDocument: () => options.document,
+        getWindow: () => options.document.defaultView,
+      },
+    }).open({ title, message, confirmLabel });
+  const backend = new BackendOutageNotice({
+    confirm,
+    toast: (severity, summary, detail) => options.hostNotices.pushToast(severity, summary, detail),
+    lastingToast: (severity, summary, detail) =>
+      void options.hostNotices.pushLastingToast(severity, summary, detail),
+    report: options.reportPresentationError,
+  });
   const whatsNew = new WhatsNewPresenter(
     new WhatsNewModal({ document: options.document }),
     seenReleases(options.app, options.reportPresentationError),
@@ -129,14 +146,8 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
     openOverrides: (trigger) => relations.openOverrideMenu(trigger),
     setOverridesInline: (inline) => relations.setOverridesInline(inline),
     adoptJobSeeds: (seeds) => relations.jobSeeds.adopt(seeds),
-    confirm: (title, message, confirmLabel) =>
-      // A dialog is told which page it belongs to; without one it has nowhere to appear.
-      new ConfirmDialog({
-        adapter: {
-          getDocument: () => options.document,
-          getWindow: () => options.document.defaultView,
-        },
-      }).open({ title, message, confirmLabel }),
+    confirm,
+    backend,
     report: options.reportPresentationError,
   });
   const editorNavigation = new WorkflowEditorNavigationHost({
@@ -176,6 +187,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
         updates,
         releaseNotes: whatsNew,
         draggedFiles,
+        backend,
         sessionNotice: {
           notSaved: (lost) => {
             const words = unsavedWorkWords(lost);

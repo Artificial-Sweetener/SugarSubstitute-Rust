@@ -108,6 +108,7 @@ test('mode restores host presentation and preserves native controls, graph, and 
   const hostColorScheme = { follow: jest.fn(), release: jest.fn() };
   const host = new SubstituteFrameHost({
     draggedFiles: new DraggedFiles(),
+    backend: { canRestart: false, restart: () => undefined },
     document,
     app,
     sessions,
@@ -426,6 +427,7 @@ test('frame actions retain stack policy, settings access, override anchor and un
   });
   const stop = jest.fn();
   const view = new SubstituteFrameView(document, {
+    backend: { canRestart: false, restart: () => undefined },
     workflows: {
       activate: jest.fn(),
       close: jest.fn(),
@@ -567,6 +569,7 @@ test('new-workflow control follows the tabs and overflow appears only when the s
   const create = jest.fn();
   const activate = jest.fn();
   const view = new SubstituteFrameView(document, {
+    backend: { canRestart: false, restart: () => undefined },
     workflows: {
       activate,
       close: jest.fn(),

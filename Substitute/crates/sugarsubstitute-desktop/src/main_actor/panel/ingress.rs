@@ -16,6 +16,11 @@ pub(in crate::main_actor) enum Ingress {
     Updates(crate::UpdatesObservation),
     ReleaseNotes(crate::ReleaseNotesObservation),
     SessionNotice(crate::SessionNoticeObservation),
+    /// A backend watch or retry, which this adapter answers itself from its recovery owner.
+    Backend {
+        message: sugarsubstitute_contracts::host_backend::BackendClientMessage,
+        claim: sugarsubstitute_contracts::execution::MemoryClaim,
+    },
 }
 
 impl MainActor {
@@ -123,6 +128,9 @@ impl MainActor {
                     claim,
                 ))
             }
+            crate::main_panel_ingress::ClientMessage::Backend(message) => {
+                Ingress::Backend { message, claim }
+            }
             crate::main_panel_ingress::ClientMessage::Native(request) => {
                 Ingress::Native(crate::CanvasNativeObservation::new(
                     self.identity(),
@@ -137,11 +145,13 @@ impl MainActor {
     }
 
     /// Publish after queue borrowing ends so native geometry getters cannot reenter a borrowed queue.
+    /// A backend message is answered here and publishes only the retry it admits.
     pub(in crate::main_actor) fn publish_panel_ingress(
         &mut self,
         ingress: Ingress,
-    ) -> DesktopStartupObservation {
-        match ingress {
+    ) -> Result<Option<DesktopStartupObservation>, DesktopError> {
+        Ok(Some(match ingress {
+            Ingress::Backend { message, claim } => return self.answer_backend_page(message, claim),
             Ingress::Panel(observation) => DesktopStartupObservation::PanelMessage(observation),
             Ingress::Memory(observation) => DesktopStartupObservation::MemoryMessage(observation),
             Ingress::Updates(observation) => DesktopStartupObservation::UpdatesMessage(observation),
@@ -181,6 +191,6 @@ impl MainActor {
                 }
                 DesktopStartupObservation::CanvasNativeMessage(observation)
             }
-        }
+        }))
     }
 }

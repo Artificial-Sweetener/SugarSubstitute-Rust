@@ -3,7 +3,10 @@
 //! Bridge fixed recovery presentation to the same Main's retained native caption peer.
 use super::*;
 use crate::{MainBackendState, main_backend::RetryAction};
-use sugarsubstitute_contracts::lifecycle::LeaseKey;
+use sugarsubstitute_contracts::{
+    host_backend::{BackendClientMessage, BackendHostMessage},
+    lifecycle::LeaseKey,
+};
 /// Preserve the original reservation; include the largest caption peer layout before native effects.
 pub(super) const NATIVE_BYTES: u64 = 512 * 1024;
 /// Reject an oversized compiled caption owner before the original metadata claim/native initialization.
@@ -103,14 +106,49 @@ impl MainActor {
         if self.controls.is_none() {
             return Ok(());
         }
-        let presentation = self.recovery.presentation(self.request()?.settings().recovery);
+        let presentation = self.recovery.presentation(self.request()?.settings().recovery).hidden();
         if let Some(controls) = &mut self.controls {
             controls.present_retry(presentation)?;
         }
-        // The retry shares the caption strip, so the page moves clear of it and back.
-        if self.view.is_some() && !self.closing() {
-            self.resize()?;
+        self.tell_backend_page()
+    }
+    /// Tell the current document how the backend stands; the page offers the retry itself.
+    /// A page that is not revealed, or is closing, is told when it next asks.
+    fn tell_backend_page(&mut self) -> Result<(), DesktopError> {
+        if self.admission.closing()
+            || self.retired
+            || !self.revealed
+            || self.readiness.as_ref().and_then(MainReadiness::panel_context).is_none()
+        {
+            return Ok(());
         }
-        Ok(())
+        let (revision, status) = self.recovery.page_state();
+        let command = crate::main_backend_page::BackendCommand::new(
+            self.identity(),
+            &BackendHostMessage::State { revision, status },
+            self.request()?.storage_lease(),
+        )
+        .map_err(|cause| DesktopError::boxed("encode_backend_state", cause))?;
+        self.send_backend_page(command)
+    }
+    /// Answer the page's watch with the current state, or act on its retry when it names the
+    /// retry-ready state still current; any other retry is stale and changes nothing.
+    pub(super) fn answer_backend_page(
+        &mut self,
+        message: BackendClientMessage,
+        claim: sugarsubstitute_contracts::execution::MemoryClaim,
+    ) -> Result<Option<DesktopStartupObservation>, DesktopError> {
+        let receipt = crate::PanelIngressReceipt::control(self.identity(), claim)
+            .map_err(|cause| DesktopError::new("acknowledge_backend_message", cause))?;
+        self.complete_panel_ingress(receipt)?;
+        match message {
+            BackendClientMessage::Watch { .. } => self.tell_backend_page().map(|()| None),
+            BackendClientMessage::Retry { revision, .. } => {
+                match self.recovery.action_at(revision) {
+                    Some(action) => self.retry_backend(action),
+                    None => self.tell_backend_page().map(|()| None),
+                }
+            }
+        }
     }
 }
