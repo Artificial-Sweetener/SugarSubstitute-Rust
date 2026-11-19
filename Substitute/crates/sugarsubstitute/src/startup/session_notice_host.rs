@@ -12,7 +12,12 @@ impl<B: StartupBackend> StartupHost<B> {
     /// Hand over what the previous close left once it is known, and have the close record
     /// marked once a page has shown its notice.
     pub(super) fn advance_session_notice(&mut self) -> Result<(), Box<dyn Error>> {
-        self.tell_host_lines()?;
+        // A notification the page shows behind a window that is not up yet is gone before the
+        // user can read it, so the lines about updates wait for the window to be revealed.
+        let revealed = self.startup.as_ref().is_some_and(|startup| {
+            startup.session().phase() == sugarsubstitute_application::startup::StartupPhase::Running
+        });
+        self.tell_host_lines(revealed)?;
         #[cfg(feature = "native-composition")]
         if let Some(workspace) = &mut self.workspace {
             if let Some(previous) = workspace.take_previous_close() {
@@ -28,18 +33,20 @@ impl<B: StartupBackend> StartupHost<B> {
         Ok(())
     }
 
-    /// Owe the page each of the host's own lines that is due this turn.
-    fn tell_host_lines(&mut self) -> Result<(), Box<dyn Error>> {
+    /// Owe the page each of the host's own lines that is due this turn. The close save is
+    /// said whenever it runs; the start-up update messages and a ready or failed update are
+    /// said only once the window is `revealed`, and wait until then.
+    pub(super) fn tell_host_lines(&mut self, revealed: bool) -> Result<(), Box<dyn Error>> {
         use sugarsubstitute_application::workspace_session::close_save::CloseSaveProgress;
         let words = sugarsubstitute_desktop::StartupWindowContent::locale_messages(self);
-        while let Some(notice) = self.child.take_update_notice() {
+        while revealed && let Some(notice) = self.child.take_update_notice() {
             self.session_notice.tell(session_notice_lines::startup_line(words, &notice))?;
         }
         let saving = matches!(
             self.close_save_progress(),
             Some(CloseSaveProgress::Saving { .. } | CloseSaveProgress::Recording(_))
         );
-        let status = self.child.update_status();
+        let status = self.child.update_status().filter(|_| revealed);
         let failed =
             status.is_some_and(sugarsubstitute_desktop::report::surface::has_update_report);
         for line in self.notice_lines.due(words, saving, status, failed) {

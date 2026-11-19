@@ -36,7 +36,11 @@ fn no_start_up_message_is_offered_to_the_title_bar() -> BackendResult<()> {
 fn every_start_up_message_is_owed_to_the_page_once() -> BackendResult<()> {
     let mut host = host()?;
     host.child.notices.extend(start_up_messages());
-    host.advance_session_notice()?;
+    // Before the window is up nothing is said, and nothing is lost.
+    host.tell_host_lines(false)?;
+    assert!(host.session_notice.owed_lines().is_empty());
+    assert_eq!(host.child.notices.len(), 4);
+    host.tell_host_lines(true)?;
     let words = host.locale_messages();
     let owed: Vec<String> =
         host.session_notice.owed_lines().into_iter().map(|line| line.text.clone()).collect();
@@ -46,7 +50,7 @@ fn every_start_up_message_is_owed_to_the_page_once() -> BackendResult<()> {
     assert_eq!(owed[2], words.updates.previous_running);
     assert_eq!(Some(owed[3].clone()), could_not_check().notice(words.pack_updates));
     // A later turn has nothing more to say.
-    host.advance_session_notice()?;
+    host.tell_host_lines(true)?;
     assert_eq!(host.session_notice.owed_lines().len(), 4);
     Ok(())
 }
