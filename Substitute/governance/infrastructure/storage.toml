@@ -2321,7 +2321,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: a d
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/selection/run/recovery/tests.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:c470ca28f095a09a1e201e5d6f9f5c0d97a55e0ae74bb26bd8f19f176809eef5"
+source_sha256 = "sha256:56605de7bc222d1a75a2cc55cf52b4806e64c8335a53a067ea45279b9856ee71"
 capabilities = ["std::fs::read", "std::fs::write"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Exercise abandoned-selection recovery through real exclusion and atomic protected storage. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."
@@ -2508,7 +2508,7 @@ rationale = "Native fixture setup, deliberate corruption or observation for: Fir
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/setup_storage/signed_installer/tests/fresh/installed/rescue.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:27aa6ef9caf79150452be1d51f859056afcee7dace47d34020ddd18b289741a3"
+source_sha256 = "sha256:92dca792fc46f5ee3200fa687b3ef3cd1921c447820a2443a4e3be7243afa4e9"
 capabilities = ["std::fs::create_dir", "std::fs::read", "std::fs::remove_file", "std::fs::write", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Native fixture setup, deliberate corruption or observation for: Recover saved first-install settings after a lost trial without reauthorizing its failed payload. The exact listed capabilities serve these qualification assertions, not runtime storage acquisition."

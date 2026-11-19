@@ -130,26 +130,43 @@ impl WindowsPort {
         family.configure_stdio(&mut startup.StartupInfo);
         let mut process = PROCESS_INFORMATION::default();
         family.check_native()?;
-        // A damaged or non-PE image must come back as the creation error, never as a modal dialog.
-        let created = with_image_errors_reported(|| {
-            // SAFETY: Validated explicit argv, cwd and environment live through the call.
-            // The exact HANDLE_LIST pins remain live through attribute deletion.
-            unsafe {
-                CreateProcessW(
-                    PCWSTR(input.command.application_name.as_ptr()),
-                    Some(PWSTR(input.command.command_line.as_mut_ptr())),
-                    None,
-                    None,
-                    inherited,
-                    creation_flags(family.backend_custody.is_some()),
-                    Some(input.environment.as_utf16().as_ptr().cast()),
-                    PCWSTR(input.command.working_directory.as_ptr()),
-                    &startup.StartupInfo,
-                    &mut process,
-                )
+        let mut flags = creation_flags(family.backend_custody.is_some());
+        let created = loop {
+            // A damaged or non-PE image must come back as the creation error, never as a modal
+            // dialog.
+            let created = with_image_errors_reported(|| {
+                // SAFETY: Validated explicit argv, cwd and environment live through the call.
+                // The exact HANDLE_LIST pins remain live through attribute deletion.
+                unsafe {
+                    CreateProcessW(
+                        PCWSTR(input.command.application_name.as_ptr()),
+                        Some(PWSTR(input.command.command_line.as_mut_ptr())),
+                        None,
+                        None,
+                        inherited,
+                        flags,
+                        Some(input.environment.as_utf16().as_ptr().cast()),
+                        PCWSTR(input.command.working_directory.as_ptr()),
+                        &startup.StartupInfo,
+                        &mut process,
+                    )
+                }
+            })
+            .map_err(|cause| RegistryError::new("creation_error_mode", cause))?;
+            match &created {
+                Err(cause) if breakaway_refused(flags, cause) => {
+                    // The job this process was started in forbids leaving it. The child still
+                    // joins its own custody Job at creation, nested inside that one, so it is
+                    // created there rather than not at all.
+                    tracing::warn!(
+                        operation = "process_creation_without_breakaway",
+                        "The surrounding job forbids breakaway; creating the process inside it"
+                    );
+                    flags &= !CREATE_BREAKAWAY_FROM_JOB;
+                }
+                _ => break created,
             }
-        })
-        .map_err(|cause| RegistryError::new("creation_error_mode", cause))?;
+        };
         if !process.hProcess.is_invalid() {
             family.members[0] = Some(Member {
                 handle: Some(process.hProcess.0 as usize),
@@ -259,9 +276,28 @@ fn creation_flags(independent_custody: bool) -> PROCESS_CREATION_FLAGS {
     if independent_custody { flags | CREATE_BREAKAWAY_FROM_JOB } else { flags }
 }
 
+/// Whether creation was refused only because the surrounding job forbids leaving it.
+fn breakaway_refused(flags: PROCESS_CREATION_FLAGS, cause: &windows::core::Error) -> bool {
+    flags.contains(CREATE_BREAKAWAY_FROM_JOB)
+        && cause.code() == windows::Win32::Foundation::E_ACCESSDENIED
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_a_denied_breakaway_is_retried_inside_the_surrounding_job() {
+        let denied = windows::core::Error::from(windows::Win32::Foundation::E_ACCESSDENIED);
+        let missing = windows::core::Error::from(
+            windows::Win32::Foundation::ERROR_FILE_NOT_FOUND.to_hresult(),
+        );
+        assert!(breakaway_refused(creation_flags(true), &denied));
+        assert!(!breakaway_refused(creation_flags(true), &missing));
+        // Without breakaway there is nothing left to give up.
+        assert!(!breakaway_refused(creation_flags(false), &denied));
+        assert!(!breakaway_refused(creation_flags(true) & !CREATE_BREAKAWAY_FROM_JOB, &denied));
+    }
 
     #[test]
     fn ordinary_native_launch_suppresses_console_creation_without_detaching_ownership() {

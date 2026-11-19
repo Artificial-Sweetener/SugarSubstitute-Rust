@@ -7,22 +7,25 @@ use crate::setup_storage::{CompletedInstallation, ReservedLaunch, reserve_instal
 /// The fixed UTC Unix time the failed generation is prepared for repair at.
 const REPAIRED_AT: u64 = 1_800_000_000;
 
-/// Publish a real first installation whose trial is lost until the installation withholds the
-/// package: `UNWITNESSED_LIMIT` lost trials in a row make one strike, and a bad verdict for the
-/// same generation makes the second.
+/// Publish a real first installation whose own start fails until the installation withholds
+/// the package: a lost trial changes nothing, and two bad verdicts for the same generation
+/// make the two strikes.
 fn quarantine(path: &Path, context: &JobContext) -> Result<CompletedInstallation, Failure> {
-    use sugarsubstitute_contracts::installation::{BadTrial, TrialVerdict, UNWITNESSED_LIMIT};
+    use sugarsubstitute_contracts::installation::{BadTrial, TrialVerdict};
     let runtime = runtime(path)?;
     let completed = import(path, context)?
         .prepare_installation(|| NOW, context)?
         .complete(&runtime, || NOW, context)?
         .authorize_installation(|| NOW, context)?
         .publish(context)?;
-    for _ in 0..UNWITNESSED_LIMIT {
-        lose_trial(&completed, context)?;
-    }
+    lose_trial(&completed, context)?;
     let store = Arc::new(SelectionStore::open(completed.root(), context)?);
-    let struck = store.load(context)?.ok_or("State absent")?;
+    let first = store.load(context)?.ok_or("State absent")?;
+    let mut run = InstallationRun::acquire(store.clone(), context)?;
+    let trial = run.begin_trial(&first, context)?;
+    let struck = run.finish_trial(&trial, TrialVerdict::Bad(BadTrial::Crashed), context)?;
+    drop(trial);
+    drop(run);
     let generation = struck.rollback().ok_or("Strike absent")?.clone();
     // Repair preparation ignores strikes, so the time it is given decides nothing.
     let staging = struck.prepare(generation.clone(), PreparationIntent::Repair, REPAIRED_AT)?;
@@ -212,8 +215,14 @@ fn stable_launcher_source_does_not_choose_between_conflicting_unaccepted_setting
             .complete(&runtime, || NOW, context)?
             .authorize_installation(|| NOW, context)?
             .publish(context)?;
-        for _ in 0..sugarsubstitute_contracts::installation::UNWITNESSED_LIMIT {
-            lose_trial(&second, context)?;
+        // The second release fails its own start as well, so neither is a candidate any more.
+        {
+            use sugarsubstitute_contracts::installation::{BadTrial, TrialVerdict};
+            let store = Arc::new(SelectionStore::open(second.root(), context)?);
+            let prepared = store.load(context)?.ok_or("State absent")?;
+            let mut run = InstallationRun::acquire(store, context)?;
+            let trial = run.begin_trial(&prepared, context)?;
+            run.finish_trial(&trial, TrialVerdict::Bad(BadTrial::Crashed), context)?;
         }
         let configuration = first.directory().join("startup.local.toml");
         let changed = b"schema_version = 1\n# Preserved user alternative\n";
@@ -240,6 +249,46 @@ fn stable_launcher_source_does_not_choose_between_conflicting_unaccepted_setting
         assert_eq!(std::fs::read(configuration)?, changed);
         assert_eq!(std::fs::read(link)?, original);
         assert!(InstalledCandidate::reopen(root, context).is_err());
+        Ok(())
+    })
+}
+
+#[test]
+fn a_first_installation_whose_trial_was_killed_is_offered_again_by_the_very_next_reopen()
+-> TestResult {
+    use sugarsubstitute_contracts::installation::UNWITNESSED_LIMIT;
+    worker::run_reserved(SIGNED_INSTALLER_RESERVATION_BYTES, |context, _| {
+        let temporary = tempfile::tempdir()?;
+        let path = temporary.path();
+        let runtime = runtime(path)?;
+        let completed = import(path, context)?
+            .prepare_installation(|| NOW, context)?
+            .complete(&runtime, || NOW, context)?
+            .authorize_installation(|| NOW, context)?
+            .publish(context)?;
+        // More kills than the abandoned-trial limit: nothing else can run, so none may withhold it.
+        for _ in 0..UNWITNESSED_LIMIT + 2 {
+            let installed =
+                InstalledCandidate::reopen(completed.root(), context)?.ok_or("Choice absent")?;
+            let mut recovery = None;
+            let transfer = installed.transfer(context, &mut recovery)?;
+            // Every owner is lost with the trial still on record, as a kill leaves it.
+            drop(transfer);
+            drop(recovery);
+            drop(installed);
+            let record = SelectionStore::open(completed.root(), context)?
+                .load(context)?
+                .ok_or("State absent")?;
+            assert!(matches!(record.candidate(), Some(Candidate::Trial { .. })));
+        }
+        // The launcher's first question after the kill is this one; it must find the candidate.
+        let installed = InstalledCandidate::reopen(completed.root(), context)?
+            .ok_or("A killed first start left nothing to launch")?;
+        assert_eq!(installed.directory(), completed.directory());
+        let record = SelectionStore::open(completed.root(), context)?
+            .load(context)?
+            .ok_or("State absent")?;
+        assert!(record.strikes().is_empty());
         Ok(())
     })
 }

@@ -89,6 +89,24 @@ fn abandoned_trials_retry_until_the_third_in_a_row_counts_as_one_strike() -> Res
 }
 
 #[test]
+fn abandoned_trials_never_strike_the_only_release_of_an_installation() -> Result {
+    let a = generation(1)?;
+    let mut record = prepare(&empty()?, &a)?;
+    for _ in 0..UNWITNESSED_LIMIT + 3 {
+        let trial = reload(&record.begin_trial()?)?;
+        record = reload(&trial.abandon_trial(&attempt(&trial)?, NOW)?)?;
+        // Nothing is accepted, so withholding this release would leave nothing to start.
+        assert_eq!(record.candidate(), Some(&Candidate::Prepared { generation: a.clone() }));
+        assert!(record.accepted().is_none());
+        assert!(record.strikes().is_empty());
+        assert!(record.rollback().is_none());
+    }
+    let healthy = reload(&record.begin_trial()?)?;
+    assert_eq!(healthy.accept(&attempt(&healthy)?)?.accepted(), Some(&a));
+    Ok(())
+}
+
+#[test]
 fn an_observed_ending_breaks_the_abandoned_streak_and_another_package_starts_its_own() -> Result {
     let a = generation(1)?;
     let b = generation(2)?;

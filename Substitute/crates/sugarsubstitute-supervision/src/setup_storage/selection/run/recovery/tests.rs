@@ -57,7 +57,48 @@ fn admitted_run_cannot_recover_its_own_trial() -> TestResult {
 }
 
 #[test]
-fn an_abandoned_trial_activates_again_until_the_third_in_a_row_counts_as_a_strike() -> TestResult {
+fn an_abandoned_update_activates_again_until_the_third_in_a_row_counts_as_a_strike() -> TestResult {
+    worker::run(|context, _| {
+        let root = root()?;
+        let store = Arc::new(
+            SelectionStore::initialize(root.path(), &initial()?, context)?
+                .with_strike_clock(StrikeClock::Fixed(AT)),
+        );
+        // An accepted release is what the installation falls back to while the update is struck.
+        let first = prepare(&store, &initial()?, 1, context)?;
+        let mut run = InstallationRun::acquire(store.clone(), context)?;
+        let trial = run.begin_trial(&first, context)?;
+        let accepted = run.accept(&trial, context)?;
+        drop(trial);
+        drop(run);
+        let mut prepared = prepare(&store, &accepted, 2, context)?;
+        for count in 1..UNWITNESSED_LIMIT {
+            abandon(&store, &prepared, context)?;
+            prepared = store.load_recovered(context)?;
+            assert_eq!(
+                prepared.candidate(),
+                Some(&Candidate::Prepared { generation: generation(2)? })
+            );
+            assert_eq!(
+                prepared.unwitnessed(),
+                Some(&Unwitnessed { package: generation(2)?.package, count })
+            );
+        }
+        abandon(&store, &prepared, context)?;
+        let struck = store.load_recovered(context)?;
+        assert_eq!(struck.accepted(), Some(&generation(1)?));
+        assert!(struck.candidate().is_none());
+        assert_eq!(struck.rollback(), Some(&generation(2)?));
+        assert_eq!(struck.strikes().len(), 1);
+        assert_eq!(struck.strikes()[0].at, AT, "recovery dates the strike with the store clock");
+        assert!(struck.unwitnessed().is_none());
+        Ok(())
+    })
+}
+
+#[test]
+fn an_installation_with_nothing_accepted_keeps_its_only_release_however_often_it_is_abandoned()
+-> TestResult {
     worker::run(|context, _| {
         let root = root()?;
         let store = Arc::new(
@@ -65,7 +106,7 @@ fn an_abandoned_trial_activates_again_until_the_third_in_a_row_counts_as_a_strik
                 .with_strike_clock(StrikeClock::Fixed(AT)),
         );
         let mut prepared = prepare(&store, &initial()?, 1, context)?;
-        for count in 1..UNWITNESSED_LIMIT {
+        for _ in 0..UNWITNESSED_LIMIT + 2 {
             abandon(&store, &prepared, context)?;
             let mut launch = InstallationRun::acquire(store.clone(), context)?;
             assert!(matches!(
@@ -73,22 +114,14 @@ fn an_abandoned_trial_activates_again_until_the_third_in_a_row_counts_as_a_strik
                 InstallationLaunch::NeedsInstallation
             ));
             prepared = store.load(context)?.ok_or("Recovered state absent")?;
+            // A kill or a power cut says nothing about the release, and there is no other to run.
             assert_eq!(
                 prepared.candidate(),
                 Some(&Candidate::Prepared { generation: generation(1)? })
             );
-            assert_eq!(
-                prepared.unwitnessed(),
-                Some(&Unwitnessed { package: generation(1)?.package, count })
-            );
+            assert!(prepared.strikes().is_empty());
+            assert!(prepared.rollback().is_none());
         }
-        abandon(&store, &prepared, context)?;
-        let struck = store.load_recovered(context)?;
-        assert!(struck.candidate().is_none());
-        assert_eq!(struck.rollback(), Some(&generation(1)?));
-        assert_eq!(struck.strikes().len(), 1);
-        assert_eq!(struck.strikes()[0].at, AT, "recovery dates the strike with the store clock");
-        assert!(struck.unwitnessed().is_none());
         Ok(())
     })
 }

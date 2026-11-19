@@ -61,11 +61,23 @@ impl PreparedCandidate {
         session: &InstallationSession,
         context: &JobContext,
     ) -> io::Result<Option<(Arc<Self>, ExistingInstallation, InstallationAuthorization)>> {
-        let store = SelectionStore::open(session.directory(), context).map_err(io::Error::other)?;
-        let snapshot = store
-            .load(context)
-            .map_err(io::Error::other)?
-            .ok_or_else(|| invalid("Installation selection is absent"))?;
+        let store =
+            Arc::new(SelectionStore::open(session.directory(), context).map_err(io::Error::other)?);
+        // A trial whose owners were all killed is still on record as running. It is resolved
+        // here, before the record is asked for a prepared candidate: resolved any later, this
+        // launch finds nothing to start and an installation with no accepted generation refuses
+        // to launch at all. A trial a running copy still owns stays as it is.
+        let snapshot = match store.load_recovered(context) {
+            Ok(snapshot) => snapshot,
+            Err(crate::setup_storage::SelectionFailure::RunBusy(_)) => store
+                .load(context)
+                .map_err(io::Error::other)?
+                .ok_or_else(|| invalid("Installation selection is absent"))?,
+            Err(crate::setup_storage::SelectionFailure::Missing) => {
+                return Err(invalid("Installation selection is absent"));
+            }
+            Err(cause) => return Err(io::Error::other(cause)),
+        };
         let Some(Candidate::Prepared { generation }) = snapshot.candidate() else {
             return Ok(None);
         };

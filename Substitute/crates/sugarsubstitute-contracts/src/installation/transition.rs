@@ -152,6 +152,11 @@ impl InstallationRecord {
     /// [`UNWITNESSED_LIMIT`] abandoned trials of the package in a row; that one counts as a bad
     /// verdict dated `at` (UTC Unix seconds), so a host that dies unobserved is not retried at
     /// every launch forever.
+    ///
+    /// An installation with no accepted generation has nothing else to run: there the candidate
+    /// always returns to `Prepared`, however many of its trials were abandoned. A kill or a power
+    /// cut says nothing about the release, and withholding the only one would leave the
+    /// installation unable to start.
     /// # Errors
     /// Rejects a stale, foreign or already completed attempt and revision exhaustion.
     pub fn abandon_trial(&self, attempt: &Trial, at: u64) -> Result<Self, Rejection> {
@@ -161,6 +166,7 @@ impl InstallationRecord {
             Some(abandoned) if &abandoned.package == package => abandoned.count.saturating_add(1),
             _ => 1,
         };
+        let count = if self.accepted.is_none() { count.min(UNWITNESSED_LIMIT - 1) } else { count };
         if count >= UNWITNESSED_LIMIT {
             return self.reject(attempt, at);
         }
