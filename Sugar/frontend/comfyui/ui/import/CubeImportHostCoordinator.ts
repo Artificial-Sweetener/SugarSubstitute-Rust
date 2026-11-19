@@ -26,6 +26,7 @@ import {
 } from './ComfyCanvasDropOriginAdapter.js';
 import { SugarScriptAuthoringApi } from '../sugarscript/SugarScriptAuthoringApi.js';
 import { SugarScriptFileDropAdapter } from '../sugarscript/SugarScriptFileDropAdapter.js';
+import { WorkflowFileDragAcceptor } from './WorkflowFileDragAcceptor.js';
 import { SugarScriptImportService } from '../sugarscript/SugarScriptImportService.js';
 import {
   isSugarScriptFileHost,
@@ -106,6 +107,8 @@ export class CubeImportHostCoordinator {
         })
       : null;
     this.#sugarScriptFiles?.setup();
+    // After the SugarScript owner, so a `.sugar` file is still answered by it first.
+    if (document) new WorkflowFileDragAcceptor(document).setup();
     this.#sugarScriptImages = isSugarScriptFileHost(this.#app)
       ? new SugarScriptImageFileHostAdapter({
           host: this.#app,
