@@ -1,3 +1,13 @@
+## [0.30.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.29.0...sugarcubes-v0.30.0) (2026-11-19)
+
+### Features
+
+* **tabs:** show a file dragged over the tab bar as the tab it will open ([785350c](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/785350c324968be5d2ae268e0229151ef6ff6abd))
+
+### Bug Fixes
+
+* **canvas:** keep the output canvas docked beside a pinned queue ([93b18cf](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/93b18cf3dd56b1ce544fda5897765435eec15ac1))
+
 ## [0.29.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.28.0...sugarcubes-v0.29.0) (2026-11-19)
 
 ### Features
