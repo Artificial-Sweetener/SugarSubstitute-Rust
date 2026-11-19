@@ -1,3 +1,13 @@
+## [0.4.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.3.2...substitute-v0.4.0) (2026-11-19)
+
+### Features
+
+* **notices:** show the desktop's messages as notifications, never in the title bar ([c95acb8](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/c95acb859a5e886f1d67122c2c47bf9ce6024d46))
+
+### Bug Fixes
+
+* **notices:** build on Linux and macOS, where the caption shows no message peers ([4f907bb](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/4f907bbbb14f1df362237ce662695b0947206f71))
+
 ## [0.3.2](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.3.1...substitute-v0.3.2) (2026-11-19)
 
 ### Bug Fixes
