@@ -54,11 +54,24 @@ function mark(element: Element, attribute: string, value: string | null): void {
 
 /** Mark the suppressed graph chrome in `scope`, or clear the marks this owner set. */
 function markChrome(scope: ParentNode, mounted: boolean): void {
-  for (const element of scope.querySelectorAll(MOUNTED_HIDES))
-    if (mounted || element.getAttribute(MASONRY_HIDES_ATTRIBUTE) === 'mounted')
-      mark(element, MASONRY_HIDES_ATTRIBUTE, mounted ? 'mounted' : null);
+  if (!mounted) {
+    for (const element of scope.querySelectorAll(`[${MASONRY_HIDES_ATTRIBUTE}="mounted"]`))
+      element.removeAttribute(MASONRY_HIDES_ATTRIBUTE);
+    for (const element of scope.querySelectorAll(`[${MASONRY_STILLS_ATTRIBUTE}]`))
+      element.removeAttribute(MASONRY_STILLS_ATTRIBUTE);
+    return;
+  }
+  for (const element of scope.querySelectorAll(MOUNTED_HIDES)) markHidden(element);
   for (const element of scope.querySelectorAll(MOUNTED_STILLS))
-    mark(element, MASONRY_STILLS_ATTRIBUTE, mounted ? '' : null);
+    mark(element, MASONRY_STILLS_ATTRIBUTE, '');
+}
+
+/** Hide a selection toolbox and, where the container holds it in a wrapper, that wrapper. */
+function markHidden(toolbox: Element): void {
+  mark(toolbox, MASONRY_HIDES_ATTRIBUTE, 'mounted');
+  const wrapper = toolbox.parentElement;
+  if (wrapper?.parentElement?.id === 'graph-canvas-container')
+    mark(wrapper, MASONRY_HIDES_ATTRIBUTE, 'mounted');
 }
 
 /** Watches each container with a mounted masonry for graph chrome the host mounts later. */
@@ -88,7 +101,7 @@ export function markMasonryMounted(surface: HTMLElement): void {
     for (const record of records)
       for (const node of record.addedNodes) {
         if (!(node instanceof Element)) continue;
-        if (node.matches(MOUNTED_HIDES)) mark(node, MASONRY_HIDES_ATTRIBUTE, 'mounted');
+        if (node.matches(MOUNTED_HIDES)) markHidden(node);
         if (node.matches(MOUNTED_STILLS)) mark(node, MASONRY_STILLS_ATTRIBUTE, '');
         markChrome(node, true);
       }
@@ -116,6 +129,9 @@ export function ensureWorkflowMasonryStyles(documentRef: Document): void {
       width:20px; height:20px; pointer-events:none; background:currentColor;
       mask:var(--sc-view-icon) center / contain no-repeat;
     }
+    /* Only the masonry's own padding reads the stack width; were it inherited, every change
+       to it would restyle every card. */
+    @property --sc-masonry-stack-width { syntax:'<length>'; inherits:false; initial-value:0px; }
     .sugarcubes-workflow-masonry {
       position:absolute; inset:0; z-index:${MASONRY_SURFACE_Z_INDEX}; box-sizing:border-box; pointer-events:auto;
       overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain;
@@ -183,7 +199,6 @@ export function ensureWorkflowMasonryStyles(documentRef: Document): void {
     .sugarcubes-workflow-masonry [data-sc-surface-moving] * { pointer-events:none !important; }
     .sugarcubes-workflow-masonry__card .lg-node-content { content-visibility:visible; }
     .sugarcubes-workflow-masonry__card:has([data-reka-popper-content-wrapper]) { z-index:10; }
-    #graph-canvas-container[${MASONRY_MOUNTED_ATTRIBUTE}] > :has(> [data-testid="selection-toolbox"]),
     #graph-canvas-container[${MASONRY_MOUNTED_ATTRIBUTE}] [data-testid="selection-toolbox"],
     #graph-canvas-container[data-sugarcubes-masonry="true"] > #graph-canvas,
     #graph-canvas-container[data-sugarcubes-masonry="true"] > .ph-no-capture,

@@ -30,6 +30,8 @@ import { subscribeMasonryPacking } from './MasonryPacking.js';
 import { measureNativeCardPresentationSources, restoreNativeCardPresentations, } from '../NativeCardPresentationOwner.js';
 import { markMasonryMounted } from './WorkflowMasonryStyles.js';
 import { DISCLOSURE_LAYOUT_EVENT, measureDisclosureCardHeight, } from '../motion/DisclosureLayout.js';
+/** Counts masonry surfaces so each has its own identifier, including two that overlap. */
+let masonrySurfaces = 0;
 /** Retain shared Cube presentation while measuring only masonry geometry. */
 export class WorkflowMasonryView {
     element;
@@ -64,6 +66,9 @@ export class WorkflowMasonryView {
         this.backdrop.setAttribute('aria-hidden', 'true');
         this.element = options.document.createElement('section');
         this.element.className = 'sugarcubes-workflow-masonry';
+        // Named while still empty: an identifier given to a surface full of cards restyles them all,
+        // and the scrollbar skin names any scroll container that has none.
+        this.element.id = `sc-workflow-masonry-${String(++masonrySurfaces)}`;
         this.element.style.opacity = '1';
         this.element.dataset.scMasonryPreparing = '';
         this.element.setAttribute('aria-label', 'Workflow masonry');
