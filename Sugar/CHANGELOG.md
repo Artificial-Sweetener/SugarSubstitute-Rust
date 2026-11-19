@@ -1,3 +1,9 @@
+## [0.29.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.28.0...sugarcubes-v0.29.0) (2026-11-19)
+
+### Features
+
+* **notices:** show the desktop's messages as notifications, never in the title bar ([c95acb8](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/c95acb859a5e886f1d67122c2c47bf9ce6024d46))
+
 ## [0.28.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.27.1...sugarcubes-v0.28.0) (2026-11-19)
 
 ### Features
