@@ -197,6 +197,10 @@ impl ProductionChild {
             if let Some(running) = &mut self.running_backend {
                 running.reload_main(previous, next)?;
             }
+            // The output owner serves the same backend to the replacement Main.
+            if let Some(owner) = self.output.owner_mut() {
+                owner.reload_main(previous, next)?;
+            }
             self.panel_deliveries.clear();
             self.identity = next;
             self.phase = Some(prepared.session().phase());

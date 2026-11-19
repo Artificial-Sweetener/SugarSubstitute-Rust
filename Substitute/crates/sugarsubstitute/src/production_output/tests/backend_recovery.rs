@@ -196,3 +196,26 @@ fn actual_closed_scope_new_source_rejection_keeps_original_owner_and_credit() ->
     assert_eq!(rig.scope.snapshot().reserved_bytes, 0);
     Ok(())
 }
+
+#[test]
+fn a_frontend_reload_rebinds_the_mounted_main_and_keeps_output_custody() -> TestResult {
+    let rig = Rig::new()?;
+    let mut owner = output(&rig)?;
+    let binding = binding()?;
+    let previous = main_identity(binding)?;
+    let next =
+        MainIdentity { launch: LaunchId::new(2)?, navigation: Generation::new(2)?, ..previous };
+    // Before any Main mounts, a reload has nothing to rebind and the next Main binds itself.
+    owner.reload_main(previous, next)?;
+    owner.running_main(previous)?;
+    assert!(owner.running_main(next).is_err(), "only a reload replaces the bound Main");
+    assert!(owner.reload_main(next, previous).is_err(), "the reload names the bound Main");
+    owner.reload_main(previous, next)?;
+    owner.running_main(next)?;
+    assert!(owner.running_main(previous).is_err());
+    // A retry is prepared for the Main now bound.
+    let h = header(binding, 2)?;
+    assert!(owner.prepare_retry(h, Moment::from_nanos(100), previous, binding.lease).is_err());
+    owner.prepare_retry(h, Moment::from_nanos(100), next, binding.lease)?;
+    Ok(())
+}

@@ -21,12 +21,20 @@ impl MainActor {
         self.view()?
             .set_visible(true)
             .map_err(|cause| DesktopError::new("show_main_view", cause))?;
-        self.show_placed_window()?;
+        // A replacement frame is already on screen where the user left it.
+        if !self.replacement {
+            self.show_placed_window()?;
+        }
         self.window()?.set_focus();
         self.view()?.focus().map_err(|cause| DesktopError::new("focus_main_view", cause))?;
         // Native show/focus can resize the container before Tao delivers its queued resize event.
-        // Restore the browser bounds and raise retained caption peers before publication.
-        self.resize()?;
+        // Restore the browser bounds and raise retained caption peers before publication. A
+        // replacement frame may also have changed monitor while its page loaded.
+        if self.replacement {
+            self.rescale(self.window()?.scale_factor())?;
+        } else {
+            self.resize()?;
+        }
         self.confirm_visible()?;
         self.receivers()?.reveal_navigation();
         self.revealed = true;
@@ -63,12 +71,19 @@ impl MainActor {
                 | WindowEvent::ScaleFactorChanged { .. }
         ) {
             self.placement.changed();
+            // A replacement frame can be moved and resized while its browser is still being
+            // built; the browser takes the window's final place and scale at reveal.
+            if self.awaiting_page() {
+                return Ok(None);
+            }
         }
         match event {
             WindowEvent::Destroyed => {
                 self.placement.close();
                 return close_request::observe(self.revealed);
             }
+            // A replacement frame's page is still loading; it closes once it can answer.
+            WindowEvent::CloseRequested if self.awaiting_page() => return Ok(None),
             WindowEvent::CloseRequested => {
                 return close_request::observe(self.revealed);
             }
@@ -91,7 +106,7 @@ impl MainActor {
         &self,
         id: u16,
     ) -> Result<Option<DesktopStartupObservation>, DesktopError> {
-        if self.admission.closing() {
+        if self.admission.closing() || self.awaiting_page() {
             return Ok(None);
         }
         match id {

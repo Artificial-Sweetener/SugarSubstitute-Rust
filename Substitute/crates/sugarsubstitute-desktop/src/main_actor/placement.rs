@@ -84,6 +84,18 @@ impl MainActor {
         Ok(())
     }
 
+    /// Put a replacement window's frame on screen as soon as it is placed and its caption is
+    /// built, so the user keeps a window while the page loads. Until the page is revealed its
+    /// close and caption buttons wait (`awaiting_page`): nothing behind them can answer yet.
+    pub(super) fn show_replacement_frame(&self) -> Result<(), DesktopError> {
+        if self.replacement { self.show_placed_window() } else { Ok(()) }
+    }
+
+    /// Whether this is a replacement window whose frame is shown while its page still loads.
+    pub(super) fn awaiting_page(&self) -> bool {
+        self.replacement && !self.revealed
+    }
+
     /// Read one pending changed placement between callbacks, while retaining the native peer.
     pub(super) fn placement_step(
         &mut self,

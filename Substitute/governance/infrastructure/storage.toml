@@ -11,7 +11,7 @@ owner = "sugarsubstitute"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:c2e72b2845deebff89b358c67568bd54c54436ba438b6ae29ae2b4fdb3f8a468"
+source_sha256 = "sha256:dd497c5dcebbd0bced4e89c34145b9c23e7d2ab0caf0ba96e7cc8a29bc6b4b86"
 rationale = "Isolated test fixture directories for sugarsubstitute; each authored acquisition still requires an exact source review."
 
 [[dependencies]]
@@ -43,7 +43,7 @@ owner = "sugarsubstitute-desktop"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:8e76a9f1cf4451dfa715d7303af0eae843473dc418b477886edc44b560048f5c"
+source_sha256 = "sha256:0b538af2be7bfa12db89f85f1f5b079d5b1803a212dd1f33b4c3170afa23f426"
 rationale = "Native OS adapter bindings for sugarsubstitute-desktop; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -99,7 +99,7 @@ owner = "sugarsubstitute-supervision"
 identity = "libc"
 binding = "libc"
 kind = "normal"
-source_sha256 = "sha256:21aee8e5fd2d943600a9912f99f4973cdd5711beb2878709f663db81bb4794cc"
+source_sha256 = "sha256:7c650c999a0616dc04497380727400d36ebd35f9e9c83bac09a58365c67f065d"
 rationale = "Unix durable-storage descriptor acquisition, relative atomic publication and checked close; exact authored access remains governed."
 
 [[dependencies]]
@@ -107,7 +107,7 @@ owner = "sugarsubstitute-supervision"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:21aee8e5fd2d943600a9912f99f4973cdd5711beb2878709f663db81bb4794cc"
+source_sha256 = "sha256:7c650c999a0616dc04497380727400d36ebd35f9e9c83bac09a58365c67f065d"
 rationale = "Isolated test fixture directories for sugarsubstitute-supervision; each authored acquisition still requires an exact source review."
 
 [[dependencies]]
@@ -115,7 +115,7 @@ owner = "sugarsubstitute-supervision"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:21aee8e5fd2d943600a9912f99f4973cdd5711beb2878709f663db81bb4794cc"
+source_sha256 = "sha256:7c650c999a0616dc04497380727400d36ebd35f9e9c83bac09a58365c67f065d"
 rationale = "Native OS adapter bindings for sugarsubstitute-supervision; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -3345,7 +3345,7 @@ rationale = "Repository tooling artifact-files.mjs: artifact-files Reads declare
 [[records]]
 path = "installer/release/build-qualification.test.mjs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:93fde1f67dbbf98f24adb2236a14934281e6f462539c213ba407d55a737f81ea"
+source_sha256 = "sha256:c7792f61ed8a1e83b99958a2a0519ac69becfefd577675ead169d5f215e00c99"
 capabilities = ["node:fs", "readFileSync"]
 disposition = "tooling"
 rationale = "Repository tooling build-qualification.test.mjs: reads the declared application manifest to prove ordinary installer builds ship its default features; writes nothing and runtime crates do not depend on this source."
@@ -4712,7 +4712,7 @@ rationale = "Read the bridge scripts, the host's recorded conformance answers an
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:0b3d89ae3c9231acd1cab631676c6d5397f568be1bf05cb6d024c80b96ee80b3"
+source_sha256 = "sha256:37c505e31caf8eac66b80e65f5b7fed561f4f3eca95ade11745b4218e6e409e1"
 capabilities = ["node:fs", "readFileSync"]
 disposition = "fixture"
 rationale = "Read the injected transport and protocol-policy bootstrap sources for executable envelope and custody regression tests."

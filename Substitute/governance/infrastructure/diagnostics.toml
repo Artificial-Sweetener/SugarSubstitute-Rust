@@ -1108,7 +1108,7 @@ rationale = "The explicit single-device offscreen composite check reports native
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/environment/storage.rs"
 owner = "sugarsubstitute-supervision"
-source_sha256 = "sha256:5edcc94126a791e53f1400deb84e7a02ed585fdca41f40de0b262123cffe2d26"
+source_sha256 = "sha256:9d06f4a6c75548dcee67b4face7561e6f98137bb541d3f2970bddac2d12433a1"
 disposition = "upstream"
 rationale = "Redirect delegated pip log paths to the caller's explicit installation-local storage directory; this environment preparation creates no diagnostic sink."
 

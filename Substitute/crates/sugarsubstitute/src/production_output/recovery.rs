@@ -81,6 +81,28 @@ impl OutputOwner {
         self.main_identity = Some(identity);
         Ok(())
     }
+    /// Follow a frontend reload: the backend and its output stay as they are, and only the
+    /// Main they serve changes from `previous` to `next`. An owner no Main was bound to yet
+    /// binds `next` when it mounts.
+    ///
+    /// # Errors
+    /// Rejects a closed owner, another run, or a `previous` that is not the bound Main.
+    pub(crate) fn reload_main(
+        &mut self,
+        previous: MainIdentity,
+        next: MainIdentity,
+    ) -> Result<(), OutputError> {
+        if self.closed
+            || next.run != self.binding.run
+            || self.main_identity.is_some_and(|current| current != previous)
+        {
+            return Err(OutputError::identity("reload_main"));
+        }
+        if self.main_identity.is_some() {
+            self.main_identity = Some(next);
+        }
+        Ok(())
+    }
     /// Queue one user retry after the previous pull/parser/frame has actually drained.
     pub(crate) fn prepare_retry(
         &mut self,

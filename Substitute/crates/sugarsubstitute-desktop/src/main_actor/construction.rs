@@ -113,6 +113,7 @@ impl MainActor {
                     .initialize()?;
                 self.resize_caption()?;
                 self.present_recovery_control()?;
+                self.show_replacement_frame()?;
                 #[cfg(feature = "native-composition")]
                 {
                     self.stage = ConstructionStage::Hosting;

@@ -102,6 +102,9 @@ pub(crate) struct MainActor {
     events: Option<Rc<Events>>,
     readiness: Option<MainReadiness>,
     revealed: bool,
+    /// This window takes the place of one the user was looking at, so its frame is shown while
+    /// its page loads instead of leaving the screen without a window.
+    replacement: bool,
     /// A window owned by this one is open; Windows would destroy it with this window.
     owned_window_open: bool,
     reload: crate::main_reload::ReloadAdmission,
@@ -120,9 +123,13 @@ pub(crate) struct MainActor {
 
 impl MainActor {
     /// Allocate only bounded authored state, before any window or COM effect.
+    ///
+    /// `replacement` says this window takes the place of a retired one in the same run, as
+    /// after a frontend reload.
     pub(crate) fn new(
         request: MainWindowRequest,
         proxy: EventLoopProxy<NativeAction>,
+        replacement: bool,
     ) -> Result<Self, DesktopError> {
         let admission = Admission::new(request.identity());
         let recovery = crate::main_backend::Recovery::new(request.identity());
@@ -192,6 +199,7 @@ impl MainActor {
             events: Some(events),
             readiness: Some(readiness),
             revealed: false,
+            replacement,
             owned_window_open: false,
             reload: crate::main_reload::ReloadAdmission::default(),
             retired: false,

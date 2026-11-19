@@ -138,19 +138,19 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/lib.rs"
-source_sha256 = "sha256:e64fe4c38e3055be7dfda0b0f2b7827c01e7dfdf7397fd35503109109afa5dd3"
+source_sha256 = "sha256:992b3c0f0ff0fa2223d621c07565a7c4f42dade89a8bcd50abd3c273c9dbadf0"
 kind = "native"
 rationale = "Native boundary: Own native window lifetime and CPU frame presentation independently of UI content.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/composition/drop_target/tests.rs"
-source_sha256 = "sha256:7f9648d7208a174568babdf655b27c43ef764c3316bd763b17d5dd5c55cdf492"
+source_sha256 = "sha256:b80326bbb0eec573da1c4747dd4cc43f4318d2b65698589e7297d545fc526b09"
 kind = "fixture"
 rationale = "Behavioral fixture creates a hidden OS STATIC window with a technical title to exercise real OLE drop registration and revocation; it grants no production text route."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/construction.rs"
-source_sha256 = "sha256:8ddcb4a8abd7c4b881fb86e5956bd1a7adfc83b562287a4c15fe5eb04b941578"
+source_sha256 = "sha256:8d58085e3b859a9299eb1f8fd917305355ee9864342d2ce1a0ce992b701602e8"
 kind = "native"
 rationale = "Native boundary: Adopt every window, presenter, controller and native getter before interpreting outcomes.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -708,7 +708,7 @@ rationale = "The bounded WebView transport defines technical JavaScript properti
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge_protocol.js"
-source_sha256 = "sha256:d9e7be57834bbba6e9e5b512f0b77f05b28433b1416be44fb1a35a2152c9a1c8"
+source_sha256 = "sha256:0b931ca64911adf21a1c8fe63a00692754db3fbaec50d86f6883684b8859c04c"
 kind = "native"
 rationale = "The native bootstrap policy validates session query identities and routes technical canvas protocol reply, cancellation and notification shapes; its message fields are empty protocol data."
 
@@ -720,13 +720,13 @@ rationale = "The bulk channel transport helper moves exact JSON bytes through ho
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
-source_sha256 = "sha256:0b3d89ae3c9231acd1cab631676c6d5397f568be1bf05cb6d024c80b96ee80b3"
+source_sha256 = "sha256:37c505e31caf8eac66b80e65f5b7fed561f4f3eca95ade11745b4218e6e409e1"
 kind = "fixture"
 rationale = "The isolated JavaScript VM fixture supplies promptId and sourceId attribution fields to exercise the actual bounded native transport; these technical protocol identities are fixture data and never become product labels or a prompt editor route."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/placement/tests/native_cases.rs"
-source_sha256 = "sha256:a9ce3ea2e648050b45d733315f2edd7f7d8228e55ffedc8cb9eb2b69b23019e9"
+source_sha256 = "sha256:7000e03e793cf5bee6bf0f154be43e4b9cc07f990476cd1e01eb7b128caf13bc"
 kind = "fixture"
 rationale = "Native placement fixture uses fixed caption labels only to construct its owned hidden test peer."
 

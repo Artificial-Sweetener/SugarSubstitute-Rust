@@ -61,47 +61,14 @@ fn qualify_placement() -> TestResult {
         width: 680.0 * scale,
         height: 460.0 * scale,
     };
-    let identity = MainIdentity {
-        run: RunKey {
-            owner: CoordinatorKey {
-                namespace: NamespaceId::new([1; 32]),
-                epoch: CoordinatorEpoch::new([2; 16])?,
-            },
-            instance: InstanceId::new(1)?,
-            generation: RunGeneration::new(1)?,
-        },
-        launch: LaunchId::new(1)?,
-        navigation: Generation::new(1)?,
-    };
+    let identity = first_identity()?;
     for maximized in [false, true] {
         let saved = main_placement::snapshot(bounds, maximized, &monitor)?;
         let expected = main_placement::restore(&saved, std::slice::from_ref(&monitor))?;
         let released = Arc::new(AtomicU64::new(0));
-        let mut request = MainWindowRequest::new(
-            identity,
-            LoopbackOrigin::parse("http://127.0.0.1:8188/", 8188)?,
-            ProfileId::new("placement-qualification".into())?,
-            std::path::PathBuf::from(r"D:\placement-profile-not-opened"),
-            ServedFrontendVersions::new("1.47.11".into(), "0.15.0".into())?,
-            MainWindowSettings {
-                logical_width: 1280,
-                logical_height: 800,
-                dark: true,
-                labels: MainCaptionLabels {
-                    minimize: "Minimize",
-                    maximize: "Maximize",
-                    restore: "Restore",
-                    close: "Close",
-                },
-                recovery: MainRecoveryLabels { retry: "Retry", retry_ready: "Retry ready" },
-            },
-            MemoryLease::new(
-                MainWindowRequest::RESERVATION_BYTES,
-                Box::new(Released(released.clone())),
-            ),
-        )?;
+        let mut request = main_request(identity, &released)?;
         request.set_initial_placement(Some(saved))?;
-        let mut actor = MainActor::new(request, events.create_proxy())?;
+        let mut actor = MainActor::new(request, events.create_proxy(), false)?;
         let result = (|| -> TestResult {
             assert!(
                 actor
@@ -171,6 +138,102 @@ fn qualify_placement() -> TestResult {
                 DesktopStartupObservation::MainPlacementCaptureFailed { identity: failed, .. } if failed == foreign)
             );
             assert!(actor.window.is_some(), "failed capture must retain the usable peer");
+            Ok(())
+        })();
+        let retirement = retire(&mut actor);
+        drop(actor);
+        result?;
+        retirement?;
+        assert_eq!(released.load(Ordering::SeqCst), MainWindowRequest::RESERVATION_BYTES);
+    }
+    Ok(())
+}
+
+/// A main window request whose profile and origin are never opened by these cases.
+fn main_request(
+    identity: MainIdentity,
+    released: &Arc<AtomicU64>,
+) -> Result<MainWindowRequest, Box<dyn Error>> {
+    Ok(MainWindowRequest::new(
+        identity,
+        LoopbackOrigin::parse("http://127.0.0.1:8188/", 8188)?,
+        ProfileId::new("placement-qualification".into())?,
+        std::path::PathBuf::from(r"D:\placement-profile-not-opened"),
+        ServedFrontendVersions::new("1.47.11".into(), "0.15.0".into())?,
+        MainWindowSettings {
+            logical_width: 1280,
+            logical_height: 800,
+            dark: true,
+            labels: MainCaptionLabels {
+                minimize: "Minimize",
+                maximize: "Maximize",
+                restore: "Restore",
+                close: "Close",
+            },
+            recovery: MainRecoveryLabels { retry: "Retry", retry_ready: "Retry ready" },
+        },
+        MemoryLease::new(
+            MainWindowRequest::RESERVATION_BYTES,
+            Box::new(Released(released.clone())),
+        ),
+    )?)
+}
+
+fn first_identity() -> Result<MainIdentity, Box<dyn Error>> {
+    Ok(MainIdentity {
+        run: RunKey {
+            owner: CoordinatorKey {
+                namespace: NamespaceId::new([1; 32]),
+                epoch: CoordinatorEpoch::new([2; 16])?,
+            },
+            instance: InstanceId::new(1)?,
+            generation: RunGeneration::new(1)?,
+        },
+        launch: LaunchId::new(1)?,
+        navigation: Generation::new(1)?,
+    })
+}
+
+#[test]
+fn a_replacement_main_shows_its_frame_before_its_page_and_holds_its_buttons_until_reveal()
+-> TestResult {
+    crate::windows_test_desktop::run(
+        concat!(
+            module_path!(),
+            "::a_replacement_main_shows_its_frame_before_its_page_and_holds_its_buttons_until_reveal"
+        ),
+        qualify_replacement_frame,
+    )
+}
+
+/// Drive production construction through the caption stage for a first and a replacement main.
+fn qualify_replacement_frame() -> TestResult {
+    let _apartment = crate::windows_ui_apartment::UiApartment::enter()?;
+    let mut builder = EventLoopBuilder::<crate::native_action::NativeAction>::with_user_event();
+    let events = builder.with_any_thread(true).build();
+    for replacement in [false, true] {
+        let released = Arc::new(AtomicU64::new(0));
+        let request = main_request(first_identity()?, &released)?;
+        let mut actor = MainActor::new(request, events.create_proxy(), replacement)?;
+        let result = (|| -> TestResult {
+            // Window, presenter and caption controls; the browser is never begun.
+            for _ in 0..3 {
+                assert!(
+                    actor.construct_step(&events, events.create_proxy(), "Reload frame")?.is_none()
+                );
+            }
+            let window = actor.window()?;
+            assert_eq!(window.is_visible(), replacement, "replacement={replacement}");
+            // The frame's close and caption buttons wait until its page can answer.
+            let close = tao::event::WindowEvent::CloseRequested;
+            if replacement {
+                assert!(actor.window_event(window.id(), &close)?.is_none());
+                assert!(actor.activate(3)?.is_none());
+                assert!(actor.activate(2)?.is_none());
+                assert!(!actor.window()?.is_maximized());
+            } else {
+                assert!(actor.window_event(window.id(), &close).is_err());
+            }
             Ok(())
         })();
         let retirement = retire(&mut actor);

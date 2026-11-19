@@ -76,7 +76,7 @@ pub(super) fn drain(
                     session.main_material = previous.material();
                 }
                 session.main_failures_reported = false;
-                session.main = Some(MainActor::new(*request, proxy.clone())?);
+                session.main = Some(MainActor::new(*request, proxy.clone(), replacement)?);
             }
             DesktopStartupCommand::AuthorizeEnvironment(identity) => {
                 #[cfg(feature = "k1-native-qualification")]
