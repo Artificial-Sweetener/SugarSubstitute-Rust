@@ -14,7 +14,8 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own transient tab transforms and settle motion without mutating workflow order. */
-import { workflowTabAtOffset, workflowTabOffsets, } from './WorkflowTabGeometry.js';
+import { slotOffsets } from '../../interaction/reorder/ReorderSlots.js';
+import { workflowTabAtOffset } from './WorkflowTabGeometry.js';
 import { WORKFLOW_TAB_ORB_CUTOUT_RADIUS } from './WorkflowTabStyles.js';
 const motion = { duration: 180, easing: 'cubic-bezier(.22,1,.36,1)' };
 /** Retain visual continuity across the host's accepted DOM permutation. */
@@ -46,7 +47,7 @@ export class WorkflowTabDragPreview {
         this.#active = true;
         this.viewport.setAttribute('data-sc-tab-dragging', '');
         const widths = this.tabWidths();
-        const starts = workflowTabOffsets(widths);
+        const starts = slotOffsets(widths);
         const first = workflowTabAtOffset(widths, this.viewport.scrollLeft);
         const natural = this.viewport.hasAttribute('data-sc-natural-tabs');
         const cutoutDisabled = this.viewport.hasAttribute('data-sc-overflow') ||
@@ -54,7 +55,7 @@ export class WorkflowTabDragPreview {
             natural;
         const progress = cutoutDisabled
             ? 0
-            : Math.max(0, Math.min(1, 1 - (placement.draggedLeft - (starts[first] ?? 0)) / (widths[first] ?? 1)));
+            : Math.max(0, Math.min(1, 1 - (placement.draggedStart - (starts[first] ?? 0)) / (widths[first] ?? 1)));
         const successor = cutoutDisabled ? -1 : origin === first ? first + 1 : first;
         for (const [index, tab] of tabs.entries()) {
             const offset = placement.offsets[index] ?? 0;

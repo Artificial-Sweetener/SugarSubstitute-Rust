@@ -17,6 +17,7 @@
 import { HostSurfaceObserver } from '../../../core/HostSurfaceObserver.js';
 import { ContextMenu } from '../../../menus/ContextMenu.js';
 import { isRecord } from '../../../types/common.js';
+import type { WorkflowTabDropTarget } from '../WorkflowTabGhost.js';
 import { applyOwnedTheme } from '../../appearance/ThemeService.js';
 import { ComfyQueueActions } from './ComfyQueueActions.js';
 import {
@@ -35,6 +36,7 @@ import {
 import { GenerationQueueFlyout } from './GenerationQueueFlyout.js';
 import { GenerationQueueMenus } from './GenerationQueueMenus.js';
 import { GenerationQueueReorder } from './GenerationQueueReorder.js';
+import { jobOpensAsTab, queueTabDropTarget } from './GenerationQueueTabDrop.js';
 import { GenerationQueueView, type GenerationQueueViewActions } from './GenerationQueueView.js';
 import { generationQueueViewCss } from './GenerationQueueViewStyles.js';
 
@@ -55,6 +57,8 @@ export interface GenerationQueueControllerOptions {
   confirm(title: string, message: string, agree: string): Promise<boolean>;
   notify(severity: 'success' | 'warn' | 'error', title: string, message: string): void;
   report(error: unknown): void;
+  /** The workflow tab bar, where a finished job may be dropped to open it as a tab. */
+  readonly tabBar?: WorkflowTabDropTarget;
 }
 
 /**
@@ -125,6 +129,16 @@ export class GenerationQueueController {
       search: (text) => this.#choose({ search: text }),
     });
     this.#flyout = new GenerationQueueFlyout(this.#flyoutView.element);
+    const job = (jobId: string) =>
+      this.#source.snapshot.jobs.find((candidate) => candidate.id === jobId) ?? null;
+    const tabDrop = options.tabBar
+      ? queueTabDropTarget({
+          tabBar: options.tabBar,
+          job,
+          open: (finished) => this.#menus.openWorkflow(finished),
+          run: (failure, action) => this.#run(failure, action),
+        })
+      : null;
     this.#reorders = [this.#flyoutView, this.#panelView].map(
       (view) =>
         new GenerationQueueReorder({
@@ -134,6 +148,9 @@ export class GenerationQueueController {
           busy: () => this.#reordering,
           preview: (order) => view.previewWaiting(order),
           commit: (order) => this.#reorder(view, order),
+          ...(tabDrop
+            ? { targets: [tabDrop], carries: (jobId: string) => jobOpensAsTab(job(jobId)) }
+            : {}),
         }),
     );
     document.addEventListener('click', this.#onButton, true);

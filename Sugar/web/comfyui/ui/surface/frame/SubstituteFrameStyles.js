@@ -72,6 +72,11 @@ export const substituteFrameCss = `
   .sc-substitute-frame [data-sc-workflow-tab][data-shimmer] .sc-workflow-shimmer { animation:sc-frame-result-shimmer 800ms cubic-bezier(.215,.61,.355,1) forwards; }
   @keyframes sc-frame-result-shimmer { 0% { left:-36px; opacity:1; } 85% { opacity:1; } 100% { left:100%; opacity:0; } }
   @media(prefers-reduced-motion:reduce) { .sc-substitute-frame [data-sc-workflow-tab][data-shimmer] .sc-workflow-shimmer { animation:none; } }
+  /* A tab that does not exist yet: where a dragged job or file would open, and under what name. */
+  .sc-substitute-frame .sc-workflow-tab-ghost { position:fixed; z-index:3; box-sizing:border-box; padding:0 8px 0 20px;
+    border:1px dashed var(--sc-accent-color); border-bottom:0; border-radius:8px 8px 0 0; pointer-events:none;
+    background:color-mix(in srgb,var(--sc-accent-color) 10%,transparent); color:var(--sc-text);
+    font:600 13px/28px var(--sc-font-family); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .sc-substitute-frame .sc-workflow-close { display:flex; align-items:center; justify-content:center; flex:0 0 18px;
     width:18px; height:18px; min-width:18px; padding:0; border-radius:4px; visibility:hidden; color:inherit; }
   .sc-substitute-frame [data-sc-workflow-tab]:hover .sc-workflow-close,

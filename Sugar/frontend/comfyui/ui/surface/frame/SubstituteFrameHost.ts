@@ -337,6 +337,7 @@ export class SubstituteFrameHost {
       this.options.report,
       this.options.adoptJobSeeds,
       this.options.confirm,
+      this.#view.tabDrop,
     );
     this.#toolbarLayout = new SubstituteToolbarLayout(
       this.options.document,

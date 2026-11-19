@@ -24,6 +24,7 @@ import { DEFAULT_QUEUE_VIEW, pendingJobCount, queueItems, queueSummary, } from '
 import { GenerationQueueFlyout } from './GenerationQueueFlyout.js';
 import { GenerationQueueMenus } from './GenerationQueueMenus.js';
 import { GenerationQueueReorder } from './GenerationQueueReorder.js';
+import { jobOpensAsTab, queueTabDropTarget } from './GenerationQueueTabDrop.js';
 import { GenerationQueueView } from './GenerationQueueView.js';
 import { generationQueueViewCss } from './GenerationQueueViewStyles.js';
 /** ComfyUI's queue button, which the frame presents as the generation queue's button. */
@@ -92,6 +93,15 @@ export class GenerationQueueController {
             search: (text) => this.#choose({ search: text }),
         });
         this.#flyout = new GenerationQueueFlyout(this.#flyoutView.element);
+        const job = (jobId) => this.#source.snapshot.jobs.find((candidate) => candidate.id === jobId) ?? null;
+        const tabDrop = options.tabBar
+            ? queueTabDropTarget({
+                tabBar: options.tabBar,
+                job,
+                open: (finished) => this.#menus.openWorkflow(finished),
+                run: (failure, action) => this.#run(failure, action),
+            })
+            : null;
         this.#reorders = [this.#flyoutView, this.#panelView].map((view) => new GenerationQueueReorder({
             root: view.element,
             rows: view.rows,
@@ -99,6 +109,9 @@ export class GenerationQueueController {
             busy: () => this.#reordering,
             preview: (order) => view.previewWaiting(order),
             commit: (order) => this.#reorder(view, order),
+            ...(tabDrop
+                ? { targets: [tabDrop], carries: (jobId) => jobOpensAsTab(job(jobId)) }
+                : {}),
         }));
         document.addEventListener('click', this.#onButton, true);
         document.addEventListener('contextmenu', this.#onButtonMenu, true);

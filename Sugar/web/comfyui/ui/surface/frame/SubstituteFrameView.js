@@ -18,6 +18,7 @@ import { createButton } from '../appearance/ControlFactory.js';
 import { WorkflowTabsView } from './WorkflowTabsView.js';
 import { AppOrbView } from './AppOrbView.js';
 import { WorkflowTabStripLayout, FRAME_TAB_START } from './WorkflowTabStripLayout.js';
+import { WorkflowTabGhost } from './WorkflowTabGhost.js';
 import { ContextMenu } from '../../menus/ContextMenu.js';
 import { applyOwnedTheme } from '../appearance/ThemeService.js';
 import { createCubeAddIconElement } from '../CubeAddIcon.js';
@@ -28,6 +29,7 @@ export class SubstituteFrameView {
     actions;
     element;
     #tabs;
+    #ghost;
     #orb;
     #menu;
     #overflowMenu;
@@ -57,6 +59,7 @@ export class SubstituteFrameView {
         viewport.id = 'sc-workflow-strip';
         viewport.setAttribute('data-sc-scrollbar-managed', '');
         this.#tabs = new WorkflowTabsView(document, actions.workflows, viewport);
+        this.#ghost = new WorkflowTabGhost(document, viewport, this.element, () => this.#tabs.tabElements, () => this.#tabs.widths);
         // Empty space on the bar beside the tabs is tab-bar space too.
         this.element.addEventListener('contextmenu', (event) => {
             if (event.target === this.element)
@@ -164,6 +167,18 @@ export class SubstituteFrameView {
     updateProgress(snapshot) {
         this.#progress.update(snapshot);
     }
+    /** The tab bar as a place to drop something that opens as a workflow tab. */
+    get tabDrop() {
+        return {
+            hit: (x, y) => this.#ghost.hit(x, y),
+            preview: (title, index) => this.#ghost.show(title, index),
+            place: (index) => {
+                const last = this.#presented.length - 1;
+                if (index < last)
+                    this.actions.workflows.reorder(last, index);
+            },
+        };
+    }
     /** Expose the progress tracks for reversible placement on the toolbar row's bottom edge. */
     get progressElement() {
         return this.#progress.element;
@@ -207,6 +222,7 @@ export class SubstituteFrameView {
         this.#overflowMenu.close();
         this.#menu.close();
         this.#orb.dispose();
+        this.#ghost.dispose();
         this.#tabs.dispose();
         this.element.remove();
     }

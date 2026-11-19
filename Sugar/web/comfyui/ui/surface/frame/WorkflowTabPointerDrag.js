@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own captured workflow-tab gestures, cancellation and one authoritative release command. */
-import { workflowTabDragPlacement, workflowTabOffsets } from './WorkflowTabGeometry.js';
+import { extentPlacement, slotOffsets } from '../../interaction/reorder/ReorderSlots.js';
 import { WorkflowTabDragPreview } from './WorkflowTabDragPreview.js';
 /** Coordinate presentation with host reorder while leaving selection to official Fluent focus. */
 export class WorkflowTabPointerDrag {
@@ -120,14 +120,14 @@ export class WorkflowTabPointerDrag {
     };
     /** Account for scroll movement without changing the original press-relative grab position. */
     #placement(candidate) {
-        const placement = workflowTabDragPlacement(candidate.widths, candidate.origin, candidate.pointer -
+        const placement = extentPlacement(candidate.widths, candidate.origin, candidate.pointer -
             candidate.x +
             candidate.viewportLeft -
             this.viewport.getBoundingClientRect().left +
             this.viewport.scrollLeft -
             candidate.scroll +
             candidate.startLeft -
-            (workflowTabOffsets(candidate.widths)[candidate.origin] ?? 0), candidate.target);
+            (slotOffsets(candidate.widths)[candidate.origin] ?? 0), candidate.target);
         candidate.target = placement.target;
         return placement;
     }

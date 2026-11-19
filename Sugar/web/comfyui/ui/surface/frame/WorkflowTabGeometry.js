@@ -13,44 +13,11 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Calculate committed workflow-tab positions independently of DOM animation. */
-/** Include the terminal edge so every consumer shares the same starts and total extent. */
-export function workflowTabOffsets(widths) {
-    const offsets = [0];
-    for (const width of widths)
-        offsets.push((offsets.at(-1) ?? 0) + width);
-    return offsets;
-}
+/** Resolve workflow-tab positions that only the tab strip asks about. */
+import { slotOffsets } from '../../interaction/reorder/ReorderSlots.js';
 /** Resolve a scroll position against actual tab extents, including unequal name-sized tabs. */
 export function workflowTabAtOffset(widths, position) {
-    const offsets = workflowTabOffsets(widths);
+    const offsets = slotOffsets(widths);
     const index = widths.findIndex((_width, index) => (offsets[index + 1] ?? 0) > position + 0.5);
     return index < 0 ? Math.max(0, widths.length - 1) : index;
-}
-/** Reorder from immutable insertion slots with a small dead band, independent of painted rectangles. */
-export function workflowTabDragPlacement(widths, origin, delta, previousTarget = origin) {
-    if (!widths.length ||
-        origin < 0 ||
-        origin >= widths.length ||
-        widths.some((width) => !Number.isFinite(width) || width <= 0))
-        throw new Error('Workflow tab geometry is unavailable.');
-    const starts = workflowTabOffsets(widths);
-    const order = widths.map((_width, index) => index).filter((index) => index !== origin);
-    const slots = workflowTabOffsets(order.map((index) => widths[index] ?? 0));
-    const draggedLeft = Math.max(0, Math.min(slots.at(-1) ?? 0, (starts[origin] ?? 0) + delta));
-    let target = Math.max(0, Math.min(widths.length - 1, previousTarget));
-    while (target < widths.length - 1 &&
-        draggedLeft >= ((slots[target] ?? 0) + (slots[target + 1] ?? 0)) / 2 + 6)
-        target++;
-    while (target > 0 && draggedLeft <= ((slots[target - 1] ?? 0) + (slots[target] ?? 0)) / 2 - 6)
-        target--;
-    order.splice(target, 0, origin);
-    const destinations = workflowTabOffsets(order.map((index) => widths[index] ?? 0));
-    return {
-        target,
-        draggedLeft,
-        offsets: widths.map((_width, index) => index === origin
-            ? draggedLeft - (starts[origin] ?? 0)
-            : (destinations[order.indexOf(index)] ?? 0) - (starts[index] ?? 0)),
-    };
 }

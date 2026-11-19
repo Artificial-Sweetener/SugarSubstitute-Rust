@@ -21,7 +21,8 @@ import {
   workflowTabAccessorySlot,
 } from '../appearance/ControlFactory.js';
 import { ContextMenu, type ContextMenuEntry } from '../../menus/ContextMenu.js';
-import { workflowTabAtOffset, workflowTabOffsets } from './WorkflowTabGeometry.js';
+import { slotOffsets } from '../../interaction/reorder/ReorderSlots.js';
+import { workflowTabAtOffset } from './WorkflowTabGeometry.js';
 import { scrollWheelDistance } from '../ScrollWheelDistance.js';
 import { WorkflowTabPointerDrag } from './WorkflowTabPointerDrag.js';
 import type { FrameWorkflowTab } from './ComfyFrameWorkflowAdapter.js';
@@ -147,7 +148,7 @@ export class WorkflowTabsView {
   #revealSelected(index: number): void {
     const width = this.viewport.clientWidth;
     if (index < 0 || width <= 0) return;
-    const starts = workflowTabOffsets(this.#widths);
+    const starts = slotOffsets(this.#widths);
     const left = starts[index] ?? 0;
     const right = starts[index + 1] ?? left;
     if (left < this.viewport.scrollLeft) this.viewport.scrollLeft = left;
@@ -192,7 +193,7 @@ export class WorkflowTabsView {
   #updateOrbAdjacency(): void {
     if (this.#drag.active) return;
     const index = workflowTabAtOffset(this.#widths, Math.max(0, this.viewport.scrollLeft));
-    const left = workflowTabOffsets(this.#widths)[index] ?? 0;
+    const left = slotOffsets(this.#widths)[index] ?? 0;
     const adjacent =
       !this.#orbVisible ||
       this.viewport.hasAttribute('data-sc-overflow') ||
@@ -207,6 +208,16 @@ export class WorkflowTabsView {
           `${String(-17 + this.viewport.scrollLeft - left)}px`,
         );
     }
+  }
+
+  /** The tabs in order, for previews drawn over the strip. */
+  get tabElements(): readonly HTMLElement[] {
+    return this.#order.flatMap((tab) => this.#tabs.get(tab.id)?.element ?? []);
+  }
+
+  /** The width each tab is given. */
+  get widths(): readonly number[] {
+    return this.#widths;
   }
 
   /** Release floating interaction and official Fluent focus bindings through normal disconnection. */

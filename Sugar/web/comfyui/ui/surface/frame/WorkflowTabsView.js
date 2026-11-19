@@ -16,7 +16,8 @@
 /** Present stable Microsoft Fluent workflow tabs while Comfy retains workflow actions. */
 import { createWorkflowTab, createWorkflowTablist, createButton, workflowTabAccessorySlot, } from '../appearance/ControlFactory.js';
 import { ContextMenu } from '../../menus/ContextMenu.js';
-import { workflowTabAtOffset, workflowTabOffsets } from './WorkflowTabGeometry.js';
+import { slotOffsets } from '../../interaction/reorder/ReorderSlots.js';
+import { workflowTabAtOffset } from './WorkflowTabGeometry.js';
 import { scrollWheelDistance } from '../ScrollWheelDistance.js';
 import { WorkflowTabPointerDrag } from './WorkflowTabPointerDrag.js';
 /** Retain keyed controls, literal titles, native keyboard navigation and one-shot activity animation. */
@@ -113,7 +114,7 @@ export class WorkflowTabsView {
         const width = this.viewport.clientWidth;
         if (index < 0 || width <= 0)
             return;
-        const starts = workflowTabOffsets(this.#widths);
+        const starts = slotOffsets(this.#widths);
         const left = starts[index] ?? 0;
         const right = starts[index + 1] ?? left;
         if (left < this.viewport.scrollLeft)
@@ -157,7 +158,7 @@ export class WorkflowTabsView {
         if (this.#drag.active)
             return;
         const index = workflowTabAtOffset(this.#widths, Math.max(0, this.viewport.scrollLeft));
-        const left = workflowTabOffsets(this.#widths)[index] ?? 0;
+        const left = slotOffsets(this.#widths)[index] ?? 0;
         const adjacent = !this.#orbVisible ||
             this.viewport.hasAttribute('data-sc-overflow') ||
             this.viewport.hasAttribute('data-sc-natural-tabs')
@@ -168,6 +169,14 @@ export class WorkflowTabsView {
             if (id === adjacent)
                 tab.element.style.setProperty('--sc-tab-cutout-x', `${String(-17 + this.viewport.scrollLeft - left)}px`);
         }
+    }
+    /** The tabs in order, for previews drawn over the strip. */
+    get tabElements() {
+        return this.#order.flatMap((tab) => this.#tabs.get(tab.id)?.element ?? []);
+    }
+    /** The width each tab is given. */
+    get widths() {
+        return this.#widths;
     }
     /** Release floating interaction and official Fluent focus bindings through normal disconnection. */
     dispose() {

@@ -18,6 +18,7 @@ import { createButton } from '../appearance/ControlFactory.js';
 import { WorkflowTabsView, type WorkflowTabsActions } from './WorkflowTabsView.js';
 import { AppOrbView } from './AppOrbView.js';
 import { WorkflowTabStripLayout, FRAME_TAB_START } from './WorkflowTabStripLayout.js';
+import { WorkflowTabGhost, type WorkflowTabDropTarget } from './WorkflowTabGhost.js';
 import { ContextMenu } from '../../menus/ContextMenu.js';
 import { applyOwnedTheme } from '../appearance/ThemeService.js';
 import type { CubeStackFrameControls } from '../stack/CubeStackHost.js';
@@ -39,6 +40,7 @@ export interface SubstituteFrameViewActions {
 export class SubstituteFrameView {
   readonly element: HTMLElement;
   readonly #tabs: WorkflowTabsView;
+  readonly #ghost: WorkflowTabGhost;
   readonly #orb: AppOrbView;
   readonly #menu: ContextMenu;
   readonly #overflowMenu: ContextMenu;
@@ -70,6 +72,13 @@ export class SubstituteFrameView {
     viewport.id = 'sc-workflow-strip';
     viewport.setAttribute('data-sc-scrollbar-managed', '');
     this.#tabs = new WorkflowTabsView(document, actions.workflows, viewport);
+    this.#ghost = new WorkflowTabGhost(
+      document,
+      viewport,
+      this.element,
+      () => this.#tabs.tabElements,
+      () => this.#tabs.widths,
+    );
     // Empty space on the bar beside the tabs is tab-bar space too.
     this.element.addEventListener('contextmenu', (event) => {
       if (event.target === this.element) this.#tabs.offerReopen(event);
@@ -194,6 +203,18 @@ export class SubstituteFrameView {
     this.#progress.update(snapshot);
   }
 
+  /** The tab bar as a place to drop something that opens as a workflow tab. */
+  get tabDrop(): WorkflowTabDropTarget {
+    return {
+      hit: (x, y) => this.#ghost.hit(x, y),
+      preview: (title, index) => this.#ghost.show(title, index),
+      place: (index) => {
+        const last = this.#presented.length - 1;
+        if (index < last) this.actions.workflows.reorder(last, index);
+      },
+    };
+  }
+
   /** Expose the progress tracks for reversible placement on the toolbar row's bottom edge. */
   get progressElement(): HTMLElement {
     return this.#progress.element;
@@ -241,6 +262,7 @@ export class SubstituteFrameView {
     this.#overflowMenu.close();
     this.#menu.close();
     this.#orb.dispose();
+    this.#ghost.dispose();
     this.#tabs.dispose();
     this.element.remove();
   }

@@ -16,7 +16,7 @@
 /** Own responsive tab-strip allocation and the lifetime of its overflow affordance. */
 import { WORKFLOW_TAB_WIDTH, WORKFLOW_TAB_MIN_WIDTH } from './WorkflowTabStyles.js';
 import { readOwnedVisualStyle } from '../appearance/VisualStyleBoundary.js';
-import { workflowTabOffsets } from './WorkflowTabGeometry.js';
+import { slotOffsets } from '../../interaction/reorder/ReorderSlots.js';
 
 /** Preserve the reference orb's tab-strip origin. */
 export const FRAME_TAB_START = 48;
@@ -165,7 +165,7 @@ export class WorkflowTabStripLayout {
       this.tabs.style.setProperty('--sc-workflow-tab-width', `${String(width)}px`);
       this.#widths = Array.from({ length: this.#count }, () => width);
     }
-    const content = workflowTabOffsets(this.#widths).at(-1) ?? 0;
+    const content = slotOffsets(this.#widths).at(-1) ?? 0;
     this.tabs.style.setProperty('--sc-workflow-tabs-width', `${String(content)}px`);
     this.viewport.style.width = `${String(Math.min(content, capacity))}px`;
     if (this.controls.overflow.hidden !== hidden) {
@@ -204,13 +204,13 @@ export class WorkflowTabStripLayout {
       0,
       this.#available - (1 + Number(previous) + Number(next)) * WORKFLOW_TAB_TOOL_WIDTH,
     );
-    const width = Math.min(workflowTabOffsets(this.#widths).at(-1) ?? 0, capacity);
+    const width = Math.min(slotOffsets(this.#widths).at(-1) ?? 0, capacity);
     const cssWidth = `${String(width)}px`;
     const resized = this.viewport.style.width !== cssWidth;
     if (resized) this.viewport.style.width = cssWidth;
     const position = Math.max(
       0,
-      Math.min(this.viewport.scrollLeft, (workflowTabOffsets(this.#widths).at(-1) ?? 0) - width),
+      Math.min(this.viewport.scrollLeft, (slotOffsets(this.#widths).at(-1) ?? 0) - width),
     );
     if (this.viewport.scrollLeft !== position) this.viewport.scrollLeft = position;
     if (changed || resized) this.repositioned();
@@ -219,7 +219,7 @@ export class WorkflowTabStripLayout {
   /** Move one readable tab at a time without overshooting either end. */
   #scroll(direction: number): void {
     const maximum = Math.max(0, this.viewport.scrollWidth - this.viewport.clientWidth);
-    const starts = workflowTabOffsets(this.#widths);
+    const starts = slotOffsets(this.#widths);
     const current = this.viewport.scrollLeft;
     const destination =
       direction > 0

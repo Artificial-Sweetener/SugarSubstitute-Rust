@@ -36,7 +36,7 @@ export class GenerationStripHost {
     #rowMenu;
     #queueView;
     /** Mount source-matched generation controls only for the enabled Substitute frame. */
-    constructor(document, frame, app, report, adoptJobSeeds, confirm) {
+    constructor(document, frame, app, report, adoptJobSeeds, confirm, tabBar) {
         this.frame = frame;
         this.#adapter = new ComfyGenerationAdapter(document, app);
         this.#style = document.createElement('style');
@@ -84,6 +84,7 @@ export class GenerationStripHost {
                 useSeeds: (jobId) => this.#rowMenu.useSeeds(jobId),
                 showPending: (count) => this.#queue.setPending(count),
                 confirm,
+                tabBar,
                 notify: (severity, title, message) => toasts.push(severity, title, message),
                 report,
             })

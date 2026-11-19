@@ -1,4 +1,5 @@
 import { isRecord } from '../../../types/common.js';
+import { jobTabTitle } from './GenerationQueueTabDrop.js';
 import { hasFailedJobs, pendingJobCount, } from './GenerationQueueRows.js';
 /**
  * The queue's menus: its own choices behind the More button, and each job's actions on its row.
@@ -112,7 +113,7 @@ export class GenerationQueueMenus {
                 label: 'Open as Workflow Tab',
                 // ComfyUI keeps a job's workflow once the job has left the queue.
                 disabled: !finished && job.status !== 'failed',
-                select: () => this.host.run('Workflow not opened', () => this.#openWorkflow(job)),
+                select: () => this.host.run('Workflow not opened', () => this.openWorkflow(job)),
             },
             { label: '', separator: true },
         ];
@@ -159,7 +160,8 @@ export class GenerationQueueMenus {
             entries,
         });
     }
-    async #openWorkflow(job) {
+    /** Open a finished job's workflow as a new tab beside the open ones. */
+    async openWorkflow(job) {
         const workflow = await this.host.actions.workflow(job.id);
         const load = isRecord(this.host.app) ? this.host.app.loadGraphData : null;
         if (!workflow || typeof load !== 'function')
@@ -169,7 +171,7 @@ export class GenerationQueueMenus {
             workflow,
             true,
             true,
-            job.workflowName ?? `Job ${job.id.slice(0, 8)}`,
+            jobTabTitle(job),
         ]);
     }
     async #exportWorkflow(job) {

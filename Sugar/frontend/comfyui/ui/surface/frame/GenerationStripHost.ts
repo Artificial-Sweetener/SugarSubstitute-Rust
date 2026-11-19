@@ -24,6 +24,7 @@ import { GenerationQueueController } from './queue/GenerationQueueController.js'
 import type { ComfyQueueApi } from './queue/ComfyQueueJobSource.js';
 import { ToastService } from '../../core/ToastService.js';
 import type { HostToast } from '../../core/ComfyAdapter.js';
+import type { WorkflowTabDropTarget } from './WorkflowTabGhost.js';
 import { isRecord } from '../../types/common.js';
 import { applyOwnedTheme } from '../appearance/ThemeService.js';
 
@@ -46,6 +47,7 @@ export class GenerationStripHost {
     report: (error: unknown) => void,
     adoptJobSeeds: (seeds: readonly QueueJobSeed[]) => number,
     confirm: (title: string, message: string, agree: string) => Promise<boolean>,
+    tabBar: WorkflowTabDropTarget,
   ) {
     this.#adapter = new ComfyGenerationAdapter(document, app);
     this.#style = document.createElement('style');
@@ -93,6 +95,7 @@ export class GenerationStripHost {
           useSeeds: (jobId) => this.#rowMenu.useSeeds(jobId),
           showPending: (count) => this.#queue.setPending(count),
           confirm,
+          tabBar,
           notify: (severity, title, message) => toasts.push(severity, title, message),
           report,
         })
