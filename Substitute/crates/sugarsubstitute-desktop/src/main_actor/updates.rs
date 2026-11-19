@@ -18,9 +18,12 @@ impl Default for CaptionText {
 }
 
 impl CaptionText {
-    /// The caption owner's view in the current language.
+    /// What the caption shows for this owner: nothing. The title bar never carries a message,
+    /// so nothing appears above the page and the page never moves; the application tells the
+    /// embedded page instead, which shows the user its own notification. The owner still names
+    /// each peer, which keeps its accessible label in the current language.
     pub(super) fn view(&self) -> UpdateCaptionView {
-        self.owner.view(self.words)
+        self.owner.view(self.words).hidden()
     }
 }
 

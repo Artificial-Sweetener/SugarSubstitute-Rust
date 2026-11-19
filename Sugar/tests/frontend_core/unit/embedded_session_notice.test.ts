@@ -22,6 +22,7 @@ import {
   unsavedWorkWords,
   type UnsavedWork,
 } from '../../../frontend/comfyui/ui/core/session_notice/UnsavedWorkNotice.js';
+import type { HostLine } from '../../../frontend/comfyui/ui/core/session_notice/HostSessionNoticeLink.js';
 import { ToastService } from '../../../frontend/comfyui/ui/core/ToastService.js';
 
 const session = '00000000-0000-4000-8000-000000000001';
@@ -32,19 +33,26 @@ afterEach(() => {
 });
 
 /** Start an embedded host whose description lists `protocols`; `reaches` says whether a notice is seen. */
-function start(protocols: readonly string[], reaches = true) {
+function start(protocols: readonly string[], reaches = true, capabilities: readonly string[] = []) {
   jest.useFakeTimers();
   const sent: unknown[] = [];
   const channel: { receive: ((value: unknown) => void) | null } = { receive: null };
   const presented: UnsavedWork[] = [];
+  const lines: HostLine[] = [];
   const host = new EmbeddedPanelHost(
     {
       window,
       host: new HostDescriptionState(),
       presentation: new EmbeddedPresentation(),
-      sessionNotice: (lost) => {
-        presented.push(lost);
-        return reaches;
+      sessionNotice: {
+        notSaved: (lost) => {
+          presented.push(lost);
+          return reaches;
+        },
+        line: (line) => {
+          lines.push(line);
+          return reaches;
+        },
       },
       connected: () => true,
       report: jest.fn(),
@@ -69,11 +77,11 @@ function start(protocols: readonly string[], reaches = true) {
       { name: 'sugarcubes.panel', version: 3 },
       ...protocols.map((name) => ({ name, version: 1 })),
     ],
-    capabilities: [],
+    capabilities: capabilities.map((name) => ({ name })),
   });
   const notices = (): unknown[] =>
     sent.filter((value) => JSON.stringify(value).includes('sugarcubes.session-notice'));
-  return { host, receive, presented, notices };
+  return { host, receive, presented, lines, notices };
 }
 
 test('a host with session notices is watched, and a shown notice is answered once', () => {
@@ -138,4 +146,54 @@ test('a lasting toast carries no lifetime and reports whether the host showed it
     detail: '<b>literal</b>',
   });
   expect(new ToastService({ getToast: () => null }).pushLasting('warn', 'a', 'b')).toBe(false);
+});
+
+test('a host that declares lines is spoken to in version two and each line is answered once', () => {
+  const { host, receive, lines, notices } = start(['sugarcubes.session-notice'], true, [
+    'session-notice.lines',
+  ]);
+  const lined = { ...envelope, version: 2 };
+  expect(notices()).toEqual([{ ...lined, type: 'watch' }]);
+  const saving = {
+    ...lined,
+    type: 'line',
+    notice: 2,
+    tone: 'info',
+    text: '<b>Saving your workspace…</b>',
+    lasting: true,
+  };
+  receive(saving);
+  // A version-one message is not this page's protocol and is ignored.
+  receive({ ...envelope, type: 'not-saved', notice: 1, workspace: true, inputs: false });
+  receive(saving);
+  receive({ ...lined, type: 'line', notice: 3, tone: 'warn', text: 'Later', lasting: false });
+  expect(lines).toEqual([
+    { tone: 'info', text: '<b>Saving your workspace…</b>', lasting: true },
+    { tone: 'warn', text: 'Later', lasting: false },
+  ]);
+  expect(notices().slice(1)).toEqual([
+    { ...lined, type: 'shown', notice: 2 },
+    { ...lined, type: 'shown', notice: 3 },
+  ]);
+  host.dispose();
+});
+
+test('a line the page could not show stays owed, and a malformed line is ignored', () => {
+  const { host, receive, lines, notices } = start(['sugarcubes.session-notice'], false, [
+    'session-notice.lines',
+  ]);
+  const lined = { ...envelope, version: 2 };
+  receive({ ...lined, type: 'line', notice: 2, tone: 'error', text: 'Lost', lasting: true });
+  receive({ ...lined, type: 'line', notice: 3, tone: 'loud', text: 'Bad tone', lasting: true });
+  receive({
+    ...lined,
+    type: 'line',
+    notice: 4,
+    tone: 'info',
+    text: 'x'.repeat(401),
+    lasting: true,
+  });
+  expect(lines).toEqual([{ tone: 'error', text: 'Lost', lasting: true }]);
+  expect(notices()).toEqual([{ ...lined, type: 'watch' }]);
+  host.dispose();
 });

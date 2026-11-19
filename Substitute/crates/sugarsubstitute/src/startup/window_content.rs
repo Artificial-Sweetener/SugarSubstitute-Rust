@@ -86,17 +86,10 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
         )
     }
 
-    /// The coordinator's next one-time start-up update message.
+    /// The window's caption is owed no start-up update message: the embedded page is told
+    /// each one as a line (`session_notice_host`), so the title bar never carries a message.
     fn take_update_notice(&mut self) -> Option<sugarsubstitute_desktop::UpdateNotice> {
-        use sugarsubstitute_contracts::update::status::StartupNotice;
-        use sugarsubstitute_desktop::UpdateNotice;
-        Some(match self.child.take_update_notice()? {
-            StartupNotice::Updated(version) => UpdateNotice::Updated { version },
-            StartupNotice::Repairing => UpdateNotice::Repairing,
-            StartupNotice::PreviousVersionRunning => UpdateNotice::PreviousVersionRunning,
-            StartupNotice::Sugarcubes(report) => UpdateNotice::Sugarcubes(report),
-            StartupNotice::StorageSetAside => UpdateNotice::StorageSetAside,
-        })
+        None
     }
 
     #[cfg(all(windows, any(feature = "windows-native-host", test)))]

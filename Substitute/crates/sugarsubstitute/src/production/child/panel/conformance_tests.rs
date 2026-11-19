@@ -124,6 +124,7 @@ fn page_script(session: &str) -> Vec<Value> {
         ),
         with(envelope("sugarcubes.release-notes", 1), json!({ "type": "watch" })),
         with(envelope("sugarcubes.session-notice", 1), json!({ "type": "watch" })),
+        with(envelope("sugarcubes.session-notice", 2), json!({ "type": "watch" })),
     ]
 }
 

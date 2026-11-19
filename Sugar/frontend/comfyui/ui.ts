@@ -115,7 +115,7 @@ const {
 } = createWorkflowCanvasComposition({
   api,
   notify: (severity, title, message) => pushToastMessage(severity, title, message),
-  warnLasting: (title, message) => hostFeedback.pushLastingToast('warn', title, message),
+  hostNotices: hostFeedback,
   app: appRef,
   document: documentRef ?? document,
   getLiteGraph: () => adapter.getLiteGraph?.(),

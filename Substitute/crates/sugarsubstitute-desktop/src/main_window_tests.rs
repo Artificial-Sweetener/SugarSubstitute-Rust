@@ -35,7 +35,7 @@ fn settings() -> MainWindowSettings {
         },
         recovery: crate::MainRecoveryLabels {
             retry: "Retry",
-            retry_ready: "Connection failed. Select here to retry",
+            retry_ready: "Connection failed. Retry",
         },
     }
 }

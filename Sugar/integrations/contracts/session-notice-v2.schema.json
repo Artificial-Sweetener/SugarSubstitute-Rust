@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://artificialsweetener.ai/schemas/sugarcubes/session-notice/v2",
+  "title": "SugarCubes session notice protocol version 2",
+  "description": "An optional protocol for a host that has something to tell the person about their session. A host offers version 2 by listing sugarcubes.session-notice version 1 in its description and declaring the capability session-notice.lines; it answers each page in the version that page speaks. The page sends watch once it can show a notice. The host answers every watch with a notice it owes, or with none, and to a watching page it may send further notices at any time. not-saved says the host's previous close did not keep the latest workflow changes (workspace), the latest input canvas edits (inputs), or both; at least one is true. line is one sentence the host has for the person, in the person's language and already worded by the host: the page shows text literally as a notification, in the given tone, and keeps a lasting line on screen until the person closes it. The page shows each notice to the person and then sends shown naming it; the host stops owing a notice once it is shown, and owes it again to a later watch until then. A notice number identifies one notice within the host's run.",
+  "$defs": {
+    "SessionNoticeTone": {
+      "enum": ["info", "warn", "error"]
+    },
+    "SessionNoticeNotSavedMessage": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.session-notice"
+        },
+        "version": {
+          "const": 2
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "type": {
+          "const": "not-saved"
+        },
+        "notice": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "workspace": {
+          "type": "boolean"
+        },
+        "inputs": {
+          "type": "boolean"
+        }
+      },
+      "required": ["protocol", "version", "session", "type", "notice", "workspace", "inputs"],
+      "additionalProperties": false
+    },
+    "SessionNoticeLineMessage": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.session-notice"
+        },
+        "version": {
+          "const": 2
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "type": {
+          "const": "line"
+        },
+        "notice": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "tone": {
+          "$ref": "#/$defs/SessionNoticeTone"
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 400,
+          "pattern": "^(?:[^\\uD800-\\uDFFF]|[\\uD800-\\uDBFF][\\uDC00-\\uDFFF])*$",
+          "x-length-unit": "unicode-codepoints"
+        },
+        "lasting": {
+          "type": "boolean"
+        }
+      },
+      "required": ["protocol", "version", "session", "type", "notice", "tone", "text", "lasting"],
+      "additionalProperties": false
+    },
+    "SessionNoticeNoneMessage": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.session-notice"
+        },
+        "version": {
+          "const": 2
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "type": {
+          "const": "none"
+        }
+      },
+      "required": ["protocol", "version", "session", "type"],
+      "additionalProperties": false
+    },
+    "SessionNoticeWatchMessage": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.session-notice"
+        },
+        "version": {
+          "const": 2
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "type": {
+          "const": "watch"
+        }
+      },
+      "required": ["protocol", "version", "session", "type"],
+      "additionalProperties": false
+    },
+    "SessionNoticeShownMessage": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.session-notice"
+        },
+        "version": {
+          "const": 2
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "type": {
+          "const": "shown"
+        },
+        "notice": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": ["protocol", "version", "session", "type", "notice"],
+      "additionalProperties": false
+    },
+    "SessionNoticeHostMessage": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/SessionNoticeNotSavedMessage"
+        },
+        {
+          "$ref": "#/$defs/SessionNoticeLineMessage"
+        },
+        {
+          "$ref": "#/$defs/SessionNoticeNoneMessage"
+        }
+      ]
+    },
+    "SessionNoticeClientMessage": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/SessionNoticeWatchMessage"
+        },
+        {
+          "$ref": "#/$defs/SessionNoticeShownMessage"
+        }
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/SessionNoticeNotSavedMessage"
+    },
+    {
+      "$ref": "#/$defs/SessionNoticeLineMessage"
+    },
+    {
+      "$ref": "#/$defs/SessionNoticeNoneMessage"
+    },
+    {
+      "$ref": "#/$defs/SessionNoticeWatchMessage"
+    },
+    {
+      "$ref": "#/$defs/SessionNoticeShownMessage"
+    }
+  ]
+}

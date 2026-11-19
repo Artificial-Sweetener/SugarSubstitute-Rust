@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! The window's start-up update messages and the splash's "Updating SugarCubes…" and
+//! The start-up update messages the page is told, and the splash's "Updating SugarCubes…" and
 //! "Updating to version X…" lines come from the coordinator's status as the child received it.
 use super::*;
 use sugarsubstitute_contracts::update::{
     pack::{PackOutcome, PackUpdateReport, PackUpdateStatus},
     status::{LaunchVersion, StartupNotice, UpdateStatus},
 };
-use sugarsubstitute_desktop::{StartupWindowContent, UpdateNotice};
+use sugarsubstitute_desktop::StartupWindowContent;
 use sugarsubstitute_splash::{StartupStatus, UpdateVersion};
 
 fn could_not_check() -> PackUpdateReport {
@@ -15,7 +15,8 @@ fn could_not_check() -> PackUpdateReport {
 }
 
 #[test]
-fn every_start_up_message_reaches_the_window_once_in_its_own_form() -> BackendResult<()> {
+fn every_start_up_message_is_owed_to_the_page_once_and_never_to_the_title_bar() -> BackendResult<()>
+{
     let mut host = host()?;
     host.child.notices.extend([
         StartupNotice::Updated("2.4.1".into()),
@@ -23,11 +24,20 @@ fn every_start_up_message_reaches_the_window_once_in_its_own_form() -> BackendRe
         StartupNotice::PreviousVersionRunning,
         StartupNotice::Sugarcubes(could_not_check()),
     ]);
-    assert_eq!(host.take_update_notice(), Some(UpdateNotice::Updated { version: "2.4.1".into() }));
-    assert_eq!(host.take_update_notice(), Some(UpdateNotice::Repairing));
-    assert_eq!(host.take_update_notice(), Some(UpdateNotice::PreviousVersionRunning));
-    assert_eq!(host.take_update_notice(), Some(UpdateNotice::Sugarcubes(could_not_check())));
+    // The window's caption is offered none of them.
     assert_eq!(host.take_update_notice(), None);
+    host.advance_session_notice()?;
+    let words = host.locale_messages();
+    let owed: Vec<String> =
+        host.session_notice.owed_lines().into_iter().map(|line| line.text.clone()).collect();
+    assert_eq!(owed.len(), 4);
+    assert!(owed[0].contains("2.4.1"));
+    assert_eq!(owed[1], words.updates.repairing);
+    assert_eq!(owed[2], words.updates.previous_running);
+    assert_eq!(Some(owed[3].clone()), could_not_check().notice(words.pack_updates));
+    // A later turn has nothing more to say.
+    host.advance_session_notice()?;
+    assert_eq!(host.session_notice.owed_lines().len(), 4);
     Ok(())
 }
 

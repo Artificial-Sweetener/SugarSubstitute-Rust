@@ -67,6 +67,9 @@ impl HostCapability {
     /// Besides `sugarcubes.updates` version 1, the host answers version 2 on the same channel,
     /// whose states name the product they describe.
     pub const NAMED_UPDATES: Self = Self("updates.product-name");
+    /// Besides `sugarcubes.session-notice` version 1, the host answers version 2 on the same
+    /// channel, whose notices include lines the host words itself.
+    pub const NOTICE_LINES: Self = Self("session-notice.lines");
     /// The host takes up to 64 acrylic regions in one canvas geometry message, where a host
     /// without this takes two.
     pub const BACKDROP_REGIONS: Self = Self("canvas.backdrop-regions");

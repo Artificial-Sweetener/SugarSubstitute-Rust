@@ -48,6 +48,7 @@ pub(crate) fn description(hosting: MainHosting) -> Result<HostDescription, Panel
         capabilities.push(HostCapability::BACKDROP_REGIONS);
     }
     capabilities.push(HostCapability::NAMED_UPDATES);
+    capabilities.push(HostCapability::NOTICE_LINES);
     HostDescription::new(PROTOCOLS.to_vec(), capabilities)
 }
 

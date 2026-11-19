@@ -123,9 +123,12 @@ export function createWorkflowFieldHost(options) {
                 host,
                 updates,
                 releaseNotes: whatsNew,
-                sessionNotice: (lost) => {
-                    const words = unsavedWorkWords(lost);
-                    return options.warnLasting(words.title, words.message);
+                sessionNotice: {
+                    notSaved: (lost) => {
+                        const words = unsavedWorkWords(lost);
+                        return options.hostNotices.pushLastingToast('warn', words.title, words.message);
+                    },
+                    line: (line) => options.hostNotices.showHostLine(line),
                 },
                 presentation: embedded,
                 hostAccent,

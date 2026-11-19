@@ -48,6 +48,8 @@ mod scopes;
 #[cfg(all(windows, any(feature = "windows-native-host", test)))]
 mod session_notice_host;
 #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+mod session_notice_lines;
+#[cfg(all(windows, any(feature = "windows-native-host", test)))]
 pub(crate) mod session_notice_page;
 #[path = "startup/shutdown.rs"]
 mod shutdown;
@@ -130,6 +132,9 @@ pub struct StartupHost<B: StartupBackend> {
     /// What the host owes the user about the previous close, shown by the page.
     #[cfg(all(windows, any(feature = "windows-native-host", test)))]
     session_notice: session_notice_page::SessionNoticePage,
+    /// Which of the host's own lines the page has been told.
+    #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+    notice_lines: session_notice_lines::LineSources,
     #[cfg(all(windows, feature = "native-composition"))]
     composition: Option<composition::CompositionWork>,
     #[cfg(all(windows, feature = "native-composition"))]
@@ -230,6 +235,8 @@ impl<B: StartupBackend> StartupHost<B> {
             release_notes_jobs: None,
             #[cfg(all(windows, any(feature = "windows-native-host", test)))]
             session_notice: session_notice_page::SessionNoticePage::new(),
+            #[cfg(all(windows, any(feature = "windows-native-host", test)))]
+            notice_lines: session_notice_lines::LineSources::default(),
             #[cfg(all(windows, feature = "native-composition"))]
             composition: None,
             #[cfg(all(windows, feature = "native-composition"))]

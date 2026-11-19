@@ -28,6 +28,16 @@ export class CubeHostFeedback {
     pushToast(severity, summary, detail) {
         this.#toast?.push?.(severity, summary, detail);
     }
+    /**
+     * Show one sentence the desktop host has for the person, in the host's own words. A lasting
+     * line stays until dismissed and answers whether the host's notifications showed it.
+     */
+    showHostLine(line) {
+        if (line.lasting)
+            return this.pushLastingToast(line.tone, line.text, '');
+        this.pushToast(line.tone, line.text, '');
+        return true;
+    }
     /** Push one toast that stays until dismissed; answer whether the host showed it. */
     pushLastingToast(severity, summary, detail) {
         return this.#toast?.pushLasting(severity, summary, detail) ?? false;

@@ -465,7 +465,20 @@ test('session notice messages ride the control lane', () => {
   assert.deepEqual(posted(f), [notice('watch'), notice('shown', { notice: 1 })]);
   assert.ok(f.sent.every(value => value.startsWith('1:c:')));
 });
-test('session notices are version-one notifications for the current session only', () => {
+test('a line reaches a page in version two, and its watch and shown ride the control lane', () => {
+  const f = fixture();
+  const lined = (type, extra = {}) => ({ ...notice(type, extra), version: 2 });
+  f.receipt('g', 'c', 1);
+  f.bridge.send(lined('watch'));
+  f.bridge.send(lined('shown', { notice: 2 }));
+  f.receipt('a', 'c', 1); f.receipt('g', 'c', 2);
+  assert.deepEqual(posted(f), [lined('watch'), lined('shown', { notice: 2 })]);
+  const line = lined('line', { notice: 2, tone: 'info', text: 'Saving your workspace…', lasting: true });
+  assert.equal(f.deliver(line), true);
+  assert.equal(f.deliver({ ...line, session: 'another-session' }), false);
+  assert.deepEqual(f.received.map(value => value.type), ['line']);
+});
+test('session notices are notifications in a released version for the current session only', () => {
   const f = fixture();
   const lost = notice('not-saved', { notice: 1, workspace: true, inputs: false });
   for (const value of [notice('watch'), notice('shown', { notice: 1 }), { ...lost, version: 3 },

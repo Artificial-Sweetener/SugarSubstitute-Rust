@@ -15,6 +15,9 @@
             },
             {
               "name": "updates.product-name"
+            },
+            {
+              "name": "session-notice.lines"
             }
           ],
           "protocol": "sugarcubes.host",
@@ -313,6 +316,22 @@
         "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
         "type": "watch",
         "version": 1
+      }
+    },
+    {
+      "host": [
+        {
+          "protocol": "sugarcubes.session-notice",
+          "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+          "type": "none",
+          "version": 2
+        }
+      ],
+      "page": {
+        "protocol": "sugarcubes.session-notice",
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "watch",
+        "version": 2
       }
     }
   ],

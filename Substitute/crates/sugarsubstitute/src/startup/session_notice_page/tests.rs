@@ -48,7 +48,16 @@ fn send(
 }
 
 fn watch(page: &mut SessionNoticePage, identity: MainIdentity) -> TestResult {
-    send(page, identity, SessionNoticeClientMessage::Watch(PanelSession::for_main(identity)?))
+    watch_in(page, identity, SessionNoticeVersion::One)
+}
+
+fn watch_in(
+    page: &mut SessionNoticePage,
+    identity: MainIdentity,
+    version: SessionNoticeVersion,
+) -> TestResult {
+    let session = PanelSession::for_main(identity)?;
+    send(page, identity, SessionNoticeClientMessage::Watch { session, version })
 }
 
 fn shown(page: &mut SessionNoticePage, identity: MainIdentity, notice: u64) -> TestResult {
@@ -159,5 +168,83 @@ fn a_retired_navigation_receives_nothing_more() -> TestResult {
     watch(&mut page, identity(1)?)?;
     page.retire(identity(1)?);
     assert_eq!(drain(&mut page)?, (1, vec![]));
+    Ok(())
+}
+
+fn saving() -> HostLine {
+    HostLine { tone: NoticeTone::Info, text: "Saving your workspace…".into(), lasting: true }
+}
+
+fn line(notice: u64, text: &str, tone: &str, lasting: bool) -> Value {
+    json!({"protocol": "sugarcubes.session-notice", "version": 2, "type": "line",
+        "notice": notice, "tone": tone, "text": text, "lasting": lasting})
+}
+
+#[test]
+fn a_version_two_page_is_sent_each_line_once_and_later_lines_as_they_arise() -> TestResult {
+    let mut page = SessionNoticePage::new();
+    page.settle(None)?;
+    page.tell(saving())?;
+    assert_eq!(drain(&mut page)?, (0, vec![]), "no page watches yet");
+    watch_in(&mut page, identity(1)?, SessionNoticeVersion::Two)?;
+    // A page that is owed a line is answered with it rather than with "none".
+    let first = line(2, "Saving your workspace…", "info", true);
+    assert_eq!(drain(&mut page)?, (1, vec![first.clone()]));
+    page.tell(saving())?;
+    assert_eq!(drain(&mut page)?, (0, vec![]), "the same words are owed once");
+    let warning = HostLine { tone: NoticeTone::Warn, text: "Later".into(), lasting: false };
+    page.tell(warning)?;
+    assert_eq!(drain(&mut page)?, (0, vec![line(3, "Later", "warn", false)]));
+    // A line stays owed, and is sent to the next navigation, until a page shows it.
+    shown(&mut page, identity(1)?, 2)?;
+    assert_eq!(drain(&mut page)?, (1, vec![]));
+    page.retire(identity(1)?);
+    watch_in(&mut page, identity(2)?, SessionNoticeVersion::Two)?;
+    assert_eq!(drain(&mut page)?, (1, vec![line(3, "Later", "warn", false)]));
+    shown(&mut page, identity(2)?, 3)?;
+    watch_in(&mut page, identity(2)?, SessionNoticeVersion::Two)?;
+    let none = json!({"protocol": "sugarcubes.session-notice", "version": 2, "type": "none"});
+    assert_eq!(drain(&mut page)?, (2, vec![none]));
+    Ok(())
+}
+
+#[test]
+fn a_version_one_page_is_never_sent_a_line_and_the_line_stays_owed() -> TestResult {
+    let mut page = SessionNoticePage::new();
+    page.settle(None)?;
+    page.tell(saving())?;
+    watch(&mut page, identity(1)?)?;
+    assert_eq!(drain(&mut page)?, (1, vec![none()]));
+    assert_eq!(page.owed_lines(), vec![&saving()]);
+    Ok(())
+}
+
+#[test]
+fn unsaved_work_and_lines_are_both_told_to_a_version_two_page() -> TestResult {
+    let mut page = SessionNoticePage::new();
+    page.settle(Some(&lost_workflow_changes()))?;
+    page.tell(saving())?;
+    watch_in(&mut page, identity(1)?, SessionNoticeVersion::Two)?;
+    let mut lost = not_saved(true, false);
+    lost["version"] = json!(2);
+    assert_eq!(drain(&mut page)?, (1, vec![lost, line(2, "Saving your workspace…", "info", true)]));
+    Ok(())
+}
+
+#[test]
+fn an_overlong_line_is_cut_to_what_the_page_admits_and_blank_ones_are_not_owed() -> TestResult {
+    let mut page = SessionNoticePage::new();
+    page.tell(HostLine { tone: NoticeTone::Info, text: "  ".into(), lasting: false })?;
+    assert!(page.owed_lines().is_empty());
+    page.tell(HostLine { tone: NoticeTone::Info, text: "é".repeat(900), lasting: false })?;
+    assert_eq!(page.owed_lines()[0].text.chars().count(), MAX_LINE_CHARACTERS);
+    for index in 0..MAX_LINES + 3 {
+        page.tell(HostLine {
+            tone: NoticeTone::Info,
+            text: format!("line {index}"),
+            lasting: false,
+        })?;
+    }
+    assert_eq!(page.owed_lines().len(), MAX_LINES, "the oldest give way");
     Ok(())
 }

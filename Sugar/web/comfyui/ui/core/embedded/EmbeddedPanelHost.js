@@ -137,7 +137,9 @@ export class EmbeddedPanelHost {
             !host?.serves(HOST_PROTOCOLS.sessionNotice))
             return;
         try {
-            this.#sessionNotice = new HostSessionNoticeLink(this.transport, this.options.sessionNotice, this.options.report);
+            this.#sessionNotice = new HostSessionNoticeLink(this.transport, this.options.sessionNotice, this.options.report, 
+            // A host that also answers version two, whose notices include its own lines, says so.
+            host.declares(HOST_CAPABILITIES.noticeLines) ? 2 : 1);
             this.#sessionNotice.start();
         }
         catch (error) {

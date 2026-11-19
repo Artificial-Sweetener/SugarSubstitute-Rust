@@ -15,17 +15,17 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
  * Receive what a host has to tell the person about their session through the
- * `sugarcubes.session-notice` protocol, version 1.
+ * `sugarcubes.session-notice` protocol.
  *
- * `integrations/contracts/session-notice.schema.json` owns the wire shapes; every host message is
- * admitted through the generated guard before it is read. The host keeps owing a notice until the
- * page says it was shown, so the page answers only after the person could see it.
+ * Version 1 (`integrations/contracts/session-notice.schema.json`) carries the notice of unsaved
+ * work; version 2 (`session-notice-v2.schema.json`) adds lines the host words itself and may send
+ * at any time. Every host message is admitted through its version's generated guard before it is
+ * read. The host keeps owing a notice until the page says it was shown, so the page answers only
+ * after the person could see it.
  */
-import { isSessionNoticeHostMessage, } from '../embedded/SessionNoticeRuntime.js';
+import { isLinedSessionNoticeHostMessage, isSessionNoticeHostMessage, } from '../embedded/SessionNoticeRuntime.js';
 /** Protocol identifier shared with desktop hosts. */
 export const SESSION_NOTICE_PROTOCOL = 'sugarcubes.session-notice';
-/** Protocol version; it advances independently of the panel transport. */
-export const SESSION_NOTICE_PROTOCOL_VERSION = 1;
 /**
  * Ask the host for the notice it owes, show it once, and tell the host it was shown.
  *
@@ -35,13 +35,15 @@ export class HostSessionNoticeLink {
     transport;
     present;
     report;
+    version;
     #shown = new Set();
     #stop = null;
     #disposed = false;
-    constructor(transport, present, report) {
+    constructor(transport, present, report, version = 1) {
         this.transport = transport;
         this.present = present;
         this.report = report;
+        this.version = version;
     }
     /** Listen before asking the host to watch, so its synchronous answer cannot be lost. */
     start() {
@@ -59,26 +61,40 @@ export class HostSessionNoticeLink {
     #envelope() {
         return {
             protocol: SESSION_NOTICE_PROTOCOL,
-            version: SESSION_NOTICE_PROTOCOL_VERSION,
+            version: this.version,
             session: this.transport.session,
         };
     }
     #receive(value) {
-        if (!isSessionNoticeHostMessage(value) || value.session !== this.transport.session)
+        const message = this.version === 2
+            ? isLinedSessionNoticeHostMessage(value)
+                ? value
+                : null
+            : isSessionNoticeHostMessage(value)
+                ? value
+                : null;
+        if (!message || message.session !== this.transport.session)
             return;
-        if (value.type !== 'not-saved' || this.#shown.has(value.notice))
+        if (message.type === 'none' || this.#shown.has(message.notice))
             return;
         let reached = false;
         try {
-            reached = this.present({ workspace: value.workspace, inputs: value.inputs });
+            reached =
+                message.type === 'line'
+                    ? this.present.line({
+                        tone: message.tone,
+                        text: message.text,
+                        lasting: message.lasting,
+                    })
+                    : this.present.notSaved({ workspace: message.workspace, inputs: message.inputs });
         }
         catch (error) {
             this.report(error);
         }
         if (!reached)
             return;
-        this.#shown.add(value.notice);
-        this.#send({ ...this.#envelope(), type: 'shown', notice: value.notice });
+        this.#shown.add(message.notice);
+        this.#send({ ...this.#envelope(), type: 'shown', notice: message.notice });
     }
     /** Send one message; a transport failure retires the link and is reported once. */
     #send(message) {

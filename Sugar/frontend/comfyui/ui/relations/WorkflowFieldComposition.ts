@@ -29,6 +29,7 @@ import { HostDescriptionState } from '../core/embedded/HostDescriptionState.js';
 import { UpdateSourceSlot } from '../core/updates/UpdateSource.js';
 import { DeclaredHost } from '../core/embedded/PanelRuntime.js';
 import { startEmbeddedPanel } from '../core/embedded/EmbeddedPanelHost.js';
+import type { HostLine } from '../core/session_notice/HostSessionNoticeLink.js';
 import { unsavedWorkWords } from '../core/session_notice/UnsavedWorkNotice.js';
 import { EmbeddedCanvasConnection } from '../core/embedded/EmbeddedCanvasConnection.js';
 import type { MemoryBudgetRegistry } from '../core/memory/MemoryBudgetRegistry.js';
@@ -51,8 +52,11 @@ export interface WorkflowFieldHostOptions
   extends Omit<RelationHostOptions, 'reportError' | 'appearance'> {
   reportRelationError(error: unknown): void;
   reportPresentationError(error: unknown): void;
-  /** Show a warning that stays until dismissed; answer whether it reached the person. */
-  warnLasting(title: string, message: string): boolean;
+  /** Shows what the host has to tell the person; each answers whether it reached them. */
+  hostNotices: {
+    pushLastingToast(severity: 'warn', title: string, message: string): boolean;
+    showHostLine(line: HostLine): boolean;
+  };
   activity: WorkflowOutputActivity;
   progress: WorkflowProgressStore;
   stackControls(): CubeStackFrameControls;
@@ -168,9 +172,12 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
         host,
         updates,
         releaseNotes: whatsNew,
-        sessionNotice: (lost) => {
-          const words = unsavedWorkWords(lost);
-          return options.warnLasting(words.title, words.message);
+        sessionNotice: {
+          notSaved: (lost) => {
+            const words = unsavedWorkWords(lost);
+            return options.hostNotices.pushLastingToast('warn', words.title, words.message);
+          },
+          line: (line) => options.hostNotices.showHostLine(line),
         },
         presentation: embedded,
         hostAccent,

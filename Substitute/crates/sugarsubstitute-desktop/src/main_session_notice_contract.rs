@@ -7,6 +7,7 @@ use sugarsubstitute_contracts::{
     execution::{MemoryClaim, MemoryLease},
     host_session_notice::{
         SessionNoticeClientMessage, SessionNoticeError, SessionNoticeHostMessage,
+        SessionNoticeVersion,
     },
     panel::PanelSession,
     startup::MainIdentity,
@@ -65,8 +66,8 @@ impl SessionNoticeCommand {
         2 * length as u64 + 4096
     }
 
-    /// Encode `message` for the exact current main session, funded from `lease` by its actual
-    /// encoded size.
+    /// Encode `message` for the exact current main session in the `version` its page speaks,
+    /// funded from `lease` by its actual encoded size.
     ///
     /// # Errors
     /// Rejects an invalid native identity, a shared encoding failure or storage the lease
@@ -74,10 +75,11 @@ impl SessionNoticeCommand {
     pub fn new(
         identity: MainIdentity,
         message: &SessionNoticeHostMessage,
+        version: SessionNoticeVersion,
         lease: &MemoryLease,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let session = PanelSession::for_main(identity).map_err(SessionNoticeError::Session)?;
-        let payload = message.encode(&session)?;
+        let payload = message.encode(&session, version)?;
         let claim = lease.claim(Self::storage_bytes(payload.len()))?;
         Ok(Self {
             identity,

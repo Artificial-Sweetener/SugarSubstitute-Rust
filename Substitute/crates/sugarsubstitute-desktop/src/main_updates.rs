@@ -161,6 +161,17 @@ pub(crate) struct UpdateCaptionView {
 }
 
 impl UpdateCaptionView {
+    /// The same peers with none of them shown.
+    pub(crate) fn hidden(mut self) -> Self {
+        self.glyph = UpdateGlyph::Hidden;
+        for peer in
+            [&mut self.update, &mut self.offer, &mut self.line, &mut self.link, &mut self.dismiss]
+        {
+            peer.visible = false;
+        }
+        self
+    }
+
     /// The peer with caption id `id`.
     pub(crate) fn peer(&self, id: u16) -> Option<&PeerView> {
         match id {

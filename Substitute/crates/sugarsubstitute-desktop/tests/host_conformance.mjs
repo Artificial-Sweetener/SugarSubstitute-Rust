@@ -22,7 +22,9 @@ const { recordHostProfile, replayHostProfile } = await import(new URL('HostProfi
 const panel = new URL('../src/main_actor/panel/', import.meta.url);
 const answers = JSON.parse(readFileSync(
   new URL('../../sugarsubstitute/src/production/child/panel/conformance_answers.json', import.meta.url), 'utf8'));
-const release = /^version = "([^"]+)"$/m.exec(readFileSync(new URL('../../../Cargo.toml', import.meta.url), 'utf8'))[1];
+// The recording, and the profile made from it, keep the version they were first made with
+// (`RECORDED_VERSION` in conformance_tests.rs); the application's own version changes every release.
+const release = '0.1.0';
 const profilePath = new URL(`profiles/substitute/${release}.json`, sugar);
 const binding = '__sugarcubes_substitute_send_v3';
 const host = 'ai.artificialsweetener.sugarsubstitute';

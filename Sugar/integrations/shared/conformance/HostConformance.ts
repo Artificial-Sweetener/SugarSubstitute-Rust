@@ -42,6 +42,7 @@ import { isUpdatesHostMessage } from '../UpdatesValidation.generated.js';
 import { isUpdatesHostMessage as isNamedUpdatesHostMessage } from '../UpdatesV2Validation.generated.js';
 import { isReleaseNotesHostMessage } from '../ReleaseNotesValidation.generated.js';
 import { isSessionNoticeHostMessage } from '../SessionNoticeValidation.generated.js';
+import { isSessionNoticeHostMessage as isLinedSessionNoticeHostMessage } from '../SessionNoticeV2Validation.generated.js';
 import type { ReleaseNotesStateMessage } from '../../contracts/ReleaseNotesProtocol.generated.js';
 import { emptyCanvasSurfaceCapabilities } from '../CanvasSurfaceDiscovery.js';
 import { NEWEST_CANVAS_SURFACE_SCHEMA } from '../CanvasSurfaceSchemas.js';
@@ -143,7 +144,12 @@ function validHostMessage(value: unknown, declared: DeclaredHost | null): boolea
     case HOST_PROTOCOLS.releaseNotes.name:
       return !!declared?.serves(HOST_PROTOCOLS.releaseNotes) && isReleaseNotesHostMessage(value);
     case HOST_PROTOCOLS.sessionNotice.name:
-      return !!declared?.serves(HOST_PROTOCOLS.sessionNotice) && isSessionNoticeHostMessage(value);
+      return (
+        !!declared?.serves(HOST_PROTOCOLS.sessionNotice) &&
+        (isSessionNoticeHostMessage(value) ||
+          (declared.declares(HOST_CAPABILITIES.noticeLines) &&
+            isLinedSessionNoticeHostMessage(value)))
+      );
     default:
       return false;
   }
@@ -281,13 +287,29 @@ async function conform(probe: HostProbe, session: string): Promise<HostConforman
   // Every watch is answered: with the notice the host owes, or with none.
   if (declared.serves(HOST_PROTOCOLS.sessionNotice)) {
     probe.check = 'session-notice';
-    probe.send({ ...envelope(HOST_PROTOCOLS.sessionNotice, session), type: 'watch' });
+    const watch = (version: 1 | 2): void => {
+      probe.send({ protocol: HOST_PROTOCOLS.sessionNotice.name, version, session, type: 'watch' });
+    };
+    watch(1);
     const answer = await probe.next(
-      'a session notice answer after watch',
+      'a session notice answer after a version 1 watch',
       isSessionNoticeHostMessage,
     );
     if (answer.type === 'not-saved' && !answer.workspace && !answer.inputs)
       throw new HostConformanceFailure(probe.check, 'the notice names nothing unsaved', answer);
+    // A host that also answers version two, whose notices include its own lines, declares so
+    // and is proved in both versions.
+    if (declared.declares(HOST_CAPABILITIES.noticeLines)) {
+      watch(2);
+      const lined = await probe.next(
+        'a session notice answer after a version 2 watch',
+        isLinedSessionNoticeHostMessage,
+      );
+      if (lined.type === 'not-saved' && !lined.workspace && !lined.inputs)
+        throw new HostConformanceFailure(probe.check, 'the notice names nothing unsaved', lined);
+      if (lined.type === 'line' && lined.text.trim() === '')
+        throw new HostConformanceFailure(probe.check, 'the line says nothing', lined);
+    }
     pass('session-notice');
   } else skip('session-notice');
 

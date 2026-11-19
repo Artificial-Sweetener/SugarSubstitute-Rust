@@ -3,13 +3,16 @@
 //! Route the page's session notice messages through the startup host.
 //!
 //! The workspace owns the previous close's record: the host hands what it read to the page's
-//! notice owner, and has the record marked once a page says it showed the notice.
+//! notice owner, and has the record marked once a page says it showed the notice. The host's
+//! own lines (the close save, a ready or failed update, the start-up update messages) are
+//! handed over here too, so the page shows them and the title bar never does.
 use super::*;
 
 impl<B: StartupBackend> StartupHost<B> {
     /// Hand over what the previous close left once it is known, and have the close record
     /// marked once a page has shown its notice.
     pub(super) fn advance_session_notice(&mut self) -> Result<(), Box<dyn Error>> {
+        self.tell_host_lines()?;
         #[cfg(feature = "native-composition")]
         if let Some(workspace) = &mut self.workspace {
             if let Some(previous) = workspace.take_previous_close() {
@@ -22,6 +25,26 @@ impl<B: StartupBackend> StartupHost<B> {
         // Without a workspace owner no close is recorded, so no notice is ever owed.
         #[cfg(not(feature = "native-composition"))]
         self.session_notice.settle(None)?;
+        Ok(())
+    }
+
+    /// Owe the page each of the host's own lines that is due this turn.
+    fn tell_host_lines(&mut self) -> Result<(), Box<dyn Error>> {
+        use sugarsubstitute_application::workspace_session::close_save::CloseSaveProgress;
+        let words = sugarsubstitute_desktop::StartupWindowContent::locale_messages(self);
+        while let Some(notice) = self.child.take_update_notice() {
+            self.session_notice.tell(session_notice_lines::startup_line(words, &notice))?;
+        }
+        let saving = matches!(
+            self.close_save_progress(),
+            Some(CloseSaveProgress::Saving { .. } | CloseSaveProgress::Recording(_))
+        );
+        let status = self.child.update_status();
+        let failed =
+            status.is_some_and(sugarsubstitute_desktop::report::surface::has_update_report);
+        for line in self.notice_lines.due(words, saving, status, failed) {
+            self.session_notice.tell(line)?;
+        }
         Ok(())
     }
 

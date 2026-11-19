@@ -15,32 +15,48 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
  * Receive what a host has to tell the person about their session through the
- * `sugarcubes.session-notice` protocol, version 1.
+ * `sugarcubes.session-notice` protocol.
  *
- * `integrations/contracts/session-notice.schema.json` owns the wire shapes; every host message is
- * admitted through the generated guard before it is read. The host keeps owing a notice until the
- * page says it was shown, so the page answers only after the person could see it.
+ * Version 1 (`integrations/contracts/session-notice.schema.json`) carries the notice of unsaved
+ * work; version 2 (`session-notice-v2.schema.json`) adds lines the host words itself and may send
+ * at any time. Every host message is admitted through its version's generated guard before it is
+ * read. The host keeps owing a notice until the page says it was shown, so the page answers only
+ * after the person could see it.
  */
 import {
+  isLinedSessionNoticeHostMessage,
   isSessionNoticeHostMessage,
+  type LinedSessionNoticeClientMessage,
   type SessionNoticeClientMessage,
+  type SessionNoticeTone,
 } from '../embedded/SessionNoticeRuntime.js';
 import type { UnsavedWork } from './UnsavedWorkNotice.js';
 
 /** Protocol identifier shared with desktop hosts. */
 export const SESSION_NOTICE_PROTOCOL = 'sugarcubes.session-notice';
-/** Protocol version; it advances independently of the panel transport. */
-export const SESSION_NOTICE_PROTOCOL_VERSION = 1;
+/** The protocol versions the page speaks; they advance independently of the panel transport. */
+export type SessionNoticeProtocolVersion = 1 | 2;
+
+/** One sentence the host has for the person, in the host's own words. */
+export interface HostLine {
+  readonly tone: SessionNoticeTone;
+  readonly text: string;
+  /** Whether the line stays on screen until the person closes it. */
+  readonly lasting: boolean;
+}
 
 /** The host transport slice the link needs; it grants no host authority. */
 export interface SessionNoticeLinkTransport {
   readonly session: string;
-  send(message: SessionNoticeClientMessage): void;
+  send(message: SessionNoticeClientMessage | LinedSessionNoticeClientMessage): void;
   subscribe(receive: (value: unknown) => void): () => void;
 }
 
-/** Show a notice to the person; answer whether it reached them. */
-export type SessionNoticePresenter = (lost: UnsavedWork) => boolean;
+/** Show the host's notices to the person; each answers whether it reached them. */
+export interface SessionNoticePresenter {
+  notSaved(lost: UnsavedWork): boolean;
+  line(line: HostLine): boolean;
+}
 
 /**
  * Ask the host for the notice it owes, show it once, and tell the host it was shown.
@@ -56,6 +72,7 @@ export class HostSessionNoticeLink {
     private readonly transport: SessionNoticeLinkTransport,
     private readonly present: SessionNoticePresenter,
     private readonly report: (error: unknown) => void,
+    private readonly version: SessionNoticeProtocolVersion = 1,
   ) {}
 
   /** Listen before asking the host to watch, so its synchronous answer cannot be lost. */
@@ -75,27 +92,42 @@ export class HostSessionNoticeLink {
   #envelope() {
     return {
       protocol: SESSION_NOTICE_PROTOCOL,
-      version: SESSION_NOTICE_PROTOCOL_VERSION,
+      version: this.version,
       session: this.transport.session,
     } as const;
   }
 
   #receive(value: unknown): void {
-    if (!isSessionNoticeHostMessage(value) || value.session !== this.transport.session) return;
-    if (value.type !== 'not-saved' || this.#shown.has(value.notice)) return;
+    const message =
+      this.version === 2
+        ? isLinedSessionNoticeHostMessage(value)
+          ? value
+          : null
+        : isSessionNoticeHostMessage(value)
+          ? value
+          : null;
+    if (!message || message.session !== this.transport.session) return;
+    if (message.type === 'none' || this.#shown.has(message.notice)) return;
     let reached = false;
     try {
-      reached = this.present({ workspace: value.workspace, inputs: value.inputs });
+      reached =
+        message.type === 'line'
+          ? this.present.line({
+              tone: message.tone,
+              text: message.text,
+              lasting: message.lasting,
+            })
+          : this.present.notSaved({ workspace: message.workspace, inputs: message.inputs });
     } catch (error: unknown) {
       this.report(error);
     }
     if (!reached) return;
-    this.#shown.add(value.notice);
-    this.#send({ ...this.#envelope(), type: 'shown', notice: value.notice });
+    this.#shown.add(message.notice);
+    this.#send({ ...this.#envelope(), type: 'shown', notice: message.notice });
   }
 
   /** Send one message; a transport failure retires the link and is reported once. */
-  #send(message: SessionNoticeClientMessage): void {
+  #send(message: SessionNoticeClientMessage | LinedSessionNoticeClientMessage): void {
     if (this.#disposed) return;
     try {
       this.transport.send(message);

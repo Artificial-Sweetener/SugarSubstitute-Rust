@@ -13,9 +13,15 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Bundle the portable session notice contract for browser consumers. */
+/** Bundle the portable session notice contract, both released versions, for browser consumers. */
 export { isSessionNoticeHostMessage } from '../../../../../integrations/shared/SessionNoticeValidation.generated.js';
 export type {
   SessionNoticeClientMessage,
   SessionNoticeHostMessage,
 } from '../../../../../integrations/contracts/SessionNoticeProtocol.generated.js';
+export { isSessionNoticeHostMessage as isLinedSessionNoticeHostMessage } from '../../../../../integrations/shared/SessionNoticeV2Validation.generated.js';
+export type {
+  SessionNoticeClientMessage as LinedSessionNoticeClientMessage,
+  SessionNoticeLineMessage,
+  SessionNoticeTone,
+} from '../../../../../integrations/contracts/SessionNoticeV2Protocol.generated.js';

@@ -36,6 +36,11 @@
       "sha256": "11fe01965e055827c77799507f4b9d144f3f182a70618e7851f4454a316dadfb"
     },
     {
+      "file": "session-notice-v2.schema.json",
+      "id": "https://artificialsweetener.ai/schemas/sugarcubes/session-notice/v2",
+      "sha256": "10efdf1c50dedc2a3b52448bc741b6fb4d1651bfe392b37f3e32ba622f260f71"
+    },
+    {
       "file": "session.schema.json",
       "id": "https://sugarcubes.dev/contracts/desktop-session/v1",
       "sha256": "4dea675b60fa4a2695f7a870fb8271c8df778dc42eec08cc6e8ae60279eaaf00"
@@ -67,6 +72,10 @@
     {
       "name": "updates.product-name",
       "meaning": "Besides sugarcubes.updates version 1, the host answers version 2 on the same channel, whose states name the product they describe."
+    },
+    {
+      "name": "session-notice.lines",
+      "meaning": "Besides sugarcubes.session-notice version 1, the host answers version 2 on the same channel, whose notices include lines the host words itself."
     },
     {
       "name": "canvas.backdrop-regions",

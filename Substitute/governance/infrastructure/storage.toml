@@ -4704,7 +4704,7 @@ rationale = "An owned temporary cache scope qualifies actual PNG/JPEG and author
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/host_conformance.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:ccbcc6d0bf28a775ba61553a1c4970ab9f0742e810f7854183931fcddeae83f9"
+source_sha256 = "sha256:5b89e9df53e1da7ef00efde92288d88e287ac410e0eb7b8208650440a8ed314b"
 capabilities = ["node:fs", "readFileSync", "writeFileSync"]
 disposition = "fixture"
 rationale = "Read the bridge scripts, the host's recorded conformance answers and the saved SugarCubes profile, and write that profile only when asked to record it."
@@ -4712,7 +4712,7 @@ rationale = "Read the bridge scripts, the host's recorded conformance answers an
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:a4a687ae2a3b0e65638272eccb7512360bb9aa8cac2108bde586de61ad712929"
+source_sha256 = "sha256:0b3d89ae3c9231acd1cab631676c6d5397f568be1bf05cb6d024c80b96ee80b3"
 capabilities = ["node:fs", "readFileSync"]
 disposition = "fixture"
 rationale = "Read the injected transport and protocol-policy bootstrap sources for executable envelope and custody regression tests."

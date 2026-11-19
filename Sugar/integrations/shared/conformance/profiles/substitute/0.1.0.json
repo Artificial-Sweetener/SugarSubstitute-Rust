@@ -25,7 +25,13 @@
             "name": "output.host-surface"
           },
           {
+            "name": "canvas.backdrop-regions"
+          },
+          {
             "name": "updates.product-name"
+          },
+          {
+            "name": "session-notice.lines"
           }
         ],
         "protocol": "sugarcubes.host",
@@ -48,6 +54,10 @@
           },
           {
             "name": "sugarcubes.release-notes",
+            "version": 1
+          },
+          {
+            "name": "sugarcubes.session-notice",
             "version": 1
           }
         ],
@@ -318,6 +328,42 @@
         "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
         "type": "state",
         "version": 1
+      }
+    },
+    {
+      "from": "page",
+      "message": {
+        "protocol": "sugarcubes.session-notice",
+        "version": 1,
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "watch"
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "protocol": "sugarcubes.session-notice",
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "none",
+        "version": 1
+      }
+    },
+    {
+      "from": "page",
+      "message": {
+        "protocol": "sugarcubes.session-notice",
+        "version": 2,
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "watch"
+      }
+    },
+    {
+      "from": "host",
+      "message": {
+        "protocol": "sugarcubes.session-notice",
+        "session": "panel-bddbf098016911f8280ce117ddb72bf694bc79ffe3b9656c21261d6adb803dbb",
+        "type": "none",
+        "version": 2
       }
     }
   ]

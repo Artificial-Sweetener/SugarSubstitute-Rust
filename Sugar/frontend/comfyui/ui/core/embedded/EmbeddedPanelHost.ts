@@ -183,6 +183,8 @@ export class EmbeddedPanelHost {
         this.transport,
         this.options.sessionNotice,
         this.options.report,
+        // A host that also answers version two, whose notices include its own lines, says so.
+        host.declares(HOST_CAPABILITIES.noticeLines) ? 2 : 1,
       );
       this.#sessionNotice.start();
     } catch (error: unknown) {
