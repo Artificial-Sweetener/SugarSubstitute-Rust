@@ -16,7 +16,7 @@ use sugarsubstitute_contracts::{
     startup::{LaunchId, ReadinessReceipt, StartupFailure},
 };
 
-use crate::{MainBackendState, MainCaptionLabels, MainRecoveryLabels, WorkflowActivity};
+use crate::{MainBackendState, MainCaptionLabels};
 pub use sugarsubstitute_contracts::startup::MainIdentity;
 
 /// Configure the initial main client rectangle in logical pixels.
@@ -30,8 +30,6 @@ pub struct MainWindowSettings {
     pub dark: bool,
     /// Localized native control names; web-owned text remains untouched.
     pub labels: MainCaptionLabels,
-    /// Canonical localized native backend retry action/status.
-    pub recovery: MainRecoveryLabels,
 }
 
 /// Retain version observations supplied by the verified served-source owner.
@@ -131,8 +129,6 @@ impl MainWindowRequest {
             settings.labels.maximize,
             settings.labels.restore,
             settings.labels.close,
-            settings.recovery.retry,
-            settings.recovery.retry_ready,
         ]
         .iter()
         .any(|label| label.is_empty() || label.len() > 128 || label.contains('\0'))
@@ -756,61 +752,11 @@ pub trait StartupWindowContent: WindowContent {
     /// Return the earliest actual application deadline, without renewing it.
     fn next_deadline(&self) -> Option<Instant>;
 
-    /// The user chose to restart so a prepared update applies. The application runs its
-    /// ordinary close, keeping everything authored, and relaunches once that close has an
-    /// outcome; a close already under way keeps its own reason. Called on the event-loop thread
-    /// between native callbacks; returns promptly. A host without an updater never offers it.
-    ///
-    /// # Errors
-    /// Preserves the close transaction's failure; this default refuses because the host offers
-    /// no update to apply.
-    fn request_restart_to_apply(&mut self) -> Result<(), Box<dyn Error>> {
-        Err("This host offers no update to apply".into())
-    }
-
-    // What the window shows about updates, the close save and last session's losses. Each is
-    // read on the event-loop thread at most once per turn and must return promptly.
-
-    /// The host's update status, or `None` for a host without an updater. The caption's update
-    /// button is hidden unless an update is ready or the latest attempt failed.
+    /// The host's update status, or `None` for a host without an updater. Read on the
+    /// event-loop thread at most once per turn; it must return promptly. The page is offered
+    /// the update report while the latest attempt failed or needs attention.
     fn update_status(&self) -> Option<sugarsubstitute_contracts::update::status::UpdateStatus> {
         None
-    }
-
-    /// The close save's progress while the window stays up for it; `None` before close began.
-    fn close_save_progress(
-        &self,
-    ) -> Option<sugarsubstitute_application::workspace_session::close_save::CloseSaveProgress> {
-        None
-    }
-
-    /// Take, once, the start-up update message: the first start on a new version, or the
-    /// previous version running after a new one failed to start. It is taken only once the
-    /// main window can show it.
-    fn take_update_notice(&mut self) -> Option<crate::UpdateNotice> {
-        None
-    }
-
-    /// Whether the embedded page can show what is new: the current navigation's page follows
-    /// the host's release notes. The caption offers "What's new" only then.
-    fn whats_new_available(&self) -> bool {
-        false
-    }
-
-    /// The user asked to see what is new. The embedded page shows its release notes; nothing
-    /// leaves the application. Called on the event-loop thread between native callbacks;
-    /// returns promptly.
-    ///
-    /// # Errors
-    /// Preserves the failure to queue the request for the page; this default refuses because
-    /// the host shows no release notes.
-    fn open_whats_new(&mut self) -> Result<(), Box<dyn Error>> {
-        Err("This host shows no release notes".into())
-    }
-
-    /// Whether a workflow is running, so the restart offer can say it waits for it.
-    fn workflow_activity(&self) -> WorkflowActivity {
-        WorkflowActivity::Idle
     }
 
     /// Take the writer that exports the current update report to a file the user selects,

@@ -4,19 +4,17 @@
 use super::Callback;
 use crate::{DesktopError, NativeMaterial};
 use windows::Win32::{
-    Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM},
-    Graphics::Gdi::{BeginPaint, EndPaint, HDC, PAINTSTRUCT, ScreenToClient},
+    Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM},
+    Graphics::Gdi::{BeginPaint, EndPaint, HDC, PAINTSTRUCT},
     UI::{
         Controls::{
             BP_PAINTPARAMS, BPBF_TOPDOWNDIB, BPPF_ERASE, BeginBufferedPaint, BufferedPaintInit,
-            BufferedPaintUnInit, DRAWITEMSTRUCT, EndBufferedPaint, ODS_DISABLED, ODS_FOCUS,
-            ODS_NOFOCUSRECT, ODS_SELECTED,
+            BufferedPaintUnInit, DRAWITEMSTRUCT, EndBufferedPaint, ODS_FOCUS, ODS_NOFOCUSRECT,
+            ODS_SELECTED,
         },
         HiDpi::GetDpiForWindow,
-        Shell::DefSubclassProc,
         WindowsAndMessaging::{
-            GetClientRect, GetParent, GetWindowTextW, HTBOTTOMRIGHT, HTCAPTION, HTLEFT, IsZoomed,
-            WM_DRAWITEM, WM_ERASEBKGND, WM_NCHITTEST, WM_PAINT,
+            GetClientRect, GetParent, IsZoomed, WM_DRAWITEM, WM_ERASEBKGND, WM_PAINT,
         },
     },
 };
@@ -34,10 +32,6 @@ mod text;
 pub(crate) struct Caption {
     pub(crate) dark: bool,
     pub(crate) material: NativeMaterial,
-    /// State of the update button, which selects its tint.
-    pub(crate) update: crate::main_updates::UpdateGlyph,
-    /// The client row where the page starts, in physical pixels; the strip above it is caption.
-    pub(crate) page_top: u32,
 }
 
 /// Route only this configured Main's parent paint and exact registered owner-drawn children.
@@ -45,16 +39,10 @@ pub(super) fn parent(
     callback: &Callback,
     hwnd: HWND,
     message: u32,
-    wparam: WPARAM,
     lparam: LPARAM,
 ) -> Option<LRESULT> {
     let caption = callback.caption.get()?;
     match message {
-        WM_NCHITTEST if caption.page_top > 0 => {
-            // SAFETY: Tao answers its frame edges first; they keep resizing the window.
-            let hit = unsafe { DefSubclassProc(hwnd, message, wparam, lparam) };
-            Some(strip_hit(hwnd, hit, lparam, caption.page_top))
-        }
         WM_ERASEBKGND => Some(LRESULT(1)),
         WM_PAINT => {
             report(paint_parent(hwnd, caption));
@@ -78,67 +66,11 @@ pub(super) fn parent(
     }
 }
 
-/// Answer a hit in the caption strip the page leaves above itself with `HTCAPTION`, so the
-/// strip moves, snaps and maximizes the window like the page's own title bar row does. Only a
-/// frame edge's resize answer outranks it; whatever the frameless window's default procedure
-/// answers inside the client (client or nowhere), the strip is caption.
-fn strip_hit(hwnd: HWND, hit: LRESULT, lparam: LPARAM, page_top: u32) -> LRESULT {
-    if resizes(hit) {
-        return hit;
-    }
-    let mut point =
-        POINT { x: lparam.0 as u16 as i16 as i32, y: (lparam.0 >> 16) as u16 as i16 as i32 };
-    let mut client = RECT::default();
-    // SAFETY: The original parent callback owns this live HWND; both calls write local storage.
-    let mapped = unsafe { ScreenToClient(hwnd, &raw mut point) }.as_bool()
-        && unsafe { GetClientRect(hwnd, &raw mut client) }.is_ok();
-    if mapped && point.x >= client.left && point.x < client.right && in_strip(point.y, page_top) {
-        LRESULT(HTCAPTION as isize)
-    } else {
-        hit
-    }
-}
-
-/// Whether `hit` is a frame edge or corner that resizes the window.
-fn resizes(hit: LRESULT) -> bool {
-    (HTLEFT as isize..=HTBOTTOMRIGHT as isize).contains(&hit.0)
-}
-
-/// Whether client row `y` lies in the caption strip above a page starting at `page_top`.
-fn in_strip(y: i32, page_top: u32) -> bool {
-    u32::try_from(y).is_ok_and(|y| y < page_top)
-}
-
-/// Whether `hwnd` is the caption's message line. Its words are not a control, so a press on
-/// them falls through to the strip beneath and drags the window, as a title bar's label does;
-/// the line's links and buttons stay clickable.
-pub(super) fn drags_window(callback: &Callback, hwnd: HWND) -> bool {
-    callback.caption.get().is_some()
-        && callback.controls.try_borrow().is_ok_and(|controls| {
-            controls.iter().any(|peer| peer.hwnd == hwnd && peer.id == crate::main_updates::LINE)
-        })
-}
 /// Keep hover ownership exclusive while Win32 retains capture, pressed and accessibility state.
 pub(super) fn child(callback: &Callback, hwnd: HWND, message: u32, wparam: WPARAM, lparam: LPARAM) {
     if callback.caption.get().is_some() {
         report(hover::child(&callback.hovered, hwnd, message, wparam, lparam));
     }
-}
-
-/// Logical width of `text` in the caption font on `hwnd`'s monitor.
-/// # Errors
-/// Preserves font and measurement failures.
-pub(crate) fn measure_text(hwnd: HWND, text: &str) -> Result<f64, DesktopError> {
-    // SAFETY: Query only the retained window's current device scale.
-    let dpi = unsafe { GetDpiForWindow(hwnd) }.max(96);
-    let units: Vec<u16> = text.encode_utf16().collect();
-    Ok(f64::from(text::measure(&units, dpi)?) * 96.0 / f64::from(dpi))
-}
-
-/// The update glyph's dark-theme tint, for captures that check it.
-#[cfg(test)]
-pub(crate) const fn update_tint(warning: bool) -> [u8; 3] {
-    glyphs::update_tint(warning, true)
 }
 
 /// Clear the native backing plane; the full-window browser owns its complete frame presentation.
@@ -177,7 +109,6 @@ fn paint_parent(hwnd: HWND, caption: Caption) -> Result<(), DesktopError> {
 /// Paint original vector geometry while preserving localized native accessible names.
 fn paint_button(item: &DRAWITEMSTRUCT, caption: Caption, hot: bool) -> Result<(), DesktopError> {
     let pressed = item.itemState.0 & ODS_SELECTED.0 != 0;
-    let disabled = item.itemState.0 & ODS_DISABLED.0 != 0;
     // SAFETY: The registered child and its parent remain owned by the active callback.
     let (parent, dpi) = unsafe { (GetParent(item.hwndItem), GetDpiForWindow(item.hwndItem)) };
     let parent = parent.map_err(|cause| DesktopError::new("caption_button_parent", cause))?;
@@ -186,30 +117,9 @@ fn paint_button(item: &DRAWITEMSTRUCT, caption: Caption, hot: bool) -> Result<()
     buffered(item.hDC, item.rcItem, |buffer, handle| {
         background(handle, item.rcItem, caption, hot, pressed, item.CtlID == 3, dpi)?;
         let light = caption.dark || item.CtlID == 3 && (hot || pressed);
-        if (1..=3).contains(&item.CtlID) {
-            pixels::with_pixels(handle, item.rcItem, |pixels| {
-                glyphs::draw(pixels, item.CtlID, maximized, dpi, if light { 255 } else { 0 })
-            })?;
-        } else if item.CtlID == u32::from(crate::main_updates::UPDATE) {
-            let warning = caption.update == crate::main_updates::UpdateGlyph::Warning;
-            pixels::with_pixels(handle, item.rcItem, |pixels| {
-                glyphs::update(pixels, dpi, warning, glyphs::update_tint(warning, caption.dark));
-                Ok(())
-            })?;
-        } else {
-            let mut label = [0_u16; 129];
-            // SAFETY: Read the peer's current localized text into a bounded buffer.
-            let length = unsafe { GetWindowTextW(item.hwndItem, &mut label) }.max(0) as usize;
-            // The retry and message line read from the left; the short actions are centred.
-            let centered = !matches!(item.CtlID, 4 | 7);
-            text::draw(
-                item.hwndItem,
-                buffer,
-                item.rcItem,
-                &label[..length],
-                text::Style { light_foreground: light, disabled, centered, dpi },
-            )?;
-        }
+        pixels::with_pixels(handle, item.rcItem, |pixels| {
+            glyphs::draw(pixels, item.CtlID, maximized, dpi, if light { 255 } else { 0 })
+        })?;
         if item.itemState.0 & ODS_FOCUS.0 != 0 && item.itemState.0 & ODS_NOFOCUSRECT.0 == 0 {
             text::focus(buffer, handle, item.rcItem, caption.dark, dpi)?;
         }

@@ -32,8 +32,10 @@ use windows::{
     core::{PCWSTR, w},
 };
 
-#[path = "windows_controls_caption.rs"]
-mod caption;
+#[cfg(test)]
+#[path = "windows_controls_caption_frame_tests.rs"]
+#[allow(unsafe_code)]
+mod caption_frame_tests;
 #[path = "windows_controls_creation.rs"]
 mod creation;
 #[path = "windows_controls_native.rs"]
@@ -59,8 +61,6 @@ use creation::{Creation, NativePort};
 pub(crate) mod console;
 #[path = "windows_controls_focus.rs"]
 mod focus;
-#[path = "windows_controls_retry.rs"]
-mod retry;
 #[path = "windows_controls_stacking.rs"]
 mod stacking;
 #[path = "windows_controls_state.rs"]
@@ -110,23 +110,11 @@ impl Controls {
 
     /// Set the native caption palette before its original peers are constructed.
     pub(crate) fn configure_caption(&self, dark: bool, material: crate::NativeMaterial) {
-        self.callback.caption.set(Some(crate::windows_callbacks::caption::Caption {
-            dark,
-            material,
-            update: Default::default(),
-            page_top: 0,
-        }));
+        self.callback
+            .caption
+            .set(Some(crate::windows_callbacks::caption::Caption { dark, material }));
     }
 
-    /// Make the caption strip above client row `page_top` move the window while the page
-    /// starts below it; zero leaves every client hit to the page.
-    pub(crate) fn set_page_top(&self, page_top: u32) {
-        if let Some(caption) = self.callback.caption.get() {
-            self.callback
-                .caption
-                .set(Some(crate::windows_callbacks::caption::Caption { page_top, ..caption }));
-        }
-    }
     /// Allocate inert retained callback/control data before any native initialization.
     pub(crate) fn new(
         window: Rc<Window>,

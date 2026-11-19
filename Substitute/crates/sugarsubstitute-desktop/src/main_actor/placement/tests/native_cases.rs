@@ -3,10 +3,7 @@
 //! Qualify actual placement and peer retention with only the frontend readiness boundary faked.
 
 use super::*;
-use crate::{
-    MainCaptionLabels, MainRecoveryLabels, MainWindowRequest, MainWindowSettings,
-    ServedFrontendVersions,
-};
+use crate::{MainCaptionLabels, MainWindowRequest, MainWindowSettings, ServedFrontendVersions};
 use std::sync::{
     Arc,
     atomic::{AtomicU64, Ordering},
@@ -170,7 +167,6 @@ fn main_request(
                 restore: "Restore",
                 close: "Close",
             },
-            recovery: MainRecoveryLabels { retry: "Retry", retry_ready: "Retry ready" },
         },
         MemoryLease::new(
             MainWindowRequest::RESERVATION_BYTES,

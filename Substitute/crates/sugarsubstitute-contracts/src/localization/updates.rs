@@ -12,25 +12,15 @@ pub const VERSION: &str = "{version}";
 pub struct UpdateMessages {
     /// The application's name, as the embedded page's Updates entry shows it beside its version.
     pub product: &'static str,
-    /// Name of the update button when an update is ready to apply.
-    pub ready: &'static str,
-    /// Name of the update button when the last update attempt failed.
-    pub failed: &'static str,
     /// The page's notification that an update is ready, saying where to apply it.
     pub ready_line: &'static str,
     /// The page's notification that the last update attempt failed, saying where to read why.
     pub failed_line: &'static str,
-    /// Restart now so the ready update applies.
-    pub restart: &'static str,
     /// Restart once the running workflow finishes so the ready update applies.
     pub restart_after_workflow: &'static str,
     /// A restart waiting for the running workflow was dropped because the application lost
     /// track of the workflow queue.
     pub restart_dropped: &'static str,
-    /// Hide a one-time message.
-    pub dismiss: &'static str,
-    /// Open the release notes of the version now running.
-    pub whats_new: &'static str,
     /// Splash line while the new version is being applied; contains [`VERSION`].
     pub applying: &'static str,
     /// First start on a new version; contains [`VERSION`].
@@ -47,19 +37,14 @@ pub struct UpdateMessages {
 
 impl UpdateMessages {
     /// Enumerate every owned label for complete registry coverage checks.
-    pub const fn labels(&self) -> [&'static str; 22] {
+    pub const fn labels(&self) -> [&'static str; 17] {
         let p = self.phases;
         [
             self.product,
-            self.ready,
-            self.failed,
             self.ready_line,
             self.failed_line,
-            self.restart,
             self.restart_after_workflow,
             self.restart_dropped,
-            self.dismiss,
-            self.whats_new,
             self.applying,
             self.updated,
             self.previous_running,
@@ -97,15 +82,10 @@ impl UpdateMessages {
 /// Canonical English update words.
 pub static EN: UpdateMessages = UpdateMessages {
     product: "SugarSubstitute",
-    ready: "Update ready",
-    failed: "Couldn't update. Show the report",
     ready_line: "An update is ready. Open Settings and choose Updates to restart and apply it.",
     failed_line: "Couldn't update. Open Settings and choose Updates for details.",
-    restart: "Restart to apply",
     restart_after_workflow: "Restart after this finishes",
     restart_dropped: "Couldn't tell whether your workflow finished, so nothing was restarted.",
-    dismiss: "Dismiss",
-    whats_new: "What's new",
     applying: "Updating to version {version}…",
     updated: "Updated to version {version}",
     previous_running: "The previous version is running.",
@@ -125,15 +105,10 @@ pub static EN: UpdateMessages = UpdateMessages {
 /// Simplified Chinese update words.
 pub static ZH_HANS: UpdateMessages = UpdateMessages {
     product: "SugarSubstitute",
-    ready: "更新已就绪",
-    failed: "无法更新。查看报告",
     ready_line: "更新已就绪。打开设置并选择“更新”，重新启动即可应用。",
     failed_line: "无法更新。打开设置并选择“更新”查看详情。",
-    restart: "重新启动以应用",
     restart_after_workflow: "完成后重新启动",
     restart_dropped: "无法确定工作流是否已完成，因此没有重新启动。",
-    dismiss: "关闭",
-    whats_new: "新功能",
     applying: "正在更新到版本 {version}…",
     updated: "已更新到版本 {version}",
     previous_running: "正在运行之前的版本。",
@@ -153,15 +128,10 @@ pub static ZH_HANS: UpdateMessages = UpdateMessages {
 /// Japanese update words.
 pub static JA: UpdateMessages = UpdateMessages {
     product: "SugarSubstitute",
-    ready: "更新の準備ができました",
-    failed: "更新できませんでした。レポートを表示",
     ready_line: "更新の準備ができました。設定の「更新」を開いて再起動すると適用されます。",
     failed_line: "更新できませんでした。設定の「更新」で詳細を確認してください。",
-    restart: "再起動して適用",
     restart_after_workflow: "完了後に再起動",
     restart_dropped: "ワークフローが完了したか確認できなかったため、再起動しませんでした。",
-    dismiss: "閉じる",
-    whats_new: "新機能",
     applying: "バージョン {version} に更新しています…",
     updated: "バージョン {version} に更新しました",
     previous_running: "以前のバージョンで動作しています。",
@@ -181,15 +151,10 @@ pub static JA: UpdateMessages = UpdateMessages {
 /// Korean update words.
 pub static KO: UpdateMessages = UpdateMessages {
     product: "SugarSubstitute",
-    ready: "업데이트 준비됨",
-    failed: "업데이트할 수 없습니다. 보고서 보기",
     ready_line: "업데이트가 준비되었습니다. 설정에서 업데이트를 열어 다시 시작하면 적용됩니다.",
     failed_line: "업데이트할 수 없습니다. 설정에서 업데이트를 열어 자세한 내용을 확인하세요.",
-    restart: "다시 시작하여 적용",
     restart_after_workflow: "완료 후 다시 시작",
     restart_dropped: "워크플로가 끝났는지 확인할 수 없어 다시 시작하지 않았습니다.",
-    dismiss: "닫기",
-    whats_new: "새로운 기능",
     applying: "버전 {version}(으)로 업데이트하는 중…",
     updated: "버전 {version}(으)로 업데이트됨",
     previous_running: "이전 버전이 실행 중입니다.",
@@ -209,15 +174,10 @@ pub static KO: UpdateMessages = UpdateMessages {
 /// Spanish update words.
 pub static ES: UpdateMessages = UpdateMessages {
     product: "SugarSubstitute",
-    ready: "Actualización lista",
-    failed: "No se pudo actualizar. Ver el informe",
     ready_line: "Hay una actualización lista. Abre Configuración y elige Actualizaciones para reiniciar y aplicarla.",
     failed_line: "No se pudo actualizar. Abre Configuración y elige Actualizaciones para ver los detalles.",
-    restart: "Reiniciar para aplicar",
     restart_after_workflow: "Reiniciar al terminar",
     restart_dropped: "No se pudo saber si el flujo de trabajo terminó, así que no se reinició nada.",
-    dismiss: "Descartar",
-    whats_new: "Novedades",
     applying: "Actualizando a la versión {version}…",
     updated: "Actualizado a la versión {version}",
     previous_running: "Se está usando la versión anterior.",

@@ -10,11 +10,6 @@ fn authenticated_presentation_controls_caption_and_theme_without_changing_geomet
         for theme in [Theme::Light, Theme::Dark] {
             let settings = requested_settings(
                 MainWindowSettings {
-                    recovery: sugarsubstitute_desktop::MainRecoveryLabels {
-                        retry: sugarsubstitute_contracts::localization::messages("en").retry,
-                        retry_ready: sugarsubstitute_contracts::localization::messages("en")
-                            .retry_ready,
-                    },
                     logical_width: 1280,
                     logical_height: 720,
                     dark: true,
@@ -29,10 +24,6 @@ fn authenticated_presentation_controls_caption_and_theme_without_changing_geomet
             );
             let copy = sugarsubstitute_contracts::localization::messages(locale.id);
             let expected = copy.window;
-            assert_eq!(
-                (settings.recovery.retry, settings.recovery.retry_ready),
-                (copy.retry, copy.retry_ready),
-            );
             assert_eq!((settings.logical_width, settings.logical_height), (1280, 720));
             assert_eq!(settings.dark, theme == Theme::Dark);
             assert_eq!(

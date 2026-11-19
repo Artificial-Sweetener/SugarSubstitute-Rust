@@ -170,7 +170,7 @@ impl WindowPeer {
     /// Returns the host's close failure.
     pub(crate) fn click_restart_to_apply(&mut self) -> HarnessResult {
         self.wire.log().note("window: the user presses Restart to apply");
-        self.fixture.host.request_restart_to_apply()
+        self.fixture.host.restart_to_apply()
     }
 
     /// The user cancels loading by closing the splash.

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Fence one existing Main's native recovery presentation without backend or page authority.
-use crate::{DesktopStartupObservation, MainBackendState, MainIdentity, MainRecoveryLabels};
+//! Fence one existing Main's backend recovery without backend or page authority.
+use crate::{DesktopStartupObservation, MainBackendState, MainIdentity};
 use sugarsubstitute_contracts::{host_backend::BackendStatus, lifecycle::LeaseKey};
 
 /// Immutable current native action; the local revision never crosses the host boundary.
@@ -10,21 +10,6 @@ pub(crate) struct RetryAction {
     pub(crate) identity: MainIdentity,
     pub(crate) failed: LeaseKey,
     revision: u64,
-}
-/// Preallocated button state; labels stay borrowed from the canonical localization owner.
-#[derive(Clone, Copy)]
-pub(crate) struct RetryPresentation {
-    #[cfg(target_os = "windows")]
-    pub(crate) identity: MainIdentity,
-    pub(crate) visible: bool,
-    pub(crate) label: &'static str,
-    pub(crate) action: Option<RetryAction>,
-}
-impl RetryPresentation {
-    /// The retry is offered by the page, so the caption never shows or arms its own peer.
-    pub(crate) fn hidden(self) -> Self {
-        Self { visible: false, action: None, ..self }
-    }
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum RecoveryError {
@@ -164,20 +149,6 @@ impl Recovery {
             identity: action.identity,
             failed: action.failed,
         }))
-    }
-    /// Borrow canonical labels and the fixed current native visibility/action snapshot.
-    pub(crate) fn presentation(&self, labels: MainRecoveryLabels) -> RetryPresentation {
-        let visible = !self.closed
-            && self.outage.is_some_and(|(_, state)| {
-                matches!(state, MainBackendState::RetryReady | MainBackendState::Retrying)
-            });
-        RetryPresentation {
-            #[cfg(target_os = "windows")]
-            identity: self.identity,
-            visible,
-            label: if self.action().is_some() { labels.retry_ready } else { labels.retry },
-            action: self.action(),
-        }
     }
     /// Closing and revision exhaustion permanently suppress every retained action.
     pub(crate) fn close(&mut self) {

@@ -27,7 +27,6 @@ impl MainActor {
         if let Some(composition) = &self.composition {
             composition.suspend_input();
         }
-        let retry_failure = self.present_recovery_control().err();
         #[cfg(feature = "k1-native-qualification")]
         if let Some(preview) = &mut self.preview {
             preview.close();
@@ -41,10 +40,7 @@ impl MainActor {
         if let Some(constructor) = &mut self.constructor {
             constructor.cancel();
         }
-        match retry_failure {
-            Some(cause) => Err(cause),
-            None => Ok(()),
-        }
+        Ok(())
     }
 
     /// A true result requires every native receiver, creation callback, controller and HWND retired.

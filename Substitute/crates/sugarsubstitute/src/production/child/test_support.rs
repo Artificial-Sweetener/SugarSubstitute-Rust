@@ -120,10 +120,6 @@ pub(crate) fn child()
         run,
         identity,
         MainWindowSettings {
-            recovery: sugarsubstitute_desktop::MainRecoveryLabels {
-                retry: sugarsubstitute_contracts::localization::messages("en").retry,
-                retry_ready: sugarsubstitute_contracts::localization::messages("en").retry_ready,
-            },
             logical_width: 1280,
             logical_height: 720,
             dark: true,

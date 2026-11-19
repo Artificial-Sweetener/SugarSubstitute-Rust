@@ -70,7 +70,7 @@ source_sha256 = "sha256:6a7b54902d843ef514288afd10d7e320c90a2699bb5dad98635a4fac
 [[boundaries]]
 owner = "sugarsubstitute-desktop"
 concern = "Native event-loop presentation, accessible peers, platform dialogs and embedded ComfyUI browser surfaces"
-capabilities = ["raster", "text", "webview", "window"]
+capabilities = ["raster", "webview", "window"]
 sources = [
     "crates/sugarsubstitute-desktop/src/main_actor/session/registration.rs",
     "crates/sugarsubstitute-desktop/src/main_actor/session/handler.rs",
@@ -89,8 +89,6 @@ sources = [
     "crates/sugarsubstitute-desktop/src/installer/native/windows.rs",
     "crates/sugarsubstitute-desktop/src/installer/native/form_window.rs",
     "crates/sugarsubstitute-desktop/src/report/surface/native_tests/hosted.rs",
-    "crates/sugarsubstitute-desktop/src/windows_controls_caption_tests.rs",
-    "crates/sugarsubstitute-desktop/src/windows_controls_caption_hit_tests.rs",
     "crates/sugarsubstitute-desktop/src/windows_controls_caption_frame_tests.rs",
     "crates/sugarsubstitute-desktop/src/linux.rs",
     "crates/sugarsubstitute-desktop/src/macos.rs",
@@ -153,7 +151,7 @@ sources = [
     "crates/sugarsubstitute-desktop/src/windows_text/field_tests.rs",
     "crates/sugarsubstitute-desktop/src/windows_text/renderer.rs",
 ]
-source_sha256 = "sha256:f5b42f0598ef92c3f3217baad40180bbd4021acace22c0ddd6c76c4344a08506"
+source_sha256 = "sha256:35474ede43b5406c26ca1eb6d50fe690e5617cead6b1949bbab312a3c6a6a0d8"
 
 [[boundaries]]
 owner = "sugarsubstitute-image-gpu"

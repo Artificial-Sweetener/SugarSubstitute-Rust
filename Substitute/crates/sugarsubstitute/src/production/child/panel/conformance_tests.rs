@@ -327,7 +327,6 @@ fn a_page_older_than_the_host_protocols_is_sent_nothing_and_its_panel_ends_at_th
     let due = host.memory.next_deadline();
     host.memory.poll(due, host.now, 0, false)?;
     assert!(silent(&mut host)?, "a page that watches nothing was sent a state");
-    assert!(!host.release_notes.watching());
 
     let second = 1_000_000_000;
     host.panel.tick(Moment::from_nanos(30 * second - 1))?;

@@ -40,6 +40,7 @@ pub(super) struct WorkflowRestart {
 impl WorkflowRestart {
     /// The user asked to restart with the queue reading `queue`. True when the close starts
     /// now; false when it waits for the workflow.
+    #[cfg(any(test, all(windows, feature = "windows-native-host")))]
     pub(super) fn request(&mut self, queue: WorkflowQueue) -> bool {
         self.dropped = false;
         self.waiting = queue == WorkflowQueue::Busy;

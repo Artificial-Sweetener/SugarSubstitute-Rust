@@ -150,10 +150,6 @@ fn quiet_pre_ui_owner_keeps_original_cutoff_until_ready_or_shutdown() -> TestRes
         run,
         (LaunchId::new(1)?, Generation::new(1)?),
         MainWindowSettings {
-            recovery: sugarsubstitute_desktop::MainRecoveryLabels {
-                retry: sugarsubstitute_contracts::localization::messages("en").retry,
-                retry_ready: sugarsubstitute_contracts::localization::messages("en").retry_ready,
-            },
             logical_width: 1280,
             logical_height: 720,
             dark: true,
@@ -316,10 +312,6 @@ fn closed_preparation_failure_survives_failed_diagnostic_write_without_native_ef
         run,
         (LaunchId::new(1)?, Generation::new(1)?),
         MainWindowSettings {
-            recovery: sugarsubstitute_desktop::MainRecoveryLabels {
-                retry: sugarsubstitute_contracts::localization::messages("en").retry,
-                retry_ready: sugarsubstitute_contracts::localization::messages("en").retry_ready,
-            },
             logical_width: 1280,
             logical_height: 720,
             dark: true,

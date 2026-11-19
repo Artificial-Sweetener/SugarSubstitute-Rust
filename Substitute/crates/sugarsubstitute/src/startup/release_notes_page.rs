@@ -32,7 +32,6 @@ struct Page {
     identity: MainIdentity,
     lease: MemoryLease,
     revision: u64,
-    watching: bool,
 }
 
 /// One page request waiting for the fetch of its range.
@@ -90,12 +89,11 @@ impl ReleaseNotesPage {
         self.receipts.push_back(PanelIngressReceipt::control(identity, claim)?);
         if self.page.as_ref().is_none_or(|page| page.identity != identity) {
             self.retire_others(identity);
-            self.page = Some(Page { identity, lease, revision: 0, watching: false });
+            self.page = Some(Page { identity, lease, revision: 0 });
         }
         match message {
             ReleaseNotesClientMessage::Watch(_) => {
                 let Some(page) = &mut self.page else { return Ok(()) };
-                page.watching = true;
                 page.revision += 1;
                 let state = ReleaseNotesHostMessage::State {
                     revision: page.revision,
@@ -126,24 +124,6 @@ impl ReleaseNotesPage {
         let Some(range) = self.fetching.take() else { return self.pump(fetches) };
         self.answer(&range, outcome)?;
         self.pump(fetches)
-    }
-
-    /// Whether a page of the current navigation follows the host's release notes, so it can
-    /// show what is new.
-    pub(crate) fn watching(&self) -> bool {
-        self.page.as_ref().is_some_and(|page| page.watching)
-    }
-
-    /// Ask the watching page to show what is new.
-    ///
-    /// # Errors
-    /// Refuses when no page follows the host's release notes, and rejects storage the page's
-    /// lease cannot fund.
-    pub(crate) fn open(&mut self) -> Result<(), Box<dyn Error>> {
-        if !self.watching() {
-            return Err("No page shows the release notes".into());
-        }
-        self.queue(&ReleaseNotesHostMessage::Open)
     }
 
     /// Forget a page whose navigation retired; its pending answers can no longer be delivered.

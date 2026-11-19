@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Exercise the actual fixed-slot/revision owner without native windows or backend fakes.
 use super::*;
-use sugarsubstitute_contracts::{execution::Generation, lifecycle::*, startup::LaunchId};
+use sugarsubstitute_contracts::{
+    execution::Generation, host_backend::BackendStatus, lifecycle::*, startup::LaunchId,
+};
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 fn identity() -> Result<MainIdentity, Box<dyn std::error::Error>> {
     Ok(MainIdentity {
@@ -30,16 +32,15 @@ fn lease(identity: MainIdentity, number: u64) -> Result<LeaseKey, Box<dyn std::e
         id: LeaseId::new(number)?,
     })
 }
-fn labels() -> MainRecoveryLabels {
-    MainRecoveryLabels { retry: "Retry", retry_ready: "Ready to retry" }
+/// Whether the page is told a retry is on offer or under way.
+fn offered(owner: &Recovery) -> bool {
+    matches!(owner.page_state().1, BackendStatus::RetryReady | BackendStatus::Retrying)
 }
 #[test]
 fn initial_outage_control_is_hidden_disabled_without_a_failed_reference() -> TestResult {
     let owner = Recovery::new(identity()?);
-    let initial = owner.presentation(labels());
-    assert!(!initial.visible);
-    assert!(initial.action.is_none());
-    assert_eq!(initial.label, labels().retry);
+    assert_eq!(owner.page_state(), (0, BackendStatus::Running));
+    assert!(owner.action().is_none());
     assert!(owner.outage.is_none());
     Ok(())
 }
@@ -96,8 +97,7 @@ fn native_click_consumes_ready_once_and_reports_only_original_main_failed_pair()
     };
     assert_eq!((identity, actual), (current, failed));
     assert!(owner.action().is_none());
-    assert!(owner.presentation(labels()).visible);
-    assert_eq!(owner.presentation(labels()).label, labels().retry);
+    assert!(offered(&owner));
     assert!(owner.consume(action)?.is_none());
     Ok(())
 }
@@ -137,7 +137,7 @@ fn recovered_requires_exact_old_lease_and_retains_replay_tombstone() -> TestResu
         Err(RecoveryError::StaleLease)
     );
     owner.present(current, first, MainBackendState::Recovered)?;
-    assert!(!owner.presentation(labels()).visible);
+    assert!(!offered(&owner));
     assert_eq!(
         owner.present(current, first, MainBackendState::RetryReady),
         Err(RecoveryError::StaleLease)
@@ -159,7 +159,7 @@ fn closing_and_exhausted_revision_never_reset_or_wrap_action_identity() -> TestR
     assert!(matches!(owner.consume(action), Err(RecoveryError::RevisionExhausted)));
     assert_eq!(owner.revision, u64::MAX);
     assert!(owner.action().is_none());
-    assert!(!owner.presentation(labels()).visible);
+    assert!(!offered(&owner));
     assert_eq!(
         owner.present(current, failed, MainBackendState::RetryReady),
         Err(RecoveryError::Closed)
@@ -178,12 +178,12 @@ fn duplicate_presentation_is_inert_and_shared_retrying_has_no_click_mapping() ->
     let failed = lease(current, 1)?;
     let mut owner = Recovery::new(current);
     owner.present(current, failed, MainBackendState::Retiring)?;
-    assert!(!owner.presentation(labels()).visible);
+    assert!(!offered(&owner));
     let revision = owner.revision;
     assert!(!owner.present(current, failed, MainBackendState::Retiring)?);
     assert_eq!(owner.revision, revision);
     owner.present(current, failed, MainBackendState::Retrying)?;
-    assert!(owner.presentation(labels()).visible);
+    assert!(offered(&owner));
     assert!(owner.action().is_none());
     Ok(())
 }
@@ -224,7 +224,6 @@ fn explicit_lineage_replaces_pending_outage_without_false_recovery_or_stale_clic
 }
 #[test]
 fn the_page_is_told_each_state_and_may_retry_only_the_ready_state_it_was_shown() -> TestResult {
-    use sugarsubstitute_contracts::host_backend::BackendStatus;
     let current = identity()?;
     let failed = lease(current, 1)?;
     let mut owner = Recovery::new(current);
@@ -236,9 +235,6 @@ fn the_page_is_told_each_state_and_may_retry_only_the_ready_state_it_was_shown()
     assert_eq!(owner.page_state(), (2, BackendStatus::RetryReady));
     assert!(owner.action_at(1).is_none(), "a retry names the ready state it saw");
     let action = owner.action_at(2).ok_or("the ready state offers its retry")?;
-    // The caption never shows or arms the peer; the page offers the retry.
-    let shown = owner.presentation(labels()).hidden();
-    assert!(!shown.visible && shown.action.is_none());
     assert!(owner.consume(action)?.is_some());
     assert_eq!(owner.page_state(), (3, BackendStatus::Retrying));
     assert!(owner.action_at(2).is_none() && owner.action_at(3).is_none());

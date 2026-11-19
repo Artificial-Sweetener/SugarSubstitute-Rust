@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Bridge fixed recovery presentation to the same Main's retained native caption peer.
+//! Tell the same Main's page how its backend stands, and act on the retry it asks for.
 use super::*;
 use crate::{MainBackendState, main_backend::RetryAction};
 use sugarsubstitute_contracts::{
@@ -56,11 +56,11 @@ impl MainActor {
     ) -> Result<(), DesktopError> {
         match change {
             Ok(false) => Ok(()),
-            Ok(true) => self.present_recovery_control(),
+            Ok(true) => self.tell_backend_page(),
             Err(cause) => {
                 let exhausted = cause == crate::main_backend::RecoveryError::RevisionExhausted;
                 let mut failure = Some(DesktopError::new("present_main_backend", cause));
-                if exhausted && let Err(native) = self.present_recovery_control() {
+                if exhausted && let Err(native) = self.tell_backend_page() {
                     DesktopError::retain_first(&mut failure, native);
                 }
                 Err(failure.ok_or_else(|| {
@@ -93,24 +93,13 @@ impl MainActor {
         };
         // Consume/exhaustion changes pure state first. Disable the old native
         // mapping/control before any host observation, preserving first errors.
-        if let Err(native) = self.present_recovery_control() {
+        if let Err(native) = self.tell_backend_page() {
             DesktopError::retain_first(&mut failure, native);
         }
         match failure {
             Some(cause) => Err(cause),
             None => Ok(observation),
         }
-    }
-    /// Reuse the retained retry peer without reentering browser or navigation owners.
-    pub(super) fn present_recovery_control(&mut self) -> Result<(), DesktopError> {
-        if self.controls.is_none() {
-            return Ok(());
-        }
-        let presentation = self.recovery.presentation(self.request()?.settings().recovery).hidden();
-        if let Some(controls) = &mut self.controls {
-            controls.present_retry(presentation)?;
-        }
-        self.tell_backend_page()
     }
     /// Tell the current document how the backend stands; the page offers the retry itself.
     /// A page that is not revealed, or is closing, is told when it next asks.

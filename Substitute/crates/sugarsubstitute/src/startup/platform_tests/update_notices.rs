@@ -23,14 +23,6 @@ fn start_up_messages() -> [StartupNotice; 4] {
     ]
 }
 
-#[test]
-fn no_start_up_message_is_offered_to_the_title_bar() -> BackendResult<()> {
-    let mut host = host()?;
-    host.child.notices.extend(start_up_messages());
-    assert_eq!(host.take_update_notice(), None);
-    Ok(())
-}
-
 #[cfg(windows)]
 #[test]
 fn every_start_up_message_is_owed_to_the_page_once() -> BackendResult<()> {
@@ -52,18 +44,6 @@ fn every_start_up_message_is_owed_to_the_page_once() -> BackendResult<()> {
     // A later turn has nothing more to say.
     host.tell_host_lines(true)?;
     assert_eq!(host.session_notice.owed_lines().len(), 4);
-    Ok(())
-}
-
-#[cfg(windows)]
-#[test]
-fn whats_new_waits_for_a_page_that_shows_the_release_notes() -> BackendResult<()> {
-    let mut host = host()?;
-    // What's new is shown only in the embedded page; before a page watches, nothing is offered
-    // and asking shows nothing anywhere else.
-    assert!(!host.whats_new_available());
-    assert!(host.open_whats_new().is_err());
-    assert!(host.release_notes.take_command().is_none());
     Ok(())
 }
 

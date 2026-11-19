@@ -238,11 +238,11 @@ fn the_window_reads_the_close_progress_and_language_the_host_holds_and_the_notic
     workspace.previous_close = Some(Some(notice.clone()));
     assert_eq!(workspace.take_previous_close(), Some(Some(notice)));
     assert_eq!(workspace.take_previous_close(), None, "taken once");
-    assert_eq!(StartupWindowContent::close_save_progress(&fixture.host), None, "before close");
-    fixture.host.request_restart_to_apply()?;
+    assert_eq!(fixture.host.close_save_progress(), None, "before close");
+    fixture.host.restart_to_apply()?;
     fixture.poll()?;
     assert!(matches!(
-        StartupWindowContent::close_save_progress(&fixture.host),
+        fixture.host.close_save_progress(),
         Some(CloseSaveProgress::Saving { reason: CloseReason::RestartToApply, .. })
     ));
     assert!(std::ptr::eq(
@@ -260,7 +260,7 @@ fn restart_to_apply_relaunches_only_once_the_close_save_has_its_outcome() -> Tes
     let mut fixture = Fixture::new(true)?;
     fixture.host.workspace.as_mut().ok_or("Workspace")?.driver = None;
     fixture.host.input_probe = Some(InputSaveProbe::default());
-    fixture.host.request_restart_to_apply()?;
+    fixture.host.restart_to_apply()?;
     let budget = fixture.host.shutdown.budget()?;
     fixture.poll()?;
     let probe = fixture.host.input_probe.as_ref().ok_or("Probe")?;
@@ -293,7 +293,7 @@ fn restart_to_apply_keeps_the_window_until_the_coordinator_notice_covers_the_scr
     fixture.host.workspace.as_mut().ok_or("Workspace")?.driver = None;
     fixture.host.input_probe = Some(InputSaveProbe::default());
     fixture.host.child.update_status = Some(UpdateStatus::default());
-    fixture.host.request_restart_to_apply()?;
+    fixture.host.restart_to_apply()?;
     fixture.poll()?;
     fixture.host.input_probe.as_mut().ok_or("Probe")?.verdict = Some(SaveVerdict::Saved);
     let host = &mut fixture.host;

@@ -92,14 +92,12 @@ impl MainActor {
     }
 }
 
-/// Fill a `width` by `height` physical-pixel client area from row `top` down. With `top` zero
-/// the page's own title bar row shares the native caption strip; a nonzero `top` leaves the
-/// strip to caption peers the page does not reserve room for.
-pub(super) fn browser_bounds(width: u32, height: u32, top: u32) -> wry::Rect {
-    let top = top.min(height.saturating_sub(1));
+/// Fill a `width` by `height` physical-pixel client area; the page's own title bar row shares
+/// the native caption strip.
+pub(super) fn browser_bounds(width: u32, height: u32) -> wry::Rect {
     wry::Rect {
-        position: wry::dpi::PhysicalPosition::new(0_u32, top).into(),
-        size: wry::dpi::PhysicalSize::new(width.max(1), (height - top).max(1)).into(),
+        position: wry::dpi::PhysicalPosition::new(0_u32, 0_u32).into(),
+        size: wry::dpi::PhysicalSize::new(width.max(1), height.max(1)).into(),
     }
 }
 

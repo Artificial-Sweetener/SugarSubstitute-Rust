@@ -9,9 +9,29 @@ use windows::Win32::{
     UI::WindowsAndMessaging::*,
 };
 
+/// Hidden snapshots begin as disabled, nonvisible children.
+fn initial_style(
+    mode: PaintMode,
+    availability: sugarsubstitute_ui::availability::Availability,
+) -> WINDOW_STYLE {
+    WS_CHILD
+        | WS_TABSTOP
+        | WINDOW_STYLE(if matches!(mode, PaintMode::NativeButtons(_)) {
+            BS_OWNERDRAW as u32
+        } else {
+            BS_PUSHBUTTON as u32
+        })
+        | if availability.visible { WS_VISIBLE } else { WINDOW_STYLE::default() }
+        | if availability.visible && availability.enabled {
+            WINDOW_STYLE::default()
+        } else {
+            WS_DISABLED
+        }
+}
+
 /// Native behavior selects its actual OS role; the shared prepared scene supplies decoration.
 pub(super) fn native_style(mode: PaintMode, spec: &Specification) -> (PCWSTR, WINDOW_STYLE) {
-    let base = retry::initial_style(mode, spec.control.id, spec.control.availability());
+    let base = initial_style(mode, spec.control.availability());
     let cleared = WINDOW_STYLE(base.0 & !(BS_TYPEMASK as u32));
     match spec.role {
         Role::Button => (w!("BUTTON"), base),

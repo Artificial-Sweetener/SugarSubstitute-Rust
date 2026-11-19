@@ -87,7 +87,6 @@ mod main_surface_contract;
 mod main_update_report;
 #[cfg(target_os = "windows")]
 mod main_update_report_page;
-mod main_updates;
 mod main_updates_contract;
 /// Bounded observational development trace records; feature-off builds expose none.
 #[cfg(feature = "k1-native-qualification")]
@@ -223,9 +222,7 @@ pub use host_contract::{
     MainRequestError, MainRetirementReason, MainWindowRequest, MainWindowSettings,
     ServedFrontendVersions, StartupDesktopReceipt, StartupPreparationStep, StartupWindowContent,
 };
-pub use main_caption_contract::{
-    MainBackendState, MainCaptionLabels, MainRecoveryLabels, UpdateNotice, WorkflowActivity,
-};
+pub use main_caption_contract::{MainBackendState, MainCaptionLabels, UpdateNotice};
 
 pub use main_canvas_native::{
     CanvasNativeNotification, CanvasNativeObservation, CanvasNativeReply, CanvasNativeReplyError,

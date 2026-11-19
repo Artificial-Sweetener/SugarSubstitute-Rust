@@ -68,54 +68,12 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
         )
     }
 
-    /// Restart to apply a prepared update through the same close save as every other close,
-    /// once the backend's running workflow finishes.
-    fn request_restart_to_apply(&mut self) -> Result<(), Box<dyn Error>> {
-        if self.workflow_restart.request(self.child.workflow_queue()) {
-            self.restart_to_apply()
-        } else {
-            Ok(())
-        }
-    }
-
     /// The coordinator's status, with its SugarCubes update, as the window shows it.
     fn update_status(&self) -> Option<sugarsubstitute_contracts::update::status::UpdateStatus> {
         let status = self.child.update_status()?.clone();
         Some(
             self.workflow_restart.presented(status, self.locale_messages().updates.restart_dropped),
         )
-    }
-
-    /// The window's caption is owed no start-up update message: the embedded page is told
-    /// each one as a line (`session_notice_host`), so the title bar never carries a message.
-    fn take_update_notice(&mut self) -> Option<sugarsubstitute_desktop::UpdateNotice> {
-        None
-    }
-
-    #[cfg(all(windows, any(feature = "windows-native-host", test)))]
-    fn whats_new_available(&self) -> bool {
-        !self.closing && self.release_notes.watching()
-    }
-
-    /// The page shows what is new; nothing leaves the application.
-    #[cfg(all(windows, any(feature = "windows-native-host", test)))]
-    fn open_whats_new(&mut self) -> Result<(), Box<dyn Error>> {
-        if self.closing {
-            return Err("The application is closing".into());
-        }
-        self.release_notes.open()
-    }
-
-    fn workflow_activity(&self) -> sugarsubstitute_desktop::WorkflowActivity {
-        match self.child.workflow_queue() {
-            sugarsubstitute_contracts::lifecycle::WorkflowQueue::Busy => {
-                sugarsubstitute_desktop::WorkflowActivity::Running
-            }
-            sugarsubstitute_contracts::lifecycle::WorkflowQueue::Idle
-            | sugarsubstitute_contracts::lifecycle::WorkflowQueue::Unobserved => {
-                sugarsubstitute_desktop::WorkflowActivity::Idle
-            }
-        }
     }
 
     /// A writer of the update report the window shows, its latest failed attempt and its
@@ -148,12 +106,6 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
 
     fn session_end_reason(&self) -> &'static str {
         self.locale_messages().closing.saving
-    }
-
-    fn close_save_progress(
-        &self,
-    ) -> Option<sugarsubstitute_application::workspace_session::close_save::CloseSaveProgress> {
-        Self::close_save_progress(self)
     }
 
     /// The configured language once startup has its session; English before then.

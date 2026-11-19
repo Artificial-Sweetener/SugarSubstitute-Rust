@@ -16,15 +16,6 @@ pub struct MainCaptionLabels {
     pub close: &'static str,
 }
 
-/// Borrow canonical localized connection-retry copy without allocating product text.
-#[derive(Clone, Copy, Debug)]
-pub struct MainRecoveryLabels {
-    /// Existing localized retry action.
-    pub retry: &'static str,
-    /// Existing localized actionable retry-ready status.
-    pub retry_ready: &'static str,
-}
-
 /// Present current backend recovery data; this state grants no backend admission.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum MainBackendState {
@@ -38,23 +29,10 @@ pub enum MainBackendState {
     Recovered,
 }
 
-/// Whether the managed backend is running a workflow, as the application observes it.
-/// The restart offer reads "after this finishes" while one runs.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum WorkflowActivity {
-    /// No workflow is queued or running, or the host cannot tell.
-    #[default]
-    Idle,
-    /// A workflow is queued or running.
-    Running,
-}
-
-/// A one-time message about updates for the first start after one, shown as one caption line
-/// the user can dismiss.
+/// A one-time message about updates for the first start after one, which the page shows.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum UpdateNotice {
-    /// This is the first start on a new version: "Updated to version X". Its "What's new"
-    /// opens the embedded page's release notes while a page can show them.
+    /// This is the first start on a new version: "Updated to version X".
     Updated {
         /// The version now running.
         version: String,

@@ -135,9 +135,7 @@ fn a_watch_returns_its_credit_then_names_the_product_and_running_version() -> Te
     let page = identity(1)?;
     let mut link = ReleaseNotesPage::new()?;
     let mut fetches = Fetches::default();
-    assert!(!link.watching());
     request(&mut link, page, watch(page)?, &mut fetches)?;
-    assert!(link.watching());
     let command = link.take_command();
     assert!(matches!(command, Some(DesktopStartupCommand::CompletePanelIngress(_))));
     let Some(DesktopStartupCommand::SendReleaseNotes(state)) = link.take_command() else {
@@ -148,27 +146,6 @@ fn a_watch_returns_its_credit_then_names_the_product_and_running_version() -> Te
     assert_eq!(value["product"], crate::APPLICATION_NAME);
     assert_eq!(value["currentVersion"], CURRENT_VERSION);
     assert_eq!(state.revision(), Some(1));
-    Ok(())
-}
-
-#[test]
-fn whats_new_reaches_only_a_watching_page_and_names_no_address() -> TestResult {
-    let page = identity(1)?;
-    let mut link = ReleaseNotesPage::new()?;
-    let mut fetches = Fetches::default();
-    assert!(link.open().is_err(), "nothing can show what is new before a page watches");
-    request(&mut link, page, watch(page)?, &mut fetches)?;
-    drain(&mut link)?;
-    link.open()?;
-    let Some(DesktopStartupCommand::SendReleaseNotes(open)) = link.take_command() else {
-        return Err("Open missing".into());
-    };
-    let value: Value = serde_json::from_slice(open.payload())?;
-    let fields: Vec<&String> = value.as_object().ok_or("Open is not an object")?.keys().collect();
-    assert_eq!(fields, ["protocol", "session", "type", "version"]);
-    assert_eq!(value["type"], "open");
-    link.retire(page);
-    assert!(!link.watching() && link.open().is_err());
     Ok(())
 }
 

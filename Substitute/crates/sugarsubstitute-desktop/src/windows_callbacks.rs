@@ -219,7 +219,7 @@ pub(crate) unsafe extern "system" fn parent_proc(
         }
         // SAFETY: The nonfinal invocation still owns its installed reference.
         let callback = unsafe { callback::<Callback>(data) };
-        if let Some(result) = caption::parent(callback, hwnd, message, wparam, lparam) {
+        if let Some(result) = caption::parent(callback, hwnd, message, lparam) {
             return result;
         }
         if message == windows::Win32::UI::WindowsAndMessaging::WM_CTLCOLORLISTBOX {
@@ -341,9 +341,6 @@ pub(crate) unsafe extern "system" fn child_proc(
                 if callback.prepared_pixels()
                     && callback.input(hwnd, None) == Some(InputKind::Prepared) =>
             {
-                return LRESULT(HTTRANSPARENT as isize);
-            }
-            WM_NCHITTEST if caption::drags_window(callback, hwnd) => {
                 return LRESULT(HTTRANSPARENT as isize);
             }
             WM_ERASEBKGND if callback.prepared_pixels() || callback.caption.get().is_some() => {

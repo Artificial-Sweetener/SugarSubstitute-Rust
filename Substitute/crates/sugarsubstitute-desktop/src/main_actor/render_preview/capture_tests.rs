@@ -196,10 +196,6 @@ fn original_four_mib_lease_funds_maximum_request_and_live_preview_claims_togethe
                 restore: "Restore",
                 close: "Close",
             },
-            recovery: crate::MainRecoveryLabels {
-                retry: "Retry",
-                retry_ready: "Connection failed. Retry",
-            },
         },
         MemoryLease::new(MainWindowRequest::RESERVATION_BYTES, Box::new(Released)),
     )?;

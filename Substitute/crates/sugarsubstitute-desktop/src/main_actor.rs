@@ -4,6 +4,7 @@
 
 mod admission;
 mod browser_memory;
+mod caption;
 mod close_request;
 #[cfg(feature = "native-composition")]
 mod composition;
@@ -24,7 +25,6 @@ mod retirement;
 mod session;
 mod timeout;
 mod update_report;
-mod updates;
 mod window_lifecycle;
 use crate::{
     DesktopError, DesktopStartupObservation, MainWindowRequest, NativeMaterial,
@@ -69,8 +69,6 @@ pub(crate) struct MainActor {
     request: Option<MainWindowRequest>,
     admission: Admission,
     recovery: crate::main_backend::Recovery,
-    /// The caption's update button, restart offer, saving state and one-time messages.
-    updates: updates::CaptionText,
     /// What the page is told of the application's update report, and its request to see it.
     update_report: crate::main_update_report::ReportOffer,
     stage: ConstructionStage,
@@ -178,7 +176,6 @@ impl MainActor {
             request: Some(request),
             admission,
             recovery,
-            updates: updates::CaptionText::default(),
             update_report: crate::main_update_report::ReportOffer::default(),
             stage: ConstructionStage::Window,
             window: None,

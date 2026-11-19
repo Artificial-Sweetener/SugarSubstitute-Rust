@@ -144,18 +144,7 @@ pub(super) fn dispatch(
             if let Some(main) = &session.main
                 && let Some(id) = action.main_control(main.identity())
             {
-                if crate::main_updates::owns(id) {
-                    updates::activate(session, content, id, target, proxy.clone(), context.title)?;
-                } else {
-                    main_operation(session, content, |main| main.activate(id))?;
-                }
-            }
-        }
-        Event::UserEvent(NativeAction::MainBackendRetry(action)) if !session.closing => {
-            let observation =
-                if let Some(main) = &mut session.main { main.retry_backend(action)? } else { None };
-            if let Some(observation) = observation {
-                session.observe(content, observation)?;
+                main_operation(session, content, |main| main.activate(id))?;
             }
         }
         Event::UserEvent(NativeAction::FocusNext(backward))

@@ -282,6 +282,16 @@ requires = "a desktop session that displays windows"
 
 [[hosted_runner]]
 package = "sugarsubstitute-desktop"
+test = "main_actor::placement::tests::native_cases::a_reloading_main_keeps_its_frame_on_screen_until_its_replacement_shows_one"
+requires = "desktop composition"
+
+[[hosted_runner]]
+package = "sugarsubstitute-desktop"
+test = "main_actor::placement::tests::native_cases::a_replacement_main_shows_its_frame_before_its_page_and_holds_its_buttons_until_reveal"
+requires = "desktop composition"
+
+[[hosted_runner]]
+package = "sugarsubstitute-desktop"
 test = "report::surface::native_tests::hosted::update_report_opens_over_the_main_window_on_its_own_loop_and_settles"
 requires = "a desktop session that displays windows"
 
@@ -312,20 +322,6 @@ requires = "a desktop session that displays windows"
 
 [[hosted_runner]]
 package = "sugarsubstitute-desktop"
-test = "windows_controls::caption::frame_tests::the_system_draws_no_caption_buttons_under_the_main_caption"
+test = "windows_controls::caption_frame_tests::the_system_draws_no_caption_buttons_under_the_main_caption"
 requires = "desktop composition"
 
-[[hosted_runner]]
-package = "sugarsubstitute-desktop"
-test = "windows_controls::caption::hit_tests::pressing_the_message_line_drags_the_window_while_its_buttons_stay_clickable"
-requires = "desktop composition"
-
-[[hosted_runner]]
-package = "sugarsubstitute-desktop"
-test = "windows_controls::caption::hit_tests::the_strip_above_the_page_answers_a_real_hit_test_as_caption"
-requires = "desktop composition"
-
-[[hosted_runner]]
-package = "sugarsubstitute-desktop"
-test = "windows_controls::caption::tests::every_update_caption_state_shows_on_the_real_caption_peers"
-requires = "desktop composition"

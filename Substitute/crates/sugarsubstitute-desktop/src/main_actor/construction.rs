@@ -112,7 +112,6 @@ impl MainActor {
                     })?
                     .initialize()?;
                 self.resize_caption()?;
-                self.present_recovery_control()?;
                 self.show_replacement_frame()?;
                 #[cfg(feature = "native-composition")]
                 {
@@ -339,22 +338,11 @@ impl MainActor {
             Ok(crate::MainHosting::Windowed)
         }
     }
-    /// The browser's bounds for the current caption, as `page_bounds` places them.
+    /// The browser fills the client area, in exact physical pixels, so no logical round trip
+    /// through a changing DPI can misalign it with the native canvas beneath it.
     pub(super) fn browser_bounds(&self) -> Result<wry::Rect, DesktopError> {
-        Ok(self.page_bounds(&self.caption_controls()?)?.0)
-    }
-    /// Fill the client area below the caption strip `controls` need, in exact physical pixels,
-    /// so no logical round trip through a changing DPI can misalign the browser with the
-    /// native canvas beneath it. Returns the bounds and the client row where the page starts.
-    fn page_bounds(
-        &self,
-        controls: &[AccessibleControl],
-    ) -> Result<(wry::Rect, u32), DesktopError> {
-        let window = self.window()?;
-        let size = window.inner_size();
-        let top =
-            crate::main_caption::page_top(self.caption_width()?, controls, window.scale_factor());
-        Ok((super::frame::browser_bounds(size.width, size.height, top), top))
+        let size = self.window()?.inner_size();
+        Ok(super::frame::browser_bounds(size.width, size.height))
     }
     /// The caption's logical layout width: the client's, never narrower than its buttons need.
     fn caption_width(&self) -> Result<f64, DesktopError> {
@@ -364,29 +352,18 @@ impl MainActor {
     pub(super) fn caption_controls(
         &self,
     ) -> Result<[AccessibleControl; crate::main_caption::PEERS], DesktopError> {
-        use tao::platform::windows::WindowExtWindows;
         let window = self.window()?;
-        let settings = self.request()?.settings();
-        let hwnd = windows::Win32::Foundation::HWND(window.hwnd() as *mut _);
-        crate::main_caption::caption_controls(
+        Ok(crate::main_caption::caption_controls(
             self.caption_width()?,
             window.is_maximized(),
-            settings.labels,
-            self.recovery.presentation(settings.recovery).hidden(),
-            &self.updates.view(),
-            |text| crate::windows_callbacks::caption::measure_text(hwnd, text),
-        )
+            self.request()?.settings().labels,
+        ))
     }
-    /// Lay the caption out for the current client size and move the browser to the area the
-    /// caption leaves it. Moving and resizing the browser keeps its page, scroll and state.
+    /// Lay the caption out for the current client size and fill the client with the browser.
+    /// Moving and resizing the browser keeps its page, scroll and state.
     pub(super) fn resize(&mut self) -> Result<(), DesktopError> {
-        let controls = self.caption_controls()?;
-        let view = self.updates.view();
-        let (bounds, top) = self.page_bounds(&controls)?;
-        if let Some(owner) = &mut self.controls {
-            owner.present_caption(&controls, &view)?;
-            owner.set_page_top(top);
-        }
+        self.resize_caption()?;
+        let bounds = self.browser_bounds()?;
         if let Some(view) = &self.view {
             view.set_bounds(bounds)
                 .map_err(|cause| DesktopError::new("resize_main_view", cause))?;

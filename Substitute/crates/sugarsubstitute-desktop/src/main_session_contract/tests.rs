@@ -2,10 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Admit trusted bootstrap identity and preserve independent session/storage boundaries.
 use super::*;
-use crate::{
-    MainCaptionLabels, MainRecoveryLabels, MainWindowRequest, MainWindowSettings,
-    ServedFrontendVersions,
-};
+use crate::{MainCaptionLabels, MainWindowRequest, MainWindowSettings, ServedFrontendVersions};
 use std::{error::Error, path::PathBuf};
 use sugarsubstitute_contracts::{
     configuration::ProfileId,
@@ -63,7 +60,6 @@ fn request() -> Result<MainWindowRequest> {
                 restore: "Restore",
                 close: "Close",
             },
-            recovery: MainRecoveryLabels { retry: "Retry", retry_ready: "Retry ready" },
         },
         MemoryLease::new(MainWindowRequest::RESERVATION_BYTES, Box::new(Release)),
     )?)

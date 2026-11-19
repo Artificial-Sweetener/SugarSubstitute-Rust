@@ -4,15 +4,76 @@
 //! maximized, and check that the system draws no caption glyphs of its own: the Main caption's
 //! buttons are transparent over the window's material, so any system glyph beneath them would
 //! show as a second copy.
-use super::tests::{Surface, TestResult, WIDTH};
 use super::*;
 use tao::{dpi::LogicalSize, event_loop::EventLoopBuilder, window::WindowBuilder};
 use windows::Win32::{
-    Graphics::{Dwm::DwmFlush, Gdi::HDC},
+    Graphics::{
+        Dwm::DwmFlush,
+        Gdi::{
+            BI_RGB, BITMAPINFO, BITMAPINFOHEADER, CreateCompatibleDC, CreateDIBSection,
+            DIB_RGB_COLORS, DeleteDC, DeleteObject, HBITMAP, HDC, SelectObject,
+        },
+    },
     UI::WindowsAndMessaging::GetClientRect,
 };
 
 windows::core::link!("user32.dll" "system" fn PrintWindow(hwnd: HWND, dc: HDC, flags: u32) -> windows::core::BOOL);
+
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+/// Logical client width of the test window.
+const WIDTH: i32 = 1100;
+
+/// An owned top-down 32-bit memory bitmap the window prints into.
+struct Surface {
+    dc: HDC,
+    bitmap: HBITMAP,
+    previous: windows::Win32::Graphics::Gdi::HGDIOBJ,
+    bits: *mut u8,
+    width: i32,
+    height: i32,
+}
+
+impl Surface {
+    fn new(width: i32, height: i32) -> Result<Self, Box<dyn std::error::Error>> {
+        let info = BITMAPINFO {
+            bmiHeader: BITMAPINFOHEADER {
+                biSize: size_of::<BITMAPINFOHEADER>() as u32,
+                biWidth: width,
+                biHeight: -height,
+                biPlanes: 1,
+                biBitCount: 32,
+                biCompression: BI_RGB.0,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let mut bits = std::ptr::null_mut();
+        // SAFETY: An owned memory DC and DIB section display nothing; Drop releases both.
+        unsafe {
+            let dc = CreateCompatibleDC(None);
+            let bitmap = CreateDIBSection(Some(dc), &info, DIB_RGB_COLORS, &raw mut bits, None, 0)?;
+            let previous = SelectObject(dc, bitmap.into());
+            Ok(Self { dc, bitmap, previous, bits: bits.cast(), width, height })
+        }
+    }
+
+    fn pixels(&self) -> &[u8] {
+        // SAFETY: The DIB section is exactly width*height 32-bit pixels and lives with self.
+        unsafe { std::slice::from_raw_parts(self.bits, (self.width * self.height * 4) as usize) }
+    }
+}
+
+impl Drop for Surface {
+    fn drop(&mut self) {
+        // SAFETY: Restore the original object, then delete exactly what `new` created.
+        unsafe {
+            SelectObject(self.dc, self.previous);
+            assert!(DeleteObject(self.bitmap.into()).as_bool());
+            assert!(DeleteDC(self.dc).as_bool());
+        }
+    }
+}
 
 /// The window-button area at the client's top right as the compositor presents it: the count
 /// of glyph-bright pixels and of unbacked (white) pixels.

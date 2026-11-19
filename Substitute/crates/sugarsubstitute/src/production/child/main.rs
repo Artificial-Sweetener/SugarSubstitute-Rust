@@ -275,10 +275,6 @@ fn requested_settings(
 ) -> MainWindowSettings {
     let copy = sugarsubstitute_contracts::localization::messages(presentation.locale().as_str());
     let labels = copy.window;
-    settings.recovery = sugarsubstitute_desktop::MainRecoveryLabels {
-        retry: copy.retry,
-        retry_ready: copy.retry_ready,
-    };
     settings.dark = presentation.theme() == sugarsubstitute_contracts::configuration::Theme::Dark;
     settings.labels = sugarsubstitute_desktop::MainCaptionLabels {
         minimize: labels.minimize,

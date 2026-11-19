@@ -18,9 +18,6 @@ pub(crate) enum NativeAction {
     /// Activate a main caption control, independently of splash-local IDs.
     #[cfg(target_os = "windows")]
     MainControl(crate::MainIdentity, u16),
-    /// Snapshot one current native recovery caption action without backend authority.
-    #[cfg(target_os = "windows")]
-    MainBackendRetry(crate::main_backend::RetryAction),
     /// Request application-owned close.
     #[cfg(target_os = "windows")]
     Close,
@@ -82,14 +79,10 @@ impl FormAction {
 
 #[cfg(target_os = "windows")]
 impl NativeAction {
-    /// Ignore queued caption intent from a retired or replaced native main lifetime. The retry
-    /// peer has its own action; window and update peers arrive here.
+    /// Ignore queued caption intent from a retired or replaced native main lifetime.
     pub(crate) fn main_control(self, current: crate::MainIdentity) -> Option<u16> {
         match self {
-            Self::MainControl(identity, id)
-                if identity == current
-                    && ((1..=3).contains(&id) || crate::main_updates::owns(id)) =>
-            {
+            Self::MainControl(identity, id) if identity == current && (1..=3).contains(&id) => {
                 Some(id)
             }
             _ => None,
@@ -127,7 +120,7 @@ mod tests {
         let close = NativeAction::MainControl(current, 3);
         assert_eq!(close.main_control(current), Some(3));
         assert_eq!(NativeAction::MainControl(current, 4).main_control(current), None);
-        assert_eq!(NativeAction::MainControl(current, 5).main_control(current), Some(5));
+        assert_eq!(NativeAction::MainControl(current, 5).main_control(current), None);
         assert_eq!(NativeAction::MainControl(current, 10).main_control(current), None);
         let mut stale = current;
         stale.launch = LaunchId::new(2)?;
