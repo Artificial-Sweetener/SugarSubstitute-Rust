@@ -1,3 +1,14 @@
+## [0.5.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.4.1...substitute-v0.5.0) (2026-11-19)
+
+### Features
+
+* **devtools:** keep DevTools available in every build ([de12d79](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/de12d79106c6469ed8a7dd96f92a000e62090f4d))
+* **tabs:** show a file dragged over the tab bar as the tab it will open ([785350c](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/785350c324968be5d2ae268e0229151ef6ff6abd))
+
+### Bug Fixes
+
+* **reload:** reload the page without crashing and keep the window's frame on screen ([8d68ec5](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/8d68ec5faa795766e5b13a2a7f0d11cbd79b77f9))
+
 ## [0.4.1](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.4.0...substitute-v0.4.1) (2026-11-19)
 
 ### Bug Fixes
