@@ -179,9 +179,9 @@ pub struct StartupHost<B: StartupBackend> {
     /// The resolution of a ComfyUI the application did not start holding the launch port.
     #[cfg(windows)]
     backend_port: Option<backend_port::BackendPortConflict>,
-    /// The current stopped start has had its port looked at.
+    /// When the current start's port is looked at, and what an early answer leads to.
     #[cfg(windows)]
-    backend_port_checked: bool,
+    backend_port_trigger: backend_port::Trigger,
     /// Wakes the window when the port's resolution has something new.
     #[cfg(windows)]
     backend_port_wake: Option<Arc<dyn CompletionWake>>,
@@ -284,7 +284,7 @@ impl<B: StartupBackend> StartupHost<B> {
             #[cfg(windows)]
             backend_port: None,
             #[cfg(windows)]
-            backend_port_checked: false,
+            backend_port_trigger: backend_port::Trigger::default(),
             #[cfg(windows)]
             backend_port_wake: None,
             #[cfg(windows)]

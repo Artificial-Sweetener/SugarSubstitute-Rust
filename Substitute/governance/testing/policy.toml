@@ -183,7 +183,7 @@ reason = "The canvas reports its next wake as a native Instant; the test convert
 
 [[real_time]]
 path = "crates/sugarsubstitute/src/startup.rs"
-source_sha256 = "sha256:43913505da5d1758dfb25398923c2147d276bcfb02e17276feeaad5f7c6a376f"
+source_sha256 = "sha256:078ecd92bcd9d6a4404152b5c07657ec4409cb988ced93769c4005dbf285d6e4"
 reason = "The test-only constructor round trip builds the startup host, whose constructor requires the real monotonic execution clock; the round trip asserts the constructed parts and never reads a duration."
 
 [[real_time]]
