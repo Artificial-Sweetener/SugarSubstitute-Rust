@@ -15,7 +15,7 @@ pub(super) fn turn(
 ) -> Result<(), DesktopError> {
     super::report::turn(session);
     if session.main.is_none() {
-        return Ok(());
+        return super::report::open_backend_conflict(session, content, target, proxy, title);
     }
     let available =
         content.update_status().as_ref().is_some_and(crate::report::surface::has_update_report);

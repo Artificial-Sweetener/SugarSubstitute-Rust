@@ -37,6 +37,8 @@ struct Session {
     main: Option<MainActor>,
     /// The update report opened over the main window, until it has settled.
     report: Option<events::HostedReport>,
+    /// The open report is a question asked over the splash, before any main window exists.
+    report_over_splash: bool,
     /// The loop's shell picker while no report holds it.
     picker: Option<crate::file_dialog::Picker>,
     main_fence: main_fence::MainFence,
@@ -194,6 +196,7 @@ pub fn run_startup(
         main: None,
         report: None,
         picker: Some(picker),
+        report_over_splash: false,
         main_fence: main_fence::MainFence::new(),
         closing: false,
         failure: None,

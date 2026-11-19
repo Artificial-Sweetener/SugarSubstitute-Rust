@@ -21,6 +21,8 @@ type Result<T> = std::result::Result<T, Box<dyn Error>>;
 /// The caller retains this service until `finished`, including surface failures.
 pub struct Service<B: ConflictBackend> {
     session: B,
+    /// The kind of work each backend operation is admitted as.
+    operation: Operation,
     clock: Arc<dyn Clock>,
     relaunch_started: bool,
     replacement: Option<OwnedJob<(), B::Error>>,
@@ -39,8 +41,14 @@ pub struct Service<B: ConflictBackend> {
 impl<B: ConflictBackend> Service<B> {
     /// Retain an inert backend; native work starts only when the surface supplies its wake.
     pub fn new(session: B) -> Self {
+        Self::admitted_as(session, Operation::Infrastructure)
+    }
+    /// The same, with each backend operation admitted as `operation`: a backend that reads the
+    /// kernel's connection table runs as native lifecycle work.
+    pub fn admitted_as(session: B, operation: Operation) -> Self {
         Self {
             session,
+            operation,
             clock: MonotonicClock::new(),
             relaunch_started: false,
             replacement: None,
@@ -204,7 +212,7 @@ impl<B: ConflictBackend> Service<B> {
         let session = self.session.clone();
         let spec = JobSpec {
             id: self.jobs.allocate()?,
-            operation: Operation::Infrastructure,
+            operation: self.operation,
             class: JobClass::InfrastructureLifecycle,
             deadline: Some(client.now()?.checked_add(Duration::from_secs(30))?),
             reservation_bytes: 4 * 1024 * 1024,

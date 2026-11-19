@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Resolve a user-selected profile conflict through retained native process identities.
 mod native;
-mod processes;
+pub(crate) mod processes;
 pub(crate) mod resources;
 use crate::ClaimError;
 use std::{

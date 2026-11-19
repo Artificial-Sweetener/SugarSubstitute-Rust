@@ -7,6 +7,9 @@
 //! prepared pixels or an execution terminal cannot substitute for those capabilities.
 
 #[cfg(windows)]
+#[path = "startup/backend_port.rs"]
+mod backend_port;
+#[cfg(windows)]
 mod canvas;
 #[path = "startup/close_diagnostic.rs"]
 mod close_diagnostic;
@@ -173,6 +176,15 @@ pub struct StartupHost<B: StartupBackend> {
     close_record_submitted: bool,
     /// A restart to apply that waits for the backend's running workflow.
     workflow_restart: workflow_restart::WorkflowRestart,
+    /// The resolution of a ComfyUI the application did not start holding the launch port.
+    #[cfg(windows)]
+    backend_port: Option<backend_port::BackendPortConflict>,
+    /// The current stopped start has had its port looked at.
+    #[cfg(windows)]
+    backend_port_checked: bool,
+    /// Wakes the window when the port's resolution has something new.
+    #[cfg(windows)]
+    backend_port_wake: Option<Arc<dyn CompletionWake>>,
     /// Exports of the update report to files the user selects.
     #[cfg(windows)]
     update_reports: Option<update_report::UpdateReports>,
@@ -269,6 +281,12 @@ impl<B: StartupBackend> StartupHost<B> {
             close_save: None,
             close_record_submitted: false,
             workflow_restart: workflow_restart::WorkflowRestart::default(),
+            #[cfg(windows)]
+            backend_port: None,
+            #[cfg(windows)]
+            backend_port_checked: false,
+            #[cfg(windows)]
+            backend_port_wake: None,
             #[cfg(windows)]
             update_reports: None,
             critical_until: None,

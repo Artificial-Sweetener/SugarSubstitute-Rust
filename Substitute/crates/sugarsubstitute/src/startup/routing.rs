@@ -71,6 +71,8 @@ impl<B: StartupBackend> StartupHost<B> {
         // After the events: the one that settles a failed start is what lets a waiting close go.
         self.advance_deferred_close()?;
         self.advance_workflow_restart()?;
+        #[cfg(windows)]
+        self.advance_backend_port()?;
         #[cfg(all(windows, feature = "native-composition"))]
         self.advance_workspace()?;
         if self.closing {
@@ -120,7 +122,7 @@ impl<B: StartupBackend> StartupHost<B> {
         Ok(())
     }
     /// Advance a user-requested retry only after the sole policy observed settlement.
-    fn retry_owned(&mut self) -> Result<(), Box<dyn Error>> {
+    pub(super) fn retry_owned(&mut self) -> Result<(), Box<dyn Error>> {
         let startup = self.startup.as_mut().ok_or("Actual startup owner absent")?;
         let identity = retry_identity(self.policy.identity(startup.session()))?;
         Self::prepare_retry_policy(&self.child, startup.session_mut(), identity)?;

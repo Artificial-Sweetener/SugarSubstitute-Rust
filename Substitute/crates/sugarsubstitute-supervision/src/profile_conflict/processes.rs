@@ -15,15 +15,15 @@ use windows::{
     core::PWSTR,
 };
 
-pub(super) struct Process {
-    pub(super) handle: Handle,
-    pub(super) pid: u32,
-    pub(super) birth: u64,
-    pub(super) image: PathBuf,
+pub(crate) struct Process {
+    pub(crate) handle: Handle,
+    pub(crate) pid: u32,
+    pub(crate) birth: u64,
+    pub(crate) image: PathBuf,
 }
 impl Process {
     /// Adopt the kernel handle before any fallible process observation.
-    pub(super) fn open(
+    pub(crate) fn open(
         pid: u32,
         terminate: bool,
         budget: Budget,
@@ -67,10 +67,10 @@ impl Process {
         process.image = OsString::from_wide(&name[..length as usize]).into();
         Ok(index)
     }
-    pub(super) fn matches(&self, candidate: &RM_UNIQUE_PROCESS) -> bool {
+    pub(crate) fn matches(&self, candidate: &RM_UNIQUE_PROCESS) -> bool {
         matches_identity(self.pid, self.birth, candidate)
     }
-    pub(super) fn exited(&self) -> Result<bool, ClaimError> {
+    pub(crate) fn exited(&self) -> Result<bool, ClaimError> {
         // SAFETY: A zero-time query observes the retained object without blocking.
         match unsafe { WaitForSingleObject(self.handle.raw(), 0) } {
             WAIT_OBJECT_0 => Ok(true),
@@ -78,7 +78,7 @@ impl Process {
             _ => Err(ClaimError::new("profile_conflict_wait", windows::core::Error::from_thread())),
         }
     }
-    pub(super) fn force(&self) -> Result<(), ClaimError> {
+    pub(crate) fn force(&self) -> Result<(), ClaimError> {
         if self.exited()? {
             return Ok(());
         }
@@ -87,24 +87,26 @@ impl Process {
             .map_err(|cause| ClaimError::new("profile_conflict_force", cause))
     }
 }
-pub(super) fn ticks(value: FILETIME) -> u64 {
+pub(crate) fn ticks(value: FILETIME) -> u64 {
     (u64::from(value.dwHighDateTime) << 32) | u64::from(value.dwLowDateTime)
 }
 fn matches_identity(pid: u32, birth: u64, candidate: &RM_UNIQUE_PROCESS) -> bool {
     pid == candidate.dwProcessId && birth == ticks(candidate.ProcessStartTime)
 }
 
-/// Capture only descendants of already retained original objects, bounded to 128 processes.
-pub(super) fn family(
-    root: usize,
-    processes: &mut Vec<Process>,
-    budget: Budget,
-    handles: &mut Vec<Handle>,
-) -> Result<(), ClaimError> {
+/// One row of the system's process list: an identifier, its parent's and its image's file name.
+pub(crate) struct Listed {
+    pub(crate) pid: u32,
+    pub(crate) parent: u32,
+    pub(crate) name: String,
+}
+
+/// Read the system's current process list, bounded to 16384 rows.
+pub(crate) fn listed(budget: Budget, handles: &mut Vec<Handle>) -> Result<Vec<Listed>, ClaimError> {
     // SAFETY: Snapshot has no process mutation rights and is adopted before reading.
     let raw = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) }
         .map_err(|cause| ClaimError::new("profile_conflict_snapshot", cause))?;
-    handles.push(Handle::new(raw, budget.clone()));
+    handles.push(Handle::new(raw, budget));
     let mut row =
         PROCESSENTRY32W { dwSize: size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
     let mut entries = Vec::new();
@@ -119,18 +121,37 @@ pub(super) fn family(
         if entries.len() >= 16384 {
             return Err(ClaimError::invalid("profile_conflict_snapshot_bound"));
         }
-        entries.push((row.th32ProcessID, row.th32ParentProcessID));
+        let length =
+            row.szExeFile.iter().position(|unit| *unit == 0).unwrap_or(row.szExeFile.len());
+        entries.push(Listed {
+            pid: row.th32ProcessID,
+            parent: row.th32ParentProcessID,
+            name: String::from_utf16_lossy(&row.szExeFile[..length]),
+        });
         // SAFETY: Same initialized entry and retained snapshot as above.
         next = unsafe { Process32NextW(raw, &mut row) };
     }
+    Ok(entries)
+}
+
+/// Capture only descendants of already retained original objects, bounded to 128 processes.
+/// `terminate` asks for the right to end each one.
+pub(crate) fn family(
+    root: usize,
+    terminate: bool,
+    processes: &mut Vec<Process>,
+    budget: Budget,
+    handles: &mut Vec<Handle>,
+) -> Result<(), ClaimError> {
+    let entries = listed(budget.clone(), handles)?;
     let mut cursor = root;
     while cursor < processes.len() {
         let (parent, born) = (processes[cursor].pid, processes[cursor].birth);
-        for &(pid, parent_pid) in &entries {
+        for &Listed { pid, parent: parent_pid, .. } in &entries {
             if parent_pid != parent || processes.iter().any(|process| process.pid == pid) {
                 continue;
             }
-            match Process::open(pid, false, budget.clone(), processes) {
+            match Process::open(pid, terminate, budget.clone(), processes) {
                 Ok(index) => {
                     if processes[index].birth < born {
                         processes[index].handle.close()?;
@@ -147,7 +168,7 @@ pub(super) fn family(
 }
 
 /// Post normal close to top-level product windows belonging to retained family objects.
-pub(super) fn close_windows(
+pub(crate) fn close_windows(
     processes: &[Process],
     image: &std::path::Path,
 ) -> Result<(), ClaimError> {

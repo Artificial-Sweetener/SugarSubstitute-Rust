@@ -76,6 +76,13 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
         )
     }
 
+    #[cfg(windows)]
+    fn take_backend_conflict(
+        &mut self,
+    ) -> Option<Box<dyn sugarsubstitute_contracts::instance_conflict::ConflictController>> {
+        self.offered_backend_port()
+    }
+
     /// A writer of the update report the window shows, its latest failed attempt and its
     /// SugarCubes update, that writes on this host's execution owner. Export stays hidden before execution starts,
     /// once the application is closing, and in a host composed without export scopes.

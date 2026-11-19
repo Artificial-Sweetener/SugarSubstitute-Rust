@@ -76,7 +76,7 @@ impl Native {
                 let index =
                     self.target.ok_or_else(|| ClaimError::invalid("profile_conflict_target"))?;
                 let budget = self.budget()?;
-                processes::family(index, &mut self.processes, budget, &mut self.handles)?;
+                processes::family(index, false, &mut self.processes, budget, &mut self.handles)?;
                 check(context)?;
                 if operation == ConflictOperation::Force {
                     self.processes[index].force()?;
@@ -232,7 +232,7 @@ impl Native {
                 return Err(ClaimError::invalid("profile_conflict_coordinator_epoch"));
             }
             self.target = Some(index);
-            processes::family(index, &mut self.processes, budget, &mut self.handles)?;
+            processes::family(index, false, &mut self.processes, budget, &mut self.handles)?;
             self.validate_owner(context)?;
             return Ok(ConflictObservation::Owner(installation));
         }

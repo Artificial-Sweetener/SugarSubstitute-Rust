@@ -40,6 +40,8 @@ mod panel_host;
 #[cfg(test)]
 mod paused_clock;
 pub use native_entry::{NativeEntry, unavailable_native_entry};
+#[cfg(windows)]
+mod backend_conflict;
 #[cfg(all(windows, feature = "windows-native-host"))]
 mod failure_details;
 #[cfg(all(target_os = "windows", feature = "windows-native-host"))]

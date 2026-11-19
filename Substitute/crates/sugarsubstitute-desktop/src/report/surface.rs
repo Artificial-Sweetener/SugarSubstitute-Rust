@@ -210,13 +210,23 @@ impl ReportPresentation {
 
     /// The question asked when the previous SugarSubstitute window has stopped responding.
     pub fn unresponsive_copy(copy: &'static Messages, window_title: &str) -> Self {
+        Self::conflict(copy, copy.conflict, window_title)
+    }
+
+    /// A conflict the user decides, worded by `words`: another copy of the application, or a
+    /// backend it did not start.
+    pub fn conflict(
+        copy: &'static Messages,
+        words: &'static sugarsubstitute_contracts::localization::conflict::ConflictMessages,
+        window_title: &str,
+    ) -> Self {
         Self::new(
             ReportContent {
                 kind: ReportKind::UnresponsiveCopy,
                 severity: ReportSeverity::Warning,
                 window_title: window_title.to_owned(),
-                title: copy.conflict.title.to_owned(),
-                message: copy.conflict.prompt.to_owned(),
+                title: words.title.to_owned(),
+                message: words.prompt.to_owned(),
                 summary: Vec::new(),
                 has_details: false,
             },

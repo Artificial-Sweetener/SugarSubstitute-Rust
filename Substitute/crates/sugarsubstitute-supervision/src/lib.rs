@@ -74,6 +74,8 @@ mod environment;
 #[cfg(windows)]
 pub mod fixture_descendant;
 #[cfg(windows)]
+pub mod foreign_backend;
+#[cfg(windows)]
 pub mod lifecycle_protocol;
 #[cfg(windows)]
 mod managed_output;

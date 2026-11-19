@@ -35,6 +35,8 @@ pub struct Messages {
     pub installer: &'static installer::InstallerMessages,
     /// Native profile-conflict controls and feedback.
     pub conflict: &'static conflict::ConflictMessages,
+    /// The same controls and feedback for a ComfyUI that already holds the application's port.
+    pub backend_conflict: &'static conflict::ConflictMessages,
     /// Startup operation and long-wait labels.
     pub startup: &'static startup::StartupMessages,
     /// Locale identifier accepted by the executable.
@@ -104,6 +106,7 @@ pub static LOCALES: &[Messages] = &[
         profile_in_use: "Another SugarSubstitute window is still open. Close it, then start SugarSubstitute again.",
         report: &incident::EN,
         conflict: &conflict::EN,
+        backend_conflict: &conflict::BACKEND_EN,
         window: &window::EN,
         closing: &closing::EN,
         updates: &updates::EN,
@@ -131,6 +134,7 @@ pub static LOCALES: &[Messages] = &[
         profile_in_use: "另一个 SugarSubstitute 窗口仍处于打开状态。请关闭它，然后重新启动 SugarSubstitute。",
         report: &incident::ZH_HANS,
         conflict: &conflict::ZH_HANS,
+        backend_conflict: &conflict::BACKEND_ZH_HANS,
         window: &window::ZH_HANS,
         closing: &closing::ZH_HANS,
         updates: &updates::ZH_HANS,
@@ -158,6 +162,7 @@ pub static LOCALES: &[Messages] = &[
         profile_in_use: "別の SugarSubstitute ウィンドウがまだ開いています。それを閉じてから、SugarSubstitute をもう一度起動してください。",
         report: &incident::JA,
         conflict: &conflict::JA,
+        backend_conflict: &conflict::BACKEND_JA,
         window: &window::JA,
         closing: &closing::JA,
         updates: &updates::JA,
@@ -185,6 +190,7 @@ pub static LOCALES: &[Messages] = &[
         profile_in_use: "다른 SugarSubstitute 창이 아직 열려 있습니다. 그 창을 닫은 다음 SugarSubstitute를 다시 시작하세요.",
         report: &incident::KO,
         conflict: &conflict::KO,
+        backend_conflict: &conflict::BACKEND_KO,
         window: &window::KO,
         closing: &closing::KO,
         updates: &updates::KO,
@@ -212,6 +218,7 @@ pub static LOCALES: &[Messages] = &[
         profile_in_use: "Otra ventana de SugarSubstitute sigue abierta. Ciérrala y vuelve a iniciar SugarSubstitute.",
         report: &incident::ES,
         conflict: &conflict::ES,
+        backend_conflict: &conflict::BACKEND_ES,
         window: &window::ES,
         closing: &closing::ES,
         updates: &updates::ES,
@@ -257,6 +264,7 @@ mod tests {
                 .chain(locale.installer.labels())
                 .chain(locale.report.labels())
                 .chain(locale.conflict.labels())
+                .chain(locale.backend_conflict.labels())
                 .chain(locale.window.labels())
                 .chain(locale.closing.labels())
                 .chain(locale.updates.labels())

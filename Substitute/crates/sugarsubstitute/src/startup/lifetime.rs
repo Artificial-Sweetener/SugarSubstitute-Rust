@@ -16,6 +16,10 @@ impl<B: StartupBackend> StartupHost<B> {
             return Err(std::io::Error::other("Startup content cannot restart").into());
         }
         self.started = true;
+        #[cfg(windows)]
+        {
+            self.backend_port_wake = Some(wake.clone());
+        }
         self.execution.start(wake)?;
         if self.scopes.render.id < self.scopes.child.id {
             self.render_scope = Some(self.execution.scope(self.scopes.render)?);

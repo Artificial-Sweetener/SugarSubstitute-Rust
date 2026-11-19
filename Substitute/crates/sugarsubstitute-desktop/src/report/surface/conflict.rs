@@ -40,6 +40,15 @@ impl<'a> ConflictReport<'a> {
         Self::with(Box::new(controller), words, false)
     }
 
+    /// Ask about `controller`'s conflict, owning the controller for a form that outlives the
+    /// call that opened it.
+    pub fn owning(
+        controller: Box<dyn ConflictController + 'a>,
+        words: &'static ConflictMessages,
+    ) -> Self {
+        Self::with(controller, words, false)
+    }
+
     /// Mirror a launch's wait on another copy, owning its controller.
     pub fn forwarding(
         controller: Box<dyn ConflictController + 'a>,

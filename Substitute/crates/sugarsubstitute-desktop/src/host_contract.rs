@@ -759,6 +759,18 @@ pub trait StartupWindowContent: WindowContent {
         None
     }
 
+    /// Take, once, a conflict over the application's backend port for the user to decide: a
+    /// ComfyUI the application did not start is answering in place of its own. The window
+    /// shows the question over the splash and drives the controller until it has finished;
+    /// the application reads the outcome from the controller it handed over. Called on the
+    /// event-loop thread at most once per turn; returns promptly.
+    #[cfg(target_os = "windows")]
+    fn take_backend_conflict(
+        &mut self,
+    ) -> Option<Box<dyn sugarsubstitute_contracts::instance_conflict::ConflictController>> {
+        None
+    }
+
     /// Take the writer that exports the current update report to a file the user selects,
     /// once per opened report. `None` hides Export; Copy stays available.
     fn update_report_export(&mut self) -> Option<Box<dyn crate::report::surface::UpdateExport>> {

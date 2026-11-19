@@ -270,7 +270,7 @@ rationale = "Native boundary: Transfer stable callback data references to and fr
 
 [[records]]
 path = "crates/sugarsubstitute-supervision/src/profile_conflict/processes.rs"
-source_sha256 = "sha256:7e88ea3323b63948710e4e6e69e9f195d11c9d1f934a52633b4deb63876ba39b"
+source_sha256 = "sha256:143e66fee6822541d5a83fd2fab6abc2429332c13b3f3ee33ad56d2111801d0c"
 kind = "native"
 rationale = "Native boundary: Retain exact process objects and request closure only for their own native windows.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -378,7 +378,7 @@ rationale = "Pure invalid-dimension qualification uses an empty title and unreac
 
 [[records]]
 path = "crates/sugarsubstitute/src/lib.rs"
-source_sha256 = "sha256:93b0f22795150a5c2e9ce5ed9d72a4ecadb3c45bc4eb8df1fe241b82e83e1aa7"
+source_sha256 = "sha256:db4d9ee314b62528e1da365b33362f526c4d1fe609fc602947790e139a2a1aba"
 kind = "presentation"
 rationale = "The explicit splash demo composes DesktopOptions.title from messages(options.locale).loading; diagnostic and protocol values do not become UI labels."
 
@@ -396,7 +396,7 @@ rationale = "Startup View binds output, cancel and retry accessible controls to 
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup.rs"
-source_sha256 = "sha256:76e4eacf2f6e9ad931d1f6a670271a67c2e155bab0f78d50387799df1011aca4"
+source_sha256 = "sha256:43913505da5d1758dfb25398923c2147d276bcfb02e17276feeaad5f7c6a376f"
 kind = "presentation"
 rationale = "WindowContent returns the authoritative startup View accessible controls. This composing owner introduces no label literals."
 
@@ -426,13 +426,13 @@ rationale = "Validate existing control labels for emptiness/NUL and unique ident
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/host_contract.rs"
-source_sha256 = "sha256:6a0743f029f3437074c4fdde7e52ea0055a66d062e0d85b0d7302571dcfcec3c"
+source_sha256 = "sha256:7e42e4efdc19f7123904f0e4b1ecb770fc6ff7a6469fcc43aa23119808756a09"
 kind = "native"
 rationale = "Main caption/recovery contracts borrow localized labels from the host. They define presentation data and no catalog or fallback policy."
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/startup_runtime.rs"
-source_sha256 = "sha256:853e9cc004c36883a7acf11bbf61608c96d10e38853174fe033c69374cffd13f"
+source_sha256 = "sha256:a420ec3d9769410b9b3624eb83158ea4f5ed8f544c251e83d49f635ca626763d"
 kind = "native"
 rationale = "The native startup session retains DesktopOptions from the host and passes them to the owned splash surface; it does not create product copy."
 
