@@ -1,3 +1,14 @@
+## [0.34.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.33.2...sugarcubes-v0.34.0) (2026-11-20)
+
+### Features
+
+* **projects:** open and save Sugar scripts in the host's own file dialog ([4d13213](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/4d13213e855c2f3ba99cfb09a24f4c03ce3990a7))
+
+### Bug Fixes
+
+* **masonry:** give a Cube card's header actions a standing button face in every style, evenly spaced ([c1e24ca](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/c1e24cab02dd97efc06439bd54fc598ba903a92c))
+* **projects:** save a Sugar script where the save dialog shows it ([b2b5efc](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/b2b5efcdab4081dcdfee9bcd553a00a1efc1510d))
+
 ## [0.33.2](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.33.1...sugarcubes-v0.33.2) (2026-11-20)
 
 ### Bug Fixes
