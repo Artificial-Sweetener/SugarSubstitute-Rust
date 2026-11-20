@@ -14,6 +14,7 @@ use sugarsubstitute_contracts::execution::{
     ExecutionId, ExecutionPort, JobClass, JobId, JobOutcome, JobSpec, Moment, Operation, OwnedJob,
     Scope,
 };
+use sugarsubstitute_contracts::installation::PreparationIntent;
 
 /// Actual execution outcome and retained domain cause; neither cancellation nor timeout loses it.
 pub struct Observation {
@@ -65,6 +66,29 @@ impl Worker {
                 trusted_root: configuration.trusted_root,
                 repository: Box::new(Repository::new(configuration.policy, configuration.idle)),
             },
+            PreparationIntent::Automatic,
+        )
+    }
+
+    /// Prepare the installation's current release again from the distribution, for an
+    /// installation whose own files can no longer start. Unlike an ordinary check it does not
+    /// stop at "already current", and bad verdicts on the package do not withhold it: there is
+    /// nothing else to run. Signatures, release history and rollback protection apply unchanged.
+    /// # Errors
+    /// Rejects relative paths and zero idle bounds.
+    pub fn repair(configuration: Configuration) -> io::Result<Self> {
+        if configuration.idle.is_zero() {
+            return Err(invalid("Invalid repair preparation idle timeout"));
+        }
+        Self::configured(
+            configuration.installation,
+            configuration.workspace,
+            super::state::Source::Distribution {
+                identity: configuration.repository,
+                trusted_root: configuration.trusted_root,
+                repository: Box::new(Repository::new(configuration.policy, configuration.idle)),
+            },
+            PreparationIntent::Repair,
         )
     }
 
@@ -79,6 +103,7 @@ impl Worker {
             configuration.installation,
             configuration.workspace,
             super::state::Source::Installed,
+            PreparationIntent::Automatic,
         )
     }
 
@@ -87,6 +112,7 @@ impl Worker {
         installation: PathBuf,
         workspace: PathBuf,
         source: super::state::Source,
+        intent: PreparationIntent,
     ) -> io::Result<Self> {
         if !installation.is_absolute() || !workspace.is_absolute() {
             return Err(invalid("Invalid automatic preparation configuration"));
@@ -95,6 +121,7 @@ impl Worker {
             installation,
             workspace,
             source,
+            intent,
             subscription: None,
             phase: Phase::Open,
             progress: Progress::Opening,

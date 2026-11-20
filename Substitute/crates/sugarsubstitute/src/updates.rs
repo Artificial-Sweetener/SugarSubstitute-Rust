@@ -80,6 +80,18 @@ pub(crate) fn installer_repository(
     Ok(Some(sugarsubstitute_supervision::update_repository::Repository::new(policy, idle)))
 }
 
+/// Construct an inert worker that prepares the installation's current release again from this
+/// build's feed, for a launcher that found nothing it can start. `None` when the build has no
+/// update configuration.
+/// # Errors
+/// Rejects malformed configured bytes and relative paths.
+pub(crate) fn repair_preparation(installation: PathBuf) -> io::Result<Option<Worker>> {
+    let workspace = installation.join(".update-workspace");
+    configuration(EMBEDDED, installation, workspace, Duration::from_secs(30))?
+        .map(Worker::repair)
+        .transpose()
+}
+
 /// Reauthenticate prepared bytes using established installation authority, without HTTP.
 /// Producing-build network configuration does not control offline activation.
 pub(crate) fn cached_preparation(installation: PathBuf) -> io::Result<Worker> {

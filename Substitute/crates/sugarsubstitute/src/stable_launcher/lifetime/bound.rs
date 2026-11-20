@@ -14,6 +14,15 @@ impl Launcher {
         self.budget = Some(budget);
     }
 
+    /// Replace the launch's moments with `budget` while keeping the notice that is already up.
+    pub(super) fn extend_budget(&mut self, budget: LauncherBudget) {
+        let now = budget.started();
+        self.until = Some(budget.until());
+        self.wake_at = native_wake(now, budget.until());
+        self.update_wake = native_wake(now, budget.update_until());
+        self.budget = Some(budget);
+    }
+
     /// Show the notice while this launcher still owns startup, and drain its jobs. Closing
     /// withdraws it and only drains.
     pub(super) fn advance_notice(&mut self) {

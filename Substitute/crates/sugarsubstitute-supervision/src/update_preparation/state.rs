@@ -42,6 +42,9 @@ pub(super) struct State {
     pub(super) workspace: PathBuf,
     pub(super) subscription: Option<Subscription>,
     pub(super) source: Source,
+    /// Why this campaign prepares: an ordinary check, or a repair that prepares the current
+    /// release again although the installation already knows it.
+    pub(super) intent: sugarsubstitute_contracts::installation::PreparationIntent,
     pub(super) phase: Phase,
     pub(super) progress: Progress,
     pub(super) failure: Option<Arc<Failure>>,
@@ -231,7 +234,9 @@ impl State {
                 }
             }
             Phase::Discover(trust) => {
-                let request = trust.application_request(self.channel(&trust, context)?, context)?;
+                let mut request =
+                    trust.application_request(self.channel(&trust, context)?, context)?;
+                request.intent = self.intent;
                 match self.source.network()?.discover(&trust, request, &mut now, context)? {
                     Check::MoreRoots => (Phase::Discover(trust), Progress::Checking),
                     Check::Offer(offer) => {

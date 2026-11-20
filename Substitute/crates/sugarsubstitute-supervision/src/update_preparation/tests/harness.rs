@@ -118,6 +118,29 @@ pub(super) fn campaign(
     Ok((Worker::new(configuration(fixture, policy))?, server))
 }
 
+/// The same served campaign for a worker that repairs: it prepares the release again although
+/// the installation already knows it.
+pub(super) fn repair_campaign(
+    pipeline: &mut Pipeline,
+    fixture: &Fixture,
+    signed: SignedPackage,
+    package: bool,
+) -> Result<(Worker, Running), Failure> {
+    let mut exchanges = discovery(&signed)?;
+    if package {
+        exchanges.push(exchange(
+            &format!("{:x}.ssupdate", Sha256::digest(&fixture.archive)),
+            Some("bytes=0-"),
+            200,
+            &format!("Content-Length: {}\r\n", fixture.archive.len()),
+            &fixture.archive,
+        ));
+    }
+    let (server, policy) =
+        pipeline.run(8 * 1024 * 1024, move |context| Running::start(exchanges, &context))?;
+    Ok((Worker::repair(configuration(fixture, policy))?, server))
+}
+
 pub(super) fn discovery(
     signed: &SignedPackage,
 ) -> Result<Vec<sugarsubstitute_execution::http_fixture::Exchange>, Failure> {

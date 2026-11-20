@@ -38,6 +38,26 @@ impl LauncherBudget {
     /// The process then exits regardless; the kernel releases every handle it still holds.
     pub const EXIT_GRACE: Duration = Duration::from_secs(5);
 
+    /// How long a launch that found nothing it could start may spend preparing its release
+    /// again from the update feed: a full download and verification on a slow connection.
+    pub const REPAIR: Duration = Duration::from_secs(30 * 60);
+
+    /// Freeze the moments of a launch that repairs the installation from `started`, the moment
+    /// the repair begins. The repaired release may begin its trial until [`Self::REPAIR`] has
+    /// passed, and the launch keeps [`Self::DURATION`] beyond that to start it. The notice is
+    /// already due.
+    /// # Errors
+    /// Returns the clock overflow if a moment is unrepresentable.
+    pub fn repair(started: Moment) -> Result<Self, TimeError> {
+        let update_until = started.checked_add(Self::REPAIR)?;
+        Ok(Self {
+            started,
+            notice_at: started,
+            update_until,
+            until: update_until.checked_add(Self::DURATION)?,
+        })
+    }
+
     /// Freeze every launcher moment from its start.
     /// # Errors
     /// Returns the clock overflow if a moment is unrepresentable.

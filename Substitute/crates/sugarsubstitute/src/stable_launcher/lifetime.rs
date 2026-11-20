@@ -12,6 +12,7 @@ mod cached;
 mod engine;
 mod installation;
 mod jobs;
+mod repair;
 mod selection;
 mod shutdown;
 #[cfg(test)]
@@ -89,6 +90,8 @@ pub(super) struct Launcher {
     route: Option<(sugarsubstitute_contracts::installation::GenerationId, u8)>,
     /// Start only the accepted release; set when this engine is a fallback.
     accepted_only: bool,
+    /// This launch has already tried to prepare the release again; it never tries twice.
+    repair_started: bool,
     clock: Arc<dyn Clock>,
     owner: Option<ExecutionOwner>,
     client: Option<ExecutionClient>,
@@ -142,6 +145,7 @@ impl Launcher {
             root,
             route: None,
             accepted_only: false,
+            repair_started: false,
             clock: MonotonicClock::new(),
             owner: None,
             client: None,

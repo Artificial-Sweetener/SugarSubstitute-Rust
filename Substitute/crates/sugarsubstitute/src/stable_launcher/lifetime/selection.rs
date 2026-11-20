@@ -201,6 +201,10 @@ impl Launcher {
             self.choice = Choice::Accepted;
             return Ok(());
         }
+        if matches!(task, Task::Select) && self.begin_repair(cause.as_ref())? {
+            self.update_failure.get_or_insert(cause);
+            return Ok(());
+        }
         if !matches!(
             task,
             Task::Installation | Task::Cache | Task::Trial | Task::Create { optional: true }
