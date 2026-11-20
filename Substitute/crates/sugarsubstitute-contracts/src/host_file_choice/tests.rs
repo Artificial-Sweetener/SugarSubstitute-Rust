@@ -45,16 +45,21 @@ fn every_answer_encodes_every_schema_field() -> TestResult {
             request: request()?,
             name: "Demo.sugar".into(),
             relative: "Demo/Demo.sugar".into(),
+            path: "E:/p/Demo/Demo.sugar".into(),
         })?,
-        with(json!({"type": "chosen", "name": "Demo.sugar", "relative": "Demo/Demo.sugar"}))
+        with(json!({"type": "chosen", "name": "Demo.sugar", "relative": "Demo/Demo.sugar",
+            "path": "E:/p/Demo/Demo.sugar"}))
     );
     assert_eq!(
         encoded(FileChoiceHostMessage::Chosen {
             request: request()?,
             name: "copy.sugar".into(),
             relative: String::new(),
+            path: "D:/elsewhere/copy.sugar".into(),
         })?,
-        with(json!({"type": "chosen", "name": "copy.sugar", "relative": ""}))
+        with(
+            json!({"type": "chosen", "name": "copy.sugar", "relative": "", "path": "D:/elsewhere/copy.sugar"})
+        )
     );
     assert_eq!(
         encoded(FileChoiceHostMessage::Dismissed { request: request()? })?,
@@ -74,8 +79,13 @@ fn every_answer_encodes_every_schema_field() -> TestResult {
 #[test]
 fn names_and_paths_beyond_their_bounds_are_never_sent() -> TestResult {
     let chosen = |name: String, relative: String| -> Result<_, Box<dyn Error>> {
-        Ok(FileChoiceHostMessage::Chosen { request: request()?, name, relative }
-            .encode(&session()?))
+        Ok(FileChoiceHostMessage::Chosen {
+            request: request()?,
+            name,
+            relative,
+            path: String::new(),
+        }
+        .encode(&session()?))
     };
     assert!(chosen("a.sugar".into(), "a".repeat(MAX_FILE_CHOICE_PATH_UNITS))?.is_ok());
     for refused in [
@@ -112,7 +122,7 @@ fn the_page_asks_to_open_or_save_from_a_folder_with_one_extension() -> TestResul
         json!({"type": "open", "request": "open-1", "folder": "/p", "start": "", "extension": "sugar",
             "path": "/etc/passwd"}),
         json!({"type": "save", "request": "save-2", "folder": "/p", "start": "", "extension": "sugar"}),
-        json!({"type": "chosen", "request": "open-1", "name": "a", "relative": ""}),
+        json!({"type": "chosen", "request": "open-1", "name": "a", "relative": "", "path": "/a"}),
         json!({"type": "open", "request": "open-1", "folder": "/p", "start": "", "extension": "sugar",
             "version": 2}),
     ] {

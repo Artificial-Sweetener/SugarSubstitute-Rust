@@ -157,7 +157,7 @@ role = "fixture"
 [[script_boundaries]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:64683b4650922c9eb58fa524213152e06e55b73bed30353a1c4f4f6225030847"
+source_sha256 = "sha256:81f4abda11476204c1583b761546f6c5db1995a48c54d7a5d792d7537bb08c99"
 rationale = "Exercise the actual bounded panel transport in an isolated JavaScript VM with native and browser boundary fixtures."
 role = "fixture"
 

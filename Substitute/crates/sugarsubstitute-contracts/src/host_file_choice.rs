@@ -96,6 +96,8 @@ pub enum FileChoiceHostMessage {
         name: String,
         /// Its path below the request's folder with forward slashes, or empty when outside.
         relative: String,
+        /// Its full path on this machine.
+        path: String,
     },
     /// The person closed the dialog without choosing.
     Dismissed {
@@ -120,9 +122,10 @@ impl FileChoiceHostMessage {
     pub fn encode(&self, session: &PanelSession) -> Result<Vec<u8>, FileChoiceError> {
         let units = |value: &str, maximum: usize| value.encode_utf16().count() <= maximum;
         let bounded = match self {
-            Self::Chosen { name, relative, .. } => {
+            Self::Chosen { name, relative, path, .. } => {
                 units(name, MAX_FILE_CHOICE_NAME_UNITS)
                     && units(relative, MAX_FILE_CHOICE_PATH_UNITS)
+                    && units(path, MAX_FILE_CHOICE_PATH_UNITS)
             }
             Self::Dismissed { .. } | Self::Failed { .. } => true,
         };

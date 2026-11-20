@@ -14,7 +14,7 @@ pub(super) fn encode(
 ) -> FileChoiceHostMessage {
     let (protocol, version, session) = (PROTOCOL.to_owned(), VERSION, session.to_owned());
     match message {
-        super::FileChoiceHostMessage::Chosen { request, name, relative } => {
+        super::FileChoiceHostMessage::Chosen { request, name, relative, path } => {
             FileChoiceHostMessage::Chosen(FileChoiceChosenMessage {
                 protocol,
                 version,
@@ -23,6 +23,7 @@ pub(super) fn encode(
                 request: request.as_str().to_owned(),
                 name: name.clone(),
                 relative: relative.clone(),
+                path: path.clone(),
             })
         }
         super::FileChoiceHostMessage::Dismissed { request } => {

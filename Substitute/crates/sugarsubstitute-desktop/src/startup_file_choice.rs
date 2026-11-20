@@ -129,7 +129,8 @@ fn outcome(
     match result {
         Ok(Some(chosen)) => {
             let (name, relative) = crate::main_file_choice::place(folder, &chosen);
-            FileChoiceHostMessage::Chosen { request, name, relative }
+            let path = chosen.to_string_lossy().into_owned();
+            FileChoiceHostMessage::Chosen { request, name, relative, path }
         }
         Ok(None) => FileChoiceHostMessage::Dismissed { request },
         Err(cause) => {

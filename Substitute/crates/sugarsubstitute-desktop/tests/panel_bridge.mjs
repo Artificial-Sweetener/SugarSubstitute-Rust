@@ -519,7 +519,7 @@ test('file choice answers reach the page, and every open and save rides the cont
   f.receipt('a', 'c', 2); f.receipt('g', 'c', 3);
   assert.deepEqual(posted(f), [open('open-1'), open('open-2')]);
   assert.ok(f.sent.every(value => value.startsWith('1:c:')));
-  const chosen = choice('chosen', { request: 'open-1', name: 'a.sugar', relative: 'a.sugar' });
+  const chosen = choice('chosen', { request: 'open-1', name: 'a.sugar', relative: 'a.sugar', path: 'C:/p/a.sugar' });
   for (const value of [{ ...chosen, version: 2 }, { ...chosen, session: 'another-session' }, open('open-1')])
     assert.equal(f.deliver(value), false);
   for (const value of [chosen, choice('dismissed', { request: 'open-2' }), choice('failed', { request: 'open-3', reason: 'busy' })])

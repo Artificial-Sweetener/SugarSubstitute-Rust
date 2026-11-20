@@ -696,7 +696,7 @@ rationale = "The bulk channel transport helper moves exact JSON bytes through ho
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
-source_sha256 = "sha256:64683b4650922c9eb58fa524213152e06e55b73bed30353a1c4f4f6225030847"
+source_sha256 = "sha256:81f4abda11476204c1583b761546f6c5db1995a48c54d7a5d792d7537bb08c99"
 kind = "fixture"
 rationale = "The isolated JavaScript VM fixture supplies promptId and sourceId attribution fields to exercise the actual bounded native transport; these technical protocol identities are fixture data and never become product labels or a prompt editor route."
 
