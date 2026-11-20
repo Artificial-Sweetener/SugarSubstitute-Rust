@@ -139,7 +139,7 @@ test('mode restores host presentation and preserves native controls, graph, and 
   expect(row.hasAttribute('data-sc-frame-native')).toBe(true);
   const frame = document.querySelector('.sc-substitute-frame');
   frame?.querySelector<HTMLElement>('[aria-label="Application menu"]')?.click();
-  // Every entry the menu has offered stays: Comfy's own workflow files first, then projects.
+  // Comfy's own workflow files first, then projects; exporting is offered once, as a project entry.
   expect(
     [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].map((item) =>
       item.textContent?.trim(),
@@ -148,7 +148,6 @@ test('mode restores host presentation and preserves native controls, graph, and 
     'Open workflow',
     'Save',
     'Save as',
-    'Export workflow',
     'Open Sugar Script...',
     'Save Sugar Script',
     'Save Sugar Script As...',

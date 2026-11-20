@@ -92,7 +92,6 @@ export class SubstituteFrameView {
         { label: 'Open workflow', select: () => actions.command('Comfy.OpenWorkflow') },
         { label: 'Save', select: () => actions.command('Comfy.SaveWorkflow') },
         { label: 'Save as', select: () => actions.command('Comfy.SaveWorkflowAs') },
-        { label: 'Export workflow', select: () => actions.command('Comfy.ExportWorkflow') },
         { label: '', separator: true },
         {
           label: 'Open Sugar Script...',
