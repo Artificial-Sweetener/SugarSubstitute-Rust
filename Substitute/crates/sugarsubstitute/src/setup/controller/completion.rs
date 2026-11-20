@@ -66,9 +66,7 @@ fn reopen(root: &std::path::Path, context: &JobContext) -> io::Result<OpenedLaun
                 .map(OpenedLaunch::Accepted)
                 .map_err(io::Error::other)
         }
-        ReservedLaunch::NeedsInstallation => Err(io::Error::other(
-            "Installation has no launchable application; run setup to repair it",
-        )),
+        ReservedLaunch::NeedsInstallation => Err(io::Error::other("Nothing installed can start")),
         ReservedLaunch::ReconcileTrial(_) => {
             Err(io::Error::other("Installation trial requires native process reconciliation"))
         }

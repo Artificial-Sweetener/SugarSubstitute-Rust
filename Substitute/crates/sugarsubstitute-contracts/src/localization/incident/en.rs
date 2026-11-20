@@ -26,7 +26,7 @@ pub static EN: ReportMessages = ReportMessages {
     unexplained: "Unexplained termination",
     host_failed: "The application reported a failure",
     startup_failed: "Startup failed",
-    reinstall_needed: "SugarSubstitute needs to be reinstalled. Your files and settings are kept.",
+    reinstall_needed: "SugarSubstitute couldn't start and couldn't repair itself. Run its installer again; your files and settings are kept.",
     panic: "Rust panic",
     abort: "Abort",
     native_fault: "Native exception",

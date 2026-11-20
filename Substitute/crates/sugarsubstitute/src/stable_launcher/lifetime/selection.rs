@@ -131,9 +131,7 @@ impl Launcher {
                     {
                         ReservedLaunch::Application(reserved) => reserved,
                         ReservedLaunch::NeedsInstallation => {
-                            return Err(io::Error::other(
-                                "Installation has no accepted application; run setup to repair it",
-                            ));
+                            return Err(io::Error::other("Nothing installed can start"));
                         }
                         ReservedLaunch::ReconcileTrial(_) => {
                             return Err(io::Error::other(

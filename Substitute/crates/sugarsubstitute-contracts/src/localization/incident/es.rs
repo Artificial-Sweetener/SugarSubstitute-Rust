@@ -26,7 +26,7 @@ pub static ES: ReportMessages = ReportMessages {
     unexplained: "Terminación sin explicación",
     host_failed: "La aplicación informó de un error",
     startup_failed: "Error de inicio",
-    reinstall_needed: "Hay que volver a instalar SugarSubstitute. Tus archivos y tu configuración se conservan.",
+    reinstall_needed: "SugarSubstitute no pudo iniciarse ni repararse por sí mismo. Vuelve a ejecutar el instalador; tus archivos y tu configuración se conservan.",
     panic: "Pánico de Rust",
     abort: "Aborto",
     native_fault: "Excepción nativa",

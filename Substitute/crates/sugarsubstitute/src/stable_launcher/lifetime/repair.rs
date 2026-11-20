@@ -88,8 +88,7 @@ mod tests {
         }
         let missing = io::Error::new(io::ErrorKind::NotFound, "sugarsubstitute.exe");
         assert!(!held_elsewhere(&missing));
-        let nothing =
-            io::Error::other("Installation has no accepted application; run setup to repair it");
+        let nothing = io::Error::other("Nothing installed can start");
         assert!(!held_elsewhere(&nothing));
     }
 }
