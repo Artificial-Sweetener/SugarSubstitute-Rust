@@ -242,6 +242,20 @@ export class ComfyProjectWorkflows implements ProjectWorkflowHost {
     await Reflect.apply(store.closeWorkflow, store, [workflow]);
   }
 
+  /**
+   * Take the workflow as it is now for Comfy's saved state, so closing its tab does not ask to
+   * save a project that was just written. A later edit makes it unsaved again as usual.
+   */
+  markSaved(): void {
+    const workflow = this.#store().activeWorkflow;
+    const tracker = isRecord(workflow) ? workflow.changeTracker : null;
+    if (!isRecord(tracker)) return;
+    for (const step of ['checkState', 'reset', 'updateModified']) {
+      const run = tracker[step];
+      if (typeof run === 'function') Reflect.apply(run, tracker, []);
+    }
+  }
+
   checkScript(source: string): Promise<void> {
     return this.options.checkScript(source);
   }

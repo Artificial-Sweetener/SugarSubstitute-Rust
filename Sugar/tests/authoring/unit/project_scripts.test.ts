@@ -81,6 +81,7 @@ function tabs(active: string | null, open: readonly string[] = active ? [active]
   const opened: string[] = [];
   const imported: string[] = [];
   const discarded: string[] = [];
+  const saved: string[] = [];
   const host: ProjectWorkflowHost = {
     activeName: () => active,
     openNames: () => [...open, ...opened],
@@ -98,11 +99,14 @@ function tabs(active: string | null, open: readonly string[] = active ? [active]
     discardOpened: async () => {
       discarded.push(opened.pop() ?? '<none>');
     },
+    markSaved: () => {
+      saved.push(active ?? '<none>');
+    },
     showCubes: () => {
       imported.push('<shown as Cubes>');
     },
   };
-  return { host, opened, imported, discarded };
+  return { host, opened, imported, discarded, saved };
 }
 
 test('a script whose Cubes cannot be built leaves no tab under the project’s name', async () => {
@@ -176,12 +180,13 @@ test('saving writes the tab’s own script and first keeps the copy it replaces'
 
 test('a first save keeps nothing, and save-as writes beside the project’s own script', async () => {
   const f = folder();
-  const scripts = new ProjectScripts(f.store, tabs('Demo').host, async () =>
-    written('use "a" as A\n'),
-  );
+  const t = tabs('Demo');
+  const scripts = new ProjectScripts(f.store, t.host, async () => written('use "a" as A\n'));
 
   expect(await scripts.save()).toEqual({ path: 'Demo/Demo.sugar', kept: null });
   expect(await scripts.saveAs('Demo_new')).toEqual({ path: 'Demo/Demo_new.sugar', kept: null });
+  // Each write leaves the tab with nothing unsaved, so closing it does not ask.
+  expect(t.saved).toEqual(['Demo', 'Demo']);
   // The header names the tab, not the file.
   expect(f.texts.get('Demo/Demo_new.sugar')).toBe('# Project: Demo\r\n\r\nuse "a" as A\r\n');
   await expect(scripts.saveAs('a/b')).rejects.toThrow('without slashes');
@@ -303,6 +308,17 @@ test('a project opens into Comfy’s own new tab, renamed to the project', async
   expect(host.openNames()).toEqual(['Unsaved Workflow', 'Other']);
   // What the input canvas holds is captured into the workflow a save writes.
   expect(await host.serialize()).toEqual({ captured: { nodes: [1] } });
+  // Comfy's own tracker takes the workflow as saved: read, reset, then tell the tab.
+  const tracked: string[] = [];
+  Object.assign(active, {
+    changeTracker: {
+      checkState: () => tracked.push('checkState'),
+      reset: () => tracked.push('reset'),
+      updateModified: () => tracked.push('updateModified'),
+    },
+  });
+  host.markSaved();
+  expect(tracked).toEqual(['checkState', 'reset', 'updateModified']);
   await host.openEmpty('Bune');
   expect(commands).toEqual(['Comfy.NewBlankWorkflow']);
   expect(renamed).toEqual([[active, 'workflows/Bune.json']]);

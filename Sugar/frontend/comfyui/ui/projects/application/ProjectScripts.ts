@@ -69,6 +69,8 @@ export interface ProjectWorkflowHost {
   importScript(source: string): Promise<void>;
   /** Close the tab `openEmpty` showed, when nothing could be built in it. */
   discardOpened(): Promise<void>;
+  /** Tell Comfy the shown workflow holds nothing unsaved: its project script was just written. */
+  markSaved(): void;
   /** Present the shown workflow as its Cubes, the way a project is worked on. */
   showCubes(): void;
 }
@@ -209,6 +211,7 @@ export class ProjectScripts {
         throw new Error('The previous copy of the project script could not be kept.');
     }
     await this.files.write(path, projectDocument(name, script));
+    this.workflows.markSaved();
     return { path, kept };
   }
 }

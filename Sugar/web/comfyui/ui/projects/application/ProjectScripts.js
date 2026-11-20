@@ -129,6 +129,7 @@ export class ProjectScripts {
                 throw new Error('The previous copy of the project script could not be kept.');
         }
         await this.files.write(path, projectDocument(name, script));
+        this.workflows.markSaved();
         return { path, kept };
     }
 }
