@@ -50,8 +50,10 @@ describe('masonry section identity', () => {
     const action = view.element.querySelector<HTMLElement>(
       '.sugarcubes-workflow-masonry__actions > [data-sc-button]',
     );
-    expect(action?.localName).toBe('fluent-button');
-    expect(action?.getAttribute('appearance')).toBe('subtle');
+    // A document that names no style is in Comfy's own, whose button is a native one.
+    expect(action?.localName).toBe('button');
+    // It keeps the style's standing button face: an action without one reads as a bare icon.
+    expect(action?.hasAttribute('appearance')).toBe(false);
     expect(action?.textContent).toBe('');
     expect(action?.querySelector('i')?.classList.contains('icon-[comfy--workflow]')).toBe(true);
     expect(action?.querySelector('i')?.getAttribute('aria-hidden')).toBe('true');
@@ -88,6 +90,41 @@ describe('masonry section identity', () => {
       view.element.querySelector('b,img,canvas,small,[data-sugarcubes-model-pill]'),
     ).toBeNull();
     view.dispose();
+  });
+
+  test('each visual style hands the header its own button, and Comfy’s is a native one', () => {
+    const cube = cubeFixture();
+    const section: WorkflowMasonrySection = {
+      id: 'cube:example',
+      label: 'SDXL/Text to Image',
+      cube,
+      target: cube,
+      cards: [],
+    };
+    const root = document.documentElement;
+    const actions = (style: string) => {
+      root.setAttribute('data-sc-visual-style', style);
+      const view = new WorkflowMasonrySectionHeaderView(section, {
+        document,
+        cardState: cardState(),
+        openCube() {},
+      });
+      view.render(section);
+      const names = [
+        ...view.element.querySelectorAll<HTMLElement>(
+          '.sugarcubes-workflow-masonry__actions > [data-sc-button]',
+        ),
+      ].map((action) => `${action.localName}${action.hasAttribute('quiet') ? ' quiet' : ''}`);
+      view.dispose();
+      return names;
+    };
+    try {
+      // Comfy's style has no component of its own: a native button the header's styles face.
+      expect(actions('comfy')[0]).toBe('button');
+      expect(actions('fluent')[0]).toBe('fluent-button');
+    } finally {
+      root.removeAttribute('data-sc-visual-style');
+    }
   });
 });
 

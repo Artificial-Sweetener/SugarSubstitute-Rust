@@ -31,7 +31,6 @@ export function photoProWorkspaceCss(): string {
     html[data-sc-visual-style="photopro"][data-sc-substitute-frame] .p-splitter:has([data-sc-substitute-toolbar]) { border-top-left-radius:0; border-top-right-radius:0; }
     html[data-sc-visual-style="photopro"] [data-sc-substitute-toolbar][data-sc-plugin-toolbar] { height:auto; min-height:35px; padding:3px 4px; gap:2px; background:var(--sc-photopro-workspace-fill); border-bottom:1px solid var(--sc-border); }
     html[data-sc-visual-style="photopro"] .sc-plugin-toolbar-start { gap:2px; }
-    html[data-sc-visual-style="photopro"] .sugarcubes-workflow-masonry__actions { gap:2px; padding-right:4px; }
     html[data-sc-visual-style="photopro"] [data-sc-plugin-toolbar] > .sc-generation-strip { margin-left:auto; }
     ${tools},${cubes},${add} { box-sizing:border-box; border:1px solid transparent; border-radius:0; background:transparent; box-shadow:none; color:var(--sc-photopro-tool-foreground); }
     ${tools} { width:28px; height:28px; min-width:28px; min-height:28px; padding:0; flex:none; }

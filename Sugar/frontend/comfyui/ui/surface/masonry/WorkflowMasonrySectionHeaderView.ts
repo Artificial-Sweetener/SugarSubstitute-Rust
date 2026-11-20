@@ -23,7 +23,10 @@ import type { CubeFaceCardStateService } from '../CubeFaceCardStateService.js';
 import { createCubeModelTitleElement } from '../CubeModelPillDomRenderer.js';
 import type { WorkflowMasonrySection } from './WorkflowMasonryProjection.js';
 import { createButton } from '../appearance/ControlFactory.js';
-import { subscribeVisualStyle } from '../appearance/VisualStyleBoundary.js';
+import {
+  readDocumentVisualStyle,
+  subscribeVisualStyle,
+} from '../appearance/VisualStyleBoundary.js';
 
 export interface WorkflowMasonrySectionHeaderViewOptions {
   document: Document;
@@ -138,9 +141,17 @@ export class WorkflowMasonrySectionHeaderView {
 
 /** Make one icon-only action as the active visual style makes its buttons. */
 function iconButton(document: Document): HTMLElement {
+  // Comfy's own style has no button component to hand out; its button is a native one that
+  // the header's styles face with Comfy's tokens.
+  if (readDocumentVisualStyle(document) === 'comfy') {
+    const native = document.createElement('button');
+    native.type = 'button';
+    native.dataset.scButton = '';
+    return native;
+  }
   const button = createButton(document);
-  button.setAttribute('appearance', 'subtle');
   button.setAttribute('icon-only', '');
-  button.setAttribute('size', 'small');
+  // A quiet Spectrum button has no face at rest and reads as a bare icon.
+  button.removeAttribute('quiet');
   return button;
 }

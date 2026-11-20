@@ -294,7 +294,7 @@ test('shares square header tools and a centered, selected-only advanced disclosu
         gap: getComputedStyle(e).gap,
         padding: getComputedStyle(e).paddingRight,
       })),
-    ).toEqual({ gap: '2px', padding: '4px' });
+    ).toEqual({ gap: '8px', padding: '12px' });
     const advanced = '[data-testid="advanced-inputs-button"]';
     expect((await appearance(advanced)).height).toBe(18);
     const glyph = await page.locator(advanced).evaluate((e) => ({

@@ -277,9 +277,23 @@ export function ensureWorkflowMasonryStyles(documentRef: Document): void {
     }
     /* The actions are the active style's own buttons; this only places them in the header. */
     .sugarcubes-workflow-masonry__actions {
-      margin-left:auto; display:flex; gap:4px; align-items:center; padding-inline-end:8px;
+      margin-left:auto; display:flex; gap:8px; align-items:center; padding-inline-end:12px;
     }
     .sugarcubes-workflow-masonry__actions > [data-sc-button] { flex:none; }
+    /* Comfy's own button face, from Comfy's tokens, for the native button its style is given. */
+    html[data-sc-visual-style="comfy"] .sugarcubes-workflow-masonry__actions > button[data-sc-button] {
+      display:inline-flex; align-items:center; justify-content:center; box-sizing:border-box;
+      width:32px; height:32px; padding:0; border-radius:8px; cursor:pointer;
+      border:1px solid var(--border-subtle,var(--border-color,#4e4e4e));
+      background:var(--secondary-background,var(--comfy-input-bg,#303030));
+      color:var(--base-foreground,var(--fg-color,#eee));
+    }
+    html[data-sc-visual-style="comfy"] .sugarcubes-workflow-masonry__actions > button[data-sc-button]:hover {
+      background:var(--secondary-background-hover,#393939);
+    }
+    html[data-sc-visual-style="comfy"] .sugarcubes-workflow-masonry__actions > button[data-sc-button]:focus-visible {
+      outline:2px solid var(--primary-background,#0b8ce9); outline-offset:1px;
+    }
     .sugarcubes-workflow-masonry__content > .sugarcubes-workflow-masonry__card {
       position:absolute; left:0; top:0; box-sizing:border-box;
       contain:layout style;
