@@ -16,17 +16,22 @@
 /** Compose Cube identity and shared section actions on the masonry surface. */
 import { requireCubeIdentity } from '../../cube/node/ComfyCubeNodeFactory.js';
 import { resolveCubeIdentityPresentation } from '../../cube/CubeIdentityPresentation.js';
-import { createResolvedCubeIconElement } from '../../core/CubeIconResolver.js';
 import { ComfyCubeCardVisibilityToolboxPresenter } from '../../affordance/ComfyCubeCardVisibilityToolboxPresenter.js';
 import { ComfyToolboxCheckMenuPresenter } from '../../affordance/ComfyToolboxCheckMenuPresenter.js';
 import { ComfyToolboxTooltipPresenter } from '../../affordance/ComfyToolboxTooltipPresenter.js';
 import { createCubeModelTitleElement } from '../CubeModelPillDomRenderer.js';
+import { createButton } from '../appearance/ControlFactory.js';
+import { subscribeVisualStyle } from '../appearance/VisualStyleBoundary.js';
 /** Retain action/menu state while refreshing the shared Cube identity presentation. */
 export class WorkflowMasonrySectionHeaderView {
     element;
     #title;
+    #actions;
+    #open;
     #anchor;
+    #section;
     #visibility;
+    #stopStyle;
     #identitySignature = '';
     /** Build stable section chrome without owning Cube identity or optional-node policies. */
     constructor(section, options) {
@@ -35,21 +40,14 @@ export class WorkflowMasonrySectionHeaderView {
         this.element.className = 'sugarcubes-workflow-masonry__section';
         this.element.dataset.masonrySection = section.id;
         this.#title = document.createElement('h2');
-        const actions = document.createElement('div');
-        actions.className = 'sugarcubes-workflow-masonry__actions';
+        this.#actions = document.createElement('div');
+        this.#actions.className = 'sugarcubes-workflow-masonry__actions';
+        this.#section = section;
         const cube = section.cube;
-        this.#anchor = document.createElement(cube ? 'button' : 'span');
-        if (cube) {
-            this.#anchor.setAttribute('type', 'button');
-            this.#anchor.className = 'sugarcubes-workflow-masonry__icon-action';
-            const icon = document.createElement('i');
-            icon.className = 'icon-[comfy--workflow] size-4';
-            icon.setAttribute('aria-hidden', 'true');
-            this.#anchor.append(icon);
-            this.#anchor.addEventListener('click', () => options.openCube(cube));
-        }
-        actions.append(this.#anchor);
-        this.element.append(this.#title, actions);
+        this.#open = cube ? () => options.openCube(cube) : null;
+        this.#anchor = this.#createAnchor();
+        this.#actions.append(this.#anchor);
+        this.element.append(this.#title, this.#actions);
         this.#visibility = new ComfyCubeCardVisibilityToolboxPresenter({
             document,
             owner: options.cardState,
@@ -59,7 +57,38 @@ export class WorkflowMasonrySectionHeaderView {
                 featureMenuAttribute: 'data-sugarcubes-card-visibility-menu',
                 featureItemAttribute: 'data-sugarcubes-card-visibility-row',
             }),
+            createButton: () => iconButton(document),
         });
+        // Each visual style brings its own button; a change of style replaces both actions.
+        this.#stopStyle = subscribeVisualStyle(document, () => {
+            const previous = this.#anchor;
+            this.#visibility.clear();
+            this.#anchor = this.#createAnchor();
+            previous.replaceWith(this.#anchor);
+            this.#present(this.#section);
+        });
+    }
+    /** Make the action that opens the Cube in the graph, or a plain anchor for a loose run. */
+    #createAnchor() {
+        const document = this.element.ownerDocument;
+        if (!this.#open)
+            return document.createElement('span');
+        const button = iconButton(document);
+        const icon = document.createElement('i');
+        icon.className = 'icon-[comfy--workflow] size-4';
+        icon.setAttribute('aria-hidden', 'true');
+        button.append(icon);
+        const open = this.#open;
+        button.addEventListener('click', () => open());
+        return button;
+    }
+    /** Name the open action for its Cube and place the eye action beside it. */
+    #present(section) {
+        if (section.cube) {
+            this.#anchor.setAttribute('aria-label', `Open ${section.label}`);
+            this.#anchor.title = `Open ${section.label} in graph`;
+        }
+        this.#visibility.present(this.#anchor, section.target);
     }
     /** Share graph-header icon and model-pill rules while leaving loose runs as plain titles. */
     render(section) {
@@ -71,27 +100,33 @@ export class WorkflowMasonrySectionHeaderView {
                 fallbackDefinitionTitle: cube.subgraph.name,
             })
             : null;
-        const signature = JSON.stringify([section.label, identity?.icon, identity?.instanceModelTitle]);
+        const signature = JSON.stringify([section.label, identity?.instanceModelTitle]);
         if (signature !== this.#identitySignature) {
             this.#identitySignature = signature;
             this.#title.setAttribute('aria-label', section.label);
             if (identity) {
-                this.#title.replaceChildren(createResolvedCubeIconElement(this.element.ownerDocument, identity.icon, 'sugarcubes-workflow-masonry__cube-icon'), createCubeModelTitleElement(this.element.ownerDocument, identity.instanceModelTitle, {
+                this.#title.replaceChildren(createCubeModelTitleElement(this.element.ownerDocument, identity.instanceModelTitle, {
                     punchoutColor: 'var(--sugarcubes-masonry-surface, var(--comfy-menu-bg, #202020))',
                 }));
             }
             else
                 this.#title.textContent = section.label;
         }
-        if (cube) {
-            this.#anchor.setAttribute('aria-label', `Open ${section.label}`);
-            this.#anchor.title = `Open ${section.label} in graph`;
-        }
-        this.#visibility.present(this.#anchor, section.target);
+        this.#section = section;
+        this.#present(section);
     }
     /** Release shared menu state and owned header DOM when the section ends. */
     dispose() {
+        this.#stopStyle();
         this.#visibility.dispose();
         this.element.remove();
     }
+}
+/** Make one icon-only action as the active visual style makes its buttons. */
+function iconButton(document) {
+    const button = createButton(document);
+    button.setAttribute('appearance', 'subtle');
+    button.setAttribute('icon-only', '');
+    button.setAttribute('size', 'small');
+    return button;
 }

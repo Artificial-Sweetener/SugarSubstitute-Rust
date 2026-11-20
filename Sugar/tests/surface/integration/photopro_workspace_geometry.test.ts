@@ -263,7 +263,7 @@ test('shares square header tools and a centered, selected-only advanced disclosu
   const page = await browser.newPage();
   try {
     await page.setContent(
-      `<!doctype html><html data-sc-visual-style="photopro" data-sc-photopro-palette="dark-gray"><body data-sc-theme="photopro"><header class="sugarcubes-workflow-masonry__section"><div class="sugarcubes-workflow-masonry__actions"><button class="sugarcubes-workflow-masonry__icon-action" id="editor">Editor</button><button class="sugarcubes-workflow-masonry__icon-action" id="eye" aria-expanded="false">Eye</button></div></header><div class="sugarcubes-cube-face__node-card"><div data-sc-style-node><button data-testid="advanced-inputs-button" aria-expanded="false"><i>Native</i></button></div></div></body></html>`,
+      `<!doctype html><html data-sc-visual-style="photopro" data-sc-photopro-palette="dark-gray"><body data-sc-theme="photopro"><header class="sugarcubes-workflow-masonry__section"><div class="sugarcubes-workflow-masonry__actions"><button data-sc-button id="editor">Editor</button><button data-sc-button id="eye" aria-expanded="false">Eye</button></div></header><div class="sugarcubes-cube-face__node-card"><div data-sc-style-node><button data-testid="advanced-inputs-button" aria-expanded="false"><i>Native</i></button></div></div></body></html>`,
     );
     await page.addStyleTag({
       content: `*{transition:none!important}.sugarcubes-workflow-masonry__section{top:0}.sugarcubes-cube-face__node-card{margin-top:60px}[data-sc-theme="photopro"]{${photoProTokenDeclarations('dark-gray')}}${photoProAppearanceCss()}`,

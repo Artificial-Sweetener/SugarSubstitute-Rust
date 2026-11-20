@@ -127,7 +127,7 @@ test('keeps seed accessories inside the field instead of painting standalone but
   expect(standaloneButtons).toHaveLength(3);
   for (const selector of standaloneButtons ?? [])
     expect(selector).toContain(
-      ':where(:not([data-sc-style-combo-frame] > button,[data-sc-seed-split] > button,.sc-generation-strip button,[data-sc-workflow-tab],.sc-workflow-close,.sc-workflow-new,[data-sc-scroll-step],.sc-cube-stack-row__activate,.sc-cube-stack__add,.sugarcubes-workflow-masonry__icon-action,[data-testid="advanced-inputs-button"],[data-sc-plugin-toolbar] button,[data-sc-substitute-toolbar] button))',
+      ':where(:not([data-sc-style-combo-frame] > button,[data-sc-seed-split] > button,.sc-generation-strip button,[data-sc-workflow-tab],.sc-workflow-close,.sc-workflow-new,[data-sc-scroll-step],.sc-cube-stack-row__activate,.sc-cube-stack__add,.sugarcubes-workflow-masonry__actions > [data-sc-button],[data-testid="advanced-inputs-button"],[data-sc-plugin-toolbar] button,[data-sc-substitute-toolbar] button))',
     );
   const standaloneFields = css.match(/[^{}]+:is\(input:not\(\[type="checkbox"\]\)[^{}]*\{/g);
   expect(standaloneFields).toHaveLength(2);

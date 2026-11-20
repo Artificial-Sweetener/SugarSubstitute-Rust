@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Keep graph layers suppressed across workflow replacement and restore native interaction exactly. */
 import { workflowMasonryGraphLayers } from './WorkflowMasonryGraphGeometry.js';
-import { MASONRY_HIDES_ATTRIBUTE, markMasonryGraphChromeHidden } from './WorkflowMasonryStyles.js';
+import { MASONRY_HIDES_ATTRIBUTE, markMasonryGraphChromeHidden, markMasonryGraphHidden, } from './WorkflowMasonryStyles.js';
 import { SurfaceInputHold } from '../motion/SurfaceInputHold.js';
 /** Own graph visibility independently from the lifetime of borrowed masonry cards. */
 export class WorkflowMasonryGraphVisibility {
@@ -41,8 +41,10 @@ export class WorkflowMasonryGraphVisibility {
                 if (layer.getAttribute(MASONRY_HIDES_ATTRIBUTE) === 'graph')
                     layer.removeAttribute(MASONRY_HIDES_ATTRIBUTE);
             this.#layers.clear();
-            for (const root of this.#chrome)
+            for (const root of this.#chrome) {
                 markMasonryGraphChromeHidden(root, false);
+                markMasonryGraphHidden(root, false);
+            }
             this.#chrome.clear();
             return;
         }
@@ -64,6 +66,8 @@ export class WorkflowMasonryGraphVisibility {
             return;
         this.#chrome.add(root);
         markMasonryGraphChromeHidden(root, true);
+        // Whatever else the container holds, now or later, is hidden with the layers above.
+        markMasonryGraphHidden(root, true, container);
     }
     /** Mark one layer hidden, remembering it for release. */
     #hide(element) {

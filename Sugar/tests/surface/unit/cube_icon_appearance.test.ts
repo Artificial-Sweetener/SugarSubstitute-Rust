@@ -23,49 +23,47 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-test.each([
-  'sugarcubes-cube-face__icon',
-  'sugarcubes-workflow-masonry__cube-icon',
-  'sc-cube-stack-row__icon',
-  'sugarcubes-cube-icon',
-])('adapts %s in either appearance mode while retaining image and canvas identity', (className) => {
-  const source = new AppearanceState();
-  const host = new CubeIconAppearanceHost(document, source);
-  const layout = document.createElement('style');
-  layout.textContent = `.${className} img, .${className} canvas { display:block; }`;
-  document.head.append(layout);
-  const icon = document.createElement('span');
-  icon.className = className;
-  icon.dataset.iconTone = 'bright';
-  const image = document.createElement('img');
-  const variant = document.createElement('canvas');
-  variant.className = 'sugarcubes-cube-icon__contrast';
-  icon.append(image, variant);
-  document.body.append(icon);
-  for (const fluent of [false, true]) {
-    source.update(fluent ? 'fluent' : 'comfy', false);
-    expect(getComputedStyle(image).display).toBe('none');
-    expect(getComputedStyle(variant).display).toBe('block');
-    source.update(fluent ? 'fluent' : 'comfy', true);
-    expect(getComputedStyle(image).display).not.toBe('none');
-    expect(getComputedStyle(variant).display).toBe('none');
-    icon.dataset.iconTone = 'dark';
-    source.update(fluent ? 'fluent' : 'comfy', false);
-    expect(getComputedStyle(image).display).not.toBe('none');
-    source.update(fluent ? 'fluent' : 'comfy', true);
-    expect(getComputedStyle(image).display).toBe('none');
-    icon.dataset.iconTone = 'original';
-    source.update(fluent ? 'fluent' : 'comfy', false);
-    expect(getComputedStyle(image).display).not.toBe('none');
-    expect(getComputedStyle(variant).display).toBe('none');
-    expect(icon.firstChild).toBe(image);
+test.each(['sugarcubes-cube-face__icon', 'sc-cube-stack-row__icon', 'sugarcubes-cube-icon'])(
+  'adapts %s in either appearance mode while retaining image and canvas identity',
+  (className) => {
+    const source = new AppearanceState();
+    const host = new CubeIconAppearanceHost(document, source);
+    const layout = document.createElement('style');
+    layout.textContent = `.${className} img, .${className} canvas { display:block; }`;
+    document.head.append(layout);
+    const icon = document.createElement('span');
+    icon.className = className;
     icon.dataset.iconTone = 'bright';
-  }
-  host.dispose();
-  expect(document.getElementById('sugarcubes-cube-icon-appearance')).toBeNull();
-  source.update('comfy', false);
-  expect(document.getElementById('sugarcubes-cube-icon-appearance')).toBeNull();
-});
+    const image = document.createElement('img');
+    const variant = document.createElement('canvas');
+    variant.className = 'sugarcubes-cube-icon__contrast';
+    icon.append(image, variant);
+    document.body.append(icon);
+    for (const fluent of [false, true]) {
+      source.update(fluent ? 'fluent' : 'comfy', false);
+      expect(getComputedStyle(image).display).toBe('none');
+      expect(getComputedStyle(variant).display).toBe('block');
+      source.update(fluent ? 'fluent' : 'comfy', true);
+      expect(getComputedStyle(image).display).not.toBe('none');
+      expect(getComputedStyle(variant).display).toBe('none');
+      icon.dataset.iconTone = 'dark';
+      source.update(fluent ? 'fluent' : 'comfy', false);
+      expect(getComputedStyle(image).display).not.toBe('none');
+      source.update(fluent ? 'fluent' : 'comfy', true);
+      expect(getComputedStyle(image).display).toBe('none');
+      icon.dataset.iconTone = 'original';
+      source.update(fluent ? 'fluent' : 'comfy', false);
+      expect(getComputedStyle(image).display).not.toBe('none');
+      expect(getComputedStyle(variant).display).toBe('none');
+      expect(icon.firstChild).toBe(image);
+      icon.dataset.iconTone = 'bright';
+    }
+    host.dispose();
+    expect(document.getElementById('sugarcubes-cube-icon-appearance')).toBeNull();
+    source.update('comfy', false);
+    expect(document.getElementById('sugarcubes-cube-icon-appearance')).toBeNull();
+  },
+);
 
 test('keeps fallback initials readable on light surfaces and restores their original dark treatment', () => {
   const source = new AppearanceState();

@@ -52,7 +52,7 @@ export function photoProAppearanceCss(): string {
 /** Skin owned controls, menus and tabs without taking their interaction or layout owners. */
 export function photoProControlCss(): string {
   const standaloneButton =
-    'html[data-sc-visual-style="photopro"] :is([data-sc-theme="photopro"], [data-sc-style-node], [data-sc-style-surface], [data-sc-style-popup]) :is(button,[data-sc-button]):where(:not([data-sc-style-combo-frame] > button,[data-sc-seed-split] > button,.sc-generation-strip button,[data-sc-workflow-tab],.sc-workflow-close,.sc-workflow-new,[data-sc-scroll-step],.sc-cube-stack-row__activate,.sc-cube-stack__add,.sugarcubes-workflow-masonry__icon-action,[data-testid="advanced-inputs-button"],[data-sc-plugin-toolbar] button,[data-sc-substitute-toolbar] button))';
+    'html[data-sc-visual-style="photopro"] :is([data-sc-theme="photopro"], [data-sc-style-node], [data-sc-style-surface], [data-sc-style-popup]) :is(button,[data-sc-button]):where(:not([data-sc-style-combo-frame] > button,[data-sc-seed-split] > button,.sc-generation-strip button,[data-sc-workflow-tab],.sc-workflow-close,.sc-workflow-new,[data-sc-scroll-step],.sc-cube-stack-row__activate,.sc-cube-stack__add,.sugarcubes-workflow-masonry__actions > [data-sc-button],[data-testid="advanced-inputs-button"],[data-sc-plugin-toolbar] button,[data-sc-substitute-toolbar] button))';
   const standaloneField =
     'html[data-sc-visual-style="photopro"] :is([data-sc-theme="photopro"], [data-sc-style-node], [data-sc-style-surface], [data-sc-style-popup]) :is(input:not([type="checkbox"]):not([type="range"]),textarea,[role="combobox"]):where(:not([data-sc-style-combo-frame] > [role="combobox"],[data-sc-number-input],.sc-generation-strip input))';
   return (

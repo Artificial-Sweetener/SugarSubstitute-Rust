@@ -17,7 +17,7 @@
 import { pluginToolbarPropertiesToggle } from '../frame/PluginFrameStyles.js';
 /** Share toolbar and cube tool states while retaining generation's segmented control. */
 export function photoProWorkspaceCss() {
-    const tools = 'html[data-sc-visual-style="photopro"] :is(:is([data-sc-plugin-toolbar],[data-sc-substitute-toolbar]) :is(button,[data-sc-button]):where(:not(.sc-generation-strip *,[data-sc-generation-queue])),.sugarcubes-workflow-masonry__section .sugarcubes-workflow-masonry__icon-action)';
+    const tools = 'html[data-sc-visual-style="photopro"] :is(:is([data-sc-plugin-toolbar],[data-sc-substitute-toolbar]) :is(button,[data-sc-button]):where(:not(.sc-generation-strip *,[data-sc-generation-queue])),.sugarcubes-workflow-masonry__actions > [data-sc-button])';
     const cubes = 'html[data-sc-visual-style="photopro"] .sc-cube-stack[data-kind="rail"] :is(.sc-cube-stack__rows,.sc-cube-stack__drag-overlay) > .sc-cube-stack-row:where(:not([data-severity="error"],[data-severity="warning"]))';
     const add = 'html[data-sc-visual-style="photopro"] .sc-cube-stack .sc-cube-stack__add';
     return `

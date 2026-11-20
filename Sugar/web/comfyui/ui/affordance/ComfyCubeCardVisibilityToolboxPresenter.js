@@ -21,10 +21,12 @@ export class ComfyCubeCardVisibilityToolboxPresenter {
     #owner;
     #tooltip;
     #menu;
+    #create;
     #button = null;
     #node = null;
     /** Bind the focused host presentation to renderer-neutral reveal state. */
     constructor(options) {
+        this.#create = options.createButton ?? null;
         this.#document = options.document;
         this.#owner = options.owner;
         this.#tooltip = options.tooltip;
@@ -40,10 +42,12 @@ export class ComfyCubeCardVisibilityToolboxPresenter {
             this.#menu.close();
         this.#node = node;
         const button = this.#button ?? this.#createButton();
-        const classSource = anchor instanceof HTMLButtonElement
-            ? anchor
-            : anchor.querySelector('button');
-        button.className = classSource?.className ?? '';
+        if (!this.#create) {
+            const classSource = anchor instanceof HTMLButtonElement
+                ? anchor
+                : anchor.querySelector('button');
+            button.className = classSource?.className ?? '';
+        }
         button.setAttribute('aria-expanded', String(this.#menu.isOpen()));
         if (button.previousElementSibling !== anchor)
             anchor.after(button);
@@ -65,8 +69,9 @@ export class ComfyCubeCardVisibilityToolboxPresenter {
     }
     /** Create the eye action once so mutation-driven refreshes remain idempotent. */
     #createButton() {
-        const button = this.#document.createElement('button');
-        button.type = 'button';
+        const button = this.#create?.() ?? this.#document.createElement('button');
+        if (button instanceof HTMLButtonElement)
+            button.type = 'button';
         button.setAttribute(BUTTON_ATTRIBUTE, '');
         button.setAttribute('aria-label', 'Manage optional nodes');
         button.setAttribute('aria-haspopup', 'menu');

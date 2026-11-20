@@ -33,7 +33,8 @@ export class ComfyCubeCardVisibilityToolboxPresenter {
   readonly #owner: Pick<CubeFaceCardStateService, 'list' | 'setRevealed'>;
   readonly #tooltip: ComfyToolboxTooltipPresenter;
   readonly #menu: ComfyToolboxCheckMenuPresenter;
-  #button: HTMLButtonElement | null = null;
+  readonly #create: (() => HTMLElement) | null;
+  #button: HTMLElement | null = null;
   #node: CubeFaceCardTarget | null = null;
 
   /** Bind the focused host presentation to renderer-neutral reveal state. */
@@ -42,7 +43,13 @@ export class ComfyCubeCardVisibilityToolboxPresenter {
     owner: Pick<CubeFaceCardStateService, 'list' | 'setRevealed'>;
     tooltip: ComfyToolboxTooltipPresenter;
     menu: ComfyToolboxCheckMenuPresenter;
+    /**
+     * Make the eye action as the surrounding surface makes its own buttons. Without it the
+     * action borrows the class of the host button it sits beside, as in ComfyUI's toolbox.
+     */
+    createButton?: () => HTMLElement;
   }) {
+    this.#create = options.createButton ?? null;
     this.#document = options.document;
     this.#owner = options.owner;
     this.#tooltip = options.tooltip;
@@ -58,11 +65,13 @@ export class ComfyCubeCardVisibilityToolboxPresenter {
     if (this.#node && this.#node !== node) this.#menu.close();
     this.#node = node;
     const button = this.#button ?? this.#createButton();
-    const classSource =
-      anchor instanceof HTMLButtonElement
-        ? anchor
-        : anchor.querySelector<HTMLButtonElement>('button');
-    button.className = classSource?.className ?? '';
+    if (!this.#create) {
+      const classSource =
+        anchor instanceof HTMLButtonElement
+          ? anchor
+          : anchor.querySelector<HTMLButtonElement>('button');
+      button.className = classSource?.className ?? '';
+    }
     button.setAttribute('aria-expanded', String(this.#menu.isOpen()));
     if (button.previousElementSibling !== anchor) anchor.after(button);
     if (this.#menu.isOpen()) this.#menu.refresh(this.#menuModel(node));
@@ -84,9 +93,9 @@ export class ComfyCubeCardVisibilityToolboxPresenter {
   }
 
   /** Create the eye action once so mutation-driven refreshes remain idempotent. */
-  #createButton(): HTMLButtonElement {
-    const button = this.#document.createElement('button');
-    button.type = 'button';
+  #createButton(): HTMLElement {
+    const button = this.#create?.() ?? this.#document.createElement('button');
+    if (button instanceof HTMLButtonElement) button.type = 'button';
     button.setAttribute(BUTTON_ATTRIBUTE, '');
     button.setAttribute('aria-label', 'Manage optional nodes');
     button.setAttribute('aria-haspopup', 'menu');

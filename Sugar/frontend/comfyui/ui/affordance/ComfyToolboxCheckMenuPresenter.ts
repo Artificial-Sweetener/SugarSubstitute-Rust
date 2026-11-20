@@ -34,7 +34,7 @@ export class ComfyToolboxCheckMenuPresenter {
   readonly #featureMenuAttribute: string;
   readonly #featureItemAttribute: string;
   readonly #menu: ContextMenu;
-  #anchor: HTMLButtonElement | null = null;
+  #anchor: HTMLElement | null = null;
   #signature = '';
 
   /** Bind public feature markers without duplicating menu rendering or placement. */
@@ -49,7 +49,7 @@ export class ComfyToolboxCheckMenuPresenter {
   }
 
   /** Toggle one feature's checked menu at its toolbar control. */
-  toggle(anchor: HTMLButtonElement, model: ToolboxCheckMenuModel): void {
+  toggle(anchor: HTMLElement, model: ToolboxCheckMenuModel): void {
     if (this.isOpen()) {
       this.close();
       return;

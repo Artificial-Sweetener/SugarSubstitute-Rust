@@ -148,7 +148,7 @@ test('no rule keyed on the workspace container reaches for everything beneath it
   expect(offenders).toEqual([]);
 });
 
-test('each graph layer carries its own mark while a masonry hides the graph', async () => {
+test('everything beside the masonry’s own workspace carries a mark while a masonry hides the graph', async () => {
   const { WorkflowMasonryGraphVisibility } = await import(
     '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryGraphVisibility.js'
   );
@@ -169,7 +169,9 @@ test('each graph layer carries its own mark while a masonry hides the graph', as
   visibility.setHidden(true);
   expect(canvas.getAttribute(MASONRY_HIDES_ATTRIBUTE)).toBe('graph');
   expect(overlay.getAttribute(MASONRY_HIDES_ATTRIBUTE)).toBe('graph');
-  expect(other.hasAttribute(MASONRY_HIDES_ATTRIBUTE)).toBe(false);
+  // Not a known graph layer, and hidden all the same: only the masonry's workspace is kept.
+  expect(other.getAttribute(MASONRY_HIDES_ATTRIBUTE)).toBe('graph');
+  expect(panel.hasAttribute(MASONRY_HIDES_ATTRIBUTE)).toBe(false);
   expect(root.dataset.sugarcubesMasonry).toBe('true');
   // A mark another owner set on a layer is not this owner's to clear.
   overlay.setAttribute(MASONRY_HIDES_ATTRIBUTE, 'mounted');

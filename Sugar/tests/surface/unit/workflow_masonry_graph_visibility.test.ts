@@ -101,3 +101,49 @@ test('holds input out of the layers without inert while borrowed cards return', 
   expect(nodes.inert).toBe(true);
   expect(nodes.hasAttribute('data-sc-input-held')).toBe(false);
 });
+
+test('hides everything in the graph container that is not SugarCubes’ own, whenever it mounts', async () => {
+  const root = document.createElement('div');
+  root.id = 'graph-canvas-container';
+  const container = document.createElement('div');
+  container.className = 'sc-output-workspace-frame';
+  const canvas = document.createElement('canvas');
+  canvas.id = 'graph-canvas';
+  // What the host and other extensions mount beside the graph: none of it is on any list.
+  const previews = document.createElement('canvas');
+  previews.className = 'pointer-events-none absolute inset-0';
+  const toolbar = document.createElement('div');
+  toolbar.className = 'pointer-events-none fixed top-0 left-0';
+  const extension = document.createElement('div');
+  extension.id = 'some-extension-root';
+  const adopted = document.createElement('div');
+  adopted.setAttribute('data-sc-desktop-frame-surface', '');
+  root.append(canvas, previews, toolbar, extension, adopted, container);
+  document.body.append(root);
+  const visibility = new WorkflowMasonryGraphVisibility(() => container);
+  const hidden = (element: Element): boolean =>
+    element.getAttribute('data-sc-masonry-hides') === 'graph';
+
+  visibility.setHidden(true);
+
+  expect([canvas, previews, toolbar, extension].map(hidden)).toEqual([true, true, true, true]);
+  expect([adopted, container].map(hidden)).toEqual([false, false]);
+  // Something mounted while masonry is shown is hidden as it arrives.
+  const late = document.createElement('div');
+  late.className = 'node-tooltip';
+  const ours = document.createElement('div');
+  ours.className = 'sugarcubes-workflow-masonry__backdrop';
+  root.append(late, ours);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+  expect(hidden(late)).toBe(true);
+  expect(hidden(ours)).toBe(false);
+
+  visibility.setHidden(false);
+  expect(root.querySelector('[data-sc-masonry-hides]')).toBeNull();
+  const after = document.createElement('div');
+  root.append(after);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+  expect(hidden(after)).toBe(false);
+});

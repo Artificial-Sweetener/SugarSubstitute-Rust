@@ -22,7 +22,7 @@ import { CubeNodeCatalog } from '../../../frontend/comfyui/ui/cube/node/CubeNode
 import type { CubeNode } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 
 describe('masonry section identity', () => {
-  test('shows the shared Cube icon and model pill without a count, and retains action identity', () => {
+  test('shows the model pill and name without an icon or a count, and retains action identity', () => {
     const cube = cubeFixture();
     const section: WorkflowMasonrySection = {
       id: 'cube:example',
@@ -38,30 +38,33 @@ describe('masonry section identity', () => {
       openCube,
     });
     view.render(section);
-    const image = view.element.querySelector('img');
-    expect(image?.getAttribute('src')).toBe('/sugarcubes/assets/icon?cube_id=example');
+    // The Cube stack shows the Cube's icon; the card title in the editor does not.
+    expect(view.element.querySelector('h2 img, h2 canvas')).toBeNull();
     expect(view.element.querySelector('[data-sugarcubes-model-pill]')?.textContent).toBe('SDXL');
     expect(view.element.querySelector('.sugarcubes-model-title__name')?.textContent).toBe(
       'Text to Image',
     );
     expect(view.element.querySelector('small')).toBeNull();
     expect(view.element.textContent).not.toMatch(/\d+ nodes/);
-    const action = view.element.querySelector('button');
+    // The action is the active visual style's own button, not a bare element styled by hand.
+    const action = view.element.querySelector<HTMLElement>(
+      '.sugarcubes-workflow-masonry__actions > [data-sc-button]',
+    );
+    expect(action?.localName).toBe('fluent-button');
+    expect(action?.getAttribute('appearance')).toBe('subtle');
     expect(action?.textContent).toBe('');
     expect(action?.querySelector('i')?.classList.contains('icon-[comfy--workflow]')).toBe(true);
     expect(action?.querySelector('i')?.getAttribute('aria-hidden')).toBe('true');
-    expect(action?.getAttribute('type')).toBe('button');
     expect(action?.title).toBe('Open SDXL/Text to Image in graph');
     expect(action?.getAttribute('aria-label')).toBe('Open SDXL/Text to Image');
     view.render(section);
-    expect(view.element.querySelector('img')).toBe(image);
-    expect(view.element.querySelector('button')).toBe(action);
+    expect(view.element.querySelector('[data-sc-button]')).toBe(action);
     action?.click();
     expect(openCube).toHaveBeenCalledWith(cube);
     section.label = '<img src=x> My Cube';
     view.render(section);
     expect(view.element.querySelector('h2')?.textContent).toContain('<img src=x> My Cube');
-    expect(view.element.querySelectorAll('img')).toHaveLength(1);
+    expect(view.element.querySelectorAll('img')).toHaveLength(0);
     expect(view.element.querySelector('[data-sugarcubes-model-pill]')?.textContent).toBe('SDXL');
     expect(action?.getAttribute('aria-label')).toBe('Open <img src=x> My Cube');
     view.dispose();

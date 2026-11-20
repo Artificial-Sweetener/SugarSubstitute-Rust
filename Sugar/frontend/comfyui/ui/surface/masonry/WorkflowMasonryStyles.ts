@@ -104,6 +104,79 @@ export function markMasonryMounted(surface: HTMLElement): void {
   );
 }
 
+/** Everything a graph container holds directly, whoever mounted it. */
+const GRAPH_CONTAINER_CHILD = '#graph-canvas-container > *';
+
+/** Watches each container whose graph is hidden for anything mounted into it later. */
+const lateGraphChildren = new WeakMap<HTMLElement, HostSurfaceObserver>();
+
+/**
+ * Whether SugarCubes mounted or adopted `element`: its own surfaces carry an `sc-` or
+ * `sugarcubes-` class, and host elements it has taken into its frame carry a `data-sc-` mark.
+ */
+function ownedSurface(element: Element): boolean {
+  for (const name of element.classList)
+    if (name.startsWith('sc-') || name.startsWith('sugarcubes-')) return true;
+  for (const attribute of element.attributes)
+    if (
+      attribute.name.startsWith('data-sc-') &&
+      attribute.name !== MASONRY_HIDES_ATTRIBUTE &&
+      attribute.name !== MASONRY_STILLS_ATTRIBUTE
+    )
+      return true;
+  return false;
+}
+
+/**
+ * Hide everything in the graph container `root` that is not SugarCubes' own, for as long as its
+ * masonry is shown; or show again what this hid.
+ *
+ * The masonry lets the desktop's backdrop show through, so anything left visible in the
+ * container shows behind the cards. The rule is by ownership, not by a list of known graph
+ * layers: a canvas, an overlay, a preview or a toolbar the host or another extension mounts,
+ * now or later, is hidden because it is not ours. `workspace` is where the masonry mounts.
+ */
+export function markMasonryGraphHidden(
+  root: HTMLElement,
+  hidden: boolean,
+  workspace: HTMLElement | null = null,
+): void {
+  // The host element the masonry is mounted in is kept, whoever owns it: its own graph chrome
+  // is hidden by the rules for that chrome.
+  const kept = (element: Element): boolean =>
+    ownedSurface(element) ||
+    (workspace !== null && (element === workspace || element.contains(workspace))) ||
+    element.querySelector('.sugarcubes-workflow-masonry') !== null;
+  const watching = lateGraphChildren.get(root);
+  if (!hidden) {
+    watching?.disconnect();
+    lateGraphChildren.delete(root);
+    for (const element of root.querySelectorAll(`[${MASONRY_HIDES_ATTRIBUTE}="graph"]`))
+      element.removeAttribute(MASONRY_HIDES_ATTRIBUTE);
+    return;
+  }
+  for (const element of root.children)
+    if (!kept(element)) mark(element, MASONRY_HIDES_ATTRIBUTE, 'graph');
+  if (watching) return;
+  lateGraphChildren.set(
+    root,
+    new HostSurfaceObserver(
+      root,
+      GRAPH_CONTAINER_CHILD,
+      (changes) => {
+        for (const change of changes)
+          if (
+            change.kind === 'mounted' &&
+            change.element.parentElement === root &&
+            !kept(change.element)
+          )
+            mark(change.element, MASONRY_HIDES_ATTRIBUTE, 'graph');
+      },
+      { exclude: '.sugarcubes-workflow-masonry' },
+    ),
+  );
+}
+
 /** Watches each container whose graph is hidden for navigation chrome the host mounts later. */
 const lateHiddenChrome = new WeakMap<HTMLElement, HostSurfaceObserver>();
 
@@ -202,24 +275,11 @@ export function ensureWorkflowMasonryStyles(documentRef: Document): void {
       display:flex; align-items:center; gap:8px; min-width:0;
       font:inherit; font-weight:600; margin:0;
     }
-    .sugarcubes-workflow-masonry__cube-icon {
-      display:inline-flex; align-items:center; justify-content:center;
-      width:24px; height:24px; flex:0 0 24px;
+    /* The actions are the active style's own buttons; this only places them in the header. */
+    .sugarcubes-workflow-masonry__actions {
+      margin-left:auto; display:flex; gap:4px; align-items:center; padding-inline-end:8px;
     }
-    .sugarcubes-workflow-masonry__cube-icon img,
-    .sugarcubes-workflow-masonry__cube-icon canvas { width:100%; height:100%; object-fit:contain; }
-    .sugarcubes-workflow-masonry__actions { margin-left:auto; display:flex; gap:12px; align-items:center; }
-    .sugarcubes-workflow-masonry__section button { color:inherit; background:transparent; border:0; cursor:pointer; }
-    .sugarcubes-workflow-masonry__section .sugarcubes-workflow-masonry__icon-action {
-      display:inline-flex; align-items:center; justify-content:center;
-      width:28px; height:28px; padding:0; border-radius:4px;
-    }
-    .sugarcubes-workflow-masonry__section .sugarcubes-workflow-masonry__icon-action:hover {
-      background:var(--sc-surface-hover,var(--interface-button-hover-surface,#393939));
-    }
-    .sugarcubes-workflow-masonry__icon-action:focus-visible {
-      outline:2px solid var(--sc-brand-border,var(--primary-color,#479ef5)); outline-offset:2px;
-    }
+    .sugarcubes-workflow-masonry__actions > [data-sc-button] { flex:none; }
     .sugarcubes-workflow-masonry__content > .sugarcubes-workflow-masonry__card {
       position:absolute; left:0; top:0; box-sizing:border-box;
       contain:layout style;
