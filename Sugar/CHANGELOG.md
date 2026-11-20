@@ -1,3 +1,9 @@
+## [0.33.1](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.33.0...sugarcubes-v0.33.1) (2026-11-20)
+
+### Bug Fixes
+
+* **projects:** close a just-saved project without being asked to save it ([8e6ff9b](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/8e6ff9b8a313685751176e1c90f19b0f3a6936d8))
+
 ## [0.33.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.32.2...sugarcubes-v0.33.0) (2026-11-20)
 
 ### Features
