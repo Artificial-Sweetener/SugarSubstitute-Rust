@@ -25,6 +25,7 @@ export type FileChoiceChosenMessage = {
   readonly request: string;
   readonly name: string;
   readonly relative: string;
+  readonly path: string;
 };
 /** Describe the schema-defined FileChoiceDismissedMessage wire value. */
 export type FileChoiceDismissedMessage = {

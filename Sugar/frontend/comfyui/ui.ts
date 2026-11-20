@@ -33,7 +33,7 @@ import { proximityWorkflowConnections } from './ui/overlays/proximity/ProximityW
 import { NativeSubgraphBoundaryResolver } from './ui/cube/graph/NativeSubgraphBoundaryResolver.js';
 import { buildShiftedPlacementPayload } from './ui/import/PlacementPayload.js';
 import { CubeImportHostCoordinator } from './ui/import/CubeImportHostCoordinator.js';
-import { createProjectCommands } from './ui/projects/ProjectComposition.js';
+import { createProjects } from './ui/projects/ProjectComposition.js';
 import { sugarCubesCommandRegistration } from './ui/SugarCubesCommands.js';
 import { createPublicApi, getSugarCubesUI } from './ui/index.js';
 import { createHostSettingsComposition } from './ui/settings/HostSettingsComposition.js';
@@ -92,15 +92,12 @@ const cubeAuthoringCommands = new CubeAuthoringHostCommands({
   createCubeFromSubgraph: () => ui.cubeCreation.startCreateCubeFromSelectedSubgraph(),
   createEmptyCube: () => ui.cubeCreation.startCreateEmptyCube(),
 });
-const adapter = ui.adapter;
-const overlayManager = ui.overlayManager;
+const { adapter, overlayManager, workflowPreconfiguration: cubePreconfiguration } = ui;
 const appRef = adapter.getApp() as SugarCubesHostApp | null;
 const windowRef = adapter.getWindow();
 const documentRef = adapter.getDocument();
 const logger = adapter.getConsole() ?? console;
 const hostFeedback = new CubeHostFeedback({ toast: ui.toast });
-
-const cubePreconfiguration = ui.workflowPreconfiguration;
 
 const cubeRuntimeLifecycle = new ComfyCubeRuntimeLifecycle(createCubeRuntime);
 const {
@@ -288,6 +285,7 @@ const importHostCoordinator = new CubeImportHostCoordinator({
   getRuntime: requireCubeRuntime,
   logger,
   relations: () => relations.relations,
+  openSugarScriptFile: (name, source) => projects.open(name, source),
 });
 const extensionSetupLifecycle = new CubeExtensionSetupLifecycle({
   api,
@@ -448,6 +446,19 @@ const modelLibrarySettings = new ModelLibrarySettings({
   },
 });
 
+const projects = createProjects({
+  app: appRef,
+  api,
+  cubeApi: ui.api,
+  dialogs: ui.dialogs,
+  notify: pushToastMessage,
+  describe: readErrorMessage,
+  importScript: (source) => importHostCoordinator.importSugarScript(source),
+  showCubes: () => workflowWorkspace.masonry.show(),
+  prepareInputs: (payload) => canvasInputs.preparation.prepare(payload),
+  hostDialog: workflowFields.fileChoice,
+});
+
 /** Define the ComfyUI extension lifecycle owned by SugarCubes. */
 export const sugarCubesExtension: SugarCubesExtension = {
   name: 'SugarCubes.UI',
@@ -455,18 +466,7 @@ export const sugarCubesExtension: SugarCubesExtension = {
     openCart: () => cubePicker.openCart(),
     toggleMasonry: () => workflowWorkspace.masonry.toggle(),
     toggleCanvas: () => workflowWorkspace.canvas.toggle(),
-    projects: createProjectCommands({
-      app: appRef,
-      api,
-      cubeApi: ui.api,
-      dialogs: ui.dialogs,
-      notify: pushToastMessage,
-      describe: readErrorMessage,
-      importScript: (source) => importHostCoordinator.importSugarScript(source),
-      showCubes: () => workflowWorkspace.masonry.show(),
-      prepareInputs: (payload) => canvasInputs.preparation.prepare(payload),
-      hostDialog: workflowFields.fileChoice,
-    }),
+    projects: projects.commands,
   }),
   addCustomNodeDefs(definitions) {
     canvasInputs.define(definitions);

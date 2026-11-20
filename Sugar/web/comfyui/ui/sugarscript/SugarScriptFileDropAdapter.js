@@ -13,21 +13,21 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Accept `.sugar` files through Comfy's canvas drop surface without an editor UI. */
+/** Open a `.sugar` file dropped on the page as its own workflow, as Open Sugar Script does. */
 const MAX_SOURCE_BYTES = 1_000_000;
 /** Own capture-phase interception only for a single bounded `.sugar` file. */
 export class SugarScriptFileDropAdapter {
     #document;
-    #importSource;
+    #openFile;
     #feedback;
     #readErrorMessage;
     #onDragOver = (event) => this.#handleDragOver(event);
     #onDrop = (event) => this.#handleDrop(event);
     #active = false;
-    /** Bind document, import use case, and host feedback. */
+    /** Bind document, the open use case, and host feedback. */
     constructor(options) {
         this.#document = options.document;
-        this.#importSource = options.importSource;
+        this.#openFile = options.openFile;
         this.#feedback = options.feedback ?? null;
         this.#readErrorMessage = options.readErrorMessage;
     }
@@ -56,26 +56,25 @@ export class SugarScriptFileDropAdapter {
         if (event.dataTransfer)
             event.dataTransfer.dropEffect = 'copy';
     }
-    /** Read and import one bounded source file while suppressing Comfy's unknown-file path. */
+    /** Read and open one bounded source file while suppressing Comfy's unknown-file path. */
     #handleDrop(event) {
         const file = readSugarFile(event.dataTransfer);
         if (!file)
             return;
         event.preventDefault();
         event.stopImmediatePropagation();
-        void this.#importFile(file);
+        void this.#open(file);
     }
     /** Contain file read and compilation failures at the user-visible host boundary. */
-    async #importFile(file) {
+    async #open(file) {
         try {
             if (file.size > MAX_SOURCE_BYTES)
                 throw new Error('SugarScript source exceeds 1 MB.');
             const source = await file.text();
-            await this.#importSource(source);
-            this.#feedback?.push?.('success', 'SugarScript workflow imported', file.name);
+            await this.#openFile(file.name, source);
         }
         catch (error) {
-            this.#feedback?.push?.('error', 'SugarScript import failed', this.#readErrorMessage(error));
+            this.#feedback?.push?.('error', 'Sugar script not opened', this.#readErrorMessage(error));
         }
     }
 }

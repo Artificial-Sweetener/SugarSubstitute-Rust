@@ -45,10 +45,20 @@ export interface ProjectHostDialog {
   ): Promise<ProjectChoice | null>;
 }
 
-/** A chosen file: its name, and its path below the named folder or `''` when outside it. */
+/**
+ * A chosen file: its name, its path below the named folder or `''` when outside it, and its
+ * full path on the machine ComfyUI runs on.
+ */
 export interface ProjectChoice {
   readonly name: string;
   readonly relative: string;
+  readonly path: string;
+}
+
+/** Read and write a Sugar script kept outside the projects folder, by its full path. */
+export interface ExternalScripts {
+  read(path: string): Promise<string>;
+  write(path: string, text: string): Promise<void>;
 }
 
 /** The extension the host's dialog offers, without its dot. */
@@ -66,6 +76,8 @@ export interface ProjectCommandOptions {
   readonly hostDialog?: ProjectHostDialog;
   /** The projects folder's own path on the machine ComfyUI runs on. */
   projectsFolder(): Promise<string>;
+  /** Scripts the person keeps outside the projects folder. */
+  readonly external: ExternalScripts;
   /** Tell the person what a command did. */
   notify(severity: 'success' | 'error', title: string, message: string): void;
   /** Describe an unknown failure. */
@@ -118,10 +130,11 @@ export function projectCommands(options: ProjectCommandOptions): readonly Projec
             SCRIPT_TYPE,
           );
           if (chosen === null) return;
-          if (!chosen.relative)
-            throw new Error(
-              'Sugar scripts open from the projects folder. Drop a script kept elsewhere onto the window to open it.',
-            );
+          // A script kept elsewhere opens as a script of its own, as one dropped on the window does.
+          if (!chosen.relative) {
+            await scripts.openPicked(chosen.name, await options.external.read(chosen.path));
+            return;
+          }
           await scripts.open(chosen.relative);
           return;
         }
@@ -151,7 +164,11 @@ export function projectCommands(options: ProjectCommandOptions): readonly Projec
             SCRIPT_TYPE,
           );
           if (chosen === null) return;
-          if (!chosen.relative) throw new Error('Sugar scripts are saved in the projects folder.');
+          if (!chosen.relative) {
+            await scripts.saveElsewhere((text) => options.external.write(chosen.path, text));
+            notify('success', 'Sugar script saved', chosen.path);
+            return;
+          }
           const saved = await scripts.saveTo(chosen.relative);
           notify('success', 'Sugar script saved', saved.path);
           return;

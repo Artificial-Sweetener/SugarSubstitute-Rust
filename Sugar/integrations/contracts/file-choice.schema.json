@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://artificialsweetener.ai/schemas/sugarcubes/file-choice/v1",
   "title": "SugarCubes file choice protocol version 1",
-  "description": "An optional protocol for a host that can show its operating system's own file dialog for the page. A page can open such a dialog itself but cannot say where it starts; a host that lists sugarcubes.file-choice can. The page asks with open to choose one existing file, or with save to choose where a file is to be written; each names its own request, a folder, the one file extension the dialog offers and start, a path below folder with forward slashes where the dialog starts; start is empty to start in folder itself, and a start that is not a folder below folder starts there too. save also names the file it suggests. The person may go anywhere, and the host shows no dialog for a folder that does not exist (failed, unavailable). The host answers every request exactly once, naming it. chosen carries only where the person chose: the file's name, and relative, its path below folder with forward slashes, which is empty when the choice lies outside folder. The host reads and writes nothing: the page reads or writes the chosen file through its own storage, and decides what a choice outside folder means. dismissed says the person closed the dialog. The host shows one dialog at a time and answers a request made while one is showing with failed, busy. Choosing a file is the person's act alone: a request grants the page nothing else.",
+  "description": "An optional protocol for a host that can show its operating system's own file dialog for the page. A page can open such a dialog itself but cannot say where it starts; a host that lists sugarcubes.file-choice can. The page asks with open to choose one existing file, or with save to choose where a file is to be written; each names its own request, a folder, the one file extension the dialog offers and start, a path below folder with forward slashes where the dialog starts; start is empty to start in folder itself, and a start that is not a folder below folder starts there too. save also names the file it suggests. The person may go anywhere, and the host shows no dialog for a folder that does not exist (failed, unavailable). The host answers every request exactly once, naming it. chosen carries only where the person chose: the file's name, path, its full path on the host's machine, and relative, its path below folder with forward slashes, which is empty when the choice lies outside folder. The host reads and writes nothing: the page reads or writes the chosen file through its own storage, and decides what a choice outside folder means. dismissed says the person closed the dialog. The host shows one dialog at a time and answers a request made while one is showing with failed, busy. Choosing a file is the person's act alone: a request grants the page nothing else.",
   "oneOf": [
     {
       "$ref": "#/$defs/FileChoiceChosenMessage"
@@ -53,9 +53,13 @@
         "relative": {
           "type": "string",
           "maxLength": 1024
+        },
+        "path": {
+          "type": "string",
+          "maxLength": 1024
         }
       },
-      "required": ["protocol", "version", "session", "type", "request", "name", "relative"],
+      "required": ["protocol", "version", "session", "type", "request", "name", "relative", "path"],
       "additionalProperties": false
     },
     "FileChoiceDismissedMessage": {

@@ -103,12 +103,24 @@ test('open and save name their own requests, and each settles with its own answe
     request: 'save-2',
     name: 'b.sugar',
     relative: 'Demo/b.sugar',
+    path: 'C:/projects/Demo/b.sugar',
   });
   host.host({ ...envelope, type: 'dismissed', request: 'open-1' });
-  expect(await saved).toEqual({ name: 'b.sugar', relative: 'Demo/b.sugar' });
+  expect(await saved).toEqual({
+    name: 'b.sugar',
+    relative: 'Demo/b.sugar',
+    path: 'C:/projects/Demo/b.sugar',
+  });
   expect(await opened).toBeNull();
   // An answer is taken once.
-  host.host({ ...envelope, type: 'chosen', request: 'open-1', name: 'a.sugar', relative: '' });
+  host.host({
+    ...envelope,
+    type: 'chosen',
+    request: 'open-1',
+    name: 'a.sugar',
+    relative: '',
+    path: 'D:/a.sugar',
+  });
 });
 
 test('a dialog the host did not show fails with what happened', async () => {

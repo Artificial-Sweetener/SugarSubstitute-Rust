@@ -21,7 +21,7 @@
  * question names its own request, and the host answers each exactly once: where the person
  * chose, that they dismissed the dialog, or that no dialog was shown. Every host message is
  * admitted through the generated guard before it is read. The host reads and writes nothing;
- * the page uses its own storage for the chosen file.
+ * the page reads or writes the chosen file through its own backend.
  */
 import { isFileChoiceHostMessage, } from '../embedded/FileChoiceRuntime.js';
 /** Protocol identifier shared with desktop hosts. */
@@ -121,7 +121,7 @@ export class HostFileChoiceLink {
             return;
         this.#waiting.delete(value.request);
         if (value.type === 'chosen')
-            waiting.resolve({ name: value.name, relative: value.relative });
+            waiting.resolve({ name: value.name, relative: value.relative, path: value.path });
         else if (value.type === 'dismissed')
             waiting.resolve(null);
         else

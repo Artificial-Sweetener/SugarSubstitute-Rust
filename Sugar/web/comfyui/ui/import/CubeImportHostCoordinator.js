@@ -57,7 +57,7 @@ export class CubeImportHostCoordinator {
         this.#sugarScriptFiles = document
             ? new SugarScriptFileDropAdapter({
                 document,
-                importSource: (source) => this.importSugarScript(source),
+                openFile: (name, source) => options.openSugarScriptFile(name, source),
                 feedback: this.#ui.toast,
                 readErrorMessage: (error) => this.#feedback.readErrorMessage(error),
             })

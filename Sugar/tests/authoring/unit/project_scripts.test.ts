@@ -347,6 +347,7 @@ test('the four commands keep their names and order and report their own failures
     dialogs: { promptText: async () => 'a/b' },
     pickScript: async () => ({ name: 'Bune.sugar', text: '# Project: Bune\n' }),
     projectsFolder: async () => 'C:\\user\\projects',
+    external,
     notify: (severity, title, message) => notices.push(`${severity}: ${title}: ${message}`),
     describe: (error) => (error instanceof Error ? error.message : String(error)),
     exportWorkflow: exported,
@@ -367,8 +368,21 @@ test('the four commands keep their names and order and report their own failures
   ]);
 });
 
+/** Scripts kept outside the projects folder, by full path, with a record of what was written. */
+const outside = new Map<string, string>([
+  ['D:\\kept\\Far.sugar', '# Project: Far\nuse "a" as A\n'],
+]);
+const external = {
+  read: async (path: string) => {
+    const text = outside.get(path);
+    if (text === undefined) throw new Error('The Sugar script no longer exists.');
+    return text;
+  },
+  write: async (path: string, text: string) => void outside.set(path, text),
+};
+
 /** A host dialog that records each question and answers from a script. */
-function hostDialog(answers: readonly ({ name: string; relative: string } | null)[]) {
+function hostDialog(answers: readonly ({ name: string; relative: string; path: string } | null)[]) {
   const asked: string[] = [];
   const queue = [...answers];
   return {
@@ -392,9 +406,13 @@ test('in a host with a file dialog, Open starts in the projects folder and opens
   const t = tabs('Demo');
   const notices: string[] = [];
   const host = hostDialog([
-    { name: 'Bune.sugar', relative: 'Bune/Bune.sugar' },
+    {
+      name: 'Bune.sugar',
+      relative: 'Bune/Bune.sugar',
+      path: 'C:\\user\\projects\\Bune\\Bune.sugar',
+    },
     null,
-    { name: 'far.sugar', relative: '' },
+    { name: 'Far.sugar', relative: '', path: 'D:\\kept\\Far.sugar' },
   ]);
   const picked = jest.fn(async () => null);
   const [open] = projectCommands({
@@ -403,6 +421,7 @@ test('in a host with a file dialog, Open starts in the projects folder and opens
     pickScript: picked,
     hostDialog: host.dialog,
     projectsFolder: async () => 'C:\\user\\projects',
+    external,
     notify: (severity, title, message) => notices.push(`${severity}: ${title}: ${message}`),
     describe: (error) => (error instanceof Error ? error.message : String(error)),
     exportWorkflow: async () => undefined,
@@ -412,10 +431,9 @@ test('in a host with a file dialog, Open starts in the projects folder and opens
   await open?.function();
   expect(host.asked).toEqual(Array(3).fill('open C:\\user\\projects [] *.sugar'));
   expect(picked).not.toHaveBeenCalled();
-  expect(t.opened).toEqual(['Bune']);
-  expect(notices).toEqual([
-    'error: Sugar script not opened: Sugar scripts open from the projects folder. Drop a script kept elsewhere onto the window to open it.',
-  ]);
+  // A script kept elsewhere is read by its full path and opens as a script of its own.
+  expect(t.opened).toEqual(['Bune', 'Far']);
+  expect(notices).toEqual([]);
 });
 
 test('in a host with a file dialog, Save As asks the operating system where and writes there', async () => {
@@ -423,10 +441,18 @@ test('in a host with a file dialog, Save As asks the operating system where and 
   const t = tabs('Demo');
   const notices: string[] = [];
   const host = hostDialog([
-    { name: 'take two.sugar', relative: 'Demo/take two.sugar' },
+    {
+      name: 'take two.sugar',
+      relative: 'Demo/take two.sugar',
+      path: 'C:\\user\\projects\\Demo\\take two.sugar',
+    },
     null,
-    { name: 'far.sugar', relative: '' },
-    { name: 'old.sugar', relative: 'Demo/versions/old.sugar' },
+    { name: 'far.sugar', relative: '', path: 'D:\\kept\\far.sugar' },
+    {
+      name: 'old.sugar',
+      relative: 'Demo/versions/old.sugar',
+      path: 'C:\\user\\projects\\Demo\\versions\\old.sugar',
+    },
   ]);
   const prompted = jest.fn(async () => null);
   const commands = projectCommands({
@@ -435,6 +461,7 @@ test('in a host with a file dialog, Save As asks the operating system where and 
     pickScript: async () => null,
     hostDialog: host.dialog,
     projectsFolder: async () => 'C:\\user\\projects',
+    external,
     notify: (severity, title, message) => notices.push(`${severity}: ${title}: ${message}`),
     describe: (error) => (error instanceof Error ? error.message : String(error)),
     exportWorkflow: async () => undefined,
@@ -447,9 +474,10 @@ test('in a host with a file dialog, Save As asks the operating system where and 
   expect(prompted).not.toHaveBeenCalled();
   expect(f.texts.get('Demo/take two.sugar')).toContain('use "a" as A');
   expect(f.log).toEqual(['write Demo/take two.sugar']);
+  expect(outside.get('D:\\kept\\far.sugar')).toContain('use "a" as A');
   expect(notices).toEqual([
     'success: Sugar script saved: Demo/take two.sugar',
-    'error: Sugar script not saved: Sugar scripts are saved in the projects folder.',
+    'success: Sugar script saved: D:\\kept\\far.sugar',
     'error: Sugar script not saved: Save a Sugar script as a .sugar file outside a versions folder.',
   ]);
 });

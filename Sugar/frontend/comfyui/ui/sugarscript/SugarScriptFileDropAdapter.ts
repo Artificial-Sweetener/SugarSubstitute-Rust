@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Accept `.sugar` files through Comfy's canvas drop surface without an editor UI. */
+/** Open a `.sugar` file dropped on the page as its own workflow, as Open Sugar Script does. */
 
 const MAX_SOURCE_BYTES = 1_000_000;
 
@@ -23,7 +23,8 @@ interface SugarScriptFileDropFeedback {
 
 export interface SugarScriptFileDropAdapterOptions {
   document: Document;
-  importSource(source: string): Promise<unknown>;
+  /** Open one script, by its file name and text, in a workflow tab of its own. */
+  openFile(name: string, source: string): Promise<unknown>;
   feedback?: SugarScriptFileDropFeedback | null;
   readErrorMessage(error: unknown): string;
 }
@@ -31,17 +32,17 @@ export interface SugarScriptFileDropAdapterOptions {
 /** Own capture-phase interception only for a single bounded `.sugar` file. */
 export class SugarScriptFileDropAdapter {
   readonly #document: Document;
-  readonly #importSource: (source: string) => Promise<unknown>;
+  readonly #openFile: (name: string, source: string) => Promise<unknown>;
   readonly #feedback: SugarScriptFileDropFeedback | null;
   readonly #readErrorMessage: (error: unknown) => string;
   readonly #onDragOver = (event: DragEvent): void => this.#handleDragOver(event);
   readonly #onDrop = (event: DragEvent): void => this.#handleDrop(event);
   #active = false;
 
-  /** Bind document, import use case, and host feedback. */
+  /** Bind document, the open use case, and host feedback. */
   constructor(options: SugarScriptFileDropAdapterOptions) {
     this.#document = options.document;
-    this.#importSource = options.importSource;
+    this.#openFile = options.openFile;
     this.#feedback = options.feedback ?? null;
     this.#readErrorMessage = options.readErrorMessage;
   }
@@ -70,24 +71,23 @@ export class SugarScriptFileDropAdapter {
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
   }
 
-  /** Read and import one bounded source file while suppressing Comfy's unknown-file path. */
+  /** Read and open one bounded source file while suppressing Comfy's unknown-file path. */
   #handleDrop(event: DragEvent): void {
     const file = readSugarFile(event.dataTransfer);
     if (!file) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    void this.#importFile(file);
+    void this.#open(file);
   }
 
   /** Contain file read and compilation failures at the user-visible host boundary. */
-  async #importFile(file: File): Promise<void> {
+  async #open(file: File): Promise<void> {
     try {
       if (file.size > MAX_SOURCE_BYTES) throw new Error('SugarScript source exceeds 1 MB.');
       const source = await file.text();
-      await this.#importSource(source);
-      this.#feedback?.push?.('success', 'SugarScript workflow imported', file.name);
+      await this.#openFile(file.name, source);
     } catch (error: unknown) {
-      this.#feedback?.push?.('error', 'SugarScript import failed', this.#readErrorMessage(error));
+      this.#feedback?.push?.('error', 'Sugar script not opened', this.#readErrorMessage(error));
     }
   }
 }

@@ -29,7 +29,7 @@ export function isFileChoiceChosenMessage(
 ): value is Contract.FileChoiceChosenMessage {
   return (
     isRecord(value) &&
-    Object.keys(value).length === 7 &&
+    Object.keys(value).length === 8 &&
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.file-choice' &&
     Object.hasOwn(value, 'version') &&
@@ -49,7 +49,10 @@ export function isFileChoiceChosenMessage(
     value['name'].length <= 255 &&
     Object.hasOwn(value, 'relative') &&
     typeof value['relative'] === 'string' &&
-    value['relative'].length <= 1024
+    value['relative'].length <= 1024 &&
+    Object.hasOwn(value, 'path') &&
+    typeof value['path'] === 'string' &&
+    value['path'].length <= 1024
   );
 }
 /** Validate a bounded FileChoiceDismissedMessage payload before dispatch. */

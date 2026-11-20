@@ -22,8 +22,14 @@ import { ProjectMasks } from './application/ProjectMasks.js';
 import { ComfyProjectFiles, ComfyProjectMaskInputs, ComfyProjectWorkflows, } from './infrastructure/ComfyProjects.js';
 import { projectCommands, } from './presentation/ProjectCommands.js';
 import { pickScriptFile } from './presentation/ScriptFilePicker.js';
-/** Build the four project commands, ready to register with Comfy and to list in a menu. */
-export function createProjectCommands(options) {
+/** The backend's own words for a failed read or write, or `fallback` when it gave none. */
+function externalFailure(body, fallback) {
+    const error = isRecord(body) ? body.error : null;
+    const message = isRecord(error) ? error.message : null;
+    return typeof message === 'string' && message ? message : fallback;
+}
+/** Build the project feature over Comfy's services. */
+export function createProjects(options) {
     /** Run one Comfy command through the host's own command service. */
     const command = async (id) => {
         const app = options.app;
@@ -53,11 +59,34 @@ export function createProjectCommands(options) {
         showCubes: options.showCubes,
         captureInputs: async (payload) => (await options.prepareInputs(payload)).payload,
     }), (workflow) => language.render(workflow), new ProjectMasks(files, new ComfyProjectMaskInputs(fetchApi)));
-    return projectCommands({
+    const commands = projectCommands({
         scripts,
         dialogs: options.dialogs,
         pickScript: () => pickScriptFile(document),
         ...(options.hostDialog ? { hostDialog: options.hostDialog } : {}),
+        external: {
+            read: async (path) => {
+                const response = await fetchApi('/sugarcubes/projects/script/read', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path }),
+                });
+                const body = await response.json().catch(() => null);
+                const text = isRecord(body) ? body.text : null;
+                if (!response.ok || typeof text !== 'string')
+                    throw new Error(externalFailure(body, 'The Sugar script could not be read.'));
+                return text;
+            },
+            write: async (path, text) => {
+                const response = await fetchApi('/sugarcubes/projects/script/write', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path, text }),
+                });
+                if (!response.ok)
+                    throw new Error(externalFailure(await response.json().catch(() => null), 'The Sugar script could not be written.'));
+            },
+        },
         projectsFolder: async () => {
             const response = await fetchApi('/sugarcubes/projects/folder');
             const body = response.ok ? await response.json() : null;
@@ -70,4 +99,5 @@ export function createProjectCommands(options) {
         describe: options.describe,
         exportWorkflow: () => command('Comfy.ExportWorkflow'),
     });
+    return { commands, open: (name, text) => scripts.openPicked(name, text) };
 }

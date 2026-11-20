@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 // Generated from file-choice.schema.json by scripts/integrations/generate-file-choice-contract.ts.
-// Schema SHA-256 (LF): 17ac55fb4580dbb590807c22617cb5a85dcdca732670c735f47b2c551d0d6566
+// Schema SHA-256 (LF): 69cc794995aaaabc4868e5e93cb88976d89fe42cd924ddbee40ebf1a04079bfd
 
 /// Schema-defined untrusted FileChoiceFailure token; decoding admits only the listed values.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -22,6 +22,7 @@ pub(super) struct FileChoiceChosenMessage {
     pub(super) request: String,
     pub(super) name: String,
     pub(super) relative: String,
+    pub(super) path: String,
 }
 impl FileChoiceChosenMessage {
     /// Reject values outside the exact schema-defined bounds.
@@ -33,6 +34,7 @@ impl FileChoiceChosenMessage {
             && valid_lowercase_token(&self.request, 48)
             && self.name.encode_utf16().count() <= 255
             && self.relative.encode_utf16().count() <= 1024
+            && self.path.encode_utf16().count() <= 1024
     }
 }
 

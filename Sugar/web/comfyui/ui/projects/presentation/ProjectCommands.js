@@ -51,8 +51,11 @@ export function projectCommands(options) {
                     const chosen = await options.hostDialog.open(await options.projectsFolder(), '', SCRIPT_TYPE);
                     if (chosen === null)
                         return;
-                    if (!chosen.relative)
-                        throw new Error('Sugar scripts open from the projects folder. Drop a script kept elsewhere onto the window to open it.');
+                    // A script kept elsewhere opens as a script of its own, as one dropped on the window does.
+                    if (!chosen.relative) {
+                        await scripts.openPicked(chosen.name, await options.external.read(chosen.path));
+                        return;
+                    }
                     await scripts.open(chosen.relative);
                     return;
                 }
@@ -79,8 +82,11 @@ export function projectCommands(options) {
                     const chosen = await options.hostDialog.save(await options.projectsFolder(), place.folder, place.file, SCRIPT_TYPE);
                     if (chosen === null)
                         return;
-                    if (!chosen.relative)
-                        throw new Error('Sugar scripts are saved in the projects folder.');
+                    if (!chosen.relative) {
+                        await scripts.saveElsewhere((text) => options.external.write(chosen.path, text));
+                        notify('success', 'Sugar script saved', chosen.path);
+                        return;
+                    }
                     const saved = await scripts.saveTo(chosen.relative);
                     notify('success', 'Sugar script saved', saved.path);
                     return;

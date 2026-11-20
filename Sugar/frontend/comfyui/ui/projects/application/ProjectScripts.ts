@@ -207,6 +207,20 @@ export class ProjectScripts {
     return this.#write(this.#name(), path);
   }
 
+  /**
+   * Save the shown workflow as a script the person keeps outside the projects folder. Its
+   * masks stay with the project of its name, where a save inside the folder keeps them.
+   */
+  async saveElsewhere(write: (text: string) => Promise<void>): Promise<void> {
+    const name = this.#name();
+    const rendered = await this.render(await this.workflows.serialize());
+    const script = this.masks
+      ? await this.masks.keep(name, rendered.source, rendered.maskFiles)
+      : rendered.source;
+    await write(projectDocument(name, script));
+    this.workflows.markSaved();
+  }
+
   /** The shown workflow's name, refused when it cannot name a project folder. */
   #name(): string {
     const name = this.workflows.activeName()?.trim() ?? '';

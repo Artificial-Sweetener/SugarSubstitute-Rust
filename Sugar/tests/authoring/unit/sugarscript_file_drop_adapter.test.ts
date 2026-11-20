@@ -19,10 +19,10 @@ import { jest } from '@jest/globals';
 import { SugarScriptFileDropAdapter } from '../../../frontend/comfyui/ui/sugarscript/SugarScriptFileDropAdapter.js';
 
 test('leaves every non-SugarScript drop untouched', () => {
-  const importSource = jest.fn<() => Promise<unknown>>();
+  const openFile = jest.fn<() => Promise<unknown>>();
   const hostDrop = jest.fn();
   document.addEventListener('drop', hostDrop);
-  const adapter = createAdapter(importSource);
+  const adapter = createAdapter(openFile);
   adapter.setup();
 
   const event = dropEvent([file('workflow.json', '{}')]);
@@ -30,16 +30,16 @@ test('leaves every non-SugarScript drop untouched', () => {
 
   expect(event.defaultPrevented).toBe(false);
   expect(hostDrop).toHaveBeenCalledTimes(1);
-  expect(importSource).not.toHaveBeenCalled();
+  expect(openFile).not.toHaveBeenCalled();
   adapter.dispose();
   document.removeEventListener('drop', hostDrop);
 });
 
 test('captures one SugarScript file and imports its exact source', async () => {
-  const importSource = jest.fn(async () => undefined);
+  const openFile = jest.fn(async () => undefined);
   const hostDrop = jest.fn();
   document.addEventListener('drop', hostDrop);
-  const adapter = createAdapter(importSource);
+  const adapter = createAdapter(openFile);
   adapter.setup();
 
   const event = dropEvent([file('Recipe.SUGAR', 'use "sdxl" as Base\n')]);
@@ -48,18 +48,19 @@ test('captures one SugarScript file and imports its exact source', async () => {
 
   expect(event.defaultPrevented).toBe(true);
   expect(hostDrop).not.toHaveBeenCalled();
-  expect(importSource).toHaveBeenCalledWith('use "sdxl" as Base\n');
+  // The file opens by its own name, as Open Sugar Script opens it: never into the shown workflow.
+  expect(openFile).toHaveBeenCalledWith(file.name, 'use "sdxl" as Base\n');
   adapter.dispose();
   document.removeEventListener('drop', hostDrop);
 });
 
 test('rejects an oversized source before reading or importing it', async () => {
-  const importSource = jest.fn(async () => undefined);
+  const openFile = jest.fn(async () => undefined);
   const feedback = { push: jest.fn() };
   const oversized = file('large.sugar', 'ignored', 1_000_001);
   const adapter = new SugarScriptFileDropAdapter({
     document,
-    importSource,
+    openFile,
     feedback,
     readErrorMessage: (error) => String(error),
   });
@@ -69,21 +70,21 @@ test('rejects an oversized source before reading or importing it', async () => {
   await settleAsyncDrop();
 
   expect(oversized.text).not.toHaveBeenCalled();
-  expect(importSource).not.toHaveBeenCalled();
+  expect(openFile).not.toHaveBeenCalled();
   expect(feedback.push).toHaveBeenCalledWith(
     'error',
-    'SugarScript import failed',
+    'Sugar script not opened',
     expect.stringContaining('exceeds 1 MB'),
   );
   adapter.dispose();
 });
 
 function createAdapter(
-  importSource: (source: string) => Promise<unknown>,
+  openFile: (name: string, source: string) => Promise<unknown>,
 ): SugarScriptFileDropAdapter {
   return new SugarScriptFileDropAdapter({
     document,
-    importSource,
+    openFile,
     readErrorMessage: (error) => String(error),
   });
 }
