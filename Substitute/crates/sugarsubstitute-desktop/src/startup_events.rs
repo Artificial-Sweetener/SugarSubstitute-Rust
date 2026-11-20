@@ -4,6 +4,8 @@
 
 #[path = "startup_commands.rs"]
 mod commands;
+#[path = "startup_file_choice.rs"]
+mod file_choice;
 #[path = "startup_presentation.rs"]
 mod presentation;
 #[path = "startup_report.rs"]
@@ -15,6 +17,7 @@ use crate::{
     cadence::{advance_deadline, closing_wait, presentation_wait},
     native_surface::input,
 };
+pub(super) use file_choice::ShownChoice;
 pub(super) use report::HostedReport;
 use sugarsubstitute_contracts::startup::{StartupFailure, StartupFailureCode};
 use tao::{
@@ -265,6 +268,7 @@ pub(super) fn dispatch(
                 )?;
             }
             updates::turn(session, content, target, proxy.clone(), context.title)?;
+            file_choice::turn(session, content, &proxy)?;
             commands::drain(session, content, proxy)?;
         }
         _ => {}

@@ -7,10 +7,9 @@ mod export_folder;
 mod picker;
 #[cfg(windows)]
 pub(crate) use picker::Picker;
+use std::path::PathBuf;
 #[cfg(windows)]
-use std::{
-    cell::RefCell, error::Error, ffi::OsString, os::windows::ffi::OsStringExt, path::PathBuf,
-};
+use std::{cell::RefCell, error::Error, ffi::OsString, os::windows::ffi::OsStringExt};
 #[cfg(windows)]
 use windows::{
     Win32::{
@@ -50,6 +49,23 @@ pub enum SelectionKind {
         filter: &'static str,
         /// File extension without its dot, such as "txt".
         extension: &'static str,
+    },
+    /// Choose one existing file of one type, starting in a folder the caller names.
+    OpenFrom {
+        /// The existing folder the dialog starts in.
+        folder: PathBuf,
+        /// File extension without its dot.
+        extension: String,
+    },
+    /// Choose where to save a file of one type, starting in a folder the caller names; the
+    /// shell confirms replacing an existing file.
+    SaveInto {
+        /// The existing folder the dialog starts in.
+        folder: PathBuf,
+        /// Suggested file name; may be empty.
+        file_name: String,
+        /// File extension without its dot.
+        extension: String,
     },
 }
 
@@ -110,6 +126,21 @@ fn choose(
                 }
                 dialog.cast()?
             }
+            SelectionKind::OpenFrom { folder, extension } => {
+                let dialog: IFileOpenDialog =
+                    CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER)?;
+                start_in(&dialog.cast()?, &folder, &extension)?;
+                dialog.SetOptions(FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | FOS_FILEMUSTEXIST)?;
+                dialog.cast()?
+            }
+            SelectionKind::SaveInto { folder, file_name, extension } => {
+                let dialog: IFileSaveDialog =
+                    CoCreateInstance(&FileSaveDialog, None, CLSCTX_INPROC_SERVER)?;
+                start_in(&dialog.cast()?, &folder, &extension)?;
+                dialog.SetFileName(&HSTRING::from(file_name))?;
+                dialog.SetOptions(FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST | FOS_OVERWRITEPROMPT)?;
+                dialog.cast()?
+            }
             open => {
                 let dialog: IFileOpenDialog =
                     CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER)?;
@@ -130,6 +161,28 @@ fn choose(
             Err(cause) => return Err(cause.into()),
         }
         Ok(Some(path_of(&dialog.GetResult()?)?))
+    }
+}
+
+/// Offer one file type in `dialog` and start it in `folder`, whatever folder it showed last.
+#[cfg(windows)]
+fn start_in(
+    dialog: &IFileDialog,
+    folder: &std::path::Path,
+    extension: &str,
+) -> windows::core::Result<()> {
+    let pattern = HSTRING::from(format!("*.{extension}"));
+    // SAFETY: The dialog is live on this STA; the borrowed strings outlive these synchronous
+    // configuration calls, and the folder item is released when it leaves scope.
+    unsafe {
+        dialog.SetFileTypes(&[COMDLG_FILTERSPEC {
+            pszName: PCWSTR(pattern.as_ptr()),
+            pszSpec: PCWSTR(pattern.as_ptr()),
+        }])?;
+        dialog.SetDefaultExtension(&HSTRING::from(extension))?;
+        let folder: IShellItem =
+            SHCreateItemFromParsingName(&HSTRING::from(folder.as_os_str()), None)?;
+        dialog.SetFolder(&folder)
     }
 }
 

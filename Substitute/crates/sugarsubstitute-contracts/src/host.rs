@@ -49,6 +49,9 @@ impl HostProtocol {
     /// `sugarcubes.update-report` version 1: whether the host has its own report of an update
     /// to show, and the page's request to show it.
     pub const UPDATE_REPORT: Self = Self { name: "sugarcubes.update-report", version: 1 };
+    /// `sugarcubes.file-choice` version 1: the operating system's file dialog, started in the
+    /// folder the page names, and what the person chose.
+    pub const FILE_CHOICE: Self = Self { name: "sugarcubes.file-choice", version: 1 };
     /// `sugarcubes.file-drag` version 1: the names of files dragged over the window, which the
     /// page cannot read before the drop.
     pub const FILE_DRAG: Self = Self { name: "sugarcubes.file-drag", version: 1 };

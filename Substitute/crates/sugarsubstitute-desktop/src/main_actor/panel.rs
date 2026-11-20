@@ -142,6 +142,15 @@ impl MainActor {
         self.canvas_replies.push(NativeDelivery::Backend(command))
     }
 
+    /// Retain the answer to a file choice request until native capacity returns.
+    pub(super) fn send_file_choice_page(
+        &mut self,
+        command: crate::main_file_choice_page::FileChoiceCommand,
+    ) -> Result<(), DesktopError> {
+        self.admitted_panel_context(command.identity())?;
+        self.canvas_replies.push(NativeDelivery::FileChoice(command))
+    }
+
     /// Retain the newest word on the update report until native capacity returns.
     pub(super) fn send_update_report_page(
         &mut self,

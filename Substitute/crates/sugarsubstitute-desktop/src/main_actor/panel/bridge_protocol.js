@@ -15,6 +15,8 @@
   const fileDragReports = ['entered', 'left'];
   const backendRequests = ['watch', 'retry'];
   const updateReportRequests = ['watch', 'open'];
+  const fileChoiceRequests = ['open', 'save'];
+  const fileChoiceAnswers = ['chosen', 'dismissed', 'failed'];
   const requestTypes = ['context.request', 'source.request', 'geometry.request', 'edit.request',
     'workflow.request', 'surface.capabilities.request', 'surface.viewport.request',
     'surface.presentation.request', 'surface.prepare', 'surface.geometry', 'surface.select',
@@ -26,7 +28,7 @@
   const versions = value =>
     ['sugarcubes.updates', 'sugarcubes.session-notice'].includes(value.protocol) ? [1, 2] :
     ['sugarcubes.host', 'sugarcubes.memory', 'sugarcubes.release-notes', 'sugarcubes.file-drag',
-      'sugarcubes.backend', 'sugarcubes.update-report']
+      'sugarcubes.backend', 'sugarcubes.update-report', 'sugarcubes.file-choice']
       .includes(value.protocol) ? [1] : [3];
   const speaks = value => versions(value).includes(value.version);
   const notification = value => value.protocol === 'sugarcubes.panel' ||
@@ -38,6 +40,7 @@
     value.protocol === 'sugarcubes.file-drag' && fileDragReports.includes(value.type) ||
     value.protocol === 'sugarcubes.backend' && value.type === 'state' ||
     value.protocol === 'sugarcubes.update-report' && value.type === 'state' ||
+    value.protocol === 'sugarcubes.file-choice' && fileChoiceAnswers.includes(value.type) ||
     value.protocol === 'sugarcubes.canvas' && value.requestId === 0 &&
     ['surface.presentation.changed', 'surface.camera.changed', 'source.changed', 'edit.changed']
       .includes(value.type);
@@ -65,14 +68,16 @@
       value.protocol === 'sugarcubes.release-notes' && notesRequests.includes(value.type) ||
       value.protocol === 'sugarcubes.session-notice' && noticeRequests.includes(value.type) ||
       value.protocol === 'sugarcubes.backend' && backendRequests.includes(value.type) ||
-      value.protocol === 'sugarcubes.update-report' && updateReportRequests.includes(value.type),
+      value.protocol === 'sugarcubes.update-report' && updateReportRequests.includes(value.type) ||
+      value.protocol === 'sugarcubes.file-choice' && fileChoiceRequests.includes(value.type),
     speaks,
     // A newer control message replaces a queued one of the same protocol and type, except an
-    // update check or restart or a release notes load: the host answers each by its request
-    // name, so each one is kept.
+    // update check or restart, a release notes load or a file choice: the host answers each by
+    // its request name, so each one is kept.
     replaces: (queued, value) => queued.protocol === value.protocol && queued.type === value.type &&
       !(value.protocol === 'sugarcubes.updates' && ['check', 'restart'].includes(value.type)) &&
-      !(value.protocol === 'sugarcubes.release-notes' && value.type === 'load'),
+      !(value.protocol === 'sugarcubes.release-notes' && value.type === 'load') &&
+      value.protocol !== 'sugarcubes.file-choice',
     request: type => requestTypes.includes(type),
     cancelled(value) {
       const envelope = { protocol: value.protocol, version: 3, session: value.session,

@@ -138,7 +138,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/lib.rs"
-source_sha256 = "sha256:b3dbee9a43579f38a41243ccc103fd9d95dbba7e8af299772120eb7e8d8dc9c0"
+source_sha256 = "sha256:9f96ee3f93a694db204b4d14c04b25b432d48c7d0f232ba7a61f0a844786e1c0"
 kind = "native"
 rationale = "Native boundary: Own native window lifetime and CPU frame presentation independently of UI content.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -180,7 +180,7 @@ rationale = "Native boundary: Pump native callbacks while preparation and owned 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/file_dialog.rs"
-source_sha256 = "sha256:b98ec9eb62a079b87bd4b19fb7eda83101ca35d5937c05f61b122adcbfb11f81"
+source_sha256 = "sha256:a50e29ac63a6e9788dde5af5221fcd50a2358d8517f2481c8b6cf6de131c8cb8"
 kind = "native"
 rationale = "Native boundary: Queue shell selection between application callbacks on the desktop's existing UI STA. The save dialog's title, suggested file name and file type label arrive from the typed catalog; the file pattern and extension are technical identities supplied by the caller."
 
@@ -432,7 +432,7 @@ rationale = "Main caption/recovery contracts borrow localized labels from the ho
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/startup_runtime.rs"
-source_sha256 = "sha256:a420ec3d9769410b9b3624eb83158ea4f5ed8f544c251e83d49f635ca626763d"
+source_sha256 = "sha256:3f09ed141515e44fe12239c755054cbb222944a4c103df41bf7e2242e957c7d1"
 kind = "native"
 rationale = "The native startup session retains DesktopOptions from the host and passes them to the owned splash surface; it does not create product copy."
 
@@ -684,7 +684,7 @@ rationale = "The bounded WebView transport defines technical JavaScript properti
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/panel/bridge_protocol.js"
-source_sha256 = "sha256:c1f42a0d898faa9d0a8f9be3202ab94d9d40a5a9770c79fa4ddb55033fd7a9d9"
+source_sha256 = "sha256:da5214dd7ef66248ab72e5f9e0e15668d3901c073d569031ff839cc52972854e"
 kind = "native"
 rationale = "The native bootstrap policy validates session query identities and routes technical canvas protocol reply, cancellation and notification shapes; its message fields are empty protocol data."
 
@@ -696,7 +696,7 @@ rationale = "The bulk channel transport helper moves exact JSON bytes through ho
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/tests/panel_bridge.mjs"
-source_sha256 = "sha256:7cb2811d30415d530f34a3c4237a6f82f1741d3a2e840cdb9f94f56904003658"
+source_sha256 = "sha256:259b24d670c838825c2198de83f4aecc87969794d8d3ddbfdb6964e709b03563"
 kind = "fixture"
 rationale = "The isolated JavaScript VM fixture supplies promptId and sourceId attribution fields to exercise the actual bounded native transport; these technical protocol identities are fixture data and never become product labels or a prompt editor route."
 

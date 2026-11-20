@@ -39,8 +39,10 @@ struct Session {
     report: Option<events::HostedReport>,
     /// The open report is a question asked over the splash, before any main window exists.
     report_over_splash: bool,
-    /// The loop's shell picker while no report holds it.
+    /// The loop's shell picker while no report or file dialog holds it.
     picker: Option<crate::file_dialog::Picker>,
+    /// The file dialog showing for the Main page, until it has returned.
+    file_choice: Option<events::ShownChoice>,
     main_fence: main_fence::MainFence,
     closing: bool,
     failure: Option<DesktopError>,
@@ -62,6 +64,7 @@ impl Session {
             splash_retired: self.splash.retired,
             main_retired: self.main.as_ref().is_none_or(MainActor::settled)
                 && self.report.is_none()
+                && self.file_choice.is_none()
                 && self.observers.retired()
                 && self.activity.retired(),
             execution_settled: self.splash.state.settled,
@@ -196,6 +199,7 @@ pub fn run_startup(
         main: None,
         report: None,
         picker: Some(picker),
+        file_choice: None,
         report_over_splash: false,
         main_fence: main_fence::MainFence::new(),
         closing: false,

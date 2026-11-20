@@ -172,6 +172,7 @@ impl Replies {
                 || matches!(&delivery, NativeDelivery::SessionNotice(value) if current != Some(value.identity()))
                 || matches!(&delivery, NativeDelivery::Backend(value) if current != Some(value.identity()))
                 || matches!(&delivery, NativeDelivery::UpdateReport(value) if current != Some(value.identity()))
+                || matches!(&delivery, NativeDelivery::FileChoice(value) if current != Some(value.identity()))
                 || stale_file_drag
                 || matches!(&delivery, NativeDelivery::CanvasNotification(value) if current != Some(value.identity()))
             {

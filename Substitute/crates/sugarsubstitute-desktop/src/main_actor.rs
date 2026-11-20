@@ -10,6 +10,7 @@ mod close_request;
 mod composition;
 mod construction;
 mod evidence;
+mod file_choice;
 mod focus;
 mod frame;
 #[cfg(feature = "native-composition")]
@@ -71,6 +72,8 @@ pub(crate) struct MainActor {
     recovery: crate::main_backend::Recovery,
     /// What the page is told of the application's update report, and its request to see it.
     update_report: crate::main_update_report::ReportOffer,
+    /// The page's request for a file dialog, held until the application shows it.
+    file_choice: crate::main_file_choice::ChoiceDesk,
     stage: ConstructionStage,
     window: Option<Rc<Window>>,
     presenter: Option<Presenter>,
@@ -177,6 +180,7 @@ impl MainActor {
             admission,
             recovery,
             update_report: crate::main_update_report::ReportOffer::default(),
+            file_choice: crate::main_file_choice::ChoiceDesk::default(),
             stage: ConstructionStage::Window,
             window: None,
             presenter: None,

@@ -508,6 +508,24 @@ test('the update report state reaches the page, and its watch and open ride the 
   assert.equal(f.deliver(state), true);
   assert.deepEqual(f.received.map(value => value.type), ['state']);
 });
+test('file choice answers reach the page, and every open and save rides the control lane', () => {
+  const f = fixture();
+  const choice = (type, extra = {}) => ({ protocol: 'sugarcubes.file-choice', version: 1, session, type, ...extra });
+  const open = request => choice('open', { request, folder: 'C:\\projects', extension: 'sugar' });
+  f.receipt('g', 'c', 1);
+  f.bridge.send(open('open-1'));
+  f.bridge.send(open('open-2'));
+  f.receipt('a', 'c', 1); f.receipt('g', 'c', 2);
+  f.receipt('a', 'c', 2); f.receipt('g', 'c', 3);
+  assert.deepEqual(posted(f), [open('open-1'), open('open-2')]);
+  assert.ok(f.sent.every(value => value.startsWith('1:c:')));
+  const chosen = choice('chosen', { request: 'open-1', name: 'a.sugar', relative: 'a.sugar' });
+  for (const value of [{ ...chosen, version: 2 }, { ...chosen, session: 'another-session' }, open('open-1')])
+    assert.equal(f.deliver(value), false);
+  for (const value of [chosen, choice('dismissed', { request: 'open-2' }), choice('failed', { request: 'open-3', reason: 'busy' })])
+    assert.equal(f.deliver(value), true);
+  assert.deepEqual(f.received.map(value => value.type), ['chosen', 'dismissed', 'failed']);
+});
 test('file drag reports reach the current session, and the page sends none', () => {
   const f = fixture();
   const drag = (type, extra = {}) => ({ protocol: 'sugarcubes.file-drag', version: 1, session, type, ...extra });

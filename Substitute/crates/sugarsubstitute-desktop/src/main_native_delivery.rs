@@ -22,6 +22,7 @@ pub(crate) enum NativeDelivery {
     SessionNotice(crate::SessionNoticeCommand),
     Backend(crate::main_backend_page::BackendCommand),
     UpdateReport(crate::main_update_report_page::UpdateReportCommand),
+    FileChoice(crate::main_file_choice_page::FileChoiceCommand),
     /// Only a composition-hosted browser's drags pass through the host.
     #[cfg(feature = "native-composition")]
     FileDrag(crate::main_file_drag_contract::FileDragCommand),
@@ -42,6 +43,7 @@ impl NativeDelivery {
             Self::SessionNotice(value) => value.identity(),
             Self::Backend(value) => value.identity(),
             Self::UpdateReport(value) => value.identity(),
+            Self::FileChoice(value) => value.identity(),
             #[cfg(feature = "native-composition")]
             Self::FileDrag(value) => value.identity(),
         }
@@ -58,7 +60,8 @@ impl NativeDelivery {
             | Self::ReleaseNotes(_)
             | Self::SessionNotice(_)
             | Self::Backend(_)
-            | Self::UpdateReport(_) => None,
+            | Self::UpdateReport(_)
+            | Self::FileChoice(_) => None,
             #[cfg(feature = "native-composition")]
             Self::FileDrag(_) => None,
             Self::Ingress(value) => Some(match value.kind() {
@@ -80,7 +83,8 @@ impl NativeDelivery {
             | Self::ReleaseNotes(_)
             | Self::SessionNotice(_)
             | Self::Backend(_)
-            | Self::UpdateReport(_) => None,
+            | Self::UpdateReport(_)
+            | Self::FileChoice(_) => None,
             #[cfg(feature = "native-composition")]
             Self::FileDrag(_) => None,
             Self::Ingress(value) => match value.kind() {
@@ -103,6 +107,7 @@ impl NativeDelivery {
             Self::SessionNotice(value) => Some(value.payload()),
             Self::Backend(value) => Some(value.payload()),
             Self::UpdateReport(value) => Some(value.payload()),
+            Self::FileChoice(value) => Some(value.payload()),
             #[cfg(feature = "native-composition")]
             Self::FileDrag(value) => Some(value.payload()),
             Self::Ingress(_) => None,
@@ -124,6 +129,7 @@ impl NativeDelivery {
             Self::SessionNotice(value) => Some(value.take_payload()),
             Self::Backend(value) => Some(value.take_payload()),
             Self::UpdateReport(value) => Some(value.take_payload()),
+            Self::FileChoice(value) => Some(value.take_payload()),
             #[cfg(feature = "native-composition")]
             Self::FileDrag(value) => Some(value.take_payload()),
             Self::Ingress(_) => None,
@@ -144,6 +150,7 @@ impl NativeDelivery {
             Self::SessionNotice(value) => value.into_claim(),
             Self::Backend(value) => value.into_claim(),
             Self::UpdateReport(value) => value.into_claim(),
+            Self::FileChoice(value) => value.into_claim(),
             #[cfg(feature = "native-composition")]
             Self::FileDrag(value) => value.into_claim(),
         }

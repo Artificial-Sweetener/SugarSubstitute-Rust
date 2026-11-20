@@ -26,6 +26,11 @@ pub(in crate::main_actor) enum Ingress {
         message: sugarsubstitute_contracts::host_update_report::UpdateReportClientMessage,
         claim: sugarsubstitute_contracts::execution::MemoryClaim,
     },
+    /// A request for a file dialog, which this adapter holds for the application to show.
+    FileChoice {
+        message: sugarsubstitute_contracts::host_file_choice::FileChoiceClientMessage,
+        claim: sugarsubstitute_contracts::execution::MemoryClaim,
+    },
 }
 
 impl MainActor {
@@ -139,6 +144,9 @@ impl MainActor {
             crate::main_panel_ingress::ClientMessage::UpdateReport(message) => {
                 Ingress::UpdateReport { message, claim }
             }
+            crate::main_panel_ingress::ClientMessage::FileChoice(message) => {
+                Ingress::FileChoice { message, claim }
+            }
             crate::main_panel_ingress::ClientMessage::Native(request) => {
                 Ingress::Native(crate::CanvasNativeObservation::new(
                     self.identity(),
@@ -162,6 +170,9 @@ impl MainActor {
             Ingress::Backend { message, claim } => return self.answer_backend_page(message, claim),
             Ingress::UpdateReport { message, claim } => {
                 return self.answer_update_report_page(message, claim).map(|()| None);
+            }
+            Ingress::FileChoice { message, claim } => {
+                return self.answer_file_choice_page(message, claim).map(|()| None);
             }
             Ingress::Panel(observation) => DesktopStartupObservation::PanelMessage(observation),
             Ingress::Memory(observation) => DesktopStartupObservation::MemoryMessage(observation),

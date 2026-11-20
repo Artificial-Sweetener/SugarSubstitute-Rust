@@ -58,6 +58,11 @@ mod main_hosting;
 mod main_memory_contract;
 mod main_placement;
 pub use main_placement::MainPlacementObservation;
+#[cfg(any(target_os = "windows", test))]
+#[cfg(any(target_os = "windows", test))]
+mod main_file_choice;
+#[cfg(target_os = "windows")]
+mod main_file_choice_page;
 #[cfg(target_os = "windows")]
 mod main_native_delivery;
 mod main_navigation;
@@ -82,7 +87,6 @@ mod main_session_ingress;
 mod main_session_media;
 mod main_session_notice_contract;
 mod main_surface_contract;
-#[cfg(any(target_os = "windows", test))]
 #[cfg(any(target_os = "windows", test))]
 mod main_update_report;
 #[cfg(target_os = "windows")]
