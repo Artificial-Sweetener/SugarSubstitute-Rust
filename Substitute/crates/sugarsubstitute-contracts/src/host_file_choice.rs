@@ -6,7 +6,7 @@
 //! The page asks with `open` or `save`, each naming its own request. The host answers every
 //! request exactly once: `chosen` with where the person chose, `dismissed`, or
 //! `failed`. The host reads and writes nothing; the page uses its own storage. Decoding
-//! validates shape and bounds only; the folder a request names is only where the dialog starts,
+//! validates shape and bounds only; the folder a request names only places the dialog and its answer,
 //! and whether a dialog is shown is the host's decision.
 
 use crate::panel::{PanelError, PanelSession};
@@ -160,8 +160,12 @@ pub struct FileChoiceClientMessage {
     pub session: PanelSession,
     /// The page's name for this request.
     pub request: FileChoiceRequestName,
-    /// Where the dialog starts, as the page named it; never trusted beyond that.
+    /// The folder a choice is placed relative to, as the page named it; never trusted beyond
+    /// that.
     pub folder: String,
+    /// The path below `folder`, with forward slashes, where the dialog starts; empty for
+    /// `folder` itself.
+    pub start: String,
     /// The one extension the dialog offers.
     pub extension: FileChoiceExtension,
     /// Open or save.

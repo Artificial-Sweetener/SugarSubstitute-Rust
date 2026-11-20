@@ -465,7 +465,7 @@ mod tests {
         let other = PanelSession::new("session-87654321".into())?;
         for (kind, extra) in [("open", ""), ("save", r#","name":"Demo.sugar""#)] {
             let request = format!(
-                r#"{{"protocol":"sugarcubes.file-choice","version":1,"session":"session-12345678","type":"{kind}","request":"r-1","folder":"C:\\projects","extension":"sugar"{extra}}}"#
+                r#"{{"protocol":"sugarcubes.file-choice","version":1,"session":"session-12345678","type":"{kind}","request":"r-1","folder":"C:\\projects","start":"","extension":"sugar"{extra}}}"#
             );
             let message =
                 decode_payload(&request, &session).ok_or("File choice request was inert")?;

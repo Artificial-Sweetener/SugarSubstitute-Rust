@@ -53,6 +53,8 @@ fn show(
     if !(folder.is_absolute() && folder.is_dir()) {
         return Err(FileChoiceFailure::Unavailable);
     }
+    let below = crate::main_file_choice::starting_folder(&folder, &asked.start);
+    let start = if below.is_dir() { below } else { folder.clone() };
     let window = session
         .main
         .as_ref()
@@ -64,9 +66,9 @@ fn show(
     let picker = session.picker.take().ok_or(FileChoiceFailure::Busy)?;
     let extension = asked.extension.as_str().to_owned();
     let kind = match asked.purpose {
-        FileChoicePurpose::Open => SelectionKind::OpenFrom { folder: folder.clone(), extension },
+        FileChoicePurpose::Open => SelectionKind::OpenFrom { folder: start, extension },
         FileChoicePurpose::Save { name } => {
-            SelectionKind::SaveInto { folder: folder.clone(), file_name: name, extension }
+            SelectionKind::SaveInto { folder: start, file_name: name, extension }
         }
     };
     let wake = proxy.clone();

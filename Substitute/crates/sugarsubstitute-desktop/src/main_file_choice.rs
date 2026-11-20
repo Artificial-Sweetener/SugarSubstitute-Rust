@@ -3,7 +3,7 @@
 //! Hold one main window's page request for a file dialog until the application shows it, and
 //! refuse a second while the first is waiting or showing. This owner holds no native resources.
 
-use sugarsubstitute_contracts::host_file_choice::FileChoiceClientMessage;
+use sugarsubstitute_contracts::host_file_choice::{FileChoiceClientMessage, FileChoiceRequestName};
 
 /// The one request a window serves at a time.
 #[derive(Debug, Default)]
@@ -13,14 +13,14 @@ pub(crate) struct ChoiceDesk {
 }
 
 impl ChoiceDesk {
-    /// Accept `message` for the application to show, or hand it back when a dialog is already
-    /// waiting or showing.
+    /// Accept `message` for the application to show, or name the request it refuses because a
+    /// dialog is already waiting or showing.
     pub(crate) fn ask(
         &mut self,
         message: FileChoiceClientMessage,
-    ) -> Result<(), FileChoiceClientMessage> {
+    ) -> Result<(), FileChoiceRequestName> {
         if self.waiting.is_some() || self.showing {
-            return Err(message);
+            return Err(message.request);
         }
         self.waiting = Some(message);
         Ok(())
@@ -52,6 +52,23 @@ pub(crate) fn place(folder: &std::path::Path, chosen: &std::path::Path) -> (Stri
     (name.unwrap_or_default(), relative)
 }
 
+/// The folder a dialog starts in: `start`, a forward-slashed path below `folder`, or `folder`
+/// itself when `start` is empty or names anything but plain folder names.
+pub(crate) fn starting_folder(folder: &std::path::Path, start: &str) -> std::path::PathBuf {
+    let plain = |part: &&str| {
+        !part.is_empty()
+            && *part != "."
+            && *part != ".."
+            && !part.contains(['\\', ':'])
+            && !part.chars().any(char::is_control)
+    };
+    let parts: Vec<&str> = start.split('/').collect();
+    if start.is_empty() || !parts.iter().all(plain) {
+        return folder.to_path_buf();
+    }
+    parts.iter().fold(folder.to_path_buf(), |path, part| path.join(part))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -60,7 +77,7 @@ mod tests {
     fn request(name: &str) -> Result<FileChoiceClientMessage, Box<dyn std::error::Error>> {
         Ok(FileChoiceClientMessage::decode(
             format!(
-                r#"{{"protocol":"sugarcubes.file-choice","version":1,"session":"session-12345678","type":"open","request":"{name}","folder":"C:\\projects","extension":"sugar"}}"#
+                r#"{{"protocol":"sugarcubes.file-choice","version":1,"session":"session-12345678","type":"open","request":"{name}","folder":"C:\\projects","start":"","extension":"sugar"}}"#
             )
             .as_bytes(),
         )?)
@@ -84,13 +101,33 @@ mod tests {
     }
 
     #[test]
+    fn a_dialog_starts_below_its_folder_and_never_outside_it() {
+        use std::path::{Path, PathBuf};
+        let folder = Path::new("projects");
+        for (start, expected) in [
+            ("", "projects"),
+            ("Demo", "projects/Demo"),
+            ("Demo/takes", "projects/Demo/takes"),
+            ("..", "projects"),
+            ("Demo/../..", "projects"),
+            ("/Demo", "projects"),
+            ("C:/Windows", "projects"),
+            ("Demo\\..\\..", "projects"),
+            ("Demo//x", "projects"),
+        ] {
+            let expected: PathBuf = expected.split('/').collect();
+            assert_eq!(starting_folder(folder, start), expected, "{start}");
+        }
+    }
+
+    #[test]
     fn one_request_is_served_at_a_time_from_asking_to_its_answer()
     -> Result<(), Box<dyn std::error::Error>> {
         let mut desk = ChoiceDesk::default();
         assert!(desk.take().is_none());
         assert!(desk.ask(request("first")?).is_ok());
         let refused = desk.ask(request("second")?).err().ok_or("a waiting request was replaced")?;
-        assert_eq!(refused.request.as_str(), "second");
+        assert_eq!(refused.as_str(), "second");
         assert_eq!(desk.take().ok_or("nothing to show")?.request.as_str(), "first");
         assert!(desk.take().is_none(), "a request is shown once");
         assert!(desk.ask(request("third")?).is_err(), "the dialog is still showing");

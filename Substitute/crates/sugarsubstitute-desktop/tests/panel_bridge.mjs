@@ -511,7 +511,7 @@ test('the update report state reaches the page, and its watch and open ride the 
 test('file choice answers reach the page, and every open and save rides the control lane', () => {
   const f = fixture();
   const choice = (type, extra = {}) => ({ protocol: 'sugarcubes.file-choice', version: 1, session, type, ...extra });
-  const open = request => choice('open', { request, folder: 'C:\\projects', extension: 'sugar' });
+  const open = request => choice('open', { request, folder: 'C:\\projects', start: '', extension: 'sugar' });
   f.receipt('g', 'c', 1);
   f.bridge.send(open('open-1'));
   f.bridge.send(open('open-2'));

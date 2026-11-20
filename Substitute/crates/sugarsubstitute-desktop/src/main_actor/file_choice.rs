@@ -56,7 +56,7 @@ impl MainActor {
         match self.file_choice.ask(message) {
             Ok(()) => Ok(()),
             Err(refused) => self.tell_file_choice_page(&FileChoiceHostMessage::Failed {
-                request: refused.request,
+                request: refused,
                 reason: FileChoiceFailure::Busy,
             }),
         }

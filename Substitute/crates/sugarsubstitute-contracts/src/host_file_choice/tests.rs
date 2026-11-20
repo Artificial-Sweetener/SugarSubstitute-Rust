@@ -91,27 +91,29 @@ fn names_and_paths_beyond_their_bounds_are_never_sent() -> TestResult {
 fn the_page_asks_to_open_or_save_from_a_folder_with_one_extension() -> TestResult {
     let open = FileChoiceClientMessage::decode(&envelope(json!({"type": "open",
         "request": "open-1", "folder": "E:\\ComfyUI\\user\\default\\projects",
-        "extension": "sugar"}))?)?;
+        "start": "", "extension": "sugar"}))?)?;
     assert_eq!(open.session(), &session()?);
     assert_eq!(open.request.as_str(), "open-1");
     assert_eq!(open.folder, "E:\\ComfyUI\\user\\default\\projects");
     assert_eq!(open.extension.as_str(), "sugar");
     assert_eq!(open.purpose, FileChoicePurpose::Open);
     let save = FileChoiceClientMessage::decode(&envelope(json!({"type": "save",
-        "request": "save-2", "folder": "/projects/Demo", "name": "Demo.sugar",
+        "request": "save-2", "folder": "/projects", "start": "Demo", "name": "Demo.sugar",
         "extension": "sugar"}))?)?;
     assert_eq!(save.purpose, FileChoicePurpose::Save { name: "Demo.sugar".into() });
+    assert_eq!((open.start.as_str(), save.start.as_str()), ("", "Demo"));
     for refused in [
-        json!({"type": "open", "request": "open-1", "folder": "/p"}),
-        json!({"type": "open", "request": "open-1", "folder": "", "extension": "sugar"}),
-        json!({"type": "open", "request": "Open 1", "folder": "/p", "extension": "sugar"}),
-        json!({"type": "open", "request": "open-1", "folder": "/p", "extension": "*.sugar"}),
-        json!({"type": "open", "request": "open-1", "folder": "/p", "extension": "su.gar"}),
-        json!({"type": "open", "request": "open-1", "folder": "/p", "extension": "sugar",
+        json!({"type": "open", "request": "open-1", "folder": "/p", "start": ""}),
+        json!({"type": "open", "request": "open-1", "folder": "/p", "extension": "sugar"}),
+        json!({"type": "open", "request": "open-1", "folder": "", "start": "", "extension": "sugar"}),
+        json!({"type": "open", "request": "Open 1", "folder": "/p", "start": "", "extension": "sugar"}),
+        json!({"type": "open", "request": "open-1", "folder": "/p", "start": "", "extension": "*.sugar"}),
+        json!({"type": "open", "request": "open-1", "folder": "/p", "start": "", "extension": "su.gar"}),
+        json!({"type": "open", "request": "open-1", "folder": "/p", "start": "", "extension": "sugar",
             "path": "/etc/passwd"}),
-        json!({"type": "save", "request": "save-2", "folder": "/p", "extension": "sugar"}),
+        json!({"type": "save", "request": "save-2", "folder": "/p", "start": "", "extension": "sugar"}),
         json!({"type": "chosen", "request": "open-1", "name": "a", "relative": ""}),
-        json!({"type": "open", "request": "open-1", "folder": "/p", "extension": "sugar",
+        json!({"type": "open", "request": "open-1", "folder": "/p", "start": "", "extension": "sugar",
             "version": 2}),
     ] {
         assert!(FileChoiceClientMessage::decode(&envelope(refused.clone())?).is_err(), "{refused}");
