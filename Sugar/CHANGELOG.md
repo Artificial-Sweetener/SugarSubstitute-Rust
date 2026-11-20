@@ -6,6 +6,7 @@
 
 ### Bug Fixes
 
+* **projects:** open and save a Sugar script in any folder, and open a dropped script as its own workflow ([1fe761e](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/1fe761e5bf8f35ad92a17689f4982217675be517))
 * **masonry:** give a Cube card's header actions a standing button face in every style, evenly spaced ([c1e24ca](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/c1e24cab02dd97efc06439bd54fc598ba903a92c))
 * **projects:** save a Sugar script where the save dialog shows it ([b2b5efc](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/b2b5efcdab4081dcdfee9bcd553a00a1efc1510d))
 

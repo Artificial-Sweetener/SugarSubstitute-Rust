@@ -6,6 +6,7 @@
 
 ### Bug Fixes
 
+* **desktop:** tell the page the full path of the file chosen in a file dialog ([764c13f](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/764c13f40a75b8152ce52234bca128036deafcf2))
 * **desktop:** start a file dialog below the folder its answer is placed in ([bd6b128](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/bd6b12839a8ac7a78d74939a8529374e29fc9d38))
 
 ## [0.8.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.7.0...substitute-v0.8.0) (2026-11-20)
