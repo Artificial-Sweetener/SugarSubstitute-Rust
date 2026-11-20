@@ -68,6 +68,8 @@ export interface ConstructedCube {
   subgraph: NativeCubeSubgraph;
   warnings: string[];
   internalNodeCount: number;
+  /** Node types the Cube uses that this ComfyUI does not have, when there are any. */
+  unavailableNodeTypes?: readonly string[];
 }
 
 export interface CubeDefinitionRollback {
@@ -171,6 +173,9 @@ export class CubeConstructionService {
         subgraph: request.built.subgraph,
         warnings: request.built.warnings,
         internalNodeCount: request.built.nodesBySymbol.size,
+        ...(request.built.unavailableNodeTypes
+          ? { unavailableNodeTypes: request.built.unavailableNodeTypes }
+          : {}),
       };
     } catch (error: unknown) {
       this.#definitions.discard(request.built.subgraph);

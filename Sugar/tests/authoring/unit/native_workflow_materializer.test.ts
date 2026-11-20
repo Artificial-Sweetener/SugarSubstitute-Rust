@@ -90,6 +90,38 @@ test('connects canonical Sugar output bindings to concise native surface slots',
   expect(connect).toHaveBeenCalledWith(0, placed[1]!.node, 0);
 });
 
+test('a Cube whose nodes are not installed is refused by name, with the node pack it needs', () => {
+  const connect = jest.fn();
+  const source = placedCube('source', ['output.image'], [], connect);
+  // Built without its nodes, the Cube has no inputs to connect.
+  const target = {
+    ...placedCube('target', [], [], jest.fn()),
+    unavailableNodeTypes: ['Pack.A', 'Pack.B', 'Pack.C', 'Pack.D', 'Pack.E'],
+  };
+  const placeBatch = jest.fn(
+    (_items: readonly unknown[], finalize: (value: PlacedCube[]) => void) => {
+      finalize([source, target]);
+      return [source, target];
+    },
+  );
+  const materializer = new NativeWorkflowMaterializer(
+    { placeBatch } as unknown as CubePlacementService,
+    { extra: {} },
+    nestedDefinitions(),
+  );
+  const workflow = plan();
+  const needy = workflow.instances[1]!;
+  needy.payload.cube = {
+    metadata: { node_pack_requirements: [{ properties: { cnr_id: 'SomePack', ver: '1.2.3' } }] },
+  } as unknown as typeof needy.payload.cube;
+
+  expect(() => materializer.materializeSugarScript(workflow, 'use source\n', [0, 0])).toThrow(
+    "Cube 'target' uses nodes that are not installed: Pack.A, Pack.B, Pack.C, Pack.D and 1 more. " +
+      'It needs SomePack 1.2.3.',
+  );
+  expect(connect).not.toHaveBeenCalled();
+});
+
 test('restores exact companion metadata when batch finalization fails', () => {
   const previousExtra = { retained: true };
   const graph = { extra: previousExtra };

@@ -18,7 +18,7 @@
 import type { CubePlacementService, PlacedCube } from '../cube/CubePlacementService.js';
 import { readCubeBoundaryDefinitions } from '../cube/CubeBoundaryDefinitions.js';
 import type { ImportPayload } from '../import/PlacementPayload.js';
-import type { Vec2 } from '../types/common.js';
+import { isRecord, type Vec2 } from '../types/common.js';
 import type {
   SugarScriptNativeConnection,
   SugarScriptNativeWorkflowPlan,
@@ -112,6 +112,7 @@ export class NativeWorkflowMaterializer {
             byId.set(instance.instanceId, { placed, payload: instance.payload });
             if (instance.bypassed) placed.node.mode = 4;
           }
+          refuseUnavailableNodes(byId.values());
           for (const connection of plan.connections) connectCubes(connection, byId);
           attachCompanion();
         },
@@ -127,6 +128,47 @@ export class NativeWorkflowMaterializer {
       throw error;
     }
   }
+}
+
+/**
+ * Refuse a workflow whose Cubes use nodes this ComfyUI does not have.
+ *
+ * Such a Cube is built without those nodes, so it has no inputs or outputs to connect and
+ * would run nothing; the person is told which nodes are missing and which node packs the Cube
+ * names, instead of a connection failing later on a boundary that was never created.
+ */
+function refuseUnavailableNodes(cubes: Iterable<MaterializedCube>): void {
+  const SHOWN = 4;
+  const problems: string[] = [];
+  for (const cube of cubes) {
+    const missing = cube.placed.unavailableNodeTypes ?? [];
+    if (missing.length === 0) continue;
+    const title = String(cube.placed.node.title ?? cube.placed.node.id);
+    const more = missing.length > SHOWN ? ` and ${missing.length - SHOWN} more` : '';
+    const packs = readNodePackRequirements(cube.payload);
+    problems.push(
+      `Cube '${title}' uses nodes that are not installed: ` +
+        `${missing.slice(0, SHOWN).join(', ')}${more}.` +
+        (packs.length > 0 ? ` It needs ${packs.join(', ')}.` : ''),
+    );
+  }
+  if (problems.length > 0) throw new Error(problems.join(' '));
+}
+
+/** Read the node packs a Cube says it needs, as `name version`. */
+function readNodePackRequirements(payload: MaterializedCube['payload']): string[] {
+  const cube: unknown = payload.cube;
+  const metadata = isRecord(cube) ? cube.metadata : null;
+  const requirements = isRecord(metadata) ? metadata.node_pack_requirements : null;
+  if (!Array.isArray(requirements)) return [];
+  const packs = new Set<string>();
+  for (const requirement of requirements) {
+    const properties: unknown = isRecord(requirement) ? requirement.properties : null;
+    if (!isRecord(properties) || typeof properties.cnr_id !== 'string') continue;
+    const version = typeof properties.ver === 'string' ? ` ${properties.ver}` : '';
+    packs.add(`${properties.cnr_id}${version}`);
+  }
+  return [...packs];
 }
 
 /** Connect one exact public Cube boundary pair. */

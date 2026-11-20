@@ -113,6 +113,8 @@ export interface BuiltCubeGraph {
   subgraph: NativeCubeSubgraph;
   nodesBySymbol: ReadonlyMap<string, NativeGraphNode>;
   warnings: string[];
+  /** Node types the Cube uses that this ComfyUI does not have, when there are any. */
+  unavailableNodeTypes?: readonly string[];
 }
 
 /** Own translation from a prepared Cube import to one native Comfy subgraph. */
@@ -144,6 +146,7 @@ export class ComfyCubeGraphBuilder {
     try {
       const nodesBySymbol = new Map<string, NativeGraphNode>();
       const warnings: string[] = [];
+      const unavailable = new Set<string>();
       const origin = readOrigin(payload);
       attachNativeCubeAuthoredLayout(subgraph, payload);
       const inputBoundaryNodes = new Set<NativeGraphNode>();
@@ -169,6 +172,7 @@ export class ComfyCubeGraphBuilder {
         const node = this.#host.createNode(classType);
         if (!node) {
           warnings.push(`Cube node type '${classType}' is unavailable.`);
+          unavailable.add(classType);
           continue;
         }
         node.id = this.#host.createUuid();
@@ -250,7 +254,12 @@ export class ComfyCubeGraphBuilder {
       subgraph.outputNode.arrange?.();
       attachNativeCubeBoundaryLayout(subgraph, inputBoundaryNodes, outputBoundaryNodes);
       applyNativeCubeBoundaryLayout(subgraph);
-      return { subgraph, nodesBySymbol, warnings };
+      return {
+        subgraph,
+        nodesBySymbol,
+        warnings,
+        ...(unavailable.size > 0 ? { unavailableNodeTypes: [...unavailable] } : {}),
+      };
     } catch (error: unknown) {
       this.#host.discardSubgraph?.(subgraph);
       throw error;

@@ -48,6 +48,7 @@ export class ComfyCubeGraphBuilder {
         try {
             const nodesBySymbol = new Map();
             const warnings = [];
+            const unavailable = new Set();
             const origin = readOrigin(payload);
             attachNativeCubeAuthoredLayout(subgraph, payload);
             const inputBoundaryNodes = new Set();
@@ -68,6 +69,7 @@ export class ComfyCubeGraphBuilder {
                 const node = this.#host.createNode(classType);
                 if (!node) {
                     warnings.push(`Cube node type '${classType}' is unavailable.`);
+                    unavailable.add(classType);
                     continue;
                 }
                 node.id = this.#host.createUuid();
@@ -139,7 +141,12 @@ export class ComfyCubeGraphBuilder {
             subgraph.outputNode.arrange?.();
             attachNativeCubeBoundaryLayout(subgraph, inputBoundaryNodes, outputBoundaryNodes);
             applyNativeCubeBoundaryLayout(subgraph);
-            return { subgraph, nodesBySymbol, warnings };
+            return {
+                subgraph,
+                nodesBySymbol,
+                warnings,
+                ...(unavailable.size > 0 ? { unavailableNodeTypes: [...unavailable] } : {}),
+            };
         }
         catch (error) {
             this.#host.discardSubgraph?.(subgraph);

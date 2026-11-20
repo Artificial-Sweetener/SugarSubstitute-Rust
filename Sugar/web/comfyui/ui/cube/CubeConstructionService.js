@@ -84,6 +84,9 @@ export class CubeConstructionService {
                 subgraph: request.built.subgraph,
                 warnings: request.built.warnings,
                 internalNodeCount: request.built.nodesBySymbol.size,
+                ...(request.built.unavailableNodeTypes
+                    ? { unavailableNodeTypes: request.built.unavailableNodeTypes }
+                    : {}),
             };
         }
         catch (error) {
