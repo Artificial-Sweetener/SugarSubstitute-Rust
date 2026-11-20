@@ -456,3 +456,54 @@ test('a bridge failure other than capacity is raised, never swallowed or retried
   closed = true;
   expect(() => transport.send(canvasRequest(2) as never)).toThrow(TypeError);
 });
+
+test('every listener in the page shares one subscription on a host that admits only a few', () => {
+  window.history.replaceState(
+    null,
+    '',
+    `/?sc-panel-host=${hostId}&sc-panel-session=${session}&sc-panel-transport=native`,
+  );
+  // The desktop bridge refuses a ninth listener; the page has more links to the host than that.
+  const native = new Set<(value: unknown) => void>();
+  let opened = 0;
+  Reflect.set(window, 'sugarcubesPanelHost', {
+    host: hostId,
+    session,
+    send: jest.fn(),
+    subscribe(listener: (value: unknown) => void) {
+      if (native.size >= 8) throw new TypeError('');
+      opened += 1;
+      native.add(listener);
+      return () => native.delete(listener);
+    },
+  });
+  const heard: string[] = [];
+  const stops: Array<() => void> = [];
+  for (let link = 0; link < 12; link += 1) {
+    // Links are built separately and each asks for the transport itself.
+    const transport = createNativePanelTransport(window);
+    if (!transport) throw new Error('Native transport missing');
+    stops.push(
+      transport.subscribe((value) => {
+        if (link === 3) throw new Error('one link failed');
+        heard.push(`${String(link)}:${String(value)}`);
+      }),
+    );
+  }
+  expect([opened, native.size]).toEqual([1, 1]);
+  const [deliver] = [...native];
+  // A link that throws is reported and does not keep the message from the others.
+  expect(() => deliver?.('a')).toThrow('one link failed');
+  expect(heard).toHaveLength(11);
+  stops[0]?.();
+  stops[0]?.();
+  heard.length = 0;
+  expect(() => deliver?.('b')).toThrow('one link failed');
+  expect(heard).toHaveLength(10);
+  for (const stop of stops) stop();
+  expect(native.size).toBe(0);
+  // The next listener opens the subscription again.
+  const again = createNativePanelTransport(window)?.subscribe(() => undefined);
+  expect([opened, native.size]).toEqual([2, 1]);
+  again?.();
+});

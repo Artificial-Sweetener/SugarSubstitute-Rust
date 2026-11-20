@@ -62,17 +62,77 @@ export function createNativePanelTransport(windowRef: Window): BrowserPanelTrans
       outbound.send(message);
     },
     subscribe: (receive) => {
-      const stop: unknown = subscribe.call(bridge, (value: unknown) => {
+      let listening = hosts.get(bridge);
+      if (!listening) {
+        listening = new SharedSubscription((deliver) => {
+          const stop: unknown = subscribe.call(bridge, deliver);
+          if (typeof stop !== 'function') throw new Error('Invalid native panel subscription.');
+          return () => {
+            stop();
+          };
+        });
+        hosts.set(bridge, listening);
+      }
+      return listening.add((value) => {
         try {
           receive(value);
         } finally {
           outbound.progressed();
         }
       });
-      if (typeof stop !== 'function') throw new Error('Invalid native panel subscription.');
-      return () => {
-        stop();
-      };
     },
   };
+}
+
+/** The one subscription held on each injected bridge. */
+const hosts = new WeakMap<object, SharedSubscription>();
+
+/**
+ * Hear one host bridge once and pass what it says to every listener in the page.
+ *
+ * The host admits only a few listeners per page, and each of SugarCubes' links to it (canvas,
+ * backend, updates, release notes, file drags and more) listens on its own. Subscribing each
+ * one natively ran past that limit, and the host refused the last link to start. They share
+ * one native subscription here, opened by the first listener and closed by the last.
+ */
+class SharedSubscription {
+  readonly #receivers = new Set<(value: unknown) => void>();
+  #stop: (() => void) | null = null;
+
+  constructor(private readonly open: (deliver: (value: unknown) => void) => () => void) {}
+
+  /** Add a listener; the returned function removes exactly that one. */
+  add(receive: (value: unknown) => void): () => void {
+    // A fresh function per call, so one listener added twice is two subscriptions.
+    const receiver = (value: unknown): void => receive(value);
+    this.#receivers.add(receiver);
+    if (!this.#stop) {
+      try {
+        this.#stop = this.open((value) => this.#deliver(value));
+      } catch (error: unknown) {
+        this.#receivers.delete(receiver);
+        throw error;
+      }
+    }
+    return () => {
+      if (!this.#receivers.delete(receiver) || this.#receivers.size > 0) return;
+      const stop = this.#stop;
+      this.#stop = null;
+      stop?.();
+    };
+  }
+
+  /** Give `value` to every current listener; one that throws does not starve the others. */
+  #deliver(value: unknown): void {
+    let failure: { readonly error: unknown } | null = null;
+    for (const receiver of [...this.#receivers]) {
+      if (!this.#receivers.has(receiver)) continue;
+      try {
+        receiver(value);
+      } catch (error: unknown) {
+        failure ??= { error };
+      }
+    }
+    if (failure) throw failure.error;
+  }
 }
