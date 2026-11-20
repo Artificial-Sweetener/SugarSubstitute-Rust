@@ -1,3 +1,12 @@
+## [0.33.2](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.33.1...sugarcubes-v0.33.2) (2026-11-20)
+
+### Bug Fixes
+
+* **canvas:** name each output tab after its Cube, even the bar's ends, and keep the node toolbar off the canvas ([fcf7384](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/fcf7384359a44a9451b2cb8796085d74d120b5c5))
+* **frame:** offer exporting a workflow once in the application menu ([d2f28d4](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/d2f28d4250bcb8fc2f852223c2d4f235752020fb))
+* **masonry:** show nothing of the graph behind the cards, and make a Cube card's header actions real buttons ([f0d08ea](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/f0d08ea947ac27b7bfd07ab6c5f9394e1cf25e15))
+* **queue:** close a menu from its own button, and keep ComfyUI's run progress bar off until it is turned on ([f2eb568](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/f2eb5680dda1698b3054b5d9da70158cc0ce9ac5))
+
 ## [0.33.1](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.33.0...sugarcubes-v0.33.1) (2026-11-20)
 
 ### Bug Fixes
