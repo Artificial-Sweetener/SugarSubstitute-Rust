@@ -205,10 +205,11 @@ test('retries readiness, acknowledges applied presentation, reports connectivity
           value.protocol === 'sugarcubes.release-notes' ||
           value.protocol === 'sugarcubes.session-notice' ||
           value.protocol === 'sugarcubes.backend' ||
-          value.protocol === 'sugarcubes.update-report'
+          value.protocol === 'sugarcubes.update-report' ||
+          value.protocol === 'sugarcubes.file-choice'
         )
           throw new Error(
-            'Unexpected mask, memory, update, release notes, session notice, backend or update report operation during presentation negotiation.',
+            'Unexpected mask, memory, update, release notes, session notice, backend, update report or file choice operation during presentation negotiation.',
           );
         messages.push(value);
       },

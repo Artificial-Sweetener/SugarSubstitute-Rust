@@ -21,6 +21,7 @@ import type { NamedUpdatesClientMessage, UpdatesClientMessage } from './UpdatesR
 import type { ReleaseNotesClientMessage } from './ReleaseNotesRuntime.js';
 import type { BackendClientMessage } from './BackendRuntime.js';
 import type { UpdateReportClientMessage } from './UpdateReportRuntime.js';
+import type { FileChoiceClientMessage } from './FileChoiceRuntime.js';
 import type {
   LinedSessionNoticeClientMessage,
   SessionNoticeClientMessage,
@@ -41,7 +42,8 @@ export interface BrowserPanelTransport {
       | SessionNoticeClientMessage
       | LinedSessionNoticeClientMessage
       | BackendClientMessage
-      | UpdateReportClientMessage,
+      | UpdateReportClientMessage
+      | FileChoiceClientMessage,
   ): void;
   subscribe(receive: (value: unknown) => void): () => void;
 }

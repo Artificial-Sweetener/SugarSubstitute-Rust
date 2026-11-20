@@ -22,6 +22,7 @@ import {
   projectNameOf,
   projectOwnerOf,
   projectScriptPath,
+  SCRIPT_EXTENSION,
   uniqueTabName,
   versionPath,
 } from '../domain/ProjectScript.js';
@@ -182,6 +183,30 @@ export class ProjectScripts {
     return this.#write(name, namedScriptPath(name, file));
   }
 
+  /**
+   * Where a save dialog for the shown workflow starts, inside the projects folder: the
+   * project's own folder once it exists, with the project's script name suggested.
+   */
+  async saveAsPlace(): Promise<{ readonly folder: string; readonly file: string }> {
+    const name = this.#name();
+    const exists = (await this.files.list()).some((file) => file.path.startsWith(`${name}/`));
+    return { folder: exists ? name : '', file: name + SCRIPT_EXTENSION };
+  }
+
+  /**
+   * Save the shown workflow at a path the person chose inside the projects folder. Its masks
+   * are kept with the folder the script sits in, where opening it looks for them.
+   */
+  async saveTo(path: string): Promise<SavedProject> {
+    const parts = path.split('/');
+    const leaf = parts[parts.length - 1] ?? '';
+    const invalid = parts.map(projectNameError).find((error) => error !== null);
+    if (invalid) throw new Error(invalid);
+    if (!isProjectScript(path) || leaf.length <= SCRIPT_EXTENSION.length)
+      throw new Error('Save a Sugar script as a .sugar file outside a versions folder.');
+    return this.#write(this.#name(), path);
+  }
+
   /** The shown workflow's name, refused when it cannot name a project folder. */
   #name(): string {
     const name = this.workflows.activeName()?.trim() ?? '';
@@ -194,7 +219,7 @@ export class ProjectScripts {
   async #write(name: string, path: string): Promise<SavedProject> {
     const rendered = await this.render(await this.workflows.serialize());
     const script = this.masks
-      ? await this.masks.keep(name, rendered.source, rendered.maskFiles)
+      ? await this.masks.keep(projectOwnerOf(path) ?? name, rendered.source, rendered.maskFiles)
       : rendered.source;
     const existing = (await this.files.list()).find((file) => file.path === path);
     let kept: string | null = null;

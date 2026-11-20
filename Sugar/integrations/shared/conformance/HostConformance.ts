@@ -45,6 +45,7 @@ import { isSessionNoticeHostMessage } from '../SessionNoticeValidation.generated
 import { isFileDragHostMessage } from '../FileDragValidation.generated.js';
 import { isBackendStateMessage } from '../BackendValidation.generated.js';
 import { isUpdateReportStateMessage } from '../UpdateReportValidation.generated.js';
+import { isFileChoiceHostMessage } from '../FileChoiceValidation.generated.js';
 import { isSessionNoticeHostMessage as isLinedSessionNoticeHostMessage } from '../SessionNoticeV2Validation.generated.js';
 import type { ReleaseNotesStateMessage } from '../../contracts/ReleaseNotesProtocol.generated.js';
 import { emptyCanvasSurfaceCapabilities } from '../CanvasSurfaceDiscovery.js';
@@ -157,6 +158,8 @@ function validHostMessage(value: unknown, declared: DeclaredHost | null): boolea
       return !!declared?.serves(HOST_PROTOCOLS.backend) && isBackendStateMessage(value);
     case HOST_PROTOCOLS.updateReport.name:
       return !!declared?.serves(HOST_PROTOCOLS.updateReport) && isUpdateReportStateMessage(value);
+    case HOST_PROTOCOLS.fileChoice.name:
+      return !!declared?.serves(HOST_PROTOCOLS.fileChoice) && isFileChoiceHostMessage(value);
     case HOST_PROTOCOLS.fileDrag.name:
       return !!declared?.serves(HOST_PROTOCOLS.fileDrag) && isFileDragHostMessage(value);
     default:

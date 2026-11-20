@@ -25,6 +25,7 @@ import { HostSessionNoticeLink, } from '../session_notice/HostSessionNoticeLink.
 import { HostBackendLink } from '../backend/HostBackendLink.js';
 import { HostUpdateReportLink, } from '../update_report/HostUpdateReportLink.js';
 import { HostFileDragLink } from '../file_drag/HostFileDragLink.js';
+import { HostFileChoiceLink } from '../file_choice/HostFileChoiceLink.js';
 /** Keep messaging active only while the owning SugarCubes document is alive. */
 export class EmbeddedPanelHost {
     options;
@@ -39,6 +40,7 @@ export class EmbeddedPanelHost {
     #fileDrag = null;
     #backend = null;
     #updateReport = null;
+    #fileChoice = null;
     #stopHost = null;
     #timer = null;
     /** Receive an identified adapter transport after Comfy and presentation setup have succeeded. */
@@ -137,6 +139,17 @@ export class EmbeddedPanelHost {
         this.#followHostFileDrags();
         this.#watchHostBackend();
         this.#watchHostUpdateReport();
+        this.#offerHostFileChoice();
+    }
+    /** Offer the host's file dialog to the page once the host declares that it shows one. */
+    #offerHostFileChoice() {
+        if (this.#fileChoice ||
+            !this.options.fileChoice ||
+            !this.options.host.read()?.serves(HOST_PROTOCOLS.fileChoice))
+            return;
+        this.#fileChoice = new HostFileChoiceLink(this.transport, this.options.report);
+        this.#fileChoice.start();
+        this.options.fileChoice.attach(this.#fileChoice);
     }
     /** Learn whether the host has an update report once the host declares that it says so. */
     #watchHostUpdateReport() {
@@ -253,6 +266,10 @@ export class EmbeddedPanelHost {
         this.#backend = null;
         this.#updateReport?.dispose();
         this.#updateReport = null;
+        if (this.#fileChoice)
+            this.options.fileChoice?.attach(null);
+        this.#fileChoice?.dispose();
+        this.#fileChoice = null;
         if (this.#timer !== null)
             this.options.window.clearInterval(this.#timer);
         this.#timer = null;

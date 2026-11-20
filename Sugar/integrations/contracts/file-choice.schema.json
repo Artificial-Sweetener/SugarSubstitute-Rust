@@ -1,0 +1,223 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://artificialsweetener.ai/schemas/sugarcubes/file-choice/v1",
+  "title": "SugarCubes file choice protocol version 1",
+  "description": "An optional protocol for a host that can show its operating system's own file dialog for the page. A page can open such a dialog itself but cannot say where it starts; a host that lists sugarcubes.file-choice can. The page asks with open to choose one existing file, or with save to choose where a file is to be written; each names its own request, the folder the dialog starts in and the one file extension it offers, and save also names the file it suggests. folder is only where the dialog starts: the person may go anywhere, and the host shows no dialog for a folder that does not exist (failed, unavailable). The host answers every request exactly once, naming it. chosen carries only where the person chose: the file's name, and relative, its path below folder with forward slashes, which is empty when the choice lies outside folder. The host reads and writes nothing: the page reads or writes the chosen file through its own storage, and decides what a choice outside folder means. dismissed says the person closed the dialog. The host shows one dialog at a time and answers a request made while one is showing with failed, busy. Choosing a file is the person's act alone: a request grants the page nothing else.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/FileChoiceChosenMessage"
+    },
+    {
+      "$ref": "#/$defs/FileChoiceDismissedMessage"
+    },
+    {
+      "$ref": "#/$defs/FileChoiceFailedMessage"
+    },
+    {
+      "$ref": "#/$defs/FileChoiceOpenMessage"
+    },
+    {
+      "$ref": "#/$defs/FileChoiceSaveMessage"
+    }
+  ],
+  "$defs": {
+    "FileChoiceFailure": {
+      "enum": ["busy", "unavailable"]
+    },
+    "FileChoiceChosenMessage": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.file-choice"
+        },
+        "version": {
+          "const": 1
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "type": {
+          "const": "chosen"
+        },
+        "request": {
+          "type": "string",
+          "maxLength": 48,
+          "pattern": "^[a-z0-9.-]{1,48}$"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "relative": {
+          "type": "string",
+          "maxLength": 1024
+        }
+      },
+      "required": ["protocol", "version", "session", "type", "request", "name", "relative"],
+      "additionalProperties": false
+    },
+    "FileChoiceDismissedMessage": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.file-choice"
+        },
+        "version": {
+          "const": 1
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "type": {
+          "const": "dismissed"
+        },
+        "request": {
+          "type": "string",
+          "maxLength": 48,
+          "pattern": "^[a-z0-9.-]{1,48}$"
+        }
+      },
+      "required": ["protocol", "version", "session", "type", "request"],
+      "additionalProperties": false
+    },
+    "FileChoiceFailedMessage": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.file-choice"
+        },
+        "version": {
+          "const": 1
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "type": {
+          "const": "failed"
+        },
+        "request": {
+          "type": "string",
+          "maxLength": 48,
+          "pattern": "^[a-z0-9.-]{1,48}$"
+        },
+        "reason": {
+          "$ref": "#/$defs/FileChoiceFailure"
+        }
+      },
+      "required": ["protocol", "version", "session", "type", "request", "reason"],
+      "additionalProperties": false
+    },
+    "FileChoiceOpenMessage": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.file-choice"
+        },
+        "version": {
+          "const": 1
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "type": {
+          "const": "open"
+        },
+        "request": {
+          "type": "string",
+          "maxLength": 48,
+          "pattern": "^[a-z0-9.-]{1,48}$"
+        },
+        "folder": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "extension": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z0-9.-]{1,64}$"
+        }
+      },
+      "required": ["protocol", "version", "session", "type", "request", "folder", "extension"],
+      "additionalProperties": false
+    },
+    "FileChoiceSaveMessage": {
+      "type": "object",
+      "properties": {
+        "protocol": {
+          "const": "sugarcubes.file-choice"
+        },
+        "version": {
+          "const": 1
+        },
+        "session": {
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^[a-zA-Z0-9-]{16,80}$"
+        },
+        "type": {
+          "const": "save"
+        },
+        "request": {
+          "type": "string",
+          "maxLength": 48,
+          "pattern": "^[a-z0-9.-]{1,48}$"
+        },
+        "folder": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "extension": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z0-9.-]{1,64}$"
+        }
+      },
+      "required": [
+        "protocol",
+        "version",
+        "session",
+        "type",
+        "request",
+        "folder",
+        "name",
+        "extension"
+      ],
+      "additionalProperties": false
+    },
+    "FileChoiceHostMessage": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/FileChoiceChosenMessage"
+        },
+        {
+          "$ref": "#/$defs/FileChoiceDismissedMessage"
+        },
+        {
+          "$ref": "#/$defs/FileChoiceFailedMessage"
+        }
+      ]
+    },
+    "FileChoiceClientMessage": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/FileChoiceOpenMessage"
+        },
+        {
+          "$ref": "#/$defs/FileChoiceSaveMessage"
+        }
+      ]
+    }
+  }
+}

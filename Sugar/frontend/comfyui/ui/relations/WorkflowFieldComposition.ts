@@ -30,6 +30,7 @@ import { UpdateSourceSlot } from '../core/updates/UpdateSource.js';
 import { DraggedFiles } from '../core/file_drag/DraggedFiles.js';
 import { BackendOutageNotice } from '../core/backend/BackendOutageNotice.js';
 import { HostUpdateReport } from '../core/update_report/HostUpdateReportLink.js';
+import { HostFileChoice } from '../core/file_choice/HostFileChoiceLink.js';
 import { DeclaredHost } from '../core/embedded/PanelRuntime.js';
 import { startEmbeddedPanel } from '../core/embedded/EmbeddedPanelHost.js';
 import type { HostLine } from '../core/session_notice/HostSessionNoticeLink.js';
@@ -84,6 +85,8 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
   updates: UpdateSourceSlot;
   /** The page's one What's new view, for every product whose notes this page shows. */
   whatsNew: WhatsNewPresenter;
+  /** The host's own file dialog, there while the page runs in a host that shows one. */
+  fileChoice: HostFileChoice;
   settingsRoute: SettingsWorkspaceRoute;
   setupPresentation(): void;
 } {
@@ -117,6 +120,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
     report: options.reportPresentationError,
   });
   const updateReport = new HostUpdateReport();
+  const fileChoice = new HostFileChoice();
   const whatsNew = new WhatsNewPresenter(
     new WhatsNewModal({ document: options.document }),
     seenReleases(options.app, options.reportPresentationError),
@@ -202,6 +206,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
         draggedFiles,
         backend,
         updateReport,
+        fileChoice,
         sessionNotice: {
           notSaved: (lost) => {
             const words = unsavedWorkWords(lost);
@@ -230,6 +235,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
     host,
     updates,
     whatsNew,
+    fileChoice,
     settingsRoute: settingsWorkspace.sessionRoute,
     setupPresentation,
   };

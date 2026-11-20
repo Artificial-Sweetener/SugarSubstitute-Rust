@@ -57,6 +57,15 @@ export function createProjectCommands(options) {
         scripts,
         dialogs: options.dialogs,
         pickScript: () => pickScriptFile(document),
+        ...(options.hostDialog ? { hostDialog: options.hostDialog } : {}),
+        projectsFolder: async () => {
+            const response = await fetchApi('/sugarcubes/projects/folder');
+            const body = response.ok ? await response.json() : null;
+            const folder = isRecord(body) ? body.folder : null;
+            if (typeof folder !== 'string' || !folder)
+                throw new Error('The projects folder is unavailable.');
+            return folder;
+        },
         notify: options.notify,
         describe: options.describe,
         exportWorkflow: () => command('Comfy.ExportWorkflow'),

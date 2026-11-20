@@ -30,6 +30,7 @@ import {
   projectCommands,
   type ProjectCommand,
   type ProjectDialogs,
+  type ProjectHostDialog,
 } from './presentation/ProjectCommands.js';
 import { pickScriptFile } from './presentation/ScriptFilePicker.js';
 
@@ -47,6 +48,8 @@ export interface ProjectCompositionOptions {
   showCubes(): void;
   /** Prepare a queue payload's inputs the way a run does: canvas sources captured into files. */
   prepareInputs(payload: unknown): Promise<{ readonly payload: unknown }>;
+  /** The host's own file dialog, used while the page runs in a host that shows one. */
+  readonly hostDialog?: ProjectHostDialog;
 }
 
 /** Build the four project commands, ready to register with Comfy and to list in a menu. */
@@ -90,6 +93,15 @@ export function createProjectCommands(
     scripts,
     dialogs: options.dialogs,
     pickScript: () => pickScriptFile(document),
+    ...(options.hostDialog ? { hostDialog: options.hostDialog } : {}),
+    projectsFolder: async () => {
+      const response = await fetchApi('/sugarcubes/projects/folder');
+      const body: unknown = response.ok ? await response.json() : null;
+      const folder = isRecord(body) ? body.folder : null;
+      if (typeof folder !== 'string' || !folder)
+        throw new Error('The projects folder is unavailable.');
+      return folder;
+    },
     notify: options.notify,
     describe: options.describe,
     exportWorkflow: () => command('Comfy.ExportWorkflow'),

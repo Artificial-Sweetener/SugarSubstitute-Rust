@@ -46,6 +46,7 @@ import {
   type UpdateReportWatcher,
 } from '../update_report/HostUpdateReportLink.js';
 import { HostFileDragLink } from '../file_drag/HostFileDragLink.js';
+import { HostFileChoiceLink, type HostFileChoice } from '../file_choice/HostFileChoiceLink.js';
 
 /** Supply the browser lifetime without introducing another connection or preference owner. */
 export interface EmbeddedPanelOptions {
@@ -73,6 +74,8 @@ export interface EmbeddedPanelOptions {
   readonly backend?: BackendWatcher;
   /** Hears whether the host has an update report when it declares `sugarcubes.update-report`. */
   readonly updateReport?: UpdateReportWatcher;
+  /** Gains the host's file dialog when the host declares `sugarcubes.file-choice`. */
+  readonly fileChoice?: HostFileChoice;
   connected(): boolean;
   subscribeConnection?(listener: (connected: boolean) => void): () => void;
   report(error: unknown): void;
@@ -90,6 +93,7 @@ export class EmbeddedPanelHost {
   #fileDrag: HostFileDragLink | null = null;
   #backend: HostBackendLink | null = null;
   #updateReport: HostUpdateReportLink | null = null;
+  #fileChoice: HostFileChoiceLink | null = null;
   #stopHost: (() => void) | null = null;
   #timer: number | null = null;
 
@@ -186,6 +190,20 @@ export class EmbeddedPanelHost {
     this.#followHostFileDrags();
     this.#watchHostBackend();
     this.#watchHostUpdateReport();
+    this.#offerHostFileChoice();
+  }
+
+  /** Offer the host's file dialog to the page once the host declares that it shows one. */
+  #offerHostFileChoice(): void {
+    if (
+      this.#fileChoice ||
+      !this.options.fileChoice ||
+      !this.options.host.read()?.serves(HOST_PROTOCOLS.fileChoice)
+    )
+      return;
+    this.#fileChoice = new HostFileChoiceLink(this.transport, this.options.report);
+    this.#fileChoice.start();
+    this.options.fileChoice.attach(this.#fileChoice);
   }
 
   /** Learn whether the host has an update report once the host declares that it says so. */
@@ -326,6 +344,9 @@ export class EmbeddedPanelHost {
     this.#backend = null;
     this.#updateReport?.dispose();
     this.#updateReport = null;
+    if (this.#fileChoice) this.options.fileChoice?.attach(null);
+    this.#fileChoice?.dispose();
+    this.#fileChoice = null;
     if (this.#timer !== null) this.options.window.clearInterval(this.#timer);
     this.#timer = null;
     this.options.window.removeEventListener('pagehide', this.dispose);

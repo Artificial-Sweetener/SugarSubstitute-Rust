@@ -40,6 +40,7 @@ from .self_update_routes import (
 )
 from .route_types import RouteHandler
 from .sugarscript_routes import build_sugarscript_route_handlers
+from .project_folder_routes import register_project_folder_route
 from .wildcard_folder_routes import register_wildcard_folder_route
 from .workflow_library_routes import build_workflow_library_route_handlers
 from .workflow_analysis_routes import build_workflow_analysis_handler
@@ -296,6 +297,7 @@ def register_routes(prompt_server: Any, services: BackendServices) -> RouteHandl
     routes.get("/sugarcubes/release-notes")(handlers.get_release_notes_version)
     routes.get("/sugarcubes/release-notes/notes")(handlers.get_release_notes)
     register_wildcard_folder_route(server)
+    register_project_folder_route(server)
     publish_self_update_events(server, services)
     accept_updates_on_full_start(server, services)
     return handlers

@@ -69,6 +69,10 @@
             "version": 1
           },
           {
+            "name": "sugarcubes.file-choice",
+            "version": 1
+          },
+          {
             "name": "sugarcubes.file-drag",
             "version": 1
           }

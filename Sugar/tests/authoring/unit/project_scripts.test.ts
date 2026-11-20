@@ -346,6 +346,7 @@ test('the four commands keep their names and order and report their own failures
     scripts: new ProjectScripts(f.store, t.host, async () => written('use "a" as A\n')),
     dialogs: { promptText: async () => 'a/b' },
     pickScript: async () => ({ name: 'Bune.sugar', text: '# Project: Bune\n' }),
+    projectsFolder: async () => 'C:\\user\\projects',
     notify: (severity, title, message) => notices.push(`${severity}: ${title}: ${message}`),
     describe: (error) => (error instanceof Error ? error.message : String(error)),
     exportWorkflow: exported,
@@ -364,6 +365,102 @@ test('the four commands keep their names and order and report their own failures
     'success: Sugar script saved: Demo/Demo.sugar',
     'error: Sugar script not saved: Use a name without slashes, colons or control characters.',
   ]);
+});
+
+/** A host dialog that records each question and answers from a script. */
+function hostDialog(answers: readonly ({ name: string; relative: string } | null)[]) {
+  const asked: string[] = [];
+  const queue = [...answers];
+  return {
+    asked,
+    dialog: {
+      available: true,
+      open: async (folder: string, extension: string) => {
+        asked.push(`open ${folder} *.${extension}`);
+        return queue.shift() ?? null;
+      },
+      save: async (folder: string, name: string, extension: string) => {
+        asked.push(`save ${folder} ${name} *.${extension}`);
+        return queue.shift() ?? null;
+      },
+    },
+  };
+}
+
+test('in a host with a file dialog, Open starts in the projects folder and opens what is chosen there', async () => {
+  const f = folder({ 'Bune/Bune.sugar': '# Project: Bune\n' });
+  const t = tabs('Demo');
+  const notices: string[] = [];
+  const host = hostDialog([
+    { name: 'Bune.sugar', relative: 'Bune/Bune.sugar' },
+    null,
+    { name: 'far.sugar', relative: '' },
+  ]);
+  const picked = jest.fn(async () => null);
+  const [open] = projectCommands({
+    scripts: new ProjectScripts(f.store, t.host, async () => written('use "a" as A\n')),
+    dialogs: { promptText: async () => null },
+    pickScript: picked,
+    hostDialog: host.dialog,
+    projectsFolder: async () => 'C:\\user\\projects',
+    notify: (severity, title, message) => notices.push(`${severity}: ${title}: ${message}`),
+    describe: (error) => (error instanceof Error ? error.message : String(error)),
+    exportWorkflow: async () => undefined,
+  });
+  await open?.function();
+  await open?.function();
+  await open?.function();
+  expect(host.asked).toEqual(Array(3).fill('open C:\\user\\projects *.sugar'));
+  expect(picked).not.toHaveBeenCalled();
+  expect(t.opened).toEqual(['Bune']);
+  expect(notices).toEqual([
+    'error: Sugar script not opened: Sugar scripts open from the projects folder. Drop a script kept elsewhere onto the window to open it.',
+  ]);
+});
+
+test('in a host with a file dialog, Save As asks the operating system where and writes there', async () => {
+  const f = folder({ 'Demo/Demo.sugar': '# Project: Demo\n' });
+  const t = tabs('Demo');
+  const notices: string[] = [];
+  const host = hostDialog([
+    { name: 'take two.sugar', relative: 'Demo/take two.sugar' },
+    null,
+    { name: 'far.sugar', relative: '' },
+    { name: 'old.sugar', relative: 'Demo/versions/old.sugar' },
+  ]);
+  const prompted = jest.fn(async () => null);
+  const commands = projectCommands({
+    scripts: new ProjectScripts(f.store, t.host, async () => written('use "a" as A\n')),
+    dialogs: { promptText: prompted },
+    pickScript: async () => null,
+    hostDialog: host.dialog,
+    projectsFolder: async () => 'C:\\user\\projects\\',
+    notify: (severity, title, message) => notices.push(`${severity}: ${title}: ${message}`),
+    describe: (error) => (error instanceof Error ? error.message : String(error)),
+    exportWorkflow: async () => undefined,
+  });
+  const saveAs = commands[2];
+  for (let turn = 0; turn < 4; turn += 1) await saveAs?.function();
+  // The dialog starts in the project's own folder, suggesting the project's script.
+  expect(host.asked).toEqual(Array(4).fill('save C:\\user\\projects\\Demo Demo.sugar *.sugar'));
+  expect(prompted).not.toHaveBeenCalled();
+  expect(f.texts.get('Demo/take two.sugar')).toContain('use "a" as A');
+  expect(f.log).toEqual(['write Demo/take two.sugar']);
+  expect(notices).toEqual([
+    'success: Sugar script saved: Demo/take two.sugar',
+    'error: Sugar script not saved: Sugar scripts are saved in the projects folder.',
+    'error: Sugar script not saved: Save a Sugar script as a .sugar file outside a versions folder.',
+  ]);
+});
+
+test('a project never saved has no folder yet, so its save dialog starts in the projects folder', async () => {
+  const f = folder();
+  const scripts = new ProjectScripts(f.store, tabs('New').host, async () => written('x\n'));
+  expect(await scripts.saveAsPlace()).toEqual({ folder: '', file: 'New.sugar' });
+  expect(await scripts.saveTo('New/New.sugar')).toEqual({ path: 'New/New.sugar', kept: null });
+  expect(await scripts.saveAsPlace()).toEqual({ folder: 'New', file: 'New.sugar' });
+  await expect(scripts.saveTo('New/../x.sugar')).rejects.toThrow('Enter a name.');
+  await expect(scripts.saveTo('New/x.txt')).rejects.toThrow('.sugar file');
 });
 
 test('a project’s masks become loadable when it opens and come home when it is saved', async () => {

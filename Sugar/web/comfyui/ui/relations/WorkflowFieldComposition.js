@@ -27,6 +27,7 @@ import { UpdateSourceSlot } from '../core/updates/UpdateSource.js';
 import { DraggedFiles } from '../core/file_drag/DraggedFiles.js';
 import { BackendOutageNotice } from '../core/backend/BackendOutageNotice.js';
 import { HostUpdateReport } from '../core/update_report/HostUpdateReportLink.js';
+import { HostFileChoice } from '../core/file_choice/HostFileChoiceLink.js';
 import { DeclaredHost } from '../core/embedded/PanelRuntime.js';
 import { startEmbeddedPanel } from '../core/embedded/EmbeddedPanelHost.js';
 import { unsavedWorkWords } from '../core/session_notice/UnsavedWorkNotice.js';
@@ -64,6 +65,7 @@ export function createWorkflowFieldHost(options) {
         report: options.reportPresentationError,
     });
     const updateReport = new HostUpdateReport();
+    const fileChoice = new HostFileChoice();
     const whatsNew = new WhatsNewPresenter(new WhatsNewModal({ document: options.document }), seenReleases(options.app, options.reportPresentationError), options.reportPresentationError);
     const canvas = new EmbeddedCanvasConnection();
     const wildcardNames = new InputModal({
@@ -145,6 +147,7 @@ export function createWorkflowFieldHost(options) {
                 draggedFiles,
                 backend,
                 updateReport,
+                fileChoice,
                 sessionNotice: {
                     notSaved: (lost) => {
                         const words = unsavedWorkWords(lost);
@@ -174,6 +177,7 @@ export function createWorkflowFieldHost(options) {
         host,
         updates,
         whatsNew,
+        fileChoice,
         settingsRoute: settingsWorkspace.sessionRoute,
         setupPresentation,
     };

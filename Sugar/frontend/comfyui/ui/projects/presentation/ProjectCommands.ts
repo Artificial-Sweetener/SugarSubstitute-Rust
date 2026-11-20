@@ -29,11 +29,42 @@ export interface ProjectDialogs {
   }): Promise<string | null>;
 }
 
+/** A host's own file dialog: it starts in a folder and says where the person chose below it. */
+export interface ProjectHostDialog {
+  /** Whether a host is there to show the dialog. */
+  readonly available: boolean;
+  open(folder: string, extension: string): Promise<ProjectChoice | null>;
+  save(folder: string, name: string, extension: string): Promise<ProjectChoice | null>;
+}
+
+/** A chosen file: its name, and its path below the starting folder or `''` when outside it. */
+export interface ProjectChoice {
+  readonly name: string;
+  readonly relative: string;
+}
+
+/** The extension the host's dialog offers, without its dot. */
+const SCRIPT_TYPE = 'sugar';
+
+/** Join a folder inside the projects folder onto its path, with that path's own separator. */
+function below(root: string, folder: string): string {
+  if (!folder) return root;
+  const separator = root.includes('\\') ? '\\' : '/';
+  return root.replace(/[\\/]+$/u, '') + separator + folder;
+}
+
 export interface ProjectCommandOptions {
   readonly scripts: ProjectScripts;
   readonly dialogs: ProjectDialogs;
   /** Let the person choose a script in the operating system's file dialog; `null` when dismissed. */
   pickScript(): Promise<PickedScript | null>;
+  /**
+   * The host's own file dialog. While one is available, Open starts in the projects folder and
+   * Save As is the operating system's save dialog.
+   */
+  readonly hostDialog?: ProjectHostDialog;
+  /** The projects folder's own path on the machine ComfyUI runs on. */
+  projectsFolder(): Promise<string>;
   /** Tell the person what a command did. */
   notify(severity: 'success' | 'error', title: string, message: string): void;
   /** Describe an unknown failure. */
@@ -79,6 +110,16 @@ export function projectCommands(options: ProjectCommandOptions): readonly Projec
       id: OPEN_SUGAR_SCRIPT,
       label: 'Open Sugar Script...',
       function: guarded('Sugar script not opened', async () => {
+        if (options.hostDialog?.available) {
+          const chosen = await options.hostDialog.open(await options.projectsFolder(), SCRIPT_TYPE);
+          if (chosen === null) return;
+          if (!chosen.relative)
+            throw new Error(
+              'Sugar scripts open from the projects folder. Drop a script kept elsewhere onto the window to open it.',
+            );
+          await scripts.open(chosen.relative);
+          return;
+        }
         const picked = await options.pickScript();
         if (picked === null) return;
         await scripts.openPicked(picked.name, picked.text);
@@ -96,6 +137,19 @@ export function projectCommands(options: ProjectCommandOptions): readonly Projec
       id: SAVE_SUGAR_SCRIPT_AS,
       label: 'Save Sugar Script As...',
       function: guarded('Sugar script not saved', async () => {
+        if (options.hostDialog?.available) {
+          const place = await scripts.saveAsPlace();
+          const chosen = await options.hostDialog.save(
+            below(await options.projectsFolder(), place.folder),
+            place.file,
+            SCRIPT_TYPE,
+          );
+          if (chosen === null) return;
+          if (!chosen.relative) throw new Error('Sugar scripts are saved in the projects folder.');
+          const saved = await scripts.saveTo(chosen.relative);
+          notify('success', 'Sugar script saved', saved.path);
+          return;
+        }
         const file = await dialogs.promptText({
           title: 'Save Sugar Script As',
           label: 'File name',

@@ -69,10 +69,9 @@ import { CivitaiCredentialClient } from './ui/model_library/CivitaiCredentialCli
 import { ModelRootClient } from './ui/model_library/ModelRootClient.js';
 import { ModelLibrarySettings } from './ui/model_library/ModelLibrarySettings.js';
 import { desktopSessionFailureReporter } from './ui/workflow/application/DesktopSessionFailureNotice.js';
-export { buildShiftedPlacementPayload };
 let invalidateCubeCatalogs = async () => undefined;
 /** Provide the authoritative UI service graph for this host extension instance. */
-export const sugarCubesUI = getSugarCubesUI({
+const ui = getSugarCubesUI({
     forceNew: true,
     adapterOptions: { app, api },
     getCubeAuthoring: () => requireCubeRuntime().authoring,
@@ -80,7 +79,7 @@ export const sugarCubesUI = getSugarCubesUI({
     validateCubePersistence: () => assertNoNestedCubes('save SugarCubes'),
     invalidateCubeCatalogs: () => invalidateCubeCatalogs(),
 });
-const ui = sugarCubesUI;
+export { buildShiftedPlacementPayload, ui as sugarCubesUI };
 const cubeAuthoringCommands = new CubeAuthoringHostCommands({
     canAuthor: () => requireCubeRuntime().graphScope.isCurrentRoot(),
     createCubeFromSelection: () => ui.cubeCreation.startCreateCubeFromSelection(),
@@ -385,6 +384,7 @@ export const sugarCubesExtension = {
             importScript: (source) => importHostCoordinator.importSugarScript(source),
             showCubes: () => workflowWorkspace.masonry.show(),
             prepareInputs: (payload) => canvasInputs.preparation.prepare(payload),
+            hostDialog: workflowFields.fileChoice,
         }),
     }),
     addCustomNodeDefs(definitions) {

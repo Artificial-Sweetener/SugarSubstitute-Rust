@@ -15,6 +15,15 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Offer a project's open and save actions as commands, with the same names SugarSubstitute used. */
 import { projectNameError } from '../domain/ProjectScript.js';
+/** The extension the host's dialog offers, without its dot. */
+const SCRIPT_TYPE = 'sugar';
+/** Join a folder inside the projects folder onto its path, with that path's own separator. */
+function below(root, folder) {
+    if (!folder)
+        return root;
+    const separator = root.includes('\\') ? '\\' : '/';
+    return root.replace(/[\\/]+$/u, '') + separator + folder;
+}
 /** Open a project script chosen in the operating system's file dialog. */
 export const OPEN_SUGAR_SCRIPT = 'SugarCubes.OpenSugarScript';
 /** Save the shown workflow as its project script. */
@@ -45,6 +54,15 @@ export function projectCommands(options) {
             id: OPEN_SUGAR_SCRIPT,
             label: 'Open Sugar Script...',
             function: guarded('Sugar script not opened', async () => {
+                if (options.hostDialog?.available) {
+                    const chosen = await options.hostDialog.open(await options.projectsFolder(), SCRIPT_TYPE);
+                    if (chosen === null)
+                        return;
+                    if (!chosen.relative)
+                        throw new Error('Sugar scripts open from the projects folder. Drop a script kept elsewhere onto the window to open it.');
+                    await scripts.open(chosen.relative);
+                    return;
+                }
                 const picked = await options.pickScript();
                 if (picked === null)
                     return;
@@ -63,6 +81,17 @@ export function projectCommands(options) {
             id: SAVE_SUGAR_SCRIPT_AS,
             label: 'Save Sugar Script As...',
             function: guarded('Sugar script not saved', async () => {
+                if (options.hostDialog?.available) {
+                    const place = await scripts.saveAsPlace();
+                    const chosen = await options.hostDialog.save(below(await options.projectsFolder(), place.folder), place.file, SCRIPT_TYPE);
+                    if (chosen === null)
+                        return;
+                    if (!chosen.relative)
+                        throw new Error('Sugar scripts are saved in the projects folder.');
+                    const saved = await scripts.saveTo(chosen.relative);
+                    notify('success', 'Sugar script saved', saved.path);
+                    return;
+                }
                 const file = await dialogs.promptText({
                     title: 'Save Sugar Script As',
                     label: 'File name',
