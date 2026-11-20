@@ -1,3 +1,13 @@
+## [0.9.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.8.0...substitute-v0.9.0) (2026-11-20)
+
+### Features
+
+* **desktop:** show the Windows open and save dialogs for the page, starting where it asks ([4dba90b](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/4dba90b733a6b1ae2a719cbd6a58c9d21b7ab697))
+
+### Bug Fixes
+
+* **desktop:** start a file dialog below the folder its answer is placed in ([bd6b128](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/bd6b12839a8ac7a78d74939a8529374e29fc9d38))
+
 ## [0.8.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.7.0...substitute-v0.8.0) (2026-11-20)
 
 ### Features
