@@ -69,6 +69,18 @@ test('allows shared ContextMenu aliases and ordinary feature event delegation', 
   ).toEqual([]);
 });
 
+test('a menu opened below a control must name that control, so the control closes it again', () => {
+  const open = (options: string) =>
+    audit(
+      `import {ContextMenu} from "./menus/ContextMenu"; declare const button:HTMLElement; new ContextMenu().open(${options});`,
+    ).map((failure) => failure.rule);
+  const below = 'anchor:{kind:"below",bounds:button.getBoundingClientRect()}';
+  expect(open(`{label:"More",entries:[],${below}}`)).toEqual(['UI_CONTEXT_MENU_TRIGGER']);
+  expect(open(`{label:"More",entries:[],${below},trigger:button}`)).toEqual([]);
+  // A menu at the pointer has no control to close it.
+  expect(open('{label:"More",entries:[],anchor:{kind:"point",x:1,y:2}}')).toEqual([]);
+});
+
 test('allows the shared floating owner to construct its own native tooltip transport', () => {
   expect(
     audit(

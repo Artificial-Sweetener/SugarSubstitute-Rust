@@ -47,6 +47,31 @@ export function isMenuOwnership(value: unknown): value is MenuOwnership {
 }
 
 /** Reject independent context renderers while allowing feature-owned entries and event delegation. */
+/**
+ * Whether an object literal asks for a menu of entries below a control without naming that
+ * control. ContextMenu closes a menu asked for again from its own trigger; a caller that names
+ * none leaves a button that only ever opens.
+ */
+function opensBelowWithoutTrigger(options: ts.ObjectLiteralExpression): boolean {
+  const named = (literal: ts.ObjectLiteralExpression, name: string) =>
+    literal.properties.find(
+      (property) =>
+        (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) &&
+        property.name.getText() === name,
+    );
+  const anchor = named(options, 'anchor');
+  if (!named(options, 'entries') || named(options, 'trigger')) return false;
+  if (!anchor || !ts.isPropertyAssignment(anchor)) return false;
+  if (!ts.isObjectLiteralExpression(anchor.initializer)) return false;
+  const kind = named(anchor.initializer, 'kind');
+  return (
+    !!kind &&
+    ts.isPropertyAssignment(kind) &&
+    ts.isStringLiteralLike(kind.initializer) &&
+    kind.initializer.text === 'below'
+  );
+}
+
 export function auditContextMenus(
   program: ts.Program,
   root: string,
@@ -87,6 +112,12 @@ export function auditContextMenus(
     };
     /** Inspect resolved types and literal DOM semantics, including imported aliases. */
     const visit = (node: ts.Node): void => {
+      if (ts.isObjectLiteralExpression(node) && opensBelowWithoutTrigger(node))
+        fail(
+          node,
+          'UI_CONTEXT_MENU_TRIGGER',
+          'Name the trigger of a menu opened below a control, so the control closes its own menu.',
+        );
       if (ts.isNewExpression(node)) {
         const type = checker.getTypeAtLocation(node);
         const symbol = type.getSymbol();
