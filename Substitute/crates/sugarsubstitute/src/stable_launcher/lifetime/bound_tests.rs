@@ -105,6 +105,20 @@ fn a_record_kept_busy_by_another_process_falls_back_to_the_accepted_release() ->
     finish(&mut launcher, &wake)
 }
 
+/// A record with neither an accepted release nor a candidate does not end the launch at routing:
+/// the launcher goes on to look for the installed release, and to the repair after it.
+#[test]
+fn a_record_that_names_nothing_to_start_continues_to_the_installed_release() -> Result<()> {
+    let (mut launcher, _, wake) = fixture()?;
+    let nothing = io::Error::other(RouteFailure::NeedsInstallation);
+    launcher.failed(Task::Route, Box::new(nothing))?;
+    assert!(matches!(launcher.choice, Choice::Installation));
+    assert!(!launcher.accepted_only, "the repair stays available");
+    assert!(launcher.update_failure.is_some());
+    launcher.request_shutdown()?;
+    finish(&mut launcher, &wake)
+}
+
 /// Close while the next step may already have failed on the unopened fixture root, then
 /// observe the ordinary retirement.
 fn close(launcher: &mut Launcher, wake: &crate::updates::test_support::Wake) -> Result<()> {

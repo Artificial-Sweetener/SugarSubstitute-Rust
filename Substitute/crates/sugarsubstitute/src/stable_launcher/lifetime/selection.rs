@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Choose a reauthenticated cached trial or the independent accepted startup path.
 use super::*;
+use sugarsubstitute_supervision::setup_storage::RouteFailure;
 
 impl Launcher {
     /// Every phase borrows the same executor and monotone job sequence; cached work performs no HTTP.
@@ -199,6 +200,14 @@ impl Launcher {
             self.choice = Choice::Accepted;
             return Ok(());
         }
+        if matches!(task, Task::Route) && route_names_nothing(cause.as_ref()) {
+            // The installed release may still be on disk; when it is not, selecting the accepted
+            // release fails and the repair prepares one from the update feed.
+            tracing::warn!(operation="startup_route_names_nothing", cause=%crate::failure_details::Details(cause.as_ref()), "The installation record names nothing to start; looking for the installed release");
+            self.update_failure.get_or_insert(cause);
+            self.choice = Choice::Installation;
+            return Ok(());
+        }
         if matches!(task, Task::Select) && self.begin_repair(cause.as_ref())? {
             self.update_failure.get_or_insert(cause);
             return Ok(());
@@ -255,19 +264,28 @@ impl Launcher {
 /// Whether routing stopped only because another process held the installation record past
 /// its bounded wait.
 fn route_lock_timed_out(cause: &(dyn Error + 'static)) -> bool {
-    use sugarsubstitute_supervision::setup_storage::{RouteFailure, SelectionFailure};
+    use sugarsubstitute_supervision::setup_storage::SelectionFailure;
+    route_failed_as(cause, |failure| {
+        matches!(failure, RouteFailure::Selection(SelectionFailure::LockTimeout))
+    })
+}
+
+/// Whether routing stopped because the record has neither an accepted release nor a candidate.
+fn route_names_nothing(cause: &(dyn Error + 'static)) -> bool {
+    route_failed_as(cause, |failure| matches!(failure, RouteFailure::NeedsInstallation))
+}
+
+/// Whether `cause`, or an error it wraps, is a routing failure that `matches`.
+fn route_failed_as(cause: &(dyn Error + 'static), matches: fn(&RouteFailure) -> bool) -> bool {
     let mut next = Some(cause);
     while let Some(current) = next {
         // `io::Error::source` skips the wrapped error itself, so look inside it first.
         if let Some(inner) = current.downcast_ref::<io::Error>().and_then(io::Error::get_ref)
-            && route_lock_timed_out(inner)
+            && route_failed_as(inner, matches)
         {
             return true;
         }
-        if matches!(
-            current.downcast_ref::<RouteFailure>(),
-            Some(RouteFailure::Selection(SelectionFailure::LockTimeout))
-        ) {
+        if current.downcast_ref::<RouteFailure>().is_some_and(matches) {
             return true;
         }
         next = current.source();
