@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 // Generated from file-choice.schema.json by scripts/integrations/generate-file-choice-contract.ts.
-// Schema SHA-256 (LF): 94bab1f563c262bdc0a2daad99f1fefed989cfde22977894862b91d96a05ef9e
+// Schema SHA-256 (LF): 17ac55fb4580dbb590807c22617cb5a85dcdca732670c735f47b2c551d0d6566
 
 /// Schema-defined untrusted FileChoiceFailure token; decoding admits only the listed values.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -89,6 +89,7 @@ pub(super) struct FileChoiceOpenMessage {
     pub(super) r#type: String,
     pub(super) request: String,
     pub(super) folder: String,
+    pub(super) start: String,
     pub(super) extension: String,
 }
 impl FileChoiceOpenMessage {
@@ -100,6 +101,7 @@ impl FileChoiceOpenMessage {
             && self.r#type == "open"
             && valid_lowercase_token(&self.request, 48)
             && self.folder.encode_utf16().count() <= 1024
+            && self.start.encode_utf16().count() <= 1024
             && valid_lowercase_token(&self.extension, 64)
     }
 }
@@ -114,6 +116,7 @@ pub(super) struct FileChoiceSaveMessage {
     pub(super) r#type: String,
     pub(super) request: String,
     pub(super) folder: String,
+    pub(super) start: String,
     pub(super) name: String,
     pub(super) extension: String,
 }
@@ -126,6 +129,7 @@ impl FileChoiceSaveMessage {
             && self.r#type == "save"
             && valid_lowercase_token(&self.request, 48)
             && self.folder.encode_utf16().count() <= 1024
+            && self.start.encode_utf16().count() <= 1024
             && self.name.encode_utf16().count() <= 255
             && valid_lowercase_token(&self.extension, 64)
     }

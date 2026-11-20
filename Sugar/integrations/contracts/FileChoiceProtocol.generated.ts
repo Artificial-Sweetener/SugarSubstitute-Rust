@@ -51,6 +51,7 @@ export type FileChoiceOpenMessage = {
   readonly type: 'open';
   readonly request: string;
   readonly folder: string;
+  readonly start: string;
   readonly extension: string;
 };
 /** Describe the schema-defined FileChoiceSaveMessage wire value. */
@@ -61,6 +62,7 @@ export type FileChoiceSaveMessage = {
   readonly type: 'save';
   readonly request: string;
   readonly folder: string;
+  readonly start: string;
   readonly name: string;
   readonly extension: string;
 };

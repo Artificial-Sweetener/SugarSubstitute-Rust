@@ -104,7 +104,7 @@ export function isFileChoiceFailedMessage(
 export function isFileChoiceOpenMessage(value: unknown): value is Contract.FileChoiceOpenMessage {
   return (
     isRecord(value) &&
-    Object.keys(value).length === 7 &&
+    Object.keys(value).length === 8 &&
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.file-choice' &&
     Object.hasOwn(value, 'version') &&
@@ -122,6 +122,9 @@ export function isFileChoiceOpenMessage(value: unknown): value is Contract.FileC
     Object.hasOwn(value, 'folder') &&
     typeof value['folder'] === 'string' &&
     value['folder'].length <= 1024 &&
+    Object.hasOwn(value, 'start') &&
+    typeof value['start'] === 'string' &&
+    value['start'].length <= 1024 &&
     Object.hasOwn(value, 'extension') &&
     typeof value['extension'] === 'string' &&
     value['extension'].length <= 64 &&
@@ -132,7 +135,7 @@ export function isFileChoiceOpenMessage(value: unknown): value is Contract.FileC
 export function isFileChoiceSaveMessage(value: unknown): value is Contract.FileChoiceSaveMessage {
   return (
     isRecord(value) &&
-    Object.keys(value).length === 8 &&
+    Object.keys(value).length === 9 &&
     Object.hasOwn(value, 'protocol') &&
     value['protocol'] === 'sugarcubes.file-choice' &&
     Object.hasOwn(value, 'version') &&
@@ -150,6 +153,9 @@ export function isFileChoiceSaveMessage(value: unknown): value is Contract.FileC
     Object.hasOwn(value, 'folder') &&
     typeof value['folder'] === 'string' &&
     value['folder'].length <= 1024 &&
+    Object.hasOwn(value, 'start') &&
+    typeof value['start'] === 'string' &&
+    value['start'].length <= 1024 &&
     Object.hasOwn(value, 'name') &&
     typeof value['name'] === 'string' &&
     value['name'].length <= 255 &&

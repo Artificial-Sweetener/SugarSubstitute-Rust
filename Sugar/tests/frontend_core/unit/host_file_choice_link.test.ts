@@ -58,7 +58,7 @@ function attached() {
 test('the dialog is there only while a host link is attached', async () => {
   const dialog = new HostFileChoice();
   expect(dialog.available).toBe(false);
-  await expect(dialog.open('C:\\p', 'sugar')).rejects.toThrow('unavailable');
+  await expect(dialog.open('C:\\p', '', 'sugar')).rejects.toThrow('unavailable');
   const { dialog: hosted } = attached();
   expect(hosted.available).toBe(true);
   hosted.attach(null);
@@ -67,15 +67,23 @@ test('the dialog is there only while a host link is attached', async () => {
 
 test('open and save name their own requests, and each settles with its own answer', async () => {
   const { host, dialog } = attached();
-  const opened = dialog.open('C:\\projects', 'sugar');
-  const saved = dialog.save('C:\\projects\\Demo', 'Demo.sugar', 'sugar');
+  const opened = dialog.open('C:\\projects', '', 'sugar');
+  const saved = dialog.save('C:\\projects', 'Demo', 'Demo.sugar', 'sugar');
   expect(host.sent).toEqual([
-    { ...envelope, type: 'open', request: 'open-1', folder: 'C:\\projects', extension: 'sugar' },
+    {
+      ...envelope,
+      type: 'open',
+      request: 'open-1',
+      folder: 'C:\\projects',
+      start: '',
+      extension: 'sugar',
+    },
     {
       ...envelope,
       type: 'save',
       request: 'save-2',
-      folder: 'C:\\projects\\Demo',
+      folder: 'C:\\projects',
+      start: 'Demo',
       extension: 'sugar',
       name: 'Demo.sugar',
     },
@@ -105,8 +113,8 @@ test('open and save name their own requests, and each settles with its own answe
 
 test('a dialog the host did not show fails with what happened', async () => {
   const { host, dialog } = attached();
-  const busy = dialog.open('C:\\p', 'sugar');
-  const missing = dialog.open('C:\\gone', 'sugar');
+  const busy = dialog.open('C:\\p', '', 'sugar');
+  const missing = dialog.open('C:\\gone', '', 'sugar');
   host.host({ ...envelope, type: 'failed', request: 'open-1', reason: 'busy' });
   host.host({ ...envelope, type: 'failed', request: 'open-2', reason: 'unavailable' });
   await expect(busy).rejects.toThrow('Another file dialog is already open.');
@@ -115,12 +123,12 @@ test('a dialog the host did not show fails with what happened', async () => {
 
 test('a question outlived by its host fails instead of waiting forever', async () => {
   const { dialog, link } = attached();
-  const waiting = dialog.open('C:\\p', 'sugar');
+  const waiting = dialog.open('C:\\p', '', 'sugar');
   link.dispose();
   await expect(waiting).rejects.toThrow('unavailable');
-  await expect(link.ask({ kind: 'open', folder: 'C:\\p', extension: 'sugar' })).rejects.toThrow(
-    'unavailable',
-  );
+  await expect(
+    link.ask({ kind: 'open', folder: 'C:\\p', start: '', extension: 'sugar' }),
+  ).rejects.toThrow('unavailable');
 });
 
 test('a transport that cannot send retires the link and fails the question', async () => {
@@ -136,8 +144,8 @@ test('a transport that cannot send retires the link and fails the question', asy
     (error) => void reported.push(error),
   );
   link.start();
-  await expect(link.ask({ kind: 'open', folder: 'C:\\p', extension: 'sugar' })).rejects.toThrow(
-    'unavailable',
-  );
+  await expect(
+    link.ask({ kind: 'open', folder: 'C:\\p', start: '', extension: 'sugar' }),
+  ).rejects.toThrow('unavailable');
   expect(reported).toHaveLength(1);
 });

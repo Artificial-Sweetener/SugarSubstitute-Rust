@@ -375,12 +375,12 @@ function hostDialog(answers: readonly ({ name: string; relative: string } | null
     asked,
     dialog: {
       available: true,
-      open: async (folder: string, extension: string) => {
-        asked.push(`open ${folder} *.${extension}`);
+      open: async (folder: string, start: string, extension: string) => {
+        asked.push(`open ${folder} [${start}] *.${extension}`);
         return queue.shift() ?? null;
       },
-      save: async (folder: string, name: string, extension: string) => {
-        asked.push(`save ${folder} ${name} *.${extension}`);
+      save: async (folder: string, start: string, name: string, extension: string) => {
+        asked.push(`save ${folder} [${start}] ${name} *.${extension}`);
         return queue.shift() ?? null;
       },
     },
@@ -410,7 +410,7 @@ test('in a host with a file dialog, Open starts in the projects folder and opens
   await open?.function();
   await open?.function();
   await open?.function();
-  expect(host.asked).toEqual(Array(3).fill('open C:\\user\\projects *.sugar'));
+  expect(host.asked).toEqual(Array(3).fill('open C:\\user\\projects [] *.sugar'));
   expect(picked).not.toHaveBeenCalled();
   expect(t.opened).toEqual(['Bune']);
   expect(notices).toEqual([
@@ -434,15 +434,16 @@ test('in a host with a file dialog, Save As asks the operating system where and 
     dialogs: { promptText: prompted },
     pickScript: async () => null,
     hostDialog: host.dialog,
-    projectsFolder: async () => 'C:\\user\\projects\\',
+    projectsFolder: async () => 'C:\\user\\projects',
     notify: (severity, title, message) => notices.push(`${severity}: ${title}: ${message}`),
     describe: (error) => (error instanceof Error ? error.message : String(error)),
     exportWorkflow: async () => undefined,
   });
   const saveAs = commands[2];
   for (let turn = 0; turn < 4; turn += 1) await saveAs?.function();
-  // The dialog starts in the project's own folder, suggesting the project's script.
-  expect(host.asked).toEqual(Array(4).fill('save C:\\user\\projects\\Demo Demo.sugar *.sugar'));
+  // The dialog starts in the project's own folder, suggesting the project's script, and what
+  // is chosen is placed relative to the projects folder.
+  expect(host.asked).toEqual(Array(4).fill('save C:\\user\\projects [Demo] Demo.sugar *.sugar'));
   expect(prompted).not.toHaveBeenCalled();
   expect(f.texts.get('Demo/take two.sugar')).toContain('use "a" as A');
   expect(f.log).toEqual(['write Demo/take two.sugar']);

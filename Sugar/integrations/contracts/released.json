@@ -13,7 +13,7 @@
     {
       "file": "file-choice.schema.json",
       "id": "https://artificialsweetener.ai/schemas/sugarcubes/file-choice/v1",
-      "sha256": "5dc06883024d24f0b22658f0e8fb04e0b0d0ed0fa9f11410d6f657f439e7be8a"
+      "sha256": "e36d3ba5c3447305a5a33dd01916b2525f9f4ba0cfae4ec1e091beb3052387cf"
     },
     {
       "file": "file-drag.schema.json",

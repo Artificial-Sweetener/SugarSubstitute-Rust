@@ -29,15 +29,23 @@ export interface ProjectDialogs {
   }): Promise<string | null>;
 }
 
-/** A host's own file dialog: it starts in a folder and says where the person chose below it. */
+/**
+ * A host's own file dialog. It starts in `start`, a forward-slashed path below `folder` (empty
+ * for `folder` itself), and says where the person chose relative to `folder`.
+ */
 export interface ProjectHostDialog {
   /** Whether a host is there to show the dialog. */
   readonly available: boolean;
-  open(folder: string, extension: string): Promise<ProjectChoice | null>;
-  save(folder: string, name: string, extension: string): Promise<ProjectChoice | null>;
+  open(folder: string, start: string, extension: string): Promise<ProjectChoice | null>;
+  save(
+    folder: string,
+    start: string,
+    name: string,
+    extension: string,
+  ): Promise<ProjectChoice | null>;
 }
 
-/** A chosen file: its name, and its path below the starting folder or `''` when outside it. */
+/** A chosen file: its name, and its path below the named folder or `''` when outside it. */
 export interface ProjectChoice {
   readonly name: string;
   readonly relative: string;
@@ -45,13 +53,6 @@ export interface ProjectChoice {
 
 /** The extension the host's dialog offers, without its dot. */
 const SCRIPT_TYPE = 'sugar';
-
-/** Join a folder inside the projects folder onto its path, with that path's own separator. */
-function below(root: string, folder: string): string {
-  if (!folder) return root;
-  const separator = root.includes('\\') ? '\\' : '/';
-  return root.replace(/[\\/]+$/u, '') + separator + folder;
-}
 
 export interface ProjectCommandOptions {
   readonly scripts: ProjectScripts;
@@ -111,7 +112,11 @@ export function projectCommands(options: ProjectCommandOptions): readonly Projec
       label: 'Open Sugar Script...',
       function: guarded('Sugar script not opened', async () => {
         if (options.hostDialog?.available) {
-          const chosen = await options.hostDialog.open(await options.projectsFolder(), SCRIPT_TYPE);
+          const chosen = await options.hostDialog.open(
+            await options.projectsFolder(),
+            '',
+            SCRIPT_TYPE,
+          );
           if (chosen === null) return;
           if (!chosen.relative)
             throw new Error(
@@ -140,7 +145,8 @@ export function projectCommands(options: ProjectCommandOptions): readonly Projec
         if (options.hostDialog?.available) {
           const place = await scripts.saveAsPlace();
           const chosen = await options.hostDialog.save(
-            below(await options.projectsFolder(), place.folder),
+            await options.projectsFolder(),
+            place.folder,
             place.file,
             SCRIPT_TYPE,
           );

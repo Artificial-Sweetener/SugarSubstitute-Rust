@@ -38,19 +38,25 @@ export interface FileChoiceLinkTransport {
   subscribe(receive: (value: unknown) => void): () => void;
 }
 
-/** Where the person chose: the file's name, and its path below the folder the dialog started in. */
+/** Where the person chose: the file's name, and its path below the folder the question named. */
 export interface FileChoice {
   readonly name: string;
-  /** Forward-slashed path below the starting folder; empty when the choice lies outside it. */
+  /** Forward-slashed path below the question's folder; empty when the choice lies outside it. */
   readonly relative: string;
 }
 
 /** One dialog to show: open an existing file, or choose where one is saved under a suggested name. */
 export type FileChoiceQuestion =
-  | { readonly kind: 'open'; readonly folder: string; readonly extension: string }
+  | {
+      readonly kind: 'open';
+      readonly folder: string;
+      readonly start: string;
+      readonly extension: string;
+    }
   | {
       readonly kind: 'save';
       readonly folder: string;
+      readonly start: string;
       readonly name: string;
       readonly extension: string;
     };
@@ -74,14 +80,18 @@ export class HostFileChoice {
     this.#asker = asker;
   }
 
-  /** Let the person choose one existing file of `extension`, starting in `folder`. */
-  open(folder: string, extension: string): Promise<FileChoice | null> {
-    return this.#ask({ kind: 'open', folder, extension });
+  /**
+   * Let the person choose one existing file of `extension`. The dialog starts in `start`, a
+   * forward-slashed path below `folder` (empty for `folder` itself); the choice is placed
+   * relative to `folder`.
+   */
+  open(folder: string, start: string, extension: string): Promise<FileChoice | null> {
+    return this.#ask({ kind: 'open', folder, start, extension });
   }
 
-  /** Let the person choose where a file of `extension` is saved, starting in `folder`. */
-  save(folder: string, name: string, extension: string): Promise<FileChoice | null> {
-    return this.#ask({ kind: 'save', folder, name, extension });
+  /** Let the person choose where a file of `extension` is saved, as `open` places its dialog. */
+  save(folder: string, start: string, name: string, extension: string): Promise<FileChoice | null> {
+    return this.#ask({ kind: 'save', folder, start, name, extension });
   }
 
   #ask(question: FileChoiceQuestion): Promise<FileChoice | null> {
@@ -137,6 +147,7 @@ export class HostFileChoiceLink implements FileChoiceAsker {
       session: this.transport.session,
       request,
       folder: question.folder,
+      start: question.start,
       extension: question.extension,
     } as const;
     return new Promise<FileChoice | null>((resolve, reject) => {

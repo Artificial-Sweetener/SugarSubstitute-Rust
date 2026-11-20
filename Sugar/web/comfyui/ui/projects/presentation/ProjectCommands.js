@@ -17,13 +17,6 @@
 import { projectNameError } from '../domain/ProjectScript.js';
 /** The extension the host's dialog offers, without its dot. */
 const SCRIPT_TYPE = 'sugar';
-/** Join a folder inside the projects folder onto its path, with that path's own separator. */
-function below(root, folder) {
-    if (!folder)
-        return root;
-    const separator = root.includes('\\') ? '\\' : '/';
-    return root.replace(/[\\/]+$/u, '') + separator + folder;
-}
 /** Open a project script chosen in the operating system's file dialog. */
 export const OPEN_SUGAR_SCRIPT = 'SugarCubes.OpenSugarScript';
 /** Save the shown workflow as its project script. */
@@ -55,7 +48,7 @@ export function projectCommands(options) {
             label: 'Open Sugar Script...',
             function: guarded('Sugar script not opened', async () => {
                 if (options.hostDialog?.available) {
-                    const chosen = await options.hostDialog.open(await options.projectsFolder(), SCRIPT_TYPE);
+                    const chosen = await options.hostDialog.open(await options.projectsFolder(), '', SCRIPT_TYPE);
                     if (chosen === null)
                         return;
                     if (!chosen.relative)
@@ -83,7 +76,7 @@ export function projectCommands(options) {
             function: guarded('Sugar script not saved', async () => {
                 if (options.hostDialog?.available) {
                     const place = await scripts.saveAsPlace();
-                    const chosen = await options.hostDialog.save(below(await options.projectsFolder(), place.folder), place.file, SCRIPT_TYPE);
+                    const chosen = await options.hostDialog.save(await options.projectsFolder(), place.folder, place.file, SCRIPT_TYPE);
                     if (chosen === null)
                         return;
                     if (!chosen.relative)

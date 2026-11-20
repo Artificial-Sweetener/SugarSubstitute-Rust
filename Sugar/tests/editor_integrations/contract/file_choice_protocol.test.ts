@@ -52,6 +52,7 @@ test('the closed wire contract admits a page’s two questions and a host’s th
     type: 'open',
     request: 'open-1',
     folder: 'C:\\p',
+    start: '',
     extension: 'sugar',
   };
   const valid = [
@@ -66,6 +67,7 @@ test('the closed wire contract admits a page’s two questions and a host’s th
   ];
   const invalid = [
     { ...open, extension: '*.sugar' },
+    { ...envelope, type: 'open', request: 'open-1', folder: '/p', extension: 'sugar' },
     { ...open, request: 'Open 1' },
     { ...open, text: 'content' },
     { ...open, type: 'save' },

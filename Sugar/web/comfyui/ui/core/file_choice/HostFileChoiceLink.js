@@ -37,13 +37,17 @@ export class HostFileChoice {
     attach(asker) {
         this.#asker = asker;
     }
-    /** Let the person choose one existing file of `extension`, starting in `folder`. */
-    open(folder, extension) {
-        return this.#ask({ kind: 'open', folder, extension });
+    /**
+     * Let the person choose one existing file of `extension`. The dialog starts in `start`, a
+     * forward-slashed path below `folder` (empty for `folder` itself); the choice is placed
+     * relative to `folder`.
+     */
+    open(folder, start, extension) {
+        return this.#ask({ kind: 'open', folder, start, extension });
     }
-    /** Let the person choose where a file of `extension` is saved, starting in `folder`. */
-    save(folder, name, extension) {
-        return this.#ask({ kind: 'save', folder, name, extension });
+    /** Let the person choose where a file of `extension` is saved, as `open` places its dialog. */
+    save(folder, start, name, extension) {
+        return this.#ask({ kind: 'save', folder, start, name, extension });
     }
     #ask(question) {
         return this.#asker
@@ -93,6 +97,7 @@ export class HostFileChoiceLink {
             session: this.transport.session,
             request,
             folder: question.folder,
+            start: question.start,
             extension: question.extension,
         };
         return new Promise((resolve, reject) => {
