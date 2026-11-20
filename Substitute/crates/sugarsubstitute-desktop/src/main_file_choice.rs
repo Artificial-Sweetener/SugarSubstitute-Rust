@@ -41,6 +41,7 @@ impl ChoiceDesk {
 
 /// The chosen file's name alone, and its path below `folder` with forward slashes; the path
 /// is empty when the choice lies outside `folder`. Letter case is ignored as Windows does.
+#[cfg(windows)]
 pub(crate) fn place(folder: &std::path::Path, chosen: &std::path::Path) -> (String, String) {
     let text = |part: std::path::Component<'_>| part.as_os_str().to_string_lossy().into_owned();
     let name = chosen.file_name().map(|name| name.to_string_lossy().into_owned());
