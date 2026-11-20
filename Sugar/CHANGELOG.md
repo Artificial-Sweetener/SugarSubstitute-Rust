@@ -1,3 +1,9 @@
+## [0.32.2](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.32.1...sugarcubes-v0.32.2) (2026-11-20)
+
+### Bug Fixes
+
+* **host:** hear the desktop through one subscription so no link is refused ([53e4e0a](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/53e4e0a9ce2278313ae4bf63f5867f5a46d11491))
+
 ## [0.32.1](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.32.0...sugarcubes-v0.32.1) (2026-11-20)
 
 ### Bug Fixes
