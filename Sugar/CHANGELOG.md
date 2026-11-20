@@ -1,3 +1,13 @@
+## [0.33.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.32.2...sugarcubes-v0.33.0) (2026-11-20)
+
+### Features
+
+* **projects:** choose a Sugar script in the system file dialog ([624821e](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/624821ea3ed27c49ad3f01ce165e307bc7beac8f))
+
+### Bug Fixes
+
+* **import:** name the nodes and the node pack a Cube is missing instead of a boundary error ([062b96e](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/062b96e68156ced825c908055f1900110797c666))
+
 ## [0.32.2](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.32.1...sugarcubes-v0.32.2) (2026-11-20)
 
 ### Bug Fixes
