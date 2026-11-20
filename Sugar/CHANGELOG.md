@@ -1,3 +1,21 @@
+## [0.32.1](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.32.0...sugarcubes-v0.32.1) (2026-11-20)
+
+### Bug Fixes
+
+* **recovery:** take back a ComfyUI-stopped notice once it is out of date ([b9d8c77](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/b9d8c77a22c0ccecff603e82c8888a29db08d8bd))
+
+### Performance Improvements
+
+* **graph:** keep zooming the graph smooth over prompt editors ([736fad8](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/736fad88abe01be424836afbcae5237ebefb76e3))
+* **masonry:** keep mounting the stack, scrollbars and graph chrome off the cards ([d8d053d](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/d8d053d8e902641a0f4f79d27da2301a3cc4a559))
+* **masonry:** keep the stack width and the surface's name off every card ([b2cf547](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/b2cf5478d9f203c6041a5020e7da82e9f3acc39f))
+* **masonry:** restyle only what a view switch changes ([875af16](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/875af16f77b9c507be25b8b969835b8b6cbaa078))
+* **masonry:** stop restyling the whole workspace during a view switch ([f8ee83a](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/f8ee83a2db1e86a493a817e149b1b30ef8167d7a))
+* **scrollbars:** read overflow for a large remount over several frames ([0aac4cf](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/0aac4cf314fbf34a0cb9075223bbb6bff26bc1cf))
+* **session:** tell the host where the view stopped, not every place on the way ([5f37941](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/5f37941fde6b6637205ee0ad113101143e9d129a))
+* **session:** validate and measure a captured graph without allocating per value ([fcdb835](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/fcdb8356b8a94e82acd70ccabe200b12539578e1))
+* **stack:** keep the rail's fade from restyling every card ([8186032](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/8186032492af8a67c6b2735f36b41026198007ef))
+
 ## [0.32.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.31.0...sugarcubes-v0.32.0) (2026-11-19)
 
 ### Features
