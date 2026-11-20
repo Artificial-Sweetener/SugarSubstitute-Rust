@@ -16,6 +16,7 @@
 /** Decode authored source labels and full instance paths from one workflow-owned serialized snapshot. */
 import { isRecord } from '../../types/common.js';
 import { outputSourceId } from '../domain/ExecutionIdentity.js';
+import { resolveCubeModelTitle } from '../../cube/CubeModelTitlePresentation.js';
 import { buildCubeOutputExecutionId } from '../../cube/execution/CubeOutputExecutionIdentity.js';
 import { readWorkflowSourceSavingPreferences } from '../../output_saving/domain/SourceSavingPreferences.js';
 /** Inventory serialized topology once at a load/submission boundary, never during media or pointer events. */
@@ -32,7 +33,7 @@ export function decodeComfyWorkflowSources(workflow) {
             definitions.set(definition.id, definition);
     const sources = [];
     const paths = new Set();
-    const append = (path, label, breadcrumb) => {
+    const append = (path, label, breadcrumb, cube) => {
         if (paths.has(path))
             return;
         paths.add(path);
@@ -42,6 +43,7 @@ export function decodeComfyWorkflowSources(workflow) {
             label,
             breadcrumb: Object.freeze([...breadcrumb]),
             order: sources.length,
+            ...(cube ? { cube: Object.freeze(cube) } : {}),
         }));
     };
     const visit = (graph, prefix, breadcrumb, ancestors) => {
@@ -73,14 +75,20 @@ export function decodeComfyWorkflowSources(workflow) {
                 'Output';
             append(path, label, breadcrumb);
             const properties = record(node.properties) ? node.properties : null;
-            if (nested && properties?.sugarcubes_kind === 'cube' && Array.isArray(nested.outputs))
-                nested.outputs.forEach((output, slot) => {
-                    const name = record(output) ? text(output.name) : '';
-                    append(buildCubeOutputExecutionId(path, slot), name || `Output ${slot + 1}`, [
-                        ...breadcrumb,
-                        label,
-                    ]);
+            if (nested && properties?.sugarcubes_kind === 'cube' && Array.isArray(nested.outputs)) {
+                const outputs = nested.outputs;
+                const metadata = record(properties.sugarcubes_cube) ? properties.sugarcubes_cube : null;
+                outputs.forEach((output, slot) => {
+                    const name = (record(output) ? text(output.name) : '') || `Output ${slot + 1}`;
+                    append(buildCubeOutputExecutionId(path, slot), name, [...breadcrumb, label], {
+                        title: label,
+                        name: resolveCubeModelTitle({ targetModel: metadata?.target_model, title: label })
+                            .nameText,
+                        outputName: name,
+                        outputCount: outputs.length,
+                    });
                 });
+            }
             if (nested)
                 visit(nested, segments, [...breadcrumb, label], nextAncestors);
         }

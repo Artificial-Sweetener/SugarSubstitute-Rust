@@ -18,6 +18,9 @@
 import { MASONRY_STACK_Z_INDEX } from '../../core/OverlayStacking.js';
 import { GRAPH_LAYER_CLIP_PROPERTY } from './ComfyCanvasFrameAllocation.js';
 
+/** Where the canvas pane's left edge sits in the window, published while the pane is shown. */
+export const CANVAS_PANE_LEFT_PROPERTY = '--sc-output-pane-left';
+
 /**
  * Install scoped allocation rules for owned regions and qualified native chrome.
  *
@@ -40,6 +43,10 @@ export function ensureCanvasWorkspaceStyles(document: Document): void {
       mask:var(--sc-output-icon) center / contain no-repeat; }
     .sc-output-workspace-frame { position:fixed; z-index:998; isolation:isolate; pointer-events:none; }
     #graph-canvas-container > :has(> .dom-widget) { clip-path:var(${GRAPH_LAYER_CLIP_PROPERTY},none); }
+    /* ComfyUI centres a selected node's toolbar on --tb-x. The canvas pane shows the native image
+       through the page, so a toolbar reaching past the pane's edge is cut off there. */
+    #graph-canvas-container [data-testid="selection-toolbox"] {
+      clip-path:inset(0 max(0px,calc(var(--tb-x,0px) + 50% - var(${CANVAS_PANE_LEFT_PROPERTY},100000px))) 0 0); }
     .sc-output-workspace-topmenu { height:var(--sc-output-toolbar-height); flex-shrink:0; overflow:visible; }
     .sc-output-workspace-topmenu > * { flex-shrink:0; }
     .sc-output-workspace-content { position:absolute; inset:0; pointer-events:none; }

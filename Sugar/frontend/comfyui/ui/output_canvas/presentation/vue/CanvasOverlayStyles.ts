@@ -32,6 +32,8 @@ export function ensureCanvasOverlayStyles(document: Document): void {
     /* Canvas chrome is one solid surface: nothing over the canvas is translucent or blurred. */
     .sc-output-tabstrip { position:absolute; bottom:8px; left:8px;
       max-width:calc(100% - 16px); padding:4px; z-index:2; isolation:isolate; }
+    /* A part with nothing to offer takes no room, so the bar's two ends keep the same inset. */
+    .sc-output-tabstrip > :empty { display:none; }
     .sc-output-choice[data-stable="true"] .sc-output-segment { min-width:calc(var(--sc-choice-label-chars,6) * 1ch + 26px); }
     .sc-output-selection-picker { display:flex; gap:4px; min-width:0; }
     .sc-output-comparison-exit { flex-shrink:0; }

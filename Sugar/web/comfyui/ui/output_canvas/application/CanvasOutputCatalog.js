@@ -132,9 +132,24 @@ function qualifiedCaptions(entries) {
         const caption = [...entry.source.breadcrumb, entry.source.label].join(' / ');
         captions.set(caption, (captions.get(caption) ?? 0) + 1);
     }
+    const cubes = new Map();
     return entries.map((entry) => {
         if ((labels.get(entry.summary.label) ?? 0) <= 1)
             return entry;
+        if (entry.source.cube) {
+            // Cubes that share a name stay named for the Cube; the later ones are numbered.
+            const nth = (cubes.get(entry.summary.label) ?? 0) + 1;
+            cubes.set(entry.summary.label, nth);
+            if (nth === 1)
+                return entry;
+            return Object.freeze({
+                ...entry,
+                summary: Object.freeze({
+                    ...entry.summary,
+                    label: `${entry.summary.label} (${String(nth)})`,
+                }),
+            });
+        }
         const label = [...entry.source.breadcrumb, entry.source.label].join(' / ');
         const occurrence = (occurrences.get(label) ?? 0) + 1;
         occurrences.set(label, occurrence);

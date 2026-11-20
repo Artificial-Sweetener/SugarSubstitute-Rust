@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Restore one independent browser view per open workflow and retire closed bindings. */
+import { presentCanvasSources } from './CanvasSourceCaption.js';
 import { canvasSessionId } from '../domain/CanvasIdentity.js';
 import { canvasSceneCatalog } from './CanvasOutputCatalog.js';
 /** Coordinate lightweight primary views without owning surface resources or native multi-view accounting. */
@@ -65,7 +66,8 @@ export class CanvasSessionCoordinator {
     restoreSources(context, sources) {
         if (this.#contexts.get(context.sessionId)?.generation !== context.generation)
             throw new TypeError('Restored canvas topology belongs to a retired workflow.');
-        this.sources.replace(context, sources);
+        // Decoded topology names a Cube's output by the output alone; the canvas names the Cube.
+        this.sources.replace(context, presentCanvasSources(sources));
         this.#refresh(context.sessionId);
     }
     /** Project an exact open session into its view without consulting the active graph. */

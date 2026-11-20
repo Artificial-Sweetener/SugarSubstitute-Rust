@@ -7,7 +7,7 @@ import {
 } from "../../../chunk-R73MK26O.js";
 import {
   ensureCanvasOverlayStyles
-} from "../../../chunk-JZL3TWTU.js";
+} from "../../../chunk-ISAOEDKW.js";
 import "../../../chunk-BNV5TS3I.js";
 import {
   canvasContextActions,

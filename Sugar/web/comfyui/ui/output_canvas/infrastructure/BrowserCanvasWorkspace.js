@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Mount explicitly allocated canvas/content siblings inside the qualified Comfy workspace. */
+import { CANVAS_PANE_LEFT_PROPERTY } from './CanvasWorkspaceStyles.js';
 import { CanvasWorkspaceResizeInput } from '../presentation/browser/CanvasWorkspaceResizeInput.js';
 import { ComfyCanvasFrameAllocation } from './ComfyCanvasFrameAllocation.js';
 import { ComfyCanvasWorkspaceFrame } from './ComfyCanvasWorkspaceFrame.js';
@@ -189,6 +190,13 @@ export class BrowserCanvasWorkspace {
             : '';
         for (const property of ['mask-image', '-webkit-mask-image'])
             this.content.style.setProperty(property, beneath);
+        // The graph's own floating chrome reads where the pane begins, so it never draws over it.
+        const frame = this.content.parentElement?.getBoundingClientRect();
+        const root = this.content.ownerDocument.documentElement;
+        if (this.#motion.present && frame)
+            root.style.setProperty(CANVAS_PANE_LEFT_PROPERTY, `${String(Math.round(frame.right - allocation.canvas.width))}px`);
+        else
+            root.style.removeProperty(CANVAS_PANE_LEFT_PROPERTY);
         this.#divider.setAttribute('aria-valuenow', String(Math.round(allocation.canvas.width)));
         this.#divider.setAttribute('aria-valuemin', String(Math.round(allocation.minimumWidth)));
         this.#divider.setAttribute('aria-valuemax', String(Math.round(allocation.maximumWidth)));

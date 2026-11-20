@@ -17,7 +17,8 @@
 
 import { isRecord, type UnknownRecord } from '../../types/common.js';
 import { outputSourceId } from '../domain/ExecutionIdentity.js';
-import type { WorkflowOutputSource } from '../domain/WorkflowOutput.js';
+import type { CubeOutputFacts, WorkflowOutputSource } from '../domain/WorkflowOutput.js';
+import { resolveCubeModelTitle } from '../../cube/CubeModelTitlePresentation.js';
 import { buildCubeOutputExecutionId } from '../../cube/execution/CubeOutputExecutionIdentity.js';
 import { readWorkflowSourceSavingPreferences } from '../../output_saving/domain/SourceSavingPreferences.js';
 
@@ -35,7 +36,12 @@ export function decodeComfyWorkflowSources(workflow: unknown): readonly Workflow
       definitions.set(definition.id, definition);
   const sources: WorkflowOutputSource[] = [];
   const paths = new Set<string>();
-  const append = (path: string, label: string, breadcrumb: readonly string[]): void => {
+  const append = (
+    path: string,
+    label: string,
+    breadcrumb: readonly string[],
+    cube?: CubeOutputFacts,
+  ): void => {
     if (paths.has(path)) return;
     paths.add(path);
     sources.push(
@@ -45,6 +51,7 @@ export function decodeComfyWorkflowSources(workflow: unknown): readonly Workflow
         label,
         breadcrumb: Object.freeze([...breadcrumb]),
         order: sources.length,
+        ...(cube ? { cube: Object.freeze(cube) } : {}),
       }),
     );
   };
@@ -81,14 +88,20 @@ export function decodeComfyWorkflowSources(workflow: unknown): readonly Workflow
         'Output';
       append(path, label, breadcrumb);
       const properties = record(node.properties) ? node.properties : null;
-      if (nested && properties?.sugarcubes_kind === 'cube' && Array.isArray(nested.outputs))
-        nested.outputs.forEach((output: unknown, slot: number) => {
-          const name = record(output) ? text(output.name) : '';
-          append(buildCubeOutputExecutionId(path, slot), name || `Output ${slot + 1}`, [
-            ...breadcrumb,
-            label,
-          ]);
+      if (nested && properties?.sugarcubes_kind === 'cube' && Array.isArray(nested.outputs)) {
+        const outputs = nested.outputs;
+        const metadata = record(properties.sugarcubes_cube) ? properties.sugarcubes_cube : null;
+        outputs.forEach((output: unknown, slot: number) => {
+          const name = (record(output) ? text(output.name) : '') || `Output ${slot + 1}`;
+          append(buildCubeOutputExecutionId(path, slot), name, [...breadcrumb, label], {
+            title: label,
+            name: resolveCubeModelTitle({ targetModel: metadata?.target_model, title: label })
+              .nameText,
+            outputName: name,
+            outputCount: outputs.length,
+          });
         });
+      }
       if (nested) visit(nested, segments, [...breadcrumb, label], nextAncestors);
     }
   };

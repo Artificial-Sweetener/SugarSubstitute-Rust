@@ -80,12 +80,25 @@ export interface WorkflowOutputItem {
 
 export type WorkflowMediaKind = 'image' | 'animated' | 'video' | 'model' | 'unsupported';
 
+/** What a workflow says about the Cube one output source belongs to. */
+export interface CubeOutputFacts {
+  /** The Cube's title as authored, model folder included. */
+  readonly title: string;
+  /** The Cube's own name: its title without the folder of the model family it targets. */
+  readonly name: string;
+  readonly outputName: string;
+  /** How many outputs the Cube exposes. */
+  readonly outputCount: number;
+}
+
 export interface WorkflowOutputSource {
   readonly id: OutputSourceId;
   readonly executionPath: string;
   readonly label: string;
   readonly breadcrumb: readonly string[];
   readonly order: number;
+  /** Present on a Cube's output, so every presenter names it by the same rule. */
+  readonly cube?: CubeOutputFacts;
   /** Route intermediate execution frames without treating their other media as the bound final. */
   readonly transientOnly?: true;
 }

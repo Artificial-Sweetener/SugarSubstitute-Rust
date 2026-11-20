@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Restore one independent browser view per open workflow and retire closed bindings. */
 
+import { presentCanvasSources } from './CanvasSourceCaption.js';
 import type { WorkflowSessionId } from '../../execution/domain/ExecutionIdentity.js';
 import type { WorkflowSessionContext } from '../../execution/domain/WorkflowSession.js';
 import type { WorkflowResultSession } from '../../execution/domain/WorkflowResultSession.js';
@@ -88,7 +89,8 @@ export class CanvasSessionCoordinator {
   restoreSources(context: WorkflowSessionContext, sources: readonly WorkflowOutputSource[]): void {
     if (this.#contexts.get(context.sessionId)?.generation !== context.generation)
       throw new TypeError('Restored canvas topology belongs to a retired workflow.');
-    this.sources.replace(context, sources);
+    // Decoded topology names a Cube's output by the output alone; the canvas names the Cube.
+    this.sources.replace(context, presentCanvasSources(sources));
     this.#refresh(context.sessionId);
   }
 

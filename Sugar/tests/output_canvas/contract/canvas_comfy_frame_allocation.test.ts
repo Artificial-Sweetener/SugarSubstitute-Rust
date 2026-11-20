@@ -19,7 +19,10 @@ import {
   ComfyCanvasFrameAllocation,
   GRAPH_LAYER_CLIP_PROPERTY,
 } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/ComfyCanvasFrameAllocation.js';
-import { ensureCanvasWorkspaceStyles } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/CanvasWorkspaceStyles.js';
+import {
+  CANVAS_PANE_LEFT_PROPERTY,
+  ensureCanvasWorkspaceStyles,
+} from '../../../frontend/comfyui/ui/output_canvas/infrastructure/CanvasWorkspaceStyles.js';
 import { jest } from '@jest/globals';
 
 /** Build only the installed public frame/chrome shape, leaving all renderer children in place. */
@@ -237,6 +240,11 @@ test('clips only the DOM-widget layer through the graph root allocation', () => 
     rules.map((entry) => [entry.selectorText, entry.style.getPropertyValue('clip-path')]),
   ).toEqual([
     ['#graph-canvas-container > :has(> .dom-widget)', `var(${GRAPH_LAYER_CLIP_PROPERTY},none)`],
+    // ComfyUI's node toolbar is centred on --tb-x and is cut off where the canvas pane begins.
+    [
+      '#graph-canvas-container [data-testid="selection-toolbox"]',
+      `inset(0 max(0px,calc(var(--tb-x,0px) + 50% - var(${CANVAS_PANE_LEFT_PROPERTY},100000px))) 0 0)`,
+    ],
   ]);
   jest.spyOn(f.parent, 'getBoundingClientRect').mockReturnValue(rectangle(0, 0, 1200, 900));
   jest.spyOn(f.panel, 'getBoundingClientRect').mockReturnValue(rectangle(0, 86, 1200, 814));

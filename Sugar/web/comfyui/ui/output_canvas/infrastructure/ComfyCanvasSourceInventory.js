@@ -18,6 +18,7 @@ import { isRecord } from '../../types/common.js';
 import { decodeComfyWorkflowSources } from '../../execution/infrastructure/ComfyWorkflowSourceDecoder.js';
 import { buildCubeOutputExecutionId } from '../../cube/execution/CubeOutputExecutionIdentity.js';
 import { resolveCubeModelTitle } from '../../cube/CubeModelTitlePresentation.js';
+import { cubeOutputCaption, presentCanvasSources } from '../application/CanvasSourceCaption.js';
 import { NativeSubgraphChangeObserver, } from '../../surface/NativeSubgraphChangeObserver.js';
 import { CanvasGraphSourceTopology } from './CanvasGraphSourceTopology.js';
 import { readWorkflowSourceSavingPreferences } from '../../output_saving/domain/SourceSavingPreferences.js';
@@ -158,7 +159,8 @@ export class ComfyCanvasSourceInventory {
             };
             visit(root, [], new Set(), []);
             const preferences = readWorkflowSourceSavingPreferences(root);
-            const presented = sources.map((source) => {
+            // A source with no live node yet is still named by the Cube rule, from its saved facts.
+            const presented = presentCanvasSources(sources).map((source) => {
                 const authored = this.#authored.get(source.executionPath);
                 if (!authored)
                     return source;
@@ -251,17 +253,15 @@ function sourceCaption(authored, override) {
         };
     const properties = isRecord(node.properties) ? node.properties : null;
     const metadata = isRecord(properties?.sugarcubes_cube) ? properties.sugarcubes_cube : null;
-    const name = resolveCubeModelTitle({
-        targetModel: metadata?.target_model,
-        title: captions.at(-1),
-    }).nameText;
-    const outputName = label(authored.output.name) || 'Output';
     const outputs = isRecord(node.subgraph) ? node.subgraph.outputs : null;
-    return {
-        ...authored.source,
-        label: Array.isArray(outputs) && outputs.length > 1 ? `${name} · ${outputName}` : name,
-        breadcrumb: [...captions, outputName],
+    const title = captions.at(-1) ?? '';
+    const cube = {
+        title,
+        name: resolveCubeModelTitle({ targetModel: metadata?.target_model, title }).nameText,
+        outputName: label(authored.output.name) || 'Output',
+        outputCount: Array.isArray(outputs) ? outputs.length : 1,
     };
+    return { ...authored.source, cube, ...cubeOutputCaption(cube, captions.slice(0, -1)) };
 }
 /** Bound literal host titles at the adapter boundary. */
 function label(value) {
