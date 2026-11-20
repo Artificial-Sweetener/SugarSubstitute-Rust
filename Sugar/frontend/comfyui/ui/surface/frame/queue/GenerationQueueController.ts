@@ -164,6 +164,9 @@ export class GenerationQueueController {
     this.#stop = this.#source.subscribe(() => this.#render());
     this.#mountPanel();
     this.#render();
+    this.#run('Run progress bar setting not read', () =>
+      this.#actions.withholdUnaskedProgressBar(),
+    );
   }
 
   /** Follow the frame's accepted theme. */

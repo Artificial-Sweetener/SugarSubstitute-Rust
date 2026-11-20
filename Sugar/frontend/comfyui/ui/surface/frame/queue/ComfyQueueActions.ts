@@ -123,6 +123,23 @@ export class ComfyQueueActions {
     await this.#set(QUEUE_PROGRESS_BAR_SETTING, shown);
   }
 
+  /**
+   * Keep ComfyUI's run progress bar off until the person turns it on.
+   *
+   * ComfyUI shows the bar unless its setting says otherwise, so a profile that never chose
+   * would get a bar nobody asked for over the canvas. A profile with no stored choice is given
+   * "off"; a stored choice, either way, is the person's and is left alone.
+   */
+  async withholdUnaskedProgressBar(): Promise<void> {
+    const response = await this.api.fetchApi(
+      `/settings/${encodeURIComponent(QUEUE_PROGRESS_BAR_SETTING)}`,
+    );
+    if (!response.ok)
+      throw new Error(`ComfyUI answered ${String(response.status)} for its settings`);
+    const stored: unknown = await response.json();
+    if (stored === null) await this.#set(QUEUE_PROGRESS_BAR_SETTING, false);
+  }
+
   /** Show ComfyUI's panel of generated assets. */
   showAssets(): void {
     const tabs = this.#store('sidebarTab');

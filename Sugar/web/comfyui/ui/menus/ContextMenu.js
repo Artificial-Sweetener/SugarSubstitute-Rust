@@ -32,8 +32,24 @@ export class ContextMenu {
     constructor(document) {
         this.#document = document;
     }
-    /** Open a fresh menu without inserting floating content inside the originating component. */
+    /**
+     * Open a fresh menu without inserting floating content inside the originating component.
+     *
+     * A menu anchored below its trigger is that trigger's toggle: asked to open again from the
+     * same trigger while it is open, it closes instead. The rule lives here so that no caller can
+     * forget it and leave a button that only ever opens.
+     */
     open(options) {
+        const current = this.#options;
+        if (current &&
+            this.isOpen() &&
+            options.anchor.kind === 'below' &&
+            current.anchor.kind === 'below' &&
+            options.trigger != null &&
+            current.trigger === options.trigger) {
+            this.close();
+            return;
+        }
         _a.#active.get(this.#document)?.close();
         this.close();
         _a.#active.set(this.#document, this);

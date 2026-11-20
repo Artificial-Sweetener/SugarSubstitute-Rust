@@ -268,3 +268,43 @@ test('anchored action menus leave their trigger available for the owning toggle'
   expect(menu.isOpen()).toBe(false);
   trigger.remove();
 });
+
+test('pressing an anchored menu’s own trigger again closes it, whoever opened it', () => {
+  const trigger = document.createElement('button');
+  const other = document.createElement('button');
+  document.body.append(trigger, other);
+  const menu = new ContextMenu(document);
+  // A caller that only ever asks to open, as a button's click handler does.
+  const press = (from: HTMLElement): void =>
+    menu.open({
+      label: 'Choices',
+      trigger: from,
+      anchor: { kind: 'below', bounds: from.getBoundingClientRect() },
+      entries: [{ label: 'A' }],
+    });
+
+  press(trigger);
+  expect(menu.isOpen()).toBe(true);
+  press(trigger);
+  expect(menu.isOpen()).toBe(false);
+  press(trigger);
+  expect(menu.isOpen()).toBe(true);
+  // Another trigger takes the menu over; it is not a second press of the first.
+  press(other);
+  expect(menu.isOpen()).toBe(true);
+  // A pointer menu is never a toggle: asking again at a point shows it there.
+  menu.open({
+    label: 'Choices',
+    anchor: { kind: 'pointer', x: 4, y: 4 },
+    entries: [{ label: 'A' }],
+  });
+  menu.open({
+    label: 'Choices',
+    anchor: { kind: 'pointer', x: 9, y: 9 },
+    entries: [{ label: 'A' }],
+  });
+  expect(menu.isOpen()).toBe(true);
+  menu.close();
+  trigger.remove();
+  other.remove();
+});
