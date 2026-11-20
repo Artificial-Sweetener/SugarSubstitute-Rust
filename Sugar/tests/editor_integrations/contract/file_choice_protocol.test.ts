@@ -96,6 +96,7 @@ test('the closed wire contract admits a page’s two questions and a host’s th
       name: 'a.sugar',
       relative: '',
       path: 'C:\\a',
+      text: 'content',
     },
     { ...envelope, type: 'failed', request: 'open-1', reason: 'denied' },
   ];

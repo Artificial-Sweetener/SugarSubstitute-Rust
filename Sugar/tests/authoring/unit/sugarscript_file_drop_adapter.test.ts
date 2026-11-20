@@ -49,7 +49,7 @@ test('captures one SugarScript file and imports its exact source', async () => {
   expect(event.defaultPrevented).toBe(true);
   expect(hostDrop).not.toHaveBeenCalled();
   // The file opens by its own name, as Open Sugar Script opens it: never into the shown workflow.
-  expect(openFile).toHaveBeenCalledWith(file.name, 'use "sdxl" as Base\n');
+  expect(openFile).toHaveBeenCalledWith('Recipe.SUGAR','use "sdxl" as Base\n');
   adapter.dispose();
   document.removeEventListener('drop', hostDrop);
 });
