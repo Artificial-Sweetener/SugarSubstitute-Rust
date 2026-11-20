@@ -1,3 +1,20 @@
+## [0.6.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.5.0...substitute-v0.6.0) (2026-11-20)
+
+### Features
+
+* **recovery:** offer to restart ComfyUI from the page instead of the title bar ([385857d](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/385857dd7a4ea9a8b4053b6578c29be0f9cbbd33))
+* **startup:** ask about a ComfyUI on the backend port as the start begins ([5d4c71b](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/5d4c71b628f72566049a72542bdcc22c31ace9b3))
+* **startup:** offer to close a ComfyUI that already holds the backend port ([ae8d537](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/ae8d5376f13faeec40e053b835fb5bdb764e3aeb))
+* **updates:** open the update report from the Updates settings page ([18f5f0f](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/18f5f0f9cbdc8b92f9515c99169fdad24ddc9831))
+
+### Bug Fixes
+
+* **reload:** build the reload admission's tests on Linux and macOS ([46d542a](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/46d542adb7d98fce158ae1f79a2169d99e29eb8b))
+* **reload:** keep the window on screen for the whole reload ([9ac8ea9](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/9ac8ea9ae57b919c25337a844a4cd7aae1650489))
+* **startup:** let the port check identify the listener and word its own buttons ([b0b182b](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/b0b182ba662043f3b639e211a3722e628ac4bb9c))
+* **startup:** start again after a kill, and inside a job that forbids breakaway ([930d794](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/930d79447eb548d83dd18373b7a1e7714f93120d))
+* **startup:** start the installed release again when nothing else can start ([bebefd2](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/bebefd26e272252deaf81bb3bc13b20b71f08850))
+
 ## [0.5.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.4.1...substitute-v0.5.0) (2026-11-19)
 
 ### Features
