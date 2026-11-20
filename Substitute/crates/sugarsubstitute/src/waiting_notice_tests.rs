@@ -159,6 +159,23 @@ fn the_notice_says_updating_to_the_version_this_launch_starts() -> Result {
     Ok(())
 }
 
+#[test]
+fn a_repairing_launch_says_so_until_it_ends() -> Result {
+    let mut notice = notice()?;
+    notice.prepared = true;
+    notice.show_repair();
+    assert_eq!(notice.status, StartupStatus::Repairing);
+    assert!(!notice.prepared, "new words prepare a new frame");
+    notice.prepared = true;
+    // What the repair prepares starts as a trial; its version does not replace the words.
+    notice.show_update(Some("2.4.1"));
+    notice.show_update(None);
+    notice.show_repair();
+    assert_eq!(notice.status, StartupStatus::Repairing);
+    assert!(notice.prepared, "the same words keep the prepared frame");
+    Ok(())
+}
+
 /// The window's client can grow after it was first reported, as Tao adds an undecorated
 /// window's hidden frame. A frame prepared for the earlier surface is never handed over; the
 /// next frame is prepared for the client as it is now, so the whole client is painted.

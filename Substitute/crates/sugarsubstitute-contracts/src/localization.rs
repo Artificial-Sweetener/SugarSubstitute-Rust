@@ -45,6 +45,9 @@ pub struct Messages {
     pub loading: &'static str,
     /// The installed launcher's own notice, shown only when starting takes more than a moment.
     pub starting: &'static str,
+    /// The launcher's notice while it prepares the installation's release again because
+    /// nothing installed could start.
+    pub repairing: &'static str,
     /// Feedback after two minutes of active startup.
     pub loading_long: &'static str,
     /// Feedback after five minutes of active startup.
@@ -92,6 +95,7 @@ pub static LOCALES: &[Messages] = &[
         startup: &startup::EN,
         loading: "Loading...",
         starting: "Starting SugarSubstitute…",
+        repairing: "Repairing SugarSubstitute…",
         loading_long: "This is taking longer than usual...",
         loading_extended: "Still waiting. Dependencies or custom nodes\nmay take several minutes...",
         show_output: "Show Comfy output",
@@ -120,6 +124,7 @@ pub static LOCALES: &[Messages] = &[
         startup: &startup::ZH_HANS,
         loading: "正在加载...",
         starting: "正在启动 SugarSubstitute…",
+        repairing: "正在修复 SugarSubstitute…",
         loading_long: "加载时间比平时稍长...",
         loading_extended: "仍在等待。依赖项或自定义节点\n可能需要几分钟...",
         show_output: "显示 Comfy 输出",
@@ -148,6 +153,7 @@ pub static LOCALES: &[Messages] = &[
         startup: &startup::JA,
         loading: "読み込み中...",
         starting: "SugarSubstitute を起動しています…",
+        repairing: "SugarSubstitute を修復しています…",
         loading_long: "通常より時間がかかっています...",
         loading_extended: "引き続き待機中です。依存関係やカスタムノードの\n準備には数分かかる場合があります...",
         show_output: "Comfy の出力を表示",
@@ -176,6 +182,7 @@ pub static LOCALES: &[Messages] = &[
         startup: &startup::KO,
         loading: "불러오는 중...",
         starting: "SugarSubstitute를 시작하는 중…",
+        repairing: "SugarSubstitute를 복구하는 중…",
         loading_long: "평소보다 시간이 오래 걸리고 있습니다...",
         loading_extended: "계속 기다리는 중입니다. 의존성이나 사용자 정의 노드\n준비에 몇 분이 걸릴 수 있습니다...",
         show_output: "Comfy 출력 표시",
@@ -204,6 +211,7 @@ pub static LOCALES: &[Messages] = &[
         startup: &startup::ES,
         loading: "Cargando...",
         starting: "Iniciando SugarSubstitute…",
+        repairing: "Reparando SugarSubstitute…",
         loading_long: "Esto está tardando más de lo habitual...",
         loading_extended: "Seguimos esperando. Las dependencias o los nodos\npersonalizados pueden tardar varios minutos...",
         show_output: "Mostrar la salida de Comfy",
@@ -246,6 +254,7 @@ mod tests {
                 [
                     locale.loading,
                     locale.starting,
+                    locale.repairing,
                     locale.loading_long,
                     locale.loading_extended,
                     locale.show_output,

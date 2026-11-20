@@ -32,6 +32,9 @@ impl Launcher {
             "Nothing installed can start; preparing the release again from the update feed"
         );
         self.extend_budget(LauncherBudget::repair(self.clock.now())?);
+        if let Some(notice) = &mut self.notice {
+            notice.show_repair();
+        }
         self.cached = Some(cached::Cached::new(worker));
         self.choice = Choice::Cache;
         Ok(true)

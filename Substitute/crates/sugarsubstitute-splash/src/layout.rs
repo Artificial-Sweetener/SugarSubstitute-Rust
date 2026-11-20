@@ -41,6 +41,9 @@ pub enum StartupStatus {
     Updating(crate::UpdateVersion),
     /// The installed launcher is still handing startup to the application.
     Starting,
+    /// The installed launcher is preparing the installation's release again because nothing
+    /// installed could start.
+    Repairing,
     /// SugarCubes is being updated before the backend loads it.
     UpdatingSugarcubes,
     /// The page failed because SugarCubes could not load, and the application can accept retry.

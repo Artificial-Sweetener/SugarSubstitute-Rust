@@ -235,6 +235,7 @@ impl RenderStages {
                     crate::StartupStatus::SugarcubesOutdated => copy.pack_updates.retry_outdated,
                     crate::StartupStatus::CleanupFailed => copy.cleanup_failed,
                     crate::StartupStatus::Starting => copy.starting,
+                    crate::StartupStatus::Repairing => copy.repairing,
                 };
                 let spec = crate::text_layout::status(
                     frame.appearance.theme,

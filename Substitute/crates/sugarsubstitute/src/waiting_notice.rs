@@ -45,6 +45,8 @@ pub(crate) struct Resources<'a> {
 
 pub(crate) struct Notice {
     policy: StartingNotice,
+    /// The launch repairs the installation; the notice keeps saying so.
+    repairing: bool,
     /// What the notice says: starting, or updating to the version this launch starts.
     status: StartupStatus,
     /// Native wake at the notice moment while it is still waiting.
@@ -81,6 +83,7 @@ impl Notice {
         Self {
             policy,
             status: StartupStatus::Starting,
+            repairing: false,
             wake,
             surface: None,
             initialization: None,
@@ -96,11 +99,25 @@ impl Notice {
     /// Say `Updating to version X…` while this launch starts ersion as a trial, or starting
     /// when it starts the accepted version. A change prepares the frame again.
     pub(crate) fn show_update(&mut self, version: Option<&str>) {
+        if self.repairing {
+            return;
+        }
         let status = version
             .and_then(UpdateVersion::new)
             .map_or(StartupStatus::Starting, StartupStatus::Updating);
         if status != self.status {
             self.status = status;
+            self.prepared = false;
+            self.frame = None;
+        }
+    }
+
+    /// Say `Repairing SugarSubstitute…` from now on: the launch is preparing the installation's
+    /// release again. An update's version no longer replaces it.
+    pub(crate) fn show_repair(&mut self) {
+        self.repairing = true;
+        if self.status != StartupStatus::Repairing {
+            self.status = StartupStatus::Repairing;
             self.prepared = false;
             self.frame = None;
         }
