@@ -1,3 +1,9 @@
+## [0.7.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.6.0...substitute-v0.7.0) (2026-11-20)
+
+### Features
+
+* **startup:** repair the installation from the update feed when nothing can start ([50a4db0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/50a4db097bcb24fa038c60e3c5af262d25f83ec0))
+
 ## [0.6.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.5.0...substitute-v0.6.0) (2026-11-20)
 
 ### Features
