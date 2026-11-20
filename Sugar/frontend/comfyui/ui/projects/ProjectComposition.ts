@@ -31,6 +31,7 @@ import {
   type ProjectCommand,
   type ProjectDialogs,
 } from './presentation/ProjectCommands.js';
+import { pickScriptFile } from './presentation/ScriptFilePicker.js';
 
 export interface ProjectCompositionOptions {
   /** Comfy's application object, read as untrusted host state. */
@@ -88,6 +89,7 @@ export function createProjectCommands(
   return projectCommands({
     scripts,
     dialogs: options.dialogs,
+    pickScript: () => pickScriptFile(document),
     notify: options.notify,
     describe: options.describe,
     exportWorkflow: () => command('Comfy.ExportWorkflow'),

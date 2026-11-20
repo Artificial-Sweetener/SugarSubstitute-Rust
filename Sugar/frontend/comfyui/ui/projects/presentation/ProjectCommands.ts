@@ -16,16 +16,10 @@
 /** Offer a project's open and save actions as commands, with the same names SugarSubstitute used. */
 import { projectNameError } from '../domain/ProjectScript.js';
 import type { ProjectScripts } from '../application/ProjectScripts.js';
+import type { PickedScript } from './ScriptFilePicker.js';
 
 /** The dialogs the commands ask the person through. */
 export interface ProjectDialogs {
-  selectItem(options: {
-    title?: string;
-    message?: string;
-    items?: { value: string; label?: string; description?: string }[];
-    confirmLabel?: string;
-    emptyMessage?: string;
-  }): Promise<string | null>;
   promptText(options: {
     title?: string;
     label?: string;
@@ -38,6 +32,8 @@ export interface ProjectDialogs {
 export interface ProjectCommandOptions {
   readonly scripts: ProjectScripts;
   readonly dialogs: ProjectDialogs;
+  /** Let the person choose a script in the operating system's file dialog; `null` when dismissed. */
+  pickScript(): Promise<PickedScript | null>;
   /** Tell the person what a command did. */
   notify(severity: 'success' | 'error', title: string, message: string): void;
   /** Describe an unknown failure. */
@@ -53,7 +49,7 @@ export interface ProjectCommand {
   function(): Promise<void>;
 }
 
-/** Open a project script from the projects folder. */
+/** Open a project script chosen in the operating system's file dialog. */
 export const OPEN_SUGAR_SCRIPT = 'SugarCubes.OpenSugarScript';
 /** Save the shown workflow as its project script. */
 export const SAVE_SUGAR_SCRIPT = 'SugarCubes.SaveSugarScript';
@@ -83,19 +79,9 @@ export function projectCommands(options: ProjectCommandOptions): readonly Projec
       id: OPEN_SUGAR_SCRIPT,
       label: 'Open Sugar Script...',
       function: guarded('Sugar script not opened', async () => {
-        const available = await scripts.scripts();
-        const path = await dialogs.selectItem({
-          title: 'Open Sugar Script',
-          items: available.map((file) => ({
-            value: file.path,
-            label: file.path,
-            ...(file.modified ? { description: file.modified.toLocaleString() } : {}),
-          })),
-          confirmLabel: 'Open',
-          emptyMessage: 'The projects folder holds no Sugar scripts yet.',
-        });
-        if (path === null) return;
-        await scripts.open(path);
+        const picked = await options.pickScript();
+        if (picked === null) return;
+        await scripts.openPicked(picked.name, picked.text);
       }),
     },
     {

@@ -67,6 +67,8 @@ export interface ProjectWorkflowHost {
   openEmpty(name: string): Promise<void>;
   /** Build the Cubes a script describes in the shown workflow. */
   importScript(source: string): Promise<void>;
+  /** Close the tab `openEmpty` showed, when nothing could be built in it. */
+  discardOpened(): Promise<void>;
   /** Present the shown workflow as its Cubes, the way a project is worked on. */
   showCubes(): void;
 }
@@ -125,6 +127,27 @@ export class ProjectScripts {
   async open(path: string): Promise<string> {
     const stored = await this.files.read(path);
     if (stored === null) throw new Error('The project script no longer exists.');
+    return this.#build(path, stored);
+  }
+
+  /**
+   * Open a script the person chose from disk, by its file name and text.
+   *
+   * A file chosen from the projects folder is that project's script, so its masks come with
+   * it: it is recognised by a script there with the same file name and the same text. Any
+   * other file opens as a script of its own, named by its header or its file name.
+   */
+  async openPicked(file: string, stored: string): Promise<string> {
+    for (const candidate of await this.scripts()) {
+      if (candidate.path.slice(candidate.path.lastIndexOf('/') + 1) !== file) continue;
+      if ((await this.files.read(candidate.path)) === stored)
+        return this.#build(candidate.path, stored);
+    }
+    return this.#build(file, stored);
+  }
+
+  /** Build `stored`, the text of the script at `path`, in a new tab. */
+  async #build(path: string, stored: string): Promise<string> {
     // A script is stored with Windows line endings; a multi-line value holds plain newlines.
     const plain = stored.replace(/\r\n?/g, '\n');
     const owner = projectOwnerOf(path);
@@ -132,7 +155,13 @@ export class ProjectScripts {
     await this.workflows.checkScript(text);
     const name = uniqueTabName(projectNameOf(text, path), this.workflows.openNames());
     await this.workflows.openEmpty(name);
-    await this.workflows.importScript(text);
+    try {
+      await this.workflows.importScript(text);
+    } catch (error: unknown) {
+      // An empty tab under the project's name would save an empty script over the project.
+      await this.workflows.discardOpened();
+      throw error;
+    }
     this.workflows.showCubes();
     return name;
   }

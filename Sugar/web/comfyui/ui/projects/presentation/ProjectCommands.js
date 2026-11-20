@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Offer a project's open and save actions as commands, with the same names SugarSubstitute used. */
 import { projectNameError } from '../domain/ProjectScript.js';
-/** Open a project script from the projects folder. */
+/** Open a project script chosen in the operating system's file dialog. */
 export const OPEN_SUGAR_SCRIPT = 'SugarCubes.OpenSugarScript';
 /** Save the shown workflow as its project script. */
 export const SAVE_SUGAR_SCRIPT = 'SugarCubes.SaveSugarScript';
@@ -45,20 +45,10 @@ export function projectCommands(options) {
             id: OPEN_SUGAR_SCRIPT,
             label: 'Open Sugar Script...',
             function: guarded('Sugar script not opened', async () => {
-                const available = await scripts.scripts();
-                const path = await dialogs.selectItem({
-                    title: 'Open Sugar Script',
-                    items: available.map((file) => ({
-                        value: file.path,
-                        label: file.path,
-                        ...(file.modified ? { description: file.modified.toLocaleString() } : {}),
-                    })),
-                    confirmLabel: 'Open',
-                    emptyMessage: 'The projects folder holds no Sugar scripts yet.',
-                });
-                if (path === null)
+                const picked = await options.pickScript();
+                if (picked === null)
                     return;
-                await scripts.open(path);
+                await scripts.openPicked(picked.name, picked.text);
             }),
         },
         {

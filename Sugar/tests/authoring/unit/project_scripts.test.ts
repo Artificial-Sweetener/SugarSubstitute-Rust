@@ -80,6 +80,7 @@ function folder(initial: Readonly<Record<string, string>> = {}) {
 function tabs(active: string | null, open: readonly string[] = active ? [active] : []) {
   const opened: string[] = [];
   const imported: string[] = [];
+  const discarded: string[] = [];
   const host: ProjectWorkflowHost = {
     activeName: () => active,
     openNames: () => [...open, ...opened],
@@ -91,14 +92,30 @@ function tabs(active: string | null, open: readonly string[] = active ? [active]
       opened.push(name);
     },
     importScript: async (source) => {
+      if (source.includes('unbuildable')) throw new Error('Cube boundary is unavailable.');
       imported.push(source);
+    },
+    discardOpened: async () => {
+      discarded.push(opened.pop() ?? '<none>');
     },
     showCubes: () => {
       imported.push('<shown as Cubes>');
     },
   };
-  return { host, opened, imported };
+  return { host, opened, imported, discarded };
 }
+
+test('a script whose Cubes cannot be built leaves no tab under the project’s name', async () => {
+  const f = folder({ 'Demo/Demo.sugar': '# Project: Demo\r\n\r\nuse "unbuildable" as A\r\n' });
+  const t = tabs('Other');
+  const scripts = new ProjectScripts(f.store, t.host, async () => written(''));
+
+  await expect(scripts.open('Demo/Demo.sugar')).rejects.toThrow('Cube boundary is unavailable.');
+
+  expect(t.discarded).toEqual(['Demo']);
+  expect(t.host.openNames()).toEqual(['Other']);
+  expect(f.log).toEqual([]);
+});
 
 test('names, paths and file text follow the persisted project layout', () => {
   expect(projectScriptPath('Portrait Study')).toBe('Portrait Study/Portrait Study.sugar');
@@ -291,6 +308,19 @@ test('a project opens into Comfy’s own new tab, renamed to the project', async
   expect(renamed).toEqual([[active, 'workflows/Bune.json']]);
 });
 
+test('a script chosen from disk opens as its project when the projects folder holds it', async () => {
+  const text = '# Project: Bune\r\n\r\nuse "a" as A\r\n';
+  const f = folder({ 'Bune/Bune.sugar': text, 'Other/Bune.sugar': '# Project: Other\r\n' });
+  const t = tabs('Demo');
+  const scripts = new ProjectScripts(f.store, t.host, async () => written(''));
+
+  // The same file name and text as the project's own script: that project.
+  expect(await scripts.openPicked('Bune.sugar', text)).toBe('Bune');
+  // A file from anywhere else opens under its own header, or else its file name.
+  expect(await scripts.openPicked('Loose.sugar', 'use "a" as A\n')).toBe('Loose');
+  expect(t.opened).toEqual(['Bune', 'Loose']);
+});
+
 test('the four commands keep their names and order and report their own failures', async () => {
   const f = folder({ 'Bune/Bune.sugar': '# Project: Bune\n' });
   const t = tabs('Demo');
@@ -298,10 +328,8 @@ test('the four commands keep their names and order and report their own failures
   const exported = jest.fn(async () => undefined);
   const commands = projectCommands({
     scripts: new ProjectScripts(f.store, t.host, async () => written('use "a" as A\n')),
-    dialogs: {
-      selectItem: async (options) => options.items?.[0]?.value ?? null,
-      promptText: async () => 'a/b',
-    },
+    dialogs: { promptText: async () => 'a/b' },
+    pickScript: async () => ({ name: 'Bune.sugar', text: '# Project: Bune\n' }),
     notify: (severity, title, message) => notices.push(`${severity}: ${title}: ${message}`),
     describe: (error) => (error instanceof Error ? error.message : String(error)),
     exportWorkflow: exported,

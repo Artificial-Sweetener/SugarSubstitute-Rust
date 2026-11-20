@@ -21,6 +21,7 @@ import { ProjectScripts } from './application/ProjectScripts.js';
 import { ProjectMasks } from './application/ProjectMasks.js';
 import { ComfyProjectFiles, ComfyProjectMaskInputs, ComfyProjectWorkflows, } from './infrastructure/ComfyProjects.js';
 import { projectCommands, } from './presentation/ProjectCommands.js';
+import { pickScriptFile } from './presentation/ScriptFilePicker.js';
 /** Build the four project commands, ready to register with Comfy and to list in a menu. */
 export function createProjectCommands(options) {
     /** Run one Comfy command through the host's own command service. */
@@ -55,6 +56,7 @@ export function createProjectCommands(options) {
     return projectCommands({
         scripts,
         dialogs: options.dialogs,
+        pickScript: () => pickScriptFile(document),
         notify: options.notify,
         describe: options.describe,
         exportWorkflow: () => command('Comfy.ExportWorkflow'),

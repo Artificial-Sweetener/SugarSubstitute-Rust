@@ -191,6 +191,16 @@ export class ComfyProjectWorkflows {
         const next = path.slice(0, path.lastIndexOf('/') + 1) + name + fullFilename.slice(filename.length);
         await Reflect.apply(store.renameWorkflow, store, [workflow, next]);
     }
+    /** Close the shown tab without asking, while it is still one Comfy never saved. */
+    async discardOpened() {
+        const store = this.#store();
+        const workflow = store.activeWorkflow;
+        if (!isRecord(workflow) || workflow.isTemporary !== true)
+            return;
+        if (typeof store.closeWorkflow !== 'function')
+            throw new Error('Comfy workflow closing is unavailable.');
+        await Reflect.apply(store.closeWorkflow, store, [workflow]);
+    }
     checkScript(source) {
         return this.options.checkScript(source);
     }
