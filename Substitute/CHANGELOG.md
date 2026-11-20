@@ -1,3 +1,14 @@
+## [0.8.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.7.0...substitute-v0.8.0) (2026-11-20)
+
+### Features
+
+* **startup:** say the launcher is repairing while it repairs ([00fb3c4](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/00fb3c4289a377b773197863d76dc4a78599e1d1))
+
+### Bug Fixes
+
+* **startup:** repair an installation whose record names nothing to start ([4f710a6](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/4f710a6471e317ac542c68f0b81165b62d60ed12))
+* **startup:** say in plain words what to do when the installation cannot repair itself ([4e15b1b](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/4e15b1be53fdc3d1f261f759d88111f416f01805))
+
 ## [0.7.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.6.0...substitute-v0.7.0) (2026-11-20)
 
 ### Features
