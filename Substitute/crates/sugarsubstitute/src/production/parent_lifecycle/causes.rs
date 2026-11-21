@@ -65,8 +65,22 @@ impl BackendCauses {
     pub(super) fn contains(&self, key: ResourceKey) -> bool {
         self.slots.iter().flatten().any(|value| value.resource == key)
     }
-    pub(super) fn free_slot(&mut self) -> Option<&mut Option<SettledAttemptFailure>> {
-        self.slots.iter_mut().find(|slot| slot.is_none())
+    /// Keep one settled attempt's cause. The first cause and the most recent ones are kept: once
+    /// every slot holds one, the oldest after the first is dropped, so a start retried any number
+    /// of times never runs out of room for its causes.
+    pub(super) fn keep(&mut self, value: SettledAttemptFailure) {
+        let at = match self.slots.iter().position(Option::is_none) {
+            Some(free) => free,
+            None => {
+                self.slots[1..].rotate_left(1);
+                self.slots.len() - 1
+            }
+        };
+        self.slots[at] = Some(value);
+    }
+    #[cfg(test)]
+    pub(super) fn kept(&self) -> impl Iterator<Item = &SettledAttemptFailure> {
+        self.slots.iter().flatten()
     }
     /// Move the same live heap and claim before its old container drops; rejection preserves both owners.
     /// This data move grants no native retirement authority. The Parent extraction path checks its actual proof first.
@@ -85,7 +99,7 @@ impl BackendCauses {
         &mut self,
         value: SettledAttemptFailure,
     ) -> std::result::Result<(), ParentError> {
-        *self.free_slot().ok_or(ParentError::Overloaded)? = Some(value);
+        self.keep(value);
         Ok(())
     }
     #[cfg(test)]

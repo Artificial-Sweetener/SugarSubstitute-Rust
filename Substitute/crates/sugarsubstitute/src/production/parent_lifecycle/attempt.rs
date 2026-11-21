@@ -224,14 +224,9 @@ impl ParentLifecycle {
             let origin = attempt.origin;
             let identity = attempt.identity;
             let campaign_scope = resources.backend.campaign_scope(resource);
-            let slot = self
-                .backend_causes
-                .as_mut()
-                .ok_or(ParentError::WrongPhase)?
-                .free_slot()
-                .ok_or(ParentError::Overloaded)?;
+            let owner = self.backend_causes.as_mut().ok_or(ParentError::WrongPhase)?;
             if let Some(cause) = resources.backend.take_attempt_failure(resource)? {
-                *slot = Some(SettledAttemptFailure { identity, resource, cause });
+                owner.keep(SettledAttemptFailure { identity, resource, cause });
                 tracing::info!(operation="startup_attempt_settled",request=?origin.request,
                     identity=?identity,resource=?resource,campaign_scope=?campaign_scope,
                     "Original preparation cause retained after checked settlement");

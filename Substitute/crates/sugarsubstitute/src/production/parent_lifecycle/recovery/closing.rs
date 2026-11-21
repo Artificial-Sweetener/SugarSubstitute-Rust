@@ -41,7 +41,6 @@ impl ParentLifecycle {
         if owner.contains(key) {
             return Ok(true);
         }
-        let slot = owner.free_slot().ok_or(ParentError::Overloaded)?;
         let mut cause = None;
         if !resources.backend.transfer_recovery_failure(key, &mut cause)? {
             if let Some(budget) = self.cleanup
@@ -52,15 +51,13 @@ impl ParentLifecycle {
             }
             return Ok(false);
         }
-        if let Some(cause) = cause {
-            *slot = Some(super::super::attempt::SettledAttemptFailure {
-                identity,
-                resource: key,
-                cause,
-            });
-        } else {
+        let Some(cause) = cause else {
             return Err(ParentError::WrongPhase.into());
-        }
+        };
+        self.backend_causes
+            .as_mut()
+            .ok_or(ParentError::WrongPhase)?
+            .keep(super::super::attempt::SettledAttemptFailure { identity, resource: key, cause });
         Ok(true)
     }
 }

@@ -34,24 +34,18 @@ impl ParentLifecycle {
         let origin = self.acquisition.as_ref().ok_or(ParentError::WrongPhase)?.header;
         let identity = self.main.snapshot().identity.ok_or(ParentError::WrongPhase)?;
         let campaign_scope = resources.backend.campaign_scope(key);
-        let Some(slot) = self.backend_causes.as_mut().ok_or(ParentError::WrongPhase)?.free_slot()
-        else {
-            return Ok(false);
-        };
         let mut cause = None;
         if !resources.backend.transfer_recovery_failure(key, &mut cause)? {
             return Ok(false);
         }
-        // The backend's success contract guarantees Some; retaining the returned slot still precedes any later check.
-        if let Some(cause) = cause {
-            *slot = Some(super::super::attempt::SettledAttemptFailure {
-                identity,
-                resource: key,
-                cause,
-            });
-        } else {
+        // The backend's success contract guarantees Some.
+        let Some(cause) = cause else {
             return Err(ParentError::WrongPhase.into());
-        }
+        };
+        self.backend_causes
+            .as_mut()
+            .ok_or(ParentError::WrongPhase)?
+            .keep(super::super::attempt::SettledAttemptFailure { identity, resource: key, cause });
         tracing::info!(operation="native_backend_failure_retained",request=?origin.request,identity=?identity,resource=?key,campaign_scope=?campaign_scope,
             "Original settled backend cause retained in its existing native owner");
         Ok(resources.backend.invalidated_lease(binding, outage.failed)?

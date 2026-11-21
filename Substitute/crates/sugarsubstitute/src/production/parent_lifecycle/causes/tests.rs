@@ -32,8 +32,7 @@ fn boxed_eight_slot_transfer_preserves_exact_cause_and_original_claim_without_a_
     let mut destination = None;
     let original = failure()?;
     let cause = std::ptr::from_ref(original.cause.source().ok_or("Original cause absent")?);
-    *source.as_mut().ok_or("Source absent")?.free_slot().ok_or("Free slot absent")? =
-        Some(original);
+    source.as_mut().ok_or("Source absent")?.keep(original);
     let allocation = source.as_ref().ok_or("Source absent")?.allocation();
     let reserved = source.as_ref().ok_or("Source absent")?.claim().reserved_bytes();
     BackendCauses::transfer(&mut source, &mut destination)?;
@@ -56,7 +55,7 @@ fn boxed_eight_slot_transfer_preserves_exact_cause_and_original_claim_without_a_
 fn occupied_destination_rejects_before_either_original_box_or_cause_moves() -> TestResult {
     let mut source = Some(owner()?);
     let mut destination = Some(owner()?);
-    *source.as_mut().ok_or("Source absent")?.free_slot().ok_or("Slot absent")? = Some(failure()?);
+    source.as_mut().ok_or("Source absent")?.keep(failure()?);
     let before = source.as_ref().ok_or("Source absent")?.allocation();
     let other = destination.as_ref().ok_or("Destination absent")?.allocation();
     assert_eq!(
@@ -92,5 +91,21 @@ fn unknown_unsettled_parent_refuses_extraction_and_keeps_real_owner() -> TestRes
         parent.backend_causes.as_ref().ok_or("Unsettled owner lost")?.allocation(),
         original
     );
+    Ok(())
+}
+/// A start retried any number of times never runs out of room for its causes: the first cause and
+/// the newest ones are kept, and the oldest after the first makes way.
+#[test]
+fn a_start_retried_any_number_of_times_keeps_its_first_and_newest_causes() -> TestResult {
+    let mut owner = owner()?;
+    for generation in 1..=20 {
+        let mut value = failure()?;
+        value.resource.generation =
+            sugarsubstitute_contracts::lifecycle::ResourceGeneration::new(generation)?;
+        owner.keep(value);
+    }
+    let kept: Vec<u64> = owner.kept().map(|value| value.resource.generation.get()).collect();
+    assert_eq!(kept, [1, 14, 15, 16, 17, 18, 19, 20]);
+    assert!(owner.full());
     Ok(())
 }
