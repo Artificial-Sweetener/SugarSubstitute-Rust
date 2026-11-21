@@ -35,6 +35,8 @@ export class ComfyQueueActions {
     private readonly api: ComfyQueueApi,
     private readonly app: unknown,
     private readonly changed: () => void,
+    /** Slide the pinned queue out, then run `then`; it goes at once when nothing is shown. */
+    private readonly leave: (then: () => void) => void = (then) => then(),
   ) {}
 
   /** Stop one job that is waiting or running. */
@@ -101,6 +103,7 @@ export class ComfyQueueActions {
 
   /** Pin the queue beside the canvas, or return it to its button. */
   async setDocked(docked: boolean): Promise<void> {
+    if (!docked) await new Promise<void>((left) => this.leave(left));
     await this.#set(QUEUE_DOCKED_SETTING, docked);
     const tabs = this.#store('sidebarTab');
     if (!isRecord(tabs)) return;
@@ -111,8 +114,11 @@ export class ComfyQueueActions {
 
   /** Put the pinned queue away without unpinning it. */
   closePanel(): void {
-    const tabs = this.#store('sidebarTab');
-    if (isRecord(tabs) && tabs.activeSidebarTabId === SIDEBAR_TAB) this.#toggle(tabs, SIDEBAR_TAB);
+    this.leave(() => {
+      const tabs = this.#store('sidebarTab');
+      if (isRecord(tabs) && tabs.activeSidebarTabId === SIDEBAR_TAB)
+        this.#toggle(tabs, SIDEBAR_TAB);
+    });
   }
 
   get progressBar(): boolean {

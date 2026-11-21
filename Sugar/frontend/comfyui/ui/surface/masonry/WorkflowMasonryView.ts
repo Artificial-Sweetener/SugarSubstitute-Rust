@@ -41,7 +41,7 @@ import {
   restoreNativeCardPresentations,
 } from '../NativeCardPresentationOwner.js';
 import type { WorkflowMasonryTransitionCard } from './WorkflowMasonryTransition.js';
-import { markMasonryMounted } from './WorkflowMasonryStyles.js';
+import { MASONRY_STACK_GAP, markMasonryMounted } from './WorkflowMasonryStyles.js';
 import {
   DISCLOSURE_LAYOUT_EVENT,
   measureDisclosureCardHeight,
@@ -307,7 +307,7 @@ export class WorkflowMasonryView {
     if (!Number.isFinite(width) || width < 0)
       throw new TypeError('Cube stack width must be finite and nonnegative.');
     if (expanded && width > 0)
-      this.element.style.setProperty('--sc-masonry-stack-gap', 'var(--sugarcubes-masonry-gap,8px)');
+      this.element.style.setProperty('--sc-masonry-stack-gap', MASONRY_STACK_GAP);
     else this.element.style.removeProperty('--sc-masonry-stack-gap');
     this.#stackInset.set(this.element, this.#content, width, motion, () => this.#requestLayout());
   }

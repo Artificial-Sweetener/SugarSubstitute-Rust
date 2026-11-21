@@ -46,8 +46,20 @@ export class PanelReveal {
             easing: surfaceMotion.easing,
         });
     }
-    /** Slide `element` out to `edge`, then `done`; at once when motion is off. */
+    /**
+     * Slide `element` out to `edge`, then `done`; at once when motion is off. An exit asked for while
+     * one already runs joins it: its `done` follows the first one's when the same slide ends.
+     */
     exit(element, edge, done) {
+        const running = this.#leaving.get(element);
+        if (running) {
+            const first = running.done;
+            running.done = () => {
+                first();
+                done();
+            };
+            return;
+        }
         if (!moves(element)) {
             done();
             return;
@@ -64,10 +76,11 @@ export class PanelReveal {
                 animation.cancel();
                 return;
             }
-            if (this.#leaving.get(element)?.animation !== animation)
+            const entry = this.#leaving.get(element);
+            if (entry?.animation !== animation)
                 return;
             this.#leaving.delete(element);
-            done();
+            entry.done();
             animation.cancel();
         });
     }

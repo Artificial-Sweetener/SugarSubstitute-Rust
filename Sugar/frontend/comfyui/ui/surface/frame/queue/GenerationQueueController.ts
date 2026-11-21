@@ -60,6 +60,8 @@ export interface GenerationQueueControllerOptions {
   report(error: unknown): void;
   /** The workflow tab bar, where a finished job may be dropped to open it as a tab. */
   readonly tabBar?: WorkflowTabDropTarget;
+  /** Slide the pinned queue out before it is put away, then run `then`. */
+  leaveDock?(then: () => void): void;
 }
 
 /**
@@ -97,6 +99,7 @@ export class GenerationQueueController {
       options.api,
       options.app,
       () => void this.#source.refresh(),
+      options.leaveDock ? (then) => options.leaveDock?.(then) : undefined,
     );
     this.#menu = new ContextMenu(document);
     this.#dialogs = new GenerationQueueDialogs(document);

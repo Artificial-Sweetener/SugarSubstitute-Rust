@@ -106,3 +106,17 @@ test('disposal completes every exit still running', () => {
   reveal.dispose();
   expect(done).toHaveBeenCalledTimes(1);
 });
+
+test('a second exit while the panel slides out runs after that same slide, never lost', () => {
+  const { element, animations } = panel();
+  const reveal = new PanelReveal();
+  const first = jest.fn();
+  const second = jest.fn();
+  reveal.exit(element, 'right', first);
+  reveal.exit(element, 'right', second);
+  expect(animations).toHaveLength(1);
+  expect(second).not.toHaveBeenCalled();
+  animations[0]?.run.finishNow();
+  expect(first).toHaveBeenCalledTimes(1);
+  expect(second).toHaveBeenCalledTimes(1);
+});

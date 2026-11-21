@@ -96,6 +96,7 @@ export class GenerationStripHost {
           showPending: (count) => this.#queue.setPending(count),
           confirm,
           tabBar,
+          leaveDock: (then) => this.#dock.leave(then),
           notify: (severity, title, message) => toasts.push(severity, title, message),
           report,
         })

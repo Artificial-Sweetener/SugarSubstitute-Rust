@@ -24,6 +24,11 @@ import {
 import { packedMasonryRule } from './MasonryPacking.js';
 
 /**
+ * The gap an expanded cube stack leaves before the cards: the masonry's own card gap. The gap
+ * token is a unitless pixel count (JavaScript reads it as a number), so it becomes a length here.
+ */
+export const MASONRY_STACK_GAP = 'calc(var(--sugarcubes-masonry-gap,8) * 1px)';
+/**
  * Marks one element whose whole subtree a masonry hides and takes out of pointer input. Its value
  * names the owner that set it.
  *

@@ -64,7 +64,7 @@ export class GenerationQueueController {
         this.#style.textContent = generationQueueViewCss;
         document.head.append(this.#style);
         this.#source = new ComfyQueueJobSource(options.api, options.report, (id) => this.#nodeName(id));
-        this.#actions = new ComfyQueueActions(options.api, options.app, () => void this.#source.refresh());
+        this.#actions = new ComfyQueueActions(options.api, options.app, () => void this.#source.refresh(), options.leaveDock ? (then) => options.leaveDock?.(then) : undefined);
         this.#menu = new ContextMenu(document);
         this.#dialogs = new GenerationQueueDialogs(document);
         this.#menus = new GenerationQueueMenus({

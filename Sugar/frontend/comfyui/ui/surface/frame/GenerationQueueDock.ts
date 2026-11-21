@@ -116,17 +116,25 @@ export class GenerationQueueDock {
     if (actions && this.#hide.parentElement !== actions) actions.append(this.#hide);
   }
 
-  /** Slide the panel out, then close it through the same owner Comfy's own icon column uses. */
+  /**
+   * Slide the shown panel out, then run `then`, which puts it away. Every way the queue is put
+   * away comes here, so it always leaves with the same motion. With no panel shown, `then` runs at
+   * once; while the panel already slides out, `then` runs when that slide ends.
+   */
+  leave(then: () => void): void {
+    const panel = this.document.querySelector<HTMLElement>(GENERATION_QUEUE_DOCK);
+    const side = panel?.closest<HTMLElement>('.side-bar-panel') ?? panel;
+    if (side) this.#reveal.exit(side, 'right', then);
+    else then();
+  }
+
+  /** Close the panel through the same owner Comfy's own icon column uses. */
   readonly #close = (): void => {
-    const close = (): void => {
+    this.leave(() => {
       const tabs = this.#store('sidebarTab');
       if (isRecord(tabs) && tabs.activeSidebarTabId === SIDEBAR_TAB)
         this.#call(tabs, 'toggleSidebarTab', SIDEBAR_TAB);
-    };
-    const panel = this.document.querySelector<HTMLElement>(GENERATION_QUEUE_DOCK);
-    const side = panel?.closest<HTMLElement>('.side-bar-panel') ?? panel;
-    if (side && !this.#reveal.leaving(side)) this.#reveal.exit(side, 'right', close);
-    else if (!side) close();
+    });
   };
 
   /** Narrow one of Comfy's stores on each use; they are replaced as Comfy starts. */

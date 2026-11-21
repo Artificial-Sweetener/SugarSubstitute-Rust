@@ -28,7 +28,7 @@ import { prepareNativePresentation } from '../NativePresentationReady.js';
 import { whenPromptEditorsPresented } from '../../prompt_editor/PromptEditorSurface.js';
 import { subscribeMasonryPacking } from './MasonryPacking.js';
 import { measureNativeCardPresentationSources, restoreNativeCardPresentations, } from '../NativeCardPresentationOwner.js';
-import { markMasonryMounted } from './WorkflowMasonryStyles.js';
+import { MASONRY_STACK_GAP, markMasonryMounted } from './WorkflowMasonryStyles.js';
 import { DISCLOSURE_LAYOUT_EVENT, measureDisclosureCardHeight, } from '../motion/DisclosureLayout.js';
 /** Counts masonry surfaces so each has its own identifier, including two that overlap. */
 let masonrySurfaces = 0;
@@ -266,7 +266,7 @@ export class WorkflowMasonryView {
         if (!Number.isFinite(width) || width < 0)
             throw new TypeError('Cube stack width must be finite and nonnegative.');
         if (expanded && width > 0)
-            this.element.style.setProperty('--sc-masonry-stack-gap', 'var(--sugarcubes-masonry-gap,8px)');
+            this.element.style.setProperty('--sc-masonry-stack-gap', MASONRY_STACK_GAP);
         else
             this.element.style.removeProperty('--sc-masonry-stack-gap');
         this.#stackInset.set(this.element, this.#content, width, motion, () => this.#requestLayout());

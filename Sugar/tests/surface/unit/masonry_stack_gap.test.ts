@@ -20,7 +20,11 @@ import {
   cubeStackExpandedReservedWidth,
   cubeStackReservedWidth,
 } from '../../../frontend/comfyui/ui/surface/stack/CubeStackMetrics.js';
-import { ensureWorkflowMasonryStyles } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryStyles.js';
+import {
+  MASONRY_STACK_GAP,
+  ensureWorkflowMasonryStyles,
+} from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryStyles.js';
+import { WORKFLOW_MASONRY_GAP } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryLayout.js';
 
 afterEach(() => document.head.replaceChildren());
 
@@ -42,4 +46,11 @@ test('beside an expanded stack the masonry leaves its card gap, not its inline p
   expect(css).toContain(
     'calc(var(--sc-masonry-stack-gap,var(--sc-masonry-inline-padding,20px)) + var(--sc-masonry-stack-width,0px))',
   );
+});
+
+test('the stack gap is the card gap in pixels, since the gap token is a unitless number', () => {
+  // A unitless token inside calc(... + ...px) would make the whole padding invalid, so the cards
+  // would lose their inset and sit under the expanded stack.
+  expect(String(WORKFLOW_MASONRY_GAP)).toMatch(/^\d+$/);
+  expect(MASONRY_STACK_GAP).toBe('calc(var(--sugarcubes-masonry-gap,8) * 1px)');
 });
