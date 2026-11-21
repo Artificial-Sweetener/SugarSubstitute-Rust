@@ -453,10 +453,10 @@ runtime_file = "web/icons/action/more-horizontal.svg"
 sha256 = "5cc969f49ca33c856fb72804f9355e84db26dc6c23f2a1fc85995b67ad1c0c8d"
 
 [[component.asset]]
-source_path = "assets/Play/SVG/ic_fluent_play_20_filled.svg"
+source_path = "assets/Play/SVG/ic_fluent_play_20_regular.svg"
 vendored_file = "frontend/static/icons/action/play.svg"
 runtime_file = "web/icons/action/play.svg"
-sha256 = "07fb72bfb7e5990b21d1eb7872a6bb47a42009f737b6bb488851a2b9cf6a80b0"
+sha256 = "0666c1378f63d4d5c32f91b4107086bc14799dff306027976be591da8843ae45"
 
 [[component.asset]]
 source_path = "assets/Panel Right/SVG/ic_fluent_panel_right_20_regular.svg"
