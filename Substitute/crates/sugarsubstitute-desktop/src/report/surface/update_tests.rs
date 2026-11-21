@@ -221,6 +221,43 @@ fn both_failures_share_one_report_with_the_application_first() -> TestResult {
     Ok(())
 }
 
+/// Only a failure that found something for the user speaks up on its own; one that never
+/// reached the repository is kept for Settings, where its report still opens.
+#[test]
+fn only_a_failure_that_found_an_update_is_announced() {
+    use sugarsubstitute_contracts::update::{
+        attempt::AttemptOutcome,
+        pack::{PackOutcome, PackUpdateReport, PackUpdateStatus},
+        status::UpdateStatus,
+    };
+    let failed = |report: Attempt| {
+        let mut status = UpdateStatus::default();
+        status.begin();
+        status.finish(Some(AttemptOutcome::Failed(report)), 0);
+        status
+    };
+    let unreachable = failed(Attempt {
+        version: None,
+        phase: AttemptPhase::Checking,
+        causes: vec!["Update repository transport failed".into(), "0x80072EFD".into()],
+    });
+    assert!(has_update_report(&unreachable), "its report still opens from Settings");
+    assert!(!announces_update_failure(&unreachable));
+    assert!(announces_update_failure(&failed(attempt())), "a found update that failed");
+    let with_pack = |outcome| {
+        let mut status = UpdateStatus::default();
+        status.observe_sugarcubes(PackUpdateStatus::Finished(PackUpdateReport::new(outcome)));
+        status
+    };
+    let could_not_check = with_pack(PackOutcome::CouldNotCheck);
+    assert!(has_update_report(&could_not_check));
+    assert!(!announces_update_failure(&could_not_check));
+    for outcome in [PackOutcome::Failed, PackOutcome::Restored, PackOutcome::Stopped] {
+        assert!(announces_update_failure(&with_pack(outcome)), "{outcome:?}");
+    }
+    assert!(!announces_update_failure(&UpdateStatus::default()));
+}
+
 #[test]
 fn nothing_failed_means_no_report() {
     assert!(

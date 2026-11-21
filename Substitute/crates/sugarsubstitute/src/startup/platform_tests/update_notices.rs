@@ -21,7 +21,7 @@ fn start_up_messages() -> [sugarsubstitute_contracts::update::status::StartupNot
         StartupNotice::Updated("2.4.1".into()),
         StartupNotice::Repairing,
         StartupNotice::PreviousVersionRunning,
-        StartupNotice::Sugarcubes(could_not_check()),
+        StartupNotice::Sugarcubes(PackUpdateReport::new(PackOutcome::Failed)),
     ]
 }
 
@@ -42,7 +42,10 @@ fn every_start_up_message_is_owed_to_the_page_once() -> BackendResult<()> {
     assert!(owed[0].contains("2.4.1"));
     assert_eq!(owed[1], words.updates.repairing);
     assert_eq!(owed[2], words.updates.previous_running);
-    assert_eq!(Some(owed[3].clone()), could_not_check().notice(words.pack_updates));
+    assert_eq!(
+        Some(owed[3].clone()),
+        PackUpdateReport::new(PackOutcome::Failed).notice(words.pack_updates)
+    );
     // A later turn has nothing more to say.
     host.tell_host_lines(true)?;
     assert_eq!(host.session_notice.owed_lines().len(), 4);

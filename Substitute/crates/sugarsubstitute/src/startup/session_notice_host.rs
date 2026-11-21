@@ -48,7 +48,7 @@ impl<B: StartupBackend> StartupHost<B> {
         );
         let status = self.child.update_status().filter(|_| revealed);
         let failed =
-            status.is_some_and(sugarsubstitute_desktop::report::surface::has_update_report);
+            status.is_some_and(sugarsubstitute_desktop::report::surface::announces_update_failure);
         for line in self.notice_lines.due(words, saving, status, failed) {
             self.session_notice.tell(line)?;
         }

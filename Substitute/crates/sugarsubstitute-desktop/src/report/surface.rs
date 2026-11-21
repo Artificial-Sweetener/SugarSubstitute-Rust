@@ -274,6 +274,21 @@ pub fn has_update_report(status: &sugarsubstitute_contracts::update::status::Upd
             .is_some_and(sugarsubstitute_contracts::update::pack::PackUpdateReport::needs_attention)
 }
 
+/// Whether `status` has an update failure to tell the user about without being asked: an
+/// attempt that found a newer version failed, or the start's SugarCubes update failed, stopped
+/// or put the previous version back. A check that never reached its repository (offline, a
+/// firewall, the host briefly down) offered nothing to the user and is retried on schedule; its
+/// report stays openable from Settings and says nothing on its own.
+pub fn announces_update_failure(
+    status: &sugarsubstitute_contracts::update::status::UpdateStatus,
+) -> bool {
+    use sugarsubstitute_contracts::update::pack::PackOutcome;
+    status.failure().is_some_and(|attempt| attempt.version.is_some())
+        || status.sugarcubes().report().is_some_and(|report| {
+            report.needs_attention() && report.outcome != PackOutcome::CouldNotCheck
+        })
+}
+
 /// The heading, version and step the report's summary shows, and the full report text: one
 /// section for the application's failed attempt, then one for the SugarCubes update.
 fn failed_update_sections(

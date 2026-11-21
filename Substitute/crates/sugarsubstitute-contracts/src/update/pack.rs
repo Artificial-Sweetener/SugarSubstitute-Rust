@@ -142,6 +142,15 @@ impl PackUpdateReport {
         )
     }
 
+    /// Whether a start tells the user about this report without being asked: SugarCubes was
+    /// updated, a newer version is available, its update failed, or the previous version runs
+    /// again. A check that could not reach the release sources offered nothing; the next start
+    /// checks again, and the report stays openable from Settings.
+    pub fn announced_at_start(&self) -> bool {
+        self.outcome != PackOutcome::CouldNotCheck
+            && self.notice_template(&crate::localization::pack_updates::EN).is_some()
+    }
+
     /// The report's bytes.
     ///
     /// # Errors

@@ -173,7 +173,7 @@ impl UpdateStatus {
             notices.push(StartupNotice::PreviousVersionRunning);
         }
         if let Some(report) = self.sugarcubes.report()
-            && report.notice_template(&crate::localization::pack_updates::EN).is_some()
+            && report.announced_at_start()
         {
             notices.push(StartupNotice::Sugarcubes(report.clone()));
         }
@@ -447,9 +447,18 @@ mod tests {
             unchecked: vec!["registry".into(), "github-release".into()],
             ..PackUpdateReport::new(PackOutcome::CouldNotCheck)
         };
-        status.observe_sugarcubes(PackUpdateStatus::Finished(could_not_check.clone()));
+        status.observe_sugarcubes(PackUpdateStatus::Finished(could_not_check));
         assert_eq!(UpdateStatus::decode(&status.encode()?)?, status);
-        assert_eq!(status.startup_notices(), [StartupNotice::Sugarcubes(could_not_check)]);
+        assert!(
+            status.startup_notices().is_empty(),
+            "a check that never reached the release sources offered nothing to say"
+        );
+        let failed = PackUpdateReport {
+            to: Some("0.16.0".into()),
+            ..PackUpdateReport::new(PackOutcome::Failed)
+        };
+        status.observe_sugarcubes(PackUpdateStatus::Finished(failed.clone()));
+        assert_eq!(status.startup_notices(), [StartupNotice::Sugarcubes(failed)]);
         status.observe_sugarcubes(PackUpdateStatus::Finished(PackUpdateReport::new(
             PackOutcome::UpToDate,
         )));
