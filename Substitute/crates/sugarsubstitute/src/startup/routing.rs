@@ -111,7 +111,7 @@ impl<B: StartupBackend> StartupHost<B> {
         }
         if let Some(view) = &mut self.view {
             if let Some(startup) = &self.startup {
-                view.phase(startup.session().phase());
+                view.observe(startup.session().phase(), failure_code(startup.session()));
             }
             let changed = view
                 .output(self.child.transcript().as_ref().map(crate::OutputSnapshot::transcript));

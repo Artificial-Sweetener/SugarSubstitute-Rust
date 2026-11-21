@@ -111,7 +111,7 @@ use sugarsubstitute_desktop::{
     AccessibleControl, DesktopStartupCommand, DesktopStartupObservation, HitTarget, KeyAction,
     Pointer, PointerAction, StartupPreparationStep, StartupWindowContent, WindowContent,
 };
-use view::StartupView;
+use view::{StartupView, failure_code};
 
 #[cfg(test)]
 mod platform_tests;
@@ -328,12 +328,11 @@ impl<B: StartupBackend> WindowContent for StartupHost<B> {
             .ok_or_else(|| std::io::Error::other("Actual startup policy absent"))?;
         let view =
             self.view.as_mut().ok_or_else(|| std::io::Error::other("Startup view absent"))?;
-        view.sample(startup.session().phase(), elapsed, Instant::now());
-        view.set_failure(
-            startup
-                .session()
-                .failure()
-                .and_then(sugarsubstitute_application::startup::SessionFailure::startup_code),
+        view.sample(
+            startup.session().phase(),
+            failure_code(startup.session()),
+            elapsed,
+            Instant::now(),
         );
         if self.child.cleanup_failed() {
             view.show_status(sugarsubstitute_splash::StartupStatus::CleanupFailed);

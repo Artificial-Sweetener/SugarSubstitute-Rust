@@ -24,13 +24,13 @@ fn output_revisions_advance_one_overall_bar_without_replaying_activity()
         sugarsubstitute_ui::accent::AccentPalette::PRODUCT,
     );
     let origin = anchor();
-    view.sample(StartupPhase::PreparingConnection, Duration::ZERO, origin);
+    view.sample(StartupPhase::PreparingConnection, None, Duration::ZERO, origin);
     for (sequence, line, expected) in [
         (1, "Collecting torch\n", StartupOperation::Dependencies),
         (2, "Device: cuda:0\n", StartupOperation::Device),
     ] {
         let elapsed = Duration::from_secs(sequence * 10);
-        view.sample(StartupPhase::PreparingConnection, elapsed, origin + elapsed);
+        view.sample(StartupPhase::PreparingConnection, None, elapsed, origin + elapsed);
         store.apply(&OutputBatch::new(
             resource,
             OutputStream::Stdout,
@@ -45,6 +45,7 @@ fn output_revisions_advance_one_overall_bar_without_replaying_activity()
         assert!(view.progress().activity.is_some());
         view.sample(
             StartupPhase::PreparingConnection,
+            None,
             elapsed + Duration::from_secs(3),
             origin + elapsed + Duration::from_secs(3),
         );
@@ -54,6 +55,7 @@ fn output_revisions_advance_one_overall_bar_without_replaying_activity()
     }
     view.sample(
         StartupPhase::WebviewLoading,
+        None,
         Duration::from_secs(30),
         origin + Duration::from_secs(30),
     );

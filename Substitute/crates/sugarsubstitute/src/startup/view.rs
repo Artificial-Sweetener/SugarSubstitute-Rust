@@ -109,14 +109,6 @@ impl StartupView {
         self.appearance.output = available;
         self.controls[0].visible = available;
     }
-    /// Name the reason the last start failed while it is retried or asked about.
-    pub(crate) fn set_failure(
-        &mut self,
-        failure: Option<sugarsubstitute_contracts::startup::StartupFailureCode>,
-    ) {
-        self.appearance.failure = failure;
-        self.schedule_retry();
-    }
     /// Whether the failed start shown needs the person: a failure retrying cannot fix, or one
     /// that five tries in a row did not fix. A dialog explains it with Retry and Close.
     pub(crate) fn asks_about_failure(&self) -> bool {
@@ -211,8 +203,15 @@ impl StartupView {
         self.appearance.retrying = self.retries_by_itself();
         self.retry_due = self.appearance.retrying;
     }
-    /// Project the sole application phase into native copy and accessible affordances.
-    pub(crate) fn phase(&mut self, phase: StartupPhase) {
+    /// Project the sole application phase, with the reason its start failed, into native copy
+    /// and accessible affordances. The two arrive together so a settled failure is never judged
+    /// for an automatic retry before its reason is known.
+    pub(crate) fn observe(
+        &mut self,
+        phase: StartupPhase,
+        failure: Option<sugarsubstitute_contracts::startup::StartupFailureCode>,
+    ) {
+        self.appearance.failure = failure;
         if self.appearance.status.offers_retry() && phase == StartupPhase::SplashFirstFrame {
             self.wait_started = self.elapsed;
             self.reset_wait_on_sample = true;
@@ -237,7 +236,7 @@ impl StartupView {
     /// A retry replaced the launch's first attempt.
     pub(crate) fn begin_retry(&mut self) {
         self.retried = true;
-        self.phase(StartupPhase::SplashFirstFrame);
+        self.observe(StartupPhase::SplashFirstFrame, None);
     }
     /// Whether a retry replaced the launch's first attempt; the version this launch updated to
     /// is then already running, so its "Updating to version" line is not shown again.
@@ -251,13 +250,19 @@ impl StartupView {
         self.schedule_retry();
     }
     /// Sample a real frame and schedule only the next text transition, including reduced motion.
-    pub(crate) fn sample(&mut self, phase: StartupPhase, elapsed: Duration, now: Instant) {
+    pub(crate) fn sample(
+        &mut self,
+        phase: StartupPhase,
+        failure: Option<sugarsubstitute_contracts::startup::StartupFailureCode>,
+        elapsed: Duration,
+        now: Instant,
+    ) {
         self.elapsed = elapsed;
         self.appearance.reveal = self.disclosure.sample(elapsed);
-        self.phase(phase);
+        self.observe(phase, failure);
         if std::mem::take(&mut self.reset_wait_on_sample) {
             self.wait_started = elapsed;
-            self.phase(phase);
+            self.observe(phase, failure);
         }
         let threshold = match self.appearance.status {
             sugarsubstitute_splash::StartupStatus::Loading => Some(Duration::from_secs(120)),
@@ -369,6 +374,13 @@ impl StartupView {
     pub(crate) const fn motion(&self) -> bool {
         !self.reduced_motion
     }
+}
+
+/// The reason `session`'s start failed, as the splash names it.
+pub(crate) fn failure_code(
+    session: &sugarsubstitute_application::startup::StartupSession,
+) -> Option<sugarsubstitute_contracts::startup::StartupFailureCode> {
+    session.failure().and_then(sugarsubstitute_application::startup::SessionFailure::startup_code)
 }
 
 #[cfg(test)]

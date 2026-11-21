@@ -32,7 +32,7 @@ fn splash_body_is_draggable_except_published_console_and_live_controls()
     assert_eq!(view.hit_test(output), HitTarget::Client);
     assert_eq!(view.hit_test(Pointer { x: 10.0, y: 440.0 }), HitTarget::Caption);
     assert_eq!(view.hit_test(Pointer { x: 270.0, y: 359.0 }), HitTarget::Caption);
-    view.phase(StartupPhase::Stopped);
+    view.observe(StartupPhase::Stopped, None);
     assert_eq!(view.hit_test(Pointer { x: 270.0, y: 510.0 }), HitTarget::Client);
     assert_eq!(view.hit_test(Pointer { x: 480.0, y: 12.0 }), HitTarget::Client);
     assert_eq!(view.hit_test(Pointer { x: 530.0, y: 12.0 }), HitTarget::Close);
@@ -48,7 +48,7 @@ fn static_waiting_feedback_wakes_at_each_boundary_without_continuous_animation()
     let origin = anchor();
     for (elapsed, next) in [(0, Some(120)), (119, Some(120)), (120, Some(300)), (300, None)] {
         let elapsed = Duration::from_secs(elapsed);
-        view.sample(StartupPhase::PreparingConnection, elapsed, origin + elapsed);
+        view.sample(StartupPhase::PreparingConnection, None, elapsed, origin + elapsed);
         assert!(!view.motion());
         assert!(!view.feedback_due(origin + elapsed));
         assert_eq!(
@@ -61,10 +61,16 @@ fn static_waiting_feedback_wakes_at_each_boundary_without_continuous_animation()
             assert!(view.feedback_due(deadline));
         }
     }
-    view.sample(StartupPhase::Stopped, Duration::from_secs(301), origin + Duration::from_secs(301));
-    view.phase(StartupPhase::SplashFirstFrame);
+    view.sample(
+        StartupPhase::Stopped,
+        None,
+        Duration::from_secs(301),
+        origin + Duration::from_secs(301),
+    );
+    view.observe(StartupPhase::SplashFirstFrame, None);
     view.sample(
         StartupPhase::SplashFirstFrame,
+        None,
         Duration::from_secs(3600),
         origin + Duration::from_secs(3600),
     );
@@ -72,6 +78,7 @@ fn static_waiting_feedback_wakes_at_each_boundary_without_continuous_animation()
     assert_eq!(view.appearance.status, sugarsubstitute_splash::StartupStatus::Loading);
     view.sample(
         StartupPhase::Cancelling,
+        None,
         Duration::from_secs(3601),
         origin + Duration::from_secs(3601),
     );
@@ -92,20 +99,20 @@ fn slow_startup_feedback_keeps_waiting_and_resets_only_for_a_settled_retry()
             (7200, StartupStatus::LoadingExtended),
         ] {
             view.elapsed = Duration::from_secs(seconds);
-            view.phase(StartupPhase::PreparingConnection);
+            view.observe(StartupPhase::PreparingConnection, None);
             assert_eq!(view.appearance.status, status);
             assert_eq!(view.progress().completed, 0.08);
             assert!(!view.activate(3));
         }
-        view.phase(StartupPhase::WebviewLoading);
+        view.observe(StartupPhase::WebviewLoading, None);
         assert_eq!(view.appearance.status, StartupStatus::LoadingExtended);
-        view.phase(StartupPhase::Cancelling);
+        view.observe(StartupPhase::Cancelling, None);
         assert_eq!(view.appearance.status, StartupStatus::Settling);
-        view.phase(StartupPhase::Stopped);
-        view.phase(StartupPhase::SplashFirstFrame);
+        view.observe(StartupPhase::Stopped, None);
+        view.observe(StartupPhase::SplashFirstFrame, None);
         assert_eq!(view.appearance.status, StartupStatus::Loading);
         view.elapsed += Duration::from_secs(120);
-        view.phase(StartupPhase::PreparingConnection);
+        view.observe(StartupPhase::PreparingConnection, None);
         assert_eq!(view.appearance.status, StartupStatus::LoadingLong);
     }
     Ok(())
@@ -114,19 +121,19 @@ fn slow_startup_feedback_keeps_waiting_and_resets_only_for_a_settled_retry()
 fn phase_feedback_is_one_estimate_and_silent_time_cannot_complete_it() -> Result<(), Box<dyn Error>>
 {
     let mut view = view(true)?;
-    view.phase(StartupPhase::PreparingConnection);
+    view.observe(StartupPhase::PreparingConnection, None);
     assert_eq!(view.progress().completed, 0.08);
     view.elapsed = Duration::from_secs(7200);
-    view.phase(StartupPhase::PreparingConnection);
+    view.observe(StartupPhase::PreparingConnection, None);
     assert_eq!(view.progress().completed, 0.08);
     assert!(view.progress().activity.is_none());
-    view.phase(StartupPhase::ServerReady);
+    view.observe(StartupPhase::ServerReady, None);
     assert_eq!(view.progress().completed, 0.80);
-    view.phase(StartupPhase::WebviewLoading);
+    view.observe(StartupPhase::WebviewLoading, None);
     assert_eq!(view.progress().completed, 0.88);
-    view.phase(StartupPhase::FrontendReady);
+    view.observe(StartupPhase::FrontendReady, None);
     assert_eq!(view.progress().completed, 0.97);
-    view.phase(StartupPhase::Running);
+    view.observe(StartupPhase::Running, None);
     assert_eq!(view.progress().completed, 1.0);
     assert!(view.progress().activity.is_none());
     Ok(())
@@ -135,15 +142,15 @@ fn phase_feedback_is_one_estimate_and_silent_time_cannot_complete_it() -> Result
 fn terminal_phases_stop_activity_and_retain_progress_for_diagnosis() -> Result<(), Box<dyn Error>> {
     for reduced in [true, false] {
         let mut view = view(reduced)?;
-        view.phase(StartupPhase::PreparingConnection);
+        view.observe(StartupPhase::PreparingConnection, None);
         view.elapsed = Duration::from_secs(1);
-        view.phase(StartupPhase::WebviewLoading);
+        view.observe(StartupPhase::WebviewLoading, None);
         let completed = view.progress().completed;
-        view.phase(StartupPhase::Failed);
+        view.observe(StartupPhase::Failed, None);
         assert_eq!(view.progress().completed, completed);
         assert!(view.progress().activity.is_none());
-        view.phase(StartupPhase::Stopped);
-        view.phase(StartupPhase::SplashFirstFrame);
+        view.observe(StartupPhase::Stopped, None);
+        view.observe(StartupPhase::SplashFirstFrame, None);
         assert_eq!(view.progress().completed, 0.0);
     }
     Ok(())
@@ -204,13 +211,13 @@ fn a_settled_failure_is_retried_five_times_by_itself_then_asked_about() -> Resul
     assert_eq!(view.controls().iter().map(|control| control.id).collect::<Vec<_>>(), [1, 2]);
     for phase in [StartupPhase::PreparingConnection, StartupPhase::Failed, StartupPhase::Cancelling]
     {
-        view.phase(phase);
+        view.observe(phase, None);
         assert!(!view.take_retry());
         assert!(!view.asks_about_failure());
     }
     for _ in 0..2 {
         for _ in 0..5 {
-            view.phase(StartupPhase::Stopped);
+            view.observe(StartupPhase::Stopped, None);
             view.pointer(PointerAction::Press, status_line);
             view.pointer(PointerAction::Release, status_line);
             assert!(!view.activate(3));
@@ -220,7 +227,7 @@ fn a_settled_failure_is_retried_five_times_by_itself_then_asked_about() -> Resul
             assert!(!view.take_retry());
             view.begin_retry();
         }
-        view.phase(StartupPhase::Stopped);
+        view.observe(StartupPhase::Stopped, None);
         assert!(!view.take_retry());
         assert!(!view.appearance.retrying);
         assert!(view.asks_about_failure());
@@ -230,14 +237,18 @@ fn a_settled_failure_is_retried_five_times_by_itself_then_asked_about() -> Resul
     Ok(())
 }
 
-/// A failure retrying cannot fix is asked about at once, never tried again by itself.
+/// A failure retrying cannot fix is asked about at once, never tried again by itself, even when
+/// the start fails and settles before any frame is drawn in between.
 #[test]
 fn a_failure_retrying_cannot_fix_is_asked_about_at_once() -> Result<(), Box<dyn Error>> {
     use sugarsubstitute_contracts::startup::StartupFailureCode;
     for code in [StartupFailureCode::FrontendMismatch, StartupFailureCode::SugarCubesMissing] {
         let mut view = view(true)?;
-        view.phase(StartupPhase::Stopped);
-        view.set_failure(Some(code));
+        view.observe(StartupPhase::PreparingConnection, None);
+        view.observe(StartupPhase::Failed, Some(code));
+        assert!(!view.take_retry());
+        view.observe(StartupPhase::Stopped, Some(code));
+        assert_eq!(view.appearance.failure, Some(code));
         assert!(!view.take_retry());
         assert!(view.asks_about_failure());
         assert!(!view.appearance.retries_by_itself());
@@ -295,7 +306,7 @@ fn readonly_console_geometry_keeps_its_place_and_locale_owner() -> Result<(), Bo
             (before.bounds.x, before.bounds.y, before.bounds.width, before.bounds.height),
             (25.0, 371.0, 508.0, 162.0)
         );
-        view.phase(StartupPhase::Stopped);
+        view.observe(StartupPhase::Stopped, None);
         let console = view.console(None);
         assert_eq!(
             (console.bounds.x, console.bounds.y, console.bounds.width, console.bounds.height),
@@ -310,7 +321,7 @@ fn readonly_console_geometry_keeps_its_place_and_locale_owner() -> Result<(), Bo
 #[test]
 fn the_restoring_line_withholds_retry_until_the_retry_line_returns() -> Result<(), Box<dyn Error>> {
     let mut view = view(true)?;
-    view.phase(StartupPhase::Stopped);
+    view.observe(StartupPhase::Stopped, None);
     view.show_status(sugarsubstitute_splash::StartupStatus::RestoringSugarcubes);
     assert!(!view.take_retry());
     view.show_status(sugarsubstitute_splash::StartupStatus::SugarcubesRetryPrevious);
