@@ -18,7 +18,12 @@ import {
   WorkflowViewPreferences,
   type WorkflowViewDefaults,
 } from '../application/WorkflowViewPreferences.js';
-import type { WorkflowViewSource, WorkflowViewSnapshot } from '../domain/WorkflowView.js';
+import type {
+  WorkflowScrollMemory,
+  WorkflowScrollSource,
+  WorkflowViewSource,
+  WorkflowViewSnapshot,
+} from '../domain/WorkflowView.js';
 import type { WorkflowViewKind } from './ComfyWorkflowViewDocument.js';
 import type { WorkflowSessionStore } from '../../execution/application/WorkflowSessionStore.js';
 import type { WorkflowSessionId } from '../../execution/domain/ExecutionIdentity.js';
@@ -35,7 +40,7 @@ export interface WorkflowViewDocuments {
 export const WORKFLOW_VIEW_STORAGE_KEY = 'SugarCubes.WorkflowViews.v1';
 
 /** Adapt storage and authoritative session commitment to one shared presentation owner. */
-export class ComfyWorkflowViewPreferences implements WorkflowViewSource {
+export class ComfyWorkflowViewPreferences implements WorkflowViewSource, WorkflowScrollSource {
   readonly #views: WorkflowViewPreferences;
   readonly #listeners = new Set<() => void>();
   #stop: (() => void) | null = null;
@@ -115,6 +120,14 @@ export class ComfyWorkflowViewPreferences implements WorkflowViewSource {
     if (!this.sessions.read().active || !this.#views.change(value)) return;
     if (value.masonry !== undefined) this.documents.recordView(value.masonry ? 'masonry' : 'graph');
     this.#publish();
+  }
+
+  /** The shown workflow's scroll memory, bound to it for as long as its masonry is mounted. */
+  bindScroll(): WorkflowScrollMemory | null {
+    const active = this.sessions.read().active;
+    return active
+      ? this.#views.scrollFor({ id: active.sessionId, path: active.path || null })
+      : null;
   }
 
   /** A workflow opens with the stored canvas choice and the view its document records. */

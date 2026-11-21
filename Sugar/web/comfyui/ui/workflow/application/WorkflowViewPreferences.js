@@ -1,3 +1,23 @@
+//    SugarCubes - composable workflow units for ComfyUI
+//    Copyright (C) 2026  Artificial Sweetener and contributors
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU Affero General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU Affero General Public License for more details.
+//
+//    You should have received a copy of the GNU Affero General Public License
+//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Retain immutable view choices independently of graph objects, history, and rendered resources. */
+import { isWorkflowScroll, } from '../domain/WorkflowView.js';
+function sameScroll(a, b) {
+    return a === b || (a !== null && b !== null && a.cube === b.cube && a.offset === b.offset);
+}
 /** Accept stored or requested editor widths in CSS pixels, with zero selecting the default. */
 function isEditorWidth(value) {
     return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 16384;
@@ -28,6 +48,7 @@ export class WorkflowViewPreferences {
                 canvas: item.canvas,
                 // Entries written before editor widths were stored select the default width.
                 editorWidth: 'editorWidth' in item && isEditorWidth(item.editorWidth) ? item.editorWidth : 0,
+                scroll: 'scroll' in item && isWorkflowScroll(item.scroll) ? item.scroll : null,
             }));
         }
     }
@@ -41,7 +62,7 @@ export class WorkflowViewPreferences {
         if (current)
             return current.view;
         const view = this.#opening(binding, defaults);
-        this.#live.set(binding.id, { path: binding.path, view });
+        this.#live.set(binding.id, { path: binding.path, view, scroll: this.#storedScroll(binding) });
         return view;
     }
     /** Import native checkpoint choices without publishing browser persistence ahead of host durability. */
@@ -51,16 +72,48 @@ export class WorkflowViewPreferences {
             !isEditorWidth(snapshot.editorWidth))
             throw new TypeError('Restored workflow presentation is invalid.');
         const view = Object.freeze({ ...snapshot });
-        this.#live.set(binding.id, { path: binding.path, view });
+        // The checkpoint names no scroll; the workflow keeps the one it already has.
+        const scroll = this.#live.get(binding.id)?.scroll ?? this.#storedScroll(binding);
+        this.#live.set(binding.id, { path: binding.path, view, scroll });
         if (this.#selected === binding.id)
             this.#snapshot = view;
+    }
+    /**
+     * The scroll memory of one open workflow. Recording keeps writing to that workflow, by its
+     * storage key once it is closed, so a scroll taken as its view is torn down is never lost.
+     */
+    scrollFor(binding) {
+        let path = binding.path;
+        return {
+            read: () => this.#live.get(binding.id)?.scroll ?? this.#storedScroll({ ...binding, path }),
+            record: (scroll) => {
+                if (!isWorkflowScroll(scroll))
+                    throw new TypeError('Workflow scroll is invalid.');
+                const live = this.#live.get(binding.id);
+                if (live) {
+                    path = live.path;
+                    if (sameScroll(live.scroll, scroll))
+                        return;
+                    live.scroll = Object.freeze({ cube: scroll.cube, offset: scroll.offset });
+                    this.#persist(live);
+                    return;
+                }
+                const stored = path ? this.#stored.get(path) : undefined;
+                if (path && stored && !sameScroll(stored.scroll, scroll))
+                    this.#store(path, { ...stored, scroll: Object.freeze({ ...scroll }) });
+            },
+        };
     }
     /** Select an explicit committed binding and carry choices through rename or Save As. */
     activate(binding, defaults) {
         let current = this.#live.get(binding.id);
         if (!current) {
             const stored = binding.path ? this.#stored.get(binding.path) : undefined;
-            current = { path: binding.path, view: this.#opening(binding, defaults) };
+            current = {
+                path: binding.path,
+                view: this.#opening(binding, defaults),
+                scroll: stored?.scroll ?? null,
+            };
             this.#live.set(binding.id, current);
             if (!stored)
                 this.#persist(current);
@@ -108,7 +161,9 @@ export class WorkflowViewPreferences {
             this.#live.delete(id);
             const stored = closed.path ? this.#stored.get(closed.path) : undefined;
             if (closed.path &&
-                (stored?.canvas !== closed.view.canvas || stored.editorWidth !== closed.view.editorWidth))
+                (stored?.canvas !== closed.view.canvas ||
+                    stored.editorWidth !== closed.view.editorWidth ||
+                    !sameScroll(stored.scroll, closed.scroll)))
                 this.#persist(closed);
         }
         if (this.#selected && !open.has(this.#selected))
@@ -124,20 +179,34 @@ export class WorkflowViewPreferences {
             editorWidth: stored?.editorWidth ?? 0,
         });
     }
+    /** The scroll stored for a workflow's key, if any. */
+    #storedScroll(binding) {
+        return (binding.path ? this.#stored.get(binding.path)?.scroll : null) ?? null;
+    }
     /** Persist changed named choices; ordinary tab switching performs no storage writes. */
     #persist(current) {
         if (!current.path)
             return;
         const stored = this.#stored.get(current.path);
-        if (stored?.canvas === current.view.canvas && stored.editorWidth === current.view.editorWidth)
+        if (stored?.canvas === current.view.canvas &&
+            stored.editorWidth === current.view.editorWidth &&
+            sameScroll(stored.scroll, current.scroll))
             return;
-        this.#stored.delete(current.path);
-        this.#stored.set(current.path, Object.freeze({ canvas: current.view.canvas, editorWidth: current.view.editorWidth }));
+        this.#store(current.path, {
+            canvas: current.view.canvas,
+            editorWidth: current.view.editorWidth,
+            scroll: current.scroll,
+        });
+    }
+    /** Write one workflow's record as the newest, within the bounded history. */
+    #store(path, record) {
+        this.#stored.delete(path);
+        this.#stored.set(path, Object.freeze(record));
         while (this.#stored.size > 128) {
             const oldest = this.#stored.keys().next().value;
             if (oldest !== undefined)
                 this.#stored.delete(oldest);
         }
-        this.write([...this.#stored].map(([path, view]) => ({ path, ...view })));
+        this.write([...this.#stored].map(([key, view]) => ({ path: key, ...view })));
     }
 }

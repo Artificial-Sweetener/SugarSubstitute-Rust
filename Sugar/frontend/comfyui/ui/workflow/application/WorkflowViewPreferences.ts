@@ -14,7 +14,12 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Retain immutable view choices independently of graph objects, history, and rendered resources. */
-import type { WorkflowViewSnapshot } from '../domain/WorkflowView.js';
+import {
+  isWorkflowScroll,
+  type WorkflowScroll,
+  type WorkflowScrollMemory,
+  type WorkflowViewSnapshot,
+} from '../domain/WorkflowView.js';
 
 interface WorkflowViewBinding {
   readonly id: string;
@@ -28,6 +33,19 @@ interface WorkflowViewBinding {
 interface StoredWorkflowView {
   readonly canvas: boolean;
   readonly editorWidth: number;
+  /** Where its masonry was last scrolled, so it reopens there after a restart. */
+  readonly scroll: WorkflowScroll | null;
+}
+
+/** One open workflow's choices and where its masonry is scrolled. */
+interface LiveWorkflowView {
+  path: string | null;
+  view: WorkflowViewSnapshot;
+  scroll: WorkflowScroll | null;
+}
+
+function sameScroll(a: WorkflowScroll | null, b: WorkflowScroll | null): boolean {
+  return a === b || (a !== null && b !== null && a.cube === b.cube && a.offset === b.offset);
 }
 
 /** What a workflow opens with when nothing about it is stored or live yet. */
@@ -43,7 +61,7 @@ function isEditorWidth(value: unknown): value is number {
 
 /** Bound persistent history while retaining every live workflow's lightweight choices. */
 export class WorkflowViewPreferences {
-  readonly #live = new Map<string, { path: string | null; view: WorkflowViewSnapshot }>();
+  readonly #live = new Map<string, LiveWorkflowView>();
   readonly #stored = new Map<string, StoredWorkflowView>();
   #selected: string | null = null;
   #snapshot: WorkflowViewSnapshot = Object.freeze({ canvas: true, masonry: false, editorWidth: 0 });
@@ -75,6 +93,7 @@ export class WorkflowViewPreferences {
           // Entries written before editor widths were stored select the default width.
           editorWidth:
             'editorWidth' in item && isEditorWidth(item.editorWidth) ? item.editorWidth : 0,
+          scroll: 'scroll' in item && isWorkflowScroll(item.scroll) ? item.scroll : null,
         }),
       );
     }
@@ -93,7 +112,7 @@ export class WorkflowViewPreferences {
     const current = this.#live.get(binding.id);
     if (current) return current.view;
     const view = this.#opening(binding, defaults);
-    this.#live.set(binding.id, { path: binding.path, view });
+    this.#live.set(binding.id, { path: binding.path, view, scroll: this.#storedScroll(binding) });
     return view;
   }
 
@@ -106,8 +125,35 @@ export class WorkflowViewPreferences {
     )
       throw new TypeError('Restored workflow presentation is invalid.');
     const view = Object.freeze({ ...snapshot });
-    this.#live.set(binding.id, { path: binding.path, view });
+    // The checkpoint names no scroll; the workflow keeps the one it already has.
+    const scroll = this.#live.get(binding.id)?.scroll ?? this.#storedScroll(binding);
+    this.#live.set(binding.id, { path: binding.path, view, scroll });
     if (this.#selected === binding.id) this.#snapshot = view;
+  }
+
+  /**
+   * The scroll memory of one open workflow. Recording keeps writing to that workflow, by its
+   * storage key once it is closed, so a scroll taken as its view is torn down is never lost.
+   */
+  scrollFor(binding: WorkflowViewBinding): WorkflowScrollMemory {
+    let path = binding.path;
+    return {
+      read: () => this.#live.get(binding.id)?.scroll ?? this.#storedScroll({ ...binding, path }),
+      record: (scroll) => {
+        if (!isWorkflowScroll(scroll)) throw new TypeError('Workflow scroll is invalid.');
+        const live = this.#live.get(binding.id);
+        if (live) {
+          path = live.path;
+          if (sameScroll(live.scroll, scroll)) return;
+          live.scroll = Object.freeze({ cube: scroll.cube, offset: scroll.offset });
+          this.#persist(live);
+          return;
+        }
+        const stored = path ? this.#stored.get(path) : undefined;
+        if (path && stored && !sameScroll(stored.scroll, scroll))
+          this.#store(path, { ...stored, scroll: Object.freeze({ ...scroll }) });
+      },
+    };
   }
 
   /** Select an explicit committed binding and carry choices through rename or Save As. */
@@ -115,7 +161,11 @@ export class WorkflowViewPreferences {
     let current = this.#live.get(binding.id);
     if (!current) {
       const stored = binding.path ? this.#stored.get(binding.path) : undefined;
-      current = { path: binding.path, view: this.#opening(binding, defaults) };
+      current = {
+        path: binding.path,
+        view: this.#opening(binding, defaults),
+        scroll: stored?.scroll ?? null,
+      };
       this.#live.set(binding.id, current);
       if (!stored) this.#persist(current);
     } else if (current.path !== binding.path) {
@@ -164,7 +214,9 @@ export class WorkflowViewPreferences {
       const stored = closed.path ? this.#stored.get(closed.path) : undefined;
       if (
         closed.path &&
-        (stored?.canvas !== closed.view.canvas || stored.editorWidth !== closed.view.editorWidth)
+        (stored?.canvas !== closed.view.canvas ||
+          stored.editorWidth !== closed.view.editorWidth ||
+          !sameScroll(stored.scroll, closed.scroll))
       )
         this.#persist(closed);
     }
@@ -185,21 +237,36 @@ export class WorkflowViewPreferences {
     });
   }
 
+  /** The scroll stored for a workflow's key, if any. */
+  #storedScroll(binding: WorkflowViewBinding): WorkflowScroll | null {
+    return (binding.path ? this.#stored.get(binding.path)?.scroll : null) ?? null;
+  }
+
   /** Persist changed named choices; ordinary tab switching performs no storage writes. */
-  #persist(current: { path: string | null; view: WorkflowViewSnapshot }): void {
+  #persist(current: LiveWorkflowView): void {
     if (!current.path) return;
     const stored = this.#stored.get(current.path);
-    if (stored?.canvas === current.view.canvas && stored.editorWidth === current.view.editorWidth)
+    if (
+      stored?.canvas === current.view.canvas &&
+      stored.editorWidth === current.view.editorWidth &&
+      sameScroll(stored.scroll, current.scroll)
+    )
       return;
-    this.#stored.delete(current.path);
-    this.#stored.set(
-      current.path,
-      Object.freeze({ canvas: current.view.canvas, editorWidth: current.view.editorWidth }),
-    );
+    this.#store(current.path, {
+      canvas: current.view.canvas,
+      editorWidth: current.view.editorWidth,
+      scroll: current.scroll,
+    });
+  }
+
+  /** Write one workflow's record as the newest, within the bounded history. */
+  #store(path: string, record: StoredWorkflowView): void {
+    this.#stored.delete(path);
+    this.#stored.set(path, Object.freeze(record));
     while (this.#stored.size > 128) {
       const oldest = this.#stored.keys().next().value;
       if (oldest !== undefined) this.#stored.delete(oldest);
     }
-    this.write([...this.#stored].map(([path, view]) => ({ path, ...view })));
+    this.write([...this.#stored].map(([key, view]) => ({ path: key, ...view })));
   }
 }

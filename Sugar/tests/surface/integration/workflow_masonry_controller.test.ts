@@ -31,6 +31,7 @@ import { CubeNodeCatalog } from '../../../frontend/comfyui/ui/cube/node/CubeNode
 import type { CubeNode } from '../../../frontend/comfyui/ui/cube/node/ComfyCubeNodeFactory.js';
 import type { ComfyNode } from '../../../frontend/comfyui/ui/types/graph.js';
 import type { WorkflowMasonrySection } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryProjection.js';
+import type { WorkflowScroll } from '../../../frontend/comfyui/ui/workflow/domain/WorkflowView.js';
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -977,6 +978,7 @@ function fixture(
   });
   const container = document.createElement('div');
   let scope: object = container;
+  const scrolls = new Map<object, WorkflowScroll>();
   document.body.append(container);
   const node: ComfyNode = {
     id: 1,
@@ -1026,7 +1028,16 @@ function fixture(
   const controller = new WorkflowMasonryController({
     document,
     getContainer: () => container,
-    getScope: () => scope,
+    // Each workflow keeps its own scroll, as the workflow view owner keeps it.
+    bindScroll: () => {
+      const bound = scope;
+      return {
+        read: () => scrolls.get(bound) ?? null,
+        record: (scroll: WorkflowScroll) => {
+          scrolls.set(bound, scroll);
+        },
+      };
+    },
     isNodes2: () => nodes2,
     getSections,
     getRenderer,

@@ -102,6 +102,11 @@ test('text menu consumes static availability, captures directional selection and
     menu.items.filter((item) => item.kind === 'text').map((item) => item.action),
     ['cut', 'copy', 'paste', 'select-all'],
   );
+  // Undo and Redo are listed without history, as in every text field's edit menu.
+  assert.deepEqual(
+    menu.items.map((item) => (item.kind === 'separator' ? '-' : item.label)),
+    ['Undo', 'Redo', '-', 'Cut', 'Copy', 'Paste', 'Select all'],
+  );
   assert.equal(
     currentTextMenu(state.update({ selection: { anchor: 0, head: 4 } }).state, menu),
     false,

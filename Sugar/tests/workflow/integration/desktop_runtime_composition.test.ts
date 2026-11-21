@@ -547,6 +547,44 @@ test('a checkpoint naming fewer tabs than Comfy reopened leaves every reopened t
   f.dispose();
 });
 
+test('tabs Comfy reopened out of order come back in checkpoint order, showing the tab that was shown', async () => {
+  const f = await desktopRuntimeFixture();
+  const [first, ...rest] = f.checkpoint.entries;
+  if (!first || !rest.length) throw new Error('The fixture needs several entries.');
+  const checkpoint: SessionCheckpoint = { ...f.checkpoint, activeEntry: first.id };
+  // Comfy restored the tabs in another order and shows the last checkpoint tab.
+  const reversed = [...checkpoint.entries].reverse();
+  await f.host.reopen(
+    reversed.map((entry) => entry.document),
+    0,
+  );
+  f.host.committed();
+  f.setResolve(async (output) => ({
+    available: true,
+    receipt: {
+      file: output.file,
+      digest: output.digest,
+      bytes: output.bytes,
+      width: output.width,
+      height: output.height,
+      media: output.media,
+      mime: output.mime,
+      metadataEmbedded: output.metadataEmbedded,
+      animated: false,
+    },
+  }));
+  const bindings = await f.runtime.materialize(checkpoint, new DesktopSessionCancellation());
+  expect(f.host.workflow.openWorkflows.map((workflow) => workflow.filename)).toEqual(
+    checkpoint.entries.map((entry) => entry.document.name),
+  );
+  expect(f.host.workflow.activeWorkflow?.filename).toBe(first.document.name);
+  expect(bindings.map((binding) => binding.entryId)).toEqual(
+    checkpoint.entries.map((entry) => entry.id),
+  );
+  expect(f.errors).toEqual([]);
+  f.dispose();
+});
+
 test('a competing committed load cancels delayed artifact restoration before pixels or view state can be published', async () => {
   const f = await desktopRuntimeFixture();
   await f.host.reopen(

@@ -96,6 +96,13 @@ export class ComfyWorkflowViewPreferences {
             this.documents.recordView(value.masonry ? 'masonry' : 'graph');
         this.#publish();
     }
+    /** The shown workflow's scroll memory, bound to it for as long as its masonry is mounted. */
+    bindScroll() {
+        const active = this.sessions.read().active;
+        return active
+            ? this.#views.scrollFor({ id: active.sessionId, path: active.path || null })
+            : null;
+    }
     /** A workflow opens with the stored canvas choice and the view its document records. */
     #defaults(sessionId) {
         return { canvas: this.defaultCanvas(), masonry: this.documents.opensInMasonry(sessionId) };

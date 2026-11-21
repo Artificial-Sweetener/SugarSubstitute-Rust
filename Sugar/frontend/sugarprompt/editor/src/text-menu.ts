@@ -68,9 +68,22 @@ export function prepareTextMenu(
         : { kind: 'disabled', label, title: reason },
     );
   }
-  if (undoDepth(state)) row('undo', 'Undo', 'Control+Z', editable, 'This prompt is read-only.');
-  if (redoDepth(state)) row('redo', 'Redo', 'Control+Y', editable, 'This prompt is read-only.');
-  if (items.length) items.push({ kind: 'separator' });
+  // Undo and Redo are always listed, as in every text field's edit menu.
+  row(
+    'undo',
+    'Undo',
+    'Control+Z',
+    editable && undoDepth(state) > 0,
+    !editable ? 'This prompt is read-only.' : 'Nothing to undo.',
+  );
+  row(
+    'redo',
+    'Redo',
+    'Control+Y',
+    editable && redoDepth(state) > 0,
+    !editable ? 'This prompt is read-only.' : 'Nothing to redo.',
+  );
+  items.push({ kind: 'separator' });
   row(
     'cut',
     'Cut',

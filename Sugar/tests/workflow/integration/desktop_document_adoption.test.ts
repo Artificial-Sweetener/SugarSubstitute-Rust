@@ -47,7 +47,7 @@ test('a tab Comfy reopened with an older document takes the document its checkpo
   expect(tabs.map((tab) => tab.isModified)).toEqual(
     f.checkpoint.entries.map((entry) => entry.document.dirty),
   );
-  // Comfy still owns the tabs: none was opened, closed or reordered.
+  // Comfy reopened every tab in checkpoint order: none was opened, closed or moved.
   expect(f.host.workflow.openWorkflows).toEqual(tabs);
   expect(f.host.workflow.activeWorkflow).toBe(tabs[0]);
   // The restore is not an edit: every tab keeps the revision its checkpoint recorded.
@@ -73,13 +73,17 @@ test('a draft Comfy kept after the checkpoint was captured stays, and so does a 
   f.dispose();
 });
 
-test('a draft older than the checkpoint does not keep its tab, whichever tab is shown', async () => {
+test('a draft older than the checkpoint does not keep its tab, whichever tab Comfy showed', async () => {
   const { f, tabs, saved, restore } = await reopenedOlder(1);
   f.setDraftTimes(() => f.checkpoint.capturedAt - 1);
   await restore();
-  expect(f.host.app.rootGraph.serialize()).toEqual(saved[1]);
+  // The tab the checkpoint showed is shown again, each tab holding its saved graph.
+  const shown = f.checkpoint.entries.findIndex((entry) => entry.id === f.checkpoint.activeEntry);
+  expect(shown).toBe(0);
+  expect(f.host.app.rootGraph.serialize()).toEqual(saved[0]);
   expect(tabs[0]?.changeTracker?.activeState).toEqual(saved[0]);
-  expect(f.host.workflow.activeWorkflow).toBe(tabs[1]);
+  expect(tabs[1]?.changeTracker?.activeState).toEqual(saved[1]);
+  expect(f.host.workflow.activeWorkflow).toBe(tabs[0]);
   expect(f.errors).toEqual([]);
   f.dispose();
 });

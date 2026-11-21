@@ -21,10 +21,49 @@ export interface WorkflowViewSnapshot {
   readonly editorWidth: number;
 }
 
+/**
+ * Where a workflow's masonry was scrolled, kept by the Cube at its top so it lands on the same
+ * Cube however the cards reflow in another window size.
+ */
+export interface WorkflowScroll {
+  /** The Cube whose section held the top of the view, or null above every Cube. */
+  readonly cube: string | null;
+  /** CSS pixels from that section's top, or from the masonry's top, to the top of the view. */
+  readonly offset: number;
+}
+
+/** One workflow's remembered scroll, bound to the workflow that was shown when it was taken. */
+export interface WorkflowScrollMemory {
+  read(): WorkflowScroll | null;
+  record(scroll: WorkflowScroll): void;
+}
+
+/** Accept a scroll from storage or a caller: a bounded offset and a Cube id or none. */
+export function isWorkflowScroll(value: unknown): value is WorkflowScroll {
+  if (typeof value !== 'object' || value === null) return false;
+  const { cube, offset } = value as { cube?: unknown; offset?: unknown };
+  return (
+    (cube === null || (typeof cube === 'string' && cube.length > 0 && cube.length <= 256)) &&
+    typeof offset === 'number' &&
+    Number.isFinite(offset) &&
+    offset >= 0 &&
+    offset <= 10_000_000
+  );
+}
+
 /** Expose accepted workflow view choices independently of rendered surfaces. */
 export interface WorkflowViewSource {
   readonly snapshot: WorkflowViewSnapshot;
   readonly ready: boolean;
   subscribe(listener: () => void): () => void;
   change(value: Partial<WorkflowViewSnapshot>): void;
+}
+
+/** Give the masonry the shown workflow's scroll memory. */
+export interface WorkflowScrollSource {
+  /**
+   * The shown workflow's scroll memory; it keeps answering for that workflow after another one
+   * is shown. Null while no workflow is shown.
+   */
+  bindScroll(): WorkflowScrollMemory | null;
 }

@@ -74,3 +74,74 @@ test('tabs Comfy did not reopen come back in the background, checkpoint tabs fir
     ],
   });
 });
+
+test('the checkpoint decides the tab order, whichever tabs Comfy restored itself', () => {
+  const tab = (path: string, filename: string, isTemporary = false) => ({
+    path,
+    filename,
+    isTemporary,
+  });
+  const kept = tab('workflows/kept.json', 'kept');
+  const unsaved = tab('workflows/Unsaved.json', 'Unsaved', true);
+  const saved = tab('workflows/saved.json', 'saved');
+  const other = tab('workflows/other.json', 'other');
+  const store = {
+    openWorkflows: [saved, other, unsaved, kept],
+    reorderWorkflows(from: number, to: number) {
+      const [moved] = this.openWorkflows.splice(from, 1);
+      if (moved) this.openWorkflows.splice(to, 0, moved);
+    },
+  };
+  const documents = new ComfyDesktopDocuments({
+    app: { extensionManager: { workflow: store } },
+    sessions: {} as never,
+    adapter: {} as never,
+  });
+  documents.arrange([
+    entry('a', 'kept', kept.path),
+    entry('b', 'Unsaved', null),
+    entry('c', 'saved', saved.path),
+    entry('d', 'gone', 'workflows/gone.json'),
+  ]);
+  // A tab no entry names keeps its place after the checkpoint's tabs.
+  expect(store.openWorkflows).toEqual([kept, unsaved, saved, other]);
+});
+
+test('the shown tab is opened as Comfy opens a tab: its document read first, then loaded', async () => {
+  const calls: string[] = [];
+  const state = { nodes: [], extra: { name: 'saved' } };
+  const saved = {
+    path: 'workflows/saved.json',
+    filename: 'saved',
+    isTemporary: false,
+    isLoaded: false,
+    changeTracker: null as { activeState: object } | null,
+    async load() {
+      calls.push('load');
+      this.isLoaded = true;
+      this.changeTracker = { activeState: state };
+      return this;
+    },
+  };
+  const shown = { path: 'workflows/shown.json', filename: 'shown', isTemporary: false };
+  const store = { openWorkflows: [shown, saved], activeWorkflow: shown as object };
+  const app = {
+    extensionManager: { workflow: store },
+    async loadGraphData(graph: object, clean: boolean, restore: boolean, workflow: object) {
+      calls.push('loadGraphData');
+      expect([graph, clean, restore, workflow]).toEqual([state, true, true, saved]);
+      store.activeWorkflow = workflow;
+    },
+  };
+  const documents = new ComfyDesktopDocuments({
+    app,
+    sessions: {} as never,
+    adapter: {} as never,
+  });
+  const document = entry('c', 'saved', saved.path).document;
+  expect(await documents.activate(document)).toBe(true);
+  expect(calls).toEqual(['load', 'loadGraphData']);
+  // The tab already shown is left alone.
+  expect(await documents.activate(document)).toBe(false);
+  expect(calls).toEqual(['load', 'loadGraphData']);
+});

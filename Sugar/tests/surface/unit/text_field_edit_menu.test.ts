@@ -15,7 +15,10 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove plain text fields take SugarCubes' edit menu exactly where the host lets them. */
 import { afterEach, expect, jest, test } from '@jest/globals';
-import { TextFieldEditMenu } from '../../../frontend/comfyui/ui/menus/TextFieldEditMenu.js';
+import {
+  FIELD_MENU_OWNER,
+  TextFieldEditMenu,
+} from '../../../frontend/comfyui/ui/menus/TextFieldEditMenu.js';
 import type { HostDescriptionSource } from '../../../frontend/comfyui/ui/core/embedded/HostDescriptionState.js';
 
 afterEach(() => document.body.replaceChildren());
@@ -71,17 +74,57 @@ test('without it only fields on SugarCubes surfaces take the menu; the browser k
   menu.dispose();
 });
 
-test('a field whose own menu already answered keeps it; non-text inputs are never touched', () => {
+test('a control that owns its field menu keeps it; non-text inputs are never touched', () => {
   const menu = new TextFieldEditMenu(document, host(true), jest.fn());
   menu.setup();
+  const picker = document.createElement('div');
+  picker.setAttribute(FIELD_MENU_OWNER, '');
   const owned = document.createElement('input');
-  owned.addEventListener('contextmenu', (event) => event.preventDefault());
+  const ownMenu = jest.fn();
+  picker.addEventListener('contextmenu', ownMenu);
+  picker.append(owned);
   const checkbox = document.createElement('input');
   checkbox.type = 'checkbox';
-  document.body.append(owned, checkbox);
+  document.body.append(picker, checkbox);
   rightClick(owned);
   expect(labels()).toEqual([]);
+  expect(ownMenu).toHaveBeenCalledTimes(1);
   expect(rightClick(checkbox).defaultPrevented).toBe(false);
+  menu.dispose();
+});
+
+test('a node that stops the right-click on its way back still leaves the field its edit menu', () => {
+  const menu = new TextFieldEditMenu(document, host(true), jest.fn());
+  menu.setup();
+  // ComfyUI's Nodes 2.0 card cancels and stops every right-click inside it for its node menu.
+  const node = document.createElement('div');
+  const nodeMenu = jest.fn((event: Event) => {
+    event.preventDefault();
+    event.stopPropagation();
+  });
+  node.addEventListener('contextmenu', nodeMenu);
+  const steps = document.createElement('input');
+  node.append(steps);
+  document.body.append(node);
+  expect(rightClick(steps).defaultPrevented).toBe(true);
+  expect(labels()).toEqual(['Undo', 'Redo', 'Cut', 'Copy', 'Paste', 'Select all']);
+  expect(nodeMenu).not.toHaveBeenCalled();
+  menu.dispose();
+});
+
+test('a document-level menu that answers first, such as Dimensions, keeps the right-click', () => {
+  const menu = new TextFieldEditMenu(document, host(true), jest.fn());
+  menu.setup();
+  const dimensions = (event: Event): void => {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+  document.addEventListener('contextmenu', dimensions, true);
+  const width = document.createElement('input');
+  document.body.append(width);
+  rightClick(width);
+  expect(labels()).toEqual([]);
+  document.removeEventListener('contextmenu', dimensions, true);
   menu.dispose();
 });
 

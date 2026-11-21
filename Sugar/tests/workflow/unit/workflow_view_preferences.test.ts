@@ -60,6 +60,7 @@ test('restores persisted false choices and carries accepted state through Save A
     path: 'workflows/renamed.json',
     canvas: false,
     editorWidth: 0,
+    scroll: null,
   });
   const restored = new WorkflowViewPreferences(write.mock.calls.at(-1)![0], write);
   restored.activate({ id: 'new-session', path: 'workflows/renamed.json' }, () => ({
@@ -143,6 +144,7 @@ test('restores entries stored before editor widths with the default width and ke
     path: 'workflows/huge.json',
     canvas: true,
     editorWidth: 1000,
+    scroll: null,
   });
 });
 
@@ -163,4 +165,61 @@ test('a closed workflow reopens with the choices a session restore gave it', () 
   expect(views.snapshot).toEqual({ canvas: true, masonry: true, editorWidth: 640 });
   views.retain([]);
   expect(write).toHaveBeenCalledTimes(1);
+});
+
+test('each workflow keeps where its masonry was scrolled, across a restart and a session restore', () => {
+  const write = jest.fn<(value: unknown) => void>();
+  const views = new WorkflowViewPreferences([], write);
+  const a = { id: 'a', path: 'workflows/a.json' };
+  const b = { id: 'b', path: 'workflows/b.json' };
+  views.activate(a, graph);
+  const scrollA = views.scrollFor(a);
+  views.activate(b, graph);
+  const scrollB = views.scrollFor(b);
+  // A memory taken for a workflow keeps answering for it after another one is shown.
+  scrollA.record({ cube: '12', offset: 40 });
+  scrollB.record({ cube: null, offset: 8 });
+  expect(scrollA.read()).toEqual({ cube: '12', offset: 40 });
+  expect(scrollB.read()).toEqual({ cube: null, offset: 8 });
+  const stored = write.mock.calls.at(-1)![0];
+  // The same scroll again writes nothing.
+  write.mockClear();
+  scrollA.record({ cube: '12', offset: 40 });
+  expect(write).not.toHaveBeenCalled();
+
+  // A restart reads it back by the workflow's path.
+  const restarted = new WorkflowViewPreferences(stored, write);
+  restarted.activate({ id: 'fresh', path: a.path }, graph);
+  expect(restarted.scrollFor({ id: 'fresh', path: a.path }).read()).toEqual({
+    cube: '12',
+    offset: 40,
+  });
+  // A session restore names no scroll; the workflow keeps its own.
+  restarted.restore({ id: 'fresh', path: a.path }, { canvas: true, masonry: true, editorWidth: 0 });
+  expect(restarted.scrollFor({ id: 'fresh', path: a.path }).read()).toEqual({
+    cube: '12',
+    offset: 40,
+  });
+});
+
+test('a scroll taken as a closed workflow masonry is torn down is still kept', () => {
+  const write = jest.fn<(value: unknown) => void>();
+  const views = new WorkflowViewPreferences([], write);
+  const a = { id: 'a', path: 'workflows/a.json' };
+  views.activate(a, graph);
+  const memory = views.scrollFor(a);
+  memory.record({ cube: '3', offset: 5 });
+  views.retain([]);
+  memory.record({ cube: '3', offset: 90 });
+  const restarted = new WorkflowViewPreferences(write.mock.calls.at(-1)![0], write);
+  expect(restarted.scrollFor({ id: 'again', path: a.path }).read()).toEqual({
+    cube: '3',
+    offset: 90,
+  });
+  // A stored scroll that is not a valid one is dropped, never trusted.
+  const damaged = new WorkflowViewPreferences(
+    [{ path: a.path, canvas: true, editorWidth: 0, scroll: { cube: 3, offset: -1 } }],
+    write,
+  );
+  expect(damaged.scrollFor({ id: 'x', path: a.path }).read()).toBeNull();
 });

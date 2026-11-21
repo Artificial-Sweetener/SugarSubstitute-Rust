@@ -255,6 +255,91 @@ function routeComboClick(documentRef, event) {
   );
 }
 
+// frontend/comfyui/ui/menus/TextFieldEditMenu.ts
+import { ContextMenu } from "../../menus/ContextMenu.js";
+
+// integrations/contracts/HostDescription.ts
+var HOST_PROTOCOLS = Object.freeze({
+  panel: Object.freeze({ name: "sugarcubes.panel", version: 3 }),
+  canvas: Object.freeze({ name: "sugarcubes.canvas", version: 3 }),
+  canvasMasks: Object.freeze({ name: "sugarcubes.canvas.masks", version: 2 }),
+  memory: Object.freeze({ name: "sugarcubes.memory", version: 1 }),
+  updates: Object.freeze({ name: "sugarcubes.updates", version: 1 }),
+  releaseNotes: Object.freeze({ name: "sugarcubes.release-notes", version: 1 }),
+  sessionNotice: Object.freeze({ name: "sugarcubes.session-notice", version: 1 }),
+  fileDrag: Object.freeze({ name: "sugarcubes.file-drag", version: 1 }),
+  backend: Object.freeze({ name: "sugarcubes.backend", version: 1 }),
+  updateReport: Object.freeze({ name: "sugarcubes.update-report", version: 1 }),
+  fileChoice: Object.freeze({ name: "sugarcubes.file-choice", version: 1 })
+});
+var HOST_CAPABILITIES = Object.freeze({
+  /** The host's configured presentation replaces the user's saved appearance while embedded. */
+  hostStyles: "presentation.host-styles",
+  /** The host's configured accent is the system accent, offered as a choice beside a custom one. */
+  systemAccent: "presentation.system-accent",
+  /** The host presents output images itself; the page never falls back to browser images. */
+  hostOutputSurface: "output.host-surface",
+  /** Besides sugarcubes.updates version 1, the host answers version 2 on the same channel, whose states name the product they describe. */
+  namedUpdates: "updates.product-name",
+  /** Besides sugarcubes.session-notice version 1, the host answers version 2 on the same channel, whose notices include lines the host words itself. */
+  noticeLines: "session-notice.lines",
+  /** The host takes up to 64 acrylic regions in one canvas geometry message, where a host without this takes two. */
+  backdropRegions: "canvas.backdrop-regions",
+  /** In this host's browser, SugarCubes owns the context menu of every text field, including the host application's own fields; without it, SugarCubes owns only its own fields. */
+  textMenus: "editing.text-menus"
+});
+
+// integrations/shared/HostDescription.ts
+var DeclaredHost = class _DeclaredHost {
+  #protocols;
+  #capabilities;
+  constructor(content) {
+    this.#protocols = new Set(content.protocols.map(protocolKey));
+    this.#capabilities = new Set(content.capabilities.map((capability) => capability.name));
+  }
+  /**
+   * Adopt a schema-validated description, refusing one that repeats a protocol or capability.
+   *
+   * A repeated name is ambiguous about what the host meant, so the whole description fails
+   * closed rather than guessing which entry to honour.
+   */
+  static read(content) {
+    const protocols = new Set(content.protocols.map((protocol) => protocol.name));
+    const capabilities = new Set(content.capabilities.map((capability) => capability.name));
+    if (protocols.size !== content.protocols.length || capabilities.size !== content.capabilities.length)
+      return null;
+    return new _DeclaredHost(content);
+  }
+  /** Serve the page outside any host: no host protocol and no host capability. */
+  static standalone = new _DeclaredHost({ protocols: [], capabilities: [] });
+  /** Describe a host that configured its panel without first describing itself. */
+  static undeclared = new _DeclaredHost({
+    protocols: [HOST_PROTOCOLS.panel],
+    capabilities: []
+  });
+  /** Whether the host serves this protocol at exactly this envelope version. */
+  serves(protocol) {
+    return this.#protocols.has(protocolKey(protocol));
+  }
+  /** Whether the host declares this capability. */
+  declares(capability) {
+    return this.#capabilities.has(capability);
+  }
+  /** Compare declarations regardless of the order a host listed them in. */
+  same(other) {
+    return sameSet(this.#protocols, other.#protocols) && sameSet(this.#capabilities, other.#capabilities);
+  }
+};
+function protocolKey(protocol) {
+  return `${protocol.name}@${String(protocol.version)}`;
+}
+function sameSet(left, right) {
+  return left.size === right.size && [...left].every((name) => right.has(name));
+}
+
+// frontend/comfyui/ui/menus/TextFieldEditMenu.ts
+var FIELD_MENU_OWNER = "data-sc-field-menu";
+
 // frontend/comfyui/ui/model_library/vue/ModelPickerField.ts
 var ModelPickerField = defineComponent({
   name: "SugarCubesModelPickerField",
@@ -433,6 +518,7 @@ var ModelPickerField = defineComponent({
             { "sc-model-field-open": open.value, "sc-model-field-transferring": !!transfer.value }
           ],
           "data-sc-style-combo-frame": "",
+          [FIELD_MENU_OWNER]: "",
           "aria-busy": !!transfer.value,
           onPointerdown: (event) => event.stopPropagation(),
           onMousedown: (event) => event.stopPropagation(),

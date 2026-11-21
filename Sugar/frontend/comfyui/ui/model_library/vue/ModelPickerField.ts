@@ -48,6 +48,7 @@ import { ModelPickerSession } from '../ModelPickerSession.js';
 import type { ModelTransferState } from '../ModelTransfer.js';
 import { useModelSelectionUpdates } from './ModelSelectionUpdates.js';
 import { acquireComboToggle } from '../../surface/appearance/ComboToggleController.js';
+import { FIELD_MENU_OWNER } from '../../menus/TextFieldEditMenu.js';
 
 /** Share the same searchable field in graph and masonry without owning workflow values. */
 export const ModelPickerField = defineComponent({
@@ -246,6 +247,7 @@ export const ModelPickerField = defineComponent({
             { 'sc-model-field-open': open.value, 'sc-model-field-transferring': !!transfer.value },
           ],
           'data-sc-style-combo-frame': '',
+          [FIELD_MENU_OWNER]: '',
           'aria-busy': !!transfer.value,
           onPointerdown: (event: Event) => event.stopPropagation(),
           onMousedown: (event: Event) => event.stopPropagation(),

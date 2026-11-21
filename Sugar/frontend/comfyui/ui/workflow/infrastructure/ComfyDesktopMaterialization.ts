@@ -111,7 +111,14 @@ export class ComfyDesktopMaterialization {
           adopted = true;
         this.options.assertCurrent(cancellation);
       }
-      // Loading an adopted document gives its tab a new occurrence; name the tabs again.
+      // The checkpoint decides the order of the tabs and which one is shown.
+      this.options.documents.arrange(checkpoint.entries);
+      const shownEntry = checkpoint.entries.find((entry) => entry.id === checkpoint.activeEntry);
+      if (shownEntry && contexts.has(shownEntry.id)) {
+        if (await this.options.documents.activate(shownEntry.document)) adopted = true;
+        this.options.assertCurrent(cancellation);
+      }
+      // Loading a document gives its tab a new occurrence; name the tabs again.
       if (adopted) contexts = this.options.documents.match(checkpoint.entries, current);
       const entries = checkpoint.entries.filter((entry) => contexts.has(entry.id));
       this.options.assertCurrent(cancellation);

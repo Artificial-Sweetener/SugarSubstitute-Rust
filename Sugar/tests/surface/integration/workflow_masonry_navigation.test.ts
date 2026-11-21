@@ -435,6 +435,7 @@ function fixture(rootCount = 1) {
       change(value) {
         viewChoice = { ...viewChoice, ...value };
       },
+      bindScroll: () => null,
     },
     stack: {
       appearance: {

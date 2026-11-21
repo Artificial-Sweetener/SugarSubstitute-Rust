@@ -70,6 +70,49 @@ export class ComfyDesktopDocuments {
         return true;
     }
     /**
+     * Put the checkpoint's tabs first, in its order, whichever of them Comfy restored itself and
+     * whichever were reopened; any other tab keeps its order after them.
+     */
+    arrange(entries) {
+        const reorder = this.#workflow.reorderWorkflows;
+        if (typeof reorder !== 'function')
+            throw new TypeError('Comfy workflow reordering is unavailable.');
+        let place = 0;
+        for (const entry of entries) {
+            const open = this.#open();
+            // Tabs before `place` are already arranged; the entry's tab is found among the rest.
+            const from = open.findIndex((workflow, index) => index >= place && describes(workflow, entry.document));
+            if (from < 0)
+                continue;
+            if (from !== place)
+                Reflect.apply(reorder, this.#workflow, [from, place]);
+            place += 1;
+        }
+    }
+    /**
+     * Show the tab of `document` as Comfy opens a tab: read its document if Comfy has not, then
+     * load it into that tab. Returns whether the shown tab changed.
+     */
+    async activate(document) {
+        const workflow = this.#open().find((candidate) => describes(candidate, document));
+        if (!workflow || workflow === this.#workflow.activeWorkflow)
+            return false;
+        if (workflow.isLoaded !== true)
+            await invoke(workflow, 'load');
+        const tracker = isRecord(workflow.changeTracker) ? workflow.changeTracker : null;
+        if (!tracker || !isRecord(tracker.activeState))
+            throw new Error('The restored active workflow holds no document.');
+        await invoke(this.#app, 'loadGraphData', tracker.activeState, true, true, workflow);
+        return true;
+    }
+    /** Comfy's open tabs, in their order. */
+    #open() {
+        const open = this.#workflow.openWorkflows;
+        if (!Array.isArray(open) || !open.every(isRecord))
+            throw new TypeError('Comfy desktop open workflows are malformed.');
+        return open;
+    }
+    /**
      * List open workflows whose document Comfy has not read yet: a saved tab restored in the
      * background or opened but still awaiting its file hold neither a tracked graph nor content.
      * They are a normal transient state of Comfy's tab lifecycle, not a capture failure.
@@ -152,17 +195,12 @@ export class ComfyDesktopDocuments {
         assertCurrent(current);
         if (!this.options.adapter.refresh())
             throw new Error('Comfy restored workflow observation failed.');
-        const open = this.#workflow.openWorkflows;
-        if (!Array.isArray(open) || !open.every(isRecord))
-            throw new TypeError('Comfy desktop open workflows are malformed.');
-        const unclaimed = [...open];
+        const unclaimed = [...this.#open()];
         const committed = this.options.sessions.read().open;
         const contexts = new Map();
         for (const entry of entries) {
             const document = entry.document;
-            const index = unclaimed.findIndex((workflow) => document.temporary
-                ? workflow.isTemporary === true && text(workflow.filename) === document.name
-                : workflow.isTemporary !== true && text(workflow.path) === document.path);
+            const index = unclaimed.findIndex((workflow) => describes(workflow, document));
             if (index < 0)
                 continue;
             const [workflow] = unclaimed.splice(index, 1);
@@ -178,6 +216,12 @@ export class ComfyDesktopDocuments {
     }
 }
 /** A workflow exposes its document through a tracked graph or serialized content once Comfy has read it. */
+/** Whether a Comfy tab is the checkpoint document's: a saved one by path, an unsaved one by name. */
+function describes(workflow, document) {
+    return document.temporary
+        ? workflow.isTemporary === true && text(workflow.filename) === document.name
+        : workflow.isTemporary !== true && text(workflow.path) === document.path;
+}
 function readable(workflow) {
     if (!isRecord(workflow))
         return false;

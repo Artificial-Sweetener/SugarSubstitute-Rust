@@ -23663,9 +23663,21 @@ function prepareTextMenu(state, clipboard) {
       enabled2 ? { kind: "text", action, label: label2, shortcut } : { kind: "disabled", label: label2, title: reason }
     );
   }
-  if (undoDepth(state)) row("undo", "Undo", "Control+Z", editable2, "This prompt is read-only.");
-  if (redoDepth(state)) row("redo", "Redo", "Control+Y", editable2, "This prompt is read-only.");
-  if (items.length) items.push({ kind: "separator" });
+  row(
+    "undo",
+    "Undo",
+    "Control+Z",
+    editable2 && undoDepth(state) > 0,
+    !editable2 ? "This prompt is read-only." : "Nothing to undo."
+  );
+  row(
+    "redo",
+    "Redo",
+    "Control+Y",
+    editable2 && redoDepth(state) > 0,
+    !editable2 ? "This prompt is read-only." : "Nothing to redo."
+  );
+  items.push({ kind: "separator" });
   row(
     "cut",
     "Cut",

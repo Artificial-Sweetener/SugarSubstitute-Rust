@@ -28,6 +28,8 @@ import { markMasonryMounted } from './WorkflowMasonryStyles.js';
 import { markWorkflowSwitch } from '../../core/WorkflowSwitchTiming.js';
 import { prepareNativePresentation } from '../NativePresentationReady.js';
 import { SurfacePresentationBoundary } from '../motion/SurfacePresentationBoundary.js';
+import { captureMasonryScroll, restoreMasonryScroll } from './MasonryCubeSections.js';
+import type { WorkflowScrollMemory } from '../../workflow/domain/WorkflowView.js';
 import {
   measureWorkflowMasonryGraph,
   workflowMasonryGraphCards,
@@ -36,7 +38,8 @@ import {
 export interface WorkflowMasonryControllerOptions {
   document: Document;
   getContainer(): HTMLElement | null;
-  getScope(): object | null;
+  /** The shown workflow's scroll memory, taken as its masonry mounts. */
+  bindScroll(): WorkflowScrollMemory | null;
   isNodes2(): boolean;
   getSections(): WorkflowMasonrySection[];
   getRenderer(): Promise<NativeNodeCardRenderer>;
@@ -76,8 +79,9 @@ export class WorkflowMasonryController {
   #renderer: NativeNodeCardRenderer | null = null;
   #links: WorkflowMasonryLinkMotion | null = null;
   readonly #graphVisibility: WorkflowMasonryGraphVisibility;
-  readonly #scrollPositions = new WeakMap<object, number>();
-  #viewScope: object | null = null;
+  /** The mounted workflow's scroll memory; written only once its kept scroll was applied. */
+  #scroll: WorkflowScrollMemory | null = null;
+  #scrollApplied = false;
 
   /** Bind host capabilities without importing host globals or owning graph mutations. */
   constructor(options: WorkflowMasonryControllerOptions) {
@@ -195,7 +199,9 @@ export class WorkflowMasonryController {
           },
         });
         this.#container = container;
-        this.#viewScope = this.#options.getScope();
+        this.#scroll = this.#options.bindScroll();
+        this.#scrollApplied = false;
+        this.#view.element.addEventListener('scrollend', this.#recordScroll);
         this.#reveal ??= new WorkflowMasonryGraphReveal();
         this.#reveal.reconcile(container, sections);
         markWorkflowSwitch('masonry-show');
@@ -222,8 +228,10 @@ export class WorkflowMasonryController {
       if (this.#view) {
         this.#options.onSurfaceReady?.(this.#view, animate);
         await this.#animate(true, animate);
-        if (generation === this.#generation && this.#viewScope && this.#view)
-          this.#view.element.scrollTop = this.#scrollPositions.get(this.#viewScope) ?? 0;
+        if (generation === this.#generation && this.#view) {
+          restoreMasonryScroll(this.#view.element, this.#scroll?.read() ?? null);
+          this.#scrollApplied = true;
+        }
       }
       if (generation === this.#generation && this.#desired) {
         this.#graphVisibility.setHidden(true);
@@ -374,11 +382,24 @@ export class WorkflowMasonryController {
     }
   }
 
+  /** Keep where the mounted workflow's masonry rests, once its kept scroll was applied. */
+  readonly #recordScroll = (): void => {
+    if (!this.#view || !this.#scroll || !this.#scrollApplied) return;
+    try {
+      this.#scroll.record(captureMasonryScroll(this.#view.element));
+    } catch (error: unknown) {
+      this.#options.reportError(error);
+    }
+  };
+
   /** Return borrowed controls before recapturing settled native noodle endpoints. */
   #disposePresentation(): void {
-    if (this.#view && this.#viewScope)
-      this.#scrollPositions.set(this.#viewScope, this.#view.element.scrollTop);
-    this.#viewScope = null;
+    if (this.#view) {
+      this.#view.element.removeEventListener('scrollend', this.#recordScroll);
+      this.#recordScroll();
+    }
+    this.#scroll = null;
+    this.#scrollApplied = false;
     // Rail reservation is part of the animation's coordinate space until card travel completes.
     if (this.#view) this.#options.onSurfaceLeaving?.();
     this.#view?.dispose();

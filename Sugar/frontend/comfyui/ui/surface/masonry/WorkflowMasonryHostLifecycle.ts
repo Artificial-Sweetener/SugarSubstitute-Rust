@@ -45,10 +45,13 @@ import {
   type CubeStackHostOptions,
   type CubeStackFrameControls,
 } from '../stack/CubeStackHost.js';
-import type { WorkflowViewSource } from '../../workflow/domain/WorkflowView.js';
+import type {
+  WorkflowScrollSource,
+  WorkflowViewSource,
+} from '../../workflow/domain/WorkflowView.js';
 
 export interface WorkflowMasonryHostLifecycleOptions {
-  presentation: WorkflowViewSource;
+  presentation: WorkflowViewSource & WorkflowScrollSource;
   stack: Omit<
     CubeStackHostOptions,
     'document' | 'app' | 'refreshSurface' | 'revealSearchResults' | 'reportError'
@@ -104,11 +107,7 @@ export class WorkflowMasonryHostLifecycle {
     this.#controller = new WorkflowMasonryController({
       document: options.document,
       getContainer: options.getContainer,
-      getScope: () => {
-        const manager = options.app?.extensionManager;
-        const store = isRecord(manager) && isRecord(manager.workflow) ? manager.workflow : null;
-        return store && isRecord(store.activeWorkflow) ? store.activeWorkflow : null;
-      },
+      bindScroll: () => options.presentation.bindScroll(),
       isNodes2: () => this.#isNodes2(),
       getSections: () => {
         const graph = options.app?.graph;

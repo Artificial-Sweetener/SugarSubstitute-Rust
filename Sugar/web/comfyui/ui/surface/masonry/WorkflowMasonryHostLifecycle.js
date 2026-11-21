@@ -48,11 +48,7 @@ export class WorkflowMasonryHostLifecycle {
         this.#controller = new WorkflowMasonryController({
             document: options.document,
             getContainer: options.getContainer,
-            getScope: () => {
-                const manager = options.app?.extensionManager;
-                const store = isRecord(manager) && isRecord(manager.workflow) ? manager.workflow : null;
-                return store && isRecord(store.activeWorkflow) ? store.activeWorkflow : null;
-            },
+            bindScroll: () => options.presentation.bindScroll(),
             isNodes2: () => this.#isNodes2(),
             getSections: () => {
                 const graph = options.app?.graph;

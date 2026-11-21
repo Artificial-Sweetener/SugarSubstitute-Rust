@@ -28,6 +28,9 @@ const TEXT_INPUT_TYPES = new Set(['text', 'search', 'url', 'tel', 'email', 'pass
 const SUGARCUBES_SURFACES =
   '[data-sc-style-theme-root], [data-sc-floating-surface], .sugarcubes-modal-overlay, .sc-substitute-frame, .sugarcubes-workflow-masonry, .sc-cube-stack-host, .sugarcubes-settings-row, [id^="SugarCubes."]';
 
+/** Marks a control that answers its own field's right-click; its fields keep that menu. */
+export const FIELD_MENU_OWNER = 'data-sc-field-menu';
+
 /** The plain text field an event landed in, by element type alone. */
 export function plainTextField(target: EventTarget | null): PlainTextField | null {
   if (!(target instanceof Element)) return null;
@@ -85,7 +88,12 @@ export function textFieldEditEntries(
  * Own the right-click menu of plain text fields. In a host that declares
  * `editing.text-menus`, every text field takes it, the host application's own included; anywhere
  * else only fields on SugarCubes' own surfaces do, and the browser keeps every other field.
- * A field's own menu (one that already handled the right-click) is left alone.
+ * Controls marked with {@link FIELD_MENU_OWNER} keep their own menu.
+ *
+ * The menu answers while the right-click is captured at the root element: after the document's
+ * capturing listeners (the Dimensions menu answers there first) and before any node or control
+ * on the way to the field, since ComfyUI's Nodes 2.0 cards and embedded controls stop the event
+ * before it could bubble back.
  */
 export class TextFieldEditMenu {
   readonly #menu: ContextMenu;
@@ -106,23 +114,24 @@ export class TextFieldEditMenu {
   setup(): void {
     if (this.#active) return;
     this.#active = true;
-    this.document.addEventListener('contextmenu', this.#open);
+    this.document.documentElement.addEventListener('contextmenu', this.#open, true);
   }
 
   /** Stop answering and close an open menu. */
   dispose(): void {
     this.#active = false;
-    this.document.removeEventListener('contextmenu', this.#open);
+    this.document.documentElement.removeEventListener('contextmenu', this.#open, true);
     this.#menu.close();
   }
 
   readonly #open = (event: MouseEvent): void => {
     if (event.defaultPrevented) return;
     const field = plainTextField(event.target);
-    if (!field) return;
+    if (!field || field.closest(`[${FIELD_MENU_OWNER}]`)) return;
     const everywhere = this.host.read()?.declares(HOST_CAPABILITIES.textMenus) === true;
     if (!everywhere && !field.closest(SUGARCUBES_SURFACES)) return;
     event.preventDefault();
+    event.stopPropagation();
     this.#menu.open({
       label: 'Text actions',
       entries: textFieldEditEntries(field, this.#clipboard, this.report),

@@ -13,6 +13,9 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/** Select the stack's Cube from where the masonry is scrolled. */
+import { masonryCubeSections } from '../masonry/MasonryCubeSections.js';
+
 /** Track only mounted masonry section geometry for the rail's scrolling selection. */
 export class CubeStackScrollSelection {
   readonly #element: HTMLElement;
@@ -93,24 +96,9 @@ export class CubeStackScrollSelection {
       this.#select(this.#navigationId);
       return;
     }
-    const headers = [
-      ...this.#element.querySelectorAll<HTMLElement>('header[data-masonry-section]'),
-    ];
-    const sections = this.#ids
-      .flatMap((id) => {
-        const header = headers.find(
-          (item) =>
-            item.dataset.masonrySection === `cube:${id}` &&
-            !item.hasAttribute('data-sc-search-card-hidden'),
-        );
-        if (!header) return [];
-        const y = Number(header.dataset.masonryY) + (header.parentElement?.offsetTop ?? 0);
-        const height = Number(header.dataset.masonryHeight);
-        return Number.isFinite(y) && Number.isFinite(height) && height >= 0
-          ? [{ id, y, height }]
-          : [];
-      })
-      .sort((a, b) => a.y - b.y);
+    const sections = masonryCubeSections(this.#element).filter((section) =>
+      this.#ids.includes(section.id),
+    );
     const y = this.#element.scrollTop;
     const firstVisible = sections.find(
       (section) => section.y + section.height >= y && section.y <= y + this.#element.clientHeight,
