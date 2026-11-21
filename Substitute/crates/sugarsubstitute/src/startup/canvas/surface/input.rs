@@ -5,8 +5,9 @@
 //! The desktop adapter routes Win32 mouse and pen messages against the region on the UI thread,
 //! so web controls above the canvas keep their own input without a page round trip. Gestures
 //! arrive in physical client pixels and become physical pixels of the native viewport; pointer
-//! samples keep their device kind, pressure, eraser and modifier facts. A drag-out request
-//! copies the shown original on a worker before the desktop runs the OS drag.
+//! samples keep their device kind, pressure, eraser and modifier facts. The pointer arriving over
+//! an output that drags out copies its original on a worker, and the copy is kept until another
+//! output is shown, so the OS drag starts the moment a drag crosses the threshold.
 
 use super::*;
 use sugarsubstitute_canvas::{ScrollPhase, ToolButton, ToolInput};
@@ -21,8 +22,8 @@ pub(super) struct DragRequest {
     request: u64,
     selection_revision: u64,
     filename: String,
-    /// The drag crossed the threshold. A copy started at the press waits for this before the
-    /// desktop is handed its bytes.
+    /// The drag crossed the threshold. A copy prepared ahead of the drag waits for this before
+    /// the desktop is handed its bytes.
     requested: bool,
     /// When the drag crossed the threshold, for the logged wait until the OS drag starts.
     requested_at: Option<std::time::Instant>,
@@ -87,6 +88,7 @@ impl NativeSurface {
                 });
         if !current {
             self.drag_out = None;
+            session.discard_drag_out();
             return None;
         }
         if !pending.requested {
@@ -111,8 +113,8 @@ impl NativeSurface {
         })
     }
 
-    /// End the navigation gesture and hand the shown original to an OS drag: the copy started
-    /// at the press when there is one, a new copy otherwise.
+    /// End the navigation gesture and hand the shown original to an OS drag: the copy prepared
+    /// ahead of it when there is one, a new copy otherwise.
     fn request_drag_out(
         &mut self,
         identity: MainIdentity,
@@ -134,8 +136,8 @@ impl NativeSurface {
         })
     }
 
-    /// Start copying the shown original when a press may become a drag-out, so the OS drag can
-    /// begin the moment the pointer crosses the drag threshold.
+    /// Start copying the shown original once, when the pointer reaches an output that drags out,
+    /// so the OS drag can begin the moment a drag crosses the threshold.
     fn prepare_drag_out(
         &mut self,
         identity: MainIdentity,
@@ -203,17 +205,19 @@ impl NativeSurface {
         if input.gesture == MainCanvasGesture::DragOut {
             return self.request_drag_out(input.identity, session);
         }
-        // A primary press over an output that drags out starts its copy; a release that never
-        // became a drag drops it.
-        if let MainCanvasGesture::Button { button: MainCanvasButton::Primary, pressed, .. } =
-            input.gesture
-        {
-            if pressed && drag_out {
-                self.prepare_drag_out(input.identity, session)?;
-            } else if !pressed && self.drag_out.as_ref().is_some_and(|pending| !pending.requested) {
-                self.drag_out = None;
-                session.discard_drag_out();
-            }
+        // The pointer over an output that drags out prepares its copy; clicks keep it, and only
+        // another shown output drops it.
+        let reaches_output = matches!(
+            input.gesture,
+            MainCanvasGesture::Pointer(_)
+                | MainCanvasGesture::Button {
+                    button: MainCanvasButton::Primary,
+                    pressed: true,
+                    ..
+                }
+        );
+        if drag_out && reaches_output {
+            self.prepare_drag_out(input.identity, session)?;
         }
         let Some(tool) = tool_input(input.gesture, [origin.x, origin.y].map(f64::from)) else {
             return Ok(RoutedInput::Refused);

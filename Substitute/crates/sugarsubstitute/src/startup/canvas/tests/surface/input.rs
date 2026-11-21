@@ -239,6 +239,31 @@ fn copied(fixture: &mut Fixture) -> Result<MainCanvasDragOut, Box<dyn Error>> {
     }
 }
 
+/// Pump real execution until the copy prepared ahead of a drag has completed, while nothing is
+/// handed to the desktop without a drag.
+fn prepared_ahead(fixture: &mut Fixture) -> Result<(), Box<dyn Error>> {
+    let scope = ScopeId::new(1)?;
+    loop {
+        let revision = fixture.wake.revision();
+        fixture.pump()?;
+        assert!(fixture.canvas.take_drag_out().is_none(), "nothing drags out without a drag");
+        let work = fixture.scope_work(scope)?;
+        if work.queued + work.running + work.undelivered == 0 {
+            return Ok(());
+        }
+        fixture.progress(revision, "the copy prepared ahead of a drag")?;
+    }
+}
+
+/// End a held press whatever the drag found, so the fixture can close.
+fn release<T>(fixture: &mut Fixture, found: T) -> Result<T, Box<dyn Error>> {
+    route(fixture, &[button(false)])?;
+    for _ in 0..4 {
+        fixture.pump()?;
+    }
+    Ok(found)
+}
+
 fn drag_out(fixture: &mut Fixture) -> Result<bool, Box<dyn Error>> {
     Ok(fixture.canvas.input_region().ok_or("Committed final has no input region")?.drag_out)
 }
@@ -356,31 +381,40 @@ fn a_press_prepares_the_copy_but_only_a_drag_hands_it_over() -> Result<(), Box<d
     let mut fixture = Fixture::new()?;
     fixture.commit(4)?;
     route(&mut fixture, &[pointer([50.0, 40.0]), button(true)])?;
-    // The copy prepared at the press completes, but nothing reaches the desktop without a drag.
-    for _ in 0..8 {
-        fixture.pump()?;
-        assert!(fixture.canvas.take_drag_out().is_none(), "a press alone never drags out");
-    }
+    // The copy prepared over the output completes, but nothing reaches the desktop without a drag.
+    prepared_ahead(&mut fixture)?;
     route(&mut fixture, &[pointer([60.0, 40.0]), MainCanvasGesture::DragOut])?;
-    let drag = copied(&mut fixture)?;
-    assert_eq!(drag.filename, "wide.png");
-    // The desktop releases the handed-over copy and its memory, and the button comes up.
-    drop(drag);
-    route(&mut fixture, &[button(false)])?;
-    for _ in 0..4 {
-        fixture.pump()?;
-    }
+    // The prepared copy is handed over on the drag's own turn; the desktop releases it and its
+    // memory, and the button comes up.
+    let drag = fixture.canvas.take_drag_out().map(|drag| drag.filename);
+    let drag = release(&mut fixture, drag)?;
+    assert_eq!(drag.as_deref(), Some("wide.png"), "the prepared copy was not ready");
     fixture.finish()
 }
 
 #[test]
-fn a_click_that_never_drags_hands_nothing_over() -> Result<(), Box<dyn Error>> {
+fn a_click_hands_nothing_over_and_keeps_the_prepared_copy_for_a_later_drag()
+-> Result<(), Box<dyn Error>> {
     let mut fixture = Fixture::new()?;
     fixture.commit(4)?;
     route(&mut fixture, &[pointer([50.0, 40.0]), button(true), button(false)])?;
-    for _ in 0..8 {
-        fixture.pump()?;
-        assert!(fixture.canvas.take_drag_out().is_none(), "a click never drags out");
-    }
+    prepared_ahead(&mut fixture)?;
+    route(&mut fixture, &[pointer([52.0, 40.0]), button(true), MainCanvasGesture::DragOut])?;
+    let drag = fixture.canvas.take_drag_out().map(|drag| drag.filename);
+    let drag = release(&mut fixture, drag)?;
+    assert_eq!(drag.as_deref(), Some("wide.png"), "the click dropped the prepared copy");
+    fixture.finish()
+}
+
+#[test]
+fn hovering_an_output_prepares_its_copy_before_any_press() -> Result<(), Box<dyn Error>> {
+    let mut fixture = Fixture::new()?;
+    fixture.commit(4)?;
+    route(&mut fixture, &[pointer([50.0, 40.0])])?;
+    prepared_ahead(&mut fixture)?;
+    route(&mut fixture, &[button(true), MainCanvasGesture::DragOut])?;
+    let drag = fixture.canvas.take_drag_out().map(|drag| drag.filename);
+    let drag = release(&mut fixture, drag)?;
+    assert_eq!(drag.as_deref(), Some("wide.png"), "hovering prepared no copy");
     fixture.finish()
 }
