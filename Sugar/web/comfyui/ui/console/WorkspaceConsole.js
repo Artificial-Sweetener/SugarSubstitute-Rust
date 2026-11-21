@@ -28,6 +28,10 @@ import { ConsoleToolbarButton } from './ConsoleToolbarButton.js';
 /** ComfyUI's command that shows or hides its Logs bottom panel. */
 export const COMFY_LOGS_COMMAND = 'Workspace.ToggleBottomPanelTab.logs-terminal';
 const STORAGE_KEY = 'sugarcubes.console';
+/** Whether `event` is ComfyUI's console key, Ctrl+` with no other modifier. */
+function isConsoleKey(event) {
+    return event.key === '`' && event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey;
+}
 /** One console for the page. */
 export class WorkspaceConsole {
     #options;
@@ -45,9 +49,11 @@ export class WorkspaceConsole {
         this.#visible = saved.visible;
         this.#height = saved.height;
     }
-    /** Place the toolbar button and reopen a console that was open last time. */
+    /** Place the toolbar button, take ComfyUI's console key, and reopen a console left open. */
     setup() {
         this.#button.setup();
+        // Capture on the window runs before ComfyUI's keybinding handler, which listens there too.
+        this.#options.document.defaultView?.addEventListener('keydown', this.#onKey, true);
         this.#button.update(this.#visible && this.#substitute());
         if (this.#visible && this.#substitute())
             this.#show();
@@ -72,9 +78,23 @@ export class WorkspaceConsole {
     }
     /** Release the panel, its feed and the button with the page. */
     dispose() {
+        this.#options.document.defaultView?.removeEventListener('keydown', this.#onKey, true);
         this.#hide();
         this.#button.dispose();
     }
+    /**
+     * Inside the frame, ComfyUI's console key (Ctrl+`) opens the frame's console instead of
+     * ComfyUI's Logs panel. ComfyUI owns that binding, so SugarCubes declares none of its own:
+     * elsewhere the key reaches ComfyUI untouched and opens its Logs as it always has.
+     */
+    #onKey = (event) => {
+        if (!this.#substitute() || !isConsoleKey(event))
+            return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (!event.repeat)
+            this.toggle();
+    };
     /** Whether the SugarSubstitute frame presents this page. */
     #substitute() {
         return this.#options.document.documentElement.hasAttribute('data-sc-substitute-frame');

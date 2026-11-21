@@ -42,7 +42,6 @@ export interface SugarCubesCommandOwners {
 export function sugarCubesCommandRegistration(owners: SugarCubesCommandOwners): {
   commands: { id: string; label: string; function: () => unknown }[];
   menuCommands: { path: string[]; commands: string[] }[];
-  keybindings: { combo: { key: string; ctrl?: boolean }; commandId: string }[];
 } {
   return {
     commands: [
@@ -76,8 +75,5 @@ export function sugarCubesCommandRegistration(owners: SugarCubesCommandOwners): 
       { path: ['File'], commands: owners.projects.map((command) => command.id) },
       { path: ['View'], commands: ['SugarCubes.ToggleConsole'] },
     ],
-    // ComfyUI's own console key opens the console wherever it is: SugarCubes' panel inside the
-    // SugarSubstitute frame, ComfyUI's Logs panel elsewhere.
-    keybindings: [{ combo: { key: '`', ctrl: true }, commandId: 'SugarCubes.ToggleConsole' }],
   };
 }

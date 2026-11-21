@@ -145,7 +145,59 @@ test('outside the frame the console command opens ComfyUI’s own Logs panel', (
   console.dispose();
 });
 
-test('the console is a registered command in the View menu, on ComfyUI’s console key', () => {
+/** Press Ctrl+` on the page and report whether a later window listener, as ComfyUI's is, saw it. */
+function pressConsoleKey(): boolean {
+  let reachedComfy = false;
+  const comfy = () => {
+    reachedComfy = true;
+  };
+  window.addEventListener('keydown', comfy);
+  document.body.dispatchEvent(
+    new KeyboardEvent('keydown', { key: '`', ctrlKey: true, bubbles: true, cancelable: true }),
+  );
+  window.removeEventListener('keydown', comfy);
+  return reachedComfy;
+}
+
+test('inside the frame ComfyUI’s console key opens the frame’s console and stops there', async () => {
+  document.documentElement.setAttribute('data-sc-substitute-frame', '');
+  const host = document.createElement('div');
+  document.body.append(host);
+  const console = new WorkspaceConsole({
+    document,
+    app: { api: logApi(), extensionManager: { command: { execute: jest.fn() } } },
+    getHost: () => host,
+    report: (error) => {
+      throw error;
+    },
+  });
+  console.setup();
+  expect(pressConsoleKey()).toBe(false);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(host.querySelector('.sc-console')).not.toBeNull();
+  expect(pressConsoleKey()).toBe(false);
+  expect(host.querySelector('.sc-console')).toBeNull();
+  console.dispose();
+  expect(pressConsoleKey()).toBe(true);
+});
+
+test('outside the frame ComfyUI’s console key reaches ComfyUI untouched', () => {
+  const host = document.createElement('div');
+  const console = new WorkspaceConsole({
+    document,
+    app: { api: logApi(), extensionManager: { command: { execute: jest.fn() } } },
+    getHost: () => host,
+    report: (error) => {
+      throw error;
+    },
+  });
+  console.setup();
+  expect(pressConsoleKey()).toBe(true);
+  expect(host.querySelector('.sc-console')).toBeNull();
+  console.dispose();
+});
+
+test('the console is a registered command in the View menu with no competing keybinding', () => {
   const toggle = jest.fn();
   const registration = sugarCubesCommandRegistration({
     openCart: () => undefined,
@@ -160,8 +212,6 @@ test('the console is a registered command in the View menu, on ComfyUI’s conso
     path: ['View'],
     commands: ['SugarCubes.ToggleConsole'],
   });
-  expect(registration.keybindings).toContainEqual({
-    combo: { key: '`', ctrl: true },
-    commandId: 'SugarCubes.ToggleConsole',
-  });
+  // ComfyUI rejects a second default binding on a key it already binds, with an error toast.
+  expect(registration).not.toHaveProperty('keybindings');
 });

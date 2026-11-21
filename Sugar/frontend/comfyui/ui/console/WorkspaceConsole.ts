@@ -30,6 +30,11 @@ import { ConsoleToolbarButton } from './ConsoleToolbarButton.js';
 export const COMFY_LOGS_COMMAND = 'Workspace.ToggleBottomPanelTab.logs-terminal';
 const STORAGE_KEY = 'sugarcubes.console';
 
+/** Whether `event` is ComfyUI's console key, Ctrl+` with no other modifier. */
+function isConsoleKey(event: KeyboardEvent): boolean {
+  return event.key === '`' && event.ctrlKey && !event.altKey && !event.shiftKey && !event.metaKey;
+}
+
 /** What the console needs from its host. */
 export interface WorkspaceConsoleOptions {
   readonly document: Document;
@@ -58,9 +63,11 @@ export class WorkspaceConsole {
     this.#height = saved.height;
   }
 
-  /** Place the toolbar button and reopen a console that was open last time. */
+  /** Place the toolbar button, take ComfyUI's console key, and reopen a console left open. */
   setup(): void {
     this.#button.setup();
+    // Capture on the window runs before ComfyUI's keybinding handler, which listens there too.
+    this.#options.document.defaultView?.addEventListener('keydown', this.#onKey, true);
     this.#button.update(this.#visible && this.#substitute());
     if (this.#visible && this.#substitute()) this.#show();
   }
@@ -85,9 +92,22 @@ export class WorkspaceConsole {
 
   /** Release the panel, its feed and the button with the page. */
   dispose(): void {
+    this.#options.document.defaultView?.removeEventListener('keydown', this.#onKey, true);
     this.#hide();
     this.#button.dispose();
   }
+
+  /**
+   * Inside the frame, ComfyUI's console key (Ctrl+`) opens the frame's console instead of
+   * ComfyUI's Logs panel. ComfyUI owns that binding, so SugarCubes declares none of its own:
+   * elsewhere the key reaches ComfyUI untouched and opens its Logs as it always has.
+   */
+  readonly #onKey = (event: KeyboardEvent): void => {
+    if (!this.#substitute() || !isConsoleKey(event)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (!event.repeat) this.toggle();
+  };
 
   /** Whether the SugarSubstitute frame presents this page. */
   #substitute(): boolean {
