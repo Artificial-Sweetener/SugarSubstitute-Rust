@@ -321,6 +321,7 @@ sources = [
   "frontend/comfyui/*.ts",
   "frontend/comfyui/ui/*.ts",
   "frontend/comfyui/ui/core/**",
+  "frontend/comfyui/ui/console/**",
   "frontend/comfyui/ui/menus/**",
   "frontend/comfyui/ui/debug/**",
   "frontend/comfyui/ui/types/**",

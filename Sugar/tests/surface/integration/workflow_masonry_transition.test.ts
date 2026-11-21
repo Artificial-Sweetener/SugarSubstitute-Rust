@@ -52,6 +52,19 @@ test('fades the background in both directions without replacing native card layo
   expect(setup.card.style.transform).toBe('translate(12px, 80px)');
 });
 
+test('a page hidden mid-transition ends the effects and gives the surface its input back', async () => {
+  const setup = fixture();
+  const transition = new WorkflowMasonryTransition();
+  const entry = transition.run(setup.view, true, false);
+  expect(setup.surface.hasAttribute('data-sc-input-held')).toBe(true);
+  const state = jest.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+  document.dispatchEvent(new Event('visibilitychange'));
+  // The run settles only because the hide finished its effect: nothing else completes it here.
+  await entry;
+  expect(setup.surface.hasAttribute('data-sc-input-held')).toBe(false);
+  state.mockRestore();
+});
+
 test('reduced motion switches immediately and cancels any pending fade', async () => {
   const setup = fixture();
   const transition = new WorkflowMasonryTransition();

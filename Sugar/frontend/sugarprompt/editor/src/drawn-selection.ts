@@ -15,7 +15,14 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** The editor draws its own caret in every browser. */
 import { Prec, type Extension } from '@codemirror/state';
-import { EditorView, ViewPlugin, drawSelection, type ViewUpdate } from '@codemirror/view';
+import {
+  EditorView,
+  RectangleMarker,
+  ViewPlugin,
+  drawSelection,
+  layer,
+  type ViewUpdate,
+} from '@codemirror/view';
 
 /**
  * One full on-and-off caret cycle, in milliseconds.
@@ -90,6 +97,67 @@ const nativeHighlight = Prec.highest(
   }),
 );
 
+/** How far the selection colour reaches past each side of a selected chip, in CSS pixels. */
+const chipSelectionBleed = 3;
+
+/** Whether the whole of `chip` lies inside a non-empty range of the view's selection. */
+function chipSelected(view: EditorView, chip: HTMLElement): boolean {
+  const parent = chip.parentNode;
+  if (!parent) return false;
+  const index = Array.prototype.indexOf.call(parent.childNodes, chip) as number;
+  const from = view.posAtDOM(parent, index);
+  const to = view.posAtDOM(parent, index + 1);
+  return view.state.selection.ranges.some(
+    (range) => !range.empty && range.from <= from && to <= range.to,
+  );
+}
+
+/**
+ * Paint the selection colour behind every chip a selection covers.
+ *
+ * The native highlight is painted on text only, so a LoRA chip (a replaced widget) shows no sign
+ * of being selected. This layer sits behind the content and draws one box per selected chip, a
+ * little wider than the chip: the chip's opaque body covers the middle, and the colour shows in
+ * its tapered ends and beside them, which is how a selected chip reads in the prompt.
+ */
+const chipSelection = [
+  layer({
+    above: false,
+    class: 'sp-widget-selection-layer',
+    markers(view) {
+      const base = view.scrollDOM.getBoundingClientRect();
+      const left = base.left - view.scrollDOM.scrollLeft * view.scaleX;
+      const top = base.top - view.scrollDOM.scrollTop * view.scaleY;
+      const markers: RectangleMarker[] = [];
+      if (view.state.selection.ranges.every((range) => range.empty)) return markers;
+      for (const chip of view.contentDOM.querySelectorAll<HTMLElement>('.sp-lora-chip')) {
+        if (!chipSelected(view, chip)) continue;
+        const box = chip.getBoundingClientRect();
+        markers.push(
+          new RectangleMarker(
+            'sp-widget-selection',
+            (box.left - left) / view.scaleX - chipSelectionBleed,
+            (box.top - top) / view.scaleY,
+            box.width / view.scaleX + chipSelectionBleed * 2,
+            box.height / view.scaleY,
+          ),
+        );
+      }
+      return markers;
+    },
+    update(update) {
+      return (
+        update.selectionSet || update.docChanged || update.viewportChanged || update.geometryChanged
+      );
+    },
+  }),
+  EditorView.theme({
+    '.sp-widget-selection': {
+      backgroundColor: 'var(--sugarprompt-selection-background, Highlight)',
+    },
+  }),
+];
+
 /**
  * Draw the caret from CodeMirror's own selection.
  *
@@ -105,4 +173,5 @@ export const drawnSelection: Extension = [
   ViewPlugin.fromClass(CaretWidth),
   caretAppearance,
   nativeHighlight,
+  chipSelection,
 ];

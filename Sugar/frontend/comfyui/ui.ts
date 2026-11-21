@@ -464,8 +464,7 @@ export const sugarCubesExtension: SugarCubesExtension = {
   name: 'SugarCubes.UI',
   ...sugarCubesCommandRegistration({
     openCart: () => cubePicker.openCart(),
-    toggleMasonry: () => workflowWorkspace.masonry.toggle(),
-    toggleCanvas: () => workflowWorkspace.canvas.toggle(),
+    workspace: workflowWorkspace,
     projects: projects.commands,
   }),
   addCustomNodeDefs(definitions) {

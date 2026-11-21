@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own masonry layout rules and workspace stacking independently of renderer appearance. */
+import { isGraphChromeLayer } from '../../core/ComfyGraphChromeLayer.js';
 import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
 import { MASONRY_SURFACE_Z_INDEX } from '../../core/OverlayStacking.js';
 import {
@@ -104,9 +105,6 @@ export function markMasonryMounted(surface: HTMLElement): void {
   );
 }
 
-/** Everything a graph container holds directly, whoever mounted it. */
-const GRAPH_CONTAINER_CHILD = '#graph-canvas-container > *';
-
 /** Watches each container whose graph is hidden for anything mounted into it later. */
 const lateGraphChildren = new WeakMap<HTMLElement, HostSurfaceObserver>();
 
@@ -141,12 +139,25 @@ export function markMasonryGraphHidden(
   hidden: boolean,
   workspace: HTMLElement | null = null,
 ): void {
-  // The host element the masonry is mounted in is kept, whoever owns it: its own graph chrome
-  // is hidden by the rules for that chrome.
+  // The host element the masonry is mounted in is kept, whoever owns it, and so is ComfyUI's
+  // application chrome layer: the graph navigation chrome inside either is hidden by the rules
+  // for that chrome.
   const kept = (element: Element): boolean =>
     ownedSurface(element) ||
+    isGraphChromeLayer(element) ||
     (workspace !== null && (element === workspace || element.contains(workspace))) ||
     element.querySelector('.sugarcubes-workflow-masonry') !== null;
+  // Whether a child is kept can change after it mounts (the chrome layer gains its panel, a
+  // workspace moves), so every pass reconsiders every child: marks are set and cleared, never
+  // only added. The container holds a handful of children, so a pass is cheap.
+  const reconcile = (): void => {
+    for (const element of root.children) {
+      const current = element.getAttribute(MASONRY_HIDES_ATTRIBUTE);
+      if (kept(element)) {
+        if (current === 'graph') element.removeAttribute(MASONRY_HIDES_ATTRIBUTE);
+      } else if (current === null) mark(element, MASONRY_HIDES_ATTRIBUTE, 'graph');
+    }
+  };
   const watching = lateGraphChildren.get(root);
   if (!hidden) {
     watching?.disconnect();
@@ -155,22 +166,15 @@ export function markMasonryGraphHidden(
       element.removeAttribute(MASONRY_HIDES_ATTRIBUTE);
     return;
   }
-  for (const element of root.children)
-    if (!kept(element)) mark(element, MASONRY_HIDES_ATTRIBUTE, 'graph');
+  reconcile();
   if (watching) return;
   lateGraphChildren.set(
     root,
     new HostSurfaceObserver(
       root,
-      GRAPH_CONTAINER_CHILD,
+      '#graph-canvas-container > *, .graph-canvas-panel',
       (changes) => {
-        for (const change of changes)
-          if (
-            change.kind === 'mounted' &&
-            change.element.parentElement === root &&
-            !kept(change.element)
-          )
-            mark(change.element, MASONRY_HIDES_ATTRIBUTE, 'graph');
+        if (changes.some((change) => change.kind !== 'content')) reconcile();
       },
       { exclude: '.sugarcubes-workflow-masonry' },
     ),
@@ -234,7 +238,7 @@ export function ensureWorkflowMasonryStyles(documentRef: Document): void {
        to it would restyle every card. */
     @property --sc-masonry-stack-width { syntax:'<length>'; inherits:false; initial-value:0px; }
     .sugarcubes-workflow-masonry {
-      position:absolute; inset:0; z-index:${MASONRY_SURFACE_Z_INDEX}; box-sizing:border-box; pointer-events:auto;
+      position:absolute; inset:0 0 var(--sc-console-inset,0px) 0; z-index:${MASONRY_SURFACE_Z_INDEX}; box-sizing:border-box; pointer-events:auto;
       overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain;
       scroll-padding-bottom:var(--sc-panel-resize-corner,0px);
       padding:${WORKFLOW_MASONRY_TOP_INSET}px var(--sc-masonry-inline-padding,${WORKFLOW_MASONRY_INLINE_PADDING}px) 96px calc(var(--sc-masonry-inline-padding,${WORKFLOW_MASONRY_INLINE_PADDING}px) + var(--sc-masonry-stack-width,0px));
@@ -254,7 +258,7 @@ export function ensureWorkflowMasonryStyles(documentRef: Document): void {
       background:var(--sugarcubes-masonry-surface,var(--comfy-menu-bg,#202020));
     }
     .sugarcubes-workflow-masonry[data-sc-masonry-preparing] { opacity:0 !important; }
-    [data-sc-masonry-source] { visibility:hidden !important; }
+    [data-sc-masonry-source] { visibility:hidden !important; opacity:0 !important; }
     .sugarcubes-workflow-masonry__card .sugarcubes-cube-face__native-card-mount {
       transform-origin:0 0;
     }
@@ -306,6 +310,8 @@ export function ensureWorkflowMasonryStyles(documentRef: Document): void {
     [${MASONRY_HIDES_ATTRIBUTE}] * {
       visibility:hidden !important; pointer-events:none !important;
     }
+    /* A descendant can declare itself visible again; nothing inside can undo its ancestor's opacity. */
+    [${MASONRY_HIDES_ATTRIBUTE}] { opacity:0 !important; }
     [${MASONRY_STILLS_ATTRIBUTE}],
     [${MASONRY_STILLS_ATTRIBUTE}] * {
       pointer-events:none !important;

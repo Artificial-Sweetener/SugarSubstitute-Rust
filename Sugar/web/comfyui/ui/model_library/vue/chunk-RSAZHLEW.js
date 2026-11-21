@@ -7,6 +7,13 @@ function filterModelChoices(items, query, folder) {
     )
   );
 }
+function compareNames(left, right) {
+  const folded = left.toLowerCase();
+  const other = right.toLowerCase();
+  if (folded !== other) return folded < other ? -1 : 1;
+  if (left === right) return 0;
+  return left < right ? -1 : 1;
+}
 function modelChoiceFolders(items, folder) {
   const prefix = folder ? `${folder}/` : "";
   const children = /* @__PURE__ */ new Set();
@@ -15,7 +22,7 @@ function modelChoiceFolders(items, folder) {
     const child = item.folder.slice(prefix.length).split("/")[0];
     if (child) children.add(`${prefix}${child}`);
   }
-  return [...children].sort((left, right) => left.localeCompare(right));
+  return [...children].sort(compareNames);
 }
 
 export {

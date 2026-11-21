@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Retire inactive primary attachments while retaining per-workflow lightweight view state. */
+import { markWorkflowSwitch } from '../../core/WorkflowSwitchTiming.js';
 import { CanvasPreparationReleased, CanvasPreparationUnavailable, } from '../domain/CanvasPreparation.js';
 /** Give exactly one active visible primary workflow ownership of its surface and ephemeral previews. */
 export class CanvasPrimarySurface {
@@ -255,6 +256,7 @@ export class CanvasPrimarySurface {
     #activate(pending) {
         if (this.#pending !== pending)
             return;
+        markWorkflowSwitch('canvas-committed');
         const { coordinator, views } = this.options;
         if (this.#disposed ||
             this.options.document.hidden ||

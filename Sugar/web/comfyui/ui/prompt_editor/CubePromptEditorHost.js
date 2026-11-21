@@ -4,6 +4,8 @@ import { preparePromptLoraCatalog, promptLoraModel, promptLoraName } from './Pro
 import { feedsPromptControl, promptUpstreamLoras } from './PromptControlSupport.js';
 import { promptModelCompletions } from './PromptModelCompletions.js';
 import { registerPromptEditorSurfaceOwner } from './PromptEditorSurface.js';
+import { ComfyAdapter } from '../core/ComfyAdapter.js';
+import { ToastService } from '../core/ToastService.js';
 import { SURFACE_INPUT_HELD_ATTRIBUTE } from '../surface/motion/SurfaceInputHold.js';
 import { setCubePromptWidgetHeight, clearCubePromptWidgetHeight, } from '../surface/CubePromptWidgetHeightStore.js';
 /** Share native documents while renderer mounts and workflow ownership remain explicit. */
@@ -28,12 +30,18 @@ export class CubePromptEditorHost {
     #stopWildcards = null;
     #modelCompletions = null;
     #models = null;
+    #toasts = null;
     /** Inject existing model catalog and feedback ownership. */
     constructor(document, catalog, report, appearance) {
         this.appearance = appearance;
         this.#document = document;
         this.#catalog = catalog;
         this.#report = report;
+    }
+    /** Say that the clipboard could not be read or written, through ComfyUI's own notifications. */
+    #clipboardRefused() {
+        this.#toasts ??= new ToastService(new ComfyAdapter());
+        this.#toasts.push('warn', 'Clipboard unavailable', 'The clipboard could not be used from the menu. Ctrl+C, Ctrl+X and Ctrl+V still work.');
     }
     /** Enable prompt enhancement, regional links and the canvas key boundary before Cube fields render. */
     setup(regions = null, canvas = null) {
@@ -259,6 +267,7 @@ export class CubePromptEditorHost {
                     session.active?.geometryChanged();
             },
             report: this.#report,
+            clipboardRefused: () => this.#clipboardRefused(),
             appearance: this.appearance,
             regionAccent: this.#regions?.accent.current() ?? null,
             sceneQueue: this.#sceneQueue,

@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Allocate the native graph viewport beneath chrome while retaining its mounted render layers. */
+import { graphChromeLayer } from '../../core/ComfyGraphChromeLayer.js';
 
 /**
  * Carry the DOM-widget layer clip from the graph root to the stylesheet rule that applies it. The
@@ -48,13 +49,13 @@ export class ComfyCanvasFrameAllocation {
     private readonly root: HTMLElement,
     private readonly panel: HTMLElement,
   ) {
-    const chrome = [...root.children].find((child) => child.contains(panel));
+    const chrome = graphChromeLayer(root);
     const canvas = root.querySelector<HTMLCanvasElement>(':scope > #graph-canvas');
     const frame = root.parentElement;
     if (
       root.id !== 'graph-canvas-container' ||
       !panel.matches('.graph-canvas-panel') ||
-      !(chrome instanceof HTMLElement) ||
+      !chrome?.contains(panel) ||
       !canvas ||
       !frame?.matches('.comfyui-body')
     )

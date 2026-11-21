@@ -48,6 +48,8 @@ interface ResultSession {
   /** The scene run being shown and each scene's latest output per source. */
   readonly scenes: WorkflowSceneOutputs;
   liveRun: boolean;
+  /** The prompt ComfyUI is executing for this workflow, from its start to its own terminal status. */
+  executing: WorkflowRun['promptId'] | null;
 }
 export interface WorkflowResultUpdate {
   readonly run: WorkflowRun;
@@ -90,6 +92,7 @@ export class WorkflowResultStore {
         outputs: new Map(),
         scenes: new WorkflowSceneOutputs(),
         liveRun: false,
+        executing: null,
         snapshot: Object.freeze({
           context: Object.freeze({ ...context }),
           revision: (previous?.snapshot.revision ?? 0) + 1,
@@ -123,10 +126,21 @@ export class WorkflowResultStore {
     return this.#sessions.get(sessionId)?.outputs.get(sourceId)?.output.provenance.revision ?? 0;
   }
 
-  /** Publish a known run without allowing an older delayed job to displace the execution frontier. */
+  /**
+   * Publish a known run without allowing an older delayed job to displace the execution frontier.
+   *
+   * The frontier follows the prompt that is executing: a job queued behind it is only waiting, so
+   * accepting it changes nothing here until it starts. Otherwise the running job's preview would be
+   * withdrawn and every later preview of it refused as older than the queued one.
+   */
   updateRun(run: WorkflowRun): void {
     const session = this.#session(run.session);
     if (!session || run.order < session.snapshot.runOrder) return;
+    if (run.status === 'queued' && session.executing !== null && session.executing !== run.promptId)
+      return;
+    if (run.status === 'running') session.executing = run.promptId;
+    else if (session.executing === run.promptId && run.status !== 'queued')
+      session.executing = null;
     session.liveRun = true;
     const previous = session.snapshot;
     if (

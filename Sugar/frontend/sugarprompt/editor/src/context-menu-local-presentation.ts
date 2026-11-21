@@ -68,21 +68,35 @@ export function localMenuContainsEventTarget(event: Event): boolean {
     );
 }
 
-/** Native chip or coordinate hit testing supplies logical-document UTF-16 without parsing source. */
+/**
+ * Whether a pointer gesture lands on the prompt's own text, where the editor's menu answers it.
+ *
+ * Embedded inputs (a weight field, a region name) keep the browser's text menu.
+ */
+export function ownsMenuGesture(view: EditorView, event: MouseEvent): boolean {
+  return (
+    event.target instanceof Element &&
+    !event.target.closest('input,textarea') &&
+    view.contentDOM.contains(event.target)
+  );
+}
+
+/**
+ * Native chip or coordinate hit testing supplies logical-document UTF-16 without parsing source.
+ *
+ * The lookup is the approximate one: the precise lookup answers nothing for a zero-length line at
+ * the viewport's edge (an empty first or last line, an empty prompt), and a right-click there would
+ * then reach the browser's own menu. The gesture already landed inside the content, so the nearest
+ * position is the line it landed on.
+ */
 export function localMenuPointerTarget(view: EditorView, event: MouseEvent): MenuTarget | null {
-  if (
-    view.composing ||
-    view.compositionStarted ||
-    !(event.target instanceof Element) ||
-    !!event.target.closest('input,textarea') ||
-    !view.contentDOM.contains(event.target)
-  )
-    return null;
-  const chip = event.target.closest<HTMLElement>('.sp-lora-chip');
+  if (view.composing || view.compositionStarted || !ownsMenuGesture(view, event)) return null;
+  const chip =
+    event.target instanceof Element ? event.target.closest<HTMLElement>('.sp-lora-chip') : null;
   const position = chip
     ? view.posAtDOM(chip, 0)
-    : view.posAtCoords({ x: event.clientX, y: event.clientY });
-  return position === null ? null : contextMenuTargetAt(view.state, position, chip !== null);
+    : view.posAtCoords({ x: event.clientX, y: event.clientY }, false);
+  return contextMenuTargetAt(view.state, position, chip !== null);
 }
 
 /** Capture the existing surface intent before invocation callbacks; refusals and failures retire only that original capability. */

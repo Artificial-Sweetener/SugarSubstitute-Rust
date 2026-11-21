@@ -152,6 +152,7 @@ test('mode restores host presentation and preserves native controls, graph, and 
     'Save Sugar Script',
     'Save Sugar Script As...',
     'Export to Comfy Workflow...',
+    'Console',
     'Extensions',
     'Settings',
   ]);

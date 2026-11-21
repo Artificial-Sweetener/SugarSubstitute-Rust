@@ -94,6 +94,49 @@ test('rejects late source previews after its same-run final even while other nod
   expect(store.publishPreview(preview(next))).toBe(true);
 });
 
+test('a job queued while another runs leaves the running job its previews and its final', () => {
+  const store = new WorkflowResultStore();
+  const runs = new WorkflowRunRegistry();
+  store.synchronize([a]);
+  const first = runs.accept(runs.reserve({ session: a, sources: [source] }), promptId('one'));
+  store.updateRun(first);
+  const running = runs.setStatus(first.promptId, 'running');
+  if (!running) throw new Error('Run one was not accepted');
+  store.updateRun(running);
+  expect(store.publishPreview(preview(running))).toBe(true);
+
+  // The second job is accepted while the first is still sampling.
+  const second = runs.accept(runs.reserve({ session: a, sources: [source] }), promptId('two'));
+  store.updateRun(second);
+  const state = store.read(a.sessionId);
+  expect(state?.runOrder).toBe(running.order);
+  expect(state?.runStatus).toBe('running');
+  expect(state?.preview?.promptId).toBe(running.promptId);
+  expect(store.publishPreview({ ...preview(running), sequence: 2 })).toBe(true);
+  expect(store.publishPreview({ ...preview(running), sequence: 3 })).toBe(true);
+
+  // The first job's final lands, then the second starts and its previews take over.
+  expect(retain(store, running, { images: [{ filename: 'one.png' }] })).toBe(true);
+  const finished = runs.setStatus(first.promptId, 'complete');
+  if (finished) store.updateRun(finished);
+  const started = runs.setStatus(second.promptId, 'running');
+  if (!started) throw new Error('Run two was not accepted');
+  store.updateRun(started);
+  expect(store.read(a.sessionId)?.runOrder).toBe(started.order);
+  expect(store.publishPreview(preview(started))).toBe(true);
+  expect(store.read(a.sessionId)?.preview?.promptId).toBe(started.promptId);
+});
+
+test('a job queued while nothing runs still becomes the frontier at once', () => {
+  const store = new WorkflowResultStore();
+  const runs = new WorkflowRunRegistry();
+  store.synchronize([a]);
+  const queued = runs.accept(runs.reserve({ session: a, sources: [source] }), promptId('one'));
+  store.updateRun(queued);
+  expect(store.read(a.sessionId)?.runOrder).toBe(queued.order);
+  expect(store.read(a.sessionId)?.runStatus).toBe('queued');
+});
+
 test('retires a source preview only when its first batch member becomes final', () => {
   const store = new WorkflowResultStore();
   const runs = new WorkflowRunRegistry();

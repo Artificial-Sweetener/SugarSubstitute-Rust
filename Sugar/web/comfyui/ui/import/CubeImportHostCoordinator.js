@@ -26,7 +26,6 @@ import { NativeWorkflowMaterializer } from '../workflow/NativeWorkflowMaterializ
 import { LegacyWorkflowAuthoringApi } from '../workflow/LegacyWorkflowAuthoringApi.js';
 import { LegacyWorkflowImportService } from '../workflow/LegacyWorkflowImportService.js';
 import { recordExactIntegers } from '../workflow/ExactIntegerRelations.js';
-import { fixImportedSeeds } from '../workflow/ImportedSeedModes.js';
 import { carryScriptComposition, markUnsavedOutputs, readUnsavedOutputInstances, } from '../workflow/ImportedScriptState.js';
 /** Own native workflow import entrypoints and their file adapters. */
 export class CubeImportHostCoordinator {
@@ -132,10 +131,7 @@ export class CubeImportHostCoordinator {
         const graph = this.#app?.graph;
         if (!graph)
             throw new Error('Comfy root graph is unavailable.');
-        return new LegacyWorkflowImportService(this.#legacyWorkflowApi, this.#nativeWorkflowMaterializer(runtime, graph), (fields) => recordExactIntegers(graph, fields), (instanceIds) => {
-            fixImportedSeeds(graph, instanceIds);
-            this.#relations().holdSeeds(instanceIds);
-        }, (instanceIds, links) => this.#relations().adoptNodeLinks(instanceIds, links));
+        return new LegacyWorkflowImportService(this.#legacyWorkflowApi, this.#nativeWorkflowMaterializer(runtime, graph), (fields) => recordExactIntegers(graph, fields), (instanceIds, links) => this.#relations().adoptNodeLinks(instanceIds, links));
     }
     /** Build the shared native workflow mutation owner for one root graph. */
     #nativeWorkflowMaterializer(runtime, graph) {

@@ -578,8 +578,6 @@ export function ensureCubeSurfaceStyles(documentRef: Document): void {
       object-position: center top;
       position: relative;
       z-index: 1;
-      opacity: 1 !important;
-      visibility: visible !important;
       border-radius: 0;
     }
     .sugarcubes-cube-editor-metadata {

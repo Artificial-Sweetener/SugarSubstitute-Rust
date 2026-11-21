@@ -350,8 +350,9 @@ describe('ensureCubeSurfaceStyles', () => {
     expect(imageRule).toMatch(/object-fit:\s*contain;/);
     expect(imageRule).toMatch(/object-position:\s*center top;/);
     expect(imageRule).toMatch(/border-radius:\s*0;/);
-    expect(imageRule).toMatch(/opacity:\s*1\s*!important;/);
-    expect(imageRule).toMatch(/visibility:\s*visible\s*!important;/);
+    // The preview never forces itself visible: a masonry hiding the graph must be able to hide it.
+    expect(imageRule).not.toMatch(/opacity:\s*1\s*!important;/);
+    expect(imageRule).not.toMatch(/visibility:\s*visible\s*!important;/);
     expect(imageRule).toMatch(/z-index:\s*1;/);
     const contentRule =
       css.match(

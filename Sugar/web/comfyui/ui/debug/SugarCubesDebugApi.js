@@ -15,10 +15,14 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Build the opt-in SugarCubes host debugging surface. */
 import { computeInnerBounds } from '../graph/CubeBounds.js';
+import { readInputDiagnostics } from './InputDiagnostics.js';
 /** Create the existing debugging API from authoritative UI owners. */
 export function createSugarCubesDebugApi({ ui, app, canvas }) {
     return {
         canvas,
+        input() {
+            return readInputDiagnostics(document);
+        },
         getDirtyState(instanceId) {
             return ui.dirtyManager.getDebugState(instanceId);
         },

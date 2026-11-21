@@ -20,14 +20,12 @@ export class LegacyWorkflowImportService {
     #api;
     #materializer;
     #recordExact;
-    #fixSeeds;
     #adoptLinks;
     /** Bind transport, graph mutation and the workflow's record of exact whole numbers. */
-    constructor(api, materializer, recordExact, fixSeeds, adoptLinks) {
+    constructor(api, materializer, recordExact, adoptLinks) {
         this.#api = api;
         this.#materializer = materializer;
         this.#recordExact = recordExact;
-        this.#fixSeeds = fixSeeds;
         this.#adoptLinks = adoptLinks;
     }
     /**
@@ -35,7 +33,7 @@ export class LegacyWorkflowImportService {
      * page cannot hold are recorded on the workflow only once its Cubes exist.
      */
     async import(workflow, origin, source) {
-        return this.#materialize(await this.#api.compile(workflow, source), origin, source, workflow);
+        return this.#materialize(await this.#api.compile(workflow, source), origin, workflow);
     }
     /**
      * Open one workflow from a file as a workflow of its own. It is reconciled first, so a file
@@ -47,10 +45,10 @@ export class LegacyWorkflowImportService {
         const response = await this.#api.compile(workflow, source);
         if (!response.plan)
             throw new Error('Persisted Cube workflow produced no native plan.');
-        return this.#materialize(response, await place(), source, workflow);
+        return this.#materialize(response, await place(), workflow);
     }
     /** Create the reconciled workflow's Cubes and record what only they can hold. */
-    #materialize(response, origin, source, workflow) {
+    #materialize(response, origin, workflow) {
         if (!response.plan)
             throw new Error('Persisted Cube workflow produced no native plan.');
         const result = this.#materializer.materializeWorkflow(response.plan, origin);
@@ -58,10 +56,9 @@ export class LegacyWorkflowImportService {
         const links = readImportedNodeLinks(workflow);
         if (links)
             this.#adoptLinks(result.instanceIds, links);
-        // A workflow sent as its saved text was carried as Cube documents, which record no seed
-        // mode: its seeds stay as the image recorded them.
-        if (source !== undefined)
-            this.#fixSeeds(result.instanceIds);
+        // Cube documents record no seed mode, so their seeds take ComfyUI's own control default, as
+        // the Python application's did. The recorded digits are kept exactly below, so the first run
+        // after import still reproduces the image.
         if (response.exactIntegers.length)
             this.#recordExact(response.exactIntegers);
         return result;

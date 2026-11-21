@@ -92,6 +92,7 @@ export class SubstituteFrameView {
                 ]
                 : []),
             { label: '', separator: true },
+            { label: 'Console', select: () => actions.command('SugarCubes.ToggleConsole') },
             {
                 label: 'Extensions',
                 select: () => actions.command('Comfy.Manager.CustomNodesManager.ShowCustomNodesMenu'),

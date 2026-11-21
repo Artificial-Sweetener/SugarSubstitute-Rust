@@ -29,7 +29,6 @@ export class LegacyWorkflowImportService {
   readonly #api: LegacyWorkflowAuthoringApi;
   readonly #materializer: NativeWorkflowMaterializer;
   readonly #recordExact: (fields: readonly ExactIntegerField[]) => void;
-  readonly #fixSeeds: (instanceIds: readonly string[]) => void;
   readonly #adoptLinks: (
     instanceIds: readonly string[],
     links: readonly ImportedNodeLink[],
@@ -40,13 +39,11 @@ export class LegacyWorkflowImportService {
     api: LegacyWorkflowAuthoringApi,
     materializer: NativeWorkflowMaterializer,
     recordExact: (fields: readonly ExactIntegerField[]) => void,
-    fixSeeds: (instanceIds: readonly string[]) => void,
     adoptLinks: (instanceIds: readonly string[], links: readonly ImportedNodeLink[]) => void,
   ) {
     this.#api = api;
     this.#materializer = materializer;
     this.#recordExact = recordExact;
-    this.#fixSeeds = fixSeeds;
     this.#adoptLinks = adoptLinks;
   }
 
@@ -59,7 +56,7 @@ export class LegacyWorkflowImportService {
     origin: Vec2,
     source?: string,
   ): Promise<NativeWorkflowMaterializationResult> {
-    return this.#materialize(await this.#api.compile(workflow, source), origin, source, workflow);
+    return this.#materialize(await this.#api.compile(workflow, source), origin, workflow);
   }
 
   /**
@@ -75,14 +72,13 @@ export class LegacyWorkflowImportService {
   ): Promise<NativeWorkflowMaterializationResult> {
     const response = await this.#api.compile(workflow, source);
     if (!response.plan) throw new Error('Persisted Cube workflow produced no native plan.');
-    return this.#materialize(response, await place(), source, workflow);
+    return this.#materialize(response, await place(), workflow);
   }
 
   /** Create the reconciled workflow's Cubes and record what only they can hold. */
   #materialize(
     response: Awaited<ReturnType<LegacyWorkflowAuthoringApi['compile']>>,
     origin: Vec2,
-    source: string | undefined,
     workflow: Record<string, unknown>,
   ): NativeWorkflowMaterializationResult {
     if (!response.plan) throw new Error('Persisted Cube workflow produced no native plan.');
@@ -90,9 +86,9 @@ export class LegacyWorkflowImportService {
     // A workflow that records its own links keeps exactly those; its Cubes are not linked for it.
     const links = readImportedNodeLinks(workflow);
     if (links) this.#adoptLinks(result.instanceIds, links);
-    // A workflow sent as its saved text was carried as Cube documents, which record no seed
-    // mode: its seeds stay as the image recorded them.
-    if (source !== undefined) this.#fixSeeds(result.instanceIds);
+    // Cube documents record no seed mode, so their seeds take ComfyUI's own control default, as
+    // the Python application's did. The recorded digits are kept exactly below, so the first run
+    // after import still reproduces the image.
     if (response.exactIntegers.length) this.#recordExact(response.exactIntegers);
     return result;
   }

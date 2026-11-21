@@ -30,6 +30,16 @@ export class WorkflowMasonryGraphVisibility {
     constructor(getContainer) {
         this.getContainer = getContainer;
     }
+    /** Whether the graph is currently hidden behind a masonry. */
+    get hidden() {
+        return this.#hidden.size > 0;
+    }
+    /** Give back the input that `holdInput` held, leaving each layer's `inert` state as it is. */
+    releaseInput() {
+        for (const hold of this.#held.values())
+            hold.release();
+        this.#held.clear();
+    }
     /** Suppress existing and replacement graph layers without removing their measurable layout. */
     setHidden(hidden) {
         this.setInert(hidden);

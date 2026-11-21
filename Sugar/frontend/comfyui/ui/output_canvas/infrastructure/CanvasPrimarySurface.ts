@@ -16,6 +16,7 @@
 /** Retire inactive primary attachments while retaining per-workflow lightweight view state. */
 
 import type { CanvasCatalogSnapshot } from '../domain/CanvasCatalog.js';
+import { markWorkflowSwitch } from '../../core/WorkflowSwitchTiming.js';
 import type { CanvasAttachmentAddress, CanvasViewId, WindowId } from '../domain/CanvasIdentity.js';
 import type { CanvasViewRegistry } from '../application/CanvasViewRegistry.js';
 import type { CanvasSessionCoordinator } from '../application/CanvasSessionCoordinator.js';
@@ -344,6 +345,7 @@ export class CanvasPrimarySurface implements WorkflowPreviewConsumer {
   /** Commit only a still-current ready candidate, then retire the replaced surface. */
   #activate(pending: PendingAttachment): void {
     if (this.#pending !== pending) return;
+    markWorkflowSwitch('canvas-committed');
     const { coordinator, views } = this.options;
     if (
       this.#disposed ||

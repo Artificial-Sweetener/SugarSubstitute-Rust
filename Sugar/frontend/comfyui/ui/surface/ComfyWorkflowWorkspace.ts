@@ -26,6 +26,7 @@ import { ComfyWorkflowViewPreferences } from '../workflow/infrastructure/ComfyWo
 import { OUTPUT_CANVAS_VISIBLE_SETTING } from '../output_canvas/infrastructure/ComfyCanvasPreferences.js';
 import { WORKFLOW_MASONRY_DEFAULT_EDITOR_WIDTH } from './masonry/WorkflowMasonryLayout.js';
 import { isRecord } from '../types/common.js';
+import { WorkspaceConsole } from '../console/WorkspaceConsole.js';
 import { ComfyDesktopSessionHost } from '../workflow/infrastructure/ComfyDesktopSessionHost.js';
 import type { SettingsWorkspaceRoute } from '../settings/SettingsWorkspaceRoute.js';
 import type { DesktopSessionFailedOperation } from '../workflow/domain/DesktopSession.js';
@@ -34,6 +35,7 @@ import type { DesktopSessionFailedOperation } from '../workflow/domain/DesktopSe
 export class ComfyWorkflowWorkspace {
   readonly canvas: ComfyCanvasHost;
   readonly masonry: WorkflowMasonryHostLifecycle;
+  readonly console: WorkspaceConsole;
   readonly #presentation: ComfyWorkflowViewPreferences;
   readonly #desktop: ComfyDesktopSessionHost | null;
 
@@ -76,6 +78,12 @@ export class ComfyWorkflowWorkspace {
       presentation: this.#presentation,
       getContainer: () => this.canvas.content,
     });
+    this.console = new WorkspaceConsole({
+      document: options.document,
+      app: options.app,
+      getHost: () => this.canvas.content,
+      report: options.report,
+    });
     const window = options.document.defaultView;
     this.#desktop = window
       ? new ComfyDesktopSessionHost(window, {
@@ -95,6 +103,7 @@ export class ComfyWorkflowWorkspace {
     this.#presentation.setup();
     this.canvas.setup();
     this.masonry.setup();
+    this.console.setup();
     try {
       this.#desktop?.setup();
     } catch (error: unknown) {
@@ -110,5 +119,6 @@ export class ComfyWorkflowWorkspace {
     this.#presentation.dispose();
     this.canvas.dispose();
     this.masonry.dispose();
+    this.console.dispose();
   };
 }

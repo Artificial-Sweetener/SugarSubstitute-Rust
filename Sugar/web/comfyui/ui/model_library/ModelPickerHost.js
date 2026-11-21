@@ -21,7 +21,7 @@ import { createComfyRendererModeChangeSource, resolveComfyRendererMode, } from '
 import { ModelPickerAppearance } from './ModelPickerAppearance.js';
 import { readComfyModelFields } from './ComfyModelFieldAdapter.js';
 import { ComfyNodeVNodeIndex } from '../surface/ComfyVueTree.js';
-import { modelPickerChoices } from './ModelPickerChoices.js';
+import { modelPickerChoices, orderModelsByTitle } from './ModelPickerChoices.js';
 import { mountModelPicker } from './vue/ModelPickerVueRuntime.js';
 import { mountModelGallery } from './vue/ModelGalleryVueRuntime.js';
 import { openModelChooser } from './vue/ModelChooserVueRuntime.js';
@@ -168,7 +168,7 @@ export class ModelPickerHost {
         const snapshot = this.#snapshot ?? (await this.#options.catalog.load());
         if (this.#disposed)
             return null;
-        const items = snapshot.items.filter((item) => item.kind === kind);
+        const items = orderModelsByTitle(snapshot.items.filter((item) => item.kind === kind));
         return new Promise((resolve) => {
             const chooser = openModelChooser(this.#options.document, { items, label, anchor }, (item) => {
                 if (chooser.popup)

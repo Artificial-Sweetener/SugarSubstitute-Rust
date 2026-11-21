@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose the adopted native editor for Cube fields while preserving its sole editing and drag owners. */
 import { mountEditor } from '../../../../sugarprompt/editor/src/index.js';
+import { clipboardRefusalObserver } from './ClipboardRefusal.js';
 import type {
   PromptEditorApi,
   EditorSnapshot,
@@ -58,6 +59,8 @@ export interface SugarPromptMountOptions {
   readonly commit: (source: string) => void;
   readonly layout: (height: number) => void;
   readonly report: (cause: unknown) => void;
+  /** Tell the person a clipboard command was refused, so a menu Paste never fails in silence. */
+  readonly clipboardRefused: () => void;
   readonly appearance: AppearanceSource;
   /** Observe pointer hover of the prompt's separator ordinals, and null when it ends. */
   readonly regionHover: (ordinal: number | null) => void;
@@ -182,6 +185,7 @@ export class SugarPromptEditor {
         ? { scheduleLora: (handoff) => this.#scheduleLora(handoff) }
         : null,
       tagLexicon: tagCatalog.lexicon,
+      clipboardObserver: clipboardRefusalObserver(options.clipboardRefused, options.report),
       onUpdate: (snapshot) => this.#observe(snapshot),
       onLayout: (metrics) => this.#layout(metrics),
       onLoraMediaError: options.report,

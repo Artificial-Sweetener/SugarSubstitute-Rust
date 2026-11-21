@@ -147,3 +147,109 @@ test('hides everything in the graph container that is not SugarCubes’ own, whe
   await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
   expect(hidden(after)).toBe(false);
 });
+
+/** Wait for the host surface observer to deliver what was mounted. */
+async function settled(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+}
+
+/** ComfyUI 1.47's chrome layer: tabs, action bar and side toolbar around the graph canvas panel. */
+function chromeLayer(withPanel = true): HTMLElement {
+  const layer = document.createElement('div');
+  layer.className = 'pointer-events-none absolute top-0 left-0 z-999 flex size-full flex-col';
+  const tabs = document.createElement('div');
+  tabs.dataset.testid = 'topbar-workflow-tabs';
+  const toolbar = document.createElement('div');
+  toolbar.dataset.testid = 'side-toolbar';
+  layer.append(tabs, toolbar);
+  if (withPanel) {
+    const panel = document.createElement('div');
+    panel.className = 'graph-canvas-panel';
+    layer.append(panel);
+  }
+  return layer;
+}
+
+test('keeps ComfyUI’s chrome layer whether or not the desktop frame has marked it', async () => {
+  const root = document.createElement('div');
+  root.id = 'graph-canvas-container';
+  const container = document.createElement('div');
+  container.className = 'sc-output-workspace-frame';
+  const canvas = document.createElement('canvas');
+  canvas.id = 'graph-canvas';
+  const present = chromeLayer();
+  root.append(canvas, present, container);
+  document.body.append(root);
+  const visibility = new WorkflowMasonryGraphVisibility(() => container);
+  const hidden = (element: Element): boolean => element.hasAttribute('data-sc-masonry-hides');
+
+  visibility.setHidden(true);
+  expect(hidden(canvas)).toBe(true);
+  expect(hidden(present)).toBe(false);
+
+  // The frame's ancestor mark comes and goes with the frame; the layer stays shown throughout.
+  present.setAttribute('data-sc-desktop-frame-surface', '');
+  present.removeAttribute('data-sc-desktop-frame-surface');
+  await settled();
+  expect(hidden(present)).toBe(false);
+
+  // A chrome layer ComfyUI mounts while the masonry is shown is kept as it arrives.
+  present.remove();
+  const late = chromeLayer();
+  root.append(late);
+  await settled();
+  expect(hidden(late)).toBe(false);
+
+  // A child marked before its graph canvas panel arrived is shown again once the panel mounts.
+  const growing = chromeLayer(false);
+  root.append(growing);
+  await settled();
+  expect(hidden(growing)).toBe(true);
+  const panel = document.createElement('div');
+  panel.className = 'graph-canvas-panel';
+  growing.append(panel);
+  await settled();
+  expect(hidden(growing)).toBe(false);
+
+  visibility.setHidden(false);
+  expect(root.querySelector('[data-sc-masonry-hides]')).toBeNull();
+});
+
+test('keeps the chrome layer through every hide after the first', async () => {
+  const root = document.createElement('div');
+  root.id = 'graph-canvas-container';
+  const container = document.createElement('div');
+  container.className = 'sc-output-workspace-frame';
+  const canvas = document.createElement('canvas');
+  canvas.id = 'graph-canvas';
+  const chrome = chromeLayer();
+  root.append(canvas, chrome, container);
+  document.body.append(root);
+  const visibility = new WorkflowMasonryGraphVisibility(() => container);
+  for (let round = 0; round < 3; round += 1) {
+    visibility.setHidden(true);
+    await settled();
+    expect(chrome.hasAttribute('data-sc-masonry-hides')).toBe(false);
+    expect(canvas.getAttribute('data-sc-masonry-hides')).toBe('graph');
+    visibility.setHidden(false);
+    expect(root.querySelector('[data-sc-masonry-hides]')).toBeNull();
+  }
+});
+
+test('the workspace stays kept and an unknown child is hidden beside the chrome layer', async () => {
+  const root = document.createElement('div');
+  root.id = 'graph-canvas-container';
+  const container = document.createElement('div');
+  root.append(chromeLayer(), container);
+  document.body.append(root);
+  const visibility = new WorkflowMasonryGraphVisibility(() => container);
+  visibility.setHidden(true);
+  const unknown = document.createElement('div');
+  unknown.id = 'some-extension-root';
+  root.append(unknown);
+  await settled();
+  expect(container.hasAttribute('data-sc-masonry-hides')).toBe(false);
+  expect(unknown.getAttribute('data-sc-masonry-hides')).toBe('graph');
+  visibility.setHidden(false);
+});

@@ -154,6 +154,44 @@ test('suppresses an incoming graph before loading from graph view and throughout
   expect(setup.container.dataset.sugarcubesMasonry).toBeUndefined();
 });
 
+test('covers the masonry area through a workflow switch until the next view mounts', async () => {
+  const setup = fixture();
+  await setup.controller.restore(true);
+  expect(document.querySelector('.sugarcubes-workflow-masonry')).not.toBeNull();
+  let acquire: ((renderer: NativeNodeCardRenderer) => void) | undefined;
+  setup.getRenderer.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        acquire = resolve;
+      }),
+  );
+  const cover = (): Element | null =>
+    setup.container.querySelector('.sugarcubes-workflow-masonry__switch-cover');
+
+  await setup.controller.setSuspended('configure', true);
+  // The cards have gone back to the outgoing graph, but the area still shows the masonry surface.
+  expect(document.querySelector('.sugarcubes-workflow-masonry')).toBeNull();
+  expect(cover()).not.toBeNull();
+  const resuming = setup.controller.setSuspended('configure', false);
+  for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
+  expect(cover()).not.toBeNull();
+  acquire?.(setup.renderer);
+  await resuming;
+  expect(document.querySelector('.sugarcubes-workflow-masonry')).not.toBeNull();
+  expect(cover()).toBeNull();
+  setup.controller.leaveImmediately();
+  expect(cover()).toBeNull();
+});
+
+test('a switch that lands in graph view leaves no cover behind', async () => {
+  const setup = fixture();
+  await setup.controller.restore(true);
+  await setup.controller.setSuspended('configure', true);
+  await setup.controller.restore(false);
+  await setup.controller.setSuspended('configure', false);
+  expect(setup.container.querySelector('.sugarcubes-workflow-masonry__switch-cover')).toBeNull();
+});
+
 test('releases loading suppression only when the committed destination is graph', async () => {
   const setup = fixture();
   await setup.controller.restore(true);

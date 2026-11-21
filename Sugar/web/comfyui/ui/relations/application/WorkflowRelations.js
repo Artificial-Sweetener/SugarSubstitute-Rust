@@ -167,33 +167,6 @@ export class WorkflowRelations {
         });
     }
     /**
-     * Keep the seeds of the named Cubes as they are when a run is queued.
-     *
-     * A shared seed takes its generation choice from its first member the moment that member is
-     * discovered, so Cubes arriving with a seed to reproduce would otherwise have it rolled by the
-     * shared seed they joined. Every shared and linked owner of their seeds is fixed in one edit.
-     */
-    holdSeeds(cubeIds) {
-        const held = new Set(cubeIds);
-        this.reconcile();
-        this.#edit((state) => {
-            const snapshot = this.snapshot();
-            const holds = (field) => field.semantic === 'seed' && field.cubeId !== null && held.has(field.cubeId);
-            for (const group of snapshot.groups) {
-                const override = state.overrides[group.key];
-                if (override && group.members.some(holds))
-                    override.seedMode = 'fixed';
-            }
-            for (const field of snapshot.fields.filter(holds)) {
-                if (Object.hasOwn(state.localSeedModes, field.id))
-                    state.localSeedModes[field.id] = 'fixed';
-                this.#inventory?.fields
-                    .find((candidate) => candidate.contract.id === field.id)
-                    ?.writeSeedMode?.('fixed');
-            }
-        });
-    }
-    /**
      * Give the named Cubes exactly the node links a file recorded for them.
      *
      * Cubes joining a workflow link each matching node to the earliest compatible Cube. Cubes read

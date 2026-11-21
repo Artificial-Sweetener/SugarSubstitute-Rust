@@ -39,6 +39,26 @@ export function filterModelChoices(items, query, folder) {
             .toLocaleLowerCase()
             .includes(term)));
 }
+/** Order two names as people read them: case folded first, then exactly, so ties stay stable. */
+function compareNames(left, right) {
+    const folded = left.toLowerCase();
+    const other = right.toLowerCase();
+    if (folded !== other)
+        return folded < other ? -1 : 1;
+    if (left === right)
+        return 0;
+    return left < right ? -1 : 1;
+}
+/**
+ * Order models by the name the picker shows, then by their path.
+ *
+ * The catalog arrives in file-path order, but each card is titled with the model's page name (or
+ * its file name where it has none). Prompt completion and the Python application list LoRAs by
+ * that shown name, case folded, with the path breaking ties, so the picker does the same.
+ */
+export function orderModelsByTitle(items) {
+    return [...items].sort((left, right) => compareNames(left.title, right.title) || compareNames(left.value, right.value));
+}
 /** Return immediate child folders without maintaining a second mutable folder index. */
 export function modelChoiceFolders(items, folder) {
     const prefix = folder ? `${folder}/` : '';
@@ -50,5 +70,5 @@ export function modelChoiceFolders(items, folder) {
         if (child)
             children.add(`${prefix}${child}`);
     }
-    return [...children].sort((left, right) => left.localeCompare(right));
+    return [...children].sort(compareNames);
 }

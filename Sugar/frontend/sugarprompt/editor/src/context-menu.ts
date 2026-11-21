@@ -21,6 +21,7 @@ import {
   requestLocalMenu,
   openLocalPointerMenu,
   localMenuPointerTarget,
+  ownsMenuGesture,
   localMenuKeyboardIntent,
   localMenuContainsEventTarget,
 } from './context-menu-local-presentation.js';
@@ -144,16 +145,20 @@ export class NativeContextMenu {
   /** Native pointer admission delegates original focus before invocation callbacks and preserves directional selection. */
   context(event: MouseEvent): boolean {
     const target = localMenuPointerTarget(this.view, event);
-    return target
-      ? openLocalPointerMenu(this.view, target, event, (current, point, handoff) =>
-          this.request(current, point, handoff),
-        )
-      : false;
+    if (target)
+      return openLocalPointerMenu(this.view, target, event, (current, point, handoff) =>
+        this.request(current, point, handoff),
+      );
+    // The prompt's own text never shows the browser's menu, even while the editor's cannot open
+    // (during composition): that menu has none of the prompt's actions.
+    if (!ownsMenuGesture(this.view, event)) return false;
+    event.preventDefault();
+    return true;
   }
 
   /** Preserve native selection before browser right-button caret handling on an eligible target. */
   pointer(event: MouseEvent): boolean {
-    if (event.button !== 2 || !localMenuPointerTarget(this.view, event)) return false;
+    if (event.button !== 2 || !ownsMenuGesture(this.view, event)) return false;
     event.preventDefault();
     return true;
   }

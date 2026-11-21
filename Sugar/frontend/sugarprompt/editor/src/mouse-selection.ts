@@ -157,11 +157,13 @@ export class PromptMouseSelection {
       typeof Element !== 'undefined' && event.target instanceof Element
         ? event.target.closest('.sp-lora-chip')
         : null;
-    // The hit side distinguishes the end of one wrapped row from the start of the next.
+    // The hit side distinguishes the end of one wrapped row from the start of the next. The
+    // approximate lookup also answers on an empty first or last line, where the precise one finds
+    // nothing and the editor's own selection rules would be skipped.
     const hit: PointerHit | null =
       chip && event.detail === 2
         ? { pos: view.posAtDOM(chip, 0), assoc: 1 }
-        : view.posAndSideAtCoords({ x: event.clientX, y: event.clientY });
+        : view.posAndSideAtCoords({ x: event.clientX, y: event.clientY }, false);
     if (hit === null) return null;
     const position = hit.pos;
     if (this.disposed) return null;

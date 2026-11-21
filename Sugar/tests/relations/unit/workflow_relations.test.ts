@@ -199,20 +199,6 @@ test('a seed beyond the exact range is rolled but never stepped', () => {
   expect([...fixture.values.values()]).toEqual([50, 50]);
 });
 
-test('held Cubes keep their seed when a run is queued, and only a seed they share is fixed', () => {
-  const fixture = workflow('seed');
-  fixture.relations.reconcile();
-  fixture.relations.setSeedMode('seed', 'randomize');
-  fixture.relations.holdSeeds(['elsewhere']);
-  expect(fixture.state().overrides.seed?.seedMode).toBe('randomize');
-  fixture.relations.holdSeeds(['b']);
-  expect(fixture.state().overrides.seed?.seedMode).toBe('fixed');
-  fixture.relations.advanceSeeds(() => {
-    throw new Error('a held seed asks for no next value');
-  });
-  expect([...fixture.values.values()]).toEqual([42, 42]);
-});
-
 test('removes connected or deleted fields from membership without continuing to write them', () => {
   const fixture = workflow();
   fixture.relations.reconcile();

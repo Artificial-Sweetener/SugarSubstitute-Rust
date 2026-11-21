@@ -140,6 +140,14 @@ test('a visibility that has not changed is not written again', () => {
   expect(element.hidden).toBe(false);
 });
 
+test('no owned rule forces something visible over a hiding ancestor', () => {
+  // `visibility:visible !important` or `opacity:1 !important` beats the masonry's hide rule for
+  // whatever it matches, so a graph preview painted through the gaps between the cards.
+  const forced = /(?:visibility\s*:\s*visible|opacity\s*:\s*1(?:\.0+)?)\s*!important/;
+  const offenders = sources().filter((file) => forced.test(readFileSync(file, 'utf8')));
+  expect(offenders).toEqual([]);
+});
+
 test('no rule keyed on the workspace container reaches for everything beneath it', () => {
   // `#graph-canvas-container[state] ... *` is checked against every element in the container each
   // time the state changes; the state belongs on the element whose subtree the rule is about.

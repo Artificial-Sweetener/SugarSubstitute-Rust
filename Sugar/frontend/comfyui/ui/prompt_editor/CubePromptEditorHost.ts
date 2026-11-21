@@ -31,6 +31,8 @@ import type { PromptSceneQueue, SugarPromptEditor } from './runtime/SugarPromptR
 import type { LoraResourceAdapter } from '../../../sugarprompt/services/src/index.js';
 import type { WildcardCatalogSource } from '../wildcards/application/WildcardLibrary.js';
 import type { AppearanceSource } from '../surface/appearance/AppearanceState.js';
+import { ComfyAdapter } from '../core/ComfyAdapter.js';
+import { ToastService } from '../core/ToastService.js';
 import { SURFACE_INPUT_HELD_ATTRIBUTE } from '../surface/motion/SurfaceInputHold.js';
 import {
   setCubePromptWidgetHeight,
@@ -95,6 +97,7 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
   #stopWildcards: (() => void) | null = null;
   #modelCompletions: ModelCompletionPopupHost | null = null;
   #models: PromptModelGallery | null = null;
+  #toasts: ToastService | null = null;
 
   /** Inject existing model catalog and feedback ownership. */
   constructor(
@@ -106,6 +109,16 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
     this.#document = document;
     this.#catalog = catalog;
     this.#report = report;
+  }
+
+  /** Say that the clipboard could not be read or written, through ComfyUI's own notifications. */
+  #clipboardRefused(): void {
+    this.#toasts ??= new ToastService(new ComfyAdapter());
+    this.#toasts.push(
+      'warn',
+      'Clipboard unavailable',
+      'The clipboard could not be used from the menu. Ctrl+C, Ctrl+X and Ctrl+V still work.',
+    );
   }
 
   /** Enable prompt enhancement, regional links and the canvas key boundary before Cube fields render. */
@@ -336,6 +349,7 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
           session.active?.geometryChanged();
       },
       report: this.#report,
+      clipboardRefused: () => this.#clipboardRefused(),
       appearance: this.appearance,
       regionAccent: this.#regions?.accent.current() ?? null,
       sceneQueue: this.#sceneQueue,

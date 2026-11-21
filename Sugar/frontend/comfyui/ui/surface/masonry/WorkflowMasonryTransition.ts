@@ -164,6 +164,7 @@ export class WorkflowMasonryTransition {
     this.#input.hold(view.surface);
     view.surface.dataset.scMasonryTransition = entering ? 'enter' : 'exit';
     const completions: Array<Promise<PromiseSettledResult<Animation>[]>> = [];
+    let finishOnHide: (() => void) | null = null;
     try {
       setSurfaceGeometryMoving(view.surface, true);
       for (const assembly of this.#graphAssemblies.values()) assembly.attach();
@@ -188,8 +189,19 @@ export class WorkflowMasonryTransition {
         this.#effects.set(request.element, effect);
         completions.push(Promise.allSettled([effect.finished]));
       }
+      // A hidden page's timeline does not advance, so its effects would never finish and the
+      // surface would stay held until the page is shown again; end them at their final frame.
+      const documentRef = view.surface.ownerDocument;
+      finishOnHide = (): void => {
+        if (documentRef.visibilityState !== 'hidden') return;
+        for (const effect of this.#effects.values()) effect.finish();
+      };
+      documentRef.addEventListener('visibilitychange', finishOnHide);
+      finishOnHide();
       await Promise.all(completions);
     } finally {
+      if (finishOnHide)
+        view.surface.ownerDocument.removeEventListener('visibilitychange', finishOnHide);
       if (generation === this.#generation) this.cancel();
     }
   }

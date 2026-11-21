@@ -15,12 +15,17 @@ export function sugarCubesCommandRegistration(owners) {
             {
                 id: 'SugarCubes.ToggleMasonry',
                 label: 'Toggle workflow masonry',
-                function: () => owners.toggleMasonry(),
+                function: () => owners.workspace.masonry.toggle(),
             },
             {
                 id: 'SugarCubes.ToggleOutputCanvas',
                 label: 'Toggle output canvas',
-                function: () => owners.toggleCanvas(),
+                function: () => owners.workspace.canvas.toggle(),
+            },
+            {
+                id: 'SugarCubes.ToggleConsole',
+                label: 'Toggle Console',
+                function: () => owners.workspace.console.toggle(),
             },
             ...owners.projects.map((command) => ({
                 id: command.id,
@@ -28,6 +33,12 @@ export function sugarCubesCommandRegistration(owners) {
                 function: () => command.function(),
             })),
         ],
-        menuCommands: [{ path: ['File'], commands: owners.projects.map((command) => command.id) }],
+        menuCommands: [
+            { path: ['File'], commands: owners.projects.map((command) => command.id) },
+            { path: ['View'], commands: ['SugarCubes.ToggleConsole'] },
+        ],
+        // ComfyUI's own console key opens the console wherever it is: SugarCubes' panel inside the
+        // SugarSubstitute frame, ComfyUI's Logs panel elsewhere.
+        keybindings: [{ combo: { key: '`', ctrl: true }, commandId: 'SugarCubes.ToggleConsole' }],
     };
 }

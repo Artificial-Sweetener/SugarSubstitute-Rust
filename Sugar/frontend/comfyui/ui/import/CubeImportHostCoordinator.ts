@@ -39,7 +39,6 @@ import { LegacyWorkflowAuthoringApi } from '../workflow/LegacyWorkflowAuthoringA
 import type { ImportedNodeLink } from '../workflow/ImportedNodeLinks.js';
 import { LegacyWorkflowImportService } from '../workflow/LegacyWorkflowImportService.js';
 import { recordExactIntegers } from '../workflow/ExactIntegerRelations.js';
-import { fixImportedSeeds } from '../workflow/ImportedSeedModes.js';
 import {
   carryScriptComposition,
   markUnsavedOutputs,
@@ -65,8 +64,6 @@ interface CubeImportHostCoordinatorOptions {
 
 /** What importing Cubes asks of the owner of the values Cubes share. */
 export interface ImportedCubeRelations {
-  /** Keep the seeds of the named Cube instances from being rolled by a shared seed. */
-  holdSeeds(instanceIds: readonly string[]): void;
   /** Give the named Cube instances exactly the node links their file recorded. */
   adoptNodeLinks(instanceIds: readonly string[], links: readonly ImportedNodeLink[]): void;
   /** Give the named Cube instances the overrides, own values and fixed seeds of their script. */
@@ -205,10 +202,6 @@ export class CubeImportHostCoordinator {
       this.#legacyWorkflowApi,
       this.#nativeWorkflowMaterializer(runtime, graph),
       (fields) => recordExactIntegers(graph, fields),
-      (instanceIds) => {
-        fixImportedSeeds(graph, instanceIds);
-        this.#relations().holdSeeds(instanceIds);
-      },
       (instanceIds, links) => this.#relations().adoptNodeLinks(instanceIds, links),
     );
   }

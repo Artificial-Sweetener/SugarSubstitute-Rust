@@ -1,6 +1,12 @@
 import {
+  SugarPromptTooltip
+} from "./chunk-5N7RXSME.js";
+import {
   bundledPromptTagCatalog
 } from "./chunk-CAOCC2WU.js";
+import {
+  clipboardRefusalObserver
+} from "./chunk-BHDD52XD.js";
 import {
   markComfyPromptInput
 } from "./chunk-74D7X3OT.js";
@@ -124,9 +130,6 @@ import {
 import {
   installSugarPromptStyles
 } from "./chunk-4OATFCQX.js";
-import {
-  SugarPromptTooltip
-} from "./chunk-5N7RXSME.js";
 
 // node_modules/@marijn/find-cluster-break/src/index.js
 var rangeFrom = [];
@@ -24553,12 +24556,14 @@ function localMenuContainsEventTarget(event) {
     (target) => target instanceof Element && !!target.closest("[data-sc-prompt-menu],.sc-context-menu")
   );
 }
+function ownsMenuGesture(view, event) {
+  return event.target instanceof Element && !event.target.closest("input,textarea") && view.contentDOM.contains(event.target);
+}
 function localMenuPointerTarget(view, event) {
-  if (view.composing || view.compositionStarted || !(event.target instanceof Element) || !!event.target.closest("input,textarea") || !view.contentDOM.contains(event.target))
-    return null;
-  const chip = event.target.closest(".sp-lora-chip");
-  const position = chip ? view.posAtDOM(chip, 0) : view.posAtCoords({ x: event.clientX, y: event.clientY });
-  return position === null ? null : contextMenuTargetAt(view.state, position, chip !== null);
+  if (view.composing || view.compositionStarted || !ownsMenuGesture(view, event)) return null;
+  const chip = event.target instanceof Element ? event.target.closest(".sp-lora-chip") : null;
+  const position = chip ? view.posAtDOM(chip, 0) : view.posAtCoords({ x: event.clientX, y: event.clientY }, false);
+  return contextMenuTargetAt(view.state, position, chip !== null);
 }
 function openLocalPointerMenu(view, target, event, request) {
   const refocus = !view.hasFocus;
@@ -24996,16 +25001,20 @@ var NativeContextMenu = class {
   /** Native pointer admission delegates original focus before invocation callbacks and preserves directional selection. */
   context(event) {
     const target = localMenuPointerTarget(this.view, event);
-    return target ? openLocalPointerMenu(
-      this.view,
-      target,
-      event,
-      (current6, point, handoff) => this.request(current6, point, handoff)
-    ) : false;
+    if (target)
+      return openLocalPointerMenu(
+        this.view,
+        target,
+        event,
+        (current6, point, handoff) => this.request(current6, point, handoff)
+      );
+    if (!ownsMenuGesture(this.view, event)) return false;
+    event.preventDefault();
+    return true;
   }
   /** Preserve native selection before browser right-button caret handling on an eligible target. */
   pointer(event) {
-    if (event.button !== 2 || !localMenuPointerTarget(this.view, event)) return false;
+    if (event.button !== 2 || !ownsMenuGesture(this.view, event)) return false;
     event.preventDefault();
     return true;
   }
@@ -31178,7 +31187,7 @@ var PromptMouseSelection = class {
     if (event.button !== 0 || event.ctrlKey || event.altKey || event.metaKey || view.compositionStarted)
       return null;
     const chip = typeof Element !== "undefined" && event.target instanceof Element ? event.target.closest(".sp-lora-chip") : null;
-    const hit = chip && event.detail === 2 ? { pos: view.posAtDOM(chip, 0), assoc: 1 } : view.posAndSideAtCoords({ x: event.clientX, y: event.clientY });
+    const hit = chip && event.detail === 2 ? { pos: view.posAtDOM(chip, 0), assoc: 1 } : view.posAndSideAtCoords({ x: event.clientX, y: event.clientY }, false);
     if (hit === null) return null;
     const position = hit.pos;
     if (this.disposed) return null;
@@ -31368,11 +31377,58 @@ var nativeHighlight = Prec.highest(
     }
   })
 );
+var chipSelectionBleed = 3;
+function chipSelected(view, chip) {
+  const parent = chip.parentNode;
+  if (!parent) return false;
+  const index = Array.prototype.indexOf.call(parent.childNodes, chip);
+  const from = view.posAtDOM(parent, index);
+  const to = view.posAtDOM(parent, index + 1);
+  return view.state.selection.ranges.some(
+    (range) => !range.empty && range.from <= from && to <= range.to
+  );
+}
+var chipSelection = [
+  layer({
+    above: false,
+    class: "sp-widget-selection-layer",
+    markers(view) {
+      const base2 = view.scrollDOM.getBoundingClientRect();
+      const left = base2.left - view.scrollDOM.scrollLeft * view.scaleX;
+      const top2 = base2.top - view.scrollDOM.scrollTop * view.scaleY;
+      const markers = [];
+      if (view.state.selection.ranges.every((range) => range.empty)) return markers;
+      for (const chip of view.contentDOM.querySelectorAll(".sp-lora-chip")) {
+        if (!chipSelected(view, chip)) continue;
+        const box = chip.getBoundingClientRect();
+        markers.push(
+          new RectangleMarker(
+            "sp-widget-selection",
+            (box.left - left) / view.scaleX - chipSelectionBleed,
+            (box.top - top2) / view.scaleY,
+            box.width / view.scaleX + chipSelectionBleed * 2,
+            box.height / view.scaleY
+          )
+        );
+      }
+      return markers;
+    },
+    update(update) {
+      return update.selectionSet || update.docChanged || update.viewportChanged || update.geometryChanged;
+    }
+  }),
+  EditorView.theme({
+    ".sp-widget-selection": {
+      backgroundColor: "var(--sugarprompt-selection-background, Highlight)"
+    }
+  })
+];
 var drawnSelection = [
   drawSelection({ cursorBlinkRate: caretBlinkCycle, drawRangeCursor: false }),
   ViewPlugin.fromClass(CaretWidth),
   caretAppearance,
-  nativeHighlight
+  nativeHighlight,
+  chipSelection
 ];
 
 // frontend/sugarprompt/editor/src/weight-preview-value.ts
@@ -47899,6 +47955,7 @@ var SugarPromptEditor = class {
       modelCompletionPopupHost: options.modelCompletions,
       fieldActionUtilities: options.pickLora ? { scheduleLora: (handoff) => this.#scheduleLora(handoff) } : null,
       tagLexicon: tagCatalog.lexicon,
+      clipboardObserver: clipboardRefusalObserver(options.clipboardRefused, options.report),
       onUpdate: (snapshot) => this.#observe(snapshot),
       onLayout: (metrics) => this.#layout(metrics),
       onLoraMediaError: options.report,

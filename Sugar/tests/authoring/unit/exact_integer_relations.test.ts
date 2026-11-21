@@ -20,7 +20,6 @@ import {
   readExactIntegerFields,
   recordExactIntegers,
 } from '../../../frontend/comfyui/ui/workflow/ExactIntegerRelations.js';
-import { fixImportedSeeds } from '../../../frontend/comfyui/ui/workflow/ImportedSeedModes.js';
 import { LegacyWorkflowAuthoringApi } from '../../../frontend/comfyui/ui/workflow/LegacyWorkflowAuthoringApi.js';
 import { LegacyWorkflowImportService } from '../../../frontend/comfyui/ui/workflow/LegacyWorkflowImportService.js';
 import type { CubeLibraryApi } from '../../../frontend/comfyui/ui/core/CubeLibraryApi.js';
@@ -95,21 +94,19 @@ test('the saved text is what is sent, and digits are recorded only after the Cub
       },
     } as unknown as NativeWorkflowMaterializer,
     (fields) => order.push('recorded ' + fields.map((field) => field.digits).join()),
-    (instanceIds) => order.push('fixed ' + String(instanceIds.length)),
     (_instanceIds, links) => order.push('linked ' + String(links.length)),
   );
   const text = `{"extra":{"seed":${SEED}}}`;
   await service.import(JSON.parse(text) as Record<string, unknown>, [0, 0], text);
   expect(JSON.parse(String(fetchJson.mock.calls[0]?.[1].body))).toEqual({ workflow_text: text });
-  expect(order).toEqual(['materialized', 'fixed 0', 'recorded ' + SEED]);
+  // Its seeds keep ComfyUI's own control mode; only the recorded digits are kept exactly.
+  expect(order).toEqual(['materialized', 'recorded ' + SEED]);
 
   // Without the text, the parsed object is sent as before.
   await service.import({ version: 0.4 }, [0, 0]);
   expect(JSON.parse(String(fetchJson.mock.calls[1]?.[1].body))).toEqual({
     workflow: { version: 0.4 },
   });
-  // A workflow that carried native nodes keeps the seed modes it was saved with.
-  expect(order.filter((step) => step.startsWith('fixed'))).toHaveLength(1);
   // Neither workflow records links of its own, so its Cubes are linked as any added Cube is.
   expect(order.filter((step) => step.startsWith('linked'))).toHaveLength(0);
 
@@ -140,7 +137,6 @@ test('a workflow from a file is reconciled before its own workflow opens, and pl
     } as unknown as NativeWorkflowMaterializer,
     () => undefined,
     () => undefined,
-    () => undefined,
   );
   await service.open({ version: 0.4 }, undefined, async () => {
     order.push('own workflow opened');
@@ -158,35 +154,6 @@ test('a workflow from a file is reconciled before its own workflow opens, and pl
     }),
   ).rejects.toThrow();
   expect(order).not.toContain('own workflow opened');
-});
-
-test('the seeds of rebuilt Cubes are fixed, and only theirs', () => {
-  const control = (value: string) => ({
-    name: 'control_after_generate',
-    type: 'combo',
-    value,
-    options: { values: ['fixed', 'increment', 'decrement', 'randomize'] },
-  });
-  const cube = (instance: string, mode: string) => ({
-    properties: { sugarcubes_cube: { instance_id: instance } },
-    subgraph: {
-      nodes: [
-        { widgets: [{ name: 'seed', type: 'number', value: 7 }, control(mode)] },
-        { subgraph: { nodes: [{ widgets: [control(mode)] }] } },
-      ],
-    },
-  });
-  const rebuilt = cube('rebuilt', 'randomize');
-  const other = cube('other', 'randomize');
-  const loose = { widgets: [control('randomize')] };
-  expect(fixImportedSeeds({ nodes: [rebuilt, other, loose] }, ['rebuilt'])).toBe(2);
-  const modes = (item: ReturnType<typeof cube>): unknown[] => [
-    item.subgraph.nodes[0]?.widgets?.[1]?.value,
-    item.subgraph.nodes[1]?.subgraph?.nodes[0]?.widgets[0]?.value,
-  ];
-  expect(modes(rebuilt)).toEqual(['fixed', 'fixed']);
-  expect(modes(other)).toEqual(['randomize', 'randomize']);
-  expect(loose.widgets[0]?.value).toBe('randomize');
 });
 
 test('an input keeps the digits of each value it holds, and one rounding has one record', () => {

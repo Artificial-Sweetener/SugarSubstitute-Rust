@@ -21,6 +21,7 @@ import { WorkflowMasonryTransition } from './WorkflowMasonryTransition.js';
 import { WorkflowMasonryGraphReveal } from './WorkflowMasonryGraphReveal.js';
 import { WorkflowMasonryGraphVisibility } from './WorkflowMasonryGraphVisibility.js';
 import { markMasonryMounted } from './WorkflowMasonryStyles.js';
+import { markWorkflowSwitch } from '../../core/WorkflowSwitchTiming.js';
 import { prepareNativePresentation } from '../NativePresentationReady.js';
 import { SurfacePresentationBoundary } from '../motion/SurfacePresentationBoundary.js';
 import { measureWorkflowMasonryGraph, workflowMasonryGraphCards, } from './WorkflowMasonryGraphGeometry.js';
@@ -33,6 +34,8 @@ export class WorkflowMasonryController {
     #reveal = null;
     #view = null;
     #container = null;
+    /** The masonry surface left in place while one workflow's view is replaced by the next. */
+    #switchCover = null;
     #desired = false;
     #suspensions = new Set();
     #generation = 0;
@@ -85,6 +88,12 @@ export class WorkflowMasonryController {
             this.#suspensions.delete(reason);
         const generation = ++this.#generation;
         this.#transition.cancel();
+        if (reason === 'configure')
+            markWorkflowSwitch(suspended ? 'configure-start' : 'configure-end');
+        // While a masonry is replaced by the next workflow's, its surface stays covered: the cards
+        // leave, but the area never drops to the bare graph container between the two workflows.
+        if (reason === 'configure' && suspended && this.#container && this.#retainGraphSuppression())
+            this.#coverSwitch(this.#container);
         this.#releaseView(this.#retainGraphSuppression());
         if (this.#retainGraphSuppression())
             this.#graphVisibility.setHidden(true);
@@ -171,8 +180,10 @@ export class WorkflowMasonryController {
                 this.#viewScope = this.#options.getScope();
                 this.#reveal ??= new WorkflowMasonryGraphReveal();
                 this.#reveal.reconcile(container, sections);
+                markWorkflowSwitch('masonry-show');
                 const sources = this.#view.prepareSources();
                 container.append(this.#view.backdrop, this.#view.element, this.#view.tail);
+                this.#uncoverSwitch();
                 markMasonryMounted(container);
                 // Appearance owners mark the surface while it is empty; marked after the cards arrive,
                 // every card is restyled again.
@@ -183,6 +194,7 @@ export class WorkflowMasonryController {
                 this.#mounting = this.#view.mountCards(renderer, sources);
             }
             await this.#mounting;
+            markWorkflowSwitch('masonry-cards-mounted');
             if (generation !== this.#generation || !this.#desired)
                 return;
             if (this.#view?.element.hasAttribute('data-sc-masonry-preparing')) {
@@ -197,14 +209,23 @@ export class WorkflowMasonryController {
                 if (generation === this.#generation && this.#viewScope && this.#view)
                     this.#view.element.scrollTop = this.#scrollPositions.get(this.#viewScope) ?? 0;
             }
-            if (generation === this.#generation && this.#desired)
+            if (generation === this.#generation && this.#desired) {
                 this.#graphVisibility.setHidden(true);
+                markWorkflowSwitch('masonry-ready');
+            }
         }
         catch (error) {
             if (generation !== this.#generation)
                 return;
             this.leaveImmediately();
             this.#options.reportError(error);
+        }
+        finally {
+            // The input hold placed before the cards left the layers belongs to this run: a run that
+            // still owns the lifecycle but ended before hiding the graph gives the layers their input
+            // back here instead of leaving them held for a later run to find.
+            if (generation === this.#generation && !this.#graphVisibility.hidden)
+                this.#graphVisibility.releaseInput();
         }
     }
     /** Restore graph immediately before graph replacement, renderer teardown, or application disposal. */
@@ -299,11 +320,27 @@ export class WorkflowMasonryController {
         if (entering && !view.element.hasAttribute('data-sc-masonry-transition'))
             view.setTransitioning(false, animate);
     }
+    /** Cover `container` with the masonry surface until the next view mounts its own. */
+    #coverSwitch(container) {
+        this.#uncoverSwitch();
+        const cover = this.#options.document.createElement('div');
+        cover.className =
+            'sugarcubes-workflow-masonry__backdrop sugarcubes-workflow-masonry__switch-cover';
+        container.append(cover);
+        this.#switchCover = cover;
+    }
+    /** Remove the switch cover, once the next view's surface or the graph takes its place. */
+    #uncoverSwitch() {
+        this.#switchCover?.remove();
+        this.#switchCover = null;
+    }
     /** Remove presentation resources while preserving canonical graph and edit state. */
     #releaseView(retainGraphSuppression = false) {
         this.#acquisition.cancel();
-        if (!retainGraphSuppression)
+        if (!retainGraphSuppression) {
+            this.#uncoverSwitch();
             this.#graphVisibility.setHidden(false);
+        }
         this.#settled.cancel();
         const links = this.#links;
         this.#links = null;

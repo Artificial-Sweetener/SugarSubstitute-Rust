@@ -16,10 +16,19 @@
 /** List the commands SugarCubes registers with Comfy and where Comfy's own menu shows them. */
 import type { ProjectCommand } from './projects/presentation/ProjectCommands.js';
 
+/** One view the workspace shows or hides. */
+interface Toggled {
+  toggle(): unknown;
+}
+
 export interface SugarCubesCommandOwners {
   openCart(): unknown;
-  toggleMasonry(): unknown;
-  toggleCanvas(): unknown;
+  /** The workspace views the View commands show or hide. */
+  readonly workspace: {
+    readonly masonry: Toggled;
+    readonly canvas: Toggled;
+    readonly console: Toggled;
+  };
   /** The project commands, in menu order. */
   readonly projects: readonly ProjectCommand[];
 }
@@ -33,6 +42,7 @@ export interface SugarCubesCommandOwners {
 export function sugarCubesCommandRegistration(owners: SugarCubesCommandOwners): {
   commands: { id: string; label: string; function: () => unknown }[];
   menuCommands: { path: string[]; commands: string[] }[];
+  keybindings: { combo: { key: string; ctrl?: boolean }; commandId: string }[];
 } {
   return {
     commands: [
@@ -44,12 +54,17 @@ export function sugarCubesCommandRegistration(owners: SugarCubesCommandOwners): 
       {
         id: 'SugarCubes.ToggleMasonry',
         label: 'Toggle workflow masonry',
-        function: () => owners.toggleMasonry(),
+        function: () => owners.workspace.masonry.toggle(),
       },
       {
         id: 'SugarCubes.ToggleOutputCanvas',
         label: 'Toggle output canvas',
-        function: () => owners.toggleCanvas(),
+        function: () => owners.workspace.canvas.toggle(),
+      },
+      {
+        id: 'SugarCubes.ToggleConsole',
+        label: 'Toggle Console',
+        function: () => owners.workspace.console.toggle(),
       },
       ...owners.projects.map((command) => ({
         id: command.id,
@@ -57,6 +72,12 @@ export function sugarCubesCommandRegistration(owners: SugarCubesCommandOwners): 
         function: () => command.function(),
       })),
     ],
-    menuCommands: [{ path: ['File'], commands: owners.projects.map((command) => command.id) }],
+    menuCommands: [
+      { path: ['File'], commands: owners.projects.map((command) => command.id) },
+      { path: ['View'], commands: ['SugarCubes.ToggleConsole'] },
+    ],
+    // ComfyUI's own console key opens the console wherever it is: SugarCubes' panel inside the
+    // SugarSubstitute frame, ComfyUI's Logs panel elsewhere.
+    keybindings: [{ combo: { key: '`', ctrl: true }, commandId: 'SugarCubes.ToggleConsole' }],
   };
 }
