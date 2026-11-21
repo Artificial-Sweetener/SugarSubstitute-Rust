@@ -225,6 +225,30 @@ impl Session {
         Ok(())
     }
 
+    /// Cancel unpublished preview intent only. The accepted preview stays shown and the parked
+    /// final stays parked, so cancelling a newer transfer never brings older pixels back.
+    pub(crate) fn cancel_preview_intent(&mut self) -> Result<(), Box<dyn Error>> {
+        let changed = self.preview.pending.as_ref().is_some_and(|input| !input.cancelled)
+            || self.preview.candidate.as_ref().is_some_and(|candidate| !candidate.cancelled);
+        self.cancel_preview_candidate()?;
+        self.preview.poll_requested |= changed;
+        Ok(())
+    }
+
+    /// Whether a native preview frame can still arrive: a live candidate or waiting original, a
+    /// refit whose job runs or whose deadline has not passed, a restoration, or an offered frame
+    /// awaiting its native acknowledgement. A refit that stopped leaves its deadline in the past
+    /// and is never retried, so it counts as no frame.
+    pub(crate) fn preview_frame_in_flight(&self) -> bool {
+        let now = self.clock.now();
+        self.preview.candidate.as_ref().is_some_and(|candidate| !candidate.cancelled)
+            || self.preview.pending.as_ref().is_some_and(|input| !input.cancelled)
+            || self.preview.resize_job.is_some()
+            || self.preview.resize_deadline.is_some_and(|deadline| deadline > now)
+            || self.preview.restoring
+            || self.document.cpu_pending.is_some()
+    }
+
     /// Accepted previews retain immutable whole-document pixels and deny navigation through tools.
     pub(in crate::native_canvas::session) fn preview_shown(&self) -> bool {
         self.preview.shown.is_some()

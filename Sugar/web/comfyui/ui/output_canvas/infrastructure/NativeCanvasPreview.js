@@ -64,15 +64,23 @@ export class NativeCanvasPreview {
     get epoch() {
         return this.#epoch;
     }
-    /** Reconcile lightweight logical interest while preserving an active frame in the same run. */
-    update(preview) {
+    /**
+     * Reconcile lightweight logical interest while preserving an active frame in the same run.
+     *
+     * A change of lane cancels only a transfer that has not reached the screen. The preview already
+     * shown stays until a newer preview, a final selection or navigation replaces it: withdrawing it
+     * would bring back the older output it covers. `release` withdraws the shown preview too, for a
+     * route that shows other content on this surface.
+     */
+    update(preview, release = false) {
         if (this.#disposed)
             return false;
         const changed = preview?.token !== this.#interest?.token ||
             canvasLane(preview) !== canvasLane(this.#interest);
-        if (canvasLane(preview) !== canvasLane(this.#interest)) {
+        if (canvasLane(preview) !== canvasLane(this.#interest) || release) {
             this.#pending = null;
-            this.#withdraw();
+            if (!this.#active?.withdrawing && (release || this.#active))
+                this.#withdraw();
         }
         this.#interest = preview;
         return changed;

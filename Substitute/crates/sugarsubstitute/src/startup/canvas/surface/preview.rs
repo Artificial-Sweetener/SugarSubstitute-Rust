@@ -68,6 +68,9 @@ pub(super) struct Preview {
     current: Option<Lease>,
     withdrawing: bool,
     shown: Option<Shown>,
+    /// The newest preview admitted on this navigation: workflow generation, run order and
+    /// sequence. A preview no newer than it is refused, so an older frame never replaces it.
+    latest: Option<(u64, u64, u64)>,
     sequence: u64,
     pending_change: Option<(MainIdentity, CanvasSurfacePresentationChange)>,
     pub(super) notification: Option<DesktopStartupCommand>,
@@ -91,7 +94,29 @@ impl Preview {
     pub(super) fn close_correlations(&mut self) {
         self.current = None;
         self.shown = None;
+        self.latest = None;
         self.withdrawing = false;
+    }
+
+    /// Whether `identity` is newer than every preview admitted on this navigation: a later run,
+    /// or a later sequence of the same run, of the same workflow generation. A new workflow
+    /// generation starts afresh.
+    pub(super) fn is_newer(
+        &self,
+        identity: &sugarsubstitute_contracts::canvas_surface::CanvasSurfacePreviewIdentity,
+    ) -> bool {
+        self.latest.is_none_or(|(generation, run, sequence)| {
+            identity.generation() != generation
+                || (identity.run_order(), identity.sequence()) > (run, sequence)
+        })
+    }
+
+    /// Record `identity` as the newest preview admitted on this navigation.
+    pub(super) fn admitted(
+        &mut self,
+        identity: &sugarsubstitute_contracts::canvas_surface::CanvasSurfacePreviewIdentity,
+    ) {
+        self.latest = Some((identity.generation(), identity.run_order(), identity.sequence()));
     }
 }
 
@@ -178,6 +203,45 @@ impl NativeSurface {
         }
         Ok(())
     }
+    /// Cancel only an in-flight transfer or unpresented candidate. The shown preview stays on
+    /// screen and the parked final stays parked: a newer preview that never arrived must not
+    /// bring older pixels back.
+    pub(super) fn cancel_preview_transfer(
+        &mut self,
+        session: &mut Session,
+    ) -> Result<(), Box<dyn Error>> {
+        self.abort_preview_stage(session, CanvasSurfacePresentationStatus::Cancelled)?;
+        session.cancel_preview_intent()?;
+        if let Some(lease) = self.preview.current.take() {
+            self.preview_change(&lease, CanvasSurfacePresentationStatus::Cancelled)?;
+        }
+        Ok(())
+    }
+
+    /// Answer geometry held for a preview frame once no preview frame can arrive: the preview
+    /// was withdrawn, its refit stopped or its candidate was cancelled. Geometry held for a
+    /// document the binding shows keeps waiting on that document's own frame.
+    pub(super) fn settle_preview_geometry(
+        &mut self,
+        session: &Session,
+    ) -> Result<(), Box<dyn Error>> {
+        let held = self
+            .pending
+            .as_ref()
+            .is_some_and(|pending| matches!(pending.kind, PendingKind::Geometry));
+        let document = self.binding.as_ref().is_some_and(|binding| binding.shows_document(session));
+        if !held || document || session.preview_frame_in_flight() {
+            return Ok(());
+        }
+        let pending = self.pending.take().ok_or("Held canvas geometry disappeared")?;
+        self.reply(
+            pending.identity,
+            &pending.request,
+            CanvasSurfaceReplyStatus::Applied,
+            pending.claim,
+        )
+    }
+
     /// Retire navigation-owned preview custody even when no canvas attachment was ever prepared.
     pub(super) fn retire_preview_navigation(
         &mut self,

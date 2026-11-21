@@ -69,6 +69,9 @@ impl NativeSurface {
                     || self.preview.withdrawing
                 {
                     CanvasSurfaceReplyStatus::Unavailable
+                } else if !self.preview.is_newer(begin.identity()) {
+                    // A late frame of an earlier run, or an older frame of this one, never shows.
+                    CanvasSurfaceReplyStatus::Stale
                 } else if let Some(memory) = session.preview_resident() {
                     match memory.claim(PREVIEW_METADATA_BYTES) {
                         Ok(metadata) => {
@@ -94,6 +97,7 @@ impl NativeSurface {
                                         ended: false,
                                         aborted: false,
                                     });
+                                    self.preview.admitted(begin.identity());
                                     CanvasSurfaceReplyStatus::Applied
                                 }
                                 Err(cause) => {
@@ -204,16 +208,20 @@ impl NativeSurface {
                 }
             }
             CanvasSurfaceOperation::PreviewWithdraw(lease) => {
-                let owns = self.preview.stage.as_ref().is_some_and(|stage| {
+                let in_flight = self.preview.stage.as_ref().is_some_and(|stage| {
                     stage.assembly.owns(lease.token(), lease.lease_revision())
                 }) || self.preview.current.as_ref().is_some_and(|current| {
                     current.token == lease.token() && current.revision == lease.lease_revision()
-                }) || self.preview.shown.as_ref().is_some_and(|shown| {
+                });
+                let shown = self.preview.shown.as_ref().is_some_and(|shown| {
                     shown.lease.token == lease.token()
                         && shown.lease.revision == lease.lease_revision()
                 });
-                if owns {
+                if shown {
                     self.fence_previews(session)?;
+                    CanvasSurfaceReplyStatus::Applied
+                } else if in_flight {
+                    self.cancel_preview_transfer(session)?;
                     CanvasSurfaceReplyStatus::Applied
                 } else {
                     CanvasSurfaceReplyStatus::Stale

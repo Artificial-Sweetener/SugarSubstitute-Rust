@@ -103,8 +103,9 @@ impl NativeSurface {
                 binding.placement = projected;
                 binding.allocation = Some(allocation);
                 let committed = binding.committed;
+                let document = binding.shows_document(session);
                 let wait = committed
-                    && (binding.shows_document(session) || preview_shown)
+                    && (document || preview_shown)
                     && projected.is_some()
                     && (session.presented_backdrop_generation()
                         != Some(binding.backdrop_generation)
@@ -123,7 +124,9 @@ impl NativeSurface {
                     self.hold(identity, request, claim, PendingKind::Hide);
                     return Ok(());
                 }
-                if wait && !deferred {
+                // A preview's frame at this geometry comes only from a refit, candidate or
+                // restoration in flight; with none, holding would wait for a frame that never comes.
+                if wait && !deferred && (document || session.preview_frame_in_flight()) {
                     self.hold(identity, request, claim, PendingKind::Geometry);
                     Ok(())
                 } else {

@@ -3,63 +3,6 @@
 //! Qualify latest-candidate failure, exact lease rejection and actual restored display snapshots.
 use super::*;
 
-/// One native adapter step: upload a pending frame, acknowledge a new hide, or stay idle.
-enum NativeStep {
-    Upload(FrameStamp, PhysicalRect),
-    Hide,
-    Idle,
-}
-
-/// Mirror the native adapter until the geometry request settles: upload every pending frame,
-/// acknowledge each transition to hidden exactly once and collect every published observation.
-fn settle_geometry(
-    fixture: &mut Fixture,
-    id: u64,
-) -> Result<(Vec<Value>, Option<PhysicalRect>), Box<dyn Error>> {
-    let mut changes = Vec::new();
-    let (mut applied, mut hidden, mut uploaded) = (false, false, None);
-    for _ in 0..500 {
-        let observed = fixture.wake.revision();
-        fixture.advance(100);
-        fixture.pump()?;
-        while let Some(command) = fixture.canvas.take_command() {
-            match command {
-                DesktopStartupCommand::SendSurfacePresentation(change) => {
-                    changes.push(serde_json::from_slice::<Value>(change.payload())?);
-                }
-                DesktopStartupCommand::SendSurface(reply) => {
-                    let value: Value = serde_json::from_slice(reply.payload())?;
-                    assert_eq!(value["requestId"], id);
-                    assert_eq!(value["status"], "applied");
-                    applied = true;
-                }
-                _ => return Err("Unexpected geometry settlement command".into()),
-            }
-        }
-        let step = match fixture.canvas.presentation() {
-            MainCanvasPresentation::Frame(frame) if frame.content.pending() => {
-                NativeStep::Upload(frame.content.target(), frame.placement.viewport)
-            }
-            MainCanvasPresentation::Hide if !hidden => NativeStep::Hide,
-            _ => NativeStep::Idle,
-        };
-        match step {
-            NativeStep::Upload(target, viewport) => {
-                hidden = false;
-                fixture.canvas.presented(target)?;
-                uploaded = Some(viewport);
-            }
-            NativeStep::Hide => {
-                hidden = true;
-                fixture.canvas.hidden(fixture.identity)?;
-            }
-            NativeStep::Idle if applied => return Ok((changes, uploaded)),
-            NativeStep::Idle => fixture.wait_preview_progress(observed)?,
-        }
-    }
-    Err("Geometry request never settled on native pixels".into())
-}
-
 #[test]
 fn resizing_a_displayed_locked_preview_refits_it_at_fit_instead_of_cancelling_it()
 -> Result<(), Box<dyn Error>> {
@@ -383,10 +326,10 @@ fn withdrawing_a_preparing_candidate_over_a_final_admits_the_next_preview()
 }
 
 #[test]
-fn withdrawing_staged_latest_reports_restored_final_only_after_actual_native_ack()
+fn withdrawing_a_staged_newer_preview_keeps_the_shown_preview_and_never_restores_the_final()
 -> Result<(), Box<dyn Error>> {
     let mut fixture = Fixture::new()?;
-    let final_camera = fixture.commit(4)?;
+    fixture.commit(4)?;
     watch(&mut fixture, 100, true)?;
     transfer(&mut fixture, 200, "preview:1", JPEG)?;
     let target = wait_frame(&mut fixture)?;
@@ -402,29 +345,42 @@ fn withdrawing_staged_latest_reports_restored_final_only_after_actual_native_ack
     let value = wait_change(&mut fixture, "cancelled")?;
     assert_eq!(value["change"]["token"], "preview:2");
     assert_eq!(value["change"]["displayed"]["token"], "preview:1");
-    let sequence = value["change"]["sequence"].as_u64().ok_or("Missing change sequence")?;
-    let mut restored = None;
-    for _ in 0..500 {
+    for _ in 0..20 {
         let observed = fixture.wake.revision();
         fixture.advance(100);
         fixture.pump()?;
-        if let Some(frame) =
-            prepared_frame(&fixture.canvas).filter(|frame| frame.content.target() != target)
-        {
-            restored = Some(frame.content.target());
+        assert!(
+            prepared_frame(&fixture.canvas).is_none_or(|frame| frame.content.target() == target),
+            "Cancelling a newer transfer offered older pixels"
+        );
+        if fixture.wake.revision() == observed {
             break;
         }
-        fixture.wait_preview_progress(observed)?;
     }
-    let target = restored.ok_or("Preview withdrawal never offered the restored final frame")?;
     assert!(change(&mut fixture)?.is_none());
+    drain(&mut fixture)?;
+    fixture.finish()
+}
+
+#[test]
+fn a_late_or_older_preview_is_refused_and_never_replaces_the_newer_one()
+-> Result<(), Box<dyn Error>> {
+    let mut fixture = Fixture::new()?;
+    fixture.commit(4)?;
+    watch(&mut fixture, 100, true)?;
+    transfer(&mut fixture, 200, "preview:2", JPEG)?;
+    let target = wait_frame(&mut fixture)?;
     fixture.canvas.presented(target)?;
-    let value = wait_change(&mut fixture, "cancelled")?;
-    assert_eq!(value["change"]["token"], "preview:2");
-    assert_eq!(value["change"]["displayed"]["type"], "final");
-    assert_eq!(value["change"]["displayed"]["selectionRevision"], 3);
-    assert!(value["change"]["sequence"].as_u64().is_some_and(|new| new > sequence));
-    assert_eq!(fixture.accepted()?.viewport, final_camera.viewport);
+    wait_change(&mut fixture, "presented")?;
+    // An older sequence of the same run and the same sequence again.
+    for (id, run, sequence, token) in [(300, 1, 1, "preview:1"), (301, 1, 2, "preview:2")] {
+        fixture.send(id, "surface.preview.begin", json!({"preview":{"generation":0,"promptId":"prompt:one","sourceId":"source:one","runOrder":run,"sequence":sequence,"token":token},"byteLength":JPEG.len(),"format":"jpeg"}))?;
+        fixture.take(id, "stale")?;
+    }
+    assert_eq!(prepared_frame(&fixture.canvas).map(|frame| frame.content.target()), Some(target));
+    // A later run is admitted.
+    fixture.send(303, "surface.preview.begin", json!({"preview":{"generation":0,"promptId":"prompt:two","sourceId":"source:one","runOrder":2,"sequence":1,"token":"preview:1"},"byteLength":JPEG.len(),"format":"jpeg"}))?;
+    fixture.take(303, "applied")?;
     drain(&mut fixture)?;
     fixture.finish()
 }

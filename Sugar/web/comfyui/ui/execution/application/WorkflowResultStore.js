@@ -97,7 +97,12 @@ export class WorkflowResultStore {
             ['complete', 'cancelled', 'error'].includes(previous.runStatus))
             return;
         const terminal = run.status === 'complete' || run.status === 'cancelled' || run.status === 'error';
-        const preview = terminal || run.order > previous.runOrder ? null : previous.preview;
+        // A run stopped early or failed keeps its last preview: it is the newest image the run made,
+        // and the outputs it replaced never come back.
+        const keepsPreview = (run.status === 'cancelled' || run.status === 'error') &&
+            run.order === previous.runOrder &&
+            previous.preview?.promptId === run.promptId;
+        const preview = keepsPreview || (!terminal && run.order <= previous.runOrder) ? previous.preview : null;
         session.scenes.follow(run, session.snapshot.runOrder);
         const scenes = session.scenes.snapshot(session.snapshot.scenes);
         if (previous.runOrder === run.order &&
@@ -224,10 +229,16 @@ export class WorkflowResultStore {
         }, 'restore');
         return true;
     }
-    /** Publish only the current known run's latest source preview; bytes are never retained here. */
+    /**
+     * Publish only the executing run's newest source preview; bytes are never retained here.
+     *
+     * A preview from any other prompt, including a late one from the previous run or one from a job
+     * still waiting in the queue, and any preview not newer than the one shown, is refused.
+     */
     publishPreview(preview) {
         const session = this.#sessions.get(preview.sessionId);
         if (!session ||
+            (session.executing !== null && preview.promptId !== session.executing) ||
             (session.outputs.get(preview.sourceId)?.completedPreviewRunOrder ?? -1) >= preview.runOrder ||
             session.snapshot.context.generation !== preview.generation ||
             preview.runOrder < session.snapshot.runOrder ||

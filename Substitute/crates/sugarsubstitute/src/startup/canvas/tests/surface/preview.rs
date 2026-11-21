@@ -5,8 +5,66 @@ use super::viewport::fixture::Fixture;
 use super::*;
 use sugarsubstitute_canvas::FrameStamp;
 mod closing;
+mod held_geometry;
 mod restoration;
 mod transactions;
+
+/// One native adapter step: upload a pending frame, acknowledge a new hide, or stay idle.
+enum NativeStep {
+    Upload(FrameStamp, PhysicalRect),
+    Hide,
+    Idle,
+}
+
+/// Mirror the native adapter until the geometry request settles: upload every pending frame,
+/// acknowledge each transition to hidden exactly once and collect every published observation.
+pub(super) fn settle_geometry(
+    fixture: &mut Fixture,
+    id: u64,
+) -> Result<(Vec<Value>, Option<PhysicalRect>), Box<dyn Error>> {
+    let mut changes = Vec::new();
+    let (mut applied, mut hidden, mut uploaded) = (false, false, None);
+    for _ in 0..500 {
+        let observed = fixture.wake.revision();
+        fixture.advance(100);
+        fixture.pump()?;
+        while let Some(command) = fixture.canvas.take_command() {
+            match command {
+                DesktopStartupCommand::SendSurfacePresentation(change) => {
+                    changes.push(serde_json::from_slice::<Value>(change.payload())?);
+                }
+                DesktopStartupCommand::SendSurface(reply) => {
+                    let value: Value = serde_json::from_slice(reply.payload())?;
+                    assert_eq!(value["requestId"], id);
+                    assert_eq!(value["status"], "applied");
+                    applied = true;
+                }
+                _ => return Err("Unexpected geometry settlement command".into()),
+            }
+        }
+        let step = match fixture.canvas.presentation() {
+            MainCanvasPresentation::Frame(frame) if frame.content.pending() => {
+                NativeStep::Upload(frame.content.target(), frame.placement.viewport)
+            }
+            MainCanvasPresentation::Hide if !hidden => NativeStep::Hide,
+            _ => NativeStep::Idle,
+        };
+        match step {
+            NativeStep::Upload(target, viewport) => {
+                hidden = false;
+                fixture.canvas.presented(target)?;
+                uploaded = Some(viewport);
+            }
+            NativeStep::Hide => {
+                hidden = true;
+                fixture.canvas.hidden(fixture.identity)?;
+            }
+            NativeStep::Idle if applied => return Ok((changes, uploaded)),
+            NativeStep::Idle => fixture.wait_preview_progress(observed)?,
+        }
+    }
+    Err("Geometry request never settled on native pixels".into())
+}
 
 pub(super) const JPEG: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),

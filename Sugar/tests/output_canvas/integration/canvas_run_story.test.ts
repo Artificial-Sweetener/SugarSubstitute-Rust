@@ -202,8 +202,29 @@ test('never resurrects previous outputs after a new preview fails before its fir
   const next = f.run(2);
   f.preview(next, 1);
   f.results.updateRun({ ...next, status: 'error' });
-  expect(f.catalog().entries).toHaveLength(0);
+  expect(f.catalog().entries.map((entry) => entry.source.id)).toEqual([f.sources[1]!.id]);
+  expect(f.catalog().entries.flatMap((entry) => entry.items)).toEqual([]);
   expect(f.catalog().result.presentedRunOrder).toBe(2);
+});
+
+test('stopping a run early keeps its last preview on the canvas, never an older output', () => {
+  const f = fixture();
+  const prior = f.run(1);
+  for (let stage = 0; stage < 3; stage++) f.final(prior, stage);
+  const next = f.run(2);
+  f.preview(next, 0);
+  f.final(next, 0);
+  f.preview(next, 1);
+  f.selection.reconcile(f.view, f.catalog());
+  f.results.updateRun({ ...next, status: 'cancelled' });
+  f.selection.reconcile(f.view, f.catalog());
+  expect(f.catalog().result.preview?.sourceId).toBe(f.sources[1]!.id);
+  expect(f.views.read(f.view).selection?.sourceId).toBe(f.sources[1]!.id);
+  const shown = f.selection.items(f.view, f.catalog()).primary;
+  expect(shown?.provenance.runOrder ?? 2).toBe(2);
+  expect(
+    f.catalog().entries.flatMap((entry) => entry.items.map((item) => item.provenance.runOrder)),
+  ).not.toContain(1);
 });
 
 test('independent views share results while retaining their own manual navigation', () => {

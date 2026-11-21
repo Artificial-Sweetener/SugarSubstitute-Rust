@@ -315,7 +315,7 @@ test('releases each custody ticket so final navigation interleaves before and be
   expect(f.presentation.diagnostics().estimatedBytes).toBe(0);
 });
 
-test('locks Fit only after displayed pixels, fences obsolete camera completion and restores the accepted final camera', async () => {
+test('locks Fit only after displayed pixels, keeps the shown preview when interest ends and restores the final camera with the final', async () => {
   const f = fixture();
   await commit(f);
   const lease = await transfer(f);
@@ -345,12 +345,9 @@ test('locks Fit only after displayed pixels, fences obsolete camera completion a
   f.clock.advance(60_000);
   expect(f.calls).toHaveLength(10);
   f.presentation.update(previewGeometry, f.item, null);
-  expect(f.calls[10]).toMatchObject({
-    type: 'surface.preview.withdraw',
-    leaseRevision: lease.revision,
-  });
-  f.respond(10);
   await settle();
+  // The shown preview is never withdrawn back to the older final; only the final replaces it.
+  expect(f.calls).toHaveLength(10);
   expect(f.previews.at(-1)).toBe(true);
   const selection = f.calls.find((call) => call.type === 'surface.select')!;
   observe(
@@ -365,7 +362,7 @@ test('locks Fit only after displayed pixels, fences obsolete camera completion a
   expect(f.errors).toEqual([]);
 });
 
-test('a stale final-camera reply before preview presentation preserves visibility and subsequent withdrawal', async () => {
+test('a stale final-camera reply before preview presentation preserves visibility and the shown preview', async () => {
   const f = fixture();
   await commit(f);
   const lease = await transfer(f);
@@ -421,12 +418,9 @@ test('a stale final-camera reply before preview presentation preserves visibilit
   expect(f.visible.at(-1)).toBe(true);
   expect(f.calls).toHaveLength(9);
   f.presentation.update(previewGeometry, f.item, null);
-  expect(f.calls[9]).toMatchObject({
-    type: 'surface.preview.withdraw',
-    leaseRevision: lease.revision,
-  });
-  f.respond(9);
   await settle();
+  expect(f.calls).toHaveLength(9);
+  expect(f.previews.at(-1)).toBe(true);
   const selection = f.calls.find((call) => call.type === 'surface.select')!;
   observe(
     f,
@@ -439,11 +433,11 @@ test('a stale final-camera reply before preview presentation preserves visibilit
   expect(f.previews.at(-1)).toBe(false);
   expect(f.visible.at(-1)).toBe(true);
   const latest = f.presentation.viewport({ type: 'native' }, f.scope());
-  expect(f.calls[10]).toMatchObject({
+  expect(f.calls[9]).toMatchObject({
     type: 'surface.viewport.request',
     command: { type: 'native' },
   });
-  f.respond(10, 'applied', finalViewport);
+  f.respond(9, 'applied', finalViewport);
   expect(await latest).toBe(true);
   expect(f.calls.filter((call) => call.type === 'surface.prepare')).toHaveLength(1);
 });
@@ -1155,5 +1149,32 @@ test('a display observation settles a viewport intent still waiting to be sent',
   ).not.toThrow();
   expect(await zoom).toBe(false);
   await settle();
+  expect(f.errors).toEqual([]);
+});
+
+test('the next stage or run never takes down the shown preview before its own preview arrives', async () => {
+  const f = fixture();
+  await commit(f);
+  const lease = await transfer(f);
+  observe(f, lease, {
+    type: 'preview',
+    token: lease.preview.token,
+    leaseRevision: lease.revision,
+    viewport: previewViewport,
+  });
+  await settle();
+  expect(f.previews.at(-1)).toBe(true);
+  const calls = f.calls.length;
+  const nextStage: WorkflowPreview = {
+    ...f.preview(2),
+    sourceId: f.second.provenance.sourceId,
+    token: 'preview:next-stage',
+  };
+  f.presentation.update(previewGeometry, f.item, nextStage);
+  await settle();
+  f.presentation.update(previewGeometry, f.item, null);
+  await settle();
+  expect(f.calls.slice(calls).some((call) => call.type === 'surface.preview.withdraw')).toBe(false);
+  expect(f.previews.at(-1)).toBe(true);
   expect(f.errors).toEqual([]);
 });

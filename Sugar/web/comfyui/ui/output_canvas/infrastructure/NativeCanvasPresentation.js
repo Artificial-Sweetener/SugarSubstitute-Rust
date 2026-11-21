@@ -80,7 +80,7 @@ export class NativeCanvasPresentation {
             this.#desired = null;
         }
         const desired = nativeCanvasDesired(geometry, item, nativeCanvasComparison(host) ? comparison : null, host?.capabilities.overview ? overview : null, this.options.accepts(), preparing, this.options.inputShown?.() ?? false);
-        const previewChanged = this.#preview?.update(desired.input ? null : preview) ?? false;
+        const previewChanged = this.#preview?.update(desired.input ? null : preview, desired.input) ?? false;
         if (this.#desired?.key === desired.key) {
             // Focus and gesture occlusions change routing, never the presented allocation.
             const routing = JSON.stringify(this.#desired.geometry) !== JSON.stringify(geometry);

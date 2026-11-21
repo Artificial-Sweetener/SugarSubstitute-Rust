@@ -69,6 +69,7 @@ impl NativeSurface {
         if self.closed {
             return Ok(());
         }
+        self.settle_preview_geometry(session)?;
         self.poll_editing(session)?;
         self.publish_settled_gesture(session)?;
         if self.poll_attachment(session)? {
