@@ -53,6 +53,7 @@ interface Frame {
 export const IDLE_NATIVE_CANVAS_PREVIEW_DIAGNOSTICS = Object.freeze({
   queuedInputs: 0,
   previewDrops: 0,
+  previewsAccepted: 0,
   estimatedBytes: 0,
   activeDeadlines: 0,
 });
@@ -91,6 +92,8 @@ export class NativeCanvasPreview {
   #sequence = -1;
   #epoch = 0;
   #drops = 0;
+  /** Preview frames taken for the canvas, so a stalled preview shows as a count that stops. */
+  #accepted = 0;
 
   /** Negotiate observation before admitting any preview bytes or custody mutations. */
   constructor(private readonly options: Options) {
@@ -167,6 +170,7 @@ export class NativeCanvasPreview {
     )
       return;
     if (this.#pending) this.#drops++;
+    this.#accepted++;
     this.#pending = { preview, blob };
     this.options.changed();
   }
@@ -258,6 +262,7 @@ export class NativeCanvasPreview {
     return {
       queuedInputs: Number(!!this.#pending),
       previewDrops: this.#drops,
+      previewsAccepted: this.#accepted,
       estimatedBytes: (this.#active?.blob?.size ?? 0) + (this.#pending?.blob.size ?? 0),
       activeDeadlines: Number(!!this.#active?.stop),
     };
