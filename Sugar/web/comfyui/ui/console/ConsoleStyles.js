@@ -53,10 +53,6 @@ export function ensureConsoleStyles(document) {
     }
     .sc-console__tool:hover { background:color-mix(in srgb,currentColor 9%,transparent); }
     .sc-console__tool:focus-visible { outline:2px solid var(--sc-accent-color,#ff4089); outline-offset:-2px; }
-    .sc-console__tool svg {
-      width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.2;
-      stroke-linecap:round; stroke-linejoin:round;
-    }
     .sc-console__output {
       flex:1; min-height:0; margin:0; overflow:auto; box-sizing:border-box; padding:6px 8px;
       background:rgba(8,10,12,.97); border:1px solid rgba(255,255,255,.22);

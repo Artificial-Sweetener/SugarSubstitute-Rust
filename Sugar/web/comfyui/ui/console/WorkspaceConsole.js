@@ -21,6 +21,7 @@
  * Logs panel is the console, so the same command opens that. Visibility and height are a viewer's
  * convenience, kept in this browser's storage.
  */
+import { PanelReveal } from '../surface/motion/PanelReveal.js';
 import { isRecord } from '../types/common.js';
 import { ComfyLogFeed } from './ComfyLogFeed.js';
 import { CONSOLE_DEFAULT_HEIGHT, CONSOLE_MINIMUM_HEIGHT, ConsolePanel } from './ConsolePanel.js';
@@ -36,6 +37,7 @@ function isConsoleKey(event) {
 export class WorkspaceConsole {
     #options;
     #button;
+    #reveal = new PanelReveal();
     #panel = null;
     #feed = null;
     #host = null;
@@ -80,6 +82,7 @@ export class WorkspaceConsole {
     dispose() {
         this.#options.document.defaultView?.removeEventListener('keydown', this.#onKey, true);
         this.#hide();
+        this.#reveal.dispose();
         this.#button.dispose();
     }
     /**
@@ -99,30 +102,46 @@ export class WorkspaceConsole {
     #substitute() {
         return this.#options.document.documentElement.hasAttribute('data-sc-substitute-frame');
     }
-    /** Dock the panel into the card column and start following ComfyUI's output. */
+    /** Dock the panel into the card column, sliding it up, and start following ComfyUI's output. */
     #show() {
         const host = this.#options.getHost();
         if (!host)
             return;
+        if (this.#panel && this.#reveal.leaving(this.#panel.element)) {
+            this.#reveal.enter(this.#panel.element, 'bottom');
+            this.#connect();
+            return;
+        }
         if (!this.#panel) {
             this.#panel = new ConsolePanel(this.#options.document, (text) => this.#copy(text), (height) => this.#resize(height));
         }
         this.#host = host;
         host.append(this.#panel.element);
         this.#applyHeight();
+        this.#reveal.enter(this.#panel.element, 'bottom');
         this.#connect();
     }
-    /** Close the panel, end the feed and give the card column its full height back. */
+    /**
+     * End the feed and slide the panel down; once it is gone, release it and give the card column
+     * its full height back. Opening the console again while it slides takes the slide back.
+     */
     #hide() {
         const feed = this.#feed;
         this.#feed = null;
         if (feed)
             void feed.close().catch(this.#options.report);
-        this.#panel?.dispose();
-        this.#panel = null;
-        this.#host?.style.removeProperty('--sc-console-height');
-        this.#host?.style.removeProperty('--sc-console-inset');
-        this.#host = null;
+        const panel = this.#panel;
+        if (!panel)
+            return;
+        this.#reveal.exit(panel.element, 'bottom', () => {
+            if (this.#panel !== panel)
+                return;
+            panel.dispose();
+            this.#panel = null;
+            this.#host?.style.removeProperty('--sc-console-height');
+            this.#host?.style.removeProperty('--sc-console-inset');
+            this.#host = null;
+        });
     }
     /** Replay ComfyUI's kept output and follow it while the panel is open. */
     #connect() {

@@ -27,6 +27,7 @@ export interface GenerationStripState {
 /** Delegate generation policy and persistence to Comfy's existing command and settings owners. */
 export class ComfyGenerationAdapter {
   readonly #manager: UnknownRecord | null;
+  readonly #api: UnknownRecord | null;
   readonly #marked = new Set<HTMLElement>();
   readonly #submissions = new Set<Promise<void>>();
   readonly #listeners = new Set<() => void>();
@@ -38,6 +39,7 @@ export class ComfyGenerationAdapter {
     app: unknown,
   ) {
     this.#manager = isRecord(app) && isRecord(app.extensionManager) ? app.extensionManager : null;
+    this.#api = isRecord(app) && isRecord(app.api) ? app.api : null;
   }
 
   /** Project native availability while retaining the mounted controls for mode restoration. */
@@ -99,7 +101,7 @@ export class ComfyGenerationAdapter {
   /** Interrupt the active generation while leaving pending host jobs intact. */
   async skip(): Promise<void> {
     if (!this.read().skipEnabled) return;
-    await this.#execute('Comfy.Interrupt');
+    await this.#interrupt();
   }
 
   /** Stop automatic submission and pending work before interrupting the active host generation. */
@@ -112,8 +114,8 @@ export class ComfyGenerationAdapter {
     try {
       // Comfy submits a batch asynchronously; clear only after its already-admitted requests finish.
       await Promise.allSettled([...this.#submissions]);
-      await this.#execute('Comfy.ClearPendingTasks');
-      await this.#execute('Comfy.Interrupt');
+      await this.#clearPending();
+      await this.#interrupt();
     } finally {
       this.#canceling = false;
       this.#notify();
@@ -163,6 +165,25 @@ export class ComfyGenerationAdapter {
   /** Publish only this boundary's in-flight command availability transitions. */
   #notify(): void {
     for (const listener of this.#listeners) listener();
+  }
+
+  /**
+   * Interrupt the running generation through ComfyUI's API. The person pressed Skip or Stop, so
+   * the toasts ComfyUI's own interrupt command shows would only repeat what they just did.
+   */
+  async #interrupt(): Promise<void> {
+    const api = this.#api;
+    if (!api || typeof api.interrupt !== 'function')
+      throw new Error('Comfy generation API is unavailable.');
+    await api.interrupt.call(api, null);
+  }
+
+  /** Clear the waiting jobs through ComfyUI's API, without its command's confirmation toast. */
+  async #clearPending(): Promise<void> {
+    const api = this.#api;
+    if (!api || typeof api.clearItems !== 'function')
+      throw new Error('Comfy generation API is unavailable.');
+    await api.clearItems.call(api, 'queue');
   }
 
   /** Keep command failures intact for the shared SugarCubes feedback boundary. */

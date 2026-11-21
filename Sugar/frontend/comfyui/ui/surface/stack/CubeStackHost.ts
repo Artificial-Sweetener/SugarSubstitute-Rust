@@ -22,7 +22,7 @@ import type { CubeIdentitySource } from '../../cube/CubeIdentityPresentation.js'
 import type { WorkflowMasonrySection } from '../masonry/WorkflowMasonryProjection.js';
 import type { AppearanceSource } from '../appearance/AppearanceState.js';
 import { applyOwnedTheme } from '../appearance/ThemeService.js';
-import { cubeStackReservedWidth } from './CubeStackMetrics.js';
+import { cubeStackExpandedReservedWidth, cubeStackReservedWidth } from './CubeStackMetrics.js';
 import { readMasonryPacked, subscribeMasonryPacking } from '../masonry/MasonryPacking.js';
 import { CubeStackPreferences } from './CubeStackPreferences.js';
 import type { ContextMenuEntry } from '../../menus/ContextMenu.js';
@@ -51,7 +51,7 @@ export interface CubeStackSurface {
   readonly sections: readonly WorkflowMasonrySection[];
   previewCubeOrder(order: readonly string[] | null): void;
   setCubeOrder(order: readonly string[]): void;
-  setStackWidth(width: number, motion: InsetMotion): void;
+  setStackWidth(width: number, motion: InsetMotion, expanded?: boolean): void;
   scrollToSection(id: string): void;
 }
 
@@ -292,8 +292,12 @@ export class CubeStackHost {
       this.#motion = new CubeStackDrawerMotion(this.#element);
       this.#mounted.setInteractive(false);
     }
+    const framed = this.#options.frame?.enabled === true;
     this.#reserveWidth(
-      cubeStackReservedWidth(state.compact, state.packed, this.#options.frame?.enabled === true),
+      state.compact
+        ? cubeStackReservedWidth(true, state.packed, framed)
+        : cubeStackExpandedReservedWidth(state.packed, framed),
+      !state.compact,
     );
     this.#material?.set(
       state.compact,
@@ -401,11 +405,11 @@ export class CubeStackHost {
   }
 
   /** In Substitute, cards travel on the stack's density frame; showing and hiding follow the drawer. */
-  #reserveWidth(width: number): void {
+  #reserveWidth(width: number, expanded = false): void {
     const densityTravel =
       this.#options.frame?.enabled === true && this.#reservedWidth > 0 && width > 0;
     this.#reservedWidth = width;
-    this.#view?.setStackWidth(width, densityTravel ? 'transform' : 'surface');
+    this.#view?.setStackWidth(width, densityTravel ? 'transform' : 'surface', expanded);
   }
 
   /** Remove owned presentation while retaining preferences for the next eligible masonry surface. */

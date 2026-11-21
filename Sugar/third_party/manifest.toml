@@ -422,6 +422,48 @@ vendored_file = "frontend/static/icons/canvas-editing/flip-vertical.svg"
 runtime_file = "web/icons/canvas-editing/flip-vertical.svg"
 sha256 = "5ba451952e70a97b68d8805e39ff62bf26a9c8a697b940747eec5bad02c2fc53"
 
+[[component.asset]]
+source_path = "assets/Broom/SVG/ic_fluent_broom_20_regular.svg"
+vendored_file = "frontend/static/icons/action/broom.svg"
+runtime_file = "web/icons/action/broom.svg"
+sha256 = "e818b7aa962d79365b10496e38f85965b72b9da5e6a2f1d5bb05dbc37e1ca346"
+
+[[component.asset]]
+source_path = "assets/Copy/SVG/ic_fluent_copy_20_regular.svg"
+vendored_file = "frontend/static/icons/action/copy.svg"
+runtime_file = "web/icons/action/copy.svg"
+sha256 = "0d3b835fa2d47f090d4adcd70af6a86bacbaf56c6e8da91d1897b716a87fb826"
+
+[[component.asset]]
+source_path = "assets/Window Console/SVG/ic_fluent_window_console_20_regular.svg"
+vendored_file = "frontend/static/icons/action/window-console.svg"
+runtime_file = "web/icons/action/window-console.svg"
+sha256 = "f2b46d93f5b922c79ecd04c9cbad61c26f6bd0491b80763de4409f059c43a202"
+
+[[component.asset]]
+source_path = "assets/Delete/SVG/ic_fluent_delete_20_regular.svg"
+vendored_file = "frontend/static/icons/action/delete.svg"
+runtime_file = "web/icons/action/delete.svg"
+sha256 = "c3ce6fcb04fa1564fc50e00677d763ddf5cafa0ade58604df4c478268ef54452"
+
+[[component.asset]]
+source_path = "assets/More Horizontal/SVG/ic_fluent_more_horizontal_20_regular.svg"
+vendored_file = "frontend/static/icons/action/more-horizontal.svg"
+runtime_file = "web/icons/action/more-horizontal.svg"
+sha256 = "5cc969f49ca33c856fb72804f9355e84db26dc6c23f2a1fc85995b67ad1c0c8d"
+
+[[component.asset]]
+source_path = "assets/Play/SVG/ic_fluent_play_20_filled.svg"
+vendored_file = "frontend/static/icons/action/play.svg"
+runtime_file = "web/icons/action/play.svg"
+sha256 = "07fb72bfb7e5990b21d1eb7872a6bb47a42009f737b6bb488851a2b9cf6a80b0"
+
+[[component.asset]]
+source_path = "assets/Panel Right/SVG/ic_fluent_panel_right_20_regular.svg"
+vendored_file = "frontend/static/icons/action/panel-right.svg"
+runtime_file = "web/icons/action/panel-right.svg"
+sha256 = "7c5813f91f989c27ea676328acdc4d07e9f9dfa293f29a165acd27a35ef603fb"
+
 [[component]]
 name = "Microsoft Fluent UI Emoji"
 license = "MIT"

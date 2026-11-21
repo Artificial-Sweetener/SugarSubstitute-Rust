@@ -37,6 +37,13 @@ export function cubeStackWidth(compact, packed) {
         return CUBE_STACK_EXPANDED_WIDTH;
     return CUBE_STACK_ROW_HEIGHT + (packed ? 0 : CUBE_STACK_ROW_INSET * 2);
 }
+/**
+ * Reserve masonry width for the expanded rail up to its own right edge: past it the masonry
+ * leaves exactly its card gap, so the stack sits as far from the cards as cards sit apart.
+ */
+export function cubeStackExpandedReservedWidth(packed, framed) {
+    return cubeStackWidth(false, packed) + (packed || framed ? 0 : FLOATING_RAIL_MARGIN);
+}
 /** Reserve masonry width for the rail and, when it floats, its outer and inner margins. */
 export function cubeStackReservedWidth(compact, packed, framed) {
     return cubeStackWidth(compact, packed) + (packed || framed ? 0 : FLOATING_RAIL_MARGIN * 2);

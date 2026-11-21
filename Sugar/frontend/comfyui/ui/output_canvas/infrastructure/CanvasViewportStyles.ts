@@ -28,7 +28,7 @@ export function ensureCanvasViewportStyles(document: Document): void {
   style.id = 'sugarcubes-output-viewport-styles';
   style.textContent = `
     .sc-output-viewport { position:absolute; inset:0; overflow:hidden; touch-action:none;
-      background:var(--sugarcubes-canvas-background,#151515); outline:none;
+      background:var(--sugarcubes-canvas-background,var(--sugarcubes-masonry-surface,var(--comfy-menu-bg,#202020))); outline:none;
       overscroll-behavior:contain; user-select:none; }
     .sc-output-workspace-pane:has(.sc-output-viewport.sc-output-native),
     .sc-output-viewport.sc-output-native { background:transparent; }

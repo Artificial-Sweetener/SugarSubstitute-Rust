@@ -29,7 +29,7 @@ export function ensureBrowserCanvasStyles(document: Document): void {
     .sc-output-image-layer { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
     .sc-output-image { position:absolute; left:0; top:0; display:block; pointer-events:auto;
       max-width:none; max-height:none; object-fit:fill; user-select:none; }
-    .sc-output-media-detail { position:absolute; inset:0; background:var(--sugarcubes-canvas-background,#151515); cursor:default; }
+    .sc-output-media-detail { position:absolute; inset:0; background:var(--sugarcubes-canvas-background,var(--sugarcubes-masonry-surface,var(--comfy-menu-bg,#202020))); cursor:default; }
     .sc-output-media-detail[hidden] { display:none; }
     .sc-output-media-detail > video,.sc-output-media-detail > img { width:100%; height:100%; object-fit:contain; }
     .sc-output-model-container { position:absolute; inset:0; overflow:hidden; }

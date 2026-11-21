@@ -114,9 +114,15 @@ export class GenerationQueueReorder {
         if (row && jobId)
             this.#gesture.press(event, jobId, row);
     };
-    /** Draw the lifted row under the pointer and mark the place it left. */
+    /**
+     * Draw the lifted row under the pointer and mark the place it left. A finished job carried
+     * towards the tab bar is never lifted: it cannot be rearranged, so the list shows no card in
+     * the air and no placeholder; the tab bar shows where it will open.
+     */
     #follow(card) {
         const { root, rows } = this.options;
+        if (card && !this.options.waiting().includes(card.key))
+            return;
         if (!card) {
             this.#overlay?.remove();
             this.#overlay = null;

@@ -17,7 +17,7 @@
 import { readOwnedVisualStyle, subscribeVisualStyle } from '../appearance/VisualStyleBoundary.js';
 import { readPluginMode, subscribePluginMode } from '../../core/PluginMode.js';
 import { applyOwnedTheme } from '../appearance/ThemeService.js';
-import { cubeStackReservedWidth } from './CubeStackMetrics.js';
+import { cubeStackExpandedReservedWidth, cubeStackReservedWidth } from './CubeStackMetrics.js';
 import { readMasonryPacked, subscribeMasonryPacking } from '../masonry/MasonryPacking.js';
 import { CubeStackPreferences } from './CubeStackPreferences.js';
 import { projectCubeStackRows } from './CubeStackProjection.js';
@@ -227,7 +227,10 @@ export class CubeStackHost {
             this.#motion = new CubeStackDrawerMotion(this.#element);
             this.#mounted.setInteractive(false);
         }
-        this.#reserveWidth(cubeStackReservedWidth(state.compact, state.packed, this.#options.frame?.enabled === true));
+        const framed = this.#options.frame?.enabled === true;
+        this.#reserveWidth(state.compact
+            ? cubeStackReservedWidth(true, state.packed, framed)
+            : cubeStackExpandedReservedWidth(state.packed, framed), !state.compact);
         this.#material?.set(state.compact, cubeStackReservedWidth(state.compact, state.packed, true), animate);
         if (this.#surfaceVisible)
             void this.#present(true, animate).catch(this.#options.reportError);
@@ -320,10 +323,10 @@ export class CubeStackHost {
         return completed;
     }
     /** In Substitute, cards travel on the stack's density frame; showing and hiding follow the drawer. */
-    #reserveWidth(width) {
+    #reserveWidth(width, expanded = false) {
         const densityTravel = this.#options.frame?.enabled === true && this.#reservedWidth > 0 && width > 0;
         this.#reservedWidth = width;
-        this.#view?.setStackWidth(width, densityTravel ? 'transform' : 'surface');
+        this.#view?.setStackWidth(width, densityTravel ? 'transform' : 'surface', expanded);
     }
     /** Remove owned presentation while retaining preferences for the next eligible masonry surface. */
     #unmount() {

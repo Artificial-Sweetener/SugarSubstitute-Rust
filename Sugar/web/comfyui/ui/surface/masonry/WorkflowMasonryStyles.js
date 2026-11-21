@@ -210,7 +210,7 @@ export function ensureWorkflowMasonryStyles(documentRef) {
       position:absolute; inset:0 0 var(--sc-console-inset,0px) 0; z-index:${MASONRY_SURFACE_Z_INDEX}; box-sizing:border-box; pointer-events:auto;
       overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain;
       scroll-padding-bottom:var(--sc-panel-resize-corner,0px);
-      padding:${WORKFLOW_MASONRY_TOP_INSET}px var(--sc-masonry-inline-padding,${WORKFLOW_MASONRY_INLINE_PADDING}px) 96px calc(var(--sc-masonry-inline-padding,${WORKFLOW_MASONRY_INLINE_PADDING}px) + var(--sc-masonry-stack-width,0px));
+      padding:${WORKFLOW_MASONRY_TOP_INSET}px var(--sc-masonry-inline-padding,${WORKFLOW_MASONRY_INLINE_PADDING}px) 96px calc(var(--sc-masonry-stack-gap,var(--sc-masonry-inline-padding,${WORKFLOW_MASONRY_INLINE_PADDING}px)) + var(--sc-masonry-stack-width,0px));
       background:transparent;
       color:var(--fg-color,#ddd); outline:none;
     }
@@ -253,15 +253,16 @@ export function ensureWorkflowMasonryStyles(documentRef) {
       margin-left:auto; display:flex; gap:8px; align-items:center; padding-inline-end:12px;
     }
     .sugarcubes-workflow-masonry__actions > [data-sc-button] { flex:none; }
-    /* Comfy's own button face, from Comfy's tokens, for the native button its style is given. */
+    /* Comfy's own button face, from Comfy's tokens, for the native button its style is given:
+       frameless at rest, its frame and fill shown on hover. */
     html[data-sc-visual-style="comfy"] .sugarcubes-workflow-masonry__actions > button[data-sc-button] {
       display:inline-flex; align-items:center; justify-content:center; box-sizing:border-box;
       width:32px; height:32px; padding:0; border-radius:8px; cursor:pointer;
-      border:1px solid var(--border-subtle,var(--border-color,#4e4e4e));
-      background:var(--secondary-background,var(--comfy-input-bg,#303030));
+      border:1px solid transparent; background:transparent;
       color:var(--base-foreground,var(--fg-color,#eee));
     }
     html[data-sc-visual-style="comfy"] .sugarcubes-workflow-masonry__actions > button[data-sc-button]:hover {
+      border-color:var(--border-subtle,var(--border-color,#4e4e4e));
       background:var(--secondary-background-hover,#393939);
     }
     html[data-sc-visual-style="comfy"] .sugarcubes-workflow-masonry__actions > button[data-sc-button]:focus-visible {

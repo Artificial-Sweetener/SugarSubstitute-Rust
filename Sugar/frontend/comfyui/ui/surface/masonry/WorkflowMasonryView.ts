@@ -299,10 +299,16 @@ export class WorkflowMasonryView {
     return this.#sections;
   }
 
-  /** Reserve rail space through ordinary layout so native controls animate rather than remount. */
-  setStackWidth(width: number, motion: InsetMotion): void {
+  /**
+   * Reserve rail space through ordinary layout so native controls animate rather than remount.
+   * Beside an expanded stack the masonry leaves its own card gap rather than its inline padding.
+   */
+  setStackWidth(width: number, motion: InsetMotion, expanded = false): void {
     if (!Number.isFinite(width) || width < 0)
       throw new TypeError('Cube stack width must be finite and nonnegative.');
+    if (expanded && width > 0)
+      this.element.style.setProperty('--sc-masonry-stack-gap', 'var(--sugarcubes-masonry-gap,8px)');
+    else this.element.style.removeProperty('--sc-masonry-stack-gap');
     this.#stackInset.set(this.element, this.#content, width, motion, () => this.#requestLayout());
   }
 

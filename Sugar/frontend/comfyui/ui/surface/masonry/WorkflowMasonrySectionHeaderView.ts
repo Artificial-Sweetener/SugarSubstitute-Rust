@@ -139,7 +139,7 @@ export class WorkflowMasonrySectionHeaderView {
   }
 }
 
-/** Make one icon-only action as the active visual style makes its buttons. */
+/** Make one frameless icon-only action as the active visual style makes its buttons. */
 function iconButton(document: Document): HTMLElement {
   // Comfy's own style has no button component to hand out; its button is a native one that
   // the header's styles face with Comfy's tokens.
@@ -149,9 +149,11 @@ function iconButton(document: Document): HTMLElement {
     native.dataset.scButton = '';
     return native;
   }
+  // Header actions are frameless at rest and show their frame on hover, as the stack rail's
+  // and the finder's icon buttons do: Fluent's subtle appearance, Spectrum's quiet button.
   const button = createButton(document);
+  button.setAttribute('appearance', 'subtle');
+  button.setAttribute('quiet', '');
   button.setAttribute('icon-only', '');
-  // A quiet Spectrum button has no face at rest and reads as a bare icon.
-  button.removeAttribute('quiet');
   return button;
 }

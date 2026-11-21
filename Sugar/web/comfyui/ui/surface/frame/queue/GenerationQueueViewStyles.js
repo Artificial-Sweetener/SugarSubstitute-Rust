@@ -17,6 +17,7 @@
  * The generation queue's geometry, which is SugarSubstitute's own and the same in every visual
  * style, drawn with the active style's tokens so colours, fonts and radii follow that style.
  */
+import { fluentIconMask } from '../../../core/FluentIcons.js';
 /** The fly-out's fixed width. */
 export const GENERATION_QUEUE_FLYOUT_WIDTH = 360;
 /** The fly-out's greatest height; a longer list scrolls inside it. */
@@ -32,13 +33,11 @@ export const GENERATION_QUEUE_ARROW_HALF_WIDTH = 8;
 const Q = '.sc-generation-queue';
 const ROW = '.sc-generation-queue-row';
 const LIGHT = `${Q}[data-sc-color-scheme='light']`;
-/** A glyph drawn as a mask in the current text colour. */
-const glyph = (path) => `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='${path}' fill='none' stroke='black' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/16px 16px no-repeat`;
-const CLOSE = glyph('M4 4l8 8M12 4l-8 8');
-const DELETE = glyph('M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5M6.8 7v4M9.2 7v4');
-const MORE = glyph('M3.5 8h.01M8 8h.01M12.5 8h.01');
-const PLAY = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M6 4.5l5.5 3.5L6 11.5z' fill='white'/%3E%3C/svg%3E") center/16px 16px no-repeat`;
-const PANEL = glyph('M2.5 3.5h11v9h-11zM10 3.5v9');
+const CLOSE = fluentIconMask('dismiss', 16);
+const DELETE = fluentIconMask('delete', 16);
+const MORE = fluentIconMask('more-horizontal', 16);
+const PLAY = fluentIconMask('play', 10);
+const PANEL = fluentIconMask('panel-right', 16);
 /** The rules for the generation queue's own view. */
 export const generationQueueViewCss = `
   ${Q} { box-sizing:border-box; display:flex; flex-direction:column; min-height:0; color:var(--sc-text,#fff);
@@ -93,8 +92,10 @@ export const generationQueueViewCss = `
   ${ROW}:is([data-role='active'],[data-role='waiting']:hover)::after { opacity:.098; }
   ${ROW}[data-role='waiting']:active::after { opacity:.2; }
   @media (prefers-reduced-motion:reduce) { ${ROW}::after { transition:none; } }
-  /* A waiting job is picked up by hand; the row it leaves marks where it will land. */
-  ${ROW}[data-role='waiting'] { cursor:grab; touch-action:none; user-select:none; }
+  /* No queue card offers text selection. Only a waiting job can be picked up by hand, so only
+     it shows the grab hand; every other card keeps the arrow. */
+  ${ROW} { cursor:default; user-select:none; -webkit-user-select:none; }
+  ${ROW}[data-role='waiting'] { cursor:grab; touch-action:none; }
   .sc-generation-queue-rows[data-reordering], .sc-generation-queue-rows[data-reordering] ${ROW} { cursor:grabbing; }
   ${ROW}[data-dragging] { border:1px dashed rgba(0,159,170,.59); background:rgba(0,159,170,.11); }
   ${ROW}[data-dragging] > * { visibility:hidden; }
@@ -108,7 +109,9 @@ export const generationQueueViewCss = `
   ${ROW}[data-status='completed'] .sc-generation-queue-thumbnail:has(img) { cursor:pointer; }
   .sc-generation-queue-thumbnail { position:relative; }
   ${ROW}[data-video] .sc-generation-queue-thumbnail::after { content:''; position:absolute; right:3px; bottom:3px; width:16px; height:16px;
-    border-radius:50%; background:rgba(0,0,0,.6) ${PLAY}; }
+    border-radius:50%; background:rgba(0,0,0,.6); }
+  ${ROW}[data-video] .sc-generation-queue-thumbnail::before { content:''; position:absolute; right:3px; bottom:3px; width:16px;
+    height:16px; z-index:1; background:#fff; -webkit-mask:${PLAY}; mask:${PLAY}; }
   .sc-generation-queue-text { flex:1; min-width:0; display:flex; flex-direction:column; justify-content:center; }
   .sc-generation-queue-row-title, .sc-generation-queue-row-status { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:inherit; }
   .sc-generation-queue-row-title { font:600 14px/19px var(--sc-font-family); }

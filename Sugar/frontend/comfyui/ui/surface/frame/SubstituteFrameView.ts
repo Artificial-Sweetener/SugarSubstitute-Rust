@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose the source-matched frame controls independently of host mounts and workflow stores. */
+import { createFluentIcon } from '../../core/FluentIcons.js';
 import { createButton } from '../appearance/ControlFactory.js';
 import { WorkflowTabsView, type WorkflowTabsActions } from './WorkflowTabsView.js';
 import { AppOrbView } from './AppOrbView.js';
@@ -125,16 +126,8 @@ export class SubstituteFrameView {
     );
     const create = this.#button('New workflow', '', () => actions.workflows.create());
     create.classList.add('sc-workflow-new');
-    const plus = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const plus = createFluentIcon(document, 'add', 16);
     plus.classList.add('sc-workflow-new-glyph');
-    plus.setAttribute('viewBox', '0 0 12 12');
-    plus.setAttribute('aria-hidden', 'true');
-    const cross = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    cross.setAttribute('d', 'M0 6H12M6 0V12');
-    cross.setAttribute('stroke', 'currentColor');
-    cross.setAttribute('stroke-width', '1');
-    cross.setAttribute('fill', 'none');
-    plus.append(cross);
     create.append(plus);
     const overflow = this.#button('More workflows', '⌄', () =>
       this.#overflowMenu.open({

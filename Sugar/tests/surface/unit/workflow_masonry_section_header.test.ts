@@ -92,7 +92,7 @@ describe('masonry section identity', () => {
     view.dispose();
   });
 
-  test('each visual style hands the header its own button, and Comfy’s is a native one', () => {
+  test('each visual style hands the header its own frameless button, and Comfy’s is a native one', () => {
     const cube = cubeFixture();
     const section: WorkflowMasonrySection = {
       id: 'cube:example',
@@ -114,14 +114,21 @@ describe('masonry section identity', () => {
         ...view.element.querySelectorAll<HTMLElement>(
           '.sugarcubes-workflow-masonry__actions > [data-sc-button]',
         ),
-      ].map((action) => `${action.localName}${action.hasAttribute('quiet') ? ' quiet' : ''}`);
+      ].map(
+        (action) =>
+          `${action.localName}${action.hasAttribute('quiet') ? ' quiet' : ''}${
+            action.getAttribute('appearance') === 'subtle' ? ' subtle' : ''
+          }`,
+      );
       view.dispose();
       return names;
     };
     try {
       // Comfy's style has no component of its own: a native button the header's styles face.
       expect(actions('comfy')[0]).toBe('button');
-      expect(actions('fluent')[0]).toBe('fluent-button');
+      // Every other style's button is frameless at rest: Fluent subtle, Spectrum quiet.
+      expect(actions('fluent')[0]).toBe('fluent-button quiet subtle');
+      expect(actions('spectrum')[0]).toBe('sp-action-button quiet subtle');
     } finally {
       root.removeAttribute('data-sc-visual-style');
     }

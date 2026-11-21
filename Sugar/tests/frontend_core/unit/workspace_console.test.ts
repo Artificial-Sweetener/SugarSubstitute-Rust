@@ -215,3 +215,22 @@ test('the console is a registered command in the View menu with no competing key
   // ComfyUI rejects a second default binding on a key it already binds, with an error toast.
   expect(registration).not.toHaveProperty('keybindings');
 });
+
+test('the console tools draw the vendored Fluent Copy and Broom icons, never hand-drawn paths', () => {
+  const panel = new ConsolePanel(
+    document,
+    () => undefined,
+    () => undefined,
+  );
+  const tools = [...panel.element.querySelectorAll<HTMLElement>('.sc-console__tool')];
+  expect(
+    tools.map((tool) =>
+      tool.querySelector('[data-sc-fluent-icon]')?.getAttribute('data-sc-fluent-icon'),
+    ),
+  ).toEqual(['copy', 'broom']);
+  expect(panel.element.querySelector('svg, path')).toBeNull();
+  for (const tool of tools) {
+    const icon = tool.querySelector<HTMLElement>('[data-sc-fluent-icon]');
+    expect(icon?.style.getPropertyValue('mask')).toMatch(/icons\/action\/(copy|broom)\.svg/);
+  }
+});

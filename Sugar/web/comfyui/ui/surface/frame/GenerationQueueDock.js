@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Keep Comfy's docked job panel on the right of the frame, with a way to put it away. */
+import { PanelReveal } from '../motion/PanelReveal.js';
 import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
 import { isRecord } from '../../types/common.js';
 import { GenerationQueueDockWidth } from './GenerationQueueDockWidth.js';
@@ -44,6 +45,9 @@ export class GenerationQueueDock {
     #presence;
     #hide;
     #width;
+    #reveal = new PanelReveal();
+    /** The docked side panel last shown, so only a newly docked panel slides in. */
+    #shown = null;
     #disposed = false;
     /** Observe only the docked panel's own mount. */
     constructor(document, app, report, 
@@ -70,6 +74,7 @@ export class GenerationQueueDock {
         this.#hide.removeEventListener('click', this.#close);
         this.#hide.remove();
         this.#width.dispose();
+        this.#reveal.dispose();
         this.#markDocked(false);
     }
     #markDocked(docked) {
@@ -84,6 +89,7 @@ export class GenerationQueueDock {
         const panel = this.document.querySelector(GENERATION_QUEUE_DOCK);
         this.#markDocked(panel !== null);
         if (!panel) {
+            this.#shown = null;
             this.#hide.remove();
             this.#width.divider.remove();
             return;
@@ -91,6 +97,10 @@ export class GenerationQueueDock {
         // The edge lives in the frame's own layer, over the panel's left side: Comfy re-renders its
         // panel and would drop an element placed inside it.
         const side = panel.closest('.side-bar-panel') ?? panel;
+        if (this.#shown !== side) {
+            this.#shown = side;
+            this.#reveal.enter(side, 'right');
+        }
         this.#width.divider.style.top = `${String(Math.max(0, side.getBoundingClientRect().top))}px`;
         if (this.#width.divider.parentElement !== this.layer)
             this.layer.append(this.#width.divider);
@@ -99,11 +109,19 @@ export class GenerationQueueDock {
         if (actions && this.#hide.parentElement !== actions)
             actions.append(this.#hide);
     }
-    /** Close the panel through the same owner Comfy's own icon column uses. */
+    /** Slide the panel out, then close it through the same owner Comfy's own icon column uses. */
     #close = () => {
-        const tabs = this.#store('sidebarTab');
-        if (isRecord(tabs) && tabs.activeSidebarTabId === SIDEBAR_TAB)
-            this.#call(tabs, 'toggleSidebarTab', SIDEBAR_TAB);
+        const close = () => {
+            const tabs = this.#store('sidebarTab');
+            if (isRecord(tabs) && tabs.activeSidebarTabId === SIDEBAR_TAB)
+                this.#call(tabs, 'toggleSidebarTab', SIDEBAR_TAB);
+        };
+        const panel = this.document.querySelector(GENERATION_QUEUE_DOCK);
+        const side = panel?.closest('.side-bar-panel') ?? panel;
+        if (side && !this.#reveal.leaving(side))
+            this.#reveal.exit(side, 'right', close);
+        else if (!side)
+            close();
     };
     /** Narrow one of Comfy's stores on each use; they are replaced as Comfy starts. */
     #store(name) {

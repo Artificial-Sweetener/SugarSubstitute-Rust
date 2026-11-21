@@ -14,9 +14,8 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Place the console toggle in ComfyUI's action bar beside SugarCubes' other view toggles. */
+import { createFluentIcon } from '../core/FluentIcons.js';
 import { HostSurfaceObserver } from '../core/HostSurfaceObserver.js';
-
-const SVG = 'http://www.w3.org/2000/svg';
 
 /** One checkable console button, kept in the action bar as ComfyUI remounts it. */
 export class ConsoleToolbarButton {
@@ -33,17 +32,7 @@ export class ConsoleToolbarButton {
     this.#button.type = 'button';
     this.#button.className = 'sc-console-toggle sc-output-canvas-toggle';
     this.#button.setAttribute('aria-label', 'Toggle console');
-    const svg = document.createElementNS(SVG, 'svg');
-    svg.setAttribute('viewBox', '0 0 20 20');
-    svg.setAttribute('aria-hidden', 'true');
-    for (const data of ['M3 4h14v12H3z', 'M6 8l2.5 2L6 12', 'M10 12h4']) {
-      const path = document.createElementNS(SVG, 'path');
-      path.setAttribute('d', data);
-      svg.append(path);
-    }
-    svg.style.cssText =
-      'width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round';
-    this.#button.append(svg);
+    this.#button.append(createFluentIcon(document, 'window-console', 18));
     this.#button.addEventListener('click', toggle);
   }
 

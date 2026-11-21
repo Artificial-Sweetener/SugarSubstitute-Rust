@@ -21,6 +21,8 @@
 export const desktopFrameCss = `
   [data-sc-desktop-frame-surface] { background:transparent !important; }
   :root[data-sc-desktop-frame-surface] {
+    /* The canvas takes the masonry's own body wash, so the two never drift apart. */
+    --sugarcubes-canvas-background:var(--sc-desktop-body-wash);
     --sc-workflow-tab-selected-fill:var(--sc-desktop-chrome-wash);
     --sc-substitute-toolbar-fill:var(--sc-desktop-chrome-wash); }
   :root[data-sc-desktop-frame-surface] :where(#graph-canvas,.sugarcubes-workflow-masonry__backdrop) {

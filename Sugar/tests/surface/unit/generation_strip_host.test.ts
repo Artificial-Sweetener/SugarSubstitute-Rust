@@ -37,8 +37,17 @@ function fixture() {
   document.body.append(native);
   const execute = jest.fn<(id: string) => Promise<void>>().mockResolvedValue(undefined);
   const queueSettings = { batchCount: 1, mode: 'disabled', $subscribe: () => () => undefined };
-  const app = { extensionManager: { queueSettings, command: { execute } } };
-  return { native, run, group, cancel, batch, execute, queueSettings, app };
+  const calls: string[] = [];
+  const api = {
+    interrupt: jest.fn(async (_prompt: string | null) => {
+      calls.push('interrupt');
+    }),
+    clearItems: jest.fn(async (_kind: string) => {
+      calls.push('clear');
+    }),
+  };
+  const app = { extensionManager: { queueSettings, command: { execute } }, api };
+  return { native, run, group, cancel, batch, execute, queueSettings, app, api, calls };
 }
 
 test('generation uses the native batch setting and canonical host command', async () => {
@@ -57,12 +66,16 @@ test('skip interrupts only; cancel stops auto queue and clears pending before in
   host.queueSettings.mode = 'instant';
   const adapter = new ComfyGenerationAdapter(document, host.app);
   await adapter.skip();
-  expect(host.execute.mock.calls).toEqual([['Comfy.Interrupt']]);
+  expect(host.calls).toEqual(['interrupt']);
+  expect(host.api.interrupt).toHaveBeenCalledWith(null);
   expect(host.queueSettings.mode).toBe('instant');
-  host.execute.mockClear();
+  host.calls.length = 0;
   await adapter.cancel();
   expect(host.queueSettings.mode).toBe('disabled');
-  expect(host.execute.mock.calls).toEqual([['Comfy.ClearPendingTasks'], ['Comfy.Interrupt']]);
+  expect(host.calls).toEqual(['clear', 'interrupt']);
+  expect(host.api.clearItems).toHaveBeenCalledWith('queue');
+  // ComfyUI's interrupt and clear commands show toasts; Skip and Stop never run them.
+  expect(host.execute).not.toHaveBeenCalled();
 });
 
 test('missing host controls fail closed and native visibility is restored on disposal', () => {
@@ -107,11 +120,8 @@ test('cancel fences already admitted batch submissions before clearing and inter
   expect(host.execute.mock.calls).toEqual([['Comfy.QueuePrompt']]);
   release();
   await Promise.all([submitting, canceling]);
-  expect(host.execute.mock.calls).toEqual([
-    ['Comfy.QueuePrompt'],
-    ['Comfy.ClearPendingTasks'],
-    ['Comfy.Interrupt'],
-  ]);
+  expect(host.execute.mock.calls).toEqual([['Comfy.QueuePrompt']]);
+  expect(host.calls).toEqual(['clear', 'interrupt']);
 });
 
 test('host action failures propagate and release the admission barrier', async () => {
@@ -122,7 +132,7 @@ test('host action failures propagate and release the admission barrier', async (
   await expect(adapter.generate()).rejects.toBe(failure);
   expect(adapter.read().cancelEnabled).toBe(false);
   host.cancel.disabled = false;
-  host.execute.mockRejectedValueOnce(failure);
+  host.api.clearItems.mockRejectedValueOnce(failure);
   await expect(adapter.cancel()).rejects.toBe(failure);
   expect(adapter.read().generateEnabled).toBe(true);
 });

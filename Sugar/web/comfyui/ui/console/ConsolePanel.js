@@ -19,6 +19,7 @@
  * colours ANSI output and stays pinned to the newest line. It docks under the card column and is
  * resized from its top edge.
  */
+import { createFluentIcon } from '../core/FluentIcons.js';
 import { parseAnsiLine, plainAnsiLine } from './AnsiText.js';
 import { ensureConsoleStyles } from './ConsoleStyles.js';
 /** The fewest lines kept before the oldest are dropped, as the Python console's stream did. */
@@ -29,19 +30,6 @@ export const CONSOLE_MINIMUM_HEIGHT = 120;
 export const CONSOLE_DEFAULT_HEIGHT = 200;
 /** How close to the end the view counts as following the output, in CSS pixels. */
 const PINNED_SLACK = 24;
-const SVG = 'http://www.w3.org/2000/svg';
-/** Build one 16 px outline icon from path data, drawn in the current text colour. */
-function icon(document, paths) {
-    const svg = document.createElementNS(SVG, 'svg');
-    svg.setAttribute('viewBox', '0 0 16 16');
-    svg.setAttribute('aria-hidden', 'true');
-    for (const data of paths) {
-        const path = document.createElementNS(SVG, 'path');
-        path.setAttribute('d', data);
-        svg.append(path);
-    }
-    return svg;
-}
 /** The console's DOM and its output, without any feed or persistence of its own. */
 export class ConsolePanel {
     copy;
@@ -67,7 +55,7 @@ export class ConsolePanel {
         const title = document.createElement('span');
         title.className = 'sc-console__title';
         title.textContent = 'Comfy Console';
-        header.append(title, this.#tool('Copy all output', ['M5 5h8v9H5z', 'M3 11V2h8'], () => this.copy(this.text())), this.#tool('Clear output', ['M10 2 6 8', 'M3 9h7l-1 5H4z', 'M5 9v5', 'M7.5 9v5'], () => this.clear()));
+        header.append(title, this.#tool('Copy all output', 'copy', () => this.copy(this.text())), this.#tool('Clear output', 'broom', () => this.clear()));
         this.#output = document.createElement('pre');
         this.#output.className = 'sc-console__output';
         this.#output.tabIndex = 0;
@@ -129,13 +117,13 @@ export class ConsolePanel {
         return row;
     }
     /** A transparent header tool button. */
-    #tool(label, paths, act) {
+    #tool(label, icon, act) {
         const button = this.#document.createElement('button');
         button.type = 'button';
         button.className = 'sc-console__tool';
         button.title = label;
         button.setAttribute('aria-label', label);
-        button.append(icon(this.#document, paths));
+        button.append(createFluentIcon(this.#document, icon));
         button.addEventListener('click', act);
         return button;
     }

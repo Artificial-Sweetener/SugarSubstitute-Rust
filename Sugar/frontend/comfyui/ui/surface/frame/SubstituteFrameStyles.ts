@@ -98,8 +98,7 @@ export const substituteFrameCss = `
   .sc-substitute-frame .sc-workflow-scroll::before { content:''; display:block; width:6px; height:6px; border:solid currentColor; border-width:0 1.5px 1.5px 0; transform:rotate(-45deg); }
   .sc-substitute-frame .sc-workflow-scroll--previous::before { transform:rotate(135deg); }
   .sc-substitute-frame .sc-workflow-new { position:relative; margin-left:${String(WORKFLOW_NEW_BUTTON_GAP)}px; }
-  .sc-substitute-frame .sc-workflow-new-glyph { display:block; width:12px; height:12px;
-    flex:none; overflow:visible; pointer-events:none; }
+  .sc-substitute-frame .sc-workflow-new-glyph { display:block; pointer-events:none; }
   .sc-substitute-frame .sc-workflow-overflow { margin-left:0; }
   .sc-substitute-frame .sc-workflow-overflow[hidden],.sc-substitute-frame .sc-workflow-scroll[hidden] { display:none !important; }
   .sc-substitute-frame .sc-app-orb { position:absolute; left:8px; top:6px; width:46px; height:46px; min-width:46px;
