@@ -211,6 +211,26 @@ impl ReadinessTransportError {
         }
         self
     }
+    /// Give back the attempt's body credit once this failure outlives the attempt that read the
+    /// body: the attempt's transaction keeps its own share of the credit while it lives, and a
+    /// failure kept after it holds no body. A JSON failure keeps only that the body was invalid,
+    /// never text decoded from it. Without this, every retried attempt would keep its whole
+    /// reservation charged for as long as its failure is remembered.
+    pub(crate) fn settle(mut self) -> Self {
+        self.body = None;
+        if matches!(
+            self.cause.downcast_ref::<crate::readiness::ReadinessError>(),
+            Some(crate::readiness::ReadinessError::Json(_))
+        ) {
+            self.cause = Box::new(crate::readiness::ReadinessError::Shape);
+        }
+        self
+    }
+    /// Whether this failure still holds its attempt's body credit.
+    #[cfg(test)]
+    pub(crate) const fn holds_body(&self) -> bool {
+        self.body.is_some()
+    }
     /// Borrow the stable operation label.
     pub const fn stage(&self) -> &'static str {
         self.stage

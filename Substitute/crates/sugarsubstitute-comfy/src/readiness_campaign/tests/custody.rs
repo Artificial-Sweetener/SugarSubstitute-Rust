@@ -17,7 +17,7 @@ fn actual_ready_releases_checked_closed_retry_credit_and_keeps_current_probe_cre
     assert!(!harness.campaign.needs_input(harness.now())?);
     first.release();
     assert_eq!(harness.completion()?, CampaignStep::Progressed);
-    assert_eq!(harness.retained_bytes(), READINESS_TRANSPORT_BYTES);
+    assert_eq!(harness.retained_bytes(), 0);
     assert!(matches!(harness.campaign.failure(), Some(CampaignError::Transport(_))));
     assert_eq!(*first.closed.lock().unwrap_or_else(std::sync::PoisonError::into_inner), [3, 2, 1]);
 
@@ -25,7 +25,7 @@ fn actual_ready_releases_checked_closed_retry_credit_and_keeps_current_probe_cre
     assert!(harness.campaign.needs_input(harness.now())?);
     let current = harness.submit(Behavior::Success, Some("begin"), false, None)?;
     current.entered()?;
-    assert_eq!(harness.retained_bytes(), 2 * READINESS_TRANSPORT_BYTES);
+    assert_eq!(harness.retained_bytes(), READINESS_TRANSPORT_BYTES);
     assert!(harness.campaign.failure().is_some());
     current.release();
     assert_eq!(harness.completion()?, CampaignStep::Ready);
@@ -55,18 +55,19 @@ fn actual_ready_releases_checked_closed_retry_credit_and_keeps_current_probe_cre
 }
 
 #[test]
-fn terminal_retry_result_keeps_its_original_cause_and_credit_after_checked_cleanup() -> TestResult {
+fn terminal_retry_result_keeps_its_original_cause_but_not_its_credit_after_checked_cleanup()
+-> TestResult {
     for behavior in [Behavior::Malformed, Behavior::WrongAsset, Behavior::Panicked] {
         let mut harness = Harness::new()?;
         harness.submit(Behavior::Unavailable, None, false, None)?;
         assert_eq!(harness.completion()?, CampaignStep::Progressed);
         harness.submit_close(Moment::from_nanos(5_000_000_000))?;
         assert_eq!(harness.completion()?, CampaignStep::Progressed);
-        assert_eq!(harness.retained_bytes(), READINESS_TRANSPORT_BYTES);
+        assert_eq!(harness.retained_bytes(), 0);
         harness.set_time(50_000_000);
         let terminal = harness.submit(behavior, Some("begin"), false, None)?;
         terminal.entered()?;
-        assert_eq!(harness.retained_bytes(), 2 * READINESS_TRANSPORT_BYTES);
+        assert_eq!(harness.retained_bytes(), READINESS_TRANSPORT_BYTES);
         terminal.release();
         assert_eq!(harness.completion()?, CampaignStep::Failed);
         assert!(harness.campaign.take_readiness().is_none());
@@ -96,7 +97,7 @@ fn terminal_retry_result_keeps_its_original_cause_and_credit_after_checked_clean
         let (campaign, attempt) = harness.finish_execution()?;
         assert!(campaign.settled());
         assert!(campaign.failure().is_none());
-        assert_eq!(attempt.snapshot().reserved_bytes, READINESS_TRANSPORT_BYTES);
+        assert_eq!(attempt.snapshot().reserved_bytes, 0);
         drop(failure);
         assert_eq!(attempt.snapshot().reserved_bytes, 0);
     }

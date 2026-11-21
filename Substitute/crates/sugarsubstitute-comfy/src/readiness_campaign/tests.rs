@@ -66,9 +66,9 @@ fn transient_retry_waits_for_actual_partial_close_and_original_backoff() -> Test
     assert!(!harness.campaign.settled());
     first.release();
     assert_eq!(harness.completion()?, CampaignStep::Progressed);
-    assert_eq!(harness.retained_bytes(), crate::readiness_transport::READINESS_TRANSPORT_BYTES);
+    assert_eq!(harness.retained_bytes(), 0);
     let cause = harness.campaign.take_failure().ok_or("Missing retained transient cause")?;
-    assert_eq!(harness.retained_bytes(), crate::readiness_transport::READINESS_TRANSPORT_BYTES);
+    assert_eq!(harness.retained_bytes(), 0);
     drop(cause);
     assert_eq!(harness.retained_bytes(), 0);
     assert_eq!(harness.campaign.next_deadline(), Some(Moment::from_nanos(50_000_000)));
@@ -246,4 +246,54 @@ fn foreign_cleanup_rejection_keeps_custody_for_actual_owning_executor() -> TestR
     assert!(!harness.campaign.settled());
     harness.finish()?;
     other.finish()
+}
+
+#[test]
+fn an_attached_comfyui_refusing_every_connection_is_reported_as_not_answering() -> TestResult {
+    let mut harness = Harness::new()?;
+    for refusal in 1..=ATTACHED_REFUSALS_BEFORE_UNREACHABLE {
+        harness.submit(Behavior::Unavailable, None, false, None)?;
+        let step = harness.completion()?;
+        if refusal < ATTACHED_REFUSALS_BEFORE_UNREACHABLE {
+            assert_eq!(step, CampaignStep::Progressed, "refusal {refusal}");
+            harness.submit_close(Moment::from_nanos(30_000_000_000))?;
+            harness.completion()?;
+            let next = harness.campaign.next_deadline().ok_or("Missing retry deadline")?;
+            harness.set_time(next.as_nanos());
+        } else {
+            assert_eq!(step, CampaignStep::Failed);
+        }
+    }
+    let Some(CampaignError::Transport(cause)) = harness.campaign.failure() else {
+        return Err("Missing the refused connection's cause".into());
+    };
+    assert_eq!(
+        cause.lifecycle_code(),
+        Some(sugarsubstitute_contracts::lifecycle::LifecycleFailureCode::BackendUnreachable)
+    );
+    harness.submit_close(Moment::from_nanos(30_000_000_000))?;
+    harness.completion()?;
+    harness.finish()
+}
+
+/// A failure the campaign keeps after its attempt holds none of the attempt's body credit, so
+/// retried attempts never stack reservations, and keeps no text decoded from the body.
+#[test]
+fn a_kept_readiness_failure_gives_back_its_attempts_body_credit() -> TestResult {
+    for behavior in [Behavior::WrongAsset, Behavior::Malformed] {
+        let mut harness = Harness::new()?;
+        harness.submit(behavior, None, false, None)?;
+        harness.completion()?;
+        let Some(CampaignError::Transport(cause)) = harness.campaign.failure() else {
+            return Err("Missing the attempt's cause".into());
+        };
+        assert!(!cause.holds_body());
+        let decoded = std::error::Error::source(cause)
+            .and_then(|source| source.downcast_ref::<crate::readiness::ReadinessError>());
+        assert!(!matches!(decoded, Some(crate::readiness::ReadinessError::Json(_))));
+        harness.submit_close(Moment::from_nanos(30_000_000_000))?;
+        harness.completion()?;
+        harness.finish()?;
+    }
+    Ok(())
 }

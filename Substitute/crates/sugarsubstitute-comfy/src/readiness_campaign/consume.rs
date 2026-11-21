@@ -57,6 +57,7 @@ impl ReadinessCampaign {
                 Ok(None) => return Ok(CampaignStep::Waiting),
                 Ok(Some(proof)) if !self.terminal => {
                     self.attempt = None;
+                    self.refused_in_a_row = 0;
                     self.ready = true;
                     self.readiness = Some(proof);
                     if matches!(&self.failure, Some(CampaignError::Transport(previous)) if retryable_attempt(previous, self.readiness_scope.is_some()))
@@ -68,16 +69,27 @@ impl ReadinessCampaign {
                 Ok(Some(_)) => self.attempt = None,
                 Err(cause) => {
                     self.attempt = None;
-                    self.retry =
-                        !self.terminal && retryable_attempt(&cause, self.readiness_scope.is_some());
+                    let refused = cause.retry_disposition()
+                        == ProbeRetryDisposition::TransientConnectionUnavailable;
+                    self.refused_in_a_row =
+                        if refused { self.refused_in_a_row.saturating_add(1) } else { 0 };
+                    // An attached ComfyUI that keeps refusing is not answering: the attempt
+                    // fails with that reason instead of waiting on it without end.
+                    let not_answering = refused
+                        && self.budget.kind() == ConnectionBudgetKind::Attached
+                        && self.refused_in_a_row >= ATTACHED_REFUSALS_BEFORE_UNREACHABLE;
+                    self.retry = !self.terminal
+                        && !not_answering
+                        && retryable_attempt(&cause, self.readiness_scope.is_some());
                     if !self.retry {
                         self.terminal = true;
                     }
                     let prior_retryable = matches!(&self.failure, Some(CampaignError::Transport(previous)) if retryable_attempt(previous, self.readiness_scope.is_some()));
+                    let cause = CampaignError::Transport(cause.settle());
                     if self.failure.is_none() || prior_retryable {
-                        self.failure = Some(CampaignError::Transport(cause));
+                        self.failure = Some(cause);
                     } else {
-                        return Err(CampaignError::Transport(cause));
+                        return Err(cause);
                     }
                 }
             }
@@ -122,7 +134,7 @@ impl ReadinessCampaign {
                 JobOutcome::Failure(cause) => {
                     self.terminal = true;
                     self.retry = false;
-                    return Err(CampaignError::Transport(cause));
+                    return Err(CampaignError::Transport(cause.settle()));
                 }
                 JobOutcome::Panicked(cause) => {
                     self.terminal = true;

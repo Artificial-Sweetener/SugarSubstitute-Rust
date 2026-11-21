@@ -48,6 +48,11 @@ struct Attempt {
     scope: ScopeId,
     until: Moment,
 }
+/// Refused connections in a row after which an attached ComfyUI counts as not answering. Nothing
+/// of the application's own is starting it, so waiting on it longer only hides the failure; a
+/// managed backend still starting keeps being waited for.
+pub const ATTACHED_REFUSALS_BEFORE_UNREACHABLE: u32 = 30;
+
 /// Own one real probe and cleanup job across finite preparation or admitted lifecycle readiness.
 pub struct ReadinessCampaign {
     target: BackendTarget,
@@ -61,6 +66,8 @@ pub struct ReadinessCampaign {
     next_input_at: Option<Moment>,
     retry: bool,
     retry_index: usize,
+    /// Probes in a row whose connection was refused.
+    refused_in_a_row: u32,
     terminal: bool,
     shutdown: Option<ShutdownBudget>,
     last_now: Moment,
@@ -95,6 +102,7 @@ impl ReadinessCampaign {
             next_input_at: Some(budget.started()),
             retry: false,
             retry_index: 0,
+            refused_in_a_row: 0,
             terminal: false,
             shutdown: None,
             last_now: budget.started(),

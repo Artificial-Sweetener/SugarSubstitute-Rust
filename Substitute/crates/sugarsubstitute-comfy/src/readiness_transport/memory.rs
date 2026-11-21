@@ -5,7 +5,8 @@
 pub(super) const BODY_BYTES: u64 = 8 * 1024 * 1024;
 use std::sync::Arc;
 use sugarsubstitute_contracts::execution::{JobContext, MemoryClaim, MemoryClaimError};
-/// Keep the original body credit outside data/control storage, including escaped failures.
+/// Keep the original body credit outside data/control storage, including failures escaping the
+/// attempt, until the campaign keeps such a failure past its attempt and settles it.
 pub(super) struct BodyClaim(Option<Arc<MemoryClaim>>);
 impl BodyClaim {
     pub(super) fn new(context: &JobContext) -> Result<Self, MemoryClaimError> {
