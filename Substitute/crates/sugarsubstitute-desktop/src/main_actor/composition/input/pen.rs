@@ -129,7 +129,7 @@ impl State {
         let routed = match transition {
             Transition::Move { held } => Message::Move { sample, held },
             Transition::Press(button) => {
-                if !self.focus.browser_focused() {
+                if !self.focus.browser_holds_focus(self.window) {
                     self.focus.enter();
                 }
                 self.press(button, sample)

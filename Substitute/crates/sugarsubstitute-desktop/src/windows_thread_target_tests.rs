@@ -127,3 +127,67 @@ fn a_paint_sent_from_another_thread_never_reaches_the_event_loop_window()
     unsafe { DestroyWindow(hwnd)? };
     Ok(())
 }
+
+unsafe extern "system" fn closable(
+    hwnd: HWND,
+    message: u32,
+    wparam: WPARAM,
+    lparam: LPARAM,
+) -> LRESULT {
+    // SAFETY: Default handling, which destroys the window on WM_CLOSE as Tao's target would.
+    unsafe { DefWindowProcW(hwnd, message, wparam, lparam) }
+}
+
+#[test]
+fn a_close_request_never_destroys_the_event_loop_window() -> Result<(), Box<dyn std::error::Error>>
+{
+    use windows::Win32::UI::WindowsAndMessaging::{IsWindow, PostMessageW};
+    assert!(closes_target(WM_CLOSE));
+    assert!(!closes_target(WM_PAINT));
+    let class = WNDCLASSW {
+        lpfnWndProc: Some(closable),
+        lpszClassName: w!("SugarCloseGuardTest"),
+        ..Default::default()
+    };
+    // SAFETY: Registers a class whose procedure is the static test procedure.
+    unsafe { RegisterClassW(&class) };
+    // SAFETY: A message-only window owned by this test thread.
+    let hwnd = unsafe {
+        CreateWindowExW(
+            WINDOW_EX_STYLE(0),
+            w!("SugarCloseGuardTest"),
+            None,
+            WINDOW_STYLE(0),
+            0,
+            0,
+            0,
+            0,
+            Some(HWND_MESSAGE),
+            None,
+            None,
+            None,
+        )?
+    };
+    guard(hwnd);
+    // A posted close, as `Process.CloseMainWindow` sends, and a sent one.
+    // SAFETY: Posting to this thread's own live window.
+    unsafe { PostMessageW(Some(hwnd), WM_CLOSE, WPARAM(0), LPARAM(0))? };
+    let mut message = MSG::default();
+    // SAFETY: Pumps this thread's queue, which delivers the posted close.
+    while unsafe { PeekMessageW(&mut message, None, 0, 0, PM_REMOVE) }.as_bool() {
+        // SAFETY: Standard dispatch of a message this thread retrieved.
+        unsafe {
+            let _ = TranslateMessage(&message);
+            DispatchMessageW(&message);
+        }
+    }
+    // SAFETY: A same-thread send is a direct call into the subclass chain.
+    unsafe { SendMessageW(hwnd, WM_CLOSE, None, None) };
+    // SAFETY: Queries this thread's own window handle.
+    assert!(unsafe { IsWindow(Some(hwnd)) }.as_bool());
+    // SAFETY: Destroys the test window on its own thread, as Tao does.
+    unsafe { DestroyWindow(hwnd)? };
+    // SAFETY: Queries the handle just destroyed.
+    assert!(!unsafe { IsWindow(Some(hwnd)) }.as_bool());
+    Ok(())
+}

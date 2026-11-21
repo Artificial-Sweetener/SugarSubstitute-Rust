@@ -132,6 +132,7 @@ struct State {
     regions: Option<ICoreWebView2CompositionController4>,
     events: Rc<Events>,
     active: Cell<bool>,
+    refusals: refusal::RefusalLog,
     pointer: Pointer,
     routing: RefCell<Routing>,
     hands: Hands,
@@ -149,7 +150,7 @@ impl State {
     /// without retaining a borrow. A press first moves keyboard focus into a browser that
     /// lacks it.
     fn deliver(&self, message: Mouse) -> Result<(), DesktopError> {
-        if focus::requests_focus(message.kind, self.focus.browser_focused()) {
+        if focus::requests_focus(message.kind, self.focus.browser_holds_focus(self.window)) {
             self.focus.enter();
         }
         if message.kind == WM_MOUSEMOVE && self.pointer.enter() {
@@ -338,8 +339,9 @@ impl State {
         self.hands.apply(self.window, native, self.pointer.cursor(), present)
     }
 
+    /// Whether input reaches the browser now; a refusal is logged once per run.
     fn admits(&self) -> bool {
-        self.active.get() && self.events.accepting()
+        self.refusals.admit(self.active.get(), self.events.accepting())
     }
 
     /// Resolve the browser's new cursor and select it when Windows will not ask for it.
@@ -394,6 +396,7 @@ impl Input {
             regions,
             events,
             active: Cell::new(true),
+            refusals: refusal::RefusalLog::default(),
             pointer: Pointer::default(),
             routing: RefCell::new(Routing::new()?),
             hands: Hands::new(window)?,
@@ -597,6 +600,7 @@ unsafe extern "system" fn procedure(
 
 mod gestures;
 mod pen;
+mod refusal;
 
 #[cfg(test)]
 mod tests;

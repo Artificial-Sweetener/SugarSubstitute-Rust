@@ -84,10 +84,18 @@ impl Focus {
         }
     }
 
-    /// Whether WebView2 last reported that the browser holds keyboard focus.
+    /// Whether the browser holds keyboard focus, by WebView2's report or by Windows' own.
+    ///
+    /// WebView2 reports focus asynchronously, so its last report can say "lost" while Windows'
+    /// keyboard focus already rests in the browser's own window under `host`. Moving focus then
+    /// would blur and refocus the page on every click; either source saying the browser holds
+    /// focus is enough to leave it where it is.
     #[cfg(feature = "native-composition")]
-    pub(in crate::main_actor) fn browser_focused(&self) -> bool {
-        self.focused.get()
+    pub(in crate::main_actor) fn browser_holds_focus(
+        &self,
+        host: windows::Win32::Foundation::HWND,
+    ) -> bool {
+        self.focused.get() || keyboard_focus_inside(host)
     }
 
     /// Register focus reporting and Tab wrapping once; returned tokens are retained for
@@ -129,6 +137,10 @@ impl Focus {
     /// Failure is logged rather than escalated: focus is advisory, the window stays usable, and
     /// the next activation or press retries.
     pub(in crate::main_actor) fn enter(&self) {
+        tracing::info!(
+            operation = "browser_focus_entered",
+            "Keyboard focus moves into the browser"
+        );
         // SAFETY: The retained controller belongs to this UI thread.
         let moved =
             unsafe { self.controller.MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC) };
@@ -223,3 +235,14 @@ fn unregister(
 #[cfg(test)]
 #[path = "focus/tests.rs"]
 mod tests;
+
+/// Whether Windows' keyboard focus rests in a window inside `host`, rather than on `host`
+/// itself or outside it.
+#[cfg(feature = "native-composition")]
+fn keyboard_focus_inside(host: windows::Win32::Foundation::HWND) -> bool {
+    use windows::Win32::UI::{Input::KeyboardAndMouse::GetFocus, WindowsAndMessaging::IsChild};
+    // SAFETY: Reads the calling UI thread's own focus window.
+    let focus = unsafe { GetFocus() };
+    // SAFETY: A pure window-relationship query on handles of this thread's windows.
+    !focus.is_invalid() && focus != host && unsafe { IsChild(host, focus) }.as_bool()
+}

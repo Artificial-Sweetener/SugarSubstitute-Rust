@@ -18,7 +18,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/windows_thread_target_tests.rs"
-source_sha256 = "sha256:adaabeca0a2ffff5b5e0cade7adc74ca47827c1ddfe37fbbd987024002809b6b"
+source_sha256 = "sha256:1d949de5c7f92ea48aad43868624d690d77fc71d9300cc8ab65b439795b27fb4"
 kind = "fixture"
 rationale = "Behavioral fixture creates one untitled message-only window to prove a cross-thread sent WM_PAINT never reaches an event-loop window; it shows nothing and grants no production text route."
 

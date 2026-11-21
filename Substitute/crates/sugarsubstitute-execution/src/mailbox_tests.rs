@@ -241,3 +241,37 @@ fn mailbox_native_projection_stops_at_original_opaque_cause_without_callbacks_or
     assert_eq!(callbacks.load(Ordering::SeqCst), 0);
     Ok(())
 }
+
+/// A wake whose target is gone: every call fails, as a closed event loop's proxy does.
+#[derive(Default)]
+struct ClosedWake {
+    calls: std::sync::atomic::AtomicU64,
+}
+impl CompletionWake for ClosedWake {
+    fn wake(&self) -> Result<(), ExecutionError> {
+        self.calls.fetch_add(1, Ordering::AcqRel);
+        Err(crate::runtime::error(std::io::Error::other("event loop closed")))
+    }
+}
+
+#[test]
+fn a_dead_wake_target_is_tried_once_and_reported_once() -> TestResult {
+    let wake = Arc::new(ClosedWake::default());
+    let mailbox = Mailbox::new(wake.clone());
+    for id in 1..=40 {
+        if mailbox.enqueue(CompletionNotification {
+            scope_id: ScopeId::new(1)?,
+            job_id: JobId::new(id)?,
+            kind: TerminalKind::Success,
+            replacement: None,
+        }) {
+            mailbox.deliver_wake();
+        }
+        mailbox.deliver_wake();
+    }
+    assert_eq!(wake.calls.load(Ordering::Acquire), 1);
+    let failure = mailbox.take_failure().ok_or("The first failure was lost")?;
+    assert!(failure.to_string().contains("event loop closed"));
+    assert!(mailbox.take_failure().is_none());
+    Ok(())
+}

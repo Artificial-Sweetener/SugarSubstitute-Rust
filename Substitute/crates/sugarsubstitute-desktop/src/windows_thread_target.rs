@@ -19,7 +19,8 @@ use windows::Win32::{
     UI::{
         Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass},
         WindowsAndMessaging::{
-            EnumThreadWindows, GetClassNameW, ISMEX_NOSEND, InSendMessageEx, WM_NCDESTROY, WM_PAINT,
+            EnumThreadWindows, GetClassNameW, ISMEX_NOSEND, InSendMessageEx, WM_CLOSE,
+            WM_NCDESTROY, WM_PAINT,
         },
     },
 };
@@ -58,6 +59,18 @@ fn sent_paint(message: u32, send: u32) -> bool {
     message == WM_PAINT && send != ISMEX_NOSEND
 }
 
+/// Whether `message` would close the thread target window from outside.
+///
+/// The window is a visible, unowned top-level window, so a program that closes a process's main
+/// windows (`Process.CloseMainWindow`, an "end task" tool, the Restart Manager) picks it and posts
+/// WM_CLOSE. Tao does not answer it, so the default handler destroys the window, and with it the
+/// target every `EventLoopProxy` wake is posted to: each later completion wake fails, a coordinator
+/// stops answering and is ended by its custodian, and a custody helper spins on wakes it can never
+/// deliver. Tao closes its loop by destroying the window itself, never through WM_CLOSE.
+fn closes_target(message: u32) -> bool {
+    message == WM_CLOSE
+}
+
 unsafe extern "system" fn procedure(
     hwnd: HWND,
     message: u32,
@@ -70,6 +83,13 @@ unsafe extern "system" fn procedure(
     if sent_paint(message, unsafe { InSendMessageEx(None) }) {
         // SAFETY: Validating this thread's own window has no other effect.
         let _ = unsafe { ValidateRect(Some(hwnd), None) };
+        return LRESULT(0);
+    }
+    if closes_target(message) {
+        tracing::info!(
+            operation = "thread_target_close_refused",
+            "A request to close the event loop's target window was refused"
+        );
         return LRESULT(0);
     }
     if message == WM_NCDESTROY {

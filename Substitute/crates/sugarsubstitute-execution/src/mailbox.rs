@@ -31,6 +31,9 @@ pub(crate) struct Mailbox {
     pub(crate) notify: Arc<tokio::sync::Notify>,
     suppressed_thread: Mutex<Option<std::thread::ThreadId>>,
     deferred_wake: std::sync::atomic::AtomicBool,
+    /// Set once a wake failed: its target (the owner's event loop) is gone for good, so later
+    /// completions are not offered to it again, each one failing and logging in turn.
+    wake_closed: std::sync::atomic::AtomicBool,
 }
 
 impl Mailbox {
@@ -46,6 +49,7 @@ impl Mailbox {
             notify: Arc::new(tokio::sync::Notify::new()),
             suppressed_thread: Mutex::new(None),
             deferred_wake: std::sync::atomic::AtomicBool::new(false),
+            wake_closed: std::sync::atomic::AtomicBool::new(false),
         }
     }
 
@@ -71,6 +75,10 @@ impl Mailbox {
     }
 
     pub(crate) fn deliver_wake(&self) {
+        if self.wake_closed.load(std::sync::atomic::Ordering::Acquire) {
+            lock(&self.pending).wake_pending = false;
+            return;
+        }
         if lock(&self.suppressed_thread).is_some_and(|thread| thread == std::thread::current().id())
         {
             self.deferred_wake.store(true, std::sync::atomic::Ordering::Release);
@@ -87,9 +95,13 @@ impl Mailbox {
             )),
         };
         if let Err(error) = result {
-            tracing::error!(operation = ?error.operation(), "Completion wake failed");
             lock(&self.pending).wake_pending = false;
-            self.record_failure(error);
+            // The first failure is the owner's to see; the target does not come back, so later
+            // wakes are dropped here instead of failing, logging and recording one by one.
+            if !self.wake_closed.swap(true, std::sync::atomic::Ordering::AcqRel) {
+                tracing::error!(operation = ?error.operation(), "Completion wake failed");
+                self.record_failure(error);
+            }
         }
     }
     #[cfg(any(windows, test))]

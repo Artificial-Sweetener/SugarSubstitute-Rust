@@ -264,8 +264,12 @@ impl Lifetime {
             }
             Ok(())
         };
-        if let Some(source) = &self.source {
-            self.until = source.retirement_until().or_else(|| source.recovery_retirement_until());
+        // A source without a retirement cutoff of its own keeps the one already set: replacing it
+        // with none would leave a helper whose coordinator is gone with no bound on its exit.
+        if let Some(until) = self.source.as_ref().and_then(|source| {
+            source.retirement_until().or_else(|| source.recovery_retirement_until())
+        }) {
+            self.until = Some(until);
         }
         if self.source.as_ref().is_none_or(|source| !source.recovery_capture_pending())
             && let (Some(execution), Some(until)) = (&mut self.execution, self.until)

@@ -53,3 +53,47 @@ pub(crate) fn admits_url(origin: LoopbackOrigin, value: &str) -> bool {
         parsed.scheme() == "http" && parsed.username().is_empty() && parsed.password().is_none()
     })
 }
+
+/// The page's own request for a browser permission, as WebView2 reports it.
+#[cfg(any(target_os = "windows", test))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum PermissionRequest {
+    /// Reading the clipboard, which the prompt editor's menu Paste needs.
+    ClipboardRead,
+    /// Any other device or capability: camera, microphone, location, notifications and the rest.
+    Other,
+}
+
+/// Whether the browser may grant `request` to the page at `uri`.
+///
+/// Only a clipboard read is ever allowed, only for the application's own page, and only when the
+/// person asked for it (a menu Paste); every other permission, and any request from another
+/// origin or without a gesture, stays denied as before.
+#[cfg(any(target_os = "windows", test))]
+pub(crate) fn admits_permission(
+    origin: LoopbackOrigin,
+    request: PermissionRequest,
+    uri: &str,
+    user_initiated: bool,
+) -> bool {
+    request == PermissionRequest::ClipboardRead && user_initiated && admits_url(origin, uri)
+}
+
+#[cfg(test)]
+mod permission_tests {
+    use super::*;
+
+    #[test]
+    fn only_a_requested_clipboard_read_from_the_application_page_is_admitted()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let origin = LoopbackOrigin::parse("http://127.0.0.1:8188/", 8188)?;
+        let page = "http://127.0.0.1:8188/?sc-panel-host=x";
+        let clipboard = PermissionRequest::ClipboardRead;
+        assert!(admits_permission(origin, clipboard, page, true));
+        assert!(!admits_permission(origin, clipboard, page, false));
+        assert!(!admits_permission(origin, PermissionRequest::Other, page, true));
+        assert!(!admits_permission(origin, clipboard, "https://example.com/", true));
+        assert!(!admits_permission(origin, clipboard, "http://127.0.0.1:9999/", true));
+        Ok(())
+    }
+}
