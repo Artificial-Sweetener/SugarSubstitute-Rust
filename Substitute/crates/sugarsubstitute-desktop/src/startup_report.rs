@@ -8,7 +8,8 @@ use crate::{
     installer::native::{FormOwner, HostedForm},
     native_action::{FormAction, FormScope},
     report::surface::{
-        ConflictReport, ReportPresentation, UpdateExport, UpdateReport, lifetime::ReportLifetime,
+        ConflictReport, ReportPresentation, StartupErrorReport, UpdateExport, UpdateReport,
+        lifetime::ReportLifetime,
     },
 };
 use tao::{event::WindowEvent, window::WindowId};
@@ -114,6 +115,57 @@ pub(super) fn open_backend_conflict(
             session.picker = Some(picker);
             tracing::error!(operation = "open_backend_conflict", cause = %cause,
                 "The backend conflict question could not open");
+        }
+    }
+    Ok(())
+}
+
+/// Open the dialog for a failed start retrying by itself cannot fix over the splash, when the
+/// application has one to ask and no report is open. The dialog records Retry or Close in the
+/// question's answer; the application acts on it.
+pub(super) fn open_startup_error(
+    session: &mut Session,
+    content: &mut impl StartupWindowContent,
+    target: &EventLoopWindowTarget<NativeAction>,
+    proxy: EventLoopProxy<NativeAction>,
+    title: &str,
+) -> Result<(), DesktopError> {
+    if session.report.is_some() || session.closing || session.main.is_some() {
+        return Ok(());
+    }
+    let Some(window) = session.splash.window.as_ref() else {
+        return Ok(());
+    };
+    let Some(picker) = session.picker.take() else {
+        return Ok(());
+    };
+    let Some(question) = content.take_startup_error() else {
+        session.picker = Some(picker);
+        return Ok(());
+    };
+    use tao::platform::windows::WindowExtWindows;
+    let owner = FormOwner(::windows::Win32::Foundation::HWND(window.hwnd() as *mut _));
+    let copy = content.locale_messages();
+    let presentation = ReportPresentation::startup_error(copy, title, &question);
+    let opened =
+        ReportLifetime::new(presentation, StartupErrorReport::new(question.answer.clone()))
+            .and_then(|lifetime| {
+                let window = crate::report::surface::report_window(title.to_owned());
+                HostedForm::open(target, proxy, picker.clone(), Some(owner), window, lifetime)
+            });
+    match opened {
+        Ok(report) => {
+            tracing::info!(
+                operation = "startup_error_dialog_opened",
+                "The startup error dialog opened over the splash"
+            );
+            session.report = Some(report);
+            session.report_over_splash = true;
+        }
+        Err(cause) => {
+            session.picker = Some(picker);
+            tracing::error!(operation = "open_startup_error", cause = %cause,
+                "The startup error dialog could not open");
         }
     }
     Ok(())

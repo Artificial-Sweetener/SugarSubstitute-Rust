@@ -276,7 +276,7 @@ fn failed_successor_is_retrying_until_its_own_cleanup_and_cause_transfer() -> Te
             ),
         },
     )?;
-    assert_eq!(failure.replies[0].outcome, RequestOutcome::Failed);
+    assert!(matches!(failure.replies[0].outcome, RequestOutcome::Failed(_)));
     assert!(failure.invalidations.is_empty());
     assert_eq!(coordinator.invalidated_lease(binding(1)?, old)?, InvalidatedLeaseState::Retrying);
     assert_eq!(

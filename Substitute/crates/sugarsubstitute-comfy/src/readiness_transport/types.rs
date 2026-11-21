@@ -2,7 +2,10 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Bind expected native sources and listener authority independently of response metadata.
 use std::{error::Error, fmt, sync::Arc};
-use sugarsubstitute_contracts::{configuration::LaunchConfiguration, lifecycle::ResourceKey};
+use sugarsubstitute_contracts::{
+    configuration::LaunchConfiguration,
+    lifecycle::{LifecycleFailureCode, ResourceKey},
+};
 use sugarsubstitute_supervision::{
     backend_listener::{AttachedListenerLease, BackendPeerIdentity, ManagedListenerLease},
     installed_frontend::InstalledFrontendLease,
@@ -215,6 +218,26 @@ impl ReadinessTransportError {
     /// Return the failure owner's stored decision without inspecting text or the cause chain.
     pub const fn retry_disposition(&self) -> ProbeRetryDisposition {
         self.disposition
+    }
+    /// The bounded reason this failure gives the person waiting for the backend, when it has
+    /// one: nothing answered, the backend serves another frontend version, or it serves no
+    /// SugarCubes.
+    pub fn lifecycle_code(&self) -> Option<LifecycleFailureCode> {
+        if self.disposition == ProbeRetryDisposition::TransientConnectionUnavailable {
+            return Some(LifecycleFailureCode::BackendUnreachable);
+        }
+        if self.stage != "served_metadata" {
+            return None;
+        }
+        match self.cause.downcast_ref::<crate::readiness::ReadinessError>() {
+            Some(crate::readiness::ReadinessError::FrontendMismatch) => {
+                Some(LifecycleFailureCode::FrontendMismatch)
+            }
+            Some(crate::readiness::ReadinessError::MissingExtension) => {
+                Some(LifecycleFailureCode::SugarCubesMissing)
+            }
+            _ => None,
+        }
     }
 }
 impl fmt::Display for ReadinessTransportError {

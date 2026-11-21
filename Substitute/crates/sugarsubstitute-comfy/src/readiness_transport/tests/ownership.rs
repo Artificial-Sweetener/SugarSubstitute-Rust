@@ -143,7 +143,7 @@ fn delivery_after_original_effective_deadline_rejects_actual_success_without_new
             "/system_stats",
             "/extensions",
             "/index.html",
-            "/extensions/SugarCubes/main.js",
+            // An attached ComfyUI's own SugarCubes file is not compared.
             "/system_stats",
             "/extensions",
         ]

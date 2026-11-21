@@ -10,6 +10,7 @@ use crate::readiness_transport::{
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
+use sugarsubstitute_contracts::lifecycle::LifecycleFailureCode;
 struct Boundary {
     responses: BTreeMap<String, Vec<u8>>,
     calls: Vec<String>,
@@ -161,4 +162,45 @@ fn managed_response_requires_full_effective_argv_while_attachment_does_not() -> 
     );
     assert_eq!(boundary.calls.len(), 2);
     Ok(())
+}
+#[test]
+fn an_attached_comfyui_may_serve_its_own_sugarcubes_build() -> TestResult {
+    let mut boundary = boundary()?;
+    boundary.responses.insert(
+        "/extensions".into(),
+        br#"["/extensions/SugarCubes/chunk-NEWER.js","/extensions/other/x.js"]"#.to_vec(),
+    );
+    metadata(&mut boundary, "1.47.11", "0.15.0", &["/extensions/SugarCubes/main.js".into()], None)?;
+    Ok(())
+}
+#[test]
+fn an_attached_comfyui_without_sugarcubes_or_with_another_frontend_is_refused() -> TestResult {
+    let mut without = boundary()?;
+    without.responses.insert("/extensions".into(), br#"["/extensions/other/x.js"]"#.to_vec());
+    let error = metadata(
+        &mut without,
+        "1.47.11",
+        "0.15.0",
+        &["/extensions/SugarCubes/main.js".into()],
+        None,
+    )
+    .err()
+    .ok_or("An attached ComfyUI without SugarCubes was admitted")?;
+    assert_eq!(error.stage(), "served_metadata");
+    assert_eq!(error.lifecycle_code(), Some(LifecycleFailureCode::SugarCubesMissing));
+    let mut other = boundary()?;
+    let error =
+        metadata(&mut other, "1.48.0", "0.15.0", &["/extensions/SugarCubes/main.js".into()], None)
+            .err()
+            .ok_or("An attached ComfyUI with another frontend was admitted")?;
+    assert_eq!(error.stage(), "served_metadata");
+    assert_eq!(error.lifecycle_code(), Some(LifecycleFailureCode::FrontendMismatch));
+    Ok(())
+}
+#[test]
+fn a_refused_connection_reads_as_an_unreachable_backend_and_other_failures_keep_no_reason() {
+    let refused =
+        ReadinessTransportError::unavailable("http_connect", std::io::Error::other("refused"));
+    assert_eq!(refused.lifecycle_code(), Some(LifecycleFailureCode::BackendUnreachable));
+    assert_eq!(ReadinessTransportError::invalid("http_header_shape").lifecycle_code(), None);
 }

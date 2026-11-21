@@ -13,6 +13,12 @@ pub enum LifecycleFailureCode {
     UnexpectedExit,
     /// The one transaction's absolute deadline elapsed before settlement.
     Deadline,
+    /// Preparation failed because no backend answered at its address.
+    BackendUnreachable,
+    /// Preparation failed because the backend serves another ComfyUI frontend version.
+    FrontendMismatch,
+    /// Preparation failed because the backend does not serve SugarCubes.
+    SugarCubesMissing,
 }
 /// Own an original typed cause; ordinary formatting remains redacted.
 pub struct LifecycleFailure {

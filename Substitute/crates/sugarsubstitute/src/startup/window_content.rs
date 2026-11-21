@@ -83,6 +83,39 @@ impl<B: StartupBackend> StartupWindowContent for StartupHost<B> {
         self.offered_backend_port()
     }
 
+    /// Offer, once per failed start, a failure retrying by itself cannot fix or did not fix in
+    /// five tries: what failed and what to do about it, with Retry and Close.
+    #[cfg(windows)]
+    fn take_startup_error(
+        &mut self,
+    ) -> Option<sugarsubstitute_contracts::startup::StartupErrorQuestion> {
+        use sugarsubstitute_contracts::startup::{
+            StartupErrorAnswer, StartupErrorQuestion, StartupFailureCode,
+        };
+        if self.startup_error.is_some() || self.closing {
+            return None;
+        }
+        let view = self.view.as_ref().filter(|view| view.asks_about_failure())?;
+        let words = self.locale_messages().startup_failures;
+        let message = match (view.appearance.status, view.appearance.failure) {
+            (sugarsubstitute_splash::StartupStatus::SugarcubesOutdated, _) => {
+                words.sugarcubes_outdated_help
+            }
+            (_, Some(StartupFailureCode::FrontendMismatch)) => words.frontend_mismatch_help,
+            (_, Some(StartupFailureCode::SugarCubesMissing)) => words.sugarcubes_missing_help,
+            _ => words.retries_exhausted_help,
+        };
+        let answer = StartupErrorAnswer::default();
+        self.startup_error = Some(answer.clone());
+        Some(StartupErrorQuestion {
+            title: words.dialog_title,
+            message,
+            retry: words.dialog_retry,
+            close: words.dialog_close,
+            answer,
+        })
+    }
+
     /// A writer of the update report the window shows, its latest failed attempt and its
     /// SugarCubes update, that writes on this host's execution owner. Export stays hidden before execution starts,
     /// once the application is closing, and in a host composed without export scopes.

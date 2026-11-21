@@ -31,11 +31,12 @@ fn all_1359_assets_qualify_across_timely_steps_with_one_original_claim() -> Test
         .iter()
         .filter(|path| !matches!(path.as_str(), "/system_stats" | "/extensions"))
         .collect::<Vec<_>>();
-    assert_eq!(assets.len(), 1359);
+    // An attached ComfyUI's own SugarCubes file is not compared: one body fewer than the manifest.
+    assert_eq!(assets.len(), 1358);
     let unique = assets.iter().copied().collect::<std::collections::BTreeSet<_>>();
-    assert_eq!(unique.len(), 1359);
+    assert_eq!(unique.len(), 1358);
     assert_eq!(requests[requests.len() - 2..], ["/system_stats", "/extensions"]);
-    assert_eq!(requests.len(), 1363);
+    assert_eq!(requests.len(), 1362);
     drop(requests);
     assert!(harness.now().as_nanos() > 2_000_000_000);
     assert_eq!(harness.campaign.budget.until(), Moment::from_nanos(30_000_000_000));
@@ -81,7 +82,8 @@ fn timeout_cannot_commit_a_continuation_or_publish_readiness() -> TestResult {
     assert!(harness.campaign.take_readiness().is_none());
     assert!(!harness.campaign.needs_continuation(harness.now())?);
     let requests = fixture.requests.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    assert_eq!(&requests[before..], ["/assets/64.bin"]);
+    // An attached ComfyUI's own SugarCubes file is not compared: one body fewer than the manifest.
+    assert_eq!(&requests[before..], ["/assets/65.bin"]);
     drop(requests);
     harness.finish()
 }
@@ -161,7 +163,8 @@ fn slow_asset_responses_yield_with_original_one_second_retirement_headroom() -> 
     assert_eq!(harness.completion()?, CampaignStep::NeedsContinuation);
     assert!(harness.campaign.take_readiness().is_none());
     let before = fixture.requests.lock().unwrap_or_else(std::sync::PoisonError::into_inner).len();
-    assert_eq!(before, 66);
+    // An attached ComfyUI's own SugarCubes file is not compared: one body fewer than the manifest.
+    assert_eq!(before, 65);
     harness.continue_probe()?;
     assert_eq!(harness.completion()?, CampaignStep::Ready);
     let requests = fixture.requests.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -170,7 +173,8 @@ fn slow_asset_responses_yield_with_original_one_second_retirement_headroom() -> 
     let proof = harness.campaign.take_readiness().ok_or("Missing confirmed yielded cohort")?;
     assert_eq!(proof.source().manifest().assets().len(), 64);
     proof.validate_current()?;
-    assert_eq!(harness.now(), Moment::from_nanos(2_040_000_000));
+    // One 30 ms body fewer: the attached ComfyUI's own SugarCubes file is not compared.
+    assert_eq!(harness.now(), Moment::from_nanos(2_010_000_000));
     drop(proof);
     harness.finish()
 }
@@ -187,7 +191,8 @@ fn final_metadata_change_rejects_the_complete_pinned_cohort() -> TestResult {
         assert!(harness.campaign.take_readiness().is_none());
     }
     let before = fixture.requests.lock().unwrap_or_else(std::sync::PoisonError::into_inner).len();
-    assert_eq!(before, 134);
+    // An attached ComfyUI's own SugarCubes file is not compared: one body fewer than the manifest.
+    assert_eq!(before, 133);
     harness.continue_probe()?;
     assert_eq!(harness.completion()?, CampaignStep::Failed);
     let requests = fixture.requests.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -211,7 +216,8 @@ fn single_phase_cohort_confirms_current_metadata_after_all_asset_bodies() -> Tes
     fixture.release();
     assert_eq!(harness.completion()?, CampaignStep::Failed);
     let requests = fixture.requests.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-    assert_eq!(requests.len(), 67);
+    // An attached ComfyUI's own SugarCubes file is not compared: one body fewer than the manifest.
+    assert_eq!(requests.len(), 66);
     assert_eq!(&requests[..2], ["/system_stats", "/extensions"]);
     assert_eq!(requests.last().map(String::as_str), Some("/system_stats"));
     drop(requests);
@@ -292,7 +298,8 @@ fn final_metadata_only_phase_can_finish_below_asset_headroom() -> TestResult {
     h.continue_probe()?;
     assert_eq!(h.completion()?, CampaignStep::NeedsContinuation);
     let before = external.requests.lock().unwrap_or_else(std::sync::PoisonError::into_inner).len();
-    assert_eq!(before, 130);
+    // An attached ComfyUI's own SugarCubes file is not compared: one body fewer than the manifest.
+    assert_eq!(before, 129);
     h.set_time(29_500_000_000);
     assert!(h.campaign.needs_continuation(h.now())?);
     h.continue_probe()?;

@@ -19,7 +19,13 @@ fn run(instance: u64) -> Result<RunKey> {
 fn transition(a: RunKey, b: RunKey) -> Result<ResourceTransition> {
     Ok(ResourceTransition {
         replies: vec![
-            ResourceReply { run: a, request: RequestId::new(1)?, outcome: RequestOutcome::Failed },
+            ResourceReply {
+                run: a,
+                request: RequestId::new(1)?,
+                outcome: RequestOutcome::Failed(
+                    sugarsubstitute_contracts::lifecycle::LifecycleFailureCode::Preparation,
+                ),
+            },
             ResourceReply {
                 run: b,
                 request: RequestId::new(2)?,

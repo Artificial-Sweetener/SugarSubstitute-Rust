@@ -11,13 +11,13 @@ impl LaunchEnvironment {
     /// desktop child names every folder it writes explicitly: its browser profile, input-canvas
     /// archives and diagnostics live under the installation's `user\` folder. Inherited WebView2
     /// data-folder and browser-argument overrides are removed, so they cannot move the browser
-    /// profile; a qualification build keeps a lone remote-debugging port so a proof can drive
-    /// the page. Processes that need confined storage, such as an installation-owned ComfyUI,
-    /// receive it from [`Self::for_local_storage`].
+    /// profile or change how it runs; the desktop opens DevTools on its own loopback port.
+    /// Processes that need confined storage, such as an installation-owned ComfyUI, receive it
+    /// from [`Self::for_local_storage`].
     /// # Errors
     /// Preserves malformed snapshot, ordinal, allocation and bound causes.
     pub fn for_desktop(snapshot: &[u16]) -> Result<Self, LaunchEnvironmentError> {
-        let names = super::storage::removed_browser_overrides(snapshot)
+        let names = super::storage::REMOVED_BROWSER_OVERRIDES
             .iter()
             .map(|name| name.encode_utf16().collect::<Vec<_>>())
             .collect::<Vec<_>>();

@@ -141,6 +141,15 @@ impl SessionFailure {
             Self::Frontend(_) | Self::Adapter(_) => PageFailure::Unattributed,
         }
     }
+
+    /// The adapter's bounded classification, which names the reason on the splash; a frontend
+    /// failure has its own classification and names none.
+    pub fn startup_code(&self) -> Option<sugarsubstitute_contracts::startup::StartupFailureCode> {
+        match self {
+            Self::Adapter(failure) => Some(failure.code()),
+            Self::Frontend(_) => None,
+        }
+    }
 }
 
 impl fmt::Display for SessionFailure {

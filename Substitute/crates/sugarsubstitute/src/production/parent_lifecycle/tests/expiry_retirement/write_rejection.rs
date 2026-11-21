@@ -300,11 +300,12 @@ fn no_issue_cutoff_classifier_keeps_foreign_changed_other_deadline_and_closed_st
     for fault in 0..6 {
         let (mut parent, h, lease, _) = pending()?;
         let index = parent.requests.find(h.request.ok_or("Original")?).ok_or("Slot")?;
-        parent
-            .acquisition
-            .as_mut()
-            .ok_or("Original")?
-            .observe_backend(h, RequestOutcome::Failed)?;
+        parent.acquisition.as_mut().ok_or("Original")?.observe_backend(
+            h,
+            RequestOutcome::Failed(
+                sugarsubstitute_contracts::lifecycle::LifecycleFailureCode::Preparation,
+            ),
+        )?;
         parent
             .acquisition
             .as_mut()

@@ -133,8 +133,8 @@ impl MainActor {
                     WebContext::new(Some(self.request()?.profile_directory().to_owned()));
                 let captured = proxy;
                 let builder = main_webview_builder(&mut context, self.browser_bounds()?);
-                // DevTools must be enabled for the browser to open the remote-debugging port
-                // its environment names.
+                // DevTools is on in every launch: F12 opens it, and the browser serves it on
+                // its loopback remote-debugging port.
                 let builder = builder.with_devtools(true);
                 // A windowed rebuild reuses the environment the parent already authorized.
                 #[cfg(feature = "native-composition")]
@@ -390,17 +390,20 @@ impl MainActor {
     }
 }
 
+/// The browser argument that opens DevTools on its fixed loopback port in every launch.
+pub(crate) const MAIN_DEVTOOLS_ARGUMENT: &str = "--remote-debugging-port=9333";
+
 /// The main browser as owned construction admits it: hidden, unfocused, transparent, blank,
-/// without download or other generic handlers. Owned construction refuses any wry callback
-/// handler; the desktop's own receivers observe browser events once the browser exists, new
-/// windows included.
+/// serving DevTools on its loopback port, without download or other generic handlers. Owned
+/// construction refuses any wry callback handler; the desktop's own receivers observe browser
+/// events once the browser exists, new windows included.
 fn main_webview_builder(context: &mut WebContext, bounds: wry::Rect) -> WebViewBuilder<'_> {
     WebViewBuilder::new_with_web_context(context)
         .with_url("about:blank")
         .with_visible(false)
         .with_focused(false)
         .with_transparent(true)
-        .with_additional_browser_args("")
+        .with_additional_browser_args(MAIN_DEVTOOLS_ARGUMENT)
         .without_download_handlers()
         .with_bounds(bounds)
 }

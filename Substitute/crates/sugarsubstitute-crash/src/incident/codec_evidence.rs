@@ -27,7 +27,16 @@ macro_rules! enum_record {
 enum_record!(
     StartupRecord,
     StartupFailureCode,
-    [ConnectionPreparation, ConnectionUnavailable, ProcessExited, TimedOut, Presentation]
+    [
+        ConnectionPreparation,
+        ConnectionUnavailable,
+        ProcessExited,
+        TimedOut,
+        Presentation,
+        BackendUnreachable,
+        FrontendMismatch,
+        SugarCubesMissing
+    ]
 );
 enum_record!(
     AbsenceRecord,

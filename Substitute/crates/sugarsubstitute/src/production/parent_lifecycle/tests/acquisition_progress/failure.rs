@@ -55,7 +55,7 @@ fn genuine_preparation_cause_survives_nonfinal_output_reservation_failure() -> R
         .iter()
         .find(|reply| Some(reply.request) == h.request)
         .ok_or("Original failure missing")?;
-    assert_eq!(original.outcome, RequestOutcome::Failed);
+    assert!(matches!(original.outcome, RequestOutcome::Failed(_)));
     let acq = parent.acquisition.as_mut().ok_or("Original missing")?;
     acq.observe_backend(h, original.outcome)?;
     acq.reply(h, Reply::Failed(LifecycleFailureCode::Preparation))?;

@@ -91,6 +91,9 @@ pub(super) const fn failure_tag(code: LifecycleFailureCode) -> u8 {
         LifecycleFailureCode::Cleanup => 2,
         LifecycleFailureCode::UnexpectedExit => 3,
         LifecycleFailureCode::Deadline => 4,
+        LifecycleFailureCode::BackendUnreachable => 5,
+        LifecycleFailureCode::FrontendMismatch => 6,
+        LifecycleFailureCode::SugarCubesMissing => 7,
     }
 }
 pub(super) fn failure(tag: u8) -> Result<LifecycleFailureCode, ProtocolError> {
@@ -99,6 +102,9 @@ pub(super) fn failure(tag: u8) -> Result<LifecycleFailureCode, ProtocolError> {
         2 => Ok(LifecycleFailureCode::Cleanup),
         3 => Ok(LifecycleFailureCode::UnexpectedExit),
         4 => Ok(LifecycleFailureCode::Deadline),
+        5 => Ok(LifecycleFailureCode::BackendUnreachable),
+        6 => Ok(LifecycleFailureCode::FrontendMismatch),
+        7 => Ok(LifecycleFailureCode::SugarCubesMissing),
         _ => Err(ProtocolError::UnsupportedTag),
     }
 }

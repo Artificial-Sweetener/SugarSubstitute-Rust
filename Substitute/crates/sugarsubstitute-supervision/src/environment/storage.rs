@@ -72,7 +72,7 @@ impl LaunchEnvironment {
             .collect::<Vec<_>>();
         let pip_log_name = "PIP_LOG".encode_utf16().collect::<Vec<_>>();
         changes.push(EnvironmentOverride::Set { name: &pip_log_name, value: &pip_log });
-        let browser_names = removed_browser_overrides(snapshot)
+        let browser_names = REMOVED_BROWSER_OVERRIDES
             .iter()
             .map(|name| name.encode_utf16().collect::<Vec<_>>())
             .collect::<Vec<_>>();
@@ -82,55 +82,6 @@ impl LaunchEnvironment {
 }
 
 /// The inherited WebView2 overrides a child's environment drops, so they cannot move the
-/// browser profile or change how the browser runs.
-pub(super) fn removed_browser_overrides(snapshot: &[u16]) -> &'static [&'static str] {
-    if debugging_port_only(snapshot) {
-        return &["WEBVIEW2_USER_DATA_FOLDER"];
-    }
-    &["WEBVIEW2_USER_DATA_FOLDER", "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"]
-}
-
-/// The embedded page can be driven and read over a loopback DevTools port, so an inherited
-/// browser argument that is exactly one remote-debugging port reaches the desktop child. Any
-/// other value is removed.
-fn debugging_port_only(snapshot: &[u16]) -> bool {
-    String::from_utf16_lossy(snapshot).split('\0').any(|entry| {
-        entry.split_once('=').is_some_and(|(name, value)| {
-            name.eq_ignore_ascii_case("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS")
-                && value.strip_prefix("--remote-debugging-port=").is_some_and(|port| {
-                    (1..=5).contains(&port.len()) && port.bytes().all(|byte| byte.is_ascii_digit())
-                })
-        })
-    })
-}
-
-#[cfg(test)]
-mod debugging_port_tests {
-    use super::debugging_port_only;
-
-    fn block(entries: &[&str]) -> Vec<u16> {
-        let mut units = Vec::new();
-        for entry in entries {
-            units.extend(entry.encode_utf16());
-            units.push(0);
-        }
-        units.push(0);
-        units
-    }
-
-    #[test]
-    fn only_a_single_debugging_port_reaches_the_page() {
-        assert!(debugging_port_only(&block(&[
-            r"PATH=C:\Windows",
-            "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333",
-        ])));
-        for refused in [
-            r"WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--log-file=C:\outside.log",
-            "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333 --log-file=x",
-            "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=",
-            "OTHER=--remote-debugging-port=9333",
-        ] {
-            assert!(!debugging_port_only(&block(&[refused])), "{refused}");
-        }
-    }
-}
+/// browser profile or change how the browser runs. The desktop opens DevTools itself.
+pub(super) const REMOVED_BROWSER_OVERRIDES: [&str; 2] =
+    ["WEBVIEW2_USER_DATA_FOLDER", "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"];

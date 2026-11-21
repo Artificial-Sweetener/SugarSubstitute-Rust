@@ -86,11 +86,31 @@ fn owned_private_profile_admits_only_the_reviewed_cache_limit_argument() -> Resu
   assert!(owned_config::Config::new(attrs(&mut context), private, true, true).is_ok());
   for (exclusive, arguments) in [(false, "--disk-cache-size=33554432"),
     (true, "--disk-cache-size=33554433"), (true, "--disable-web-security"),
-    (true, "--disk-cache-size=33554432 --disable-web-security")] {
+    (true, "--disk-cache-size=33554432 --disable-web-security"),
+    (false, "--disk-cache-size=33554432 --remote-debugging-port=9333"),
+    (true, "--remote-debugging-port=9333 --disk-cache-size=33554432"),
+    (true, "--disk-cache-size=33554432 --remote-debugging-port=9333 --log-file=x"),
+    (false, "--remote-debugging-port=0"), (false, "--remote-debugging-port=70000"),
+    (false, "--remote-debugging-port="), (false, "--remote-debugging-port=93a3"),
+    (false, "--remote-debugging-port=9333 --disable-web-security")] {
     let mut private = platform();
     private.exclusive_user_data_folder_access = exclusive;
     private.additional_browser_args = Some(arguments.into());
     assert!(owned_config::Config::new(attrs(&mut context), private, true, true).is_err());
+  }
+  Ok(())
+}
+
+#[test]
+fn owned_construction_admits_a_lone_devtools_port_with_or_without_the_cache_limit() -> Result<()> {
+  let mut context = context();
+  for (exclusive, arguments) in [(false, "--remote-debugging-port=9333"),
+    (true, "--remote-debugging-port=9333"),
+    (true, "--disk-cache-size=33554432 --remote-debugging-port=9333")] {
+    let mut private = platform();
+    private.exclusive_user_data_folder_access = exclusive;
+    private.additional_browser_args = Some(arguments.into());
+    owned_config::Config::new(attrs(&mut context), private, true, true)?;
   }
   Ok(())
 }

@@ -65,6 +65,18 @@ impl Requests for BoundRequests<'_> {
         self.port.get(self.state, self.input, endpoint, self.context, consume)
     }
 }
+/// The installed files compared byte for byte with what the backend serves. An attached ComfyUI
+/// serves its own SugarCubes build, so only the frontend's files are compared; a managed backend
+/// serves the installation's exact pack, so every file is.
+pub(super) fn compared_assets(
+    input: &ReadinessProbeInput,
+) -> impl Iterator<Item = &sugarsubstitute_supervision::installed_frontend::FrontendAsset> {
+    let attached = matches!(input.listener, Listener::Attached(_, _));
+    input.source.manifest().assets().iter().filter(move |asset| {
+        !attached || !asset.path().starts_with(crate::readiness::SUGARCUBES_EXTENSION_PREFIX)
+    })
+}
+
 pub(super) fn inspect(
     port: &dyn HttpPort,
     state: &mut Transaction,
@@ -72,9 +84,9 @@ pub(super) fn inspect(
     context: &JobContext,
 ) -> Result<(usize, bool), ReadinessTransportError> {
     input.source.validate_live().map_err(|e| ReadinessTransportError::new("expected_source", e))?;
-    let manifest = input.source.manifest();
+    let assets = compared_assets(input).collect::<Vec<_>>();
     let start = state.verified_assets;
-    let total = manifest.assets().len();
+    let total = assets.len();
     if total == 0 || start > total {
         return Err(ReadinessTransportError::invalid("served_empty_or_changed_cohort"));
     }
@@ -86,7 +98,7 @@ pub(super) fn inspect(
         metadata(&mut requests, input)?;
     }
     let mut next = start;
-    for asset in manifest.assets().iter().skip(start).take(ASSETS_PER_STEP) {
+    for asset in assets.iter().skip(start).take(ASSETS_PER_STEP) {
         checkpoint(context)?;
         let now = context.now();
         let until = context

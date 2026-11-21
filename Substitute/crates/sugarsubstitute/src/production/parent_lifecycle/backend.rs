@@ -3,7 +3,7 @@
 //! Preserve each original Acquire until actual backend readiness publishes one final reply.
 use super::{ParentError, ParentLifecycle, ParentResources, Reply, Result};
 use sugarsubstitute_contracts::lifecycle::{
-    ClientBinding, LifecycleFailureCode, RequestOutcome, ResourceRequest, ResourceTransition,
+    ClientBinding, RequestOutcome, ResourceRequest, ResourceTransition,
 };
 
 impl ParentLifecycle {
@@ -277,9 +277,9 @@ impl ParentLifecycle {
                 return self.begin_frontend_refresh(index, identity, lease, until, resources);
             }
             RequestOutcome::Cancelled => Reply::Cancelled,
-            RequestOutcome::Failed => {
+            RequestOutcome::Failed(code) => {
                 self.latch_backend_failure(reply.request)?;
-                Reply::Failed(LifecycleFailureCode::Preparation)
+                Reply::Failed(code)
             }
         };
         tracing::info!(operation="parent_backend_disposition",request=?reply.request,run=?self.run,

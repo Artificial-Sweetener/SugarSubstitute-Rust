@@ -76,7 +76,7 @@ fn later_cleanup_failures_preserve_original_policy_cause_and_original_scope_budg
     let first = Box::new(std::io::Error::from_raw_os_error(122));
     let first_pointer = std::ptr::from_ref(first.as_ref());
     let failed = backend.failed(key, first, &mut resources)?;
-    assert_eq!(failed.replies[0].outcome, RequestOutcome::Failed);
+    assert!(matches!(failed.replies[0].outcome, RequestOutcome::Failed(_)));
     let original = backend.record(key)?.shutdown.ok_or("Actual cleanup budget missing")?;
     assert_eq!(backend.deadlines().min(), Some(original.1.graceful_until));
     assert!(backend.record(key)?.scope.snapshot().cancellation_requested);
@@ -201,7 +201,7 @@ fn late_original_grace_admission_progresses_actual_inert_cleanup_without_another
         assert_eq!(jobs.allocate()?.get(), 1);
         // The actual produced failure remains routed, rather than lost with immediate cleanup.
         let pending = backend.take_pending_transition().ok_or("Actual pending failure absent")?;
-        assert_eq!(pending.replies[0].outcome, RequestOutcome::Failed);
+        assert!(matches!(pending.replies[0].outcome, RequestOutcome::Failed(_)));
         if elapsed >= original.settle_until.as_nanos() {
             assert_eq!(
                 backend

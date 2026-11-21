@@ -29,6 +29,16 @@ impl AcquisitionFailure {
     pub(super) const fn classification(self) -> StartupFailureCode {
         match self {
             Self::Failed(LifecycleFailureCode::Deadline) => StartupFailureCode::TimedOut,
+            Self::Failed(LifecycleFailureCode::BackendUnreachable) => {
+                StartupFailureCode::BackendUnreachable
+            }
+            Self::Failed(LifecycleFailureCode::FrontendMismatch) => {
+                StartupFailureCode::FrontendMismatch
+            }
+            Self::Failed(LifecycleFailureCode::SugarCubesMissing) => {
+                StartupFailureCode::SugarCubesMissing
+            }
+            Self::Failed(LifecycleFailureCode::UnexpectedExit) => StartupFailureCode::ProcessExited,
             Self::Rejected(_) => StartupFailureCode::ConnectionPreparation,
             _ => StartupFailureCode::ConnectionUnavailable,
         }

@@ -15,6 +15,8 @@ pub mod installer;
 pub mod pack_updates;
 /// Localized operation-specific startup feedback.
 pub mod startup;
+/// Localized reasons a start failed.
+pub mod startup_failures;
 pub mod updates;
 /// Localized standalone canvas viewer status.
 pub mod viewer;
@@ -66,10 +68,8 @@ pub struct Messages {
     pub cleanup_pending: &'static str,
     /// Status while failed cleanup retains actual ownership.
     pub cleanup_failed: &'static str,
-    /// Actionable status after genuine cleanup settlement.
-    pub retry_ready: &'static str,
-    /// Accessible retry action.
-    pub retry: &'static str,
+    /// The reason a start failed, shown while the start is retried by itself.
+    pub startup_failures: &'static startup_failures::StartupFailureMessages,
     /// Explain a live profile exclusion conflict and how to open the requested copy.
     pub profile_in_use: &'static str,
     /// Complete native report surface copy.
@@ -104,9 +104,8 @@ pub static LOCALES: &[Messages] = &[
         cancel: "Cancel loading",
         connection_failed: "Connection failed",
         cleanup_pending: "Connection failed. Finishing cleanup...",
-        cleanup_failed: "Cleanup failed. Retry is unavailable",
-        retry_ready: "Connection failed. Retry",
-        retry: "Retry",
+        cleanup_failed: "Cleanup failed. Close SugarSubstitute and start it again",
+        startup_failures: &startup_failures::EN,
         profile_in_use: "Another SugarSubstitute window is still open. Close it, then start SugarSubstitute again.",
         report: &incident::EN,
         conflict: &conflict::EN,
@@ -133,9 +132,8 @@ pub static LOCALES: &[Messages] = &[
         cancel: "取消加载",
         connection_failed: "连接失败",
         cleanup_pending: "连接失败，正在完成清理...",
-        cleanup_failed: "清理失败，无法重试",
-        retry_ready: "连接失败，重试",
-        retry: "重试",
+        cleanup_failed: "清理失败。请关闭 SugarSubstitute 后重新启动",
+        startup_failures: &startup_failures::ZH_HANS,
         profile_in_use: "另一个 SugarSubstitute 窗口仍处于打开状态。请关闭它，然后重新启动 SugarSubstitute。",
         report: &incident::ZH_HANS,
         conflict: &conflict::ZH_HANS,
@@ -162,9 +160,8 @@ pub static LOCALES: &[Messages] = &[
         cancel: "読み込みをキャンセル",
         connection_failed: "接続に失敗しました",
         cleanup_pending: "接続に失敗しました。終了処理中...",
-        cleanup_failed: "終了処理に失敗しました。再試行できません",
-        retry_ready: "接続に失敗しました。再試行",
-        retry: "再試行",
+        cleanup_failed: "終了処理に失敗しました。SugarSubstitute を閉じてからもう一度起動してください",
+        startup_failures: &startup_failures::JA,
         profile_in_use: "別の SugarSubstitute ウィンドウがまだ開いています。それを閉じてから、SugarSubstitute をもう一度起動してください。",
         report: &incident::JA,
         conflict: &conflict::JA,
@@ -191,9 +188,8 @@ pub static LOCALES: &[Messages] = &[
         cancel: "불러오기 취소",
         connection_failed: "연결 실패",
         cleanup_pending: "연결 실패. 정리 중...",
-        cleanup_failed: "정리 실패. 다시 시도할 수 없습니다",
-        retry_ready: "연결 실패. 다시 시도",
-        retry: "다시 시도",
+        cleanup_failed: "정리 실패. SugarSubstitute를 닫은 다음 다시 시작하세요",
+        startup_failures: &startup_failures::KO,
         profile_in_use: "다른 SugarSubstitute 창이 아직 열려 있습니다. 그 창을 닫은 다음 SugarSubstitute를 다시 시작하세요.",
         report: &incident::KO,
         conflict: &conflict::KO,
@@ -220,9 +216,8 @@ pub static LOCALES: &[Messages] = &[
         cancel: "Cancelar la carga",
         connection_failed: "Error de conexión",
         cleanup_pending: "Error de conexión. Finalizando limpieza...",
-        cleanup_failed: "Falló la limpieza. No se puede reintentar",
-        retry_ready: "Error de conexión. Reintentar",
-        retry: "Reintentar",
+        cleanup_failed: "Falló la limpieza. Cierra SugarSubstitute y vuelve a iniciarlo",
+        startup_failures: &startup_failures::ES,
         profile_in_use: "Otra ventana de SugarSubstitute sigue abierta. Ciérrala y vuelve a iniciar SugarSubstitute.",
         report: &incident::ES,
         conflict: &conflict::ES,
@@ -264,8 +259,6 @@ mod tests {
                     locale.connection_failed,
                     locale.cleanup_pending,
                     locale.cleanup_failed,
-                    locale.retry_ready,
-                    locale.retry,
                     locale.profile_in_use
                 ]
                 .into_iter()
@@ -280,6 +273,7 @@ mod tests {
                 .chain(locale.pack_updates.labels())
                 .chain(locale.viewer.labels())
                 .chain(locale.startup.labels())
+                .chain(locale.startup_failures.labels())
                 .all(|text| !text.trim().is_empty() && !text.contains('\0'))
             );
         }

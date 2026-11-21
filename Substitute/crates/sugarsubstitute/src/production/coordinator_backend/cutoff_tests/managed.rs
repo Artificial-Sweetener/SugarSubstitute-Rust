@@ -68,7 +68,7 @@ fn exact_contained_start_alone_admits_live_wait_and_matching_exit_fails_pending_
     assert!(backend.managed_exit_observation(key, process, other, 3).is_err());
     let exited = backend.managed_exit_observation(key, process, process, 3)?;
     assert_eq!(exited.replies.len(), 1);
-    assert_eq!(exited.replies[0].outcome, RequestOutcome::Failed);
+    assert!(matches!(exited.replies[0].outcome, RequestOutcome::Failed(_)));
     assert_eq!(backend.record(key)?.managed_exit, Some((process, 3)));
     assert!(!backend.record(key)?.settled);
     Ok(())

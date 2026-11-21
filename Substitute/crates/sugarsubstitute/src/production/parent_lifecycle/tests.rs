@@ -70,7 +70,12 @@ fn pending_backend_failure_keeps_exact_observed_resource_without_granted_readine
         history.observe_backend(index, RequestOutcome::Pending(changed)),
         Err(ParentError::ForeignPeer)
     );
-    assert!(history.observe_backend(index, RequestOutcome::Failed)?);
+    assert!(history.observe_backend(
+        index,
+        RequestOutcome::Failed(
+            sugarsubstitute_contracts::lifecycle::LifecycleFailureCode::Preparation
+        )
+    )?);
     assert_eq!(history.backend_resource(RequestId::new(1)?)?, Some(lease.resource));
     assert_eq!(
         history.observe_backend(index, RequestOutcome::Granted(changed)),
@@ -85,13 +90,28 @@ fn final_backend_replay_preserves_original_and_never_restarts_local_effects() ->
     use sugarsubstitute_contracts::lifecycle::RequestOutcome;
     let mut history = Requests::new();
     let (index, _) = history.admit(header(1)?, b"acquire")?;
-    assert!(history.observe_backend(index, RequestOutcome::Failed)?);
-    assert!(!history.observe_backend(index, RequestOutcome::Failed)?);
+    assert!(history.observe_backend(
+        index,
+        RequestOutcome::Failed(
+            sugarsubstitute_contracts::lifecycle::LifecycleFailureCode::Preparation
+        )
+    )?);
+    assert!(!history.observe_backend(
+        index,
+        RequestOutcome::Failed(
+            sugarsubstitute_contracts::lifecycle::LifecycleFailureCode::Preparation
+        )
+    )?);
     assert_eq!(
         history.observe_backend(index, RequestOutcome::Cancelled),
         Err(ParentError::ChangedDuplicate)
     );
-    assert!(!history.observe_backend(index, RequestOutcome::Failed)?);
+    assert!(!history.observe_backend(
+        index,
+        RequestOutcome::Failed(
+            sugarsubstitute_contracts::lifecycle::LifecycleFailureCode::Preparation
+        )
+    )?);
     Ok(())
 }
 

@@ -193,34 +193,68 @@ fn keyboard_focus_does_not_activate_disclosure_and_reduced_motion_stays_static()
     Ok(())
 }
 
+/// The splash never asks anyone to retry: no control exists for it and a click on the status
+/// line does nothing. A settled failed start is tried again by itself at once, five times in a
+/// row; then the failure is asked about in the dialog, whose Retry starts the count again.
 #[test]
-fn recovery_control_is_localized_and_inert_until_policy_observes_settlement()
--> Result<(), Box<dyn Error>> {
+fn a_settled_failure_is_retried_five_times_by_itself_then_asked_about() -> Result<(), Box<dyn Error>>
+{
     let mut view = view(true)?;
-    let retry = Pointer { x: 270.0, y: 510.0 };
+    let status_line = Pointer { x: 270.0, y: 510.0 };
+    assert_eq!(view.controls().iter().map(|control| control.id).collect::<Vec<_>>(), [1, 2]);
     for phase in [StartupPhase::PreparingConnection, StartupPhase::Failed, StartupPhase::Cancelling]
     {
         view.phase(phase);
-        assert_eq!(view.controls().len(), 3);
-        assert_eq!(view.controls().iter().map(|control| control.id).collect::<Vec<_>>(), [1, 2, 3]);
-        assert!(!view.controls()[2].visible);
-        assert!(!view.activate(3));
-        view.pointer(PointerAction::Press, retry);
-        view.pointer(PointerAction::Release, retry);
         assert!(!view.take_retry());
+        assert!(!view.asks_about_failure());
     }
-    view.phase(StartupPhase::Stopped);
-    assert_eq!(view.controls()[2].label, "Retry");
-    assert!(view.controls()[2].visible);
-    assert!(!view.controls()[2].close);
-    view.pointer(PointerAction::Press, retry);
-    view.pointer(PointerAction::Release, retry);
-    assert!(view.take_retry());
-    assert!(!view.take_retry());
-    view.phase(StartupPhase::SplashFirstFrame);
-    assert_eq!(view.controls().len(), 3);
-    assert!(!view.controls()[2].visible);
-    assert!(!view.activate(3));
+    for _ in 0..2 {
+        for _ in 0..5 {
+            view.phase(StartupPhase::Stopped);
+            view.pointer(PointerAction::Press, status_line);
+            view.pointer(PointerAction::Release, status_line);
+            assert!(!view.activate(3));
+            assert!(view.appearance.retrying);
+            assert!(!view.asks_about_failure());
+            assert!(view.take_retry());
+            assert!(!view.take_retry());
+            view.begin_retry();
+        }
+        view.phase(StartupPhase::Stopped);
+        assert!(!view.take_retry());
+        assert!(!view.appearance.retrying);
+        assert!(view.asks_about_failure());
+        assert!(view.gave_up());
+        view.reset_retries();
+    }
+    Ok(())
+}
+
+/// A failure retrying cannot fix is asked about at once, never tried again by itself.
+#[test]
+fn a_failure_retrying_cannot_fix_is_asked_about_at_once() -> Result<(), Box<dyn Error>> {
+    use sugarsubstitute_contracts::startup::StartupFailureCode;
+    for code in [StartupFailureCode::FrontendMismatch, StartupFailureCode::SugarCubesMissing] {
+        let mut view = view(true)?;
+        view.phase(StartupPhase::Stopped);
+        view.set_failure(Some(code));
+        assert!(!view.take_retry());
+        assert!(view.asks_about_failure());
+        assert!(!view.gave_up());
+    }
+    Ok(())
+}
+
+/// An attached ComfyUI writes no output to the application, so its splash offers none.
+#[test]
+fn an_attached_start_offers_no_output_disclosure() -> Result<(), Box<dyn Error>> {
+    let mut view = view(true)?;
+    view.set_output_available(false);
+    assert!(!view.controls()[0].visible);
+    assert!(!view.activate(1));
+    view.pointer(PointerAction::Press, Pointer { x: 480.0, y: 10.0 });
+    view.pointer(PointerAction::Release, Pointer { x: 480.0, y: 10.0 });
+    assert!(!view.appearance.expanded);
     Ok(())
 }
 
@@ -246,8 +280,7 @@ fn native_console_visibility_tracks_published_disclosure_and_preserves_identity_
     Ok(())
 }
 #[test]
-fn readonly_console_geometry_preserves_original_retry_peer_and_locale_owner()
--> Result<(), Box<dyn Error>> {
+fn readonly_console_geometry_keeps_its_place_and_locale_owner() -> Result<(), Box<dyn Error>> {
     for messages in sugarsubstitute_contracts::localization::LOCALES {
         let mut view = StartupView::new(
             Presentation::new(messages.id, RequestedTheme::Dark, true)?,
@@ -264,26 +297,23 @@ fn readonly_console_geometry_preserves_original_retry_peer_and_locale_owner()
         );
         view.phase(StartupPhase::Stopped);
         let console = view.console(None);
-        assert!(console.bounds.y + console.bounds.height <= view.controls()[2].bounds.y);
-        assert!(view.controls()[2].visible);
-        assert!(view.activate(3));
+        assert_eq!(
+            (console.bounds.x, console.bounds.y, console.bounds.width, console.bounds.height),
+            (25.0, 371.0, 508.0, 162.0)
+        );
     }
     Ok(())
 }
 
-/// While the previous SugarCubes version is put back, Retry is neither shown nor accepted;
-/// once the retry line returns it is both.
+/// While the previous SugarCubes version is put back no retry is due; once the retry line
+/// returns, the retry is due at once.
 #[test]
 fn the_restoring_line_withholds_retry_until_the_retry_line_returns() -> Result<(), Box<dyn Error>> {
     let mut view = view(true)?;
     view.phase(StartupPhase::Stopped);
     view.show_status(sugarsubstitute_splash::StartupStatus::RestoringSugarcubes);
-    assert!(!view.controls()[2].visible);
-    assert!(!view.activate(3));
     assert!(!view.take_retry());
     view.show_status(sugarsubstitute_splash::StartupStatus::SugarcubesRetryPrevious);
-    assert!(view.controls()[2].visible);
-    assert!(view.activate(3));
     assert!(view.take_retry());
     Ok(())
 }

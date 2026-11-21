@@ -356,7 +356,12 @@ fn changed_producer_lease_and_final_denial_preserve_first_original() -> Result<(
         retained.observe_backend(h, RequestOutcome::Pending(wrong)),
         Err(ParentError::ForeignPeer)
     );
-    retained.observe_backend(h, RequestOutcome::Failed)?;
+    retained.observe_backend(
+        h,
+        RequestOutcome::Failed(
+            sugarsubstitute_contracts::lifecycle::LifecycleFailureCode::Preparation,
+        ),
+    )?;
     retained.reply(
         h,
         Reply::Failed(sugarsubstitute_contracts::lifecycle::LifecycleFailureCode::Preparation),

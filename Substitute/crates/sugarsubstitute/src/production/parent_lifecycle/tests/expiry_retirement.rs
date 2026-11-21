@@ -42,7 +42,7 @@ fn expired() -> Result<(Box<ParentLifecycle>, WireHeader, LeaseKey)> {
         .iter()
         .find(|reply| Some(reply.request) == h.request)
         .ok_or("Actual Failed absent")?;
-    assert_eq!(reply.outcome, RequestOutcome::Failed);
+    assert!(matches!(reply.outcome, RequestOutcome::Failed(_)));
     assert_eq!(
         coordinator
             .failure(lease.resource)

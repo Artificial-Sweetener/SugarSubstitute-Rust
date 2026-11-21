@@ -80,6 +80,7 @@ impl ResourceCoordinator {
         transition: &mut ResourceTransition,
     ) {
         self.failed_replacements(key);
+        let code = failure.code();
         let leases = self
             .resources
             .get(&key.id)
@@ -94,7 +95,7 @@ impl ResourceCoordinator {
             }
         }
         for lease in leases {
-            self.finish_pending(lease, RequestOutcome::Failed, transition);
+            self.finish_pending(lease, RequestOutcome::Failed(code), transition);
         }
     }
     fn validate_observation(

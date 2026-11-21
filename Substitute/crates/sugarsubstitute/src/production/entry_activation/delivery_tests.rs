@@ -28,7 +28,13 @@ fn failed_later_recipient_keeps_actual_return_and_blocks_another_producer() -> R
     let mut owner = owned()?;
     let original = ResourceTransition {
         replies: vec![
-            ResourceReply { run: a, request: RequestId::new(1)?, outcome: RequestOutcome::Failed },
+            ResourceReply {
+                run: a,
+                request: RequestId::new(1)?,
+                outcome: RequestOutcome::Failed(
+                    sugarsubstitute_contracts::lifecycle::LifecycleFailureCode::Preparation,
+                ),
+            },
             ResourceReply {
                 run: b,
                 request: RequestId::new(2)?,
@@ -85,7 +91,9 @@ fn producer_failure_retains_pending_return_without_overwriting_prior_owner() -> 
         replies: vec![ResourceReply {
             run: a,
             request: RequestId::new(1)?,
-            outcome: RequestOutcome::Failed,
+            outcome: RequestOutcome::Failed(
+                sugarsubstitute_contracts::lifecycle::LifecycleFailureCode::Preparation,
+            ),
         }],
         effects: vec![],
         invalidations: vec![],

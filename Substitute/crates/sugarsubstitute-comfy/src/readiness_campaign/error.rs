@@ -59,6 +59,21 @@ impl fmt::Display for CampaignError {
         }
     }
 }
+impl CampaignError {
+    /// The bounded reason this campaign failure gives the person waiting for the backend, when
+    /// it has one. A campaign whose attempts ran out never reached a ready backend.
+    pub fn lifecycle_code(
+        &self,
+    ) -> Option<sugarsubstitute_contracts::lifecycle::LifecycleFailureCode> {
+        match self {
+            Self::Budget(_) => {
+                Some(sugarsubstitute_contracts::lifecycle::LifecycleFailureCode::BackendUnreachable)
+            }
+            Self::Transport(transport) => transport.lifecycle_code(),
+            _ => None,
+        }
+    }
+}
 impl Error for CampaignError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {

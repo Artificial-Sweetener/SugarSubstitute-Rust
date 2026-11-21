@@ -15,8 +15,6 @@ pub enum Control {
     ConsoleToggle,
     /// Startup cancellation affordance.
     Close,
-    /// Retry after actual previous-attempt settlement.
-    Retry,
 }
 
 /// Closed presentation of the actual application recovery phase.
@@ -60,7 +58,8 @@ pub enum StartupStatus {
 }
 
 impl StartupStatus {
-    /// Whether the status line offers the retry the application can accept now.
+    /// Whether the status line names a settled failed start, which the application retries
+    /// by itself.
     pub const fn offers_retry(self) -> bool {
         matches!(
             self,
@@ -94,6 +93,13 @@ pub struct Appearance {
     /// Whether the console and close controls are drawn. The launcher's notice has neither:
     /// it has no output to show and ends by itself within seconds.
     pub controls: bool,
+    /// Whether the output disclosure is offered. An attached ComfyUI writes no output to this
+    /// application, so its splash has nothing to disclose.
+    pub output: bool,
+    /// The reason the last start failed, named in the status line while the start is retried.
+    pub failure: Option<sugarsubstitute_contracts::startup::StartupFailureCode>,
+    /// Whether the status line says the failed start is being tried again by itself.
+    pub retrying: bool,
 }
 
 impl Appearance {
@@ -109,6 +115,9 @@ impl Appearance {
             hovered: None,
             pressed: None,
             controls: true,
+            output: true,
+            failure: None,
+            retrying: false,
         }
     }
 
@@ -135,6 +144,27 @@ impl Appearance {
     /// Simplified feedback appears only after the full console finishes closing.
     pub fn status_visible(self) -> bool {
         !self.expanded && self.reveal == 0.0
+    }
+
+    /// Whether the failed start named in the status line is retried by itself. A ComfyUI that
+    /// serves another frontend version or no SugarCubes, or a SugarCubes too old for this
+    /// application, stays that way until the person fixes it, so those ask instead.
+    pub fn retries_by_itself(self) -> bool {
+        use sugarsubstitute_contracts::startup::StartupFailureCode;
+        match self.status {
+            StartupStatus::RetryReady => !matches!(
+                self.failure,
+                Some(StartupFailureCode::FrontendMismatch | StartupFailureCode::SugarCubesMissing)
+            ),
+            StartupStatus::SugarcubesRetryReady | StartupStatus::SugarcubesRetryPrevious => true,
+            _ => false,
+        }
+    }
+
+    /// Whether the failed start named in the status line needs the person: a dialog explains
+    /// it and offers Retry and Close.
+    pub fn asks_about_failure(self) -> bool {
+        self.status.offers_retry() && !self.retries_by_itself()
     }
 }
 

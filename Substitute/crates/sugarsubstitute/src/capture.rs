@@ -164,6 +164,9 @@ fn export_admitted(
             hovered: control(scenario.hovered.as_deref())?,
             pressed: control(scenario.pressed.as_deref())?,
             controls: true,
+            output: true,
+            failure: None,
+            retrying: false,
         };
         let character = AnimationFrame {
             pose: if scenario.flip >= 0.5 { 1 } else { scenario.pose },

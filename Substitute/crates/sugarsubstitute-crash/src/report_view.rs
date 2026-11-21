@@ -208,7 +208,10 @@ fn startup_reason(reason: sugarsubstitute_contracts::startup::StartupFailureCode
     use sugarsubstitute_contracts::startup::StartupFailureCode;
     match reason {
         StartupFailureCode::ConnectionPreparation => 0,
-        StartupFailureCode::ConnectionUnavailable => 1,
+        StartupFailureCode::ConnectionUnavailable
+        | StartupFailureCode::BackendUnreachable
+        | StartupFailureCode::FrontendMismatch
+        | StartupFailureCode::SugarCubesMissing => 1,
         StartupFailureCode::ProcessExited => 2,
         StartupFailureCode::TimedOut => 3,
         StartupFailureCode::Presentation => 4,

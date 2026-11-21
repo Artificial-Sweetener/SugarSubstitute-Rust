@@ -20,8 +20,34 @@ impl<B: StartupBackend> StartupHost<B> {
             return Ok(None);
         }
         if self.view.as_mut().is_some_and(|view| view.take_retry()) {
+            tracing::info!(
+                operation = "startup_automatic_retry",
+                "A settled failed start is tried again by itself"
+            );
             let retried = self.retry_owned();
             observed_consume::<B, _>(ConsumeStage::Retry, retried)?;
+        }
+        #[cfg(windows)]
+        if let Some(decision) = self
+            .startup_error
+            .as_ref()
+            .and_then(sugarsubstitute_contracts::startup::StartupErrorAnswer::take)
+        {
+            self.startup_error = None;
+            tracing::info!(operation = "startup_error_decision", decision = ?decision,
+                "The startup error dialog was answered");
+            match decision {
+                sugarsubstitute_contracts::startup::StartupErrorDecision::Retry => {
+                    if let Some(view) = &mut self.view {
+                        view.reset_retries();
+                    }
+                    let retried = self.retry_owned();
+                    observed_consume::<B, _>(ConsumeStage::Retry, retried)?;
+                }
+                sugarsubstitute_contracts::startup::StartupErrorDecision::Close => {
+                    self.close_owned()?;
+                }
+            }
         }
         let batch =
             observed_consume::<B, _>(ConsumeStage::ExecutionDrain, self.execution.drain(maximum))?;
@@ -121,7 +147,7 @@ impl<B: StartupBackend> StartupHost<B> {
         }
         Ok(())
     }
-    /// Advance a user-requested retry only after the sole policy observed settlement.
+    /// Advance a due retry only after the sole policy observed settlement.
     pub(super) fn retry_owned(&mut self) -> Result<(), Box<dyn Error>> {
         let startup = self.startup.as_mut().ok_or("Actual startup owner absent")?;
         let identity = retry_identity(self.policy.identity(startup.session()))?;

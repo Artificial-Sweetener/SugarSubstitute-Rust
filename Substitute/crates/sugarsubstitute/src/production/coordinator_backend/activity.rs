@@ -400,7 +400,8 @@ impl CoordinatorBackend {
         if stopped {
             self.pack.backend_stopped(resources)?;
         }
-        let failure = LifecycleFailure::new(LifecycleFailureCode::Preparation, cause);
+        let failure =
+            LifecycleFailure::new(super::failure::preparation_code(cause.as_ref()), cause);
         let mut transition =
             self.observe(ResourceObservation::Failed { resource: key, failure })?;
         if let Some(failure) = self.failure(key) {

@@ -135,7 +135,7 @@ impl ParentLifecycle {
         reply: sugarsubstitute_contracts::lifecycle::ResourceReply,
         resources: &mut ParentResources<'_, '_>,
     ) -> Result<()> {
-        use sugarsubstitute_contracts::lifecycle::{LifecycleFailureCode, RequestOutcome};
+        use sugarsubstitute_contracts::lifecycle::RequestOutcome;
         let retry = self.recovery.retry.ok_or(ParentError::WrongPhase)?;
         let index = self.requests.find(reply.request).ok_or(ParentError::StaleRequest)?;
         if reply.run != self.run || retry.header != self.requests.get(index)?.header {
@@ -165,14 +165,13 @@ impl ParentLifecycle {
                     Some(lease);
             }
             RequestOutcome::Granted(_) if final_outcome => self.stage_replacement(index)?,
-            RequestOutcome::Failed if final_outcome => {
-                self.requests.get_mut(index)?.reply =
-                    Some(Reply::Failed(LifecycleFailureCode::Preparation))
+            RequestOutcome::Failed(code) if final_outcome => {
+                self.requests.get_mut(index)?.reply = Some(Reply::Failed(code))
             }
             RequestOutcome::Cancelled if final_outcome => {
                 self.requests.get_mut(index)?.reply = Some(Reply::Cancelled)
             }
-            RequestOutcome::Granted(_) | RequestOutcome::Failed | RequestOutcome::Cancelled => {}
+            RequestOutcome::Granted(_) | RequestOutcome::Failed(_) | RequestOutcome::Cancelled => {}
             _ => return Err(ParentError::WrongPhase.into()),
         }
         Ok(())

@@ -11,6 +11,24 @@ use sugarsubstitute_supervision::{
 #[cfg(test)]
 #[path = "failure/tests.rs"]
 mod tests;
+/// The bounded reason a backend preparation failed, shown to the person waiting at the splash:
+/// no backend answered in time, it serves another ComfyUI frontend version, or it does not
+/// serve SugarCubes. Any other cause stays a plain preparation failure.
+pub(super) fn preparation_code(cause: &(dyn Error + 'static)) -> LifecycleFailureCode {
+    use sugarsubstitute_comfy::{
+        readiness_campaign::CampaignError, readiness_transport::ReadinessTransportError,
+    };
+    cause
+        .downcast_ref::<CampaignError>()
+        .and_then(CampaignError::lifecycle_code)
+        .or_else(|| {
+            cause
+                .downcast_ref::<ReadinessTransportError>()
+                .and_then(ReadinessTransportError::lifecycle_code)
+        })
+        .unwrap_or(LifecycleFailureCode::Preparation)
+}
+
 /// Closed diagnostic classes derived from the already retained concrete owner error.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum FailureKind {

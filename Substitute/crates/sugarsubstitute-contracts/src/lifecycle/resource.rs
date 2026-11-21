@@ -94,8 +94,8 @@ pub enum RequestOutcome {
     Reloaded(LeaseKey),
     /// Pending preparation was cancelled by lease/client release.
     Cancelled,
-    /// Preparation failed; the resource owner retains the original cause.
-    Failed,
+    /// Preparation failed for this bounded reason; the resource owner retains the original cause.
+    Failed(super::LifecycleFailureCode),
 }
 /// Deliver a request result under its exact run/request identity.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

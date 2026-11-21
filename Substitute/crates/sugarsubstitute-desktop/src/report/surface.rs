@@ -24,6 +24,7 @@ pub(crate) mod lifetime;
 #[allow(unsafe_code)]
 pub(crate) mod native_tests;
 mod startup;
+mod startup_error;
 #[cfg(test)]
 mod tests;
 mod update;
@@ -33,6 +34,7 @@ pub use crash::run_report_surface;
 #[cfg(target_os = "windows")]
 pub(super) use crash::validate_content_capacity;
 pub use startup::StartupReport;
+pub use startup_error::StartupErrorReport;
 pub use update::{UpdateExport, UpdateReport};
 
 /// Everything a report shows, in the user's language.
@@ -91,6 +93,31 @@ impl ReportPresentation {
             None,
             copy,
         )
+    }
+
+    /// A failed start retrying by itself cannot fix: what failed and what to do, with Retry as
+    /// the primary action and Close beside it.
+    pub fn startup_error(
+        copy: &'static Messages,
+        window_title: &str,
+        question: &sugarsubstitute_contracts::startup::StartupErrorQuestion,
+    ) -> Self {
+        let mut presentation = Self::new(
+            ReportContent {
+                kind: ReportKind::UnresponsiveCopy,
+                severity: ReportSeverity::Error,
+                window_title: window_title.to_owned(),
+                title: question.title.to_owned(),
+                message: question.message.to_owned(),
+                summary: Vec::new(),
+                has_details: false,
+            },
+            None,
+            copy,
+        );
+        presentation.labels.close = question.retry;
+        presentation.labels.cancel = question.close;
+        presentation
     }
 
     /// A launch that could not start: heading, explanation and the redacted cause chain.

@@ -188,6 +188,9 @@ pub struct StartupHost<B: StartupBackend> {
     /// Exports of the update report to files the user selects.
     #[cfg(windows)]
     update_reports: Option<update_report::UpdateReports>,
+    /// The answer of the startup error dialog offered for the current failed start.
+    #[cfg(windows)]
+    startup_error: Option<sugarsubstitute_contracts::startup::StartupErrorAnswer>,
     /// The short graceful cutoff of a critical session end, which waits for nothing.
     critical_until: Option<sugarsubstitute_contracts::execution::Moment>,
     #[cfg(all(test, windows, feature = "native-composition"))]
@@ -284,6 +287,8 @@ impl<B: StartupBackend> StartupHost<B> {
             #[cfg(windows)]
             backend_port: None,
             #[cfg(windows)]
+            startup_error: None,
+            #[cfg(windows)]
             backend_port_trigger: backend_port::Trigger::default(),
             #[cfg(windows)]
             backend_port_wake: None,
@@ -324,6 +329,12 @@ impl<B: StartupBackend> WindowContent for StartupHost<B> {
         let view =
             self.view.as_mut().ok_or_else(|| std::io::Error::other("Startup view absent"))?;
         view.sample(startup.session().phase(), elapsed, Instant::now());
+        view.set_failure(
+            startup
+                .session()
+                .failure()
+                .and_then(sugarsubstitute_application::startup::SessionFailure::startup_code),
+        );
         if self.child.cleanup_failed() {
             view.show_status(sugarsubstitute_splash::StartupStatus::CleanupFailed);
         } else if self.deferred_close.is_some() {

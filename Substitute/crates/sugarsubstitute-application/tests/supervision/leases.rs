@@ -296,7 +296,9 @@ fn managed_provisional_clients_keep_other_wait_after_elapsed_preparation_and_fai
         vec![ResourceReply {
             run: second.run,
             request: second_request.id,
-            outcome: RequestOutcome::Failed
+            outcome: RequestOutcome::Failed(
+                sugarsubstitute_contracts::lifecycle::LifecycleFailureCode::UnexpectedExit
+            )
         }]
     );
     assert_eq!(exited.effects, vec![ResourceEffect::StopOwned { resource: second.resource }]);
@@ -309,7 +311,9 @@ fn managed_provisional_clients_keep_other_wait_after_elapsed_preparation_and_fai
     );
     assert_eq!(
         submit(&mut coordinator, second_request)?.replies[0].outcome,
-        RequestOutcome::Failed
+        RequestOutcome::Failed(
+            sugarsubstitute_contracts::lifecycle::LifecycleFailureCode::UnexpectedExit
+        )
     );
     assert_eq!(
         coordinator.take_failure(second.resource).map(|_| ()),

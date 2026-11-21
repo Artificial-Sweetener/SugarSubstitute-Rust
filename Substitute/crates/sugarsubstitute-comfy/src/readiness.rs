@@ -13,6 +13,7 @@ mod identity;
 mod json;
 mod schema;
 pub use identity::InstalledFrontendIdentity;
+pub(crate) use identity::SUGARCUBES_EXTENSION_PREFIX;
 pub use schema::{PackageVersion, SystemStats};
 
 /// Maximum complete `/system_stats` body before any JSON allocation.

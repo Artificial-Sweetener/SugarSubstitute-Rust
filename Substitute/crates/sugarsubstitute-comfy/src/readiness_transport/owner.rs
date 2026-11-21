@@ -292,7 +292,7 @@ impl ReadinessProbeOwner {
                 state.peer.ok_or_else(|| ReadinessTransportError::invalid("attempt_no_peer"))?;
             state.verified_assets = state.candidate_assets;
             if !state.candidate_complete {
-                let total = self.input.source.manifest().assets().len();
+                let total = super::probe::compared_assets(&self.input).count();
                 self.continuation_headroom = Some(if state.verified_assets < total {
                     super::probe::asset_headroom(total)
                 } else {

@@ -211,6 +211,7 @@ impl RenderStages {
                 let copy = messages(&renderer.locale);
                 let operation = copy.startup.operation(frame.appearance.operation);
                 let updating;
+                let retrying;
                 let message = match frame.appearance.status {
                     crate::StartupStatus::Updating(version) => {
                         updating = sugarsubstitute_contracts::localization::updates::UpdateMessages::with_version(
@@ -227,7 +228,17 @@ impl RenderStages {
                     crate::StartupStatus::LoadingExtended => operation[2],
                     crate::StartupStatus::Failed => copy.connection_failed,
                     crate::StartupStatus::Settling => copy.cleanup_pending,
-                    crate::StartupStatus::RetryReady => copy.retry_ready,
+                    crate::StartupStatus::RetryReady => {
+                        let code = frame.appearance.failure.unwrap_or(
+                            sugarsubstitute_contracts::startup::StartupFailureCode::ConnectionUnavailable,
+                        );
+                        if frame.appearance.retrying {
+                            retrying = copy.startup_failures.retrying(code);
+                            retrying.as_str()
+                        } else {
+                            copy.startup_failures.reason(code)
+                        }
+                    }
                     crate::StartupStatus::SugarcubesRetryReady => copy.pack_updates.retry,
                     crate::StartupStatus::SugarcubesRetryPrevious => {
                         copy.pack_updates.retry_previous
@@ -275,19 +286,27 @@ impl RenderStages {
             }
             Stage::Controls => {
                 let cursor = self.controls.as_mut().ok_or(RenderError::InvalidFrame)?;
-                if let Some(button) = cursor.next() {
+                if let Some(button) = cursor.next()
+                    && (frame.appearance.output
+                        || button.action == sugarsubstitute_ui::caption::CaptionAction::Close)
+                {
                     button.paint(target, frame.scale as f32)?;
                 }
                 if cursor.len() != 0 {
                     return Ok(false);
                 }
                 self.controls = None;
-                let tint = if frame.appearance.theme == Theme::Dark { [255; 3] } else { [0; 3] };
-                self.caption = Some((
-                    CaptionCursor::new(frame.scale, CaptionIcon::Console, tint)
-                        .map_err(RenderError::Icon)?,
-                    true,
-                ));
+                self.caption = Some(if frame.appearance.output {
+                    let tint =
+                        if frame.appearance.theme == Theme::Dark { [255; 3] } else { [0; 3] };
+                    (
+                        CaptionCursor::new(frame.scale, CaptionIcon::Console, tint)
+                            .map_err(RenderError::Icon)?,
+                        true,
+                    )
+                } else {
+                    (close_icon(frame)?, false)
+                });
                 self.stage = Stage::Caption;
             }
             Stage::Caption => {
@@ -296,18 +315,7 @@ impl RenderStages {
                     let console = *console;
                     self.caption = None;
                     if console {
-                        let light = frame.appearance.theme == Theme::Dark
-                            || frame.appearance.hovered == Some(Control::Close)
-                            || frame.appearance.pressed == Some(Control::Close);
-                        self.caption = Some((
-                            CaptionCursor::new(
-                                frame.scale,
-                                CaptionIcon::Close,
-                                if light { [255; 3] } else { [0; 3] },
-                            )
-                            .map_err(RenderError::Icon)?,
-                            false,
-                        ));
+                        self.caption = Some((close_icon(frame)?, false));
                     } else {
                         self.stage = Stage::Done;
                     }
@@ -350,4 +358,13 @@ impl RenderStages {
         }
         self.target.ok_or(RenderError::InvalidFrame)
     }
+}
+
+/// The close glyph, light over the dark theme or the close button's hover and press fill.
+fn close_icon(frame: &RenderFrame) -> Result<CaptionCursor, RenderError> {
+    let light = frame.appearance.theme == Theme::Dark
+        || frame.appearance.hovered == Some(Control::Close)
+        || frame.appearance.pressed == Some(Control::Close);
+    CaptionCursor::new(frame.scale, CaptionIcon::Close, if light { [255; 3] } else { [0; 3] })
+        .map_err(RenderError::Icon)
 }

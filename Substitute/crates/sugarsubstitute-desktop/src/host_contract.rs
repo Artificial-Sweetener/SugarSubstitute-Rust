@@ -771,6 +771,16 @@ pub trait StartupWindowContent: WindowContent {
         None
     }
 
+    /// Take, once per failed start, a failure retrying by itself cannot fix, for a dialog over
+    /// the splash that explains it with Retry and Close. The application reads the decision
+    /// from the question's answer. Called on the event-loop thread at most once per turn.
+    #[cfg(target_os = "windows")]
+    fn take_startup_error(
+        &mut self,
+    ) -> Option<sugarsubstitute_contracts::startup::StartupErrorQuestion> {
+        None
+    }
+
     /// Take the writer that exports the current update report to a file the user selects,
     /// once per opened report. `None` hides Export; Copy stays available.
     fn update_report_export(&mut self) -> Option<Box<dyn crate::report::surface::UpdateExport>> {

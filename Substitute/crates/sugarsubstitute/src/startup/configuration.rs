@@ -30,10 +30,14 @@ impl<B: StartupBackend> StartupHost<B> {
             .into());
         }
         if self.preparation.is_none() {
-            let view = StartupView::new(
+            let mut view = StartupView::new(
                 startup.session().configuration().presentation(),
                 self.accent.palette(),
             );
+            view.set_output_available(!matches!(
+                startup.session().configuration().connection(),
+                sugarsubstitute_contracts::configuration::ConnectionConfiguration::Attach(_)
+            ));
             self.view = Some(view);
             let scope = self
                 .render_scope

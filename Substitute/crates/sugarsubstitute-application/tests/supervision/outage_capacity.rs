@@ -164,7 +164,7 @@ fn pending_managed_exit_finishes_request_without_inventing_a_granted_invalidatio
     )?;
     let dead = observe(&mut coordinator, death(pending, 0)?)?;
     assert!(dead.invalidations.is_empty() && dead.replacements.is_empty());
-    assert_eq!(dead.replies[0].outcome, RequestOutcome::Failed);
+    assert!(matches!(dead.replies[0].outcome, RequestOutcome::Failed(_)));
     assert_eq!(
         coordinator.invalidated_lease(binding(1)?, pending),
         Err(LifecycleRejection::StaleIdentity)

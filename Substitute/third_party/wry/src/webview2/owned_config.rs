@@ -96,6 +96,25 @@ pub(super) fn invalid(message: &'static str) -> Error {
   ))
 }
 
+/// The reviewed browser arguments an owned webview admits: none, the private profile's cache
+/// limit, a lone loopback DevTools port, or the cache limit followed by that port.
+fn reviewed_arguments(arguments: &str, exclusive: bool) -> bool {
+  const CACHE_LIMIT: &str = "--disk-cache-size=33554432";
+  let debugging_port = |argument: &str| {
+    argument
+      .strip_prefix("--remote-debugging-port=")
+      .is_some_and(|port| {
+        (1..=5).contains(&port.len())
+          && port.bytes().all(|byte| byte.is_ascii_digit())
+          && port.parse::<u16>().is_ok_and(|port| port != 0)
+      })
+  };
+  match arguments.split_once(' ') {
+    None => arguments.is_empty() || (exclusive && arguments == CACHE_LIMIT) || debugging_port(arguments),
+    Some((first, second)) => exclusive && first == CACHE_LIMIT && debugging_port(second),
+  }
+}
+
 fn validate(
   attrs: &WebViewAttributes<'_>,
   platform: &super::super::PlatformSpecificWebViewAttributes,
@@ -126,11 +145,10 @@ fn validate(
     || platform.environment.is_some()
     || platform.browser_extensions_enabled
     || platform.extension_path.is_some()
-    || match platform.additional_browser_args.as_deref() {
-      Some("") => false,
-      Some("--disk-cache-size=33554432") if platform.exclusive_user_data_folder_access => false,
-      _ => true,
-    }
+    || !platform
+      .additional_browser_args
+      .as_deref()
+      .is_some_and(|arguments| reviewed_arguments(arguments, platform.exclusive_user_data_folder_access))
   {
     return Err(invalid("unsupported owned webview configuration"));
   }

@@ -9,6 +9,7 @@
 //! Concrete observations and effects describe acknowledged lifecycle ordering;
 //! they carry no live process, browser or native surface ownership.
 
+mod error_question;
 mod events;
 mod feedback;
 mod intents;
@@ -16,6 +17,7 @@ pub mod launcher;
 mod main_identity;
 mod readiness;
 
+pub use error_question::{StartupErrorAnswer, StartupErrorDecision, StartupErrorQuestion};
 pub use events::{StartupEvent, StartupFailure, StartupFailureCode, StartupObservation};
 pub use feedback::StartupOperation;
 pub use intents::{ConnectionCleanup, SplashIntent, StartupEffect};

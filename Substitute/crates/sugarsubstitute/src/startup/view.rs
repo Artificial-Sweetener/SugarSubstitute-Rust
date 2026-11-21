@@ -16,6 +16,9 @@ use sugarsubstitute_ui::{accent::AccentPalette, progress::ProgressFrame};
 #[path = "view/disclosure.rs"]
 mod disclosure;
 
+/// Tries in a row the splash makes by itself before it asks the person instead.
+const MAXIMUM_AUTOMATIC_RETRIES: u32 = 5;
+
 /// Keep view-only disclosure and motion independent of native/connection authority.
 pub(crate) struct StartupView {
     pub(crate) appearance: Appearance,
@@ -24,8 +27,11 @@ pub(crate) struct StartupView {
     reduced_motion: bool,
     pressed: Option<Control>,
     messages: &'static Messages,
-    controls: [AccessibleControl; 3],
-    retry_requested: bool,
+    controls: [AccessibleControl; 2],
+    /// A settled failed start is due to be tried again by itself.
+    retry_due: bool,
+    /// Tries in a row that failed since the launch or the person's last Retry.
+    retries: u32,
     /// A retry replaced the launch's first attempt, so its update has already been applied.
     retried: bool,
     published_reveal: f64,
@@ -58,6 +64,9 @@ impl StartupView {
                 hovered: None,
                 pressed: None,
                 controls: true,
+                output: true,
+                failure: None,
+                retrying: false,
             },
             animation,
             elapsed: Duration::ZERO,
@@ -68,7 +77,8 @@ impl StartupView {
             output_revision: None,
             reduced_motion: presentation.reduced_motion(),
             pressed: None,
-            retry_requested: false,
+            retry_due: false,
+            retries: 0,
             retried: false,
             published_reveal: 0.0,
             disclosure: disclosure::Disclosure::new(),
@@ -90,16 +100,31 @@ impl StartupView {
                     close: true,
                     visible: true,
                 },
-                AccessibleControl {
-                    enabled: true,
-                    id: 3,
-                    label: messages.retry,
-                    bounds: ControlBounds { x: 24.0, y: 486.0, width: 510.0, height: 48.0 },
-                    close: false,
-                    visible: false,
-                },
             ],
         }
+    }
+    /// Offer the output disclosure only when this start writes ComfyUI output to the
+    /// application: a ComfyUI the application attaches to writes none.
+    pub(crate) fn set_output_available(&mut self, available: bool) {
+        self.appearance.output = available;
+        self.controls[0].visible = available;
+    }
+    /// Name the reason the last start failed while it is retried or asked about.
+    pub(crate) fn set_failure(
+        &mut self,
+        failure: Option<sugarsubstitute_contracts::startup::StartupFailureCode>,
+    ) {
+        self.appearance.failure = failure;
+        self.schedule_retry();
+    }
+    /// Whether the failed start shown needs the person: a failure retrying cannot fix, or one
+    /// that five tries in a row did not fix. A dialog explains it with Retry and Close.
+    pub(crate) fn asks_about_failure(&self) -> bool {
+        self.appearance.status.offers_retry() && !self.retries_by_itself()
+    }
+    /// Whether the splash gave up retrying a failure that retrying could have fixed.
+    pub(crate) fn gave_up(&self) -> bool {
+        self.appearance.retries_by_itself() && !self.retries_by_itself()
     }
     /// Repaint with a changed operating-system accent; returns whether the palette changed.
     pub(crate) fn set_accent(&mut self, accent: AccentPalette) -> bool {
@@ -108,13 +133,12 @@ impl StartupView {
         changed
     }
     /// Describe the existing console inner rectangle only after matching frame publication.
-    /// Leave the settled Retry peer's original rectangle available above this native child.
     pub(crate) fn console<'a>(
         &self,
         text: Option<&'a dyn sugarsubstitute_desktop::ConsoleText>,
     ) -> sugarsubstitute_desktop::ConsoleView<'a> {
         let top = 545.0 - 174.0 * self.published_reveal;
-        let bottom = if self.controls[2].visible { 480.0 } else { 533.0 };
+        let bottom = 533.0;
         sugarsubstitute_desktop::ConsoleView {
             label: self.messages.output,
             bounds: ControlBounds {
@@ -166,9 +190,30 @@ impl StartupView {
         self.controls[0].label =
             if appearance.expanded { self.messages.hide_output } else { self.messages.show_output };
     }
-    /// Consume only an actual pointer/accessibility activation, never a rendered fact.
+    /// Consume the retry that falls due once a failed start has settled. The splash never asks
+    /// anyone to retry: it names the failure and tries again by itself as soon as the failed
+    /// attempt has settled, up to [`MAXIMUM_AUTOMATIC_RETRIES`] tries in a row.
     pub(crate) fn take_retry(&mut self) -> bool {
-        std::mem::take(&mut self.retry_requested)
+        if !std::mem::take(&mut self.retry_due) {
+            return false;
+        }
+        self.retries = self.retries.saturating_add(1);
+        true
+    }
+    /// Whether the splash still tries the failed start again by itself: only a failure that
+    /// retrying can fix, and only until five tries in a row have failed.
+    fn retries_by_itself(&self) -> bool {
+        self.appearance.retries_by_itself() && self.retries < MAXIMUM_AUTOMATIC_RETRIES
+    }
+    /// Start counting tries again, after the person chose Retry in the dialog.
+    pub(crate) fn reset_retries(&mut self) {
+        self.retries = 0;
+    }
+    /// Schedule the next retry while the status line names a failed start the splash retries by
+    /// itself, and drop it otherwise; a failure that needs the person is asked in a dialog.
+    fn schedule_retry(&mut self) {
+        self.appearance.retrying = self.retries_by_itself();
+        self.retry_due = self.appearance.retrying;
     }
     /// Project the sole application phase into native copy and accessible affordances.
     pub(crate) fn phase(&mut self, phase: StartupPhase) {
@@ -180,7 +225,6 @@ impl StartupView {
         }
         self.progress.sample(phase, self.elapsed, self.reduced_motion);
         self.appearance.operation = self.progress.operation();
-        self.controls[2].visible = phase == StartupPhase::Stopped;
         self.appearance.status = match phase {
             StartupPhase::Failed | StartupPhase::Cancelling => {
                 sugarsubstitute_splash::StartupStatus::Settling
@@ -192,6 +236,7 @@ impl StartupView {
                 _ => sugarsubstitute_splash::StartupStatus::Loading,
             },
         };
+        self.schedule_retry();
     }
     /// A retry replaced the launch's first attempt.
     pub(crate) fn begin_retry(&mut self) {
@@ -203,11 +248,11 @@ impl StartupView {
     pub(crate) const fn retried(&self) -> bool {
         self.retried
     }
-    /// Show `status` in place of the phase's own line; the Retry control is offered only while
-    /// the shown line offers retry.
+    /// Show `status` in place of the phase's own line; a retry is scheduled only while the shown
+    /// line names a failed start the splash retries by itself.
     pub(crate) fn show_status(&mut self, status: sugarsubstitute_splash::StartupStatus) {
         self.appearance.status = status;
-        self.controls[2].visible = status.offers_retry();
+        self.schedule_retry();
     }
     /// Sample a real frame and schedule only the next text transition, including reduced motion.
     pub(crate) fn sample(&mut self, phase: StartupPhase, elapsed: Duration, now: Instant) {
@@ -236,18 +281,12 @@ impl StartupView {
         self.feedback_deadline.is_some_and(|deadline| now >= deadline)
     }
     fn control(&self, pointer: Pointer) -> Option<Control> {
-        if self.appearance.status.offers_retry()
-            && (24.0..534.0).contains(&pointer.x)
-            && (486.0..534.0).contains(&pointer.y)
-        {
-            return Some(Control::Retry);
-        }
         if !(0.0..32.0).contains(&pointer.y) {
             return None;
         }
         if (512.0..558.0).contains(&pointer.x) {
             Some(Control::Close)
-        } else if (466.0..512.0).contains(&pointer.x) {
+        } else if self.appearance.output && (466.0..512.0).contains(&pointer.x) {
             Some(Control::ConsoleToggle)
         } else {
             None
@@ -301,9 +340,6 @@ impl StartupView {
                 if self.pressed == Some(Control::ConsoleToggle) && control == self.pressed {
                     self.toggle_console();
                 }
-                if self.pressed == Some(Control::Retry) && control == self.pressed {
-                    self.retry_requested = true;
-                }
                 self.pressed = None;
                 self.appearance.pressed = None;
             }
@@ -316,17 +352,13 @@ impl StartupView {
     pub(crate) fn key(&mut self, _action: KeyAction) -> bool {
         false
     }
-    /// Keep every native identity preallocated; phase changes only Retry visibility and eligibility.
+    /// Keep every native identity preallocated; attach mode hides only the output disclosure.
     pub(crate) fn controls(&self) -> &[AccessibleControl] {
         &self.controls
     }
     /// Activate only the non-close disclosure control; desktop owns native close intent.
     pub(crate) fn activate(&mut self, id: u16) -> bool {
-        if id == 3 && self.appearance.status.offers_retry() {
-            self.retry_requested = true;
-            return true;
-        }
-        if id != 1 {
+        if id != 1 || !self.appearance.output {
             return false;
         }
         self.toggle_console();

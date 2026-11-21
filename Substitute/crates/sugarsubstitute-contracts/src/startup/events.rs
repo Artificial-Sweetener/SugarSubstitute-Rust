@@ -19,6 +19,12 @@ pub enum StartupFailureCode {
     TimedOut,
     /// A required native presentation or handoff operation failed.
     Presentation,
+    /// No backend answered at its address.
+    BackendUnreachable,
+    /// The backend serves another ComfyUI frontend version than the installed one.
+    FrontendMismatch,
+    /// The backend does not serve SugarCubes.
+    SugarCubesMissing,
 }
 
 /// Own one original adapter cause; diagnostics do not clone or automatically log it.

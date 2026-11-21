@@ -176,7 +176,7 @@ fn failed_resource_diagnostic_borrows_the_original_source_cause_after_policy_ado
     );
     let pending = owner.take_pending_transition().ok_or(LifecycleRejection::WrongPhase)?;
     assert_eq!(pending.replies.len(), 1);
-    assert_eq!(pending.replies[0].outcome, RequestOutcome::Failed);
+    assert!(matches!(pending.replies[0].outcome, RequestOutcome::Failed(_)));
     assert_eq!(
         FailureObservation::retained(
             owner.failure(resource).ok_or(LifecycleRejection::WrongPhase)?
@@ -329,7 +329,13 @@ fn pending_actual_transition_blocks_mutation_until_original_replies_transfer() -
     owner.begin_delivery()?;
     let run =
         RunKey { owner: key()?, instance: InstanceId::new(1)?, generation: RunGeneration::new(1)? };
-    let reply = ResourceReply { run, request: RequestId::new(3)?, outcome: RequestOutcome::Failed };
+    let reply = ResourceReply {
+        run,
+        request: RequestId::new(3)?,
+        outcome: RequestOutcome::Failed(
+            sugarsubstitute_contracts::lifecycle::LifecycleFailureCode::Preparation,
+        ),
+    };
     owner.retain_transition(&ResourceTransition {
         replies: vec![reply],
         ..ResourceTransition::default()

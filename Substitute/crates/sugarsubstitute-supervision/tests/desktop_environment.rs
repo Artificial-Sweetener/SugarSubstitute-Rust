@@ -47,18 +47,14 @@ fn the_desktop_child_keeps_the_users_profile_and_drops_browser_overrides() -> Te
     Ok(())
 }
 
-/// A lone remote-debugging port reaches the page so it can be driven and read; the
-/// browser-profile override is still removed.
+/// An inherited debugging port is dropped like any other browser override: the desktop opens
+/// DevTools on its own port in every launch.
 #[test]
-fn the_desktop_child_keeps_a_lone_debugging_port() -> TestResult {
-    let port = "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333";
+fn the_desktop_child_drops_an_inherited_debugging_port() -> TestResult {
     let mut captured = PROFILE.to_vec();
-    captured.push(port);
-    captured.push(r"WEBVIEW2_USER_DATA_FOLDER=C:\Elsewhere");
+    captured.push("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333");
     let desktop = LaunchEnvironment::for_desktop(&snapshot(&captured))?;
-    let mut expected = PROFILE.to_vec();
-    expected.push(port);
-    assert_eq!(lines(&desktop), expected);
+    assert_eq!(lines(&desktop), PROFILE);
     Ok(())
 }
 

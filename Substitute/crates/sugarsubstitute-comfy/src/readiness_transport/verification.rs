@@ -14,7 +14,9 @@ pub(super) trait Requests {
         consume: &mut dyn FnMut(&[u8]) -> Result<(), ReadinessTransportError>,
     ) -> Result<(), ReadinessTransportError>;
 }
-/// Check current metadata and effective argv against the same original installed source.
+/// Check current metadata against the installed source: a managed backend must serve the
+/// installation's exact SugarCubes inventory and run its exact argv; an attached ComfyUI must
+/// serve the installed frontend version and its own SugarCubes.
 pub(super) fn metadata(
     requests: &mut impl Requests,
     frontend: &str,
@@ -34,9 +36,11 @@ pub(super) fn metadata(
         paths.to_vec(),
     )
     .map_err(|e| ReadinessTransportError::new("expected_metadata", e))?;
-    identity
-        .compare(&stats, &extensions)
-        .map_err(|e| ReadinessTransportError::new("served_metadata", e))?;
+    match managed {
+        Some(_) => identity.compare(&stats, &extensions),
+        None => identity.compare_attached(&stats, &extensions),
+    }
+    .map_err(|e| ReadinessTransportError::new("served_metadata", e))?;
     if let Some(configuration) = managed {
         crate::readiness::compare_managed_arguments(&stats, configuration)
             .map_err(|e| ReadinessTransportError::new("served_managed_arguments", e))?;

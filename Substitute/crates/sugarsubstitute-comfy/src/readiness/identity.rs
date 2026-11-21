@@ -70,7 +70,29 @@ impl InstalledFrontendIdentity {
         }
         Ok(())
     }
+
+    /// Check an attached ComfyUI: the served frontend version must be the installed one, and
+    /// it must serve SugarCubes. The attached ComfyUI owns its SugarCubes, so the served build
+    /// is not compared with the installation's own pack; the host contract handshake decides
+    /// whether the page can work with this host.
+    pub fn compare_attached(
+        &self,
+        stats: &SystemStats,
+        extensions: &ExtensionInventory,
+    ) -> Result<(), ReadinessError> {
+        let package = stats.packages().iter().find(|p| p.name == "comfyui-frontend-package");
+        if package.and_then(|p| p.installed.as_deref()) != Some(&self.frontend_version) {
+            return Err(ReadinessError::FrontendMismatch);
+        }
+        if !extensions.paths.iter().any(|path| path.starts_with(SUGARCUBES_EXTENSION_PREFIX)) {
+            return Err(ReadinessError::MissingExtension);
+        }
+        Ok(())
+    }
 }
+
+/// The URL prefix ComfyUI serves SugarCubes' web files under.
+pub(crate) const SUGARCUBES_EXTENSION_PREFIX: &str = "/extensions/SugarCubes/";
 pub(super) fn validate_paths(paths: &[String], cube_only: bool) -> Result<(), ReadinessError> {
     if paths.len() > MAX_EXTENSION_PATHS {
         return Err(ReadinessError::Shape);
