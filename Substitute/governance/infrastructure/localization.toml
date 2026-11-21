@@ -390,13 +390,13 @@ rationale = "Reapply caption/recovery labels from the authenticated configuratio
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/view.rs"
-source_sha256 = "sha256:1e44fe74142607c88d98a4f20f8977241a5bfa0e248222bce0e55d58d09725f3"
+source_sha256 = "sha256:8de65421f6ba8b4be2ffb48cd5fd2c3f04e2b5dbf9f713546f004911e7cb3911"
 kind = "presentation"
 rationale = "Startup View binds output, cancel and retry accessible controls to its existing Messages record; state changes select fields without authoring copy."
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup.rs"
-source_sha256 = "sha256:9efa04a61dc0d6a16338834fb3e825bbc1973dce752cb6abd0463030cccefe91"
+source_sha256 = "sha256:c943bbaf2365843e4d9d98f6a77f5861cda484928f9a068157c16ff0a9d5a378"
 kind = "presentation"
 rationale = "WindowContent returns the authoritative startup View accessible controls. This composing owner introduces no label literals."
 

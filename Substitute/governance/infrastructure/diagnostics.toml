@@ -73,7 +73,7 @@ rationale = "Native shared-texture qualification reports measured per-adapter in
 [[records]]
 path = "crates/sugarsubstitute-comfy/src/readiness_transport/memory.rs"
 owner = "sugarsubstitute-comfy"
-source_sha256 = "sha256:7fa368a86468be284a882ee48e0d6dbd12984cbd7d664a45a8b5af3fda51b700"
+source_sha256 = "sha256:5f7b279566d01b25c0145b2539b07966266b88fcc61ff7cec679517f4d7ea253"
 disposition = "fixture"
 rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
 
