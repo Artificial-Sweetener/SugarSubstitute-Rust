@@ -65,7 +65,7 @@ sources = [
     "crates/sugarsubstitute-splash/src/render.rs",
     "crates/sugarsubstitute-splash/src/render_stages.rs",
 ]
-source_sha256 = "sha256:5882cb52eb6b1e65597f81dd24499c7c1fddd9cf7253c767f6d66dc8c8284605"
+source_sha256 = "sha256:24d99be9f35549dd17b488717031261396b280c08826132f62efa7958bb3cda4"
 
 [[boundaries]]
 owner = "sugarsubstitute-desktop"
@@ -151,7 +151,7 @@ sources = [
     "crates/sugarsubstitute-desktop/src/windows_text/field_tests.rs",
     "crates/sugarsubstitute-desktop/src/windows_text/renderer.rs",
 ]
-source_sha256 = "sha256:ce9aead893cf7e2a4b0525a894a1ed04ebb6d54ad700bcfceefb1e9ba45c1601"
+source_sha256 = "sha256:1ab54275ced27195a663919084c120c27b24b75f328bd10c3e41c12da2a26637"
 
 [[boundaries]]
 owner = "sugarsubstitute-image-gpu"

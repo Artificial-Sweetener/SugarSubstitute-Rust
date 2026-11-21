@@ -122,10 +122,6 @@ impl StartupView {
     pub(crate) fn asks_about_failure(&self) -> bool {
         self.appearance.status.offers_retry() && !self.retries_by_itself()
     }
-    /// Whether the splash gave up retrying a failure that retrying could have fixed.
-    pub(crate) fn gave_up(&self) -> bool {
-        self.appearance.retries_by_itself() && !self.retries_by_itself()
-    }
     /// Repaint with a changed operating-system accent; returns whether the palette changed.
     pub(crate) fn set_accent(&mut self, accent: AccentPalette) -> bool {
         let changed = self.appearance.accent != accent;

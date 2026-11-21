@@ -150,7 +150,7 @@ rationale = "Behavioral fixture creates a hidden OS STATIC window with a technic
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/construction.rs"
-source_sha256 = "sha256:f2d75d80aede873d03e336d97c8e53d2bb9c152fad401f197c824de061411beb"
+source_sha256 = "sha256:98889ea009d122b5586ba19c90ebbe62cd9014f10fd85e77dbdbd46c84447946"
 kind = "native"
 rationale = "Native boundary: Adopt every window, presenter, controller and native getter before interpreting outcomes.. Product labels arrive from the typed catalog or host-provided presentation, OS class/control names are technical identities, and original console/diagnostic data is preserved without translation."
 
@@ -390,13 +390,13 @@ rationale = "Reapply caption/recovery labels from the authenticated configuratio
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/view.rs"
-source_sha256 = "sha256:0ff9fbca4f2f15ba6eb878e2ac37bb9d406443d767603bed42f6c8c797579515"
+source_sha256 = "sha256:62b27c94033c30f7c1d0f112ffd15d8875e0197e6457a6a209867700f8f7efa1"
 kind = "presentation"
 rationale = "Startup View binds output, cancel and retry accessible controls to its existing Messages record; state changes select fields without authoring copy."
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup.rs"
-source_sha256 = "sha256:078ecd92bcd9d6a4404152b5c07657ec4409cb988ced93769c4005dbf285d6e4"
+source_sha256 = "sha256:9efa04a61dc0d6a16338834fb3e825bbc1973dce752cb6abd0463030cccefe91"
 kind = "presentation"
 rationale = "WindowContent returns the authoritative startup View accessible controls. This composing owner introduces no label literals."
 
@@ -426,7 +426,7 @@ rationale = "Validate existing control labels for emptiness/NUL and unique ident
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/host_contract.rs"
-source_sha256 = "sha256:7e42e4efdc19f7123904f0e4b1ecb770fc6ff7a6469fcc43aa23119808756a09"
+source_sha256 = "sha256:41e667f8ce0b892bb1e64323608f45f42fe7f96f1f48915435078e64c93dbba3"
 kind = "native"
 rationale = "Main caption/recovery contracts borrow localized labels from the host. They define presentation data and no catalog or fallback policy."
 

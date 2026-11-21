@@ -224,7 +224,7 @@ fn a_settled_failure_is_retried_five_times_by_itself_then_asked_about() -> Resul
         assert!(!view.take_retry());
         assert!(!view.appearance.retrying);
         assert!(view.asks_about_failure());
-        assert!(view.gave_up());
+        assert!(view.appearance.retries_by_itself());
         view.reset_retries();
     }
     Ok(())
@@ -240,7 +240,7 @@ fn a_failure_retrying_cannot_fix_is_asked_about_at_once() -> Result<(), Box<dyn 
         view.set_failure(Some(code));
         assert!(!view.take_retry());
         assert!(view.asks_about_failure());
-        assert!(!view.gave_up());
+        assert!(!view.appearance.retries_by_itself());
     }
     Ok(())
 }
