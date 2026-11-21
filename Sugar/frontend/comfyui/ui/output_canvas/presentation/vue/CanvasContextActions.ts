@@ -29,8 +29,9 @@ import type {
 } from '../../domain/CanvasViewPort.js';
 
 /**
- * Offer the Output actions in the original order: Compare outputs, then Copy, Open in Photoshop,
- * Open All in Photoshop and Reveal in File Manager, delegating every transition to its owner.
+ * Offer the Output actions in the original order: Compare outputs, then Copy, the copy in the
+ * other image format, Open in Photoshop, Open All in Photoshop and Reveal in File Manager,
+ * delegating every transition to its owner.
  *
  * The overview offers no menu away from an image unless outputs are being compared; an image
  * there offers the actions addressed to it, without Open All. Video offers neither Compare nor
@@ -83,6 +84,15 @@ export function canvasContextActions(
     { type: 'copy-media', target, format: 'preferred' },
     unavailable || actions?.copy === false,
   );
+  // Beside Copy, the image format the Drag and Copy setting did not choose.
+  if (!video && snapshot.mediaActions) {
+    const format = snapshot.mediaActions.preferredCopyFormat === 'jpeg' ? 'png' : 'jpeg';
+    action(
+      `Copy .${format === 'jpeg' ? 'jpg' : 'png'}`,
+      { type: 'copy-media', target, format },
+      unavailable || actions?.copy === false,
+    );
+  }
   if (!video && snapshot.mediaActions?.photoshop) {
     action(
       'Open in Photoshop',

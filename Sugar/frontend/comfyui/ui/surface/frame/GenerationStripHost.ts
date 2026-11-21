@@ -58,6 +58,10 @@ export class GenerationStripHost {
         this.#adapter.setBatch(value);
         this.#refresh();
       },
+      setMode: (mode) => {
+        this.#adapter.setMode(mode);
+        this.#refresh();
+      },
       generate: () => this.#adapter.generate(),
       cancel: () => this.#adapter.cancel(),
       skip: () => this.#adapter.skip(),

@@ -87,7 +87,11 @@ import { regionTheme } from './region-theme.js';
 import { regionCaret } from './region-caret.js';
 import { nativeConditioning } from './conditioning-state.js';
 import { regionHost, regionNameObserver } from './region-host.js';
-import { clipboardCommands, type ClipboardObserver } from './native-clipboard.js';
+import { clipboardCommands, runEditCommand, type ClipboardObserver } from './native-clipboard.js';
+
+/** Keys the edit-command owner answers; CodeMirror's own bindings for them are left out. */
+const EDIT_KEYS = new Set(['Mod-a', 'Mod-z', 'Mod-y', 'Mod-Shift-z']);
+
 import { synchronizedRegionNames } from './region-host-transaction.js';
 import { reorderInteractions } from './reorder-interactions.js';
 import type { RegionNameChange } from './region-host-contracts.js';
@@ -241,15 +245,21 @@ export function createNativeState(source: string, options: NativeStateOptions): 
             shift: () => true,
             preventDefault: true,
           },
-          ...historyKeymap,
+          // Select all, undo and redo run under the prompt's one set of edit-command rules.
+          { key: 'Mod-a', run: (view) => runEditCommand(view, 'select-all'), preventDefault: true },
+          { key: 'Mod-z', run: (view) => runEditCommand(view, 'undo'), preventDefault: true },
+          { key: 'Mod-y', run: (view) => runEditCommand(view, 'redo'), preventDefault: true },
+          { key: 'Mod-Shift-z', run: (view) => runEditCommand(view, 'redo'), preventDefault: true },
+          ...historyKeymap.filter((binding) => !EDIT_KEYS.has(binding.key ?? '')),
           ...defaultKeymap.filter(
             (binding) =>
-              !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(binding.key ?? ''),
+              !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(binding.key ?? '') &&
+              !EDIT_KEYS.has(binding.key ?? ''),
           ),
         ]),
       ),
       EditorView.updateListener.of(options.update),
-      nativeInputEvents(options.view, options.lexicon, options.publish, options.isAlive),
+      nativeInputEvents(options.view, options.publish, options.isAlive),
       editorTheme,
       loraTheme,
       loraActiveFeedback,

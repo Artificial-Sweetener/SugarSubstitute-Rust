@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose native field appearance and relation policy around one submitted seed history. */
+import { TextFieldEditMenu } from '../menus/TextFieldEditMenu.js';
 import { RelationHostLifecycle, type RelationHostOptions } from './RelationHostLifecycle.js';
 import { AppearanceHost } from '../surface/appearance/AppearanceHost.js';
 import { OwnedSurfaceAppearance } from '../surface/appearance/OwnedSurfaceAppearance.js';
@@ -93,6 +94,8 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
   const embedded = new EmbeddedPresentation();
   const hostAccent = new HostAccent();
   const host = new HostDescriptionState();
+  // Ordinary text fields take SugarCubes' edit menu where the host lets SugarCubes own it.
+  const textMenus = new TextFieldEditMenu(options.document, host, options.reportPresentationError);
   const updates = new UpdateSourceSlot();
   const draggedFiles = new DraggedFiles();
   const confirm = (
@@ -185,6 +188,7 @@ export function createWorkflowFieldHost(options: WorkflowFieldHostOptions): {
   });
   /** Mount field appearance and its frame/navigation presentation after native workspace setup. */
   function setupPresentation(): void {
+    textMenus.setup();
     appearance.setup();
     frame.setup();
     relations.setupOverridePresentation(embedded);

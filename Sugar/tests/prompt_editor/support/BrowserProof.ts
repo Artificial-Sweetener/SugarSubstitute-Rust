@@ -134,10 +134,28 @@ host.setup(null, {
         },
       };
     },
+    modelMenu: () => [],
     chooseModel: (kind, label, anchor) =>
       new Promise((resolve) => {
         const items = promptCatalogFixture().items.filter((item) => item.kind === kind);
-        openModelChooser(document, { items, label, anchor }, resolve);
+        openModelChooser(
+          document,
+          {
+            items,
+            label,
+            anchor,
+            context: {
+              actions: null,
+              updates: null,
+              feedback: null,
+              detectors: null,
+              outputs: null,
+              detectorDialog: null,
+            },
+            session: null,
+          },
+          resolve,
+        );
       }),
   },
 });

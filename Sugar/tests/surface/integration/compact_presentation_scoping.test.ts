@@ -54,7 +54,8 @@ interface Presentation {
   readonly rowsPadding: string;
   readonly gap: string;
   readonly masonryPadding: string;
-  readonly labelDisplay: string;
+  readonly labelVisibility: string;
+  readonly iconWidth: number;
 }
 
 /** Render the real rail and masonry rules under the given root presentation attributes. */
@@ -71,7 +72,9 @@ async function present(root: string, compactStack: boolean): Promise<Presentatio
       content: `*{box-sizing:border-box}html,body{margin:0;height:100%}#workspace{position:relative;height:100%}${substituteFrameCss}${pluginFrameCss}`,
     });
     await page.addScriptTag({ content: installStyles });
-    return await page.evaluate(() => {
+    return await page.evaluate(async () => {
+      // Measure the settled presentation, after the rail's own transitions end.
+      await Promise.all(document.getAnimations().map((animation) => animation.finished));
       const host = document.querySelector('.sc-cube-stack-host')!;
       const stack = document.querySelector('.sc-cube-stack')!;
       const row = document.querySelector<HTMLElement>('.sc-cube-stack-row')!;
@@ -86,7 +89,9 @@ async function present(root: string, compactStack: boolean): Promise<Presentatio
         rowsPadding: getComputedStyle(document.querySelector('.sc-cube-stack__rows')!).padding,
         gap: getComputedStyle(masonry).getPropertyValue('--sugarcubes-masonry-gap').trim(),
         masonryPadding: getComputedStyle(masonry).padding,
-        labelDisplay: getComputedStyle(row.querySelector('.sc-cube-stack-row__text')!).display,
+        labelVisibility: getComputedStyle(row.querySelector('.sc-cube-stack-row__text')!)
+          .visibility,
+        iconWidth: row.querySelector('.sc-cube-stack-row__icon')!.getBoundingClientRect().width,
       };
     });
   } finally {
@@ -101,7 +106,9 @@ test.each([
   'a compact Cube stack in %s only hides labels and keeps masonry and rail spacing',
   async (_name, root, hostLeft, hostTop, hostRadius, rowRadius) => {
     const actual = await present(root, true);
-    expect(actual.labelDisplay).toBe('none');
+    // Compacting hides the text; the icon keeps its size and place.
+    expect(actual.labelVisibility).toBe('hidden');
+    expect(actual.iconWidth).toBe(34);
     expect(actual.stackWidth).toBe(58);
     expect(actual.hostLeft).toBe(hostLeft);
     expect(actual.hostTop).toBe(hostTop);
@@ -121,7 +128,8 @@ test.each([
 ])('%s packs masonry and the Cube stack edge to edge', async (_name, root) => {
   for (const compactStack of [false, true]) {
     const actual = await present(root, compactStack);
-    expect(actual.labelDisplay).toBe(compactStack ? 'none' : 'flex');
+    expect(actual.labelVisibility).toBe(compactStack ? 'hidden' : 'visible');
+    expect(actual.iconWidth).toBe(34);
     expect(actual.stackWidth).toBe(compactStack ? 46 : 224);
     expect(actual.hostLeft).toBe(0);
     expect(actual.hostTop).toBe(0);

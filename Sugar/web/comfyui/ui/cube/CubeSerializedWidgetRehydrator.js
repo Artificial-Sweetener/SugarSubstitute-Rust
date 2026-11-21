@@ -14,10 +14,10 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Rehydrate saved Cube widgets before Comfy applies positional values. */
+import { isCubeKind } from './CubeKind.js';
 import { rebindSubgraphWidgetValues } from '../graph/SubgraphWidgetValueRebinder.js';
 import { isRecord } from '../types/common.js';
 import { CubeNestedWidgetRestoration } from './CubeNestedWidgetRestoration.js';
-const CUBE_KINDS = new Set(['cube', 'cube_draft']);
 const WIDGET_INPUT_TYPES = new Set([
     'BOOLEAN',
     'COMBO',
@@ -146,9 +146,7 @@ function isWidgetFieldSpec(value) {
 }
 /** Identify a serialized SugarCube definition without touching ordinary subgraphs. */
 function isCubeDefinition(value) {
-    return (isRecord(value) &&
-        isRecord(value.extra) &&
-        CUBE_KINDS.has(readString(value.extra.sugarcubes_kind)));
+    return isRecord(value) && isRecord(value.extra) && isCubeKind(value.extra.sugarcubes_kind);
 }
 /** Normalize one optional serialized identity. */
 function readString(value) {

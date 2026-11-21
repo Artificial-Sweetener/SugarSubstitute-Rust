@@ -14,6 +14,8 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own editor menu entry-point lifetimes while delegating values, policies and persistence. */
+import { plainTextField, textFieldEditEntries } from '../../menus/TextFieldEditMenu.js';
+import { SystemClipboard } from '../../core/SystemClipboard.js';
 import { ContextMenu } from '../../menus/ContextMenu.js';
 import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
 import type { ContextMenuEntry } from '../../menus/ContextMenu.js';
@@ -42,6 +44,8 @@ export interface EditorContextMenuOptions {
   readonly modelContributions?: (root: HTMLElement) => readonly ModelContextContribution[];
   readonly canvasDimensions?: (binding: DimensionBinding) => readonly ContextMenuEntry[];
 }
+const SEPARATOR: ContextMenuEntry = { label: '', separator: true };
+
 interface CardMenu {
   readonly root: HTMLElement;
   card: NativeEditorCard;
@@ -52,6 +56,7 @@ export class EditorContextMenuHost {
   readonly #options: EditorContextMenuOptions;
   readonly #menu: ContextMenu;
   readonly #dialog: SaveNodePresetDialog;
+  readonly #clipboard: SystemClipboard;
   readonly #cards = new Map<HTMLElement, CardMenu>();
   #presence: HostSurfaceObserver | null = null;
   readonly #dirty = new Set<HTMLElement>();
@@ -63,6 +68,7 @@ export class EditorContextMenuHost {
     this.#options = options;
     this.#menu = new ContextMenu(options.document);
     this.#dialog = new SaveNodePresetDialog(options.document);
+    this.#clipboard = new SystemClipboard(options.document);
   }
   /** Observe native card mounts and intercept dimension menus before embedded event isolation. */
   setup(): void {
@@ -214,9 +220,14 @@ export class EditorContextMenuHost {
     event.preventDefault();
     event.stopImmediatePropagation();
     this.#menuRoot = root;
+    // The field keeps its edit rows; the dimension actions follow them.
+    const input = plainTextField(event.target);
+    const edits = input
+      ? [...textFieldEditEntries(input, this.#clipboard, this.#options.reportError), SEPARATOR]
+      : [];
     this.#menu.open({
       label: 'Dimensions',
-      entries,
+      entries: [...edits, ...entries],
       anchor: { kind: 'pointer', x: event.clientX, y: event.clientY },
       trigger: field.element,
       preferRightSubmenus: true,

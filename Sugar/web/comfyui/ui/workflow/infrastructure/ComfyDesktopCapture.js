@@ -20,6 +20,8 @@ import { DesktopSessionRefusal, } from '../domain/DesktopSession.js';
 /** Keep checkpoint inventory and bounded DTO admission together; this owner never changes workflow state. */
 export class ComfyDesktopCapture {
     options;
+    /** Each workflow's entry as last captured, kept for a capture that cannot read it again. */
+    #kept = new Map();
     constructor(options) {
         this.options = options;
     }
@@ -32,33 +34,29 @@ export class ComfyDesktopCapture {
         for (const context of snapshot.open) {
             this.options.assertCurrent(cancellation);
             const binding = this.options.bindings.binding(context.sessionId);
-            const document = this.options.documents.capture(context, binding.graphRevision);
-            total += utf8Bytes(document.graphJson) + utf8Bytes(document.baselineGraphJson ?? '');
-            if (total > 128 * 1024 * 1024)
-                throw new DesktopSessionRefusal('too-large', 'Desktop workspace exceeds checkpoint admission.');
-            const result = this.options.execution.results.read(context.sessionId);
-            const preferences = this.options.presentation.capture(context.sessionId);
-            if (!result || !preferences)
-                throw new DesktopSessionRefusal('stale', 'Desktop workflow owner was retired.');
-            const outputs = await this.options.outputs.capture(binding, this.options.scope.backend, result, cancellation);
-            this.options.assertCurrent(cancellation);
-            // Results arriving while receipts were awaited can advance this workflow past the captured
-            // document; the capture then describes no single moment and is retried, not refused.
-            if (!sameBinding(this.options.bindings.binding(context.sessionId), binding))
-                throw new DesktopSessionRefusal('stale', 'Desktop workflow changed while its checkpoint was captured.');
-            const route = readComfyWorkflowInputState(JSON.parse(document.graphJson))?.route ?? 'output';
-            const view = this.options.canvas.capture(context, binding, outputs, this.options.identities, preferences, route);
-            entries.push(Object.freeze({
-                id: binding.entryId,
-                document,
-                input: this.options.input.get(binding.entryId) ?? null,
-                view,
-                sourceRevision: binding.sourceRevision,
-                navigationRevision: binding.navigationRevision,
-                sources: this.options.identities.inventory(binding.entryId),
-                outputs,
-                submissions: this.options.submissions.read(binding.entryId),
-            }));
+            try {
+                const entry = await this.#entry(context, binding, total, cancellation);
+                total += entry.bytes;
+                entries.push(entry.entry);
+                this.#kept.set(binding.entryId, entry.entry);
+            }
+            catch (error) {
+                // A workflow that changed while it was captured is captured again, not kept.
+                if (cancellation.cancelled() ||
+                    (error instanceof DesktopSessionRefusal &&
+                        (error.code === 'too-large' || error.code === 'stale')))
+                    throw error;
+                // One workflow that cannot be captured keeps the state it was last saved with, so it
+                // never costs the other workflows their save.
+                const kept = this.#kept.get(binding.entryId);
+                if (kept)
+                    entries.push(kept);
+                console.warn('SugarCubes kept a workflow at its last saved state.', {
+                    entry: binding.entryId,
+                    kept: Boolean(kept),
+                    error,
+                });
+            }
         }
         const assets = new Map();
         for (const output of entries.flatMap((entry) => entry.outputs)) {
@@ -101,6 +99,39 @@ export class ComfyDesktopCapture {
         if (rule !== null)
             throw new DesktopSessionRefusal('invalid', `Desktop checkpoint failed semantic admission: ${rule}.`);
         return checkpoint;
+    }
+    /** Capture one open workflow's entry, refusing when it would overflow the checkpoint. */
+    async #entry(context, binding, total, cancellation) {
+        const document = this.options.documents.capture(context, binding.graphRevision);
+        const bytes = utf8Bytes(document.graphJson) + utf8Bytes(document.baselineGraphJson ?? '');
+        if (total + bytes > 128 * 1024 * 1024)
+            throw new DesktopSessionRefusal('too-large', 'Desktop workspace exceeds checkpoint admission.');
+        const result = this.options.execution.results.read(context.sessionId);
+        const preferences = this.options.presentation.capture(context.sessionId);
+        if (!result || !preferences)
+            throw new DesktopSessionRefusal('stale', 'Desktop workflow owner was retired.');
+        const outputs = await this.options.outputs.capture(binding, this.options.scope.backend, result, cancellation);
+        this.options.assertCurrent(cancellation);
+        // Results arriving while receipts were awaited can advance this workflow past the captured
+        // document; the capture then describes no single moment and is retried, not refused.
+        if (!sameBinding(this.options.bindings.binding(context.sessionId), binding))
+            throw new DesktopSessionRefusal('stale', 'Desktop workflow changed while its checkpoint was captured.');
+        const route = readComfyWorkflowInputState(JSON.parse(document.graphJson))?.route ?? 'output';
+        const view = this.options.canvas.capture(context, binding, outputs, this.options.identities, preferences, route);
+        return {
+            bytes,
+            entry: Object.freeze({
+                id: binding.entryId,
+                document,
+                input: this.options.input.get(binding.entryId) ?? null,
+                view,
+                sourceRevision: binding.sourceRevision,
+                navigationRevision: binding.navigationRevision,
+                sources: this.options.identities.inventory(binding.entryId),
+                outputs,
+                submissions: this.options.submissions.read(binding.entryId),
+            }),
+        };
     }
 }
 /** Describe exact temporary bytes the native publisher must verify and retain before durable acknowledgement. */

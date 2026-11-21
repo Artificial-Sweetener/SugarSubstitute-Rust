@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose the adopted native editor for Cube fields while preserving its sole editing and drag owners. */
+import type { ContextMenuEntry } from '../../menus/ContextMenu.js';
 import { mountEditor } from '../../../../sugarprompt/editor/src/index.js';
 import { clipboardRefusalObserver } from './ClipboardRefusal.js';
 import type {
@@ -79,6 +80,8 @@ export interface SugarPromptMountOptions {
    * resolve with the name a prompt writes for it; null when nothing was picked or it is unavailable.
    */
   readonly pickLora: ((anchor: PromptMenuPoint) => Promise<string | null>) | null;
+  /** The model rows for one installed LoRA, by its backend value; none when it is unknown. */
+  readonly loraMenu: (backendValue: string) => readonly ContextMenuEntry[];
   /** The LoRAs loaded ahead of this prompt's encoder, as the current catalog describes them. */
   readonly loraUpstream: () => readonly LoraCatalogItem[];
 }
@@ -171,7 +174,7 @@ export class SugarPromptEditor {
     const tagCatalog = bundledPromptTagCatalog();
     this.#api = mountEditor(this.#content, {
       source: options.source,
-      menuPresentation: (root) => new SugarPromptMenu(root, options.report),
+      menuPresentation: (root) => new SugarPromptMenu(root, options.report, options.loraMenu),
       tooltipTransport: (plane) => new SugarPromptTooltip(plane),
       label: options.label,
       placeholder: 'Write a prompt…',

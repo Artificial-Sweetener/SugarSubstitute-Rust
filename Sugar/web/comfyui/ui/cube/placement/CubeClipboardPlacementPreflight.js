@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Inspect Comfy clipboard serialization before it can register copied definitions. */
+import { isCubeKind } from '../CubeKind.js';
 import { isRecord } from '../../types/common.js';
 /** Detect a copied wrapper or a wrapper buried inside a copied Subgraph definition. */
 export function readCubeClipboardViolation(value, targetIsRoot) {
@@ -51,10 +52,6 @@ function isSerializedCubeNode(value, cubeDefinitionIds) {
 /** Read definition-level product identity from untrusted clipboard data. */
 function readExtraKind(value) {
     return isRecord(value.extra) ? value.extra.sugarcubes_kind : null;
-}
-/** Recognize both persisted and workflow-only Cube identity markers. */
-function isCubeKind(value) {
-    return value === 'cube' || value === 'cube_draft';
 }
 /** Read one stable serialized identifier. */
 function readString(value) {

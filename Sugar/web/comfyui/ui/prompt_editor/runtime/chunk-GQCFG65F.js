@@ -1,16 +1,21 @@
 // frontend/comfyui/ui/prompt_editor/runtime/SugarPromptMenu.ts
 import { ContextMenu } from "../../menus/ContextMenu.js";
 var SugarPromptMenu = class {
-  #menu;
-  #root;
-  #report;
-  #publication = null;
-  /** Bind focus return and observable command failures to one editor lifetime. */
-  constructor(root, report) {
+  /**
+   * Bind focus return and observable command failures to one editor lifetime. `loraMenu` gives
+   * the rows about the LoRA whose banner the menu opened on, the same ones every model surface
+   * shows.
+   */
+  constructor(root, report, loraMenu) {
+    this.loraMenu = loraMenu;
     this.#root = root;
     this.#report = report;
     this.#menu = new ContextMenu(root.ownerDocument);
   }
+  #menu;
+  #root;
+  #report;
+  #publication = null;
   /** Map literal domain entries without changing source or reconstructing commands. */
   show(menu, activate, dismiss) {
     this.hide();
@@ -29,9 +34,11 @@ var SugarPromptMenu = class {
         }
       };
     });
+    const lora = menu.actions?.kind === "inline" && menu.actions.resource.resolution === "found" ? this.loraMenu(menu.actions.resource.model.backendValue) : [];
+    const own = entries(menu.items);
     this.#menu.open({
       label: "Prompt actions",
-      entries: entries(menu.items),
+      entries: lora.length ? [...own, { label: "", separator: true }, ...lora] : own,
       anchor: { kind: "pointer", x: menu.anchor.left, y: menu.anchor.bottom },
       focusReturn: this.#root.querySelector(".cm-content"),
       returnFocusOnSelect: false,

@@ -1,3 +1,6 @@
+import { ContextMenu } from '../../menus/ContextMenu.js';
+const GENERATE_GLYPH = 'play.svg';
+const CONTINUOUS_GLYPH = 'infinity.svg';
 /** Keep controls and keyboard focus stable through native execution and preview updates. */
 export class GenerationStripView {
     document;
@@ -10,11 +13,14 @@ export class GenerationStripView {
     #generate;
     #cancel;
     #skip;
+    #modes;
     #state = {
         batch: 1,
         generateEnabled: false,
         cancelEnabled: false,
         skipEnabled: false,
+        mode: 'generate',
+        looping: false,
     };
     /** Build accessible segments in the source order: batch, cancel, generate, skip. */
     constructor(document, actions) {
@@ -63,7 +69,19 @@ export class GenerationStripView {
         const cluster = document.createElement('div');
         cluster.className = 'sc-generation-actions';
         this.#cancel = this.#segment('cancel', 'Cancel generation', 'stop.svg', () => actions.cancel());
-        this.#generate = this.#segment('generate', 'Generate', 'play.svg', () => actions.generate());
+        this.#generate = this.#segment('generate', 'Generate', GENERATE_GLYPH, () => actions.generate());
+        this.#modes = new ContextMenu(document);
+        // Right-clicking Generate chooses what it does, as in the original Substitute.
+        this.#generate.addEventListener('contextmenu', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            this.#modes.open({
+                label: 'Generation mode',
+                entries: this.#modeEntries(),
+                anchor: { kind: 'pointer', x: event.clientX, y: event.clientY },
+                trigger: this.#generate,
+            });
+        });
         this.#skip = this.#segment('skip', 'Skip generation', 'next.svg', () => actions.skip());
         cluster.append(this.#cancel, this.#generate, this.#skip);
         this.queueSlot = document.createElement('span');
@@ -80,7 +98,9 @@ export class GenerationStripView {
             this.#input.value = String(state.batch);
         this.#input.setAttribute('aria-valuenow', String(state.batch));
         this.#input.disabled = !state.generateEnabled;
-        this.#generate.disabled = !state.generateEnabled;
+        // A running loop can always be stopped from Generate.
+        this.#generate.disabled = !state.generateEnabled && !state.looping;
+        this.#presentMode(state);
         this.#cancel.disabled = !state.cancelEnabled;
         this.#skip.disabled = !state.skipEnabled;
         this.#up.disabled = !state.generateEnabled || state.batch >= 999;
@@ -88,7 +108,55 @@ export class GenerationStripView {
     }
     /** Release only owned presentation nodes. */
     dispose() {
+        this.#modes.close();
         this.element.remove();
+    }
+    /** Show the chosen mode on Generate: its icon, and the press's meaning while a loop runs. */
+    #presentMode(state) {
+        const continuous = state.mode === 'continuous';
+        const label = state.looping
+            ? 'Stop continuous generation'
+            : continuous
+                ? 'Generate continuously'
+                : 'Generate';
+        this.#generate.dataset.mode = state.mode;
+        this.#generate.toggleAttribute('data-looping', state.looping);
+        this.#generate.setAttribute('aria-label', label);
+        this.#generate.title = label;
+        this.#glyph(this.#generate, continuous ? CONTINUOUS_GLYPH : GENERATE_GLYPH);
+    }
+    /** The mode menu: Generate and Continuous, each with its icon, the chosen one checked. */
+    #modeEntries() {
+        const entry = (mode, label, glyph) => ({
+            label,
+            checked: this.#state.mode === mode,
+            selection: 'single',
+            icon: (document) => {
+                const icon = document.createElement('span');
+                icon.className = 'sc-generation-glyph';
+                icon.setAttribute('aria-hidden', 'true');
+                icon.style.setProperty('--sc-generation-glyph', glyphUrl(glyph));
+                return icon;
+            },
+            select: () => {
+                try {
+                    this.actions.setMode(mode);
+                }
+                catch (error) {
+                    this.actions.report(error);
+                }
+            },
+        });
+        return [
+            entry('generate', 'Generate', GENERATE_GLYPH),
+            entry('continuous', 'Continuous', CONTINUOUS_GLYPH),
+        ];
+    }
+    /** Point one segment's tinted glyph at a packaged icon. */
+    #glyph(button, filename) {
+        button
+            .querySelector('.sc-generation-glyph')
+            ?.style.setProperty('--sc-generation-glyph', glyphUrl(filename));
     }
     /** Commit valid numeric edits and restore the canonical value for empty or invalid text. */
     #commit() {
@@ -137,11 +205,15 @@ export class GenerationStripView {
         const glyph = this.document.createElement('span');
         glyph.className = 'sc-generation-glyph';
         glyph.setAttribute('aria-hidden', 'true');
-        glyph.style.setProperty('--sc-generation-glyph', `url("${new URL(`../../../../orb/${filename}`, import.meta.url).href}")`);
+        glyph.style.setProperty('--sc-generation-glyph', glyphUrl(filename));
         button.append(glyph);
         button.addEventListener('click', () => {
             void action().catch(this.actions.report);
         });
         return button;
     }
+}
+/** The packaged strip icon `filename`, as a CSS image. */
+function glyphUrl(filename) {
+    return `url("${new URL(`../../../../orb/${filename}`, import.meta.url).href}")`;
 }

@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own the editable banner field and its attached, host-independent model popup. */
+import type { ModelContextOptions } from '../ModelMenu.js';
 import {
   computed,
   defineComponent,
@@ -60,6 +61,10 @@ export const ModelPickerField = defineComponent({
     updates: { type: Object as PropType<ModelUpdatePort | null>, default: null },
     detectors: { type: Object as PropType<ModelDetectorPort | null>, default: null },
     outputs: { type: Object as PropType<ModelOutputThumbnails | null>, default: null },
+    detectorDialog: {
+      type: Function as PropType<ModelContextOptions['detectorDialog']>,
+      default: null,
+    },
     discoveryAction: { type: Function as PropType<(() => void) | null>, default: null },
     compatibility: {
       type: Function as PropType<(() => ModelCompatibilityContext | null) | null>,

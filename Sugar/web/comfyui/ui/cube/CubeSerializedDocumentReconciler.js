@@ -14,8 +14,8 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Reconcile stale auxiliary Cube documents before native graph construction. */
+import { isCubeKind } from './CubeKind.js';
 import { isRecord } from '../types/common.js';
-const CUBE_KINDS = new Set(['cube', 'cube_draft']);
 /** Remove stale portable copies while preserving authoritative native definitions. */
 export class CubeSerializedDocumentReconciler {
     /** Discard documents whose identity no longer matches their native definition. */
@@ -30,7 +30,7 @@ export class CubeSerializedDocumentReconciler {
             if (!isRecord(definition) || !isRecord(definition.extra))
                 continue;
             const extra = definition.extra;
-            if (!CUBE_KINDS.has(readString(extra.sugarcubes_kind)))
+            if (!isCubeKind(extra.sugarcubes_kind))
                 continue;
             if (!isRecord(extra.sugarcubes_cube) || !isRecord(extra.sugarcubes_document))
                 continue;

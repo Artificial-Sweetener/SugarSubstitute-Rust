@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Adapt Comfy's native image actions to Cube output media. */
+import { SystemClipboard } from '../core/SystemClipboard.js';
 import { ContextMenu } from '../menus/ContextMenu.js';
 /** Reuse Comfy's image-action semantics on output media outside native node cards. */
 export class ComfyCubePreviewActions {
@@ -106,14 +107,7 @@ export function createComfyCubePreviewActions(host) {
                 throw new Error(`Image request failed with status ${String(response.status)}.`);
             return response.blob();
         },
-        writeClipboard: async (blob) => {
-            if (!windowRef.ClipboardItem || !windowRef.navigator.clipboard) {
-                throw new Error('Image clipboard writing is unavailable in this browser.');
-            }
-            await windowRef.navigator.clipboard.write([
-                new windowRef.ClipboardItem({ [blob.type]: blob }),
-            ]);
-        },
+        writeClipboard: (blob) => new SystemClipboard(host.document).writeItem({ [blob.type]: blob }),
         showContextMenu: (options, event) => {
             new ContextMenu(host.document).open({
                 label: 'Image actions',

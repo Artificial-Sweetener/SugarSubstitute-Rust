@@ -1,14 +1,13 @@
 import {
   ModelPickerField
-} from "./chunk-HHO6XLTE.js";
+} from "./chunk-VWGYIV4K.js";
 import "./chunk-RR5YCA3U.js";
 import "./chunk-RUTW3MPT.js";
 import "./chunk-OKMKTXD6.js";
-import "./chunk-LMZEATZG.js";
-import "./chunk-MM7W35BE.js";
 import "./chunk-JK626FTQ.js";
 import "./chunk-IVMM67XL.js";
 import "./chunk-BGLA25ZI.js";
+import "./chunk-MAD7FSJN.js";
 import "./chunk-7IKTD2HE.js";
 import "./chunk-4DBFGV2O.js";
 import "./chunk-HRRVXU3H.js";
@@ -27,6 +26,7 @@ import {
 } from "./chunk-3W5PGMRW.js";
 
 // frontend/comfyui/ui/model_library/vue/ModelPickerVueRuntime.ts
+import { ModelDetectorDialog } from "../ModelDetectorDialog.js";
 var mountIdentity = 0;
 function mountModelPicker(element, binding, initialItems, actions = null, feedback = null, updates = null, detectors = null, outputs = null, compatibility = null, session = null) {
   const items = shallowRef(initialItems);
@@ -41,6 +41,7 @@ function mountModelPicker(element, binding, initialItems, actions = null, feedba
       updates,
       detectors,
       outputs,
+      detectorDialog: detectors ? (item) => new ModelDetectorDialog(document, item, detectors) : null,
       compatibility,
       session,
       discoveryAction: discoveryAction.value,

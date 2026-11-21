@@ -14,21 +14,23 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Restore workflow views at the committed session boundary without observing presentation DOM. */
-import { WorkflowViewPreferences } from '../application/WorkflowViewPreferences.js';
+import { WorkflowViewPreferences, } from '../application/WorkflowViewPreferences.js';
 /** Identify browser-local view metadata, separate from user workflow documents. */
 export const WORKFLOW_VIEW_STORAGE_KEY = 'SugarCubes.WorkflowViews.v1';
 /** Adapt storage and authoritative session commitment to one shared presentation owner. */
 export class ComfyWorkflowViewPreferences {
     sessions;
     defaultCanvas;
+    documents;
     #views;
     #listeners = new Set();
     #stop = null;
     #ready = false;
     /** Inject browser persistence so invalid/unavailable storage never blocks workflow switching. */
-    constructor(sessions, storage, defaultCanvas, logger) {
+    constructor(sessions, storage, defaultCanvas, documents, logger) {
         this.sessions = sessions;
         this.defaultCanvas = defaultCanvas;
+        this.documents = documents;
         let stored = null;
         try {
             const json = storage()?.getItem(WORKFLOW_VIEW_STORAGE_KEY);
@@ -59,7 +61,7 @@ export class ComfyWorkflowViewPreferences {
     capture(sessionId) {
         const context = this.sessions.read().open.find((item) => item.sessionId === sessionId);
         return context
-            ? this.#views.snapshotFor({ id: sessionId, path: context.path || null }, this.defaultCanvas)
+            ? this.#views.snapshotFor({ id: sessionId, path: context.path || null }, () => this.#defaults(context.sessionId))
             : null;
     }
     /** Bind restored choices to an exact current occurrence before output and masonry projection. */
@@ -83,11 +85,20 @@ export class ComfyWorkflowViewPreferences {
         this.#listeners.add(listener);
         return () => this.#listeners.delete(listener);
     }
-    /** Persist explicit actions only while the graph has a committed active workflow. */
+    /**
+     * Persist explicit actions only while the graph has a committed active workflow. A view switch
+     * is recorded in the workflow itself, never as a step of its history.
+     */
     change(value) {
         if (!this.sessions.read().active || !this.#views.change(value))
             return;
+        if (value.masonry !== undefined)
+            this.documents.recordView(value.masonry ? 'masonry' : 'graph');
         this.#publish();
+    }
+    /** A workflow opens with the stored canvas choice and the view its document records. */
+    #defaults(sessionId) {
+        return { canvas: this.defaultCanvas(), masonry: this.documents.opensInMasonry(sessionId) };
     }
     /** Retire the host subscription without changing persisted choices. */
     dispose() {
@@ -108,7 +119,7 @@ export class ComfyWorkflowViewPreferences {
             return;
         }
         const context = snapshot.active;
-        if (this.#views.activate({ id: context.sessionId, path: context.path }, this.defaultCanvas) ||
+        if (this.#views.activate({ id: context.sessionId, path: context.path }, () => this.#defaults(context.sessionId)) ||
             changed)
             this.#publish();
     };

@@ -15,13 +15,12 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Resolve validated workflow-embedded definitions without consulting a catalog. */
 
+import { isCubeKind } from '../cube/CubeKind.js';
 import { buildCubeDefinitionKey, normalizeRevisionRef } from '../core/CubeDefinitionKey.js';
 import { parseCanonicalCubeId } from '../core/CubeId.js';
 import { hashText, stableStringify } from '../graph/DirtyHasher.js';
 import { isRecord } from '../types/common.js';
 import type { UnknownRecord } from '../types/common.js';
-
-const CUBE_KINDS = new Set(['cube', 'cube_draft']);
 
 export interface ResolvedEmbeddedCubeDefinition {
   cubeId: string;
@@ -47,7 +46,7 @@ export class EmbeddedCubeDefinitionResolver {
     const byDefinitionId = new Map<string, ResolvedEmbeddedCubeDefinition>();
     for (const [index, candidate] of definitions.entries()) {
       if (!isRecord(candidate) || !isRecord(candidate.extra)) continue;
-      if (!CUBE_KINDS.has(String(candidate.extra.sugarcubes_kind))) continue;
+      if (!isCubeKind(candidate.extra.sugarcubes_kind)) continue;
       const path = `definitions.subgraphs[${String(index)}]`;
       const definitionId = requireString(candidate.id, `${path}.id`);
       if (byDefinitionId.has(definitionId)) {
@@ -101,7 +100,7 @@ function requireNoPersistedCubeInstances(
   const instanceIds = new Set<string>();
   for (const [index, candidate] of nodes.entries()) {
     if (!isRecord(candidate) || !isRecord(candidate.properties)) continue;
-    if (!CUBE_KINDS.has(String(candidate.properties.sugarcubes_kind))) continue;
+    if (!isCubeKind(candidate.properties.sugarcubes_kind)) continue;
     const path = `nodes[${String(index)}]`;
     const definitionId = requireString(candidate.type, `${path}.type`);
     const definition = definitions.get(definitionId);

@@ -275,6 +275,10 @@ export class CubePromptEditorHost {
             promptControl: feedsPromptControl(session.node),
             modelCompletions: this.#modelCompletions,
             pickLora: this.#models ? (anchor) => this.#pickLora(anchor) : null,
+            loraMenu: (backendValue) => {
+                const item = this.#loraCatalog ? promptLoraModel(this.#loraCatalog, backendValue) : null;
+                return item && this.#models ? this.#models.modelMenu(item) : [];
+            },
             loraUpstream: () => promptUpstreamLoras(session.node, this.#loraCatalog),
             regionHover: (ordinal) => {
                 try {

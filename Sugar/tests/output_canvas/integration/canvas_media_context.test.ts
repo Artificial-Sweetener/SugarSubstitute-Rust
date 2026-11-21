@@ -73,6 +73,7 @@ test('presents the Substitute Output menu in its order with local reveal or remo
     'Compare outputs',
     'separator',
     'Copy',
+    'Copy .jpg',
     'Open in Photoshop',
     'Open All in Photoshop',
     'Reveal in File Manager',
@@ -85,7 +86,8 @@ test('presents the Substitute Output menu in its order with local reveal or remo
     caps,
     jest.fn(),
   );
-  expect(labels(remote)).toEqual(['Compare outputs', 'separator', 'Copy', 'Download']);
+  // The extra row is the format the Drag and Copy setting did not choose.
+  expect(labels(remote)).toEqual(['Compare outputs', 'separator', 'Copy', 'Copy .png', 'Download']);
   const compareOnly = canvasContextActions(
     snapshot(),
     { schema: 1, commands: ['comparison'] },
@@ -94,11 +96,12 @@ test('presents the Substitute Output menu in its order with local reveal or remo
   expect(labels(compareOnly)).toEqual(['Compare outputs']);
 });
 
-test('sends Copy in the preferred format and the Photoshop actions for their outputs', () => {
+test('sends Copy in the preferred format, the other format beside it, and the Photoshop actions for their outputs', () => {
   const send = jest.fn<(command: CanvasCommand) => void>();
   const entries = canvasContextActions(snapshot(), { schema: 1, commands: allCommands }, send);
   for (const label of [
     'Copy',
+    'Copy .jpg',
     'Open in Photoshop',
     'Open All in Photoshop',
     'Reveal in File Manager',
@@ -106,6 +109,7 @@ test('sends Copy in the preferred format and the Photoshop actions for their out
     entries.find((entry) => entry.label === label)?.select?.();
   expect(send.mock.calls.map(([command]) => command)).toEqual([
     { type: 'copy-media', target: 'primary', format: 'preferred' },
+    { type: 'copy-media', target: 'primary', format: 'jpeg' },
     { type: 'photoshop-media', target: 'primary' },
     { type: 'photoshop-all-media' },
     { type: 'file-media', target: 'primary' },
@@ -120,7 +124,12 @@ test('the overview offers a menu only on an image or while comparing, and never 
   const item = source.grid[1]!.items[0]!;
   const tile = { sourceId: item.provenance.sourceId, itemId: item.id };
   const onTile = canvasContextActions(overview, caps, jest.fn(), tile);
-  expect(labels(onTile)).toEqual(['Copy', 'Open in Photoshop', 'Reveal in File Manager']);
+  expect(labels(onTile)).toEqual([
+    'Copy',
+    'Copy .jpg',
+    'Open in Photoshop',
+    'Reveal in File Manager',
+  ]);
   expect(onTile.every((entry) => !entry.disabled)).toBe(true);
   const comparing = {
     ...overview,

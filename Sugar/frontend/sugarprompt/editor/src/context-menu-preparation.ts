@@ -158,7 +158,7 @@ export function prepareContextMenu(
         [...presets.items, ...(scheduleItem ? [scheduleItem] : [])],
         queueItem ? [queueItem] : [],
         actions?.items ?? [],
-        actions?.kind === 'inline' ? [] : [renderingItem],
+        actions?.kind === 'inline' && actions.items.length ? [] : [renderingItem],
       ]) {
     if (!group.length) continue;
     if (items.length) items.push({ kind: 'separator' });

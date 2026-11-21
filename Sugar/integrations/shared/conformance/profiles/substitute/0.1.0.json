@@ -32,6 +32,9 @@
           },
           {
             "name": "session-notice.lines"
+          },
+          {
+            "name": "editing.text-menus"
           }
         ],
         "protocol": "sugarcubes.host",

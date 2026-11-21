@@ -16,6 +16,10 @@
 /** Qualify inactive/temporary occurrence preferences and native import without premature browser writes. */
 import { WorkflowViewPreferences } from '../../../frontend/comfyui/ui/workflow/application/WorkflowViewPreferences.js';
 
+/** A workflow with no recorded view and no Cubes, opening with the canvas shown or hidden. */
+const graph = () => ({ canvas: true, masonry: false });
+const graphNoCanvas = () => ({ canvas: false, masonry: false });
+
 test('inactive browser history and temporary live choices capture without activating or writing', () => {
   const writes: unknown[] = [];
   const views = new WorkflowViewPreferences(
@@ -24,16 +28,17 @@ test('inactive browser history and temporary live choices capture without activa
   );
   const a = { id: 'a', path: 'workflows/a.json' };
   const temp = { id: 'temp', path: null };
-  expect(views.snapshotFor(a, () => true)).toEqual({
+  // An inactive workflow's own document says it opens in masonry.
+  expect(views.snapshotFor(a, () => ({ canvas: true, masonry: true }))).toEqual({
     canvas: false,
     masonry: true,
     editorWidth: 444,
   });
   views.restore(temp, { canvas: true, masonry: true, editorWidth: 650 });
-  views.activate(temp, () => false);
+  views.activate(temp, graphNoCanvas);
   expect(views.snapshot).toEqual({ canvas: true, masonry: true, editorWidth: 650 });
   expect(writes).toEqual([]);
-  views.activate(a, () => true);
+  views.activate(a, graph);
   expect(views.snapshot.editorWidth).toBe(444);
   expect(writes).toEqual([]);
 });

@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Convert a native Comfy selection into a real Cube subgraph node. */
 
+import { isCubeKind } from './CubeKind.js';
 import { isRecord } from '../types/common.js';
 import type { UnknownRecord, Vec2 } from '../types/common.js';
 import type { ComfyGraph, GraphId, NumericVector } from '../types/graph.js';
@@ -306,10 +307,7 @@ function readSelectedSubgraphNode(items: Set<unknown>): NativeConversionNode {
   if (!isNativeSubgraphNode(selected)) {
     throw new Error('Select a native Comfy subgraph node to convert it to a SugarCube.');
   }
-  if (
-    selected.properties.sugarcubes_kind === 'cube' ||
-    selected.properties.sugarcubes_kind === 'cube_draft'
-  ) {
+  if (isCubeKind(selected.properties.sugarcubes_kind)) {
     throw new Error('The selected subgraph is already a SugarCube.');
   }
   if (selected.isSubgraphNode.call(selected) !== true) {

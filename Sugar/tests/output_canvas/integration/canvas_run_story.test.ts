@@ -276,7 +276,7 @@ test('automatically presents the progressive batch and replaces only presentable
   });
 });
 
-test('refuses a preview-only source that lacks the exact manually selected batch position', () => {
+test('the tab receiving previews follows them, and a batch position opens once the stage has finals', () => {
   const f = fixture();
   const active = f.run(1);
   f.final(active, 0, 3);
@@ -285,17 +285,17 @@ test('refuses a preview-only source that lacks the exact manually selected batch
     type: 'select',
     selection: { sourceId: f.sources[0]!.id, batchIndex: 2 },
   });
+  // Choosing the tab receiving previews means "show me the latest": it follows that stage.
   f.selection.apply(f.view, f.catalog(), {
     type: 'select-source',
     selection: { sourceId: f.sources[1]!.id, batchIndex: 2 },
   });
   expect(f.views.read(f.view)).toMatchObject({
-    follow: 'manual',
-    selection: { sourceId: f.sources[0]!.id, batchIndex: 2 },
+    follow: 'auto',
+    selection: { sourceId: f.sources[1]!.id, batchIndex: 0 },
   });
   f.preview(active, 1);
-  expect(f.selection.preview(f.view, f.catalog())).toBeNull();
-  expect(f.selection.items(f.view, f.catalog()).primary?.file.filename).toBe('1-0-2.png');
+  expect(f.selection.preview(f.view, f.catalog())?.sourceId).toBe(f.sources[1]!.id);
   f.final(active, 1, 3);
   f.selection.apply(f.view, f.catalog(), {
     type: 'select-source',
@@ -373,4 +373,60 @@ test('keeps the source overview available while its first position is a live pre
   f.selection.apply(f.view, f.catalog(), { type: 'overview', enabled: true });
   expect(f.views.read(f.view)).toMatchObject({ mode: 'overview', sourcePreview: true });
   expect(f.selection.preview(f.view, f.catalog())?.sourceId).toBe(f.sources[1]!.id);
+});
+
+test('switching to a finished stage holds it; switching back to the stage receiving previews follows again', () => {
+  const f = fixture();
+  const active = f.run(1);
+  f.preview(active, 0);
+  f.final(active, 0);
+  f.preview(active, 1);
+  expect(f.views.read(f.view)).toMatchObject({ follow: 'auto' });
+  // Looking at the first stage's finished output is a manual choice.
+  f.selection.apply(f.view, f.catalog(), {
+    type: 'select-source',
+    selection: { sourceId: f.sources[0]!.id, batchIndex: 0 },
+  });
+  expect(f.views.read(f.view)).toMatchObject({ follow: 'manual' });
+  f.preview(active, 1);
+  expect(f.views.read(f.view).selection?.sourceId).toBe(f.sources[0]!.id);
+  // Back on the tab receiving previews: "show me the latest".
+  f.selection.apply(f.view, f.catalog(), {
+    type: 'select-source',
+    selection: { sourceId: f.sources[1]!.id, batchIndex: 0 },
+  });
+  expect(f.views.read(f.view)).toMatchObject({ follow: 'auto', sourcePreview: true });
+  expect(f.views.read(f.view).selection?.sourceId).toBe(f.sources[1]!.id);
+  expect(f.selection.preview(f.view, f.catalog())?.sourceId).toBe(f.sources[1]!.id);
+});
+
+test('after a stop, the finished output and the kept preview can each be selected and inspected', () => {
+  const f = fixture();
+  const active = f.run(1);
+  f.preview(active, 0);
+  f.final(active, 0);
+  f.preview(active, 1);
+  f.results.updateRun({ ...active, status: 'cancelled' });
+  f.selection.reconcile(f.view, f.catalog());
+  f.selection.apply(f.view, f.catalog(), {
+    type: 'select-source',
+    selection: { sourceId: f.sources[0]!.id, batchIndex: 0 },
+  });
+  expect(f.views.read(f.view)).toMatchObject({ follow: 'manual' });
+  expect(f.selection.items(f.view, f.catalog()).primary?.provenance.sourceId).toBe(
+    f.sources[0]!.id,
+  );
+  expect(f.selection.preview(f.view, f.catalog())).toBeNull();
+  // The kept preview is its stage's last image: selecting that tab shows it, and stays put.
+  f.selection.apply(f.view, f.catalog(), { type: 'select-preview', sourceId: f.sources[1]!.id });
+  expect(f.views.read(f.view)).toMatchObject({ follow: 'manual' });
+  expect(f.selection.preview(f.view, f.catalog())?.sourceId).toBe(f.sources[1]!.id);
+  // And back to the finished output again.
+  f.selection.apply(f.view, f.catalog(), {
+    type: 'select-source',
+    selection: { sourceId: f.sources[0]!.id, batchIndex: 0 },
+  });
+  expect(f.selection.items(f.view, f.catalog()).primary?.provenance.sourceId).toBe(
+    f.sources[0]!.id,
+  );
 });

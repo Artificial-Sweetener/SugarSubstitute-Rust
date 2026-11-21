@@ -35,12 +35,27 @@ const items = modelPickerChoices([], 'loras', [
   'characters/knight.safetensors',
 ]);
 
+const context = {
+  actions: null,
+  updates: null,
+  feedback: null,
+  detectors: null,
+  outputs: null,
+  detectorDialog: null,
+};
+
 /** Open the chooser over the fixture models and collect how it settles. */
-function open() {
+function open(models: readonly ModelCatalogItem[] = items) {
   const settled: (ModelCatalogItem | null)[] = [];
   const chooser = openModelChooser(
     document,
-    { items, label: 'Search LoRA', anchor: { left: 40, top: 40, width: 1, height: 1 } },
+    {
+      items: models,
+      label: 'Search LoRA',
+      anchor: { left: 40, top: 40, width: 1, height: 1 },
+      context,
+      session: null,
+    },
     (item) => settled.push(item),
   );
   const input = chooser.popup?.querySelector('input');
@@ -121,4 +136,31 @@ test('Escape, a press elsewhere and an explicit dismissal each settle once with 
   dismissed.chooser.dismiss();
   expect(dismissed.settled).toEqual([null]);
   expect(document.querySelector('.sc-model-popup')).toBeNull();
+});
+
+test('right-clicking a card opens the same model menu as the model picker, and choosing nothing', async () => {
+  const linked = items.map((item) => ({
+    ...item,
+    provider: 'civitai' as const,
+    providerUrl: 'https://civitai.com/models/1',
+  }));
+  const f = open(linked);
+  await nextTick();
+  const tile = document.querySelector<HTMLElement>('.sc-model-tile')!;
+  const event = new MouseEvent('contextmenu', {
+    bubbles: true,
+    cancelable: true,
+    clientX: 60,
+    clientY: 60,
+  });
+  tile.dispatchEvent(event);
+  await nextTick();
+  expect(event.defaultPrevented).toBe(true);
+  const menu = document.querySelector('[data-sc-floating-surface]');
+  expect(menu).not.toBeNull();
+  expect(menu!.textContent).toContain('Go to CivitAI page');
+  // Pressing in the card's menu is not a press outside the chooser.
+  menu!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+  expect(f.settled).toEqual([]);
+  f.chooser.dismiss();
 });

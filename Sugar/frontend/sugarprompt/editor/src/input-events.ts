@@ -16,63 +16,26 @@
 /** Native DOM event boundaries delegate source policy and observe composition without taking ownership of input. */
 import { EditorView } from '@codemirror/view';
 import type { Extension } from '@codemirror/state';
-import type { TagLexicon } from '../../core/src/index.js';
 import { documentToSource } from '../../core/src/line-endings.js';
-import { copySource, eventClipboardTransfer, pasteSource } from './clipboard.js';
 import { nativeClipboard } from './native-clipboard.js';
 import { exactReplacement, lineEndings } from './exact-source.js';
 
-/** One synchronous event owner accepts selected source/cut before publishing those same transferred bytes into the async private format. */
-function copyEvent(editor: EditorView, event: ClipboardEvent, cut: boolean): boolean {
-  const clipboard = editor.plugin(nativeClipboard);
-  clipboard?.cancel();
-  const handled = copySource(editor, event, cut);
-  if (handled && event.isTrusted && event.clipboardData) {
-    const transferred = eventClipboardTransfer(event.clipboardData);
-    if (transferred.kind === 'exact' && transferred.text)
-      void clipboard?.copiedSource(transferred.text);
-  }
-  return handled;
-}
-
-/** Install one view-owned input boundary; event callbacks observe the currently mounted editor and immutable host lexicon. */
+/** Install one view-owned input boundary; event callbacks observe the currently mounted editor. */
 export function nativeInputEvents(
   getView: () => EditorView,
-  lexicon: () => TagLexicon | undefined,
   publish: () => void,
   isAlive: () => boolean,
 ): Extension {
   return EditorView.domEventHandlers({
-    /** Copy routes through exact selected source. */
+    /** Copy, cut and paste events go to the prompt's one edit-command owner. */
     copy(event) {
-      return copyEvent(getView(), event, false);
+      return getView().plugin(nativeClipboard)?.fromCopyEvent(event, false) ?? false;
     },
-    /** Cut has one native history event and respects read-only. */
     cut(event) {
-      return copyEvent(getView(), event, true);
+      return getView().plugin(nativeClipboard)?.fromCopyEvent(event, true) ?? false;
     },
-    /** External ordinary text follows the selected editing mode; private transfers preserve exact source spelling. */
     paste(event) {
-      const editor = getView();
-      const clipboard = editor.plugin(nativeClipboard);
-      clipboard?.cancel();
-      const transfer = event.clipboardData
-        ? eventClipboardTransfer(event.clipboardData)
-        : undefined;
-      if (
-        event.isTrusted &&
-        transfer?.kind === 'plain' &&
-        clipboard?.fromPasteImport(transfer.text)
-      ) {
-        event.preventDefault();
-        return true;
-      }
-      if (event.isTrusted && clipboard?.readable && transfer?.kind === 'plain') {
-        event.preventDefault();
-        void clipboard.fromInteraction('paste', transfer);
-        return true;
-      }
-      return pasteSource(editor, event, lexicon());
+      return getView().plugin(nativeClipboard)?.fromPasteEvent(event) ?? false;
     },
     /** Native composition owns preedit; publication observes its lifecycle. */
     compositionstart() {

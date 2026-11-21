@@ -27,7 +27,12 @@ type Occlusion = NonNullable<CanvasSurfaceGeometry['occlusions']>[number];
 /** The attachment's own chrome over its viewport: tabs, status, divider, grid and editing tools. */
 const ATTACHMENT_CHROME =
   '.sc-output-tabstrip, .sc-output-status, .sc-output-wipe, .sc-output-overview, .sc-canvas-edit-chrome';
-/** Elements examined per measurement, in document order, bounding work in large documents. */
+/**
+ * Surfaces SugarCubes opens over the page mark themselves, so they are always reported, however
+ * large the document: menus, flyouts and pickers (`data-sc-floating-surface`) and modal overlays.
+ */
+const OWNED_OVERLAYS = '[data-sc-floating-surface], .sugarcubes-modal-overlay';
+/** Elements examined per measurement, newest first, bounding work in large documents. */
 const MAX_SCANNED_ELEMENTS = 6000;
 /** Positioned elements over the viewport whose paint order is confirmed per measurement. */
 const MAX_CANDIDATES = 48;
@@ -89,6 +94,12 @@ export class NativeCanvasOcclusions implements CanvasSurfaceRouting {
     for (const chrome of this.root.querySelectorAll<HTMLElement>(ATTACHMENT_CHROME))
       if (rendered(chrome)) add(clipped(chrome.getBoundingClientRect(), box));
     let covering = false;
+    for (const overlay of this.root.ownerDocument.querySelectorAll<HTMLElement>(OWNED_OVERLAYS)) {
+      if (!rendered(overlay) || overlay.contains(this.viewport)) continue;
+      const rect = clipped(overlay.getBoundingClientRect(), box);
+      add(rect);
+      covering ||= rect !== null && spans(rect, viewport);
+    }
     for (const candidate of this.#candidates(box)) {
       const intersection = clipped(candidate.getBoundingClientRect(), box);
       if (!intersection || within(intersection, occlusions.values())) continue;
@@ -101,7 +112,10 @@ export class NativeCanvasOcclusions implements CanvasSurfaceRouting {
     return { occlusions: bounded([...occlusions.values()]), modal: covering || this.#modal() };
   }
 
-  /** Find visible out-of-flow or top-layer elements meeting the viewport, within the scan bound. */
+  /**
+   * Find visible out-of-flow or top-layer elements meeting the viewport, within the scan bound.
+   * The document is walked from its end, so overlays, which are attached last, are reached first.
+   */
   #candidates(box: ClientBox): readonly Element[] {
     const document = this.root.ownerDocument;
     const window = document.defaultView;
@@ -114,7 +128,8 @@ export class NativeCanvasOcclusions implements CanvasSurfaceRouting {
         node === viewport ? window.NodeFilter.FILTER_REJECT : window.NodeFilter.FILTER_ACCEPT,
     });
     const candidates: Element[] = [];
-    let node = walker.nextNode();
+    let node: Node | null = walker.lastChild();
+    while (node && walker.lastChild()) node = walker.currentNode;
     for (
       let scanned = 0;
       node && scanned < MAX_SCANNED_ELEMENTS && candidates.length < MAX_CANDIDATES;
@@ -128,7 +143,7 @@ export class NativeCanvasOcclusions implements CanvasSurfaceRouting {
         rendered(node)
       )
         candidates.push(node);
-      node = walker.nextNode();
+      node = walker.previousNode();
     }
     return candidates;
   }

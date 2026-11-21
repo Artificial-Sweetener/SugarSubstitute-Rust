@@ -92,8 +92,11 @@ function createTextPart(
   return part;
 }
 
+/** The class of a model pill drawn as a badge on an icon corner; its owner only places it. */
+export const CUBE_MODEL_BADGE_CLASS = 'sugarcubes-model-badge';
+
 /** Inject the one shared compact geometry and Comfy-token color contract. */
-function ensureCubeModelPillStyles(documentRef: Document): void {
+export function ensureCubeModelPillStyles(documentRef: Document): void {
   if (documentRef.getElementById(STYLE_ID)) return;
   const style = documentRef.createElement('style');
   style.id = STYLE_ID;
@@ -140,6 +143,21 @@ function ensureCubeModelPillStyles(documentRef: Document): void {
     }
     .sugarcubes-model-title__suffix {
       color: color-mix(in srgb, currentColor 82%, transparent);
+    }
+    .${CUBE_MODEL_BADGE_CLASS} {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      height: 10px;
+      min-width: 10px;
+      padding: 0 2px;
+      border-radius: 5px;
+      white-space: nowrap;
+      pointer-events: none;
+      background: ${CUBE_MODEL_PILL_BACKGROUND};
+      color: ${CUBE_MODEL_PILL_FOREGROUND};
+      font: 600 8px/10px var(--sc-font-family, "Segoe UI Variable", "Segoe UI", sans-serif);
     }
   `;
   (documentRef.head ?? documentRef.documentElement).append(style);

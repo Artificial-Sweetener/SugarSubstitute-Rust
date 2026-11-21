@@ -22,6 +22,11 @@ import {
   WORKFLOW_VIEW_STORAGE_KEY,
 } from '../../../frontend/comfyui/ui/workflow/infrastructure/ComfyWorkflowViewPreferences.js';
 
+const documents = {
+  opensInMasonry: (_sessionId: string): boolean => false,
+  recordView: jest.fn((_view: 'masonry' | 'graph') => true),
+};
+
 test('restores both choices atomically after activation and performs zero reads/writes on repeated switches', () => {
   const sessions = new WorkflowSessionStore();
   const a = { sessionId: workflowSessionId('a'), title: 'A', path: 'workflows/a.json' };
@@ -31,10 +36,12 @@ test('restores both choices atomically after activation and performs zero reads/
     setItem: jest.fn(),
   };
   sessions.synchronize([a, b], a.sessionId);
+  documents.opensInMasonry = (id: string) => id === a.sessionId;
   const views = new ComfyWorkflowViewPreferences(
     sessions,
     () => storage,
     () => true,
+    documents,
     { warn: jest.fn() },
   );
   views.setup();
@@ -60,6 +67,8 @@ test('restores both choices atomically after activation and performs zero reads/
     sessions.completeLoad(load, true);
     expect(views.snapshot).toEqual({ canvas: false, masonry: true, editorWidth: 0 });
   }
+  // The view switch was recorded in the workflow, not in browser storage.
+  expect(documents.recordView).toHaveBeenCalledWith('masonry');
   expect(storage.getItem).toHaveBeenCalledTimes(1);
   expect(storage.setItem).not.toHaveBeenCalled();
   views.dispose();
@@ -76,6 +85,7 @@ test('does not let failed loads or unavailable storage discard accepted user cho
       throw new Error('Storage denied');
     },
     () => true,
+    documents,
     logger,
   );
   views.setup();

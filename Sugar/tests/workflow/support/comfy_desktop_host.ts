@@ -46,6 +46,7 @@ export function comfyDesktopHostBoundary() {
   let trackerGate: Promise<void> = Promise.resolve();
   const failingLoads = new Set<string>();
   const loadedPaths: string[] = [];
+  const temporaries = new Map<string, HostWorkflow>();
   const workflow = {
     openWorkflows: [] as HostWorkflow[],
     activeWorkflow: null as HostWorkflow | null,
@@ -82,6 +83,34 @@ export function comfyDesktopHostBoundary() {
       const [target] = this.openWorkflows.splice(from, 1);
       if (!target) throw new Error('Workflow reorder source is unavailable.');
       this.openWorkflows.splice(to, 0, target);
+    },
+    /** Model Comfy's lookup of a saved or open workflow by its path. */
+    getWorkflowByPath(path: string): HostWorkflow | null {
+      const open = this.openWorkflows.find((item) => item.path === path);
+      if (open) return open;
+      const known = temporaries.get(path);
+      if (known) return known;
+      return files.has(path) ? this.createSaved(path) : null;
+    },
+    /** Model Comfy's unsaved workflow made from a document, not yet open. */
+    createTemporary(filename: string, state: object): HostWorkflow {
+      const name = filename.replace(/\.json$/, '');
+      const created = hostWorkflow(`workflows/${filename}`, name, -1);
+      created.content = JSON.stringify(state);
+      created.originalContent = created.content;
+      temporaries.set(created.path, created);
+      return created;
+    },
+    /** Model Comfy putting paths first, in order, then the tabs it already had open. */
+    openWorkflowsInBackground({ left = [] }: { left?: readonly string[] }) {
+      const front = left
+        .map((path) => this.getWorkflowByPath(path))
+        .filter((item): item is HostWorkflow => item !== null);
+      this.openWorkflows = [
+        ...front,
+        ...this.openWorkflows.filter((item) => !front.includes(item)),
+      ];
+      for (const listener of listeners) listener();
     },
   };
   const app = {

@@ -5,6 +5,9 @@ import {
   ModelPickerPopupContent
 } from "./chunk-IVMM67XL.js";
 import {
+  useModelContext
+} from "./chunk-MAD7FSJN.js";
+import {
   useModelBrowsing
 } from "./chunk-YSX5FCKB.js";
 import {
@@ -25,7 +28,11 @@ var ModelChooser = defineComponent({
     /** Names the popup and its search box, e.g. "Search LoRA". */
     label: { type: String, required: true },
     /** The viewport point or rectangle the popup opens beside. */
-    anchor: { type: Object, required: true }
+    anchor: { type: Object, required: true },
+    /** The owners behind a card's right-click menu. */
+    context: { type: Object, required: true },
+    /** Where a version chosen from a card's menu goes; null where versions cannot be browsed. */
+    session: { type: Object, default: null }
   },
   emits: {
     choose: (_item) => true,
@@ -33,6 +40,12 @@ var ModelChooser = defineComponent({
   },
   setup(props, { emit }) {
     const browsing = useModelBrowsing(() => props.items);
+    const context = useModelContext(
+      props.context,
+      () => false,
+      () => void 0,
+      props.session
+    );
     const input = ref(null);
     const popup = ref(null);
     const popupId = useId();
@@ -51,7 +64,9 @@ var ModelChooser = defineComponent({
       if (item) emit("choose", item);
     };
     const outside = (event) => {
-      if (event.target instanceof Node && !popup.value?.contains(event.target)) emit("dismiss");
+      const target = event.target;
+      if (target instanceof Node && !popup.value?.contains(target) && !(target instanceof Element && target.closest("[data-sc-floating-surface]")))
+        emit("dismiss");
     };
     const key = (event) => {
       event.stopPropagation();
@@ -121,8 +136,13 @@ var ModelChooser = defineComponent({
           onSelect: choose,
           onGeometry: (width) => {
             browsing.wallWidth.value = width;
-          }
-        })
+          },
+          updateOffers: context.proposals.value,
+          onFamily: (target) => context.family(target),
+          onUpdateContext: (target, event) => context.show(target, event, true),
+          onContext: context.show
+        }),
+        context.render()
       ]
     );
   }

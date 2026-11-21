@@ -18,7 +18,12 @@ import { CANVAS_SURFACE_OCCLUSIONS, CANVAS_SURFACE_OCCLUSION_EXTENT, } from '../
 import { observeNativeCanvasOverlays } from './NativeCanvasOverlayObserver.js';
 /** The attachment's own chrome over its viewport: tabs, status, divider, grid and editing tools. */
 const ATTACHMENT_CHROME = '.sc-output-tabstrip, .sc-output-status, .sc-output-wipe, .sc-output-overview, .sc-canvas-edit-chrome';
-/** Elements examined per measurement, in document order, bounding work in large documents. */
+/**
+ * Surfaces SugarCubes opens over the page mark themselves, so they are always reported, however
+ * large the document: menus, flyouts and pickers (`data-sc-floating-surface`) and modal overlays.
+ */
+const OWNED_OVERLAYS = '[data-sc-floating-surface], .sugarcubes-modal-overlay';
+/** Elements examined per measurement, newest first, bounding work in large documents. */
 const MAX_SCANNED_ELEMENTS = 6000;
 /** Positioned elements over the viewport whose paint order is confirmed per measurement. */
 const MAX_CANDIDATES = 48;
@@ -71,6 +76,13 @@ export class NativeCanvasOcclusions {
             if (rendered(chrome))
                 add(clipped(chrome.getBoundingClientRect(), box));
         let covering = false;
+        for (const overlay of this.root.ownerDocument.querySelectorAll(OWNED_OVERLAYS)) {
+            if (!rendered(overlay) || overlay.contains(this.viewport))
+                continue;
+            const rect = clipped(overlay.getBoundingClientRect(), box);
+            add(rect);
+            covering ||= rect !== null && spans(rect, viewport);
+        }
         for (const candidate of this.#candidates(box)) {
             const intersection = clipped(candidate.getBoundingClientRect(), box);
             if (!intersection || within(intersection, occlusions.values()))
@@ -83,7 +95,10 @@ export class NativeCanvasOcclusions {
         }
         return { occlusions: bounded([...occlusions.values()]), modal: covering || this.#modal() };
     }
-    /** Find visible out-of-flow or top-layer elements meeting the viewport, within the scan bound. */
+    /**
+     * Find visible out-of-flow or top-layer elements meeting the viewport, within the scan bound.
+     * The document is walked from its end, so overlays, which are attached last, are reached first.
+     */
     #candidates(box) {
         const document = this.root.ownerDocument;
         const window = document.defaultView;
@@ -96,7 +111,9 @@ export class NativeCanvasOcclusions {
             acceptNode: (node) => node === viewport ? window.NodeFilter.FILTER_REJECT : window.NodeFilter.FILTER_ACCEPT,
         });
         const candidates = [];
-        let node = walker.nextNode();
+        let node = walker.lastChild();
+        while (node && walker.lastChild())
+            node = walker.currentNode;
         for (let scanned = 0; node && scanned < MAX_SCANNED_ELEMENTS && candidates.length < MAX_CANDIDATES; scanned++) {
             if (node instanceof window.Element &&
                 !node.contains(viewport) &&
@@ -104,7 +121,7 @@ export class NativeCanvasOcclusions {
                 positioned(node, window) &&
                 rendered(node))
                 candidates.push(node);
-            node = walker.nextNode();
+            node = walker.previousNode();
         }
         return candidates;
     }

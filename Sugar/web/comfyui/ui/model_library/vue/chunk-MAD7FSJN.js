@@ -1,7 +1,4 @@
 import {
-  useModelAction
-} from "./chunk-MM7W35BE.js";
-import {
   ModelContextMenuView,
   projectModelContext
 } from "./chunk-WIKCJTWX.js";
@@ -71,9 +68,6 @@ function modelContextEntries(item, canManage, hasUpdate, hasOutput) {
   return entries;
 }
 
-// frontend/comfyui/ui/model_library/vue/ModelContextState.ts
-import { ModelDetectorDialog } from "../ModelDetectorDialog.js";
-
 // frontend/comfyui/ui/model_library/ModelOutputThumbnailMenu.ts
 function compareSceneText(left, right) {
   const leftPoints = Array.from(left, (character) => character.codePointAt(0) ?? 0);
@@ -142,21 +136,43 @@ function modelOutputThumbnailMenu(choices, active) {
   });
 }
 
-// frontend/comfyui/ui/model_library/vue/ModelContextState.ts
-function useModelContext(options, disabled, beforeFamily, session) {
-  const menu = ref(
-    null
-  );
-  const updates = shallowRef(options.updates?.read().proposals ?? []);
-  const unsubscribe = options.updates?.subscribe((snapshot) => {
-    updates.value = snapshot.proposals;
-  });
-  const state = useModelAction(disabled);
-  let dialog = null;
-  let active = true;
-  const offer = (item) => updates.value.find((proposal) => proposal.modelId === item.id);
-  const entries = (item, updateOnly = false) => {
-    const proposal = offer(item);
+// frontend/comfyui/ui/model_library/ModelMenu.ts
+var ModelMenu = class {
+  /** Bind the owners, the session that applies a chosen version, and the caller's hooks. */
+  constructor(options, session, disabled = () => false, beforeFamily = () => void 0) {
+    this.options = options;
+    this.session = session;
+    this.disabled = disabled;
+    this.beforeFamily = beforeFamily;
+    this.#proposals = options.updates?.read().proposals ?? [];
+    this.#unsubscribe = options.updates?.subscribe((snapshot) => {
+      this.#proposals = snapshot.proposals;
+      for (const listener of this.#listeners) listener();
+    });
+  }
+  #proposals;
+  #unsubscribe;
+  #listeners = /* @__PURE__ */ new Set();
+  #controller = null;
+  #dialog = null;
+  #disposed = false;
+  /** The current update offers, in catalog order. */
+  get proposals() {
+    return this.#proposals;
+  }
+  /** Observe changed update offers. */
+  subscribe(listener) {
+    this.#listeners.add(listener);
+    return () => this.#listeners.delete(listener);
+  }
+  /** Match only authoritative catalog identities rather than loosely matching display labels. */
+  offer(item) {
+    return this.#proposals.find((proposal) => proposal.modelId === item.id);
+  }
+  /** The rows about `item`; the update badge's own menu holds only its two update decisions. */
+  entries(item, updateOnly = false) {
+    const proposal = this.offer(item);
+    const { actions, detectors, outputs } = this.options;
     return updateOnly && proposal ? [
       { label: "Dismiss", enabled: true, command: "dismiss", url: null },
       {
@@ -167,98 +183,146 @@ function useModelContext(options, disabled, beforeFamily, session) {
       }
     ] : modelContextEntries(
       item,
-      item.kind === "ultralytics" ? !!options.detectors : !!options.actions && /^[a-f0-9]{64}$/.test(item.id),
+      item.kind === "ultralytics" ? !!detectors && !!this.options.detectorDialog : !!actions && /^[a-f0-9]{64}$/.test(item.id),
       !!proposal,
       false
     ).map(
-      (entry) => entry.command === "output-thumbnail" && options.outputs ? modelOutputThumbnailMenu(options.outputs.choices(), options.outputs.activeChoice()) : entry
+      (entry) => entry.command === "output-thumbnail" && outputs ? modelOutputThumbnailMenu(outputs.choices(), outputs.activeChoice()) : entry
     );
-  };
-  const show = (item, event, updateOnly = false) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (!entries(item, updateOnly).length) return;
-    menu.value = { item, x: event.clientX, y: event.clientY, updateOnly };
-  };
-  const family = (item) => {
-    if (!options.actions || !canBrowseModelVersions(item, !!offer(item))) return;
-    beforeFamily();
-    menu.value = null;
-    dialog?.close();
-    void session.versions(item, options.actions, (severity, message) => options.feedback?.(severity, message)).finally(() => {
-      void options.updates?.load().catch((error) => {
-        options.feedback?.(
+  }
+  /** The rows about `item` as shared menu entries, for menus that are not the picker's own. */
+  project(item, updateOnly = false) {
+    return projectModelContext(
+      this.entries(item, updateOnly),
+      (entry) => this.command(item, entry)
+    );
+  }
+  /** Browse a verified version family independently of update notification state. */
+  family(item) {
+    const { actions, feedback, updates } = this.options;
+    if (!actions || !this.session || !canBrowseModelVersions(item, !!this.offer(item))) return;
+    this.beforeFamily();
+    this.#dialog?.close();
+    void this.session.versions(item, actions, (severity, message) => feedback?.(severity, message)).finally(() => {
+      void updates?.load().catch((error) => {
+        feedback?.(
           "error",
           error instanceof Error ? error.message : "Model updates are unavailable."
         );
       });
     });
-  };
-  const command = (item, entry) => {
-    if (entry.command === "detector-thumbnail" && options.detectors) {
-      beforeFamily();
-      menu.value = null;
-      dialog?.close();
-      const current = new ModelDetectorDialog(document, item, options.detectors);
-      dialog = current;
+  }
+  /** Execute one row through its authoritative owner and report how it ended. */
+  command(item, entry) {
+    const { actions, outputs, updates, feedback, detectorDialog } = this.options;
+    if (entry.command === "detector-thumbnail" && detectorDialog) {
+      this.beforeFamily();
+      this.#dialog?.close();
+      const current = detectorDialog(item);
+      this.#dialog = current;
       void current.open().finally(() => {
-        if (dialog === current) dialog = null;
+        if (this.#dialog === current) this.#dialog = null;
       });
       return;
     }
     if (entry.command === "versions") {
-      family(item);
+      this.family(item);
       return;
     }
-    void state.run(async (signal) => {
+    let status = "";
+    void this.#run(async (signal) => {
       if (entry.command === "refresh")
-        await options.actions?.refreshMetadata(
+        await actions?.refreshMetadata(
           item.id,
           (message) => {
-            state.status.value = message;
+            status = message;
           },
           signal
         );
-      else if (entry.command === "output-thumbnail" && entry.imageId && options.outputs && options.actions) {
-        const image = await options.outputs.image(entry.imageId, signal);
+      else if (entry.command === "output-thumbnail" && entry.imageId && outputs && actions) {
+        const image = await outputs.image(entry.imageId, signal);
         if (signal.aborted) return;
-        await options.actions.replaceThumbnail(item.id, image, signal);
-        if (!signal.aborted) state.status.value = "Model thumbnail updated.";
-      } else if (entry.command === "dismiss") await options.updates?.dismiss(item.id);
-      else if (entry.command === "disable-updates") await options.updates?.disableModel(item.id);
-    }).then(() => {
-      if (!active) return;
-      if (state.error.value) options.feedback?.("error", state.error.value);
-      else if (state.status.value) options.feedback?.("info", state.status.value);
+        await actions.replaceThumbnail(item.id, image, signal);
+        if (!signal.aborted) status = "Model thumbnail updated.";
+      } else if (entry.command === "dismiss") await updates?.dismiss(item.id);
+      else if (entry.command === "disable-updates") await updates?.disableModel(item.id);
+    }).then((error) => {
+      if (this.#disposed) return;
+      if (error) feedback?.("error", error);
+      else if (status) feedback?.("info", status);
     });
+  }
+  /** Release the update subscription, a running command and an open detector dialog. */
+  dispose() {
+    this.#disposed = true;
+    this.#unsubscribe?.();
+    this.#listeners.clear();
+    this.#controller?.abort();
+    this.#dialog?.close();
+  }
+  /** Run one command at a time; resolve with its failure message, or null. */
+  async #run(operation) {
+    if (this.#controller || this.disabled()) return null;
+    const current = new AbortController();
+    this.#controller = current;
+    try {
+      await operation(current.signal);
+      return null;
+    } catch (failure) {
+      if (current.signal.aborted) return null;
+      console.error("SugarCubes model action failed.", failure);
+      return failure instanceof Error ? failure.message : "The model action failed.";
+    } finally {
+      this.#controller = null;
+    }
+  }
+};
+
+// frontend/comfyui/ui/model_library/vue/ModelContextState.ts
+function useModelContext(options, disabled, beforeFamily, session) {
+  const menu = ref(
+    null
+  );
+  const owner = new ModelMenu(options, session, disabled, () => {
+    menu.value = null;
+    beforeFamily();
+  });
+  const proposals = shallowRef(owner.proposals);
+  const unsubscribe = owner.subscribe(() => {
+    proposals.value = owner.proposals;
+  });
+  const show = (item, event, updateOnly = false) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!owner.entries(item, updateOnly).length) return;
+    menu.value = { item, x: event.clientX, y: event.clientY, updateOnly };
   };
   onBeforeUnmount(() => {
-    active = false;
     menu.value = null;
-    unsubscribe?.();
-    dialog?.close();
+    unsubscribe();
+    owner.dispose();
   });
   const render = () => {
     const current = menu.value;
     return current ? h(ModelContextMenuView, {
-      entries: entries(current.item, current.updateOnly),
+      entries: owner.entries(current.item, current.updateOnly),
       x: current.x,
       y: current.y,
       onClose: () => {
         menu.value = null;
       },
-      onAction: (entry) => command(current.item, entry)
+      onAction: (entry) => owner.command(current.item, entry)
     }) : null;
   };
   return {
     menu,
     show,
-    family,
-    offer,
+    family: (item) => owner.family(item),
+    offer: (item) => owner.offer(item),
     render,
-    proposals: updates,
+    proposals,
     /** Capture the selected model without creating another metadata or command owner. */
-    project: (item) => projectModelContext(entries(item), (entry) => command(item, entry))
+    project: (item) => owner.project(item)
   };
 }
 

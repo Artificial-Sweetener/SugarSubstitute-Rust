@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Convert a native Comfy selection into a real Cube subgraph node. */
+import { isCubeKind } from './CubeKind.js';
 import { isRecord } from '../types/common.js';
 import { isDraftCubeNode, requireCubeIdentity, } from './node/ComfyCubeNodeFactory.js';
 import { writeCubeDefinitionIdentity } from './node/CubeDefinitionIdentityWriter.js';
@@ -211,8 +212,7 @@ function readSelectedSubgraphNode(items) {
     if (!isNativeSubgraphNode(selected)) {
         throw new Error('Select a native Comfy subgraph node to convert it to a SugarCube.');
     }
-    if (selected.properties.sugarcubes_kind === 'cube' ||
-        selected.properties.sugarcubes_kind === 'cube_draft') {
+    if (isCubeKind(selected.properties.sugarcubes_kind)) {
         throw new Error('The selected subgraph is already a SugarCube.');
     }
     if (selected.isSubgraphNode.call(selected) !== true) {

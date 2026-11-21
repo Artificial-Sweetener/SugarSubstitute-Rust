@@ -18,11 +18,12 @@ import { SESSION_DOCUMENT_BYTES, sessionGraph, sessionJsonScalars, utf8Bytes, is
 import { isRecord } from '../../types/common.js';
 import { DesktopSessionRefusal } from '../domain/DesktopSession.js';
 /**
- * Capture Comfy-owned documents and match a checkpoint to the tabs Comfy restored.
+ * Capture Comfy-owned documents, match a checkpoint to the tabs Comfy restored, and reopen the
+ * tabs the checkpoint holds that Comfy did not.
  *
- * Comfy owns workflow tabs: it reopens them from its own persistence. This owner never opens,
- * closes, reorders or reloads a tab; it only reads documents and names which restored tab a
- * checkpoint entry describes.
+ * The checkpoint decides which tabs are open and in what order. Comfy reopens tabs from its own
+ * page storage, which can miss some after the app was not closed; this owner reopens those the
+ * way Comfy restores its own, in the background, and never closes or reloads a tab.
  */
 export class ComfyDesktopDocuments {
     options;
@@ -38,6 +39,35 @@ export class ComfyDesktopDocuments {
             throw new TypeError('Comfy desktop workflow capabilities are unavailable.');
         this.#app = app;
         this.#workflow = manager.workflow;
+    }
+    /**
+     * Reopen, in the background, every checkpoint tab Comfy did not reopen, and put the checkpoint's
+     * tabs first in its order. A saved workflow reopens from its file; an unsaved one, or a saved
+     * one whose file is gone, reopens as an unsaved workflow holding the checkpoint's document.
+     * Returns whether any tab was reopened.
+     */
+    reopen(entries, missing) {
+        if (!missing.size)
+            return false;
+        const store = this.#workflow;
+        const byPath = store.getWorkflowByPath;
+        if (typeof byPath !== 'function' || typeof store.createTemporary !== 'function')
+            throw new TypeError('Comfy workflow reopening is unavailable.');
+        const paths = [];
+        for (const entry of entries) {
+            const document = entry.document;
+            let workflow = !document.temporary && document.path ? Reflect.apply(byPath, store, [document.path]) : null;
+            if (missing.has(entry.id) && !isRecord(workflow))
+                workflow = Reflect.apply(store.createTemporary, store, [
+                    `${document.name}.json`,
+                    JSON.parse(document.graphJson),
+                ]);
+            if (isRecord(workflow) && typeof workflow.path === 'string')
+                paths.push(workflow.path);
+        }
+        // Comfy keeps the given paths first, in order, then any other tab it already had open.
+        invoke(store, 'openWorkflowsInBackground', { left: paths });
+        return true;
     }
     /**
      * List open workflows whose document Comfy has not read yet: a saved tab restored in the

@@ -14,14 +14,12 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Clipboard source fidelity, including a private format surviving platform plain-text newline conversion. */
-import { EditorView } from '@codemirror/view';
 import type { PasteImportHistoryIntent } from './paste-import-history.js';
 import type { EditorState, TransactionSpec } from '@codemirror/state';
 import { isolateHistory } from '@codemirror/commands';
 import type { TagLexicon } from '../../core/src/index.js';
 import type { ClipboardTransfer } from '../../services/src/clipboard/contracts.js';
 import { enteredTextInsertion, type PreparedNativeIngestion } from './ingestion.js';
-import { dispatchNativeIngestion } from './native-ingestion.js';
 import { documentToSource } from '../../core/src/line-endings.js';
 import { exactReplacement, lineEndings, readExactSource } from './exact-source.js';
 
@@ -94,42 +92,4 @@ export function clipboardPaste(
     transactions: Object.freeze([transaction]),
     edit: null,
   });
-}
-
-/** Write exact source to native clipboard events; cut participates in CodeMirror history. */
-export function copySource(view: EditorView, event: ClipboardEvent, cut: boolean): boolean {
-  if (!event.clipboardData) return false;
-  const selected = clipboardSelection(view.state);
-  if (!selected || (cut && (view.state.readOnly || view.composing || view.compositionStarted))) {
-    event.preventDefault();
-    return true;
-  }
-  event.clipboardData.clearData();
-  event.clipboardData.setData('text/plain', selected.text);
-  event.clipboardData.setData(exactClipboardMime, selected.text);
-  const deletion = cut ? clipboardCut(view.state) : null;
-  if (deletion) view.dispatch(deletion);
-  event.preventDefault();
-  return true;
-}
-
-/** Internal transfer retains exact source; external plain text follows rich/raw editing policy. Composition/read-only reject mutation. */
-export function pasteSource(
-  view: EditorView,
-  event: ClipboardEvent,
-  lexicon?: TagLexicon,
-): boolean {
-  if (view.state.readOnly || view.composing || view.compositionStarted) {
-    event.preventDefault();
-    return true;
-  }
-  if (!event.clipboardData) return false;
-  const insertion = clipboardPaste(
-    view.state,
-    eventClipboardTransfer(event.clipboardData),
-    lexicon,
-  );
-  if (insertion) dispatchNativeIngestion(view, insertion);
-  event.preventDefault();
-  return true;
 }

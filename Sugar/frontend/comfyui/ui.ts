@@ -342,7 +342,7 @@ const workflowHistory = new ComfyCanvasHistoryAdapter(
   appRef,
   documentRef ?? document,
   relations.commitNativeTransaction,
-  (error) => logger.error('SugarCubes workflow history shortcuts failed', { error }),
+  workflowWorkspace.changeTracker,
 );
 
 /** Compose theme-independent native scroll input once for the host document. */

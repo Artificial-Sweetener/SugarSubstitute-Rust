@@ -16,6 +16,7 @@
 /** Prove native graph transactions capture once across current and legacy Comfy history hooks. */
 import { expect, jest, test } from '@jest/globals';
 import { ComfyCanvasHistoryAdapter } from '../../../frontend/comfyui/ui/surface/ComfyCanvasHistoryAdapter.js';
+import { ComfyWorkflowChangeTracker } from '../../../frontend/comfyui/ui/workflow/infrastructure/ComfyWorkflowChangeTracker.js';
 
 /** Model the host tracker depth and capture behavior without implementing an alternative history. */
 function fixture(legacy: boolean) {
@@ -41,7 +42,12 @@ function fixture(legacy: boolean) {
   const workflow = { changeTracker: tracker };
   const app = { canvas, extensionManager: { workflow: { activeWorkflow: workflow } } };
   const beforeCommit = jest.fn();
-  const adapter = new ComfyCanvasHistoryAdapter(app, document, beforeCommit, jest.fn());
+  const adapter = new ComfyCanvasHistoryAdapter(
+    app,
+    document,
+    beforeCommit,
+    new ComfyWorkflowChangeTracker(app, window, jest.fn()),
+  );
   adapter.install();
   return {
     tracker,
@@ -183,7 +189,12 @@ test('a shortcut another surface consumed never walks workflow history', async (
     extensionManager: { workflow: { activeWorkflow: { changeTracker: tracker } } },
   };
   const report = jest.fn();
-  const adapter = new ComfyCanvasHistoryAdapter(app, document, jest.fn(), report);
+  const adapter = new ComfyCanvasHistoryAdapter(
+    app,
+    document,
+    jest.fn(),
+    new ComfyWorkflowChangeTracker(app, window, report),
+  );
   adapter.install();
   /** Deliver one Ctrl+Z as Comfy does: its capture listener walks history after surfaces ran. */
   const press = async (consume: boolean): Promise<unknown> => {

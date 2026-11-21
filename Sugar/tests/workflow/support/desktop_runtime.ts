@@ -97,6 +97,7 @@ export async function desktopRuntimeFixture(
     execution.sessions,
     () => null,
     () => true,
+    { opensInMasonry: () => false, recordView: () => true },
     { warn: () => {} },
   );
   presentation.setup();

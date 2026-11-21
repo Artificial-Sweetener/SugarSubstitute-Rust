@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Build canonical workflow requests for authoritative SugarCubes execution. */
 
+import { isCubeKind } from '../CubeKind.js';
 import { enrichWorkflowPayload } from '../../graph/WorkflowPayloadBuilder.js';
 import { isRecord } from '../../types/common.js';
 import type { ComfyGraph, ComfyHostApi } from '../../types/graph.js';
@@ -181,8 +182,7 @@ function copyNonEmptyString(target: Record<string, unknown>, key: string, value:
 /** Identify a durable native Cube marker without resolving its definition. */
 function isPersistedCubeNode(value: unknown): boolean {
   if (!isRecord(value) || !isRecord(value.properties)) return false;
-  const kind = value.properties.sugarcubes_kind;
-  return kind === 'cube' || kind === 'cube_draft';
+  return isCubeKind(value.properties.sugarcubes_kind);
 }
 
 /** Project only accepted Cube-to-Cube proximity matches into stable boundary identities. */

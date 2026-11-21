@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Inspect Comfy clipboard serialization before it can register copied definitions. */
 
+import { isCubeKind } from '../CubeKind.js';
 import { isRecord } from '../../types/common.js';
 import type { UnknownRecord } from '../../types/common.js';
 
@@ -51,11 +52,6 @@ function isSerializedCubeNode(value: unknown, cubeDefinitionIds: ReadonlySet<str
 /** Read definition-level product identity from untrusted clipboard data. */
 function readExtraKind(value: UnknownRecord): unknown {
   return isRecord(value.extra) ? value.extra.sugarcubes_kind : null;
-}
-
-/** Recognize both persisted and workflow-only Cube identity markers. */
-function isCubeKind(value: unknown): boolean {
-  return value === 'cube' || value === 'cube_draft';
 }
 
 /** Read one stable serialized identifier. */

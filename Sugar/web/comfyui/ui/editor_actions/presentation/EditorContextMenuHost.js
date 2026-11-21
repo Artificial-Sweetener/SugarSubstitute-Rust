@@ -14,6 +14,8 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own editor menu entry-point lifetimes while delegating values, policies and persistence. */
+import { plainTextField, textFieldEditEntries } from '../../menus/TextFieldEditMenu.js';
+import { SystemClipboard } from '../../core/SystemClipboard.js';
 import { ContextMenu } from '../../menus/ContextMenu.js';
 import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
 import { inferDimensionPairs } from '../domain/DimensionPolicy.js';
@@ -22,11 +24,13 @@ import { SaveNodePresetDialog } from './SaveNodePresetDialog.js';
 import { nodeActionEntries } from './NodeActionMenu.js';
 import { dimensionMenuEntries } from './DimensionMenu.js';
 import { dimensionFieldTarget } from './DimensionFieldTarget.js';
+const SEPARATOR = { label: '', separator: true };
 /** Use one native-card owner for both SugarCube faces and Workflow Masonry. */
 export class EditorContextMenuHost {
     #options;
     #menu;
     #dialog;
+    #clipboard;
     #cards = new Map();
     #presence = null;
     #dirty = new Set();
@@ -38,6 +42,7 @@ export class EditorContextMenuHost {
         this.#options = options;
         this.#menu = new ContextMenu(options.document);
         this.#dialog = new SaveNodePresetDialog(options.document);
+        this.#clipboard = new SystemClipboard(options.document);
     }
     /** Observe native card mounts and intercept dimension menus before embedded event isolation. */
     setup() {
@@ -176,9 +181,14 @@ export class EditorContextMenuHost {
         event.preventDefault();
         event.stopImmediatePropagation();
         this.#menuRoot = root;
+        // The field keeps its edit rows; the dimension actions follow them.
+        const input = plainTextField(event.target);
+        const edits = input
+            ? [...textFieldEditEntries(input, this.#clipboard, this.#options.reportError), SEPARATOR]
+            : [];
         this.#menu.open({
             label: 'Dimensions',
-            entries,
+            entries: [...edits, ...entries],
             anchor: { kind: 'pointer', x: event.clientX, y: event.clientY },
             trigger: field.element,
             preferRightSubmenus: true,

@@ -78,10 +78,10 @@ export class ComfyDesktopMaterialization {
     this.#cancellation?.cancel();
   }
   /**
-   * Bind host-adopted durable entries to the tabs Comfy itself restored, then import references
-   * and view intent. Comfy owns the tabs: an entry whose tab Comfy did not reopen is left out, and
-   * the returned bindings name only the entries that were bound. A tab Comfy reopened with an
-   * older document than the checkpoint saved takes the checkpoint's document first.
+   * Reopen every checkpoint tab Comfy did not reopen, bind each entry to its tab, then import
+   * references and view intent. A tab that still cannot be found is left out, and the returned
+   * bindings name only the entries that were bound. A tab holding an older document than the
+   * checkpoint saved takes the checkpoint's document first.
    */
   async materialize(
     checkpoint: SessionCheckpoint,
@@ -93,6 +93,14 @@ export class ComfyDesktopMaterialization {
     try {
       const current = (): boolean => !cancellation.cancelled() && !this.options.retired();
       let contexts = this.options.documents.match(checkpoint.entries, current);
+      // The checkpoint decides the tabs: those Comfy did not reopen are reopened from it.
+      const missing = new Set(
+        checkpoint.entries.filter((entry) => !contexts.has(entry.id)).map((entry) => entry.id),
+      );
+      if (this.options.documents.reopen(checkpoint.entries, missing)) {
+        this.options.assertCurrent(cancellation);
+        contexts = this.options.documents.match(checkpoint.entries, current);
+      }
       let adopted = false;
       for (const entry of checkpoint.entries) {
         const context = contexts.get(entry.id);

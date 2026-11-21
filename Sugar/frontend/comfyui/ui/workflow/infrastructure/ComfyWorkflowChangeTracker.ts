@@ -13,13 +13,16 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Keep shortcuts another surface consumed out of Comfy's workflow history. */
-import { isRecord, type UnknownRecord } from '../types/common.js';
+/** Own every SugarCubes contact with Comfy's workflow change tracker. */
+import { isRecord, type UnknownRecord } from '../../types/common.js';
+import { WORKFLOW_VIEW_EXTRA, type WorkflowViewKind } from './ComfyWorkflowViewDocument.js';
 
 type UndoRedo = (this: unknown, event: unknown) => unknown;
 
 /**
- * Make Comfy's workflow history respect a consumed undo or redo shortcut.
+ * Own SugarCubes' contact with Comfy's workflow change tracker: shortcuts another surface consumed
+ * stay out of workflow history, and the view a workflow records is written without becoming a
+ * step in that history.
  *
  * Comfy listens for keys on the window in the capture phase, before any surface inside the
  * document, and walks workflow history a frame later whatever that surface did with the key. A
@@ -28,10 +31,11 @@ type UndoRedo = (this: unknown, event: unknown) => unknown;
  * graph underneath the surface. The adapter wraps the history owner's shortcut entry point once
  * per tracker class so a consumed shortcut is reported as handled and changes nothing.
  */
-export class ComfyWorkflowHistoryShortcuts {
+export class ComfyWorkflowChangeTracker {
   readonly #wrapped = new Map<UnknownRecord, UndoRedo>();
   #active = false;
   #reported = false;
+  #viewReported = false;
 
   /** Borrow the host app and window; `report` receives a host that no longer fits. */
   constructor(
@@ -77,13 +81,57 @@ export class ComfyWorkflowHistoryShortcuts {
     };
   };
 
-  /** The class of the active workflow's history owner, shared by every open workflow. */
-  #trackerClass(): UnknownRecord | null {
+  /**
+   * Record in the active workflow which view it is showing, without an undo step.
+   *
+   * Comfy's undo reloads a stored copy of the workflow, and its unsaved mark compares the copy it
+   * opened with the current one. The view is written into the live graph, the current copy and
+   * every stored undo and redo copy, so no step is recorded, undoing other edits keeps the view,
+   * and the workflow shows unsaved until it is saved. Returns false, reported once, when the
+   * tracker no longer has that shape; the view is then kept only for this session.
+   */
+  recordView(view: WorkflowViewKind): boolean {
+    const tracker = this.#tracker();
+    const graph = isRecord(this.app) ? this.app.rootGraph : null;
+    const queues = tracker ? [tracker.undoQueue, tracker.redoQueue] : [];
+    if (
+      !tracker ||
+      !isRecord(graph) ||
+      !isRecord(tracker.activeState) ||
+      !queues.every(Array.isArray) ||
+      typeof tracker.updateModified !== 'function'
+    ) {
+      if (!this.#viewReported)
+        this.report(new TypeError('Comfy workflow view recording is unavailable.'));
+      this.#viewReported = true;
+      return false;
+    }
+    const stamp = (state: unknown): void => {
+      if (isRecord(state))
+        state.extra = {
+          ...(isRecord(state.extra) ? state.extra : {}),
+          [WORKFLOW_VIEW_EXTRA]: view,
+        };
+    };
+    stamp(graph);
+    stamp(tracker.activeState);
+    for (const queue of queues as unknown[][]) for (const state of queue) stamp(state);
+    Reflect.apply(tracker.updateModified, tracker, []);
+    return true;
+  }
+
+  /** The active workflow's history owner. */
+  #tracker(): UnknownRecord | null {
     const manager =
       isRecord(this.app) && isRecord(this.app.extensionManager) ? this.app.extensionManager : null;
     const store = manager && isRecord(manager.workflow) ? manager.workflow : null;
     const workflow = store && isRecord(store.activeWorkflow) ? store.activeWorkflow : null;
-    const tracker = workflow && isRecord(workflow.changeTracker) ? workflow.changeTracker : null;
+    return workflow && isRecord(workflow.changeTracker) ? workflow.changeTracker : null;
+  }
+
+  /** The class of the active workflow's history owner, shared by every open workflow. */
+  #trackerClass(): UnknownRecord | null {
+    const tracker = this.#tracker();
     const prototype: unknown = tracker ? Object.getPrototypeOf(tracker) : null;
     return isRecord(prototype) && prototype !== Object.prototype ? prototype : null;
   }

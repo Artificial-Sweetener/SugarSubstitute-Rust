@@ -27,8 +27,16 @@ export class SugarPromptMenu implements PromptMenuPresentation {
   readonly #report: (cause: unknown) => void;
   #publication: object | null = null;
 
-  /** Bind focus return and observable command failures to one editor lifetime. */
-  constructor(root: HTMLElement, report: (cause: unknown) => void) {
+  /**
+   * Bind focus return and observable command failures to one editor lifetime. `loraMenu` gives
+   * the rows about the LoRA whose banner the menu opened on, the same ones every model surface
+   * shows.
+   */
+  constructor(
+    root: HTMLElement,
+    report: (cause: unknown) => void,
+    private readonly loraMenu: (backendValue: string) => readonly ContextMenuEntry[],
+  ) {
     this.#root = root;
     this.#report = report;
     this.#menu = new ContextMenu(root.ownerDocument);
@@ -59,9 +67,14 @@ export class SugarPromptMenu implements PromptMenuPresentation {
           },
         };
       });
+    const lora =
+      menu.actions?.kind === 'inline' && menu.actions.resource.resolution === 'found'
+        ? this.loraMenu(menu.actions.resource.model.backendValue)
+        : [];
+    const own = entries(menu.items);
     this.#menu.open({
       label: 'Prompt actions',
-      entries: entries(menu.items),
+      entries: lora.length ? [...own, { label: '', separator: true }, ...lora] : own,
       anchor: { kind: 'pointer', x: menu.anchor.left, y: menu.anchor.bottom },
       focusReturn: this.#root.querySelector<HTMLElement>('.cm-content'),
       returnFocusOnSelect: false,

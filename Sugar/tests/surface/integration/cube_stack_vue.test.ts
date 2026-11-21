@@ -51,8 +51,9 @@ test('compact rows hide only their labels and keep the expanded rail spacing', a
   expect(getComputedStyle(f.rail).width).toBe('58px');
   expect(getComputedStyle(selected).borderRadius).toBe('5px');
   expect(getComputedStyle(selected).backgroundColor).toBe(background);
-  expect(getComputedStyle(selected.querySelector('.sc-cube-stack-row__text')!).display).toBe(
-    'none',
+  // The label is hidden, not removed: the narrowing row covers it while it fades.
+  expect(getComputedStyle(selected.querySelector('.sc-cube-stack-row__text')!).visibility).toBe(
+    'hidden',
   );
   f.view.update({
     ...f.state,

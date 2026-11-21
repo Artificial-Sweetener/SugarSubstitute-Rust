@@ -23,6 +23,7 @@ afterEach(() => document.body.replaceChildren());
 function fixture() {
   const actions = {
     setBatch: jest.fn<(value: number) => void>(),
+    setMode: jest.fn<(mode: 'generate' | 'continuous') => void>(),
     generate: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
     cancel: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
     skip: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
@@ -30,7 +31,14 @@ function fixture() {
   };
   const view = new GenerationStripView(document, actions);
   document.body.append(view.element);
-  const state = { batch: 3, generateEnabled: true, skipEnabled: true, cancelEnabled: true };
+  const state = {
+    batch: 3,
+    generateEnabled: true,
+    skipEnabled: true,
+    cancelEnabled: true,
+    mode: 'generate' as const,
+    looping: false,
+  };
   view.update(state);
   const input = view.element.querySelector('input')!;
   return { actions, view, state, input };
@@ -93,4 +101,30 @@ test('each action delegates once and failure reaches the existing feedback bound
   view.element.querySelector<HTMLButtonElement>('[data-action="generate"]')!.click();
   await Promise.resolve();
   expect(actions.report).toHaveBeenCalledWith(error);
+});
+
+test('right-clicking Generate chooses its mode, and Generate shows the chosen one', () => {
+  const { actions, view, state } = fixture();
+  const generate = view.element.querySelector<HTMLButtonElement>('[data-action="generate"]')!;
+  generate.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+  const rows = [
+    ...document.querySelectorAll<HTMLElement>('[role="menuitemradio"],[role="menuitem"]'),
+  ];
+  const labels = rows.map((row) => row.textContent?.trim());
+  expect(labels).toEqual(expect.arrayContaining(['Generate', 'Continuous']));
+  rows.find((row) => row.textContent?.trim() === 'Continuous')!.click();
+  expect(actions.setMode).toHaveBeenCalledWith('continuous');
+  view.update({ ...state, mode: 'continuous' });
+  expect(generate.dataset.mode).toBe('continuous');
+  expect(generate.getAttribute('aria-label')).toBe('Generate continuously');
+  expect(
+    generate
+      .querySelector<HTMLElement>('.sc-generation-glyph')!
+      .style.getPropertyValue('--sc-generation-glyph'),
+  ).toContain('infinity.svg');
+  // While the loop runs, Generate stops it, even when a new run could not be queued.
+  view.update({ ...state, mode: 'continuous', looping: true, generateEnabled: false });
+  expect(generate.disabled).toBe(false);
+  expect(generate.getAttribute('aria-label')).toBe('Stop continuous generation');
+  view.dispose();
 });

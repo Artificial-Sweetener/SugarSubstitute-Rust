@@ -13,21 +13,37 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** One native lifetime binds asynchronous clipboard work to CodeMirror source, selection, permission and focus. */
+/**
+ * The one owner of a prompt's editing commands: cut, copy, paste, select all, undo and redo, from
+ * the menu, the keyboard, native clipboard events and the host API alike. It holds the only
+ * composition, read-only and stale-target rules and makes every edit.
+ */
 import { requireValue } from '../../core/src/required.js';
 import { Facet, type Extension } from '@codemirror/state';
 import { EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view';
 import type { TagLexicon } from '../../core/src/index.js';
 import { ClipboardSession } from '../../services/src/clipboard/session.js';
-import type { ClipboardTransfer } from '../../services/src/clipboard/contracts.js';
+import type {
+  ClipboardGateway,
+  ClipboardTransfer,
+} from '../../services/src/clipboard/contracts.js';
 import { BooruPasteImport } from './booru-paste-import.js';
 import { booruPostLookup } from './booru-paste-host.js';
 import { browserClipboard } from './browser-clipboard.js';
-import { clipboardCut, clipboardPaste, clipboardSelection } from './clipboard.js';
+import { redo, selectAll, undo } from '@codemirror/commands';
+import {
+  clipboardCut,
+  clipboardPaste,
+  clipboardSelection,
+  eventClipboardTransfer,
+  exactClipboardMime,
+} from './clipboard.js';
 import { editorFreshness } from './freshness.js';
 import { dispatchNativeIngestion } from './native-ingestion.js';
 /** Clipboard commands share native event source rules; the browser remains the system transfer boundary. */
 export type ClipboardAction = 'copy' | 'cut' | 'paste';
+/** History and selection commands, under the same rules as the clipboard. */
+export type EditAction = 'undo' | 'redo' | 'select-all';
 /** Source-free command outcomes distinguish native availability, permission and current target retirement. */
 export interface ClipboardCommandOutcome {
   readonly status:
@@ -61,6 +77,14 @@ const clipboardConfiguration = Facet.define<ClipboardConfiguration, ClipboardCon
       observer: undefined,
     },
 });
+/** A prompt with no browser window has no clipboard to read or write. */
+const UNAVAILABLE_CLIPBOARD: ClipboardGateway = Object.freeze({
+  readable: false,
+  writable: false,
+  read: () => Promise.resolve({ status: 'unavailable' }),
+  write: () => Promise.resolve({ status: 'unavailable' }),
+});
+
 /** The mounted plugin owns one gateway and cancellation lane; no editable source or parallel selection is stored here. */
 export class NativeClipboard {
   private readonly session: ClipboardSession;
@@ -74,8 +98,8 @@ export class NativeClipboard {
   constructor(view: EditorView) {
     this.view = view;
     const owner = view.dom.ownerDocument.defaultView;
-    if (!owner) throw new Error('Native clipboard window unavailable');
-    const gateway = browserClipboard(owner);
+    // Without a browser window there is no clipboard; select all, undo and redo still work.
+    const gateway = owner ? browserClipboard(owner) : UNAVAILABLE_CLIPBOARD;
     this.readable = gateway.readable;
     this.writable = gateway.writable;
     this.session = new ClipboardSession(gateway);
@@ -169,6 +193,62 @@ export class NativeClipboard {
       this.view.state.facet(clipboardConfiguration).observer?.observe(outcome);
     return outcome;
   }
+  /**
+   * A native copy or cut event: the exact selected source goes into the event's transfer, a cut
+   * removes it as one history event, and the same source is published in the private format the
+   * menu's Paste can read. Nothing selected, or a cut that may not edit, transfers nothing.
+   */
+  fromCopyEvent(event: ClipboardEvent, cut: boolean): boolean {
+    this.cancel();
+    if (!event.clipboardData) return false;
+    const selected = clipboardSelection(this.view.state);
+    if (
+      !selected ||
+      (cut && (this.view.state.readOnly || this.view.composing || this.view.compositionStarted))
+    ) {
+      event.preventDefault();
+      return true;
+    }
+    event.clipboardData.clearData();
+    event.clipboardData.setData('text/plain', selected.text);
+    event.clipboardData.setData(exactClipboardMime, selected.text);
+    const deletion = cut ? clipboardCut(this.view.state) : null;
+    if (deletion) this.view.dispatch(deletion);
+    event.preventDefault();
+    // The event's own transfer is not readable by the asynchronous API the menu's Paste uses.
+    if (event.isTrusted && selected.text) void this.copiedSource(selected.text);
+    return true;
+  }
+
+  /**
+   * A native paste event: ordinary text follows the prompt's editing mode through the same
+   * ingestion as the menu's Paste, a private transfer keeps its exact source spelling, and a
+   * read-only or composing prompt takes nothing.
+   */
+  fromPasteEvent(event: ClipboardEvent): boolean {
+    this.cancel();
+    if (this.view.state.readOnly || this.view.composing || this.view.compositionStarted) {
+      event.preventDefault();
+      return true;
+    }
+    if (!event.clipboardData) return false;
+    const transfer = eventClipboardTransfer(event.clipboardData);
+    event.preventDefault();
+    if (event.isTrusted && transfer.kind === 'plain' && this.fromPasteImport(transfer.text))
+      return true;
+    if (event.isTrusted && this.readable && transfer.kind === 'plain') {
+      void this.fromInteraction('paste', transfer);
+      return true;
+    }
+    const insertion = clipboardPaste(
+      this.view.state,
+      transfer,
+      this.view.state.facet(clipboardConfiguration).lexicon(),
+    );
+    if (insertion) dispatchNativeIngestion(this.view, insertion);
+    return true;
+  }
+
   /** Native blur retires imports immediately; teardown, refocus and newer commands fence deferred clipboard cancellation. */
   blur(): void {
     const operation = this.operation;
@@ -198,7 +278,7 @@ export class NativeClipboard {
     }
   }
   /** Publish the source already accepted by a native copy/cut into the asynchronous API's private system format; source and native cut remain synchronous. */
-  async copiedSource(text: string): Promise<void> {
+  private async copiedSource(text: string): Promise<void> {
     if (this.disposed || !this.writable) return;
     const operation = this.operation;
     try {
@@ -241,6 +321,19 @@ export class NativeClipboard {
     this.imports.destroy();
   }
 }
+/**
+ * Run one history or selection command on a prompt, from the menu, the keyboard or the host API.
+ * Composition refuses all of them; a read-only prompt refuses undo and redo. A newer command
+ * supersedes the prompt's pending clipboard work.
+ */
+export function runEditCommand(view: EditorView, action: EditAction): boolean {
+  if (view.composing || view.compositionStarted) return false;
+  if (action === 'select-all') return selectAll(view);
+  if (view.state.readOnly) return false;
+  view.plugin(nativeClipboard)?.cancel();
+  return action === 'undo' ? undo(view) : redo(view);
+}
+
 /** One stable plugin identity supports both the public source facade and native menu delegation. */
 export const nativeClipboard = ViewPlugin.fromClass(NativeClipboard, {
   eventObservers: {

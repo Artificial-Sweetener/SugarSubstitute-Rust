@@ -90,9 +90,9 @@ export class GenerationQueueReorder {
         const card = this.#gesture.card;
         if (!card)
             return;
-        if (!this.options.waiting().includes(card.key) && !this.options.carries?.(card.key))
+        if (!this.#placed(card.key) && !this.options.carries?.(card.key))
             this.#gesture.clear();
-        else
+        else if (this.#placed(card.key))
             this.#mark(card.key);
     }
     /** Release the list and remove anything in the air. */
@@ -121,7 +121,7 @@ export class GenerationQueueReorder {
      */
     #follow(card) {
         const { root, rows } = this.options;
-        if (card && !this.options.waiting().includes(card.key))
+        if (card && !this.#placed(card.key))
             return;
         if (!card) {
             this.#overlay?.remove();
@@ -151,6 +151,13 @@ export class GenerationQueueReorder {
         this.#overlay.style.left = `${String(card.x)}px`;
         this.#overlay.style.top = `${String(card.y)}px`;
         this.#mark(card.key);
+    }
+    /**
+     * Whether a lifted job has a place in the list. Only waiting jobs do; a finished job carried
+     * towards the tab bar never marks its row, whatever updates the queue during the carry.
+     */
+    #placed(jobId) {
+        return this.options.waiting().includes(jobId);
     }
     #mark(jobId) {
         this.#row(jobId)?.setAttribute('data-dragging', '');

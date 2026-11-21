@@ -14,10 +14,12 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Open the standalone picker popup in its own scoped Vue application. */
+import type { ModelPickerSession } from '../ModelPickerSession.js';
 import { createApp, h } from 'vue';
 import type { ModelCatalogItem } from '../ModelCatalog.js';
 import type { ModelPickerRectangle } from '../ModelPickerPlacement.js';
 import { ModelChooser } from './ModelChooser.js';
+import type { ModelContextOptions } from '../ModelMenu.js';
 
 export interface ModelChooserRequest {
   readonly items: readonly ModelCatalogItem[];
@@ -25,6 +27,10 @@ export interface ModelChooserRequest {
   readonly label: string;
   /** The viewport point or rectangle the popup opens beside. */
   readonly anchor: ModelPickerRectangle;
+  /** The owners behind a card's right-click menu, the same ones every model picker uses. */
+  readonly context: ModelContextOptions;
+  /** Where a version chosen from a card's menu goes; null where versions cannot be browsed. */
+  readonly session: ModelPickerSession | null;
 }
 
 export interface OpenModelChooser {

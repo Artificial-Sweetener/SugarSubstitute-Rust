@@ -63,7 +63,7 @@ test('Plugin Mode compacts the existing rail and removes extra space before the 
   expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(46, 'transform', false);
   publishPluginMode(document, false);
   await nextTick();
-  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(224, 'transform', true);
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(218, 'transform', true);
   expect(document.querySelector('.sc-cube-stack-host')).toBe(rail);
 });
 
@@ -78,7 +78,7 @@ test('frame mode changes allocation without replacing the existing rail or accen
   frame.setEnabled(true);
   await nextTick();
   // Substitute moves the cards on the stack's density frame; the browser keeps the surface curve.
-  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(224, 'transform', true);
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(218, 'transform', true);
   expect(document.querySelector('.sc-cube-stack-host')).toBe(rail);
   expect(rail?.querySelector('.sc-cube-stack__selection')).toBe(indicator);
   fixture.settings.get(CUBE_STACK_COMPACT_SETTING)?.onChange(true);
@@ -344,7 +344,7 @@ test('retains one mounted rail, follows official appearance and recovers a hidde
   expect(document.querySelector('.sc-cube-stack-row__activate')).toBe(button);
   expect(rail?.getAttribute('data-appearance')).toBe('fluent');
   expect(rail?.parentElement?.dataset.colorScheme).toBe('light');
-  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(236, 'surface', true);
+  expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(230, 'surface', true);
   fixture.settings.get(CUBE_STACK_COMPACT_SETTING)?.onChange(true);
   await nextTick();
   expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(82, 'surface', false);
@@ -399,7 +399,7 @@ test('retains the same Vue controls until drawer exit finishes and survives a qu
     for (const finish of completions) finish();
     for (let tick = 0; tick < 8; tick += 1) await nextTick();
     expect(document.querySelector('.sc-cube-stack-row__activate')).toBe(row);
-    expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(236, 'surface', true);
+    expect(fixture.surface.setStackWidth).toHaveBeenLastCalledWith(230, 'surface', true);
   } finally {
     Reflect.deleteProperty(HTMLElement.prototype, 'animate');
   }
@@ -716,7 +716,7 @@ test('density preferences fade only the material aperture and release it with th
   fixture.settings.get(CUBE_STACK_COMPACT_SETTING)?.onChange(false);
   await nextTick();
   expect(workspace.style.getPropertyValue('--sc-stack-wash-opacity')).toBe('1');
-  expect(workspace.style.getPropertyValue('--sc-stack-material-width')).toBe('224px');
+  expect(workspace.style.getPropertyValue('--sc-stack-material-width')).toBe('218px');
   fixture.host.release();
   expect(workspace.style.getPropertyValue('--sc-stack-wash-opacity')).toBe('');
   expect(workspace.style.getPropertyValue('--sc-stack-material-width')).toBe('');

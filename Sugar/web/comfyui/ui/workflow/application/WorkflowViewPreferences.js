@@ -19,16 +19,13 @@ export class WorkflowViewPreferences {
                 item === null ||
                 !('path' in item) ||
                 !('canvas' in item) ||
-                !('masonry' in item) ||
                 typeof item.path !== 'string' ||
                 !item.path ||
                 item.path.length > 4096 ||
-                typeof item.canvas !== 'boolean' ||
-                typeof item.masonry !== 'boolean')
+                typeof item.canvas !== 'boolean')
                 continue;
             this.#stored.set(item.path, Object.freeze({
                 canvas: item.canvas,
-                masonry: item.masonry,
                 // Entries written before editor widths were stored select the default width.
                 editorWidth: 'editorWidth' in item && isEditorWidth(item.editorWidth) ? item.editorWidth : 0,
             }));
@@ -39,12 +36,11 @@ export class WorkflowViewPreferences {
         return this.#snapshot;
     }
     /** Capture one explicit live occurrence, including temporary workflows without browser-history keys. */
-    snapshotFor(binding, defaultCanvas) {
+    snapshotFor(binding, defaults) {
         const current = this.#live.get(binding.id);
         if (current)
             return current.view;
-        const view = (binding.path ? this.#stored.get(binding.path) : null) ??
-            Object.freeze({ canvas: defaultCanvas(), masonry: false, editorWidth: 0 });
+        const view = this.#opening(binding, defaults);
         this.#live.set(binding.id, { path: binding.path, view });
         return view;
     }
@@ -60,14 +56,11 @@ export class WorkflowViewPreferences {
             this.#snapshot = view;
     }
     /** Select an explicit committed binding and carry choices through rename or Save As. */
-    activate(binding, defaultCanvas) {
+    activate(binding, defaults) {
         let current = this.#live.get(binding.id);
         if (!current) {
             const stored = binding.path ? this.#stored.get(binding.path) : undefined;
-            current = {
-                path: binding.path,
-                view: stored || Object.freeze({ canvas: defaultCanvas(), masonry: false, editorWidth: 0 }),
-            };
+            current = { path: binding.path, view: this.#opening(binding, defaults) };
             this.#live.set(binding.id, current);
             if (!stored)
                 this.#persist(current);
@@ -104,7 +97,7 @@ export class WorkflowViewPreferences {
     }
     /**
      * Release closed in-memory bindings while keeping bounded reopen metadata. A closed workflow's
-     * choices are kept under its path, including ones a session restore supplied without
+     * stored choices follow what it last showed, including ones a session restore supplied without
      * publishing them, so the workflow reopens the way it was left.
      */
     retain(ids) {
@@ -113,18 +106,33 @@ export class WorkflowViewPreferences {
             if (open.has(id))
                 continue;
             this.#live.delete(id);
-            if (closed.path && this.#stored.get(closed.path) !== closed.view)
+            const stored = closed.path ? this.#stored.get(closed.path) : undefined;
+            if (closed.path &&
+                (stored?.canvas !== closed.view.canvas || stored.editorWidth !== closed.view.editorWidth))
                 this.#persist(closed);
         }
         if (this.#selected && !open.has(this.#selected))
             this.#selected = null;
     }
+    /** The choices a workflow opens with: stored canvas and width, and its own masonry default. */
+    #opening(binding, defaults) {
+        const stored = binding.path ? this.#stored.get(binding.path) : undefined;
+        const fallback = defaults();
+        return Object.freeze({
+            canvas: stored?.canvas ?? fallback.canvas,
+            masonry: fallback.masonry,
+            editorWidth: stored?.editorWidth ?? 0,
+        });
+    }
     /** Persist changed named choices; ordinary tab switching performs no storage writes. */
     #persist(current) {
         if (!current.path)
             return;
+        const stored = this.#stored.get(current.path);
+        if (stored?.canvas === current.view.canvas && stored.editorWidth === current.view.editorWidth)
+            return;
         this.#stored.delete(current.path);
-        this.#stored.set(current.path, current.view);
+        this.#stored.set(current.path, Object.freeze({ canvas: current.view.canvas, editorWidth: current.view.editorWidth }));
         while (this.#stored.size > 128) {
             const oldest = this.#stored.keys().next().value;
             if (oldest !== undefined)

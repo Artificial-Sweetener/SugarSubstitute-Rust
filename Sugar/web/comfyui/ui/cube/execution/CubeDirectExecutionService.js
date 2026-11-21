@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Build canonical workflow requests for authoritative SugarCubes execution. */
+import { isCubeKind } from '../CubeKind.js';
 import { enrichWorkflowPayload } from '../../graph/WorkflowPayloadBuilder.js';
 import { isRecord } from '../../types/common.js';
 import { requireCubeIdentity } from '../node/ComfyCubeNodeFactory.js';
@@ -140,8 +141,7 @@ function copyNonEmptyString(target, key, value) {
 function isPersistedCubeNode(value) {
     if (!isRecord(value) || !isRecord(value.properties))
         return false;
-    const kind = value.properties.sugarcubes_kind;
-    return kind === 'cube' || kind === 'cube_draft';
+    return isCubeKind(value.properties.sugarcubes_kind);
 }
 /** Project only accepted Cube-to-Cube proximity matches into stable boundary identities. */
 function toConnection(value) {

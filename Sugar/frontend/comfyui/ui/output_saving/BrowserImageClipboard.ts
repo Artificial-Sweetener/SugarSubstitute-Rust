@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Adapt exact preferred image bytes to Chromium's supported clipboard representations. */
+import { SystemClipboard } from '../core/SystemClipboard.js';
 
 export interface OutputImageClipboard {
   /** Publish preferred bytes and an interoperable image representation without retaining pixels. */
@@ -27,14 +28,12 @@ export class BrowserImageClipboard implements OutputImageClipboard {
 
   /** Preserve JPEG/WebP bytes as custom formats while offering PNG pixels to ordinary applications. */
   async write(blob: Blob, mimeType: 'image/png' | 'image/jpeg' | 'image/webp'): Promise<void> {
-    const clipboard = this.document.defaultView?.navigator.clipboard;
-    if (!clipboard || typeof ClipboardItem !== 'function')
+    const clipboard = new SystemClipboard(this.document);
+    // Every browser that can copy images at all can copy PNG.
+    if (!clipboard.supports('image/png'))
       throw new Error('Image copying is unavailable in this browser.');
     const representations: Record<string, Blob | Promise<Blob>> = {};
-    const supports = (type: string): boolean =>
-      typeof ClipboardItem.supports === 'function'
-        ? ClipboardItem.supports(type)
-        : type === 'image/png';
+    const supports = (type: string): boolean => clipboard.supports(type);
     if (supports(mimeType)) representations[mimeType] = blob;
     else {
       const customType = 'web ' + mimeType;
@@ -43,7 +42,7 @@ export class BrowserImageClipboard implements OutputImageClipboard {
     if (mimeType !== 'image/png') representations['image/png'] = this.#png(blob);
     if (!Object.keys(representations).length)
       throw new Error('The browser cannot copy the selected image format.');
-    await clipboard.write([new ClipboardItem(representations)]);
+    await clipboard.writeItem(representations);
   }
 
   /** Release temporary decoded pixels immediately after interoperable PNG encoding. */

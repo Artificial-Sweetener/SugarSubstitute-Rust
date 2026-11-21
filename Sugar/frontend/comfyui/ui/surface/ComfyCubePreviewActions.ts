@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Adapt Comfy's native image actions to Cube output media. */
 
+import { SystemClipboard } from '../core/SystemClipboard.js';
 import type { CubePreviewActions } from './CubePreviewActions.js';
 import type { CubePreviewItem } from './CubePreviewModel.js';
 import type { UnknownRecord } from '../types/common.js';
@@ -148,14 +149,7 @@ export function createComfyCubePreviewActions(
         throw new Error(`Image request failed with status ${String(response.status)}.`);
       return response.blob();
     },
-    writeClipboard: async (blob) => {
-      if (!windowRef.ClipboardItem || !windowRef.navigator.clipboard) {
-        throw new Error('Image clipboard writing is unavailable in this browser.');
-      }
-      await windowRef.navigator.clipboard.write([
-        new windowRef.ClipboardItem({ [blob.type]: blob }),
-      ]);
-    },
+    writeClipboard: (blob) => new SystemClipboard(host.document).writeItem({ [blob.type]: blob }),
     showContextMenu: (options, event) => {
       new ContextMenu(host.document).open({
         label: 'Image actions',

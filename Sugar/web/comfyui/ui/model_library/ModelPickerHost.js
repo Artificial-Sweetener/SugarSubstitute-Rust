@@ -14,6 +14,9 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own reversible model-picker mounts independently of theme and layout preferences. */
+import { ModelDetectorDialog } from './ModelDetectorDialog.js';
+import { ModelPickerSession } from './ModelPickerSession.js';
+import { ModelMenu } from './ModelMenu.js';
 import { sugarCubesSettingsSection } from '../settings/SugarCubesSettingsSections.js';
 import { isRecord } from '../types/common.js';
 import { HostSurfaceObserver } from '../core/HostSurfaceObserver.js';
@@ -38,6 +41,7 @@ export const MODEL_PICKER_SETTING = 'SugarCubes.Models.EnhancedPicker';
 export class ModelPickerHost {
     #options;
     #sessions;
+    #menu = null;
     #discovery;
     #page;
     #appearance;
@@ -170,7 +174,10 @@ export class ModelPickerHost {
             return null;
         const items = orderModelsByTitle(snapshot.items.filter((item) => item.kind === kind));
         return new Promise((resolve) => {
-            const chooser = openModelChooser(this.#options.document, { items, label, anchor }, (item) => {
+            // A model chosen here belongs to no workflow field, so a chosen version applies nowhere.
+            const session = new ModelPickerSession(this.#options.document, () => null);
+            const request = { items, label, anchor, context: this.#context(), session };
+            const chooser = openModelChooser(this.#options.document, request, (item) => {
                 if (chooser.popup)
                     this.#appearance.release(chooser.popup);
                 resolve(item);
@@ -179,11 +186,35 @@ export class ModelPickerHost {
                 this.#appearance.track(chooser.popup);
         });
     }
+    /**
+     * The rows about one model, for a menu SugarCubes opens outside the picker, such as a prompt's
+     * LoRA banner: the same rows every model picker surface shows.
+     */
+    modelMenu(item) {
+        if (this.#disposed)
+            return [];
+        // A model chosen here belongs to no workflow field, so a chosen version applies nowhere.
+        this.#menu ??= new ModelMenu(this.#context(), new ModelPickerSession(this.#options.document, () => null));
+        return this.#menu.project(item);
+    }
+    /** The owners behind every model menu this host opens. */
+    #context() {
+        return {
+            actions: this.#options.catalog,
+            updates: this.#options.updates,
+            feedback: this.#options.feedback,
+            detectors: this.#options.detectors,
+            outputs: this.#options.outputs,
+            detectorDialog: (item) => new ModelDetectorDialog(this.#options.document, item, this.#options.detectors),
+        };
+    }
     /** Release mounted Vue apps, pending discovery, and temporary native-control annotations. */
     dispose() {
         if (this.#disposed)
             return;
         this.#disposed = true;
+        this.#menu?.dispose();
+        this.#menu = null;
         this.#page?.dispose();
         this.#deactivate();
         this.#observer?.disconnect();

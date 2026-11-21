@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Create and identify real Comfy subgraph nodes presented as SugarCubes. */
 
+import { isCubeKind } from '../CubeKind.js';
 import { isRecord } from '../../types/common.js';
 import type { UnknownRecord, Vec2 } from '../../types/common.js';
 import type { NativeCubeSubgraph, NativeGraphNode } from '../ComfyCubeGraphBuilder.js';
@@ -232,9 +233,4 @@ function cloneRecord(value: UnknownRecord): UnknownRecord {
 /** Accept LiteGraph's mutable array and typed-array geometry vectors. */
 function isNumericVector(value: unknown): value is number[] | Float32Array | Float64Array {
   return Array.isArray(value) || value instanceof Float32Array || value instanceof Float64Array;
-}
-
-/** Recognize both persisted Cubes and workflow-only draft Cube faces. */
-function isCubeKind(value: unknown): boolean {
-  return value === 'cube' || value === 'cube_draft';
 }

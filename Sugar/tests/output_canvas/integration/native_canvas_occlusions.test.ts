@@ -155,6 +155,26 @@ test('detects an unknown third-party popup painted over the viewport', () => {
   });
 });
 
+test('our own menu is reported even when many positioned elements sit behind the canvas', () => {
+  const { place } = layout();
+  const { occlusions } = surfaceRoot();
+  // A large Nodes 2.0 graph: many positioned nodes behind the canvas, attached before the menu.
+  for (let index = 0; index < 200; index++)
+    place(document.body, { left: 120, top: 60, width: 40, height: 40 }, { painted: 'behind' });
+  const menu = place(document.body, { left: 200, top: 100, width: 120, height: 90 });
+  menu.dataset.scFloatingSurface = '';
+  expect(measure(occlusions).occlusions).toContainEqual({ x: 100, y: 50, width: 120, height: 90 });
+});
+
+test('a third-party popup attached after many positioned elements is still found', () => {
+  const { place } = layout();
+  const { occlusions } = surfaceRoot();
+  for (let index = 0; index < 200; index++)
+    place(document.body, { left: 120, top: 60, width: 40, height: 40 }, { painted: 'behind' });
+  place(document.body, { left: 200, top: 100, width: 120, height: 90 });
+  expect(measure(occlusions).occlusions).toContainEqual({ x: 100, y: 50, width: 120, height: 90 });
+});
+
 test('ignores a positioned popup painted behind the viewport and a hidden one', () => {
   const { place } = layout();
   const { occlusions } = surfaceRoot();

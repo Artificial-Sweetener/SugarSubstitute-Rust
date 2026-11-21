@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Present the prompt editor's LoRA candidates in the model library's own picker gallery. */
+import type { ContextMenuEntry } from '../menus/ContextMenu.js';
 import type {
   ModelCompletionPopup,
   ModelCompletionPopupHost,
@@ -30,6 +31,8 @@ export interface PromptModelGallery {
     label: string,
     anchor: { left: number; top: number; width: number; height: number },
   ): Promise<ModelCatalogItem | null>;
+  /** The rows about one model, the same ones every model picker surface shows. */
+  modelMenu(item: ModelCatalogItem): readonly ContextMenuEntry[];
 }
 
 /**

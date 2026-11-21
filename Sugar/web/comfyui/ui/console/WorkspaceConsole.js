@@ -21,6 +21,7 @@
  * Logs panel is the console, so the same command opens that. Visibility and height are a viewer's
  * convenience, kept in this browser's storage.
  */
+import { SystemClipboard } from '../core/SystemClipboard.js';
 import { PanelReveal } from '../surface/motion/PanelReveal.js';
 import { isRecord } from '../types/common.js';
 import { ComfyLogFeed } from './ComfyLogFeed.js';
@@ -180,10 +181,7 @@ export class WorkspaceConsole {
     }
     /** Hand the shown output to the clipboard. */
     #copy(text) {
-        const clipboard = this.#options.document.defaultView?.navigator.clipboard;
-        if (!clipboard)
-            return;
-        void clipboard.writeText(text).catch(this.#options.report);
+        void new SystemClipboard(this.#options.document).writeText(text).catch(this.#options.report);
     }
     /** Run one of ComfyUI's own commands through its command service. */
     #runComfyCommand(id) {

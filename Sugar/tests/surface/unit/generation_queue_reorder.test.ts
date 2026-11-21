@@ -84,6 +84,23 @@ test('a finished job never lifts and leaves no placeholder, since it cannot be r
   q.reorder.dispose();
 });
 
+test('a queue update while a finished job is carried never turns its row into a placeholder', () => {
+  const q = queue();
+  q.drag(q.finished, 100);
+  // Progress or another job finishing reconciles the drag while the job is in the air.
+  q.reorder.reconcile();
+  q.reorder.reconcile();
+  expect(q.finished.hasAttribute('data-dragging')).toBe(false);
+  expect(q.root.querySelector('.sc-generation-queue-lifted')).toBeNull();
+  // A waiting job's drag still keeps its placeholder through the same update.
+  q.reorder.dispose();
+  const w = queue();
+  w.drag(w.waiting, 30);
+  w.reorder.reconcile();
+  expect(w.waiting.hasAttribute('data-dragging')).toBe(true);
+  w.reorder.dispose();
+});
+
 test('queue cards show the arrow and no text selection, and only waiting cards show the grab hand', () => {
   const css = generationQueueViewCss.replace(/\s+/g, ' ');
   expect(css).toContain(

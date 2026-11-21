@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Offer everything the generation queue and its jobs can do, as menus. */
+import { SystemClipboard } from '../../../core/SystemClipboard.js';
 import type { ContextMenu, ContextMenuEntry } from '../../../menus/ContextMenu.js';
 import { isRecord } from '../../../types/common.js';
 import type { ComfyQueueActions } from './ComfyQueueActions.js';
@@ -284,8 +285,6 @@ export class GenerationQueueMenus {
   }
 
   #copy(text: string): void {
-    const clipboard = this.host.document.defaultView?.navigator.clipboard;
-    if (!clipboard) return;
-    void clipboard.writeText(text).catch(this.host.report);
+    void new SystemClipboard(this.host.document).writeText(text).catch(this.host.report);
   }
 }

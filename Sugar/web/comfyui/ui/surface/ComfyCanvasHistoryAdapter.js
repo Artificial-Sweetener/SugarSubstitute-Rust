@@ -15,7 +15,6 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Connect native graph transactions to Comfy's active workflow history owner. */
 import { isRecord } from '../types/common.js';
-import { ComfyWorkflowHistoryShortcuts } from './ComfyWorkflowHistoryShortcuts.js';
 /**
  * Keep graph mutation clients independent of Comfy's renderer-specific history registration, and
  * keep that history from acting on a shortcut one of those surfaces consumed.
@@ -24,17 +23,16 @@ export class ComfyCanvasHistoryAdapter {
     app;
     document;
     beforeCommit;
-    report;
+    tracker;
     #configuring = false;
     #active = false;
-    #shortcuts = null;
     #bindings = [];
     /** Connect native history and dependent reconciliation to this document's lifetime. */
-    constructor(app, document, beforeCommit, report) {
+    constructor(app, document, beforeCommit, tracker) {
         this.app = app;
         this.document = document;
         this.beforeCommit = beforeCommit;
-        this.report = report;
+        this.tracker = tracker;
     }
     /** Preserve native callback chains while supplying workflow capture for graph transactions. */
     install() {
@@ -48,12 +46,8 @@ export class ComfyCanvasHistoryAdapter {
         if (typeof canvas.emitBeforeChange === 'function' &&
             typeof canvas.emitAfterChange === 'function')
             this.#bind(canvas, 'emitBeforeChange', 'emitAfterChange');
-        const window = this.document.defaultView;
-        if (window) {
-            this.#shortcuts = new ComfyWorkflowHistoryShortcuts(this.app, window, this.report);
-            this.#shortcuts.install();
-        }
-        window?.addEventListener('pagehide', this.#dispose);
+        this.tracker.install();
+        this.document.defaultView?.addEventListener('pagehide', this.#dispose);
     }
     /** Keep graph hydration inside the host load rather than recording another user edit. */
     setConfiguring(configuring) {
@@ -66,8 +60,7 @@ export class ComfyCanvasHistoryAdapter {
         this.#active = false;
         for (const dispose of this.#bindings.splice(0))
             dispose();
-        this.#shortcuts?.dispose();
-        this.#shortcuts = null;
+        this.tracker.dispose();
         this.document.defaultView?.removeEventListener('pagehide', this.#dispose);
     }
     /** Bridge both native transaction vocabularies without replacing their event or callback chains. */

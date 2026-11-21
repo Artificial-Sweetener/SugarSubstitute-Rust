@@ -107,11 +107,13 @@ describe('canvas workflow navigation', () => {
       selection: { sourceId: source.id, batchIndex: 0 },
     });
     expect(f.selection.preview(f.view, catalog)).toBeNull();
+    // Choosing the tab receiving the running job's previews means "show me the latest".
     f.selection.apply(f.view, catalog, {
       type: 'select-source',
       selection: { sourceId: source.id, batchIndex: 2 },
     });
-    expect(f.selection.preview(f.view, catalog)).toBeNull();
+    expect(f.views.read(f.view).follow).toBe('auto');
+    expect(f.selection.preview(f.view, catalog)).toBe(preview);
     f.selection.apply(f.view, catalog, {
       type: 'select-source',
       selection: { sourceId: source.id, batchIndex: 0 },

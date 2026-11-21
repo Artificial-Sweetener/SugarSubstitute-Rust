@@ -14,9 +14,9 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prepare Cube descriptions before Comfy registers serialized Subgraph node definitions. */
+import { isCubeKind } from './CubeKind.js';
 import { resolveCubeDefinitionDescription } from './node/CubeDefinitionIdentityWriter.js';
 import { isRecord } from '../types/common.js';
-const CUBE_KINDS = new Set(['cube', 'cube_draft']);
 /** Adapt only marked serialized definitions during Comfy's official preconfigure hook. */
 export class CubeSerializedDefinitionPresentationAdapter {
     /** Supply Cube metadata to generated native node definitions before registration. */
@@ -30,7 +30,7 @@ export class CubeSerializedDefinitionPresentationAdapter {
         for (const definition of definitions) {
             if (!isRecord(definition) || !isRecord(definition.extra))
                 continue;
-            if (!CUBE_KINDS.has(String(definition.extra.sugarcubes_kind)))
+            if (!isCubeKind(definition.extra.sugarcubes_kind))
                 continue;
             const metadata = definition.extra.sugarcubes_cube;
             if (!isRecord(metadata))

@@ -1073,7 +1073,7 @@ license = "MIT"
 license_file = "third_party/licenses/fluentui-system-icons.LICENSE.txt"
 source = "https://github.com/Artificial-Sweetener/SugarSubstitute"
 revision = "34ce6d9976c76ac708b1dbda3920e9311010006a"
-modifications = "None; Substitute's stop and Microsoft Fluent next SVGs copied verbatim and tinted through CSS masks."
+modifications = "None; Substitute's stop and continuous-generation infinity and Microsoft Fluent next SVGs copied verbatim and tinted through CSS masks."
 
 [[component.asset]]
 source_path = "substitute/presentation/resources/icons/StopSolid_black.svg"
@@ -1086,6 +1086,12 @@ source_path = "substitute/presentation/resources/icons/Next24Filled_black.svg"
 vendored_file = "frontend/static/orb/next.svg"
 runtime_file = "web/orb/next.svg"
 sha256 = "843ff93d6e261f8e6520e1081a9db5121aede857bb8d6ed62459d5524efb9633"
+
+[[component.asset]]
+source_path = "substitute/presentation/resources/icons/InfinityHighContrast_black.svg"
+vendored_file = "frontend/static/orb/infinity.svg"
+runtime_file = "web/orb/infinity.svg"
+sha256 = "32854cf63d030a50a773e91d6fa5fcbe62fed3e8be436c2f3a95034b7cb0c758"
 
 [[component]]
 name = "QFluent generation queue artwork"

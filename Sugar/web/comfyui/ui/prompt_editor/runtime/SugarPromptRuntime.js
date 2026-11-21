@@ -126,7 +126,7 @@ import {
 } from "./chunk-D7JNCOVZ.js";
 import {
   SugarPromptMenu
-} from "./chunk-QTBJ64DI.js";
+} from "./chunk-GQCFG65F.js";
 import {
   installSugarPromptStyles
 } from "./chunk-4OATFCQX.js";
@@ -22396,6 +22396,51 @@ function enteredTextInsertion(state, from, to, text, lexicon, history2) {
   });
 }
 
+// frontend/sugarprompt/editor/src/clipboard.ts
+var exactClipboardMime = "application/x-sugarprompt-source";
+function eventClipboardTransfer(data) {
+  const exact = [exactClipboardMime, `web ${exactClipboardMime}`].find(
+    (type) => data.types.includes(type)
+  );
+  return {
+    kind: exact ? "exact" : "plain",
+    text: exact ? data.getData(exact) : data.types.includes("text/plain") ? data.getData("text/plain") : ""
+  };
+}
+function clipboardSelection(state) {
+  const selection = state.selection.main;
+  if (selection.empty) return void 0;
+  const logical = state.doc.toString(), endings = state.field(lineEndings);
+  const from = documentToSource(logical, endings, selection.from), to = documentToSource(logical, endings, selection.to);
+  return { from, to, text: readExactSource(state).slice(from, to) };
+}
+function clipboardCut(state) {
+  if (state.readOnly) return null;
+  const selected = clipboardSelection(state);
+  return selected ? {
+    ...exactReplacement(state, selected.from, selected.to, ""),
+    annotations: isolateHistory.of("full"),
+    userEvent: "delete.cut"
+  } : null;
+}
+function clipboardPaste(state, transfer, lexicon, history2) {
+  if (state.readOnly || !transfer.text) return null;
+  const logical = state.doc.toString(), endings = state.field(lineEndings), selection = state.selection.main;
+  const from = documentToSource(logical, endings, selection.from), to = documentToSource(logical, endings, selection.to);
+  if (transfer.kind === "plain")
+    return enteredTextInsertion(state, from, to, transfer.text, lexicon, history2);
+  const transaction = state.update({
+    ...exactReplacement(state, from, to, transfer.text),
+    annotations: isolateHistory.of("full"),
+    userEvent: "input.paste"
+  });
+  return Object.freeze({
+    startState: state,
+    transactions: Object.freeze([transaction]),
+    edit: null
+  });
+}
+
 // frontend/sugarprompt/editor/src/scene-line-bands.ts
 var empty3 = Object.freeze([]);
 function prepareSceneBands(document2) {
@@ -23029,81 +23074,6 @@ function dispatchNativeIngestion(view, prepared4) {
   return true;
 }
 
-// frontend/sugarprompt/editor/src/clipboard.ts
-var exactClipboardMime = "application/x-sugarprompt-source";
-function eventClipboardTransfer(data) {
-  const exact = [exactClipboardMime, `web ${exactClipboardMime}`].find(
-    (type) => data.types.includes(type)
-  );
-  return {
-    kind: exact ? "exact" : "plain",
-    text: exact ? data.getData(exact) : data.types.includes("text/plain") ? data.getData("text/plain") : ""
-  };
-}
-function clipboardSelection(state) {
-  const selection = state.selection.main;
-  if (selection.empty) return void 0;
-  const logical = state.doc.toString(), endings = state.field(lineEndings);
-  const from = documentToSource(logical, endings, selection.from), to = documentToSource(logical, endings, selection.to);
-  return { from, to, text: readExactSource(state).slice(from, to) };
-}
-function clipboardCut(state) {
-  if (state.readOnly) return null;
-  const selected = clipboardSelection(state);
-  return selected ? {
-    ...exactReplacement(state, selected.from, selected.to, ""),
-    annotations: isolateHistory.of("full"),
-    userEvent: "delete.cut"
-  } : null;
-}
-function clipboardPaste(state, transfer, lexicon, history2) {
-  if (state.readOnly || !transfer.text) return null;
-  const logical = state.doc.toString(), endings = state.field(lineEndings), selection = state.selection.main;
-  const from = documentToSource(logical, endings, selection.from), to = documentToSource(logical, endings, selection.to);
-  if (transfer.kind === "plain")
-    return enteredTextInsertion(state, from, to, transfer.text, lexicon, history2);
-  const transaction = state.update({
-    ...exactReplacement(state, from, to, transfer.text),
-    annotations: isolateHistory.of("full"),
-    userEvent: "input.paste"
-  });
-  return Object.freeze({
-    startState: state,
-    transactions: Object.freeze([transaction]),
-    edit: null
-  });
-}
-function copySource(view, event, cut) {
-  if (!event.clipboardData) return false;
-  const selected = clipboardSelection(view.state);
-  if (!selected || cut && (view.state.readOnly || view.composing || view.compositionStarted)) {
-    event.preventDefault();
-    return true;
-  }
-  event.clipboardData.clearData();
-  event.clipboardData.setData("text/plain", selected.text);
-  event.clipboardData.setData(exactClipboardMime, selected.text);
-  const deletion = cut ? clipboardCut(view.state) : null;
-  if (deletion) view.dispatch(deletion);
-  event.preventDefault();
-  return true;
-}
-function pasteSource(view, event, lexicon) {
-  if (view.state.readOnly || view.composing || view.compositionStarted) {
-    event.preventDefault();
-    return true;
-  }
-  if (!event.clipboardData) return false;
-  const insertion = clipboardPaste(
-    view.state,
-    eventClipboardTransfer(event.clipboardData),
-    lexicon
-  );
-  if (insertion) dispatchNativeIngestion(view, insertion);
-  event.preventDefault();
-  return true;
-}
-
 // frontend/sugarprompt/editor/src/booru-paste-import.ts
 var BooruPasteImport = class {
   pending = null;
@@ -23450,6 +23420,12 @@ var clipboardConfiguration = Facet.define({
     observer: void 0
   }
 });
+var UNAVAILABLE_CLIPBOARD = Object.freeze({
+  readable: false,
+  writable: false,
+  read: () => Promise.resolve({ status: "unavailable" }),
+  write: () => Promise.resolve({ status: "unavailable" })
+});
 var NativeClipboard = class {
   session;
   imports;
@@ -23462,8 +23438,7 @@ var NativeClipboard = class {
   constructor(view) {
     this.view = view;
     const owner = view.dom.ownerDocument.defaultView;
-    if (!owner) throw new Error("Native clipboard window unavailable");
-    const gateway = browserClipboard(owner);
+    const gateway = owner ? browserClipboard(owner) : UNAVAILABLE_CLIPBOARD;
     this.readable = gateway.readable;
     this.writable = gateway.writable;
     this.session = new ClipboardSession(gateway);
@@ -23531,6 +23506,56 @@ var NativeClipboard = class {
     if (!this.disposed && operation === this.operation)
       this.view.state.facet(clipboardConfiguration).observer?.observe(outcome);
     return outcome;
+  }
+  /**
+   * A native copy or cut event: the exact selected source goes into the event's transfer, a cut
+   * removes it as one history event, and the same source is published in the private format the
+   * menu's Paste can read. Nothing selected, or a cut that may not edit, transfers nothing.
+   */
+  fromCopyEvent(event, cut) {
+    this.cancel();
+    if (!event.clipboardData) return false;
+    const selected = clipboardSelection(this.view.state);
+    if (!selected || cut && (this.view.state.readOnly || this.view.composing || this.view.compositionStarted)) {
+      event.preventDefault();
+      return true;
+    }
+    event.clipboardData.clearData();
+    event.clipboardData.setData("text/plain", selected.text);
+    event.clipboardData.setData(exactClipboardMime, selected.text);
+    const deletion = cut ? clipboardCut(this.view.state) : null;
+    if (deletion) this.view.dispatch(deletion);
+    event.preventDefault();
+    if (event.isTrusted && selected.text) void this.copiedSource(selected.text);
+    return true;
+  }
+  /**
+   * A native paste event: ordinary text follows the prompt's editing mode through the same
+   * ingestion as the menu's Paste, a private transfer keeps its exact source spelling, and a
+   * read-only or composing prompt takes nothing.
+   */
+  fromPasteEvent(event) {
+    this.cancel();
+    if (this.view.state.readOnly || this.view.composing || this.view.compositionStarted) {
+      event.preventDefault();
+      return true;
+    }
+    if (!event.clipboardData) return false;
+    const transfer = eventClipboardTransfer(event.clipboardData);
+    event.preventDefault();
+    if (event.isTrusted && transfer.kind === "plain" && this.fromPasteImport(transfer.text))
+      return true;
+    if (event.isTrusted && this.readable && transfer.kind === "plain") {
+      void this.fromInteraction("paste", transfer);
+      return true;
+    }
+    const insertion = clipboardPaste(
+      this.view.state,
+      transfer,
+      this.view.state.facet(clipboardConfiguration).lexicon()
+    );
+    if (insertion) dispatchNativeIngestion(this.view, insertion);
+    return true;
   }
   /** Native blur retires imports immediately; teardown, refocus and newer commands fence deferred clipboard cancellation. */
   blur() {
@@ -23601,6 +23626,13 @@ var NativeClipboard = class {
     this.imports.destroy();
   }
 };
+function runEditCommand(view, action) {
+  if (view.composing || view.compositionStarted) return false;
+  if (action === "select-all") return selectAll(view);
+  if (view.state.readOnly) return false;
+  view.plugin(nativeClipboard)?.cancel();
+  return action === "undo" ? undo(view) : redo(view);
+}
 var nativeClipboard = ViewPlugin.fromClass(NativeClipboard, {
   eventObservers: {
     /** Even navigation that leaves the native selection unchanged retires the pending paste. */
@@ -23671,9 +23703,8 @@ function currentTextMenu(state, menu) {
 async function executeTextMenu(view, menu, item) {
   if (!menu.leaves.has(item) || !currentTextMenu(view.state, menu) || view.composing || view.compositionStarted)
     return;
-  if (item.action === "select-all") selectAll(view);
-  else if (item.action === "undo") undo(view);
-  else if (item.action === "redo") redo(view);
+  if (item.action === "select-all" || item.action === "undo" || item.action === "redo")
+    runEditCommand(view, item.action);
   else await view.plugin(nativeClipboard)?.fromInteraction(item.action);
 }
 
@@ -24456,7 +24487,7 @@ function prepareLoraMenu(state, position, target) {
     ...triggers.items.length && external.length ? [{ kind: "separator" }] : [],
     ...external
   ]);
-  if (!items.length) return null;
+  if (!items.length && !target) return null;
   const context = {
     freshness: state.field(editorFreshness),
     pageHost,
@@ -24521,7 +24552,7 @@ function prepareContextMenu(state, target, surface, clipboard = { readable: fals
     [...presets.items, ...scheduleItem ? [scheduleItem] : []],
     queueItem ? [queueItem] : [],
     actions?.items ?? [],
-    actions?.kind === "inline" ? [] : [renderingItem]
+    actions?.kind === "inline" && actions.items.length ? [] : [renderingItem]
   ]) {
     if (!group.length) continue;
     if (items.length) items.push({ kind: "separator" });
@@ -30091,19 +30122,16 @@ function nativeSourceCommands(getView, lexicon, alive, hostIntent) {
         view.dispatch(edit.transaction);
         return { status: "applied" };
       },
-      /** Native composition excludes semantic history commands. */
+      /** History commands run through the prompt's one edit-command owner. */
       undo() {
         alive();
         hostIntent.accept("source");
-        const view = getView();
-        return !nativeCompositionStarted(view) && undo(view);
+        return runEditCommand(getView(), "undo");
       },
-      /** Redo shares the same native composition and lifetime boundary. */
       redo() {
         alive();
         hostIntent.accept("source");
-        const view = getView();
-        return !nativeCompositionStarted(view) && redo(view);
+        return runEditCommand(getView(), "redo");
       }
     },
     /** Release the sole prepared-command registry; CodeMirror owns document and history disposal. */
@@ -35901,43 +35929,17 @@ function navigateSelection(view, forward, extend, move) {
 }
 
 // frontend/sugarprompt/editor/src/input-events.ts
-function copyEvent(editor, event, cut) {
-  const clipboard = editor.plugin(nativeClipboard);
-  clipboard?.cancel();
-  const handled = copySource(editor, event, cut);
-  if (handled && event.isTrusted && event.clipboardData) {
-    const transferred = eventClipboardTransfer(event.clipboardData);
-    if (transferred.kind === "exact" && transferred.text)
-      void clipboard?.copiedSource(transferred.text);
-  }
-  return handled;
-}
-function nativeInputEvents(getView, lexicon, publish2, isAlive) {
+function nativeInputEvents(getView, publish2, isAlive) {
   return EditorView.domEventHandlers({
-    /** Copy routes through exact selected source. */
+    /** Copy, cut and paste events go to the prompt's one edit-command owner. */
     copy(event) {
-      return copyEvent(getView(), event, false);
+      return getView().plugin(nativeClipboard)?.fromCopyEvent(event, false) ?? false;
     },
-    /** Cut has one native history event and respects read-only. */
     cut(event) {
-      return copyEvent(getView(), event, true);
+      return getView().plugin(nativeClipboard)?.fromCopyEvent(event, true) ?? false;
     },
-    /** External ordinary text follows the selected editing mode; private transfers preserve exact source spelling. */
     paste(event) {
-      const editor = getView();
-      const clipboard = editor.plugin(nativeClipboard);
-      clipboard?.cancel();
-      const transfer = event.clipboardData ? eventClipboardTransfer(event.clipboardData) : void 0;
-      if (event.isTrusted && transfer?.kind === "plain" && clipboard?.fromPasteImport(transfer.text)) {
-        event.preventDefault();
-        return true;
-      }
-      if (event.isTrusted && clipboard?.readable && transfer?.kind === "plain") {
-        event.preventDefault();
-        void clipboard.fromInteraction("paste", transfer);
-        return true;
-      }
-      return pasteSource(editor, event, lexicon());
+      return getView().plugin(nativeClipboard)?.fromPasteEvent(event) ?? false;
     },
     /** Native composition owns preedit; publication observes its lifecycle. */
     compositionstart() {
@@ -46514,6 +46516,7 @@ var reorderInteractions = [
 ];
 
 // frontend/sugarprompt/editor/src/native-state.ts
+var EDIT_KEYS = /* @__PURE__ */ new Set(["Mod-a", "Mod-z", "Mod-y", "Mod-Shift-z"]);
 function createNativeState(source, options) {
   const encoded = encodeSource(source);
   const state = EditorState.create({
@@ -46627,14 +46630,19 @@ function createNativeState(source, options) {
             shift: () => true,
             preventDefault: true
           },
-          ...historyKeymap,
+          // Select all, undo and redo run under the prompt's one set of edit-command rules.
+          { key: "Mod-a", run: (view) => runEditCommand(view, "select-all"), preventDefault: true },
+          { key: "Mod-z", run: (view) => runEditCommand(view, "undo"), preventDefault: true },
+          { key: "Mod-y", run: (view) => runEditCommand(view, "redo"), preventDefault: true },
+          { key: "Mod-Shift-z", run: (view) => runEditCommand(view, "redo"), preventDefault: true },
+          ...historyKeymap.filter((binding) => !EDIT_KEYS.has(binding.key ?? "")),
           ...defaultKeymap.filter(
-            (binding) => !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(binding.key ?? "")
+            (binding) => !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(binding.key ?? "") && !EDIT_KEYS.has(binding.key ?? "")
           )
         ])
       ),
       EditorView.updateListener.of(options.update),
-      nativeInputEvents(options.view, options.lexicon, options.publish, options.isAlive),
+      nativeInputEvents(options.view, options.publish, options.isAlive),
       editorTheme,
       loraTheme,
       loraActiveFeedback,
@@ -47943,7 +47951,7 @@ var SugarPromptEditor = class {
     const tagCatalog = bundledPromptTagCatalog();
     this.#api = mountEditor(this.#content, {
       source: options.source,
-      menuPresentation: (root) => new SugarPromptMenu(root, options.report),
+      menuPresentation: (root) => new SugarPromptMenu(root, options.report, options.loraMenu),
       tooltipTransport: (plane) => new SugarPromptTooltip(plane),
       label: options.label,
       placeholder: "Write a prompt\u2026",

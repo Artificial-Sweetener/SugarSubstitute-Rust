@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Create and identify real Comfy subgraph nodes presented as SugarCubes. */
+import { isCubeKind } from '../CubeKind.js';
 import { isRecord } from '../../types/common.js';
 import { initializePromotedWidgetIdentity } from './PromotedWidgetIdentityInitializer.js';
 const DEFAULT_SIZE = [720, 480];
@@ -181,8 +182,4 @@ function cloneRecord(value) {
 /** Accept LiteGraph's mutable array and typed-array geometry vectors. */
 function isNumericVector(value) {
     return Array.isArray(value) || value instanceof Float32Array || value instanceof Float64Array;
-}
-/** Recognize both persisted Cubes and workflow-only draft Cube faces. */
-function isCubeKind(value) {
-    return value === 'cube' || value === 'cube_draft';
 }

@@ -16,6 +16,9 @@
 /** Adapt the public Comfy generation settings and mounted action controls without a second queue. */
 import { isRecord } from '../../types/common.js';
 import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
+/** ComfyUI's run modes that queue the batch again once the queue is empty. */
+const INSTANT_IDLE = 'instant-idle';
+const INSTANT_RUNNING = 'instant-running';
 /** Delegate generation policy and persistence to Comfy's existing command and settings owners. */
 export class ComfyGenerationAdapter {
     document;
@@ -53,7 +56,10 @@ export class ComfyGenerationAdapter {
             this.#marked.add(element);
         }
         const count = settings?.batchCount;
+        const mode = settings?.mode;
         return {
+            mode: mode === INSTANT_IDLE || mode === INSTANT_RUNNING ? 'continuous' : 'generate',
+            looping: mode === INSTANT_RUNNING,
             batch: typeof count === 'number' && Number.isFinite(count)
                 ? Math.max(1, Math.min(999, Math.trunc(count)))
                 : 1,
@@ -69,10 +75,34 @@ export class ComfyGenerationAdapter {
             throw new Error('Comfy generation batch setting is unavailable or invalid.');
         settings.batchCount = Math.max(1, Math.min(999, Math.trunc(value)));
     }
-    /** Submit through Comfy's normal generation command and execution hooks. */
-    async generate() {
-        if (!this.read().generateEnabled)
+    /**
+     * Continuous generation is ComfyUI's instant run mode: it queues the batch again each time the
+     * queue empties, and stops after a failed run. Choosing Generate leaves that mode.
+     */
+    setMode(mode) {
+        const settings = this.#settings();
+        if (!settings)
+            throw new Error('Comfy generation run mode is unavailable.');
+        const current = this.read().mode;
+        if (current === mode)
             return;
+        settings.mode = mode === 'continuous' ? INSTANT_IDLE : 'disabled';
+    }
+    /**
+     * Submit through Comfy's normal generation command and execution hooks. In continuous mode the
+     * first press starts the loop and a press while it runs stops it, as ComfyUI's own Run does.
+     */
+    async generate() {
+        const state = this.read();
+        const settings = this.#settings();
+        if (state.mode === 'continuous' && state.looping && settings) {
+            settings.mode = INSTANT_IDLE;
+            return;
+        }
+        if (!state.generateEnabled)
+            return;
+        if (state.mode === 'continuous' && settings)
+            settings.mode = INSTANT_RUNNING;
         const submission = this.#execute('Comfy.QueuePrompt');
         this.#submissions.add(submission);
         this.#notify();
@@ -90,15 +120,19 @@ export class ComfyGenerationAdapter {
             return;
         await this.#interrupt();
     }
-    /** Stop automatic submission and pending work before interrupting the active host generation. */
+    /**
+     * Stop a running continuous loop and pending work before interrupting the active host
+     * generation. The chosen run mode stays: a continuous loop returns to waiting for the next
+     * Generate.
+     */
     async cancel() {
         if (!this.read().cancelEnabled)
             return;
         this.#canceling = true;
         this.#notify();
         const settings = this.#settings();
-        if (settings)
-            settings.mode = 'disabled';
+        if (settings?.mode === INSTANT_RUNNING)
+            settings.mode = INSTANT_IDLE;
         try {
             // Comfy submits a batch asynchronously; clear only after its already-admitted requests finish.
             await Promise.allSettled([...this.#submissions]);

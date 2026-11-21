@@ -23,6 +23,8 @@ import {
   type WorkflowMasonryHostLifecycleOptions,
 } from '../surface/masonry/WorkflowMasonryHostLifecycle.js';
 import { ComfyWorkflowViewPreferences } from '../workflow/infrastructure/ComfyWorkflowViewPreferences.js';
+import { ComfyWorkflowChangeTracker } from '../workflow/infrastructure/ComfyWorkflowChangeTracker.js';
+import { workflowOpensInMasonry } from '../workflow/infrastructure/ComfyWorkflowViewDocument.js';
 import { OUTPUT_CANVAS_VISIBLE_SETTING } from '../output_canvas/infrastructure/ComfyCanvasPreferences.js';
 import { WORKFLOW_MASONRY_DEFAULT_EDITOR_WIDTH } from './masonry/WorkflowMasonryLayout.js';
 import { isRecord } from '../types/common.js';
@@ -36,6 +38,8 @@ export class ComfyWorkflowWorkspace {
   readonly canvas: ComfyCanvasHost;
   readonly masonry: WorkflowMasonryHostLifecycle;
   readonly console: WorkspaceConsole;
+  /** The one owner of SugarCubes' contact with Comfy's workflow change tracker. */
+  readonly changeTracker: ComfyWorkflowChangeTracker;
   readonly #presentation: ComfyWorkflowViewPreferences;
   readonly #desktop: ComfyDesktopSessionHost | null;
 
@@ -52,6 +56,9 @@ export class ComfyWorkflowWorkspace {
     masonry: Omit<WorkflowMasonryHostLifecycleOptions, 'presentation' | 'getContainer'>,
     logger: Pick<Console, 'warn'>,
   ) {
+    const view = options.document.defaultView;
+    if (!view) throw new Error('The workflow workspace needs a browser window.');
+    this.changeTracker = new ComfyWorkflowChangeTracker(options.app, view, options.report);
     this.#presentation = new ComfyWorkflowViewPreferences(
       options.execution.sessions,
       () => options.document.defaultView?.localStorage ?? null,
@@ -65,6 +72,13 @@ export class ComfyWorkflowWorkspace {
             ? read.call(settings, OUTPUT_CANVAS_VISIBLE_SETTING, true)
             : true;
         return typeof value === 'boolean' ? value : true;
+      },
+      {
+        opensInMasonry: (sessionId) =>
+          workflowOpensInMasonry(
+            committedDocument(options.execution.workflowDocuments.readHostWorkflow(sessionId)),
+          ),
+        recordView: (view) => this.changeTracker.recordView(view),
       },
       logger,
     );
@@ -121,4 +135,17 @@ export class ComfyWorkflowWorkspace {
     this.masonry.dispose();
     this.console.dispose();
   };
+}
+
+/** The committed serialized graph of one host workflow: its tracked state, or its saved content. */
+function committedDocument(workflow: unknown): unknown {
+  if (!isRecord(workflow)) return null;
+  if (isRecord(workflow.changeTracker) && isRecord(workflow.changeTracker.activeState))
+    return workflow.changeTracker.activeState;
+  if (typeof workflow.content !== 'string' || !workflow.content) return null;
+  try {
+    return JSON.parse(workflow.content) as unknown;
+  } catch {
+    return null;
+  }
 }

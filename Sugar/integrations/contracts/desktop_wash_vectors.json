@@ -1,0 +1,15 @@
+{
+  "description": "The desktop material washes as 8-bit sRGB channels and 8-bit alpha, per window theme. The page paints them in CSS; the native canvas paints the body wash behind its image.",
+  "body": {
+    "dark": [32, 32, 32, 150],
+    "light": [251, 251, 251, 188]
+  },
+  "chrome": {
+    "dark": [44, 44, 44, 150],
+    "light": [252, 252, 252, 196]
+  },
+  "card": {
+    "dark": [255, 255, 255, 13],
+    "light": [255, 255, 255, 179]
+  }
+}

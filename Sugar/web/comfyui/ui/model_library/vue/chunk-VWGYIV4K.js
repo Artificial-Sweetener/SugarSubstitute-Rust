@@ -5,14 +5,14 @@ import {
   useModelSelectionUpdates
 } from "./chunk-OKMKTXD6.js";
 import {
-  useModelContext
-} from "./chunk-LMZEATZG.js";
-import {
   modelPickerPlacement
 } from "./chunk-JK626FTQ.js";
 import {
   ModelPickerPopupContent
 } from "./chunk-IVMM67XL.js";
+import {
+  useModelContext
+} from "./chunk-MAD7FSJN.js";
 import {
   ModelUpdateButton
 } from "./chunk-4DBFGV2O.js";
@@ -267,6 +267,10 @@ var ModelPickerField = defineComponent({
     updates: { type: Object, default: null },
     detectors: { type: Object, default: null },
     outputs: { type: Object, default: null },
+    detectorDialog: {
+      type: Function,
+      default: null
+    },
     discoveryAction: { type: Function, default: null },
     compatibility: {
       type: Function,

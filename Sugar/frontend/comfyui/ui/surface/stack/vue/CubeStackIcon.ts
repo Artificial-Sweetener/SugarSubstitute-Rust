@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Render the shared icon and its model overlay without replacing the Vue-owned capsule. */
 import { defineComponent, h, watch, type PropType } from 'vue';
+import { CUBE_MODEL_BADGE_CLASS } from '../../CubeModelPillDomRenderer.js';
 import {
   createResolvedCubeIconElement,
   type CubeIconModel,
@@ -46,7 +47,11 @@ export const CubeStackIcon = defineComponent({
       h('span', { class: 'sc-cube-stack-row__icon', 'aria-hidden': 'true' }, [
         h('span', { class: 'sc-cube-stack-row__asset', ref: retainElement }),
         props.targetModel
-          ? h('span', { class: 'sc-cube-stack-row__model' }, props.targetModel)
+          ? h(
+              'span',
+              { class: `${CUBE_MODEL_BADGE_CLASS} sc-cube-stack-row__model` },
+              props.targetModel,
+            )
           : null,
       ]);
   },

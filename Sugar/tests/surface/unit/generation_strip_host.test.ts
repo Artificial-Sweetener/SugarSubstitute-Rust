@@ -60,22 +60,43 @@ test('generation uses the native batch setting and canonical host command', asyn
   expect(adapter.read().batch).toBe(3);
 });
 
-test('skip interrupts only; cancel stops auto queue and clears pending before interrupting', async () => {
+test('skip interrupts only; cancel stops the loop, keeps the mode and clears pending before interrupting', async () => {
   const host = fixture();
   host.cancel.disabled = false;
-  host.queueSettings.mode = 'instant';
+  host.queueSettings.mode = 'instant-running';
   const adapter = new ComfyGenerationAdapter(document, host.app);
   await adapter.skip();
   expect(host.calls).toEqual(['interrupt']);
   expect(host.api.interrupt).toHaveBeenCalledWith(null);
-  expect(host.queueSettings.mode).toBe('instant');
+  expect(host.queueSettings.mode).toBe('instant-running');
   host.calls.length = 0;
   await adapter.cancel();
-  expect(host.queueSettings.mode).toBe('disabled');
+  // Continuous stays chosen; only its running loop stops.
+  expect(host.queueSettings.mode).toBe('instant-idle');
+  expect(adapter.read().mode).toBe('continuous');
   expect(host.calls).toEqual(['clear', 'interrupt']);
   expect(host.api.clearItems).toHaveBeenCalledWith('queue');
   // ComfyUI's interrupt and clear commands show toasts; Skip and Stop never run them.
   expect(host.execute).not.toHaveBeenCalled();
+});
+
+test('continuous generation is the ComfyUI instant mode: Generate starts the loop and stops it', async () => {
+  const host = fixture();
+  const adapter = new ComfyGenerationAdapter(document, host.app);
+  expect(adapter.read().mode).toBe('generate');
+  adapter.setMode('continuous');
+  expect(host.queueSettings.mode).toBe('instant-idle');
+  expect(adapter.read()).toMatchObject({ mode: 'continuous', looping: false });
+  await adapter.generate();
+  expect(host.queueSettings.mode).toBe('instant-running');
+  expect(host.execute.mock.calls).toEqual([['Comfy.QueuePrompt']]);
+  expect(adapter.read().looping).toBe(true);
+  // A press while the loop runs stops it and queues nothing more.
+  await adapter.generate();
+  expect(host.queueSettings.mode).toBe('instant-idle');
+  expect(host.execute.mock.calls).toHaveLength(1);
+  adapter.setMode('generate');
+  expect(host.queueSettings.mode).toBe('disabled');
 });
 
 test('missing host controls fail closed and native visibility is restored on disposal', () => {

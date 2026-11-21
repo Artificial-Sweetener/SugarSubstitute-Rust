@@ -41,6 +41,14 @@ function canvasContextActions(snapshot, capabilities, send, target = "primary") 
     { type: "copy-media", target, format: "preferred" },
     unavailable || actions?.copy === false
   );
+  if (!video && snapshot.mediaActions) {
+    const format = snapshot.mediaActions.preferredCopyFormat === "jpeg" ? "png" : "jpeg";
+    action(
+      `Copy .${format === "jpeg" ? "jpg" : "png"}`,
+      { type: "copy-media", target, format },
+      unavailable || actions?.copy === false
+    );
+  }
   if (!video && snapshot.mediaActions?.photoshop) {
     action(
       "Open in Photoshop",

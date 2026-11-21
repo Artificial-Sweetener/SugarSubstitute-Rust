@@ -34,9 +34,14 @@ export function cubeStackRowStride(packed: boolean): number {
   return CUBE_STACK_ROW_HEIGHT + cubeStackRowGap(packed);
 }
 
-/** Size the rail: compact keeps one icon tile plus the row insets that packing removes. */
+/**
+ * Size the rail. Expanded, its rows keep the reference width but have no inset on the side that
+ * faces the cards, so they sit exactly one card gap from them; packing removes both insets.
+ * Compact keeps one icon tile plus the row insets that packing removes.
+ */
 export function cubeStackWidth(compact: boolean, packed: boolean): number {
-  if (!compact) return CUBE_STACK_EXPANDED_WIDTH;
+  if (!compact)
+    return packed ? CUBE_STACK_EXPANDED_WIDTH : CUBE_STACK_EXPANDED_WIDTH - CUBE_STACK_ROW_INSET;
   return CUBE_STACK_ROW_HEIGHT + (packed ? 0 : CUBE_STACK_ROW_INSET * 2);
 }
 

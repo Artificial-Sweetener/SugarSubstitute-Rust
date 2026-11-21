@@ -21,6 +21,9 @@ import { modelPickerPlacement } from '../ModelPickerPlacement.js';
 import type { ModelPickerRectangle } from '../ModelPickerPlacement.js';
 import { useModelBrowsing } from './ModelBrowsing.js';
 import { ModelPickerPopupContent } from './ModelPickerPopupContent.js';
+import { useModelContext } from './ModelContextState.js';
+import type { ModelContextOptions } from '../ModelMenu.js';
+import type { ModelPickerSession } from '../ModelPickerSession.js';
 
 /** Browse and choose without a workflow field: the caller receives the model or a dismissal. */
 export const ModelChooser = defineComponent({
@@ -31,6 +34,10 @@ export const ModelChooser = defineComponent({
     label: { type: String, required: true },
     /** The viewport point or rectangle the popup opens beside. */
     anchor: { type: Object as PropType<ModelPickerRectangle>, required: true },
+    /** The owners behind a card's right-click menu. */
+    context: { type: Object as PropType<ModelContextOptions>, required: true },
+    /** Where a version chosen from a card's menu goes; null where versions cannot be browsed. */
+    session: { type: Object as PropType<ModelPickerSession | null>, default: null },
   },
   emits: {
     choose: (_item: ModelCatalogItem) => true,
@@ -38,6 +45,13 @@ export const ModelChooser = defineComponent({
   },
   setup(props, { emit }) {
     const browsing = useModelBrowsing(() => props.items);
+    // Right-clicking a card offers the same model rows as every other model surface.
+    const context = useModelContext(
+      props.context,
+      () => false,
+      () => undefined,
+      props.session,
+    );
     const input = ref<HTMLInputElement | null>(null);
     const popup = ref<HTMLElement | null>(null);
     const popupId = useId();
@@ -57,9 +71,15 @@ export const ModelChooser = defineComponent({
       const item = browsing.visible.value.find((candidate) => candidate.value === value);
       if (item) emit('choose', item);
     };
-    /** A press anywhere else leaves without choosing. */
+    /** A press anywhere else leaves without choosing; a card's own menu is part of the chooser. */
     const outside = (event: Event): void => {
-      if (event.target instanceof Node && !popup.value?.contains(event.target)) emit('dismiss');
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        !popup.value?.contains(target) &&
+        !(target instanceof Element && target.closest('[data-sc-floating-surface]'))
+      )
+        emit('dismiss');
     };
     /** Route keys to browsing so neither the prompt nor the graph handles them. */
     const key = (event: KeyboardEvent): void => {
@@ -138,7 +158,13 @@ export const ModelChooser = defineComponent({
             onGeometry: (width: number) => {
               browsing.wallWidth.value = width;
             },
+            updateOffers: context.proposals.value,
+            onFamily: (target: ModelCatalogItem) => context.family(target),
+            onUpdateContext: (target: ModelCatalogItem, event: MouseEvent) =>
+              context.show(target, event, true),
+            onContext: context.show,
           }),
+          context.render(),
         ],
       );
   },

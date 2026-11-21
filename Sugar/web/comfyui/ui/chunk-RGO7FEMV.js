@@ -4,6 +4,30 @@ import {
   watch
 } from "./chunk-6PAJ5Y37.js";
 
+// frontend/comfyui/ui/surface/CubeModelPillAppearance.ts
+var backgroundTokens = [
+  "--sc-accent-color",
+  "--sc-brand-text",
+  "--p-primary-color",
+  "--primary-color"
+];
+var foregroundTokens = [
+  "--sc-accent-foreground",
+  "--sugarcubes-model-pill-punchout",
+  "--comfy-menu-bg",
+  "--p-content-background"
+];
+var fallbackBackground = "#60cdff";
+var fallbackForeground = "#171b20";
+var CUBE_MODEL_PILL_BACKGROUND = tokenFallback(backgroundTokens, fallbackBackground);
+var CUBE_MODEL_PILL_FOREGROUND = tokenFallback(foregroundTokens, fallbackForeground);
+function tokenFallback(tokens, fallback) {
+  return tokens.reduceRight((value, token) => `var(${token}, ${value})`, fallback);
+}
+
+// frontend/comfyui/ui/surface/CubeModelPillDomRenderer.ts
+var CUBE_MODEL_BADGE_CLASS = "sugarcubes-model-badge";
+
 // frontend/comfyui/ui/core/CubeFallbackIconRenderer.ts
 var FALLBACK_ICON_STYLE = Object.freeze({
   fontFamily: "Segoe UI",
@@ -308,7 +332,11 @@ var CubeStackIcon = defineComponent({
     };
     return () => h("span", { class: "sc-cube-stack-row__icon", "aria-hidden": "true" }, [
       h("span", { class: "sc-cube-stack-row__asset", ref: retainElement }),
-      props.targetModel ? h("span", { class: "sc-cube-stack-row__model" }, props.targetModel) : null
+      props.targetModel ? h(
+        "span",
+        { class: `${CUBE_MODEL_BADGE_CLASS} sc-cube-stack-row__model` },
+        props.targetModel
+      ) : null
     ]);
   }
 });

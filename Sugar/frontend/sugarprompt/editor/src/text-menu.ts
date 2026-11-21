@@ -15,12 +15,12 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Standard text rows prepare native history and clipboard capabilities without reading system clipboard contents. */
 import { type EditorSelection, type EditorState } from '@codemirror/state';
-import { redo, redoDepth, selectAll, undo, undoDepth } from '@codemirror/commands';
+import { redoDepth, undoDepth } from '@codemirror/commands';
 import type { EditorView } from '@codemirror/view';
 import { editorFreshness, type EditorFreshness } from './freshness.js';
-import { nativeClipboard, type ClipboardAction } from './native-clipboard.js';
+import { nativeClipboard, runEditCommand, type ClipboardAction } from './native-clipboard.js';
 
-/** Native editing actions share the CodeMirror command/history owner and clipboard transfer owner. */
+/** Every native editing action runs through the prompt's one edit-command owner. */
 export type TextMenuAction = ClipboardAction | 'undo' | 'redo' | 'select-all';
 
 /** Each enabled leaf belongs to exactly one prepared native text-menu target. */
@@ -125,8 +125,7 @@ export async function executeTextMenu(
     view.compositionStarted
   )
     return;
-  if (item.action === 'select-all') selectAll(view);
-  else if (item.action === 'undo') undo(view);
-  else if (item.action === 'redo') redo(view);
+  if (item.action === 'select-all' || item.action === 'undo' || item.action === 'redo')
+    runEditCommand(view, item.action);
   else await view.plugin(nativeClipboard)?.fromInteraction(item.action);
 }

@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Mount picker-owned Vue presentation without changing Comfy's Vue application. */
+import { ModelDetectorDialog } from '../ModelDetectorDialog.js';
 import { createApp, h, shallowRef } from 'vue';
 import type { ModelCatalogItem } from '../ModelCatalog.js';
 import type { ModelPickerBinding } from '../ModelPickerBinding.js';
@@ -61,6 +62,9 @@ export function mountModelPicker(
         updates,
         detectors,
         outputs,
+        detectorDialog: detectors
+          ? (item: ModelCatalogItem) => new ModelDetectorDialog(document, item, detectors)
+          : null,
         compatibility,
         session,
         discoveryAction: discoveryAction.value,

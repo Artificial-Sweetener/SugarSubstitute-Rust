@@ -14,9 +14,22 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Restore workflow views at the committed session boundary without observing presentation DOM. */
-import { WorkflowViewPreferences } from '../application/WorkflowViewPreferences.js';
+import {
+  WorkflowViewPreferences,
+  type WorkflowViewDefaults,
+} from '../application/WorkflowViewPreferences.js';
 import type { WorkflowViewSource, WorkflowViewSnapshot } from '../domain/WorkflowView.js';
+import type { WorkflowViewKind } from './ComfyWorkflowViewDocument.js';
 import type { WorkflowSessionStore } from '../../execution/application/WorkflowSessionStore.js';
+import type { WorkflowSessionId } from '../../execution/domain/ExecutionIdentity.js';
+
+/** Where a workflow's own view lives: read from its document, recorded into the active one. */
+export interface WorkflowViewDocuments {
+  /** Whether the workflow of `sessionId` opens in masonry, by what its document records. */
+  opensInMasonry(sessionId: WorkflowSessionId): boolean;
+  /** Record the active workflow's view in it; false when only this session can keep it. */
+  recordView(view: WorkflowViewKind): boolean;
+}
 
 /** Identify browser-local view metadata, separate from user workflow documents. */
 export const WORKFLOW_VIEW_STORAGE_KEY = 'SugarCubes.WorkflowViews.v1';
@@ -33,6 +46,7 @@ export class ComfyWorkflowViewPreferences implements WorkflowViewSource {
     private readonly sessions: WorkflowSessionStore,
     storage: () => Pick<Storage, 'getItem' | 'setItem'> | null,
     private readonly defaultCanvas: () => boolean,
+    private readonly documents: WorkflowViewDocuments,
     logger: Pick<Console, 'warn'>,
   ) {
     let stored: unknown = null;
@@ -65,7 +79,9 @@ export class ComfyWorkflowViewPreferences implements WorkflowViewSource {
   capture(sessionId: string): WorkflowViewSnapshot | null {
     const context = this.sessions.read().open.find((item) => item.sessionId === sessionId);
     return context
-      ? this.#views.snapshotFor({ id: sessionId, path: context.path || null }, this.defaultCanvas)
+      ? this.#views.snapshotFor({ id: sessionId, path: context.path || null }, () =>
+          this.#defaults(context.sessionId),
+        )
       : null;
   }
 
@@ -91,10 +107,19 @@ export class ComfyWorkflowViewPreferences implements WorkflowViewSource {
     return () => this.#listeners.delete(listener);
   }
 
-  /** Persist explicit actions only while the graph has a committed active workflow. */
+  /**
+   * Persist explicit actions only while the graph has a committed active workflow. A view switch
+   * is recorded in the workflow itself, never as a step of its history.
+   */
   change(value: Partial<WorkflowViewSnapshot>): void {
     if (!this.sessions.read().active || !this.#views.change(value)) return;
+    if (value.masonry !== undefined) this.documents.recordView(value.masonry ? 'masonry' : 'graph');
     this.#publish();
+  }
+
+  /** A workflow opens with the stored canvas choice and the view its document records. */
+  #defaults(sessionId: WorkflowSessionId): WorkflowViewDefaults {
+    return { canvas: this.defaultCanvas(), masonry: this.documents.opensInMasonry(sessionId) };
   }
 
   /** Retire the host subscription without changing persisted choices. */
@@ -117,7 +142,9 @@ export class ComfyWorkflowViewPreferences implements WorkflowViewSource {
     }
     const context = snapshot.active;
     if (
-      this.#views.activate({ id: context.sessionId, path: context.path }, this.defaultCanvas) ||
+      this.#views.activate({ id: context.sessionId, path: context.path }, () =>
+        this.#defaults(context.sessionId),
+      ) ||
       changed
     )
       this.#publish();

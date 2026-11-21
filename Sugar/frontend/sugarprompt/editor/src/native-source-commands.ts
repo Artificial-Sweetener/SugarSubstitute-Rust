@@ -15,7 +15,6 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** One finite native source-command adapter owns exact/logical editing, prepared reservations, directional selection and history delegation. */
 import { EditorSelection } from '@codemirror/state';
-import { redo, undo } from '@codemirror/commands';
 import type { EditorView } from '@codemirror/view';
 import type { TagLexicon } from '../../core/src/index.js';
 import { documentToSource, sourceToDocument } from '../../core/src/line-endings.js';
@@ -24,7 +23,7 @@ import { exactReplacement, lineEndings } from './exact-source.js';
 import { enteredTextInsertion } from './ingestion.js';
 import { dispatchNativeIngestion } from './native-ingestion.js';
 import { PreparedSourceEdits } from './prepared-edits.js';
-import { nativeClipboard } from './native-clipboard.js';
+import { nativeClipboard, runEditCommand } from './native-clipboard.js';
 import { nativeCompositionStarted } from './input-settlement.js';
 import type { FocusHandoff } from './focus-handoff-contracts.js';
 
@@ -163,19 +162,16 @@ export function nativeSourceCommands(
         view.dispatch(edit.transaction);
         return { status: 'applied' };
       },
-      /** Native composition excludes semantic history commands. */
+      /** History commands run through the prompt's one edit-command owner. */
       undo() {
         alive();
         hostIntent.accept('source');
-        const view = getView();
-        return !nativeCompositionStarted(view) && undo(view);
+        return runEditCommand(getView(), 'undo');
       },
-      /** Redo shares the same native composition and lifetime boundary. */
       redo() {
         alive();
         hostIntent.accept('source');
-        const view = getView();
-        return !nativeCompositionStarted(view) && redo(view);
+        return runEditCommand(getView(), 'redo');
       },
     },
     /** Release the sole prepared-command registry; CodeMirror owns document and history disposal. */

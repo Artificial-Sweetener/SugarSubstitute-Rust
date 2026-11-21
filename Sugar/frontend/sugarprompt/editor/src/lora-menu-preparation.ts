@@ -43,7 +43,8 @@ export function prepareLoraMenu(
     ...(triggers.items.length && external.length ? [{ kind: 'separator' as const }] : []),
     ...external,
   ]);
-  if (!items.length) return null;
+  // A banner with no rows of its own still names its LoRA, so the host can add the model's rows.
+  if (!items.length && !target) return null;
   const context = {
     freshness: state.field(editorFreshness),
     pageHost,

@@ -90,6 +90,14 @@ function autoCandidate(catalog: CanvasCatalogSnapshot): Candidate | null {
   return candidate;
 }
 
+/** Whether `source` is the tab receiving the queued or running job's live previews. */
+function receivingPreviews(catalog: CanvasCatalogSnapshot, source: OutputSourceId): boolean {
+  const status = catalog.result.runStatus;
+  return (
+    (status === 'running' || status === 'queued') && catalog.result.preview?.sourceId === source
+  );
+}
+
 /** Return the current scene run when it has several scenes to choose between. */
 function sceneRun(catalog: CanvasCatalogSnapshot): WorkflowSceneResults | null {
   const run = catalog.result.scenes;
@@ -250,6 +258,11 @@ export class CanvasSelectionController {
         this.#select(viewId, catalog, command.selection, 'image');
         return true;
       case 'select-source':
+        // The tab receiving the running job's previews means "show me the latest".
+        if (receivingPreviews(catalog, command.selection.sourceId)) {
+          this.#follow(viewId, catalog);
+          return true;
+        }
         this.#select(
           viewId,
           catalog,
@@ -301,21 +314,8 @@ export class CanvasSelectionController {
         return true;
       }
       case 'follow':
-        if (command.mode === 'auto') {
-          this.#cursors.set(viewId, {
-            generation: catalog.generation,
-            frontier: null,
-            presentedRun: this.#cursors.get(viewId)?.presentedRun ?? 0,
-          });
-          this.views.update(viewId, (current) => ({
-            ...current,
-            follow: 'auto',
-            sourcePreview: true,
-            comparison: null,
-            mode: 'image',
-          }));
-          this.reconcile(viewId, catalog);
-        } else this.manual(viewId);
+        if (command.mode === 'auto') this.#follow(viewId, catalog);
+        else this.manual(viewId);
         return true;
       case 'overview':
         if (
@@ -375,6 +375,23 @@ export class CanvasSelectionController {
       default:
         return false;
     }
+  }
+
+  /** Return to following the newest content from the current frontier. */
+  #follow(viewId: CanvasViewId, catalog: CanvasCatalogSnapshot): void {
+    this.#cursors.set(viewId, {
+      generation: catalog.generation,
+      frontier: null,
+      presentedRun: this.#cursors.get(viewId)?.presentedRun ?? 0,
+    });
+    this.views.update(viewId, (current) => ({
+      ...current,
+      follow: 'auto',
+      sourcePreview: true,
+      comparison: null,
+      mode: 'image',
+    }));
+    this.reconcile(viewId, catalog);
   }
 
   /** Hold deliberate content navigation for the current output session. */
