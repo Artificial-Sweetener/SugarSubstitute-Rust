@@ -91,6 +91,8 @@ pub struct WorkspaceDriver {
     last_ack: Option<(String, String, u64, Vec<SessionBinding>, bool)>,
     /// The page and its native window retired; see [`Self::retire_peer`].
     peer_retired: bool,
+    /// A restore failed: the next save first keeps a copy of the checkpoint it did not restore.
+    set_aside_original: bool,
     originals: native::RecordedOutputs,
 }
 impl WorkspaceDriver {
@@ -147,6 +149,7 @@ impl WorkspaceDriver {
             close_cutoff: None,
             last_ack: None,
             peer_retired: false,
+            set_aside_original: false,
             originals,
         })
     }
@@ -162,6 +165,11 @@ impl WorkspaceDriver {
     /// Retain preceding durable data for immutable output verification on the publisher worker.
     pub fn baseline(&self) -> CheckpointBaseline {
         CheckpointBaseline { restored: self.restored.clone(), published: self.published.clone() }
+    }
+    /// Whether the next save must first keep a copy of the checkpoint a failed restore left
+    /// unrestored; cleared once a save has done so.
+    pub fn sets_aside_original(&self) -> bool {
+        self.set_aside_original
     }
     /// Suspend publication after a permanently incompatible native association is observed.
     /// The composing owner retains its original cause; authored originals remain untouched.

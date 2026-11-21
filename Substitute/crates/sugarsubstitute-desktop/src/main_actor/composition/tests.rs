@@ -79,7 +79,7 @@ fn qualify_device_failure() -> TestResult {
     let lease = MemoryLease::new(65536, Box::new(Released(released.clone())));
     let claim = lease.claim(65536)?;
     let mut composition =
-        Composition::new(window.clone(), claim, CompositionSource::FailingDevice(E_FAIL));
+        Composition::new(window.clone(), claim, CompositionSource::FailingDevice(E_FAIL), true);
     let failure = composition.advance().err().ok_or("injected device failure was ignored")?;
     assert!(failure.to_string().contains("create_composition_device"), "{failure}");
     assert!(!composition.surface_ready());
@@ -113,8 +113,12 @@ fn qualify_browser_bind_failure() -> TestResult {
     let released = Arc::new(AtomicU64::new(0));
     let lease = MemoryLease::new(65536, Box::new(Released(released.clone())));
     let claim = lease.claim(65536)?;
-    let mut composition =
-        Composition::new(window.clone(), claim, CompositionSource::FailingBrowserBind(E_FAIL));
+    let mut composition = Composition::new(
+        window.clone(),
+        claim,
+        CompositionSource::FailingBrowserBind(E_FAIL),
+        true,
+    );
     for _ in 0..8 {
         if composition.surface_ready() {
             break;

@@ -167,6 +167,8 @@ pub(super) struct Composition {
     root: Option<IDCompositionVisual>,
     browser: Option<IDCompositionVisual>,
     canvas: Option<canvas::Canvas>,
+    /// Whether the window uses its dark theme, which selects the wash behind the canvas image.
+    dark: bool,
     /// The browser allocation the committed native pixels were placed against.
     shown: Option<crate::canvas::placement::WebViewAllocation>,
     /// The client point the browser visual was last committed at.
@@ -184,9 +186,10 @@ pub(super) struct Composition {
 impl Composition {
     /// Retain the parent and claim before any native composition effect.
     /// The browser controller is attached only after the composition surface exists.
-    fn new(window: Rc<Window>, claim: MemoryClaim, source: CompositionSource) -> Self {
+    fn new(window: Rc<Window>, claim: MemoryClaim, source: CompositionSource, dark: bool) -> Self {
         Self {
             source,
+            dark,
             window: Some(window),
             controller: None,
             composition: None,

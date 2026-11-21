@@ -156,6 +156,8 @@ pub struct SaveReceipt {
     pub kept_previous: bool,
     /// Digest-named original-byte evidence created before replacing rejected data.
     pub evidence: Vec<PathBuf>,
+    /// The copy kept of a checkpoint a failed restore left unrestored, when this save made one.
+    pub set_aside: Option<PathBuf>,
 }
 /// Inert store for one host-selected profile/workspace/backend directory.
 #[derive(Clone, Debug)]
@@ -176,9 +178,10 @@ impl WorkspaceStore {
     pub(crate) fn save_worker(
         &self,
         checkpoint: &SessionCheckpoint,
+        set_aside: bool,
         context: &sugarsubstitute_contracts::execution::JobContext,
     ) -> Result<SaveReceipt, StoreError> {
-        files::save(self, checkpoint, context)
+        files::save(self, checkpoint, set_aside, context)
     }
     /// Select an absolute installation-owned directory and independently trusted scope.
     /// The composition, not checkpoint/page data, selects this directory.
@@ -265,9 +268,11 @@ impl WorkspaceStore {
         scope: &Scope,
         spec: JobSpec,
         checkpoint: SessionCheckpoint,
+        set_aside: bool,
     ) -> Result<OwnedJob<SaveReceipt, StoreError>, AdmissionError> {
         let store = self.clone();
-        execution
-            .submit_blocking(scope, spec, move |context| files::save(&store, &checkpoint, &context))
+        execution.submit_blocking(scope, spec, move |context| {
+            files::save(&store, &checkpoint, set_aside, &context)
+        })
     }
 }

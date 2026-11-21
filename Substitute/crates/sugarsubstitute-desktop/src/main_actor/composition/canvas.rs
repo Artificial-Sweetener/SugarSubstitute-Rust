@@ -40,6 +40,7 @@ impl super::Composition {
                 self.root()?.clone(),
                 frame.memory.clone(),
                 frame.graphics.clone(),
+                self.dark,
             )?);
         }
         let canvas = self.canvas.as_mut().ok_or_else(|| missing("canvas_composition"))?;
@@ -210,6 +211,9 @@ pub(super) struct Canvas {
     pending: Option<Allocation>,
     retirements: [Option<RetiredAllocation>; 2],
     acknowledgement: Acknowledgement,
+    /// The desktop body wash the surface is cleared to under every frame, so the canvas reads
+    /// as the same surface as the page's washed workspace over the window's Mica.
+    wash: [u8; 4],
     /// Where the committed pixels show, which differs from their placement once repositioned.
     displayed: Option<CanvasPlacement>,
     linked: bool,
@@ -244,6 +248,7 @@ impl Canvas {
         root: IDCompositionVisual,
         lease: MemoryLease,
         graphics: Arc<crate::canvas::CanvasGraphics>,
+        dark: bool,
     ) -> Result<Self, DesktopError> {
         if !graphics.owns_memory(&lease) {
             return Err(DesktopError::message(
@@ -260,6 +265,7 @@ impl Canvas {
             pending: None,
             retirements: [None, None],
             acknowledgement: Acknowledgement::default(),
+            wash: sugarsubstitute_contracts::presentation::desktop_body_wash(dark),
             displayed: None,
             linked: false,
             retired: false,
@@ -340,7 +346,7 @@ impl Canvas {
         if std::mem::take(&mut self.capture_next) {
             allocation.capture.request();
         }
-        let uploaded = allocation.upload(content);
+        let uploaded = allocation.upload(content, self.wash);
         // A failed upload may still have queued its read, so the fence always follows it.
         #[cfg(windows)]
         if let CanvasContent::Shared(shared) = content {

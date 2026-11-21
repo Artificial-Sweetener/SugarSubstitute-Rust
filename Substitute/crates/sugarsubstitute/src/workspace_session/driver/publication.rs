@@ -58,6 +58,9 @@ impl WorkspaceDriver {
             return Err(SessionError::Stale.into());
         }
         self.originals.remember(&captured.checkpoint)?;
+        if receipt.set_aside.is_some() {
+            self.set_aside_original = false;
+        }
         self.policy.finished(ticket, true, now).map_err(application)?;
         let capture = self.capture.take().ok_or(SessionError::Stale)?;
         self.published = Some(Arc::new(captured));

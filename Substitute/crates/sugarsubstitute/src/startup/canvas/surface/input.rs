@@ -21,6 +21,11 @@ pub(super) struct DragRequest {
     request: u64,
     selection_revision: u64,
     filename: String,
+    /// The drag crossed the threshold. A copy started at the press waits for this before the
+    /// desktop is handed its bytes.
+    requested: bool,
+    /// When the drag crossed the threshold, for the logged wait until the OS drag starts.
+    requested_at: Option<std::time::Instant>,
 }
 
 /// Whether a routed gesture reached the navigation tool.
@@ -84,8 +89,18 @@ impl NativeSurface {
             self.drag_out = None;
             return None;
         }
+        if !pending.requested {
+            return None;
+        }
         let copied = session.take_drag_out(pending.request)?;
         let pending = self.drag_out.take()?;
+        if let Some(at) = pending.requested_at {
+            tracing::info!(
+                operation = "canvas_drag_out_ready",
+                waited_ms = at.elapsed().as_millis(),
+                "The drag-out is handed to the desktop"
+            );
+        }
         Some(MainCanvasDragOut {
             identity: pending.identity,
             filename: pending.filename,
@@ -96,25 +111,67 @@ impl NativeSurface {
         })
     }
 
-    /// End the navigation gesture and start copying the shown original for an OS drag.
+    /// End the navigation gesture and hand the shown original to an OS drag: the copy started
+    /// at the press when there is one, a new copy otherwise.
     fn request_drag_out(
         &mut self,
         identity: MainIdentity,
         session: &mut Session,
     ) -> Result<RoutedInput, Box<dyn Error>> {
         session.input(Input::Unfocused)?;
-        let Some(binding) = self.binding.as_ref() else { return Ok(RoutedInput::Refused) };
+        let selection = self.binding.as_ref().map(|binding| binding.selection_revision);
+        if let Some(pending) = self.drag_out.as_mut().filter(|pending| {
+            pending.identity == identity && Some(pending.selection_revision) == selection
+        }) {
+            pending.requested = true;
+            pending.requested_at = Some(std::time::Instant::now());
+            return Ok(RoutedInput::Applied);
+        }
+        Ok(if self.start_drag_copy(identity, session, true)? {
+            RoutedInput::Applied
+        } else {
+            RoutedInput::Refused
+        })
+    }
+
+    /// Start copying the shown original when a press may become a drag-out, so the OS drag can
+    /// begin the moment the pointer crosses the drag threshold.
+    fn prepare_drag_out(
+        &mut self,
+        identity: MainIdentity,
+        session: &mut Session,
+    ) -> Result<(), Box<dyn Error>> {
+        if self.drag_out.is_none() {
+            self.start_drag_copy(identity, session, false)?;
+        }
+        Ok(())
+    }
+
+    /// Submit one copy of the shown original; false when it cannot be dragged out now.
+    fn start_drag_copy(
+        &mut self,
+        identity: MainIdentity,
+        session: &mut Session,
+        requested: bool,
+    ) -> Result<bool, Box<dyn Error>> {
+        let Some(binding) = self.binding.as_ref() else { return Ok(false) };
         let Some(filename) = binding.drag_name.clone().filter(|_| session.allows_drag_out()) else {
-            return Ok(RoutedInput::Refused);
+            return Ok(false);
         };
         let selection_revision = binding.selection_revision;
         self.drag_sequence =
             self.drag_sequence.checked_add(1).ok_or("Drag-out identities exhausted")?;
         let request = self.drag_sequence;
-        self.drag_out = session
-            .request_drag_out(request, filename.clone())?
-            .then_some(DragRequest { identity, request, selection_revision, filename });
-        Ok(RoutedInput::Applied)
+        self.drag_out =
+            session.request_drag_out(request, filename.clone())?.then_some(DragRequest {
+                identity,
+                request,
+                selection_revision,
+                filename,
+                requested,
+                requested_at: requested.then(std::time::Instant::now),
+            });
+        Ok(self.drag_out.is_some())
     }
 
     /// Apply one routed gesture to the session's navigation tool.
@@ -136,13 +193,27 @@ impl NativeSurface {
             self.await_settled_gesture();
             return Ok(RoutedInput::Applied);
         }
-        let Some(origin) =
-            self.input_region(session).filter(|_| current).map(|region| region.placement.viewport)
+        let Some((origin, drag_out)) = self
+            .input_region(session)
+            .filter(|_| current)
+            .map(|region| (region.placement.viewport, region.drag_out))
         else {
             return Ok(RoutedInput::Refused);
         };
         if input.gesture == MainCanvasGesture::DragOut {
             return self.request_drag_out(input.identity, session);
+        }
+        // A primary press over an output that drags out starts its copy; a release that never
+        // became a drag drops it.
+        if let MainCanvasGesture::Button { button: MainCanvasButton::Primary, pressed, .. } =
+            input.gesture
+        {
+            if pressed && drag_out {
+                self.prepare_drag_out(input.identity, session)?;
+            } else if !pressed && self.drag_out.as_ref().is_some_and(|pending| !pending.requested) {
+                self.drag_out = None;
+                session.discard_drag_out();
+            }
         }
         let Some(tool) = tool_input(input.gesture, [origin.x, origin.y].map(f64::from)) else {
             return Ok(RoutedInput::Refused);

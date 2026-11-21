@@ -75,7 +75,20 @@ impl Fixture {
         Ok(self.wake.completion(&self.client, &mut job)?.outcome)
     }
     fn save(&self, checkpoint: SessionCheckpoint) -> TestResult<Result<SaveReceipt, StoreError>> {
-        let job = self.store.submit_save(&self.client, &self.scope, self.spec()?, checkpoint)?;
+        self.save_with(checkpoint, false)
+    }
+    fn save_with(
+        &self,
+        checkpoint: SessionCheckpoint,
+        set_aside: bool,
+    ) -> TestResult<Result<SaveReceipt, StoreError>> {
+        let job = self.store.submit_save(
+            &self.client,
+            &self.scope,
+            self.spec()?,
+            checkpoint,
+            set_aside,
+        )?;
         match self.terminal(job)? {
             JobOutcome::Success(value) => Ok(Ok(value)),
             JobOutcome::Failure(cause) => Ok(Err(cause)),

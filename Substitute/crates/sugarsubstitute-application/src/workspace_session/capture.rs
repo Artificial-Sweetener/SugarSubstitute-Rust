@@ -125,10 +125,12 @@ impl WorkspaceSession {
             || checkpoint.entries.len() != ticket.fence.bindings.len()
             || checkpoint.entries.iter().any(|entry| {
                 !ticket.fence.bindings.iter().any(|binding| {
+                    // An entry may lag its binding: the page keeps a workflow's last captured
+                    // state when it cannot capture it again, rather than failing every workflow.
                     binding.entry_id == entry.id
-                        && binding.graph_revision == entry.document.graph_revision
-                        && binding.source_revision == entry.source_revision
-                        && binding.navigation_revision == entry.navigation_revision
+                        && binding.graph_revision >= entry.document.graph_revision
+                        && binding.source_revision >= entry.source_revision
+                        && binding.navigation_revision >= entry.navigation_revision
                 })
             })
         {

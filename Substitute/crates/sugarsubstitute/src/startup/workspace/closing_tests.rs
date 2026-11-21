@@ -244,6 +244,7 @@ impl Fixture {
                 replacement: None,
             },
             checkpoint,
+            false,
         )?;
         match terminal(client, &self.wake, job)? {
             JobOutcome::Success(receipt) => Ok(receipt),

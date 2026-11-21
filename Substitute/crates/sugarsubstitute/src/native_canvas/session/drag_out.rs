@@ -46,6 +46,8 @@ pub(super) struct DragOut {
     job: Option<OwnedJob<Copied, WorkError>>,
     ready: Option<DragOutBytes>,
     staged: VecDeque<StagedDrag>,
+    /// The copy in flight was started ahead of a drag that did not happen; its bytes are dropped.
+    discarded: bool,
 }
 
 impl DragOut {
@@ -75,6 +77,7 @@ impl Session {
         filename: String,
     ) -> Result<bool, Box<dyn Error>> {
         self.drag_out.ready = None;
+        self.drag_out.discarded = false;
         let original = self.document.scene.as_ref().and_then(|scene| scene.original.clone());
         let (Some(original), false, false) = (original, self.closing, self.drag_out.in_flight())
         else {
@@ -124,6 +127,13 @@ impl Session {
         }
     }
 
+    /// Drop the copy started ahead of a drag that did not happen: completed bytes now, an
+    /// in-flight copy's bytes when it completes. Its staged file stays pinned as usual.
+    pub(crate) fn discard_drag_out(&mut self) {
+        self.drag_out.ready = None;
+        self.drag_out.discarded = self.drag_out.in_flight();
+    }
+
     /// Take completed bytes for exactly `request`; bytes for any other request are discarded.
     pub(crate) fn take_drag_out(&mut self, request: u64) -> Option<DragOutBytes> {
         self.drag_out.ready.take().filter(|ready| ready.request == request)
@@ -145,6 +155,9 @@ impl Session {
             Ok(Copied { request, bytes, claim, staged, preview }) => {
                 let path = staged.as_ref().map(|staged| staged.path.clone());
                 self.drag_out.staged.extend(staged);
+                if std::mem::take(&mut self.drag_out.discarded) {
+                    return Ok(());
+                }
                 self.drag_out.ready =
                     Some(DragOutBytes { request, bytes, claim, staged: path, preview });
             }

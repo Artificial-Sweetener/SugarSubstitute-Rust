@@ -3,6 +3,24 @@
 //! Preserve actual files across recovery, stale publication and failed asset admission.
 use super::*;
 #[test]
+fn a_save_after_a_failed_restore_keeps_the_unrestored_checkpoint_under_its_own_name() -> TestResult
+{
+    let fixture = Fixture::new()?;
+    fixture.save(checkpoint(1)?)??;
+    let unrestored = std::fs::read(fixture.path(CURRENT_CHECKPOINT))?;
+    let receipt = fixture.save_with(checkpoint(2)?, true)??;
+    let kept = receipt.set_aside.ok_or("No copy was kept")?;
+    assert!(kept.file_name().and_then(|name| name.to_str()).is_some_and(|name| {
+        name.starts_with("workspace.unrestored-") && name.ends_with(".json")
+    }));
+    assert_eq!(std::fs::read(&kept)?, unrestored);
+    // Ordinary saves rotate current and previous; the kept copy is never replaced.
+    fixture.save(checkpoint(3)?)??;
+    fixture.save(checkpoint(4)?)??;
+    assert_eq!(std::fs::read(&kept)?, unrestored);
+    Ok(())
+}
+#[test]
 fn oversized_primary_recovers_previous_read_only_without_hashing_or_replacing_original()
 -> TestResult {
     let fixture = Fixture::new()?;

@@ -54,7 +54,8 @@ impl Drop for Apartment {
 }
 
 /// Each premultiplied frame replaces the reused surface: transparent and partially covered
-/// pixels show the window backdrop, never the pixels an earlier frame drew there.
+/// pixels show the desktop body wash over the window backdrop, never the pixels an earlier frame
+/// drew there.
 #[test]
 fn reused_surface_frames_replace_earlier_pixels_instead_of_blending_over_them()
 -> Result<(), Box<dyn std::error::Error>> {
@@ -80,7 +81,7 @@ fn reused_surface_frames_replace_earlier_pixels_instead_of_blending_over_them()
     let composition = composition.ok_or("Composition device missing")?;
     // SAFETY: This test retains the device and its unbound root on the creating thread.
     let root = unsafe { composition.CreateVisual()? };
-    let mut canvas = Canvas::new(composition.clone(), root, memory, graphics)?;
+    let mut canvas = Canvas::new(composition.clone(), root, memory, graphics, true)?;
     let extent = Extent::new(16, 8)?;
     let damage = DamagePlan::full(extent);
     let viewport = PhysicalRect { x: 0, y: 0, width: 16, height: 8 };
@@ -122,10 +123,16 @@ fn reused_surface_frames_replace_earlier_pixels_instead_of_blending_over_them()
     // Composition surfaces hand back buffers with undefined contents, here stale magenta, so
     // an update must not depend on what its buffer last showed.
     let other = vec![0xff20_c040; extent.pixels() as usize];
+    let washed: Vec<u32> = fitted.iter().map(|pixel| over_wash(*pixel)).collect();
     for generation in 0..4 {
         let earlier = if generation % 2 == 0 { &opaque } else { &other };
         assert_eq!(present(2 * generation + 1, earlier)?, *earlier);
-        assert_eq!(present(2 * generation + 2, &fitted)?, fitted, "frame {}", 2 * generation + 2);
+        let shown = present(2 * generation + 2, &fitted)?;
+        assert!(
+            shown.iter().zip(&washed).all(|(shown, expected)| close(*shown, *expected)),
+            "frame {}: {shown:08x?} against {washed:08x?}",
+            2 * generation + 2
+        );
     }
     assert!(!canvas.hide()?);
     execution
@@ -165,7 +172,7 @@ fn real_offscreen_surface_commits_frames_and_preserves_old_surface_on_budget_rej
     let composition = composition.ok_or("Composition device missing")?;
     // SAFETY: This test retains the device and its unbound root on the creating thread.
     let root = unsafe { composition.CreateVisual()? };
-    let mut canvas = Canvas::new(composition.clone(), root, memory, graphics)?;
+    let mut canvas = Canvas::new(composition.clone(), root, memory, graphics, true)?;
     let extent = Extent::new(64, 48)?;
     let pixels = vec![0xff12_3456; extent.pixels() as usize];
     let damage = DamagePlan::full(extent);
@@ -289,4 +296,22 @@ fn real_offscreen_surface_commits_frames_and_preserves_old_surface_on_budget_rej
     drop(canvas);
     execution.finish().map_err(|cause| cause as Box<dyn std::error::Error>)?;
     Ok(())
+}
+
+/// A premultiplied `0xAARRGGBB` pixel composited source-over the dark desktop body wash.
+fn over_wash(pixel: u32) -> u32 {
+    let [red, green, blue, alpha] =
+        sugarsubstitute_contracts::presentation::desktop_body_wash(true).map(f64::from);
+    let wash = [alpha, red * alpha / 255.0, green * alpha / 255.0, blue * alpha / 255.0];
+    let source = [24, 16, 8, 0].map(|shift| f64::from((pixel >> shift) & 0xff));
+    let cover = 1.0 - source[0] / 255.0;
+    let channel = |index: usize| (source[index] + wash[index] * cover).round() as u32;
+    (channel(0) << 24) | (channel(1) << 16) | (channel(2) << 8) | channel(3)
+}
+
+/// Whether two pixels differ by at most one step of rounding in every channel.
+fn close(left: u32, right: u32) -> bool {
+    [24, 16, 8, 0]
+        .iter()
+        .all(|shift| ((left >> shift) & 0xff).abs_diff((right >> shift) & 0xff) <= 1)
 }

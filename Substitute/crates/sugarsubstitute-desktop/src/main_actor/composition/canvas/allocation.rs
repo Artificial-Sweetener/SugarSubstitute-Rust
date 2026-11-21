@@ -97,11 +97,15 @@ impl Allocation {
     }
 
     /// Upload complete immutable pixels and always try to close the exact native draw.
-    pub(super) fn upload(&mut self, content: &CanvasContent<'_>) -> Result<(), DesktopError> {
+    pub(super) fn upload(
+        &mut self,
+        content: &CanvasContent<'_>,
+        wash: [u8; 4],
+    ) -> Result<(), DesktopError> {
         if content.validate()? != self.extent || self.drawing {
             return Err(DesktopError::message("canvas_upload", "frame or drawing state differs"));
         }
-        let result = self.draw(content);
+        let result = self.draw(content, wash);
         let retirement = self.end_draw();
         #[cfg(test)]
         let retirement = retirement.and_then(|()| self.capture.complete());
@@ -115,7 +119,7 @@ impl Allocation {
         }
     }
 
-    fn draw(&mut self, content: &CanvasContent<'_>) -> Result<(), DesktopError> {
+    fn draw(&mut self, content: &CanvasContent<'_>, wash: [u8; 4]) -> Result<(), DesktopError> {
         let surface = self.surface()?.clone();
         let mut raw = std::ptr::null_mut();
         let mut offset = POINT::default();
@@ -190,11 +194,14 @@ impl Allocation {
         // DirectComposition leaves the update rectangle's prior contents undefined, often an
         // earlier frame. Premultiplied frames carry transparent pixels, so source-over drawing
         // would let those contents show; clearing first makes every frame replace the surface.
+        // The clear is the desktop body wash, so the window's Mica shows through it behind the
+        // image as it does behind the page's workspace.
+        let [red, green, blue, alpha] = wash.map(|channel| f32::from(channel) / 255.0);
         // SAFETY: The live context and bitmap belong to this active surface drawing operation;
         // the aliased clip is the exact update rectangle and is popped before drawing.
         unsafe {
             context.PushAxisAlignedClip(&rectangle, D2D1_ANTIALIAS_MODE_ALIASED);
-            context.Clear(Some(&D2D1_COLOR_F { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }));
+            context.Clear(Some(&D2D1_COLOR_F { r: red, g: green, b: blue, a: alpha }));
             context.PopAxisAlignedClip();
             context.DrawBitmap(
                 bitmap,

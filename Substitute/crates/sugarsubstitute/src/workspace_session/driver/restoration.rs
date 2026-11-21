@@ -63,8 +63,9 @@ impl WorkspaceDriver {
         self.queue(cancellation, SessionOperation::Cancel { target_request_id: request.into() })
     }
     /// End the owned restore, when there is one, on an observed `cause`: retire its delivery,
-    /// protect the saved workspace from being replaced by a partly restored one, and log the
-    /// cause.
+    /// set the saved workspace aside so the next save keeps a copy of it, and log the cause. The
+    /// run itself keeps saving, so the next launch reopens what the person last had. A restore
+    /// ended by closing protects the saved workspace instead: nothing else was authored.
     /// # Errors
     /// Preserves the application's refusal to reconcile the page.
     pub(super) fn abandon_restore(&mut self, cause: &RestoreFailure) -> Result<(), StoreError> {
@@ -72,12 +73,19 @@ impl WorkspaceDriver {
             return Ok(());
         };
         self.cancel_restore()?;
-        self.policy.protect_originals();
+        // Closing before the page restored means nothing was authored over the saved workspace,
+        // so it stays exactly as it is. Any other failure leaves a page the person keeps
+        // working in: that work is saved, with the unrestored checkpoint kept beside it.
+        if *cause == RestoreFailure::Shutdown {
+            self.policy.protect_originals();
+        } else {
+            self.set_aside_original = true;
+        }
         tracing::warn!(
             operation = "workspace_restore_failed",
             request_id = %request,
             reason = %cause,
-            "Workspace restore ended on an observed failure; the saved workspace is protected"
+            "Workspace restore ended on an observed failure; the saved workspace is set aside"
         );
         Ok(())
     }

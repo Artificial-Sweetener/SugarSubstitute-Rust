@@ -283,3 +283,21 @@ fn a_close_after_the_peer_retired_does_not_wait_for_a_capture() -> Result {
     assert!(running.owner.close_ready(at(270)));
     Ok(())
 }
+#[test]
+fn a_kept_entry_may_lag_its_binding_but_never_run_ahead_of_it() -> Result {
+    let mut fixture = Fixture::new(false, false)?;
+    let ticket = fixture.capture(250, 100)?;
+    let bound = ticket.fence.bindings[0].clone();
+    // The page kept this workflow's last captured state: older revisions are admitted.
+    let mut kept = fixture.content(&ticket);
+    let entry = kept.entries.iter_mut().find(|entry| entry.id == bound.entry_id).ok_or("entry")?;
+    entry.document.graph_revision = bound.graph_revision.saturating_sub(1);
+    entry.source_revision = bound.source_revision.saturating_sub(1);
+    fixture.owner.admit_capture_identity(&ticket, &kept)?;
+    // An entry newer than what the page reported is not the page's state.
+    let mut ahead = fixture.content(&ticket);
+    let entry = ahead.entries.iter_mut().find(|entry| entry.id == bound.entry_id).ok_or("entry")?;
+    entry.document.graph_revision = bound.graph_revision + 1;
+    assert!(fixture.owner.admit_capture_identity(&ticket, &ahead).is_err());
+    Ok(())
+}

@@ -102,6 +102,7 @@ fn a_delivered_capture_is_decoded_and_published_after_any_elapsed_time() -> Test
         bytes: 1,
         kept_previous: true,
         evidence: vec![],
+        set_aside: None,
     };
     driver.published(&ticket, captured, &receipt, LATER)?;
     let delivery = driver.next_message().ok_or("Durable delivery missing")?;

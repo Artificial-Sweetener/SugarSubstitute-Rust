@@ -61,6 +61,7 @@ pub(super) fn load(
 pub(super) fn save(
     store: &WorkspaceStore,
     checkpoint: &SessionCheckpoint,
+    set_aside: bool,
     context: &JobContext,
 ) -> Result<SaveReceipt, StoreError> {
     if checkpoint.scope != store.scope {
@@ -97,18 +98,37 @@ pub(super) fn save(
         bytes: bytes.len() as u64,
         kept_previous: false,
         evidence: vec![],
+        set_aside: None,
     };
+    // A checkpoint a failed restore left unrestored is kept under its own name before the
+    // ordinary rotation can replace it.
+    if set_aside && let Some(candidate) = &old {
+        receipt.set_aside =
+            Some(preserve(&store.directory, &current, candidate, "unrestored", context)?);
+    }
     if let Some(candidate) = &backup
         && candidate.decoded.is_err()
     {
-        receipt.evidence.push(preserve(&store.directory, &previous, candidate, context)?);
+        receipt.evidence.push(preserve(
+            &store.directory,
+            &previous,
+            candidate,
+            "rejected",
+            context,
+        )?);
     }
     if let Some(candidate) = &old {
         if candidate.decoded.is_ok() {
             copy(&current, &previous, candidate, ArtifactPublication::ReplaceSelected, context)?;
             receipt.kept_previous = true;
         } else {
-            receipt.evidence.push(preserve(&store.directory, &current, candidate, context)?);
+            receipt.evidence.push(preserve(
+                &store.directory,
+                &current,
+                candidate,
+                "rejected",
+                context,
+            )?);
         }
     }
     write_artifact(
@@ -155,13 +175,16 @@ fn read(
         Err(cause) => Err(artifact(cause)),
     }
 }
+/// Copy `source` to `workspace.<kind>-<digest>.json`, once: an existing copy must hold the same
+/// bytes.
 fn preserve(
     directory: &Path,
     source: &Path,
     candidate: &Candidate,
+    kind: &str,
     context: &JobContext,
 ) -> Result<PathBuf, StoreError> {
-    let path = directory.join(format!("workspace.rejected-{}.json", candidate.digest));
+    let path = directory.join(format!("workspace.{kind}-{}.json", candidate.digest));
     match with_artifact_input(&path, MAX_ORIGINAL_BYTES, context, |input| digest(input, context)) {
         Ok(existing) if existing == candidate.digest => return Ok(path),
         Ok(_) => return Err(StoreError::Changed),

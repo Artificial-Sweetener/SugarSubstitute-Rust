@@ -93,6 +93,8 @@ impl WorkspaceWork {
             .ok_or("Workspace transfer admission overflow")?;
         let spec = self.job(bytes, until)?;
         let ticket = input.ticket.clone();
+        let set_aside =
+            self.driver.as_ref().ok_or("Workspace driver absent")?.sets_aside_original();
         let directory =
             self.input_directory.clone().ok_or("Workspace native archive directory absent")?;
         let user = self.user.clone();
@@ -129,7 +131,7 @@ impl WorkspaceWork {
                 }
                 result?;
             }
-            let receipt = profile.workspace.save_worker(&input.captured.checkpoint,&context)?;
+            let receipt = profile.workspace.save_worker(&input.captured.checkpoint,set_aside,&context)?;
             Ok(Published { captured: input.captured,receipt })
         }) {
             Ok(job) => self.active = Some(Active::Publish { ticket,job }),

@@ -106,6 +106,7 @@ fn final_close_waits_for_exact_durable_delivery_receipt_and_keeps_host_revision_
         bytes: 1,
         kept_previous: true,
         evidence: vec![],
+        set_aside: None,
     };
     driver.published(&ticket, captured, &receipt, Moment::from_nanos(6))?;
     #[cfg(windows)]

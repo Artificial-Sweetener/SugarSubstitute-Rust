@@ -79,6 +79,74 @@ pub(crate) fn admits_permission(
     request == PermissionRequest::ClipboardRead && user_initiated && admits_url(origin, uri)
 }
 
+/// One row of the browser's own context menu, by its unlocalized name.
+#[cfg(any(target_os = "windows", test))]
+#[derive(Debug)]
+pub(crate) struct BrowserMenuRow {
+    pub(crate) name: String,
+    pub(crate) separator: bool,
+}
+
+/// The browser menu rows the application never offers: page inspection and the developer tools
+/// submenu. Names are WebView2's unlocalized lower-camel-case English labels.
+#[cfg(any(target_os = "windows", test))]
+const HIDDEN_BROWSER_MENU_ROWS: [&str; 2] = ["inspectElement", "moreTools"];
+
+/// Indices of the rows to remove, ascending: the hidden rows, and separators left at either end or
+/// next to another separator once those rows are gone.
+#[cfg(any(target_os = "windows", test))]
+pub(crate) fn browser_menu_removals(rows: &[BrowserMenuRow]) -> Vec<usize> {
+    let hidden: Vec<bool> = rows
+        .iter()
+        .map(|row| !row.separator && HIDDEN_BROWSER_MENU_ROWS.contains(&row.name.as_str()))
+        .collect();
+    if !hidden.contains(&true) {
+        return Vec::new();
+    }
+    let kept: Vec<usize> = (0..rows.len()).filter(|&index| !hidden[index]).collect();
+    let mut removed: Vec<usize> = (0..rows.len()).filter(|&index| hidden[index]).collect();
+    let mut previous_separator = true;
+    for (position, &index) in kept.iter().enumerate() {
+        if !rows[index].separator {
+            previous_separator = false;
+            continue;
+        }
+        let last = kept[position + 1..].iter().all(|&next| rows[next].separator);
+        if previous_separator || last {
+            removed.push(index);
+        } else {
+            previous_separator = true;
+        }
+    }
+    removed.sort_unstable();
+    removed
+}
+
+#[cfg(test)]
+mod browser_menu_tests {
+    use super::*;
+
+    fn rows(names: &[&str]) -> Vec<BrowserMenuRow> {
+        names
+            .iter()
+            .map(|name| BrowserMenuRow { name: (*name).into(), separator: *name == "-" })
+            .collect()
+    }
+
+    #[test]
+    fn inspection_rows_go_with_the_separator_they_strand() {
+        let menu = rows(&["back", "reload", "-", "moreTools", "-", "inspectElement"]);
+        assert_eq!(browser_menu_removals(&menu), vec![2, 3, 4, 5]);
+        let editing = rows(&["cut", "copy", "paste", "-", "selectAll", "-", "inspectElement"]);
+        assert_eq!(browser_menu_removals(&editing), vec![5, 6]);
+    }
+
+    #[test]
+    fn a_menu_without_inspection_rows_is_left_alone() {
+        assert!(browser_menu_removals(&rows(&["cut", "-", "-", "copy"])).is_empty());
+    }
+}
+
 #[cfg(test)]
 mod permission_tests {
     use super::*;

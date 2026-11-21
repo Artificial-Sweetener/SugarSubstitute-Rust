@@ -193,7 +193,8 @@ fn qualify_extent(
         .map_err(io)?;
     // SAFETY: This test retains the device and its unbound root on the creating thread.
     let root = unsafe { composition.CreateVisual()? };
-    let mut canvas = Canvas::new(composition.clone(), root, memory.clone(), graphics.clone())?;
+    let mut canvas =
+        Canvas::new(composition.clone(), root, memory.clone(), graphics.clone(), true)?;
     let viewport = PhysicalRect { x: 0, y: 0, width: extent.width(), height: extent.height() };
     let placement = CanvasPlacement { viewport, clip: viewport };
     let stamp = |generation| -> TestResult<FrameStamp> {

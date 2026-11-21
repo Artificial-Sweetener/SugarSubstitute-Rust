@@ -350,3 +350,37 @@ fn a_routed_pan_admits_its_frame_without_another_main_loop_turn() -> Result<(), 
     route(&mut fixture, &[button(false)])?;
     fixture.finish()
 }
+
+#[test]
+fn a_press_prepares_the_copy_but_only_a_drag_hands_it_over() -> Result<(), Box<dyn Error>> {
+    let mut fixture = Fixture::new()?;
+    fixture.commit(4)?;
+    route(&mut fixture, &[pointer([50.0, 40.0]), button(true)])?;
+    // The copy prepared at the press completes, but nothing reaches the desktop without a drag.
+    for _ in 0..8 {
+        fixture.pump()?;
+        assert!(fixture.canvas.take_drag_out().is_none(), "a press alone never drags out");
+    }
+    route(&mut fixture, &[pointer([60.0, 40.0]), MainCanvasGesture::DragOut])?;
+    let drag = copied(&mut fixture)?;
+    assert_eq!(drag.filename, "wide.png");
+    // The desktop releases the handed-over copy and its memory, and the button comes up.
+    drop(drag);
+    route(&mut fixture, &[button(false)])?;
+    for _ in 0..4 {
+        fixture.pump()?;
+    }
+    fixture.finish()
+}
+
+#[test]
+fn a_click_that_never_drags_hands_nothing_over() -> Result<(), Box<dyn Error>> {
+    let mut fixture = Fixture::new()?;
+    fixture.commit(4)?;
+    route(&mut fixture, &[pointer([50.0, 40.0]), button(true), button(false)])?;
+    for _ in 0..8 {
+        fixture.pump()?;
+        assert!(fixture.canvas.take_drag_out().is_none(), "a click never drags out");
+    }
+    fixture.finish()
+}

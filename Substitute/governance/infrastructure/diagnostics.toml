@@ -66,7 +66,7 @@ rationale = "Repository build or verification diagnostics remain developer outpu
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/composition/canvas/tests/shared.rs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:ee6432631dd5d3cf4ecc01db1ff876c50467622f744e6dc556e50b00448af1c4"
+source_sha256 = "sha256:4a16cd7337488b7232bd1dba78b4fc2e3039f9f7d35cda52ec00842851f80bb4"
 disposition = "fixture"
 rationale = "Native shared-texture qualification reports measured per-adapter interop timings as test output; runtime construction and presentation are unchanged."
 

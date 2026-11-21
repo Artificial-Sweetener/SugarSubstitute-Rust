@@ -13,6 +13,9 @@ pub use frame::{
     FrameError, FrameFormat, FrameIdentity, FrameShape, FrameValidator, PreparedFrame,
 };
 
+mod wash;
+pub use wash::desktop_body_wash;
+
 mod console;
 pub use console::{
     ConsolePresentation, NATIVE_CONSOLE_ACCESSIBILITY_BYTES, NATIVE_CONSOLE_PAINT_BYTES,

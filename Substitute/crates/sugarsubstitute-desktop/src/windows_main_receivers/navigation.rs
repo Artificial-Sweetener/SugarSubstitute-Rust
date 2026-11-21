@@ -9,11 +9,12 @@ use sugarsubstitute_contracts::configuration::LoopbackOrigin;
 #[cfg(feature = "k1-native-qualification")]
 use webview2_com::ContentLoadingEventHandler;
 use webview2_com::{
-    DownloadStartingEventHandler, NavigationCompletedEventHandler, NavigationStartingEventHandler,
+    ContextMenuRequestedEventHandler, DownloadStartingEventHandler,
+    NavigationCompletedEventHandler, NavigationStartingEventHandler,
     NewWindowRequestedEventHandler, PermissionRequestedEventHandler, ProcessFailedEventHandler,
 };
 
-const EVENT_COUNT: usize = if cfg!(feature = "k1-native-qualification") { 7 } else { 6 };
+const EVENT_COUNT: usize = if cfg!(feature = "k1-native-qualification") { 8 } else { 7 };
 
 struct State {
     origin: LoopbackOrigin,
@@ -288,8 +289,28 @@ impl Navigation {
                     })),
                     &mut token,
                 ),
+                // The browser's own menu keeps its editing rows but never offers page inspection.
+                6 => core.cast::<ICoreWebView2_11>().and_then(|core| {
+                    core.add_ContextMenuRequested(
+                        &ContextMenuRequestedEventHandler::create(Box::new(move |_, args| {
+                            let _callback = captured.callback();
+                            let result = match args {
+                                Some(args) => {
+                                    args.MenuItems().and_then(|items| hide_inspection(&items))
+                                }
+                                None => Err(windows::core::Error::from(E_POINTER)),
+                            };
+                            if let Err(cause) = result {
+                                tracing::warn!(operation = "browser_context_menu", %cause,
+                                    "The browser menu could not be trimmed");
+                            }
+                            Ok(())
+                        })),
+                        &mut token,
+                    )
+                }),
                 #[cfg(feature = "k1-native-qualification")]
-                6 => core.add_ContentLoading(
+                7 => core.add_ContentLoading(
                     &ContentLoadingEventHandler::create(Box::new(move |_, args| {
                         let _callback = captured.callback();
                         let mut id = 0;
@@ -376,8 +397,11 @@ impl Navigation {
                     .cast::<ICoreWebView2_4>()
                     .and_then(|core| core.remove_DownloadStarting(token)),
                 5 => core.remove_NewWindowRequested(token),
+                6 => core
+                    .cast::<ICoreWebView2_11>()
+                    .and_then(|core| core.remove_ContextMenuRequested(token)),
                 #[cfg(feature = "k1-native-qualification")]
-                6 => core.remove_ContentLoading(token),
+                7 => core.remove_ContentLoading(token),
                 _ => {
                     return Err(DesktopError::message(
                         "remove_main_browser_events",
@@ -390,6 +414,45 @@ impl Navigation {
         self.tokens[index] = None;
         Ok(false)
     }
+}
+
+/// Remove the inspection rows from one browser menu, then the separators they leave stranded.
+fn hide_inspection(items: &ICoreWebView2ContextMenuItemCollection) -> windows::core::Result<()> {
+    let mut count = 0;
+    // SAFETY: The live menu collection belongs to this callback's event arguments.
+    unsafe { items.Count(&mut count) }?;
+    let mut rows = Vec::with_capacity(count as usize);
+    for index in 0..count {
+        // SAFETY: As above; every index is below the collection's own count.
+        let item = unsafe { items.GetValueAtIndex(index) }?;
+        let mut name = PWSTR::null();
+        // SAFETY: The getter writes an owned CoTaskMem string adopted before inspection.
+        let status = unsafe { item.Name(&mut name) };
+        let name = NativeString(name);
+        status?;
+        let text = if name.0.is_null() {
+            String::new()
+        } else {
+            // SAFETY: A successful getter left an owned NUL-terminated string, checked non-null.
+            unsafe { name.0.to_string() }.unwrap_or_default()
+        };
+        let mut kind = COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND::default();
+        // SAFETY: As above.
+        unsafe { item.Kind(&mut kind) }?;
+        rows.push(crate::main_navigation::BrowserMenuRow {
+            name: text,
+            separator: kind == COREWEBVIEW2_CONTEXT_MENU_ITEM_KIND_SEPARATOR,
+        });
+    }
+    let removed = crate::main_navigation::browser_menu_removals(&rows);
+    tracing::info!(operation = "browser_context_menu",
+        names = ?rows.iter().map(|row| row.name.as_str()).collect::<Vec<_>>(),
+        removed = removed.len(), "Browser menu trimmed");
+    for index in removed.into_iter().rev() {
+        // SAFETY: Indices are removed from the end, so each stays within the shrinking collection.
+        unsafe { items.RemoveValueAtIndex(index as u32) }?;
+    }
+    Ok(())
 }
 
 /// Answer one permission request by the application's permission rule, saving nothing.

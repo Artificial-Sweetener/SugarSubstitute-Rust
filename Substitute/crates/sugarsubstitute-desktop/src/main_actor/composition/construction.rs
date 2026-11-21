@@ -34,10 +34,12 @@ impl MainActor {
                         self.request()?.storage_lease().claim(65536).map_err(|cause| {
                             DesktopError::new("claim_browser_composition", cause)
                         })?;
+                    let dark = self.request()?.settings().dark;
                     self.composition = Some(Composition::new(
                         self.window()?.clone(),
                         claim,
                         self.composition_source,
+                        dark,
                     ));
                 }
                 let composition =
