@@ -1,3 +1,31 @@
+## [0.10.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.9.0...substitute-v0.10.0) (2026-11-22)
+
+### Features
+
+* **session:** desktop checkpoint version 2 keeps each workflow's masonry scroll ([8503f51](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/8503f51930749777c9f088c45d8da9a01ddd0e17))
+* **splash:** right-click menu on the Comfy output console ([ddd642a](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/ddd642af5ad7cfb39c267d3d3299369bb4cc7107))
+* **startup:** name a failed start, retry it by itself and ask when retrying cannot help ([9c0a992](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/9c0a992a9f03a81e2de8a55a304e7b3d0a269c13))
+* **substitute:** wash behind the canvas, earlier drag-out, kept restores and a quieter browser menu ([88d4a1d](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/88d4a1dbccab95c902f6ead55d5d6cfbff3682e4))
+
+### Bug Fixes
+
+* **canvas:** keep the last preview when a run stops and never show an older one ([2a2ff95](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/2a2ff958d0c7eeac4f90ee1c53f8d51da99f91fe))
+* **canvas:** show the newest preview again after a final replaced it ([8197da3](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/8197da3834551663ebf48f2922487f63683a53c6))
+* **desktop:** build on Linux and macOS, where no file dialog places a choice ([c45e2e2](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/c45e2e2adc3f51ca922313639dceebe4244af9a2))
+* **desktop:** survive closed event windows and allow requested clipboard reads ([c685ac3](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/c685ac3987ae637bf8f84306c139b604b9a8a001))
+* **readiness:** stop an attached ComfyUI that keeps refusing, and free a kept failure's body credit ([883a91b](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/883a91bf90d27c08aa0ceb318f78e7532f2b071b))
+* **splash:** a select-all in the output console no longer closes the app ([051fedc](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/051fedcca7a6f03b45cd324f9ce82a8414639bb1))
+* **startup:** a start retried any number of times never runs out of room for its causes ([1ab147f](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/1ab147f5e946fe2860123993259c9d556448fa32))
+* **startup:** judge a settled failure's retry with its reason ([e784337](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/e7843377948a7d69faf53be327866e0739f076e9))
+* **substitute:** a wake failure no longer stalls completions, and the start-up dialog builds only on Windows ([28906b7](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/28906b73ff68ff847464f955792920b7fe644730))
+* **substitute:** build on Linux and macOS, and test checkpoint writing as version 2 writes it ([a71f36f](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/a71f36f5c8245bc13ec00e02580e4d4c6e6b5f8c))
+* **substitute:** restore and replace a stored version-2 checkpoint ([79ffb8d](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/79ffb8dd887b61eaef507be83a0664f9e7964a30))
+* **updates:** stay quiet when a background check cannot reach its repository ([1bcd531](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/1bcd531024a1d6f18d6fff16b51590aab56f6ea5))
+
+### Performance Improvements
+
+* **substitute:** prepare the drag-out copy when the pointer reaches the output ([f1dbcc5](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/f1dbcc57dd8d5f07e509ae19fddc65d01839714b))
+
 ## [0.9.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/substitute-v0.8.0...substitute-v0.9.0) (2026-11-20)
 
 ### Features
