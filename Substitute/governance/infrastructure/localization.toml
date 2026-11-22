@@ -221,6 +221,12 @@ kind = "fixture"
 rationale = "Behavioral fixture explicitly exercises native presentation, input validation, or original dynamic text; it grants no production text route. Protect exclusive hover transitions independently of live mouse timing or desktop capture."
 
 [[records]]
+path = "crates/sugarsubstitute-desktop/src/windows_console/menu.rs"
+source_sha256 = "sha256:64c5335fdf11446829373e29d030e5ce1dfd9b9cfdd5a5a718d23e0cfcffc7c3"
+kind = "native"
+rationale = "Console edit menu: row labels arrive from the typed catalog's edit record through ConsoleView; uxtheme ordinals and the popup's class are technical identities, never product copy."
+
+[[records]]
 path = "crates/sugarsubstitute-desktop/src/windows_console/native.rs"
 source_sha256 = "sha256:38a4dc8dc092b36ed7c882777adaa028a9a1a238dd767a3a60312871e3181b7a"
 kind = "native"
@@ -390,7 +396,7 @@ rationale = "Reapply caption/recovery labels from the authenticated configuratio
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/view.rs"
-source_sha256 = "sha256:8de65421f6ba8b4be2ffb48cd5fd2c3f04e2b5dbf9f713546f004911e7cb3911"
+source_sha256 = "sha256:2e7c9d31822fc821a7d1cf1d6edf6b8ef0db1fe53b22fa20e77e1d7ec758d28a"
 kind = "presentation"
 rationale = "Startup View binds output, cancel and retry accessible controls to its existing Messages record; state changes select fields without authoring copy."
 
@@ -408,7 +414,7 @@ rationale = "Focus traversal consumes existing accessible-control identities and
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/console.rs"
-source_sha256 = "sha256:643292b7106e484f2a6995fe1a8407848daf85c86541b0eaf65c9ec7a7c3c8c7"
+source_sha256 = "sha256:d20b38855c3fa3c2306c272621ebb6f63a9dd48ef36a6af22749564e6e7eb0b3"
 kind = "native"
 rationale = "ConsoleView carries the composing locale owner label and original transcript; native_control forwards the same borrowed label with its geometry."
 

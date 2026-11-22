@@ -33,6 +33,8 @@ pub trait ConsoleText {
 pub struct ConsoleView<'a> {
     /// Stable localized accessible name, independent of foreign document contents.
     pub label: &'static str,
+    /// Localized edit rows of the console's right-click menu.
+    pub edit: &'static sugarsubstitute_contracts::localization::edit::EditMessages,
     /// Logical client rectangle matching the console's existing inner area.
     pub bounds: ControlBounds,
     /// Native control is available only after the matching expanded frame publishes.

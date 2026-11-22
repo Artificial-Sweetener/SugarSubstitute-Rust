@@ -49,6 +49,7 @@ impl Controller {
     ) -> Option<sugarsubstitute_desktop::installer::InstallerConsole<'_>> {
         self.console.as_ref()?.view(
             sugarsubstitute_contracts::localization::installer::messages(&self.locale).details,
+            sugarsubstitute_contracts::localization::messages(&self.locale).edit,
         )
     }
     /// Start the single installer execution root and authenticated package preparation.

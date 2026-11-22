@@ -129,6 +129,7 @@ impl StartupView {
         let bottom = 533.0;
         sugarsubstitute_desktop::ConsoleView {
             label: self.messages.output,
+            edit: self.messages.edit,
             bounds: ControlBounds {
                 x: 25.0,
                 y: top.min(bottom - 1.0),

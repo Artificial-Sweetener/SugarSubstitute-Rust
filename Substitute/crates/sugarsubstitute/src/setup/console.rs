@@ -153,7 +153,11 @@ impl Output {
         }
         Ok(())
     }
-    pub(super) fn view(&self, label: &'static str) -> Option<InstallerConsole<'_>> {
+    pub(super) fn view(
+        &self,
+        label: &'static str,
+        edit: &'static sugarsubstitute_contracts::localization::edit::EditMessages,
+    ) -> Option<InstallerConsole<'_>> {
         let (layout, _, frame) = self.prepared.as_ref()?;
         let visible = self.layout.is_some_and(|current| current.visible && current == *layout);
         Some(InstallerConsole {
@@ -161,6 +165,7 @@ impl Output {
             frame,
             view: ConsoleView {
                 label,
+                edit,
                 bounds: layout.bounds,
                 visible,
                 dark: true,

@@ -946,7 +946,7 @@ rationale = "Read only the optional qualification evidence directory for report 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/windows_test_desktop.rs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:74a13f3abc1fc59c310995cb241c2a2e0fb73376188b0626c0297c08033d1e04"
+source_sha256 = "sha256:10a434221ea290b62dfab52e4b7a71baf8e8a50690cd5c057f222fe8b516130a"
 capabilities = ["environment"]
 rationale = "Read only the exact per-test private-desktop and target environment selectors; the parent retains the actual child process and desktop through checked process termination without reading or writing product settings."
 

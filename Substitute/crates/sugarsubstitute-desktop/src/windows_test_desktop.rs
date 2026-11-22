@@ -16,8 +16,8 @@ use windows::{
         System::{
             Com::CoCreateGuid,
             StationsAndDesktops::{
-                CloseDesktop, CreateDesktopW, DESKTOP_CONTROL_FLAGS, DESKTOP_CREATEWINDOW,
-                DESKTOP_READOBJECTS, DESKTOP_WRITEOBJECTS, GetThreadDesktop,
+                CloseDesktop, CreateDesktopW, DESKTOP_CONTROL_FLAGS, DESKTOP_CREATEMENU,
+                DESKTOP_CREATEWINDOW, DESKTOP_READOBJECTS, DESKTOP_WRITEOBJECTS, GetThreadDesktop,
                 GetUserObjectInformationW, HDESK, OpenDesktopW, SetThreadDesktop, UOI_NAME,
             },
             Threading::{
@@ -32,7 +32,9 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 const TARGET: &str = "SUGARSUBSTITUTE_NATIVE_TEST_TARGET";
 const DESKTOP: &str = "SUGARSUBSTITUTE_NATIVE_TEST_DESKTOP";
 const PREFIX: &str = "SugarSubstitute-Native-";
-const ACCESS: u32 = DESKTOP_CREATEWINDOW.0 | DESKTOP_READOBJECTS.0 | DESKTOP_WRITEOBJECTS.0;
+/// Windows, popup menus, and reading and writing what they show.
+const ACCESS: u32 =
+    DESKTOP_CREATEWINDOW.0 | DESKTOP_CREATEMENU.0 | DESKTOP_READOBJECTS.0 | DESKTOP_WRITEOBJECTS.0;
 
 /// Reexecute this exact libtest case with its own process-scoped private desktop.
 /// A completion event proves that the selected body actually ran; a successful empty test filter

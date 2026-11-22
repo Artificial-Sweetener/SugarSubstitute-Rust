@@ -12,6 +12,8 @@ mod native_fixture;
 use native_fixture::{Hidden, MtaUsage, apartment_fact};
 #[path = "input_tests.rs"]
 mod input_tests;
+#[path = "menu_tests.rs"]
+mod menu_tests;
 #[path = "native_alpha_tests.rs"]
 mod native_alpha_tests;
 #[path = "publication_tests.rs"]

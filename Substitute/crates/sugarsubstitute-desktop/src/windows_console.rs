@@ -15,6 +15,8 @@ use tao::{event_loop::EventLoopProxy, window::Window};
 use windows::Win32::UI::Input::KeyboardAndMouse::GetFocus;
 #[path = "windows_console/callback.rs"]
 mod callback;
+#[path = "windows_console/menu.rs"]
+mod menu;
 #[path = "windows_console/messages.rs"]
 mod messages;
 #[path = "windows_console/native.rs"]
@@ -72,7 +74,7 @@ impl Console {
             Some(source) => DocumentIndex::prepare(source, claim)?,
             None => DocumentIndex::empty(claim)?,
         };
-        let callback = Rc::new(callback::Callback::new(proxy, timings));
+        let callback = Rc::new(callback::Callback::new(proxy, timings, view.edit));
         Ok(Self {
             creation: Creation::new(1)?,
             callback,
@@ -141,6 +143,7 @@ impl Console {
             .peers
             .first()
             .ok_or_else(|| DesktopError::message("console_present", "retained peer absent"))?;
+        self.callback.dark.set(view.dark);
         let result = (|| {
             peer.value.live()?;
             let document_changed = documents.pending();

@@ -7,6 +7,8 @@
 pub mod closing;
 /// Localized profile-conflict decisions.
 pub mod conflict;
+/// Localized text edit rows of native controls.
+pub mod edit;
 /// Localized native incident reporting copy.
 pub mod incident;
 /// Localized installer screens and actions.
@@ -76,6 +78,8 @@ pub struct Messages {
     pub report: &'static incident::ReportMessages,
     /// Accessible names for the native main-window caption controls.
     pub window: &'static window::WindowMessages,
+    /// Text edit rows of native controls.
+    pub edit: &'static edit::EditMessages,
     /// The close save's window state and the next start's unsaved-work notice.
     pub closing: &'static closing::ClosingMessages,
     /// The window's update controls, the update report's steps and start-up update lines.
@@ -111,6 +115,7 @@ pub static LOCALES: &[Messages] = &[
         conflict: &conflict::EN,
         backend_conflict: &conflict::BACKEND_EN,
         window: &window::EN,
+        edit: &edit::EN,
         closing: &closing::EN,
         updates: &updates::EN,
         pack_updates: &pack_updates::EN,
@@ -139,6 +144,7 @@ pub static LOCALES: &[Messages] = &[
         conflict: &conflict::ZH_HANS,
         backend_conflict: &conflict::BACKEND_ZH_HANS,
         window: &window::ZH_HANS,
+        edit: &edit::ZH_HANS,
         closing: &closing::ZH_HANS,
         updates: &updates::ZH_HANS,
         pack_updates: &pack_updates::ZH_HANS,
@@ -167,6 +173,7 @@ pub static LOCALES: &[Messages] = &[
         conflict: &conflict::JA,
         backend_conflict: &conflict::BACKEND_JA,
         window: &window::JA,
+        edit: &edit::JA,
         closing: &closing::JA,
         updates: &updates::JA,
         pack_updates: &pack_updates::JA,
@@ -195,6 +202,7 @@ pub static LOCALES: &[Messages] = &[
         conflict: &conflict::KO,
         backend_conflict: &conflict::BACKEND_KO,
         window: &window::KO,
+        edit: &edit::KO,
         closing: &closing::KO,
         updates: &updates::KO,
         pack_updates: &pack_updates::KO,
@@ -223,6 +231,7 @@ pub static LOCALES: &[Messages] = &[
         conflict: &conflict::ES,
         backend_conflict: &conflict::BACKEND_ES,
         window: &window::ES,
+        edit: &edit::ES,
         closing: &closing::ES,
         updates: &updates::ES,
         pack_updates: &pack_updates::ES,
@@ -268,6 +277,7 @@ mod tests {
                 .chain(locale.conflict.labels())
                 .chain(locale.backend_conflict.labels())
                 .chain(locale.window.labels())
+                .chain(locale.edit.labels())
                 .chain(locale.closing.labels())
                 .chain(locale.updates.labels())
                 .chain(locale.pack_updates.labels())
