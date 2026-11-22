@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Protect observable checkpoint ordering with deterministic clocks and boundary values.
 use super::*;
-use sugarsubstitute_contracts::desktop_session::{decode_checkpoint, wire::SessionCheckpoint};
+use sugarsubstitute_contracts::desktop_session::{decode_checkpoint, wire::v2::SessionCheckpoint};
 type Result<T = ()> = std::result::Result<T, Box<dyn Error>>;
 const FIXTURE: &str =
     include_str!("../../../../../Sugar/integrations/contracts/session_vectors.json");

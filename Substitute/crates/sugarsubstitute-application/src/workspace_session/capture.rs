@@ -2,7 +2,9 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Admit immutable captures and observe exactly their durable publication outcomes.
 use super::*;
-use sugarsubstitute_contracts::desktop_session::{validate_checkpoint, wire::SessionCheckpoint};
+use sugarsubstitute_contracts::desktop_session::{
+    validate_checkpoint, wire::v2::SessionCheckpoint,
+};
 
 pub(super) const MAX_REVISION: u64 = 9_007_199_254_740_991;
 

@@ -16,7 +16,10 @@ use sugarsubstitute_application::workspace_session::{
     CaptureTicket, DurableCheckpoint, WorkspaceSession,
 };
 use sugarsubstitute_contracts::{
-    desktop_session::{CheckpointId, validate_message, wire::*},
+    desktop_session::{
+        CheckpointId, validate_message,
+        wire::{v2::SessionCheckpoint, *},
+    },
     execution::{MemoryLease, Moment},
 };
 

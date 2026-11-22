@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Coordinate fenced desktop capture/materialization over one bounded correlated protocol lifetime. */
 import {
+  encodeDesktopCheckpoint,
   isSessionMessage,
   isDesktopCheckpoint,
   utf8Bytes,
@@ -55,6 +56,8 @@ export interface DesktopSessionClientOptions {
   readonly digest: (text: string) => Promise<string>;
   /** Receive each failure the user needs to see once, with the work it interrupted. */
   readonly report: (error: unknown, operation: DesktopSessionFailedOperation) => void;
+  /** Whether the host keeps checkpoint version 2, which names where each masonry is scrolled. */
+  readonly hostTakesScroll: () => boolean;
 }
 
 const capabilities: SessionCapabilities = Object.freeze({
@@ -239,7 +242,7 @@ export class DesktopSessionClient {
           !sameScope(checkpoint.scope, this.options.transport.scope)
         )
           throw new TypeError('Captured checkpoint does not match the admitted request.');
-        const text = JSON.stringify(checkpoint);
+        const text = encodeDesktopCheckpoint(checkpoint, this.options.hostTakesScroll());
         const chunks = desktopSessionChunks(text);
         const digest = await this.options.digest(text);
         if (!this.#current(active)) return;

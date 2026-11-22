@@ -2,7 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Share desktop checkpoint values independently of storage, Comfy and native adapters.
 //!
-//! V1 accepts only v1. Storage adapters must preserve rejected/newer originals and the last good checkpoint;
+//! Checkpoints are read in version 1 or 2 and held as version 2. Storage adapters must preserve rejected/newer originals and the last good checkpoint;
 //! they must not replace an unsupported checkpoint with an empty autosave. Relative session
 //! names are below the installation layout owner's `InstallationLayout::user()` data root.
 //! Original outputs and referenced assets are authoritative data without a TTL. Storage,
@@ -18,6 +18,7 @@ mod protocol;
 mod scenes;
 mod snapshot;
 mod submissions;
+mod versions;
 /// Schema-derived untrusted JSON values; semantic validators must admit them before use.
 pub mod wire;
 

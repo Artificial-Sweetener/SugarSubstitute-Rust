@@ -4,7 +4,11 @@
 use super::{
     MAX_ASSET_BYTES, MAX_CHECKPOINT_BYTES, SessionError,
     primitives::{digest, file, scope, uuid},
-    wire::*,
+    versions,
+    wire::{
+        self, SessionOutput, SessionSelection,
+        v2::{SessionCheckpoint, SessionEntry},
+    },
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -95,7 +99,7 @@ fn entry(value: &SessionEntry, checkpoint: &SessionCheckpoint) -> bool {
     })
 }
 
-/// Validate a v1 checkpoint's shape, bounds, identities and complete reference relationships.
+/// Validate a checkpoint's shape, bounds, identities and complete reference relationships.
 ///
 /// Encoded storage bytes require [`decode_checkpoint`] admission before parsing. Callers
 /// construct immutable accepted snapshots after this check; mutable DTOs must be revalidated.
@@ -188,22 +192,42 @@ pub fn validate_checkpoint(value: &SessionCheckpoint) -> Result<(), SessionError
     Ok(())
 }
 
-/// Decode a bounded checkpoint; stores preserve rejected bytes before attempting recovery.
+/// The version a checkpoint's bytes declare, read before its version's exact shape.
+#[derive(serde::Deserialize)]
+struct Declared {
+    version: u64,
+}
+
+/// Decode a bounded version-1 or version-2 checkpoint as version 2; stores preserve rejected
+/// bytes before attempting recovery.
 /// # Errors
 /// Rejects malformed JSON, duplicate/unknown members, newer versions and invalid semantics.
 pub fn decode_checkpoint(bytes: &[u8]) -> Result<SessionCheckpoint, SessionError> {
     if bytes.len() > MAX_CHECKPOINT_BYTES {
         return Err(SessionError::TooLarge);
     }
-    let value = serde_json::from_slice(bytes).map_err(|_| SessionError::Invalid)?;
+    let invalid = |_| SessionError::Invalid;
+    let Declared { version } = serde_json::from_slice(bytes).map_err(invalid)?;
+    let value = match version {
+        1 => versions::upgrade(
+            serde_json::from_slice::<wire::SessionCheckpoint>(bytes).map_err(invalid)?,
+        ),
+        2 => serde_json::from_slice(bytes).map_err(invalid)?,
+        _ => return Err(SessionError::Invalid),
+    };
     validate_checkpoint(&value)?;
     Ok(value)
 }
 
-/// Encode only a fully validated v1 checkpoint for storage or a dedicated bounded transfer.
+/// Encode a fully validated checkpoint for storage or a dedicated bounded transfer, as version 1
+/// when no entry names a scroll, so a page that reads only version 1 reads it.
 /// # Errors
 /// Rejects invalid DTO construction or encoded bytes exceeding checkpoint admission.
 pub fn encode_checkpoint(value: &SessionCheckpoint) -> Result<Vec<u8>, SessionError> {
     validate_checkpoint(value)?;
-    serde_json::to_vec(value).map_err(|_| SessionError::Invalid)
+    match versions::downgrade(value) {
+        Some(first) => serde_json::to_vec(&first),
+        None => serde_json::to_vec(value),
+    }
+    .map_err(|_| SessionError::Invalid)
 }

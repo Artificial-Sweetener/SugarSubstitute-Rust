@@ -83,7 +83,14 @@ function growing(sections: readonly [string, number, number][], reach: number) {
 
 function memory(kept: WorkflowScroll | null) {
   const recorded: WorkflowScroll[] = [];
-  return { recorded, read: () => kept, record: (scroll: WorkflowScroll) => recorded.push(scroll) };
+  return {
+    recorded,
+    read: () => kept,
+    record: (scroll: WorkflowScroll) => {
+      recorded.push(scroll);
+    },
+    subscribe: () => () => undefined,
+  };
 }
 
 test('a kept scroll the cards cannot reach yet waits for them, and nothing overwrites it meanwhile', () => {
@@ -140,4 +147,32 @@ test('a masonry taken out of the document never records the top it reads there',
   element.scrollTop = 0;
   keeper.dispose();
   expect(kept.recorded).toEqual([{ cube: '4', offset: 319 }]);
+});
+
+test('a scroll a restored session brings moves a masonry whose cards have entered', () => {
+  const { element } = growing([['cube:4', 0, 900]], 600);
+  let kept: WorkflowScroll | null = { cube: '4', offset: 100 };
+  let restore: () => void = () => undefined;
+  const recorded: WorkflowScroll[] = [];
+  const keeper = new MasonryScrollKeeper(
+    element,
+    {
+      read: () => kept,
+      record: (scroll) => {
+        recorded.push(scroll);
+      },
+      subscribe: (listener) => {
+        restore = listener;
+        return () => undefined;
+      },
+    },
+    () => undefined,
+  );
+  keeper.settle();
+  expect(element.scrollTop).toBe(100);
+  kept = { cube: '4', offset: 319 };
+  restore();
+  expect(element.scrollTop).toBe(319);
+  expect(recorded.at(-1)).toEqual({ cube: '4', offset: 319 });
+  keeper.dispose();
 });

@@ -3,7 +3,7 @@
 //! Verify one-time legacy adoption through real archive codec, metadata and selected scope.
 use super::*;
 use crate::input_documents::{InputRestorePlan, legacy};
-use sugarsubstitute_contracts::desktop_session::{decode_checkpoint, wire::SessionCheckpoint};
+use sugarsubstitute_contracts::desktop_session::{decode_checkpoint, wire::v2::SessionCheckpoint};
 fn checkpoint(mask: &str) -> TestResult<SessionCheckpoint> {
     let vectors: serde_json::Value = serde_json::from_str(include_str!(
         "../../../../../../../Sugar/integrations/contracts/session_vectors.json"

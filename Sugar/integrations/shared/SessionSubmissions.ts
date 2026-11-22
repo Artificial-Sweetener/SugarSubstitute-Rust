@@ -14,7 +14,8 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Retain accepted prompt ownership even before a submission produces final artifacts. */
-import type { SessionEntry, SessionScope } from '../contracts/SessionProtocol.generated.js';
+import type { SessionScope } from '../contracts/SessionProtocol.generated.js';
+import type { SessionEntry } from '../contracts/SessionCheckpointV2Protocol.generated.js';
 import { sessionUuid } from './SessionPrimitives.js';
 
 /** Match receipts to frozen submission sources rather than a reused live node number. */

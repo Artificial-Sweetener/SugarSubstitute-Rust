@@ -103,6 +103,7 @@ export class ComfyDesktopMaterialization {
                     masonry: entry.view.masonryEnabled,
                     editorWidth: entry.view.editorWidth,
                 });
+                this.options.presentation.restoreScroll(context.sessionId, entry.view.scroll);
                 this.options.canvas.restore(context, entry, decodeComfyWorkflowSources(JSON.parse(entry.document.graphJson)));
             }
             const shown = this.options.execution.sessions.read().active?.sessionId;

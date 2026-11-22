@@ -17,9 +17,9 @@
 import type {
   SessionAsset,
   SessionBinding,
-  SessionCheckpoint,
   SessionInput,
 } from '../../../../../integrations/contracts/SessionProtocol.generated.js';
+import type { SessionCheckpoint } from '../../../../../integrations/contracts/SessionCheckpointV2Protocol.generated.js';
 import type { ComfyWorkflowExecutionRuntime } from '../../execution/infrastructure/ComfyWorkflowExecutionRuntime.js';
 import type { WorkflowOutputIdentities } from '../../execution/application/WorkflowOutputIdentities.js';
 import type { WorkflowSubmissionSnapshots } from '../../execution/application/WorkflowSubmissionSnapshots.js';
@@ -171,6 +171,7 @@ export class ComfyDesktopMaterialization {
           masonry: entry.view.masonryEnabled,
           editorWidth: entry.view.editorWidth,
         });
+        this.options.presentation.restoreScroll(context.sessionId, entry.view.scroll);
         this.options.canvas.restore(
           context,
           entry,

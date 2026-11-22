@@ -22,11 +22,11 @@ import { isDesktopCheckpoint } from '../../../integrations/shared/SessionSnapsho
 import { utf8Bytes } from '../../../integrations/shared/SessionPrimitives.js';
 import { createHash } from 'node:crypto';
 import type {
-  SessionCheckpoint,
   SessionFence,
   SessionMessage,
   SessionOperation,
 } from '../../../integrations/contracts/SessionProtocol.generated.js';
+import type { SessionCheckpoint } from '../../../integrations/contracts/SessionCheckpointV2Protocol.generated.js';
 
 type Fixture = Awaited<ReturnType<typeof desktopRuntimeFixture>>;
 
@@ -357,6 +357,7 @@ test('the restore the host plans on the first committed Ready is admitted over t
     nextId: relaunched.nextId,
     digest,
     report: (error) => relaunched.errors.push(error),
+    hostTakesScroll: () => true,
   });
   try {
     client.install();

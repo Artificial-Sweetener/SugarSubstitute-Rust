@@ -31,11 +31,14 @@ const TAKEOVER = ['wheel', 'pointerdown', 'keydown', 'touchstart'] as const;
  * longer laid out.
  */
 export class MasonryScrollKeeper {
-  readonly #entered: number;
+  readonly #startTop: number;
   #pending: WorkflowScroll | null = null;
   #settled = false;
   /** Where the last application left the masonry, so its own scroll event is not a takeover. */
   #applied: number | null = null;
+  /** The cards have entered, so a newer kept scroll applies at once. */
+  #entered = false;
+  readonly #unsubscribe: (() => void) | null;
 
   /** Watch one mounted masonry element for the workflow `memory` belongs to. */
   constructor(
@@ -43,21 +46,25 @@ export class MasonryScrollKeeper {
     private readonly memory: WorkflowScrollMemory | null,
     private readonly report: (error: unknown) => void,
   ) {
-    this.#entered = element.scrollTop;
+    this.#startTop = element.scrollTop;
     element.addEventListener('scrollend', this.#record);
     element.addEventListener('scroll', this.#moved, { passive: true });
     element.addEventListener('sc-masonry-layout', this.#retry);
     for (const name of TAKEOVER) element.addEventListener(name, this.#takeOver, { passive: true });
+    this.#unsubscribe = memory?.subscribe(this.#restored) ?? null;
   }
 
   /** The cards have entered: bring back the kept scroll unless something scrolled meanwhile. */
   settle(): void {
-    this.#pending = this.element.scrollTop === this.#entered ? (this.memory?.read() ?? null) : null;
+    this.#entered = true;
+    this.#pending =
+      this.element.scrollTop === this.#startTop ? (this.memory?.read() ?? null) : null;
     this.#apply();
   }
 
   /** Record where the masonry rests, if settled, and stop watching it. */
   dispose(): void {
+    this.#unsubscribe?.();
     this.element.removeEventListener('scrollend', this.#record);
     this.element.removeEventListener('scroll', this.#moved);
     this.element.removeEventListener('sc-masonry-layout', this.#retry);
@@ -79,6 +86,14 @@ export class MasonryScrollKeeper {
     this.#settled = true;
     this.#record();
   }
+
+  /** A restored session brought a newer kept scroll: the masonry goes there. */
+  readonly #restored = (): void => {
+    if (!this.#entered) return;
+    this.#pending = this.memory?.read() ?? null;
+    this.#settled = false;
+    this.#apply();
+  };
 
   readonly #retry = (): void => {
     if (this.#pending) this.#apply();

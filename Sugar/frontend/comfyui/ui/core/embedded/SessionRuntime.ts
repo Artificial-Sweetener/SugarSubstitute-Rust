@@ -37,6 +37,7 @@ export {
   parseSessionJson,
   decodeDesktopCheckpoint,
 } from '../../../../../integrations/shared/SessionDecode.js';
+export { encodeDesktopCheckpoint } from '../../../../../integrations/shared/SessionCheckpointVersions.js';
 export {
   isSessionBinding,
   isSessionMessage,

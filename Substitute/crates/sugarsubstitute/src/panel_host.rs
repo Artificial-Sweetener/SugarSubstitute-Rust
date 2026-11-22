@@ -59,6 +59,7 @@ pub(crate) fn description(hosting: MainHosting) -> Result<HostDescription, Panel
     capabilities.push(HostCapability::NAMED_UPDATES);
     capabilities.push(HostCapability::NOTICE_LINES);
     capabilities.push(HostCapability::TEXT_MENUS);
+    capabilities.push(HostCapability::CHECKPOINT_SCROLL);
     let mut protocols = PROTOCOLS.to_vec();
     if hosting == MainHosting::Composition {
         protocols.push(HostProtocol::FILE_DRAG);

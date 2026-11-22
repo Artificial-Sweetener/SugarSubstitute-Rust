@@ -50,7 +50,10 @@ export class ComfyDesktopSessionHost {
       | 'observeEdits'
       | 'observeNavigation'
       | 'draftTimes'
-    >,
+    > & {
+      /** Whether the host keeps checkpoint version 2, which names where each masonry is scrolled. */
+      readonly hostTakesScroll: () => boolean;
+    },
   ) {}
 
   /** Register a nonblocking handshake before Comfy's normal initial workflow restoration completes. */
@@ -111,6 +114,7 @@ export class ComfyDesktopSessionHost {
             .join('');
         },
         report: this.options.report,
+        hostTakesScroll: this.options.hostTakesScroll,
       });
       this.#client.install();
     } catch (error: unknown) {

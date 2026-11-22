@@ -9,6 +9,7 @@ use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicU64, Ordering};
 use sugarsubstitute_application::startup::StartupSession;
 use sugarsubstitute_application::workspace_session::close_save::NotSavedLastTime;
+use sugarsubstitute_contracts::desktop_session::wire::v2::SessionCheckpoint;
 use sugarsubstitute_contracts::{
     configuration::*,
     lifecycle::ShutdownBudget,

@@ -122,7 +122,7 @@ export class ComfyDesktopSessionRuntime {
             }
             this.#refresh(true);
             this.bindings.changed();
-        }), canvas.subscribe(() => this.#navigation?.changed()), presentation.subscribe(() => this.#navigation?.changed()));
+        }), canvas.subscribe(() => this.#navigation?.changed()), presentation.subscribe(() => this.#navigation?.changed()), presentation.subscribeScroll(() => this.#navigation?.changed()));
         if (route)
             this.#stops.push(route.subscribe(() => this.#refresh(true)));
         if (this.options.settingsRoute)
@@ -342,6 +342,7 @@ export class ComfyDesktopSessionRuntime {
                 observe(context.sessionId, 'navigation', JSON.stringify([
                     this.options.canvas.signature(context),
                     this.options.presentation.capture(context.sessionId),
+                    this.options.presentation.captureScroll(context.sessionId),
                     this.#graphViews.get(context.sessionId),
                 ]));
             }

@@ -24,6 +24,7 @@ import { WORKFLOW_MASONRY_DEFAULT_EDITOR_WIDTH } from './masonry/WorkflowMasonry
 import { isRecord } from '../types/common.js';
 import { WorkspaceConsole } from '../console/WorkspaceConsole.js';
 import { ComfyDesktopSessionHost } from '../workflow/infrastructure/ComfyDesktopSessionHost.js';
+import { HOST_CAPABILITIES } from '../core/embedded/PanelRuntime.js';
 /** Keep presentation lifecycle registration outside the host extension entry point. */
 export class ComfyWorkflowWorkspace {
     options;
@@ -80,6 +81,7 @@ export class ComfyWorkflowWorkspace {
                 ...(options.route ? { route: options.route } : {}),
                 report: options.reportSession,
                 ...(options.settingsRoute ? { settingsRoute: options.settingsRoute } : {}),
+                hostTakesScroll: () => options.host.read()?.declares(HOST_CAPABILITIES.checkpointScroll) === true,
             })
             : null;
     }

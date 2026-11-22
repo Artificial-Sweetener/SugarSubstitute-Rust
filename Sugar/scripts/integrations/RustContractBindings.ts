@@ -90,7 +90,16 @@ impl ${name} {
 export function rustContractBindings(
   definitions: Schema,
   schemaText: string,
-  options: { readonly schema: string; readonly generator: string; readonly prefix: string },
+  options: {
+    readonly schema: string;
+    readonly generator: string;
+    readonly prefix: string;
+    /**
+     * Emit only these definitions; the others are named by reference and must already exist in
+     * the module the output is included into.
+     */
+    readonly emit?: readonly string[];
+  },
 ): string {
   if (
     !/^[a-z][a-z0-9-]*\.schema\.json$/.test(options.schema) ||
@@ -113,7 +122,12 @@ export function rustContractBindings(
 // Generated from ${options.schema} by ${options.generator}.
 // Schema SHA-256 (LF): ${sourceHash}
 `;
-  const values = Object.entries(definitions).map(([name, value]) => {
+  if (options.emit?.some((name) => !declared.names.has(name)))
+    throw new Error('Invalid Rust contract emission.');
+  const emitted = Object.entries(definitions).filter(
+    ([name]) => !options.emit || options.emit.includes(name),
+  );
+  const values = emitted.map(([name, value]) => {
     if (!name.startsWith(options.prefix) || !/^[A-Za-z]+$/.test(name))
       throw new Error('Invalid Rust contract type name.');
     const node = record(value);

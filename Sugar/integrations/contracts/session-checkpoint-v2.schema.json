@@ -1,0 +1,960 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sugarcubes.dev/contracts/desktop-session-checkpoint/v2",
+  "title": "Desktop session checkpoint v2",
+  "description": "Version 2 of the desktop checkpoint that sugarcubes.desktop-session transfers carry as text. It is version 1 with each entry's view also naming where that workflow's masonry is scrolled: the Cube whose section holds the top of the view, or null above every Cube, and the distance in CSS pixels from that section's top, or the masonry's top, to the top of the view. A host that declares the capability session.checkpoint-scroll takes and keeps version-2 checkpoints as well as version 1; it gives a checkpoint back as version 1 when no entry names a scroll. The session messages stay version 1.",
+  "$ref": "#/$defs/SessionCheckpoint",
+  "$defs": {
+    "SessionScope": {
+      "type": "object",
+      "properties": {
+        "installation": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "profile": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "workspace": {
+          "type": "string",
+          "maxLength": 36
+        },
+        "backend": {
+          "type": "string",
+          "maxLength": 36
+        }
+      },
+      "required": ["installation", "profile", "workspace", "backend"],
+      "additionalProperties": false
+    },
+    "SessionSource": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 36
+        },
+        "nodeId": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "executionPath": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "graphRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": ["id", "nodeId", "executionPath", "label", "graphRevision"],
+      "additionalProperties": false
+    },
+    "SessionScene": {
+      "type": "object",
+      "properties": {
+        "groupId": {
+          "type": "string",
+          "maxLength": 36
+        },
+        "sceneId": {
+          "type": "string",
+          "maxLength": 36
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8191
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8192
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 4096
+        }
+      },
+      "required": ["groupId", "sceneId", "order", "count", "title"],
+      "additionalProperties": false
+    },
+    "SessionFile": {
+      "type": "object",
+      "properties": {
+        "storage": {
+          "enum": ["output", "input", "temp"]
+        },
+        "filename": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "subfolder": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "managedArtifact": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 256
+            },
+            {
+              "const": null
+            }
+          ]
+        }
+      },
+      "required": ["storage", "filename", "subfolder", "managedArtifact"],
+      "additionalProperties": false
+    },
+    "SessionAsset": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "digest": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8589934592
+        },
+        "extension": {
+          "enum": ["png", "jpg", "webp", "gif", "mp4", "webm"]
+        },
+        "media": {
+          "enum": ["image", "video"]
+        }
+      },
+      "required": ["version", "digest", "bytes", "extension", "media"],
+      "additionalProperties": false
+    },
+    "SessionOutput": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 36
+        },
+        "entryId": {
+          "type": "string",
+          "maxLength": 36
+        },
+        "backend": {
+          "type": "string",
+          "maxLength": 36
+        },
+        "promptId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 256
+            },
+            {
+              "const": null
+            }
+          ]
+        },
+        "runId": {
+          "type": "string",
+          "maxLength": 36
+        },
+        "runOrder": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "sourceId": {
+          "type": "string",
+          "maxLength": 36
+        },
+        "scene": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SessionScene"
+            },
+            {
+              "const": null
+            }
+          ]
+        },
+        "listIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8191
+        },
+        "batchIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8191
+        },
+        "imageIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8191
+        },
+        "file": {
+          "$ref": "#/$defs/SessionFile"
+        },
+        "assetDigest": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 64
+            },
+            {
+              "const": null
+            }
+          ]
+        },
+        "digest": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8589934592
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 131072
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 131072
+        },
+        "media": {
+          "enum": ["image", "video"]
+        },
+        "mime": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "metadataEmbedded": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "entryId",
+        "backend",
+        "promptId",
+        "runId",
+        "runOrder",
+        "sourceId",
+        "scene",
+        "listIndex",
+        "batchIndex",
+        "imageIndex",
+        "file",
+        "assetDigest",
+        "digest",
+        "bytes",
+        "width",
+        "height",
+        "media",
+        "mime",
+        "metadataEmbedded"
+      ],
+      "additionalProperties": false
+    },
+    "SessionSelection": {
+      "type": "object",
+      "properties": {
+        "outputId": {
+          "type": "string",
+          "maxLength": 36
+        },
+        "sourceId": {
+          "type": "string",
+          "maxLength": 36
+        },
+        "sceneId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 36
+            },
+            {
+              "const": null
+            }
+          ]
+        },
+        "batchIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8191
+        },
+        "listIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8191
+        }
+      },
+      "required": ["outputId", "sourceId", "sceneId", "batchIndex", "listIndex"],
+      "additionalProperties": false
+    },
+    "SessionCamera": {
+      "type": "object",
+      "properties": {
+        "outputId": {
+          "type": "string",
+          "maxLength": 36
+        },
+        "inspection": {
+          "$ref": "#/$defs/SessionInspection"
+        }
+      },
+      "required": ["outputId", "inspection"],
+      "additionalProperties": false
+    },
+    "SessionComparison": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "selection": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SessionSelection"
+            },
+            {
+              "const": null
+            }
+          ]
+        },
+        "orientation": {
+          "enum": ["horizontal", "vertical"]
+        },
+        "split": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": ["enabled", "selection", "orientation", "split"],
+      "additionalProperties": false
+    },
+    "SessionView": {
+      "type": "object",
+      "properties": {
+        "canvasEnabled": {
+          "type": "boolean"
+        },
+        "masonryEnabled": {
+          "type": "boolean"
+        },
+        "editorWidth": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16384
+        },
+        "route": {
+          "enum": ["input", "output"]
+        },
+        "follow": {
+          "enum": ["auto", "manual"]
+        },
+        "mode": {
+          "enum": ["image", "overview"]
+        },
+        "linked": {
+          "type": "boolean"
+        },
+        "selection": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SessionSelection"
+            },
+            {
+              "const": null
+            }
+          ]
+        },
+        "comparison": {
+          "$ref": "#/$defs/SessionComparison"
+        },
+        "cameras": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SessionCamera"
+          },
+          "maxItems": 8192
+        },
+        "navigation": {
+          "$ref": "#/$defs/SessionNavigation"
+        },
+        "sourcePreview": {
+          "type": "boolean"
+        },
+        "sharedInspection": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SessionInspection"
+            },
+            {
+              "const": null
+            }
+          ]
+        },
+        "scroll": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SessionScroll"
+            },
+            {
+              "const": null
+            }
+          ]
+        }
+      },
+      "required": [
+        "canvasEnabled",
+        "masonryEnabled",
+        "editorWidth",
+        "route",
+        "follow",
+        "mode",
+        "linked",
+        "selection",
+        "comparison",
+        "cameras",
+        "navigation",
+        "sourcePreview",
+        "sharedInspection",
+        "scroll"
+      ],
+      "additionalProperties": false
+    },
+    "SessionScroll": {
+      "type": "object",
+      "properties": {
+        "cube": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            {
+              "const": null
+            }
+          ]
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        }
+      },
+      "required": ["cube", "offset"],
+      "additionalProperties": false
+    },
+    "SessionGraphView": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "number",
+          "minimum": -1000000000,
+          "maximum": 1000000000
+        },
+        "y": {
+          "type": "number",
+          "minimum": -1000000000,
+          "maximum": 1000000000
+        },
+        "scale": {
+          "type": "number",
+          "minimum": 1e-6,
+          "maximum": 1000000
+        }
+      },
+      "required": ["x", "y", "scale"],
+      "additionalProperties": false
+    },
+    "SessionDocument": {
+      "type": "object",
+      "properties": {
+        "graphJson": {
+          "type": "string",
+          "maxLength": 33554432
+        },
+        "graphRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "path": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 4096
+            },
+            {
+              "const": null
+            }
+          ]
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 4096
+        },
+        "temporary": {
+          "type": "boolean"
+        },
+        "dirty": {
+          "type": "boolean"
+        },
+        "sourceIdentity": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 4096
+            },
+            {
+              "const": null
+            }
+          ]
+        },
+        "view": {
+          "$ref": "#/$defs/SessionGraphView"
+        },
+        "baselineGraphJson": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 33554432
+            },
+            {
+              "const": null
+            }
+          ]
+        }
+      },
+      "required": [
+        "graphJson",
+        "graphRevision",
+        "path",
+        "name",
+        "temporary",
+        "dirty",
+        "sourceIdentity",
+        "view",
+        "baselineGraphJson"
+      ],
+      "additionalProperties": false
+    },
+    "SessionInput": {
+      "type": "object",
+      "properties": {
+        "documentId": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "signature": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "surface": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 256
+            },
+            {
+              "const": null
+            }
+          ]
+        },
+        "mask": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 256
+            },
+            {
+              "const": null
+            }
+          ]
+        }
+      },
+      "required": ["documentId", "generation", "signature", "surface", "mask"],
+      "additionalProperties": false
+    },
+    "SessionSubmission": {
+      "type": "object",
+      "properties": {
+        "entryId": {
+          "type": "string",
+          "maxLength": 36
+        },
+        "backend": {
+          "type": "string",
+          "maxLength": 36
+        },
+        "promptId": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "runId": {
+          "type": "string",
+          "maxLength": 36
+        },
+        "runOrder": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "graphRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "scene": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SessionScene"
+            },
+            {
+              "const": null
+            }
+          ]
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SessionSource"
+          },
+          "minItems": 1,
+          "maxItems": 8192
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "entryId",
+        "backend",
+        "promptId",
+        "runId",
+        "runOrder",
+        "graphRevision",
+        "scene",
+        "sources"
+      ]
+    },
+    "SessionEntry": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 36
+        },
+        "document": {
+          "$ref": "#/$defs/SessionDocument"
+        },
+        "input": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SessionInput"
+            },
+            {
+              "const": null
+            }
+          ]
+        },
+        "view": {
+          "$ref": "#/$defs/SessionView"
+        },
+        "sourceRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "navigationRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SessionSource"
+          },
+          "maxItems": 8192
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SessionOutput"
+          },
+          "maxItems": 8192
+        },
+        "submissions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SessionSubmission"
+          },
+          "maxItems": 8192
+        }
+      },
+      "required": [
+        "id",
+        "document",
+        "input",
+        "view",
+        "sourceRevision",
+        "navigationRevision",
+        "sources",
+        "outputs",
+        "submissions"
+      ],
+      "additionalProperties": false
+    },
+    "SessionRect": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "number",
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "y": {
+          "type": "number",
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "width": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "height": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 1000000
+        }
+      },
+      "required": ["x", "y", "width", "height"],
+      "additionalProperties": false
+    },
+    "SessionPlacement": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "bounds": {
+          "$ref": "#/$defs/SessionRect"
+        },
+        "maximized": {
+          "type": "boolean"
+        },
+        "monitor": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "workArea": {
+          "$ref": "#/$defs/SessionRect"
+        },
+        "dpi": {
+          "type": "number",
+          "minimum": 24,
+          "maximum": 960
+        }
+      },
+      "required": ["version", "bounds", "maximized", "monitor", "workArea", "dpi"],
+      "additionalProperties": false
+    },
+    "SessionCheckpoint": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 2
+        },
+        "id": {
+          "type": "string",
+          "maxLength": 36
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "previousId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 36
+            },
+            {
+              "const": null
+            }
+          ]
+        },
+        "capturedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "scope": {
+          "$ref": "#/$defs/SessionScope"
+        },
+        "producer": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "frontend": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "sugarcubes": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SessionEntry"
+          },
+          "maxItems": 256
+        },
+        "activeEntry": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 36
+            },
+            {
+              "const": null
+            }
+          ]
+        },
+        "route": {
+          "enum": ["workflow", "settings"]
+        },
+        "placement": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SessionPlacement"
+            },
+            {
+              "const": null
+            }
+          ]
+        },
+        "assets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SessionAsset"
+          },
+          "maxItems": 65536
+        }
+      },
+      "required": [
+        "version",
+        "id",
+        "revision",
+        "previousId",
+        "capturedAt",
+        "scope",
+        "producer",
+        "frontend",
+        "sugarcubes",
+        "entries",
+        "activeEntry",
+        "route",
+        "placement",
+        "assets"
+      ],
+      "additionalProperties": false
+    },
+    "SessionNavigation": {
+      "type": "object",
+      "properties": {
+        "sceneOverview": {
+          "type": "boolean"
+        },
+        "sceneId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 36
+            },
+            {
+              "const": null
+            }
+          ]
+        },
+        "sourceId": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 36
+            },
+            {
+              "const": null
+            }
+          ]
+        },
+        "batchIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8191
+        },
+        "batchOverview": {
+          "type": "boolean"
+        }
+      },
+      "required": ["sceneOverview", "sceneId", "sourceId", "batchIndex", "batchOverview"],
+      "additionalProperties": false
+    },
+    "SessionInspection": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "enum": ["fit", "native", "custom"]
+        },
+        "centerX": {
+          "type": "number",
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "centerY": {
+          "type": "number",
+          "minimum": -1000000,
+          "maximum": 1000000
+        },
+        "spanX": {
+          "type": "number",
+          "minimum": 1e-12,
+          "maximum": 1000000000000.0
+        },
+        "spanY": {
+          "type": "number",
+          "minimum": 1e-12,
+          "maximum": 1000000000000.0
+        }
+      },
+      "required": ["mode", "centerX", "centerY", "spanX", "spanY"],
+      "additionalProperties": false
+    }
+  }
+}

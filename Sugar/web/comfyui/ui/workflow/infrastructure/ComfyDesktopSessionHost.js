@@ -90,6 +90,7 @@ export class ComfyDesktopSessionHost {
                         .join('');
                 },
                 report: this.options.report,
+                hostTakesScroll: this.options.hostTakesScroll,
             });
             this.#client.install();
         }

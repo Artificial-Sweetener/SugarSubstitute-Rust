@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Validate coherent scene-group facts across accepted pending prompts and final receipts. */
-import type { SessionEntry } from '../contracts/SessionProtocol.generated.js';
+import type { SessionEntry } from '../contracts/SessionCheckpointV2Protocol.generated.js';
 
 /** Keep one scene identity per group/order and one immutable scene description per identity. */
 export function sessionScenes(entry: SessionEntry): boolean {

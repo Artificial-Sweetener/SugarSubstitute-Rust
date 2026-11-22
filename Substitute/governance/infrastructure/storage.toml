@@ -5147,7 +5147,7 @@ rationale = "An owned temporary session directory holds retained originals: it i
 [[records]]
 path = "crates/sugarsubstitute/src/input_documents/tests/storage/legacy.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:3dd2876337cab5c0f0b8486134c9f26941c451c79d63bf9b12b5f4c4af9d1556"
+source_sha256 = "sha256:9285e1c786407c187b9cccbb8518651214701836e576c1fcaad0de8f3e0b5fb1"
 capabilities = ["std::fs::read", "std::fs::write"]
 disposition = "fixture"
 rationale = "Owned temporary native archives qualify exact graph metadata association, immutable codec receipts, changed scope rejection and preservation of unmatched originals."
@@ -5219,7 +5219,7 @@ rationale = "Owned temporary checkpoint files qualify atomic publication, exact 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/workspace/closing_tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:1393f93c34e20e4070a7e2ae44bf14cf053b25601ca20f1241081c78f81a62fe"
+source_sha256 = "sha256:477d7addb19deb4a17926003382a2a08218ff9a476a2182ed8ff7b34e98d9098"
 capabilities = ["tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "An owned temporary workspace drives actual missing-checkpoint load and durable publication through the execution owner, proving ordinary startup polling retains the native peer until final delivery or the unchanged capture cutoff."

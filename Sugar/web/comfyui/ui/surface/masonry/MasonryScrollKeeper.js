@@ -15,30 +15,37 @@ export class MasonryScrollKeeper {
     element;
     memory;
     report;
-    #entered;
+    #startTop;
     #pending = null;
     #settled = false;
     /** Where the last application left the masonry, so its own scroll event is not a takeover. */
     #applied = null;
+    /** The cards have entered, so a newer kept scroll applies at once. */
+    #entered = false;
+    #unsubscribe;
     /** Watch one mounted masonry element for the workflow `memory` belongs to. */
     constructor(element, memory, report) {
         this.element = element;
         this.memory = memory;
         this.report = report;
-        this.#entered = element.scrollTop;
+        this.#startTop = element.scrollTop;
         element.addEventListener('scrollend', this.#record);
         element.addEventListener('scroll', this.#moved, { passive: true });
         element.addEventListener('sc-masonry-layout', this.#retry);
         for (const name of TAKEOVER)
             element.addEventListener(name, this.#takeOver, { passive: true });
+        this.#unsubscribe = memory?.subscribe(this.#restored) ?? null;
     }
     /** The cards have entered: bring back the kept scroll unless something scrolled meanwhile. */
     settle() {
-        this.#pending = this.element.scrollTop === this.#entered ? (this.memory?.read() ?? null) : null;
+        this.#entered = true;
+        this.#pending =
+            this.element.scrollTop === this.#startTop ? (this.memory?.read() ?? null) : null;
         this.#apply();
     }
     /** Record where the masonry rests, if settled, and stop watching it. */
     dispose() {
+        this.#unsubscribe?.();
         this.element.removeEventListener('scrollend', this.#record);
         this.element.removeEventListener('scroll', this.#moved);
         this.element.removeEventListener('sc-masonry-layout', this.#retry);
@@ -61,6 +68,14 @@ export class MasonryScrollKeeper {
         this.#settled = true;
         this.#record();
     }
+    /** A restored session brought a newer kept scroll: the masonry goes there. */
+    #restored = () => {
+        if (!this.#entered)
+            return;
+        this.#pending = this.memory?.read() ?? null;
+        this.#settled = false;
+        this.#apply();
+    };
     #retry = () => {
         if (this.#pending)
             this.#apply();

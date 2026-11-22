@@ -18,10 +18,10 @@
 import { desktopRuntimeFixture } from '../../workflow/support/desktop_runtime.js';
 import { DesktopSessionCancellation } from '../../../frontend/comfyui/ui/workflow/domain/DesktopSession.js';
 import type {
-  SessionEntry,
   SessionOutput,
   SessionSelection,
 } from '../../../integrations/contracts/SessionProtocol.generated.js';
+import type { SessionEntry } from '../../../integrations/contracts/SessionCheckpointV2Protocol.generated.js';
 
 /**
  * Comfy reopens a checkpoint's tabs from its own persistence before startup commits; desktop

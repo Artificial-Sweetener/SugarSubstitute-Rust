@@ -84,6 +84,7 @@ function fixture() {
     nextId: () => `00000000-0000-4000-8000-${(++sequence).toString(16).padStart(12, '0')}`,
     digest,
     report: (error) => errors.push(error),
+    hostTakesScroll: () => true,
   });
   const requestId = '00000000-0000-4000-8000-0000000000ff';
   const message = (operation: SessionOperation): SessionMessage => ({
@@ -353,6 +354,7 @@ test('a save refused for the same reason on every retry is reported once, and ag
       host.errors.push(error);
       operations.push(operation);
     },
+    hostTakesScroll: () => true,
   });
   const capture = host.runtime.capture;
   const refuse = (reason: string) => {

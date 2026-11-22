@@ -56,7 +56,7 @@ use std::{
 use sugarsubstitute_contracts::{
     desktop_session::{
         MAX_CHECKPOINT_BYTES, SessionError,
-        wire::{SessionCheckpoint, SessionScope},
+        wire::{SessionScope, v2::SessionCheckpoint},
     },
     execution::{AdmissionError, ExecutionPort, JobSpec, OwnedJob, Scope},
 };

@@ -286,7 +286,9 @@ var HOST_CAPABILITIES = Object.freeze({
   /** The host takes up to 64 acrylic regions in one canvas geometry message, where a host without this takes two. */
   backdropRegions: "canvas.backdrop-regions",
   /** In this host's browser, SugarCubes owns the context menu of every text field, including the host application's own fields; without it, SugarCubes owns only its own fields. */
-  textMenus: "editing.text-menus"
+  textMenus: "editing.text-menus",
+  /** Besides desktop-session checkpoint version 1, the host takes and keeps checkpoint version 2, whose entries also name where each workflow's masonry is scrolled; it gives a checkpoint back as version 1 when no entry names a scroll. */
+  checkpointScroll: "session.checkpoint-scroll"
 });
 
 // integrations/shared/HostDescription.ts

@@ -14,13 +14,12 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Admit coherent checkpoint membership, final outputs and image-relative presentation. */
+import type { SessionOutput, SessionSelection } from '../contracts/SessionProtocol.generated.js';
 import type {
   SessionCheckpoint,
   SessionEntry,
-  SessionOutput,
-  SessionSelection,
-} from '../contracts/SessionProtocol.generated.js';
-import { isSessionCheckpoint } from './SessionValidation.generated.js';
+} from '../contracts/SessionCheckpointV2Protocol.generated.js';
+import { isSessionCheckpoint } from './SessionCheckpointV2Validation.generated.js';
 import { sessionDocumentError } from './SessionDocuments.js';
 import { sessionPlacementError } from './SessionPlacement.js';
 import { sessionScenes } from './SessionScenes.js';

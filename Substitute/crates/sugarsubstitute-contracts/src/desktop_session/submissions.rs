@@ -3,7 +3,7 @@
 //! Retain accepted prompt ownership independently of output arrival and live node numbers.
 use super::{
     primitives::uuid,
-    wire::{SessionEntry, SessionScope},
+    wire::{SessionScope, v2::SessionEntry},
 };
 use std::collections::BTreeSet;
 

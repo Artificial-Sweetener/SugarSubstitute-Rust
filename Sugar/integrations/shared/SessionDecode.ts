@@ -14,13 +14,12 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Decode bounded JSON while rejecting duplicate object members before semantic validation. */
-import type {
-  SessionCheckpoint,
-  SessionMessage,
-  SessionScope,
-} from '../contracts/SessionProtocol.generated.js';
+import type { SessionMessage, SessionScope } from '../contracts/SessionProtocol.generated.js';
+import type { SessionCheckpoint } from '../contracts/SessionCheckpointV2Protocol.generated.js';
 import { utf8Bytes } from './SessionPrimitives.js';
 import { isDesktopCheckpoint } from './SessionSnapshot.js';
+import { isSessionCheckpoint as isFirstCheckpoint } from './SessionValidation.generated.js';
+import { upgradeDesktopCheckpoint } from './SessionCheckpointVersions.js';
 import { SESSION_MESSAGE_BYTES, sessionMessageError } from './SessionProtocol.js';
 
 /** Check member uniqueness without interpreting nested Comfy graph strings. */
@@ -101,10 +100,12 @@ export function parseSessionJson(text: string, maximum: number): unknown {
   }
 }
 
-/** Read an authoritative v1 checkpoint; the storage owner retains rejected original bytes. */
+/** Read an authoritative version-1 or version-2 checkpoint as version 2; the storage owner retains rejected original bytes. */
 export function decodeDesktopCheckpoint(text: string): SessionCheckpoint | null {
   const value = parseSessionJson(text, 134217728);
-  return isDesktopCheckpoint(value) ? value : null;
+  // A version-1 checkpoint is read as version 2, naming no scroll.
+  const read = isFirstCheckpoint(value) ? upgradeDesktopCheckpoint(value) : value;
+  return isDesktopCheckpoint(read) ? read : null;
 }
 
 /** Read a message against current independent trust facts, before application admission. */

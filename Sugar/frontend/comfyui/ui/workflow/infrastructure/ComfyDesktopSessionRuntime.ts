@@ -17,11 +17,11 @@
 import type {
   SessionAsset,
   SessionBinding,
-  SessionCheckpoint,
   SessionDocument,
   SessionInput,
   SessionScope,
 } from '../../../../../integrations/contracts/SessionProtocol.generated.js';
+import type { SessionCheckpoint } from '../../../../../integrations/contracts/SessionCheckpointV2Protocol.generated.js';
 import type { ComfyWorkflowExecutionRuntime } from '../../execution/infrastructure/ComfyWorkflowExecutionRuntime.js';
 import { decodeComfyWorkflowSources } from '../../execution/infrastructure/ComfyWorkflowSourceDecoder.js';
 import type { WorkflowGenerationEvent } from '../../execution/domain/WorkflowGenerationEvent.js';
@@ -207,6 +207,7 @@ export class ComfyDesktopSessionRuntime implements DesktopSessionRuntime {
       }),
       canvas.subscribe(() => this.#navigation?.changed()),
       presentation.subscribe(() => this.#navigation?.changed()),
+      presentation.subscribeScroll(() => this.#navigation?.changed()),
     );
     if (route) this.#stops.push(route.subscribe(() => this.#refresh(true)));
     if (this.options.settingsRoute)
@@ -478,6 +479,7 @@ export class ComfyDesktopSessionRuntime implements DesktopSessionRuntime {
           JSON.stringify([
             this.options.canvas.signature(context),
             this.options.presentation.capture(context.sessionId),
+            this.options.presentation.captureScroll(context.sessionId),
             this.#graphViews.get(context.sessionId),
           ]),
         );

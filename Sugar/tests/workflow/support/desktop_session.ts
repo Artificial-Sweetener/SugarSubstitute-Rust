@@ -15,10 +15,8 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Read the frozen portable fixture through production validators for frontend behavioral proofs. */
 import { readFileSync } from 'node:fs';
-import type {
-  SessionCheckpoint,
-  SessionFence,
-} from '../../../integrations/contracts/SessionProtocol.generated.js';
+import type { SessionFence } from '../../../integrations/contracts/SessionProtocol.generated.js';
+import type { SessionCheckpoint } from '../../../integrations/contracts/SessionCheckpointV2Protocol.generated.js';
 import { decodeDesktopCheckpoint } from '../../../integrations/shared/SessionDecode.js';
 import { isSessionFence } from '../../../integrations/shared/SessionValidation.generated.js';
 

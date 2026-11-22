@@ -36,6 +36,8 @@ export interface WorkflowScroll {
 export interface WorkflowScrollMemory {
   read(): WorkflowScroll | null;
   record(scroll: WorkflowScroll): void;
+  /** Hear when a restored session replaces the kept scroll, so a shown masonry can follow it. */
+  subscribe(restored: () => void): () => void;
 }
 
 /** Accept a scroll from storage or a caller: a bounded offset and a Cube id or none. */

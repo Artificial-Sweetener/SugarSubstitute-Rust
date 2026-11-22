@@ -120,3 +120,72 @@ fn escaped_unicode_in_current_or_baseline_graph_uses_encoded_document_budget()
     }
     Ok(())
 }
+
+#[test]
+fn generated_checkpoint_v2_decoder_fingerprints_its_schema() -> Result<(), Box<dyn Error>> {
+    let schema = include_str!(
+        "../../../../../Sugar/integrations/contracts/session-checkpoint-v2.schema.json"
+    )
+    .replace("\r\n", "\n");
+    let wire = include_str!(
+        "../../../../../Sugar/integrations/contracts/SessionCheckpointV2Protocol.generated.rs"
+    );
+    let recorded = wire
+        .lines()
+        .find_map(|line| line.strip_prefix("// Schema SHA-256 (LF): "))
+        .ok_or("Missing schema hash")?;
+    assert_eq!(recorded, format!("{:x}", Sha256::digest(schema.as_bytes())));
+    Ok(())
+}
+
+/// The shared accepted version-1 checkpoint, as its bytes.
+fn first_version() -> Result<Vec<u8>, Box<dyn Error>> {
+    let fixture: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../../Sugar/integrations/contracts/session_vectors.json"
+    ))?;
+    Ok(serde_json::to_vec(&fixture["checkpoints"][0]["value"])?)
+}
+
+#[test]
+fn a_version_one_checkpoint_reads_as_version_two_and_is_written_back_as_version_one()
+-> Result<(), Box<dyn Error>> {
+    let bytes = first_version()?;
+    let checkpoint = decode_checkpoint(&bytes)?;
+    assert_eq!(checkpoint.version, 2);
+    assert!(checkpoint.entries.iter().all(|entry| entry.view.scroll.is_none()));
+    // Written back, it is exactly the version-1 checkpoint it was read from.
+    let first: wire::SessionCheckpoint = serde_json::from_slice(&bytes)?;
+    assert_eq!(
+        serde_json::from_slice::<wire::SessionCheckpoint>(&encode_checkpoint(&checkpoint)?)?,
+        first
+    );
+    Ok(())
+}
+
+#[test]
+fn a_checkpoint_naming_a_scroll_is_written_and_read_as_version_two() -> Result<(), Box<dyn Error>> {
+    let mut checkpoint = decode_checkpoint(&first_version()?)?;
+    let entry = checkpoint.entries.first_mut().ok_or("The fixture has no entry")?;
+    entry.view.scroll = Some(wire::v2::SessionScroll { cube: Some("12".into()), offset: 319 });
+    let bytes = encode_checkpoint(&checkpoint)?;
+    let written: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(written["version"], 2);
+    assert_eq!(
+        written["entries"][0]["view"]["scroll"],
+        serde_json::json!({"cube": "12", "offset": 319})
+    );
+    assert_eq!(decode_checkpoint(&bytes)?, checkpoint);
+    Ok(())
+}
+
+#[test]
+fn a_checkpoint_of_an_unknown_version_or_a_scroll_in_version_one_is_refused()
+-> Result<(), Box<dyn Error>> {
+    let mut value: serde_json::Value = serde_json::from_slice(&first_version()?)?;
+    value["version"] = 3.into();
+    assert_eq!(decode_checkpoint(&serde_json::to_vec(&value)?), Err(SessionError::Invalid));
+    value["version"] = 1.into();
+    value["entries"][0]["view"]["scroll"] = serde_json::json!({"cube": null, "offset": 4});
+    assert_eq!(decode_checkpoint(&serde_json::to_vec(&value)?), Err(SessionError::Invalid));
+    Ok(())
+}

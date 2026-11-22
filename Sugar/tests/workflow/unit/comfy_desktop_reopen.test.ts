@@ -16,7 +16,7 @@
 /** Reopen the tabs a checkpoint holds that Comfy did not, in the checkpoint's order. */
 import { jest } from '@jest/globals';
 import { ComfyDesktopDocuments } from '../../../frontend/comfyui/ui/workflow/infrastructure/ComfyDesktopDocuments.js';
-import type { SessionEntry } from '../../../integrations/contracts/SessionProtocol.generated.js';
+import type { SessionEntry } from '../../../integrations/contracts/SessionCheckpointV2Protocol.generated.js';
 
 function entry(id: string, name: string, path: string | null): SessionEntry {
   return {

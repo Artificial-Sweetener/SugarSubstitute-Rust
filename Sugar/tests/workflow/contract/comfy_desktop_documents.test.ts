@@ -19,10 +19,8 @@ import { ComfyDesktopDocuments } from '../../../frontend/comfyui/ui/workflow/inf
 import { ComfyWorkflowSessionAdapter } from '../../../frontend/comfyui/ui/execution/infrastructure/ComfyWorkflowSessionAdapter.js';
 import { WorkflowSessionStore } from '../../../frontend/comfyui/ui/execution/application/WorkflowSessionStore.js';
 import { createComfyWorkflowLoadObserver } from '../../../frontend/comfyui/ui/execution/infrastructure/ComfyWorkflowLoadObserver.js';
-import type {
-  SessionDocument,
-  SessionEntry,
-} from '../../../integrations/contracts/SessionProtocol.generated.js';
+import type { SessionDocument } from '../../../integrations/contracts/SessionProtocol.generated.js';
+import type { SessionEntry } from '../../../integrations/contracts/SessionCheckpointV2Protocol.generated.js';
 
 interface HostWorkflow {
   path: string;
@@ -184,6 +182,7 @@ function entry(id: string, value: SessionDocument): SessionEntry {
       },
       sourcePreview: true,
       sharedInspection: null,
+      scroll: null,
     },
   };
 }

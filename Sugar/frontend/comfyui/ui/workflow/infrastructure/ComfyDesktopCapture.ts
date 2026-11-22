@@ -18,12 +18,14 @@ import { desktopCheckpointError, utf8Bytes } from '../../core/embedded/SessionRu
 import type {
   SessionAsset,
   SessionBinding,
-  SessionCheckpoint,
-  SessionEntry,
   SessionInput,
   SessionOutput,
   SessionScope,
 } from '../../../../../integrations/contracts/SessionProtocol.generated.js';
+import type {
+  SessionCheckpoint,
+  SessionEntry,
+} from '../../../../../integrations/contracts/SessionCheckpointV2Protocol.generated.js';
 
 import type { ComfyWorkflowExecutionRuntime } from '../../execution/infrastructure/ComfyWorkflowExecutionRuntime.js';
 import type { WorkflowOutputIdentities } from '../../execution/application/WorkflowOutputIdentities.js';
@@ -129,7 +131,7 @@ export class ComfyDesktopCapture {
       assets.set(asset.digest, asset);
     }
     const checkpoint: SessionCheckpoint = Object.freeze({
-      version: 1,
+      version: 2,
       id,
       revision,
       previousId: this.options.previousId(),
@@ -188,14 +190,17 @@ export class ComfyDesktopCapture {
       );
     const route =
       readComfyWorkflowInputState(JSON.parse(document.graphJson) as unknown)?.route ?? 'output';
-    const view = this.options.canvas.capture(
-      context,
-      binding,
-      outputs,
-      this.options.identities,
-      preferences,
-      route,
-    );
+    const view = Object.freeze({
+      ...this.options.canvas.capture(
+        context,
+        binding,
+        outputs,
+        this.options.identities,
+        preferences,
+        route,
+      ),
+      scroll: this.options.presentation.captureScroll(context.sessionId),
+    });
     return {
       bytes,
       entry: Object.freeze({

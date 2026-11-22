@@ -24,8 +24,8 @@ import type {
   SessionMessage,
   SessionOperation,
   SessionFence,
-  SessionCheckpoint,
 } from '../../../integrations/contracts/SessionProtocol.generated.js';
+import type { SessionCheckpoint } from '../../../integrations/contracts/SessionCheckpointV2Protocol.generated.js';
 import { utf8Bytes } from '../../../integrations/shared/SessionPrimitives.js';
 import { isDesktopCheckpoint } from '../../../integrations/shared/SessionSnapshot.js';
 import { outputSourceId } from '../../../frontend/comfyui/ui/execution/domain/ExecutionIdentity.js';
@@ -442,6 +442,7 @@ test('real G0 transport handshake binds the tabs Comfy reopened to results and c
     nextId: f.nextId,
     digest,
     report: (error) => f.errors.push(error),
+    hostTakesScroll: () => true,
   });
   client.install();
   const requestId = f.nextId();

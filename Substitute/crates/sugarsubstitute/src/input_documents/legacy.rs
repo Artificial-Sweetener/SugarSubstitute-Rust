@@ -4,7 +4,7 @@
 use super::*;
 use std::{io::Read, path::Path};
 use sugarsubstitute_contracts::{
-    desktop_session::wire::{SessionCheckpoint, SessionScope},
+    desktop_session::wire::{SessionScope, v2::SessionCheckpoint},
     execution::JobContext,
 };
 use sugarsubstitute_supervision::{

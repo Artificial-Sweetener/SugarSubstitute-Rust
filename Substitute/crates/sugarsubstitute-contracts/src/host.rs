@@ -85,6 +85,10 @@ impl HostCapability {
     /// In this host's browser, SugarCubes owns the context menu of every text field, including
     /// the host application's own fields; without it, SugarCubes owns only its own fields.
     pub const TEXT_MENUS: Self = Self("editing.text-menus");
+    /// Besides desktop-session checkpoint version 1, the host takes and keeps checkpoint version
+    /// 2, whose entries also name where each workflow's masonry is scrolled; it gives a
+    /// checkpoint back as version 1 when no entry names a scroll.
+    pub const CHECKPOINT_SCROLL: Self = Self("session.checkpoint-scroll");
     /// The host takes up to 64 acrylic regions in one canvas geometry message, where a host
     /// without this takes two.
     pub const BACKDROP_REGIONS: Self = Self("canvas.backdrop-regions");

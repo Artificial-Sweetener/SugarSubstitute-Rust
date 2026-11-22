@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Validate independent scene, batch-grid and source navigation within one occurrence.
-use super::wire::SessionEntry;
+use super::wire::v2::SessionEntry;
 
 /// Preserve navigation intent independently of the final artifact's inspection camera.
 pub(super) fn valid(entry: &SessionEntry) -> bool {

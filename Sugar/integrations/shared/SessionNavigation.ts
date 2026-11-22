@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Validate independent scene, batch-grid and source navigation within its occurrence. */
-import type { SessionEntry } from '../contracts/SessionProtocol.generated.js';
+import type { SessionEntry } from '../contracts/SessionCheckpointV2Protocol.generated.js';
 
 /** Keep navigation intent separate from the exact artifact retained for final inspection. */
 export function sessionNavigation(entry: SessionEntry): boolean {

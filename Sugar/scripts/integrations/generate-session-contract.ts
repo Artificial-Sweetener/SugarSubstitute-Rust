@@ -109,12 +109,82 @@ export async function sessionBindings(text: string): Promise<Readonly<Record<str
   };
 }
 
+/** The definitions version 2 of the checkpoint changes; it shares every other one with version 1. */
+const CHECKPOINT_V2_CHANGED = ['SessionScroll', 'SessionView', 'SessionEntry', 'SessionCheckpoint'];
+
+/** Every definition `value` names by reference. */
+function references(value: unknown, names = new Set<string>()): Set<string> {
+  if (Array.isArray(value)) for (const item of value) references(item, names);
+  else if (value && typeof value === 'object')
+    for (const [key, item] of Object.entries(value)) {
+      if (key === '$ref' && typeof item === 'string') names.add(item.replace('#/$defs/', ''));
+      else references(item, names);
+    }
+  return names;
+}
+
+/**
+ * Generate the version-two checkpoint's changed definitions; the unchanged ones are version
+ * one's own, so a checkpoint and a session message keep sharing one output, file and scope type.
+ */
+export async function sessionCheckpointV2Bindings(
+  text: string,
+  versionOne: string,
+): Promise<Readonly<Record<string, string>>> {
+  const schema = JSON.parse(text) as { $defs: Record<string, unknown> };
+  const previous = JSON.parse(versionOne) as { $defs: Record<string, unknown> };
+  const shared = Object.keys(schema.$defs).filter((name) => !CHECKPOINT_V2_CHANGED.includes(name));
+  for (const name of shared)
+    if (JSON.stringify(schema.$defs[name]) !== JSON.stringify(previous.$defs[name]))
+      throw new Error(`Checkpoint version 2 changes ${name} without naming the change.`);
+  const changed = Object.fromEntries(
+    CHECKPOINT_V2_CHANGED.map((name) => [name, schema.$defs[name]]),
+  );
+  const named = references(changed);
+  const generator = 'scripts/integrations/generate-session-contract.ts';
+  const typescript = await contractBindings(
+    JSON.stringify({ $defs: changed, oneOf: [{ $ref: '#/$defs/SessionCheckpoint' }] }),
+    {
+      union: 'SessionCheckpointValue',
+      schema: 'session-checkpoint-v2.schema.json',
+      generator,
+      types: 'integrations/contracts/SessionCheckpointV2Protocol.generated.ts',
+      validation: 'integrations/shared/SessionCheckpointV2Validation.generated.ts',
+      importPath: '../contracts/SessionCheckpointV2Protocol.generated.js',
+      description: 'a version-two desktop checkpoint',
+      recordImport: './ContractRecord.js',
+      external: {
+        names: shared.filter((name) => named.has(name)),
+        typesImport: './SessionProtocol.generated.js',
+        validationImport: './SessionValidation.generated.js',
+      },
+    },
+  );
+  return {
+    ...typescript,
+    'integrations/contracts/SessionCheckpointV2Protocol.generated.rs': publicRust(
+      rustContractBindings(schema.$defs, text, {
+        schema: 'session-checkpoint-v2.schema.json',
+        generator,
+        prefix: 'Session',
+        emit: CHECKPOINT_V2_CHANGED,
+      }),
+    ),
+  };
+}
+
 /** Regenerate deterministically or fail when the checked-in bindings have drifted. */
 async function main(): Promise<void> {
   const root = path.resolve(import.meta.dirname, '../..');
-  const outputs = await sessionBindings(
-    readFileSync(path.join(root, 'integrations/contracts/session.schema.json'), 'utf8'),
-  );
+  const contract = (name: string): string =>
+    readFileSync(path.join(root, 'integrations/contracts', name), 'utf8');
+  const outputs = {
+    ...(await sessionBindings(contract('session.schema.json'))),
+    ...(await sessionCheckpointV2Bindings(
+      contract('session-checkpoint-v2.schema.json'),
+      contract('session.schema.json'),
+    )),
+  };
   for (const [relative, source] of Object.entries(outputs)) {
     const file = path.join(root, relative);
     if (process.argv.includes('--check')) {

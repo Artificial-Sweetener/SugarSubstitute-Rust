@@ -54,7 +54,10 @@ test('a workflow that advances while its output receipts are awaited makes the c
     identities: { inventory: () => [] },
     submissions: { read: () => [] },
     canvas: { capture: () => entry.view },
-    presentation: { capture: () => ({ canvas: true, masonry: false, editorWidth: 0 }) },
+    presentation: {
+      capture: () => ({ canvas: true, masonry: false, editorWidth: 0 }),
+      captureScroll: () => null,
+    },
     input: new Map(),
     assets: new Map(),
     scope: shared.checkpoint.scope,
@@ -99,7 +102,10 @@ test('a workflow that cannot be captured again keeps its last captured state ins
     identities: { inventory: () => entry.sources },
     submissions: { read: () => entry.submissions },
     canvas: { capture: () => entry.view },
-    presentation: { capture: () => ({ canvas: true, masonry: false, editorWidth: 0 }) },
+    presentation: {
+      capture: () => ({ canvas: true, masonry: false, editorWidth: 0 }),
+      captureScroll: () => null,
+    },
     input: new Map(),
     assets: new Map(shared.checkpoint.assets.map((asset) => [asset.digest, asset])),
     scope: shared.checkpoint.scope,

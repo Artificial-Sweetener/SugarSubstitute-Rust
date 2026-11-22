@@ -1064,6 +1064,7 @@ function fixture(
         record: (scroll: WorkflowScroll) => {
           scrolls.set(bound, scroll);
         },
+        subscribe: () => () => undefined,
       };
     },
     isNodes2: () => nodes2,

@@ -16,12 +16,12 @@
 /** Define explicit desktop-session delivery and semantic snapshot ports without browser authority. */
 import type {
   SessionBinding,
-  SessionCheckpoint,
   SessionFence,
   SessionMessage,
   SessionScope,
   SessionFailure,
 } from '../../../../../integrations/contracts/SessionProtocol.generated.js';
+import type { SessionCheckpoint } from '../../../../../integrations/contracts/SessionCheckpointV2Protocol.generated.js';
 
 export interface DesktopSessionTransport {
   readonly scope: SessionScope;

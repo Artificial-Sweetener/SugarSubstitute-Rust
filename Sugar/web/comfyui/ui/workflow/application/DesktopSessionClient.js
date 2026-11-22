@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Coordinate fenced desktop capture/materialization over one bounded correlated protocol lifetime. */
-import { isSessionMessage, isDesktopCheckpoint, utf8Bytes, sameSessionFence, sessionAdmission, sessionMessageError, } from '../../core/embedded/SessionRuntime.js';
+import { encodeDesktopCheckpoint, isSessionMessage, isDesktopCheckpoint, utf8Bytes, sameSessionFence, sessionAdmission, sessionMessageError, } from '../../core/embedded/SessionRuntime.js';
 import { DesktopSessionCancellation, DesktopSessionRefusal, } from '../domain/DesktopSession.js';
 import { DesktopSessionTransfer, desktopSessionChunks } from './DesktopSessionTransfer.js';
 const capabilities = Object.freeze({
@@ -173,7 +173,7 @@ export class DesktopSessionClient {
                     checkpoint.revision !== operation.revision ||
                     !sameScope(checkpoint.scope, this.options.transport.scope))
                     throw new TypeError('Captured checkpoint does not match the admitted request.');
-                const text = JSON.stringify(checkpoint);
+                const text = encodeDesktopCheckpoint(checkpoint, this.options.hostTakesScroll());
                 const chunks = desktopSessionChunks(text);
                 const digest = await this.options.digest(text);
                 if (!this.#current(active))

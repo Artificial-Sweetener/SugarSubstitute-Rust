@@ -78,7 +78,7 @@ export class ComfyDesktopCapture {
             assets.set(asset.digest, asset);
         }
         const checkpoint = Object.freeze({
-            version: 1,
+            version: 2,
             id,
             revision,
             previousId: this.options.previousId(),
@@ -117,7 +117,10 @@ export class ComfyDesktopCapture {
         if (!sameBinding(this.options.bindings.binding(context.sessionId), binding))
             throw new DesktopSessionRefusal('stale', 'Desktop workflow changed while its checkpoint was captured.');
         const route = readComfyWorkflowInputState(JSON.parse(document.graphJson))?.route ?? 'output';
-        const view = this.options.canvas.capture(context, binding, outputs, this.options.identities, preferences, route);
+        const view = Object.freeze({
+            ...this.options.canvas.capture(context, binding, outputs, this.options.identities, preferences, route),
+            scroll: this.options.presentation.captureScroll(context.sessionId),
+        });
         return {
             bytes,
             entry: Object.freeze({

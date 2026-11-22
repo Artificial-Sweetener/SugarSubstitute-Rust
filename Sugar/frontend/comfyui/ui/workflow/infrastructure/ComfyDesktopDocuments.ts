@@ -21,10 +21,8 @@ import {
   utf8Bytes,
   isSessionDocument,
 } from '../../core/embedded/SessionRuntime.js';
-import type {
-  SessionDocument,
-  SessionEntry,
-} from '../../../../../integrations/contracts/SessionProtocol.generated.js';
+import type { SessionDocument } from '../../../../../integrations/contracts/SessionProtocol.generated.js';
+import type { SessionEntry } from '../../../../../integrations/contracts/SessionCheckpointV2Protocol.generated.js';
 
 import { isRecord, type UnknownRecord } from '../../types/common.js';
 import type { WorkflowSessionContext } from '../../execution/domain/WorkflowSession.js';

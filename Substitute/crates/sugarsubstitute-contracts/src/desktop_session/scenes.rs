@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Validate coherent scene groups across accepted pending prompts and final receipts.
-use super::wire::SessionEntry;
+use super::wire::v2::SessionEntry;
 use std::collections::BTreeMap;
 
 /// Preserve one scene identity per group/order and immutable facts for each scene identity.

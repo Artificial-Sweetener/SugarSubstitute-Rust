@@ -19,10 +19,8 @@ import {
   utf8Bytes,
   SESSION_CHUNK_BYTES,
 } from '../../core/embedded/SessionRuntime.js';
-import type {
-  SessionCheckpoint,
-  SessionTransfer,
-} from '../../../../../integrations/contracts/SessionProtocol.generated.js';
+import type { SessionTransfer } from '../../../../../integrations/contracts/SessionProtocol.generated.js';
+import type { SessionCheckpoint } from '../../../../../integrations/contracts/SessionCheckpointV2Protocol.generated.js';
 
 interface IncomingTransfer {
   readonly requestId: string;

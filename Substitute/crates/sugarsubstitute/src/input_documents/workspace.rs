@@ -3,7 +3,7 @@
 //! Associate the supported SugarCubes input metadata record with actual native archive custody.
 use super::*;
 use sugarsubstitute_contracts::{
-    desktop_session::wire::{SessionCheckpoint, SessionInput},
+    desktop_session::wire::{SessionInput, v2::SessionCheckpoint},
     execution::JobContext,
 };
 

@@ -35,6 +35,10 @@ import {
   isDesktopCheckpoint,
 } from '../../../integrations/shared/SessionSnapshot.js';
 import { sessionDirectory, sessionGraph } from '../../../integrations/shared/SessionPrimitives.js';
+import {
+  encodeDesktopCheckpoint,
+  upgradeDesktopCheckpoint,
+} from '../../../integrations/shared/SessionCheckpointVersions.js';
 import { sessionBindings } from '../../../scripts/integrations/generate-session-contract.js';
 
 interface Vector {
@@ -75,13 +79,36 @@ const vectors = JSON.parse(
 
 test.each(vectors.checkpoints)('checkpoint: $label', ({ value, valid }) => {
   const text = JSON.stringify(value);
-  expect(isDesktopCheckpoint(value)).toBe(valid);
   const decoded = decodeDesktopCheckpoint(text);
   expect(decoded !== null).toBe(valid);
   if (decoded) {
-    expect(decoded).toEqual(value);
+    // A version-1 checkpoint is read as version 2 naming no scroll, and written back as itself.
+    expect(decoded).toEqual(upgradeDesktopCheckpoint(value as never));
+    expect(isDesktopCheckpoint(decoded)).toBe(true);
+    expect(JSON.parse(encodeDesktopCheckpoint(decoded, true))).toEqual(value);
     expect(decodeDesktopCheckpoint(JSON.stringify(decoded))).toEqual(decoded);
   }
+});
+
+test('a checkpoint naming a scroll goes to a host that keeps it as version 2, and to any other as version 1', () => {
+  const base = vectors.checkpoints[0];
+  if (!base) throw new Error('Missing mixed-workspace fixture');
+  const value = decodeDesktopCheckpoint(JSON.stringify(base.value));
+  const entry = value?.entries[0];
+  if (!value || !entry) throw new Error('Missing entry fixture');
+  const scrolled = {
+    ...value,
+    entries: [
+      { ...entry, view: { ...entry.view, scroll: { cube: '12', offset: 319 } } },
+      ...value.entries.slice(1),
+    ],
+  };
+  const kept = decodeDesktopCheckpoint(encodeDesktopCheckpoint(scrolled, true));
+  expect(kept).toEqual(scrolled);
+  expect(JSON.parse(encodeDesktopCheckpoint(scrolled, true)).version).toBe(2);
+  const first = JSON.parse(encodeDesktopCheckpoint(scrolled, false));
+  expect(first.version).toBe(1);
+  expect(first).toEqual(base.value);
 });
 
 test.each(vectors.messages)('message: $label', ({ value, valid, error }) => {
@@ -168,7 +195,7 @@ test('a refused checkpoint names the rule it breaks without quoting its content'
   );
   expect(refused({ ...entry, submissions: [] })).toBe('entry submissions');
   expect(desktopCheckpointError({ ...value, activeEntry: null })).toBe('active entry');
-  expect(desktopCheckpointError({ ...value, version: 2 })).toBe('shape');
+  expect(desktopCheckpointError({ ...value, version: 3 })).toBe('shape');
 });
 
 test('rejects nonfinite cameras and invalid Unicode before JSON serialization erases them', () => {

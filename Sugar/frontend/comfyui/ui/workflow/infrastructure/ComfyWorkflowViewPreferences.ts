@@ -19,6 +19,7 @@ import {
   type WorkflowViewDefaults,
 } from '../application/WorkflowViewPreferences.js';
 import type {
+  WorkflowScroll,
   WorkflowScrollMemory,
   WorkflowScrollSource,
   WorkflowViewSource,
@@ -97,6 +98,26 @@ export class ComfyWorkflowViewPreferences implements WorkflowViewSource, Workflo
     this.#views.restore({ id: context.sessionId, path: context.path || null }, snapshot);
     this.#synchronize();
     this.#publish();
+  }
+
+  /** Where one open workflow's masonry is kept scrolled, for the desktop checkpoint. */
+  captureScroll(sessionId: string): WorkflowScroll | null {
+    const context = this.sessions.read().open.find((item) => item.sessionId === sessionId);
+    return context
+      ? this.#views.scrollFor({ id: sessionId, path: context.path || null }).read()
+      : null;
+  }
+
+  /** Bring back the scroll a restored desktop checkpoint kept for one open workflow. */
+  restoreScroll(sessionId: string, scroll: WorkflowScroll | null): void {
+    const context = this.sessions.read().open.find((item) => item.sessionId === sessionId);
+    if (!context) throw new Error('Restored workflow scroll occurrence is unavailable.');
+    this.#views.restoreScroll({ id: context.sessionId, path: context.path || null }, scroll);
+  }
+
+  /** Hear whenever any workflow's kept scroll changes. */
+  subscribeScroll(listener: () => void): () => void {
+    return this.#views.subscribeScroll(listener);
   }
 
   /** Bind once after host setup and ignore intermediate asynchronous graph-load notifications. */

@@ -223,3 +223,30 @@ test('a scroll taken as a closed workflow masonry is torn down is still kept', (
   );
   expect(damaged.scrollFor({ id: 'x', path: a.path }).read()).toBeNull();
 });
+
+test('a restored session brings its scroll to the open workflow and tells its masonry', () => {
+  const write = jest.fn<(value: unknown) => void>();
+  const views = new WorkflowViewPreferences([], write);
+  const a = { id: 'a', path: 'workflows/a.json' };
+  views.activate(a, graph);
+  const memory = views.scrollFor(a);
+  memory.record({ cube: '4', offset: 10 });
+  const restored = jest.fn();
+  const changed = jest.fn();
+  const stop = memory.subscribe(restored);
+  views.subscribeScroll(changed);
+  // The checkpoint was saved within seconds of the last scroll, so it wins over browser storage.
+  views.restoreScroll(a, { cube: '4', offset: 319 });
+  expect(memory.read()).toEqual({ cube: '4', offset: 319 });
+  expect(restored).toHaveBeenCalledTimes(1);
+  // A checkpoint that kept no scroll leaves the workflow's own.
+  views.restoreScroll(a, null);
+  expect(memory.read()).toEqual({ cube: '4', offset: 319 });
+  expect(restored).toHaveBeenCalledTimes(1);
+  // A person's scroll is a change the session hears.
+  memory.record({ cube: '4', offset: 40 });
+  expect(changed).toHaveBeenCalledTimes(1);
+  stop();
+  views.restoreScroll(a, { cube: '4', offset: 7 });
+  expect(restored).toHaveBeenCalledTimes(1);
+});

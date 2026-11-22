@@ -62,6 +62,10 @@ function isEditorWidth(value: unknown): value is number {
 /** Bound persistent history while retaining every live workflow's lightweight choices. */
 export class WorkflowViewPreferences {
   readonly #live = new Map<string, LiveWorkflowView>();
+  /** Listeners told whenever any workflow's kept scroll changes. */
+  readonly #scrollChanged = new Set<() => void>();
+  /** Per open workflow, its masonry's listeners for a scroll a restored session brought. */
+  readonly #scrollRestored = new Map<string, Set<() => void>>();
   readonly #stored = new Map<string, StoredWorkflowView>();
   #selected: string | null = null;
   #snapshot: WorkflowViewSnapshot = Object.freeze({ canvas: true, masonry: false, editorWidth: 0 });
@@ -147,13 +151,45 @@ export class WorkflowViewPreferences {
           if (sameScroll(live.scroll, scroll)) return;
           live.scroll = Object.freeze({ cube: scroll.cube, offset: scroll.offset });
           this.#persist(live);
-          return;
-        }
-        const stored = path ? this.#stored.get(path) : undefined;
-        if (path && stored && !sameScroll(stored.scroll, scroll))
+        } else {
+          const stored = path ? this.#stored.get(path) : undefined;
+          if (!path || !stored || sameScroll(stored.scroll, scroll)) return;
           this.#store(path, { ...stored, scroll: Object.freeze({ ...scroll }) });
+        }
+        for (const listener of this.#scrollChanged) listener();
+      },
+      subscribe: (restored) => {
+        const listeners = this.#scrollRestored.get(binding.id) ?? new Set();
+        listeners.add(restored);
+        this.#scrollRestored.set(binding.id, listeners);
+        return () => {
+          listeners.delete(restored);
+          if (!listeners.size) this.#scrollRestored.delete(binding.id);
+        };
       },
     };
+  }
+
+  /**
+   * Take the scroll a restored session kept for an open workflow. The session was saved within
+   * seconds of the last scroll, so it is the latest one; a session that kept no scroll leaves the
+   * workflow's own.
+   */
+  restoreScroll(binding: WorkflowViewBinding, scroll: WorkflowScroll | null): void {
+    if (scroll === null) return;
+    if (!isWorkflowScroll(scroll)) throw new TypeError('Restored workflow scroll is invalid.');
+    const live = this.#live.get(binding.id);
+    if (!live) throw new Error('Restored workflow scroll occurrence is unavailable.');
+    if (sameScroll(live.scroll, scroll)) return;
+    live.scroll = Object.freeze({ cube: scroll.cube, offset: scroll.offset });
+    this.#persist(live);
+    for (const listener of [...(this.#scrollRestored.get(binding.id) ?? [])]) listener();
+  }
+
+  /** Hear whenever any workflow's kept scroll changes. */
+  subscribeScroll(listener: () => void): () => void {
+    this.#scrollChanged.add(listener);
+    return () => this.#scrollChanged.delete(listener);
   }
 
   /** Select an explicit committed binding and carry choices through rename or Save As. */

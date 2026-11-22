@@ -21,6 +21,9 @@
             },
             {
               "name": "editing.text-menus"
+            },
+            {
+              "name": "session.checkpoint-scroll"
             }
           ],
           "protocol": "sugarcubes.host",
