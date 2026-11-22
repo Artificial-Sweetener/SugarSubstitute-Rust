@@ -74,10 +74,14 @@ fn shared_checkpoint_vectors_roundtrip_all_sections_and_reject_invalid_membershi
         assert_eq!(decoded.is_ok(), vector.valid, "{}: {decoded:?}", vector.label);
         if let Ok(value) = decoded {
             let bytes = encode_checkpoint(&value)?;
-            assert_eq!(
-                serde_json::from_slice::<serde_json::Value>(&bytes)?,
-                serde_json::to_value(&value)?
-            );
+            // Version 2 is written only when a workflow names a scroll; otherwise the checkpoint
+            // keeps the version 1 form every older reader understands.
+            let written = serde_json::from_slice::<serde_json::Value>(&bytes)?;
+            let scrolled =
+                serde_json::to_value(&value)?["entries"].as_array().is_some_and(|entries| {
+                    entries.iter().any(|entry| !entry["view"]["scroll"].is_null())
+                });
+            assert_eq!(written["version"], if scrolled { 2 } else { 1 }, "{}", vector.label);
             assert_eq!(decode_checkpoint(&bytes)?, value);
         }
     }
