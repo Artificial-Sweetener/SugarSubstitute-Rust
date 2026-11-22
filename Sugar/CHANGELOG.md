@@ -1,3 +1,26 @@
+## [0.35.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.34.0...sugarcubes-v0.35.0) (2026-11-22)
+
+### Features
+
+* **canvas:** count the preview frames the canvas accepts in its diagnostics ([2fe0895](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/2fe0895ffeea857e3e164fc4fad3bcca5ee1109b))
+* **session:** desktop checkpoint version 2 keeps each workflow's masonry scroll ([8503f51](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/8503f51930749777c9f088c45d8da9a01ddd0e17))
+* **sugarcubes:** one owner for edit commands, workflow-owned masonry view and continuous generation ([11e157e](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/11e157e894728bcd92e98bed65be587d35903f21))
+
+### Bug Fixes
+
+* **canvas:** keep the last preview when a run stops and never show an older one ([2a2ff95](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/2a2ff958d0c7eeac4f90ee1c53f8d51da99f91fe))
+* **cube-stack:** a bordered floating stack sits one card gap from the cards ([aa57278](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/aa572784d20ac5a1318ccc0fa85d0f3a2f5e161c))
+* **output-canvas:** a picked final holds over previews, and the preview tab comes back after a stop ([edcc899](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/edcc89953271706c2d40aae50980c80b4d3cc570))
+* **output-canvas:** the web canvas shows a stopped stage's last preview again ([e99b170](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/e99b170040b7a527e2cce3fe768c13cd6e014a85))
+* **sugarcubes:** Cancel ends a continuous loop between runs; masonry scroll lands once reachable ([d28148a](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/d28148a9eea179d856216af3c434461559097efe))
+* **sugarcubes:** close the tester feedback round ([e5244b5](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/e5244b57864085ad5d2eb12875114493e2966776))
+* **sugarcubes:** draw the queue's video badge with Fluent's regular Play icon ([2eba1a4](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/2eba1a4be12dea3317f4f5e2c4681e874890c7de))
+* **sugarcubes:** edit menus on ComfyUI cards, restore in checkpoint order, kept masonry scroll ([1e5fb30](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/1e5fb300184714d1cf9899b37d22055b43e4592c))
+* **sugarcubes:** open the console on ComfyUI's console key without a competing keybinding ([a253c03](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/a253c03bded73b84b10d6b50f393432e963dd26a))
+* **sugarcubes:** quiet Stop, frameless header buttons, Fluent icons and calmer panels ([6ac5a2d](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/6ac5a2d376d656fe38204b50b361acac7f7596f3))
+* **sugarcubes:** stack gap in pixels, and the pinned queue always slides out ([3f4536f](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/3f4536feaa06f4d290bc8b3159351429b3d7580b))
+* **workflow:** a view switch on an unedited workflow shows it unsaved ([08d1d84](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/commit/08d1d844bc7f47bd7f8c8f2555c7c77c107f51b2))
+
 ## [0.34.0](https://github.com/Artificial-Sweetener/SugarSubstitute-Rust/compare/sugarcubes-v0.33.2...sugarcubes-v0.34.0) (2026-11-20)
 
 ### Features
