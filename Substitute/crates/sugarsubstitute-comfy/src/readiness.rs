@@ -13,6 +13,7 @@ mod identity;
 mod json;
 mod schema;
 pub use identity::InstalledFrontendIdentity;
+#[cfg(windows)]
 pub(crate) use identity::SUGARCUBES_EXTENSION_PREFIX;
 pub use schema::{PackageVersion, SystemStats};
 
