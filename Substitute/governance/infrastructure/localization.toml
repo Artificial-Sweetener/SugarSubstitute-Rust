@@ -396,7 +396,7 @@ rationale = "Reapply caption/recovery labels from the authenticated configuratio
 
 [[records]]
 path = "crates/sugarsubstitute/src/startup/view.rs"
-source_sha256 = "sha256:2e7c9d31822fc821a7d1cf1d6edf6b8ef0db1fe53b22fa20e77e1d7ec758d28a"
+source_sha256 = "sha256:32cf9b7d75e805138be0a778c30968cff53d5b1332e1898ab801910d17c6e54d"
 kind = "presentation"
 rationale = "Startup View binds output, cancel and retry accessible controls to its existing Messages record; state changes select fields without authoring copy."
 

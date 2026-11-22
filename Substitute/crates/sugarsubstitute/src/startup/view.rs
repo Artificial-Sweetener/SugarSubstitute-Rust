@@ -111,6 +111,7 @@ impl StartupView {
     }
     /// Whether the failed start shown needs the person: a failure retrying cannot fix, or one
     /// that five tries in a row did not fix. A dialog explains it with Retry and Close.
+    #[cfg(any(windows, test))]
     pub(crate) fn asks_about_failure(&self) -> bool {
         self.appearance.status.offers_retry() && !self.retries_by_itself()
     }
@@ -195,6 +196,7 @@ impl StartupView {
         self.appearance.retries_by_itself() && self.retries < MAXIMUM_AUTOMATIC_RETRIES
     }
     /// Start counting tries again, after the person chose Retry in the dialog.
+    #[cfg(any(windows, test))]
     pub(crate) fn reset_retries(&mut self) {
         self.retries = 0;
     }
