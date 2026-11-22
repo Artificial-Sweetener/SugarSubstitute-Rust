@@ -80,6 +80,22 @@ test('skip interrupts only; cancel stops the loop, keeps the mode and clears pen
   expect(host.execute).not.toHaveBeenCalled();
 });
 
+test('cancel stops a continuous loop between two of its runs, with nothing running', async () => {
+  const host = fixture();
+  // The queue is empty for a moment between runs: ComfyUI's own cancel is disabled.
+  host.cancel.disabled = true;
+  host.queueSettings.mode = 'instant-running';
+  const adapter = new ComfyGenerationAdapter(document, host.app);
+  expect(adapter.read().cancelEnabled).toBe(true);
+  await adapter.cancel();
+  expect(host.queueSettings.mode).toBe('instant-idle');
+  expect(adapter.read()).toMatchObject({
+    mode: 'continuous',
+    looping: false,
+    cancelEnabled: false,
+  });
+});
+
 test('continuous generation is the ComfyUI instant mode: Generate starts the loop and stops it', async () => {
   const host = fixture();
   const adapter = new ComfyGenerationAdapter(document, host.app);

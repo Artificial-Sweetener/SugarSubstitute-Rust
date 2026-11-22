@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Read the masonry's Cube sections from their settled layout, and keep a scroll by its Cube. */
+/** Read the masonry's Cube sections from their settled layout, and place a scroll by its Cube. */
 import type { WorkflowScroll } from '../../workflow/domain/WorkflowView.js';
 
 /** One Cube's section in the masonry's scroll coordinates. */
@@ -53,18 +53,11 @@ export function captureMasonryScroll(element: HTMLElement): WorkflowScroll {
 }
 
 /**
- * Scroll the masonry back to a kept scroll: the same distance into the same Cube, or the top when
- * that Cube is gone.
+ * Where the masonry must be scrolled to land the same distance into the kept scroll's Cube, or
+ * null while that Cube's section is not laid out.
  */
-export function restoreMasonryScroll(element: HTMLElement, scroll: WorkflowScroll | null): void {
-  if (!scroll) {
-    element.scrollTop = 0;
-    return;
-  }
-  if (scroll.cube === null) {
-    element.scrollTop = scroll.offset;
-    return;
-  }
+export function masonryScrollTop(element: HTMLElement, scroll: WorkflowScroll): number | null {
+  if (scroll.cube === null) return scroll.offset;
   const section = masonryCubeSections(element).find((item) => item.id === scroll.cube);
-  element.scrollTop = section ? section.y + scroll.offset : 0;
+  return section ? section.y + scroll.offset : null;
 }

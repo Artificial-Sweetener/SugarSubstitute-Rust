@@ -18,8 +18,10 @@ import { afterEach, expect, test } from '@jest/globals';
 import {
   captureMasonryScroll,
   masonryCubeSections,
-  restoreMasonryScroll,
+  masonryScrollTop,
 } from '../../../frontend/comfyui/ui/surface/masonry/MasonryCubeSections.js';
+import { MasonryScrollKeeper } from '../../../frontend/comfyui/ui/surface/masonry/MasonryScrollKeeper.js';
+import type { WorkflowScroll } from '../../../frontend/comfyui/ui/workflow/domain/WorkflowView.js';
 
 afterEach(() => document.body.replaceChildren());
 
@@ -52,18 +54,90 @@ test('a scroll is kept by the Cube holding the top of the view', () => {
   expect(captureMasonryScroll(element)).toEqual({ cube: '9', offset: 40 });
 });
 
-test('a kept scroll lands in the same Cube after the cards reflow, or at the top when it is gone', () => {
+test('a kept scroll lands the same distance into its Cube after the cards reflow', () => {
   const element = masonry([
     ['cube:4', 100, 300],
     ['cube:9', 420, 400],
   ]);
-  restoreMasonryScroll(element, { cube: '9', offset: 40 });
-  expect(element.scrollTop).toBe(460);
-  restoreMasonryScroll(element, { cube: null, offset: 30 });
-  expect(element.scrollTop).toBe(30);
-  restoreMasonryScroll(element, { cube: 'gone', offset: 40 });
-  expect(element.scrollTop).toBe(0);
-  element.scrollTop = 200;
-  restoreMasonryScroll(element, null);
-  expect(element.scrollTop).toBe(0);
+  expect(masonryScrollTop(element, { cube: '9', offset: 40 })).toBe(460);
+  expect(masonryScrollTop(element, { cube: null, offset: 30 })).toBe(30);
+  // A Cube not laid out yet has no place to land.
+  expect(masonryScrollTop(element, { cube: 'later', offset: 40 })).toBeNull();
+});
+
+/** A masonry whose reachable scroll grows as its cards grow, as a browser clamps scrollTop. */
+function growing(sections: readonly [string, number, number][], reach: number) {
+  const element = masonry(sections);
+  // A laid out masonry: jsdom gives elements no height of their own.
+  Object.defineProperty(element, 'clientHeight', { get: () => (element.isConnected ? 700 : 0) });
+  let top = 0;
+  const state = { reach };
+  Object.defineProperty(element, 'scrollTop', {
+    get: () => top,
+    set: (value: number) => {
+      top = Math.max(0, Math.min(value, state.reach));
+    },
+  });
+  return { element, state };
+}
+
+function memory(kept: WorkflowScroll | null) {
+  const recorded: WorkflowScroll[] = [];
+  return { recorded, read: () => kept, record: (scroll: WorkflowScroll) => recorded.push(scroll) };
+}
+
+test('a kept scroll the cards cannot reach yet waits for them, and nothing overwrites it meanwhile', () => {
+  const { element, state } = growing([['cube:4', 0, 900]], 100);
+  const kept = memory({ cube: '4', offset: 319 });
+  const keeper = new MasonryScrollKeeper(element, kept, () => undefined);
+  keeper.settle();
+  expect(element.scrollTop).toBe(100);
+  element.dispatchEvent(new Event('scroll'));
+  element.dispatchEvent(new Event('scrollend'));
+  expect(kept.recorded).toEqual([]);
+  // The cards grow; the next layout lands the kept scroll and records it.
+  state.reach = 600;
+  element.dispatchEvent(new CustomEvent('sc-masonry-layout'));
+  expect(element.scrollTop).toBe(319);
+  expect(kept.recorded).toEqual([{ cube: '4', offset: 319 }]);
+  keeper.dispose();
+});
+
+test('a person scrolling takes over from a kept scroll still waiting for the cards', () => {
+  const { element, state } = growing([['cube:4', 0, 900]], 100);
+  const kept = memory({ cube: '4', offset: 319 });
+  const keeper = new MasonryScrollKeeper(element, kept, () => undefined);
+  keeper.settle();
+  element.dispatchEvent(new Event('wheel'));
+  element.scrollTop = 40;
+  state.reach = 600;
+  element.dispatchEvent(new CustomEvent('sc-masonry-layout'));
+  expect(element.scrollTop).toBe(40);
+  element.dispatchEvent(new Event('scrollend'));
+  expect(kept.recorded).toEqual([{ cube: '4', offset: 40 }]);
+  keeper.dispose();
+});
+
+test('a scroll made while the cards entered wins over the kept one', () => {
+  const { element } = growing([['cube:4', 0, 900]], 600);
+  const kept = memory({ cube: '4', offset: 319 });
+  const keeper = new MasonryScrollKeeper(element, kept, () => undefined);
+  element.scrollTop = 90;
+  keeper.settle();
+  expect(element.scrollTop).toBe(90);
+  expect(kept.recorded).toEqual([{ cube: '4', offset: 90 }]);
+  keeper.dispose();
+});
+
+test('a masonry taken out of the document never records the top it reads there', () => {
+  const { element } = growing([['cube:4', 0, 900]], 600);
+  const kept = memory({ cube: '4', offset: 319 });
+  const keeper = new MasonryScrollKeeper(element, kept, () => undefined);
+  keeper.settle();
+  expect(kept.recorded).toEqual([{ cube: '4', offset: 319 }]);
+  // Closing removes the masonry before its keeper is disposed; it then reads as scrolled to 0.
+  element.remove();
+  element.scrollTop = 0;
+  keeper.dispose();
+  expect(kept.recorded).toEqual([{ cube: '4', offset: 319 }]);
 });

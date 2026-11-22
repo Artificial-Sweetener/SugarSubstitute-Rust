@@ -25,18 +25,12 @@ export function captureMasonryScroll(element) {
         : { cube: null, offset: Math.round(top) };
 }
 /**
- * Scroll the masonry back to a kept scroll: the same distance into the same Cube, or the top when
- * that Cube is gone.
+ * Where the masonry must be scrolled to land the same distance into the kept scroll's Cube, or
+ * null while that Cube's section is not laid out.
  */
-export function restoreMasonryScroll(element, scroll) {
-    if (!scroll) {
-        element.scrollTop = 0;
-        return;
-    }
-    if (scroll.cube === null) {
-        element.scrollTop = scroll.offset;
-        return;
-    }
+export function masonryScrollTop(element, scroll) {
+    if (scroll.cube === null)
+        return scroll.offset;
     const section = masonryCubeSections(element).find((item) => item.id === scroll.cube);
-    element.scrollTop = section ? section.y + scroll.offset : 0;
+    return section ? section.y + scroll.offset : null;
 }

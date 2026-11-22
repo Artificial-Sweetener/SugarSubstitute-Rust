@@ -65,7 +65,12 @@ export class ComfyGenerationAdapter {
                 : 1,
             generateEnabled: ready && !!run && !run.disabled && !this.#canceling,
             skipEnabled: ready && !!cancel && !cancel.disabled && !this.#canceling,
-            cancelEnabled: ready && ((!!cancel && !cancel.disabled) || this.#submissions.size > 0) && !this.#canceling,
+            // A running continuous loop can always be cancelled, also between two of its runs.
+            cancelEnabled: ready &&
+                ((!!cancel && !cancel.disabled) ||
+                    this.#submissions.size > 0 ||
+                    mode === INSTANT_RUNNING) &&
+                !this.#canceling,
         };
     }
     /** Update the same batch count used by Comfy.QueuePrompt, independently of latent batch size. */

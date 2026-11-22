@@ -326,6 +326,30 @@ test('restores workflow scroll and rebinds controls without replaying entry moti
   expect(setup.container.dataset.sugarcubesMasonry).toBeUndefined();
 });
 
+test('a scroll made while the cards enter wins over the kept one and is kept in its place', async () => {
+  let scrollDuringEntry: number | null = null;
+  const setup = fixture(undefined, {
+    onSurfaceReady: (view) => {
+      if (scrollDuringEntry !== null) view.element.scrollTop = scrollDuringEntry;
+    },
+  });
+  await setup.controller.toggle();
+  const surface = (): HTMLElement => {
+    const element = document.querySelector<HTMLElement>('.sugarcubes-workflow-masonry');
+    if (!element) throw new Error('Masonry fixture is missing');
+    return element;
+  };
+  surface().scrollTop = 240;
+  surface().dispatchEvent(new Event('scrollend'));
+  expect([...setup.scrolls.values()]).toEqual([{ cube: null, offset: 240 }]);
+  await setup.controller.setSuspended('configure', true);
+  scrollDuringEntry = 90;
+  await setup.controller.setSuspended('configure', false);
+  expect(surface().scrollTop).toBe(90);
+  expect([...setup.scrolls.values()]).toEqual([{ cube: null, offset: 90 }]);
+  setup.controller.leaveImmediately();
+});
+
 test('keeps scroll positions scoped to workflow identities and releases suppression for app mode', async () => {
   const setup = fixture();
   const first = {};
@@ -976,6 +1000,10 @@ function fixture(
     queueMicrotask(() => callback(0));
     return 0;
   });
+  // Elements in the document are laid out, as in a browser; jsdom gives them no height.
+  jest.spyOn(Element.prototype, 'clientHeight', 'get').mockImplementation(function (this: Element) {
+    return this.isConnected ? 700 : 0;
+  });
   const container = document.createElement('div');
   let scope: object = container;
   const scrolls = new Map<object, WorkflowScroll>();
@@ -1066,6 +1094,7 @@ function fixture(
     setScope: (value: object) => {
       scope = value;
     },
+    scrolls,
     setNodes2: (value: boolean) => {
       nodes2 = value;
     },
