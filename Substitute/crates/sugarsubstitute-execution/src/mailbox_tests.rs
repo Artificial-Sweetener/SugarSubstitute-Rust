@@ -273,5 +273,14 @@ fn a_dead_wake_target_is_tried_once_and_reported_once() -> TestResult {
     let failure = mailbox.take_failure().ok_or("The first failure was lost")?;
     assert!(failure.to_string().contains("event loop closed"));
     assert!(mailbox.take_failure().is_none());
+    // An owner that took the failure is alive: its next completion wakes it again.
+    mailbox.enqueue(CompletionNotification {
+        scope_id: ScopeId::new(1)?,
+        job_id: JobId::new(41)?,
+        kind: TerminalKind::Success,
+        replacement: None,
+    });
+    mailbox.deliver_wake();
+    assert_eq!(wake.calls.load(Ordering::Acquire), 2);
     Ok(())
 }

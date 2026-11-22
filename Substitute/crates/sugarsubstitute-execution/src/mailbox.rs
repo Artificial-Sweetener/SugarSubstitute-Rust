@@ -31,8 +31,9 @@ pub(crate) struct Mailbox {
     pub(crate) notify: Arc<tokio::sync::Notify>,
     suppressed_thread: Mutex<Option<std::thread::ThreadId>>,
     deferred_wake: std::sync::atomic::AtomicBool,
-    /// Set once a wake failed: its target (the owner's event loop) is gone for good, so later
-    /// completions are not offered to it again, each one failing and logging in turn.
+    /// Set once a wake failed, until the owner takes that failure. An owner whose event loop is
+    /// gone never takes it, so later completions are not offered to it again, each one failing
+    /// and logging in turn; an owner that takes the failure is alive and is woken again.
     wake_closed: std::sync::atomic::AtomicBool,
 }
 
@@ -125,7 +126,11 @@ impl Mailbox {
 
     pub(crate) fn take_failure(&self) -> Option<ExecutionError> {
         let mut pending = lock(&self.pending);
-        Self::take_pending_failure(&mut pending)
+        let failure = Self::take_pending_failure(&mut pending);
+        if failure.is_some() {
+            self.wake_closed.store(false, std::sync::atomic::Ordering::Release);
+        }
+        failure
     }
 
     /// Preserve original causes and omitted counts while the caller holds the pending mutex.
@@ -152,7 +157,9 @@ impl Mailbox {
         let (result, should_wake) = {
             let mut pending = lock(&self.pending);
             let result = if let Some(error) = Self::take_pending_failure(&mut pending) {
-                // Observing the fatal wake acknowledges it without consuming terminal facts.
+                // Observing the fatal wake acknowledges it without consuming terminal facts; the
+                // owner that took it is alive, so its wakes resume.
+                self.wake_closed.store(false, std::sync::atomic::Ordering::Release);
                 Err(error)
             } else {
                 let count = maximum.get().min(32).min(pending.notices.len());
