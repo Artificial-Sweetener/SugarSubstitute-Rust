@@ -77,6 +77,23 @@ test('the expanded rail lines its rows, toolbar and add button up with no card-s
   );
 });
 
+test('a floating rail draws its edge inside its box, so the reservation reaches that edge', () => {
+  // A border would widen the rail past its reserved width by its own width on each side, putting
+  // the rows one pixel closer to the cards than the card gap (seen in a plain browser).
+  ensureCubeStackStyles(document);
+  const css = [...document.head.querySelectorAll('style')]
+    .map((style) => style.textContent)
+    .join('')
+    .replace(/\s+/g, ' ');
+  const floating = css.match(
+    /\.sc-cube-stack-host\[data-appearance\]:not\(\[data-appearance="comfy"\]\) \{[^}]*\}/,
+  )?.[0];
+  expect(floating).toContain(
+    'outline:1px solid var(--sc-border-subtle,transparent); outline-offset:-1px;',
+  );
+  expect(floating).not.toMatch(/border:/);
+});
+
 test('compacting hides the text but never moves or resizes the icon or its model badge', () => {
   ensureCubeStackStyles(document);
   const css = [...document.head.querySelectorAll('style')]

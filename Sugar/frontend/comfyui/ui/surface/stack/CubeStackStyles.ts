@@ -160,7 +160,7 @@ export function ensureCubeStackStyles(documentRef: Document): void {
     .sc-cube-stack__add:hover { background:var(--sc-stack-hover); color:var(--sc-stack-text); }
     .sc-cube-stack__status { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
     .sc-cube-stack-host { position:absolute; z-index:${MASONRY_STACK_Z_INDEX}; pointer-events:auto; left:12px; top:${WORKFLOW_MASONRY_TOP_INSET}px; bottom:12px; overflow-y:auto; overflow-x:hidden; padding:6px 0; border-radius:8px; background:var(--comfy-menu-bg,#202020); }
-    .sc-cube-stack-host[data-appearance]:not([data-appearance="comfy"]) { background:var(--sc-surface-secondary,#202020); border:1px solid var(--sc-border-subtle,transparent); box-shadow:var(--sc-shadow-small,0 2px 4px #0002); }
+    .sc-cube-stack-host[data-appearance]:not([data-appearance="comfy"]) { background:var(--sc-surface-secondary,#202020); outline:1px solid var(--sc-border-subtle,transparent); outline-offset:-1px; box-shadow:var(--sc-shadow-small,0 2px 4px #0002); }
     /* Compact masonry and Plugin Mode pack the rail flush; the Cube stack's compact preference never does. */
     ${packedMasonryRule('.sc-cube-stack[data-kind="rail"][data-compact]')} { width:${String(cubeStackWidth(true, true))}px; }
     ${packedMasonryRule('.sc-cube-stack[data-kind="rail"]:not([data-compact])')} { width:${String(cubeStackWidth(false, true))}px; }
@@ -170,7 +170,7 @@ export function ensureCubeStackStyles(documentRef: Document): void {
     ${packedMasonryRule('.sc-cube-stack[data-kind="rail"] .sc-cube-stack__selection')} { left:1px; }
     ${packedMasonryRule('.sc-cube-stack[data-kind="rail"] .sc-cube-stack__add')} { margin:0; width:100%; border-radius:0; }
     ${packedMasonryRule('.sc-cube-stack[data-kind="rail"] .sc-cube-stack-row')} { border-radius:0; }
-    ${packedMasonryRule('.sc-cube-stack-host')} { left:0; top:0; bottom:0; padding:0; border:0; border-radius:0; }
+    ${packedMasonryRule('.sc-cube-stack-host')} { left:0; top:0; bottom:0; padding:0; outline:0; border-radius:0; }
     @media (hover:none) { .sc-cube-stack-row__remove { opacity:1; } }
     @media (prefers-reduced-motion:reduce) {
       .sc-cube-stack-move,.sc-cube-stack-enter-active,.sc-cube-stack-leave-active,

@@ -35,7 +35,7 @@ export const desktopFrameCss = `
       color-mix(in srgb,var(--sc-desktop-body-wash) calc(var(--sc-stack-wash-opacity,1) * 100%),transparent) 0 var(--sc-stack-material-width,0px),
       var(--sc-desktop-body-wash) var(--sc-stack-material-width,0px) 100%); }
   :root[data-sc-desktop-frame-surface] .sc-cube-stack-host,
-  :root[data-sc-desktop-frame-surface] .sc-cube-stack-host[data-appearance] { background:transparent; border:0; box-shadow:none; }
+  :root[data-sc-desktop-frame-surface] .sc-cube-stack-host[data-appearance] { background:transparent; outline:0; box-shadow:none; }
   :root[data-sc-desktop-frame-surface] .sc-cube-stack[data-kind='rail'] {
     --sc-stack-row:var(--sc-desktop-card-wash); }
   /* The rail's edge is the aperture's edge, so both travel on the material motion's one curve. */
