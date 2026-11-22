@@ -5,7 +5,7 @@ use super::*;
 use sha2::{Digest, Sha256};
 use std::io::Read;
 use sugarsubstitute_contracts::{
-    desktop_session::{decode_checkpoint, encode_checkpoint},
+    desktop_session::{decode_checkpoint, encode_checkpoint, reads_checkpoint_version},
     execution::{JobContext, MemoryClaim},
 };
 use sugarsubstitute_supervision::{
@@ -162,7 +162,7 @@ fn read(
             .ok()
             .and_then(|value| value.get("version").and_then(serde_json::Value::as_u64));
         let mut decoded = decode_checkpoint(&bytes);
-        let protected = version.is_some_and(|version| version != 1)
+        let protected = version.is_some_and(|version| !reads_checkpoint_version(version))
             || decoded.as_ref().is_ok_and(|value| value.scope != *scope);
         if protected {
             decoded = Err(SessionError::Stale);

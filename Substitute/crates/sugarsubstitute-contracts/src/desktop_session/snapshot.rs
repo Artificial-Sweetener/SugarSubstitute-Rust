@@ -192,6 +192,12 @@ pub fn validate_checkpoint(value: &SessionCheckpoint) -> Result<(), SessionError
     Ok(())
 }
 
+/// Whether this host reads checkpoints of `version`; a store keeps any other version untouched,
+/// as written by a newer app.
+pub const fn reads_checkpoint_version(version: u64) -> bool {
+    matches!(version, 1 | 2)
+}
+
 /// The version a checkpoint's bytes declare, read before its version's exact shape.
 #[derive(serde::Deserialize)]
 struct Declared {
@@ -209,11 +215,11 @@ pub fn decode_checkpoint(bytes: &[u8]) -> Result<SessionCheckpoint, SessionError
     let invalid = |_| SessionError::Invalid;
     let Declared { version } = serde_json::from_slice(bytes).map_err(invalid)?;
     let value = match version {
+        _ if !reads_checkpoint_version(version) => return Err(SessionError::Invalid),
         1 => versions::upgrade(
             serde_json::from_slice::<wire::SessionCheckpoint>(bytes).map_err(invalid)?,
         ),
-        2 => serde_json::from_slice(bytes).map_err(invalid)?,
-        _ => return Err(SessionError::Invalid),
+        _ => serde_json::from_slice(bytes).map_err(invalid)?,
     };
     validate_checkpoint(&value)?;
     Ok(value)

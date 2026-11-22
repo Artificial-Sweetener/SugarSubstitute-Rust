@@ -30,7 +30,9 @@ pub use identity::{
 };
 pub use placement::validate_placement;
 pub use protocol::{admit_operation, decode_message, encode_message, same_fence, validate_message};
-pub use snapshot::{decode_checkpoint, encode_checkpoint, validate_checkpoint};
+pub use snapshot::{
+    decode_checkpoint, encode_checkpoint, reads_checkpoint_version, validate_checkpoint,
+};
 
 use std::{error::Error, fmt};
 

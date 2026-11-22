@@ -80,7 +80,7 @@ fn newer_primary_keeps_original_and_inhibits_empty_autosave_despite_usable_previ
     let fixture = Fixture::new()?;
     fixture.save(checkpoint(1)?)??;
     fixture.save(checkpoint(2)?)??;
-    let future = b"{\"version\":2,\"future-state\":\"must survive\"}";
+    let future = b"{\"version\":3,\"future-state\":\"must survive\"}";
     std::fs::write(fixture.path(CURRENT_CHECKPOINT), future)?;
     let restored = fixture.load()?;
     assert!(restored.protected);
@@ -130,5 +130,21 @@ fn retained_asset_is_immutable_and_wrong_source_never_publishes() -> TestResult 
     })?;
     assert!(matches!(fixture.terminal(job)?, JobOutcome::Failure(_)));
     assert_eq!(std::fs::read(&path)?, b"changed");
+    Ok(())
+}
+#[test]
+fn a_stored_version_two_checkpoint_is_restored_and_replaced_like_any_other() -> TestResult {
+    let fixture = Fixture::new()?;
+    fixture.save(checkpoint(1)?)??;
+    let path = fixture.path(CURRENT_CHECKPOINT);
+    let mut stored: serde_json::Value = serde_json::from_slice(&std::fs::read(&path)?)?;
+    stored["version"] = 2.into();
+    std::fs::write(&path, serde_json::to_vec(&stored)?)?;
+    let restored = fixture.load()?;
+    assert!(!restored.protected);
+    assert_eq!(restored.checkpoint.as_ref().map(|(_, value)| value.revision), Some(1));
+    drop(restored);
+    fixture.save(checkpoint(2)?)??;
+    assert_eq!(fixture.load()?.checkpoint.map(|(_, value)| value.revision), Some(2));
     Ok(())
 }

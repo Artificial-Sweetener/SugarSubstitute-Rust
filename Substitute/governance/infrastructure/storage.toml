@@ -5211,7 +5211,7 @@ rationale = "Owned temporary profile records qualify stable namespaces, aggregat
 [[records]]
 path = "crates/sugarsubstitute/src/workspace_session/tests/storage.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:3494244f46d30ef4b2a803793cfd12d0888bbb87c2171c7f43840de27c9b1603"
+source_sha256 = "sha256:db040d6e6be3dce0d2c860bb01d20523cd8623e5fd562dae1939be1822a66a45"
 capabilities = ["method set_len", "std::fs::OpenOptions::new", "std::fs::metadata", "std::fs::read", "std::fs::remove_file", "std::fs::write"]
 disposition = "fixture"
 rationale = "Owned temporary checkpoint files qualify atomic publication, exact digest and bounds rejection, missing-current recovery and preserved previous/rejected originals."
