@@ -69,7 +69,9 @@ impl NativeSurface {
                     || self.preview.withdrawing
                 {
                     CanvasSurfaceReplyStatus::Unavailable
-                } else if !self.preview.is_newer(begin.identity()) {
+                } else if !self.preview.is_newer(begin.identity())
+                    && !self.preview.is_chosen_again(begin.identity())
+                {
                     // A late frame of an earlier run, or an older frame of this one, never shows.
                     CanvasSurfaceReplyStatus::Stale
                 } else if let Some(memory) = session.preview_resident() {

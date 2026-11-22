@@ -111,6 +111,17 @@ impl Preview {
         })
     }
 
+    /// Whether `identity` is the newest preview admitted and no preview is shown: a final replaced
+    /// it, and the person chose it again. The page sends a frame a second time only then.
+    pub(super) fn is_chosen_again(
+        &self,
+        identity: &sugarsubstitute_contracts::canvas_surface::CanvasSurfacePreviewIdentity,
+    ) -> bool {
+        self.shown.is_none()
+            && self.latest
+                == Some((identity.generation(), identity.run_order(), identity.sequence()))
+    }
+
     /// Record `identity` as the newest preview admitted on this navigation.
     pub(super) fn admitted(
         &mut self,

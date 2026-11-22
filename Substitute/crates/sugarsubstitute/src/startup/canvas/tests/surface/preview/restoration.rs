@@ -89,3 +89,55 @@ fn restored_old_final_cannot_acknowledge_a_new_final_selection() -> Result<(), B
     }
     Err("New final selection did not acknowledge its actual native source".into())
 }
+
+/// After a stop, the person inspects the final, then chooses the kept preview's tab again: the
+/// page sends that newest preview a second time, and it shows again.
+#[test]
+fn the_newest_preview_shows_again_after_a_final_replaced_it() -> Result<(), Box<dyn Error>> {
+    let mut fixture = Fixture::new()?;
+    fixture.commit(4)?;
+    watch(&mut fixture, 100, true)?;
+    transfer(&mut fixture, 200, "preview:1", JPEG)?;
+    let preview = wait_frame(&mut fixture)?;
+    fixture.canvas.presented(preview)?;
+    wait_change(&mut fixture, "presented")?;
+    fixture.select(300, "tall.png")?;
+    let mut acknowledged = None;
+    let mut replied = false;
+    for _ in 0..500 {
+        let observed = fixture.wake.revision();
+        fixture.advance(100);
+        fixture.pump()?;
+        while let Some(command) = fixture.canvas.take_command() {
+            if let DesktopStartupCommand::SendSurface(reply) = command {
+                let value: Value = serde_json::from_slice(reply.payload())?;
+                if value["requestId"] == 300 {
+                    assert_eq!(value["status"], "applied");
+                    replied = true;
+                }
+            }
+        }
+        if replied {
+            break;
+        }
+        if let Some(frame) = prepared_frame(&fixture.canvas)
+            .filter(|frame| frame.content.target() != preview)
+            .filter(|frame| acknowledged != Some(frame.content.target()))
+        {
+            let target = frame.content.target();
+            fixture.canvas.presented(target)?;
+            acknowledged = Some(target);
+        } else {
+            fixture.wait_preview_progress(observed)?;
+        }
+    }
+    assert!(replied, "The final never replaced the preview");
+    drain(&mut fixture)?;
+    // The same newest preview, sent again because its tab was chosen, is admitted and shown.
+    transfer(&mut fixture, 400, "preview:1", JPEG)?;
+    let again = wait_frame(&mut fixture)?;
+    fixture.canvas.presented(again)?;
+    wait_change(&mut fixture, "presented")?;
+    drain(&mut fixture)?;
+    fixture.finish()
+}
