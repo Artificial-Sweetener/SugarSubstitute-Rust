@@ -87,8 +87,17 @@ export class NativeCanvasPreview {
   #interest: WorkflowPreview | null = null;
   #active: Frame | null = null;
   #pending: { preview: WorkflowPreview; blob: Blob } | null = null;
+  /** The newest preview taken, until it is shown or replaced. */
+  #received: { preview: WorkflowPreview; blob: Blob } | null = null;
+  /**
+   * The newest preview shown, kept after a final replaces it on screen, so choosing its tab again
+   * shows it: after a run stops it is the newest image that run made.
+   */
+  #kept: { preview: WorkflowPreview; blob: Blob } | null = null;
   #shown: { preview: WorkflowPreview; leaseRevision: number } | null = null;
   #displayedPreview = false;
+  /** The content last asked for, kept through failures that drop the presentation's state. */
+  #requested: string | null = null;
   #sequence = -1;
   #epoch = 0;
   #drops = 0;
@@ -119,6 +128,15 @@ export class NativeCanvasPreview {
   /** Only actual accepted native pixels lock the shared controls. */
   get displayed(): boolean {
     return this.#displayedPreview;
+  }
+  /**
+   * Record the content a person asks for; true when it is a newly chosen final while this preview
+   * covers the canvas. That choice wants its final, also the one the host still holds beneath.
+   */
+  covers(desired: { readonly content: string; readonly item: unknown }): boolean {
+    const picked = desired.content !== this.#requested;
+    this.#requested = desired.content;
+    return picked && !!desired.item && this.#displayedPreview;
   }
   /** Describe pending native preparation without treating it as presented pixels. */
   get preparing(): boolean {
@@ -151,6 +169,19 @@ export class NativeCanvasPreview {
       if (!this.#active?.withdrawing && (release || this.#active)) this.#withdraw();
     }
     this.#interest = preview;
+    // The kept preview comes back when its tab is chosen again after a final replaced it.
+    const kept = this.#kept;
+    if (
+      kept &&
+      preview &&
+      canvasLane(preview) === canvasLane(kept.preview) &&
+      !this.#active &&
+      !this.#pending &&
+      this.#shown?.preview.token !== kept.preview.token
+    ) {
+      this.#pending = kept;
+      this.options.changed();
+    }
     return changed;
   }
 
@@ -179,6 +210,7 @@ export class NativeCanvasPreview {
     if (this.#pending) this.#drops++;
     this.#accepted++;
     this.#pending = { preview, blob };
+    this.#received = this.#pending;
     this.options.changed();
   }
 
@@ -283,6 +315,8 @@ export class NativeCanvasPreview {
     this.#subscription = null;
     this.#clearActive();
     this.#pending = null;
+    this.#received = null;
+    this.#kept = null;
     this.#shown = null;
     this.#interest = null;
     this.#displayedPreview = false;
@@ -457,8 +491,10 @@ export class NativeCanvasPreview {
       active &&
       active.leaseRevision !== null &&
       matches(active, change.token, change.leaseRevision)
-    )
+    ) {
       this.#shown = { preview: active.preview, leaseRevision: active.leaseRevision };
+      if (this.#received?.preview.token === active.preview.token) this.#kept = this.#received;
+    }
     if (
       active &&
       matches(active, change.token, change.leaseRevision) &&

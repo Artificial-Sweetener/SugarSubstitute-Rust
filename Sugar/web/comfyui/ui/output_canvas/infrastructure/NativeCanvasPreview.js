@@ -18,8 +18,17 @@ export class NativeCanvasPreview {
     #interest = null;
     #active = null;
     #pending = null;
+    /** The newest preview taken, until it is shown or replaced. */
+    #received = null;
+    /**
+     * The newest preview shown, kept after a final replaces it on screen, so choosing its tab again
+     * shows it: after a run stops it is the newest image that run made.
+     */
+    #kept = null;
     #shown = null;
     #displayedPreview = false;
+    /** The content last asked for, kept through failures that drop the presentation's state. */
+    #requested = null;
     #sequence = -1;
     #epoch = 0;
     #drops = 0;
@@ -52,6 +61,15 @@ export class NativeCanvasPreview {
     get displayed() {
         return this.#displayedPreview;
     }
+    /**
+     * Record the content a person asks for; true when it is a newly chosen final while this preview
+     * covers the canvas. That choice wants its final, also the one the host still holds beneath.
+     */
+    covers(desired) {
+        const picked = desired.content !== this.#requested;
+        this.#requested = desired.content;
+        return picked && !!desired.item && this.#displayedPreview;
+    }
     /** Describe pending native preparation without treating it as presented pixels. */
     get preparing() {
         return !!this.#active || !!this.#pending;
@@ -83,6 +101,17 @@ export class NativeCanvasPreview {
                 this.#withdraw();
         }
         this.#interest = preview;
+        // The kept preview comes back when its tab is chosen again after a final replaced it.
+        const kept = this.#kept;
+        if (kept &&
+            preview &&
+            canvasLane(preview) === canvasLane(kept.preview) &&
+            !this.#active &&
+            !this.#pending &&
+            this.#shown?.preview.token !== kept.preview.token) {
+            this.#pending = kept;
+            this.options.changed();
+        }
         return changed;
     }
     /** Refuse bytes until this exact committed attachment has a qualified workflow preview. */
@@ -106,6 +135,7 @@ export class NativeCanvasPreview {
             this.#drops++;
         this.#accepted++;
         this.#pending = { preview, blob };
+        this.#received = this.#pending;
         this.options.changed();
     }
     /** Select already fences native preview custody; avoid withdrawing back to the previous final. */
@@ -206,6 +236,8 @@ export class NativeCanvasPreview {
         this.#subscription = null;
         this.#clearActive();
         this.#pending = null;
+        this.#received = null;
+        this.#kept = null;
         this.#shown = null;
         this.#interest = null;
         this.#displayedPreview = false;
@@ -372,8 +404,11 @@ export class NativeCanvasPreview {
         if (change.status === 'presented' &&
             active &&
             active.leaseRevision !== null &&
-            matches(active, change.token, change.leaseRevision))
+            matches(active, change.token, change.leaseRevision)) {
             this.#shown = { preview: active.preview, leaseRevision: active.leaseRevision };
+            if (this.#received?.preview.token === active.preview.token)
+                this.#kept = this.#received;
+        }
         if (active &&
             matches(active, change.token, change.leaseRevision) &&
             !(change.status === 'presented' && active.withdrawing))

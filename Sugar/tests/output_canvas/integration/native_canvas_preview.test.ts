@@ -362,6 +362,42 @@ test('locks Fit only after displayed pixels, keeps the shown preview when intere
   expect(f.errors).toEqual([]);
 });
 
+test('picking a final while a preview covers it shows that final, and the preview comes back with its tab', async () => {
+  const f = fixture();
+  await commit(f);
+  const lease = await transfer(f);
+  observe(f, lease, {
+    type: 'preview',
+    token: lease.preview.token,
+    leaseRevision: lease.revision,
+    viewport: previewViewport,
+  });
+  await settle();
+  expect(f.previews.at(-1)).toBe(true);
+  const selects = () => f.calls.filter((call) => call.type === 'surface.select').length;
+  const answer = async () => {
+    for (const [index, pending] of f.pending.entries())
+      if (!pending.settled) f.respond(index, 'applied', finalViewport);
+    await settle();
+  };
+  const before = selects();
+  // The person looks at the tab receiving previews, which has no final yet, then picks the final
+  // the host was showing before the preview covered it.
+  f.presentation.update(previewGeometry, null, null);
+  await answer();
+  expect(selects()).toBe(before);
+  f.presentation.update(previewGeometry, f.item, null);
+  await answer();
+  expect(selects()).toBe(before + 1);
+  // Choosing the preview's tab again, after the run stopped, shows the kept preview again.
+  const begins = () => f.calls.filter((call) => call.type === 'surface.preview.begin').length;
+  const shownBefore = begins();
+  f.presentation.update(previewGeometry, null, f.preview());
+  await answer();
+  expect(begins()).toBe(shownBefore + 1);
+  expect(f.errors).toEqual([]);
+});
+
 test('a stale final-camera reply before preview presentation preserves visibility and the shown preview', async () => {
   const f = fixture();
   await commit(f);

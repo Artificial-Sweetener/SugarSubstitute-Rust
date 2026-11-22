@@ -197,6 +197,8 @@ export class NativeCanvasPresentation {
       shown: this.#visible,
     });
     this.#desired = desired;
+    // A key changes with its content, so the preview sees every new choice here.
+    if (this.#preview?.covers(desired) && this.#binding) this.#binding.selection = null;
     if (!material.retainedFinal) this.options.viewport(null);
     if (this.#viewport && !material.retainedFinal) this.#cancelViewport(this.#viewport);
     // A previous allocation can no longer be presented after the native window resizes.
