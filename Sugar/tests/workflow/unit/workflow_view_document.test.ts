@@ -76,6 +76,19 @@ test('a view switch is written into the workflow and every stored copy, never as
   expect(report).not.toHaveBeenCalled();
 });
 
+test('a workflow with no edits shows unsaved after a switch, its opened copy keeping its view', () => {
+  const { tracker, app } = comfy();
+  // A freshly opened workflow: Comfy holds its opened copy as the current one, same object.
+  const opened = tracker.activeState;
+  const clean = { ...tracker, initialState: opened, undoQueue: [], redoQueue: [] };
+  app.extensionManager.workflow.activeWorkflow.changeTracker = clean;
+  const owner = new ComfyWorkflowChangeTracker(app, window, jest.fn());
+  expect(owner.recordView('graph')).toBe(true);
+  expect(clean.initialState.extra[WORKFLOW_VIEW_EXTRA]).toBeUndefined();
+  expect(clean.activeState.extra[WORKFLOW_VIEW_EXTRA]).toBe('graph');
+  expect(clean.activeState).not.toBe(clean.initialState);
+});
+
 test('a tracker of another shape keeps the view for this session only and is reported once', () => {
   const report = jest.fn();
   const owner = new ComfyWorkflowChangeTracker({ rootGraph: { extra: {} } }, window, report);

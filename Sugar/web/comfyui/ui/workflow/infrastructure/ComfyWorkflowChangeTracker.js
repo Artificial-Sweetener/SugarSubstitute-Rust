@@ -104,18 +104,18 @@ export class ComfyWorkflowChangeTracker {
             this.#viewReported = true;
             return false;
         }
-        const stamp = (state) => {
-            if (isRecord(state))
-                state.extra = {
-                    ...(isRecord(state.extra) ? state.extra : {}),
-                    [WORKFLOW_VIEW_EXTRA]: view,
-                };
-        };
-        stamp(graph);
-        stamp(tracker.activeState);
+        const viewed = (extra) => ({
+            ...(isRecord(extra) ? extra : {}),
+            [WORKFLOW_VIEW_EXTRA]: view,
+        });
+        // Stored copies are replaced, never changed in place: on a workflow with no edits Comfy's
+        // opened copy is the very object it holds as current, and it must keep its own view.
+        const copy = (state) => isRecord(state) ? { ...state, extra: viewed(state.extra) } : state;
+        graph.extra = viewed(graph.extra);
+        tracker.activeState = copy(tracker.activeState);
         for (const queue of queues)
-            for (const state of queue)
-                stamp(state);
+            for (const [index, state] of queue.entries())
+                queue[index] = copy(state);
         Reflect.apply(tracker.updateModified, tracker, []);
         return true;
     }
