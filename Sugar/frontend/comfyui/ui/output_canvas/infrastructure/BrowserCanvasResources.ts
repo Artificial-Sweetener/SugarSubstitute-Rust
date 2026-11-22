@@ -48,6 +48,11 @@ export class BrowserCanvasResources {
   #plan: CanvasDisplayPlan | null = null;
   #budgetScope = '';
   #previewStarted = false;
+  /**
+   * The newest preview taken, kept after its tab is left, so choosing that tab again shows it:
+   * after a run stops no further frame comes, and it is the newest image that stage made.
+   */
+  #kept: { preview: WorkflowPreview; blob: Blob } | null = null;
   #overviewImages: CanvasVisibleImage<BrowserCanvasImagePayload>[] = [];
   #overviewPreviewSlot: string | null = null;
   #disposed = false;
@@ -157,6 +162,9 @@ export class BrowserCanvasResources {
     this.#previewStarted = Boolean(
       plan.preview && this.resources.hasPreviewInterest(canvasPreviewLane(plan.preview)),
     );
+    const kept = this.#kept;
+    if (plan.preview && kept && canvasPreviewLane(kept.preview) === canvasPreviewLane(plan.preview))
+      this.receive({ ...kept.preview, token: plan.preview.token }, kept.blob);
   }
 
   /** Admit only the overview's intersecting final-image cells through the same byte/decode limits. */
@@ -212,6 +220,7 @@ export class BrowserCanvasResources {
     )
       return;
     const lane = canvasPreviewLane(preview);
+    this.#kept = { preview, blob };
     const input: CanvasImageInput<BrowserCanvasImagePayload> = {
       key: preview.token,
       runOrder: preview.runOrder,
@@ -280,6 +289,7 @@ export class BrowserCanvasResources {
     if (this.#disposed) return;
     this.#disposed = true;
     this.#plan = null;
+    this.#kept = null;
     this.#preparation.dispose();
     this.resources.dispose();
   }

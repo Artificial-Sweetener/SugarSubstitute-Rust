@@ -269,6 +269,36 @@ describe('browser resource composition', () => {
     expect(f.resources.diagnostics().estimatedBytes).toBe(0);
   });
 
+  test('shows the newest preview of a stage again when its tab is chosen after leaving it', async () => {
+    const f = fixture();
+    const preview = f.preview(7);
+    const blob = new Blob(['preview']);
+    f.browser.reconcile(f.plan(f.catalog, preview));
+    f.browser.receive(preview, blob);
+    const shown = f.loads.findIndex((load) => load.input.preview);
+    expect(shown).toBeGreaterThanOrEqual(0);
+    await f.ready(shown, { width: 512, height: 288 });
+    // Another tab: the preview's bytes are retired with it.
+    f.selection.apply(f.view, f.catalog, {
+      type: 'select',
+      selection: { sourceId: f.catalog.entries[1]!.source.id, batchIndex: 0 },
+    });
+    f.browser.reconcile(f.plan());
+    expect(f.loads[shown]?.released).toBe(true);
+    const before = f.loads.length;
+    // Back on the stage's tab, with no further frame coming: its newest preview shows again.
+    f.selection.apply(f.view, f.catalog, {
+      type: 'select',
+      selection: { sourceId: f.catalog.entries[0]!.source.id, batchIndex: 0 },
+    });
+    f.browser.reconcile(f.plan(f.catalog, preview));
+    const again = f.loads.slice(before).find((load) => load.input.preview);
+    expect(again).toBeDefined();
+    expect(again?.input.payload).toEqual({ kind: 'preview', blob });
+    expect(f.browser.previewStarted).toBe(true);
+    f.browser.dispose();
+  });
+
   test('releases an outgoing image before displaying controls for another source', async () => {
     const f = fixture();
     f.browser.reconcile(f.plan());
