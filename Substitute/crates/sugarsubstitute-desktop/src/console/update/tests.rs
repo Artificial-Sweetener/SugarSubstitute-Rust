@@ -74,6 +74,19 @@ fn tail_follow_requires_empty_selection_and_actual_bottom_and_never_grants_focus
     Ok(())
 }
 #[test]
+fn select_all_reaching_the_closing_mark_survives_new_output() -> TestResult {
+    let (old, _, _) = index(&source(1, &[(1, "first")])?)?;
+    let (next, _, _) = index(&source(2, &[(1, "first"), (2, "next")])?)?;
+    // Select-all ends on the control's closing mark, one position past the text.
+    let mut port = Port::new(Observation { start: 0, end: 6, first: 0, at_bottom: true });
+    replace(Some(&old), &next, &mut port)?;
+    assert_eq!(port.restored, Some((0, 5, 0, false)));
+    // Past the closing mark is still a broken observation.
+    port.observation = Observation { start: 0, end: 7, first: 0, at_bottom: true };
+    assert!(replace(Some(&old), &next, &mut port).is_err());
+    Ok(())
+}
+#[test]
 fn foreign_resource_clears_old_selection_and_never_reuses_old_record_authority() -> TestResult {
     let (old, _, _) = index(&source(1, &[(1, "old")])?)?;
     let mut foreign = source(1, &[(1, "different")])?;

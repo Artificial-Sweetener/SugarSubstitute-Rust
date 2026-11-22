@@ -4380,7 +4380,7 @@ boundary = "external_runtime"
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/windows_console/menu.rs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:64c5335fdf11446829373e29d030e5ce1dfd9b9cfdd5a5a718d23e0cfcffc7c3"
+source_sha256 = "sha256:7cc946b31ef42e31e6e0920885f6ff093fd9e685e836d0786e643337f39463ca"
 capabilities = ["GetProcAddress", "windows::Win32::System::LibraryLoader::GetProcAddress"]
 disposition = "boundary"
 rationale = "Resolve uxtheme's two unnamed menu-theme exports from the module the process already holds, so the console's popup menu follows its theme; no module is loaded or retained."

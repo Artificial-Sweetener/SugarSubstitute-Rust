@@ -222,7 +222,7 @@ rationale = "Behavioral fixture explicitly exercises native presentation, input 
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/windows_console/menu.rs"
-source_sha256 = "sha256:64c5335fdf11446829373e29d030e5ce1dfd9b9cfdd5a5a718d23e0cfcffc7c3"
+source_sha256 = "sha256:7cc946b31ef42e31e6e0920885f6ff093fd9e685e836d0786e643337f39463ca"
 kind = "native"
 rationale = "Console edit menu: row labels arrive from the typed catalog's edit record through ConsoleView; uxtheme ordinals and the popup's class are technical identities, never product copy."
 

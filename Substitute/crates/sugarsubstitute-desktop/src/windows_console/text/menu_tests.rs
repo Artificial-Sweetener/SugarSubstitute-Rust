@@ -140,6 +140,25 @@ fn qualify_menu() -> TestResult {
     // As with Ctrl+A, the selection also takes the document's closing paragraph mark.
     let all = control.selection();
     assert!(all.cpMin == 0 && all.cpMax as isize >= control.length(), "selected {all:?}");
+    // Output keeps arriving during start-up: a selection on the closing mark must survive it.
+    let (more, _more_frame, _more_release) =
+        index(&source(2, &[(1, "menu target text"), (2, "more output")])?)?;
+    documents.stage(more)?;
+    publish(hwnd, &mut documents, true)?;
+    // Ctrl+A reaches the same native end.
+    // SAFETY: Select through the live fixture console, as its Ctrl+A does.
+    unsafe {
+        SendMessageW(
+            hwnd,
+            windows::Win32::UI::Controls::EM_SETSEL,
+            Some(WPARAM(0)),
+            Some(LPARAM(-1)),
+        );
+    }
+    let (most, _most_frame, _most_release) =
+        index(&source(3, &[(1, "menu target text"), (2, "more output"), (3, "most")])?)?;
+    documents.stage(most)?;
+    publish(hwnd, &mut documents, true)?;
     control.select(2, 2)?;
     assert_eq!(Document::read(hwnd), Document { selected: false, text: true });
     assert!(!Row::Copy.enabled(Document::read(hwnd)));

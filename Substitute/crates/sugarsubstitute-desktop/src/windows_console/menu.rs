@@ -186,8 +186,12 @@ pub(super) fn choose(owner: HWND, request: &Request) -> Result<Option<Row>, Desk
     Ok(Row::chosen(command.0))
 }
 
-/// Run a chosen row on the console, which must still be the one the menu opened over.
+/// Run a chosen row on the console, which must still be the one the menu opened over. A row the
+/// console cannot run now does nothing, whatever the popup returned.
 pub(super) fn run(hwnd: HWND, row: Row) -> Result<(), DesktopError> {
+    if !row.enabled(Document::read(hwnd)) {
+        return Ok(());
+    }
     match row {
         // SAFETY: The live console copies its own selection, as for Ctrl+C.
         Row::Copy => unsafe {

@@ -12,6 +12,19 @@ pub(crate) struct Observation {
     pub(crate) first: i32,
     pub(crate) at_bottom: bool,
 }
+impl Observation {
+    /// Read the native closing mark as the end of the text. The control closes every document
+    /// with a paragraph mark one position past its text, and select-all (Ctrl+A or the menu)
+    /// reaches it.
+    fn within(self, units: u32) -> Self {
+        let closing = units.checked_add(1);
+        let end = |position: i32| match u32::try_from(position) {
+            Ok(native) if Some(native) == closing => position - 1,
+            _ => position,
+        };
+        Self { start: end(self.start), end: end(self.end), first: end(self.first), ..self }
+    }
+}
 /// Replace external native effects; record identity and selection policy remain here.
 pub(crate) trait TextPort {
     fn observe(&mut self) -> Result<Observation, DesktopError>;
@@ -35,8 +48,8 @@ pub(crate) fn replace(
     incoming: &DocumentIndex,
     port: &mut impl TextPort,
 ) -> Result<(), DesktopError> {
-    let observation = if current.is_some() {
-        port.observe()?
+    let observation = if let Some(old) = current {
+        port.observe()?.within(old.units)
     } else {
         Observation { at_bottom: true, ..Default::default() }
     };
