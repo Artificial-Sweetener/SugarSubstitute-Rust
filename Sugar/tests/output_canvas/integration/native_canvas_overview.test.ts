@@ -68,6 +68,7 @@ function fixture(
   const visible: boolean[] = [];
   const errors: unknown[] = [];
   const presentation = new NativeCanvasPresentation({
+    previewFrame: () => null,
     address,
     clock: new WorkflowTestClock(),
     host: () => transport?.surface ?? host,

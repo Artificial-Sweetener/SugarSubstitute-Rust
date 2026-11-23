@@ -13,10 +13,14 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Deliver ephemeral preview bytes to interested renderers without retaining a background pixel cache. */
+/**
+ * Own live preview bytes: deliver each frame to interested renderers, and keep exactly the bytes of
+ * each workflow's current preview, the one the result store names, until the store stops naming it.
+ */
 
 import type { WorkflowCanvasPreview } from '../domain/WorkflowCanvas.js';
 import type { WorkflowPreview } from '../domain/WorkflowPreview.js';
+import type { WorkflowSessionId } from '../domain/ExecutionIdentity.js';
 import type { WorkflowResultStore } from '../application/WorkflowResultStore.js';
 import type { AttributedWorkflowSource } from '../application/WorkflowExecutionIngestor.js';
 
@@ -25,9 +29,12 @@ export interface WorkflowPreviewConsumer {
   receive(preview: WorkflowPreview, blob: Blob): void;
 }
 
-/** Own preview delivery identities while each interested renderer owns its admitted pixels and URLs. */
+/** Own preview delivery identities and the current preview's bytes; renderers keep no copies. */
 export class ComfyWorkflowPreviewDelivery {
   readonly #consumers = new Set<WorkflowPreviewConsumer>();
+  /** The current preview's bytes per workflow, released once the result store stops naming it. */
+  readonly #current = new Map<WorkflowSessionId, { readonly token: string; readonly blob: Blob }>();
+  readonly #stopResults: () => void;
   #sequence = 0;
   #disposed = false;
 
@@ -36,7 +43,29 @@ export class ComfyWorkflowPreviewDelivery {
     private readonly results: WorkflowResultStore,
     private readonly logger: Pick<Console, 'error'>,
     private readonly canvasPreview: (frame: WorkflowCanvasPreview<Blob>) => void = () => {},
-  ) {}
+  ) {
+    this.#stopResults = results.subscribe((sessionId) => {
+      const current = this.#current.get(sessionId);
+      if (current && results.read(sessionId)?.preview?.token !== current.token)
+        this.#current.delete(sessionId);
+    });
+  }
+
+  /**
+   * The bytes of a stopped run's newest image, while the result store still names it as current:
+   * a renderer shows it again when its tab is chosen instead of keeping a copy. A running run's
+   * preview is never handed out again; its next live frame replaces it, and a stage's final closes
+   * its lane for good.
+   */
+  frame(preview: WorkflowPreview): Blob | null {
+    const current = this.#current.get(preview.sessionId);
+    const session = this.results.read(preview.sessionId);
+    return current?.token === preview.token &&
+      session?.preview?.token === preview.token &&
+      (session.runStatus === 'cancelled' || session.runStatus === 'error')
+      ? current.blob
+      : null;
+  }
 
   /** Subscribe one explicit renderer interest; inactive surfaces refuse bytes before admission. */
   subscribe(consumer: WorkflowPreviewConsumer): () => void {
@@ -62,6 +91,7 @@ export class ComfyWorkflowPreviewDelivery {
       dimensions: null,
     });
     if (!this.results.publishPreview(preview)) return;
+    this.#current.set(preview.sessionId, { token: preview.token, blob });
     this.canvasPreview({ source, preview, bytes: blob });
     for (const consumer of this.#consumers) {
       try {
@@ -79,6 +109,8 @@ export class ComfyWorkflowPreviewDelivery {
   /** Retire consumers without taking ownership of renderer-held allocations. */
   dispose(): void {
     this.#disposed = true;
+    this.#stopResults();
+    this.#current.clear();
     this.#consumers.clear();
   }
 }

@@ -193,6 +193,7 @@ function fixture(discovery: Discovery) {
       }
       mounted.native++;
       const attachment = new NativeCanvasAttachment(element, {
+        previewFrame: () => null,
         address,
         views,
         selection,

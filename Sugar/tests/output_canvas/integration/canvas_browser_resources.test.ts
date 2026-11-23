@@ -89,11 +89,14 @@ function fixture() {
       },
     },
   });
+  /** The preview owner's bytes, by token, of a stopped run's newest image. */
+  const owned = new Map<string, Blob>();
   const browser = new BrowserCanvasResources(
     resources,
     budget,
     allowances,
     (item) => `http://localhost/view?filename=${item.file.filename}&v=${item.id}`,
+    (preview) => owned.get(preview.token) ?? null,
   );
   /** Project a current authoritative selection with optional transient metadata. */
   const plan = (current: CanvasCatalogSnapshot = catalog, preview: WorkflowPreview | null = null) =>
@@ -140,6 +143,7 @@ function fixture() {
     plan,
     ready,
     preview,
+    owned,
     errors,
   };
 }
@@ -269,12 +273,14 @@ describe('browser resource composition', () => {
     expect(f.resources.diagnostics().estimatedBytes).toBe(0);
   });
 
-  test('shows the newest preview of a stage again when its tab is chosen after leaving it', async () => {
+  test("shows a stopped run's newest preview again from its owner when its tab is chosen", async () => {
     const f = fixture();
     const preview = f.preview(7);
     const blob = new Blob(['preview']);
     f.browser.reconcile(f.plan(f.catalog, preview));
     f.browser.receive(preview, blob);
+    // The run stops: its owner keeps the newest image; this canvas keeps no copy.
+    f.owned.set(preview.token, blob);
     const shown = f.loads.findIndex((load) => load.input.preview);
     expect(shown).toBeGreaterThanOrEqual(0);
     await f.ready(shown, { width: 512, height: 288 });
@@ -296,6 +302,29 @@ describe('browser resource composition', () => {
     expect(again).toBeDefined();
     expect(again?.input.payload).toEqual({ kind: 'preview', blob });
     expect(f.browser.previewStarted).toBe(true);
+    f.browser.dispose();
+  });
+
+  test('never shows a preview again that its owner no longer hands out', async () => {
+    const f = fixture();
+    const preview = f.preview(7);
+    f.browser.reconcile(f.plan(f.catalog, preview));
+    f.browser.receive(preview, new Blob(['preview']));
+    const shown = f.loads.findIndex((load) => load.input.preview);
+    await f.ready(shown, { width: 512, height: 288 });
+    f.selection.apply(f.view, f.catalog, {
+      type: 'select',
+      selection: { sourceId: f.catalog.entries[1]!.source.id, batchIndex: 0 },
+    });
+    f.browser.reconcile(f.plan());
+    const before = f.loads.length;
+    // Back on the running stage: only its next live frame shows; the old one never returns.
+    f.selection.apply(f.view, f.catalog, {
+      type: 'select',
+      selection: { sourceId: f.catalog.entries[0]!.source.id, batchIndex: 0 },
+    });
+    f.browser.reconcile(f.plan(f.catalog, preview));
+    expect(f.loads.slice(before).some((load) => load.input.preview)).toBe(false);
     f.browser.dispose();
   });
 

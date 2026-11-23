@@ -56,6 +56,7 @@ function fixture(backdrop = true, comparison = false) {
   const changed = jest.fn();
   const report = jest.fn();
   const presentation = new NativeCanvasPresentation({
+    previewFrame: () => null,
     address: canvasSnapshot('acrylic').address,
     clock: new WorkflowTestClock(),
     host: () => host,

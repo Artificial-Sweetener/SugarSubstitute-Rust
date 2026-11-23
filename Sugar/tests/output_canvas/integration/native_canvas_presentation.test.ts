@@ -152,6 +152,7 @@ function fixture() {
   const statuses: NativeCanvasPresentationStatus['state'][] = [];
   const errors: unknown[] = [];
   const surface = new NativeCanvasPresentation({
+    previewFrame: () => null,
     clock: new WorkflowTestClock(),
     preview: () => {},
     acceptsPreparation: () => false,

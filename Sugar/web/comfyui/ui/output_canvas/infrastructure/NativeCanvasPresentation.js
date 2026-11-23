@@ -63,9 +63,8 @@ export class NativeCanvasPresentation {
                 this.#binding = createNativeCanvasBinding(host);
                 const binding = this.#binding;
                 this.#preview = new NativeCanvasPreview({
-                    address: this.options.address,
+                    context: this.options,
                     host,
-                    clock: this.options.clock,
                     active: () => this.#owns(binding) && this.options.accepts(),
                     finalRevision: () => binding.selectionRevision,
                     changed: () => this.#wake(),
@@ -74,7 +73,6 @@ export class NativeCanvasPresentation {
                             binding.active.cancellation.cancel();
                     },
                     displayed: (value, presentation) => this.#observed(binding, value, presentation),
-                    report: this.options.report,
                 });
             }
             this.#desired = null;

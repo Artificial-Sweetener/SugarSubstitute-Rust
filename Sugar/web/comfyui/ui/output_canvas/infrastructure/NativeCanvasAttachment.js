@@ -179,6 +179,7 @@ export class NativeCanvasAttachment {
         this.#native = new NativeCanvasPresentation({
             address: options.address,
             clock: options.clock,
+            previewFrame: options.previewFrame,
             backdropChanged: () => {
                 if (this.#ready && !this.#disposed)
                     this.#publish();

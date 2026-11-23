@@ -163,6 +163,7 @@ function fixture(
   const errors: unknown[] = [];
   const frames = new CanvasFrameFixture();
   const surface = new NativeCanvasAttachment(root, {
+    previewFrame: () => null,
     address,
     clock: new WorkflowTestClock(),
     views,

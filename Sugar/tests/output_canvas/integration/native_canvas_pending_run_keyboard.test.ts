@@ -95,6 +95,7 @@ function fixture({ pending, staged }: Scenario) {
   const host = nativePreviewHost();
   const errors: unknown[] = [];
   const surface = new NativeCanvasAttachment(root, {
+    previewFrame: () => null,
     address,
     clock: new WorkflowTestClock(),
     views,

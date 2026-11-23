@@ -66,6 +66,7 @@ function fixture() {
   const host = nativePreviewHost(false);
   const errors: unknown[] = [];
   const surface = new NativeCanvasAttachment(root, {
+    previewFrame: () => null,
     address,
     clock: new WorkflowTestClock(),
     views,

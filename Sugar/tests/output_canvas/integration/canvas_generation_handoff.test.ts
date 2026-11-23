@@ -97,6 +97,7 @@ test('background results stay with their workflow and late decodes cannot replac
       const loader = new BrowserCanvasPlatformFixture();
       loaders.push(loader);
       return new BrowserCanvasAttachment(element, {
+        previewFrame: () => null,
         address,
         views,
         selection,

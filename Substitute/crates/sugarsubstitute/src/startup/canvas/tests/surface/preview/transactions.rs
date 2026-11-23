@@ -372,11 +372,9 @@ fn a_late_or_older_preview_is_refused_and_never_replaces_the_newer_one()
     let target = wait_frame(&mut fixture)?;
     fixture.canvas.presented(target)?;
     wait_change(&mut fixture, "presented")?;
-    // An older sequence of the same run and the same sequence again.
-    for (id, run, sequence, token) in [(300, 1, 1, "preview:1"), (301, 1, 2, "preview:2")] {
-        fixture.send(id, "surface.preview.begin", json!({"preview":{"generation":0,"promptId":"prompt:one","sourceId":"source:one","runOrder":run,"sequence":sequence,"token":token},"byteLength":JPEG.len(),"format":"jpeg"}))?;
-        fixture.take(id, "stale")?;
-    }
+    // An older sequence of the same run.
+    fixture.send(300, "surface.preview.begin", json!({"preview":{"generation":0,"promptId":"prompt:one","sourceId":"source:one","runOrder":1,"sequence":1,"token":"preview:1"},"byteLength":JPEG.len(),"format":"jpeg"}))?;
+    fixture.take(300, "stale")?;
     assert_eq!(prepared_frame(&fixture.canvas).map(|frame| frame.content.target()), Some(target));
     // A later run is admitted.
     fixture.send(303, "surface.preview.begin", json!({"preview":{"generation":0,"promptId":"prompt:two","sourceId":"source:one","runOrder":2,"sequence":1,"token":"preview:1"},"byteLength":JPEG.len(),"format":"jpeg"}))?;

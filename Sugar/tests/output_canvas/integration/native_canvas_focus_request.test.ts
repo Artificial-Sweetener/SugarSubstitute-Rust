@@ -69,6 +69,7 @@ function fixture(staged: boolean, options: { route?: CanvasRouteState; empty?: b
   };
   const host = nativePreviewHost(options.empty === true);
   const surface = new NativeCanvasAttachment(root, {
+    previewFrame: () => null,
     address,
     clock: new WorkflowTestClock(),
     views,

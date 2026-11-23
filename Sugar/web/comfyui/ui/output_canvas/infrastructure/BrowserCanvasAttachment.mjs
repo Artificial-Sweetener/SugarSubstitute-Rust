@@ -129,7 +129,7 @@ export class BrowserCanvasAttachment {
             changed: () => this.#resourcesChanged(),
             logger: options.logger,
         });
-        this.#browserResources = new BrowserCanvasResources(resources, budget, options.allowances, options.url);
+        this.#browserResources = new BrowserCanvasResources(resources, budget, options.allowances, options.url, options.previewFrame);
         const dragSubjects = new BrowserCanvasDragSubjects(this.viewport, this.#images, this.#overview, () => this.#plan);
         this.#drag = new CanvasOutputDrag(element, {
             resolve: (target, event) => dragSubjects.resolve(target, event),

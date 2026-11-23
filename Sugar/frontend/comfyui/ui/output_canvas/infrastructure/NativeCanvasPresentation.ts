@@ -25,8 +25,7 @@ import {
 } from './NativeCanvasBinding.js';
 import type { WorkflowOutputItem } from '../../execution/domain/WorkflowOutput.js';
 import type { WorkflowPreview } from '../../execution/domain/WorkflowPreview.js';
-import type { ExecutionClock } from '../../execution/domain/WorkflowExecutionEvent.js';
-import { NativeCanvasPreview } from './NativeCanvasPreview.js';
+import { NativeCanvasPreview, type NativeCanvasPreviewContext } from './NativeCanvasPreview.js';
 import { nativeCanvasDiagnostics } from './NativeCanvasDiagnostics.js';
 import { NativeCanvasViewportIntent, viewportRejection } from './NativeCanvasViewportIntent.js';
 import { nativeCanvasComparison } from './NativeCanvasCapabilities.js';
@@ -35,7 +34,6 @@ import {
   nativeMaterialReady,
   nativeMaterialRetention,
 } from './NativeCanvasMaterial.js';
-import type { CanvasAttachmentAddress } from '../domain/CanvasIdentity.js';
 import type { CanvasSurfaceGeometry } from '../domain/CanvasViewPort.js';
 import type {
   CanvasSurfaceHost,
@@ -64,9 +62,7 @@ import {
   type NativeCanvasPresentationStatus,
 } from './NativeCanvasStatus.js';
 
-export interface NativeCanvasPresentationOptions {
-  readonly address: CanvasAttachmentAddress;
-  readonly clock: ExecutionClock;
+export interface NativeCanvasPresentationOptions extends NativeCanvasPreviewContext {
   /** Resolve the negotiated surface through the shared canvas registry. */
   host(): CanvasSurfaceHost | null;
   /** Report that no surface exists yet because the host's first discovery has not concluded. */
@@ -95,7 +91,6 @@ export interface NativeCanvasPresentationOptions {
   backdropChanged?(): void;
   /** Choose the camera an image selection restores when sent; without one it starts at Fit. */
   readonly inspection?: Parameters<typeof nativeCanvasSelection>[1];
-  report(error: unknown): void;
 }
 
 /** Keep one in-flight operation and coalesce newer view or geometry changes. */
@@ -148,9 +143,8 @@ export class NativeCanvasPresentation {
         this.#binding = createNativeCanvasBinding(host);
         const binding = this.#binding;
         this.#preview = new NativeCanvasPreview({
-          address: this.options.address,
+          context: this.options,
           host,
-          clock: this.options.clock,
           active: () => this.#owns(binding) && this.options.accepts(),
           finalRevision: () => binding.selectionRevision,
           changed: () => this.#wake(),
@@ -159,7 +153,6 @@ export class NativeCanvasPresentation {
               binding.active.cancellation.cancel();
           },
           displayed: (value, presentation) => this.#observed(binding, value, presentation),
-          report: this.options.report,
         });
       }
       this.#desired = null;

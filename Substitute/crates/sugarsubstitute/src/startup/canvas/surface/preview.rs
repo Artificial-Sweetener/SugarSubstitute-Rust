@@ -69,7 +69,7 @@ pub(super) struct Preview {
     withdrawing: bool,
     shown: Option<Shown>,
     /// The newest preview admitted on this navigation: workflow generation, run order and
-    /// sequence. A preview no newer than it is refused, so an older frame never replaces it.
+    /// sequence. A preview older than it is refused, so an older frame never replaces it.
     latest: Option<(u64, u64, u64)>,
     sequence: u64,
     pending_change: Option<(MainIdentity, CanvasSurfacePresentationChange)>,
@@ -98,28 +98,18 @@ impl Preview {
         self.withdrawing = false;
     }
 
-    /// Whether `identity` is newer than every preview admitted on this navigation: a later run,
-    /// or a later sequence of the same run, of the same workflow generation. A new workflow
-    /// generation starts afresh.
-    pub(super) fn is_newer(
+    /// Whether `identity` is no older than the newest preview admitted on this navigation: a run
+    /// and sequence at least as late, of the same workflow generation. A new workflow generation
+    /// starts afresh. The newest itself comes again only when the page shows a stopped run's newest
+    /// image again; anything older, such as a late frame of an earlier run, never shows.
+    pub(super) fn is_not_older(
         &self,
         identity: &sugarsubstitute_contracts::canvas_surface::CanvasSurfacePreviewIdentity,
     ) -> bool {
         self.latest.is_none_or(|(generation, run, sequence)| {
             identity.generation() != generation
-                || (identity.run_order(), identity.sequence()) > (run, sequence)
+                || (identity.run_order(), identity.sequence()) >= (run, sequence)
         })
-    }
-
-    /// Whether `identity` is the newest preview admitted and no preview is shown: a final replaced
-    /// it, and the person chose it again. The page sends a frame a second time only then.
-    pub(super) fn is_chosen_again(
-        &self,
-        identity: &sugarsubstitute_contracts::canvas_surface::CanvasSurfacePreviewIdentity,
-    ) -> bool {
-        self.shown.is_none()
-            && self.latest
-                == Some((identity.generation(), identity.run_order(), identity.sequence()))
     }
 
     /// Record `identity` as the newest preview admitted on this navigation.

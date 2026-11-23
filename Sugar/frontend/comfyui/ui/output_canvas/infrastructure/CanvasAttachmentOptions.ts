@@ -16,6 +16,7 @@
 /** Supply shared workflow and overlay services to either output presenter. */
 
 import type { WorkflowOutputItem } from '../../execution/domain/WorkflowOutput.js';
+import type { WorkflowPreview } from '../../execution/domain/WorkflowPreview.js';
 import type { ExecutionClock } from '../../execution/domain/WorkflowExecutionEvent.js';
 import type { CanvasFrameClock } from '../application/CanvasCameraTransition.js';
 import type { CanvasInspectionStore } from '../application/CanvasInspectionStore.js';
@@ -40,6 +41,11 @@ export interface CanvasAttachmentOptions {
   catalog(): CanvasCatalogSnapshot | null;
   /** Check the fixed attachment and workflow generation without graph traversal. */
   accepts(): boolean;
+  /**
+   * The bytes of a preview the workflow's result still names as current, from their only owner;
+   * a presenter showing that preview again asks here instead of keeping its own copy.
+   */
+  previewFrame(preview: WorkflowPreview): Blob | null;
   /** Read shared connection state without installing another execution listener. */
   connected(): boolean;
   copy?: CanvasMediaOptions['copy'];

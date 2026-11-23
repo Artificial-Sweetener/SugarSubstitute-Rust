@@ -93,6 +93,7 @@ function fixture(options: { host?: boolean; discovering?: boolean } = {}) {
     report: (error) => errors.push(error),
     mount: (root, address, _catalog, accepts, acceptsPreparation) => {
       const attachment = new NativeCanvasAttachment(root, {
+        previewFrame: () => null,
         address,
         clock,
         views,

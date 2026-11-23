@@ -107,6 +107,7 @@ function fixture(
     },
   };
   const presentation = new NativeCanvasPresentation({
+    previewFrame: () => null,
     clock: new WorkflowTestClock(),
     preview: () => {},
     address: canvasSnapshot('viewport').address,

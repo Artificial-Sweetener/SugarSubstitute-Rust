@@ -108,6 +108,7 @@ function fixture(brokenUrl = false) {
     open: jest.fn(),
     memory: new MemoryBudgetRegistry(),
     disposeLoader: () => loader.dispose(),
+    previewFrame: () => null,
     report: (error: unknown) => {
       errors.push(error);
     },

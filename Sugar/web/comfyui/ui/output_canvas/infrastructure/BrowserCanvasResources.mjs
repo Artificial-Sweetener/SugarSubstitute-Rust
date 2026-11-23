@@ -24,26 +24,25 @@ export class BrowserCanvasResources {
     budget;
     allowances;
     url;
+    previewFrame;
     #preparation;
     #plan = null;
     #budgetScope = '';
     #previewStarted = false;
-    /**
-     * The newest preview taken, kept after its tab is left, so choosing that tab again shows it:
-     * after a run stops no further frame comes, and it is the newest image that stage made.
-     */
-    #kept = null;
     #overviewImages = [];
     #overviewPreviewSlot = null;
     #disposed = false;
     #active = true;
     #refreshNeeded = false;
     /** Use existing authoritative resource/approval owners and a host-qualified final URL adapter. */
-    constructor(resources, budget, allowances, url) {
+    constructor(resources, budget, allowances, url, 
+    /** The preview owner's bytes of a stopped run's newest image; this canvas keeps no copy. */
+    previewFrame) {
         this.resources = resources;
         this.budget = budget;
         this.allowances = allowances;
         this.url = url;
+        this.previewFrame = previewFrame;
         this.#preparation = new CanvasImagePreparation(resources);
     }
     /** Warm only the requested source's visible finals under the current shared budget. */
@@ -130,9 +129,9 @@ export class BrowserCanvasResources {
             }
             : null);
         this.#previewStarted = Boolean(plan.preview && this.resources.hasPreviewInterest(canvasPreviewLane(plan.preview)));
-        const kept = this.#kept;
-        if (plan.preview && kept && canvasPreviewLane(kept.preview) === canvasPreviewLane(plan.preview))
-            this.receive({ ...kept.preview, token: plan.preview.token }, kept.blob);
+        const owned = plan.preview ? this.previewFrame(plan.preview) : null;
+        if (plan.preview && owned)
+            this.receive(plan.preview, owned);
     }
     /** Admit only the overview's intersecting final-image cells through the same byte/decode limits. */
     overview(cells) {
@@ -178,7 +177,6 @@ export class BrowserCanvasResources {
             canvasPreviewLane(preview) !== canvasPreviewLane(current))
             return;
         const lane = canvasPreviewLane(preview);
-        this.#kept = { preview, blob };
         const input = {
             key: preview.token,
             runOrder: preview.runOrder,
@@ -251,7 +249,6 @@ export class BrowserCanvasResources {
             return;
         this.#disposed = true;
         this.#plan = null;
-        this.#kept = null;
         this.#preparation.dispose();
         this.resources.dispose();
     }

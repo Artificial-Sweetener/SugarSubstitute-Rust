@@ -155,6 +155,7 @@ function workspace() {
         const errors: unknown[] = [];
         let camera = fit();
         const surface = new NativeCanvasAttachment(root, {
+          previewFrame: () => null,
           address,
           clock: new WorkflowTestClock(),
           views,

@@ -79,6 +79,7 @@ function fixture(capabilities: Partial<CanvasSurfaceCapabilities>, comparison = 
   const host = { ...native.host, capabilities: { ...native.host.capabilities, ...capabilities } };
   const errors: unknown[] = [];
   const surface = new NativeCanvasAttachment(root, {
+    previewFrame: () => null,
     address,
     clock: new WorkflowTestClock(),
     views,

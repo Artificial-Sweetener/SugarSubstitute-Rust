@@ -142,6 +142,7 @@ function fixture(options: { readonly undiscovered?: boolean } = {}) {
     report: (error) => errors.push(error),
     mount: (root, address, _catalog, accepts, acceptsPreparation) => {
       const attachment = new NativeCanvasAttachment(root, {
+        previewFrame: () => null,
         address,
         clock,
         views,

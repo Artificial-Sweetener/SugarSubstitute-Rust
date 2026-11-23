@@ -93,6 +93,7 @@ function fixture(capabilities: CanvasSurfaceCapabilities = comparing, transport?
     },
   };
   const presentation = new NativeCanvasPresentation({
+    previewFrame: () => null,
     clock: new WorkflowTestClock(),
     preview: () => {},
     address: canvasSnapshot('comparison').address,

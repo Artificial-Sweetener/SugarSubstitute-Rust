@@ -133,6 +133,7 @@ function fixture(webp = false) {
       if (presenter.current() !== 'browser') {
         mounted.native++;
         return new NativeCanvasAttachment(element, {
+          previewFrame: () => null,
           address,
           clock,
           views,

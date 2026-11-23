@@ -90,8 +90,8 @@ fn restored_old_final_cannot_acknowledge_a_new_final_selection() -> Result<(), B
     Err("New final selection did not acknowledge its actual native source".into())
 }
 
-/// After a stop, the person inspects the final, then chooses the kept preview's tab again: the
-/// page sends that newest preview a second time, and it shows again.
+/// After a stop, the person inspects the final, then chooses the stopped stage's tab again: the
+/// page sends that run's newest image, from its preview owner, a second time, and it shows again.
 #[test]
 fn the_newest_preview_shows_again_after_a_final_replaced_it() -> Result<(), Box<dyn Error>> {
     let mut fixture = Fixture::new()?;

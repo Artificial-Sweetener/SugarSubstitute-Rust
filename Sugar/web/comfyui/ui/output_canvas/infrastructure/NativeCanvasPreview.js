@@ -18,13 +18,6 @@ export class NativeCanvasPreview {
     #interest = null;
     #active = null;
     #pending = null;
-    /** The newest preview taken, until it is shown or replaced. */
-    #received = null;
-    /**
-     * The newest preview shown, kept after a final replaces it on screen, so choosing its tab again
-     * shows it: after a run stops it is the newest image that run made.
-     */
-    #kept = null;
     #shown = null;
     #displayedPreview = false;
     /** The content last asked for, kept through failures that drop the presentation's state. */
@@ -47,10 +40,10 @@ export class NativeCanvasPreview {
                     return;
                 this.#observing = status === 'observing';
                 this.options.changed();
-            }, options.report);
+            }, options.context.report);
         }
         catch (error) {
-            options.report(error);
+            options.context.report(error);
         }
     }
     /** Read accepted observation support without granting sibling preparation byte authority. */
@@ -101,22 +94,18 @@ export class NativeCanvasPreview {
                 this.#withdraw();
         }
         this.#interest = preview;
-        // The kept preview comes back when its tab is chosen again after a final replaced it.
-        const kept = this.#kept;
-        if (kept &&
-            preview &&
-            canvasLane(preview) === canvasLane(kept.preview) &&
-            !this.#active &&
-            !this.#pending &&
-            this.#shown?.preview.token !== kept.preview.token) {
-            this.#pending = kept;
-            this.options.changed();
-        }
+        // A stopped run's newest image comes back from its owner when its tab is chosen again.
+        const owned = preview ? this.options.context.previewFrame(preview) : null;
+        if (preview && owned)
+            this.receive(preview, owned);
         return changed;
     }
-    /** Refuse bytes until this exact committed attachment has a qualified workflow preview. */
+    /**
+     * Refuse bytes until this exact committed attachment has a qualified workflow preview. A frame
+     * taken while a final selection settles waits and is sent the moment that selection finishes.
+     */
     wants() {
-        return this.observing && this.options.active() && !this.#selecting && !!this.#interest;
+        return this.observing && this.options.active() && !!this.#interest;
     }
     /** Retain encoded bytes only; no image, URL, image loader or browser decoder is created. */
     receive(preview, blob) {
@@ -135,7 +124,6 @@ export class NativeCanvasPreview {
             this.#drops++;
         this.#accepted++;
         this.#pending = { preview, blob };
-        this.#received = this.#pending;
         this.options.changed();
     }
     /** Select already fences native preview custody; avoid withdrawing back to the previous final. */
@@ -154,6 +142,8 @@ export class NativeCanvasPreview {
     /** Reopen admission after any selection outcome while preserving observed lease correlation. */
     selectionFinished() {
         this.#selecting = false;
+        if (this.#pending)
+            this.options.changed();
     }
     /** A successful final selection acknowledges the newly accepted native final frame. */
     selected() {
@@ -204,7 +194,7 @@ export class NativeCanvasPreview {
                 if (operation.type !== 'surface.preview.begin')
                     return;
                 frame.leaseRevision = revision;
-                frame.stop = this.options.clock.later(CANVAS_PREVIEW_LEASE_MILLISECONDS, () => {
+                frame.stop = this.options.context.clock.later(CANVAS_PREVIEW_LEASE_MILLISECONDS, () => {
                     if (this.#active === frame) {
                         this.#withdraw();
                         this.options.changed();
@@ -213,7 +203,7 @@ export class NativeCanvasPreview {
             },
             settled: (result) => this.#settled(frame, operation, result),
             failed: (error) => {
-                this.options.report(error);
+                this.options.context.report(error);
                 this.#settled(frame, operation, { status: 'error', message: 'Preview transfer failed.' });
             },
         };
@@ -236,8 +226,6 @@ export class NativeCanvasPreview {
         this.#subscription = null;
         this.#clearActive();
         this.#pending = null;
-        this.#received = null;
-        this.#kept = null;
         this.#shown = null;
         this.#interest = null;
         this.#displayedPreview = false;
@@ -263,7 +251,7 @@ export class NativeCanvasPreview {
         })
             .catch((error) => {
             frame.reading = false;
-            this.options.report(error);
+            this.options.context.report(error);
             if (this.#active === frame) {
                 this.#withdraw();
                 this.options.changed();
@@ -380,7 +368,7 @@ export class NativeCanvasPreview {
     #observe(change) {
         if (!this.observing ||
             !this.options.active() ||
-            ['sessionId', 'viewId', 'windowId', 'attachmentId', 'generation'].some((key) => change.address[key] !== this.options.address[key]) ||
+            ['sessionId', 'viewId', 'windowId', 'attachmentId', 'generation'].some((key) => change.address[key] !== this.options.context.address[key]) ||
             change.sequence <= this.#sequence)
             return;
         const matches = (value, token, revision) => value?.preview.token === token && value.leaseRevision === revision;
@@ -406,8 +394,6 @@ export class NativeCanvasPreview {
             active.leaseRevision !== null &&
             matches(active, change.token, change.leaseRevision)) {
             this.#shown = { preview: active.preview, leaseRevision: active.leaseRevision };
-            if (this.#received?.preview.token === active.preview.token)
-                this.#kept = this.#received;
         }
         if (active &&
             matches(active, change.token, change.leaseRevision) &&
@@ -418,7 +404,7 @@ export class NativeCanvasPreview {
         this.#displayedPreview = display.type === 'preview';
         this.options.displayed(display, presentation);
         if (change.status === 'failed' && change.message)
-            this.options.report(new Error(change.message));
+            this.options.context.report(new Error(change.message));
         this.options.changed();
     }
 }

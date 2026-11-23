@@ -159,6 +159,7 @@ export class ComfyCanvasHost {
                     clock,
                     frames,
                     accepts,
+                    previewFrame: (preview) => execution.previews.frame(preview),
                     catalog: () => this.#coordinator.catalog(address.viewId),
                     connected: () => execution.connected,
                     ...canvasOutputTransfers(transfers),

@@ -54,7 +54,10 @@ function fixture(supported = true, inputShown?: () => boolean) {
   const errors: unknown[] = [];
   const visible: boolean[] = [];
   let accepts = true;
+  /** The preview owner's bytes, by token, of a stopped run's newest image. */
+  const owned = new Map<string, Blob>();
   const presentation = new NativeCanvasPresentation({
+    previewFrame: (preview) => owned.get(preview.token) ?? null,
     address,
     clock,
     host: () => host.host,
@@ -100,6 +103,7 @@ function fixture(supported = true, inputShown?: () => boolean) {
     statuses,
     errors,
     visible,
+    owned,
     item,
     second: catalog.entries[1]!.items[0]!,
     preview,
@@ -362,7 +366,60 @@ test('locks Fit only after displayed pixels, keeps the shown preview when intere
   expect(f.errors).toEqual([]);
 });
 
-test('picking a final while a preview covers it shows that final, and the preview comes back with its tab', async () => {
+/** Show `f.preview()` natively, then let the person pick the final it covered. */
+async function coverThenPickFinal(f: ReturnType<typeof fixture>) {
+  await commit(f);
+  const lease = await transfer(f);
+  observe(f, lease, {
+    type: 'preview',
+    token: lease.preview.token,
+    leaseRevision: lease.revision,
+    viewport: previewViewport,
+  });
+  await settle();
+  f.presentation.update(previewGeometry, f.item, null);
+  for (const [index, pending] of f.pending.entries())
+    if (!pending.settled) f.respond(index, 'applied', finalViewport);
+  await settle();
+}
+
+test('a preview its owner no longer hands out never comes back after a final replaced it', async () => {
+  const f = fixture();
+  await coverThenPickFinal(f);
+  const begins = () => f.calls.filter((call) => call.type === 'surface.preview.begin').length;
+  const before = begins();
+  // The stage's final closed its lane, or the run goes on: the old frame never shows again.
+  f.presentation.update(previewGeometry, null, f.preview());
+  await settle();
+  expect(begins()).toBe(before);
+  expect(f.errors).toEqual([]);
+});
+
+test('a frame that arrives while a final selection settles shows as soon as it settles', async () => {
+  const f = fixture();
+  await commit(f);
+  // A new run starts while the previous final is being selected: its first frame must wait for
+  // that selection, not be refused until a later frame comes.
+  f.presentation.update(previewGeometry, f.second, f.preview());
+  const select = f.calls.length - 1;
+  expect(f.calls[select]).toMatchObject({ type: 'surface.select', itemId: f.second.id });
+  f.presentation.receive(f.preview(), new NativePreviewBlob());
+  await settle();
+  expect(f.calls.some((call) => call.type === 'surface.preview.begin')).toBe(false);
+  f.respond(select, 'applied', finalViewport);
+  await settle();
+  // The selected final's camera settles first; the waiting frame follows without a newer one.
+  for (const [index, pending] of f.pending.entries())
+    if (!pending.settled && f.calls[index]?.type === 'surface.viewport.request')
+      f.respond(index, 'applied', finalViewport);
+  await settle();
+  expect(f.calls.at(-1)).toMatchObject({
+    type: 'surface.preview.begin',
+    preview: { token: 'preview:1' },
+  });
+});
+
+test("picking a final while a preview covers it shows that final, and a stopped run's preview comes back from its owner with its tab", async () => {
   const f = fixture();
   await commit(f);
   const lease = await transfer(f);
@@ -389,7 +446,8 @@ test('picking a final while a preview covers it shows that final, and the previe
   f.presentation.update(previewGeometry, f.item, null);
   await answer();
   expect(selects()).toBe(before + 1);
-  // Choosing the preview's tab again, after the run stopped, shows the kept preview again.
+  // The run stops: its owner keeps the newest image, and choosing its tab again shows it.
+  f.owned.set(f.preview().token, new NativePreviewBlob());
   const begins = () => f.calls.filter((call) => call.type === 'surface.preview.begin').length;
   const shownBefore = begins();
   f.presentation.update(previewGeometry, null, f.preview());

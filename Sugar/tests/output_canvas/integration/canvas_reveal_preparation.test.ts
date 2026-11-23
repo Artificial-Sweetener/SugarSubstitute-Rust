@@ -51,6 +51,7 @@ function fixture() {
     budget,
     new CanvasImageAllowances(),
     (item) => `http://localhost/view?filename=${item.file.filename}&id=${item.id}`,
+    () => null,
   );
   let active = true;
   const plan = () =>

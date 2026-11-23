@@ -169,6 +169,7 @@ export class BrowserCanvasAttachment {
       budget,
       options.allowances,
       options.url,
+      options.previewFrame,
     );
     const dragSubjects = new BrowserCanvasDragSubjects(
       this.viewport,

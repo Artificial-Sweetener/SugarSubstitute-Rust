@@ -66,16 +66,26 @@ export interface NativeCanvasPreviewStep {
   failed(error: unknown): void;
 }
 
-interface Options {
+/** What a presentation shares with its preview: identity, clock, the preview owner, reporting. */
+export interface NativeCanvasPreviewContext {
   readonly address: CanvasAttachmentAddress;
-  readonly host: CanvasSurfaceHost;
   readonly clock: ExecutionClock;
+  /**
+   * The owner's bytes of a preview it still names and no live frame will replace: a stopped run's
+   * newest image. The canvas keeps no copy of its own.
+   */
+  previewFrame(preview: WorkflowPreview): Blob | null;
+  report(error: unknown): void;
+}
+
+interface Options {
+  readonly context: NativeCanvasPreviewContext;
+  readonly host: CanvasSurfaceHost;
   active(): boolean;
   finalRevision(): number | null;
   changed(): void;
   cancelOperation(): void;
   displayed(value: CanvasSurfacePresentationDisplay | null, presentation: object | null): void;
-  report(error: unknown): void;
 }
 
 /** Own one active transfer, its latest pending Blob, and one host observation lifetime. */
@@ -87,13 +97,6 @@ export class NativeCanvasPreview {
   #interest: WorkflowPreview | null = null;
   #active: Frame | null = null;
   #pending: { preview: WorkflowPreview; blob: Blob } | null = null;
-  /** The newest preview taken, until it is shown or replaced. */
-  #received: { preview: WorkflowPreview; blob: Blob } | null = null;
-  /**
-   * The newest preview shown, kept after a final replaces it on screen, so choosing its tab again
-   * shows it: after a run stops it is the newest image that run made.
-   */
-  #kept: { preview: WorkflowPreview; blob: Blob } | null = null;
   #shown: { preview: WorkflowPreview; leaseRevision: number } | null = null;
   #displayedPreview = false;
   /** The content last asked for, kept through failures that drop the presentation's state. */
@@ -115,9 +118,9 @@ export class NativeCanvasPreview {
         if (this.#disposed || this.#subscription !== subscription) return;
         this.#observing = status === 'observing';
         this.options.changed();
-      }, options.report);
+      }, options.context.report);
     } catch (error: unknown) {
-      options.report(error);
+      options.context.report(error);
     }
   }
 
@@ -169,25 +172,18 @@ export class NativeCanvasPreview {
       if (!this.#active?.withdrawing && (release || this.#active)) this.#withdraw();
     }
     this.#interest = preview;
-    // The kept preview comes back when its tab is chosen again after a final replaced it.
-    const kept = this.#kept;
-    if (
-      kept &&
-      preview &&
-      canvasLane(preview) === canvasLane(kept.preview) &&
-      !this.#active &&
-      !this.#pending &&
-      this.#shown?.preview.token !== kept.preview.token
-    ) {
-      this.#pending = kept;
-      this.options.changed();
-    }
+    // A stopped run's newest image comes back from its owner when its tab is chosen again.
+    const owned = preview ? this.options.context.previewFrame(preview) : null;
+    if (preview && owned) this.receive(preview, owned);
     return changed;
   }
 
-  /** Refuse bytes until this exact committed attachment has a qualified workflow preview. */
+  /**
+   * Refuse bytes until this exact committed attachment has a qualified workflow preview. A frame
+   * taken while a final selection settles waits and is sent the moment that selection finishes.
+   */
   wants(): boolean {
-    return this.observing && this.options.active() && !this.#selecting && !!this.#interest;
+    return this.observing && this.options.active() && !!this.#interest;
   }
 
   /** Retain encoded bytes only; no image, URL, image loader or browser decoder is created. */
@@ -210,7 +206,6 @@ export class NativeCanvasPreview {
     if (this.#pending) this.#drops++;
     this.#accepted++;
     this.#pending = { preview, blob };
-    this.#received = this.#pending;
     this.options.changed();
   }
 
@@ -231,6 +226,7 @@ export class NativeCanvasPreview {
   /** Reopen admission after any selection outcome while preserving observed lease correlation. */
   selectionFinished(): void {
     this.#selecting = false;
+    if (this.#pending) this.options.changed();
   }
 
   /** A successful final selection acknowledges the newly accepted native final frame. */
@@ -281,7 +277,7 @@ export class NativeCanvasPreview {
       started: (revision) => {
         if (operation.type !== 'surface.preview.begin') return;
         frame.leaseRevision = revision;
-        frame.stop = this.options.clock.later(CANVAS_PREVIEW_LEASE_MILLISECONDS, () => {
+        frame.stop = this.options.context.clock.later(CANVAS_PREVIEW_LEASE_MILLISECONDS, () => {
           if (this.#active === frame) {
             this.#withdraw();
             this.options.changed();
@@ -290,7 +286,7 @@ export class NativeCanvasPreview {
       },
       settled: (result) => this.#settled(frame, operation, result),
       failed: (error) => {
-        this.options.report(error);
+        this.options.context.report(error);
         this.#settled(frame, operation, { status: 'error', message: 'Preview transfer failed.' });
       },
     };
@@ -315,8 +311,6 @@ export class NativeCanvasPreview {
     this.#subscription = null;
     this.#clearActive();
     this.#pending = null;
-    this.#received = null;
-    this.#kept = null;
     this.#shown = null;
     this.#interest = null;
     this.#displayedPreview = false;
@@ -341,7 +335,7 @@ export class NativeCanvasPreview {
       })
       .catch((error: unknown) => {
         frame.reading = false;
-        this.options.report(error);
+        this.options.context.report(error);
         if (this.#active === frame) {
           this.#withdraw();
           this.options.changed();
@@ -453,7 +447,7 @@ export class NativeCanvasPreview {
       !this.observing ||
       !this.options.active() ||
       (['sessionId', 'viewId', 'windowId', 'attachmentId', 'generation'] as const).some(
-        (key) => change.address[key] !== this.options.address[key],
+        (key) => change.address[key] !== this.options.context.address[key],
       ) ||
       change.sequence <= this.#sequence
     )
@@ -493,7 +487,6 @@ export class NativeCanvasPreview {
       matches(active, change.token, change.leaseRevision)
     ) {
       this.#shown = { preview: active.preview, leaseRevision: active.leaseRevision };
-      if (this.#received?.preview.token === active.preview.token) this.#kept = this.#received;
     }
     if (
       active &&
@@ -505,7 +498,7 @@ export class NativeCanvasPreview {
     this.#displayedPreview = display.type === 'preview';
     this.options.displayed(display, presentation);
     if (change.status === 'failed' && change.message)
-      this.options.report(new Error(change.message));
+      this.options.context.report(new Error(change.message));
     this.options.changed();
   }
 }

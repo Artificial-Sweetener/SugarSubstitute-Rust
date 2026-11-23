@@ -115,6 +115,7 @@ function fixture() {
       const loader = new BrowserCanvasPlatformFixture();
       loaders.push(loader);
       return new BrowserCanvasAttachment(element, {
+        previewFrame: () => null,
         address,
         views,
         selection,

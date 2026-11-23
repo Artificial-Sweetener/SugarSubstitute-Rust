@@ -98,6 +98,7 @@ function fixture(firstPreview = false, staged = false, route?: CanvasRoutePort) 
   const errors: unknown[] = [];
   const image = jest.spyOn(globalThis, 'Image');
   const surface = new NativeCanvasAttachment(root, {
+    previewFrame: () => null,
     address,
     clock,
     views,
