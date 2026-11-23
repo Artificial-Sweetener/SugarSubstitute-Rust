@@ -10,7 +10,7 @@ use sugarsubstitute_canvas::{ZoomMotion, ZoomSnap};
 
 tokens! {
     /// Why a zoom jumped to its target, or `Animated` when it moved over time.
-    Snap { Animated, FastInput, ShorterThanFrame, Unchanged }
+    Snap { Animated, Unchanged }
 }
 
 /// One zoom's motion in whole microseconds; `gap` is absent for the first wheel step.
@@ -30,8 +30,6 @@ impl From<ZoomMotion> for Record {
             duration: micros(zoom.duration),
             snap: match zoom.snapped {
                 None => Snap::Animated,
-                Some(ZoomSnap::FastInput) => Snap::FastInput,
-                Some(ZoomSnap::ShorterThanFrame) => Snap::ShorterThanFrame,
                 Some(ZoomSnap::Unchanged) => Snap::Unchanged,
             },
         }

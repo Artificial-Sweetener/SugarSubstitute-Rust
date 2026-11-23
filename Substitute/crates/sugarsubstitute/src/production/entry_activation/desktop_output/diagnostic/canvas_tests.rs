@@ -67,7 +67,7 @@ fn preparation_snapshot_crosses_chunked_parent_relay_under_the_canvas_budget() {
 
 #[test]
 fn zoom_records_cross_the_relay_under_their_own_budget() {
-    const ZOOM: &[u8] = b"2026-11-22T20:00:00.000000Z  INFO sugarsubstitute::canvas_zoom_diagnostic: operation=\"canvas_zoom\" schema=1 gap_us=12000 duration_us=0 snap=FastInput\n";
+    const ZOOM: &[u8] = b"2026-11-22T20:00:00.000000Z  INFO sugarsubstitute::canvas_zoom_diagnostic: operation=\"canvas_zoom\" schema=1 gap_us=12000 duration_us=96000 snap=Animated\n";
     for split in 1..ZOOM.len() {
         let mut owner = Diagnostic::new();
         let mut seen = Vec::new();
@@ -75,7 +75,7 @@ fn zoom_records_cross_the_relay_under_their_own_budget() {
         assert!(seen.is_empty());
         owner.feed(OutputStream::Stderr, 2, false, false, &ZOOM[split..], |v| seen.push(v));
         assert!(matches!(seen.as_slice(), [Observation::Zoom(record)]
-            if record.gap == Some(12_000) && record.duration == 0));
+            if record.gap == Some(12_000) && record.duration == 96_000));
     }
     let mut owner = Diagnostic::new();
     let (mut zoom, mut canvas) = (0_u16, 0_u16);

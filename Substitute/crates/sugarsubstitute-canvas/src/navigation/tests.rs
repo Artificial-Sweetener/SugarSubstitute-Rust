@@ -3,6 +3,7 @@
 //! Characterize navigation with explicit timestamps, geometry and semantic destinations.
 use super::*;
 mod commands;
+mod follow;
 
 #[test]
 fn cancelling_an_incomplete_stop_keeps_the_visible_camera_in_custom_mode() -> TestResult {
@@ -27,20 +28,21 @@ fn cancelling_an_incomplete_stop_keeps_the_visible_camera_in_custom_mode() -> Te
 }
 
 #[test]
-fn cadence_retargets_without_a_queue_and_uses_exact_elapsed_endpoints() -> TestResult {
-    for (cadence, duration) in [(25, 0), (26, 20), (40, 20), (100, 50), (160, 80)] {
+fn every_cadence_retargets_without_a_queue_and_lands_exactly_at_its_end() -> TestResult {
+    for cadence in [5, 10, 25, 26, 40, 100, 160] {
         let mut nav = navigation()?;
         wheel(&mut nav, 1.0, 0)?;
         wheel(&mut nav, 1.0, cadence)?;
         let target = nav.target_viewport();
         assert_eq!(target.zoom(), 0.78125);
-        if duration > 0 {
-            assert_ne!(nav.viewport(), target);
-            nav.advance(time(cadence + duration - 1))?;
-            assert_ne!(nav.viewport(), target);
-        }
-        nav.advance(time(cadence + duration))?;
-        assert_eq!(nav.viewport(), target);
+        let motion = nav.take_zoom().ok_or("zoom unreported")?;
+        assert_eq!(motion.snapped, None, "{cadence} ms");
+        let end = time(cadence) + motion.duration;
+        assert_ne!(nav.viewport(), target);
+        nav.advance(end - Duration::from_micros(500))?;
+        assert_ne!(nav.viewport(), target, "{cadence} ms");
+        nav.advance(end)?;
+        assert_eq!(nav.viewport(), target, "{cadence} ms");
     }
     Ok(())
 }
@@ -62,8 +64,9 @@ fn fit_motion_interpolates_physical_pan_and_late_ticks_skip_to_endpoint() -> Tes
             (500.0 - view.origin()[1]) * view.zoom() - 250.0,
         ]
     };
+    // Halfway through the quartic ease-out, (1 - 0.5)^4 of the pan remains.
     for (current, original) in pan(middle).into_iter().zip(pan(start)) {
-        assert!((current - original * 0.25).abs() < 1e-10);
+        assert!((current - original * 0.5_f64.powi(4)).abs() < 1e-10);
     }
     assert!(nav.next_deadline(time(140)).is_some_and(|deadline| deadline > time(140)));
     nav.advance(time(1000))?;
@@ -78,9 +81,11 @@ fn final_phased_wheel_delta_is_not_lost_when_gesture_ends() -> TestResult {
     let mut nav = navigation()?;
     nav.input(NavigationInput::Wheel { steps: 1.0, phase: ScrollPhase::Begin }, time(0))?;
     nav.input(NavigationInput::Wheel { steps: 0.5, phase: ScrollPhase::End }, time(10))?;
+    assert_eq!(nav.target_viewport().zoom(), 0.625 * 1.25_f64.sqrt());
+    nav.advance(time(90))?;
     assert_eq!(nav.viewport().zoom(), 0.625 * 1.25_f64.sqrt());
     assert!(!nav.interacting());
-    assert_eq!(nav.next_deadline(time(10)), None);
+    assert_eq!(nav.next_deadline(time(90)), None);
     Ok(())
 }
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -99,7 +104,7 @@ fn irregular_slow_frames_sample_elapsed_motion_and_never_queue_missed_refresh_ti
         for ms in [13, 42, 79] {
             slow.advance(time(ms))?;
             let t = ms as f64 / 80.0;
-            let expected = 0.5 + 0.125 * (1.0 - (1.0 - t).powi(2));
+            let expected = 0.5 * 1.25_f64.powf(1.0 - (1.0 - t).powi(4));
             assert!((slow.viewport().zoom() - expected).abs() < 1e-12);
             assert_eq!(slow.viewport().document_at(pointer)?, anchor);
             let next = slow.next_deadline(time(ms)).ok_or("Missing next animation deadline")?;
@@ -184,11 +189,11 @@ fn wheel_magnitude_accumulates_pending_intent_and_leaves_exact_native_snap() -> 
     wheel(&mut nav, 3.0, 0)?;
     assert_eq!(nav.target_viewport().zoom(), 0.9765625);
     wheel(&mut nav, 1.0, 10)?;
-    assert_eq!(nav.viewport().zoom(), 1.0);
+    assert_eq!(nav.target_viewport().zoom(), 1.0);
     assert_eq!(nav.zoom_mode(), ZoomMode::OneToOne);
     wheel(&mut nav, 0.5, 20)?;
     assert_eq!(nav.zoom_mode(), ZoomMode::Custom);
-    assert!((nav.viewport().zoom() - 1.25_f64.sqrt()).abs() < 1e-14);
+    assert!((nav.target_viewport().zoom() - 1.25_f64.sqrt()).abs() < 1e-14);
     Ok(())
 }
 
@@ -236,7 +241,7 @@ fn double_click_uses_semantic_mode_and_preserves_anchor_through_easing() -> Test
     nav.input(NavigationInput::DoubleClick(anchor), time(0))?;
     assert_eq!(nav.zoom_mode(), ZoomMode::OneToOne);
     nav.advance(time(40))?;
-    assert_eq!(nav.viewport().zoom(), 0.875);
+    assert!((nav.viewport().zoom() - 0.5 * 2.0_f64.powf(1.0 - 0.5_f64.powi(4))).abs() < 1e-12);
     let current = nav.viewport().document_at(anchor)?;
     assert!((current[0] - point[0]).abs() < 1e-10);
     assert!((current[1] - point[1]).abs() < 1e-10);
@@ -292,7 +297,7 @@ fn fractional_refresh_periods_retime_without_restarting_animation() -> TestResul
     nav.input(NavigationInput::OneToOne, time(0))?;
     assert_eq!(nav.next_deadline(time(0)), Some(Duration::from_nanos(6_944_444)));
     nav.advance(time(40))?;
-    assert_eq!(nav.viewport().zoom(), 0.875);
+    assert!((nav.viewport().zoom() - 0.5 * 2.0_f64.powf(1.0 - 0.5_f64.powi(4))).abs() < 1e-12);
     nav.set_refresh_rate(Some(120.0))?;
     assert_eq!(nav.next_deadline(time(40)), Some(Duration::from_nanos(41_666_665)));
     nav.advance(time(80))?;
@@ -409,20 +414,20 @@ fn returning_to_fit_preserves_the_original_large_image_sampling_phase() -> TestR
 fn each_zoom_reports_its_gap_duration_and_why_it_jumped() -> TestResult {
     let mut nav = navigation()?;
     nav.input(NavigationInput::Pointer([500.0, 250.0]), time(0))?;
-    // A first wheel step has no gap and animates for the full length.
+    // A first wheel step has no gap and follows the curve.
     wheel(&mut nav, 1.0, 0)?;
     let first = nav.take_zoom().ok_or("first zoom unreported")?;
     assert_eq!(first.gap, None);
-    assert_eq!(first.duration, Duration::from_millis(80));
+    assert!(first.duration > Duration::ZERO);
     assert_eq!(first.snapped, None);
     // Taken once: nothing is reported again until the next zoom.
     assert!(nav.take_zoom().is_none());
-    // A step 10 ms later lands at once, and says why.
+    // A step 10 ms later animates too.
     wheel(&mut nav, 1.0, 10)?;
     let fast = nav.take_zoom().ok_or("fast zoom unreported")?;
     assert_eq!(fast.gap, Some(Duration::from_millis(10)));
-    assert_eq!(fast.duration, Duration::ZERO);
-    assert_eq!(fast.snapped, Some(ZoomSnap::FastInput));
+    assert!(fast.duration > Duration::ZERO);
+    assert_eq!(fast.snapped, None);
     // A step 400 ms later animates again.
     wheel(&mut nav, 1.0, 410)?;
     let slow = nav.take_zoom().ok_or("slow zoom unreported")?;

@@ -139,7 +139,9 @@ fn camera_cancel_keeps_ordinary_and_cancel_credit_distinct_and_cannot_stop_a_new
     fixture.geometry(9, 100, 50)?;
     fixture.complete(9)?;
     fixture.viewport(10, json!({"type":"read"}))?;
-    snapshot(&fixture.complete(10)?, 10, "custom", 0.8125, [320, 160]);
+    // Cancelled halfway through the quartic ease-out from Fit (0.25) to 1:1.
+    let halfway = 0.25 * 4.0_f64.powf(1.0 - 0.5_f64.powi(4));
+    snapshot(&fixture.complete(10)?, 10, "custom", halfway, [320, 160]);
     fixture.viewport(11, json!({"type":"native"}))?;
     fixture.advance(40);
     fixture.cancel(11)?;

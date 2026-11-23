@@ -1,7 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Sample one bounded camera transition from elapsed time with exact final coordinates.
+//!
+//! Every camera change follows one curve: a quartic ease-out over `FOLLOW`, which starts at four
+//! times the average speed, so the first display frame already covers a large part of the way,
+//! and stops with zero velocity exactly at its target. A new request re-aims from wherever the
+//! camera is, so rapid wheel input keeps the camera moving close behind the latest target instead
+//! of jumping or trailing. Positions are sampled from elapsed time, so a late frame shows the
+//! current point on the curve. Only a request that leaves the scale unchanged lands at once.
 use super::*;
+
+/// Length of every camera motion.
+const FOLLOW: Duration = Duration::from_millis(80);
 
 #[derive(Clone, Copy, Debug)]
 pub(super) struct Transition {
@@ -28,9 +38,10 @@ impl Navigation {
         }
         let t = (now - transition.begin).as_secs_f64()
             / (transition.end - transition.begin).as_secs_f64();
-        let eased = 1.0 - (1.0 - t) * (1.0 - t);
-        let zoom =
-            transition.start.zoom() + (transition.target.zoom() - transition.start.zoom()) * eased;
+        let eased = 1.0 - (1.0 - t).powi(4);
+        // Scale moves geometrically, so zooming in and out start equally fast on screen.
+        let zoom = transition.start.zoom()
+            * (transition.target.zoom() / transition.start.zoom()).powf(eased);
         let origin = if let Some(anchor) = transition.anchor {
             let point = transition.start.document_at(anchor)?;
             [point[0] - anchor[0] / zoom, point[1] - anchor[1] / zoom]
@@ -93,21 +104,9 @@ impl Navigation {
     ) -> Result<(), CanvasError> {
         self.mode = mode;
         let target = self.clamp(target)?;
-        let duration = match cadence.map(|time| time.as_secs_f64() * 1000.0) {
-            Some(ms) if ms <= 25.0 => 0.0,
-            Some(ms) if ms < 160.0 => 20.0 + 60.0 * ((ms - 40.0) / 120.0).clamp(0.0, 1.0),
-            _ => 80.0,
-        };
-        let duration = Duration::from_secs_f64(duration / 1000.0);
-        let snapped = if (target.zoom() - self.view.zoom()).abs() <= 1e-4 {
-            Some(ZoomSnap::Unchanged)
-        } else if duration.is_zero() {
-            Some(ZoomSnap::FastInput)
-        } else if duration < self.frame_period {
-            Some(ZoomSnap::ShorterThanFrame)
-        } else {
-            None
-        };
+        let snapped =
+            ((target.zoom() - self.view.zoom()).abs() <= 1e-4).then_some(ZoomSnap::Unchanged);
+        let duration = if snapped.is_some() { Duration::ZERO } else { FOLLOW };
         self.zoom = Some(ZoomMotion {
             gap: cadence,
             duration: if snapped.is_some() { Duration::ZERO } else { duration },

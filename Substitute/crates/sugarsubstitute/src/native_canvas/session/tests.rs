@@ -115,7 +115,8 @@ fn normalized_tool_zoom_uses_the_execution_clock_and_keeps_finished_work_during_
     clock.0.store(40_000_000, Ordering::SeqCst);
     session.poll(Duration::ZERO)?;
     let view = session.document.tools.navigation().viewport();
-    assert_eq!(view.zoom(), 0.59375);
+    // Halfway through the quartic ease-out; the scale moves geometrically.
+    assert!((view.zoom() - 0.5 * 1.25_f64.powf(1.0 - 0.5_f64.powi(4))).abs() < 1e-12);
     assert_eq!(view.document_at(pointer)?, anchor);
     clock.0.store(119_999_999, Ordering::SeqCst);
     session.poll(Duration::ZERO)?;
@@ -132,7 +133,8 @@ fn normalized_tool_zoom_uses_the_execution_clock_and_keeps_finished_work_during_
     );
     assert!(session.next_deadline().is_none());
     session.input(Input::Tool(ToolInput::Wheel { steps: 0.5, phase: ScrollPhase::End }))?;
-    clock.0.store(180_000_000, Ordering::SeqCst);
+    // The final step animates too; its 80 ms motion has ended by 200 ms.
+    clock.0.store(200_000_000, Ordering::SeqCst);
     session.poll(Duration::ZERO)?;
     assert_eq!(session.document.tools.navigation().viewport().zoom(), 0.625 * 1.25_f64.sqrt());
     assert_eq!(

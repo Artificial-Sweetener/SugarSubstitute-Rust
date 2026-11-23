@@ -4545,7 +4545,7 @@ rationale = "Owned temporary PNG and cache fixtures verify retained encoded inpu
 [[records]]
 path = "crates/sugarsubstitute/src/native_canvas/session/tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:4ba5f5aee47841f5667fa92585d1f8171bd2396a2795228e7327ad43704f73fc"
+source_sha256 = "sha256:6c728441f7a7cbf779e32a96dc6ca1dd5cc309aedf89593c11d517235dd6aab1"
 capabilities = ["tempfile::TempDir", "tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary directories keep viewer document and refinement fixtures portable and isolated; test teardown retains the directory through its actual session lifetime."

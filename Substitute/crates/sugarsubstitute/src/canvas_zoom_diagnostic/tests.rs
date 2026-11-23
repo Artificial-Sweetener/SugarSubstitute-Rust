@@ -40,8 +40,8 @@ fn each_snap_and_a_first_step_survive_the_child_formatter_and_relay() -> Result<
 {
     for record in [
         Record { gap: None, duration: 80_000, snap: Snap::Animated },
-        Record { gap: Some(10_000), duration: 0, snap: Snap::FastInput },
-        Record { gap: Some(400_000), duration: 0, snap: Snap::ShorterThanFrame },
+        Record { gap: Some(10_000), duration: 96_000, snap: Snap::Animated },
+        Record { gap: Some(400_000), duration: 0, snap: Snap::Unchanged },
         Record { gap: Some(0), duration: 0, snap: Snap::Unchanged },
         Record { gap: Some(u64::MAX), duration: u64::MAX, snap: Snap::Animated },
     ] {

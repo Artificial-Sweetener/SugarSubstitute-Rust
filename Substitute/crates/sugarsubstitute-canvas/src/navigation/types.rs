@@ -59,13 +59,10 @@ pub struct ZoomMotion {
     /// Why the zoom jumped instead of animating, when it did.
     pub snapped: Option<ZoomSnap>,
 }
-/// Why a zoom jumps to its target instead of animating.
+/// Why a zoom lands at once instead of following the curve. Every zoom that changes the scale
+/// animates.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ZoomSnap {
-    /// Wheel requests 25 ms or less apart: each one lands at once.
-    FastInput,
-    /// The animation would be shorter than one display frame.
-    ShorterThanFrame,
     /// The scale does not change, as at a zoom limit.
     Unchanged,
 }
