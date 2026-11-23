@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Retain encoded preview custody and observed pixels without another native mutation scheduler. */
+import { previewOrderGeneration } from './NativeCanvasPreviewOrder.js';
 import type {
   CanvasSurfaceHost,
   CanvasSurfacePresentationChange,
@@ -363,10 +364,17 @@ export class NativeCanvasPreview {
   #operation(frame: Frame): PreviewOperation | null {
     const token = frame.preview.token;
     if (frame.phase === 'begin' && frame.blob) {
-      const { generation, promptId, sourceId, runOrder, sequence } = frame.preview;
+      const { promptId, sourceId, runOrder, sequence } = frame.preview;
       return {
         type: 'surface.preview.begin',
-        preview: { generation, promptId, sourceId, runOrder, sequence, token },
+        preview: {
+          generation: previewOrderGeneration(frame.preview),
+          promptId,
+          sourceId,
+          runOrder,
+          sequence,
+          token,
+        },
         byteLength: frame.blob.size,
         format: 'jpeg',
       };

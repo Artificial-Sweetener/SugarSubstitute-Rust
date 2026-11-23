@@ -206,6 +206,34 @@ async function transfer(
   return begin(f, preview.token);
 }
 
+test('each workflow tab reports its previews in an ordering domain of its own', async () => {
+  const f = fixture();
+  await commit(f);
+  /** Offer `preview`, read the generation its begin reports, and let the host refuse it. */
+  const reported = async (preview: WorkflowPreview): Promise<number> => {
+    f.presentation.update(previewGeometry, f.item, preview);
+    const offset = f.calls.length;
+    f.presentation.receive(preview, new NativePreviewBlob());
+    await settle();
+    const call = f.calls[offset];
+    if (call?.type !== 'surface.preview.begin') throw new Error('Preview begin is missing.');
+    f.respond(offset, 'unavailable');
+    await settle();
+    return call.preview.generation;
+  };
+  const tab = await reported(f.preview(5));
+  // Each tab counts its runs from one, so the host must never order one tab's frames after
+  // another's; frames of the same tab stay in one domain.
+  const other: WorkflowPreview = {
+    ...f.preview(1),
+    sessionId: 'workflow:another-tab',
+    promptId: 'prompt:another',
+    token: 'preview:another',
+  };
+  expect(await reported(other)).not.toBe(tab);
+  expect(await reported(f.preview(6))).toBe(tab);
+});
+
 test('a cancelled final replacement cannot make an unshown camera block the next live preview', async () => {
   const f = fixture();
   await commit(f);
