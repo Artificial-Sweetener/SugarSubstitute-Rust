@@ -1294,3 +1294,24 @@ test('a stage first frame taken before its tab was chosen shows from the owner o
     preview: { token: 'preview:stage' },
   });
 });
+
+test("a new run's first preview replaces the shown final without selecting the previous run's final first", async () => {
+  const f = fixture();
+  await commit(f);
+  const selects = () => f.calls.filter((call) => call.type === 'surface.select').length;
+  const before = selects();
+  // The view follows the tab receiving the new run's previews, whose item is an older final.
+  const next: WorkflowPreview = { ...f.preview(1), runOrder: 2, token: 'preview:next-run' };
+  f.presentation.update(previewGeometry, f.second, next);
+  f.presentation.receive(next, new NativePreviewBlob());
+  await settle();
+  for (const [index, pending] of f.pending.entries())
+    if (!pending.settled && f.calls[index]?.type === 'surface.viewport.request')
+      f.respond(index, 'applied', finalViewport);
+  await settle();
+  expect(selects()).toBe(before);
+  expect(f.calls.at(-1)).toMatchObject({
+    type: 'surface.preview.begin',
+    preview: { token: 'preview:next-run' },
+  });
+});

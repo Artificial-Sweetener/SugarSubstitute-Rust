@@ -63,6 +63,19 @@ export class NativeCanvasPreview {
         this.#requested = desired.content;
         return picked && !!desired.item && this.#displayedPreview;
     }
+    /**
+     * Whether the preview wanted here comes from a newer run than `item` while a final is already
+     * presented beneath: that older final would only be covered, so it is not selected first and the
+     * new run's first frame replaces what is shown at once.
+     */
+    supersedes(item, presented) {
+        const interest = this.#interest;
+        return (this.observing &&
+            presented &&
+            !!item &&
+            !!interest &&
+            item.provenance.runOrder < interest.runOrder);
+    }
     /** Describe pending native preparation without treating it as presented pixels. */
     get preparing() {
         return !!this.#active || !!this.#pending;

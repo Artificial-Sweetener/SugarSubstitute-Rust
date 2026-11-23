@@ -373,7 +373,8 @@ export class NativeCanvasPresentation {
           }
         }
         const selection = nativeCanvasSelection(desired, this.options.inspection);
-        if (selection && selection.key !== binding.selection) {
+        const covered = this.#preview?.supersedes(desired.item, binding.selection !== null);
+        if (selection && selection.key !== binding.selection && !covered) {
           const preview = this.#preview;
           preview?.selecting();
           let selectionRevision = 0;

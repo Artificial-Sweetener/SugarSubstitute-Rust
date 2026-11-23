@@ -28,6 +28,7 @@ import {
   encodeCanvasBytes,
 } from '../../core/embedded/CanvasRuntime.js';
 import type { WorkflowPreview } from '../../execution/domain/WorkflowPreview.js';
+import type { WorkflowOutputItem } from '../../execution/domain/WorkflowOutput.js';
 import type { ExecutionClock } from '../../execution/domain/WorkflowExecutionEvent.js';
 import { canvasPreviewLane } from '../application/CanvasDisplayPlan.js';
 import type { CanvasAttachmentAddress } from '../domain/CanvasIdentity.js';
@@ -140,6 +141,21 @@ export class NativeCanvasPreview {
     const picked = desired.content !== this.#requested;
     this.#requested = desired.content;
     return picked && !!desired.item && this.#displayedPreview;
+  }
+  /**
+   * Whether the preview wanted here comes from a newer run than `item` while a final is already
+   * presented beneath: that older final would only be covered, so it is not selected first and the
+   * new run's first frame replaces what is shown at once.
+   */
+  supersedes(item: WorkflowOutputItem | null, presented: boolean): boolean {
+    const interest = this.#interest;
+    return (
+      this.observing &&
+      presented &&
+      !!item &&
+      !!interest &&
+      item.provenance.runOrder < interest.runOrder
+    );
   }
   /** Describe pending native preparation without treating it as presented pixels. */
   get preparing(): boolean {
