@@ -37,10 +37,12 @@ impl Session {
                     .is_some_and(|evidence| evidence.view.surface() == extent))
     }
 
-    /// Preserve newer source selection while restoring the parked document's custody.
+    /// Preserve newer source selection while restoring the parked document's custody: a load or
+    /// a retained document's return for the current selection replaces the covered final.
     pub(super) fn preview_replacing_final(&self) -> bool {
         self.pending_open.as_ref().is_some_and(|open| open.intent == self.selection)
             || self.loading.as_ref().is_some_and(|loading| loading.intent == self.selection)
+            || self.pending_restore.as_ref().is_some_and(|(_, intent)| *intent == self.selection)
     }
 
     /// Restoration waits for actual foreign job outcomes and owned retirement capacity.

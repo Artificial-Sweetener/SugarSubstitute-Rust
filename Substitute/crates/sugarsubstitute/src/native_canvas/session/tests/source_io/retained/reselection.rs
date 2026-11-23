@@ -10,6 +10,7 @@ use sugarsubstitute_canvas::{CursorIntent, NavigationCommand, Viewport, ZoomMode
 mod budget;
 mod camera_restore;
 mod parking;
+mod previews;
 
 /// Enough retained-document storage for every 8x8 test document these tests park.
 const FUNDED: u64 = 8 * 1024 * 1024;
@@ -471,9 +472,12 @@ fn comparison_overview_and_preview_documents_are_never_retained() -> Result<(), 
     let mut preview = Some(fixture.output([0, 255, 255])?);
     assert!(fixture.session.offer_preview(&mut preview, deadline)?.token().is_some());
     assert!(fixture.session.preview_pending());
-    // Preview custody owns presentation, so even the current output must be acquired again.
-    assert!(!fixture.session.reselect_retained(&key("single"))?);
-    fixture.session.withdraw_preview()?;
+    // Reselecting the current output withdraws the preview and reuses the output's document;
+    // the preview's own document is never retained.
+    assert!(fixture.session.reselect_retained(&key("single"))?);
+    fixture.settle()?;
+    assert_eq!(fixture.session.document.retention, Some(key("single")));
+    assert_eq!(fixture.session.retained.count(), 0);
     let _directory = fixture.finish()?;
     Ok(())
 }

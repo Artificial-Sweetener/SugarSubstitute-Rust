@@ -256,6 +256,15 @@ impl Session {
         self.preview.shown.is_some()
     }
 
+    /// Whether the shown preview covers the final retained as `key`, which returns as the current
+    /// document once the preview is withdrawn.
+    pub(in crate::native_canvas::session) fn preview_covers(&self, key: &RetentionKey) -> bool {
+        self.preview
+            .parked
+            .as_ref()
+            .is_some_and(|covered| covered.document.retention.as_ref() == Some(key))
+    }
+
     /// Fence new final-load admission until accepted-preview custody has restored its predecessor.
     pub(in crate::native_canvas::session) fn preview_restoring(&self) -> bool {
         self.preview.restoring

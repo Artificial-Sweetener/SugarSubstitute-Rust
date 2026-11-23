@@ -343,8 +343,10 @@ impl Session {
     ///
     /// On `true` this is the current selection: the retained document becomes current with its
     /// camera once earlier document work has settled, and its finished frame is displayed
-    /// directly. Returns `false` without any change when no document for `key` is retained, or
-    /// while closing, GPU-window presentation, an attachment transaction, preview custody or a
+    /// directly. A live preview on screen is withdrawn first: the final it covered returns, and
+    /// the restore waits for preview custody to settle, so a final is reused during a run too.
+    /// Returns `false` without any change when no document for `key` is retained or covered by
+    /// the preview, or while closing, GPU-window presentation, an attachment transaction or a
     /// pending source retirement prevents reuse; the caller then offers the source as usual.
     ///
     /// # Errors
@@ -355,7 +357,6 @@ impl Session {
             || self.resources.is_none()
             || self.document_suspended
             || self.document_transaction.is_some()
-            || self.preview_pending()
         {
             return Ok(false);
         }
@@ -367,12 +368,13 @@ impl Session {
                 .parked_output
                 .as_ref()
                 .is_some_and(|document| document.retention.as_ref() == Some(key));
-        if !current && !parked && !self.retained.contains(key) {
+        if !current && !parked && !self.preview_covers(key) && !self.retained.contains(key) {
             return Ok(false);
         }
         let Some(intent) = self.supersede_pending_source()? else {
             return Ok(false);
         };
+        self.withdraw_preview()?;
         self.pending_restore = Some((key.clone(), intent));
         if let Some(watch) = &mut self.selection_watch {
             watch.retained();
