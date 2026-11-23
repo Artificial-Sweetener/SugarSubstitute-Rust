@@ -39,6 +39,7 @@ import { NativeCanvasOverview } from './NativeCanvasOverview.js';
 import { canvasOverviewSceneCommand } from '../application/CanvasOverviewWindow.js';
 import { nativeCanvasSnapshot } from './NativeCanvasSnapshot.js';
 import { NativeCanvasPresentation } from './NativeCanvasPresentation.js';
+import { nativeCanvasShowsThrough, } from './NativeCanvasStatus.js';
 import { mountCanvasEditOverlay, } from '../../canvas_editing/presentation/CanvasEditOverlayRuntime.js';
 /** Retain controls and selection while leaving every output pixel to the native host. */
 export class NativeCanvasAttachment {
@@ -75,6 +76,8 @@ export class NativeCanvasAttachment {
     #viewport = null;
     #preview = false;
     #presentation = { state: 'empty', message: '' };
+    /** Whether the presentation shows its native surface; empty, it draws nothing there. */
+    #nativeShown = false;
     #ready = false;
     #disposed = false;
     #constructorSurface;
@@ -185,9 +188,13 @@ export class NativeCanvasAttachment {
             host: options.nativeSurface,
             surfacePending: () => this.options.surfacePending?.() ?? false,
             accepts: () => !this.#disposed && options.accepts(),
-            visible: (value) => this.viewport.classList.toggle('sc-output-native', value),
+            visible: (value) => {
+                this.#nativeShown = value;
+                this.#paintNative();
+            },
             status: (value) => {
                 this.#presentation = value;
+                this.#paintNative();
                 if (value.state === 'error' || value.state === 'unavailable')
                     this.#readiness.fail(new CanvasPreparationUnavailable(value.message));
                 if (this.#ready)
@@ -452,6 +459,11 @@ export class NativeCanvasAttachment {
             ? { item: secondary, orientation: comparison.orientation, split: comparison.split }
             : null;
         this.#native.update(this.#surface, this.#plan.primary?.item ?? null, this.#plan.preview, pair);
+    }
+    /** Let the native surface show through only while it draws something. */
+    #paintNative() {
+        const through = nativeCanvasShowsThrough(this.#nativeShown, this.#presentation);
+        this.viewport.classList.toggle('sc-output-native', through);
     }
     /** Publish selection and actual native readiness to the shared overlay. */
     #publish() {

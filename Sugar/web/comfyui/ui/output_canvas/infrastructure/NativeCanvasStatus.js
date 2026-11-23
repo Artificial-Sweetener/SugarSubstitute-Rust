@@ -54,3 +54,10 @@ export function nativeCanvasFailureStatus(result, message) {
             (error ? NATIVE_CANVAS_PRESENTATION_FAILURE : 'The native canvas is unavailable.'),
     };
 }
+/**
+ * Whether the page lets the native surface show through. Empty, the host draws nothing behind the
+ * page, so the viewport keeps its own wash instead of the window's Mica.
+ */
+export function nativeCanvasShowsThrough(shown, status) {
+    return shown && status.state !== 'empty';
+}

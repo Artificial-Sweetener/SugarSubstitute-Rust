@@ -21,6 +21,7 @@ import {
   nativeCanvasFailureStatus,
   nativeCanvasPendingStatus,
   nativeCanvasSettledStatus,
+  nativeCanvasShowsThrough,
 } from '../../../frontend/comfyui/ui/output_canvas/infrastructure/NativeCanvasStatus.js';
 import type { CanvasSurfaceGeometry } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasViewPort.js';
 import { canvasCatalogFixture } from '../support/CanvasCatalogFixture.js';
@@ -85,4 +86,14 @@ test('names rejected operations with the caller, host or default message', () =>
   expect(nativeCanvasFailureStatus({ status: 'stale', message: '' }).message).toBe(
     'The native canvas is unavailable.',
   );
+});
+
+test('the native surface shows through only while it draws, so an empty canvas keeps the wash', () => {
+  // Empty, the host draws nothing behind the page: letting it show through would show the window's
+  // Mica instead of the wash the viewport paints itself.
+  expect(nativeCanvasShowsThrough(true, { state: 'empty', message: '' })).toBe(false);
+  expect(nativeCanvasShowsThrough(true, { state: 'ready', message: '' })).toBe(true);
+  // While loading the host still holds what it last drew.
+  expect(nativeCanvasShowsThrough(true, { state: 'loading', message: '' })).toBe(true);
+  expect(nativeCanvasShowsThrough(false, { state: 'ready', message: '' })).toBe(false);
 });
