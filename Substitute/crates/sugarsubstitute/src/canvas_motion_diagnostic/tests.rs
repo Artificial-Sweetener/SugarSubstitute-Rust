@@ -48,7 +48,7 @@ fn motion_records_survive_the_child_formatter_and_relay() -> Result<(), Box<dyn 
         skipped: 0,
         longest_gap: 7_100,
         detail: false,
-        blocked: [0, 0, 0, 3, 0, 0, 0],
+        blocked: [0, 0, 0, 3, 0, 0, 0, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     };
     let missing = Record { first_frame: None, accepted: 0, detail: true, ..smooth };
     let largest = Record {
@@ -62,7 +62,7 @@ fn motion_records_survive_the_child_formatter_and_relay() -> Result<(), Box<dyn 
         longest_gap: u32::MAX,
         detail: true,
         // A motion of minutes at every display period still fits the 512-byte relay line.
-        blocked: [99_999; 7],
+        blocked: [u16::MAX; 17],
     };
     for record in [smooth, missing, largest] {
         let line = formatted(record)?;
@@ -87,9 +87,9 @@ fn a_window_becomes_a_record_of_its_own_frames() {
         Duration::from_millis(190),
         Duration::from_micros(6_944),
         false,
-        [1, 2, 3, 4, 5, 6, 7],
+        [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 70_000],
     );
-    assert_eq!(record.blocked, [1, 2, 3, 4, 5, 6, 7]);
+    assert_eq!(record.blocked, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, u16::MAX]);
     assert_eq!(record.elapsed, 90_000);
     assert_eq!(record.first_frame, Some(4_000));
     assert_eq!(record.accepted, 11);
@@ -98,7 +98,7 @@ fn a_window_becomes_a_record_of_its_own_frames() {
 
 #[test]
 fn other_targets_schemas_and_extra_fields_are_refused() {
-    let good = "operation=\"canvas_motion\" schema=1 elapsed_us=1 period_us=2 first_frame_us=none accepted=0 submitted=0 abandoned=0 skipped=0 longest_gap_us=0 detail=false blocked=displaying:0,gpu_pending:0,cpu_pending:0,pacer:0,no_backing:0,unchanged:0,buffers:0";
+    let good = "operation=\"canvas_motion\" schema=1 elapsed_us=1 period_us=2 first_frame_us=none accepted=0 submitted=0 abandoned=0 skipped=0 longest_gap_us=0 detail=false blocked=disp:0,gpu:0,cpu:0,pace:0,back:0,same:0,buf:0,ret:0,rest:0,acq:0,init:0,pick:0,ginit:0,route:0,open:0,susp:0,stale:0";
     assert!(Record::parse(format!("{PREFIX}{good}").as_bytes()).is_some());
     for line in [
         format!("2026  INFO sugarsubstitute::other: {good}"),
@@ -106,8 +106,9 @@ fn other_targets_schemas_and_extra_fields_are_refused() {
         format!("{PREFIX}{good} extra=1"),
         format!("{PREFIX}{}", good.replace("elapsed_us=1", "elapsed_us=-1")),
         format!("{PREFIX}{}", good.replace("detail=false", "detail=maybe")),
-        format!("{PREFIX}{}", good.replace(",buffers:0", "")),
-        format!("{PREFIX}{}", good.replace("pacer:0", "pacer:-1")),
+        format!("{PREFIX}{}", good.replace(",stale:0", "")),
+        format!("{PREFIX}{}", good.replace("ret:0", "ret:70000")),
+        format!("{PREFIX}{}", good.replace("pace:0", "pace:-1")),
     ] {
         assert_eq!(Record::parse(line.as_bytes()), None, "{line}");
     }

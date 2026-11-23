@@ -24,15 +24,21 @@ pub(crate) struct Record {
     pub(crate) skipped: u32,
     pub(crate) longest_gap: u32,
     pub(crate) detail: bool,
-    /// Display attempts each gate stopped, in order: a frame already preparing, GPU presentation
-    /// pending, a CPU document frame pending, a frame in flight at the pacer, no backing, nothing
-    /// new to show, no display buffer of the view's size.
-    pub(crate) blocked: [u32; 7],
+    /// Ticks each gate stopped without a frame, in `GATES` order: the display gates (a frame
+    /// already preparing, GPU presentation pending, a CPU document frame pending, a frame in
+    /// flight at the pacer, no backing, nothing new to show, no display buffer of the view's
+    /// size), then session work that ended the tick before display. 16-bit, saturating.
+    pub(crate) blocked: [u16; 17],
 }
 
-/// The wire names of the blocked counts, in `Record::blocked` order.
-const GATES: [&str; 7] =
-    ["displaying", "gpu_pending", "cpu_pending", "pacer", "no_backing", "unchanged", "buffers"];
+/// The wire names of the blocked counts, in `Record::blocked` order: the display gates (frame
+/// preparing, GPU pending, CPU pending, pacer, no backing, nothing new, buffers), then the tick
+/// holds (retiring, restoring, acquisition, initializing, picker, GPU init, input route,
+/// opening, suspended, stale scene). Short, so a record keeps within the relay line.
+const GATES: [&str; 17] = [
+    "disp", "gpu", "cpu", "pace", "back", "same", "buf", "ret", "rest", "acq", "init", "pick",
+    "ginit", "route", "open", "susp", "stale",
+];
 
 /// Whole microseconds, saturating.
 fn micros(value: Duration) -> u32 {
@@ -51,7 +57,7 @@ impl Record {
         now: Duration,
         period: Duration,
         detail: bool,
-        blocked: [u64; 7],
+        blocked: [u64; 17],
     ) -> Self {
         let stats = window.stats;
         Self {
@@ -66,7 +72,7 @@ impl Record {
             skipped: count(stats.skipped_slots),
             longest_gap: micros(stats.native_acceptance_cadence.maximum),
             detail,
-            blocked: blocked.map(count),
+            blocked: blocked.map(|value| u16::try_from(value).unwrap_or(u16::MAX)),
         }
     }
 
@@ -113,10 +119,11 @@ impl Record {
             "false" => false,
             _ => return None,
         };
-        let mut blocked = [0; 7];
+        let mut blocked = [0; 17];
         let mut counts = field("blocked")?.split(',');
         for (slot, name) in blocked.iter_mut().zip(GATES) {
-            *slot = number(counts.next()?.strip_prefix(name)?.strip_prefix(':')?)?;
+            *slot = u16::try_from(number(counts.next()?.strip_prefix(name)?.strip_prefix(':')?)?)
+                .ok()?;
         }
         if counts.next().is_some() || fields.next().is_some() {
             return None;
@@ -149,7 +156,7 @@ impl Record {
 }
 
 /// The blocked counts on the wire: `name:count` pairs joined by commas, in `GATES` order.
-struct Counts([u32; 7]);
+struct Counts([u16; 17]);
 
 impl std::fmt::Display for Counts {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

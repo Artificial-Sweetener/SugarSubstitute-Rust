@@ -5,7 +5,8 @@
 
 use super::*;
 
-/// Why one display attempt during a camera motion submitted no frame.
+/// Why one tick during a camera motion submitted no frame: a display gate, or session work that
+/// ended the tick before display.
 #[derive(Clone, Copy)]
 pub(super) enum Gate {
     Displaying,
@@ -15,18 +16,44 @@ pub(super) enum Gate {
     NoBacking,
     Unchanged,
     Buffers,
+    Retiring,
+    Restoring,
+    /// Held only by document composition work.
+    #[cfg_attr(not(feature = "native-composition"), allow(dead_code))]
+    Acquisition,
+    Initializing,
+    Picker,
+    GpuInit,
+    /// Held only by document composition work.
+    #[cfg_attr(not(feature = "native-composition"), allow(dead_code))]
+    InputRoute,
+    Opening,
+    /// Held only by document composition work.
+    #[cfg_attr(not(feature = "native-composition"), allow(dead_code))]
+    Suspended,
+    SceneStale,
 }
 
 /// A camera motion being measured: whether detail work ran when it began, and how often each
 /// gate stopped a frame.
 pub(super) struct MotionWatch {
     detail: bool,
-    blocked: [u64; 7],
+    blocked: [u64; 17],
 }
 
 impl Session {
     /// Count a display attempt that a gate stopped while a camera motion is measured.
     pub(super) fn note_blocked(&mut self, gate: Gate) {
+        self.note_gate(gate);
+    }
+
+    /// End a tick that `gate` held before display, counting it while a camera motion is measured.
+    pub(super) fn held(&mut self, gate: Gate) -> Result<(), Box<dyn Error>> {
+        self.note_gate(gate);
+        Ok(())
+    }
+
+    fn note_gate(&mut self, gate: Gate) {
         if let Some(watch) = &mut self.motion {
             let count = &mut watch.blocked[gate as usize];
             *count = count.saturating_add(1);
@@ -57,7 +84,7 @@ impl Session {
                     .rendering
                     .as_ref()
                     .is_some_and(|rendering| rendering.tier == BackingTier::Detail);
-                self.motion = Some(MotionWatch { detail, blocked: [0; 7] });
+                self.motion = Some(MotionWatch { detail, blocked: [0; 17] });
                 self.pacing.begin_window(now);
             }
             Some(MotionWatch { detail, blocked }) if !moving => {

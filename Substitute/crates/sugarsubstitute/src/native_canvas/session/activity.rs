@@ -91,23 +91,27 @@ impl Session {
         self.submit_retirement()?;
         #[cfg(feature = "native-composition")]
         self.report_input_memory();
-        if restoring
-            || self.closing
-            || self.pending_retirement.is_some()
+        if self.closing {
+            return Ok(());
+        }
+        if restoring {
+            return self.held(zoom::Gate::Restoring);
+        }
+        if self.pending_retirement.is_some()
             || self.deferred_retirement.is_some()
             || self.retirement.is_some()
         {
-            return Ok(());
+            return self.held(zoom::Gate::Retiring);
         }
         #[cfg(feature = "native-composition")]
         if self.acquisition_retirement.is_some() {
-            return Ok(());
+            return self.held(zoom::Gate::Acquisition);
         }
         if self.initialization_pending {
             self.submit_initialization()?;
         }
         if self.initializing.is_some() || self.resources.is_none() {
-            return Ok(());
+            return self.held(zoom::Gate::Initializing);
         }
         #[cfg(all(windows, feature = "native-composition"))]
         if self.host_graphics_pending {
@@ -122,17 +126,17 @@ impl Session {
         #[cfg(feature = "native-composition")]
         self.advance_input_autosave()?;
         if self.picker {
-            return Ok(());
+            return self.held(zoom::Gate::Picker);
         }
         if !self.gpu_ready {
             if self.failed.is_none() {
                 self.initialize_gpu()?;
             }
-            return Ok(());
+            return self.held(zoom::Gate::GpuInit);
         }
         #[cfg(feature = "native-composition")]
         if self.advance_input_route()? || self.advance_retained_restore()? {
-            return Ok(());
+            return self.held(zoom::Gate::InputRoute);
         }
         if self.pending_open.is_some() {
             if self.loading.is_none()
@@ -141,15 +145,15 @@ impl Session {
             {
                 self.submit_load()?;
             }
-            return Ok(());
+            return self.held(zoom::Gate::Opening);
         }
         #[cfg(feature = "native-composition")]
         if self.document_suspended {
-            return Ok(());
+            return self.held(zoom::Gate::Suspended);
         }
         if self.document.scene.as_ref().is_none_or(|scene| scene.source_revision != self.selection)
         {
-            return Ok(());
+            return self.held(zoom::Gate::SceneStale);
         }
         #[cfg(feature = "native-composition")]
         self.prepare_editing()?;
