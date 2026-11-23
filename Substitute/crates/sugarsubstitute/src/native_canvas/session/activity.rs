@@ -4,6 +4,15 @@
 use super::*;
 use sugarsubstitute_execution::OwnedInputError;
 
+/// What one tick may do while retired work is being dropped.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum RetiringTick {
+    /// Present a frame from the backings already held; nothing else.
+    PresentOnly,
+    /// Do nothing until the disposal completes.
+    Hold,
+}
+
 impl Session {
     /// Consume typed completions before submitting the latest application intent.
     pub(super) fn advance(&mut self) -> Result<(), Box<dyn Error>> {
@@ -101,6 +110,9 @@ impl Session {
             || self.deferred_retirement.is_some()
             || self.retirement.is_some()
         {
+            if self.retiring_tick() == RetiringTick::PresentOnly {
+                self.submit_display()?;
+            }
             return self.held(zoom::Gate::Retiring);
         }
         #[cfg(feature = "native-composition")]
@@ -171,6 +183,41 @@ impl Session {
             self.submit_frame()?;
         }
         Ok(())
+    }
+    /// What a tick may do while retired work is dropped on the disposal worker. Disposal never
+    /// holds presentation from the backings the canvas still holds, so a camera motion keeps its
+    /// frames; everything else waits for it. A frame recycles at most one buffer, so presenting
+    /// needs the second retirement slot free.
+    pub(super) fn retiring_tick(&self) -> RetiringTick {
+        if self.deferred_retirement.is_none() && self.presents_current_scene() {
+            RetiringTick::PresentOnly
+        } else {
+            RetiringTick::Hold
+        }
+    }
+
+    /// Whether the scene on screen is current and settled enough to present a frame from the
+    /// backings already held: nothing initializing, opening, routing, restoring or failed.
+    fn presents_current_scene(&self) -> bool {
+        #[cfg(feature = "native-composition")]
+        if self.acquisition_retirement.is_some()
+            || self.inputs.routing()
+            || self.pending_restore.is_some()
+            || self.document_suspended
+        {
+            return false;
+        }
+        self.failed.is_none()
+            && self.initializing.is_none()
+            && self.resources.is_some()
+            && !self.picker
+            && self.gpu_ready
+            && self.pending_open.is_none()
+            && self
+                .document
+                .scene
+                .as_ref()
+                .is_some_and(|scene| scene.source_revision == self.selection)
     }
     /// Retain cleanup input even when deadline arithmetic fails before worker admission.
     pub(super) fn retire(&mut self, value: Retired) -> Result<(), Box<dyn Error>> {

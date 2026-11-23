@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Keep input, source replacement and shutdown correct while an external native present is held.
 use super::*;
+use crate::native_canvas::session::activity::RetiringTick;
 use crate::native_canvas::session::presentation::Presenting;
 use std::sync::{Condvar, Mutex};
 use sugarsubstitute_image_gpu::WindowPresentation;
@@ -292,5 +293,30 @@ fn native_display_prepares_while_reconstruction_retains_the_cpu_interactive_slot
         fixture.wake.completion(&runtime.client, &mut reconstruction)?.outcome,
         JobOutcome::Success(())
     ));
+    Ok(())
+}
+
+/// Zooming out retires the old detail backing on a worker, and the motion must keep presenting
+/// from the backings still held while that disposal runs. Only a full retirement queue or an
+/// unsettled scene holds the tick.
+#[test]
+fn a_tick_keeps_presenting_while_retired_work_is_dropped() -> Result<(), Box<dyn Error>> {
+    let (mut fixture, release, target) = presenting(true)?;
+    drop(release);
+    consume_present(&mut fixture.session, &fixture.wake)?;
+    fixture.session.take_gpu_presentation().ok_or("Missing native receipt")?;
+    fixture.session.did_present_gpu(target)?;
+    let session = &mut fixture.session;
+    session.retire(Retired::default())?;
+    assert_eq!(session.retiring_tick(), RetiringTick::PresentOnly);
+    session.picker = true;
+    assert_eq!(session.retiring_tick(), RetiringTick::Hold, "An open picker shows no frames");
+    session.picker = false;
+    session.retire(Retired::default())?;
+    assert_eq!(
+        session.retiring_tick(),
+        RetiringTick::Hold,
+        "A frame could recycle a buffer that no retirement slot can take"
+    );
     Ok(())
 }

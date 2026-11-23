@@ -148,6 +148,11 @@ pub(super) struct InputDocuments {
 }
 
 impl InputDocuments {
+    /// Whether the canvas is switching between its Input and Output documents.
+    pub(super) const fn routing(&self) -> bool {
+        self.route.is_some()
+    }
+
     fn surfaces(&self, workflow: &str) -> Option<&Vec<Surface>> {
         self.workflows.iter().find(|(id, _)| &**id == workflow).map(|(_, surfaces)| surfaces)
     }
