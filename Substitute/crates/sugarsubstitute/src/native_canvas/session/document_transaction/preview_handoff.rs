@@ -129,6 +129,7 @@ impl Session {
         self.last_prepare = elapsed;
         self.last_stats = stats;
         candidate.stage = Stage::Offered(document, Some(resources));
+        candidate.timing.offered(candidate.token.0).emit();
         Ok(())
     }
 

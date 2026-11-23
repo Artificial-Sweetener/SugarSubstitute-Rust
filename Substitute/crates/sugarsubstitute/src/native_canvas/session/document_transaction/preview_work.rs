@@ -36,6 +36,7 @@ impl Session {
                 owner_selection: input.owner_selection,
                 stage: Stage::Input(Some(input)),
                 custody: None,
+                timing: crate::canvas_preview_diagnostic::PreviewTiming::start(),
             });
         }
         let Some(mut candidate) = self.preview.candidate.take() else {
@@ -55,7 +56,10 @@ impl Session {
         };
         if let Some(outcome) = outcome {
             match outcome {
-                Ok(stage) => candidate.stage = stage,
+                Ok(stage) => {
+                    candidate.timing.loaded();
+                    candidate.stage = stage;
+                }
                 Err(cause) => {
                     self.record_preview_failure(
                         candidate.token,
@@ -77,7 +81,10 @@ impl Session {
             && let Some(outcome) = Self::take(job)
         {
             match Self::terminal(outcome) {
-                Ok(ready) => candidate.stage = Stage::Ready(Some(Box::new(ready))),
+                Ok(ready) => {
+                    candidate.timing.prepared();
+                    candidate.stage = Stage::Ready(Some(Box::new(ready)));
+                }
                 Err(cause) => {
                     self.record_preview_failure(
                         candidate.token,

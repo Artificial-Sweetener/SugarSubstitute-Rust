@@ -92,3 +92,25 @@ fn zoom_records_cross_the_relay_under_their_own_budget() {
     });
     assert_eq!((zoom, canvas), (ZOOM_RECORDS, 1));
 }
+
+#[test]
+fn preview_timing_records_cross_the_relay_under_their_own_budget() {
+    const PREVIEW: &[u8] = b"2026-11-22T20:00:00.000000Z  INFO sugarsubstitute::canvas_preview_diagnostic: operation=\"canvas_preview_offered\" schema=1 frame=9 load_us=120000 prepare_us=30000 offer_us=5000\n";
+    for split in 1..PREVIEW.len() {
+        let mut owner = Diagnostic::new();
+        let mut seen = Vec::new();
+        owner.feed(OutputStream::Stderr, 1, false, false, &PREVIEW[..split], |v| seen.push(v));
+        assert!(seen.is_empty());
+        owner.feed(OutputStream::Stderr, 2, false, false, &PREVIEW[split..], |v| seen.push(v));
+        assert!(matches!(seen.as_slice(), [Observation::Preview(record)]
+            if record.token == 9 && record.load == 120_000 && record.offer == 5_000));
+    }
+    let mut owner = Diagnostic::new();
+    let mut count = 0_u16;
+    for sequence in 1..=u64::from(PREVIEW_RECORDS) + 8 {
+        owner.feed(OutputStream::Stderr, sequence, false, false, PREVIEW, |v| {
+            count += u16::from(matches!(v, Observation::Preview(_)));
+        });
+    }
+    assert_eq!(count, PREVIEW_RECORDS);
+}

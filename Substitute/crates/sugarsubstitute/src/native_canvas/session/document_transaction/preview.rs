@@ -78,6 +78,8 @@ pub(super) struct Candidate {
     pub(super) owner_selection: u64,
     pub(super) stage: Stage,
     pub(super) custody: Option<SourceCustody>,
+    /// When this candidate began and finished each step, for its offered-frame record.
+    pub(super) timing: crate::canvas_preview_diagnostic::PreviewTiming,
 }
 
 /// Keep native originals and archive readers alive until a storage worker retires their last clone.
