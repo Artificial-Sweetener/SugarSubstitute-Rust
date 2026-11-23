@@ -159,6 +159,10 @@ impl ToolManager {
     pub const fn navigation(&self) -> &Navigation {
         &self.navigation
     }
+    /// Take the latest zoom's motion, once, for the host to report.
+    pub const fn take_zoom(&mut self) -> Option<crate::ZoomMotion> {
+        self.navigation.take_zoom()
+    }
     /// Whether a primary drag exports the content: navigation is the effective tool with no
     /// uncommitted edit taking priority, and the content cannot pan.
     pub fn allows_drag_out(&self) -> bool {

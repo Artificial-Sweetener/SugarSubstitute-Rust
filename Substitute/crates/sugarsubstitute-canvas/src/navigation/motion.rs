@@ -99,7 +99,21 @@ impl Navigation {
             _ => 80.0,
         };
         let duration = Duration::from_secs_f64(duration / 1000.0);
-        if duration < self.frame_period || (target.zoom() - self.view.zoom()).abs() <= 1e-4 {
+        let snapped = if (target.zoom() - self.view.zoom()).abs() <= 1e-4 {
+            Some(ZoomSnap::Unchanged)
+        } else if duration.is_zero() {
+            Some(ZoomSnap::FastInput)
+        } else if duration < self.frame_period {
+            Some(ZoomSnap::ShorterThanFrame)
+        } else {
+            None
+        };
+        self.zoom = Some(ZoomMotion {
+            gap: cadence,
+            duration: if snapped.is_some() { Duration::ZERO } else { duration },
+            snapped,
+        });
+        if snapped.is_some() {
             self.view = target;
             self.transition = None;
         } else {

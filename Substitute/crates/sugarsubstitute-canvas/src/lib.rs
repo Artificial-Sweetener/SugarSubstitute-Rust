@@ -32,7 +32,8 @@ pub use document::{
 };
 pub use error::CanvasError;
 pub use navigation::{
-    Navigation, NavigationCommand, NavigationCommandOutcome, NavigationInput, ScrollPhase, ZoomMode,
+    Navigation, NavigationCommand, NavigationCommandOutcome, NavigationInput, ScrollPhase,
+    ZoomMode, ZoomMotion, ZoomSnap,
 };
 pub use overlay::{
     ANT_DARK, ANT_DASH, ANT_LIGHT, BoundaryRun, BoundaryWork, CoverageBoundary, GUIDE,

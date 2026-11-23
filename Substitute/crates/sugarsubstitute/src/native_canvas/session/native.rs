@@ -252,6 +252,7 @@ impl Lifetime for Session {
         if self.pacing.period() != self.document.tools.navigation().frame_period() {
             self.pacing.set_frame_period(self.document.tools.navigation().frame_period(), now)?;
         }
+        self.log_zoom();
         self.cancel_obsolete_refinement()?;
         Ok(())
     }

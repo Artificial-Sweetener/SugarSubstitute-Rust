@@ -404,3 +404,30 @@ fn returning_to_fit_preserves_the_original_large_image_sampling_phase() -> TestR
     assert_eq!(nav.viewport().repair_from(fitted)?.dirty().pixels(), 0);
     Ok(())
 }
+
+#[test]
+fn each_zoom_reports_its_gap_duration_and_why_it_jumped() -> TestResult {
+    let mut nav = navigation()?;
+    nav.input(NavigationInput::Pointer([500.0, 250.0]), time(0))?;
+    // A first wheel step has no gap and animates for the full length.
+    wheel(&mut nav, 1.0, 0)?;
+    let first = nav.take_zoom().ok_or("first zoom unreported")?;
+    assert_eq!(first.gap, None);
+    assert_eq!(first.duration, Duration::from_millis(80));
+    assert_eq!(first.snapped, None);
+    // Taken once: nothing is reported again until the next zoom.
+    assert!(nav.take_zoom().is_none());
+    // A step 10 ms later lands at once, and says why.
+    wheel(&mut nav, 1.0, 10)?;
+    let fast = nav.take_zoom().ok_or("fast zoom unreported")?;
+    assert_eq!(fast.gap, Some(Duration::from_millis(10)));
+    assert_eq!(fast.duration, Duration::ZERO);
+    assert_eq!(fast.snapped, Some(ZoomSnap::FastInput));
+    // A step 400 ms later animates again.
+    wheel(&mut nav, 1.0, 410)?;
+    let slow = nav.take_zoom().ok_or("slow zoom unreported")?;
+    assert_eq!(slow.gap, Some(Duration::from_millis(400)));
+    assert_eq!(slow.snapped, None);
+    assert!(slow.duration > Duration::ZERO);
+    Ok(())
+}

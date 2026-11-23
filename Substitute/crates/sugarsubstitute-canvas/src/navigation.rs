@@ -12,6 +12,7 @@ use std::time::Duration;
 use sugarsubstitute_image_ops::Extent;
 pub use types::{
     NavigationCommand, NavigationCommandOutcome, NavigationInput, ScrollPhase, ZoomMode,
+    ZoomMotion, ZoomSnap,
 };
 
 /// Portable navigation state. The application supplies monotonic elapsed time from its clock.
@@ -33,6 +34,8 @@ pub struct Navigation {
     transition: Option<Transition>,
     frame_period: Duration,
     last_time: Option<Duration>,
+    /// The latest zoom's motion, until the host takes it to report.
+    zoom: Option<ZoomMotion>,
 }
 impl Navigation {
     /// Create inert navigation for a drawable camera with no loaded content.
@@ -52,7 +55,12 @@ impl Navigation {
             transition: None,
             frame_period: Duration::from_nanos(16_666_667),
             last_time: None,
+            zoom: None,
         }
+    }
+    /// Take the latest zoom's motion, once, for the host to report.
+    pub const fn take_zoom(&mut self) -> Option<ZoomMotion> {
+        self.zoom.take()
     }
     /// Actual current camera, distinct from the pending transition target.
     pub const fn viewport(&self) -> Viewport {

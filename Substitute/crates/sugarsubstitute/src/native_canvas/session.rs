@@ -51,6 +51,7 @@ mod retention;
 mod selection_camera;
 #[cfg(all(windows, feature = "native-composition"))]
 mod video_memory;
+mod zoom;
 #[cfg(feature = "native-composition")]
 pub(crate) use retention::RetentionKey;
 pub(crate) mod runtime;

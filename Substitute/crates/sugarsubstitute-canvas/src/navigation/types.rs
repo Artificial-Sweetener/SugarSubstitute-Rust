@@ -3,6 +3,7 @@
 //! Toolkit-independent navigation observations and camera commands.
 
 use crate::Viewport;
+use std::time::Duration;
 
 /// Semantic camera operations independent of physical pointer and wheel gestures.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -48,6 +49,26 @@ pub enum NavigationCommandOutcome {
     NoContent,
 }
 
+/// How one zoom request moved the camera, kept so the host can report it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ZoomMotion {
+    /// Time since the previous wheel request, absent for the first one or a command.
+    pub gap: Option<Duration>,
+    /// Chosen animation length; zero when the zoom jumped.
+    pub duration: Duration,
+    /// Why the zoom jumped instead of animating, when it did.
+    pub snapped: Option<ZoomSnap>,
+}
+/// Why a zoom jumps to its target instead of animating.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ZoomSnap {
+    /// Wheel requests 25 ms or less apart: each one lands at once.
+    FastInput,
+    /// The animation would be shorter than one display frame.
+    ShorterThanFrame,
+    /// The scale does not change, as at a zoom limit.
+    Unchanged,
+}
 /// Meaning of the camera scale, independent of its current animated numerical value.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ZoomMode {
