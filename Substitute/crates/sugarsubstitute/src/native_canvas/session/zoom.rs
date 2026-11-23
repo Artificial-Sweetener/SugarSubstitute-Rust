@@ -5,7 +5,34 @@
 
 use super::*;
 
+/// Why one display attempt during a camera motion submitted no frame.
+#[derive(Clone, Copy)]
+pub(super) enum Gate {
+    Displaying,
+    GpuPending,
+    CpuPending,
+    Pacer,
+    NoBacking,
+    Unchanged,
+    Buffers,
+}
+
+/// A camera motion being measured: whether detail work ran when it began, and how often each
+/// gate stopped a frame.
+pub(super) struct MotionWatch {
+    detail: bool,
+    blocked: [u64; 7],
+}
+
 impl Session {
+    /// Count a display attempt that a gate stopped while a camera motion is measured.
+    pub(super) fn note_blocked(&mut self, gate: Gate) {
+        if let Some(watch) = &mut self.motion {
+            let count = &mut watch.blocked[gate as usize];
+            *count = count.saturating_add(1);
+        }
+    }
+
     /// Record the zoom the last input made: its wheel gap, chosen duration and why it jumped, if
     /// it did. The desktop child writes it as a closed record the parent relays to the app log.
     pub(super) fn log_zoom(&mut self) {
@@ -30,10 +57,10 @@ impl Session {
                     .rendering
                     .as_ref()
                     .is_some_and(|rendering| rendering.tier == BackingTier::Detail);
-                self.motion = Some(detail);
+                self.motion = Some(MotionWatch { detail, blocked: [0; 7] });
                 self.pacing.begin_window(now);
             }
-            Some(detail) if !moving => {
+            Some(MotionWatch { detail, blocked }) if !moving => {
                 if matches!(
                     self.pacing.readiness(now)?,
                     sugarsubstitute_canvas_render::PresentationReadiness::Busy { .. }
@@ -51,13 +78,14 @@ impl Session {
                     now,
                     self.pacing.period(),
                     detail,
+                    blocked,
                 )
                 .emit();
                 #[cfg(not(all(
                     windows,
                     any(feature = "native-composition", feature = "windows-native-host")
                 )))]
-                let _ = (window, detail);
+                let _ = (window, detail, blocked);
             }
             _ => {}
         }

@@ -1142,7 +1142,7 @@ rationale = "Capture only isolated formatter output to prove fixed native prepar
 [[records]]
 path = "crates/sugarsubstitute/src/canvas_motion_diagnostic/tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:9b2bdfcb03a7159de69491130af376a918ba9efa18bac5d8bb0516b31bdafb3b"
+source_sha256 = "sha256:de9d30bce1fc2c6869980a40e13700d51ba480ac54fe4e7199289a430bcfe067"
 disposition = "fixture"
 rationale = "Capture only isolated formatter output to prove the relayed camera motion record's fixed fields and its refusal of other targets, schemas and values."
 

@@ -117,7 +117,7 @@ fn preview_timing_records_cross_the_relay_under_their_own_budget() {
 
 #[test]
 fn motion_records_cross_the_relay_under_their_own_budget() {
-    const MOTION: &[u8] = b"2026-11-23T05:00:00.000000Z  INFO sugarsubstitute::canvas_motion_diagnostic: operation=\"canvas_motion\" schema=1 elapsed_us=86000 period_us=6944 first_frame_us=4000 accepted=12 submitted=12 abandoned=0 skipped=0 longest_gap_us=7100 detail=false\n";
+    const MOTION: &[u8] = b"2026-11-23T05:00:00.000000Z  INFO sugarsubstitute::canvas_motion_diagnostic: operation=\"canvas_motion\" schema=1 elapsed_us=86000 period_us=6944 first_frame_us=4000 accepted=12 submitted=12 abandoned=0 skipped=0 longest_gap_us=7100 detail=false blocked=displaying:0,gpu_pending:0,cpu_pending:0,pacer:3,no_backing:0,unchanged:0,buffers:0\n";
     for split in 1..MOTION.len() {
         let mut owner = Diagnostic::new();
         let mut seen = Vec::new();

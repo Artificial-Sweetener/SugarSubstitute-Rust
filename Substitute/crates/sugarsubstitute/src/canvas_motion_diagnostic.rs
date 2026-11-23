@@ -9,24 +9,39 @@
 use std::time::Duration;
 use sugarsubstitute_canvas_render::PresentationWindow;
 
-/// What one camera motion presented, in whole microseconds and frame counts.
+/// What one camera motion presented, in whole microseconds and frame counts. Fields are 32-bit,
+/// saturating (71 minutes of microseconds), so the relayed observation stays within its inline
+/// metadata size.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct Record {
-    pub(crate) elapsed: u64,
-    pub(crate) period: u64,
+    pub(crate) elapsed: u32,
+    pub(crate) period: u32,
     /// From the motion's start to its first accepted frame; absent when none was accepted.
-    pub(crate) first_frame: Option<u64>,
-    pub(crate) accepted: u64,
-    pub(crate) submitted: u64,
-    pub(crate) abandoned: u64,
-    pub(crate) skipped: u64,
-    pub(crate) longest_gap: u64,
+    pub(crate) first_frame: Option<u32>,
+    pub(crate) accepted: u32,
+    pub(crate) submitted: u32,
+    pub(crate) abandoned: u32,
+    pub(crate) skipped: u32,
+    pub(crate) longest_gap: u32,
     pub(crate) detail: bool,
+    /// Display attempts each gate stopped, in order: a frame already preparing, GPU presentation
+    /// pending, a CPU document frame pending, a frame in flight at the pacer, no backing, nothing
+    /// new to show, no display buffer of the view's size.
+    pub(crate) blocked: [u32; 7],
 }
 
+/// The wire names of the blocked counts, in `Record::blocked` order.
+const GATES: [&str; 7] =
+    ["displaying", "gpu_pending", "cpu_pending", "pacer", "no_backing", "unchanged", "buffers"];
+
 /// Whole microseconds, saturating.
-fn micros(value: Duration) -> u64 {
-    u64::try_from(value.as_micros()).unwrap_or(u64::MAX)
+fn micros(value: Duration) -> u32 {
+    u32::try_from(value.as_micros()).unwrap_or(u32::MAX)
+}
+
+/// A count, saturating.
+fn count(value: u64) -> u32 {
+    u32::try_from(value).unwrap_or(u32::MAX)
 }
 
 impl Record {
@@ -36,6 +51,7 @@ impl Record {
         now: Duration,
         period: Duration,
         detail: bool,
+        blocked: [u64; 7],
     ) -> Self {
         let stats = window.stats;
         Self {
@@ -44,12 +60,13 @@ impl Record {
             first_frame: window
                 .first_acceptance
                 .map(|at| micros(at.saturating_sub(window.started))),
-            accepted: stats.canonical_accepted.saturating_add(stats.projected_accepted),
-            submitted: stats.submitted,
-            abandoned: stats.abandoned,
-            skipped: stats.skipped_slots,
+            accepted: count(stats.canonical_accepted.saturating_add(stats.projected_accepted)),
+            submitted: count(stats.submitted),
+            abandoned: count(stats.abandoned),
+            skipped: count(stats.skipped_slots),
             longest_gap: micros(stats.native_acceptance_cadence.maximum),
             detail,
+            blocked: blocked.map(count),
         }
     }
 
@@ -58,7 +75,8 @@ impl Record {
         tracing::info!(operation = "canvas_motion", schema = 1, elapsed_us = self.elapsed,
             period_us = self.period, first_frame_us = %Optional(self.first_frame),
             accepted = self.accepted, submitted = self.submitted, abandoned = self.abandoned,
-            skipped = self.skipped, longest_gap_us = self.longest_gap, detail = self.detail);
+            skipped = self.skipped, longest_gap_us = self.longest_gap, detail = self.detail,
+            blocked = %Counts(self.blocked));
     }
 
     /// Accept exactly the schema-one line `emit` writes, within the child-output scratch.
@@ -95,7 +113,12 @@ impl Record {
             "false" => false,
             _ => return None,
         };
-        if fields.next().is_some() {
+        let mut blocked = [0; 7];
+        let mut counts = field("blocked")?.split(',');
+        for (slot, name) in blocked.iter_mut().zip(GATES) {
+            *slot = number(counts.next()?.strip_prefix(name)?.strip_prefix(':')?)?;
+        }
+        if counts.next().is_some() || fields.next().is_some() {
             return None;
         }
         Some(Self {
@@ -108,24 +131,40 @@ impl Record {
             skipped,
             longest_gap,
             detail,
+            blocked,
         })
     }
 
     /// Write the relayed motion to the application log under the child's run.
     #[cfg(feature = "windows-native-host")]
     pub(crate) fn relay(self, run: sugarsubstitute_contracts::lifecycle::RunKey) {
-        let ms = |value: u64| value as f64 / 1000.0;
+        let ms = |value: u32| f64::from(value) / 1000.0;
         tracing::info!(operation = "desktop_child_canvas_motion", run = ?run,
             elapsed_ms = ms(self.elapsed), period_ms = ms(self.period),
             first_frame_ms = self.first_frame.map(ms), accepted = self.accepted,
             submitted = self.submitted, abandoned = self.abandoned, skipped = self.skipped,
             longest_gap_ms = ms(self.longest_gap), detail = self.detail,
-            "A camera motion settled");
+            blocked = %Counts(self.blocked), "A camera motion settled");
+    }
+}
+
+/// The blocked counts on the wire: `name:count` pairs joined by commas, in `GATES` order.
+struct Counts([u32; 7]);
+
+impl std::fmt::Display for Counts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (index, (name, count)) in GATES.iter().zip(self.0).enumerate() {
+            if index > 0 {
+                f.write_str(",")?;
+            }
+            write!(f, "{name}:{count}")?;
+        }
+        Ok(())
     }
 }
 
 /// An optional count on the wire: digits, or `none`.
-struct Optional(Option<u64>);
+struct Optional(Option<u32>);
 
 impl std::fmt::Display for Optional {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -138,7 +177,7 @@ impl std::fmt::Display for Optional {
 
 /// Refuse signs, padding and overflow at the passive wire boundary.
 #[cfg(feature = "windows-native-host")]
-fn number(value: &str) -> Option<u64> {
+fn number(value: &str) -> Option<u32> {
     if value.is_empty()
         || value.len() > 1 && value.starts_with('0')
         || !value.bytes().all(|b| b.is_ascii_digit())

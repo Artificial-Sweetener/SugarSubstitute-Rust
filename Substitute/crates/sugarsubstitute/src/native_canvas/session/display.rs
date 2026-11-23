@@ -135,25 +135,38 @@ impl Session {
 
     /// Admit only the latest camera when the sole display slot and its cadence are available.
     pub(super) fn submit_display(&mut self) -> Result<(), Box<dyn Error>> {
-        if self.closing
-            || !self.drawable
-            || self.displaying.is_some()
-            || self.gpu_presentation_pending()
-            || self.document.cpu_pending.is_some()
-        {
+        if self.closing || !self.drawable {
+            return Ok(());
+        }
+        let gate = if self.displaying.is_some() {
+            Some(zoom::Gate::Displaying)
+        } else if self.gpu_presentation_pending() {
+            Some(zoom::Gate::GpuPending)
+        } else {
+            self.document.cpu_pending.is_some().then_some(zoom::Gate::CpuPending)
+        };
+        if let Some(gate) = gate {
+            self.note_blocked(gate);
             return Ok(());
         }
         let now = self.navigation_time();
-        if self.pacing.readiness(now)? != PresentationReadiness::Ready {
-            return Ok(());
+        match self.pacing.readiness(now)? {
+            PresentationReadiness::Ready => {}
+            PresentationReadiness::Busy { .. } => {
+                self.note_blocked(zoom::Gate::Pacer);
+                return Ok(());
+            }
+            _ => return Ok(()),
         }
         let view = self.document.tools.navigation().viewport();
         let Some(selection) = self.select_backing()? else {
+            self.note_blocked(zoom::Gate::NoBacking);
             return Ok(());
         };
         let shown = selection.primary.shown;
         let source_stamp = selection.primary.source;
         if !self.display_selection_pending(selection) {
+            self.note_blocked(zoom::Gate::Unchanged);
             return Ok(());
         }
         if !self.gpu_document()
@@ -164,6 +177,7 @@ impl Session {
                 .flatten()
                 .any(|buffer| buffer.extent() == view.surface())
         {
+            self.note_blocked(zoom::Gate::Buffers);
             return Ok(());
         }
         let next = self.frame_revision.checked_add(1).ok_or("Canvas display revision exhausted")?;
