@@ -116,6 +116,29 @@ fn preview_timing_records_cross_the_relay_under_their_own_budget() {
 }
 
 #[test]
+fn selection_records_cross_the_relay_under_their_own_budget() {
+    const SELECTION: &[u8] = b"2026-11-23T20:00:00.000000Z  INFO sugarsubstitute::canvas_selection_diagnostic: operation=\"canvas_selection_shown\" schema=1 selection=6 route=Retained tier=Detail load_us=0 shown_us=9000\n";
+    for split in 1..SELECTION.len() {
+        let mut owner = Diagnostic::new();
+        let mut seen = Vec::new();
+        owner.feed(OutputStream::Stderr, 1, false, false, &SELECTION[..split], |v| seen.push(v));
+        assert!(seen.is_empty());
+        owner.feed(OutputStream::Stderr, 2, false, false, &SELECTION[split..], |v| seen.push(v));
+        assert!(matches!(seen.as_slice(), [Observation::Selection(record)]
+            if record.selection == 6 && record.shown == 9_000
+                && record.route == crate::canvas_selection_diagnostic::Route::Retained));
+    }
+    let mut owner = Diagnostic::new();
+    let mut count = 0_u16;
+    for sequence in 1..=u64::from(SELECTION_RECORDS) + 8 {
+        owner.feed(OutputStream::Stderr, sequence, false, false, SELECTION, |v| {
+            count += u16::from(matches!(v, Observation::Selection(_)));
+        });
+    }
+    assert_eq!(count, SELECTION_RECORDS);
+}
+
+#[test]
 fn motion_records_cross_the_relay_under_their_own_budget() {
     const MOTION: &[u8] = b"2026-11-23T05:00:00.000000Z  INFO sugarsubstitute::canvas_motion_diagnostic: operation=\"canvas_motion\" schema=1 elapsed_us=86000 period_us=6944 first_frame_us=4000 accepted=12 submitted=12 abandoned=0 skipped=0 longest_gap_us=7100 detail=false blocked=disp:0,gpu:0,cpu:0,pace:3,back:0,same:0,buf:0,ret:5,rest:0,acq:0,init:0,pick:0,ginit:0,route:0,open:0,susp:0,stale:0\n";
     for split in 1..MOTION.len() {

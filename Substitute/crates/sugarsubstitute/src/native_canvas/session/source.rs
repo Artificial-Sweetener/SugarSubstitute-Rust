@@ -141,6 +141,7 @@ impl Session {
         }
         self.source_sequence = next;
         self.selection = next;
+        self.selection_watch = None;
         self.pending_first_image = None;
         self.pending_restore = None;
         self.initial_frame = None;
@@ -214,6 +215,10 @@ impl Session {
         self.abandon_cpu_frame(self.navigation_time())?;
         self.input_observed = self.navigation_time();
         self.selection = next;
+        self.selection_watch = Some(crate::canvas_selection_diagnostic::SelectionWatch::start(
+            next,
+            self.input_observed,
+        ));
         self.source_sequence = next;
         if self.first_image_queue_latency.is_none() {
             self.pending_first_image = Some((self.selection, self.input_observed));

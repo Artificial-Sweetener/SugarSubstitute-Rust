@@ -431,6 +431,9 @@ impl Session {
         self.document.display_source = Some(evidence.source);
         self.document.display_view = Some(evidence.view);
         self.document.display_evidence = Some(evidence);
+        if native_acknowledged {
+            self.note_selection_shown(evidence.source_revision, evidence.tier);
+        }
         if native_acknowledged
             && self.first_image_queue_latency.is_none()
             && let Some((source_revision, intent)) = self.pending_first_image

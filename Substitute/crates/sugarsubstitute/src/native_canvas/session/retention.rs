@@ -374,6 +374,9 @@ impl Session {
             return Ok(false);
         };
         self.pending_restore = Some((key.clone(), intent));
+        if let Some(watch) = &mut self.selection_watch {
+            watch.retained();
+        }
         Ok(true)
     }
 

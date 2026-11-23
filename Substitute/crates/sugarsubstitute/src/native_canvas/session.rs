@@ -299,6 +299,8 @@ pub(crate) struct Session {
     pacing: PresentationPacer,
     /// The camera motion being measured, if any.
     motion: Option<zoom::MotionWatch>,
+    /// The current source selection being timed until each backing tier shows.
+    selection_watch: Option<crate::canvas_selection_diagnostic::SelectionWatch>,
     input_observed: Duration,
     expose_pending: bool,
     drawable: bool,
@@ -452,6 +454,7 @@ impl Session {
             first_fallback_preparation_io: None,
             pacing: PresentationPacer::new(Duration::from_nanos(16_666_667))?,
             motion: None,
+            selection_watch: None,
             input_observed: Duration::ZERO,
             expose_pending: false,
             drawable: true,

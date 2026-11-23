@@ -1154,6 +1154,13 @@ disposition = "fixture"
 rationale = "Capture only isolated formatter output to prove the relayed preview timing record's fixed fields and its refusal of other targets, schemas and values."
 
 [[records]]
+path = "crates/sugarsubstitute/src/canvas_selection_diagnostic/tests.rs"
+owner = "sugarsubstitute"
+source_sha256 = "sha256:e3c14238d6a6b1166c107b72beb18038c7b36933900ca2fe700ba30386c02774"
+disposition = "fixture"
+rationale = "Capture only isolated formatter output to prove the relayed canvas selection record's fixed fields and its refusal of other targets, schemas and values."
+
+[[records]]
 path = "crates/sugarsubstitute/src/canvas_zoom_diagnostic/tests.rs"
 owner = "sugarsubstitute"
 source_sha256 = "sha256:cd5238eefed269736004614337e5f9a3bb0be87fb0dadddde2771f89d8540add"

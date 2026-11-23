@@ -73,6 +73,22 @@ impl Session {
         let _ = zoom;
     }
 
+    /// Record the first native acceptance of each backing tier for the current selection.
+    pub(super) fn note_selection_shown(&mut self, selection: u64, tier: BackingTier) {
+        use crate::canvas_selection_diagnostic::Tier;
+        let tier = match tier {
+            BackingTier::Fallback => Tier::Fallback,
+            BackingTier::Navigation => Tier::Navigation,
+            BackingTier::Detail => Tier::Detail,
+        };
+        let now = self.navigation_time();
+        if let Some(record) =
+            self.selection_watch.as_mut().and_then(|watch| watch.shown(selection, tier, now))
+        {
+            record.emit();
+        }
+    }
+
     /// Measure each camera motion: open a presentation window when the camera starts to move,
     /// and record what it presented once it settles and no frame is still in flight.
     pub(super) fn observe_motion(&mut self) -> Result<(), Box<dyn Error>> {

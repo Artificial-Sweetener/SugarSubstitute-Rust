@@ -61,6 +61,10 @@ impl Session {
             return Ok(());
         };
         let loading = self.loading.take().ok_or("Canvas load identity was lost")?;
+        let now = self.navigation_time();
+        if let Some(watch) = &mut self.selection_watch {
+            watch.loaded(loading.intent, now);
+        }
         Self::observe_terminal(&loading.job, &completion.outcome);
         #[cfg(feature = "native-composition")]
         let incomplete = loading.acquirer.as_ref().is_some_and(|owner| !owner.settled())

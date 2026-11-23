@@ -77,6 +77,7 @@ pub(super) enum Observation {
     CanvasPreparation(crate::canvas_preparation_diagnostic::Record),
     Zoom(crate::canvas_zoom_diagnostic::Record),
     Preview(crate::canvas_preview_diagnostic::Record),
+    Selection(crate::canvas_selection_diagnostic::Record),
     Motion(crate::canvas_motion_diagnostic::Record),
     Bulk(sugarsubstitute_desktop::bulk_channel_diagnostic::Record),
     #[cfg(feature = "k1-native-qualification")]
@@ -100,6 +101,7 @@ pub(super) struct Diagnostic {
     canvas_emitted: u16,
     zoom_emitted: u16,
     preview_emitted: u16,
+    selection_emitted: u16,
     motion_emitted: u16,
     bulk_emitted: u16,
 }
@@ -109,6 +111,8 @@ const CANVAS_RECORDS: u16 = 4096;
 const ZOOM_RECORDS: u16 = 8192;
 /// Offered live preview frames relayed per child run; a long session's later ones are discarded.
 const PREVIEW_RECORDS: u16 = 8192;
+/// Selection tier timings relayed per child run; a long session's later ones are discarded.
+const SELECTION_RECORDS: u16 = 8192;
 /// Settled camera motions relayed per child run; a long session's later ones are discarded.
 const MOTION_RECORDS: u16 = 8192;
 /// Bulk channel refusals relayed per child run; a page can provoke them, so later ones are
@@ -132,6 +136,7 @@ impl Diagnostic {
             canvas_emitted: 0,
             zoom_emitted: 0,
             preview_emitted: 0,
+            selection_emitted: 0,
             motion_emitted: 0,
             bulk_emitted: 0,
         }
@@ -200,6 +205,13 @@ impl Diagnostic {
                         if self.preview_emitted < PREVIEW_RECORDS {
                             self.preview_emitted += 1;
                             emit(Observation::Preview(record));
+                        }
+                    } else if let Some(record) = crate::canvas_selection_diagnostic::Record::parse(
+                        &self.bytes[..self.length],
+                    ) {
+                        if self.selection_emitted < SELECTION_RECORDS {
+                            self.selection_emitted += 1;
+                            emit(Observation::Selection(record));
                         }
                     } else if let Some(record) =
                         crate::canvas_motion_diagnostic::Record::parse(&self.bytes[..self.length])
