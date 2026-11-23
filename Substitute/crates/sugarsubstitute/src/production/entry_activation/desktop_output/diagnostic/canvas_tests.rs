@@ -114,3 +114,25 @@ fn preview_timing_records_cross_the_relay_under_their_own_budget() {
     }
     assert_eq!(count, PREVIEW_RECORDS);
 }
+
+#[test]
+fn motion_records_cross_the_relay_under_their_own_budget() {
+    const MOTION: &[u8] = b"2026-11-23T05:00:00.000000Z  INFO sugarsubstitute::canvas_motion_diagnostic: operation=\"canvas_motion\" schema=1 elapsed_us=86000 period_us=6944 first_frame_us=4000 accepted=12 submitted=12 abandoned=0 skipped=0 longest_gap_us=7100 detail=false\n";
+    for split in 1..MOTION.len() {
+        let mut owner = Diagnostic::new();
+        let mut seen = Vec::new();
+        owner.feed(OutputStream::Stderr, 1, false, false, &MOTION[..split], |v| seen.push(v));
+        assert!(seen.is_empty());
+        owner.feed(OutputStream::Stderr, 2, false, false, &MOTION[split..], |v| seen.push(v));
+        assert!(matches!(seen.as_slice(), [Observation::Motion(record)]
+            if record.accepted == 12 && record.period == 6_944 && record.first_frame == Some(4_000)));
+    }
+    let mut owner = Diagnostic::new();
+    let mut count = 0_u16;
+    for sequence in 1..=u64::from(MOTION_RECORDS) + 8 {
+        owner.feed(OutputStream::Stderr, sequence, false, false, MOTION, |v| {
+            count += u16::from(matches!(v, Observation::Motion(_)));
+        });
+    }
+    assert_eq!(count, MOTION_RECORDS);
+}

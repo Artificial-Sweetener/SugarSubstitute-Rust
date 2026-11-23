@@ -80,6 +80,17 @@ pub struct PresentationStats {
     pub native_acceptance_cadence: TimingSummary,
 }
 
+/// One measured stretch of presentation, such as one camera motion, from its first observation.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PresentationWindow {
+    /// Elapsed-clock time at which the window began.
+    pub started: Duration,
+    /// Elapsed-clock time of the window's first native queue acceptance.
+    pub first_acceptance: Option<Duration>,
+    /// Observations made while the window was open; cadence starts at its first acceptance.
+    pub stats: PresentationStats,
+}
+
 /// Invalid pacing observation rejected without changing presentation custody.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PacingError {
@@ -174,6 +185,7 @@ pub struct PresentationPacer {
     surface: Option<SurfaceId>,
     pending: Option<PendingPresentation>,
     stats: PresentationStats,
+    window: Option<PresentationWindow>,
 }
 
 impl PresentationPacer {
@@ -193,6 +205,7 @@ impl PresentationPacer {
             surface: None,
             pending: None,
             stats: PresentationStats::default(),
+            window: None,
         })
     }
 
@@ -298,9 +311,11 @@ impl PresentationPacer {
             input_at,
             stage: PresentationStage::Preparing,
         });
-        self.stats.submitted = self.stats.submitted.saturating_add(1);
-        self.stats.skipped_slots =
-            self.stats.skipped_slots.saturating_add(u64::try_from(skipped).unwrap_or(u64::MAX));
+        let skipped = u64::try_from(skipped).unwrap_or(u64::MAX);
+        self.observe(|stats| {
+            stats.submitted = stats.submitted.saturating_add(1);
+            stats.skipped_slots = stats.skipped_slots.saturating_add(skipped);
+        });
         Ok(())
     }
 
@@ -344,27 +359,30 @@ impl PresentationPacer {
             });
         }
         let latency = now.checked_sub(pending.input_at).ok_or(PacingError::ClockRegression)?;
-        let cadence = self
-            .stats
-            .last_native_acceptance
-            .map(|previous| now.checked_sub(previous).ok_or(PacingError::ClockRegression))
-            .transpose()?;
-
+        if self.stats.last_native_acceptance.is_some_and(|previous| now < previous) {
+            return Err(PacingError::ClockRegression);
+        }
         self.pending = None;
         self.last_observation = Some(now);
-        self.stats.last_native_acceptance = Some(now);
-        match pending.mode {
-            PresentationMode::Canonical => {
-                self.stats.canonical_accepted = self.stats.canonical_accepted.saturating_add(1);
-            }
-            PresentationMode::Projected => {
-                self.stats.projected_accepted = self.stats.projected_accepted.saturating_add(1);
-            }
+        if let Some(window) = &mut self.window {
+            window.first_acceptance.get_or_insert(now);
         }
-        self.stats.input_to_native.observe(latency);
-        if let Some(interval) = cadence {
-            self.stats.native_acceptance_cadence.observe(interval);
-        }
+        self.observe(|stats| {
+            let cadence = stats.last_native_acceptance.map(|previous| now.saturating_sub(previous));
+            stats.last_native_acceptance = Some(now);
+            match pending.mode {
+                PresentationMode::Canonical => {
+                    stats.canonical_accepted = stats.canonical_accepted.saturating_add(1);
+                }
+                PresentationMode::Projected => {
+                    stats.projected_accepted = stats.projected_accepted.saturating_add(1);
+                }
+            }
+            stats.input_to_native.observe(latency);
+            if let Some(interval) = cadence {
+                stats.native_acceptance_cadence.observe(interval);
+            }
+        });
         Ok(())
     }
 
@@ -378,7 +396,7 @@ impl PresentationPacer {
         self.matches(target)?;
         self.pending = None;
         self.last_observation = Some(now);
-        self.stats.abandoned = self.stats.abandoned.saturating_add(1);
+        self.observe(|stats| stats.abandoned = stats.abandoned.saturating_add(1));
         Ok(())
     }
 
@@ -396,6 +414,25 @@ impl PresentationPacer {
     /// and acceptance to the new window.
     pub fn take_stats(&mut self) -> PresentationStats {
         std::mem::take(&mut self.stats)
+    }
+
+    /// Open a measurement window, such as one camera motion, alongside the aggregate stats.
+    /// A window already open is replaced.
+    pub fn begin_window(&mut self, now: Duration) {
+        self.window = Some(PresentationWindow { started: now, ..PresentationWindow::default() });
+    }
+
+    /// Close the open measurement window and return what it observed.
+    pub fn end_window(&mut self) -> Option<PresentationWindow> {
+        self.window.take()
+    }
+
+    /// Apply one observation to the aggregate stats and to the open window.
+    fn observe(&mut self, update: impl Fn(&mut PresentationStats)) {
+        update(&mut self.stats);
+        if let Some(window) = &mut self.window {
+            update(&mut window.stats);
+        }
     }
 
     fn validate_time(&self, now: Duration) -> Result<(), PacingError> {

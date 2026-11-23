@@ -17,7 +17,7 @@ pub use gpu_surface::{GpuFrame, GpuSurface};
 pub use overlay::{OverlayPixel, OverlayPixels};
 pub use pacing::{
     PacingError, PresentationMode, PresentationPacer, PresentationReadiness, PresentationStage,
-    PresentationStats, TimingSummary,
+    PresentationStats, PresentationWindow, TimingSummary,
 };
 pub use projection::{CpuProjection, ProjectionBuffer, ProjectionBuffers, ProjectionSamples};
 pub use surface::{CpuSurface, PreparedUpdate, SurfaceWork};

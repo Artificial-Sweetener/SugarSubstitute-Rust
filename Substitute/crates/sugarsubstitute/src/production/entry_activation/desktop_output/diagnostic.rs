@@ -77,6 +77,7 @@ pub(super) enum Observation {
     CanvasPreparation(crate::canvas_preparation_diagnostic::Record),
     Zoom(crate::canvas_zoom_diagnostic::Record),
     Preview(crate::canvas_preview_diagnostic::Record),
+    Motion(crate::canvas_motion_diagnostic::Record),
     Bulk(sugarsubstitute_desktop::bulk_channel_diagnostic::Record),
     #[cfg(feature = "k1-native-qualification")]
     Qualification(qualification::Qualification),
@@ -99,6 +100,7 @@ pub(super) struct Diagnostic {
     canvas_emitted: u16,
     zoom_emitted: u16,
     preview_emitted: u16,
+    motion_emitted: u16,
     bulk_emitted: u16,
 }
 /// Canvas request lifecycle records relayed per child run; later records are discarded.
@@ -107,6 +109,8 @@ const CANVAS_RECORDS: u16 = 4096;
 const ZOOM_RECORDS: u16 = 8192;
 /// Offered live preview frames relayed per child run; a long session's later ones are discarded.
 const PREVIEW_RECORDS: u16 = 8192;
+/// Settled camera motions relayed per child run; a long session's later ones are discarded.
+const MOTION_RECORDS: u16 = 8192;
 /// Bulk channel refusals relayed per child run; a page can provoke them, so later ones are
 /// discarded.
 const BULK_RECORDS: u16 = 256;
@@ -128,6 +132,7 @@ impl Diagnostic {
             canvas_emitted: 0,
             zoom_emitted: 0,
             preview_emitted: 0,
+            motion_emitted: 0,
             bulk_emitted: 0,
         }
     }
@@ -195,6 +200,13 @@ impl Diagnostic {
                         if self.preview_emitted < PREVIEW_RECORDS {
                             self.preview_emitted += 1;
                             emit(Observation::Preview(record));
+                        }
+                    } else if let Some(record) =
+                        crate::canvas_motion_diagnostic::Record::parse(&self.bytes[..self.length])
+                    {
+                        if self.motion_emitted < MOTION_RECORDS {
+                            self.motion_emitted += 1;
+                            emit(Observation::Motion(record));
                         }
                     } else if let Some(record) =
                         sugarsubstitute_desktop::bulk_channel_diagnostic::Record::parse(

@@ -228,6 +228,7 @@ impl DesktopOutput {
                     diagnostic::Observation::CanvasPreparation(record) => record.relay(self.run),
                     diagnostic::Observation::Zoom(record) => record.relay(self.run),
                     diagnostic::Observation::Preview(record) => record.relay(self.run),
+                    diagnostic::Observation::Motion(record) => record.relay(self.run),
                     diagnostic::Observation::Bulk(record) => {
                         diagnostic::bulk::relay(self.run, record);
                     }

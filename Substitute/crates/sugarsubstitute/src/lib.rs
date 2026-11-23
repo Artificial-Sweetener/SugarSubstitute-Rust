@@ -16,6 +16,8 @@ mod authority_clock;
 #[cfg(all(windows, feature = "windows-native-host"))]
 mod campaign_watch;
 #[cfg(all(windows, any(feature = "native-composition", feature = "windows-native-host")))]
+mod canvas_motion_diagnostic;
+#[cfg(all(windows, any(feature = "native-composition", feature = "windows-native-host")))]
 mod canvas_preparation_diagnostic;
 #[cfg(all(windows, any(feature = "native-composition", feature = "windows-native-host")))]
 mod canvas_preview_diagnostic;

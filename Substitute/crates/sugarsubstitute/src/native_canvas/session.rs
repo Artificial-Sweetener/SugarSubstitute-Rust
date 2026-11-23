@@ -297,6 +297,8 @@ pub(crate) struct Session {
     bootstrap_projection_acceptances: u64,
     first_fallback_preparation_io: Option<ArchiveStats>,
     pacing: PresentationPacer,
+    /// While a camera motion is measured: whether detail work was running when it began.
+    motion: Option<bool>,
     input_observed: Duration,
     expose_pending: bool,
     drawable: bool,
@@ -449,6 +451,7 @@ impl Session {
             bootstrap_projection_acceptances: 0,
             first_fallback_preparation_io: None,
             pacing: PresentationPacer::new(Duration::from_nanos(16_666_667))?,
+            motion: None,
             input_observed: Duration::ZERO,
             expose_pending: false,
             drawable: true,

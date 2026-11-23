@@ -10,6 +10,7 @@ impl Session {
         #[cfg(feature = "native-composition")]
         self.consume_preview_poll_request();
         self.document.tools.advance(self.navigation_time())?;
+        self.observe_motion()?;
         self.cancel_obsolete_refinement()?;
         if let Some(runtime) = &self.runtime {
             runtime.drain_standalone()?;

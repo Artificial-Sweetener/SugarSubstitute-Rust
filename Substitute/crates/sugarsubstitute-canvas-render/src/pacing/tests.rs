@@ -219,3 +219,30 @@ fn taking_stats_starts_a_new_window_without_changing_pacing_or_custody()
     );
     Ok(())
 }
+
+#[test]
+fn a_window_counts_only_its_own_frames_and_their_gaps() -> Result<(), Box<dyn std::error::Error>> {
+    let period = 6_944_444;
+    let mut pacing = PresentationPacer::new(time(period))?;
+    let before = stamp(1, 1)?;
+    pacing.submitted(before, PresentationMode::Canonical, time(0), time(0))?;
+    pacing.prepared(before, time(1))?;
+    pacing.native_accepted(before, time(2))?;
+    pacing.begin_window(time(10));
+    for (index, at) in [period, 2 * period, 5 * period].into_iter().enumerate() {
+        let frame = stamp(1, 2 + index as u64)?;
+        pacing.submitted(frame, PresentationMode::Projected, time(at), time(at))?;
+        pacing.prepared(frame, time(at + 1))?;
+        pacing.native_accepted(frame, time(at + 2))?;
+    }
+    let window = pacing.end_window().ok_or("Missing window")?;
+    assert_eq!(window.started, time(10));
+    assert_eq!(window.first_acceptance, Some(time(period + 2)));
+    assert_eq!(window.stats.projected_accepted, 3);
+    assert_eq!(window.stats.canonical_accepted, 0);
+    assert_eq!(window.stats.native_acceptance_cadence.samples, 2);
+    assert_eq!(window.stats.native_acceptance_cadence.maximum, time(3 * period));
+    assert_eq!(pacing.stats().canonical_accepted + pacing.stats().projected_accepted, 4);
+    assert_eq!(pacing.end_window(), None);
+    Ok(())
+}
