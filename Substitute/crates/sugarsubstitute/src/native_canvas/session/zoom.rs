@@ -5,17 +5,16 @@
 use super::*;
 
 impl Session {
-    /// Log the zoom the last input made: its wheel gap, chosen duration and why it jumped, if it
-    /// did.
+    /// Record the zoom the last input made: its wheel gap, chosen duration and why it jumped, if
+    /// it did. The desktop child writes it as a closed record the parent relays to the app log.
     pub(super) fn log_zoom(&mut self) {
-        if let Some(zoom) = self.document.tools.take_zoom() {
-            tracing::info!(
-                operation = "canvas_zoom",
-                gap_ms = zoom.gap.map(|gap| gap.as_secs_f64() * 1000.0),
-                duration_ms = zoom.duration.as_secs_f64() * 1000.0,
-                snapped = ?zoom.snapped,
-                "A zoom moved the canvas camera"
-            );
-        }
+        let Some(zoom) = self.document.tools.take_zoom() else { return };
+        #[cfg(all(windows, any(feature = "native-composition", feature = "windows-native-host")))]
+        crate::canvas_zoom_diagnostic::Record::from(zoom).emit();
+        #[cfg(not(all(
+            windows,
+            any(feature = "native-composition", feature = "windows-native-host")
+        )))]
+        let _ = zoom;
     }
 }

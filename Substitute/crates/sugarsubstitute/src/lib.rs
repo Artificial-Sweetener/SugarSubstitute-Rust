@@ -19,6 +19,8 @@ mod campaign_watch;
 mod canvas_preparation_diagnostic;
 #[cfg(all(windows, any(feature = "native-composition", feature = "windows-native-host")))]
 mod canvas_surface_diagnostic;
+#[cfg(all(windows, any(feature = "native-composition", feature = "windows-native-host")))]
+mod canvas_zoom_diagnostic;
 mod capture;
 #[cfg(all(target_os = "windows", feature = "windows-native-host"))]
 mod capture_fixture;
