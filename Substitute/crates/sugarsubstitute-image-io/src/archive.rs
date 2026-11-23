@@ -44,6 +44,20 @@ pub struct RasterArchive<R> {
     stats: ArchiveStats,
     position: Option<u64>,
 }
+impl<R> RasterArchive<R> {
+    /// Keep this verified archive and its workspace while wrapping its reader, so sources read
+    /// through different storage can share one reader type.
+    pub fn map_reader<S>(self, wrap: impl FnOnce(R) -> S) -> RasterArchive<S> {
+        RasterArchive {
+            reader: wrap(self.reader),
+            descriptor: self.descriptor,
+            encoded: self.encoded,
+            linear: self.linear,
+            stats: self.stats,
+            position: self.position,
+        }
+    }
+}
 impl<R: Read + Seek> RasterArchive<R> {
     /// Verify expected source semantics and complete archive length before region access.
     /// Original retained memory is separate from the current worker's controls.

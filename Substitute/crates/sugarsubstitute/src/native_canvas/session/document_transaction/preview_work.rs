@@ -238,13 +238,7 @@ impl Session {
             Stage::Input(input) => runtime
                 .client
                 .submit_blocking_owned_input(&runtime.scope, spec, input, move |input, context| {
-                    work::load(
-                        work::Originals::single(input.source),
-                        input.revision,
-                        CacheReuse::Compatible,
-                        &resources,
-                        &context,
-                    )
+                    work::load_transient(input.source, input.revision, &resources, &context)
                 })
                 .map(|job| Some(Stage::Loading(Some(job)))),
             Stage::Scene(scene) => {

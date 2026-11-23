@@ -4745,7 +4745,7 @@ rationale = "Owned temporary cache roots verify immutable admitted byte original
 [[records]]
 path = "crates/sugarsubstitute-image-io/src/tests/cached/jpeg.rs"
 owner = "sugarsubstitute-image-io"
-source_sha256 = "sha256:ea2f7e141eb30887053a0f15d60dc7b7573083a41ffef37a9d65aa286f78d69c"
+source_sha256 = "sha256:aa79323cb5c97dbf40196e50323dd780aa2909e0394ff32b5c95b66f88ebc46f"
 capabilities = ["tempfile::tempdir"]
 disposition = "fixture"
 rationale = "Owned temporary cache roots verify supported JPEG import, original retention, independent rebuild and malformed-input publication rejection through the real cache owner."

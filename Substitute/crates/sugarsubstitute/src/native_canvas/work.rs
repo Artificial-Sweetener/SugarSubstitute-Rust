@@ -9,12 +9,17 @@ mod display;
 mod gpu;
 #[cfg(feature = "native-composition")]
 pub(super) mod preview;
+mod source;
 #[cfg(all(windows, feature = "native-composition"))]
 pub(super) use display::{CompositionFrame, CompositionTarget};
 pub(super) use display::{
     CpuUnderlay, DisplayBackdrops, DisplayTarget, Draw, DrawInput, DrawPixels, DrawSource,
     GpuUnderlay, NativeFrame, UnderlayEvidence,
 };
+pub(super) use source::SourceReader;
+#[cfg(feature = "native-composition")]
+pub(super) use source::load_transient;
+use source::scene;
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -40,7 +45,7 @@ use sugarsubstitute_supervision::cache::{CachePolicy, CacheReader, RuntimeCache}
 pub(super) const IMPORT_BYTES: u64 = 48 * 1024 * 1024;
 pub(super) const GPU_PREPARE_BYTES: u64 = 32 * 1024 * 1024;
 pub(super) const GPU_PROOF_BYTES: u64 = 40 * 1024 * 1024;
-pub(super) type Source = SharedRaster<CacheReader<'static>>;
+pub(super) type Source = SharedRaster<SourceReader>;
 /// The exact content a frame shows: document identity, published revision, and the staged
 /// gesture preview generation the session latched, zero for the published revision itself.
 pub(super) type DocumentKey = (u64, u64, u64);
@@ -341,7 +346,7 @@ pub(super) fn load(
             now,
             context,
         )?;
-        Ok(SharedRaster::new(raster, &resources.memory)?)
+        Ok(SharedRaster::new(raster.map_reader(SourceReader::Cache), &resources.memory)?)
     };
     let source = import(&original)?;
     if let Some(overview) = overview {
@@ -356,20 +361,7 @@ pub(super) fn load(
         }
         None => None,
     };
-    let descriptor = source.descriptor();
-    let extent = descriptor.layout().extent();
-    let mut document = Document::new(revision, extent, &resources.memory)?;
-    let layer =
-        Layer::new(LayerId::new(1)?, LayerContent::Raster { asset: descriptor.asset(), extent })?;
-    document.apply(DocumentEdit::Insert { index: 0, layer })?;
-    Ok(Scene {
-        document,
-        source: Some(source),
-        source_revision: revision,
-        original: Some(original),
-        compared,
-        placed: Vec::new(),
-    })
+    scene(source, original, compared, revision, resources)
 }
 /// Compose the primary and every further cell original into one viewport-sized document of
 /// placed layers; each original keeps its own pixels and is fitted inside its cell.

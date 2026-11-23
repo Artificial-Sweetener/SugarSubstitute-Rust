@@ -17,6 +17,8 @@ mod png_input;
 mod shared;
 #[cfg(windows)]
 mod source;
+#[cfg(windows)]
+mod transient;
 mod write;
 pub use archive::{ArchiveStats, RasterArchive};
 #[cfg(windows)]
@@ -29,6 +31,8 @@ pub use png_input::PngImport;
 pub use shared::SharedRaster;
 #[cfg(windows)]
 pub use source::ImageSource;
+#[cfg(windows)]
+pub use transient::{MemoryRaster, TransientRaster};
 pub use write::write_raster;
 
 /// Largest immutable encoded image original accepted by the import owner, in bytes.

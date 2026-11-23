@@ -147,7 +147,8 @@ pub(super) fn rebase(
     context: &JobContext,
 ) -> Result<(work::Source, ImageSource), WorkError> {
     let (raster, original) = import(acquirer, resources, context)?;
-    Ok((sugarsubstitute_image_io::SharedRaster::new(raster, &resources.memory)?, original))
+    let source = raster.map_reader(work::SourceReader::Cache);
+    Ok((sugarsubstitute_image_io::SharedRaster::new(source, &resources.memory)?, original))
 }
 
 /// Read a mask file through `channel` when its extent is `expected`.

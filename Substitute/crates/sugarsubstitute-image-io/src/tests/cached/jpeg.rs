@@ -205,3 +205,61 @@ fn malformed_jpeg_keeps_its_encoded_cache_original_and_publishes_no_raster() -> 
         Ok(())
     })
 }
+
+#[test]
+fn a_memory_original_decodes_into_memory_exactly_as_the_cached_import() -> harness::TestResult {
+    harness::run_storage(48 * 1024 * 1024, |context| {
+        let root = tempfile::tempdir()?;
+        let cache = RuntimeCache::open(
+            &root.path().join("cache"),
+            CachePolicy { total_bytes: 1024 * 1024 },
+            context,
+        )?;
+        let bytes = include_bytes!("../jpeg/fixtures/420.jpg").to_vec();
+        let claim = context.memory().claim(bytes.capacity() as u64 + 128)?;
+        let original = ImageSource::memory(&mut Some((bytes, claim)), context.memory())?;
+        let mut transient = original.import_transient(context.memory(), context)?;
+        let mut cached = original.import_image(
+            cache.clone(),
+            CacheReuse::Compatible,
+            context.memory(),
+            10,
+            context,
+        )?;
+        assert_eq!(transient.descriptor(), cached.descriptor());
+        let region = Region::new(0, 0, 19, 17)?;
+        let mut from_memory = vec![Pixel::TRANSPARENT; 19 * 17];
+        let mut from_cache = vec![Pixel::TRANSPARENT; 19 * 17];
+        transient.read(transient.descriptor().asset(), region, &mut from_memory, context)?;
+        cached.read(cached.descriptor().asset(), region, &mut from_cache, context)?;
+        assert_eq!(from_memory, from_cache);
+        Ok(())
+    })
+}
+
+#[test]
+fn a_retained_stream_original_also_decodes_into_memory() -> harness::TestResult {
+    harness::run_storage(48 * 1024 * 1024, |context| {
+        let root = tempfile::tempdir()?;
+        let cache = RuntimeCache::open(
+            &root.path().join("cache"),
+            CachePolicy { total_bytes: 1024 * 1024 },
+            context,
+        )?;
+        let bytes = include_bytes!("../jpeg/fixtures/420.jpg");
+        let mut entry = cache.clone().fresh(
+            Namespace::ComfyOutputs,
+            &storage_key(bytes),
+            bytes.len() as u64,
+            10,
+            context,
+        )?;
+        entry.write("output.jpg", bytes, context)?;
+        entry.publish(context)?;
+        let mut input = Some(entry.into_file_reader("output.jpg", context)?);
+        let original = ImageSource::encoded(&mut input, context.memory())?;
+        let transient = original.import_transient(context.memory(), context)?;
+        assert_eq!(transient.descriptor().layout().extent(), Extent::new(19, 17)?);
+        Ok(())
+    })
+}

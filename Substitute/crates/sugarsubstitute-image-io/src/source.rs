@@ -128,6 +128,29 @@ impl ImageSource {
         }
     }
 
+    /// Decode this original into memory, outside the image cache: for an image shown once and
+    /// replaced, such as a live preview frame. A memory original decodes in place; a file or
+    /// retained stream is read into memory first. Decoded bytes are admitted from `resident`.
+    ///
+    /// Call on an execution-owned storage worker.
+    ///
+    /// # Errors
+    /// Preserves acquisition, image, admission and control failures; a retained stream in use by
+    /// another import is `ImportError::Busy`.
+    pub fn import_transient(
+        &self,
+        resident: &MemoryLease,
+        context: &JobContext,
+    ) -> Result<crate::TransientRaster, ImportError> {
+        crate::check(context)?;
+        if let Original::Memory(original) = &self.inner {
+            return crate::transient::import_transient(original.bytes()?, resident, context);
+        }
+        let (bytes, _claim) =
+            self.encoded_bytes(crate::MAX_ENCODED_SOURCE_BYTES, context.memory(), context)?;
+        crate::transient::import_transient(&bytes, resident, context)
+    }
+
     /// Copy the complete original encoded bytes, as acquired, for handing to another program.
     ///
     /// Call on an execution-owned storage worker. The returned claim, taken from `memory`,
