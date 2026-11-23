@@ -14,7 +14,7 @@ mod report;
 mod updates;
 use super::*;
 use crate::{
-    cadence::{advance_deadline, closing_wait, presentation_wait},
+    cadence::{advance_deadline, presentation_wait, progress_wait},
     native_surface::input,
 };
 pub(super) use file_choice::ShownChoice;
@@ -181,6 +181,7 @@ pub(super) fn dispatch(
             presentation::submit(session, content, shape, context.timings)?;
         }
         Event::MainEventsCleared => {
+            session.main_advanced = false;
             if session.splash.state.poll(content, shape, session.drain, session.started.elapsed())
                 && !session.splash.retiring
             {
@@ -351,7 +352,9 @@ fn progress_main(
     let Some(main) = &mut session.main else {
         return Ok(());
     };
-    match main.progress(target, proxy, title) {
+    let progress = main.progress(target, proxy, title);
+    session.main_advanced |= main.take_advanced() || matches!(progress, Ok(Some(_)));
+    match progress {
         Ok(Some(observation)) => session.observe(content, observation),
         Ok(None) => Ok(()),
         Err(cause) => fail_main(session, content, cause),
@@ -429,7 +432,10 @@ pub(super) fn wait(
         || session.main.as_ref().is_some_and(|main| main.retired() && !main.settled())
     {
         let now = Instant::now();
-        match (closing_wait(now), deadline.filter(|deadline| *deadline > now)) {
+        match (
+            progress_wait(session.main_advanced, now),
+            deadline.filter(|deadline| *deadline > now),
+        ) {
             (ControlFlow::WaitUntil(native), Some(deadline)) => {
                 ControlFlow::WaitUntil(native.min(deadline))
             }

@@ -20,6 +20,8 @@ pub(super) fn drain(
         else {
             return Ok(());
         };
+        // A command such as a surface reply leaves the main actor a step to take at once.
+        session.main_advanced = true;
         if session.closing {
             match command.while_closing() {
                 crate::host_contract::ClosingAdmission::Run => {}

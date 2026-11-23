@@ -438,7 +438,7 @@ rationale = "Main caption/recovery contracts borrow localized labels from the ho
 
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/startup_runtime.rs"
-source_sha256 = "sha256:3f09ed141515e44fe12239c755054cbb222944a4c103df41bf7e2242e957c7d1"
+source_sha256 = "sha256:8cd3fa03578809b73e4e17298da63d3105ff27a4b01030484d024eb3eb4556ae"
 kind = "native"
 rationale = "The native startup session retains DesktopOptions from the host and passes them to the owned splash surface; it does not create product copy."
 

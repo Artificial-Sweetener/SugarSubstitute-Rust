@@ -49,6 +49,8 @@ struct Session {
     pointer: crate::Pointer,
     pressed: Option<crate::HitTarget>,
     next_frame: Instant,
+    /// Whether the main actor did work in this loop iteration, so its next step runs at once.
+    main_advanced: bool,
     started: Instant,
     drain: NonZeroUsize,
     splash_retirement_reported: bool,
@@ -207,6 +209,7 @@ pub fn run_startup(
         pointer: crate::Pointer::default(),
         pressed: None,
         next_frame: started,
+        main_advanced: false,
         started,
         drain,
         splash_retirement_reported: false,

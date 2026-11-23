@@ -13,6 +13,13 @@ pub(crate) fn closing_wait(now: Instant) -> ControlFlow {
     ControlFlow::WaitUntil(now + Duration::from_millis(16))
 }
 
+/// Wait for the next native step: at once when the last one did work, since a step that makes
+/// another runnable (a queued reply, a returned transport credit, a further queued event) raises
+/// no event of its own; otherwise poll again after the bounded native deadline.
+pub(crate) fn progress_wait(advanced: bool, now: Instant) -> ControlFlow {
+    if advanced { ControlFlow::Poll } else { closing_wait(now) }
+}
+
 /// Suspend static or hidden native surfaces while preserving bounded qualification exit.
 pub(crate) fn presentation_wait(
     visible: bool,
@@ -51,6 +58,15 @@ mod tests {
     fn closing_poll_has_a_bounded_native_deadline() {
         let now = sugarsubstitute_execution::qualification_time::anchor();
         assert_eq!(closing_wait(now), ControlFlow::WaitUntil(now + Duration::from_millis(16)));
+    }
+
+    /// A step that did work runs the next one at once; an idle step keeps the bounded poll, so
+    /// work blocked on an outside completion never spins the loop.
+    #[test]
+    fn a_native_step_that_did_work_runs_the_next_one_at_once() {
+        let now = sugarsubstitute_execution::qualification_time::anchor();
+        assert_eq!(progress_wait(true, now), ControlFlow::Poll);
+        assert_eq!(progress_wait(false, now), closing_wait(now));
     }
 
     /// Preserve early input cadence and skip missed animation periods without catch-up work.

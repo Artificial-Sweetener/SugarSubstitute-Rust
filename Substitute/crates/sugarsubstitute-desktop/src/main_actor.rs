@@ -119,6 +119,8 @@ pub(crate) struct MainActor {
     owned_window_open: bool,
     reload: crate::main_reload::ReloadAdmission,
     retired: bool,
+    /// Whether the last live step did work, so the native loop takes the next one at once.
+    advanced: bool,
     navigations: u64,
     material: Option<NativeMaterial>,
     native_storage: Option<sugarsubstitute_contracts::execution::MemoryClaim>,
@@ -206,6 +208,7 @@ impl MainActor {
             panel_transport,
             bulk,
             panel_navigation_started: false,
+            advanced: false,
             receivers: None,
             events: Some(events),
             readiness: Some(readiness),
@@ -291,6 +294,11 @@ impl MainActor {
             crate::MainHosting::Windowed
         }
     }
+    /// Whether the last live step did work, cleared as it is read.
+    pub(crate) fn take_advanced(&mut self) -> bool {
+        std::mem::take(&mut self.advanced)
+    }
+
     /// Native cadence advances finite construction/retirement without a separate scheduler.
     pub(crate) fn needs_progress(&self) -> bool {
         !self.retired
@@ -410,16 +418,19 @@ impl MainActor {
             }
         }
         if self.progress_panel_transport()? || self.progress_panel_messages()? {
+            self.advanced = true;
             return Ok(None);
         }
         #[cfg(feature = "native-composition")]
         self.forward_file_drag()?;
         let reply_was_due = self.canvas_replies.reply_due();
         if reply_was_due && self.progress_canvas_reply()? {
+            self.advanced = true;
             return Ok(None);
         }
         let evidence = self.evidence_step()?;
         if evidence.consumed {
+            self.advanced = true;
             self.canvas_replies.evidence_serviced();
         }
         let observed = evidence.observation;
@@ -427,6 +438,7 @@ impl MainActor {
             return Ok(observed);
         }
         if !reply_was_due && !self.canvas_replies.is_empty() && self.progress_canvas_reply()? {
+            self.advanced = true;
             return Ok(None);
         }
         if !self.panel_navigation_started
