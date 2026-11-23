@@ -36,7 +36,7 @@ export class BrowserCanvasResources {
     #refreshNeeded = false;
     /** Use existing authoritative resource/approval owners and a host-qualified final URL adapter. */
     constructor(resources, budget, allowances, url, 
-    /** The preview owner's bytes of a stopped run's newest image; this canvas keeps no copy. */
+    /** The preview owner's bytes of the preview it names as current; this canvas keeps no copy. */
     previewFrame) {
         this.resources = resources;
         this.budget = budget;

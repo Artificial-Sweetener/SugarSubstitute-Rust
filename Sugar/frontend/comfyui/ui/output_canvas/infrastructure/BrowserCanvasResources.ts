@@ -60,7 +60,7 @@ export class BrowserCanvasResources {
     private readonly budget: CanvasImageBudget,
     private readonly allowances: CanvasImageAllowances,
     private readonly url: (item: WorkflowOutputItem) => string,
-    /** The preview owner's bytes of a stopped run's newest image; this canvas keeps no copy. */
+    /** The preview owner's bytes of the preview it names as current; this canvas keeps no copy. */
     private readonly previewFrame: (preview: WorkflowPreview) => Blob | null,
   ) {
     this.#preparation = new CanvasImagePreparation(resources);

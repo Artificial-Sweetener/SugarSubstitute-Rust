@@ -52,17 +52,15 @@ export class ComfyWorkflowPreviewDelivery {
   }
 
   /**
-   * The bytes of a stopped run's newest image, while the result store still names it as current:
-   * a renderer shows it again when its tab is chosen instead of keeping a copy. A running run's
-   * preview is never handed out again; its next live frame replaces it, and a stage's final closes
-   * its lane for good.
+   * The bytes of the preview the result store names as current, for a renderer whose plan names
+   * it before its live frame was taken: the first frame of a stage arrives before its tab is
+   * chosen, and a stopped run's newest image shows when its tab is chosen again. Renderers keep no
+   * copies. A stage's final closes its lane, so nothing is handed out for it after that final.
    */
   frame(preview: WorkflowPreview): Blob | null {
     const current = this.#current.get(preview.sessionId);
-    const session = this.results.read(preview.sessionId);
     return current?.token === preview.token &&
-      session?.preview?.token === preview.token &&
-      (session.runStatus === 'cancelled' || session.runStatus === 'error')
+      this.results.read(preview.sessionId)?.preview?.token === preview.token
       ? current.blob
       : null;
   }

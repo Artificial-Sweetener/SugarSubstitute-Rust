@@ -111,7 +111,7 @@ test('accepts only bound finals and routes stage previews independently of the v
   delivery.dispose();
 });
 
-test("the preview owner hands a frame out again only as a stopped run's newest image", () => {
+test('the preview owner hands out only the preview the store names, until a final closes it', () => {
   const f = workflowResultsFixture();
   const marker = buildCubeOutputExecutionId(23, 0);
   const sources = decodeComfyPromptSources({
@@ -130,18 +130,56 @@ test("the preview owner hands a frame out again only as a stopped run's newest i
   const attributed = f.ingestor.resolveSource(f.id, ['instance:sampler']);
   if (!attributed) throw new Error('Missing attributable stage preview');
   const delivery = new ComfyWorkflowPreviewDelivery(f.results, { error: jest.fn() });
-  const bytes = new Blob(['frame']);
-  delivery.deliver(attributed, bytes);
+  const first = new Blob(['first']);
+  delivery.deliver(attributed, first);
+  const named = f.results.read(f.a.session.sessionId)?.preview;
+  if (!named) throw new Error('Missing current preview');
+  // A canvas whose plan names this preview after its live frame went by takes it from the owner.
+  expect(delivery.frame(named)).toBe(first);
+  const newest = new Blob(['newest']);
+  delivery.deliver(attributed, newest);
   const current = f.results.read(f.a.session.sessionId)?.preview;
-  if (!current) throw new Error('Missing current preview');
-  // While the run goes on, its next live frame replaces this one; nothing is handed out again.
-  expect(delivery.frame(current)).toBeNull();
+  if (!current) throw new Error('Missing newest preview');
+  expect(delivery.frame(named)).toBeNull();
+  expect(delivery.frame(current)).toBe(newest);
+  // The run stops: its newest image stays named, and comes back when its tab is chosen.
   f.ingestor.terminal(f.id, 'cancelled');
-  expect(f.results.read(f.a.session.sessionId)?.preview?.token).toBe(current.token);
-  expect(delivery.frame(current)).toBe(bytes);
-  expect(delivery.frame({ ...current, token: 'preview:older' })).toBeNull();
-  // The workflow is cleared: the owner lets the bytes go with the preview.
-  f.results.clearPreview(f.a.session.sessionId);
-  expect(delivery.frame(current)).toBeNull();
+  expect(delivery.frame(current)).toBe(newest);
+  delivery.dispose();
+});
+
+test('a stage final closes its preview, and the owner never hands that preview out again', () => {
+  const f = workflowResultsFixture();
+  const marker = buildCubeOutputExecutionId(23, 0);
+  const sources = decodeComfyPromptSources({
+    output: {
+      'instance:sampler': { class_type: 'KSampler' },
+      'instance:decode': { class_type: 'VAEDecode' },
+      [marker]: {
+        class_type: 'SugarCubes.CubeOutput',
+        inputs: { instance_id: 'instance', value: ['instance:decode', 0] },
+      },
+    },
+  });
+  f.ingestor.accepted(f.ingestor.submitting({ ...f.a, sources }), f.id);
+  f.ingestor.started(f.id);
+  f.ingestor.executing(f.id, ['instance:sampler']);
+  const attributed = f.ingestor.resolveSource(f.id, ['instance:sampler']);
+  if (!attributed) throw new Error('Missing attributable stage preview');
+  const delivery = new ComfyWorkflowPreviewDelivery(f.results, { error: jest.fn() });
+  delivery.deliver(attributed, new Blob(['frame']));
+  const preview = f.results.read(f.a.session.sessionId)?.preview;
+  if (!preview) throw new Error('Missing current preview');
+  const media = decodeComfyMedia({ images: [{ filename: 'stage.png', type: 'temp' }] })!;
+  expect(
+    f.ingestor.final({
+      promptId: f.id,
+      executionPaths: ['instance:decode'],
+      ...media,
+      merge: false,
+    }),
+  ).toBe(true);
+  expect(f.results.read(f.a.session.sessionId)?.preview).toBeNull();
+  expect(delivery.frame(preview)).toBeNull();
   delivery.dispose();
 });

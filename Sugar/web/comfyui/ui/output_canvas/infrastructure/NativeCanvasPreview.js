@@ -94,7 +94,7 @@ export class NativeCanvasPreview {
                 this.#withdraw();
         }
         this.#interest = preview;
-        // A stopped run's newest image comes back from its owner when its tab is chosen again.
+        // The named preview comes from its owner when its frame went by before this plan named it.
         const owned = preview ? this.options.context.previewFrame(preview) : null;
         if (preview && owned)
             this.receive(preview, owned);

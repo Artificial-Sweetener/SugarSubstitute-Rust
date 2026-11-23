@@ -384,3 +384,20 @@ describe('browser resource composition', () => {
     expect(f.errors).toEqual([]);
   });
 });
+
+test('a stage first frame taken before its tab was chosen shows from the owner once the plan names it', () => {
+  const f = fixture();
+  const preview = f.preview(7);
+  const blob = new Blob(['preview']);
+  f.browser.reconcile(f.plan());
+  // The frame arrives before the plan names its preview: refused, nothing loads.
+  f.browser.receive(preview, blob);
+  expect(f.loads.some((load) => load.input.preview)).toBe(false);
+  f.owned.set(preview.token, blob);
+  f.browser.reconcile(f.plan(f.catalog, preview));
+  expect(f.loads.find((load) => load.input.preview)?.input.payload).toEqual({
+    kind: 'preview',
+    blob,
+  });
+  f.browser.dispose();
+});

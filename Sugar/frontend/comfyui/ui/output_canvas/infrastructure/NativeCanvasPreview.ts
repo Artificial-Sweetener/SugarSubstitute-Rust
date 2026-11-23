@@ -71,8 +71,8 @@ export interface NativeCanvasPreviewContext {
   readonly address: CanvasAttachmentAddress;
   readonly clock: ExecutionClock;
   /**
-   * The owner's bytes of a preview it still names and no live frame will replace: a stopped run's
-   * newest image. The canvas keeps no copy of its own.
+   * The owner's bytes of the preview it names as current: a stage's first frame, taken before its
+   * tab was chosen, or a stopped run's newest image. The canvas keeps no copy of its own.
    */
   previewFrame(preview: WorkflowPreview): Blob | null;
   report(error: unknown): void;
@@ -172,7 +172,7 @@ export class NativeCanvasPreview {
       if (!this.#active?.withdrawing && (release || this.#active)) this.#withdraw();
     }
     this.#interest = preview;
-    // A stopped run's newest image comes back from its owner when its tab is chosen again.
+    // The named preview comes from its owner when its frame went by before this plan named it.
     const owned = preview ? this.options.context.previewFrame(preview) : null;
     if (preview && owned) this.receive(preview, owned);
     return changed;

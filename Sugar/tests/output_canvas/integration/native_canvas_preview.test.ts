@@ -1272,3 +1272,25 @@ test('the next stage or run never takes down the shown preview before its own pr
   expect(f.previews.at(-1)).toBe(true);
   expect(f.errors).toEqual([]);
 });
+
+test('a stage first frame taken before its tab was chosen shows from the owner once the plan names it', async () => {
+  const f = fixture();
+  await commit(f);
+  const stage: WorkflowPreview = {
+    ...f.preview(2),
+    sourceId: f.second.provenance.sourceId,
+    token: 'preview:stage',
+  };
+  // The frame arrives while the plan still names the previous lane: the canvas refuses it.
+  f.presentation.receive(stage, new NativePreviewBlob());
+  await settle();
+  expect(f.calls.some((call) => call.type === 'surface.preview.begin')).toBe(false);
+  // The view follows the stage's tab; the owner still holds that frame, so it shows at once.
+  f.owned.set(stage.token, new NativePreviewBlob());
+  f.presentation.update(previewGeometry, f.item, stage);
+  await settle();
+  expect(f.calls.at(-1)).toMatchObject({
+    type: 'surface.preview.begin',
+    preview: { token: 'preview:stage' },
+  });
+});
