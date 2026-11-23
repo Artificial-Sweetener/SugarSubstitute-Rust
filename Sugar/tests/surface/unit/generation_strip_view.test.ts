@@ -16,6 +16,7 @@
 /** Prove stable generation-strip controls, batch edits and action feedback. */
 import { jest } from '@jest/globals';
 import { GenerationStripView } from '../../../frontend/comfyui/ui/surface/frame/GenerationStripView.js';
+import { generationStripCss } from '../../../frontend/comfyui/ui/surface/frame/GenerationStripStyles.js';
 
 afterEach(() => document.body.replaceChildren());
 
@@ -127,4 +128,15 @@ test('right-clicking Generate chooses its mode, and Generate shows the chosen on
   expect(generate.disabled).toBe(false);
   expect(generate.getAttribute('aria-label')).toBe('Stop continuous generation');
   view.dispose();
+});
+
+test('glyphs keep the Python sizes: Generate 16 px, Continuous 24 px, Skip 20 px', () => {
+  const css = generationStripCss.replace(/\s+/g, ' ');
+  expect(css).toContain('.sc-generation-glyph { display:block; width:16px; height:16px;');
+  expect(css).toContain(
+    ".sc-generation-action[data-action='generate'][data-mode='continuous'] .sc-generation-glyph { width:24px; height:24px; }",
+  );
+  expect(css).toContain(
+    ".sc-generation-action[data-action='skip'] .sc-generation-glyph { width:20px; height:20px; }",
+  );
 });

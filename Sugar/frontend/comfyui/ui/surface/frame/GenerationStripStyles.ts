@@ -51,6 +51,7 @@ export const generationStripCss = `
   .sc-generation-action:disabled { background:rgb(52,52,52); color:rgba(255,255,255,.431); cursor:default; }
   .sc-generation-glyph { display:block; width:16px; height:16px; background:currentColor; mask:var(--sc-generation-glyph) center/contain no-repeat; }
   .sc-generation-action[data-action='skip'] .sc-generation-glyph { width:20px; height:20px; }
+  .sc-generation-action[data-action='generate'][data-mode='continuous'] .sc-generation-glyph { width:24px; height:24px; }
   .sc-generation-queue-slot { display:block; flex:0 0 40px; width:40px; height:30px; }
   :root[data-sc-substitute-frame] button[data-sc-generation-queue] { position:fixed!important; left:var(--sc-queue-left)!important;
     top:var(--sc-queue-top)!important; width:40px!important; height:30px!important; min-width:40px!important; padding:0!important;
