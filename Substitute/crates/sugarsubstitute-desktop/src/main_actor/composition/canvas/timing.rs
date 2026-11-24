@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Report what embedded canvas presentation costs, one record per second of activity.
+//! Report what embedded canvas presentation costs, one relayed record per second of activity.
 
+use crate::canvas_present_diagnostic::Record;
 use std::time::{Duration, Instant};
 
 const WINDOW: Duration = Duration::from_secs(1);
@@ -82,20 +83,20 @@ impl PresentTimings {
         if window.presents == 0 {
             return;
         }
-        tracing::info!(
-            operation = "canvas_embedded_present",
-            window_microseconds = elapsed.as_micros(),
-            presents = window.presents,
-            bitmap_creations = window.bitmap_creations,
-            bitmap_updates = window.bitmap_updates,
-            wrapper_creations = window.wrapper_creations,
-            source_bytes = window.source_bytes,
-            fill_microseconds = window.fill.as_micros(),
-            draw_microseconds = window.draw.as_micros(),
-            commit_microseconds = window.commit.as_micros(),
-            slowest_present_microseconds = window.slowest.as_micros(),
-            "Embedded canvas presentation window"
-        );
+        let micros = |value: Duration| u64::try_from(value.as_micros()).unwrap_or(u64::MAX);
+        Record {
+            window_us: micros(elapsed),
+            presents: window.presents,
+            created: window.bitmap_creations,
+            updated: window.bitmap_updates,
+            wrapped: window.wrapper_creations,
+            source_bytes: window.source_bytes,
+            fill_us: micros(window.fill),
+            draw_us: micros(window.draw),
+            commit_us: micros(window.commit),
+            slowest_us: micros(window.slowest),
+        }
+        .emit();
     }
 }
 

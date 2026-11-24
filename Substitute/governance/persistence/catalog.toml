@@ -942,6 +942,19 @@ accepted_versions = [1]
 compatibility = "reject"
 migrations = []
 
+# Closed canvas presentation windows use the existing authenticated 512-byte stderr decoder.
+[[formats]]
+id = "child-canvas-present-diagnostic"
+owner = "sugarsubstitute-desktop"
+sources = ["crates/sugarsubstitute-desktop/src/canvas_present_diagnostic.rs"]
+source_sha256 = "sha256:63b926725d3761c9d356e22f096f6b98546a876791774e70069204e7af01dc87"
+classification = "protocol"
+preservation = "must_preserve"
+current_version = 1
+accepted_versions = [1]
+compatibility = "reject"
+migrations = []
+
 # Closed bulk channel refusal facts use the existing authenticated 512-byte stderr decoder.
 [[formats]]
 id = "child-bulk-channel-refusal-diagnostic"
@@ -959,7 +972,7 @@ migrations = []
 id = "child-bulk-channel-refusal-diagnostic-decoder"
 owner = "sugarsubstitute"
 sources = ["crates/sugarsubstitute/src/production/entry_activation/desktop_output/diagnostic.rs", "crates/sugarsubstitute/src/production/entry_activation/desktop_output/diagnostic/bulk.rs", "crates/sugarsubstitute/src/production/entry_activation/desktop_output.rs"]
-source_sha256 = "sha256:a3e58c0ca70f05a28b3ac7e5d488583192fe1151e230b77d0240d6b13ea6fa36"
+source_sha256 = "sha256:b3bc5fc438d98ba259bb4b066558a067901245a6013d9bc55ec2300e393a87c0"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1
@@ -986,7 +999,7 @@ migrations = []
 id = "child-console-first-failure-diagnostic-decoder"
 owner = "sugarsubstitute"
 sources = ["crates/sugarsubstitute/src/production/entry_activation/desktop_output/diagnostic.rs", "crates/sugarsubstitute/src/production/entry_activation/desktop_output/diagnostic/console.rs", "crates/sugarsubstitute/src/production/entry_activation/desktop_output/diagnostic/failure.rs"]
-source_sha256 = "sha256:cb96ec8302514882c018edaa34f6916eb145635ec6fb3e6958da26e0f4ec73f9"
+source_sha256 = "sha256:6b1e220230bb4aa6990d45f483f8933d768eebbb12680bc7615496946ed191ad"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1
@@ -1237,7 +1250,7 @@ migrations = []
 id = "desktop-startup-readiness-acknowledgement-diagnostic"
 owner = "sugarsubstitute"
 sources = ["crates/sugarsubstitute/src/production/startup_readiness_diagnostic.rs", "crates/sugarsubstitute/src/production/entry_activation/desktop_output/diagnostic.rs", "crates/sugarsubstitute/src/production/entry_activation/desktop_output.rs"]
-source_sha256 = "sha256:aaeb4ac1537c5d5b1fac7d6393bc4565723be215f414230431b58a90d3126d58"
+source_sha256 = "sha256:b781ed3983a7a4ef668195fc326e3ed1ba8deacca3022a6b6a7e7a510f3c17a2"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1
@@ -1249,7 +1262,7 @@ migrations = []
 id = "desktop-canvas-surface-request-diagnostic"
 owner = "sugarsubstitute"
 sources = ["crates/sugarsubstitute/src/canvas_surface_diagnostic.rs", "crates/sugarsubstitute/src/production/entry_activation/desktop_output/diagnostic.rs", "crates/sugarsubstitute/src/production/entry_activation/desktop_output.rs"]
-source_sha256 = "sha256:adfdadc9219f7181dc31f49ec3601d86bf486be770aee0b62ff64d5287f4c172"
+source_sha256 = "sha256:c2c5ded146ffe7c5ec98fb7711eca78bd9bfe04e1852aa2081b44ec1e232d982"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1
@@ -1919,7 +1932,7 @@ migrations = []
 id = "desktop-canvas-preparation-diagnostic"
 owner = "sugarsubstitute"
 sources = ["crates/sugarsubstitute/src/canvas_preparation_diagnostic.rs", "crates/sugarsubstitute/src/native_canvas/session/preparation_snapshot.rs", "crates/sugarsubstitute/src/native_canvas/session/inputs/route.rs", "crates/sugarsubstitute/src/startup/canvas/surface/lifecycle.rs", "crates/sugarsubstitute/src/production/entry_activation/desktop_output/diagnostic.rs", "crates/sugarsubstitute/src/production/entry_activation/desktop_output.rs"]
-source_sha256 = "sha256:bfc9bd2439243e73fd65d25ba023978942b500ae4eaec25f4340c90c80de8521"
+source_sha256 = "sha256:1a39700a453ac0f775460d98b3db64667fcb658fb6b5eae269f91521f527c87f"
 classification = "protocol"
 preservation = "must_preserve"
 current_version = 1

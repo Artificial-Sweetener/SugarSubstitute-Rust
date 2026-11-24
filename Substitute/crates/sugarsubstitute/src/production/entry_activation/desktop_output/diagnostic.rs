@@ -12,6 +12,8 @@ mod console;
 mod consume;
 #[path = "diagnostic/failure.rs"]
 pub(super) mod failure;
+#[path = "diagnostic/present.rs"]
+pub(super) mod present;
 use failure::parse as parse_failure;
 #[path = "diagnostic/main.rs"]
 mod main;
@@ -80,6 +82,7 @@ pub(super) enum Observation {
     Selection(crate::canvas_selection_diagnostic::Record),
     Motion(crate::canvas_motion_diagnostic::Record),
     Bulk(sugarsubstitute_desktop::bulk_channel_diagnostic::Record),
+    Present(sugarsubstitute_desktop::canvas_present_diagnostic::Record),
     #[cfg(feature = "k1-native-qualification")]
     Qualification(qualification::Qualification),
 }
@@ -104,6 +107,7 @@ pub(super) struct Diagnostic {
     selection_emitted: u16,
     motion_emitted: u16,
     bulk_emitted: u16,
+    present_emitted: u16,
 }
 /// Canvas request lifecycle records relayed per child run; later records are discarded.
 const CANVAS_RECORDS: u16 = 4096;
@@ -118,6 +122,9 @@ const MOTION_RECORDS: u16 = 8192;
 /// Bulk channel refusals relayed per child run; a page can provoke them, so later ones are
 /// discarded.
 const BULK_RECORDS: u16 = 256;
+/// Canvas presentation windows relayed per child run, one per second of activity; later ones
+/// are discarded.
+const PRESENT_RECORDS: u16 = 8192;
 impl Diagnostic {
     pub(super) const fn new() -> Self {
         Self {
@@ -139,6 +146,7 @@ impl Diagnostic {
             selection_emitted: 0,
             motion_emitted: 0,
             bulk_emitted: 0,
+            present_emitted: 0,
         }
     }
     /// The authenticated output owner validates Run before these inert byte facts.
@@ -229,6 +237,15 @@ impl Diagnostic {
                         if self.bulk_emitted < BULK_RECORDS {
                             self.bulk_emitted += 1;
                             emit(Observation::Bulk(record));
+                        }
+                    } else if let Some(record) =
+                        sugarsubstitute_desktop::canvas_present_diagnostic::Record::parse(
+                            &self.bytes[..self.length],
+                        )
+                    {
+                        if self.present_emitted < PRESENT_RECORDS {
+                            self.present_emitted += 1;
+                            emit(Observation::Present(record));
                         }
                     } else if let Some(probe) =
                         sugarsubstitute_desktop::frontend_probe_diagnostic::Record::parse(

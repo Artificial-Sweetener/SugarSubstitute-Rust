@@ -6,6 +6,7 @@
 mod bootstrap;
 /// Closed schema-one facts about refused bulk channel requests; these grant no capability.
 pub mod bulk_channel_diagnostic;
+pub mod canvas_present_diagnostic;
 #[cfg(target_os = "windows")]
 #[allow(unsafe_code)]
 mod windows_activation;

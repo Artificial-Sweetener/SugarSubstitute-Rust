@@ -159,3 +159,25 @@ fn motion_records_cross_the_relay_under_their_own_budget() {
     }
     assert_eq!(count, MOTION_RECORDS);
 }
+
+#[test]
+fn presentation_windows_cross_the_relay_under_their_own_budget() {
+    const PRESENT: &[u8] = b"2026-11-24T05:00:00.000000Z  INFO sugarsubstitute_desktop::canvas_present_diagnostic: operation=\"canvas_present\" schema=1 window_us=1000250 presents=60 created=1 updated=12 wrapped=47 source_bytes=431308800 fill_us=41000 draw_us=900 commit_us=5200 slowest_us=3100\n";
+    for split in 1..PRESENT.len() {
+        let mut owner = Diagnostic::new();
+        let mut seen = Vec::new();
+        owner.feed(OutputStream::Stderr, 1, false, false, &PRESENT[..split], |v| seen.push(v));
+        assert!(seen.is_empty());
+        owner.feed(OutputStream::Stderr, 2, false, false, &PRESENT[split..], |v| seen.push(v));
+        assert!(matches!(seen.as_slice(), [Observation::Present(record)]
+            if record.presents == 60 && record.updated == 12 && record.fill_us == 41_000));
+    }
+    let mut owner = Diagnostic::new();
+    let mut count = 0_u16;
+    for sequence in 1..=u64::from(PRESENT_RECORDS) + 8 {
+        owner.feed(OutputStream::Stderr, sequence, false, false, PRESENT, |v| {
+            count += u16::from(matches!(v, Observation::Present(_)));
+        });
+    }
+    assert_eq!(count, PRESENT_RECORDS);
+}

@@ -233,6 +233,9 @@ impl DesktopOutput {
                     diagnostic::Observation::Bulk(record) => {
                         diagnostic::bulk::relay(self.run, record);
                     }
+                    diagnostic::Observation::Present(record) => {
+                        diagnostic::present::relay(self.run, record);
+                    }
                     diagnostic::Observation::Close(close) => {
                         diagnostic::close::relay(self.run, close);
                     }
