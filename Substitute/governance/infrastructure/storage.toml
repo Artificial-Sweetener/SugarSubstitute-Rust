@@ -11,7 +11,7 @@ owner = "sugarsubstitute"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:dd497c5dcebbd0bced4e89c34145b9c23e7d2ab0caf0ba96e7cc8a29bc6b4b86"
+source_sha256 = "sha256:d7b429a5e7e663f8064a0e13c9e2e9c09daad27f5037cc312a1aa87e7dec73b3"
 rationale = "Isolated test fixture directories for sugarsubstitute; each authored acquisition still requires an exact source review."
 
 [[dependencies]]
@@ -19,7 +19,7 @@ owner = "sugarsubstitute-comfy"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:0e85fecebca13473947ce24c1c293ef6970ae9cb61559c88d3695296b3e0ccfa"
+source_sha256 = "sha256:4c09a4ba0cb9f0476e7aadd20ceca58e50b86bae23d6899e179f9da7c8e543a8"
 rationale = "An isolated temporary cache scope qualifies the actual bounded Comfy output transfer without accessing user data."
 
 [[dependencies]]
@@ -27,7 +27,7 @@ owner = "sugarsubstitute-comfy"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:0e85fecebca13473947ce24c1c293ef6970ae9cb61559c88d3695296b3e0ccfa"
+source_sha256 = "sha256:4c09a4ba0cb9f0476e7aadd20ceca58e50b86bae23d6899e179f9da7c8e543a8"
 rationale = "Native OS adapter bindings for sugarsubstitute-comfy; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -35,7 +35,7 @@ owner = "sugarsubstitute-crash"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:da4325d407a2fe5530eab0503e7cc6f00d940ad2caa198ed36e15ebb16a0adb7"
+source_sha256 = "sha256:af37962928684ddb3eac3318ec96de1ed769c5473bdc62579d9cb37f68f7e89a"
 rationale = "Native OS adapter bindings for sugarsubstitute-crash; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -43,7 +43,7 @@ owner = "sugarsubstitute-desktop"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:0b538af2be7bfa12db89f85f1f5b079d5b1803a212dd1f33b4c3170afa23f426"
+source_sha256 = "sha256:3d448e0ea36b19c6373f9f926ca6ebe77002eb19d1948ab65d47f304d721d777"
 rationale = "Native OS adapter bindings for sugarsubstitute-desktop; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -51,7 +51,7 @@ owner = "sugarsubstitute-image-gpu"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:cea9588b9a34886cc72aac94f67b60524bf6f815967e22c61d362a8553b7bc71"
+source_sha256 = "sha256:891dcdf2092a34d22fcd5bb708d7c70b8148c1351cb8077b50da109ba7d95bc6"
 rationale = "Win32 handle type for importing composition-owned D3D11 textures into Vulkan; the crate performs no filesystem access."
 
 [[dependencies]]
@@ -59,7 +59,7 @@ owner = "sugarsubstitute-execution"
 identity = "tokio"
 binding = "tokio"
 kind = "normal"
-source_sha256 = "sha256:24798f269fe90d37d51fa6636227b7ee9c4ed1e2f470942f88e0ce388cda571e"
+source_sha256 = "sha256:3755c6de3fc12f068406f66e23030aff62056320912bc2e2eaa4299df5a18642"
 rationale = "Execution-owned async runtime and network integration; filesystem APIs remain restricted by authored source reviews."
 
 [[dependencies]]
@@ -67,7 +67,7 @@ owner = "sugarsubstitute-execution"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:24798f269fe90d37d51fa6636227b7ee9c4ed1e2f470942f88e0ce388cda571e"
+source_sha256 = "sha256:3755c6de3fc12f068406f66e23030aff62056320912bc2e2eaa4299df5a18642"
 rationale = "Native OS adapter bindings for sugarsubstitute-execution; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -75,7 +75,7 @@ owner = "sugarsubstitute-networking"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:d6e6b451a08de0ee39a0dc2401450cd17462a5b957d0e02efffc6d086922c1e7"
+source_sha256 = "sha256:a4af0391e0db51d263661dc6d5a5659f9565807088a94eb5de1a20de2e767dcf"
 rationale = "Native OS adapter bindings for sugarsubstitute-networking; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -83,7 +83,7 @@ owner = "sugarsubstitute-splash"
 identity = "tiny-skia"
 binding = "tiny-skia"
 kind = "normal"
-source_sha256 = "sha256:b789334907dccf3ce4cfc7bf30860004783d93d06b1fda99326e99abdd01dd02"
+source_sha256 = "sha256:540b5d2d4765c017d3424b828845d241d4d20316f3c9d210c0154ff68b8ac2fe"
 rationale = "CPU raster composition and in-memory PNG encoding; public path-capable backing raster values must remain private."
 
 [[dependencies]]
@@ -91,7 +91,7 @@ owner = "sugarsubstitute-execution"
 identity = "libc"
 binding = "libc"
 kind = "normal"
-source_sha256 = "sha256:24798f269fe90d37d51fa6636227b7ee9c4ed1e2f470942f88e0ce388cda571e"
+source_sha256 = "sha256:3755c6de3fc12f068406f66e23030aff62056320912bc2e2eaa4299df5a18642"
 rationale = "Unix CLOCK_MONOTONIC sampling for the shared system counter; no filesystem access."
 
 [[dependencies]]
@@ -99,7 +99,7 @@ owner = "sugarsubstitute-supervision"
 identity = "libc"
 binding = "libc"
 kind = "normal"
-source_sha256 = "sha256:7c650c999a0616dc04497380727400d36ebd35f9e9c83bac09a58365c67f065d"
+source_sha256 = "sha256:b61bcd5f2a90ec308c6fdfd06cb3c97d4187f01b084e7625d1672dd0f0445d45"
 rationale = "Unix durable-storage descriptor acquisition, relative atomic publication and checked close; exact authored access remains governed."
 
 [[dependencies]]
@@ -107,7 +107,7 @@ owner = "sugarsubstitute-supervision"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:7c650c999a0616dc04497380727400d36ebd35f9e9c83bac09a58365c67f065d"
+source_sha256 = "sha256:b61bcd5f2a90ec308c6fdfd06cb3c97d4187f01b084e7625d1672dd0f0445d45"
 rationale = "Isolated test fixture directories for sugarsubstitute-supervision; each authored acquisition still requires an exact source review."
 
 [[dependencies]]
@@ -115,7 +115,7 @@ owner = "sugarsubstitute-supervision"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:7c650c999a0616dc04497380727400d36ebd35f9e9c83bac09a58365c67f065d"
+source_sha256 = "sha256:b61bcd5f2a90ec308c6fdfd06cb3c97d4187f01b084e7625d1672dd0f0445d45"
 rationale = "Native OS adapter bindings for sugarsubstitute-supervision; the dependency grants no independent source exemption for file entry points."
 
 [[dependencies]]
@@ -123,7 +123,7 @@ owner = "sugarsubstitute-update-repository"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:45ac792c9767dfc676b9b795aaa34d6fa9e207d14b89ab52819388be11ed2619"
+source_sha256 = "sha256:04eeb4d465d88670253c48f80b95485811601c1d5bbef46889c1852caaaa3a99"
 rationale = "Isolated test fixture directories for sugarsubstitute-update-repository; each authored acquisition still requires an exact source review."
 
 [[dependencies]]
@@ -131,7 +131,7 @@ owner = "sugarsubstitute-xtask"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:1034afdac915eed1409bcd2511e053a92e098a1d568eb3367ebf9a8679304442"
+source_sha256 = "sha256:15ef360bcaa93d4fae78cfecafcbf472296974bbea5cafee2988454d69357bb4"
 rationale = "Isolated test fixture directories for sugarsubstitute-xtask; each authored acquisition still requires an exact source review."
 
 [[records]]
@@ -3809,294 +3809,6 @@ disposition = "tooling"
 rationale = "Repository tooling descriptor_readiness_tests.cpp: descriptor readiness tests Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
 
 [[records]]
-path = "tools/splash_parity/caption_atlas.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:4309a85f21e732e418c64ec4b8f12280aa5c4120cec90d373015693a2d885c33"
-capabilities = ["pathlib", "remove", "write_bytes", "write_text"]
-disposition = "tooling"
-rationale = "Repository tooling caption_atlas.py: caption atlas Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/caption_entry_windows.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:fd2ab0fe758f413c699e31f4c7045b9d15e85778827528ef9c3110d77d241964"
-capabilities = ["pathlib", "read_bytes"]
-disposition = "tooling"
-rationale = "Repository tooling caption_entry_windows.py: caption entry windows Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/caption_reference.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:b638da33448205b6f2495c20b3c26289782a9194e283cf0cd0c6a833aa13663f"
-capabilities = ["pathlib", "write_bytes", "write_text"]
-disposition = "tooling"
-rationale = "Repository tooling caption_reference.py: caption reference Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/clip_reference.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:687dbba436bbb65c4f8de93c7ccbce956f8737b3cbbd8d2fe5060c99b193c6d9"
-capabilities = ["open", "pathlib", "replace", "write_text"]
-disposition = "tooling"
-rationale = "Repository tooling clip_reference.py: clip reference Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/compare.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:29002dfbb4495dd7227e36e8b1a6bab0a0c9f91c0f7c4fee2da11e949100ba9b"
-capabilities = ["open", "pathlib", "read_bytes", "read_text", "write_text"]
-disposition = "tooling"
-rationale = "Repository tooling compare.py: compare Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/dxgi_abi.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:ccb1caaaad2295c62930b50d625d7e9ef6d51d4d6ea2094c3194dc3bd0128f1a"
-capabilities = ["pathlib", "read_bytes", "stat"]
-disposition = "tooling"
-rationale = "Repository tooling dxgi_abi.py: dxgi abi Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/dxgi_known_color.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:c87e4c76f980fd0f5e779b43442a321cfbc4784da05594f6435873430d3ff526"
-capabilities = ["pathlib", "read_bytes"]
-disposition = "tooling"
-rationale = "Repository tooling dxgi_known_color.py: dxgi known color Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/dxgi_pointer_probe.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:163551ddf25ff75035b3dfffe780e1c58ed28eba15c72ac9298e28126c7f9e53"
-capabilities = ["pathlib", "read_bytes", "stat", "write_bytes"]
-disposition = "tooling"
-rationale = "Repository tooling dxgi_pointer_probe.py: dxgi pointer probe Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/dxgi_storage.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:d295fcb57d8015d9c82bd717baeb4c4e5ea1c8c68b3e6f0b29270cce4d013e18"
-capabilities = ["open"]
-disposition = "tooling"
-rationale = "Repository tooling dxgi_storage.py: dxgi storage Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/gdi_storage.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:f39ee1969b7eb898f434852c3fc5ffe9c559c02143d2dcdb5f0ec003b41eafa8"
-capabilities = ["open"]
-disposition = "tooling"
-rationale = "Repository tooling gdi_storage.py: gdi storage Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/gradient_reference.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:f7bf4450882dcff71ea828edeadac4f4cad896cfe2fca181b59278794ceb5c5f"
-capabilities = ["pathlib", "write_text"]
-disposition = "tooling"
-rationale = "Repository tooling gradient_reference.py: gradient reference Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/icon_assets.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:a5acc61ba0287e93ef5f83e50cfd7186b0398f46e104da446d9fc5c0f22f4404"
-capabilities = ["open", "pathlib"]
-disposition = "tooling"
-rationale = "Repository tooling icon_assets.py: icon assets Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/m0_windows.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:00f8aaf4afb57d87b51d4e71f774cb5554b61dbf97f45e2fdb8a0615b4b7660a"
-capabilities = ["pathlib"]
-disposition = "tooling"
-rationale = "Repository tooling m0_windows.py: m0 windows Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/native_timing.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:91668936ffcc876a201601027cb550e981f4a99f570001f23560a3a504d38254"
-capabilities = ["open", "pathlib", "write_text"]
-disposition = "tooling"
-rationale = "Repository tooling native_timing.py: native timing Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/native_windows.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:85b6fafd11c57fead59e35faee1119452a281b658811c72689989b523dd955e7"
-capabilities = ["pathlib", "read_text", "replace", "write_text"]
-disposition = "tooling"
-rationale = "Repository tooling native_windows.py: native windows Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/offscreen_child.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:ded0177bfbc6c48c00808b9335e4aec407d262dee578ef443be61a6e7810985b"
-capabilities = ["open", "pathlib", "write_text"]
-disposition = "tooling"
-rationale = "Repository tooling offscreen_child.py: offscreen child Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/offscreen_lifecycle.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:4baa78e602ea6400b673445c165127d4685a65eecb9e19781a67ca013d1940e2"
-capabilities = ["pathlib", "write_text"]
-disposition = "tooling"
-rationale = "Repository tooling offscreen_lifecycle.py: offscreen lifecycle Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/offscreen_native.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:b0a496d324bab89516541902a9156b1582b9fd1c8130723038a33f545257d345"
-capabilities = ["pathlib"]
-disposition = "tooling"
-rationale = "Repository tooling offscreen_native.py: offscreen native Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/offscreen_processes.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:cee65aebfc7a2d265bc9df11fffa0736257ca8aa2adb99132764cc0612acee51"
-capabilities = ["open"]
-disposition = "tooling"
-rationale = "Repository tooling offscreen_processes.py: offscreen processes Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/offscreen_responsiveness.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:cd470b49fa2d0d6f74d92fec1ca2989eb9529a2501d637626cd1ae505115894c"
-capabilities = ["pathlib", "write_text"]
-disposition = "tooling"
-rationale = "Repository tooling offscreen_responsiveness.py: offscreen responsiveness Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/operational_windows.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:11a15a86f1dd2de67d458465a86e634ba175f636780ac8a0b1ff6011498912fd"
-capabilities = ["pathlib", "read_bytes", "read_text", "replace", "stat", "write_bytes"]
-disposition = "tooling"
-rationale = "Repository tooling operational_windows.py: operational windows Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/reference.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:75d4cf6d9e76c8031544299efda0269ab5e1d66a8d1b84ce5a69166f0af8fc88"
-capabilities = ["pathlib", "read_bytes", "write_text"]
-disposition = "tooling"
-rationale = "Repository tooling reference.py: reference Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/region_capture.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:ba6210c1c57d6c3d97f41c62d764d5c43d22e74e229d9eb7613087e7a366a6de"
-capabilities = ["open"]
-disposition = "tooling"
-rationale = "Repository tooling region_capture.py: region capture Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/startup_windows.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:3afe3ed1a882d43a009a16f06997b9ea042b608707182a0bcb7229c08a6bc57f"
-capabilities = ["open", "pathlib", "read_bytes", "remove", "write_bytes"]
-disposition = "tooling"
-rationale = "Repository tooling startup_windows.py: startup windows Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/test_acceptance.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:acc31bf7d615df5197e3cb53deb8c02fb2d9b0fbd8d9e93b357545235562eea5"
-capabilities = ["TemporaryDirectory", "open", "pathlib", "read_text", "tempfile", "write_text"]
-disposition = "tooling"
-rationale = "Repository tooling test_acceptance.py: test acceptance Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/test_caption_entry_windows.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:098cc17abb22af0971721bc87c6960b28490b8fb01de5155eb683133c539e684"
-capabilities = ["TemporaryDirectory", "iterdir", "pathlib", "read_bytes", "read_text", "tempfile", "write_bytes"]
-disposition = "tooling"
-rationale = "Repository tooling test_caption_entry_windows.py: test caption entry windows Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/test_disclosure_label.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:bab6518b5a167ae24b31aa9b97495ada2db32e1a4c0cc9ff877f707e06664368"
-capabilities = ["open", "replace"]
-disposition = "tooling"
-rationale = "Repository tooling test_disclosure_label.py: test disclosure label Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/test_dxgi_known_color.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:c122735917d12d90980f6b6e2e9fe5b3580d7327a32ab561dc39655fdc442977"
-capabilities = ["TemporaryDirectory", "pathlib", "read_bytes", "read_text", "replace", "tempfile", "write_bytes"]
-disposition = "tooling"
-rationale = "Repository tooling test_dxgi_known_color.py: test dxgi known color Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/test_dxgi_pointer_probe.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:147b79271eb93082470a4e46f01f98089936e34e500a5c16b85f7924dd014c2c"
-capabilities = ["TemporaryDirectory", "open", "pathlib", "read_bytes", "read_text", "tempfile", "write_bytes"]
-disposition = "tooling"
-rationale = "Repository tooling test_dxgi_pointer_probe.py: test dxgi pointer probe Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/test_dxgi_storage.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:3dc2c5f50af962a0260a28128656442d40a9a926e6e248b9f961fdff25de454b"
-capabilities = ["TemporaryDirectory", "pathlib", "read_bytes", "replace", "tempfile", "write_bytes"]
-disposition = "tooling"
-rationale = "Repository tooling test_dxgi_storage.py: test dxgi storage Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/test_m0_windows.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:7b2b151cef2c9b5543d493449584327bd0e6150626a614a4ead2de8b5f166c11"
-capabilities = ["TemporaryDirectory", "pathlib", "read_bytes", "read_text", "tempfile", "write_bytes", "write_text"]
-disposition = "tooling"
-rationale = "Repository tooling test_m0_windows.py: test m0 windows Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/test_native_observation.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:733dd6448464cc8579c10cbbd9c3de4720c070bdec0c2e4b244e841505f1fcd6"
-capabilities = ["TemporaryDirectory", "pathlib", "read_text", "tempfile"]
-disposition = "tooling"
-rationale = "Repository tooling test_native_observation.py: test native observation Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/test_native_timing.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:94c38d87b3f0205082a3316d7113bce2db0624a6ac72b87f02f346cf5e959f2c"
-capabilities = ["TemporaryDirectory", "open", "pathlib", "tempfile", "write_text"]
-disposition = "tooling"
-rationale = "Repository tooling test_native_timing.py: test native timing Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/test_offscreen_native.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:331a16d159a11587a048483e4ffbd965ea9f0023c7e9832b517bc98fa6ccd692"
-capabilities = ["open", "pathlib"]
-disposition = "tooling"
-rationale = "Repository tooling test_offscreen_native.py: test offscreen native Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/test_operational_windows.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:0b0cbd2d821e72cec80308c31e4bbb37c86d93d7a7dab483b5b58642d4e89138"
-capabilities = ["TemporaryDirectory", "pathlib", "read_bytes", "read_text", "tempfile", "write_bytes", "write_text"]
-disposition = "tooling"
-rationale = "Repository tooling test_operational_windows.py: test operational windows Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
-path = "tools/splash_parity/test_startup_windows.py"
-owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:c653f708fe719c577661206f80c160632f5b79166f88f4ebf213371361a6efd8"
-capabilities = ["TemporaryDirectory", "open", "pathlib", "read_bytes", "read_text", "tempfile", "write_bytes"]
-disposition = "tooling"
-rationale = "Repository tooling test_startup_windows.py: test startup windows Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
-
-[[records]]
 path = "tools/test_updater_feed_fixture.py"
 owner = "sugarsubstitute-xtask"
 source_sha256 = "sha256:c9873595ab9db410f652711dc48d303cd77165f7c26890baf32fc244aef1efa2"
@@ -4443,7 +4155,7 @@ owner = "sugarsubstitute-ui"
 identity = "tiny-skia"
 binding = "tiny-skia"
 kind = "normal"
-source_sha256 = "sha256:a207bc3427729a03f3ffd588419c334e143d4dc9498bad5ad621bb2812b43f9f"
+source_sha256 = "sha256:4fc1944cdc7f479c6ac2668c4ae12294dc57f2a07c91f51d81d66dd583d57755"
 rationale = "Shared pixel preparation uses private raster backing and fixed system UI APIs; public bitmap and mask values expose only data and supported painting, while source-level construction remains independently checked."
 
 [[dependencies]]
@@ -4451,7 +4163,7 @@ owner = "sugarsubstitute-ui"
 identity = "windows"
 binding = "windows"
 kind = "normal"
-source_sha256 = "sha256:a207bc3427729a03f3ffd588419c334e143d4dc9498bad5ad621bb2812b43f9f"
+source_sha256 = "sha256:4fc1944cdc7f479c6ac2668c4ae12294dc57f2a07c91f51d81d66dd583d57755"
 rationale = "Shared pixel preparation uses private raster backing and fixed system UI APIs; public bitmap and mask values expose only data and supported painting, while source-level construction remains independently checked."
 
 [[records]]
@@ -4523,7 +4235,7 @@ owner = "sugarsubstitute-image-io"
 identity = "tempfile"
 binding = "tempfile"
 kind = "dev"
-source_sha256 = "sha256:ba3aacf0844690cd5b4d26756cbc32e8b46c8c019caed55f7a676865bf6ac321"
+source_sha256 = "sha256:c0bef84c31eb960c2b6b5c031dfa507a445ba4a4d6e506bec7c7602b7046b538"
 rationale = "Owned temporary source/cache fixtures; production streams and publication use the existing durable storage owner."
 
 [[records]]

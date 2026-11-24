@@ -57,7 +57,8 @@ fn initialize(rig: &Rig) -> TestResult<SplashRenderer> {
     assert_eq!(rig.scope.snapshot().reserved_bytes, SPLASH_CACHE_RESERVATION_BYTES);
     Ok(renderer)
 }
-/// Cold work yields through PNG rows; warm work retains the exact cache-owning renderer.
+/// Cold work yields through the character's PNG rows; warm work retains the exact cache-owning
+/// renderer.
 #[test]
 fn admitted_cold_and_warm_frames_preserve_pixels_cache_and_memory() -> TestResult {
     let rig = Rig::new()?;
@@ -93,7 +94,10 @@ fn admitted_cold_and_warm_frames_preserve_pixels_cache_and_memory() -> TestResul
             assert!(count > 450);
             previous_steps = count;
         } else {
-            assert!(count + 400 < previous_steps);
+            // A warm frame skips the character's row-by-row decode. The caption glyphs are
+            // rasterized from SVG in one step each, cold or warm, so the cold frame no longer
+            // carries the two caption PNG decodes (2 x 40 rows at 1.25) it once did.
+            assert!(count + 320 < previous_steps);
         }
         assert_eq!(rig.scope.snapshot().reserved_bytes, SPLASH_CACHE_RESERVATION_BYTES + bytes);
         let clone = frame.clone();

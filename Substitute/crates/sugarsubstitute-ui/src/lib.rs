@@ -15,6 +15,7 @@ pub mod panel;
 pub mod report;
 pub mod scene;
 pub mod shapes;
+pub mod shared_icons;
 pub mod text;
 pub mod vector;
 pub mod widgets;

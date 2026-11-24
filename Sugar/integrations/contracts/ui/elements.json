@@ -1,0 +1,44 @@
+{
+  "description": "Shared native and web UI elements: one record each side pins its own rendering to. Icons are the SVG files beside this record. A toggle shows the icon of where activating it goes.",
+  "captionButton": {
+    "description": "A window caption button: flat, no corner rounding, no held fill. Fills are 8-bit sRGB channels and 8-bit alpha per window theme; the close button uses its own red fills.",
+    "width": 46,
+    "height": 32,
+    "glyph": 16,
+    "fill": {
+      "dark": {
+        "rest": [255, 255, 255, 0],
+        "hover": [255, 255, 255, 26],
+        "pressed": [255, 255, 255, 51]
+      },
+      "light": { "rest": [0, 0, 0, 0], "hover": [0, 0, 0, 26], "pressed": [0, 0, 0, 51] }
+    },
+    "ink": { "dark": [255, 255, 255], "light": [0, 0, 0] }
+  },
+  "toggles": {
+    "console": { "toOpen": "icons/console-open.svg", "toClose": "icons/console-close.svg" },
+    "outputCanvas": { "toOpen": "icons/canvas-open.svg", "toClose": "icons/canvas-close.svg" }
+  },
+  "windowClose": "icons/window-close.svg",
+  "workflowView": {
+    "description": "The graph/masonry toggle: four outlined nodes on a 20-unit grid. Boxes are left, top, right, bottom. Links join each node's right side to the next node's left side at their vertical centres, ends inset half an outline stroke, as cubic curves whose control points sit 'swing' units out horizontally. Moving from graph to masonry, every box eases with smoothstep and each link shows max(0, 1 - linkRetract * progress) of its length from its source end; the reverse plays backwards. The fourth graph node sits beyond the right edge, so its link trails off the icon.",
+    "outline": 1,
+    "cornerRadius": 1.5,
+    "link": 0.8,
+    "durationMs": 240,
+    "linkRetract": 2.2,
+    "graph": [
+      [3, 3, 7.8, 7],
+      [6.6, 12.4, 12, 17],
+      [12.2, 5, 17, 9],
+      [21.5, 11.4, 26.3, 15.4]
+    ],
+    "masonry": [
+      [3, 3, 9.5, 8],
+      [3, 9, 9.5, 17],
+      [10.5, 3, 17, 12],
+      [10.5, 13, 17, 17]
+    ],
+    "swing": [3.2, 3.0, 2.8]
+  }
+}

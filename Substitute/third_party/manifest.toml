@@ -65,23 +65,6 @@ files = [
 ]
 
 [[components]]
-id = "fluent-console-icon"
-source_url = "https://github.com/microsoft/fluentui-system-icons"
-license = "MIT"
-license_file = "third_party/licenses/fluentui-system-icons.MIT.txt"
-files = [
-  "crates/sugarsubstitute-splash/assets/caption/console-100.png",
-  "crates/sugarsubstitute-splash/assets/caption/console-125.png",
-  "crates/sugarsubstitute-splash/assets/caption/console-150.png",
-  "crates/sugarsubstitute-splash/assets/caption/console-175.png",
-  "crates/sugarsubstitute-splash/assets/caption/console-200.png",
-  "crates/sugarsubstitute-splash/assets/caption/console-250.png",
-  "crates/sugarsubstitute-splash/assets/caption/console-300.png",
-  "crates/sugarsubstitute-splash/assets/caption/console-350.png",
-  "crates/sugarsubstitute-splash/assets/caption/console-400.png",
-]
-
-[[components]]
 id = "frameless-close-icon"
 source_url = "https://github.com/zhiyiYo/PyQt-Frameless-Window"
 license = "MIT"
@@ -89,15 +72,6 @@ license_file = "third_party/licenses/frameless-window.LICENSE.txt"
 files = [
   "crates/sugarsubstitute-desktop/assets/caption/close.coverage",
   "crates/sugarsubstitute-desktop/src/windows_caption_glyphs.rs",
-  "crates/sugarsubstitute-splash/assets/caption/close-100.png",
-  "crates/sugarsubstitute-splash/assets/caption/close-125.png",
-  "crates/sugarsubstitute-splash/assets/caption/close-150.png",
-  "crates/sugarsubstitute-splash/assets/caption/close-175.png",
-  "crates/sugarsubstitute-splash/assets/caption/close-200.png",
-  "crates/sugarsubstitute-splash/assets/caption/close-250.png",
-  "crates/sugarsubstitute-splash/assets/caption/close-300.png",
-  "crates/sugarsubstitute-splash/assets/caption/close-350.png",
-  "crates/sugarsubstitute-splash/assets/caption/close-400.png",
 ]
 
 [[components]]

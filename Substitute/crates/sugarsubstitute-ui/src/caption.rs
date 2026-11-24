@@ -14,15 +14,14 @@ pub enum CaptionAction {
     Auxiliary,
 }
 
-/// Observed pointer and toggle state; interaction ownership remains with the host.
+/// Observed pointer state; interaction ownership remains with the host. A toggle shows its state
+/// through its glyph alone, so no state other than hover and press reaches the background.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CaptionState {
     /// Pointer lies inside this button.
     pub hovered: bool,
     /// The owning input transaction is pressed.
     pub pressed: bool,
-    /// The associated panel is open.
-    pub selected: bool,
 }
 
 /// One standard 46-by-32-logical-pixel caption button.
@@ -82,8 +81,6 @@ impl CaptionButton {
             51
         } else if self.state.hovered {
             26
-        } else if self.action == CaptionAction::Auxiliary && self.state.selected {
-            if self.dark { 28 } else { 18 }
         } else {
             0
         };
@@ -122,7 +119,7 @@ mod tests {
             y: 12.0,
             action: CaptionAction::Auxiliary,
             dark: true,
-            state: CaptionState { selected: true, ..CaptionState::default() },
+            state: CaptionState { hovered: true, ..CaptionState::default() },
         }
         .paint(&mut pixels, 1.25)?;
         for y in 0..100 {
@@ -131,8 +128,33 @@ mod tests {
                 if !(10..68).contains(&x) || !(15..55).contains(&y) {
                     assert_eq!(alpha, 0);
                 } else if x < 67 {
-                    assert_eq!(alpha, 28);
+                    assert_eq!(alpha, 26);
                 }
+            }
+        }
+        Ok(())
+    }
+
+    /// The caption button's size and fills are the shared element record's, which the page's
+    /// caption-row buttons also follow; a toggle at rest has no fill, open or closed.
+    #[test]
+    fn caption_fills_match_the_shared_element_record() -> Result<(), Box<dyn std::error::Error>> {
+        let record: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../Sugar/integrations/contracts/ui/elements.json"
+        ))?;
+        let caption = &record["captionButton"];
+        assert_eq!((caption["width"].as_u64(), caption["height"].as_u64()), (Some(46), Some(32)));
+        for (theme, dark) in [("dark", true), ("light", false)] {
+            for (state_name, state) in [
+                ("rest", CaptionState::default()),
+                ("hover", CaptionState { hovered: true, pressed: false }),
+                ("pressed", CaptionState { hovered: true, pressed: true }),
+            ] {
+                let button =
+                    CaptionButton { x: 0.0, y: 0.0, action: CaptionAction::Auxiliary, dark, state };
+                let expected: Vec<u8> =
+                    serde_json::from_value(caption["fill"][theme][state_name].clone())?;
+                assert_eq!(button.color().to_vec(), expected, "{theme} {state_name}");
             }
         }
         Ok(())

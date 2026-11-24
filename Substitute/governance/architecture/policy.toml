@@ -71,7 +71,7 @@ concern = "Release-CI signing of the update repository: authenticates the publis
 [[owners]]
 package = "sugarsubstitute-xtask"
 root = "tools/xtask"
-auxiliary_roots = ["installer/release", "installer/patches", "tools/crashpad", "tools/local_k1", "tools/splash_parity", "tools/native_dxgi"]
+auxiliary_roots = ["installer/release", "installer/patches", "tools/crashpad", "tools/local_k1", "tools/native_dxgi"]
 auxiliary_files = [
     "installer/attach-package.mjs",
     "installer/attach-package.test.mjs",

@@ -300,8 +300,12 @@ impl RenderStages {
                     let tint =
                         if frame.appearance.theme == Theme::Dark { [255; 3] } else { [0; 3] };
                     (
-                        CaptionCursor::new(frame.scale, CaptionIcon::Console, tint)
-                            .map_err(RenderError::Icon)?,
+                        CaptionCursor::new(
+                            frame.scale,
+                            CaptionIcon::Console { open: frame.appearance.expanded },
+                            tint,
+                        )
+                        .map_err(RenderError::Icon)?,
                         true,
                     )
                 } else {

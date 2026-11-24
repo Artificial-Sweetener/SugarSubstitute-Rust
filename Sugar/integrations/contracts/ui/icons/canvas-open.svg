@@ -1,0 +1,7 @@
+<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+<!-- SugarSubstitute output canvas toggle, solid side bar. Shown while the canvas is hidden: it shows it. -->
+<defs><clipPath id="pane"><path d="M5.5 4H13V16H5.5A1.5 1.5 0 0 1 4 14.5V5.5A1.5 1.5 0 0 1 5.5 4Z"/></clipPath></defs>
+<path d="M5.5 3H14.5A2.5 2.5 0 0 1 17 5.5V14.5A2.5 2.5 0 0 1 14.5 17H5.5A2.5 2.5 0 0 1 3 14.5V5.5A2.5 2.5 0 0 1 5.5 3ZM5.5 4H13V16H5.5A1.5 1.5 0 0 1 4 14.5V5.5A1.5 1.5 0 0 1 5.5 4Z" fill="#212121" fill-rule="evenodd"/>
+<path d="M11.8934 7.9274A1.9 1.9 0 1 1 9.9334 5.4074A1.6 1.6 0 0 0 11.8934 7.9274Z" fill="#212121"/>
+<path d="M1.4 16.8L6.9 11.3L9.3 13.7L10.8 12.2L15.4 16.8" stroke="#212121" stroke-width="1" stroke-linejoin="round" stroke-linecap="round" clip-path="url(#pane)"/>
+</svg>

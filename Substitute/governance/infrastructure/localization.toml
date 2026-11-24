@@ -527,18 +527,6 @@ kind = "fixture"
 rationale = "The descriptor observer owns a message-only native fixture window for bounded desktop update observation; its fixed class identity is diagnostic data."
 
 [[records]]
-path = "tools/splash_parity/foreground_launcher.py"
-source_sha256 = "sha256:6eb6a4d99a70accc36e042081e96c20a6f0400121a2e505be1ea1dc28144aa56"
-kind = "fixture"
-rationale = "The owned foreground-launch fixture creates its own gesture window before measuring production startup; its fixed labels identify only this test surface."
-
-[[records]]
-path = "tools/splash_parity/test_foreground_launcher.py"
-source_sha256 = "sha256:272e78a5b6ae208e0a7cd547ad751a109ffeb981feaa5f26a88f8aeed222452e"
-kind = "fixture"
-rationale = "Foreground-launch rejection tests fake native window creation and assert observed ownership and gesture retirement."
-
-[[records]]
 path = "crates/sugarsubstitute-desktop/src/installer/native/scroll_tests.rs"
 source_sha256 = "sha256:5a29bd20ce0e9b607902f82d8bfdf942cca745b693c1dde17582a64b6721c02f"
 kind = "fixture"

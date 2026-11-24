@@ -2889,6 +2889,7 @@ version = "0.9.0"
 dependencies = [
  "cosmic-text",
  "resvg",
+ "serde_json",
  "sugarsubstitute-contracts",
  "tiny-skia",
  "windows",

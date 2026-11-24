@@ -51,7 +51,6 @@ pub(crate) fn caption_buttons(
         state: CaptionState {
             pressed: appearance.pressed == Some(control),
             hovered: appearance.hovered == Some(control),
-            selected: control == Control::ConsoleToggle && appearance.expanded,
         },
     })
 }
@@ -108,14 +107,29 @@ mod tests {
         Ok(())
     }
 
-    /// Keep checked caption fill inside its observed fractional-DPI child widget clip.
+    /// Keep the hovered console fill inside its fractional-DPI child widget clip.
     #[test]
     fn fractional_caption_origin_does_not_leak_leftward() -> Result<(), Box<dyn std::error::Error>>
     {
         let mut target = Bitmap::new(977, 56).ok_or("Cannot allocate caption raster")?;
-        controls(&mut target, Appearance::demo(), 1.75)?;
+        let hovered = Appearance { hovered: Some(Control::ConsoleToggle), ..Appearance::demo() };
+        controls(&mut target, hovered, 1.75)?;
         assert_eq!(target.pixel(815, 12).map(|pixel| pixel.alpha()), Some(0));
-        assert_eq!(target.pixel(816, 12).map(|pixel| pixel.alpha()), Some(28));
+        assert_eq!(target.pixel(816, 12).map(|pixel| pixel.alpha()), Some(26));
+        Ok(())
+    }
+
+    /// The console button has no held fill: open or closed, at rest it paints nothing, like the
+    /// window buttons; only its glyph tells the two apart.
+    #[test]
+    fn an_open_console_leaves_its_button_unfilled() -> Result<(), Box<dyn std::error::Error>> {
+        for expanded in [false, true] {
+            let mut target = Bitmap::new(977, 56).ok_or("Cannot allocate caption raster")?;
+            let appearance =
+                Appearance { expanded, hovered: None, pressed: None, ..Appearance::demo() };
+            controls(&mut target, appearance, 1.0)?;
+            assert!(target.data().chunks_exact(4).all(|pixel| pixel[3] == 0), "{expanded}");
+        }
         Ok(())
     }
 
