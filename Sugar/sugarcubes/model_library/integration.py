@@ -69,13 +69,13 @@ def install_model_library(prompt_server: object) -> ModelLibraryRuntime:
     register_model_library_routes(routes, runtime)
     register_model_download_routes(routes, runtime.download_preferences)
     register_model_metadata_routes(
-        routes, runtime.relationships, runtime.content_classification, runtime.updates
+        routes, runtime.relationships, runtime.content_classification
     )
     register_model_release_routes(routes, runtime)
     register_model_update_routes(routes, runtime.update_feed)
     register_model_preference_routes(routes, runtime.preferences)
     register_model_cache_routes(routes, runtime)
-    register_detector_routes(routes, runtime.detectors, runtime.updates)
+    register_detector_routes(routes, runtime.detectors)
     register_model_fingerprint_routes(routes, runtime)
     register_model_credential_routes(routes, runtime.credentials)
     register_model_discovery_routes(

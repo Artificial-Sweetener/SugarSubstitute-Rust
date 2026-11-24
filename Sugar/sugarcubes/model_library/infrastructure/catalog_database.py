@@ -17,7 +17,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 import sqlite3
@@ -31,6 +31,8 @@ class ModelCatalogDatabase:
 
     def __init__(self, model_root: Path) -> None:
         """Initialize the established schema without replacing unsupported user data."""
+        self._advancing: set[int] = set()
+        self._commit_listener: Callable[[], None] | None = None
         self.asset_root = (
             model_root.resolve() / ".sugarcubes" / "model-library" / "v1" / "assets"
         )
@@ -95,11 +97,22 @@ class ModelCatalogDatabase:
         try:
             with connection:
                 yield connection
+            if id(connection) in self._advancing and self._commit_listener is not None:
+                self._commit_listener()
         finally:
+            self._advancing.discard(id(connection))
             connection.close()
+
+    def watch_commits(self, listener: Callable[[], None]) -> None:
+        """Report every committed revision advance to the one publication owner.
+
+        The listener runs on whichever thread committed, after the transaction is durable.
+        """
+        self._commit_listener = listener
 
     def advance_revision(self, connection: sqlite3.Connection) -> None:
         """Advance the shared token inside the same transaction as its catalog mutation."""
+        self._advancing.add(id(connection))
         connection.execute("UPDATE catalog_state SET revision=revision+1 WHERE id=1")
 
     def revision(self, connection: sqlite3.Connection) -> int:

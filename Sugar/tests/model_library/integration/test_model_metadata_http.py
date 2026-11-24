@@ -74,7 +74,6 @@ def test_model_traits_http_classification_and_relative_preferences(
             routes,
             runtime.relationships,
             runtime.content_classification,
-            runtime.updates,
         )
         register_model_download_routes(routes, runtime.download_preferences)
         app = web.Application()

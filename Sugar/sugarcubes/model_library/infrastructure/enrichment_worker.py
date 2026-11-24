@@ -19,13 +19,12 @@ from __future__ import annotations
 
 import asyncio
 from collections import OrderedDict
-from collections.abc import Sequence, AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
 import logging
 
 from ..application.automatic_enrichment import AutomaticModelEnrichment
 from ..application.ports import ModelCatalogRepository
-from .catalog_updates import ModelCatalogUpdates
 from .jobs import ModelBackgroundJobs, ModelJob
 
 _LOGGER = logging.getLogger(__name__)
@@ -39,15 +38,22 @@ class ModelEnrichmentWorker:
         repository: ModelCatalogRepository,
         enrichment: AutomaticModelEnrichment,
         jobs: ModelBackgroundJobs,
-        updates: ModelCatalogUpdates,
         interval: float = 60,
+        *,
+        after_refresh: Callable[[str], Awaitable[None]] | None = None,
     ) -> None:
-        """Bind authoritative use-case, job and publication owners to a bounded scheduler."""
+        """Bind the authoritative use case and job owner to a bounded scheduler.
+
+        ``after_refresh`` runs for a model once its enrichment found provider metadata and
+        has released the metadata lease, so follow-up work takes a lease of its own.
+        """
         self._repository = repository
         self._enrichment = enrichment
         self._jobs = jobs
-        self._updates = updates
+        self._after_refresh = after_refresh
         self._interval = interval
+        self._reconsider = False
+        self._loop: asyncio.AbstractEventLoop | None = None
         self._pending: OrderedDict[str, bool] = OrderedDict()
         self._wake = asyncio.Event()
         self._task: asyncio.Task[None] | None = None
@@ -62,6 +68,7 @@ class ModelEnrichmentWorker:
     def start(self) -> None:
         """Start once after scanning publishes approved catalog evidence."""
         if self._task is None:
+            self._loop = asyncio.get_running_loop()
             self._task = asyncio.create_task(self._run())
             self._task.add_done_callback(self._observe_failure)
 
@@ -72,6 +79,15 @@ class ModelEnrichmentWorker:
                 self._pending.setdefault(identity, True)
                 self._pending.move_to_end(identity, last=False)
         self._wake.set()
+
+    def reconsider(self) -> None:
+        """Re-evaluate every model on the scheduler's next turn, after a preference changed.
+
+        Safe from any thread: settings are saved off the host loop.
+        """
+        self._reconsider = True
+        if self._loop is not None and not self._loop.is_closed():
+            self._loop.call_soon_threadsafe(self._wake.set)
 
     async def refill(self) -> None:
         """Append current candidates while retaining visible-model priority."""
@@ -121,9 +137,10 @@ class ModelEnrichmentWorker:
             raise ValueError("The requested model was not found in the catalog.")
 
         async def operation() -> dict[str, object]:
-            """Notify consumers after the application owner commits its enrichment result."""
+            """Run follow-up work only after the enrichment released its metadata lease."""
             result = await self._enrichment.refresh(model_id, automatic=automatic)
-            await self._updates.publish()
+            if result.get("status") == "found" and self._after_refresh is not None:
+                await self._after_refresh(model_id)
             return result
 
         return self._jobs.start(f"metadata-refresh:{model_id}", operation)
@@ -148,8 +165,12 @@ class ModelEnrichmentWorker:
         """Drain serial batches and reconsider durable retry decisions on idle turns."""
         while True:
             self._wake.clear()
+            if self._reconsider:
+                await self._refill_reconsidered()
             while self._pending:
                 await self._ready.wait()
+                if self._reconsider:
+                    await self._refill_reconsidered()
                 if not self._pending:
                     break
                 self._current, automatic = self._pending.popitem(last=False)
@@ -169,6 +190,11 @@ class ModelEnrichmentWorker:
                 await asyncio.wait_for(self._wake.wait(), timeout=self._interval)
             except TimeoutError:
                 await self.refill()
+
+    async def _refill_reconsidered(self) -> None:
+        """Queue the models a changed preference made stale without waiting for an idle poll."""
+        self._reconsider = False
+        await self.refill()
 
     def _observe_failure(self, task: asyncio.Task[None]) -> None:
         """Surface unexpected lifecycle failures rather than silently abandoning the backlog."""

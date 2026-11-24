@@ -52,7 +52,7 @@ def test_detector_library_resolution_assignment_and_safety(tmp_path: Path) -> No
         runtime = ModelLibraryRuntime(roots, enrichment_provider=ObservedProvider())
         routes = web.RouteTableDef()
         register_model_library_routes(routes, runtime)
-        register_detector_routes(routes, runtime.detectors, runtime.updates)
+        register_detector_routes(routes, runtime.detectors)
         app = web.Application()
         app.add_routes(routes)
         async with TestClient(TestServer(app)) as client:

@@ -172,6 +172,8 @@ class PreviewRedirectSession(TransportSession):
     "target",
     [
         "https://blobs-b2.civitai.com/file/blobs-managed-public/ABC123",
+        "https://blobs-b2.civitai.com/file/blobs-managed-public/ABC123.jpg",
+        "https://blobs-b2.civitai.com/file/blobs-managed-public/ABC123.jpg/more",
         "https://127.0.0.1/secret",
         "https://blobs-b2.civitai.com/file/private/ABC123",
         "https://image.civitai.com@127.0.0.1/secret",
@@ -185,7 +187,9 @@ def test_preview_redirects_admit_only_public_provider_images(
     monkeypatch.setattr(aiohttp, "ClientSession", session.factory)
     provider = CivitaiModelProvider(lambda: "fixture-token")
     request = provider.read_preview("https://image.civitai.com/fixture.jpeg")
-    if target == "https://blobs-b2.civitai.com/file/blobs-managed-public/ABC123":
+    if target.startswith(
+        "https://blobs-b2.civitai.com/file/blobs-managed-public/ABC123"
+    ) and not target.endswith("/more"):
         assert asyncio.run(request) == b"prepared source image"
         assert len(session.requests) == 2
     else:

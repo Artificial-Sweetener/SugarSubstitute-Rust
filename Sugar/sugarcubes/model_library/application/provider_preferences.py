@@ -46,6 +46,14 @@ class ModelProviderPreferenceService:
     def __init__(self, repository: ModelProviderPreferenceRepository) -> None:
         """Bind the configured model-root repository."""
         self._repository = repository
+        self._changed: Callable[[], None] | None = None
+
+    def watch(self, changed: Callable[[], None]) -> None:
+        """Tell the owner of preference-dependent work about every saved transition.
+
+        The listener runs on whichever thread saved the settings.
+        """
+        self._changed = changed
 
     def read(self) -> ModelProviderPreferences:
         """Read current preferences without starting any provider request."""
@@ -55,7 +63,7 @@ class ModelProviderPreferenceService:
         self, patch: ModelProviderPreferencePatch
     ) -> ModelProviderPreferences:
         """Merge only explicit choices, preserving changes from other consumers."""
-        return self._repository.change(
+        value = self._repository.change(
             lambda current: replace(
                 current,
                 metadata_lookup_enabled=patch.get(
@@ -75,6 +83,9 @@ class ModelProviderPreferenceService:
                 ),
             )
         )
+        if self._changed is not None:
+            self._changed()
+        return value
 
     def image_policy(self) -> CivitaiThumbnailSafety:
         """Apply current thumbnail settings at each provider selection boundary."""

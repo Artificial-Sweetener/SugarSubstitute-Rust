@@ -25,7 +25,6 @@ from ..application.catalog_service import ModelCatalogService
 from ..application.architecture_service import ModelArchitectureService
 from ..domain.models import ModelCatalogEntry
 from ..domain.provider_releases import InstalledModelArtifact
-from .catalog_updates import ModelCatalogUpdates
 from .local_presentation import LocalModelPresentation
 
 
@@ -35,7 +34,6 @@ class ModelArtifactPublication:
 
     catalog: ModelCatalogService
     local_presentation: LocalModelPresentation
-    updates: ModelCatalogUpdates
     architectures: ModelArchitectureService
 
     async def publish(self, artifact: InstalledModelArtifact) -> dict[str, object]:
@@ -43,7 +41,6 @@ class ModelArtifactPublication:
         entry = await asyncio.to_thread(self._commit, artifact)
         await asyncio.to_thread(self.architectures.refresh, (artifact.offer.kind,))
         await asyncio.to_thread(self.local_presentation.refresh, (artifact.offer.kind,))
-        await self.updates.publish()
         return {
             "status": "installed",
             "fileName": artifact.file_name,

@@ -94,6 +94,14 @@ class SqliteEnrichmentAttempts:
                             (json.dumps(owners), row_id),
                         )
 
+            if "preview_failures" not in {
+                row[1]
+                for row in connection.execute("PRAGMA table_info(content_attempts)")
+            }:
+                connection.execute(
+                    "ALTER TABLE content_attempts ADD COLUMN preview_failures INTEGER NOT NULL DEFAULT 0"
+                )
+
     def reserve(
         self,
         evidence: ModelEvidence,
@@ -133,6 +141,15 @@ class SqliteEnrichmentAttempts:
             ).fetchone()
             return 0 if row is None else float(row[0])
 
+    def preview_failures(self, sha256: str, *, policy: str) -> int:
+        """Count the consecutive failed preview downloads recorded for this content and policy."""
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT preview_failures FROM content_attempts WHERE sha256=? AND policy=?",
+                (normalized_hash(sha256), policy),
+            ).fetchone()
+            return 0 if row is None else int(row[0])
+
     def finish(
         self,
         evidence: ModelEvidence,
@@ -142,6 +159,7 @@ class SqliteEnrichmentAttempts:
         *,
         policy: str,
         providers: tuple[str, ...],
+        preview_failures: int = 0,
     ) -> None:
         """Record the old file's result without overwriting a lease for changed evidence."""
         signature = f"{policy}:{enrichment_evidence_signature(evidence)}"
@@ -152,13 +170,14 @@ class SqliteEnrichmentAttempts:
             )
             if sha256 is not None:
                 connection.execute(
-                    "INSERT OR REPLACE INTO content_attempts VALUES (?,?,?,?,?)",
+                    "INSERT OR REPLACE INTO content_attempts VALUES (?,?,?,?,?,?)",
                     (
                         normalized_hash(sha256),
                         status,
                         retry_at,
                         policy,
                         json.dumps(providers),
+                        preview_failures,
                     ),
                 )
 

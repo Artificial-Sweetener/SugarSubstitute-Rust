@@ -325,3 +325,34 @@ def test_thumbnail_only_policy_change_retains_a_confirmed_miss(tmp_path: Path) -
         asyncio.run(fixture.restart().refresh(fixture.identity))["status"] == "cached"
     )
     assert len(fixture.provider.hashes) == 1
+
+
+def test_a_preview_that_keeps_failing_is_retried_less_and_less_often(
+    tmp_path: Path,
+) -> None:
+    """Ask again after five minutes, then an hour, then daily, and at once when it works."""
+    fixture = EnrichmentFreshnessFixture(tmp_path, fixture_provider_version())
+    fixture.previews.unavailable = True
+    attempts = SqliteEnrichmentAttempts(
+        fixture.repository.asset_root.parent / "enrichment.sqlite3"
+    )
+    policy = f"{fixture.provider_scope[0]}|{fixture.policy[0]}"
+    for delay in (300, 3600, 86400, 86400):
+        started = fixture.clock[0]
+        assert asyncio.run(fixture.automatic.refresh(fixture.identity))["status"] == (
+            "found"
+        )
+        digest = fixture.repository.list_entries()[0].sha256
+        assert digest is not None
+        assert attempts.content_retry_at(digest, policy=policy) == started + delay
+        lookups = len(fixture.provider.hashes)
+        fixture.clock[0] = started + delay - 1
+        assert asyncio.run(fixture.automatic.refresh(fixture.identity))["status"] == (
+            "cached"
+        )
+        assert len(fixture.provider.hashes) == lookups
+        fixture.clock[0] = started + delay + 1
+    fixture.previews.unavailable = False
+    assert asyncio.run(fixture.automatic.refresh(fixture.identity))["status"] == "found"
+    assert attempts.preview_failures(digest, policy=policy) == 0
+    assert attempts.content_retry_at(digest, policy=policy) == 0

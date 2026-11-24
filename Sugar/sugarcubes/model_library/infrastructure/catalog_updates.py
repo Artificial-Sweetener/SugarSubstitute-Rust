@@ -13,44 +13,93 @@
 #
 #    You should have received a copy of the GNU Affero General Public License
 #    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-"""Publish cheap catalog invalidation tokens to browser and desktop consumers."""
+"""Announce committed catalog revisions to browser and desktop consumers at a bounded pace."""
 
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
+import time
 
 from .catalog_store import SqliteModelCatalogRepository
 from ..application.blocking_model_work import complete_blocking_model_work
 
 
 class ModelCatalogUpdates:
-    """Wake catalog consumers after committed library mutations without resending image data."""
+    """Own when consumers learn of a committed revision; mutation owners only commit.
 
-    def __init__(self, repository: SqliteModelCatalogRepository) -> None:
+    The first change after a quiet period is announced at once. While changes keep arriving,
+    a consumer that already holds the last announced revision hears of the newest one at most
+    once per interval, so a long ingest costs each consumer one catalog read per interval
+    instead of one per model. The newest revision is always announced.
+    """
+
+    def __init__(
+        self,
+        repository: SqliteModelCatalogRepository,
+        *,
+        interval: float = 3.0,
+        clock: Callable[[], float] = time.monotonic,
+        pause: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    ) -> None:
         """Bind the persisted revision as the authoritative change token."""
         self._repository = repository
-        self._condition = asyncio.Condition()
-
-    async def publish(self) -> None:
-        """Notify only after the mutation owner has committed its catalog work."""
-        async with self._condition:
-            self._condition.notify_all()
+        self._interval = interval
+        self._clock = clock
+        self._pause = pause
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._waiters: list[asyncio.Future[None]] = []
+        self._announced: tuple[int, float] | None = None
+        repository.database.watch_commits(self._committed)
 
     async def invalidate(self) -> None:
-        """Advance the durable token before waking every catalog consumer for deliberate cache actions."""
+        """Advance the durable token for deliberate cache actions that change no catalog row."""
         await complete_blocking_model_work(self._repository.database.invalidate)
-        await self.publish()
 
     async def wait(self, after_revision: int) -> int:
-        """Return immediately for stale clients or wait at most fifteen seconds for change."""
+        """Return a newer revision, or the same one after fifteen quiet seconds."""
         if after_revision < 0:
             raise ValueError("Model catalog revision must be nonnegative.")
-        async with self._condition:
+        loop = asyncio.get_running_loop()
+        self._loop = loop
+        # Registered before the read, so a commit between the read and the wait still wakes it.
+        waiter: asyncio.Future[None] = loop.create_future()
+        self._waiters.append(waiter)
+        try:
             revision = await asyncio.to_thread(self._repository.revision)
-            if revision != after_revision:
-                return revision
-            try:
-                await asyncio.wait_for(self._condition.wait(), timeout=15)
-            except TimeoutError:
-                pass
-            return await asyncio.to_thread(self._repository.revision)
+            if revision == after_revision:
+                try:
+                    await asyncio.wait_for(waiter, timeout=15)
+                except TimeoutError:
+                    pass
+                revision = await asyncio.to_thread(self._repository.revision)
+                if revision == after_revision:
+                    return revision
+        finally:
+            if waiter in self._waiters:
+                self._waiters.remove(waiter)
+        return await self._announce(after_revision, revision)
+
+    async def _announce(self, held: int, revision: int) -> int:
+        """Answer a consumer behind the last announcement at once and pace one that holds it."""
+        announced = self._announced
+        if announced is not None and held == announced[0]:
+            delay = announced[1] + self._interval - self._clock()
+            if delay > 0:
+                await self._pause(delay)
+                revision = await asyncio.to_thread(self._repository.revision)
+        self._announced = (revision, self._clock())
+        return revision
+
+    def _committed(self) -> None:
+        """Hand a commit made on any thread to the host loop that owns the waiters."""
+        loop = self._loop
+        if loop is not None and not loop.is_closed():
+            loop.call_soon_threadsafe(self._wake)
+
+    def _wake(self) -> None:
+        """Release every consumer waiting for a change."""
+        waiters, self._waiters = self._waiters, []
+        for waiter in waiters:
+            if not waiter.done():
+                waiter.set_result(None)

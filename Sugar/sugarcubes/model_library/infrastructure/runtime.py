@@ -210,7 +210,7 @@ class ModelLibraryRuntime:
         )
         self.update_feed = ModelUpdateFeed(self.model_updates)
         self.artifact_publication = ModelArtifactPublication(
-            self.catalog, self.local_presentation, self.updates, self.architectures
+            self.catalog, self.local_presentation, self.architectures
         )
         self.desktop_acquisitions = DesktopModelAcquisitions(
             RequestedModelArtifacts(provider),
@@ -281,7 +281,6 @@ class ModelLibraryRuntime:
             ),
             provider_previews,
             activity=self.metadata_activity,
-            after_refresh=ModelEnrichmentUpdateCheck(self.update_feed).check,
         )
         enrichment_attempts = SqliteEnrichmentAttempts(
             self.repository.asset_root.parent / "enrichment.sqlite3"
@@ -305,8 +304,9 @@ class ModelLibraryRuntime:
                 enabled=self.preferences.enrichment_enabled,
             ),
             self.jobs,
-            self.updates,
+            after_refresh=ModelEnrichmentUpdateCheck(self.update_feed).check,
         )
+        self.preferences.watch(self.automatic_enrichment.reconsider)
         self.civitai_cache = ModelProviderCacheService(
             CivitaiCacheStorage(
                 self.repository.provider_cache,
@@ -328,9 +328,21 @@ class ModelLibraryRuntime:
             ModelFolderObservations(roots), self.repository, self.jobs, self.refresh
         )
 
-    async def list_models(self, kinds: Sequence[str] | None) -> dict[str, object]:
-        """Return prepared records immediately and bootstrap a cold index in the background."""
-        result = await asyncio.to_thread(self.catalog.list_models, kinds)
+    async def list_models(
+        self, kinds: Sequence[str] | None, held_revision: int | None = None
+    ) -> dict[str, object]:
+        """Return prepared records immediately and bootstrap a cold index in the background.
+
+        A consumer that names the revision it already holds gets only that revision back while
+        it is still current, so an unchanged catalog is never rebuilt or resent.
+        """
+        result: dict[str, object] | None = None
+        if held_revision is not None:
+            revision = await asyncio.to_thread(self.repository.revision)
+            if revision == held_revision:
+                result = {"schemaVersion": 1, "revision": revision, "unchanged": True}
+        if result is None:
+            result = await asyncio.to_thread(self.catalog.list_models, kinds)
         result["scan"] = self.start_initial_scan().to_payload()
         result["enrichment"] = self.automatic_enrichment.status()
         return result
@@ -356,7 +368,6 @@ class ModelLibraryRuntime:
             result["localPresentationUpdates"] = await asyncio.to_thread(
                 self.local_presentation.refresh, kinds
             )
-            await self.updates.publish()
             await self.automatic_enrichment.refill()
             self.automatic_enrichment.start()
             return result
@@ -395,15 +406,13 @@ class ModelLibraryRuntime:
         async def operation() -> dict[str, object]:
             """Publish only a digest backed by unchanged approved file evidence."""
             digest = await self.fingerprints.refresh(entry)
-            await self.updates.publish()
             return {"modelId": model_id, "sha256": digest}
 
         return self.jobs.start(f"fingerprint-refresh:{model_id}", operation)
 
     async def replace_thumbnail(self, model_id: str, content: bytes) -> None:
-        """Prepare an explicit image off the event loop and publish its committed revision."""
+        """Prepare an explicit image off the event loop; its commit announces itself."""
         await asyncio.to_thread(self.thumbnail_choices.replace, model_id, content)
-        await self.updates.publish()
 
     def acquire_release(self, model_id: str, version_id: str, file_id: str) -> ModelJob:
         """Queue one deliberate verified acquisition and publish its resulting catalog revision."""

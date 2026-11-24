@@ -24,7 +24,6 @@ import sqlite3
 from aiohttp import web
 
 from .application.detector_service import ModelDetectorService
-from .infrastructure.catalog_updates import ModelCatalogUpdates
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,7 +31,6 @@ _LOGGER = logging.getLogger(__name__)
 def register_detector_routes(
     routes: web.RouteTableDef,
     service: ModelDetectorService,
-    updates: ModelCatalogUpdates,
 ) -> None:
     """Bind package-art reads and exact-value preferences without accepting filesystem paths."""
 
@@ -108,7 +106,6 @@ def register_detector_routes(
         value, asset = payload["value"], payload["asset"]
         try:
             await asyncio.to_thread(service.assign, value, asset)
-            await updates.publish()
             return web.json_response({"schemaVersion": 1})
         except ValueError as error:
             return web.json_response({"error": str(error)}, status=400)

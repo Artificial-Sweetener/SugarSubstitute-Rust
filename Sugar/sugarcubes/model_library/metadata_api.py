@@ -24,7 +24,6 @@ from aiohttp import web
 
 from .application.content_classification import ModelContentClassification
 from .domain.model_relationships import ModelRelationships
-from .infrastructure.catalog_updates import ModelCatalogUpdates
 from .infrastructure.model_content_codec import optional_nsfw
 
 _LOGGER = logging.getLogger(__name__)
@@ -34,7 +33,6 @@ def register_model_metadata_routes(
     routes: web.RouteTableDef,
     relationships: ModelRelationships,
     content: ModelContentClassification,
-    updates: ModelCatalogUpdates,
 ) -> None:
     """Translate bounded requests into the authoritative metadata and invalidation owners."""
 
@@ -51,7 +49,6 @@ def register_model_metadata_routes(
             await content.configure(
                 request.match_info["model_id"], optional_nsfw(value["nsfw"])
             )
-            await updates.publish()
         except ValueError as error:
             return web.json_response({"error": str(error)}, status=400)
         except (OSError, sqlite3.Error):

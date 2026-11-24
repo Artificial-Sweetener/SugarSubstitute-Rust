@@ -61,7 +61,10 @@ def valid_preview_redirect(url: str) -> bool:
             and not parsed.username
             and not parsed.password
             and not parsed.fragment
-            and re.fullmatch(r"/file/blobs-managed-public/[A-Za-z0-9_-]+", parsed.path)
+            and re.fullmatch(
+                r"/file/blobs-managed-public/[A-Za-z0-9_-]+(?:\.[A-Za-z0-9]{1,5})?",
+                parsed.path,
+            )
             is not None
         )
     except ValueError:

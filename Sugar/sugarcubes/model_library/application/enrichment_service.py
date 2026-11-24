@@ -18,7 +18,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from collections.abc import Awaitable, Callable
 import logging
 from typing import Protocol
 
@@ -80,17 +79,13 @@ class ModelEnrichmentService:
     provider: ModelProvider
     previews: ModelPreviewPreparer
     activity: ModelMetadataActivity = field(default_factory=ModelMetadataActivity)
-    after_refresh: Callable[[str], Awaitable[None]] | None = None
 
     async def refresh(
         self, entry: ModelCatalogEntry, *, preserve_previews: bool = False
     ) -> ModelEnrichmentResult:
         """Resolve content identity, refresh provider evidence, and preserve local fallback images."""
         async with self.activity.work():
-            result = await self._refresh(entry, preserve_previews=preserve_previews)
-        if result.metadata is not None and self.after_refresh is not None:
-            await self.after_refresh(entry.evidence.location_id)
-        return result
+            return await self._refresh(entry, preserve_previews=preserve_previews)
 
     async def _refresh(
         self, entry: ModelCatalogEntry, *, preserve_previews: bool
