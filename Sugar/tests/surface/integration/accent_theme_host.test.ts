@@ -121,7 +121,7 @@ async function settle(): Promise<void> {
 test('loads the saved color without rewriting it, then updates through the registered menu', () => {
   const { setting, setDirty, setSettingValue, host } = createHost();
   expect(setting.id).toBe(ACCENT_COLOR_SETTING);
-  expect(setting.category).toEqual(['SugarCubes', 'Appearance', 'AccentColor']);
+  expect(setting.category).toEqual(['SugarCubes', 'Style', 'AccentColor']);
   expect(setSettingValue).not.toHaveBeenCalled();
   const style = document.getElementById('sugarcubes-accent-theme')!;
   expect(style.textContent).toContain('--sc-accent-color:#c19eff');

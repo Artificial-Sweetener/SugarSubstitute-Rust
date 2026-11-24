@@ -5052,20 +5052,11 @@ function createMenuItem(document2) {
     style === "spectrum" ? "sc-spectrum-menu-item" : style === "photopro" || style === "gimp" ? "div" : "fluent-menu-item"
   );
 }
-function setMenuItemChecked(row, checked) {
-  row.setAttribute("aria-checked", String(checked));
-  if (checked)
-    row.setAttribute(
-      readOwnedVisualStyle(row.ownerDocument) === "spectrum" ? "selected" : "checked",
-      ""
-    );
-}
 function menuItemSlot(document2, position) {
   return ["photopro", "gimp"].includes(readOwnedVisualStyle(document2)) ? "" : readOwnedVisualStyle(document2) === "spectrum" ? position === "start" ? "icon" : "value" : position;
 }
 export {
   createMenuItem,
   createMenuList,
-  menuItemSlot,
-  setMenuItemChecked
+  menuItemSlot
 };

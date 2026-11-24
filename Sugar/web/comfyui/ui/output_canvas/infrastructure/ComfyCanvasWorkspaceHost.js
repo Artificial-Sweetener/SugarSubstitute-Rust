@@ -32,6 +32,7 @@ export class ComfyCanvasWorkspaceHost {
     #stops = [];
     #observer = null;
     #workspace = null;
+    #bottom = 0;
     #panel = null;
     #appMode = false;
     #configuring = false;
@@ -157,6 +158,11 @@ export class ComfyCanvasWorkspaceHost {
         this.#workspace?.preferences(next, this.#userVisibilityChange);
         this.changed();
     }
+    /** Reserve height below the graph for the console, kept across workspace remounts. */
+    reserveBottom(height) {
+        this.#bottom = height;
+        this.#workspace?.reserveBottom(height);
+    }
     /** Mount only qualified siblings, releasing the old attachment before removing its allocation. */
     #reconcile() {
         if (this.#disposed)
@@ -182,6 +188,7 @@ export class ComfyCanvasWorkspaceHost {
                 report: this.report,
             });
             this.#panel = panel;
+            this.#workspace.reserveBottom(this.#bottom);
             this.#workspace.suspend(this.#suspension());
             this.changed();
         }

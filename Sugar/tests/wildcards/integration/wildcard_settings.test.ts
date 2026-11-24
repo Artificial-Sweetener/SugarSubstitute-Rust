@@ -92,7 +92,7 @@ function fixture(paths: string[], answers: (string | null)[]) {
 test('the row sits under Prompt editor and offers the three wildcard actions', async () => {
   const f = fixture([], []);
   expect(f.setting.id).toBe(WILDCARD_SETTING);
-  expect(f.setting.category).toEqual(['SugarCubes', 'Prompt editor', 'Wildcards']);
+  expect(f.setting.category).toEqual(['SugarCubes', 'Wildcards', 'Wildcards']);
   expect(f.setting.type()).toBe(f.row);
   expect([...f.row.querySelectorAll('button')].map((button) => button.textContent)).toEqual([
     'Open wildcards folder',

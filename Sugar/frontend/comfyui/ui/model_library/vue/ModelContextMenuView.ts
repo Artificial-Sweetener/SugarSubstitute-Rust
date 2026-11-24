@@ -33,11 +33,8 @@ export const ModelContextMenuView = defineComponent({
   setup(props, { emit }) {
     const menu = new ContextMenu(document);
     let disposed = false;
-    /** Replace an open target when another card requests a menu in the same Vue lifetime. */
+    /** Hand the shared menu the current entries; it decides whether its rows change. */
     const open = (): void => {
-      disposed = true;
-      menu.close();
-      disposed = false;
       menu.open({
         label: props.label,
         entries: projectModelContext(props.entries, (item) => emit('action', item)),

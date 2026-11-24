@@ -19,6 +19,8 @@ import {
   DESKTOP_BODY_WASH_PROPERTY,
   DESKTOP_CHROME_WASH_PROPERTY,
   DESKTOP_CARD_WASH_PROPERTY,
+  DESKTOP_ROW_HOVER_PROPERTY,
+  DESKTOP_ROW_PRESSED_PROPERTY,
   desktopMaterialWash,
 } from './DesktopMaterialWash.js';
 
@@ -116,6 +118,8 @@ export class DesktopFramePresentation {
     this.#style(root, DESKTOP_BODY_WASH_PROPERTY, wash.body);
     this.#style(root, DESKTOP_CHROME_WASH_PROPERTY, wash.chrome);
     this.#style(root, DESKTOP_CARD_WASH_PROPERTY, wash.card);
+    this.#style(root, DESKTOP_ROW_HOVER_PROPERTY, wash.rowHover);
+    this.#style(root, DESKTOP_ROW_PRESSED_PROPERTY, wash.rowPressed);
   }
 
   /** Restore only values still owned by this presentation, preserving later host mutations. */

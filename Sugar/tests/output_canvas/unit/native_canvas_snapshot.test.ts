@@ -55,6 +55,14 @@ function snapshot(input: boolean) {
   });
 }
 
+test('consecutive snapshots without scenes share one empty list, so nothing reads as changed', () => {
+  // Snapshots arrive about once a frame; the canvas menu refreshes when these lists change identity.
+  const first = snapshot(false);
+  const second = snapshot(false);
+  expect(first.scenes).toHaveLength(0);
+  expect(second.scenes).toBe(first.scenes);
+});
+
 test('an Output live preview locks the viewer controls only while the Output route shows it', () => {
   expect(snapshot(false).preview).toBe(true);
   expect(snapshot(true).preview).toBe(false);

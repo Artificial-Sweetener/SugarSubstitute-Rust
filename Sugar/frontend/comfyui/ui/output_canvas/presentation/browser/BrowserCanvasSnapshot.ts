@@ -48,7 +48,7 @@ export function browserCanvasSnapshot(
   preparing: boolean,
   mediaActions: OutputMediaProfile | null,
   detail: CanvasResourceStatus | null = null,
-  itemActions: readonly CanvasOutputActions[] = [],
+  itemActions?: readonly CanvasOutputActions[],
   photoshopAllAvailable?: boolean,
 ): CanvasViewSnapshot {
   const primary = images.find((slot) => slot.slot === 'primary');

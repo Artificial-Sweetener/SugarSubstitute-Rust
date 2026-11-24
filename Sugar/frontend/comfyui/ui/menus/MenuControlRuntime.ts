@@ -50,16 +50,6 @@ export function createMenuItem(document: Document): HTMLElement {
   );
 }
 
-/** Reflect shared selection semantics into the selected library's checkmark presentation. */
-export function setMenuItemChecked(row: HTMLElement, checked: boolean): void {
-  row.setAttribute('aria-checked', String(checked));
-  if (checked)
-    row.setAttribute(
-      readOwnedVisualStyle(row.ownerDocument) === 'spectrum' ? 'selected' : 'checked',
-      '',
-    );
-}
-
 /** Route shared icons and accessories into each library's documented slots. */
 export function menuItemSlot(document: Document, position: 'start' | 'end'): string {
   return ['photopro', 'gimp'].includes(readOwnedVisualStyle(document))

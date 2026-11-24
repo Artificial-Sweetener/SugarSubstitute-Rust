@@ -26,7 +26,7 @@ import { PanelReveal } from '../surface/motion/PanelReveal.js';
 import { isRecord } from '../types/common.js';
 import { ComfyLogFeed } from './ComfyLogFeed.js';
 import { CONSOLE_DEFAULT_HEIGHT, CONSOLE_MINIMUM_HEIGHT, ConsolePanel } from './ConsolePanel.js';
-import { ConsoleToolbarButton } from './ConsoleToolbarButton.js';
+import { ConsoleCaptionButton } from './ConsoleCaptionButton.js';
 /** ComfyUI's command that shows or hides its Logs bottom panel. */
 export const COMFY_LOGS_COMMAND = 'Workspace.ToggleBottomPanelTab.logs-terminal';
 const STORAGE_KEY = 'sugarcubes.console';
@@ -47,7 +47,7 @@ export class WorkspaceConsole {
     /** Bind to the page; nothing is shown until `setup`. */
     constructor(options) {
         this.#options = options;
-        this.#button = new ConsoleToolbarButton(options.document, () => this.toggle());
+        this.#button = new ConsoleCaptionButton(options.document, () => this.toggle());
         const saved = this.#read();
         this.#visible = saved.visible;
         this.#height = saved.height;
@@ -142,6 +142,7 @@ export class WorkspaceConsole {
             this.#host?.style.removeProperty('--sc-console-height');
             this.#host?.style.removeProperty('--sc-console-inset');
             this.#host = null;
+            this.#options.reserve(0);
         });
     }
     /** Replay ComfyUI's kept output and follow it while the panel is open. */
@@ -173,11 +174,13 @@ export class WorkspaceConsole {
         this.#applyHeight();
         this.#write();
     }
-    /** Publish the panel's height to the column, which the masonry above it leaves free. */
+    /** Publish the panel's height: masonry leaves it free and the graph ends above it. */
     #applyHeight() {
-        const height = `${String(Math.max(CONSOLE_MINIMUM_HEIGHT, this.#height))}px`;
+        const pixels = Math.max(CONSOLE_MINIMUM_HEIGHT, this.#height);
+        const height = `${String(pixels)}px`;
         this.#host?.style.setProperty('--sc-console-height', height);
         this.#host?.style.setProperty('--sc-console-inset', height);
+        this.#options.reserve(pixels);
     }
     /** Hand the shown output to the clipboard. */
     #copy(text) {

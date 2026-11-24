@@ -54,6 +54,7 @@ export class ComfyCanvasFrameAllocation {
         this.#styles = [
             { element: frame, property: 'overflow' },
             { element: panel, property: '--sc-output-workspace-reserved-width' },
+            { element: panel, property: '--sc-output-workspace-reserved-height' },
             ...[
                 'width',
                 'height',
@@ -74,33 +75,45 @@ export class ComfyCanvasFrameAllocation {
             priority: element.style.getPropertyPriority(property),
         }));
     }
-    /** Resize actual canvas/Nodes layers to the usable panel through Comfy's canvas ResizeObserver. */
-    apply(inset) {
+    /**
+     * Resize actual canvas/Nodes layers to the usable panel through Comfy's canvas ResizeObserver.
+     *
+     * `inset` is the width reserved at the right for the output pane; `bottom` is the height
+     * reserved below the graph for the console, so the graph ends at the console's top edge and
+     * ComfyUI's bottom-anchored graph chrome rides above it.
+     */
+    apply(inset, bottom = 0) {
         if (!Number.isFinite(inset) || inset < 0)
             throw new RangeError('Graph workspace inset is invalid.');
+        if (!Number.isFinite(bottom) || bottom < 0)
+            throw new RangeError('Graph workspace bottom reservation is invalid.');
         if (this.#disposed)
             return;
         const frame = this.#frame.getBoundingClientRect();
         const panel = this.panel.getBoundingClientRect();
         const measured = frame.height > 0 && panel.height > 0;
         const top = measured ? Math.max(0, Math.min(frame.height, panel.top - frame.top)) : 0;
-        const bottom = measured
-            ? Math.max(0, Math.min(frame.height - top, frame.bottom - panel.bottom))
-            : 0;
         const measuredWidth = frame.width > 0 && panel.width > 0;
         const left = measuredWidth ? Math.max(0, Math.min(frame.width, panel.left - frame.left)) : 0;
         const right = measuredWidth
             ? Math.max(0, Math.min(frame.width - left, frame.right - panel.right))
             : 0;
         const horizontal = left + right + inset;
-        const vertical = top + bottom;
+        const reserved = measured
+            ? Math.min(bottom, Math.max(0, frame.height - top - (frame.bottom - panel.bottom)))
+            : 0;
+        const below = measured
+            ? Math.max(0, Math.min(frame.height - top, frame.bottom - panel.bottom))
+            : 0;
+        const vertical = top + below + reserved;
         // Fixed chrome follows the frame's client rectangle, so frame moves and resizes join the key.
         const allocation = JSON.stringify([
             inset,
+            reserved,
             left,
             right,
             top,
-            bottom,
+            below,
             frame.left,
             frame.top,
             frame.width,
@@ -116,6 +129,7 @@ export class ComfyCanvasFrameAllocation {
         }
         this.#set(this.root, 'width', horizontal ? `calc(100% - ${horizontal}px)` : null);
         this.#set(this.panel, '--sc-output-workspace-reserved-width', inset ? `${inset}px` : null);
+        this.#set(this.panel, '--sc-output-workspace-reserved-height', reserved ? `${reserved}px` : null);
         this.#set(this.root, 'margin-left', horizontal ? `${left}px` : null);
         this.#set(this.root, 'margin-top', vertical ? `${top}px` : null);
         this.#set(this.root, 'height', vertical ? `calc(100% - ${vertical}px)` : null);
@@ -125,7 +139,7 @@ export class ComfyCanvasFrameAllocation {
         // Chrome and graph layers keep their relative order inside the graph root's stacking context.
         this.#set(this.root, 'isolation', 'isolate');
         // The DOM-widget layer starts at the root's top edge with the root's width; it ends with the panel.
-        this.#set(this.root, GRAPH_LAYER_CLIP_PROPERTY, `inset(0px 0px calc(100% - ${measured ? panel.height : 0}px) 0px)`);
+        this.#set(this.root, GRAPH_LAYER_CLIP_PROPERTY, `inset(0px 0px calc(100% - ${measured ? panel.height - reserved : 0}px) 0px)`);
         this.#set(this.#chrome, 'position', 'fixed');
         this.#set(this.#chrome, 'left', `${frame.left}px`);
         this.#set(this.#chrome, 'top', `${frame.top}px`);

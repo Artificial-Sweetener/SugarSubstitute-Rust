@@ -14,13 +14,14 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose the source-matched frame controls independently of host mounts and workflow stores. */
-import { createFluentIcon } from '../../core/FluentIcons.js';
+import { createFluentIcon, type FluentIconName } from '../../core/FluentIcons.js';
+import { sharedIconUrl, type SharedIconName } from '../../core/SharedElements.js';
 import { createButton } from '../appearance/ControlFactory.js';
 import { WorkflowTabsView, type WorkflowTabsActions } from './WorkflowTabsView.js';
 import { AppOrbView } from './AppOrbView.js';
 import { WorkflowTabStripLayout, FRAME_TAB_START } from './WorkflowTabStripLayout.js';
 import { WorkflowTabGhost, type WorkflowTabDropTarget } from './WorkflowTabGhost.js';
-import { ContextMenu } from '../../menus/ContextMenu.js';
+import { ContextMenu, type ContextMenuEntry } from '../../menus/ContextMenu.js';
 import { applyOwnedTheme } from '../appearance/ThemeService.js';
 import type { CubeStackFrameControls } from '../stack/CubeStackHost.js';
 import type { FrameWorkflowTab } from './ComfyFrameWorkflowAdapter.js';
@@ -35,6 +36,16 @@ export interface SubstituteFrameViewActions {
   command(id: string): void;
   /** The host's ComfyUI: whether it can be started again now, and the request to do so. */
   readonly backend: { readonly canRestart: boolean; restart(): void };
+  /** ComfyUI's registered sidebar tabs, offered where its hidden strip would offer them. */
+  readonly sidebar: {
+    tabs(): readonly {
+      readonly id: string;
+      readonly title: string;
+      readonly icon: string | null;
+    }[];
+    active(): string | null;
+    toggle(id: string): void;
+  };
   openOverrides(trigger: HTMLElement): void;
   report(error: unknown): void;
 }
@@ -90,37 +101,76 @@ export class SubstituteFrameView {
     this.#orb = new AppOrbView(
       document,
       () => [
-        { label: 'Open workflow', select: () => actions.command('Comfy.OpenWorkflow') },
-        { label: 'Save', select: () => actions.command('Comfy.SaveWorkflow') },
-        { label: 'Save as', select: () => actions.command('Comfy.SaveWorkflowAs') },
+        {
+          label: 'Open workflow',
+          icon: fluent('folder-open'),
+          select: () => actions.command('Comfy.OpenWorkflow'),
+        },
+        {
+          label: 'Save',
+          icon: fluent('save'),
+          select: () => actions.command('Comfy.SaveWorkflow'),
+        },
+        {
+          label: 'Save as',
+          icon: fluent('save-edit'),
+          select: () => actions.command('Comfy.SaveWorkflowAs'),
+        },
         { label: '', separator: true },
         {
           label: 'Open Sugar Script...',
+          icon: fluent('code'),
           select: () => actions.command('SugarCubes.OpenSugarScript'),
         },
-        { label: 'Save Sugar Script', select: () => actions.command('SugarCubes.SaveSugarScript') },
+        {
+          label: 'Save Sugar Script',
+          icon: fluent('save'),
+          select: () => actions.command('SugarCubes.SaveSugarScript'),
+        },
         {
           label: 'Save Sugar Script As...',
+          icon: fluent('save-edit'),
           select: () => actions.command('SugarCubes.SaveSugarScriptAs'),
         },
         {
           label: 'Export to Comfy Workflow...',
+          icon: fluent('arrow-export'),
           select: () => actions.command('SugarCubes.ExportComfyWorkflow'),
         },
         // Offered only while the host says ComfyUI is stopped and can be started again.
         ...(actions.backend.canRestart
           ? [
               { label: '', separator: true },
-              { label: 'Restart ComfyUI', select: () => actions.backend.restart() },
+              {
+                label: 'Restart ComfyUI',
+                icon: fluent('arrow-clockwise'),
+                select: () => actions.backend.restart(),
+              },
             ]
           : []),
+        ...sidebarEntries(actions.sidebar),
         { label: '', separator: true },
-        { label: 'Console', select: () => actions.command('SugarCubes.ToggleConsole') },
+        {
+          label: 'Console',
+          icon: (document: Document) =>
+            sharedIcon(
+              document,
+              this.element.getAttribute('data-console-caption') === 'open'
+                ? 'console-close'
+                : 'console-open',
+            ),
+          select: () => actions.command('SugarCubes.ToggleConsole'),
+        },
         {
           label: 'Extensions',
+          icon: fluent('puzzle-piece'),
           select: () => actions.command('Comfy.Manager.CustomNodesManager.ShowCustomNodesMenu'),
         },
-        { label: 'Settings', select: () => actions.command('Comfy.ShowSettingsDialog') },
+        {
+          label: 'Settings',
+          icon: fluent('settings'),
+          select: () => actions.command('Comfy.ShowSettingsDialog'),
+        },
       ],
       actions.report,
     );
@@ -283,7 +333,7 @@ export class SubstituteFrameView {
     this.element.remove();
   }
 
-  /** Present the stack owner's current cart or compact intent with the shared cube-chrome icon. */
+  /** Present the stack owner's cart or the stack it would become, with the shared cube-chrome icon. */
   #updateStack(): void {
     const action = this.actions.stack.action;
     const compact = action === 'expand';
@@ -303,7 +353,8 @@ export class SubstituteFrameView {
     }
     this.#addGlyph.style.display = action === 'add' ? '' : 'none';
     this.#stackGlyph.style.display = action === 'add' ? 'none' : '';
-    const filename = compact ? 'panel-left-regular.svg' : 'panel-left.svg';
+    // The glyph shows where the button goes: the full panel expands, the outline compacts.
+    const filename = compact ? 'panel-left.svg' : 'panel-left-regular.svg';
     this.#stackGlyph.style.setProperty(
       '--sc-orb-glyph',
       `url("${new URL(`../../../../orb/${filename}`, import.meta.url).href}")`,
@@ -339,4 +390,56 @@ export class SubstituteFrameView {
     });
     return button;
   }
+}
+
+/** A menu icon from the vendored Fluent set. */
+function fluent(name: FluentIconName): (document: Document) => HTMLElement {
+  return (document) => createFluentIcon(document, name, 16);
+}
+
+/** A menu icon from the shared native and web artwork. */
+function sharedIcon(document: Document, name: SharedIconName): HTMLElement {
+  const icon = document.createElement('span');
+  icon.setAttribute('aria-hidden', 'true');
+  Object.assign(icon.style, {
+    display: 'inline-block',
+    width: '16px',
+    height: '16px',
+    background: 'currentColor',
+    mask: `url("${sharedIconUrl(name)}") center / contain no-repeat`,
+  });
+  return icon;
+}
+
+/** ComfyUI's own icon class for a sidebar tab, or a Fluent fallback when it registered none. */
+function sidebarIcon(icon: string | null): (document: Document) => HTMLElement {
+  return (document) => {
+    if (!icon) return createFluentIcon(document, 'app-generic', 16);
+    const element = document.createElement('i');
+    element.className = icon;
+    element.setAttribute('aria-hidden', 'true');
+    Object.assign(element.style, {
+      display: 'inline-block',
+      width: '16px',
+      height: '16px',
+      fontSize: '16px',
+    });
+    return element;
+  };
+}
+
+/** Every registered sidebar tab as an entry; choosing the open one closes it. */
+function sidebarEntries(sidebar: SubstituteFrameViewActions['sidebar']): ContextMenuEntry[] {
+  const tabs = sidebar.tabs();
+  if (tabs.length === 0) return [];
+  const active = sidebar.active();
+  return [
+    { label: '', separator: true },
+    ...tabs.map((tab) => ({
+      label: tab.title,
+      icon: sidebarIcon(tab.icon),
+      checked: tab.id === active,
+      select: () => sidebar.toggle(tab.id),
+    })),
+  ];
 }

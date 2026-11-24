@@ -12,7 +12,7 @@ import {
 } from "./chunk-SYMYA4CE.js";
 import {
   ModelContextMenuView
-} from "./chunk-WIKCJTWX.js";
+} from "./chunk-2G7SQCCL.js";
 import {
   ModelProviderIcon
 } from "./chunk-NC5FFMF2.js";

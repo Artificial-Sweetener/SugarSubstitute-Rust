@@ -41,10 +41,23 @@ export const desktopFrameCss = `
   /* The rail's edge is the aperture's edge, so both travel on the material motion's one curve. */
   :root[data-sc-desktop-frame-surface] .sc-cube-stack-host .sc-cube-stack[data-kind='rail'][data-appearance] {
     width:var(--sc-stack-material-width); transition:none; }
-  /* Node cards keep the style's own opaque fill, in masonry and in the graph: their rows' hover,
-     pressed and divider colours are drawn against that fill. Only non-node surfaces are washed. */
+  /* Cards, node cards included, in masonry and in the graph, are the translucent WinUI card fill
+     over the body wash, as in SugarSubstitute's Python application, so the Mica shows through them.
+     A node card is painted once, by its outer element: its header, body and footer layers overlap,
+     and a translucent fill painted by each would stack into brighter bands. Its rows show the
+     Windows list-item overlays over that fill; dividers already use the card stroke. Without the
+     desktop frame there is no Mica, and cards keep the style's opaque fill. */
   :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] [data-sc-style-surface] {
     --sc-card-fill:var(--sc-desktop-card-wash); }
+  :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] [data-sc-style-node] {
+    --sc-card-fill:transparent; background:var(--sc-desktop-card-wash);
+    border-radius:var(--sc-node-card-radius,4px); }
+  :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] [data-sc-style-node] :is(
+    [data-sc-toggle-row],[data-testid="advanced-inputs-button"],[data-sc-titlebar-action]):is(:hover,:focus-visible) {
+    background:var(--sc-desktop-row-hover); }
+  :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] [data-sc-style-node] :is(
+    [data-sc-toggle-row],[data-testid="advanced-inputs-button"],[data-sc-titlebar-action]):active {
+    background:var(--sc-desktop-row-pressed); }
   [data-sc-desktop-frame-host] { border:0 !important; box-shadow:none !important; }
   [data-sc-desktop-frame-host] .sc-substitute-frame { app-region:drag; }
   [data-sc-desktop-frame-host] .sc-substitute-frame :is(

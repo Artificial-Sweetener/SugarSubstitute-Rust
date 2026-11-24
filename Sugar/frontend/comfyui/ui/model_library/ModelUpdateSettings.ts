@@ -43,7 +43,7 @@ export class ModelUpdateSettings {
     settings.addSetting.call(settings, {
       id: 'SugarCubes.Models.UpdateNotifications',
       name: 'Model update notifications',
-      ...sugarCubesSettingsSection('updates', 'UpdateNotifications'),
+      ...sugarCubesSettingsSection('modelUpdates', 'UpdateNotifications'),
       defaultValue: '',
       tooltip:
         'Show compatible updates checked during metadata lookup, daily model selection, and version browsing.',

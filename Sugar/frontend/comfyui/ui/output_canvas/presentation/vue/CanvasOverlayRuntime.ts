@@ -26,7 +26,6 @@ import type {
   CanvasViewPort,
   CanvasViewSnapshot,
 } from '../../domain/CanvasViewPort.js';
-import { canvasNavigationSnapshot } from './CanvasNavigationSnapshot.js';
 import { canvasMediaFile, type CanvasMediaTarget } from '../../domain/CanvasMedia.js';
 import { CanvasOverlay } from './CanvasOverlay.js';
 import { ensureCanvasOverlayStyles } from './CanvasOverlayStyles.js';
@@ -136,13 +135,7 @@ export function mountCanvasOverlay(
         (typeof menuTarget === 'object' && !canvasMediaFile(snapshot, menuTarget))
       )
         menu.close();
-      else if (
-        canvasNavigationSnapshot(snapshot, state.value) !== state.value ||
-        snapshot.mediaActions !== state.value.mediaActions ||
-        snapshot.itemActions !== state.value.itemActions ||
-        snapshot.photoshopAllAvailable !== state.value.photoshopAllAvailable
-      )
-        menu.updateEntries(canvasContextActions(snapshot, port.capabilities, send, menuTarget));
+      else menu.updateEntries(canvasContextActions(snapshot, port.capabilities, send, menuTarget));
     }
     const spoken = canvasAnnouncement(state.value, snapshot);
     if (spoken !== null) announcement.value = spoken;

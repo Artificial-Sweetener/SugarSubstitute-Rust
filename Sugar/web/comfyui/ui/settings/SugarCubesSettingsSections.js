@@ -1,36 +1,87 @@
-//    SugarCubes - composable workflow units for ComfyUI
-//    Copyright (C) 2026  Artificial Sweetener and contributors
-//
-//    This program is free software: you can redistribute it and/or modify
-//    it under the terms of the GNU Affero General Public License as published by
-//    the Free Software Foundation, either version 3 of the License, or
-//    (at your option) any later version.
-//
-//    This program is distributed in the hope that it will be useful,
-//    but WITHOUT ANY WARRANTY; without even the implied warranty of
-//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//    GNU Affero General Public License for more details.
-//
-//    You should have received a copy of the GNU Affero General Public License
-//    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Define SugarCubes settings organization independently of native and themed control rendering. */
+/** The pages, in the Python app's navigation order; pages with no settings today are left out. */
+export const SETTINGS_PAGES = [
+    {
+        id: 'about',
+        title: 'About',
+        subtitle: 'Version, project, updates and acknowledgements.',
+        icon: 'app-generic',
+        sections: ['About', 'Updates'],
+    },
+    {
+        id: 'generation',
+        title: 'Generation',
+        subtitle: 'Generation behavior and generated files.',
+        icon: 'play',
+        sections: ['Output canvas', 'Output files', 'Model updates', 'Memory'],
+    },
+    {
+        id: 'prompt_editing',
+        title: 'Prompt Editing',
+        subtitle: 'Prompt editor behavior and authoring support.',
+        icon: 'edit',
+        sections: ['Wildcards'],
+    },
+    {
+        id: 'controls',
+        title: 'Controls',
+        subtitle: 'Keyboard and pointer controls.',
+        icon: 'settings',
+        sections: ['Workflow connections'],
+    },
+    {
+        id: 'model_sources',
+        title: 'Model Sources',
+        subtitle: 'External providers, metadata, previews and caches.',
+        icon: 'brain-circuit',
+        sections: ['Model library', 'Model metadata', 'Model previews'],
+    },
+    {
+        id: 'library',
+        title: 'Library',
+        subtitle: 'Cube Packs, their updates and authoring.',
+        icon: 'folder',
+        sections: ['Cube library', 'Authoring'],
+    },
+    {
+        id: 'appearance',
+        title: 'Appearance',
+        subtitle: 'Visual customization.',
+        icon: 'color',
+        sections: ['Style', 'Cube stack'],
+    },
+];
+/** Where each SugarCubes setting family belongs: its section label. */
 export const sugarCubesSettingsSections = {
-    appearance: { label: 'Appearance', priority: 1000 },
-    stack: { label: 'Cube stack', priority: 900 },
-    memory: { label: 'Memory', priority: 850 },
-    canvas: { label: 'Image canvas', priority: 800 },
-    output: { label: 'Output files', priority: 700 },
-    prompts: { label: 'Prompt editor', priority: 650 },
-    models: { label: 'Model library', priority: 600 },
-    metadata: { label: 'Model metadata', priority: 500 },
-    previews: { label: 'Model previews', priority: 400 },
-    updates: { label: 'Model updates', priority: 300 },
-    connections: { label: 'Workflow connections', priority: 200 },
-    authoring: { label: 'Authoring', priority: 100 },
-    packs: { label: 'Cube library', priority: 0 },
+    about: 'About',
+    updates: 'Updates',
+    canvas: 'Output canvas',
+    output: 'Output files',
+    modelUpdates: 'Model updates',
+    memory: 'Memory',
+    prompts: 'Wildcards',
+    connections: 'Workflow connections',
+    models: 'Model library',
+    metadata: 'Model metadata',
+    previews: 'Model previews',
+    packs: 'Cube library',
+    authoring: 'Authoring',
+    appearance: 'Style',
+    stack: 'Cube stack',
 };
-/** Project shared section descriptors into Comfy-native settings tokens without changing value IDs. */
+/** The section order across all pages, first to last. */
+const SECTION_ORDER = SETTINGS_PAGES.flatMap((page) => page.sections);
+/**
+ * Place one setting: under the SugarCubes category, in its section. ComfyUI shows higher
+ * `sortOrder` first, so the Python order counts down.
+ */
 export function sugarCubesSettingsSection(section, key) {
-    const descriptor = sugarCubesSettingsSections[section];
-    return { category: ['SugarCubes', descriptor.label, key], sortOrder: descriptor.priority };
+    const label = sugarCubesSettingsSections[section];
+    return {
+        category: ['SugarCubes', label, key],
+        sortOrder: 10_000 - SECTION_ORDER.indexOf(label) * 10,
+    };
+}
+/** The page a section belongs to. */
+export function settingsPageOfSection(label) {
+    return SETTINGS_PAGES.find((page) => page.sections.includes(label)) ?? null;
 }

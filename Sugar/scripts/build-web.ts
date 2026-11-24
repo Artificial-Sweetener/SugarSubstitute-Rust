@@ -64,6 +64,18 @@ function stageStaticAssets(): void {
     mkdirSync(path.dirname(output), { recursive: true });
     copyFileSync(source, output);
   }
+  // The shared UI element icons are one copy, read by the native host and served to the page.
+  const sharedIconsRoot = path.join(repositoryRoot, 'integrations', 'contracts', 'ui', 'icons');
+  for (const source of walkArtifactFiles(sharedIconsRoot)) {
+    const output = path.join(
+      generatedRoot,
+      'icons',
+      'shared',
+      path.relative(sharedIconsRoot, source),
+    );
+    mkdirSync(path.dirname(output), { recursive: true });
+    copyFileSync(source, output);
+  }
   const noticesRoot = path.join(repositoryRoot, 'third_party');
   for (const source of walkArtifactFiles(noticesRoot)) {
     const output = path.join(generatedRoot, 'third_party', path.relative(noticesRoot, source));

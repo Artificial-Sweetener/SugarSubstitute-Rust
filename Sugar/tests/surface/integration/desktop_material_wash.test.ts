@@ -113,6 +113,7 @@ describe.each([
           container: fill('main'),
           graph: fill('canvas'),
           backdrop: fill('.sugarcubes-workflow-masonry__backdrop'),
+          node: fill('[data-sc-style-node]'),
           card: fill('[data-testid="node-inner-wrapper"]'),
           body: fill('[data-testid="node-body-1"]'),
           outerCard: fill('.sugarcubes-cube-face__node-card'),
@@ -124,8 +125,10 @@ describe.each([
       });
       expect(fills.container).toBe('rgba(0, 0, 0, 0)');
       expect(fills.graph).toBe('rgba(0, 0, 0, 0)');
-      // A node card keeps the style's own opaque fill: its rows are drawn against it.
-      expect(fills.card).toBe(dark ? 'rgb(43, 43, 43)' : 'rgb(251, 251, 251)');
+      // A node card is the translucent WinUI card fill over the body wash, as in the Python
+      // application, painted once by the node's outer element: its inner layers stay clear.
+      expect(fills.node).toBe(dark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.7)');
+      expect(fills.card).toBe('rgba(0, 0, 0, 0)');
       expect(fills.body).toBe(fills.card);
       expect(fills.outerCard).toBe('rgba(0, 0, 0, 0)');
       expect(fills.stack).toBe('rgba(0, 0, 0, 0)');

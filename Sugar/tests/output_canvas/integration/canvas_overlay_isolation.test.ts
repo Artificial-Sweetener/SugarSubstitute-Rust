@@ -18,7 +18,6 @@
 import { jest } from '@jest/globals';
 import { nextTick } from 'vue';
 import { mountCanvasOverlay } from '../../../frontend/comfyui/ui/output_canvas/presentation/vue/CanvasOverlayRuntime.js';
-import { ContextMenu } from '../../../frontend/comfyui/ui/menus/ContextMenu.js';
 import { canvasContextActions } from '../../../frontend/comfyui/ui/output_canvas/presentation/vue/CanvasContextActions.js';
 import { windowId } from '../../../frontend/comfyui/ui/output_canvas/domain/CanvasIdentity.js';
 import { CanvasPortFixture, canvasSnapshot } from '../support/CanvasPortFixture.js';
@@ -506,7 +505,9 @@ test('retains the context menu through camera updates without rebuilding catalog
   const mounted = mountCanvasOverlay(element, port, jest.fn());
   element.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }));
   const row = document.activeElement;
-  const update = jest.spyOn(ContextMenu.prototype, 'updateEntries');
+  const menu = document.querySelector('[role="menu"]');
+  const observer = new MutationObserver(() => undefined);
+  if (menu) observer.observe(menu, { subtree: true, childList: true, attributes: true });
   for (let revision = 2; revision < 50; revision++)
     port.publish({
       ...port.read(),
@@ -514,8 +515,12 @@ test('retains the context menu through camera updates without rebuilding catalog
       zoom: { ...port.read().zoom!, physicalScale: revision },
     });
   await nextTick();
+  // The overlay hands the open menu every update; the menu keeps its rows and writes nothing.
+  expect(document.querySelector('[role="menu"]')).toBe(menu);
+  expect(row?.isConnected).toBe(true);
   expect(document.activeElement).toBe(row);
-  expect(update).not.toHaveBeenCalled();
+  expect(observer.takeRecords()).toHaveLength(0);
+  observer.disconnect();
   mounted.dispose();
 });
 

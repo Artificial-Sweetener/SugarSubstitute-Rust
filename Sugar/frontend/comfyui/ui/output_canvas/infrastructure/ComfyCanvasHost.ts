@@ -299,6 +299,11 @@ export class ComfyCanvasHost {
     });
   }
 
+  /** Take `height` from the graph's bottom for the docked console, or give it back with 0. */
+  reserveBottom(height: number): void {
+    this.#workspace.reserveBottom(height);
+  }
+
   /** Supply the actual remaining workspace to masonry even while the output pane is collapsed. */
   get content(): HTMLElement | null {
     return this.#workspace.content;

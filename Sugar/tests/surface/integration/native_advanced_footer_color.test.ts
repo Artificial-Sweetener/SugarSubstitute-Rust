@@ -182,10 +182,14 @@ describe.each([
       const body = pixel(x, facts.body.y + 12);
       const overlap = pixel(x, facts.body.y + facts.body.height - 8);
       const footer = pixel(x, facts.button.y + facts.button.height - 6);
-      expect(body).toEqual(
-        // A node card keeps the style's own opaque fill on the desktop frame.
-        explicit ? [64, 80, 96, 255] : dark ? [43, 43, 43, 255] : [251, 251, 251, 255],
-      );
+      if (explicit) expect(body).toEqual([64, 80, 96, 255]);
+      else {
+        // On the desktop frame a node card is the translucent card fill: the page behind it
+        // (rgb 40,20,20 here) shows through, so it is neither the style's opaque fill nor bare.
+        expect(body).not.toEqual(dark ? [43, 43, 43, 255] : [251, 251, 251, 255]);
+        expect(body).not.toEqual([40, 20, 20, 255]);
+      }
+      // One card layer: the footer and the body's lower edge paint the same pixel as the body.
       expect(overlap).toEqual(body);
       expect(footer).toEqual(explicit ? [112, 71, 71, 255] : body);
       expect(

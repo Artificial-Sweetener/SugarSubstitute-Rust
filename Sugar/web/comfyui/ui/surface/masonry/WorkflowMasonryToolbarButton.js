@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own the icon-only view affordance and its position in Comfy's action bar. */
 import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
+import { WorkflowViewIcon } from './WorkflowViewIcon.js';
 /** Retain the native toolbar affordance across identified action-bar mounts. */
 export class WorkflowMasonryToolbarButton {
     #document;
@@ -31,10 +32,10 @@ export class WorkflowMasonryToolbarButton {
         this.#button.className = 'sugarcubes-masonry-toggle';
         this.#button.type = 'button';
         this.#button.setAttribute('aria-label', 'Toggle workflow masonry');
-        this.#icon = documentRef.createElement('span');
-        this.#icon.className = 'sugarcubes-masonry-toggle__icon';
-        this.#icon.setAttribute('aria-hidden', 'true');
-        this.#button.append(this.#icon);
+        // The icon shows the destination: masonry tiles while the graph shows.
+        this.#icon = new WorkflowViewIcon(documentRef, 1);
+        this.#icon.element.classList.add('sugarcubes-masonry-toggle__icon');
+        this.#button.append(this.#icon.element);
         this.#button.addEventListener('click', toggle);
         this.update(false, false);
     }
@@ -45,14 +46,20 @@ export class WorkflowMasonryToolbarButton {
         this.#presence = new HostSurfaceObserver(this.#document.body, '.actionbar-container', () => this.#attach(), { content: true });
         this.#attach();
     }
-    /** Show the destination view while exposing current state to assistive technology. */
+    /**
+     * Show the destination view while exposing current state to assistive technology. A change of
+     * view animates the icon from one arrangement to the other; the first state is drawn at once.
+     */
     update(active, available, unavailableReason) {
         const destination = active ? 'graph' : 'masonry';
         if (this.#button.dataset.view !== destination) {
+            const first = this.#button.dataset.view === undefined;
             this.#button.dataset.view = destination;
-            const filename = active ? 'flowchart.svg' : 'board.svg';
-            const url = new URL(`../../../../icons/view/${filename}`, import.meta.url);
-            this.#icon.style.setProperty('--sc-view-icon', `url("${url.href}")`);
+            const position = destination === 'graph' ? 0 : 1;
+            if (first)
+                this.#icon.pose(position);
+            else
+                this.#icon.animateTo(position);
         }
         this.#button.setAttribute('aria-pressed', String(active));
         this.#button.disabled = !available;
@@ -64,6 +71,7 @@ export class WorkflowMasonryToolbarButton {
     dispose() {
         this.#disposed = true;
         this.#presence?.disconnect();
+        this.#icon.dispose();
         this.#button.removeEventListener('click', this.#toggle);
         this.#button.remove();
     }

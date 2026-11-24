@@ -428,6 +428,7 @@ test('frame actions retain stack policy, settings access, override anchor and un
   const stop = jest.fn();
   const view = new SubstituteFrameView(document, {
     backend: { canRestart: false, restart: () => undefined },
+    sidebar: { tabs: () => [], active: () => null, toggle: jest.fn() },
     workflows: {
       activate: jest.fn(),
       close: jest.fn(),
@@ -570,6 +571,7 @@ test('new-workflow control follows the tabs and overflow appears only when the s
   const activate = jest.fn();
   const view = new SubstituteFrameView(document, {
     backend: { canRestart: false, restart: () => undefined },
+    sidebar: { tabs: () => [], active: () => null, toggle: jest.fn() },
     workflows: {
       activate,
       close: jest.fn(),

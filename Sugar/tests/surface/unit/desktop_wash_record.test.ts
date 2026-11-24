@@ -24,7 +24,7 @@ const record = JSON.parse(
     new URL('../../../integrations/contracts/desktop_wash_vectors.json', import.meta.url),
     'utf8',
   ),
-) as Record<'body' | 'chrome' | 'card', Record<'dark' | 'light', Wash>>;
+) as Record<'body' | 'chrome' | 'card' | 'rowHover' | 'rowPressed', Record<'dark' | 'light', Wash>>;
 
 const css = ([red, green, blue, alpha]: Wash): string =>
   `rgba(${String(red)}, ${String(green)}, ${String(blue)}, ${(alpha / 255).toFixed(4)})`;
@@ -38,5 +38,7 @@ test('every desktop wash the page paints is the one the shared record names', ()
     expect(wash.body).toBe(css(record.body[theme]));
     expect(wash.chrome).toBe(css(record.chrome[theme]));
     expect(wash.card).toBe(css(record.card[theme]));
+    expect(wash.rowHover).toBe(css(record.rowHover[theme]));
+    expect(wash.rowPressed).toBe(css(record.rowPressed[theme]));
   }
 });

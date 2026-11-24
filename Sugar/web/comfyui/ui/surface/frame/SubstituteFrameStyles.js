@@ -48,7 +48,9 @@ export const substituteFrameCss = `
   :root[data-sc-substitute-frame] { --workflow-tabs-height:34px; }
   :root[data-sc-substitute-frame] [data-sc-frame-native] { display:none !important; }
   :root[data-sc-tab-menu-capture] [role='menu'] { visibility:hidden!important; }
-  :root[data-sc-substitute-frame] :is(.side-toolbar-container,.side-tool-bar-container,.side-bar-panel) { display:none !important; }
+  /* The orb menu offers ComfyUI's sidebar tabs, so its strip is hidden; the panel a tab opens shows on the
+     left and takes its width from the graph, as in ComfyUI. */
+  :root[data-sc-substitute-frame] :is(.side-toolbar-container,.side-tool-bar-container) { display:none !important; }
   :root[data-sc-substitute-frame] .splitter-overlay:not(.splitter-overlay-bottom) > .p-splitter-gutter { display:none !important; }
   :root[data-sc-substitute-frame] .subgraph-breadcrumb { padding-left:62px; }
   :root[data-sc-substitute-frame] div:has(> .subgraph-breadcrumb) { min-width:190px; }

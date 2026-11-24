@@ -18,14 +18,26 @@
 /** Every Fluent icon product chrome draws, by name, mapped to its vendored file. */
 const FLUENT_ICON_FILES = {
   add: 'seed/add.svg',
+  'app-generic': 'node/app-generic.svg',
+  'brain-circuit': 'node/brain-circuit.svg',
+  color: 'node/color.svg',
+  edit: 'node/edit.svg',
+  folder: 'node/folder.svg',
+  'arrow-clockwise': 'action/arrow-clockwise.svg',
+  'arrow-export': 'action/arrow-export.svg',
   broom: 'action/broom.svg',
+  code: 'action/code.svg',
   copy: 'action/copy.svg',
   delete: 'action/delete.svg',
   dismiss: 'search/dismiss.svg',
+  'folder-open': 'action/folder-open.svg',
   'more-horizontal': 'action/more-horizontal.svg',
   'panel-right': 'action/panel-right.svg',
   play: 'action/play.svg',
-  'window-console': 'action/window-console.svg',
+  'puzzle-piece': 'action/puzzle-piece.svg',
+  save: 'action/save.svg',
+  'save-edit': 'action/save-edit.svg',
+  settings: 'action/settings.svg',
 } as const;
 
 /** A vendored Fluent icon's name. */

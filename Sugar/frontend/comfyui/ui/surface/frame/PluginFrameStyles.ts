@@ -27,7 +27,7 @@ export const pluginFrameCss = `
   :root[data-sc-plugin-mode] { --sc-generation-top-radius:6px; }
   :root[data-sc-plugin-mode] .splitter-overlay-bottom:has(> .graph-canvas-panel) { margin-bottom:0; }
   .sc-substitute-frame[data-plugin-mode] { padding-left:0; }
-  .sc-substitute-frame[data-plugin-mode][data-generation-strip] { padding-right:var(--sc-native-caption-width,0px); }
+  .sc-substitute-frame[data-plugin-mode][data-generation-strip] { padding-right:calc(var(--sc-native-caption-width,0px) + var(--sc-console-caption-width,0px)); }
   :root[data-sc-plugin-mode] [data-sc-substitute-toolbar-line] { padding-left:0; }
   [data-sc-plugin-toolbar] { flex-wrap:wrap; align-items:center; justify-content:flex-start; gap:4px; }
   [data-sc-plugin-toolbar] > .sc-overrides-dock-slot { order:20; flex:0 0 100% !important; }

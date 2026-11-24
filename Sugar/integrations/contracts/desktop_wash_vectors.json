@@ -1,5 +1,5 @@
 {
-  "description": "The desktop material washes as 8-bit sRGB channels and 8-bit alpha, per window theme. The page paints them in CSS; the native canvas paints the body wash behind its image.",
+  "description": "The desktop material washes as 8-bit sRGB channels and 8-bit alpha, per window theme. The page paints them in CSS; the native canvas paints the body wash behind its image. Cards are the translucent card fill over the body wash; their rows show the Windows list-item hover and pressed overlays over that fill.",
   "body": {
     "dark": [32, 32, 32, 150],
     "light": [251, 251, 251, 188]
@@ -11,5 +11,13 @@
   "card": {
     "dark": [255, 255, 255, 13],
     "light": [255, 255, 255, 179]
+  },
+  "rowHover": {
+    "dark": [255, 255, 255, 25],
+    "light": [0, 0, 0, 25]
+  },
+  "rowPressed": {
+    "dark": [255, 255, 255, 51],
+    "light": [0, 0, 0, 51]
   }
 }

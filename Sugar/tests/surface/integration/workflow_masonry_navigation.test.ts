@@ -165,6 +165,8 @@ test.each([false, true])(
 test('cancels obsolete native mount batches when navigation interrupts mounting', async () => {
   const setup = fixture(20);
   const frames: FrameRequestCallback[] = [];
+  // Each drained frame is a browser frame: its timestamp advances, as animations rely on.
+  let clock = 0;
   jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
     frames.push(callback);
     return frames.length;
@@ -176,7 +178,7 @@ test('cancels obsolete native mount batches when navigation interrupts mounting'
   expect(setup.unmount).toHaveBeenCalledTimes(6);
   await settle();
   while (frames.length) {
-    frames.shift()?.(0);
+    frames.shift()?.((clock += 16));
     await settle();
   }
   expect(
@@ -337,6 +339,7 @@ test('preserves the requested view through Nodes 1 fallback during app mode', as
 test('cancels a partially mounted surface when app mode interrupts entry', async () => {
   const setup = fixture(20);
   const frames: FrameRequestCallback[] = [];
+  let clock = 0;
   jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
     frames.push(callback);
     return frames.length;
@@ -347,14 +350,14 @@ test('cancels a partially mounted surface when app mode interrupts entry', async
   setup.setMode('app');
   expect(setup.unmount).toHaveBeenCalledTimes(6);
   while (frames.length) {
-    frames.shift()?.(0);
+    frames.shift()?.((clock += 16));
     await settle();
   }
   expect(setup.mount).toHaveBeenCalledTimes(6);
   expect(document.querySelector('input')).toBeNull();
   setup.setMode('graph');
   while (frames.length) {
-    frames.shift()?.(0);
+    frames.shift()?.((clock += 16));
     await settle();
   }
   expect(document.querySelectorAll('input')).toHaveLength(20);
@@ -365,8 +368,10 @@ test('cancels a partially mounted surface when app mode interrupts entry', async
 
 /** Mount real masonry with only the external native renderer replaced. */
 function fixture(rootCount = 1) {
+  // Frames arrive at once, each later than the last, as a browser's do.
+  let clock = 0;
   jest.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
-    queueMicrotask(() => callback(0));
+    queueMicrotask(() => callback((clock += 16)));
     return 1;
   });
   const root = graph('root model', rootCount);

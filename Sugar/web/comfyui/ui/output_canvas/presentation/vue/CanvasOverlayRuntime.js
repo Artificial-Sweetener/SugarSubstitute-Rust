@@ -2,9 +2,7 @@ import {
   CanvasOverlay
 } from "../../../chunk-TXUU676D.js";
 import "../../../chunk-WIEFPHCO.js";
-import {
-  canvasNavigationSnapshot
-} from "../../../chunk-R73MK26O.js";
+import "../../../chunk-R73MK26O.js";
 import {
   ensureCanvasOverlayStyles
 } from "../../../chunk-ISAOEDKW.js";
@@ -119,8 +117,7 @@ function mountCanvasOverlay(element, port, reportFailure, interactionSurface = e
     if (menu.isOpen()) {
       if (snapshot.selected?.id !== state.value.selected?.id || snapshot.secondary?.id !== state.value.secondary?.id || snapshot.preview !== state.value.preview || snapshot.view.mode !== state.value.view.mode || typeof menuTarget === "object" && !canvasMediaFile(snapshot, menuTarget))
         menu.close();
-      else if (canvasNavigationSnapshot(snapshot, state.value) !== state.value || snapshot.mediaActions !== state.value.mediaActions || snapshot.itemActions !== state.value.itemActions || snapshot.photoshopAllAvailable !== state.value.photoshopAllAvailable)
-        menu.updateEntries(canvasContextActions(snapshot, port.capabilities, send, menuTarget));
+      else menu.updateEntries(canvasContextActions(snapshot, port.capabilities, send, menuTarget));
     }
     const spoken = canvasAnnouncement(state.value, snapshot);
     if (spoken !== null) announcement.value = spoken;

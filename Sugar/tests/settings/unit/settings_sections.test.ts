@@ -24,12 +24,13 @@ import {
 test('project ordered sections into native Comfy tokens while preserving per-setting identity keys', () => {
   const appearance = sugarCubesSettingsSection('appearance', 'Fluent');
   const models = sugarCubesSettingsSection('models', 'EnhancedPicker');
-  expect(appearance.category).toEqual(['SugarCubes', 'Appearance', 'Fluent']);
+  expect(appearance.category).toEqual(['SugarCubes', 'Style', 'Fluent']);
   expect(models.category).toEqual(['SugarCubes', 'Model library', 'EnhancedPicker']);
-  expect(appearance.sortOrder).toBeGreaterThan(models.sortOrder);
-  expect(
-    new Set(Object.values(sugarCubesSettingsSections).map((section) => section.label)).size,
-  ).toBe(Object.keys(sugarCubesSettingsSections).length);
+  // Python's order: Model Sources comes before Appearance.
+  expect(models.sortOrder).toBeGreaterThan(appearance.sortOrder);
+  expect(new Set(Object.values(sugarCubesSettingsSections)).size).toBe(
+    Object.keys(sugarCubesSettingsSections).length,
+  );
 });
 
 test('ship the repository license in the offline About resource', () => {

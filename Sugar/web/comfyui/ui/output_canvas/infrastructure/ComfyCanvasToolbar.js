@@ -14,12 +14,14 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own the accessible Output Canvas affordance across identified native action-bar mounts. */
+import { sharedIconUrl } from '../../core/SharedElements.js';
 import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
 import { readPluginMode, subscribePluginMode } from '../../core/PluginMode.js';
 /** Reuse one toolbar button without moving Comfy controls or acquiring image resources. */
 export class ComfyCanvasToolbar {
     document;
     toggle;
+    #icon;
     #button;
     #observer = null;
     #disposed = false;
@@ -33,10 +35,10 @@ export class ComfyCanvasToolbar {
         this.#button.className = 'sc-output-canvas-toggle';
         this.#button.type = 'button';
         this.#button.setAttribute('aria-label', 'Toggle output canvas');
-        const icon = document.createElement('span');
-        icon.setAttribute('aria-hidden', 'true');
-        icon.style.setProperty('--sc-output-icon', `url("${new URL('../../../../icons/node/image.svg', import.meta.url).href}")`);
-        this.#button.append(icon);
+        this.#icon = document.createElement('span');
+        this.#icon.setAttribute('aria-hidden', 'true');
+        this.#button.append(this.#icon);
+        this.#showDestination(false);
         this.#button.addEventListener('click', toggle);
     }
     /** Observe only action-bar mounting and local host content replacement. */
@@ -52,6 +54,7 @@ export class ComfyCanvasToolbar {
     update(visible, available) {
         this.#button.setAttribute('aria-pressed', String(visible));
         this.#button.title = visible ? 'Close output canvas' : 'Open output canvas';
+        this.#showDestination(visible);
         this.#available = available;
         this.#mode();
     }
@@ -62,6 +65,10 @@ export class ComfyCanvasToolbar {
         this.#stopMode?.();
         this.#button.removeEventListener('click', this.toggle);
         this.#button.remove();
+    }
+    /** Show where the button goes: the solid side bar opens the canvas, the hollow one closes it. */
+    #showDestination(visible) {
+        this.#icon.style.setProperty('--sc-output-icon', `url("${sharedIconUrl(visible ? 'canvas-close' : 'canvas-open')}")`);
     }
     /** Remove the affordance while the workspace owner enforces Plugin Mode's closed canvas. */
     #mode() {

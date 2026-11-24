@@ -32,6 +32,12 @@ export interface FloatingSurfaceOptions {
   /** Reserve one measured surface width to the right before interaction starts. */
   readonly reserveRight?: boolean;
   readonly anchor: FloatingAnchor;
+  /**
+   * The element the surface stands by. Scrolling that moves it dismisses the surface; other
+   * scrolling, a console following its output for one, leaves it open. A pointer anchor without
+   * one stands by whatever was under the pointer when it opened.
+   */
+  readonly anchorElement?: Element | null;
   readonly dismiss: () => void;
   readonly containsTarget?: (target: Node) => boolean;
   readonly maxHeight?: number;
@@ -72,6 +78,24 @@ export function createFloatingPlane(element: HTMLElement): FloatingPlane {
   };
 }
 
+/** Whether two anchors place a surface at the same spot. */
+export function sameFloatingAnchor(first: FloatingAnchor, second: FloatingAnchor): boolean {
+  if (first.kind === 'pointer' || second.kind === 'pointer')
+    return (
+      first.kind === 'pointer' &&
+      second.kind === 'pointer' &&
+      first.x === second.x &&
+      first.y === second.y
+    );
+  return (
+    first.kind === second.kind &&
+    first.bounds.left === second.bounds.left &&
+    first.bounds.top === second.bounds.top &&
+    first.bounds.right === second.bounds.right &&
+    first.bounds.bottom === second.bounds.bottom
+  );
+}
+
 /** Keep all popup kinds within the viewport while preferring their natural opening direction. */
 export function floatingPosition(
   anchor: FloatingAnchor,
@@ -103,6 +127,7 @@ export class FloatingSurface {
   readonly #document: Document;
   readonly element: HTMLElement;
   #options: FloatingSurfaceOptions | null = null;
+  #anchorElement: Element | null = null;
   #observer: ResizeObserver | null = null;
 
   /** Bind a feature-owned content element to the shared floating boundary. */
@@ -128,6 +153,11 @@ export class FloatingSurface {
   open(options: FloatingSurfaceOptions): void {
     this.close();
     this.#options = options;
+    this.#anchorElement =
+      options.anchorElement ??
+      (options.anchor.kind === 'pointer' && typeof this.#document.elementFromPoint === 'function'
+        ? this.#document.elementFromPoint(options.anchor.x, options.anchor.y)
+        : null);
     this.#document.body.append(this.element);
     applyOwnedTheme(this.element, readOwnedDarkTheme(this.#document));
     if (typeof this.element.showPopover === 'function') this.element.showPopover();
@@ -196,15 +226,20 @@ export class FloatingSurface {
     this.element.removeEventListener('wheel', this.#stop);
     this.element.removeEventListener('contextmenu', this.#context);
     this.#options = null;
+    this.#anchorElement = null;
   }
 
   /** Dismiss only interactions outside the complete owning popup tree. */
   readonly #outside = (event: Event): void => {
     if (event.target instanceof Node && !this.#contains(event.target)) this.#dismiss();
   };
-  /** Keep internal scrolling independent from graph and page scrolling. */
+  /** Dismiss on scrolling that moves the anchor; scrolling elsewhere does not move the surface's place. */
   readonly #scroll = (event: Event): void => {
-    if (!(event.target instanceof Node) || !this.#contains(event.target)) this.#dismiss();
+    const target = event.target;
+    if (target instanceof Node && this.#contains(target)) return;
+    const anchor = this.#anchorElement;
+    if (anchor?.isConnected && target instanceof Element && !target.contains(anchor)) return;
+    this.#dismiss();
   };
   /** Let the feature decide how dismissal changes its state. */
   readonly #dismiss = (): void => this.#options?.dismiss();

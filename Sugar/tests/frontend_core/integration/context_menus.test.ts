@@ -182,6 +182,228 @@ test('reconciles checked choices without replacing the floating surface', () => 
   menu.close();
 });
 
+test('a refresh that presents the same rows keeps them, so hover and a slow click survive it', () => {
+  const first = jest.fn();
+  const second = jest.fn();
+  const menu = new ContextMenu(document);
+  const entries = (
+    select: () => void,
+    label: string,
+  ): Parameters<ContextMenu['updateEntries']>[0] => [
+    { label: 'Compare outputs' },
+    { label: '', separator: true },
+    { label, select },
+  ];
+  menu.open({
+    label: 'Output',
+    anchor: { kind: 'pointer', x: 20, y: 20 },
+    entries: entries(first, 'Copy'),
+  });
+  const row = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')][1];
+  if (!row) throw new Error('Missing row');
+  row.focus();
+  // The canvas refreshes its open menu as often as every frame.
+  for (let frame = 0; frame < 60; frame++) menu.updateEntries(entries(second, 'Copy'));
+  expect([...document.querySelectorAll('[role="menuitem"]')][1]).toBe(row);
+  expect(document.activeElement).toBe(row);
+  menu.updateEntries(entries(second, 'Copy .jpg'));
+  expect(row.textContent).toBe('Copy .jpg');
+  row.click();
+  expect(second).toHaveBeenCalledTimes(1);
+  expect(first).not.toHaveBeenCalled();
+});
+
+test('a refresh that changes the rows rebuilds them', () => {
+  const menu = new ContextMenu(document);
+  menu.open({
+    label: 'Output',
+    anchor: { kind: 'pointer', x: 20, y: 20 },
+    entries: [{ label: 'A' }],
+  });
+  const before = document.querySelector('[role="menuitem"]');
+  menu.updateEntries([{ label: 'A' }, { label: 'B' }]);
+  expect(document.querySelectorAll('[role="menuitem"]')).toHaveLength(2);
+  expect(document.querySelector('[role="menuitem"]')).not.toBe(before);
+  menu.close();
+});
+
+test('opening an open menu again at the same spot refreshes it; a new spot opens a new menu', () => {
+  const closed = jest.fn();
+  const first = jest.fn();
+  const second = jest.fn();
+  const menu = new ContextMenu(document);
+  const open = (x: number, select: () => void, label: string): void =>
+    menu.open({
+      label: 'Model actions',
+      anchor: { kind: 'pointer', x, y: 20 },
+      entries: [{ label: 'Open' }, { label, select }],
+      closed,
+    });
+  open(20, first, 'Download');
+  const surface = document.querySelector('[role=menu]');
+  const row = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')][1];
+  if (!surface || !row) throw new Error('Missing menu');
+  row.focus();
+  // A Vue owner re-renders the menu on every download progress update.
+  for (let render = 0; render < 30; render++) open(20, second, 'Download');
+  open(20, second, 'Cancel download');
+  expect(document.querySelector('[role=menu]')).toBe(surface);
+  expect([...document.querySelectorAll('[role="menuitem"]')][1]).toBe(row);
+  expect(document.activeElement).toBe(row);
+  expect(row.textContent).toBe('Cancel download');
+  expect(closed).not.toHaveBeenCalled();
+  row.click();
+  expect(second).toHaveBeenCalledTimes(1);
+  expect(first).not.toHaveBeenCalled();
+  open(20, first, 'Download');
+  open(60, first, 'Download');
+  expect(closed).toHaveBeenCalledTimes(2);
+  expect(document.querySelector('[role=menu]')).not.toBe(surface);
+  menu.close();
+});
+
+test('opening again at the same spot takes the new menu attributes', () => {
+  const menu = new ContextMenu(document);
+  const open = (attributes: Record<string, string>): void =>
+    menu.open({
+      label: 'Cube actions',
+      anchor: { kind: 'pointer', x: 20, y: 20 },
+      entries: [{ label: 'Rename' }],
+      attributes,
+    });
+  open({ 'data-appearance': 'comfy', 'data-old': '' });
+  open({ 'data-appearance': 'fluent' });
+  const surface = document.querySelector('[role=menu]');
+  expect(surface?.getAttribute('data-appearance')).toBe('fluent');
+  expect(surface?.hasAttribute('data-old')).toBe(false);
+  menu.close();
+});
+
+test('a refresh with nothing changed writes nothing to the menu', () => {
+  const menu = new ContextMenu(document);
+  const entries = (): Parameters<ContextMenu['updateEntries']>[0] => [
+    { label: 'Visible', checked: true, selection: 'multiple' },
+    { label: 'Hidden', checked: false, selection: 'multiple', disabled: true },
+  ];
+  menu.open({ label: 'Choices', anchor: { kind: 'pointer', x: 20, y: 20 }, entries: entries() });
+  const surface = document.querySelector('[role=menu]');
+  if (!surface) throw new Error('Missing menu');
+  const observer = new MutationObserver(() => undefined);
+  observer.observe(surface, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    characterData: true,
+  });
+  for (let frame = 0; frame < 10; frame++) menu.updateEntries(entries());
+  expect(
+    observer
+      .takeRecords()
+      .map(
+        (record) =>
+          `${record.type} ${record.attributeName ?? ''} ${record.target.nodeName} ${String(record.oldValue)}`,
+      ),
+  ).toEqual([]);
+  observer.disconnect();
+  menu.close();
+});
+
+test('a refresh unchecks a row that was checked', () => {
+  const menu = new ContextMenu(document);
+  const entries = (checked: boolean): Parameters<ContextMenu['updateEntries']>[0] => [
+    { label: 'Visible', checked, selection: 'multiple', keepOpen: true },
+  ];
+  menu.open({
+    label: 'Choices',
+    anchor: { kind: 'pointer', x: 20, y: 20 },
+    entries: entries(true),
+  });
+  const row = document.querySelector<HTMLElement>('[role="menuitemcheckbox"]');
+  if (!row) throw new Error('Missing row');
+  expect(row.hasAttribute('checked')).toBe(true);
+  menu.updateEntries(entries(false));
+  expect(row.getAttribute('aria-checked')).toBe('false');
+  expect(row.hasAttribute('checked')).toBe(false);
+  menu.close();
+});
+
+test('an open submenu takes its trigger’s new children and keeps its focus', () => {
+  const chosen = jest.fn();
+  const menu = new ContextMenu(document);
+  const entries = (
+    label: string,
+    children: Parameters<ContextMenu['updateEntries']>[0],
+  ): Parameters<ContextMenu['updateEntries']>[0] => [
+    { label: 'Open' },
+    {
+      label: 'Scale',
+      children: children.map((child) => ({ ...child, label: `${child.label}${label}` })),
+    },
+  ];
+  menu.open({
+    label: 'Output',
+    anchor: { kind: 'pointer', x: 20, y: 20 },
+    entries: entries('', [{ label: '50%' }, { label: '200%' }]),
+  });
+  const trigger = document.querySelector<HTMLElement>('[aria-haspopup="menu"]');
+  if (!trigger) throw new Error('Missing submenu trigger');
+  trigger.dispatchEvent(new Event('pointerenter'));
+  const child = [
+    ...document.querySelectorAll<HTMLElement>('[role=menu]'),
+  ][1]?.querySelectorAll<HTMLElement>('[role="menuitem"]')[1];
+  if (!child) throw new Error('Missing submenu row');
+  child.focus();
+  menu.updateEntries(entries(' (2048 px)', [{ label: '50%' }, { label: '200%', select: chosen }]));
+  expect(document.querySelectorAll('[role=menu]')).toHaveLength(2);
+  expect(document.activeElement).toBe(child);
+  expect(child.textContent).toBe('200% (2048 px)');
+  child.click();
+  expect(chosen).toHaveBeenCalledTimes(1);
+  menu.open({
+    label: 'Output',
+    anchor: { kind: 'pointer', x: 20, y: 20 },
+    entries: entries('', [{ label: '50%' }, { label: '200%' }]),
+  });
+  const reopened = document.querySelector<HTMLElement>('[aria-haspopup="menu"]');
+  if (!reopened) throw new Error('Missing submenu trigger');
+  reopened.dispatchEvent(new Event('pointerenter'));
+  [...document.querySelectorAll<HTMLElement>('[role=menu]')][1]
+    ?.querySelector<HTMLElement>('[role="menuitem"]')
+    ?.focus();
+  // Children that no longer build the submenu's rows close it and return focus to its trigger.
+  menu.updateEntries(entries('', [{ label: '50%' }]));
+  expect(document.querySelectorAll('[role=menu]')).toHaveLength(1);
+  expect(document.activeElement).toBe(reopened);
+  menu.close();
+});
+
+test('scrolling elsewhere leaves a menu open; scrolling what it stands by closes it', () => {
+  const list = document.createElement('div');
+  const trigger = document.createElement('button');
+  const console = document.createElement('pre');
+  list.append(trigger);
+  document.body.append(list, console);
+  const menu = new ContextMenu(document);
+  const open = (): void =>
+    menu.open({
+      label: 'Tab',
+      anchor: { kind: 'pointer', x: 20, y: 20 },
+      trigger,
+      entries: [{ label: 'Rename' }],
+    });
+  open();
+  // The console follows its output while a run logs.
+  console.dispatchEvent(new Event('scroll'));
+  expect(menu.isOpen()).toBe(true);
+  list.dispatchEvent(new Event('scroll'));
+  expect(menu.isOpen()).toBe(false);
+  open();
+  document.dispatchEvent(new Event('scroll'));
+  expect(menu.isOpen()).toBe(false);
+  list.remove();
+  console.remove();
+});
+
 test('returns focus to an explicit selection owner after asynchronous row updates', () => {
   const active = document.createElement('button');
   const contextTarget = document.createElement('button');

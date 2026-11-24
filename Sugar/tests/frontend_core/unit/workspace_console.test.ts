@@ -105,6 +105,7 @@ test('inside the SugarSubstitute frame the console docks under the card column a
     document,
     app: { api, extensionManager: { command: { execute } } },
     getHost: () => host,
+    reserve: () => undefined,
     report: (error) => {
       throw error;
     },
@@ -135,6 +136,7 @@ test('outside the frame the console command opens ComfyUI’s own Logs panel', (
     document,
     app: { api: logApi(), extensionManager: { command: { execute } } },
     getHost: () => host,
+    reserve: () => undefined,
     report: (error) => {
       throw error;
     },
@@ -167,6 +169,7 @@ test('inside the frame ComfyUI’s console key opens the frame’s console and s
     document,
     app: { api: logApi(), extensionManager: { command: { execute: jest.fn() } } },
     getHost: () => host,
+    reserve: () => undefined,
     report: (error) => {
       throw error;
     },
@@ -187,6 +190,7 @@ test('outside the frame ComfyUI’s console key reaches ComfyUI untouched', () =
     document,
     app: { api: logApi(), extensionManager: { command: { execute: jest.fn() } } },
     getHost: () => host,
+    reserve: () => undefined,
     report: (error) => {
       throw error;
     },

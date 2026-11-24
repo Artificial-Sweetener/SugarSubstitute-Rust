@@ -97,6 +97,7 @@ export class ComfyWorkflowWorkspace {
       document: options.document,
       app: options.app,
       getHost: () => this.canvas.content,
+      reserve: (height) => this.canvas.reserveBottom(height),
       report: options.report,
     });
     const window = options.document.defaultView;

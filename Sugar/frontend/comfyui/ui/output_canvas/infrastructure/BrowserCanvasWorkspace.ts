@@ -53,6 +53,7 @@ export class BrowserCanvasWorkspace {
   readonly #motion: BrowserCanvasWorkspaceMotion;
   #allocation: CanvasWorkspaceAllocation | null = null;
   #suspension: 'app' | 'configure' | null = null;
+  #bottom = 0;
   #disposed = false;
 
   /** Allocate only owned nodes, keeping Comfy's chrome and every native render layer in its original parent. */
@@ -151,6 +152,13 @@ export class BrowserCanvasWorkspace {
   }
 
   /** Keep content identity while the host temporarily hides graph mode or configures its workflow. */
+  /** Reserve height below the graph for the console; the graph ends at the console's top edge. */
+  reserveBottom(height: number): void {
+    if (this.#disposed || this.#bottom === height) return;
+    this.#bottom = height;
+    this.#render();
+  }
+
   suspend(reason: 'app' | 'configure' | null): void {
     if (this.#disposed || (this.#suspension === reason && !this.#pane.dataset.canvasMotion)) return;
     this.#suspension = reason;
@@ -234,7 +242,7 @@ export class BrowserCanvasWorkspace {
         ? allocation.canvas.width
         : 0;
     if (this.#suspension === 'app') this.#frame.suspend();
-    else this.#frame.apply(inset);
+    else this.#frame.apply(inset, this.#bottom);
     return inset;
   }
 }

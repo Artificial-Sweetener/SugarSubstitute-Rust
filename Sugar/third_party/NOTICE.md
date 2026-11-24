@@ -248,3 +248,13 @@ Each entry identifies its exact source archive, including unmodified MPL-2.0 sou
 The embedded Microsoft WebView2 loader matches SDK 1.0.3800.47 byte for byte; its
 BSD-3-Clause license and SDK notices are included in that aggregate. WebView2 Runtime
 is supplied by the user's system.
+
+## SugarSubstitute shared UI artwork
+
+The icons shared by SugarSubstitute's native host and its web pages live once in
+`integrations/contracts/ui/icons` and are served from `web/icons/shared`. The console toggle
+icons adapt Microsoft Fluent UI System Icons' Window Console 20 Filled and Regular (MIT): the
+frame is flipped so its bar sits at the bottom and the prompt is moved up. The window close
+cross is PyQt-Frameless-Window's `close.svg` (LGPL-3.0-only), copied verbatim; its license is in
+`licenses/frameless-window.LICENSE.txt`. The output canvas toggle icons are SugarSubstitute's own
+artwork. Pinned sources, hashes and runtime paths are recorded in the manifest.

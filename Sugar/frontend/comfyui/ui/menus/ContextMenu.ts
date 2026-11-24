@@ -14,15 +14,12 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own every SugarCubes menu's themed rows, nested interaction and floating presentation. */
+import { ensureContextMenuStyles } from './ContextMenuStyles.js';
 import { createContextMenuField, type ContextMenuInput } from './ContextMenuField.js';
-import { FloatingSurface } from './FloatingSurface.js';
+import { FloatingSurface, sameFloatingAnchor } from './FloatingSurface.js';
 import type { FloatingAnchor } from './FloatingSurface.js';
-import {
-  createMenuList,
-  createMenuItem,
-  setMenuItemChecked,
-  menuItemSlot,
-} from './MenuControlRuntime.js';
+import { createMenuList, createMenuItem, menuItemSlot } from './MenuControlRuntime.js';
+import { setMenuItemChecked } from './MenuItemChecked.js';
 import { subscribeVisualStyle } from '../surface/appearance/VisualStyleBoundary.js';
 import { identifyMenuSurface } from './MenuSurface.js';
 
@@ -62,13 +59,55 @@ interface MenuLevel {
   readonly trigger: HTMLElement | null;
   readonly refresh: () => void;
   readonly updates: (() => void)[];
+  /** What each entry presents; a refresh presenting the same rows keeps them. */
+  readonly presented: string[];
+  /** Each row's current entry, rebound in place when a refresh presents the same rows. */
+  readonly bindings: (EntryBinding | null)[];
   release?: () => void;
 }
 
-/** Own a complete transient menu tree; features supply values, icons and actions only. */
+/** The entry one row acts for, replaceable without rebuilding the row. */
+interface EntryBinding {
+  entry: ContextMenuEntry;
+}
+
+/**
+ * How one entry's row is built. Two entry lists built alike keep their rows: each row's label,
+ * disabled state and check are updated in place and only the actions behind them change. An
+ * entry with an inline field always rebuilds.
+ */
+function presentation(entry: ContextMenuEntry): string {
+  return JSON.stringify([
+    entry.separator ?? false,
+    entry.section ? entry.label : false,
+    entry.input ? true : false,
+    entry.checked === undefined ? 'item' : (entry.selection ?? 'single'),
+    entry.children ? true : false,
+    entry.icon ? true : false,
+    entry.attributes ?? null,
+  ]);
+}
+
+/** The first row a keyboard or pointer user can act on. */
+function firstEnabledRow(level: MenuLevel): HTMLElement | undefined {
+  return level.rows.find(
+    (row) =>
+      row.getAttribute('aria-disabled') !== 'true' &&
+      !(row instanceof HTMLInputElement && row.disabled),
+  );
+}
+
+/**
+ * Own a complete transient menu tree; features supply values, icons and actions only.
+ *
+ * Whether an open menu needs new rows is decided here and nowhere else: features hand the menu
+ * their current entries as often as their state changes, by `open` at the same spot or by
+ * `updateEntries`, and rows that would come out the same are kept.
+ */
 export class ContextMenu {
   static readonly #active = new WeakMap<Document, ContextMenu>();
   readonly #document: Document;
+  readonly #rowBindings = new WeakMap<HTMLElement, EntryBinding>();
   #options: ContextMenuOptions | null = null;
   #levels: MenuLevel[] = [];
   #previous: HTMLElement | null = null;
@@ -85,6 +124,10 @@ export class ContextMenu {
    * A menu anchored below its trigger is that trigger's toggle: asked to open again from the
    * same trigger while it is open, it closes instead. The rule lives here so that no caller can
    * forget it and leave a button that only ever opens.
+   *
+   * Opened again at the same spot while it is open, the menu takes the new entries as a refresh
+   * rather than a fresh menu, so a feature that re-renders it keeps its hover, focus and any press
+   * in flight.
    */
   open(options: ContextMenuOptions): void {
     const current = this.#options;
@@ -97,6 +140,22 @@ export class ContextMenu {
       current.trigger === options.trigger
     ) {
       this.close();
+      return;
+    }
+    if (
+      current &&
+      this.isOpen() &&
+      ContextMenu.#active.get(this.#document) === this &&
+      current.label === options.label &&
+      sameFloatingAnchor(current.anchor, options.anchor)
+    ) {
+      const root = this.#levels[0]?.surface.element;
+      for (const name of Object.keys(current.attributes ?? {}))
+        if (!(name in (options.attributes ?? {}))) root?.removeAttribute(name);
+      for (const [name, value] of Object.entries(options.attributes ?? {}))
+        if (root?.getAttribute(name) !== value) root?.setAttribute(name, value);
+      this.#options = options;
+      this.updateEntries(options.entries);
       return;
     }
     ContextMenu.#active.get(this.#document)?.close();
@@ -121,14 +180,9 @@ export class ContextMenu {
             row.getAttribute('aria-disabled') !== 'true',
         )
         ?.focus();
-    if (!this.#levels[0]?.rows.some((row) => row === this.#document.activeElement))
-      (
-        this.#levels[0]?.rows.find(
-          (row) =>
-            row.getAttribute('aria-disabled') !== 'true' &&
-            !(row instanceof HTMLInputElement && row.disabled),
-        ) ?? this.#levels[0]?.surface.element
-      )?.focus();
+    const root = this.#levels[0];
+    if (root && !root.rows.some((row) => row === this.#document.activeElement))
+      (firstEnabledRow(root) ?? root.surface.element).focus();
   }
 
   /** Report the complete tree's lifetime rather than one submenu's state. */
@@ -166,6 +220,7 @@ export class ContextMenu {
     this.#trim(depth);
     const menu = createMenuList(this.#document);
     menu.className = 'sc-context-menu';
+    ensureContextMenuStyles(this.#document);
     identifyMenuSurface(menu, 'actions');
     menu.setAttribute('role', 'menu');
     menu.setAttribute('tabindex', '-1');
@@ -182,12 +237,22 @@ export class ContextMenu {
     const refresh = (): void => {
       for (const update of updates) update();
     };
-    const rows = this.#renderRows(menu, entries, depth, updates, refresh);
+    const bindings: (EntryBinding | null)[] = [];
+    const rows = this.#renderRows(menu, entries, depth, updates, refresh, bindings);
     const surface = new FloatingSurface(menu);
-    const level: MenuLevel = { surface, rows, trigger, refresh, updates };
+    const level: MenuLevel = {
+      surface,
+      rows,
+      trigger,
+      refresh,
+      updates,
+      presented: entries.map(presentation),
+      bindings,
+    };
     this.#levels.push(level);
     surface.open({
       anchor,
+      anchorElement: depth === 0 ? (this.#options?.trigger ?? null) : trigger,
       reserveRight: depth === 0 && this.#options?.preferRightSubmenus === true,
       dismiss: this.close,
       containsTarget: (target) =>
@@ -201,22 +266,80 @@ export class ContextMenu {
       }, this.close);
   }
 
-  /** Update checked choices without replacing the floating surface or losing its scroll position. */
+  /**
+   * Update checked choices without replacing the floating surface or losing its scroll position.
+   *
+   * Entries that present the same rows as the open menu keep those rows, so the row under the
+   * pointer keeps its hover and a press and its release land on the same row: features may refresh
+   * an open menu as often as their state changes. An open submenu takes its trigger's new
+   * children the same way, and closes when they no longer build its rows. Changed root rows
+   * rebuild the menu.
+   */
   updateEntries(entries: readonly ContextMenuEntry[]): void {
     const level = this.#levels[0];
     if (!level) return;
+    if (this.#keepRows(level, entries)) {
+      for (let depth = 1; depth < this.#levels.length; depth += 1) {
+        const submenu = this.#levels[depth];
+        const children = submenu?.trigger
+          ? this.#rowBindings.get(submenu.trigger)?.entry.children
+          : undefined;
+        if (!submenu || !children || !this.#keepRows(submenu, children)) {
+          const focused = this.#document.activeElement;
+          const focusInside = this.#levels
+            .slice(depth)
+            .some(
+              (current) => focused instanceof Node && current.surface.element.contains(focused),
+            );
+          this.#trim(depth);
+          if (focusInside) submenu?.trigger?.focus();
+          break;
+        }
+      }
+      // A row that has focus keeps it; a menu still focused as a whole hands it to its first row.
+      const focused = this.#document.activeElement;
+      const whole = this.#levels.find((current) => current.surface.element === focused);
+      if (whole) firstEnabledRow(whole)?.focus();
+      return;
+    }
     const active = this.#document.activeElement;
     const index = active instanceof HTMLElement ? level.rows.indexOf(active) : -1;
     this.#trim(1);
     level.surface.element.replaceChildren();
     level.updates.length = 0;
+    level.bindings.length = 0;
+    level.presented.splice(0, level.presented.length, ...entries.map(presentation));
     level.rows.splice(
       0,
       level.rows.length,
-      ...this.#renderRows(level.surface.element, entries, 0, level.updates, level.refresh),
+      ...this.#renderRows(
+        level.surface.element,
+        entries,
+        0,
+        level.updates,
+        level.refresh,
+        level.bindings,
+      ),
     );
     (level.rows[Math.max(0, index)] ?? level.surface.element).focus();
     level.surface.reposition();
+  }
+
+  /** Rebind one level's rows to entries that build them unchanged; report whether they did. */
+  #keepRows(level: MenuLevel, entries: readonly ContextMenuEntry[]): boolean {
+    const presented = entries.map(presentation);
+    if (
+      presented.length !== level.presented.length ||
+      presented.some((value, index) => value !== level.presented[index]) ||
+      entries.some((entry) => entry.input)
+    )
+      return false;
+    entries.forEach((entry, index) => {
+      const binding = level.bindings[index];
+      if (binding) binding.entry = entry;
+    });
+    level.refresh();
+    return true;
   }
 
   /** Build rows for one level from the current feature-owned choices. */
@@ -226,9 +349,12 @@ export class ContextMenu {
     depth: number,
     updates: (() => void)[],
     refresh: () => void,
+    bindings: (EntryBinding | null)[],
   ): HTMLElement[] {
     const rows: HTMLElement[] = [];
-    for (const entry of entries) {
+    for (const initial of entries) {
+      let entry = initial;
+      if (entry.input || entry.section || entry.separator) bindings.push(null);
       if (entry.input) {
         const field = createContextMenuField(
           this.#document,
@@ -265,7 +391,10 @@ export class ContextMenu {
         menu.append(separator);
         continue;
       }
+      const binding: EntryBinding = { entry };
+      bindings.push(binding);
       const row = createMenuItem(this.#document);
+      this.#rowBindings.set(row, binding);
       row.setAttribute(
         'role',
         entry.checked === undefined
@@ -295,7 +424,7 @@ export class ContextMenu {
       label.textContent = entry.label;
       label.style.cssText = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
       row.append(label);
-      const children = (): readonly ContextMenuEntry[] => entry.children ?? [];
+      const children = (): readonly ContextMenuEntry[] => binding.entry.children ?? [];
       if (entry.children) {
         row.setAttribute('aria-haspopup', 'menu');
         row.setAttribute('aria-expanded', 'false');
@@ -308,6 +437,7 @@ export class ContextMenu {
       }
       /** Activate feature policy once while suppressing the component's independent submenu lifecycle. */
       const activate = (): void => {
+        entry = binding.entry;
         if (entry.disabled) return;
         if (entry.children) {
           if (this.#levels[depth + 1]?.trigger !== row)
@@ -319,13 +449,8 @@ export class ContextMenu {
               entry.opened,
             );
           row.setAttribute('aria-expanded', 'true');
-          (
-            this.#levels[depth + 1]?.rows.find(
-              (item) =>
-                item.getAttribute('aria-disabled') !== 'true' &&
-                !(item instanceof HTMLInputElement && item.disabled),
-            ) ?? this.#levels[depth + 1]?.surface.element
-          )?.focus();
+          const submenu = this.#levels[depth + 1];
+          if (submenu) (firstEnabledRow(submenu) ?? submenu.surface.element).focus();
         } else {
           if (entry.keepOpen === 'parent' && depth > 0) {
             const parent = this.#levels[depth]?.trigger;
@@ -346,6 +471,7 @@ export class ContextMenu {
         true,
       );
       row.addEventListener('pointerenter', () => {
+        entry = binding.entry;
         if (entry.disabled) return;
         if (entry.children && this.#levels[depth + 1]?.trigger !== row) {
           this.#openLevel(
@@ -358,11 +484,14 @@ export class ContextMenu {
           row.setAttribute('aria-expanded', 'true');
         } else if (!entry.children) this.#trim(depth + 1);
       });
+      // Refreshes may arrive every frame: write only what changed, so observers see no churn.
       const update = (): void => {
-        label.textContent = entry.label;
-        row.setAttribute('aria-disabled', String(entry.disabled ?? false));
-        if (entry.disabled) row.setAttribute('disabled', '');
-        else row.removeAttribute('disabled');
+        entry = binding.entry;
+        if (label.textContent !== entry.label) label.textContent = entry.label;
+        const disabled = entry.disabled ?? false;
+        if (row.getAttribute('aria-disabled') !== String(disabled))
+          row.setAttribute('aria-disabled', String(disabled));
+        row.toggleAttribute('disabled', disabled);
         if (entry.checked !== undefined) setMenuItemChecked(row, entry.checked);
       };
       updates.push(update);

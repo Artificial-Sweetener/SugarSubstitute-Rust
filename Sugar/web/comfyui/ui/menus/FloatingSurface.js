@@ -44,6 +44,19 @@ export function createFloatingPlane(element) {
         },
     };
 }
+/** Whether two anchors place a surface at the same spot. */
+export function sameFloatingAnchor(first, second) {
+    if (first.kind === 'pointer' || second.kind === 'pointer')
+        return (first.kind === 'pointer' &&
+            second.kind === 'pointer' &&
+            first.x === second.x &&
+            first.y === second.y);
+    return (first.kind === second.kind &&
+        first.bounds.left === second.bounds.left &&
+        first.bounds.top === second.bounds.top &&
+        first.bounds.right === second.bounds.right &&
+        first.bounds.bottom === second.bounds.bottom);
+}
 /** Keep all popup kinds within the viewport while preferring their natural opening direction. */
 export function floatingPosition(anchor, width, height, viewportWidth, viewportHeight, reserveRight = 0) {
     const gap = 4;
@@ -69,6 +82,7 @@ export class FloatingSurface {
     #document;
     element;
     #options = null;
+    #anchorElement = null;
     #observer = null;
     /** Bind a feature-owned content element to the shared floating boundary. */
     constructor(element) {
@@ -92,6 +106,11 @@ export class FloatingSurface {
     open(options) {
         this.close();
         this.#options = options;
+        this.#anchorElement =
+            options.anchorElement ??
+                (options.anchor.kind === 'pointer' && typeof this.#document.elementFromPoint === 'function'
+                    ? this.#document.elementFromPoint(options.anchor.x, options.anchor.y)
+                    : null);
         this.#document.body.append(this.element);
         applyOwnedTheme(this.element, readOwnedDarkTheme(this.#document));
         if (typeof this.element.showPopover === 'function')
@@ -149,16 +168,22 @@ export class FloatingSurface {
         this.element.removeEventListener('wheel', this.#stop);
         this.element.removeEventListener('contextmenu', this.#context);
         this.#options = null;
+        this.#anchorElement = null;
     }
     /** Dismiss only interactions outside the complete owning popup tree. */
     #outside = (event) => {
         if (event.target instanceof Node && !this.#contains(event.target))
             this.#dismiss();
     };
-    /** Keep internal scrolling independent from graph and page scrolling. */
+    /** Dismiss on scrolling that moves the anchor; scrolling elsewhere does not move the surface's place. */
     #scroll = (event) => {
-        if (!(event.target instanceof Node) || !this.#contains(event.target))
-            this.#dismiss();
+        const target = event.target;
+        if (target instanceof Node && this.#contains(target))
+            return;
+        const anchor = this.#anchorElement;
+        if (anchor?.isConnected && target instanceof Element && !target.contains(anchor))
+            return;
+        this.#dismiss();
     };
     /** Let the feature decide how dismissal changes its state. */
     #dismiss = () => this.#options?.dismiss();

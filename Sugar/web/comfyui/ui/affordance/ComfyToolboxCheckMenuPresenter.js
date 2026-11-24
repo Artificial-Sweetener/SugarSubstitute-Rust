@@ -21,7 +21,6 @@ export class ComfyToolboxCheckMenuPresenter {
     #featureItemAttribute;
     #menu;
     #anchor = null;
-    #signature = '';
     /** Bind public feature markers without duplicating menu rendering or placement. */
     constructor(options) {
         this.#featureMenuAttribute = options.featureMenuAttribute;
@@ -47,9 +46,6 @@ export class ComfyToolboxCheckMenuPresenter {
             this.close();
             throw new Error('Single-selection toolbox menus require exactly one checked item.');
         }
-        const signature = JSON.stringify(items);
-        if (signature === this.#signature && this.isOpen())
-            return;
         if (!items.length) {
             this.close();
             return;
@@ -71,7 +67,6 @@ export class ComfyToolboxCheckMenuPresenter {
         }));
         if (this.#menu.isOpen()) {
             this.#menu.updateEntries(entries);
-            this.#signature = signature;
             return;
         }
         this.#menu.open({
@@ -81,11 +76,9 @@ export class ComfyToolboxCheckMenuPresenter {
             attributes: { 'data-sugarcubes-toolbox-check-menu': '', [this.#featureMenuAttribute]: '' },
             entries,
             closed: () => {
-                this.#signature = '';
                 anchor.setAttribute('aria-expanded', 'false');
             },
         });
-        this.#signature = signature;
         anchor.setAttribute('aria-expanded', 'true');
     }
     /** Report whether the shared menu currently owns a visible tree. */
@@ -96,7 +89,6 @@ export class ComfyToolboxCheckMenuPresenter {
     close = () => {
         this.#menu.close();
         this.#anchor = null;
-        this.#signature = '';
     };
     /** Release the feature's transient menu. */
     dispose() {

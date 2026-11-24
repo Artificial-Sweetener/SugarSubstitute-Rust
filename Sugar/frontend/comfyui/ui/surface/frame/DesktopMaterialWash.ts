@@ -31,6 +31,10 @@ export interface DesktopMaterialWash {
   readonly chrome: string;
   /** White WinUI card fill, painted once over its parent's material. */
   readonly card: string;
+  /** Windows list-item hover overlay for a card's rows, drawn over the card fill. */
+  readonly rowHover: string;
+  /** Windows list-item pressed overlay for a card's rows, drawn over the card fill. */
+  readonly rowPressed: string;
 }
 
 const DARK_BODY: WashColor = { red: 32, green: 32, blue: 32, alpha: 150 };
@@ -44,6 +48,10 @@ export const DESKTOP_BODY_WASH_PROPERTY = '--sc-desktop-body-wash';
 export const DESKTOP_CHROME_WASH_PROPERTY = '--sc-desktop-chrome-wash';
 /** Root custom property carrying the canonical translucent WinUI card fill. */
 export const DESKTOP_CARD_WASH_PROPERTY = '--sc-desktop-card-wash';
+/** Root custom property carrying a card row's hover overlay. */
+export const DESKTOP_ROW_HOVER_PROPERTY = '--sc-desktop-row-hover';
+/** Root custom property carrying a card row's pressed overlay. */
+export const DESKTOP_ROW_PRESSED_PROPERTY = '--sc-desktop-row-pressed';
 
 /** Format one wash with four-decimal alpha so CSS composites the painter's exact 8-bit alpha. */
 function css({ red, green, blue, alpha }: WashColor): string {
@@ -56,5 +64,17 @@ export function desktopMaterialWash(darkTheme: boolean): DesktopMaterialWash {
     body: css(darkTheme ? DARK_BODY : LIGHT_BODY),
     chrome: css(darkTheme ? DARK_CHROME : LIGHT_CHROME),
     card: css({ red: 255, green: 255, blue: 255, alpha: darkTheme ? 13 : 179 }),
+    rowHover: css({
+      red: darkTheme ? 255 : 0,
+      green: darkTheme ? 255 : 0,
+      blue: darkTheme ? 255 : 0,
+      alpha: 25,
+    }),
+    rowPressed: css({
+      red: darkTheme ? 255 : 0,
+      green: darkTheme ? 255 : 0,
+      blue: darkTheme ? 255 : 0,
+      alpha: 51,
+    }),
   });
 }

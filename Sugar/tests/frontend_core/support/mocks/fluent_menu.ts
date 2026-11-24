@@ -25,12 +25,6 @@ export function createMenuItem(document: Document): HTMLElement {
   return document.createElement('button');
 }
 
-/** Reflect checked presentation at the mocked third-party component boundary. */
-export function setMenuItemChecked(row: HTMLElement, checked: boolean): void {
-  row.setAttribute('aria-checked', String(checked));
-  if (checked) row.setAttribute('checked', '');
-}
-
 /** Preserve the known slots while testing the real shared menu owner. */
 export function menuItemSlot(_document: Document, position: 'start' | 'end'): string {
   return position;

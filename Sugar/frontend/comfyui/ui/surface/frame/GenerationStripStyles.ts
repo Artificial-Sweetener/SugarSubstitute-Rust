@@ -13,14 +13,21 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+/**
+ * Style the generation strip in the SugarSubstitute frame's title-bar row, left of the console
+ * button when it is there and of the window buttons.
+ */
+import { CAPTION_BUTTON } from '../../core/SharedElements.js';
+
 /** Match Substitute's top-bleeding generation cluster and overlapping numeric accessory. */
 export const GENERATION_STRIP_WIDTH = 226;
 
 /** Keep strip styling confined to the explicitly enabled Substitute frame. */
 export const generationStripCss = `
-  .sc-substitute-frame[data-generation-strip] { padding-right:calc(${GENERATION_STRIP_WIDTH}px + var(--sc-native-caption-width,0px)); }
+  .sc-substitute-frame[data-generation-strip] { padding-right:calc(${GENERATION_STRIP_WIDTH}px + var(--sc-native-caption-width,0px) + var(--sc-console-caption-width,0px)); }
+  .sc-substitute-frame[data-console-caption] { --sc-console-caption-width:${String(CAPTION_BUTTON.width)}px; }
   :root[data-sc-substitute-frame] [data-sc-generation-native] { display:none !important; }
-  .sc-generation-strip { position:absolute; top:0; right:var(--sc-native-caption-width,0px); width:${GENERATION_STRIP_WIDTH}px; height:32px;
+  .sc-generation-strip { position:absolute; top:0; right:calc(var(--sc-native-caption-width,0px) + var(--sc-console-caption-width,0px)); width:${GENERATION_STRIP_WIDTH}px; height:32px;
     display:flex; align-items:flex-start; -webkit-app-region:no-drag; font-family:var(--sc-font-family);
     --sc-generation-batch-fill:color-mix(in srgb,#202020 58.8%,var(--sc-generation-backdrop,transparent)); }
   .sc-generation-batch { position:relative; width:72px; height:30px; flex:0 0 72px;

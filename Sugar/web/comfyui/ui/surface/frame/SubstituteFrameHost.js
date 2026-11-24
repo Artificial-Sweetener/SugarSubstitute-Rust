@@ -22,6 +22,10 @@ import { ComfyFrameWorkflowAdapter } from './ComfyFrameWorkflowAdapter.js';
 import { ClosedWorkflowHistory } from './ClosedWorkflowHistory.js';
 import { SubstituteFrameView } from './SubstituteFrameView.js';
 import { substituteFrameCss } from './SubstituteFrameStyles.js';
+import { graphToolbarCss } from './GraphToolbarStyles.js';
+import { comfyMenuCss } from './ComfyMenuStyles.js';
+import { ComfySidebarTabs } from './ComfySidebarTabs.js';
+import { SidebarPanelClose } from './SidebarPanelClose.js';
 import { generationQueueSkinCss } from './GenerationQueueSkinStyles.js';
 import { GenerationStripHost } from './GenerationStripHost.js';
 import { WorkflowFileTabDrop } from './WorkflowFileTabDrop.js';
@@ -50,6 +54,7 @@ export class SubstituteFrameHost {
     #renamePrompt;
     #generation = null;
     #fileTabDrop = null;
+    #sidebarClose = null;
     #toolbarLayout = null;
     #pluginToolbar = null;
     #adapter = null;
@@ -73,7 +78,12 @@ export class SubstituteFrameHost {
         this.#style = options.document.createElement('style');
         this.#style.id = 'sugarcubes-substitute-frame';
         this.#style.textContent =
-            substituteFrameCss + generationQueueSkinCss + desktopFrameCss + pluginFrameCss;
+            substituteFrameCss +
+                generationQueueSkinCss +
+                desktopFrameCss +
+                pluginFrameCss +
+                graphToolbarCss +
+                comfyMenuCss;
     }
     /** Configure one desktop document through the presentation protocol without persisting preferences. */
     configureDesktopFrame(configuration) {
@@ -248,8 +258,10 @@ export class SubstituteFrameHost {
         const command = (id) => {
             void this.#adapter?.command(id).catch(this.options.report);
         };
+        const sidebar = new ComfySidebarTabs(this.options.document, this.options.app);
         this.#view = new SubstituteFrameView(this.options.document, {
             backend: this.options.backend,
+            sidebar,
             workflows: {
                 activate: (id) => this.#adapter?.activate(id, this.options.sessions.read().open),
                 close: (id) => this.#afterCapture(() => this.#adapter?.close(id, this.options.sessions.read().open)),
@@ -283,6 +295,12 @@ export class SubstituteFrameHost {
         mount.append(this.#view.element);
         this.#desktop.attach(mount);
         this.#generation = new GenerationStripHost(this.options.document, this.#view.element, this.options.app, this.options.report, this.options.adoptJobSeeds, this.options.confirm, this.#view.tabDrop);
+        this.#sidebarClose = new SidebarPanelClose(this.options.document, () => {
+            const open = sidebar.active();
+            if (open)
+                sidebar.toggle(open);
+        });
+        this.#sidebarClose.setup();
         const view = this.#view;
         this.#fileTabDrop = new WorkflowFileTabDrop({
             document: this.options.document,
@@ -316,6 +334,8 @@ export class SubstituteFrameHost {
         this.#toolbarLayout = null;
         this.#generation?.dispose();
         this.#generation = null;
+        this.#sidebarClose?.dispose();
+        this.#sidebarClose = null;
         this.#fileTabDrop?.dispose();
         this.#fileTabDrop = null;
         this.#stopWorkflow?.();

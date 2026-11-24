@@ -248,18 +248,6 @@ runtime_file = "web/icons/node/image.svg"
 sha256 = "3a0db668b30da746f0bf6805c9c95debf35d1180aa3e7033b9409898f7e3c876"
 
 [[component.asset]]
-source_path = "assets/Board/SVG/ic_fluent_board_20_regular.svg"
-vendored_file = "frontend/static/icons/view/board.svg"
-runtime_file = "web/icons/view/board.svg"
-sha256 = "2c5d82fbb94de4e543c6cb135f365fa83d854f20b4825a188f56488ab673215a"
-
-[[component.asset]]
-source_path = "assets/Flowchart/SVG/ic_fluent_flowchart_20_regular.svg"
-vendored_file = "frontend/static/icons/view/flowchart.svg"
-runtime_file = "web/icons/view/flowchart.svg"
-sha256 = "883d49055c5ca780026385788ca1ddaeb2818d0c08af53c680aff2a6f42354e3"
-
-[[component.asset]]
 source_path = "assets/Add/SVG/ic_fluent_add_20_regular.svg"
 vendored_file = "frontend/static/icons/seed/add.svg"
 runtime_file = "web/icons/seed/add.svg"
@@ -429,16 +417,58 @@ runtime_file = "web/icons/action/broom.svg"
 sha256 = "e818b7aa962d79365b10496e38f85965b72b9da5e6a2f1d5bb05dbc37e1ca346"
 
 [[component.asset]]
+source_path = "assets/Folder Open/SVG/ic_fluent_folder_open_20_regular.svg"
+vendored_file = "frontend/static/icons/action/folder-open.svg"
+runtime_file = "web/icons/action/folder-open.svg"
+sha256 = "c5f8b2db9af20a454c1f05ce6eda4b21c99f1b8677b14b6d7d07d5817140a487"
+
+[[component.asset]]
+source_path = "assets/Save/SVG/ic_fluent_save_20_regular.svg"
+vendored_file = "frontend/static/icons/action/save.svg"
+runtime_file = "web/icons/action/save.svg"
+sha256 = "fdfbcf9c469ff958782a3f8ab4659c7f1c48062752bb6324b07e5bbb70f52969"
+
+[[component.asset]]
+source_path = "assets/Save Edit/SVG/ic_fluent_save_edit_20_regular.svg"
+vendored_file = "frontend/static/icons/action/save-edit.svg"
+runtime_file = "web/icons/action/save-edit.svg"
+sha256 = "cdc5be5c2e99102fe88386d7c24010e3955aa04ff443eac95728007972c3a5d3"
+
+[[component.asset]]
+source_path = "assets/Code/SVG/ic_fluent_code_20_regular.svg"
+vendored_file = "frontend/static/icons/action/code.svg"
+runtime_file = "web/icons/action/code.svg"
+sha256 = "a022d6b5041d465d798da033e90973040f9157826c56e5a6b2e457eb0403ca5a"
+
+[[component.asset]]
+source_path = "assets/Arrow Export/SVG/ic_fluent_arrow_export_20_regular.svg"
+vendored_file = "frontend/static/icons/action/arrow-export.svg"
+runtime_file = "web/icons/action/arrow-export.svg"
+sha256 = "ee47d4a260546d0497ecb3d292ee1fb2a6781ef9d0549d3f94ba4ab8625c6bcc"
+
+[[component.asset]]
+source_path = "assets/Arrow Clockwise/SVG/ic_fluent_arrow_clockwise_20_regular.svg"
+vendored_file = "frontend/static/icons/action/arrow-clockwise.svg"
+runtime_file = "web/icons/action/arrow-clockwise.svg"
+sha256 = "ab803364462aa202e1d26eb8fec8ff988c108f742e62b1442a0db4e0d3304800"
+
+[[component.asset]]
+source_path = "assets/Puzzle Piece/SVG/ic_fluent_puzzle_piece_20_regular.svg"
+vendored_file = "frontend/static/icons/action/puzzle-piece.svg"
+runtime_file = "web/icons/action/puzzle-piece.svg"
+sha256 = "72ecd648cf6d8947f8fa8f601cadce027139c34780cacb71e2a4824aead3588c"
+
+[[component.asset]]
+source_path = "assets/Settings/SVG/ic_fluent_settings_20_regular.svg"
+vendored_file = "frontend/static/icons/action/settings.svg"
+runtime_file = "web/icons/action/settings.svg"
+sha256 = "ac5bdb808bed91dc8c0b6f346e7a0a1ee1901fc4b50f5641987498a65e200685"
+
+[[component.asset]]
 source_path = "assets/Copy/SVG/ic_fluent_copy_20_regular.svg"
 vendored_file = "frontend/static/icons/action/copy.svg"
 runtime_file = "web/icons/action/copy.svg"
 sha256 = "0d3b835fa2d47f090d4adcd70af6a86bacbaf56c6e8da91d1897b716a87fb826"
-
-[[component.asset]]
-source_path = "assets/Window Console/SVG/ic_fluent_window_console_20_regular.svg"
-vendored_file = "frontend/static/icons/action/window-console.svg"
-runtime_file = "web/icons/action/window-console.svg"
-sha256 = "f2b46d93f5b922c79ecd04c9cbad61c26f6bd0491b80763de4409f059c43a202"
 
 [[component.asset]]
 source_path = "assets/Delete/SVG/ic_fluent_delete_20_regular.svg"
@@ -829,7 +859,7 @@ version = "3.1.3"
 modifications = "Official MenuList and MenuItem components bundled with esbuild; upstream source is unchanged. FAST dependency and license are pinned in package-lock.json and third_party/NOTICE.md."
 source_paths = ["packages/web-components/src/menu-list", "packages/web-components/src/menu-item"]
 runtime_files = ["web/comfyui/ui/menus/MenuControlRuntime.js"]
-runtime_sha256 = "ab36b0d5f27dafb88af29875eb32c64f75dde0b0b627a5edb631e9b95b1818a5"
+runtime_sha256 = "661425f675b46e614f46e2e09e0ca66ffc17776e4651684496b22774213f08d4"
 
 [[component]]
 name = "SugarSubstitute media wall presentation"
@@ -1670,3 +1700,37 @@ revision = "sha256:4d4ce7aaaaf12757d66ef1d3674e88aae525d903d02c0b8236632fa601d20
 modifications = "Unmodified locked Windows desktop dependencies; complete upstream license and notice texts are aggregated by scripts/gimp/licenses.ts. The index records exact source archives and resource SHA-256 values. The Microsoft WebView2 loader is byte-matched to SDK 1.0.3800.47 and retains its BSD license and notices."
 source_paths = ["integrations/gimp/companion/Cargo.lock", "third_party/gimp-companion-licenses.json"]
 runtime_files = ["plug-ins/sugarcubes-gimp/companion/sugarcubes-gimp-companion.exe"]
+
+[[component]]
+name = "SugarSubstitute shared UI Fluent artwork"
+license = "MIT"
+license_file = "third_party/licenses/fluentui-system-icons.LICENSE.txt"
+source = "https://github.com/microsoft/fluentui-system-icons"
+revision = "a6931cf6ad3541975b132762c8cad67b2f54fd7a"
+modifications = "Window Console 20 Filled and Regular: the frame is flipped top to bottom by an SVG transform so its bar sits at the bottom, and the prompt is moved up 3 units; paths otherwise unchanged."
+
+[[component.asset]]
+source_path = "assets/Window Console/SVG/ic_fluent_window_console_20_filled.svg"
+vendored_file = "integrations/contracts/ui/icons/console-open.svg"
+runtime_file = "web/icons/shared/console-open.svg"
+sha256 = "5ca597e4f81926b23eab9797f662bce6c845770bb05b7d187f662a2e12df40bc"
+
+[[component.asset]]
+source_path = "assets/Window Console/SVG/ic_fluent_window_console_20_regular.svg"
+vendored_file = "integrations/contracts/ui/icons/console-close.svg"
+runtime_file = "web/icons/shared/console-close.svg"
+sha256 = "2b045a3d40fdc2da78343edb7007b887a30514d0b0b8fbc4eb4576436861e888"
+
+[[component]]
+name = "SugarSubstitute shared UI caption artwork"
+license = "LGPL-3.0-only"
+license_file = "third_party/licenses/frameless-window.LICENSE.txt"
+source = "https://github.com/zhiyiYo/PyQt-Frameless-Window"
+revision = "a4a961cdc18716e6e14a261ebe6dc567068aa3f5"
+modifications = "None; SVG file copied verbatim."
+
+[[component.asset]]
+source_path = "qframelesswindow/_rc/title_bar/close.svg"
+vendored_file = "integrations/contracts/ui/icons/window-close.svg"
+runtime_file = "web/icons/shared/window-close.svg"
+sha256 = "e67c255f212cc5c97769f4c6e43d8c246661d8204231c38149534690c8211535"

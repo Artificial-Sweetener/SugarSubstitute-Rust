@@ -1,7 +1,7 @@
 import {
   ModelContextMenuView,
   projectModelContext
-} from "./chunk-WIKCJTWX.js";
+} from "./chunk-2G7SQCCL.js";
 import {
   h,
   onBeforeUnmount,

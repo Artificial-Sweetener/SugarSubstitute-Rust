@@ -28,6 +28,13 @@ import type {
 import type { CanvasDisplayPlan } from './CanvasDisplayPlan.js';
 import type { CanvasOutputActions } from '../domain/CanvasMedia.js';
 
+/**
+ * The one empty list every snapshot without sources, scenes or item actions shares. Snapshots arrive about once
+ * a frame and consumers compare these lists by identity, so a new empty list per snapshot would
+ * read as a change every frame.
+ */
+const NONE: readonly never[] = Object.freeze([]);
+
 /** Project presenter-specific facts without borrowing its image handles. */
 export interface CanvasSnapshotPresentation {
   readonly photoshopAllAvailable?: boolean;
@@ -47,7 +54,7 @@ export function canvasViewSnapshot(
   connected: boolean,
   mediaActions: OutputMediaProfile | null,
   presentation: CanvasSnapshotPresentation,
-  itemActions: readonly CanvasOutputActions[] = [],
+  itemActions: readonly CanvasOutputActions[] = NONE,
 ): CanvasViewSnapshot {
   return Object.freeze({
     schema: 1,
@@ -58,8 +65,8 @@ export function canvasViewSnapshot(
     address,
     revision: 0,
     view: plan.view,
-    sources: catalog.sceneOverview ? Object.freeze([]) : sources,
-    scenes: catalog.scenes ?? Object.freeze([]),
+    sources: catalog.sceneOverview ? NONE : sources,
+    scenes: catalog.scenes ?? NONE,
     grid: plan.grid,
     comparisonAvailable: presentation.comparisonAvailable,
     selected: plan.primary?.item ?? null,

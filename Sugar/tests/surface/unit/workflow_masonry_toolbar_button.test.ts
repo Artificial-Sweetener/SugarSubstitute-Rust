@@ -55,9 +55,7 @@ test('places one icon-only switch between queue and Properties and changes its d
     expect(button.getAttribute('aria-pressed')).toBe(String(active));
     expect(button.title).toBe(`Switch to ${active ? 'graph' : 'masonry'} view`);
     expect(button.firstElementChild?.getAttribute('aria-hidden')).toBe('true');
-    expect(button.firstElementChild?.getAttribute('style')).toContain(
-      active ? 'flowchart.svg' : 'board.svg',
-    );
+    expect(button.dataset.view).toBe(active ? 'graph' : 'masonry');
     button.click();
   }
   expect(toggle).toHaveBeenCalledTimes(3);

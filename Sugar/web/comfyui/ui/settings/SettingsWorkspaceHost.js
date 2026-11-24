@@ -14,11 +14,13 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Bind unified settings presentation to named Comfy mounts and existing visual-mode authorities. */
+import { sugarCubesSettingsSection } from './SugarCubesSettingsSections.js';
 import { readOwnedVisualStyle, subscribeVisualStyle, } from '../surface/appearance/VisualStyleBoundary.js';
 import { HostSurfaceObserver } from '../core/HostSurfaceObserver.js';
 import { ComfySettingsCatalog } from './ComfySettingsCatalog.js';
 import { SettingsWorkspaceSurface } from './SettingsWorkspaceSurface.js';
 import { settingsWorkspaceCss } from './SettingsWorkspaceStyles.js';
+import { SettingsPageNavigation, settingsPageNavigationCss } from './SettingsPageNavigation.js';
 import { AboutSettingsPage } from './AboutSettingsPage.js';
 import { UPDATES_SETTING_ID, UpdatesSettingsPage, } from './UpdatesSettingsPage.js';
 import { ComfyAboutInformation } from './ComfyAboutInformation.js';
@@ -44,6 +46,7 @@ export class SettingsWorkspaceHost {
     #shows = new Set();
     #catalog;
     #surfaces = new Map();
+    #pages = new Map();
     #stops = [];
     #style;
     #popups = new SettingsPopupTheme();
@@ -61,7 +64,7 @@ export class SettingsWorkspaceHost {
         this.#catalog = new ComfySettingsCatalog(options.app);
         this.#style = options.document.createElement('style');
         this.#style.id = 'sugarcubes-settings-workspace';
-        this.#style.textContent = settingsWorkspaceCss;
+        this.#style.textContent = settingsWorkspaceCss + settingsPageNavigationCss;
     }
     /** Add a native settings category and observe only Comfy's identified settings dialog. */
     setup() {
@@ -71,7 +74,7 @@ export class SettingsWorkspaceHost {
         this.#catalog.register({
             id: 'SugarCubes.About.Information',
             name: 'About SugarCubes',
-            category: ['About SugarCubes', 'Information', 'Project'],
+            ...sugarCubesSettingsSection('about', 'Project'),
             tooltip: 'Project, versions, source code, license, contributors and acknowledgements.',
             defaultValue: '',
             type: () => {
@@ -114,7 +117,7 @@ export class SettingsWorkspaceHost {
         this.#catalog.register({
             id: UPDATES_SETTING_ID,
             name: 'Updates',
-            category: ['SugarCubes', 'Updates', 'Status'],
+            ...sugarCubesSettingsSection('updates', 'Status'),
             tooltip: 'Current version, update channel, last check, and applying a ready update.',
             defaultValue: '',
             type: () => {
@@ -133,6 +136,9 @@ export class SettingsWorkspaceHost {
             stop();
         for (const surface of this.#surfaces.values())
             surface.dispose();
+        for (const pages of this.#pages.values())
+            pages.dispose();
+        this.#pages.clear();
         this.#surfaces.clear();
         this.#popups.dispose();
         this.#about?.dispose();
@@ -167,6 +173,8 @@ export class SettingsWorkspaceHost {
                 continue;
             surface.dispose();
             this.#surfaces.delete(root);
+            this.#pages.get(root)?.dispose();
+            this.#pages.delete(root);
         }
         for (const root of this.options.document.querySelectorAll('[data-testid="settings-dialog"]')) {
             let surface = this.#surfaces.get(root);
@@ -175,6 +183,12 @@ export class SettingsWorkspaceHost {
                 this.#surfaces.set(root, surface);
             }
             surface.update(this.options.mode.enabled, this.options.palette.theme.dark);
+            let pages = this.#pages.get(root);
+            if (!pages) {
+                pages = new SettingsPageNavigation(root);
+                this.#pages.set(root, pages);
+            }
+            pages.update(this.options.mode.enabled);
         }
         this.#popups.refresh(this.#surfaces.keys(), this.options.mode.enabled, this.options.palette.theme.dark);
         const route = this.#surfaces.size ? 'settings' : 'workflow';

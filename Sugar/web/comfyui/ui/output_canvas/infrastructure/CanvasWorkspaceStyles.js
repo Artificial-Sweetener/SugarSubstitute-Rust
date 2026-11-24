@@ -51,6 +51,12 @@ export function ensureCanvasWorkspaceStyles(document) {
     .graph-canvas-panel > .pointer-events-auto > [role="toolbar"][data-pc-name="buttongroup"],
     .graph-canvas-panel > .minimap-main-container {
       right:var(--sc-output-workspace-reserved-width,0px); }
+    /* A docked console takes its height from the graph: ComfyUI's bottom-anchored graph chrome
+       rides on the graph's new bottom edge. */
+    .graph-canvas-panel > .pointer-events-auto > [role="toolbar"][data-pc-name="buttongroup"] {
+      bottom:var(--sc-output-workspace-reserved-height,0px); }
+    .graph-canvas-panel > .minimap-main-container {
+      bottom:calc(54px + var(--sc-output-workspace-reserved-height,0px)); }
     .sc-output-workspace-pane { position:absolute; right:0; top:0; bottom:0; z-index:${MASONRY_STACK_Z_INDEX + 2};
       display:flex; flex-direction:column; box-sizing:border-box; pointer-events:auto;
       color:var(--fg-color,#ddd);

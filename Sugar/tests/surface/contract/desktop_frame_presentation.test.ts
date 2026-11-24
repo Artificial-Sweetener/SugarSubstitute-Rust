@@ -201,17 +201,25 @@ test('washes reach the selected tab, toolbar, graph and masonry only inside the 
   }
 });
 
-test('node cards keep their own opaque fill on the desktop frame, in masonry and in the graph', () => {
-  // A node's rows draw their hover, pressed and divider colours against the card's own fill, so
-  // the desktop sheet must not restyle a node or any of its rows.
-  expect(desktopFrameCss).not.toContain('data-sc-style-node');
-  expect(desktopFrameCss).not.toContain('node-header-');
-  expect(desktopFrameCss).not.toContain('node-body-');
-  expect(desktopFrameCss).not.toContain('advanced-inputs-button');
-  expect(desktopFrameCss).not.toContain('sugarcubes-cube-face__node-card');
-  expect(desktopFrameCss).not.toContain(':hover');
-  // Non-node surfaces still take the wash.
-  expect(desktopFrameCss.replace(/\s+/g, ' ')).toContain(
-    '[data-sc-style-surface] { --sc-card-fill:var(--sc-desktop-card-wash); }',
+test('node cards are translucent over the Mica on the desktop frame, with overlay row states', () => {
+  // As in SugarSubstitute's Python application, cards in masonry and in the graph are the
+  // translucent WinUI card fill over the body wash, and their rows show the Windows list-item
+  // overlays over it rather than opaque colours drawn for an opaque card.
+  const css = desktopFrameCss.replace(/\s+/g, ' ');
+  expect(css).toContain(
+    ":root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] [data-sc-style-surface] { --sc-card-fill:var(--sc-desktop-card-wash); }",
   );
+  // A node card paints the fill once, on its outer element; its inner layers stay clear.
+  expect(css).toContain(
+    ":root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] [data-sc-style-node] { --sc-card-fill:transparent; background:var(--sc-desktop-card-wash);",
+  );
+  expect(css).toMatch(
+    /\[data-sc-style-node\] :is\( \[data-sc-toggle-row\],\[data-testid="advanced-inputs-button"\],\[data-sc-titlebar-action\]\):is\(:hover,:focus-visible\) \{ background:var\(--sc-desktop-row-hover\); \}/,
+  );
+  expect(css).toMatch(
+    /\[data-sc-titlebar-action\]\):active \{ background:var\(--sc-desktop-row-pressed\); \}/,
+  );
+  // Every card rule needs the desktop frame's Mica: without it cards keep the style's own fill.
+  for (const rule of css.split('}').filter((part) => part.includes('--sc-desktop-card-wash);')))
+    expect(rule).toContain('[data-sc-desktop-frame-surface]');
 });

@@ -14,8 +14,14 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Assemble shared output controls from renderer-owned presentation status. */
+/**
+ * The one empty list every snapshot without sources, scenes or item actions shares. Snapshots arrive about once
+ * a frame and consumers compare these lists by identity, so a new empty list per snapshot would
+ * read as a change every frame.
+ */
+const NONE = Object.freeze([]);
 /** Preserve the same workflow and selection authority for every presentation backend. */
-export function canvasViewSnapshot(address, plan, catalog, sources, connected, mediaActions, presentation, itemActions = []) {
+export function canvasViewSnapshot(address, plan, catalog, sources, connected, mediaActions, presentation, itemActions = NONE) {
     return Object.freeze({
         schema: 1,
         itemActions,
@@ -25,8 +31,8 @@ export function canvasViewSnapshot(address, plan, catalog, sources, connected, m
         address,
         revision: 0,
         view: plan.view,
-        sources: catalog.sceneOverview ? Object.freeze([]) : sources,
-        scenes: catalog.scenes ?? Object.freeze([]),
+        sources: catalog.sceneOverview ? NONE : sources,
+        scenes: catalog.scenes ?? NONE,
         grid: plan.grid,
         comparisonAvailable: presentation.comparisonAvailable,
         selected: plan.primary?.item ?? null,

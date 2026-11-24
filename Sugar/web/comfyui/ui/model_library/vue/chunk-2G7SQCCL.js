@@ -41,9 +41,6 @@ var ModelContextMenuView = defineComponent({
     const menu = new ContextMenu(document);
     let disposed = false;
     const open = () => {
-      disposed = true;
-      menu.close();
-      disposed = false;
       menu.open({
         label: props.label,
         entries: projectModelContext(props.entries, (item) => emit("action", item)),

@@ -122,6 +122,67 @@ def test_canvas_editing_artwork_has_pinned_licensed_deployment_bytes() -> None:
     }
 
 
+SHARED_UI_ARTWORK = {
+    "SugarSubstitute shared UI Fluent artwork": (
+        "MIT",
+        "https://github.com/microsoft/fluentui-system-icons",
+    ),
+    "SugarSubstitute shared UI caption artwork": (
+        "LGPL-3.0-only",
+        "https://github.com/zhiyiYo/PyQt-Frameless-Window",
+    ),
+}
+
+
+def test_shared_ui_artwork_has_pinned_licensed_deployment_bytes() -> None:
+    """Verify the shared native and web icons against pinned sources and served bytes.
+
+    The shared icons live once in the UI element record; the native host embeds them and the
+    web build serves them under ``web/icons/shared``. Every third-party-derived one is recorded;
+    the rest are SugarSubstitute's own artwork.
+    """
+    manifest = tomllib.loads((ROOT / "third_party/manifest.toml").read_text("utf-8"))
+    pending = dict(SHARED_UI_ARTWORK)
+    recorded: set[str] = set()
+    for component in manifest["component"]:
+        if component["name"] not in pending:
+            continue
+        license_id, source = pending.pop(component["name"])
+        assert (component["license"], component["source"]) == (license_id, source)
+        assert re.fullmatch(r"[0-9a-f]{40}", component["revision"])
+        license_path = Path(component["license_file"])
+        assert (ROOT / license_path).read_bytes() == (
+            ROOT / "web" / license_path
+        ).read_bytes()
+        for asset in component["asset"]:
+            authored = asset["vendored_file"]
+            assert authored.startswith("integrations/contracts/ui/icons/")
+            assert asset["runtime_file"] == "web/icons/shared/" + Path(authored).name
+            recorded.add(Path(authored).name)
+            contents = (ROOT / authored).read_bytes()
+            assert hashlib.sha256(contents).hexdigest() == asset["sha256"]
+            assert (ROOT / asset["runtime_file"]).read_bytes() == contents
+    assert not pending
+    assert recorded == {"console-open.svg", "console-close.svg", "window-close.svg"}
+    shipped = {
+        path.name for path in (ROOT / "integrations/contracts/ui/icons").iterdir()
+    }
+    served = {path.name for path in (ROOT / "web/icons/shared").iterdir()}
+    assert shipped == served
+    for name in shipped:
+        contents = (ROOT / "integrations/contracts/ui/icons" / name).read_bytes()
+        assert (ROOT / "web/icons/shared" / name).read_bytes() == contents
+        svg = ElementTree.fromstring(contents)
+        assert svg.tag == "{http://www.w3.org/2000/svg}svg"
+        for element in svg.iter():
+            assert not element.tag.endswith("script")
+            assert not any(key.lower().startswith("on") for key in element.attrib)
+            assert not any(
+                "href" in key.lower() and not value.startswith("#")
+                for key, value in element.attrib.items()
+            )
+
+
 def test_every_vendored_icon_has_exact_provenance_and_deployment_bytes() -> None:
     """Reject unrecorded assets, stale derivatives, unsafe SVGs, and missing notices."""
     manifest = tomllib.loads((ROOT / "third_party/manifest.toml").read_text("utf-8"))
@@ -130,7 +191,7 @@ def test_every_vendored_icon_has_exact_provenance_and_deployment_bytes() -> None
     recorded: set[str] = set()
     for component in components:
         assert isinstance(component, dict)
-        if "asset" not in component:
+        if "asset" not in component or component["name"] in SHARED_UI_ARTWORK:
             continue
         source = component["source"]
         if source == "https://gitlab.gnome.org/GNOME/adwaita-icon-theme":
