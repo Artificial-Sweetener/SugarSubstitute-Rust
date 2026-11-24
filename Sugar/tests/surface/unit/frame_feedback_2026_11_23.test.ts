@@ -16,6 +16,7 @@
 /** Frame presentation: the animated view icon, ComfyUI's sidebar tabs and the mirrored toolbar. */
 import { afterEach, expect, jest, test } from '@jest/globals';
 import { WORKFLOW_VIEW_ICON } from '../../../frontend/comfyui/ui/core/SharedElements.js';
+import { ensureWorkflowMasonryStyles } from '../../../frontend/comfyui/ui/surface/masonry/WorkflowMasonryStyles.js';
 import {
   WorkflowViewIcon,
   workflowViewBoxes,
@@ -46,6 +47,24 @@ test('the view icon draws the graph at 0 and the masonry at 1, its links gone be
   // The first masonry tile, drawn inside its box by half an outline.
   expect(nodes[0]?.getAttribute('x')).toBe('3.5');
   expect(nodes[0]?.getAttribute('width')).toBe('5.5');
+});
+
+test('the view icon is cut off at its own 20 x 20 box in both views and while it moves', () => {
+  // The approved graph draws its last node beyond the right edge, where the box cuts it off.
+  const last = WORKFLOW_VIEW_ICON.graph.at(-1);
+  expect(last?.[0]).toBeGreaterThan(20);
+  for (const position of [0, 0.5, 1]) {
+    const icon = new WorkflowViewIcon(document, position);
+    expect(icon.element.getAttribute('viewBox')).toBe('0 0 20 20');
+    expect(icon.element.style.overflow).toBe('hidden');
+    icon.pose(1 - position);
+    expect(icon.element.style.overflow).toBe('hidden');
+  }
+  // No stylesheet of the pack lets the icon paint outside its box.
+  ensureWorkflowMasonryStyles(document);
+  const rules = [...document.querySelectorAll('style')].map((style) => style.textContent).join('');
+  expect(rules).toContain('.sugarcubes-masonry-toggle__icon');
+  expect(rules).not.toMatch(/\.sugarcubes-masonry-toggle__icon[^}]*overflow/);
 });
 
 test('the view icon jumps to its destination when the viewer asks for reduced motion', () => {

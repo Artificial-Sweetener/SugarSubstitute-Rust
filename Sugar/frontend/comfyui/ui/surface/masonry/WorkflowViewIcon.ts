@@ -60,6 +60,10 @@ export class WorkflowViewIcon {
     this.#window = document.defaultView;
     this.element = document.createElementNS(SVG, 'svg');
     this.element.setAttribute('viewBox', '0 0 20 20');
+    // The graph's last node lies beyond the right edge by design: the icon ends at its box, so
+    // that node and the link reaching for it are cut off. The clip is the icon's own, set
+    // inline, so no stylesheet can undo it.
+    this.element.style.overflow = 'hidden';
     this.element.setAttribute('aria-hidden', 'true');
     this.element.setAttribute('focusable', 'false');
     const { outline, link } = WORKFLOW_VIEW_ICON;

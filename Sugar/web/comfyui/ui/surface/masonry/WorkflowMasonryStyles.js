@@ -204,7 +204,7 @@ export function ensureWorkflowMasonryStyles(documentRef) {
     .sugarcubes-masonry-toggle:hover { background:var(--secondary-background-hover,#404040); }
     .sugarcubes-masonry-toggle:focus-visible { outline:1px solid var(--ring,currentColor); outline-offset:2px; }
     .sugarcubes-masonry-toggle:disabled { opacity:.5; cursor:default; }
-    .sugarcubes-masonry-toggle__icon { width:20px; height:20px; pointer-events:none; overflow:visible; }
+    .sugarcubes-masonry-toggle__icon { width:20px; height:20px; pointer-events:none; }
     /* Only the masonry's own padding reads the stack width; were it inherited, every change
        to it would restyle every card. */
     @property --sc-masonry-stack-width { syntax:'<length>'; inherits:false; initial-value:0px; }
