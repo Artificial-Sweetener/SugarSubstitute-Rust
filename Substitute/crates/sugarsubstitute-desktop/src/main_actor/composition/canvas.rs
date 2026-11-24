@@ -5,6 +5,7 @@
 mod allocation;
 mod device;
 mod reposition;
+mod timing;
 
 use super::{adopt, missing};
 use crate::{
@@ -219,6 +220,7 @@ pub(super) struct Canvas {
     linked: bool,
     retired: bool,
     lease: Option<MemoryLease>,
+    timings: timing::PresentTimings,
     #[cfg(test)]
     capture_next: bool,
 }
@@ -270,6 +272,7 @@ impl Canvas {
             linked: false,
             retired: false,
             lease: Some(lease),
+            timings: timing::PresentTimings::default(),
             #[cfg(test)]
             capture_next: false,
         })
@@ -356,7 +359,8 @@ impl Canvas {
                 .map_err(|cause| DesktopError::new("canvas_shared_texture_reads", cause))?;
             shared.texture.record_reads(value);
         }
-        uploaded?;
+        let cost = uploaded?;
+        let committing = std::time::Instant::now();
         let visual = self.visual.as_ref().ok_or_else(|| missing("canvas_visual"))?;
         // SAFETY: All interfaces are live on the UI apartment; the clip is within this viewport.
         unsafe {
@@ -398,6 +402,7 @@ impl Canvas {
                 });
             }
         }
+        self.timings.record(cost, committing.elapsed());
         self.acknowledgement.committed(content.target(), placement);
         self.displayed = Some(placement);
         Ok(Some(content.target()))

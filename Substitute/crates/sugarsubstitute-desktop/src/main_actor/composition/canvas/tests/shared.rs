@@ -21,6 +21,7 @@ use windows::Win32::{
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 
 const BUDGET: u64 = 512 * 1024 * 1024;
+const WARM_CPU_FRAMES: u64 = 24;
 
 fn io(cause: impl std::fmt::Display) -> io::Error {
     io::Error::other(cause.to_string())
@@ -130,6 +131,9 @@ struct Timing {
     vulkan_draw_microseconds: f64,
     copy_gpu_microseconds: f64,
     handoff_microseconds: f64,
+    cpu_fill_microseconds: f64,
+    cpu_draw_microseconds: f64,
+    cpu_bitmap_creations: usize,
 }
 
 /// Initialize exactly the enumerated adapter on a fresh catalog, matching it by model and LUID.
@@ -272,9 +276,38 @@ fn qualify_extent(
     assert!(canvas.retains(stamp(5)?, placement));
     drop(foreign);
 
+    // Warm preview replacement: distinct complete CPU frames on the one retained surface.
+    let alternate = vec![0xff60_4020; pixels.len()];
+    let mut samples = Vec::new();
+    for round in 0..WARM_CPU_FRAMES {
+        let frame = CpuFrame {
+            kind: CpuFrameKind::Prepared,
+            pending: true,
+            target: stamp(10 + round)?,
+            base: None,
+            damage: &damage,
+            pixels: if round % 2 == 0 { &cpu_pixels } else { &alternate },
+        };
+        assert_eq!(canvas.present(&CanvasContent::Cpu(frame), placement)?, Some(frame.target));
+        samples.push(canvas.timings.latest.ok_or("Presentation cost absent")?);
+    }
+    let median = |cost: fn(&super::timing::UploadCost) -> std::time::Duration| {
+        let mut values: Vec<_> = samples.iter().map(cost).collect();
+        values.sort_unstable();
+        values[values.len() / 2].as_secs_f64() * 1_000_000.0
+    };
+    let (cpu_fill_microseconds, cpu_draw_microseconds) =
+        (median(|cost| cost.fill), median(|cost| cost.draw));
+    let cpu_bitmap_creations =
+        samples.iter().filter(|cost| cost.source == super::timing::Source::Created).count();
+    // A shared frame sits between the earlier CPU frame and these; the surface's own bitmap
+    // survives it, so no warm preview allocates.
+    assert_eq!(cpu_bitmap_creations, 0);
+    let last = stamp(9 + WARM_CPU_FRAMES)?;
+
     // Hiding withdraws the shared frame; completion follows the compositor's retirement.
     assert!(!canvas.hide()?);
-    assert!(!canvas.retains(stamp(5)?, placement));
+    assert!(!canvas.retains(last, placement));
     execution.wait_composition(canvas.next_wait().ok_or("Hide wait absent")?).map_err(io)?;
     canvas.reap_retirements()?;
     assert!(canvas.hide()?);
@@ -292,6 +325,9 @@ fn qualify_extent(
         vulkan_draw_microseconds: vulkan.as_secs_f64() * 1_000_000.0,
         copy_gpu_microseconds,
         handoff_microseconds: handoff.as_secs_f64() * 1_000_000.0,
+        cpu_fill_microseconds,
+        cpu_draw_microseconds,
+        cpu_bitmap_creations,
     })
 }
 
@@ -326,11 +362,16 @@ fn qualify_adapter(
             qualify_extent(execution, composition, memory, &graphics, &device, descriptor, extent)?;
         eprintln!(
             "shared_texture_timing adapter=\"{}\" extent={width}x{height} \
-             vulkan_draw_us={:.1} composition_copy_gpu_us={:.1} fence_handoff_us={:.1}",
+             vulkan_draw_us={:.1} composition_copy_gpu_us={:.1} fence_handoff_us={:.1} \
+             warm_cpu_fill_us={:.1} warm_cpu_draw_us={:.1} warm_cpu_bitmap_creations={}/{}",
             descriptor.name,
             timing.vulkan_draw_microseconds,
             timing.copy_gpu_microseconds,
-            timing.handoff_microseconds
+            timing.handoff_microseconds,
+            timing.cpu_fill_microseconds,
+            timing.cpu_draw_microseconds,
+            timing.cpu_bitmap_creations,
+            WARM_CPU_FRAMES
         );
     }
     drop(graphics);
