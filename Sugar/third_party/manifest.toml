@@ -271,7 +271,6 @@ vendored_file = "frontend/static/icons/model/update.svg"
 runtime_file = "web/icons/model/update.svg"
 sha256 = "00ec9e6f8c2ab76f4fe3df7b53bc9474ee8da700a32ba3b57422a7fab7bf3062"
 
-
 [[component.asset]]
 source_path = "assets/Globe/SVG/ic_fluent_globe_20_regular.svg"
 vendored_file = "frontend/static/icons/model/globe.svg"
@@ -493,6 +492,204 @@ source_path = "assets/Panel Right/SVG/ic_fluent_panel_right_20_regular.svg"
 vendored_file = "frontend/static/icons/action/panel-right.svg"
 runtime_file = "web/icons/action/panel-right.svg"
 sha256 = "7c5813f91f989c27ea676328acdc4d07e9f9dfa293f29a165acd27a35ef603fb"
+
+[[component.asset]]
+source_path = "assets/Cube/SVG/ic_fluent_cube_20_filled.svg"
+vendored_file = "frontend/static/icons/settings/cube-filled.svg"
+runtime_file = "web/icons/settings/cube-filled.svg"
+sha256 = "b8ca53272823027fce5c4ad62df51a1e078bec469f54bfd318888e697f4dd004"
+
+[[component.asset]]
+source_path = "assets/Image Sparkle/SVG/ic_fluent_image_sparkle_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/image-sparkle.svg"
+runtime_file = "web/icons/settings/image-sparkle.svg"
+sha256 = "72edf48b53e58ecc0235f687bc481e54dbc75503439410cb21c986466042866c"
+
+[[component.asset]]
+source_path = "assets/Text Effects Sparkle/SVG/ic_fluent_text_effects_sparkle_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/text-effects-sparkle.svg"
+runtime_file = "web/icons/settings/text-effects-sparkle.svg"
+sha256 = "05421a5128b0baaf9cf36f7ba0818d0fe3b12678b2abc7acc3f63d1113adbe1b"
+
+[[component.asset]]
+source_path = "assets/Cursor Hover/SVG/ic_fluent_cursor_hover_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/cursor-hover.svg"
+runtime_file = "web/icons/settings/cursor-hover.svg"
+sha256 = "1e5b7524eab0207c8d859145d0bb1cc0d1caf573250f44d4524b7525721d8f7d"
+
+[[component.asset]]
+source_path = "assets/Globe Desktop/SVG/ic_fluent_globe_desktop_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/globe-desktop.svg"
+runtime_file = "web/icons/settings/globe-desktop.svg"
+sha256 = "97a316b256948c69468bf8b352ddf5076072cb796afd345b8b39c54a31aae19e"
+
+[[component.asset]]
+source_path = "assets/Library/SVG/ic_fluent_library_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/library.svg"
+runtime_file = "web/icons/settings/library.svg"
+sha256 = "0024a62c289f291dba8e09332e93337d52848808d8e1941905d4dd46e9d9880f"
+
+[[component.asset]]
+source_path = "assets/Plug Connected Settings/SVG/ic_fluent_plug_connected_settings_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/plug-connected-settings.svg"
+runtime_file = "web/icons/settings/plug-connected-settings.svg"
+sha256 = "3aa36922f416213f11f87e26a9c4347e62dabdb7d812158c079035291fc73a4b"
+
+[[component.asset]]
+source_path = "assets/Paint Brush/SVG/ic_fluent_paint_brush_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/paint-brush.svg"
+runtime_file = "web/icons/settings/paint-brush.svg"
+sha256 = "93ff42e35a196ac0b92d51fe3715373ce6702891dabfcc253c3377154ba1beb3"
+
+[[component.asset]]
+source_path = "assets/Save Image/SVG/ic_fluent_save_image_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/save-image.svg"
+runtime_file = "web/icons/settings/save-image.svg"
+sha256 = "929eb560e59b85916fcc227a107bdee7e69179db669ec5e7c6db511ff95e3d03"
+
+[[component.asset]]
+source_path = "assets/Document Text/SVG/ic_fluent_document_text_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/document-text.svg"
+runtime_file = "web/icons/settings/document-text.svg"
+sha256 = "9e0e80637fd19c0ac45c2058ccd8dcc4fa8a1e647bfa54ae8a480bf6c2d5e844"
+
+[[component.asset]]
+source_path = "assets/Box Search/SVG/ic_fluent_box_search_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/box-search.svg"
+runtime_file = "web/icons/settings/box-search.svg"
+sha256 = "cbb406d0d092fc934c4241675568f4b9732d37f77458b64b2aef6a8575035782"
+
+[[component.asset]]
+source_path = "assets/Arrow Download/SVG/ic_fluent_arrow_download_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/arrow-download.svg"
+runtime_file = "web/icons/settings/arrow-download.svg"
+sha256 = "003fde5a3b8a229c5a51dbe04bfb30f98b52e1d769d13c44e542b22123d5c1e1"
+
+[[component.asset]]
+source_path = "assets/Book Arrow Clockwise/SVG/ic_fluent_book_arrow_clockwise_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/book-arrow-clockwise.svg"
+runtime_file = "web/icons/settings/book-arrow-clockwise.svg"
+sha256 = "efc7408c80b8c4fec4d04a8ef055d129e7f358a5327468754864b21123b3e56a"
+
+[[component.asset]]
+source_path = "assets/Database Search/SVG/ic_fluent_database_search_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/database-search.svg"
+runtime_file = "web/icons/settings/database-search.svg"
+sha256 = "b2e596813af506f6156692da36f4b515f408729ca7e6d17b6a9d76579831cb16"
+
+[[component.asset]]
+source_path = "assets/Image Multiple/SVG/ic_fluent_image_multiple_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/image-multiple.svg"
+runtime_file = "web/icons/settings/image-multiple.svg"
+sha256 = "f406f64ad2994b3ab01374489bb85f2136cdba32c7b7873fc43957cda9e99ab2"
+
+[[component.asset]]
+source_path = "assets/Shield Checkmark/SVG/ic_fluent_shield_checkmark_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/shield-checkmark.svg"
+runtime_file = "web/icons/settings/shield-checkmark.svg"
+sha256 = "6c20b23f3e2bbf9e2262d92fade66b175c86359da38c56d2cacdfd945729cf19"
+
+[[component.asset]]
+source_path = "assets/Plug Connected Checkmark/SVG/ic_fluent_plug_connected_checkmark_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/plug-connected-checkmark.svg"
+runtime_file = "web/icons/settings/plug-connected-checkmark.svg"
+sha256 = "f206933dc729ee38878b74c5a95ac0af4ca2ccf5ac04ac02e52f16f2a8e9681c"
+
+[[component.asset]]
+source_path = "assets/Key/SVG/ic_fluent_key_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/key.svg"
+runtime_file = "web/icons/settings/key.svg"
+sha256 = "7977d3963b316b2ad7cf397dc81de65ffeb8d7adc46fd210eb0b5114943f8deb"
+
+[[component.asset]]
+source_path = "assets/Link Add/SVG/ic_fluent_link_add_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/link-add.svg"
+runtime_file = "web/icons/settings/link-add.svg"
+sha256 = "ab534623999882ac56876a2c94cbaa5ce69c0046c2cbe1ab10e1dbffe049d060"
+
+[[component.asset]]
+source_path = "assets/Cube Multiple/SVG/ic_fluent_cube_multiple_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/cube-multiple.svg"
+runtime_file = "web/icons/settings/cube-multiple.svg"
+sha256 = "e1fbfb7635d480b93dc5e97a909fbaf1579088901f97fda09ab0038189e951bc"
+
+[[component.asset]]
+source_path = "assets/Info/SVG/ic_fluent_info_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/info.svg"
+runtime_file = "web/icons/settings/info.svg"
+sha256 = "7e47762e5b5d471e60513f1c538d21fb154c4b7f5c9b0a1e7b2e4362333482d1"
+
+[[component.asset]]
+source_path = "assets/Heart/SVG/ic_fluent_heart_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/heart.svg"
+runtime_file = "web/icons/settings/heart.svg"
+sha256 = "b01a92c62d6c23a93519e769c4711c8d52ef3608ca558bfabc29826aad8abcaf"
+
+[[component.asset]]
+source_path = "assets/Star/SVG/ic_fluent_star_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/star.svg"
+runtime_file = "web/icons/settings/star.svg"
+sha256 = "ad835b239ced250b648e2740915893cba5e83a353a970d3b7d6ebb96e0a81654"
+
+[[component.asset]]
+source_path = "assets/Certificate/SVG/ic_fluent_certificate_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/certificate.svg"
+runtime_file = "web/icons/settings/certificate.svg"
+sha256 = "6806cb72415c6c84fec3a03d313e1921bccc35a3b632a1a06eb7cc126a5168c9"
+
+[[component.asset]]
+source_path = "assets/Keyboard/SVG/ic_fluent_keyboard_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/keyboard.svg"
+runtime_file = "web/icons/settings/keyboard.svg"
+sha256 = "60c26331d27b37670c302bedfec6767239902017e977c0f49c5ce76f939cdd54"
+
+[[component.asset]]
+source_path = "assets/Search/SVG/ic_fluent_search_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/search.svg"
+runtime_file = "web/icons/settings/search.svg"
+sha256 = "5ac33d20fce7e4844117468b27c8106a4145a94c8c7732688f1a35f637261c45"
+
+[[component.asset]]
+source_path = "assets/Chevron Down/SVG/ic_fluent_chevron_down_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/chevron-down.svg"
+runtime_file = "web/icons/settings/chevron-down.svg"
+sha256 = "9004843957bb4a6fe88444e1c68d35a032b05b3320c7f89c181d332ec764b966"
+
+[[component.asset]]
+source_path = "assets/Chevron Right/SVG/ic_fluent_chevron_right_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/chevron-right.svg"
+runtime_file = "web/icons/settings/chevron-right.svg"
+sha256 = "14313fa3004c614d1cbe5c635449abfad7d079dc409c694c418f7eaf14f3cae9"
+
+[[component.asset]]
+source_path = "assets/Wand/SVG/ic_fluent_wand_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/wand.svg"
+runtime_file = "web/icons/settings/wand.svg"
+sha256 = "2d0c2875204dfc2940e7373bb4f52e2242481acfe1108e67d7624ed9c943687a"
+
+[[component.asset]]
+source_path = "assets/Ram/SVG/ic_fluent_ram_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/ram.svg"
+runtime_file = "web/icons/settings/ram.svg"
+sha256 = "33dd907d68ec6325840321dd1312c971d200bb930fcd78ee3cbae1e2baa71b29"
+
+[[component.asset]]
+source_path = "assets/Window Brush/SVG/ic_fluent_window_brush_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/window-brush.svg"
+runtime_file = "web/icons/settings/window-brush.svg"
+sha256 = "34c5cd763be0aabd3a0d5cfc3df3dcccb0b9c5f362160fcaa9248ead45393922"
+
+[[component.asset]]
+source_path = "assets/Braces Variable/SVG/ic_fluent_braces_variable_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/braces-variable.svg"
+runtime_file = "web/icons/settings/braces-variable.svg"
+sha256 = "73178a8776abefb847ec56888bac809d058e6585743e8cdf2f30878c8bb9f6f6"
+
+[[component.asset]]
+source_path = "assets/Arrow Sync/SVG/ic_fluent_arrow_sync_20_regular.svg"
+vendored_file = "frontend/static/icons/settings/arrow-sync.svg"
+runtime_file = "web/icons/settings/arrow-sync.svg"
+sha256 = "ef2c8e23d0a70faa677b4ef732030df69efcd74612f551b3601abe55906c08bd"
 
 [[component]]
 name = "Microsoft Fluent UI Emoji"
@@ -894,7 +1091,6 @@ adapted_paths = ["frontend/comfyui/ui/model_library/ModelGalleryLayout.ts"]
 source_path = "substitute/presentation/widgets/media_wall/media_wall_view.py"
 source_sha256 = "d478a72b5dab0fb707455eec88fa28cc45cf0ea71958b4798b5c6036645251cf"
 adapted_paths = ["frontend/comfyui/ui/model_library/ModelPickerNavigation.ts", "frontend/comfyui/ui/model_library/vue/ModelPickerWall.ts"]
-
 
 [[component]]
 name = 'CivitAI model relationships'

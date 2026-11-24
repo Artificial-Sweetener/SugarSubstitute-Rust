@@ -54,7 +54,7 @@ function settingsFixture() {
         },
       },
     },
-    mode: { enabled: false, subscribe: () => () => {} },
+    mode: { enabled: false, desktop: false, subscribe: () => () => {} },
     palette: { theme: { dark: true, color: '#479ef5' }, subscribe: () => () => {} },
     report: (error) => errors.push(error),
   });

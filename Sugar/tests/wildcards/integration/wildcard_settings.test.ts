@@ -20,10 +20,10 @@ import {
   type WildcardApiResponse,
 } from '../../../frontend/comfyui/ui/wildcards/infrastructure/ComfyWildcardFiles.js';
 import {
-  WILDCARD_SETTING,
   registerWildcardSettings,
   type WildcardNamePrompt,
 } from '../../../frontend/comfyui/ui/wildcards/presentation/WildcardSettings.js';
+import { drawRows } from '../../settings/support/SettingsRowHarness.js';
 import {
   wildcardFile,
   type WildcardFile,
@@ -42,15 +42,12 @@ function fixture(paths: string[], answers: (string | null)[]) {
   let files = listed();
   const prompts: Parameters<WildcardNamePrompt>[0][] = [];
   const refusals: (string | null)[] = [];
-  const settings: { id: string; type: () => HTMLElement; category: string[] }[] = [];
+  const app = {};
   const report = jest.fn<(error: unknown) => void>();
   const openFolder = jest.fn(async () => undefined);
   registerWildcardSettings({
-    app: {
-      ui: {
-        settings: { addSetting: (setting: (typeof settings)[number]) => settings.push(setting) },
-      },
-    },
+    app,
+
     document,
     files: () => files,
     refresh: async () => {
@@ -78,38 +75,35 @@ function fixture(paths: string[], answers: (string | null)[]) {
     },
     report,
   });
-  const setting = settings[0]!;
-  const row = setting.type();
-  document.body.append(row);
+  const row = drawRows(app, ['prompt_editing.wildcards.manage'], report).card(
+    'prompt_editing.wildcards.manage',
+  );
   const press = async (label: string): Promise<void> => {
     const button = [...row.querySelectorAll('button')].find((item) => item.textContent === label);
     button!.click();
     for (let turn = 0; turn < 20; turn++) await Promise.resolve();
   };
-  return { setting, row, folder, prompts, refusals, report, openFolder, press };
+  return { row, folder, prompts, refusals, report, openFolder, press };
 }
 
-test('the row sits under Prompt editor and offers the three wildcard actions', async () => {
+test('the Manage wildcards row offers the three wildcard actions', async () => {
   const f = fixture([], []);
-  expect(f.setting.id).toBe(WILDCARD_SETTING);
-  expect(f.setting.category).toEqual(['SugarCubes', 'Wildcards', 'Wildcards']);
-  expect(f.setting.type()).toBe(f.row);
   expect([...f.row.querySelectorAll('button')].map((button) => button.textContent)).toEqual([
-    'Open wildcards folder',
-    'New wildcard…',
-    'Rename wildcard…',
+    'Open folder',
+    'New…',
+    'Rename…',
   ]);
-  await f.press('Open wildcards folder');
+  await f.press('Open folder');
   expect(f.openFolder).toHaveBeenCalledTimes(1);
   expect(f.report).not.toHaveBeenCalled();
 });
 
 test('a new wildcard is a TXT file unless its name ends in .csv, and a taken name is refused', async () => {
   const f = fixture(['colors.txt'], ['people/hair', 'Sets/Moods.csv', 'Colors', '../escape']);
-  await f.press('New wildcard…');
-  await f.press('New wildcard…');
-  await f.press('New wildcard…');
-  await f.press('New wildcard…');
+  await f.press('New…');
+  await f.press('New…');
+  await f.press('New…');
+  await f.press('New…');
   expect([...f.folder].sort()).toEqual(['Sets/Moods.csv', 'colors.txt', 'people/hair.txt']);
   expect(f.refusals).toEqual([
     null,
@@ -123,7 +117,7 @@ test('a new wildcard is a TXT file unless its name ends in .csv, and a taken nam
 
 test('a wildcard is renamed by the name prompts use, keeping its kind', async () => {
   const f = fixture(['People/Hair.csv', 'colors.txt'], ['people/hair', 'people/styles', 'nothing']);
-  await f.press('Rename wildcard…');
+  await f.press('Rename…');
   expect([...f.folder].sort()).toEqual(['colors.txt', 'people/styles.csv']);
   expect(f.prompts[1]).toMatchObject({
     label: 'New name for people/hair',
@@ -131,7 +125,7 @@ test('a wildcard is renamed by the name prompts use, keeping its kind', async ()
     confirmLabel: 'Rename',
   });
   // A name the folder does not hold is refused before a new name is asked for.
-  await f.press('Rename wildcard…');
+  await f.press('Rename…');
   expect(f.refusals.at(-1)).toBe('There is no wildcard with this name.');
   expect(f.prompts).toHaveLength(3);
   expect(f.report).not.toHaveBeenCalled();

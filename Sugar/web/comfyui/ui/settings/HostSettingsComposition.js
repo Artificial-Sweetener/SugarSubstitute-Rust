@@ -36,7 +36,7 @@ export function createHostSettingsComposition(dependencies) {
         adapter: dependencies.adapter,
     };
     const saving = document
-        ? new OutputSavingSettings(document, configuration, dependencies.adapter, (error) => {
+        ? new OutputSavingSettings(document, configuration, (error) => {
             dependencies.logger.warn('SugarCubes output settings failed', { error });
             dependencies.pushToast('error', 'Output settings unavailable', dependencies.readErrorMessage(error));
         }, controls ? () => controls.open() : null)
@@ -45,16 +45,13 @@ export function createHostSettingsComposition(dependencies) {
         outputSaving,
         register: () => {
             repository.register();
-            const manager = dependencies.appRef?.ui?.settings;
-            if (manager)
-                saving?.register(manager);
+            saving?.register(dependencies.appRef);
         },
         refresh: async (options) => {
             await Promise.all([repository.refresh(options), saving?.refresh()]);
         },
         refreshUi: () => {
             repository.refreshUi();
-            saving?.show();
         },
     };
 }

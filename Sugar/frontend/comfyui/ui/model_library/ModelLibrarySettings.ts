@@ -13,19 +13,16 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Present model-library configuration through SugarCubes' existing settings and dialogs. */
-import { sugarCubesSettingsSection } from '../settings/SugarCubesSettingsSections.js';
-import { isRecord } from '../types/common.js';
-import type { ModalService } from '../dialogs/ModalService.js';
+/** Present model-library configuration as rows of the SugarCubes settings workspace. */
+import { settingsCatalogFor } from '../settings/workspace/SettingsCatalog.js';
+import { SettingsState } from '../settings/workspace/SettingsModel.js';
 import type { ModelCatalogClient } from './ModelCatalogClient.js';
 import type { ModelRootClient } from './ModelRootClient.js';
 
 export interface ModelLibrarySettingsOptions {
   readonly app: unknown;
-  readonly document: Document;
   readonly roots: ModelRootClient;
   readonly catalog: ModelCatalogClient;
-  readonly dialogs: Pick<ModalService, 'openForm' | 'alert'>;
   reportError(error: unknown): void;
 }
 
@@ -39,116 +36,71 @@ export class ModelLibrarySettings {
     this.#options = options;
   }
 
-  /** Register one owned settings action row without creating persisted browser paths. */
+  /**
+   * Contribute the model folder (the ComfyUI page's Connection), the download folder pattern
+   * (Generation › Model downloads) and the catalog rescan (Model Sources › Model library).
+   */
   setup(): void {
     if (this.#registered) return;
-    const app = isRecord(this.#options.app) ? this.#options.app : {};
-    const ui = isRecord(app.ui) ? app.ui : {};
-    const settings = isRecord(ui.settings) ? ui.settings : {};
-    if (typeof settings.addSetting !== 'function')
-      throw new Error('Comfy model-library settings are unavailable.');
     this.#registered = true;
-    let row: HTMLElement | null = null;
-    settings.addSetting.call(settings, {
-      id: 'SugarCubes.Models.Library',
-      name: 'Model library',
-      ...sugarCubesSettingsSection('models', 'Library'),
-      defaultValue: '',
-      tooltip: 'Configure the shared model folder or refresh the prepared model catalog.',
-      type: () => {
-        if (row) return row;
-        row = this.#options.document.createElement('div');
-        row.className = 'sugarcubes-settings-row';
-        Object.assign(row.style, { display: 'flex', gap: '8px', justifyContent: 'flex-end' });
-        row.append(
-          this.#button('Model folder…', () => this.#configure()),
-          this.#button('Download organization…', () => this.#organization()),
-          this.#button('Refresh catalog', () => this.#options.catalog.refresh()),
-        );
-        return row;
-      },
+    const catalog = settingsCatalogFor(this.#options.app);
+    const folder = new SettingsState('', async (path) => {
+      const saved = await this.#options.roots.configure(path.trim() === '' ? null : path.trim());
+      this.#folderStatus.set(
+        saved.restartRequired
+          ? 'Restart ComfyUI to use this folder.'
+          : 'ComfyUI is using this folder.',
+      );
+      await this.#loadFolder();
     });
-  }
-
-  /** Configure optional folders beneath each model category through the shared modal system. */
-  async #organization(): Promise<void> {
-    const pattern = await this.#options.catalog.downloadPattern();
-    const values = await this.#options.dialogs.openForm({
-      title: 'Download organization',
-      message: [
-        'New downloads are saved beneath their model category folder.',
-        'Use {architecture}, {family}, {nsfw} and {file_name}. Unknown metadata uses Unknown or unknown.',
-        'Example: {architecture}/{family}/{nsfw}/{file_name}',
-      ],
-      fields: [
+    this.#folder = folder;
+    catalog.contribute('comfyui.connection.model_folder', {
+      controls: [
+        { kind: 'text', value: folder, width: 420, placeholder: 'ComfyUI’s default model folder' },
         {
-          key: 'pattern',
-          label: 'Folder pattern',
-          initialValue: pattern,
-          normalizeValue: (value) => value.trim(),
+          kind: 'button',
+          button: { label: 'Default', run: () => folder.write('') },
+        },
+        { kind: 'status', text: this.#folderStatus },
+      ],
+    });
+    const pattern = new SettingsState('', (value) =>
+      this.#options.catalog.saveDownloadPattern(value.trim()),
+    );
+    catalog.contribute('generation.model_downloads.pattern', {
+      controls: [
+        {
+          kind: 'text',
+          value: pattern,
+          width: 360,
+          placeholder: '{architecture}/{family}/{nsfw}/{file_name}',
         },
       ],
-      confirmLabel: 'Save',
     });
-    if (values && typeof values.pattern === 'string')
-      await this.#options.catalog.saveDownloadPattern(values.pattern);
+    catalog.contribute('model_sources.model_library.catalog', {
+      controls: [
+        {
+          kind: 'button',
+          button: { label: 'Refresh catalog', run: () => this.#options.catalog.refresh() },
+        },
+      ],
+    });
+    void this.#loadFolder().catch(this.#options.reportError);
+    void this.#options.catalog
+      .downloadPattern()
+      .then((value) => pattern.set(value))
+      .catch(this.#options.reportError);
   }
 
-  /** Own one button's pending state and route failures through existing SugarCubes feedback. */
-  #button(label: string, operation: () => Promise<void>): HTMLButtonElement {
-    const button = this.#options.document.createElement('button');
-    button.type = 'button';
-    button.className = 'p-button p-button-secondary';
-    button.textContent = label;
-    button.addEventListener('click', () => {
-      button.disabled = true;
-      void operation()
-        .catch(this.#options.reportError)
-        .finally(() => {
-          button.disabled = false;
-        });
-    });
-    return button;
-  }
+  readonly #folderStatus = new SettingsState('');
+  #folder: SettingsState<string> | null = null;
 
-  /** Edit next-launch intent without relocating files or restarting the current Comfy host. */
-  async #configure(): Promise<void> {
+  /** Show the configured folder, or the default's path as the field's hint. */
+  async #loadFolder(): Promise<void> {
     const status = await this.#options.roots.load();
-    const values = await this.#options.dialogs.openForm({
-      title: 'Model folder',
-      message: [
-        `Active folder: ${status.activeModelRoot}`,
-        'Changes apply after ComfyUI restarts. Existing model files stay in their current folders.',
-      ],
-      fields: [
-        {
-          key: 'useDefault',
-          type: 'checkbox',
-          label: 'Use ComfyUI’s default model folder',
-          initialValue: status.usesDefault,
-        },
-        {
-          key: 'path',
-          label: 'Model folder',
-          initialValue: status.configuredModelRoot ?? status.activeModelRoot,
-          normalizeValue: (value) => value.trim(),
-          validate: (value, all) =>
-            all.useDefault === true || (typeof value === 'string' && value.length > 0)
-              ? null
-              : 'Enter an absolute model folder path.',
-        },
-      ],
-      confirmLabel: 'Save model folder',
-    });
-    if (!values) return;
-    const path =
-      values.useDefault === true ? null : typeof values.path === 'string' ? values.path : '';
-    const saved = await this.#options.roots.configure(path);
-    await this.#options.dialogs.alert({
-      title: 'Model folder saved',
-      message: saved.restartRequired
-        ? 'Restart ComfyUI to use the selected model folder.'
-        : 'ComfyUI is already using the selected model folder.',
-    });
+    this.#folder?.set(
+      status.usesDefault ? '' : (status.configuredModelRoot ?? status.activeModelRoot),
+    );
+    if (!this.#folderStatus.read()) this.#folderStatus.set(`Active: ${status.activeModelRoot}`);
   }
 }

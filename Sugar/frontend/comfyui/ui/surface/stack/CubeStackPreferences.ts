@@ -14,7 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Persist stack presentation through Comfy settings, independently of workflow documents. */
-import { sugarCubesSettingsSection } from '../../settings/SugarCubesSettingsSections.js';
+import { settingsCatalogFor } from '../../settings/workspace/SettingsCatalog.js';
 import { isRecord } from '../../types/common.js';
 
 /** Identify the persisted rail visibility affordance in Comfy settings. */
@@ -72,17 +72,18 @@ export class CubeStackPreferences {
     this.#setValue = async (id, value) => {
       await setSettingValue.call(settings, id, value);
     };
+    const catalog = settingsCatalogFor(this.#app);
     const register = (
       id: string,
       name: string,
       key: keyof CubeStackPreferenceSnapshot,
       defaultValue: boolean,
+      row: string,
     ): void => {
       addSetting.call(settings, {
         id,
         name,
-        ...sugarCubesSettingsSection('stack', name),
-        type: 'boolean',
+        type: 'hidden',
         defaultValue,
         onChange: (value: unknown) => {
           if (typeof value === 'boolean') this.#accept(key, value);
@@ -90,9 +91,33 @@ export class CubeStackPreferences {
       });
       const value: unknown = getSettingValue.call(settings, id, defaultValue);
       this.#accept(key, typeof value === 'boolean' ? value : defaultValue);
+      catalog.contribute(row, {
+        controls: [
+          {
+            kind: 'switch',
+            value: {
+              read: () => this.#saved[key],
+              write: (next) => this.#write(id, key, next),
+              subscribe: (listener) => this.subscribe(listener),
+            },
+          },
+        ],
+      });
     };
-    register(CUBE_STACK_VISIBLE_SETTING, 'Show Cube stack', 'visible', true);
-    register(CUBE_STACK_COMPACT_SETTING, 'Compact Cube stack', 'compact', false);
+    register(
+      CUBE_STACK_VISIBLE_SETTING,
+      'Show Cube stack',
+      'visible',
+      true,
+      'appearance.layout.cube_stack',
+    );
+    register(
+      CUBE_STACK_COMPACT_SETTING,
+      'Compact Cube stack',
+      'compact',
+      false,
+      'appearance.layout.compact_stack',
+    );
   }
 
   /** Persist a visibility choice, including recovery through the normal Comfy settings UI. */

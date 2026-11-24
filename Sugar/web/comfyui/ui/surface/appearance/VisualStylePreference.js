@@ -14,7 +14,9 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Adapt Comfy's persisted settings to one validated visual-style preference. */
-import { sugarCubesSettingsSection } from '../../settings/SugarCubesSettingsSections.js';
+import { ComfySettingStore } from '../../settings/workspace/ComfySettingStore.js';
+import { settingsCatalogFor } from '../../settings/workspace/SettingsCatalog.js';
+import { fixed } from '../../settings/workspace/SettingsModel.js';
 import { isRecord } from '../../types/common.js';
 import { isVisualStyle, resolveVisualStyle } from './VisualStyle.js';
 /** Persist visual style independently of workflow documents and renderer selection. */
@@ -47,17 +49,8 @@ export function registerVisualStylePreference(app, accept, report, embedded) {
     settings.addSetting.call(settings, {
         id: VISUAL_STYLE_SETTING,
         name: 'Visual style',
-        ...sugarCubesSettingsSection('appearance', 'VisualStyle'),
-        type: 'combo',
+        type: 'hidden',
         defaultValue: initial,
-        options: [
-            { value: 'comfy', text: 'Comfy' },
-            { value: 'fluent', text: 'Fluent' },
-            { value: 'spectrum', text: 'Spectrum 2' },
-            { value: 'photopro', text: 'PhotoPro' },
-            { value: 'gimp', text: 'GIMP' },
-        ],
-        tooltip: 'Choose Comfy, Fluent, Spectrum 2, PhotoPro, or GIMP for node cards, masonry, and SugarCubes surfaces.',
         onChange: (value) => {
             if (isVisualStyle(value)) {
                 saved = value;
@@ -68,6 +61,30 @@ export function registerVisualStylePreference(app, accept, report, embedded) {
         },
     });
     refresh();
+    settingsCatalogFor(app).contribute('appearance.style.visual', {
+        controls: [
+            {
+                kind: 'choice',
+                value: new ComfySettingStore(app).value(VISUAL_STYLE_SETTING, (value) => isVisualStyle(value) ? value : 'comfy'),
+                choices: fixed([
+                    { value: 'comfy', label: 'Comfy' },
+                    { value: 'fluent', label: 'Fluent' },
+                    { value: 'spectrum', label: 'Spectrum 2' },
+                    { value: 'photopro', label: 'PhotoPro' },
+                    { value: 'gimp', label: 'GIMP' },
+                ]),
+            },
+        ],
+        // A host that decides the style itself leaves nothing to choose here.
+        ...(embedded
+            ? {
+                enabled: {
+                    read: () => embedded.read()?.visualStyle === undefined,
+                    subscribe: (listener) => embedded.subscribe(listener),
+                },
+            }
+            : {}),
+    });
     return embedded?.subscribe(refresh) ?? (() => undefined);
 }
 /** Narrow Comfy's dynamic settings object before invoking host methods. */

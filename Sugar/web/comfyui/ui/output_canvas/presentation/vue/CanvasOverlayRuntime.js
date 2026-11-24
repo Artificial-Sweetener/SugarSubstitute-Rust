@@ -1,30 +1,31 @@
 import {
   CanvasOverlay
-} from "../../../chunk-TXUU676D.js";
-import "../../../chunk-WIEFPHCO.js";
+} from "../../../chunk-HD443KUO.js";
+import "../../../chunk-3KUB4OUJ.js";
 import "../../../chunk-R73MK26O.js";
 import {
   ensureCanvasOverlayStyles
-} from "../../../chunk-ISAOEDKW.js";
-import "../../../chunk-BNV5TS3I.js";
+} from "../../../chunk-ZLN6DOSA.js";
+import "../../../chunk-PYV5DVYA.js";
 import {
   canvasContextActions,
   canvasMediaFile
 } from "../../../chunk-C6HYIV4C.js";
-import "../../../chunk-Z66IIUOP.js";
-import "../../../chunk-YFHAUKRK.js";
-import "../../../chunk-6MZ5BAVS.js";
-import "../../../chunk-HFZ5NECD.js";
-import "../../../chunk-P7TVKFNT.js";
-import "../../../chunk-KKVBN3OP.js";
-import "../../../chunk-KQOAPFCP.js";
-import "../../../chunk-QXRZ6IZZ.js";
-import "../../../chunk-J2E7XMH3.js";
+import "../../../chunk-3U6T6ASA.js";
+import "../../../chunk-GSFWR6DC.js";
+import "../../../chunk-5CIJKECM.js";
+import "../../../chunk-5LBUCDPM.js";
+import "../../../chunk-FDJMJIBE.js";
+import "../../../chunk-RN57S6QQ.js";
+import "../../../chunk-CAVCKRXE.js";
+import "../../../chunk-73OVUSZU.js";
+import "../../../chunk-EBACZXLZ.js";
+import "../../../chunk-63BPV6SS.js";
 import {
   createApp,
   h,
   shallowRef
-} from "../../../chunk-6PAJ5Y37.js";
+} from "../../../chunk-ZMBAFDHL.js";
 
 // frontend/comfyui/ui/output_canvas/presentation/CanvasMediaLabel.ts
 function canvasMediaLabel(kind) {

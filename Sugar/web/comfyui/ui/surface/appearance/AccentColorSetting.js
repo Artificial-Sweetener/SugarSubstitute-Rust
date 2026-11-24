@@ -13,54 +13,73 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Present a persisted accent color picker with validated hexadecimal editing. */
+/**
+ * The Accent color row's controls as the Python application draws them: a colour swatch and its
+ * hex value, then (after the row's source choice, when the host offers one) a Choose button that
+ * opens the colour picker. Without a system accent to return to, a Default button restores the
+ * default accent.
+ */
 import { DEFAULT_ACCENT_COLOR, normalizeAccentColor } from './AccentPalette.js';
-/** Build a settings row without retaining detached inputs or accepting invalid color text. */
-export function createAccentColorSetting(documentRef, color, save) {
-    const row = documentRef.createElement('fieldset');
-    row.className = 'sugarcubes-settings-row sc-accent-setting';
-    row.style.cssText = 'display:flex;align-items:center;gap:12px;border:0;padding:0;margin:0';
-    const picker = documentRef.createElement('input');
+/** Build the controls; `save` receives each chosen, normalized colour. */
+export function createAccentColorControls(document, color, save, offerDefault) {
+    const preview = document.createElement('span');
+    preview.className = 'sc-accent-preview';
+    const swatch = document.createElement('span');
+    swatch.className = 'sc-accent-swatch';
+    swatch.setAttribute('aria-hidden', 'true');
+    const hex = document.createElement('span');
+    hex.className = 'sc-accent-hex';
+    preview.append(swatch, hex);
+    const actions = document.createElement('span');
+    actions.className = 'sc-accent-actions';
+    const picker = document.createElement('input');
     picker.type = 'color';
-    picker.value = color;
-    picker.setAttribute('aria-label', 'SugarCubes accent color');
-    const text = documentRef.createElement('input');
-    text.type = 'text';
-    text.value = color;
-    text.placeholder = DEFAULT_ACCENT_COLOR;
-    text.setAttribute('aria-label', 'SugarCubes accent hex');
-    text.maxLength = 7;
-    const reset = documentRef.createElement('button');
-    reset.type = 'button';
-    reset.textContent = 'Reset';
-    reset.className = 'p-button p-button-secondary';
-    /** Publish only complete colors, keeping transient text edits local to the control. */
+    picker.className = 'sc-accent-picker';
+    picker.tabIndex = -1;
+    picker.setAttribute('aria-hidden', 'true');
+    const show = (value) => {
+        swatch.style.background = value;
+        hex.textContent = value;
+        picker.value = value;
+    };
     const accept = (value) => {
         const normalized = normalizeAccentColor(value);
-        text.setCustomValidity(normalized ? '' : 'Enter a hexadecimal color such as #b58cff.');
-        text.setAttribute('aria-invalid', normalized ? 'false' : 'true');
         if (!normalized)
             return;
-        picker.value = text.value = normalized;
+        show(normalized);
         save(normalized);
     };
-    picker.addEventListener('input', () => accept(picker.value));
-    text.addEventListener('input', () => {
-        if (text.value.trim().length === 7 && normalizeAccentColor(text.value))
-            accept(text.value);
+    const choose = button(document, 'Choose');
+    choose.setAttribute('aria-label', 'Choose accent color');
+    choose.addEventListener('click', () => {
+        // The browser's colour dialog opens from the click, as Python's Choose opens its dialog.
+        if (typeof picker.showPicker === 'function')
+            picker.showPicker();
+        else
+            picker.click();
     });
-    text.addEventListener('change', () => accept(text.value));
-    reset.addEventListener('click', () => accept(DEFAULT_ACCENT_COLOR));
-    row.append(picker, text, reset);
-    return row;
+    picker.addEventListener('input', () => accept(picker.value));
+    actions.append(picker, choose);
+    if (offerDefault) {
+        const reset = button(document, 'Default');
+        reset.addEventListener('click', () => accept(DEFAULT_ACCENT_COLOR));
+        actions.append(reset);
+    }
+    show(color);
+    return {
+        preview,
+        actions,
+        update: (value, usesSystem) => {
+            show(value);
+            for (const control of actions.querySelectorAll('button'))
+                control.disabled = usesSystem;
+        },
+    };
 }
-/** Synchronize a mounted picker with its selected source without disturbing partial text edits. */
-export function updateAccentColorSetting(row, color, disabled) {
-    const signature = `${color}:${disabled}`;
-    if (row.dataset.accentState === signature)
-        return;
-    row.dataset.accentState = signature;
-    row.disabled = disabled;
-    for (const input of row.querySelectorAll('input'))
-        input.value = color;
+function button(document, label) {
+    const element = document.createElement('button');
+    element.type = 'button';
+    element.className = 'sc-sw-button sc-accent-button';
+    element.textContent = label;
+    return element;
 }

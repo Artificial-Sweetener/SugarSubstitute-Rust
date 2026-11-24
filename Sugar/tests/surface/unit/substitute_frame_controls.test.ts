@@ -47,6 +47,21 @@ test('frame mode defaults off, changes independently, and registers one preferen
   expect(mode.enabled).toBe(false);
 });
 
+test('the desktop taking the page is announced even while the browser preference already shows the frame', () => {
+  const mode = new SubstituteFrameMode();
+  mode.setEnabled(true);
+  let changes = 0;
+  mode.subscribe(() => changes++);
+  mode.setDesktop(true);
+  mode.setDesktop(true);
+  expect(mode.desktop).toBe(true);
+  expect(mode.enabled).toBe(true);
+  expect(changes).toBe(1);
+  mode.setDesktop(false);
+  expect(mode.desktop).toBe(false);
+  expect(changes).toBe(2);
+});
+
 test('activation and inactive close invoke the existing native handlers without changing the store', () => {
   const id = workflowSessionId('original');
   const sessions = [{ sessionId: id, title: '<literal>', path: 'original', generation: 0 }];

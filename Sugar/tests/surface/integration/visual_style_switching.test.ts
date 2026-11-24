@@ -20,6 +20,7 @@ import { VISUAL_STYLE_SETTING } from '../../../frontend/comfyui/ui/surface/appea
 import { prepareNativePresentation } from '../../../frontend/comfyui/ui/surface/NativePresentationReady.js';
 import { isRecord, type UnknownRecord } from '../../../frontend/comfyui/ui/types/common.js';
 import type { VisualStyle } from '../../../frontend/comfyui/ui/surface/appearance/VisualStyle.js';
+import { settingsCatalogFor } from '../../../frontend/comfyui/ui/settings/workspace/SettingsCatalog.js';
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -60,10 +61,11 @@ function fixture(style: VisualStyle) {
     addEventListener: events.addEventListener.bind(events),
     removeEventListener: events.removeEventListener.bind(events),
   };
-  const host = new AppearanceHost({ document, app: { ui: { settings } }, reportError: errors });
+  const app = { ui: { settings } };
+  const host = new AppearanceHost({ document, app, reportError: errors });
   host.setup();
   prepareNativePresentation(root);
-  return { host, root, input, values, registrations, events, frames, errors };
+  return { host, app, root, input, values, registrations, events, frames, errors };
 }
 
 test.each(['comfy', 'fluent', 'spectrum', 'photopro', 'gimp'] as const)(
@@ -71,13 +73,15 @@ test.each(['comfy', 'fluent', 'spectrum', 'photopro', 'gimp'] as const)(
   (style) => {
     const f = fixture(style);
     const setting = f.registrations.get(VISUAL_STYLE_SETTING);
-    expect(setting?.type).toBe('combo');
-    expect(setting?.options).toEqual([
-      { value: 'comfy', text: 'Comfy' },
-      { value: 'fluent', text: 'Fluent' },
-      { value: 'spectrum', text: 'Spectrum 2' },
-      { value: 'photopro', text: 'PhotoPro' },
-      { value: 'gimp', text: 'GIMP' },
+    // ComfyUI keeps the value; the settings workspace's Visual style row offers the styles.
+    expect(setting?.type).toBe('hidden');
+    const choice = settingsCatalogFor(f.app).row('appearance.style.visual')?.controls?.[0];
+    expect(choice?.kind === 'choice' ? choice.choices.read() : null).toEqual([
+      { value: 'comfy', label: 'Comfy' },
+      { value: 'fluent', label: 'Fluent' },
+      { value: 'spectrum', label: 'Spectrum 2' },
+      { value: 'photopro', label: 'PhotoPro' },
+      { value: 'gimp', label: 'GIMP' },
     ]);
     expect(f.registrations.has('SugarCubes.Appearance.Fluent')).toBe(false);
     expect(f.host.state.appearance.style).toBe(style);

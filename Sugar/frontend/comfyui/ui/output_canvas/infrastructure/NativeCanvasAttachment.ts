@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose shared canvas controls over one host-owned native output surface. */
 
+import { StyledNumericSlider } from '../../surface/appearance/OwnedNumericSlider.js';
 import type {
   CanvasSurfaceHost,
   CanvasSurfaceViewportState,
@@ -344,6 +345,7 @@ export class NativeCanvasAttachment {
         region: this.viewport,
         geometry: () => this.#surface,
         obstacles: () => this.#overlay.navigationBounds(),
+        sliders: (document, option, input) => new StyledNumericSlider(document, option, input),
         report: (error) => options.report(error, null),
       });
       cleanup.push(() => this.#editing.dispose());

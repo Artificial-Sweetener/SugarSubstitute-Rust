@@ -15,7 +15,9 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Store the desktop application's memory ceiling in Comfy's persisted settings. */
 import { isRecord } from '../types/common.js';
-import { sugarCubesSettingsSection } from './SugarCubesSettingsSections.js';
+import { ComfySettingStore } from './workspace/ComfySettingStore.js';
+import { settingsCatalogFor } from './workspace/SettingsCatalog.js';
+import { fixed } from './workspace/SettingsModel.js';
 const MODE_ID = 'SugarCubes.Memory.Mode';
 const SHARE_ID = 'SugarCubes.Memory.SharePercent';
 const FIXED_ID = 'SugarCubes.Memory.FixedGiB';
@@ -30,6 +32,7 @@ export class MemoryBudgetSettings {
     #settings;
     /** Values delivered by change callbacks, which can precede Comfy's own store update. */
     #changed = new Map();
+    #stops = [];
     /** Register the three settings rows in Comfy's settings dialog. */
     constructor(app) {
         const host = isRecord(app) ? app : {};
@@ -52,28 +55,62 @@ export class MemoryBudgetSettings {
         add({
             id: MODE_ID,
             name: 'Application memory limit',
-            ...sugarCubesSettingsSection('memory', 'Mode'),
-            type: 'combo',
-            options: [SHARE_MODE, FIXED_MODE],
+            type: 'hidden',
             defaultValue: SHARE_MODE,
-            tooltip: 'How much memory SugarSubstitute may use for its own work and caches. Caches shrink at once when the system needs memory back.',
         });
         add({
             id: SHARE_ID,
             name: 'Share of system memory (%)',
-            ...sugarCubesSettingsSection('memory', 'SharePercent'),
-            type: 'slider',
-            attrs: { min: 10, max: 75, step: 5 },
+            type: 'hidden',
             defaultValue: DEFAULT_SHARE,
         });
-        add({
-            id: FIXED_ID,
-            name: 'Fixed size (GB)',
-            ...sugarCubesSettingsSection('memory', 'FixedGiB'),
-            type: 'number',
-            attrs: { min: 1, max: 1024, step: 1 },
-            defaultValue: DEFAULT_FIXED_GIB,
+        add({ id: FIXED_ID, name: 'Fixed size (GB)', type: 'hidden', defaultValue: DEFAULT_FIXED_GIB });
+        const store = new ComfySettingStore(app);
+        const catalog = settingsCatalogFor(app);
+        const mode = store.value(MODE_ID, (value) => (value === FIXED_MODE ? FIXED_MODE : SHARE_MODE));
+        const showing = (wanted) => ({
+            read: () => mode.read() === wanted,
+            subscribe: (listener) => mode.subscribe(listener),
         });
+        this.#stops.push(catalog.contribute('generation.memory.mode', {
+            controls: [
+                {
+                    kind: 'choice',
+                    value: mode,
+                    choices: fixed([
+                        { value: SHARE_MODE, label: SHARE_MODE },
+                        { value: FIXED_MODE, label: FIXED_MODE },
+                    ]),
+                },
+            ],
+        }), catalog.contribute('generation.memory.share', {
+            controls: [
+                {
+                    kind: 'slider',
+                    value: store.value(SHARE_ID, (value) => typeof value === 'number' ? value : DEFAULT_SHARE),
+                    min: 10,
+                    max: 75,
+                    step: 5,
+                },
+            ],
+            visible: showing(SHARE_MODE),
+        }), catalog.contribute('generation.memory.fixed', {
+            controls: [
+                {
+                    kind: 'number',
+                    value: store.value(FIXED_ID, (value) => typeof value === 'number' ? value : DEFAULT_FIXED_GIB),
+                    min: 1,
+                    max: 1024,
+                    step: 1,
+                },
+            ],
+            visible: showing(FIXED_MODE),
+        }));
+    }
+    /** Withdraw the rows, as when the desktop host's memory link ends. */
+    dispose() {
+        for (const stop of this.#stops.splice(0))
+            stop();
     }
     /** The preference the stored settings select, with out-of-range values clamped. */
     read() {

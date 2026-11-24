@@ -332,9 +332,9 @@ const reportModelFailure = (failure, title) => (error) => {
     pushToastMessage('error', title, readErrorMessage(error));
 };
 const modelUpdateLifecycle = new ModelUpdateLifecycle(window, modelUpdates, modelBackgroundReporter(logger, 'model update lifecycle'));
-const modelUpdateSettings = new ModelUpdateSettings(documentRef ?? document, modelUpdates, reportModelFailure('SugarCubes model update failed', 'Model updates unavailable'));
-const modelProviderSettings = new ModelProviderSettings(documentRef ?? document, new ModelProviderPreferenceClient((path, options) => api.fetchApi(path, options)), reportModelFailure('SugarCubes model provider settings failed', 'Model provider settings'));
-const modelProviderCacheSettings = new ModelProviderCacheSettings(documentRef ?? document, new ModelProviderCacheClient((path, options) => api.fetchApi(path, options)), reportModelFailure('SugarCubes model cache settings failed', 'Model cache'));
+const modelUpdateSettings = new ModelUpdateSettings(modelUpdates, reportModelFailure('SugarCubes model update failed', 'Model updates unavailable'));
+const modelProviderSettings = new ModelProviderSettings(new ModelProviderPreferenceClient((path, options) => api.fetchApi(path, options)), reportModelFailure('SugarCubes model provider settings failed', 'Model provider settings'));
+const modelProviderCacheSettings = new ModelProviderCacheSettings(new ModelProviderCacheClient((path, options) => api.fetchApi(path, options)), reportModelFailure('SugarCubes model cache settings failed', 'Model cache'));
 const modelPickers = new ModelPickerHost({
     app: appRef,
     document: documentRef ?? document,
@@ -357,10 +357,8 @@ const editorActions = createEditorActionsRuntime(adapter, modelCatalog, logger, 
 /** Compose shared model-root settings without duplicating persistence or dialog policy. */
 const modelLibrarySettings = new ModelLibrarySettings({
     app: appRef,
-    document: documentRef ?? document,
     catalog: modelCatalog,
     roots: new ModelRootClient((path, options) => api.fetchApi(path, options)),
-    dialogs: ui.dialogs,
     reportError: (error) => {
         logger.error('SugarCubes model library settings failed', { error });
         pushToastMessage('error', 'Model library unavailable', readErrorMessage(error));

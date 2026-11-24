@@ -15,13 +15,12 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Define the host extension lifecycle and application capabilities at the ComfyUI boundary. */
 import type { ComfyApp, ComfyExtension, ComfyNodeDefinition } from '/scripts/app.js';
-import type { SettingsManager } from '../settings/HostSettingsController.js';
 import type { UnknownRecord } from './common.js';
 import type { ComfyApplication } from './graph.js';
 
 /** Describe the application services used by SugarCubes' composition root. */
 export interface SugarCubesHostApp extends ComfyApplication {
-  ui?: { settings?: SettingsManager };
+  ui?: { settings?: { addSetting(setting: UnknownRecord): void } };
   clean?(): void;
   registerExtension?(extension: UnknownRecord): void;
 }

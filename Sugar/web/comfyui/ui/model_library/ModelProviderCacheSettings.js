@@ -13,117 +13,64 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Present cache usage and reference maintenance actions through the shared server owner. */
-import { sugarCubesSettingsSection } from '../settings/SugarCubesSettingsSections.js';
-import { isRecord } from '../types/common.js';
-/** Keep cache activity independent of preference edits and their form state. */
+/**
+ * The Model Sources page's Provider cache rows, as in Python: CivitAI cache usage, then its
+ * maintenance actions. The server keeps the cache and reports its usage.
+ */
+import { settingsCatalogFor } from '../settings/workspace/SettingsCatalog.js';
+import { SettingsState } from '../settings/workspace/SettingsModel.js';
+/** Keep cache activity independent of preference edits. */
 export class ModelProviderCacheSettings {
-    #document;
-    #client;
-    #report;
-    #row = null;
-    #summary = null;
-    #buttons = [];
-    #loading = null;
-    #busy = false;
+    client;
+    report;
+    #summary = new SettingsState('Loading cache usage…');
+    #idle = new SettingsState(false);
     #registered = false;
-    /** Bind transport and existing non-blocking feedback without storing cache data in settings. */
-    constructor(document, client, report) {
-        this.#document = document;
-        this.#client = client;
-        this.#report = report;
+    constructor(client, report) {
+        this.client = client;
+        this.report = report;
     }
-    /** Register one cache row with a usage summary and the three deliberate maintenance actions. */
+    /** Contribute the usage and maintenance rows and read the usage. */
     setup(app) {
         if (this.#registered)
             return;
-        const host = isRecord(app) ? app : {};
-        const ui = isRecord(host.ui) ? host.ui : {};
-        const settings = isRecord(ui.settings) ? ui.settings : {};
-        if (typeof settings.addSetting !== 'function')
-            throw new Error('Comfy model cache settings are unavailable.');
-        settings.addSetting.call(settings, {
-            id: 'SugarCubes.Models.CivitaiCache',
-            name: 'CivitAI cache',
-            ...sugarCubesSettingsSection('metadata', 'CivitaiCache'),
-            defaultValue: '',
-            type: () => {
-                if (!this.#row)
-                    this.#create();
-                this.#load();
-                return this.#row;
-            },
-        });
         this.#registered = true;
-    }
-    /** Render literal usage and bounded controls within the existing settings layout. */
-    #create() {
-        this.#row = this.#document.createElement('div');
-        this.#row.className = 'sugarcubes-settings-row';
-        this.#row.style.cssText =
-            'display:flex;flex-direction:column;align-items:flex-start;gap:8px;min-width:0';
-        this.#summary = this.#document.createElement('span');
-        this.#summary.setAttribute('aria-live', 'polite');
-        this.#summary.textContent = 'Loading cache usage…';
-        const actions = this.#document.createElement('div');
-        actions.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;max-width:100%';
-        for (const [action, caption] of [
-            ['clear_thumbnails', 'Clear thumbnails'],
-            ['clear_metadata', 'Clear metadata'],
-            ['refresh', 'Refresh'],
-        ]) {
-            const button = this.#document.createElement('button');
-            button.type = 'button';
-            button.className = 'p-button p-component p-button-secondary';
-            button.textContent = caption;
-            button.disabled = true;
-            button.addEventListener('click', () => this.#execute(action));
-            this.#buttons.push(button);
-            actions.append(button);
-        }
-        this.#row.append(this.#summary, actions);
-    }
-    /** Re-read usage on settings entry and allow retry after unavailable transport. */
-    #load() {
-        if (this.#loading || this.#busy)
-            return;
-        this.#loading = this.#client
+        const catalog = settingsCatalogFor(app);
+        catalog.contribute('model_sources.provider_cache.civitai_usage', {
+            controls: [{ kind: 'status', text: this.#summary }],
+        });
+        catalog.contribute('model_sources.provider_cache.civitai_maintenance', {
+            controls: [
+                ['clear_thumbnails', 'Clear thumbnails'],
+                ['clear_metadata', 'Clear metadata'],
+                ['refresh', 'Refresh'],
+            ].map(([action, label]) => ({
+                kind: 'button',
+                button: { label, run: () => this.#execute(action), enabled: this.#idle },
+            })),
+        });
+        void this.client
             .load()
             .then((value) => this.#show(value))
             .catch((error) => {
-            if (this.#summary)
-                this.#summary.textContent = 'Cache usage unavailable.';
-            this.#report(error);
-        })
-            .finally(() => {
-            this.#loading = null;
+            this.#summary.set('Cache usage unavailable.');
+            this.#idle.set(true);
+            this.report(error);
         });
     }
-    /** Disable competing gestures until the shared job returns committed usage. */
-    #execute(action) {
-        if (this.#busy || this.#loading)
-            return;
-        this.#busy = true;
-        for (const button of this.#buttons)
-            button.disabled = true;
-        void this.#client
-            .execute(action, (message) => {
-            if (this.#summary)
-                this.#summary.textContent = message;
-        })
-            .then((value) => this.#show(value))
-            .catch((error) => {
-            if (this.#summary)
-                this.#summary.textContent = 'Cache action did not complete.';
-            this.#report(error);
-        })
-            .finally(() => {
-            this.#busy = false;
-            for (const button of this.#buttons)
-                button.disabled = false;
-        });
+    /** Run one action, showing its progress, and keep the others off until it returns. */
+    async #execute(action) {
+        this.#idle.set(false);
+        try {
+            this.#show(await this.client.execute(action, (message) => this.#summary.set(message)));
+        }
+        catch (error) {
+            this.#summary.set('Cache action did not complete.');
+            this.#idle.set(true);
+            throw error;
+        }
     }
-    /** Show the server's exact record and image counts without manufacturing empty defaults. */
+    /** The server's exact record and image counts. */
     #show(value) {
         const bytes = value.thumbnailBytes;
         const size = bytes < 1024
@@ -131,9 +78,7 @@ export class ModelProviderCacheSettings {
             : bytes < 1024 ** 2
                 ? `${(bytes / 1024).toFixed(1)} KB`
                 : `${(bytes / 1024 ** 2).toFixed(1)} MB`;
-        if (this.#summary)
-            this.#summary.textContent = `${value.providerRecordCount} metadata records · ${value.thumbnailSourceCount} thumbnails · ${value.thumbnailVariantCount} variants · ${size}`;
-        for (const button of this.#buttons)
-            button.disabled = this.#busy;
+        this.#summary.set(`${value.providerRecordCount} metadata records · ${value.thumbnailSourceCount} thumbnails · ${value.thumbnailVariantCount} variants · ${size}`);
+        this.#idle.set(true);
     }
 }

@@ -14,73 +14,23 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Offer the wildcard folder's file actions in SugarCubes' settings. */
-import { sugarCubesSettingsSection } from '../../settings/SugarCubesSettingsSections.js';
-import { applySettingsControlsStyle, applySettingsRowShellStyle, applySettingsSummaryStyle, } from '../../settings/SettingsRowPresentation.js';
-import { isRecord } from '../../types/common.js';
-/** The setting row holding the wildcard folder's actions. */
-export const WILDCARD_SETTING = 'SugarCubes.Prompts.Wildcards';
-const SUMMARY = 'Wildcards are .txt and .csv files in the sugar/wildcards folder of your ComfyUI user folder. ' +
-    'A prompt names one as {colors}, {people/hair}, {csv:people:hair} or {colors|tag}, and each ' +
-    'run picks from it with the run’s seed.';
+import { settingsCatalogFor } from '../../settings/workspace/SettingsCatalog.js';
 /**
- * Register the Wildcards row: open the folder, create a wildcard, rename a wildcard.
+ * Contribute Prompt Editing's Manage wildcards row: open the folder, create a wildcard, rename a
+ * wildcard. Its actions read the folder as it is when they run.
  *
  * A name is written as a prompt writes it, so `people/hair` creates `people/hair.txt`; ending the
  * name in `.csv` creates a CSV wildcard. Names that are taken or are not wildcard files are
  * refused in the dialog, before anything is written.
  */
 export function registerWildcardSettings(options) {
-    const host = isRecord(options.app) ? options.app : {};
-    const ui = isRecord(host.ui) ? host.ui : {};
-    const settings = isRecord(ui.settings) ? ui.settings : null;
-    if (!settings || typeof settings.addSetting !== 'function') {
-        options.report(new Error('Comfy settings registration is unavailable for wildcards.'));
-        return;
-    }
-    let row = null;
-    settings.addSetting.call(settings, {
-        id: WILDCARD_SETTING,
-        name: 'Wildcards',
-        ...sugarCubesSettingsSection('prompts', 'Wildcards'),
-        defaultValue: '',
-        tooltip: 'Open the wildcard folder, or create and rename wildcard files.',
-        type: () => (row ??= wildcardSettingsRow(options)),
+    settingsCatalogFor(options.app).contribute('prompt_editing.wildcards.manage', {
+        controls: [
+            { kind: 'button', button: { label: 'Open folder', run: () => options.openFolder() } },
+            { kind: 'button', button: { label: 'New…', run: () => createWildcard(options) } },
+            { kind: 'button', button: { label: 'Rename…', run: () => renameWildcard(options) } },
+        ],
     });
-}
-/** Build the row once; its actions read the folder as it is when they run. */
-function wildcardSettingsRow(options) {
-    const { document } = options;
-    const root = document.createElement('div');
-    root.className = 'sugarcubes-settings-row sugarcubes-settings-row--wildcards';
-    applySettingsRowShellStyle(root);
-    const controls = document.createElement('div');
-    applySettingsControlsStyle(controls);
-    const action = (label, run) => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'p-button p-component p-button-sm p-button-text p-button-secondary';
-        const text = document.createElement('span');
-        text.className = 'p-button-label';
-        text.textContent = label;
-        button.append(text);
-        button.addEventListener('click', () => {
-            button.disabled = true;
-            void run()
-                .catch(options.report)
-                .finally(() => {
-                button.disabled = false;
-            });
-        });
-        controls.append(button);
-    };
-    action('Open wildcards folder', () => options.openFolder());
-    action('New wildcard…', () => createWildcard(options));
-    action('Rename wildcard…', () => renameWildcard(options));
-    const summary = document.createElement('div');
-    applySettingsSummaryStyle(summary);
-    summary.textContent = SUMMARY;
-    root.append(controls, summary);
-    return root;
 }
 /** Turn a typed name into a file path: a TXT wildcard unless the name ends in `.csv` or `.txt`. */
 function pathOf(name, extension = '.txt') {

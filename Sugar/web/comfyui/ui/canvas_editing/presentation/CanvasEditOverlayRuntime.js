@@ -4,19 +4,22 @@ import {
 import {
   CanvasEditOverlay,
   canvasEditSurface
-} from "../../chunk-NQJZ5CRG.js";
+} from "../../chunk-M72IAOHJ.js";
 import {
   ensureCanvasEditStyles
-} from "../../chunk-CETUOIZM.js";
-import "../../chunk-QDZURHB6.js";
-import "../../chunk-YS23D6EK.js";
-import "../../chunk-RBMNCV5O.js";
+} from "../../chunk-XV4MZTUJ.js";
+import "../../chunk-M4INAEAP.js";
+import "../../chunk-EPLTHLBY.js";
+import "../../chunk-V45VCN34.js";
 import {
   CanvasEditContextMenu
 } from "../../chunk-I74YAAHW.js";
-import "../../chunk-74DLBBMV.js";
-import "../../chunk-SLI4UFVA.js";
-import "../../chunk-HXRUOFZ6.js";
+import "../../chunk-XUXNVRNS.js";
+import "../../chunk-D5ETU77I.js";
+import "../../chunk-P2A62NDZ.js";
+import {
+  CANVAS_OPTION_SLIDERS
+} from "../../chunk-S7BMWHGE.js";
 import "../../chunk-3HDL7XRD.js";
 import {
   canvasEditSlotOf,
@@ -27,12 +30,12 @@ import {
   DEFAULT_COVERAGE_MODIFICATION
 } from "../../chunk-EFQNN4SR.js";
 import "../../chunk-OJDBLLHY.js";
-import "../../chunk-X5ULNSRV.js";
+import "../../chunk-MOOZ7AAA.js";
 import {
   createApp,
   h,
   shallowRef
-} from "../../chunk-6PAJ5Y37.js";
+} from "../../chunk-ZMBAFDHL.js";
 
 // frontend/comfyui/ui/canvas_editing/domain/CanvasEditKeys.ts
 var NUDGES = {
@@ -367,6 +370,7 @@ function mountCanvasEditOverlay(options) {
       });
     }
   });
+  app.provide(CANVAS_OPTION_SLIDERS, options.sliders);
   app.config.errorHandler = (error) => options.report(error);
   app.mount(root);
   function measure() {

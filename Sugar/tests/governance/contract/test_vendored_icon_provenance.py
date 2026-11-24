@@ -235,7 +235,7 @@ def test_every_vendored_icon_has_exact_provenance_and_deployment_bytes() -> None
             runtime_path = asset["runtime_file"]
             assert isinstance(source_path, str) and source_path.startswith("assets/")
             if source.endswith("/fluentui-system-icons"):
-                assert source_path.endswith("_20_regular.svg")
+                assert source_path.endswith(("_20_regular.svg", "_20_filled.svg"))
             else:
                 assert source_path in {
                     "assets/Game die/High Contrast/game_die_high_contrast.svg",

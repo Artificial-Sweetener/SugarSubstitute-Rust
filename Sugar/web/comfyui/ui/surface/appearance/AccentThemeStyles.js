@@ -131,16 +131,5 @@ export function accentThemeCss(color, dark) {
     background:var(--sc-accent-checkbox-pressed); border-color:var(--sc-accent-checkbox-pressed);
   }
   ${scopes} .p-toggleswitch-checked:not(.p-disabled):active .p-toggleswitch-slider { background:var(--sc-accent-toggle-pressed); }
-  .sugarcubes-settings-row input[type="checkbox"] { accent-color:var(--sc-accent-color); }
-  .sc-accent-setting :is(input,button) {
-    height:32px; border:1px solid var(--p-content-border-color,var(--border-color,#555));
-    border-radius:4px; background:var(--p-inputtext-background,var(--comfy-input-bg,#303030));
-    color:var(--p-inputtext-color,var(--fg-color,#eee)); font:inherit;
-  }
-  .sc-accent-setting input[type="color"] { width:40px; padding:3px; cursor:pointer; }
-  .sc-accent-setting input[type="text"] { width:110px; padding:0 8px; }
-  .sc-accent-setting button { padding:0 12px; cursor:pointer; }
-  .sc-accent-setting :is(input,button):focus-visible {
-    outline:2px solid var(--sc-accent-indicator); outline-offset:2px;
-  }`;
+  .sugarcubes-settings-row input[type="checkbox"] { accent-color:var(--sc-accent-color); }`;
 }

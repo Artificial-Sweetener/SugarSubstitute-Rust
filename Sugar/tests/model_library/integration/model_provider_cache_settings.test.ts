@@ -21,7 +21,7 @@ import {
   decodeModelProviderCacheSummary,
 } from '../../../frontend/comfyui/ui/model_library/ModelProviderCacheClient.js';
 import type { ModelApiFetch } from '../../../frontend/comfyui/ui/model_library/ModelApiTransport.js';
-import { isRecord } from '../../../frontend/comfyui/ui/types/common.js';
+import { drawRows, settle } from '../../settings/support/SettingsRowHarness.js';
 
 const initial = {
   schemaVersion: 1,
@@ -36,39 +36,23 @@ function response(value: unknown, ok = true): Response {
   return { ok, json: async () => value } as Response;
 }
 
-/** Drain settings promise reactions without substituting their presentation logic. */
-async function settle(): Promise<void> {
-  await new Promise<void>((resolve) => setTimeout(resolve, 0));
-}
-
-/** Mount the actual renderer through the Comfy setting registration surface. */
+/** Draw the usage and maintenance rows the cache settings contribute. */
 function mount(fetchApi: ModelApiFetch) {
-  let render: (() => unknown) | null = null;
   const report = jest.fn<(error: unknown) => void>();
-  const settings = new ModelProviderCacheSettings(
-    document,
-    new ModelProviderCacheClient(fetchApi),
+  const app = {};
+  const settings = new ModelProviderCacheSettings(new ModelProviderCacheClient(fetchApi), report);
+  settings.setup(app);
+  settings.setup(app);
+  const rows = drawRows(
+    app,
+    [
+      'model_sources.provider_cache.civitai_usage',
+      'model_sources.provider_cache.civitai_maintenance',
+    ],
     report,
   );
-  const register = jest.fn<(value: unknown) => void>((value) => {
-    if (!isRecord(value) || typeof value.type !== 'function') throw new Error('Invalid setting.');
-    const factory = value.type;
-    render = () => factory();
-  });
-  const app = { ui: { settings: { addSetting: register } } };
-  settings.setup(app);
-  settings.setup(app);
-  const create = (): HTMLElement => {
-    if (!render) throw new Error('Missing renderer.');
-    const root: unknown = render();
-    if (!(root instanceof HTMLElement)) throw new Error('Invalid cache row.');
-    return root;
-  };
-  const root = create();
-  document.body.append(root);
-  return { root, create, report, register };
+  return { root: rows.root, rows, report };
 }
-
 test.each(['clear_thumbnails', 'clear_metadata', 'refresh'] as const)(
   'runs %s only after its deliberate click and shows committed usage',
   async (action) => {
@@ -84,7 +68,6 @@ test.each(['clear_thumbnails', 'clear_metadata', 'refresh'] as const)(
     });
     try {
       await settle();
-      expect(harness.register).toHaveBeenCalledTimes(1);
       expect(calls).toEqual([{ path: '/sugarcubes/v1/models/cache/civitai', method: undefined }]);
       expect(harness.root.textContent).toContain(
         '3 metadata records · 2 thumbnails · 6 variants · 4.0 KB',
@@ -126,7 +109,7 @@ test.each(['clear_thumbnails', 'clear_metadata', 'refresh'] as const)(
       expect(buttons.every((item) => !item.disabled)).toBe(true);
       expect(harness.report).not.toHaveBeenCalled();
     } finally {
-      harness.root.remove();
+      harness.rows.dispose();
     }
   },
 );
@@ -148,12 +131,11 @@ test('retries initial usage failure and reports failed jobs without rendering er
   const confirm = jest.spyOn(window, 'confirm');
   try {
     await settle();
+    // An unavailable read leaves the actions free, so Refresh can retry it.
     expect(harness.root.textContent).toContain('Cache usage unavailable.');
-    expect(Array.from(harness.root.querySelectorAll('button')).every((item) => item.disabled)).toBe(
-      true,
-    );
-    expect(harness.create()).toBe(harness.root);
-    await settle();
+    expect(
+      Array.from(harness.root.querySelectorAll('button')).every((item) => !item.disabled),
+    ).toBe(true);
     harness.root.querySelector('button')?.click();
     await settle();
     expect(harness.report).toHaveBeenLastCalledWith(

@@ -20,6 +20,16 @@ import type { MockSettingDefinition } from '../../frontend_core/support/mocks/ap
 import type { UnknownRecord } from '../../../frontend/comfyui/ui/types/common.js';
 import type { SugarCubesUI } from '../../../frontend/comfyui/ui/SugarCubesUI.js';
 import { preserveAppearanceRuntime } from '../../frontend_core/support/appearance_runtime.js';
+type SettingsCatalogModule =
+  typeof import('../../../frontend/comfyui/ui/settings/workspace/SettingsCatalog.js');
+type SettingsCardsModule =
+  typeof import('../../../frontend/comfyui/ui/settings/workspace/SettingsCards.js');
+/** The settings modules of the loaded UI's own module registry. */
+let workspace: { catalog: SettingsCatalogModule; cards: SettingsCardsModule } | null = null;
+const settingsCatalogFor = (host: unknown) => {
+  if (!workspace) throw new Error('The UI is not loaded.');
+  return workspace.catalog.settingsCatalogFor(host);
+};
 
 let app = hostApp as unknown as (typeof import('../../frontend_core/support/mocks/app.js'))['app'];
 let api = hostApi as unknown as (typeof import('../../frontend_core/support/mocks/api.js'))['api'];
@@ -85,6 +95,10 @@ async function loadUi() {
   const loaded: { value?: typeof import('../../../frontend/comfyui/ui.js') } = {};
   await jest.isolateModulesAsync(async () => {
     loaded.value = await import('../../../frontend/comfyui/ui.js');
+    workspace = {
+      catalog: await import('../../../frontend/comfyui/ui/settings/workspace/SettingsCatalog.js'),
+      cards: await import('../../../frontend/comfyui/ui/settings/workspace/SettingsCards.js'),
+    };
   });
   if (!loaded.value) throw new Error('SugarCubes UI module did not load');
   const { sugarCubesExtension, sugarCubesUI } = loaded.value;
@@ -114,42 +128,34 @@ async function setupExtension() {
   return extension;
 }
 
-function renderRegisteredSetting(id: string): HTMLElement {
-  const setting = getRegisteredSetting(id);
-  expect(setting).toBeDefined();
-  if (typeof setting.type !== 'function') throw new Error('Expected a rendered settings control.');
-  const element = setting.type();
-  document.body.appendChild(element);
+/** Draw one row a feature contributed to the settings workspace, as the workspace draws it. */
+function renderRow(id: string): HTMLElement {
+  const row = settingsCatalogFor(app).row(id);
+  if (!row) throw new Error(`Missing settings row: ${id}`);
+  if (!workspace) throw new Error('The UI is not loaded.');
+  const view = workspace.cards.renderSettingsRow(document, row, () => undefined);
+  document.body.appendChild(view.element);
+  return view.element;
+}
+
+async function renderRowAsync(id: string, flushCount = 2): Promise<HTMLElement> {
+  const element = renderRow(id);
+  for (let index = 0; index < flushCount; index += 1) await flushPromises();
   return element;
 }
 
-function getRegisteredSetting(id: string): MockSettingDefinition {
-  const setting = registeredSettings.find((entry) => entry.id === id);
-  if (!setting) throw new Error(`Missing registered setting: ${id}`);
-  return setting;
+/** The Library page body, which reads the tracked packs again when it is shown. */
+async function openLibrary(flushCount = 3): Promise<HTMLElement> {
+  return renderRowAsync('library.page', flushCount);
 }
 
-async function renderRegisteredSettingAsync(id: string, flushCount = 2): Promise<HTMLElement> {
-  const element = renderRegisteredSetting(id);
-  for (let index = 0; index < flushCount; index += 1) {
-    await flushPromises();
-  }
-  return element;
-}
-
-async function openTrackedPackManagerFromSettings(flushCount = 2): Promise<HTMLElement> {
-  const row = await renderRegisteredSettingAsync('SugarCubes.CubePacks.Manager', flushCount);
-  const openButton = Array.from(row.querySelectorAll('button')).find((button) =>
-    button.textContent.includes('Open Manager'),
+function button(root: ParentNode, label: string): HTMLButtonElement {
+  const found = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(
+    (candidate) => candidate.textContent?.trim() === label,
   );
-  expect(openButton).not.toBeNull();
-  if (!openButton) throw new Error('Missing Open Manager button');
-  openButton.click();
-  await flushPromises();
-  await flushPromises();
-  return requiredElement(document, '.sugarcubes-pack-manager-dialog');
+  if (!found) throw new Error(`Missing button: ${label}`);
+  return found;
 }
-
 async function flushPromises() {
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
@@ -299,29 +305,21 @@ describe('host settings and public library APIs', () => {
     restore();
   });
 
-  test('SugarCubes settings register human-readable categories and labels', async () => {
+  test('host settings rows sit on the Python pages, and ComfyUI draws none of them', async () => {
     const restore = silenceConsole();
     await setupExtension();
-
-    expect(getRegisteredSetting('SugarCubes.CubePacks.TrackedPacks')).toMatchObject({
-      category: ['SugarCubes', 'Cube library', 'TrackedPacks'],
-      name: 'Tracked packs',
-    });
-    expect(getRegisteredSetting('SugarCubes.CubePacks.Manager')).toMatchObject({
-      category: ['SugarCubes', 'Cube library', 'Manager'],
-      name: 'Manage tracked packs',
-    });
-    expect(getRegisteredSetting('SugarCubes.Authoring.ClaimedGithubOwner')).toMatchObject({
-      category: ['SugarCubes', 'Authoring', 'ClaimedGithubOwner'],
-      name: 'Claimed GitHub owner',
-    });
-    expect(getRegisteredSetting('SugarCubes.Graph.ProximityLinks')).toMatchObject({
-      category: ['SugarCubes', 'Workflow connections', 'ProximityLinks'],
-      name: 'Enable proximity links',
-    });
-    expect(registeredSettings.some((entry) => String(entry.name).startsWith('SugarCubes:'))).toBe(
-      false,
-    );
+    const catalog = settingsCatalogFor(app);
+    expect(catalog.row('library.page')).not.toBeNull();
+    expect(catalog.row('library.authoring.claimed_owner')?.title).toBe('Claimed GitHub owner');
+    expect(catalog.row('controls.graph.proximity_links')?.title).toBe('Proximity links');
+    // Every SugarCubes value ComfyUI keeps is hidden: the workspace row is the one ComfyUI draws.
+    expect(
+      registeredSettings
+        .filter(
+          (entry) => String(entry.id).startsWith('SugarCubes.') && String(entry.type) !== 'hidden',
+        )
+        .map((entry) => entry.id),
+    ).toEqual(['SugarCubes.Settings']);
     restore();
   });
 
@@ -386,15 +384,13 @@ describe('host settings and public library APIs', () => {
 
     await setupExtension();
     await flushPromises();
-    const row = await renderRegisteredSettingAsync('SugarCubes.CubePacks.TrackedPacks', 3);
-
-    expect(row.textContent).toContain('1 tracked pack');
-    expect(row.textContent).toContain('1 writable');
-    expect(row.textContent).toContain('No updates available');
-    expect(row.textContent).not.toContain('Artificial-Sweetener/Base-Cubes');
-    expect(row.textContent).not.toContain('Add Pack');
-    expect(row.textContent).not.toContain('Edit source');
-    expect(row.textContent).not.toContain('SugarCubes:');
+    const library = await openLibrary();
+    const summary = requiredElement(library, '[data-row="library.summary"]');
+    expect(summary.textContent).toContain('1 tracked pack');
+    expect(summary.textContent).toContain('up to date');
+    expect(button(summary, 'Update all').disabled).toBe(true);
+    expect(library.textContent).toContain('Base-Cubes');
+    expect(library.textContent).not.toContain('Edit source');
     restore();
   });
 
@@ -460,13 +456,18 @@ describe('host settings and public library APIs', () => {
 
     await setupExtension();
     await flushPromises();
-    await renderRegisteredSettingAsync('SugarCubes.CubePacks.TrackedPacks', 3);
-    const dialog = await openTrackedPackManagerFromSettings(3);
-
-    expect(dialog?.textContent).toContain('Manage tracked packs');
-    expect(dialog?.textContent).toContain('Artificial-Sweetener/Base-Cubes');
-    expect(dialog?.textContent).not.toContain('Branch:');
-    expect(dialog?.textContent).not.toContain('Edit source');
+    const library = await openLibrary();
+    // Each pack is an expander card: its details show when it opens.
+    const pack = requiredElement(
+      library,
+      '[data-row="library.pack.Artificial-Sweetener/Base-Cubes"]',
+    );
+    expect(pack.hasAttribute('data-open')).toBe(false);
+    requiredElement(pack, '.sc-sw-card-head').click();
+    expect(pack.hasAttribute('data-open')).toBe(true);
+    expect(pack.textContent).toContain('Artificial-Sweetener/Base-Cubes');
+    expect(pack.textContent).not.toContain('Branch:');
+    expect(pack.textContent).not.toContain('Edit source');
     restore();
   });
 
@@ -504,10 +505,10 @@ describe('host settings and public library APIs', () => {
 
     await setupExtension();
     await flushPromises();
-    const dialog = await openTrackedPackManagerFromSettings(4);
+    const library = await openLibrary(4);
 
     expect(repoReadCount).toBeGreaterThan(1);
-    expect(dialog?.textContent).toContain('Artificial-Sweetener/New-Pack');
+    expect(library.textContent).toContain('New-Pack');
     restore();
   });
 
@@ -590,20 +591,12 @@ describe('host settings and public library APIs', () => {
 
     await setupExtension();
     await flushPromises();
-    const ownerRow = await renderRegisteredSettingAsync('SugarCubes.Authoring.ClaimedGithubOwner');
+    await openLibrary();
+    const ownerRow = await renderRowAsync('library.authoring.claimed_owner');
 
-    expect(ownerRow.textContent).toContain(
-      'Managed by environment configuration (.env or process environment).',
-    );
-    const changeClaimButton = Array.from(ownerRow.querySelectorAll('button')).find((button) =>
-      button.textContent.includes('Change'),
-    );
-    const clearClaimButton = Array.from(ownerRow.querySelectorAll('button')).find((button) =>
-      button.textContent.includes('Clear'),
-    );
-
-    expect(changeClaimButton?.disabled).toBe(true);
-    expect(clearClaimButton?.disabled).toBe(true);
+    expect(ownerRow.textContent).toContain('Artificial-Sweetener · set by the environment');
+    expect(button(ownerRow, 'Claim…').disabled).toBe(true);
+    expect(button(ownerRow, 'Clear').disabled).toBe(true);
     restore();
   });
 
@@ -650,21 +643,13 @@ describe('host settings and public library APIs', () => {
 
     await setupExtension();
     await flushPromises();
-    const ownerRow = await renderRegisteredSettingAsync('SugarCubes.Authoring.ClaimedGithubOwner');
+    await openLibrary();
+    const ownerRow = await renderRowAsync('library.authoring.claimed_owner');
 
-    const changeClaimButton = Array.from(ownerRow.querySelectorAll('button')).find((button) =>
-      button.textContent.includes('Change'),
-    );
-    const clearClaimButton = Array.from(ownerRow.querySelectorAll('button')).find((button) =>
-      button.textContent.includes('Clear'),
-    );
-
-    expect(ownerRow.textContent).not.toContain('Managed by environment configuration');
-    expect(ownerRow.textContent).toContain(
-      'Artificial-Sweetener can only be claimed when SUGARCUBES_ALLOW_SYSTEM_OWNER_CLAIM is enabled in .env or the process environment.',
-    );
-    expect(changeClaimButton?.disabled).toBe(false);
-    expect(clearClaimButton?.disabled).toBe(false);
+    expect(ownerRow.textContent).toContain('ExampleUser');
+    expect(ownerRow.textContent).not.toContain('set by the environment');
+    expect(button(ownerRow, 'Claim…').disabled).toBe(false);
+    expect(button(ownerRow, 'Clear').disabled).toBe(false);
     restore();
   });
 
@@ -723,12 +708,8 @@ describe('host settings and public library APIs', () => {
     };
 
     await setupExtension();
-    const managerDialog = await openTrackedPackManagerFromSettings(3);
-    const addButton = Array.from(managerDialog.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Add Pack',
-    );
-    if (!addButton) throw new Error('Missing Add Pack button');
-    addButton.click();
+    const library = await openLibrary();
+    button(library, 'Add…').click();
     await submitFormModal({
       'Source repository': ' Artificial-Sweetener/Base-Cubes ',
     });
@@ -759,8 +740,8 @@ describe('host settings and public library APIs', () => {
     expect(infoSpy).toHaveBeenCalledWith(
       expect.stringContaining('Artificial-Sweetener/Base-Cubes is now tracked. Found 2 cubes.'),
     );
-    expect(managerDialog.textContent).toContain('Artificial-Sweetener/Base-Cubes');
-    expect(managerDialog.textContent).not.toContain('Branch:');
+    expect(library.textContent).toContain('Base-Cubes');
+    expect(library.textContent).not.toContain('Branch:');
     infoSpy.mockRestore();
     restore();
   });
@@ -793,12 +774,8 @@ describe('host settings and public library APIs', () => {
     };
 
     await setupExtension();
-    const managerDialog = await openTrackedPackManagerFromSettings(3);
-    const addButton = Array.from(managerDialog.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Add Pack',
-    );
-    if (!addButton) throw new Error('Missing Add Pack button');
-    addButton.click();
+    const library = await openLibrary();
+    button(library, 'Add…').click();
     await submitFormModal({
       'Source repository': ' Artificial-Sweetener/Empty-Pack ',
     });
@@ -847,9 +824,13 @@ describe('host settings and public library APIs', () => {
     };
 
     await setupExtension();
-    const managerDialog = await openTrackedPackManagerFromSettings(3);
-    expect(managerDialog.textContent).not.toContain('Edit source');
-    expect(managerDialog.textContent).not.toContain('Branch:');
+    const library = await openLibrary();
+    requiredElement(
+      library,
+      '[data-row="library.pack.Artificial-Sweetener/Base-Cubes"] .sc-sw-card-head',
+    ).click();
+    expect(library.textContent).not.toContain('Edit source');
+    expect(library.textContent).not.toContain('Branch:');
     restore();
   });
 
@@ -929,14 +910,15 @@ describe('host settings and public library APIs', () => {
 
     await setupExtension();
     await flushPromises();
-    const managerDialog = await openTrackedPackManagerFromSettings(3);
-
-    const toggleLabels = Array.from(managerDialog.querySelectorAll('label'));
-    const autoUpdateLabel = toggleLabels.find((label) => label.textContent.includes('Auto-update'));
-    if (!autoUpdateLabel) throw new Error('Missing auto-update setting');
-    const toggle = requiredElement(autoUpdateLabel, 'input[type="checkbox"]');
-    toggle.checked = true;
-    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+    const library = await openLibrary();
+    requiredElement(
+      library,
+      '[data-row="library.pack.Artificial-Sweetener/Base-Cubes"] .sc-sw-card-head',
+    ).click();
+    requiredElement(
+      library,
+      '[data-row="library.pack.Artificial-Sweetener/Base-Cubes.auto_update"] [role="switch"]',
+    ).click();
     await flushPromises();
     await flushPromises();
 
@@ -957,18 +939,16 @@ describe('host settings and public library APIs', () => {
     const restore = silenceConsole();
     await setupExtension();
 
-    const row = await renderRegisteredSettingAsync('SugarCubes.Graph.ProximityLinks');
-    const toggle = requiredElement(row, 'input[type="checkbox"]');
-    expect(toggle.checked).toBe(true);
+    const row = await renderRowAsync('controls.graph.proximity_links');
+    const toggle = requiredElement(row, '[role="switch"]');
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
     expect(row.textContent).toContain('connect automatically during queueing');
 
-    toggle.checked = false;
-    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+    toggle.click();
+    await flushPromises();
 
-    expect(toggle.checked).toBe(false);
-    expect(row.textContent).toContain(
-      'Queueing will not auto-connect nearby compatible cube markers',
-    );
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    expect(loadedUi?.overlayManager.proximity.settings.enabled).toBe(false);
     restore();
   });
 

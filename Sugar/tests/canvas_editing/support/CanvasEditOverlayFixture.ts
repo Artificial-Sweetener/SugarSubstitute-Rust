@@ -17,6 +17,7 @@
 import { jest } from '@jest/globals';
 import { nextTick } from 'vue';
 import { mountCanvasEditOverlay } from '../../../frontend/comfyui/ui/canvas_editing/presentation/CanvasEditOverlayRuntime.js';
+import { StyledNumericSlider } from '../../../frontend/comfyui/ui/surface/appearance/OwnedNumericSlider.js';
 import type { CanvasEditState } from '../../../integrations/contracts/CanvasProtocol.generated.js';
 import { CanvasEditHostFixture, editState, settle } from './CanvasEditHostFixture.js';
 
@@ -88,6 +89,8 @@ export async function mountEditing(
     }),
     obstacles,
     maskColor: (layer) => (layer === 'mask-layer-1' ? '#33cc99' : null),
+    // The slider the canvas attachment supplies: the node cards' slider in the selected style.
+    sliders: (document, option, input) => new StyledNumericSlider(document, option, input),
     report: (error) => errors.push(error),
   });
   mounted.add(overlay);

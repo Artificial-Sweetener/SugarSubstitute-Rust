@@ -52,7 +52,8 @@ test('switches compact packing without touching the selected visual style', () =
   );
   expect(document.documentElement.hasAttribute('data-sc-compact-masonry')).toBe(true);
   const registration = registrations.get(COMPACT_MASONRY_SETTING);
-  expect(registration?.type).toBe('boolean');
+  // ComfyUI keeps the value; the settings workspace draws its row.
+  expect(registration?.type).toBe('hidden');
   const onChange = registration?.onChange;
   if (typeof onChange !== 'function') throw new Error('Compact setting callback is unavailable.');
   onChange(false);

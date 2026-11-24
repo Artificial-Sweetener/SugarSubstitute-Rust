@@ -13,127 +13,309 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Present configured output saving and explicit settings import in Comfy's SugarCubes settings. */
-import { sugarCubesSettingsSection } from '../settings/SugarCubesSettingsSections.js';
-import type { SettingsManager } from '../settings/HostSettingsController.js';
-import type { ModalAdapter } from '../dialogs/ModalShell.js';
-import { OutputSavingDialog } from './OutputSavingDialog.js';
+/**
+ * The Generation page's Output files rows, as Python presents them: output folder, output
+ * pattern, the example path, saved cube outputs, JPEG companions with their sizing, Drag and Copy
+ * format, workflow saving and its Preview Image outputs, each open workflow's outputs, and the
+ * settings import. Every change is saved at once; the server keeps the settings and renders the
+ * example path.
+ */
+import { settingsCatalogFor } from '../settings/workspace/SettingsCatalog.js';
+import {
+  fixed,
+  SettingsState,
+  type SettingsFact,
+  type SettingsValue,
+} from '../settings/workspace/SettingsModel.js';
 import type { OutputSavingCommands } from './OutputSavingConfiguration.js';
-import type { OutputSavingSnapshot } from './OutputSavingPreferences.js';
+import type { OutputSavingPreferences, OutputSavingSnapshot } from './OutputSavingPreferences.js';
 import { pickSubstituteSettings } from './SubstituteSettingsPicker.js';
 
-/** Keep the server authoritative while retaining one row's control identity and explicit pending state. */
+/** Keep the server authoritative; one change is saved at a time. */
 export class OutputSavingSettings {
-  readonly #dialog: OutputSavingDialog;
-  #manager: SettingsManager | null = null;
-  #row: HTMLElement | null = null;
-  #summary: HTMLElement | null = null;
-  #buttons: HTMLButtonElement[] = [];
-  #value: OutputSavingSnapshot | null = null;
-  #loading: Promise<void> | null = null;
-  #busy = false;
-  #revision = 0;
+  readonly #snapshot = new SettingsState<OutputSavingSnapshot | null>(null);
+  readonly #busy = new SettingsState(false);
+  #registered = false;
 
-  /** Bind existing modal, transport and feedback owners without introducing canvas policy. */
   constructor(
     private readonly document: Document,
     private readonly client: OutputSavingCommands,
-    adapter: ModalAdapter,
     private readonly reportError: (error: unknown) => void,
     private readonly manageSources: (() => Promise<void>) | null,
-  ) {
-    this.#dialog = new OutputSavingDialog(document, client, adapter);
-  }
+  ) {}
 
-  /** Register an action row whose controls read shared settings each time the panel is entered. */
-  register(manager: SettingsManager): void {
-    if (this.#manager === manager) return;
-    this.#manager = manager;
-    manager.addSetting({
-      id: 'SugarCubes.Output.Files',
-      name: 'Output files',
-      ...sugarCubesSettingsSection('output', 'Files'),
-      defaultValue: '',
-      tooltip:
-        'Configure output folder, filename pattern, saved cubes, JPEG companions, workflow management, and Drag and Copy format.',
-      type: () => {
-        if (!this.#row) {
-          this.#row = this.document.createElement('div');
-          this.#row.className = 'sugarcubes-settings-row sc-output-saving-setting';
-          this.#row.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap';
-          this.#summary = this.document.createElement('span');
-          this.#summary.style.flex = '1';
-          this.#row.append(
-            this.#summary,
-            this.#button('Configure…', async () => {
-              const snapshot = await this.client.load();
-              const saved = await this.#dialog.open(snapshot);
-              this.#value = saved ?? snapshot;
+  /** Contribute the rows and read the settings. */
+  register(app: unknown): void {
+    if (this.#registered) return;
+    this.#registered = true;
+    const catalog = settingsCatalogFor(app);
+    const ready = this.#fact((value) => value !== null && !this.#busy.read());
+    const jpegOn = this.#fact(
+      (value) => value?.preferences.jpeg.enabled === true && !this.#busy.read(),
+    );
+    catalog.contribute('generation.output.folder', {
+      controls: [
+        {
+          kind: 'text',
+          value: this.#field(
+            (p) => p.organization.output_root ?? '',
+            (p, next) => ({
+              ...p,
+              organization: { ...p.organization, output_root: next.trim() || null },
             }),
-            this.#button('Import Substitute settings…', async () => {
-              const value = await pickSubstituteSettings(this.document);
-              if (value !== null) this.#value = await this.client.importSubstitute(value);
-            }),
-            ...(this.manageSources ? [this.#button('Workflow outputs…', this.manageSources)] : []),
-          );
-        }
-        this.show();
-        void this.refresh();
-        return this.#row;
+            '',
+          ),
+          width: 420,
+          placeholder: 'ComfyUI’s output folder',
+        },
+        {
+          kind: 'button',
+          button: {
+            label: 'Default',
+            run: () =>
+              this.#save((p) => ({ ...p, organization: { ...p.organization, output_root: null } })),
+          },
+        },
+      ],
+      enabled: ready,
+    });
+    catalog.contribute('generation.output.pattern', {
+      controls: [
+        {
+          kind: 'text',
+          value: this.#field(
+            (p) => p.organization.path_pattern,
+            (p, next) => ({ ...p, organization: { ...p.organization, path_pattern: next } }),
+            '',
+          ),
+          width: 360,
+        },
+      ],
+      enabled: ready,
+    });
+    catalog.contribute('generation.output.preview', {
+      controls: [
+        {
+          kind: 'text',
+          value: { ...this.#fact((value) => value?.examplePath ?? ''), write: () => undefined },
+          width: 420,
+          readOnly: true,
+        },
+      ],
+    });
+    catalog.contribute('generation.output.persistence', {
+      controls: [
+        {
+          kind: 'choice',
+          value: this.#field(
+            (p) => p.persistence_mode,
+            (p, next) => ({ ...p, persistence_mode: next === 'final_cube' ? 'final_cube' : 'all' }),
+            'all',
+          ),
+          choices: fixed([
+            { value: 'all', label: 'Every cube' },
+            { value: 'final_cube', label: 'Final active cube' },
+          ]),
+        },
+      ],
+      enabled: ready,
+    });
+    const jpeg = this.#field(
+      (p) => p.jpeg.enabled,
+      (p, next) => ({ ...p, jpeg: { ...p.jpeg, enabled: next } }),
+      false,
+    );
+    const sizing = this.#field(
+      (p) => p.jpeg.sizing_mode,
+      (p, next) => ({
+        ...p,
+        jpeg: { ...p.jpeg, sizing_mode: next === 'target_size' ? 'target_size' : 'quality' },
+      }),
+      'quality',
+    );
+    catalog.contribute('generation.output.jpeg', {
+      expander: {
+        switch: jpeg,
+        rows: [
+          {
+            id: 'generation.output.jpeg.sizing',
+            title: 'JPEG sizing',
+            description: 'Size each companion by a fixed quality or an approximate file size.',
+            controls: [
+              {
+                kind: 'choice',
+                value: sizing,
+                choices: fixed([
+                  { value: 'quality', label: 'Fixed quality' },
+                  { value: 'target_size', label: 'Approximate target size' },
+                ]),
+                width: 200,
+              },
+            ],
+            enabled: jpegOn,
+          },
+          {
+            id: 'generation.output.jpeg.quality',
+            title: 'JPEG quality',
+            description: 'Also the quality of JPEG copies for drag and Copy.',
+            controls: [
+              {
+                kind: 'slider',
+                value: this.#field(
+                  (p) => p.jpeg.quality,
+                  (p, next) => ({ ...p, jpeg: { ...p.jpeg, quality: Math.round(next) } }),
+                  90,
+                ),
+                min: 1,
+                max: 100,
+                step: 1,
+              },
+            ],
+            enabled: ready,
+          },
+          {
+            id: 'generation.output.jpeg.target',
+            title: 'Target size (KiB)',
+            description: 'The approximate size of each companion.',
+            controls: [
+              {
+                kind: 'number',
+                value: this.#field(
+                  (p) => p.jpeg.target_size_kib,
+                  (p, next) => ({
+                    ...p,
+                    jpeg: { ...p.jpeg, target_size_kib: Math.max(1, Math.round(next)) },
+                  }),
+                  512,
+                ),
+                min: 1,
+                step: 1,
+              },
+            ],
+            visible: {
+              read: () => sizing.read() === 'target_size',
+              subscribe: (l) => sizing.subscribe(l),
+            },
+            enabled: jpegOn,
+          },
+        ],
       },
+      enabled: ready,
     });
-  }
-
-  /** Re-read shared settings once without reconstructing the controls or fabricating fallback defaults. */
-  refresh(): Promise<void> {
-    if (this.#busy) return Promise.resolve();
-    if (this.#loading) return this.#loading;
-    const revision = this.#revision;
-    this.#loading = this.client
-      .load()
-      .then((value) => {
-        if (revision !== this.#revision) return;
-        this.#value = value;
-        this.show();
-      })
-      .catch(this.reportError)
-      .finally(() => {
-        this.#loading = null;
+    catalog.contribute('generation.output.transfer', {
+      controls: [
+        {
+          kind: 'switch',
+          value: this.#field(
+            (p) => p.transfer.preferred_format === 'companion_jpeg',
+            (p, next) => ({
+              ...p,
+              transfer: { preferred_format: next ? 'companion_jpeg' : 'canonical_png' },
+            }),
+            false,
+          ),
+        },
+      ],
+      enabled: jpegOn,
+    });
+    const managed = this.#field(
+      (p) => p.manage_workflow,
+      (p, next) => ({ ...p, manage_workflow: next }),
+      false,
+    );
+    catalog.contribute('generation.output.workflow', {
+      controls: [{ kind: 'switch', value: managed }],
+      enabled: ready,
+    });
+    catalog.contribute('generation.output.previews', {
+      controls: [
+        {
+          kind: 'switch',
+          value: this.#field(
+            (p) => p.save_previews,
+            (p, next) => ({ ...p, save_previews: next }),
+            false,
+          ),
+        },
+      ],
+      enabled: this.#fact(
+        (value) => value?.preferences.manage_workflow === true && !this.#busy.read(),
+      ),
+    });
+    if (this.manageSources) {
+      const manageSources = this.manageSources;
+      catalog.contribute('generation.output.sources', {
+        controls: [{ kind: 'button', button: { label: 'Workflow outputs…', run: manageSources } }],
       });
-    return this.#loading;
-  }
-
-  /** Describe the two independent scopes and reconcile control state after accepted or failed operations. */
-  show(): void {
-    for (const button of this.#buttons) button.disabled = this.#busy;
-    if (!this.#summary) return;
-    const value = this.#value?.preferences;
-    this.#summary.textContent = value
-      ? (value.persistence_mode === 'all' ? 'Every cube' : 'Final active cube') +
-        ' · Workflow management ' +
-        (value.manage_workflow ? 'on' : 'off')
-      : 'Output settings';
-  }
-
-  /** Route asynchronous actions through existing feedback while preserving picker and modal user activation. */
-  #button(label: string, operation: () => Promise<void>): HTMLButtonElement {
-    const button = this.document.createElement('button');
-    button.type = 'button';
-    button.className = 'p-button p-button-secondary';
-    button.textContent = label;
-    this.#buttons.push(button);
-    button.addEventListener('click', () => {
-      if (this.#busy) return;
-      this.#revision++;
-      this.#busy = true;
-      this.show();
-      void operation()
-        .catch(this.reportError)
-        .finally(() => {
-          this.#busy = false;
-          this.show();
-        });
+    }
+    catalog.contribute('generation.output.import', {
+      controls: [
+        {
+          kind: 'button',
+          button: {
+            label: 'Import…',
+            run: async () => {
+              const value = await pickSubstituteSettings(this.document);
+              if (value !== null) this.#snapshot.set(await this.client.importSubstitute(value));
+            },
+          },
+        },
+      ],
+      enabled: ready,
     });
-    return button;
+    void this.refresh();
+  }
+
+  /** Read the settings again, as when another window changed them. */
+  refresh(): Promise<void> {
+    if (this.#busy.read()) return Promise.resolve();
+    return this.client
+      .load()
+      .then((value) => this.#snapshot.set(value))
+      .catch(this.reportError);
+  }
+
+  /** A fact read from the current settings, following saves and reloads. */
+  #fact<T>(read: (value: OutputSavingSnapshot | null) => T): SettingsFact<T> {
+    return {
+      read: () => read(this.#snapshot.read()),
+      subscribe: (listener) => {
+        const stopSnapshot = this.#snapshot.subscribe(listener);
+        const stopBusy = this.#busy.subscribe(listener);
+        return () => {
+          stopSnapshot();
+          stopBusy();
+        };
+      },
+    };
+  }
+
+  /** One field of the settings, saved as a whole on change. */
+  #field<T>(
+    read: (preferences: OutputSavingPreferences) => T,
+    apply: (preferences: OutputSavingPreferences, next: T) => OutputSavingPreferences,
+    fallback: T,
+  ): SettingsValue<T> {
+    return {
+      read: () => {
+        const value = this.#snapshot.read();
+        return value ? read(value.preferences) : fallback;
+      },
+      write: (next) => this.#save((preferences) => apply(preferences, next)),
+      subscribe: this.#fact(() => null).subscribe,
+    };
+  }
+
+  async #save(
+    change: (preferences: OutputSavingPreferences) => OutputSavingPreferences,
+  ): Promise<void> {
+    const current = this.#snapshot.read();
+    if (!current || this.#busy.read()) return;
+    this.#busy.set(true);
+    try {
+      this.#snapshot.set(await this.client.save(change(current.preferences)));
+    } finally {
+      this.#busy.set(false);
+    }
   }
 }

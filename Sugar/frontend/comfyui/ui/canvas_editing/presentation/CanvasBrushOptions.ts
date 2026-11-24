@@ -14,11 +14,22 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Present the Brush and Eraser options as a compact header that expands into sliders. */
-import { defineComponent, h, ref, watch, type PropType, type VNode } from 'vue';
+import {
+  defineComponent,
+  h,
+  inject,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+  type PropType,
+  type VNode,
+} from 'vue';
 import type { CanvasBrushOptions as BrushOptions } from '../../../../../integrations/contracts/CanvasProtocol.generated.js';
 import { BRUSH_LIMITS, withBrushOption } from '../domain/CanvasCoverageModification.js';
 import { canvasEditIcon } from './CanvasEditIcons.js';
 import { CANVAS_EDIT_TEXT } from './CanvasEditText.js';
+import { CANVAS_OPTION_SLIDERS, type CanvasOptionSlider } from './CanvasOptionSliders.js';
 
 let gradients = 0;
 
@@ -69,20 +80,14 @@ export const CanvasBrushOptions = defineComponent({
       props.change(props.tool, next);
     }
     function slider(field: keyof BrushOptions, label: string, value: string): VNode[] {
-      const current = (draft.value ?? props.options)[field];
       return [
-        h('label', { for: `${gradient}-${field}` }, label),
-        h('input', {
-          id: `${gradient}-${field}`,
-          type: 'range',
-          'data-canvas-option': field,
-          min: BRUSH_LIMITS[field].min,
-          max: BRUSH_LIMITS[field].max,
-          step: 1,
-          value: current,
-          onInput: (event: Event) => {
-            if (event.target instanceof HTMLInputElement) update(field, event.target.valueAsNumber);
-          },
+        h('label', { id: `${gradient}-${field}` }, label),
+        h(BrushOptionSlider, {
+          field,
+          labelledBy: `${gradient}-${field}`,
+          label,
+          value: (draft.value ?? props.options)[field],
+          change: (next: number) => update(field, next),
         }),
         h('span', { 'data-canvas-option-value': field }, value),
       ];
@@ -146,6 +151,53 @@ export const CanvasBrushOptions = defineComponent({
         ],
       );
     };
+  },
+});
+
+/** One brush option's slider, as the canvas attachment supplies it. */
+const BrushOptionSlider = defineComponent({
+  name: 'BrushOptionSlider',
+  props: {
+    field: { type: String as PropType<keyof BrushOptions>, required: true },
+    label: { type: String, required: true },
+    labelledBy: { type: String, required: true },
+    value: { type: Number, required: true },
+    change: { type: Function as PropType<(value: number) => void>, required: true },
+  },
+  setup(props) {
+    const host = ref<HTMLElement | null>(null);
+    const sliders = inject(CANVAS_OPTION_SLIDERS, null);
+    let slider: CanvasOptionSlider | null = null;
+    const synchronize = (): void => {
+      const limits = BRUSH_LIMITS[props.field];
+      slider?.synchronize(limits.min, limits.max, 1, false, props.value);
+    };
+    onMounted(() => {
+      const element = host.value;
+      if (!element || !sliders)
+        throw new Error('The canvas editing chrome was mounted without its option sliders.');
+      // The brush follows a drag as it happens.
+      slider = sliders(
+        element.ownerDocument,
+        {
+          name: props.field,
+          label: props.label,
+          minimum: BRUSH_LIMITS[props.field].min,
+          maximum: BRUSH_LIMITS[props.field].max,
+          step: 1,
+          precision: 0,
+          attributes: { 'data-canvas-option': props.field, 'aria-labelledby': props.labelledBy },
+        },
+        (value) => {
+          if (value !== props.value) props.change(value);
+        },
+      );
+      element.append(slider.root);
+      synchronize();
+    });
+    watch(() => props.value, synchronize);
+    onBeforeUnmount(() => slider?.dispose());
+    return () => h('span', { ref: host, class: 'sc-canvas-edit-slider' });
   },
 });
 

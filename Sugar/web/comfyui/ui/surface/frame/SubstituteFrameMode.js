@@ -14,7 +14,8 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own the independent frame-mode preference and its explicit host selection boundary. */
-import { sugarCubesSettingsSection } from '../../settings/SugarCubesSettingsSections.js';
+import { ComfySettingStore } from '../../settings/workspace/ComfySettingStore.js';
+import { settingsCatalogFor } from '../../settings/workspace/SettingsCatalog.js';
 import { isRecord } from '../../types/common.js';
 /** Persist only the opt-in visual-mode preference in Comfy settings. */
 export const SUBSTITUTE_FRAME_SETTING = 'SugarCubes.Appearance.SubstituteFrame';
@@ -37,12 +38,15 @@ export class SubstituteFrameMode {
         for (const listener of this.#listeners)
             listener();
     }
+    /** Whether the SugarSubstitute desktop hosts this page. */
+    get desktop() {
+        return this.#desktop;
+    }
     /** Keep desktop chrome mounted while retaining the independent persisted browser preference. */
     setDesktop(enabled) {
-        const previous = this.enabled;
-        this.#desktop = enabled;
-        if (this.enabled === previous)
+        if (this.#desktop === enabled)
             return;
+        this.#desktop = enabled;
         for (const listener of this.#listeners)
             listener();
     }
@@ -65,11 +69,19 @@ export class SubstituteFrameMode {
         settings.addSetting.call(settings, {
             id: SUBSTITUTE_FRAME_SETTING,
             name: 'Substitute frame',
-            ...sugarCubesSettingsSection('appearance', 'SubstituteFrame'),
-            type: 'boolean',
+            type: 'hidden',
             defaultValue: false,
-            tooltip: 'Use Substitute workflow tabs, application orb and transparent Cube stack; hide the Comfy sidebar.',
             onChange: (value) => this.setEnabled(value === true),
+        });
+        // The desktop always presents the frame, so the choice exists only in a browser.
+        settingsCatalogFor(app).contribute('appearance.layout.substitute_frame', {
+            controls: [
+                {
+                    kind: 'switch',
+                    value: new ComfySettingStore(app).value(SUBSTITUTE_FRAME_SETTING, (value) => value === true),
+                },
+            ],
+            visible: { read: () => !this.#desktop, subscribe: (listener) => this.subscribe(listener) },
         });
         this.setEnabled(settings.getSettingValue.call(settings, SUBSTITUTE_FRAME_SETTING, false) === true);
     }

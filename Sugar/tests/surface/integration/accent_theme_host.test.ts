@@ -27,11 +27,11 @@ import {
 
 interface ColorSetting {
   id: string;
-  category: string[];
-  type: () => HTMLElement;
+  type: unknown;
   onChange: (value: unknown) => void;
 }
 
+import { settingsCatalogFor } from '../../../frontend/comfyui/ui/settings/workspace/SettingsCatalog.js';
 import {
   EmbeddedPresentation,
   type EmbeddedPresentationSource,
@@ -77,26 +77,20 @@ function createHost(
   const setSettingValue = jest.fn<(id: string, value: string) => void>((_id, value) =>
     setting!.onChange(value),
   );
-  const host = new AccentThemeHost(
-    document,
-    {
-      canvas: { setDirty },
-      ui: {
-        settings: {
-          getSettingValue: (id: string) => (id === ACCENT_SOURCE_SETTING ? source : saved),
-          addSetting: (value: ColorSetting) => {
-            if (value.id === ACCENT_SOURCE_SETTING) sourceSetting = value;
-            else setting = value;
-          },
-          setSettingValue,
+  const app = {
+    canvas: { setDirty },
+    ui: {
+      settings: {
+        getSettingValue: (id: string) => (id === ACCENT_SOURCE_SETTING ? source : saved),
+        addSetting: (value: ColorSetting) => {
+          if (value.id === ACCENT_SOURCE_SETTING) sourceSetting = value;
+          else setting = value;
         },
+        setSettingValue,
       },
     },
-    report,
-    embedded,
-    hostAccent,
-    description,
-  );
+  };
+  const host = new AccentThemeHost(document, app, report, embedded, hostAccent, description);
   hosts.push(host);
   host.setup();
   return {
@@ -108,6 +102,20 @@ function createHost(
     setDirty,
     report,
     setSettingValue,
+    /** The Accent color row's controls, drawn in order as the settings workspace draws them. */
+    picker(): { choose: HTMLButtonElement; color: HTMLInputElement; hex: HTMLElement } {
+      const root = document.createElement('div');
+      for (const control of settingsCatalogFor(app).row('appearance.system_colors.accent')
+        ?.controls ?? [])
+        if (control.kind === 'element') root.append(control.create(document));
+      const choose = [...root.querySelectorAll('button')].find(
+        (button) => button.textContent === 'Choose',
+      );
+      const color = root.querySelector<HTMLInputElement>('input[type="color"]');
+      const hex = root.querySelector<HTMLElement>('.sc-accent-hex');
+      if (!choose || !color || !hex) throw new Error('Missing accent controls.');
+      return { choose, color, hex };
+    },
   };
 }
 
@@ -119,16 +127,16 @@ async function settle(): Promise<void> {
 }
 
 test('loads the saved color without rewriting it, then updates through the registered menu', () => {
-  const { setting, setDirty, setSettingValue, host } = createHost();
+  const { setting, setDirty, setSettingValue, host, picker } = createHost();
   expect(setting.id).toBe(ACCENT_COLOR_SETTING);
-  expect(setting.category).toEqual(['SugarCubes', 'Style', 'AccentColor']);
+  expect(setting.type).toBe('hidden');
   expect(setSettingValue).not.toHaveBeenCalled();
   const style = document.getElementById('sugarcubes-accent-theme')!;
   expect(style.textContent).toContain('--sc-accent-color:#c19eff');
-  const row = setting.type();
-  const input = row.querySelector<HTMLInputElement>('input[type="text"]')!;
-  input.value = '#071530';
-  input.dispatchEvent(new Event('change'));
+  const row = picker();
+  row.color.value = '#071530';
+  row.color.dispatchEvent(new Event('input'));
+  expect(row.hex.textContent).toBe('#071530');
   expect(setSettingValue).toHaveBeenCalledWith(ACCENT_COLOR_SETTING, '#071530');
   expect(style.textContent).toContain('--sc-accent-foreground:#000000');
   expect(style.textContent).toContain('--sc-accent-color:#4887ff');
@@ -344,22 +352,23 @@ test('a system-accent host defaults to it and switches live between System and C
   const f = createHost('#479ef5', undefined, accent);
   expect(f.sourceSetting?.id).toBe(ACCENT_SOURCE_SETTING);
   expect(f.host.theme.color).toBe('#c30052');
-  const picker = f.setting.type() as HTMLFieldSetElement;
-  expect(picker.disabled).toBe(true);
+  const picker = f.picker();
+  expect(picker.choose.disabled).toBe(true);
   f.sourceSetting!.onChange('custom');
   expect(f.host.theme.color).toBe('#479ef5');
-  expect(picker.disabled).toBe(false);
+  expect(picker.choose.disabled).toBe(false);
   f.setting.onChange('#e91e63');
   expect(f.host.theme.color).toBe('#e91e63');
   accent.set('#107c10');
   expect(f.host.theme.color).toBe('#e91e63');
   f.sourceSetting!.onChange('system');
   expect(f.host.theme.color).toBe('#107c10');
-  expect(picker.disabled).toBe(true);
-  expect(picker.querySelector('input')?.value).toBe('#107c10');
+  expect(picker.choose.disabled).toBe(true);
+  expect(picker.color.value).toBe('#107c10');
+  expect(picker.hex.textContent).toBe('#107c10');
   accent.set(null);
   expect(f.host.theme.color).toBe('#e91e63');
-  expect(picker.disabled).toBe(false);
+  expect(picker.choose.disabled).toBe(false);
   expect(f.setSettingValue).not.toHaveBeenCalled();
 });
 
@@ -382,7 +391,7 @@ test('without a declared system accent the source setting is absent and the save
   expect(defaults.sourceSetting).toBeUndefined();
   expect(saved.host.theme.color).toBe('#b58cff');
   expect(defaults.host.theme.color).toBe(DEFAULT_ACCENT_COLOR);
-  expect((saved.setting.type() as HTMLFieldSetElement).disabled).toBe(false);
+  expect(saved.picker().choose.disabled).toBe(false);
   saved.setting.onChange('#e91e63');
   expect(saved.host.theme.color).toBe('#e91e63');
 });

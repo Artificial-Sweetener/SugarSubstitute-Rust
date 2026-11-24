@@ -14,7 +14,10 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Persist Photoshop's interface brightness independently of visual-style choice. */
-import { sugarCubesSettingsSection } from '../../settings/SugarCubesSettingsSections.js';
+import { ComfySettingStore } from '../../settings/workspace/ComfySettingStore.js';
+import { settingsCatalogFor } from '../../settings/workspace/SettingsCatalog.js';
+import { fixed } from '../../settings/workspace/SettingsModel.js';
+import { VISUAL_STYLE_SETTING } from './VisualStylePreference.js';
 import { isRecord } from '../../types/common.js';
 import { isPhotoProPalette, type PhotoProPalette } from './PhotoProThemeTokens.js';
 import type { EmbeddedPresentationSource } from '../../core/embedded/EmbeddedPresentation.js';
@@ -45,21 +48,35 @@ export function registerPhotoProPalettePreference(
     register.call(settings, {
       id: PHOTOPRO_PALETTE_SETTING,
       name: 'PhotoPro color theme',
-      ...sugarCubesSettingsSection('appearance', 'PhotoProPalette'),
-      type: 'combo',
+      type: 'hidden',
       defaultValue: initial,
-      options: [
-        { value: 'black', text: 'Black' },
-        { value: 'dark-gray', text: 'Dark Gray' },
-        { value: 'medium-gray', text: 'Medium Gray' },
-        { value: 'light-gray', text: 'Light Gray' },
-      ],
-      tooltip: 'Choose one of Photoshop desktop’s four interface brightness levels.',
       onChange: (candidate: unknown) => {
         if (isPhotoProPalette(candidate)) {
           saved = candidate;
           refresh();
         } else report(new TypeError('PhotoPro color theme must be a supported Photoshop palette.'));
+      },
+    });
+    const store = new ComfySettingStore(app);
+    settingsCatalogFor(app).contribute('appearance.style.photopro_palette', {
+      controls: [
+        {
+          kind: 'choice',
+          value: store.value(PHOTOPRO_PALETTE_SETTING, (candidate) =>
+            isPhotoProPalette(candidate) ? candidate : 'medium-gray',
+          ),
+          choices: fixed([
+            { value: 'black', label: 'Black' },
+            { value: 'dark-gray', label: 'Dark Gray' },
+            { value: 'medium-gray', label: 'Medium Gray' },
+            { value: 'light-gray', label: 'Light Gray' },
+          ]),
+        },
+      ],
+      // The palette belongs to the PhotoPro style and shows only while it is chosen.
+      visible: {
+        read: () => store.get(VISUAL_STYLE_SETTING) === 'photopro',
+        subscribe: (listener) => store.subscribe(VISUAL_STYLE_SETTING, listener),
       },
     });
   } else report(new Error('Comfy settings registration is unavailable for PhotoPro palettes.'));

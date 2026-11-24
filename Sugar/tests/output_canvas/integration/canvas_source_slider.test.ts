@@ -102,9 +102,8 @@ test('navigation selectors are plain segments beside the tabs, with the arrow cu
     new CanvasPortFixture(canvasSnapshot('glass')),
     jest.fn(),
   );
-  expect(rule('.sc-output-tabs button,.sc-output-overlay .sc-output-segment')?.cursor).toBe(
-    'default',
-  );
+  expect(rule('.sc-output-tabs button')?.cursor).toBe('default');
+  expect(rule('.sc-output-overlay .sc-output-segment')?.cursor).toBe('default');
   const bar = rule('.sc-output-tabstrip');
   expect(bar?.getPropertyValue('backdrop-filter')).toBe('');
   expect(bar?.getPropertyValue('background')).toBe('');

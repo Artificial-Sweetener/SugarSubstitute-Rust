@@ -68,8 +68,8 @@ export function ensureCanvasEditStyles(document: Document): void {
     .sc-canvas-edit-tip { width:20px; height:20px; flex:0 0 20px; }
     .sc-canvas-edit-sliders { display:grid; grid-template-columns:auto 128px 48px; align-items:center;
       gap:4px 8px; padding:8px; }
-    .sc-canvas-edit-sliders input[type="range"] { width:128px; margin:0;
-      accent-color:var(--p-primary-color,var(--ring,#df258e)); }
+    .sc-canvas-edit-slider { display:flex; align-items:center; width:128px; }
+    .sc-canvas-edit-slider > [data-sc-number-slider] { width:100%; }
     .sc-canvas-edit-coverage-controls { display:flex; align-items:center; gap:8px; }
     .sc-canvas-edit-coverage-controls select,.sc-canvas-edit-coverage-controls input {
       color:inherit; font:inherit; height:28px; box-sizing:border-box; border-radius:5px;

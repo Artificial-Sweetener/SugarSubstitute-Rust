@@ -20,7 +20,6 @@ import { ModalService } from '../../../frontend/comfyui/ui/dialogs/ModalService.
 import { ContextMenu } from '../../../frontend/comfyui/ui/menus/ContextMenu.js';
 import { VersionDialog } from '../../../frontend/comfyui/ui/dialogs/VersionDialog.js';
 import { CubeAuthoringModal } from '../../../frontend/comfyui/ui/dialogs/CubeAuthoringModal.js';
-import { TrackedPackManagerDialog } from '../../../frontend/comfyui/ui/settings/TrackedPackManagerDialog.js';
 import { SaveNodePresetDialog } from '../../../frontend/comfyui/ui/editor_actions/presentation/SaveNodePresetDialog.js';
 import { GLOBAL_ASSOCIATION } from '../../../frontend/comfyui/ui/editor_actions/domain/UserPreset.js';
 import { TestComfySettingsSelectRenderer } from '../support/ComfySettingsSelectTestRenderer.js';
@@ -64,7 +63,6 @@ const cases: readonly [string, () => Promise<unknown>, unknown][] = [
     () => new VersionDialog({ adapter }).open([{ default_alias: 'Cube' }]),
     false,
   ],
-  ['tracked packs', () => new TrackedPackManagerDialog({ adapter }).open(), false],
   [
     'node preset',
     () => new SaveNodePresetDialog(document).open('Save preset', [GLOBAL_ASSOCIATION]),

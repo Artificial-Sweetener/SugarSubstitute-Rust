@@ -13,338 +13,271 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Safeguard native settings identity and the isolation of bespoke plugin controls. */
+/**
+ * Prove the settings workspace presents the Python application's settings: Python's pages,
+ * sections and rows as setting cards, the whole dialog in the SugarSubstitute frame with ComfyUI's
+ * own settings drawn as the same cards, and one SugarCubes page with segmented tabs in plain
+ * ComfyUI. These checks also guard the ComfyUI surfaces the workspace relies on, so a ComfyUI
+ * release that changes them fails here by name.
+ */
 import { afterEach, expect, jest, test } from '@jest/globals';
-import { ComfySettingsCatalog } from '../../../frontend/comfyui/ui/settings/ComfySettingsCatalog.js';
-import { SettingsWorkspaceSurface } from '../../../frontend/comfyui/ui/settings/SettingsWorkspaceSurface.js';
-import { SettingsWorkspaceHost } from '../../../frontend/comfyui/ui/settings/SettingsWorkspaceHost.js';
-import { UpdateSourceSlot } from '../../../frontend/comfyui/ui/core/updates/UpdateSource.js';
-import { SettingsPopupTheme } from '../../../frontend/comfyui/ui/settings/SettingsPopupTheme.js';
-import { settingsWorkspaceCss } from '../../../frontend/comfyui/ui/settings/SettingsWorkspaceStyles.js';
-import { publishVisualStyle } from '../../../frontend/comfyui/ui/surface/appearance/VisualStyleBoundary.js';
-import { Switch } from '@spectrum-web-components/switch/src/Switch.js';
+import {
+  SettingsWorkspaceHost,
+  SETTINGS_ROW_ID,
+  describeBinding,
+} from '../../../frontend/comfyui/ui/settings/SettingsWorkspaceHost.js';
+import { settingsCatalogFor } from '../../../frontend/comfyui/ui/settings/workspace/SettingsCatalog.js';
+import { ComfySettingStore } from '../../../frontend/comfyui/ui/settings/workspace/ComfySettingStore.js';
+import { SETTINGS_LAYOUT } from '../../../frontend/comfyui/ui/settings/workspace/SettingsLayout.js';
+import { settingsLook } from '../../../frontend/comfyui/ui/settings/workspace/SettingsLooks.js';
+import { searchSettings } from '../../../frontend/comfyui/ui/settings/workspace/SettingsSearch.js';
+import { isRecord } from '../../../frontend/comfyui/ui/types/common.js';
 
 afterEach(() => {
   document.body.replaceChildren();
   document.head.replaceChildren();
-  jest.restoreAllMocks();
-  document.documentElement.removeAttribute('data-sc-visual-style');
 });
 
-test('Spectrum settings retain the native value and persistence owner while switching providers reversibly', async () => {
-  const f = fixture();
-  const row = f.rows[0];
-  const input = row?.querySelector('input');
-  if (!row || !input) throw new Error('Missing standard setting');
-  input.type = 'checkbox';
-  input.setAttribute('aria-label', '<img src=x> Enabled');
-  const native = document.createElement('div');
-  native.dataset.pcName = 'toggleswitch';
-  input.before(native);
-  native.append(input);
-  const persisted = jest.fn();
-  input.addEventListener('change', persisted);
-  const surface = new SettingsWorkspaceSurface(f.root, f.catalog);
-  publishVisualStyle(document, 'spectrum');
-  surface.update(true, true);
-  const control = row.querySelector('[data-sc-settings-switch]');
-  if (!(control instanceof Switch)) throw new Error('Expected an actual Spectrum switch');
-  await control.updateComplete;
-  expect(native.hidden).toBe(true);
-  expect(row.querySelector('img')).toBeNull();
-  expect(control.focusElement.getAttribute('aria-label')).toBe('<img src=x> Enabled');
-  control.click();
-  await control.updateComplete;
-  expect(input.checked).toBe(true);
-  expect(persisted).toHaveBeenCalledTimes(1);
-  input.checked = false;
-  input.dispatchEvent(new Event('change'));
-  await control.updateComplete;
-  expect(control.checked).toBe(false);
-  input.disabled = true;
-  await new Promise<void>((resolve) => setTimeout(resolve, 0));
-  await control.updateComplete;
-  expect(control.disabled).toBe(true);
-  control.click();
-  expect(persisted).toHaveBeenCalledTimes(2);
-  input.disabled = false;
-  surface.update(true, false);
-  await control.updateComplete;
-  expect(row.querySelector('[data-sc-settings-switch]')).toBe(control);
-  control.focus();
-  await control.updateComplete;
-  publishVisualStyle(document, 'fluent');
-  surface.update(true, false);
-  expect(row.querySelector('[data-sc-settings-switch]')).toBeNull();
-  expect(native.hidden).toBe(false);
-  expect(row.querySelector('input')).toBe(input);
-  expect(document.activeElement).toBe(input);
-  expect(persisted).toHaveBeenCalledTimes(2);
-  surface.dispose();
+/** ComfyUI's setting store and settings facade, as extensions see them. */
+function comfyApp() {
+  const values: Record<string, unknown> = {};
+  const definitions: Record<string, Record<string, unknown> & { id: string }> = {};
+  const events = new EventTarget();
+  const settings = Object.assign(events, {
+    addSetting(definition: Record<string, unknown> & { id: string }): void {
+      definitions[definition.id] = definition;
+    },
+  });
+  const set = async (id: string, value: unknown): Promise<void> => {
+    const old = values[id];
+    const onChange = definitions[id]?.onChange;
+    if (typeof onChange === 'function') onChange(value, old);
+    values[id] = value;
+    events.dispatchEvent(new CustomEvent(`${id}.change`, { detail: { value, oldValue: old } }));
+  };
+  const app = {
+    ui: { settings },
+    extensionManager: {
+      setting: {
+        settings: definitions,
+        get: (id: string) => (id in values ? values[id] : definitions[id]?.defaultValue),
+        set,
+      },
+      command: { execute: jest.fn() },
+    },
+  };
+  return { app, values, definitions };
+}
+
+function host(app: unknown, frame: boolean): SettingsWorkspaceHost {
+  return new SettingsWorkspaceHost({
+    document,
+    app,
+    mode: { enabled: frame, desktop: frame, subscribe: () => () => undefined },
+    palette: { theme: { color: '#df258e', dark: true }, subscribe: () => () => undefined },
+    report: jest.fn(),
+  });
+}
+
+/** Give one SugarCubes row its switch, bound to a store value. */
+function contributeCanvasRow(app: unknown): void {
+  const store = new ComfySettingStore(app);
+  store.register({
+    id: 'SugarCubes.OutputCanvas.Visible',
+    name: 'Show output canvas',
+    type: 'hidden',
+    defaultValue: true,
+  });
+  settingsCatalogFor(app).contribute('generation.output_canvas.visible', {
+    controls: [
+      { kind: 'switch', value: store.value('SugarCubes.OutputCanvas.Visible', (v) => v !== false) },
+    ],
+  });
+}
+
+const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+test('in plain ComfyUI one SugarCubes row carries the workspace: segmented tabs over Python pages', async () => {
+  const { app, definitions } = comfyApp();
+  contributeCanvasRow(app);
+  const workspace = host(app, false);
+  workspace.setup();
+  const row = definitions[SETTINGS_ROW_ID];
+  if (!row || typeof row.type !== 'function') throw new Error('Missing workspace row');
+  const element = (row.type as () => unknown)();
+  if (!(element instanceof HTMLElement)) throw new Error('The workspace row did not render');
+  document.body.append(element);
+  // ComfyUI calls a custom renderer again on every re-render: the same workspace comes back.
+  expect((row.type as () => unknown)()).toBe(element);
+  expect(element.dataset.mode).toBe('page');
+  const tabs = [
+    ...element.querySelectorAll<HTMLButtonElement>('.sc-segmented-slider [role="tab"]'),
+  ];
+  expect(tabs.map((tab) => tab.textContent)).toEqual(['About', 'Generation', 'Controls']);
+  expect(element.querySelector('.sc-segmented-slider-indicator')).not.toBeNull();
+  tabs[1]?.click();
+  await settle();
+  expect(
+    [...element.querySelectorAll('.sc-sw-section:not([hidden]) .sc-sw-section-title')].map(
+      (title) => title.textContent,
+    ),
+  ).toEqual(['Output canvas']);
+  const card = element.querySelector<HTMLElement>('[data-row="generation.output_canvas.visible"]');
+  expect(card?.querySelector('.sc-sw-card-title')?.textContent).toBe('Show output canvas');
+  expect(card?.querySelector('.sc-sw-card-description')?.textContent).toContain('output canvas');
+  // Nothing of ComfyUI's own dialog is touched: the workspace lives inside its one row.
+  expect(document.querySelector('[data-sc-sw-host]')).toBeNull();
+  workspace.dispose();
 });
 
-/** Build the observed host boundaries with an independently owned plugin page. */
-function fixture() {
+test('in the frame the workspace is the dialog, with ComfyUI’s settings as the same cards', async () => {
+  const { app, values } = comfyApp();
+  contributeCanvasRow(app);
+  const store = new ComfySettingStore(app);
+  store.register({
+    id: 'Comfy.Graph.Snap',
+    name: 'Snap to grid',
+    type: 'boolean',
+    tooltip: 'Align nodes to the grid.',
+    category: ['Comfy', 'Graph', 'Snap'],
+    defaultValue: false,
+  });
+  store.register({
+    id: 'Syrup.Mode',
+    name: 'Syrup mode',
+    type: 'combo',
+    options: ['thin', 'thick'],
+    category: ['SimpleSyrup', 'Mode'],
+    defaultValue: 'thin',
+  });
   const root = document.createElement('div');
   root.dataset.testid = 'settings-dialog';
   const grid = document.createElement('div');
-  const sidebar = document.createElement('nav');
-  const title = document.createElement('header');
-  title.textContent = 'Settings';
-  const searchSlot = document.createElement('div');
-  const input = document.createElement('input');
-  input.placeholder = 'Search Settings...';
-  searchSlot.append(input);
-  sidebar.append(title, searchSlot, document.createElement('nav'));
-  const content = document.createElement('div');
-  const header = document.createElement('header');
-  const close = document.createElement('button');
-  close.setAttribute('aria-label', 'Close dialog');
-  header.append(close);
-  const main = document.createElement('main');
-  const rows = ['Plugin.Enabled', 'Plugin.Custom', 'SugarCubes.Output.Files'].map((id) => {
-    const row = document.createElement('div');
-    row.dataset.settingId = id;
-    const label = document.createElement('div');
-    label.className = 'form-label';
-    const control = document.createElement('input');
-    row.append(label, control);
-    return row;
-  });
-  main.append(...rows);
-  content.append(header, main);
-  grid.append(sidebar, content);
+  grid.className = 'grid';
+  const nav = document.createElement('nav');
+  const clicked: string[] = [];
+  for (const [id, label] of [
+    ['root/Comfy', 'Comfy'],
+    ['root/SugarCubes', 'SugarCubes'],
+    ['root/SimpleSyrup', 'SimpleSyrup'],
+    ['keybinding', 'Keybinding'],
+    ['about', 'About'],
+  ]) {
+    const item = document.createElement('div');
+    item.dataset.navId = id;
+    item.append(document.createElement('i'), label ?? '');
+    item.addEventListener('click', () => clicked.push(id ?? ''));
+    nav.append(item);
+  }
+  grid.append(nav);
   root.append(grid);
   document.body.append(root);
-  const custom = jest.fn();
-  const catalog = new ComfySettingsCatalog({
-    ui: {
-      settings: {
-        settingsParamLookup: {
-          'Plugin.Enabled': {
-            id: 'Plugin.Enabled',
-            name: 'Enabled',
-            type: 'boolean',
-            tooltip: '<b>Literal</b>',
-          },
-          'Plugin.Custom': { id: 'Plugin.Custom', name: 'Custom', type: custom },
-          'SugarCubes.Output.Files': { id: 'SugarCubes.Output.Files', name: 'Files', type: custom },
-        },
-      },
-    },
-  });
-  return { root, sidebar, searchSlot, input, close, header, rows, custom, catalog };
-}
-
-test('move the original search and close controls and restore their exact slots on mode exit', () => {
-  const f = fixture();
-  const changed = jest.fn();
-  f.input.addEventListener('input', changed);
-  f.input.value = 'focused search';
-  f.input.focus();
-  f.input.setSelectionRange(2, 5);
-  const surface = new SettingsWorkspaceSurface(f.root, f.catalog);
-  surface.update(true, true);
-  expect(f.input.closest('.sc-settings-search-bar')).not.toBeNull();
-  expect(document.activeElement).toBe(f.input);
-  expect(f.input.selectionStart).toBe(2);
-  expect(f.close.closest('.sc-settings-search-bar')).not.toBeNull();
-  f.input.value = 'existing search';
-  f.input.dispatchEvent(new Event('input', { bubbles: true }));
-  surface.update(true, false);
-  expect(changed).toHaveBeenCalledTimes(1);
-  expect(f.input.value).toBe('existing search');
-  surface.update(false, false);
-  expect(f.searchSlot.parentElement).toBe(f.sidebar);
-  expect(f.close.parentElement).toBe(f.header);
-  expect(f.root.querySelector('.sc-settings-search-bar')).toBeNull();
-  expect(document.activeElement).toBe(f.input);
-  surface.dispose();
+  const workspace = host(app, true);
+  workspace.setup();
+  await settle();
+  const view = root.querySelector<HTMLElement>('.sc-sw[data-mode="frame"]');
+  if (!view) throw new Error('The frame workspace did not mount');
+  expect(root.hasAttribute('data-sc-sw-host')).toBe(true);
+  const entries = [...view.querySelectorAll('.sc-sw-nav > *')].map((item) =>
+    item.classList.contains('sc-sw-nav-group')
+      ? `# ${item.textContent ?? ''}`
+      : (item.textContent ?? ''),
+  );
+  expect(entries.filter((entry) => entry !== '')).toEqual([
+    '# Sugar',
+    'About',
+    'Generation',
+    'Controls',
+    '# ComfyUI',
+    'Comfy',
+    'Keybinding',
+    'About',
+    '# ComfyUI extensions',
+    'SimpleSyrup',
+  ]);
+  expect(view.querySelector('.sc-sw-header')?.textContent).toBe('Settings › About');
+  // Our About and ComfyUI's About panel are distinct entries: only ours is the open page.
+  const current = [...view.querySelectorAll<HTMLElement>('.sc-sw-nav [aria-current="page"]')];
+  expect(current.map((item) => item.dataset.entry)).toEqual(['about']);
+  view.querySelector<HTMLElement>('[data-entry="root/Comfy"]')?.click();
+  await settle();
+  expect(view.querySelector('.sc-sw-header')?.textContent).toBe('Settings › Comfy');
+  const snap = view.querySelector<HTMLElement>('[data-row="Comfy.Graph.Snap"]');
+  expect(snap?.querySelector('.sc-sw-card-description')?.textContent).toBe(
+    'Align nodes to the grid.',
+  );
+  snap?.querySelector<HTMLElement>('[role="switch"]')?.click();
+  await settle();
+  expect(values['Comfy.Graph.Snap']).toBe(true);
+  // ComfyUI's own panels show through: the workspace selects ComfyUI's entry for them.
+  view.querySelector<HTMLElement>('[data-entry="panel/keybinding"]')?.click();
+  await settle();
+  expect(root.getAttribute('data-sc-sw-panel')).toBe('keybinding');
+  expect(clicked).toEqual(['keybinding']);
+  workspace.dispose();
+  expect(root.hasAttribute('data-sc-sw-host')).toBe(false);
+  expect(root.querySelector('.sc-sw')).toBeNull();
 });
 
-test('retains native sidebar collapse authority and both header actions in themed settings', () => {
-  const f = fixture();
-  const grid = f.root.firstElementChild;
-  if (!(grid instanceof HTMLElement)) throw new Error('Missing native settings grid.');
-  const toggle = document.createElement('button');
-  toggle.setAttribute('aria-label', 'Show left panel');
-  f.header.prepend(toggle);
-  f.sidebar.inert = true;
-  f.sidebar.setAttribute('aria-hidden', 'true');
-  grid.style.gridTemplateColumns = '0rem 1fr';
-  toggle.addEventListener('click', () => {
-    f.sidebar.inert = !f.sidebar.inert;
-    f.sidebar.setAttribute('aria-hidden', String(f.sidebar.inert));
-    grid.style.gridTemplateColumns = f.sidebar.inert ? '0rem 1fr' : '18rem 1fr';
+test('every style draws the same workspace in its own look; Fluent in the frame is Python’s', () => {
+  expect(settingsLook('fluent', true, 'frame')).toMatchObject({
+    card: 'rgb(43,43,43)',
+    radius: '6px',
+    text: '#fff',
   });
-  const closed = jest.fn();
-  f.close.addEventListener('click', closed);
-  const style = document.createElement('style');
-  style.textContent = settingsWorkspaceCss;
-  document.head.append(style);
-  const surface = new SettingsWorkspaceSurface(f.root, f.catalog);
-  surface.update(true, true);
-  expect(f.sidebar.inert).toBe(true);
-  expect(getComputedStyle(grid).gridTemplateColumns).toBe('0rem 1fr');
-  expect(toggle.closest('.sc-settings-search-bar')).not.toBeNull();
-  expect(f.close.closest('.sc-settings-search-bar')).not.toBeNull();
-  toggle.click();
-  expect(f.sidebar.inert).toBe(false);
-  expect(getComputedStyle(grid).gridTemplateColumns).toBe('18rem 1fr');
-  f.close.click();
-  expect(closed).toHaveBeenCalledTimes(1);
-  toggle.click();
-  expect(f.sidebar.inert).toBe(true);
-  surface.dispose();
-  expect([...f.header.children]).toEqual([toggle, f.close]);
-  expect(f.sidebar.inert).toBe(true);
+  expect(settingsLook('fluent', false, 'frame')).toMatchObject({
+    card: 'rgba(255,255,255,.702)',
+    text: '#000',
+  });
+  expect(settingsLook('fluent', true, 'page').card).toBe('var(--sc-surface-secondary)');
+  expect(settingsLook('photopro', true, 'frame').radius).toBe('0');
+  expect(settingsLook('comfy', true, 'frame').text).toBe('var(--fg-color,#ddd)');
 });
 
-test('theme registered standard rows while preserving custom plugin subtrees and callbacks', () => {
-  const f = fixture();
-  const customTree = f.rows[1]?.cloneNode(true);
-  const surface = new SettingsWorkspaceSurface(f.root, f.catalog);
-  surface.update(true, true);
-  expect(f.rows[0]?.dataset.scSettingKind).toBe('standard');
-  expect(f.rows[0]?.querySelector('.sc-setting-description')?.textContent).toBe('<b>Literal</b>');
-  expect(f.rows[0]?.querySelector('b')).toBeNull();
-  expect(f.rows[1]?.isEqualNode(customTree ?? null)).toBe(true);
-  expect(f.rows[2]?.dataset.scSettingKind).toBe('owned');
-  surface.update(true, true);
-  expect(f.rows[0]?.querySelectorAll('.sc-setting-description')).toHaveLength(1);
-  expect(f.custom).not.toHaveBeenCalled();
-  surface.dispose();
-  expect(f.rows[0]?.hasAttribute('data-sc-setting-kind')).toBe(false);
+test('every row has a place and Python’s text before a feature can fill it', () => {
+  const ids = SETTINGS_LAYOUT.flatMap((page) =>
+    page.sections.flatMap((section) => section.rows.map((row) => row.id)),
+  );
+  expect(new Set(ids).size).toBe(ids.length);
+  expect(SETTINGS_LAYOUT.map((page) => page.title)).toEqual([
+    'About',
+    'Generation',
+    'Prompt Editing',
+    'Controls',
+    'Model Sources',
+    'Library',
+    'ComfyUI',
+    'Appearance',
+  ]);
+  expect(() => settingsCatalogFor({}).contribute('generation.unplaced', {})).toThrow(
+    'has no place',
+  );
 });
 
-test('ignore unrelated portals and preserve mounted settings controls across mode changes', async () => {
-  const f = fixture();
-  const modeListeners = new Set<() => void>();
-  const mode = {
-    enabled: true,
-    subscribe: (callback: () => void) => {
-      modeListeners.add(callback);
-      return () => modeListeners.delete(callback);
-    },
-  };
-  const register = jest.fn();
-  const host = new SettingsWorkspaceHost({
-    document,
-    app: { ui: { settings: { addSetting: register, settingsParamLookup: {} } } },
-    mode,
-    palette: { theme: { dark: true, color: '#479ef5' }, subscribe: () => () => {} },
-    report: (error) => {
-      throw error;
-    },
-  });
-  const reads = jest.spyOn(ComfySettingsCatalog.prototype, 'find');
-  host.setup();
-  await new Promise<void>((resolve) => setTimeout(resolve, 0));
-  reads.mockClear();
-  const portal = document.createElement('div');
-  portal.setAttribute('role', 'dialog');
-  portal.className = 'p-select-overlay';
-  portal.append(document.createElement('input'));
-  document.body.append(portal);
-  portal.append(document.createElement('button'));
-  await new Promise<void>((resolve) => setTimeout(resolve, 0));
-  expect(reads).not.toHaveBeenCalled();
-  mode.enabled = false;
-  for (const listener of modeListeners) listener();
-  await new Promise<void>((resolve) => setTimeout(resolve, 0));
-  expect(f.searchSlot.parentElement).toBe(f.sidebar);
-  expect(register).toHaveBeenCalledTimes(1);
-  host.dispose();
-  expect(modeListeners.size).toBe(0);
-  expect(f.root.hasAttribute('data-sc-settings')).toBe(false);
+test('search follows Python: every word starts a word of the row, its section or its page', () => {
+  const { app } = comfyApp();
+  contributeCanvasRow(app);
+  const pages = settingsCatalogFor(app).pages();
+  expect(searchSettings(pages, 'outp canv').map((result) => result.row.id)).toEqual([
+    'generation.output_canvas.visible',
+  ]);
+  expect(searchSettings(pages, 'anvas')).toEqual([]);
 });
 
-test('return to the prior native category after clearing search', () => {
-  const f = fixture();
-  const navigation = f.sidebar.querySelector('nav');
-  const entries = ['Comfy', 'Plugin'].map((id) => {
-    const button = document.createElement('button');
-    button.dataset.navId = id;
-    navigation?.append(button);
-    return button;
-  });
-  const [comfy, plugin] = entries;
-  if (!comfy || !plugin) throw new Error('Missing navigation fixture.');
-  plugin.className = 'bg-interface-menu-component-surface-selected';
-  const restore = jest.fn();
-  plugin.addEventListener('click', restore);
-  const surface = new SettingsWorkspaceSurface(f.root, f.catalog);
-  surface.update(true, true);
-  f.input.value = 'preview';
-  f.input.dispatchEvent(new Event('input', { bubbles: true }));
-  plugin.className = '';
-  surface.update(true, true);
-  expect(restore).not.toHaveBeenCalled();
-  f.input.value = '';
-  comfy.className = 'bg-interface-menu-component-surface-selected';
-  surface.update(true, true);
-  surface.update(true, true);
-  expect(restore).toHaveBeenCalledTimes(1);
-  surface.dispose();
+test('a ComfyUI release that changes the settings surface is named', () => {
+  expect(() => new ComfySettingStore({}).get('Comfy.X')).toThrow('ComfyUI settings changed');
+  expect(() => new ComfySettingStore({}).subscribe('Comfy.X', () => undefined)).toThrow(
+    'ComfyUI settings changed',
+  );
+  expect(() => new ComfySettingStore({}).register({ id: 'X' })).toThrow('ComfyUI settings changed');
 });
 
-test('theme only portals anchored to standard settings and restore their host tokens on exit', () => {
-  const f = fixture();
-  const surface = new SettingsWorkspaceSurface(f.root, f.catalog);
-  surface.update(true, true);
-  const control = f.rows[0]?.querySelector('input');
-  control?.setAttribute('aria-controls', 'standard-options');
-  const overlays = ['standard-options', 'plugin-options'].map((id) => {
-    const overlay = document.createElement('div');
-    const list = document.createElement('ul');
-    list.id = id;
-    list.setAttribute('role', 'listbox');
-    overlay.append(list);
-    document.body.append(overlay);
-    return overlay;
-  });
-  const [standard, plugin] = overlays;
-  if (!standard || !plugin) throw new Error('Missing overlay fixture.');
-  const theme = new SettingsPopupTheme();
-  theme.reconcile(standard, [f.root], true, true);
-  theme.reconcile(plugin, [f.root], true, true);
-  expect(standard.hasAttribute('data-sc-settings-popup')).toBe(true);
-  expect(plugin.hasAttribute('data-sc-settings-popup')).toBe(false);
-  theme.refresh([f.root], false, true);
-  expect(standard.hasAttribute('data-sc-settings-popup')).toBe(false);
-  theme.refresh([f.root], true, false);
-  expect(standard.hasAttribute('data-sc-settings-popup')).toBe(true);
-  expect(plugin.hasAttribute('data-sc-settings-popup')).toBe(false);
-  theme.dispose();
-  surface.dispose();
-});
-
-test('adds the Updates entry only once an update source attaches, and only once', () => {
-  const register = jest.fn<(definition: Record<string, unknown>) => void>();
-  const updates = new UpdateSourceSlot();
-  const host = new SettingsWorkspaceHost({
-    document,
-    app: { ui: { settings: { addSetting: register, settingsParamLookup: {} } } },
-    mode: { enabled: true, subscribe: () => () => undefined },
-    palette: { theme: { dark: true, color: '#479ef5' }, subscribe: () => () => {} },
-    updates,
-    report: (error) => {
-      throw error;
-    },
-  });
-  host.setup();
-  const ids = (): unknown[] => register.mock.calls.map(([definition]) => definition.id);
-  expect(ids()).toEqual(['SugarCubes.About.Information']);
-  const source = {
-    applies: 'host-restart' as const,
-    read: () => null,
-    subscribe: () => () => undefined,
-    check: () => Promise.resolve({ accepted: true as const }),
-    apply: () => Promise.resolve({ accepted: true as const }),
-  };
-  const release = updates.attach(source);
-  release();
-  updates.attach(source);
-  expect(ids()).toEqual(['SugarCubes.About.Information', 'SugarCubes.Updates.Status']);
-  host.dispose();
+test('a command’s bound key reads as Python wrote shortcuts', () => {
+  const bindings = [
+    { commandId: 'SugarCubes.ToggleConsole', combo: { key: 'k', ctrl: true, shift: true } },
+  ];
+  expect(describeBinding(bindings, 'SugarCubes.ToggleConsole')).toBe('Ctrl+Shift+K');
+  expect(describeBinding(bindings, 'SugarCubes.ToggleMasonry')).toBe('Not assigned');
+  expect(describeBinding(null, 'SugarCubes.ToggleMasonry')).toBe('Not assigned');
+  expect(isRecord(bindings[0])).toBe(true);
 });

@@ -20,8 +20,7 @@ import {
 } from '../../../frontend/comfyui/ui/model_library/ModelRootClient.js';
 import { ModelLibrarySettings } from '../../../frontend/comfyui/ui/model_library/ModelLibrarySettings.js';
 import { ModelCatalogClient } from '../../../frontend/comfyui/ui/model_library/ModelCatalogClient.js';
-import { isRecord } from '../../../frontend/comfyui/ui/types/common.js';
-import type { FormModalOptions } from '../../../frontend/comfyui/ui/dialogs/FormModal.js';
+import { drawRows, settle } from '../../settings/support/SettingsRowHarness.js';
 
 const status = {
   schemaVersion: 1,
@@ -55,61 +54,46 @@ test('validates root ownership status and preserves useful backend errors', asyn
   await expect(failed.load()).rejects.toThrow('Model root must be absolute.');
 });
 
-test('canceling the folder dialog never persists a selection', async () => {
-  let render: (() => unknown) | null = null;
-  const requests: string[] = [];
-  let form: FormModalOptions | null = null;
-  let resolveOpened: (() => void) | null = null;
-  const opened = new Promise<void>((resolve) => {
-    resolveOpened = resolve;
-  });
+test('an abandoned model folder edit never persists; Enter saves it once', async () => {
+  const requests: { method: string; body?: string }[] = [];
   const rootClient = new ModelRootClient(async (_path, options) => {
-    requests.push(options?.method ?? 'GET');
+    requests.push({
+      method: options?.method ?? 'GET',
+      ...(typeof options?.body === 'string' ? { body: options.body } : {}),
+    });
     return response(status);
   });
+  const errors: unknown[] = [];
+  const app = {};
   const settings = new ModelLibrarySettings({
-    app: {
-      ui: {
-        settings: {
-          addSetting(value: unknown): void {
-            if (isRecord(value) && typeof value.type === 'function') {
-              const type = value.type;
-              render = () => type();
-            }
-          },
-        },
-      },
-    },
-    document,
+    app,
     roots: rootClient,
-    catalog: new ModelCatalogClient(async () => response({})),
-    dialogs: {
-      openForm: async (options) => {
-        form = options ?? null;
-        resolveOpened?.();
-        return null;
-      },
-      alert: async () => true,
-    },
-    reportError: (error) => {
-      throw error;
-    },
+    catalog: new ModelCatalogClient(async () =>
+      response({ schemaVersion: 1, pattern: '{architecture}/{file_name}' }),
+    ),
+    reportError: (error) => errors.push(error),
   });
   settings.setup();
   settings.setup();
-  // The host invokes a dynamic settings renderer; narrow its result at that boundary.
-  const renderer: unknown = render;
-  if (typeof renderer !== 'function') throw new Error('Settings row was not registered.');
-  const row: unknown = renderer();
-  if (!(row instanceof HTMLElement)) throw new Error('Settings row is invalid.');
-  document.body.append(row);
-  const button = row.querySelector('button');
-  if (!button) throw new Error('The model folder action is missing.');
-  button.click();
-  await opened;
-  expect(requests).toEqual(['GET']);
-  expect(form).toEqual(
-    expect.objectContaining({ title: 'Model folder', confirmLabel: 'Save model folder' }),
-  );
-  row.remove();
+  await settle();
+  const rows = drawRows(app, ['comfyui.connection.model_folder'], (error) => errors.push(error));
+  const field = rows.control<HTMLInputElement>('comfyui.connection.model_folder', 'input');
+  expect(field.value).toBe('/shared/models');
+  field.focus();
+  field.value = '/elsewhere/models';
+  field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await settle();
+  expect(field.value).toBe('/shared/models');
+  expect(requests.map((request) => request.method)).toEqual(['GET']);
+  field.focus();
+  field.value = '/new/models';
+  field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  field.dispatchEvent(new Event('change'));
+  await settle();
+  await settle();
+  expect(requests.filter((request) => request.method === 'PUT')).toEqual([
+    { method: 'PUT', body: JSON.stringify({ mode: 'custom', path: '/new/models' }) },
+  ]);
+  expect(errors).toEqual([]);
+  rows.dispose();
 });

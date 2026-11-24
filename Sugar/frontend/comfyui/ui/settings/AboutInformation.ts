@@ -43,3 +43,13 @@ export const sugarCubesProject = {
   summary:
     'Build, share and run reusable SugarCubes, compose workflows, manage models and work with images in an integrated ComfyUI workspace.',
 } as const;
+
+/** The desktop application's identity, which About shows when SugarSubstitute hosts the page. */
+export const sugarSubstituteProject = {
+  name: 'SugarSubstitute',
+  description: 'A desktop frontend for building and running ComfyUI workflows with SugarCubes.',
+  author: 'Artificial Sweetener and contributors',
+  url: 'https://github.com/Artificial-Sweetener/SugarSubstitute-Rust',
+  summary:
+    'SugarSubstitute provides a focused desktop workspace for ComfyUI, with cube-based workflow composition, managed model metadata, prompt tooling, and integrated image canvas workflows.',
+} as const;

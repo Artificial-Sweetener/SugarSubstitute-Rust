@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose shared canvas controls over one host-owned native output surface. */
+import { StyledNumericSlider } from '../../surface/appearance/OwnedNumericSlider.js';
 import { applyCanvasAction } from '../application/CanvasActions.js';
 import { CanvasSourceNavigation } from '../application/CanvasSourceNavigation.js';
 import { CanvasStatusPublisher } from '../application/CanvasStatusPublisher.js';
@@ -271,6 +272,7 @@ export class NativeCanvasAttachment {
                 region: this.viewport,
                 geometry: () => this.#surface,
                 obstacles: () => this.#overlay.navigationBounds(),
+                sliders: (document, option, input) => new StyledNumericSlider(document, option, input),
                 report: (error) => options.report(error, null),
             });
             cleanup.push(() => this.#editing.dispose());

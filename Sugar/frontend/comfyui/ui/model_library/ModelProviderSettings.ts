@@ -13,178 +13,119 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Present reference CivitAI settings through the shared SugarCubes preference owner. */
-import { sugarCubesSettingsSection } from '../settings/SugarCubesSettingsSections.js';
-import { isRecord } from '../types/common.js';
-import { createSettingsCheckbox, type SettingsCheckbox } from '../settings/SettingsCheckbox.js';
+/**
+ * The CivitAI provider policy's settings rows: missing-model lookup and downloads on the
+ * Generation page; local metadata lookup, thumbnail downloads and thumbnail safety on the Model
+ * Sources page. The server keeps the policy; the rows show it and send each change.
+ */
+import { settingsCatalogFor } from '../settings/workspace/SettingsCatalog.js';
+import type { SettingsFact, SettingsValue } from '../settings/workspace/SettingsModel.js';
 import {
   modelThumbnailSafetyChoices,
   type ModelProviderPreferences,
   type ModelProviderPreferenceClient,
 } from './ModelProviderPreferences.js';
 
-/** Render provider policy without manufacturing defaults or persisting browser-local choices. */
+type ProviderSwitch = Exclude<keyof ModelProviderPreferences, 'thumbnailSafety'>;
+
+/** Show provider policy without manufacturing defaults or persisting browser-local choices. */
 export class ModelProviderSettings {
-  readonly #document: Document;
-  readonly #client: ModelProviderPreferenceClient;
-  readonly #report: (error: unknown) => void;
-  readonly #createCheckbox: (document: Document) => SettingsCheckbox;
-  readonly #render: (() => void)[] = [];
+  readonly #listeners = new Set<() => void>();
   #value: ModelProviderPreferences | null = null;
-  #loading: Promise<void> | null = null;
   #busy = false;
   #registered = false;
 
-  /** Bind shared settings transport and the established non-blocking feedback owner. */
   constructor(
-    document: Document,
-    client: ModelProviderPreferenceClient,
-    report: (error: unknown) => void,
-    createCheckbox: (document: Document) => SettingsCheckbox = createSettingsCheckbox,
-  ) {
-    this.#document = document;
-    this.#client = client;
-    this.#report = report;
-    this.#createCheckbox = createCheckbox;
-  }
+    private readonly client: ModelProviderPreferenceClient,
+    private readonly report: (error: unknown) => void,
+  ) {}
 
-  /** Register separate reference controls while keeping server policy authoritative. */
+  /** Contribute the rows and read the current policy. */
   setup(app: unknown): void {
     if (this.#registered) return;
-    const host = isRecord(app) ? app : {};
-    const ui = isRecord(host.ui) ? host.ui : {};
-    const settings = isRecord(ui.settings) ? ui.settings : {};
-    if (typeof settings.addSetting !== 'function')
-      throw new Error('Comfy provider settings are unavailable.');
     this.#registered = true;
-    for (const [key, name, tooltip] of [
-      [
-        'metadataLookupEnabled',
-        'Look up local model metadata',
-        'Use CivitAI hashes to identify local models.',
-      ],
-      [
-        'missingModelLookupEnabled',
-        'Look up missing models',
-        'Use CivitAI hashes to resolve missing model references.',
-      ],
-      [
-        'downloadsEnabled',
-        'Download missing CivitAI models',
-        'Allow missing-model resolution to offer CivitAI downloads.',
-      ],
-      [
-        'thumbnailDownloadsEnabled',
-        'Download model thumbnails',
-        'Download CivitAI preview images for model fields and pickers.',
-      ],
-      [
-        'thumbnailSafety',
-        'Thumbnail safety',
-        'Choose which CivitAI images may be used as model thumbnails.',
-      ],
-    ] as const) {
-      const booleanKey = key === 'thumbnailSafety' ? null : key;
-      let row: HTMLElement | null = null;
-      settings.addSetting.call(settings, {
-        id: 'SugarCubes.Models.' + key,
-        name,
-        ...sugarCubesSettingsSection(key.startsWith('thumbnail') ? 'previews' : 'metadata', key),
-        defaultValue: '',
-        tooltip,
-        type: () => {
-          if (row) {
-            this.#load();
-            return row;
-          }
-          row = this.#document.createElement('div');
-          row.className = 'sugarcubes-settings-row';
-          let control: HTMLSelectElement | SettingsCheckbox;
-          if (key === 'thumbnailSafety') {
-            const select = this.#document.createElement('select');
-            select.className = 'p-inputtext p-component';
-            for (const choice of modelThumbnailSafetyChoices) {
-              const option = this.#document.createElement('option');
-              option.value = choice.value;
-              option.textContent = choice.label;
-              select.append(option);
-            }
-            control = select;
-          } else {
-            control = this.#createCheckbox(this.#document);
-            const caption = this.#document.createElement('span');
-            caption.textContent = 'Enabled';
-            const group = this.#document.createElement('span');
-            group.style.cssText =
-              'display:inline-flex;align-items:center;gap:8px;white-space:nowrap';
-            group.append(control, caption);
-            const checkbox = control;
-            caption.addEventListener('click', () => {
-              if (!checkbox.disabled) checkbox.click();
-            });
-            row.append(group);
-          }
-          control.setAttribute('aria-label', name);
-          if (control instanceof HTMLSelectElement) row.append(control);
-          this.#render.push(() => {
-            control.disabled =
-              this.#busy ||
-              this.#value === null ||
-              (key === 'thumbnailSafety' && !this.#value.thumbnailDownloadsEnabled);
-            if (!this.#value) return;
-            if (control instanceof HTMLSelectElement) control.value = this.#value.thumbnailSafety;
-            else if (booleanKey) control.checked = this.#value[booleanKey];
-          });
-          control.addEventListener('change', () => {
-            if (!this.#value || this.#busy) return;
-            const patch: Partial<ModelProviderPreferences> =
-              control instanceof HTMLSelectElement
-                ? {
-                    thumbnailSafety:
-                      modelThumbnailSafetyChoices.find((choice) => choice.value === control.value)
-                        ?.value ?? this.#value.thumbnailSafety,
-                  }
-                : booleanKey
-                  ? { [booleanKey]: control.checked }
-                  : {};
-            this.#busy = true;
-            this.#show();
-            void this.#client
-              .configure(patch)
-              .then((value) => {
-                this.#value = value;
-              })
-              .catch(this.#report)
-              .finally(() => {
-                this.#busy = false;
-                this.#show();
-              });
-          });
-          this.#show();
-          this.#load();
-          return row;
-        },
+    const catalog = settingsCatalogFor(app);
+    const toggles: readonly (readonly [string, ProviderSwitch])[] = [
+      ['generation.missing_models.lookup', 'missingModelLookupEnabled'],
+      ['generation.missing_models.downloads', 'downloadsEnabled'],
+      ['model_sources.civitai_lookup.local_metadata', 'metadataLookupEnabled'],
+      ['model_sources.safety.civitai_thumbnails', 'thumbnailDownloadsEnabled'],
+    ];
+    for (const [row, key] of toggles)
+      catalog.contribute(row, {
+        controls: [{ kind: 'switch', value: this.#field(key, (value) => value[key]) }],
+        enabled: this.#ready(() => true),
       });
-    }
+    catalog.contribute('model_sources.safety.civitai_thumbnail_policy', {
+      controls: [
+        {
+          kind: 'choice',
+          value: this.#field('thumbnailSafety', (value) => value.thumbnailSafety),
+          choices: {
+            read: () => modelThumbnailSafetyChoices.map(({ value, label }) => ({ value, label })),
+            subscribe: () => () => undefined,
+          },
+        },
+      ],
+      // Thumbnail safety applies only while thumbnails are downloaded.
+      enabled: this.#ready((value) => value.thumbnailDownloadsEnabled),
+    });
+    this.#load();
   }
 
-  /** Reconcile every mounted control after one shared response or failed edit. */
-  #show(): void {
-    for (const render of this.#render) render();
+  /** A live value for one policy field, written as one change to the server. */
+  #field<K extends keyof ModelProviderPreferences>(
+    key: K,
+    read: (value: ModelProviderPreferences) => ModelProviderPreferences[K],
+  ): SettingsValue<ModelProviderPreferences[K]> {
+    return {
+      read: () => (this.#value ? read(this.#value) : (false as ModelProviderPreferences[K])),
+      write: (next) => this.#configure({ [key]: next } as Partial<ModelProviderPreferences>),
+      subscribe: (listener) => this.#subscribe(listener),
+    };
   }
 
-  /** Re-read shared policy on settings entry and permit retry after unavailable transport. */
+  /** Controls work once the policy is known and no change is in flight. */
+  #ready(when: (value: ModelProviderPreferences) => boolean): SettingsFact<boolean> {
+    return {
+      read: () => !this.#busy && this.#value !== null && when(this.#value),
+      subscribe: (listener) => this.#subscribe(listener),
+    };
+  }
+
+  #configure(patch: Partial<ModelProviderPreferences>): Promise<void> {
+    if (this.#busy || !this.#value) return Promise.resolve();
+    this.#busy = true;
+    this.#changed();
+    return this.client
+      .configure(patch)
+      .then((value) => {
+        this.#value = value;
+      })
+      .finally(() => {
+        this.#busy = false;
+        this.#changed();
+      });
+  }
+
   #load(): void {
-    if (this.#busy || this.#loading) return;
-    this.#loading = this.#client
+    void this.client
       .load()
       .then((value) => {
         this.#value = value;
-        this.#show();
+        this.#changed();
       })
-      .catch(this.#report)
-      .finally(() => {
-        this.#loading = null;
-      });
+      .catch(this.report);
+  }
+
+  #subscribe(listener: () => void): () => void {
+    this.#listeners.add(listener);
+    return () => {
+      this.#listeners.delete(listener);
+    };
+  }
+
+  #changed(): void {
+    for (const listener of [...this.#listeners]) listener();
   }
 }

@@ -17,7 +17,8 @@
 import { ModelDetectorDialog } from './ModelDetectorDialog.js';
 import { ModelPickerSession } from './ModelPickerSession.js';
 import { ModelMenu } from './ModelMenu.js';
-import { sugarCubesSettingsSection } from '../settings/SugarCubesSettingsSections.js';
+import { ComfySettingStore } from '../settings/workspace/ComfySettingStore.js';
+import { settingsCatalogFor } from '../settings/workspace/SettingsCatalog.js';
 import { isRecord } from '../types/common.js';
 import { HostSurfaceObserver } from '../core/HostSurfaceObserver.js';
 import { createComfyRendererModeChangeSource, resolveComfyRendererMode, } from '../core/ComfyRendererMode.js';
@@ -93,11 +94,17 @@ export class ModelPickerHost {
         settings.addSetting.call(settings, {
             id: MODEL_PICKER_SETTING,
             name: 'Enhanced model pickers',
-            type: 'boolean',
+            type: 'hidden',
             defaultValue: true,
-            ...sugarCubesSettingsSection('models', 'EnhancedPicker'),
-            tooltip: 'Browse models with searchable image-backed fields in Nodes 2.0.',
             onChange: (value) => this.setEnabled(value === true),
+        });
+        settingsCatalogFor(this.#options.app).contribute('model_sources.model_library.enhanced_picker', {
+            controls: [
+                {
+                    kind: 'switch',
+                    value: new ComfySettingStore(this.#options.app).value(MODEL_PICKER_SETTING, (value) => value !== false),
+                },
+            ],
         });
         this.#observer = new HostSurfaceObserver(this.#options.document.body, '.lg-node,.sc-model-popup', (changes) => {
             if (!this.#active)

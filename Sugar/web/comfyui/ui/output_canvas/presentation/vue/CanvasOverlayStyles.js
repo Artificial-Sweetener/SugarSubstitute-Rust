@@ -1,6 +1,7 @@
 import {
   ensureCanvasOverlayStyles
-} from "../../../chunk-ISAOEDKW.js";
+} from "../../../chunk-ZLN6DOSA.js";
+import "../../../chunk-FDJMJIBE.js";
 export {
   ensureCanvasOverlayStyles
 };

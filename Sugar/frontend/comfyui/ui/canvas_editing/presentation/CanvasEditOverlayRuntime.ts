@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Mount the editing chrome over any canvas surface whose host advertises editing. */
+import { CANVAS_OPTION_SLIDERS, type CanvasOptionSliders } from './CanvasOptionSliders.js';
 import { createApp, h, shallowRef } from 'vue';
 import type { CanvasEditHost } from '../../../../../integrations/contracts/CanvasEditing.js';
 import {
@@ -46,6 +47,8 @@ export interface CanvasEditOverlayOptions {
   obstacles?(): readonly DOMRectReadOnly[];
   /** Name the CSS colour of a mask layer; absent or null shows the theme accent. */
   maskColor?(layerId: string): string | null;
+  /** The slider the tool options draw. */
+  readonly sliders: CanvasOptionSliders;
   report(error: unknown): void;
 }
 
@@ -114,6 +117,7 @@ export function mountCanvasEditOverlay(
       });
     },
   });
+  app.provide(CANVAS_OPTION_SLIDERS, options.sliders);
   app.config.errorHandler = (error) => options.report(error);
   app.mount(root);
 

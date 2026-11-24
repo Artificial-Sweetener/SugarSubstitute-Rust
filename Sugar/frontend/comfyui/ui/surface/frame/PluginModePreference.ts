@@ -14,7 +14,8 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own the opt-in Plugin Mode setting independently of workflow data and visual style. */
-import { sugarCubesSettingsSection } from '../../settings/SugarCubesSettingsSections.js';
+import { ComfySettingStore } from '../../settings/workspace/ComfySettingStore.js';
+import { settingsCatalogFor } from '../../settings/workspace/SettingsCatalog.js';
 import { isRecord } from '../../types/common.js';
 import { publishPluginMode } from '../../core/PluginMode.js';
 import type { EmbeddedPresentationSource } from '../../core/embedded/EmbeddedPresentation.js';
@@ -53,11 +54,26 @@ export function registerPluginModePreference(
     settings.addSetting.call(settings, {
       id: PLUGIN_MODE_SETTING,
       name: 'Plugin Mode',
-      ...sugarCubesSettingsSection('appearance', 'PluginMode'),
-      type: 'boolean',
+      type: 'hidden',
       defaultValue: false,
-      tooltip: 'Show global overrides as an always-expanded node card above the cubes.',
       onChange: accept,
+    });
+    settingsCatalogFor(app).contribute('appearance.layout.plugin_mode', {
+      controls: [
+        {
+          kind: 'switch',
+          value: new ComfySettingStore(app).value(PLUGIN_MODE_SETTING, (value) => value === true),
+        },
+      ],
+      // A host that decides Plugin Mode itself leaves nothing to choose here.
+      ...(embedded
+        ? {
+            enabled: {
+              read: () => embedded.read()?.pluginMode === undefined,
+              subscribe: (listener: () => void) => embedded.subscribe(listener),
+            },
+          }
+        : {}),
     });
   } else report(new Error('Comfy settings registration is unavailable for Plugin Mode.'));
   accept(

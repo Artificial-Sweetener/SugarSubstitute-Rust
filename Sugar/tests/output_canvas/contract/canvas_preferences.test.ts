@@ -43,7 +43,7 @@ test('registers the visibility default once and leaves editor widths to workflow
   preferences.setup();
   expect([...registered.keys()]).toEqual([OUTPUT_CANVAS_VISIBLE_SETTING]);
   expect(registered.get(OUTPUT_CANVAS_VISIBLE_SETTING)).toMatchObject({
-    type: 'boolean',
+    type: 'hidden',
     defaultValue: true,
   });
   expect(write).not.toHaveBeenCalled();

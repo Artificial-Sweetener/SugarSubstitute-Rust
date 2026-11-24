@@ -14,11 +14,13 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Own accent persistence, external CSS overrides, and palette-only invalidation. */
-import { sugarCubesSettingsSection } from '../../settings/SugarCubesSettingsSections.js';
+import { ComfySettingStore } from '../../settings/workspace/ComfySettingStore.js';
+import { settingsCatalogFor } from '../../settings/workspace/SettingsCatalog.js';
+import { fixed } from '../../settings/workspace/SettingsModel.js';
 import { isRecord } from '../../types/common.js';
 import { readOwnedDarkTheme } from './OwnedColorScheme.js';
 import { DEFAULT_ACCENT_COLOR, normalizeAccentColor } from './AccentPalette.js';
-import { createAccentColorSetting, updateAccentColorSetting } from './AccentColorSetting.js';
+import { createAccentColorControls } from './AccentColorSetting.js';
 import { HOST_CAPABILITIES } from '../../core/embedded/PanelRuntime.js';
 import { accentThemeCss } from './AccentThemeStyles.js';
 /** Persist the user's accent independently of every workflow document. */
@@ -54,7 +56,9 @@ export class AccentThemeHost {
     #source = 'system';
     #sourceOffered = false;
     #releaseHost = null;
+    /** Drawn accent rows, held weakly by their preview element so a closed dialog's rows can go. */
     #pickers = new Set();
+    #pickerControls = new WeakMap();
     #registering = false;
     #releaseHostAccent = null;
     #signature = '';
@@ -102,26 +106,8 @@ export class AccentThemeHost {
                 settings.addSetting.call(settings, {
                     id: ACCENT_COLOR_SETTING,
                     name: 'Accent color',
-                    ...sugarCubesSettingsSection('appearance', 'AccentColor'),
+                    type: 'hidden',
                     defaultValue: DEFAULT_ACCENT_COLOR,
-                    tooltip: 'Choose the shared SugarCubes accent. Hosts can override it with --sugarcubes-accent on the document root.',
-                    type: () => {
-                        const picker = createAccentColorSetting(this.#document, this.#preferred(), (color) => {
-                            if (typeof settings.setSettingValue !== 'function') {
-                                this.#report(new Error('Comfy accent setting persistence is unavailable.'));
-                                return;
-                            }
-                            try {
-                                void Promise.resolve(settings.setSettingValue.call(settings, ACCENT_COLOR_SETTING, color)).catch(this.#report);
-                            }
-                            catch (error) {
-                                this.#report(error);
-                            }
-                        });
-                        this.#pickers.add(new WeakRef(picker));
-                        updateAccentColorSetting(picker, this.#preferred(), this.#usesSystem());
-                        return picker;
-                    },
                     onChange: (value) => {
                         if (this.#registering)
                             return;
@@ -138,6 +124,7 @@ export class AccentThemeHost {
         finally {
             this.#registering = false;
         }
+        this.#contributeAccentRow();
         this.#document.head.append(this.#style);
         for (const style of this.#document.head.querySelectorAll('style'))
             this.#styleTexts.set(style, style.textContent);
@@ -185,14 +172,8 @@ export class AccentThemeHost {
                 settings.addSetting.call(settings, {
                     id: ACCENT_SOURCE_SETTING,
                     name: 'Accent source',
-                    ...sugarCubesSettingsSection('appearance', 'AccentSource'),
-                    type: 'combo',
+                    type: 'hidden',
                     defaultValue: 'system',
-                    options: [
-                        { value: 'system', text: 'System accent color' },
-                        { value: 'custom', text: 'Custom' },
-                    ],
-                    tooltip: 'Use the system accent color or choose a custom accent color.',
                     onChange: (value) => {
                         if (this.#registering)
                             return;
@@ -208,7 +189,64 @@ export class AccentThemeHost {
         finally {
             this.#registering = false;
         }
+        this.#contributeAccentRow();
         this.refresh();
+    }
+    /**
+     * The Appearance page's Accent color row, as in Python: the colour, and once the host declares
+     * a system accent, the choice between it and a custom colour.
+     */
+    #contributeAccentRow() {
+        const settings = this.#settings();
+        const save = (color) => {
+            if (typeof settings.setSettingValue !== 'function') {
+                this.#report(new Error('Comfy accent setting persistence is unavailable.'));
+                return;
+            }
+            try {
+                void Promise.resolve(settings.setSettingValue.call(settings, ACCENT_COLOR_SETTING, color)).catch(this.#report);
+            }
+            catch (error) {
+                this.#report(error);
+            }
+        };
+        // The row draws its controls in order: the preview creates one row's controls, the actions
+        // after the source choice take them.
+        let drawing = null;
+        const preview = {
+            kind: 'element',
+            create: (document) => {
+                const controls = createAccentColorControls(document, this.#preferred(), save, !this.#sourceOffered);
+                controls.update(this.#preferred(), this.#usesSystem());
+                this.#pickers.add(new WeakRef(controls.preview));
+                this.#pickerControls.set(controls.preview, controls);
+                drawing = controls;
+                return controls.preview;
+            },
+        };
+        const actions = {
+            kind: 'element',
+            create: (document) => {
+                const controls = drawing;
+                drawing = null;
+                return controls?.actions ?? document.createElement('span');
+            },
+        };
+        const source = this.#sourceOffered
+            ? [
+                {
+                    kind: 'choice',
+                    value: new ComfySettingStore(this.#app).value(ACCENT_SOURCE_SETTING, (value) => value === 'custom' ? 'custom' : 'system'),
+                    choices: fixed([
+                        { value: 'custom', label: 'Custom' },
+                        { value: 'system', label: 'System' },
+                    ]),
+                },
+            ]
+            : [];
+        settingsCatalogFor(this.#app).contribute('appearance.system_colors.accent', {
+            controls: [preview, ...source, actions],
+        });
     }
     /** Use the host's system accent only in system mode, retaining the custom browser fallback. */
     #preferred() {
@@ -227,9 +265,9 @@ export class AccentThemeHost {
         if (this.#disposed || !this.#setup)
             return;
         for (const reference of this.#pickers) {
-            const picker = reference.deref();
-            if (picker)
-                updateAccentColorSetting(picker, this.#preferred(), this.#usesSystem());
+            const preview = reference.deref();
+            if (preview)
+                this.#pickerControls.get(preview)?.update(this.#preferred(), this.#usesSystem());
             else
                 this.#pickers.delete(reference);
         }

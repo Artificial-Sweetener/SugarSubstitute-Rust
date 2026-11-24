@@ -14,8 +14,8 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Register the global output canvas setting through Comfy settings, independently of workflow JSON. */
-import { sugarCubesSettingsSection } from '../../settings/SugarCubesSettingsSections.js';
-import { isRecord } from '../../types/common.js';
+import { ComfySettingStore } from '../../settings/workspace/ComfySettingStore.js';
+import { settingsCatalogFor } from '../../settings/workspace/SettingsCatalog.js';
 /** Identify whether workflows without a stored view choice open with the output canvas shown. */
 export const OUTPUT_CANVAS_VISIBLE_SETTING = 'SugarCubes.OutputCanvas.Visible';
 /** Register the canvas default once extension setup makes Comfy settings available. */
@@ -27,26 +27,29 @@ export class ComfyCanvasPreferences {
         this.app = app;
     }
     /**
-     * Register the visibility default that new workflow views read through Comfy settings.
+     * Register the visibility default that new workflow views read through Comfy settings, and
+     * its row on the Generation page.
      *
      * @throws Error when Comfy's settings registration is unavailable.
      */
     setup() {
         if (this.#started)
             return;
-        const app = isRecord(this.app) ? this.app : {};
-        const ui = isRecord(app.ui) ? app.ui : {};
-        const settings = isRecord(ui.settings) ? ui.settings : {};
-        const { addSetting } = settings;
-        if (typeof addSetting !== 'function')
-            throw new Error('Comfy output canvas settings are unavailable.');
-        this.#started = true;
-        addSetting.call(settings, {
+        const store = new ComfySettingStore(this.app);
+        store.register({
             id: OUTPUT_CANVAS_VISIBLE_SETTING,
             name: 'Show output canvas',
-            ...sugarCubesSettingsSection('canvas', 'Visible'),
-            type: 'boolean',
+            type: 'hidden',
             defaultValue: true,
+        });
+        this.#started = true;
+        settingsCatalogFor(this.app).contribute('generation.output_canvas.visible', {
+            controls: [
+                {
+                    kind: 'switch',
+                    value: store.value(OUTPUT_CANVAS_VISIBLE_SETTING, (value) => value !== false),
+                },
+            ],
         });
     }
 }

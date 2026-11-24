@@ -17,6 +17,7 @@
 
 import { defineComponent, h, onBeforeUnmount, onMounted, onUpdated, ref, type PropType } from 'vue';
 import type { CanvasSourceSummary } from '../../domain/CanvasViewPort.js';
+import { placeSegmentIndicator, segmentKeyTarget } from '../../../core/SegmentedSlider.js';
 
 /**
  * Keep source labels literal and move one selection indicator to the selected tab.
@@ -41,22 +42,11 @@ export const CanvasSourceSlider = defineComponent({
 
     /** Cover the selected tab with the indicator; the stylesheet animates later moves. */
     function place(): void {
-      const mark = indicator.value;
-      const tab = list.value?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
-      if (!mark) return;
-      if (!tab) {
-        mark.hidden = true;
-        delete mark.dataset.placed;
-        return;
-      }
-      mark.hidden = false;
-      mark.style.transform = `translateX(${String(tab.offsetLeft)}px)`;
-      mark.style.width = `${String(tab.offsetWidth)}px`;
-      // Motion starts only after the first placement has been styled at its target.
-      if (!mark.dataset.placed) {
-        void mark.offsetWidth;
-        mark.dataset.placed = 'true';
-      }
+      if (!indicator.value) return;
+      placeSegmentIndicator(
+        indicator.value,
+        list.value?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]') ?? null,
+      );
     }
     onMounted(() => {
       place();
@@ -69,19 +59,8 @@ export const CanvasSourceSlider = defineComponent({
 
     /** Follow tab-list keyboard conventions while keeping focus scoped to this overlay root. */
     function navigate(event: KeyboardEvent, index: number): void {
-      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-      const count = props.sources.length;
-      const next =
-        event.key === 'Home'
-          ? 0
-          : event.key === 'End'
-            ? count - 1
-            : event.key === 'ArrowRight'
-              ? (index + 1) % count
-              : event.key === 'ArrowLeft'
-                ? (index + count - 1) % count
-                : null;
-      if (next === null || !count) return;
+      const next = segmentKeyTarget(event, index, props.sources.length);
+      if (next === null) return;
       event.preventDefault();
       event.stopPropagation();
       list.value?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();

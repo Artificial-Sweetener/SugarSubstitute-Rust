@@ -38,6 +38,7 @@ import {
   registerPhotoProPalettePreference,
 } from '../../../frontend/comfyui/ui/surface/appearance/PhotoProPalettePreference.js';
 import { isRecord, type UnknownRecord } from '../../../frontend/comfyui/ui/types/common.js';
+import { settingsCatalogFor } from '../../../frontend/comfyui/ui/settings/workspace/SettingsCatalog.js';
 import { SPINNER_WIDTH } from '../../../frontend/comfyui/ui/surface/appearance/ControlGeometry.js';
 
 afterEach(() => {
@@ -231,27 +232,27 @@ test('offers the four Photoshop brightness schemes through one semantic token ow
   );
   const registrations = new Map<string, UnknownRecord>();
   const report = jest.fn();
-  const release = registerPhotoProPalettePreference(
-    {
-      ui: {
-        settings: {
-          getSettingValue: () => 'dark-gray',
-          addSetting: (entry: unknown) => {
-            if (isRecord(entry) && typeof entry.id === 'string') registrations.set(entry.id, entry);
-          },
+  const app = {
+    ui: {
+      settings: {
+        getSettingValue: () => 'dark-gray',
+        addSetting: (entry: unknown) => {
+          if (isRecord(entry) && typeof entry.id === 'string') registrations.set(entry.id, entry);
         },
       },
     },
-    document,
-    report,
-  );
+  };
+  const release = registerPhotoProPalettePreference(app, document, report);
   expect(document.documentElement.dataset.scPhotoproPalette).toBe('dark-gray');
   const setting = registrations.get(PHOTOPRO_PALETTE_SETTING);
-  expect(setting?.options).toEqual([
-    { value: 'black', text: 'Black' },
-    { value: 'dark-gray', text: 'Dark Gray' },
-    { value: 'medium-gray', text: 'Medium Gray' },
-    { value: 'light-gray', text: 'Light Gray' },
+  expect(setting?.type).toBe('hidden');
+  const row = settingsCatalogFor(app).row('appearance.style.photopro_palette');
+  const choice = row?.controls?.[0];
+  expect(choice?.kind === 'choice' ? choice.choices.read() : null).toEqual([
+    { value: 'black', label: 'Black' },
+    { value: 'dark-gray', label: 'Dark Gray' },
+    { value: 'medium-gray', label: 'Medium Gray' },
+    { value: 'light-gray', label: 'Light Gray' },
   ]);
   const onChange = setting?.onChange;
   if (typeof onChange !== 'function') throw new Error('PhotoPro palette callback is unavailable.');

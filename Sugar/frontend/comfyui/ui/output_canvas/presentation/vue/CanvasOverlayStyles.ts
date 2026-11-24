@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Style reusable canvas controls in the owning overlay document. */
+import { segmentedSliderCss } from '../../../core/SegmentedSlider.js';
 
 /** Install one shared static stylesheet per document without creating image or host dependencies. */
 export function ensureCanvasOverlayStyles(document: Document): void {
@@ -40,8 +41,6 @@ export function ensureCanvasOverlayStyles(document: Document): void {
     .sc-output-tabs.sc-output-tabs-measure { position:absolute; visibility:hidden; pointer-events:none; width:max-content; }
     .sc-output-tabstrip.sc-output-compare-first { max-width:calc(50% - 12px); }
     .sc-output-tabstrip.sc-output-compare-second { left:auto; right:8px; max-width:calc(50% - 12px); }
-    .sc-output-tabs { position:relative; display:flex; align-items:center; gap:0; margin:0; padding:0; overflow-x:auto; min-width:0;
-      white-space:nowrap; overscroll-behavior:contain; scrollbar-width:thin; }
     .sc-output-status { position:absolute; bottom:60px; left:12px; right:12px; padding:6px;
       flex-wrap:wrap; font-size:12px; z-index:2; }
     .sc-output-overlay button {
@@ -63,22 +62,9 @@ export function ensureCanvasOverlayStyles(document: Document): void {
     .sc-output-wipe[data-orientation="vertical"] { top:0; bottom:0; width:4px; transform:translateX(-50%); cursor:ew-resize; }
     .sc-output-wipe[data-orientation="horizontal"] { left:0; right:0; height:4px; transform:translateY(-50%); cursor:ns-resize; }
     .sc-output-wipe span { border-radius:20px; padding:8px; color:#111; background:#eee; box-shadow:0 1px 6px #0008; }
-    .sc-output-tabs button { position:relative; background:transparent; border:1px solid transparent; border-radius:5px;
-      padding:0 12px; height:30px; min-height:30px; box-shadow:none; font-size:14px; line-height:28px; }
-    .sc-output-tabs button:hover:not(:disabled) { background:color-mix(in srgb,var(--fg-color,#fff) 3.5%,transparent); }
-    .sc-output-tabs button:active:not(:disabled) { background:color-mix(in srgb,var(--fg-color,#fff) 2.5%,transparent); }
-    .sc-output-tabs button[aria-selected="true"] { box-shadow:none; border-color:transparent; background:transparent; }
-    .sc-output-slider-indicator { position:absolute; left:0; top:0; height:30px; box-sizing:border-box; pointer-events:none;
-      border:1px solid color-mix(in srgb,var(--fg-color,#fff) 5.5%,transparent); border-radius:5px;
-      background:color-mix(in srgb,var(--fg-color,#fff) 6%,transparent); }
-    .sc-output-slider-indicator[hidden] { display:none; }
-    .sc-output-slider-indicator::after { content:""; position:absolute; bottom:0;
-      left:calc(50% - 8px); width:16px; height:3px; border-radius:1.5px; background:var(--p-primary-color,var(--ring,#df258e)); }
-    .sc-output-slider-indicator[data-placed] { transition:transform 200ms var(--sc-motion-ease,cubic-bezier(0,0,0,1)),
-      width 200ms var(--sc-motion-ease,cubic-bezier(0,0,0,1)); }
-    .sc-output-tabs button,.sc-output-overlay .sc-output-segment { cursor:default; }
+    ${segmentedSliderCss('.sc-output-tabs', '.sc-output-slider-indicator')}
     .sc-output-choice { display:inline-flex; min-width:0; }
-    .sc-output-overlay .sc-output-segment { display:block; position:relative; box-shadow:none;
+    .sc-output-overlay .sc-output-segment { display:block; position:relative; box-shadow:none; cursor:default;
       height:30px; min-height:30px; min-width:34px; max-width:260px; padding:0 12px; font-size:14px; line-height:28px;
       border:1px solid transparent; border-radius:5px; background:transparent;
       overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
