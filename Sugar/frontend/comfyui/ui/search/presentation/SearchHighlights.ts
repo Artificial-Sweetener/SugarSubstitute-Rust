@@ -68,11 +68,16 @@ export class SearchHighlights {
     const Observer = documentRef.defaultView?.ResizeObserver;
     this.#observer = Observer ? new Observer(() => this.#schedule()) : null;
   }
-  /** Reconcile marks using literal text nodes and retain unchanged controls across navigation. */
+  /**
+   * Reconcile marks using literal text nodes and retain unchanged controls across navigation.
+   * Matches are found in a field's value; a control that shows that value differently, such as
+   * a formatted number, gets a mark only where its own characters read `needle`.
+   */
   render(
     fields: ReadonlyMap<string, SearchFieldSurface>,
     matches: readonly SearchMatch[],
     active: SearchMatch | null,
+    needle: string,
   ): void {
     const created: HighlightBinding[] = [];
     const grouped = new Map<string, SearchMatch[]>();
@@ -140,6 +145,8 @@ export class SearchHighlights {
         const fragments: Node[] = [];
         let offset = 0;
         for (const range of ranges) {
+          const shown = control.value.slice(range.start, range.start + range.length);
+          if (shown.toLowerCase() !== needle) continue;
           fragments.push(this.#document.createTextNode(control.value.slice(offset, range.start)));
           const mark = this.#document.createElement('mark');
           mark.textContent = control.value.slice(range.start, range.start + range.length);

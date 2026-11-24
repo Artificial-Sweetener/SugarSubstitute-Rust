@@ -47,7 +47,7 @@ function fixture() {
     control.value = '512';
     row.append(control);
     card.append(row);
-    fields.set(id, { id, node: 'latent', card, row, control });
+    fields.set(id, { id, node: 'latent', card, row, label: null, control, painter: null });
   }
   const read = jest.fn(() => [
     {
@@ -63,7 +63,7 @@ function fixture() {
       })),
     },
   ]);
-  const surface: SearchSurface = { fields, read };
+  const surface: SearchSurface = { fields, titles: new Map(), read };
   const setCards = jest.fn<(nodes: ReadonlySet<string> | null, remeasure: boolean) => void>();
   const presenter = new MasonrySearchPresenter({ root, container, surface, setCards });
   presenters.push(presenter);

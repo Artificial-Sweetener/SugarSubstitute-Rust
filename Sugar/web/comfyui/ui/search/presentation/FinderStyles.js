@@ -48,7 +48,12 @@ export function ensureFinderStyles(documentRef) {
     .sc-search-highlight { position:absolute; pointer-events:none; overflow:hidden; color:transparent !important; z-index:1; }
     .sc-search-highlight__text { color:transparent !important; }
     .sc-search-highlight mark { color:transparent !important; background:color-mix(in srgb,var(--sc-brand-fill,#479ef5) 35%,transparent); padding:0; }
-    .sc-search-highlight mark[data-active] { background:color-mix(in srgb,var(--sc-brand-fill,#479ef5) 59%,transparent); }
+    .sc-search-highlight mark[data-active] { background:color-mix(in srgb,var(--sc-brand-fill,#479ef5) 55%,transparent); outline:1px solid var(--sc-brand-fill,#479ef5); border-radius:2px; }
+    /* Text a card renders itself and prompt editors use the same colour at the same two strengths. */
+    ::highlight(sc-search-match) { background-color:color-mix(in srgb,var(--sc-brand-fill,#479ef5) 35%,transparent); }
+    [data-sc-prompt-editor] { --sugarprompt-search-highlight:var(--sc-brand-fill,#479ef5); }
+    /* The marks lie over the text, so the current match is stronger and outlined, never opaque. */
+    [data-sc-prompt-editor] .sugarprompt-search-active { background-color:color-mix(in srgb,var(--sc-brand-fill,#479ef5) 55%,transparent); outline:1px solid var(--sc-brand-fill,#479ef5); border-radius:2px; }
     @supports not (backdrop-filter:blur(1px)) {
       .sc-masonry-finder { background:var(--sc-surface-secondary); }
       .sc-masonry-finder::before { display:none; }

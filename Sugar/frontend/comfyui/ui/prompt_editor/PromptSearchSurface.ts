@@ -30,8 +30,10 @@ export interface PromptSearchSurface {
    * the query so a new one starts a new search; it is never shown.
    */
   paint(query: string, ranges: readonly PromptSearchRange[], active: number | null): void;
-  /** Select the match at `index`, scroll the prompt to it and optionally give it focus. */
-  reveal(index: number, focus: boolean): void;
+  /** Select the match at `index` and scroll the prompt to it; the finder keeps focus. */
+  reveal(index: number): void;
+  /** Select the match at `index`, give the prompt focus there, then remove every match. */
+  focus(index: number): void;
   /** Remove every match. */
   clear(): void;
 }

@@ -23,6 +23,7 @@ import { cubeFacePresentedWidgets } from '../../surface/CubeFaceWidgetPolicy.js'
 import { nativeNodeFieldRows } from '../../surface/NativeNodeFieldRows.js';
 import { ComfyNodeVNodeIndex } from '../../surface/ComfyVueTree.js';
 import { formatDisplayLabel } from '../../surface/appearance/DisplayLabels.js';
+import { promptSearchIn } from '../../prompt_editor/PromptSearchSurface.js';
 import type { SearchField, SearchNode } from '../domain/SearchMatching.js';
 import type {
   SearchFieldSurface,
@@ -41,6 +42,7 @@ interface SourceNode {
 /** Retain native references only while mounted; query and navigation never rediscover the graph. */
 export class MasonrySearchCorpus implements SearchSurface {
   readonly fields = new Map<string, SearchFieldSurface>();
+  readonly titles = new Map<string, HTMLElement>();
   readonly #cards = new Map<string, { card: WorkflowMasonryCard; cell: HTMLElement }>();
   readonly #nodes = new Map<string, SourceNode>();
   readonly #rowCards = new WeakMap<HTMLElement, string>();
@@ -86,23 +88,32 @@ export class MasonrySearchCorpus implements SearchSurface {
         const row = rows.get(key);
         if (!row || row.hidden || row.getAttribute('aria-hidden') === 'true') continue;
         const fieldId = JSON.stringify([card.id, key]);
+        const shownLabel = row.querySelector<HTMLElement>(
+          '[data-testid="widget-layout-field-label"]',
+        );
         const label =
-          row
-            .querySelector<HTMLElement>('[data-testid="widget-layout-field-label"]')
-            ?.textContent?.trim() ||
+          shownLabel?.textContent?.trim() ||
           (typeof widget.options?.label === 'string'
             ? widget.options.label
             : formatDisplayLabel(key));
-        fields.push({ description: { id: fieldId, key, label }, widget });
-        this.fields.set(fieldId, {
+        const painter = promptSearchIn(row);
+        const surface: SearchFieldSurface = {
           id: fieldId,
           node: card.id,
           card: cell,
           row,
-          control: selectableControl(row),
-        });
+          label: shownLabel,
+          // A prompt's own text control is hidden behind its editor, which paints for it.
+          control: painter ? null : selectableControl(row),
+          painter,
+        };
+        fields.push({ description: { id: fieldId, key, label }, widget });
+        this.fields.set(fieldId, surface);
         this.#rowCards.set(row, card.id);
       }
+      const title = cell.querySelector<HTMLElement>('[data-testid="node-title"]');
+      if (title) this.titles.set(id, title);
+      else this.titles.delete(id);
       this.#nodes.set(id, {
         description: {
           id: card.id,

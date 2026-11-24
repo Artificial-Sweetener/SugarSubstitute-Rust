@@ -20,6 +20,8 @@ import type { SearchMatch } from '../domain/SearchMatching.js';
 import type { SearchSurface } from './SearchSurface.js';
 import { FinderView } from './FinderView.js';
 import { SearchHighlights } from './SearchHighlights.js';
+import { SearchFieldPainters } from './SearchFieldPainters.js';
+import { SearchRenderedText } from './SearchRenderedText.js';
 import { SearchVisibility } from './SearchVisibility.js';
 import { subscribeVisualStyle } from '../../surface/appearance/VisualStyleBoundary.js';
 
@@ -37,6 +39,8 @@ export class MasonrySearchPresenter {
   #finder: FinderView;
   readonly #stopStyle: () => void;
   readonly #highlights: SearchHighlights;
+  readonly #painters = new SearchFieldPainters();
+  readonly #rendered: SearchRenderedText;
   #visibility: SearchVisibility;
   #surface: SearchSurface;
   #frame: number | null = null;
@@ -50,6 +54,7 @@ export class MasonrySearchPresenter {
     this.#session = new SearchSession(options.state);
     this.#visibility = new SearchVisibility(options.surface.fields, options.setCards);
     this.#highlights = new SearchHighlights(options.root.ownerDocument);
+    this.#rendered = new SearchRenderedText(options.root.ownerDocument);
     this.#finder = this.#createFinder();
     this.#stopStyle = subscribeVisualStyle(options.root.ownerDocument, () => {
       this.#flush();
@@ -96,13 +101,16 @@ export class MasonrySearchPresenter {
     this.#session.setOpen(false);
     this.#visibility.apply(null);
     this.#highlights.clear();
+    // On Escape a prompt selects and focuses its current match as its marks are removed.
+    const promptFocused = this.#painters.clear(focusMatch ? active : null);
+    this.#rendered.clear();
     this.#finder.hide();
     for (const field of this.#surface.fields.values()) {
       const control = field.control;
       if (control?.selectionEnd !== null && control?.selectionEnd !== undefined)
         control.setSelectionRange(control.selectionEnd, control.selectionEnd);
     }
-    if (focusMatch) {
+    if (focusMatch && !promptFocused) {
       const control = active ? this.#surface.fields.get(active.field)?.control : null;
       if (control && active) {
         control.focus({ preventScroll: true });
@@ -114,8 +122,10 @@ export class MasonrySearchPresenter {
   cycle(direction: 1 | -1): void {
     this.#flush();
     if (!this.#session.state.open || this.#session.state.mode === 'field') return;
+    const previous = this.#session.state.active;
     const active = this.#session.cycle(direction);
     this.#highlights.activate(active);
+    this.#painters.activate(previous, active);
     this.#sync();
     if (active) this.#reveal(active);
   }
@@ -133,6 +143,8 @@ export class MasonrySearchPresenter {
     this.#stopStyle();
     this.#visibility.dispose();
     this.#highlights.dispose();
+    this.#painters.clear();
+    this.#rendered.clear();
     this.#finder.dispose();
   }
   /** Recreate provider controls while retaining the query, results, filters, and native field corpus. */
@@ -177,7 +189,7 @@ export class MasonrySearchPresenter {
     this.#session.selectable(
       new Set(
         [...this.#surface.fields.values()]
-          .filter((field) => field.control !== null)
+          .filter((field) => field.control !== null || field.painter !== null)
           .map((field) => field.id),
       ),
     );
@@ -185,11 +197,11 @@ export class MasonrySearchPresenter {
   /** Paint results independently of source values and native field ownership. */
   #render(reveal: boolean): void {
     this.#visibility.apply(this.#session.result);
-    this.#highlights.render(
-      this.#surface.fields,
-      this.#session.result.matches,
-      this.#session.state.active,
-    );
+    const { matches } = this.#session.result;
+    const { active, query } = this.#session.state;
+    this.#highlights.render(this.#surface.fields, matches, active, query.text);
+    this.#painters.render(this.#surface.fields, matches, active, `${query.mode}\n${query.text}`);
+    this.#rendered.render(this.#surface, this.#session.result);
     this.#sync();
     if (reveal && this.#session.state.active) this.#reveal(this.#session.state.active);
   }
@@ -213,13 +225,15 @@ export class MasonrySearchPresenter {
   /** Select inside the native widget and scroll only when the active match lies outside the viewport. */
   #reveal(match: SearchMatch): void {
     const field = this.#surface.fields.get(match.field);
-    const control = field?.control;
-    if (!control) return;
-    control.setSelectionRange(match.start, match.start + match.length);
-    this.#highlights.reveal(match);
+    const shown = field?.painter?.element ?? field?.control;
+    if (!field || !shown) return;
+    if (!this.#painters.reveal(match)) {
+      field.control?.setSelectionRange(match.start, match.start + match.length);
+      this.#highlights.reveal(match);
+    }
     const root = this.#options.root;
     const bounds = root.getBoundingClientRect();
-    const target = control.getBoundingClientRect();
+    const target = shown.getBoundingClientRect();
     if (target.top < bounds.top + 64 || target.bottom > bounds.bottom - 16)
       root.scrollTo?.({
         top: Math.max(

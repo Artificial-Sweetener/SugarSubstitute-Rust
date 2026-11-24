@@ -21,7 +21,7 @@ import {
 } from "./chunk-J5G7M2RT.js";
 import {
   PromptSearchPainter
-} from "./chunk-ZCPRHCKW.js";
+} from "./chunk-3Y3NCOJU.js";
 import "./chunk-LN2UPO34.js";
 import {
   ClipboardSession,
@@ -47945,6 +47945,7 @@ var SugarPromptEditor = class {
   #menuPoint = null;
   #scheduling;
   #admission;
+  #search = null;
   /** Mount all existing editing, rich projection, weight and Alt-reorder behavior through its public API. */
   constructor(document2, options) {
     installSugarPromptStyles(document2);
@@ -48011,6 +48012,7 @@ var SugarPromptEditor = class {
       tagLexicon: tagCatalog.lexicon,
       clipboardObserver: clipboardRefusalObserver(options.clipboardRefused, options.report),
       onUpdate: (snapshot) => this.#observe(snapshot),
+      onSearchRefresh: (request) => this.#search?.refresh(request),
       onLayout: (metrics) => this.#layout(metrics),
       onLoraMediaError: options.report,
       onRegionHover: options.regionHover,
@@ -48023,7 +48025,8 @@ var SugarPromptEditor = class {
       options.loraUpstream
     );
     markComfyPromptInput(this.element);
-    publishPromptSearch(new PromptSearchPainter(this.element, this.#api, options.report));
+    this.#search = new PromptSearchPainter(this.element, this.#api, options.report);
+    publishPromptSearch(this.#search);
   }
   /** Preserve the native document and history when the host moves the same field to another presentation. */
   attach(textarea) {

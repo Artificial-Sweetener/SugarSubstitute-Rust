@@ -33,6 +33,8 @@ type SearchApi = Pick<
  */
 export class PromptSearchPainter implements PromptSearchSurface {
   #request: SearchRequest | null = null;
+  #published: SearchRequest | null = null;
+  #painted: { ranges: readonly PromptSearchRange[]; active: number | null } | null = null;
   #query: string | null = null;
   #queries = 0;
   #results = 0;
@@ -49,6 +51,7 @@ export class PromptSearchPainter implements PromptSearchSurface {
   paint(query: string, ranges: readonly PromptSearchRange[], active: number | null): void {
     if (this.#query !== query) this.#request = null;
     this.#query = query;
+    this.#painted = { ranges, active };
     // An edit retires the editor's request, so a refused publication is issued a new one.
     if (this.#publish(ranges, active) === 'stale') {
       this.#request = null;
@@ -56,24 +59,50 @@ export class PromptSearchPainter implements PromptSearchSurface {
     }
   }
 
-  reveal(index: number, focus: boolean): void {
+  reveal(index: number): void {
+    void this.#navigate(index, false).catch(this.report);
+  }
+
+  focus(index: number): void {
+    const query = this.#query;
+    void this.#navigate(index, true)
+      .catch(this.report)
+      // The marks stay until focus has arrived, because removing them cancels the focus.
+      .finally(() => {
+        if (this.#query === query) this.clear();
+      });
+  }
+
+  async #navigate(index: number, focus: boolean): Promise<void> {
     if (!this.#request) return;
-    void this.api
-      .navigateSearchMatch({
-        request: this.#request,
-        resultRevision: this.#results,
-        matchId: String(index),
-        select: true,
-        scroll: true,
-        focus,
-      })
-      .catch(this.report);
+    await this.api.navigateSearchMatch({
+      request: this.#request,
+      resultRevision: this.#results,
+      matchId: String(index),
+      select: true,
+      scroll: true,
+      focus,
+    });
+  }
+
+  /**
+   * Paint again for the request the editor issues when it retires its matches. An edit changes
+   * the source the ranges were found in, so those wait for the finder's next search; any other
+   * retirement, such as a replaced model catalog, repaints the same ranges.
+   */
+  refresh(request: SearchRequest): void {
+    if (this.#query === null || request === this.#published) return;
+    const edited = this.#request?.sourceRevision !== request.sourceRevision;
+    this.#request = request;
+    if (!edited && this.#painted) this.#publish(this.#painted.ranges, this.#painted.active);
   }
 
   clear(): void {
     if (this.#query === null) return;
     this.#query = null;
     this.#request = null;
+    this.#published = null;
+    this.#painted = null;
     void this.api.clearSearch(false).catch(this.report);
   }
 
@@ -83,6 +112,7 @@ export class PromptSearchPainter implements PromptSearchSurface {
       queryId: `query-${String(++this.#queries)}`,
     });
     if (!this.#request) return 'unavailable';
+    this.#published = this.#request;
     return this.api.publishSearchMatches({
       request: this.#request,
       resultRevision: ++this.#results,

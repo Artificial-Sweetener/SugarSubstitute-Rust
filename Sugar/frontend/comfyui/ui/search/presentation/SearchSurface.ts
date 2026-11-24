@@ -15,16 +15,28 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Describe identified native controls without exposing graph traversal to search presentation. */
 import type { SearchNode } from '../domain/SearchMatching.js';
+import type { PromptSearchSurface } from '../../prompt_editor/PromptSearchSurface.js';
 export type SearchTextControl = HTMLInputElement | HTMLTextAreaElement;
+/**
+ * One searchable field of a card. A field shows its matches through exactly one of:
+ * - `painter`: a prompt editor that paints matches in its own text;
+ * - `control`: a plain text control the finder lays a highlight over;
+ * - neither: text the field renders itself, highlighted where it stands.
+ */
 export interface SearchFieldSurface {
   readonly id: string;
   readonly node: string;
   readonly card: HTMLElement;
   readonly row: HTMLElement;
+  /** The element showing the field's name, when the row has one. */
+  readonly label: HTMLElement | null;
   readonly control: SearchTextControl | null;
+  readonly painter: PromptSearchSurface | null;
 }
 /** Read values from a lifecycle-owned corpus while keeping mounted lookup stable during edits. */
 export interface SearchSurface {
   readonly fields: ReadonlyMap<string, SearchFieldSurface>;
+  /** The element showing each card's title, by node. */
+  readonly titles: ReadonlyMap<string, HTMLElement>;
   read(): readonly SearchNode[];
 }
