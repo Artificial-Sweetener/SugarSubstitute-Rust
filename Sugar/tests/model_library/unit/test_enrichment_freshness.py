@@ -354,5 +354,7 @@ def test_a_preview_that_keeps_failing_is_retried_less_and_less_often(
         fixture.clock[0] = started + delay + 1
     fixture.previews.unavailable = False
     assert asyncio.run(fixture.automatic.refresh(fixture.identity))["status"] == "found"
+    digest = fixture.repository.list_entries()[0].sha256
+    assert digest is not None
     assert attempts.preview_failures(digest, policy=policy) == 0
     assert attempts.content_retry_at(digest, policy=policy) == 0

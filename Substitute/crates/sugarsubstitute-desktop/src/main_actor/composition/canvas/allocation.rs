@@ -140,11 +140,7 @@ impl Allocation {
         }
     }
 
-    fn draw(
-        &mut self,
-        content: &CanvasContent<'_>,
-        wash: [u8; 4],
-    ) -> Result<Filled, DesktopError> {
+    fn draw(&mut self, content: &CanvasContent<'_>, wash: [u8; 4]) -> Result<Filled, DesktopError> {
         let started = Instant::now();
         let surface = self.surface()?.clone();
         let mut raw = std::ptr::null_mut();
@@ -177,11 +173,14 @@ impl Allocation {
         let (source, source_bytes) = match content {
             CanvasContent::Cpu(frame) => {
                 let stride = self.extent.width() * 4;
-                // SAFETY: Frame validation proves the complete immutable pixel storage and stride;
-                // the retained bitmap has this surface's extent and format.
-                let refilled = self.upload.as_ref().is_some_and(|bitmap| unsafe {
-                    bitmap.CopyFromMemory(None, frame.pixels.as_ptr().cast(), stride).is_ok()
-                });
+                let refilled = match &self.upload {
+                    // SAFETY: Frame validation proves the complete immutable pixel storage and
+                    // stride; the retained bitmap has this surface's extent and format.
+                    Some(bitmap) => unsafe {
+                        bitmap.CopyFromMemory(None, frame.pixels.as_ptr().cast(), stride).is_ok()
+                    },
+                    None => false,
+                };
                 if !refilled {
                     self.upload = None;
                     let mut raw = std::ptr::null_mut();
@@ -210,9 +209,9 @@ impl Allocation {
                     .texture()
                     .cast()
                     .map_err(|cause| DesktopError::new("query_canvas_shared_surface", cause))?;
+                let mut raw = std::ptr::null_mut();
                 // SAFETY: The texture belongs to this context's D3D11 device and has the same
                 // BGRA8 format; the surface outlives this call and the retained bitmap.
-                let mut raw = std::ptr::null_mut();
                 let status = unsafe {
                     (context.vtable().CreateBitmapFromDxgiSurface)(
                         context.as_raw(),

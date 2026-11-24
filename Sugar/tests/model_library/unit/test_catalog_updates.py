@@ -65,10 +65,11 @@ def test_first_change_after_quiet_is_announced_at_once(tmp_path: Path) -> None:
 
     async def exercise() -> None:
         await updates.invalidate()
-        assert await updates.wait(0) == 1
+        first = await updates.wait(0)
+        assert first == 1
         pace.now += 60
         await updates.invalidate()
-        assert await updates.wait(1) == 2
+        assert await updates.wait(first) == 2
 
     asyncio.run(exercise())
     assert pace.pauses == []
@@ -83,14 +84,16 @@ def test_continuing_changes_reach_a_consumer_once_per_interval_with_the_newest_r
 
     async def exercise() -> None:
         await updates.invalidate()
-        assert await updates.wait(0) == 1
+        first = await updates.wait(0)
+        assert first == 1
         for _ in range(25):
             await updates.invalidate()
         pace.now += 1.0
-        assert await updates.wait(1) == 26
+        second = await updates.wait(first)
+        assert second == 26
         for _ in range(4):
             await updates.invalidate()
-        assert await updates.wait(26) == 30
+        assert await updates.wait(second) == 30
 
     asyncio.run(exercise())
     assert pace.pauses == [pytest.approx(2.0), pytest.approx(3.0)]
@@ -102,8 +105,11 @@ def test_a_consumer_behind_the_last_announcement_is_not_paced(tmp_path: Path) ->
 
     async def exercise() -> None:
         await updates.invalidate()
+        held = await updates.wait(0)
         await updates.invalidate()
-        assert await updates.wait(1) == 2
+        assert held == 1
+        pace.now += 60
+        assert await updates.wait(held) == 2
         assert await updates.wait(0) == 2
 
     asyncio.run(exercise())
