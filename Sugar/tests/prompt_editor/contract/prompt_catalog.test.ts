@@ -17,6 +17,7 @@
 import {
   preparePromptLoraCatalog,
   promptLoraItem,
+  promptLoraMediaRevision,
   promptLoraModel,
   promptLoraName,
 } from '../../../frontend/comfyui/ui/prompt_editor/PromptLoraCatalog.js';
@@ -168,4 +169,54 @@ test('an installed LoRA is named as a prompt writes it and found as the editor d
     triggerWords: ['example trigger'],
   });
   expect(promptLoraItem(adapter, 'missing.safetensors')).toBeNull();
+});
+
+test('a LoRA whose image alone changed keeps the catalog and everything prepared from it', async () => {
+  const snapshot = promptCatalogFixture();
+  const lora = snapshot.items[0];
+  if (!lora) throw new Error('Missing catalog fixture');
+  const first = preparePromptLoraCatalog(snapshot, 'http://localhost/');
+  const completion = first.completionCatalog;
+  const repainted = {
+    ...lora,
+    thumbnails: lora.thumbnails.map((image) => ({ ...image, url: `${image.url}?changed` })),
+  };
+  const later = preparePromptLoraCatalog(
+    { ...snapshot, revision: snapshot.revision + 1, items: [repainted] },
+    'http://localhost/',
+    undefined,
+    first,
+  );
+  // The same catalog: no editor retires a menu, a completion popup or a gesture for an image.
+  expect(later).toBe(first);
+  expect(later.completionCatalog).toBe(completion);
+  expect(later.revision).toBe(first.revision);
+  expect(promptLoraMediaRevision(later)).toBe(1);
+  // Chips, the model lookup and the editor's record all describe the new image.
+  const [resource] = await later.resolve(['folder/example'], new AbortController().signal);
+  expect(resource).toMatchObject({
+    resolution: 'found',
+    thumbnail: { status: 'ready', url: 'http://localhost/proof/banner.svg?changed' },
+  });
+  expect(promptLoraModel(later, lora.value)).toBe(repainted);
+  expect(promptLoraItem(later, lora.value)?.thumbnail).toMatchObject({
+    url: 'http://localhost/proof/banner.svg?changed',
+  });
+});
+
+test('a LoRA whose name or words changed replaces the catalog', () => {
+  const snapshot = promptCatalogFixture();
+  const lora = snapshot.items[0];
+  if (!lora) throw new Error('Missing catalog fixture');
+  const first = preparePromptLoraCatalog(snapshot, 'http://localhost/');
+  for (const change of [{ title: 'Renamed' }, { trainedWords: ['another trigger'] }]) {
+    const later = preparePromptLoraCatalog(
+      { ...snapshot, revision: snapshot.revision + 1, items: [{ ...lora, ...change }] },
+      'http://localhost/',
+      undefined,
+      first,
+    );
+    expect(later).not.toBe(first);
+    expect(promptLoraMediaRevision(first)).toBe(0);
+  }
 });

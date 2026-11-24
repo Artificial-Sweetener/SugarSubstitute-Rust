@@ -28,6 +28,8 @@ from ..application.ports import ModelCatalogRepository
 from .jobs import ModelBackgroundJobs, ModelJob
 
 _LOGGER = logging.getLogger(__name__)
+# How many recently shown models are remembered for the front of a reconsidered backlog.
+_SHOWN_MODELS = 512
 
 
 class ModelEnrichmentWorker:
@@ -53,6 +55,7 @@ class ModelEnrichmentWorker:
         self._after_refresh = after_refresh
         self._interval = interval
         self._reconsider = False
+        self._shown: OrderedDict[str, None] = OrderedDict()
         self._loop: asyncio.AbstractEventLoop | None = None
         self._pending: OrderedDict[str, bool] = OrderedDict()
         self._wake = asyncio.Event()
@@ -74,6 +77,11 @@ class ModelEnrichmentWorker:
 
     def prioritize(self, identities: Sequence[str]) -> None:
         """Move visible choices ahead of the remaining startup backlog without duplication."""
+        for identity in reversed(identities):
+            self._shown[identity] = None
+            self._shown.move_to_end(identity, last=False)
+        while len(self._shown) > _SHOWN_MODELS:
+            self._shown.popitem()
         for identity in reversed(identities):
             if identity != self._current:
                 self._pending.setdefault(identity, True)
@@ -192,9 +200,14 @@ class ModelEnrichmentWorker:
                 await self.refill()
 
     async def _refill_reconsidered(self) -> None:
-        """Queue the models a changed preference made stale without waiting for an idle poll."""
+        """Queue the models a changed preference made stale without waiting for an idle poll.
+
+        The models consumers showed most recently go first, so what a person is looking at
+        changes first.
+        """
         self._reconsider = False
         await self.refill()
+        self.prioritize(tuple(self._shown))
 
     def _observe_failure(self, task: asyncio.Task[None]) -> None:
         """Surface unexpected lifecycle failures rather than silently abandoning the backlog."""

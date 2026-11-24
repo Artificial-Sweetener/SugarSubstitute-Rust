@@ -108,21 +108,41 @@ export class LoraWidget extends SourceWidget {
   }
   /** Native feedback changes only its two owned class tokens; equivalent content retains decoded media and numeric subtree identity. */
   override updateDOM(dom: HTMLElement, _view: EditorView, from: LoraWidget): boolean {
-    if (!this.sameContent(from)) return false;
+    if (!this.sameContent(from) && !this.awaitsReplacementImage(dom, from)) return false;
     dom.classList.toggle('sp-wheel-ready', this.adjustment === 'wheel');
     dom.classList.toggle('sp-adjustment-content', this.adjustment === 'pointer');
     return true;
   }
+  /**
+   * A chip showing an image keeps it while the model's replacement image is not ready: still
+   * being prepared, or failed. The chip is rebuilt once the replacement is ready, or when the
+   * model no longer has an image.
+   */
+  private awaitsReplacementImage(dom: HTMLElement, from: LoraWidget): boolean {
+    return (
+      this.sameLabels(from) &&
+      this.preparedMedia.status !== 'ready' &&
+      this.resource.resolution === 'found' &&
+      this.resource.thumbnail.status === 'ready' &&
+      dom.querySelector('.sp-lora-media') !== null
+    );
+  }
   /** One immutable comparison owns every constructor operand that can change the retained child graph or attributes. */
   private sameContent(other: LoraWidget): boolean {
+    return (
+      this.sameLabels(other) &&
+      this.media === other.media &&
+      this.preparedMedia === other.preparedMedia
+    );
+  }
+  /** Everything a chip shows apart from its image. */
+  private sameLabels(other: LoraWidget): boolean {
     return (
       this.resource.name === other.resource.name &&
       this.resource.resolution === other.resource.resolution &&
       this.title === other.title &&
       this.subtitle === other.subtitle &&
       this.status === other.status &&
-      this.media === other.media &&
-      this.preparedMedia === other.preparedMedia &&
       this.weight === other.weight &&
       this.draftKey === other.draftKey
     );

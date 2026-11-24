@@ -50,7 +50,7 @@ def register_model_library_routes(
     async def catalog(request: web.Request) -> web.Response:
         """Read prepared catalog data without performing heavy work in the request."""
         try:
-            held = request.query.get("ifRevision")
+            held = request.headers.get("X-SugarCubes-Held-Revision")
             if held is not None and not re.fullmatch(r"[0-9]{1,15}", held):
                 return _error("Invalid model catalog revision.", 400)
             return web.json_response(

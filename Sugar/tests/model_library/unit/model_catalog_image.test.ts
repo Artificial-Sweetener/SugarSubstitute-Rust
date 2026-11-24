@@ -117,3 +117,66 @@ test('removes a failed decorative banner and restores it on publication', async 
     fixture.dispose();
   }
 });
+
+/** The image being loaded out of sight for a replacement. */
+function loading(root: HTMLElement): HTMLImageElement | null {
+  return root.querySelector<HTMLImageElement>('img[data-sc-model-image-loading]');
+}
+
+/** The image a person sees. */
+function visible(root: HTMLElement): HTMLImageElement {
+  const value = root.querySelector<HTMLImageElement>('img:not([data-sc-model-image-loading])');
+  if (!value) throw new Error('Missing visible image.');
+  return value;
+}
+
+test('keeps the image on screen until its replacement has loaded', async () => {
+  const fixture = mount();
+  try {
+    const shown = visible(fixture.root);
+    shown.dispatchEvent(new Event('load'));
+    await nextTick();
+    fixture.state.image = { ...fixture.state.image, url: '/assets/second' };
+    await nextTick();
+    expect(visible(fixture.root)).toBe(shown);
+    expect(shown.getAttribute('src')).toBe('/assets/first');
+    expect(loading(fixture.root)?.getAttribute('src')).toBe('/assets/second');
+    loading(fixture.root)?.dispatchEvent(new Event('load'));
+    await nextTick();
+    expect(visible(fixture.root)).toBe(shown);
+    expect(shown.getAttribute('src')).toBe('/assets/second');
+    expect(loading(fixture.root)).toBeNull();
+  } finally {
+    fixture.dispose();
+  }
+});
+
+test('a newer replacement supersedes one still loading, and a failed one keeps the image', async () => {
+  const fixture = mount();
+  try {
+    const shown = visible(fixture.root);
+    shown.dispatchEvent(new Event('load'));
+    await nextTick();
+    fixture.state.image = { ...fixture.state.image, url: '/assets/second' };
+    await nextTick();
+    const superseded = loading(fixture.root);
+    fixture.state.image = { ...fixture.state.image, url: '/assets/third' };
+    await nextTick();
+    superseded?.dispatchEvent(new Event('load'));
+    await nextTick();
+    expect(shown.getAttribute('src')).toBe('/assets/first');
+    expect(loading(fixture.root)?.getAttribute('src')).toBe('/assets/third');
+    loading(fixture.root)?.dispatchEvent(new Event('error'));
+    await nextTick();
+    expect(visible(fixture.root)).toBe(shown);
+    expect(shown.getAttribute('src')).toBe('/assets/first');
+    expect(fixture.root.textContent).toBe('');
+    expect(loading(fixture.root)).toBeNull();
+    // The catalog publishing the model's image again is what retries the failed address.
+    fixture.state.image = { ...fixture.state.image };
+    await nextTick();
+    expect(loading(fixture.root)?.getAttribute('src')).toBe('/assets/third');
+  } finally {
+    fixture.dispose();
+  }
+});

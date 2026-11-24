@@ -1274,13 +1274,8 @@ function prepareLoraCompletion(catalog, options, resolution) {
     items.push(ranked);
   }
   Object.freeze(items);
-  const index = new ScalarSubstringIndex(items, (item) => [
-    item.basename,
-    item.display,
-    item.name,
-    item.backend,
-    item.metadata
-  ]), ordered = Object.freeze([...items].sort(compareRankedLoras).map((item) => item.empty)), memo = /* @__PURE__ */ new Map();
+  let index = null, ordered = null;
+  const memo = /* @__PURE__ */ new Map();
   let retained = 0;
   return Object.freeze({
     revision: catalog.revision,
@@ -1290,13 +1285,23 @@ function prepareLoraCompletion(catalog, options, resolution) {
       if (typeof query !== "string" || query.length > 4096)
         throw new TypeError("Invalid LoRA completion query");
       const key = loraNameKey(query);
-      if (!key) return ordered;
+      if (!key)
+        return ordered ??= Object.freeze(
+          [...items].sort(compareRankedLoras).map((item) => item.empty)
+        );
       const cached = memo.get(key);
       if (cached) {
         memo.delete(key);
         memo.set(key, cached);
         return cached;
       }
+      index ??= new ScalarSubstringIndex(items, (item) => [
+        item.basename,
+        item.display,
+        item.name,
+        item.backend,
+        item.metadata
+      ]);
       const ranked = index.candidates(key).flatMap((item) => {
         const result2 = rankLora(item, key);
         return result2 ? [{ item, result: result2 }] : [];
@@ -1368,30 +1373,33 @@ function promptLoraItem(catalog, backendValue) {
 function promptLoraModel(catalog, backendValue) {
   return prepared.get(catalog)?.models.get(backendValue) ?? null;
 }
+function promptLoraMediaRevision(catalog) {
+  return prepared.get(catalog)?.media ?? 0;
+}
 function preparePromptLoraCatalog(snapshot, baseUrl, prioritize, previous) {
   const loras = snapshot.items.filter((item) => item.kind === "loras");
   const authoritative = !snapshot.scanning;
   const replaced = previous ? prepared.get(previous) : void 0;
   if (previous && replaced?.authoritative === authoritative && replaced.loras.length === loras.length && replaced.loras.every((item, index) => item === loras[index]))
     return previous;
+  if (previous && replaced?.authoritative === authoritative && replaced.loras.length === loras.length && replaced.loras.every((item, index) => sameWords(item, loras[index]))) {
+    replaced.loras.forEach((item, index) => {
+      const next = loras[index];
+      if (!next || next === item) return;
+      const held = replaced.items.get(next.value)?.thumbnail;
+      const made = promptLoraDescription(next, baseUrl);
+      replaced.models.set(next.value, next);
+      replaced.items.set(
+        next.value,
+        held && sameImage(held, made.thumbnail) ? { ...made, thumbnail: held } : made
+      );
+    });
+    replaced.loras = loras;
+    replaced.media++;
+    return previous;
+  }
   const models = new Map(loras.map((item) => [item.value, item]));
-  const items = loras.map((item) => {
-    const name = promptLoraName(item.value);
-    const thumbnail2 = item.thumbnails.find((image) => image.role === "banner") ?? item.thumbnails[0];
-    const url = thumbnail2 ? safeHttpUrl(thumbnail2.url, baseUrl) : null;
-    return {
-      model: {
-        promptName: name,
-        backendValue: item.value,
-        basename: name.split(/[\\/]/).pop() ?? name
-      },
-      title: item.title || item.value,
-      subtitle: item.version || null,
-      triggerWords: item.trainedWords,
-      thumbnail: thumbnail2 && url && thumbnail2.width > 0 && thumbnail2.height > 0 ? { status: "ready", url, width: thumbnail2.width, height: thumbnail2.height } : { status: "unavailable" },
-      modelPageUrl: modelPage(item, baseUrl)
-    };
-  });
+  const items = loras.map((item) => promptLoraDescription(item, baseUrl));
   const adapter = createLoraCatalogAdapter(
     { revision: `models:${String(snapshot.revision)}`, authoritative, items },
     // Everything a person may know a LoRA by finds it when they type its name.
@@ -1426,17 +1434,48 @@ function preparePromptLoraCatalog(snapshot, baseUrl, prioritize, previous) {
         }
         prioritize?.([...items2]);
       }
-      return resources;
+      return record.media === 0 ? resources : resources.map((resource) => {
+        const image = resource.resolution === "found" ? record.items.get(resource.model.backendValue)?.thumbnail : void 0;
+        return resource.resolution === "found" && image && image !== resource.thumbnail ? Object.freeze({ ...resource, thumbnail: image }) : resource;
+      });
     }
   };
-  prepared.set(catalog, {
+  const record = {
     adapter,
     authoritative,
     loras,
     models,
-    items: new Map(items.map((item) => [item.model.backendValue, item]))
-  });
+    items: new Map(items.map((item) => [item.model.backendValue, item])),
+    media: 0
+  };
+  prepared.set(catalog, record);
   return catalog;
+}
+function promptLoraDescription(item, baseUrl) {
+  const name = promptLoraName(item.value);
+  const thumbnail2 = item.thumbnails.find((image) => image.role === "banner") ?? item.thumbnails[0];
+  const url = thumbnail2 ? safeHttpUrl(thumbnail2.url, baseUrl) : null;
+  return {
+    model: {
+      promptName: name,
+      backendValue: item.value,
+      basename: name.split(/[\\/]/).pop() ?? name
+    },
+    title: item.title || item.value,
+    subtitle: item.version || null,
+    triggerWords: item.trainedWords,
+    thumbnail: thumbnail2 && url && thumbnail2.width > 0 && thumbnail2.height > 0 ? { status: "ready", url, width: thumbnail2.width, height: thumbnail2.height } : { status: "unavailable" },
+    modelPageUrl: modelPage(item, baseUrl)
+  };
+}
+function sameImage(left, right) {
+  return left.status === "ready" && right.status === "ready" && left.url === right.url && left.width === right.width && left.height === right.height;
+}
+function sameWords(left, right) {
+  if (!right) return false;
+  if (left === right) return true;
+  const same = (a, b) => (a ?? []).length === (b ?? []).length && (a ?? []).every((word, index) => word === b?.[index]);
+  return left.value === right.value && left.title === right.title && left.version === right.version && left.relativePath === right.relativePath && left.folder === right.folder && left.baseModel === right.baseModel && left.providerUrl === right.providerUrl && left.providerLinks[0]?.modelPageUrl === right.providerLinks[0]?.modelPageUrl && same(left.trainedWords, right.trainedWords) && same(left.tags, right.tags);
 }
 function safeHttpUrl(value, baseUrl) {
   if (!value) return null;
@@ -1453,6 +1492,7 @@ function modelPage(item, baseUrl) {
 export {
   preparePromptLoraCatalog,
   promptLoraItem,
+  promptLoraMediaRevision,
   promptLoraModel,
   promptLoraName
 };

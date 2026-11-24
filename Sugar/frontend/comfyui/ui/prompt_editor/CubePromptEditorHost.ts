@@ -19,7 +19,12 @@ import type { ModelCatalogClient } from '../model_library/ModelCatalogClient.js'
 import type { ModelCatalogSnapshot } from '../model_library/ModelCatalog.js';
 import { PromptWidgetBinding } from './PromptWidgetBinding.js';
 import { ComfyCanvasEditorKeyBoundary } from './ComfyCanvasEditorKeyBoundary.js';
-import { preparePromptLoraCatalog, promptLoraModel, promptLoraName } from './PromptLoraCatalog.js';
+import {
+  preparePromptLoraCatalog,
+  promptLoraMediaRevision,
+  promptLoraModel,
+  promptLoraName,
+} from './PromptLoraCatalog.js';
 import { feedsPromptControl, promptUpstreamLoras } from './PromptControlSupport.js';
 import type { PromptMenuPoint } from './runtime/SugarPromptRuntime.js';
 import { promptModelCompletions } from './PromptModelCompletions.js';
@@ -393,16 +398,22 @@ export class CubePromptEditorHost implements PromptEditorSurfaceOwner {
   #publishCatalog(snapshot: ModelCatalogSnapshot): void {
     if (snapshot !== this.#catalogSnapshot) {
       this.#catalogSnapshot = snapshot;
-      this.#loraCatalog = preparePromptLoraCatalog(
+      const replaced = this.#loraCatalog;
+      const images = replaced ? promptLoraMediaRevision(replaced) : 0;
+      const catalog = preparePromptLoraCatalog(
         snapshot,
         this.#document.baseURI,
         (items) => {
           if (items.length) void this.#catalog.prioritize(items).catch(this.#report);
         },
-        this.#loraCatalog ?? undefined,
+        replaced ?? undefined,
       );
-      for (const current of this.#sessions.values())
-        current.editor?.setLoraCatalog(this.#loraCatalog);
+      this.#loraCatalog = catalog;
+      const imagesChanged = catalog === replaced && promptLoraMediaRevision(catalog) !== images;
+      for (const current of this.#sessions.values()) {
+        if (imagesChanged) current.editor?.refreshLoraMedia();
+        else current.editor?.setLoraCatalog(catalog);
+      }
     }
   }
 

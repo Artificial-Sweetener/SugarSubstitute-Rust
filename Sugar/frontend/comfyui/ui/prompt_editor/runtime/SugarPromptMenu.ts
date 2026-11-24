@@ -30,12 +30,13 @@ export class SugarPromptMenu implements PromptMenuPresentation {
   /**
    * Bind focus return and observable command failures to one editor lifetime. `loraMenu` gives
    * the rows about the LoRA whose banner the menu opened on, the same ones every model surface
-   * shows.
+   * shows. `presented` hears each time the menu opens and closes.
    */
   constructor(
     root: HTMLElement,
     report: (cause: unknown) => void,
     private readonly loraMenu: (backendValue: string) => readonly ContextMenuEntry[],
+    private readonly presented: (open: boolean) => void = () => undefined,
   ) {
     this.#root = root;
     this.#report = report;
@@ -79,15 +80,19 @@ export class SugarPromptMenu implements PromptMenuPresentation {
       focusReturn: this.#root.querySelector<HTMLElement>('.cm-content'),
       returnFocusOnSelect: false,
       attributes: { 'data-sc-prompt-menu': '' },
-      closed: () =>
+      closed: () => {
+        if (this.#publication === publication) this.presented(false);
         queueMicrotask(() => {
           if (this.#publication === publication) dismiss();
-        }),
+        });
+      },
     });
+    this.presented(true);
   }
 
   /** Clear presentation without retiring a replacement native invocation. */
   hide(): void {
+    if (this.#publication) this.presented(false);
     this.#publication = null;
     this.#menu.close();
   }

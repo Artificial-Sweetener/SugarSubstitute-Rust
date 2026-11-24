@@ -21,17 +21,20 @@ import type {
 } from '../../../sugarprompt/services/src/index.js';
 import type { ModelCatalogSnapshot, ModelCatalogItem } from '../model_library/ModelCatalog.js';
 
-/** The installed LoRAs each prepared catalog was made from, and the adapter that resolves them. */
-const prepared = new WeakMap<
-  LoraResourceAdapter,
-  {
-    readonly adapter: LoraResourceAdapter;
-    readonly authoritative: boolean;
-    readonly loras: readonly ModelCatalogItem[];
-    readonly models: ReadonlyMap<string, ModelCatalogItem>;
-    readonly items: ReadonlyMap<string, LoraCatalogItem>;
-  }
->();
+/**
+ * The installed LoRAs each prepared catalog was made from, and the adapter that resolves them.
+ * A catalog is replaced when what a prompt can write or search for changes. Images alone change
+ * in place: `models` and `items` then describe the newest images and `media` counts the change.
+ */
+interface PreparedCatalog {
+  readonly adapter: LoraResourceAdapter;
+  readonly authoritative: boolean;
+  loras: readonly ModelCatalogItem[];
+  readonly models: Map<string, ModelCatalogItem>;
+  readonly items: Map<string, LoraCatalogItem>;
+  media: number;
+}
+const prepared = new WeakMap<LoraResourceAdapter, PreparedCatalog>();
 
 /** The name a prompt writes for an installed LoRA: its path without the model file extension. */
 export function promptLoraName(backendValue: string): string {
@@ -54,14 +57,21 @@ export function promptLoraModel(
   return prepared.get(catalog)?.models.get(backendValue) ?? null;
 }
 
+/** How many times a prepared catalog's images have changed in place. */
+export function promptLoraMediaRevision(catalog: LoraResourceAdapter): number {
+  return prepared.get(catalog)?.media ?? 0;
+}
+
 /**
  * Preserve installed identities and prefer the model's authored banner artwork.
  *
  * The model library publishes a new snapshot for every change to any model, and its catalog
  * keeps every unchanged model as the same object. Pass the catalog being replaced as `previous`:
  * a snapshot whose LoRAs are all those same objects returns that same catalog, so no editor is
- * disturbed, and one that does change keeps the descriptor of every banner whose image is
- * unchanged, so only changed banners are decoded again.
+ * disturbed. So does one in which only images changed: the catalog then carries the new images
+ * and a higher `promptLoraMediaRevision`, and nothing a prompt has prepared is retired. Any other
+ * change returns a new catalog that keeps the descriptor of every unchanged image, so only
+ * changed images are decoded again.
  */
 export function preparePromptLoraCatalog(
   snapshot: ModelCatalogSnapshot,
@@ -79,28 +89,29 @@ export function preparePromptLoraCatalog(
     replaced.loras.every((item, index) => item === loras[index])
   )
     return previous;
+  if (
+    previous &&
+    replaced?.authoritative === authoritative &&
+    replaced.loras.length === loras.length &&
+    replaced.loras.every((item, index) => sameWords(item, loras[index]))
+  ) {
+    replaced.loras.forEach((item, index) => {
+      const next = loras[index];
+      if (!next || next === item) return;
+      const held = replaced.items.get(next.value)?.thumbnail;
+      const made = promptLoraDescription(next, baseUrl);
+      replaced.models.set(next.value, next);
+      replaced.items.set(
+        next.value,
+        held && sameImage(held, made.thumbnail) ? { ...made, thumbnail: held } : made,
+      );
+    });
+    replaced.loras = loras;
+    replaced.media++;
+    return previous;
+  }
   const models = new Map(loras.map((item) => [item.value, item]));
-  const items = loras.map((item) => {
-    const name = promptLoraName(item.value);
-    const thumbnail =
-      item.thumbnails.find((image) => image.role === 'banner') ?? item.thumbnails[0];
-    const url = thumbnail ? safeHttpUrl(thumbnail.url, baseUrl) : null;
-    return {
-      model: {
-        promptName: name,
-        backendValue: item.value,
-        basename: name.split(/[\\/]/).pop() ?? name,
-      },
-      title: item.title || item.value,
-      subtitle: item.version || null,
-      triggerWords: item.trainedWords,
-      thumbnail:
-        thumbnail && url && thumbnail.width > 0 && thumbnail.height > 0
-          ? { status: 'ready' as const, url, width: thumbnail.width, height: thumbnail.height }
-          : { status: 'unavailable' as const },
-      modelPageUrl: modelPage(item, baseUrl),
-    };
-  });
+  const items = loras.map((item) => promptLoraDescription(item, baseUrl));
   const adapter = createLoraCatalogAdapter(
     { revision: `models:${String(snapshot.revision)}`, authoritative, items },
     // Everything a person may know a LoRA by finds it when they type its name.
@@ -137,17 +148,86 @@ export function preparePromptLoraCatalog(
         }
         prioritize?.([...items]);
       }
-      return resources;
+      // Images that changed since this catalog was indexed are the ones a chip shows.
+      return record.media === 0
+        ? resources
+        : resources.map((resource) => {
+            const image =
+              resource.resolution === 'found'
+                ? record.items.get(resource.model.backendValue)?.thumbnail
+                : undefined;
+            return resource.resolution === 'found' && image && image !== resource.thumbnail
+              ? Object.freeze({ ...resource, thumbnail: image })
+              : resource;
+          });
     },
   };
-  prepared.set(catalog, {
+  const record: PreparedCatalog = {
     adapter,
     authoritative,
     loras,
     models,
     items: new Map(items.map((item) => [item.model.backendValue, item])),
-  });
+    media: 0,
+  };
+  prepared.set(catalog, record);
   return catalog;
+}
+
+/** Describe one installed LoRA to the editor, preferring its authored banner artwork. */
+function promptLoraDescription(item: ModelCatalogItem, baseUrl: string): LoraCatalogItem {
+  const name = promptLoraName(item.value);
+  const thumbnail = item.thumbnails.find((image) => image.role === 'banner') ?? item.thumbnails[0];
+  const url = thumbnail ? safeHttpUrl(thumbnail.url, baseUrl) : null;
+  return {
+    model: {
+      promptName: name,
+      backendValue: item.value,
+      basename: name.split(/[\\/]/).pop() ?? name,
+    },
+    title: item.title || item.value,
+    subtitle: item.version || null,
+    triggerWords: item.trainedWords,
+    thumbnail:
+      thumbnail && url && thumbnail.width > 0 && thumbnail.height > 0
+        ? { status: 'ready' as const, url, width: thumbnail.width, height: thumbnail.height }
+        : { status: 'unavailable' as const },
+    modelPageUrl: modelPage(item, baseUrl),
+  };
+}
+
+/** Whether two images are the same picture: the same address at the same size. */
+function sameImage(
+  left: LoraCatalogItem['thumbnail'],
+  right: LoraCatalogItem['thumbnail'],
+): boolean {
+  return (
+    left.status === 'ready' &&
+    right.status === 'ready' &&
+    left.url === right.url &&
+    left.width === right.width &&
+    left.height === right.height
+  );
+}
+
+/** Whether two records of a model give a prompt the same names, words and links to work with. */
+function sameWords(left: ModelCatalogItem, right: ModelCatalogItem | undefined): boolean {
+  if (!right) return false;
+  if (left === right) return true;
+  const same = (a: readonly string[] | undefined, b: readonly string[] | undefined): boolean =>
+    (a ?? []).length === (b ?? []).length && (a ?? []).every((word, index) => word === b?.[index]);
+  return (
+    left.value === right.value &&
+    left.title === right.title &&
+    left.version === right.version &&
+    left.relativePath === right.relativePath &&
+    left.folder === right.folder &&
+    left.baseModel === right.baseModel &&
+    left.providerUrl === right.providerUrl &&
+    left.providerLinks[0]?.modelPageUrl === right.providerLinks[0]?.modelPageUrl &&
+    same(left.trainedWords, right.trainedWords) &&
+    same(left.tags, right.tags)
+  );
 }
 
 /** Admit only browser-safe media and model pages from validated catalog addresses. */

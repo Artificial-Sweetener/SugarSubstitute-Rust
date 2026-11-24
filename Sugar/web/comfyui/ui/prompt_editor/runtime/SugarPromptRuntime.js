@@ -1,9 +1,12 @@
 import {
+  installSugarPromptStyles
+} from "./chunk-4OATFCQX.js";
+import {
   SugarPromptTooltip
 } from "./chunk-5N7RXSME.js";
 import {
   bundledPromptTagCatalog
-} from "./chunk-CAOCC2WU.js";
+} from "./chunk-QJ2WG3XI.js";
 import {
   clipboardRefusalObserver
 } from "./chunk-BHDD52XD.js";
@@ -11,9 +14,15 @@ import {
   markComfyPromptInput
 } from "./chunk-74D7X3OT.js";
 import {
+  PromptCatalogAdmission
+} from "./chunk-E5NG5543.js";
+import {
   PromptLoraScheduling
-} from "./chunk-GINX2ITT.js";
-import "./chunk-R7HV2ECX.js";
+} from "./chunk-J5G7M2RT.js";
+import {
+  PromptSearchPainter
+} from "./chunk-ZCPRHCKW.js";
+import "./chunk-LN2UPO34.js";
 import {
   ClipboardSession,
   ConditioningTopology,
@@ -123,13 +132,10 @@ import {
   wildcardDelimiters,
   wildcardGhostText,
   wildcardReplacement
-} from "./chunk-D7JNCOVZ.js";
+} from "./chunk-HVJO4BPJ.js";
 import {
   SugarPromptMenu
-} from "./chunk-GQCFG65F.js";
-import {
-  installSugarPromptStyles
-} from "./chunk-4OATFCQX.js";
+} from "./chunk-H66FF5P6.js";
 
 // node_modules/@marijn/find-cluster-break/src/index.js
 var rangeFrom = [];
@@ -2470,7 +2476,7 @@ var EditorState = class _EditorState {
       if (effect.is(Compartment.reconfigure)) {
         if (conf) {
           compartments = /* @__PURE__ */ new Map();
-          conf.compartments.forEach((val, key2) => compartments.set(key2, val));
+          conf.compartments.forEach((val, key3) => compartments.set(key3, val));
           conf = null;
         }
         compartments.set(effect.value.compartment, effect.value.extension);
@@ -2759,19 +2765,19 @@ Compartment.reconfigure = /* @__PURE__ */ StateEffect.define();
 function combineConfig(configs, defaults, combine = {}) {
   let result2 = {};
   for (let config of configs)
-    for (let key2 of Object.keys(config)) {
-      let value = config[key2], current6 = result2[key2];
+    for (let key3 of Object.keys(config)) {
+      let value = config[key3], current6 = result2[key3];
       if (current6 === void 0)
-        result2[key2] = value;
+        result2[key3] = value;
       else if (current6 === value || value === void 0) ;
-      else if (Object.hasOwnProperty.call(combine, key2))
-        result2[key2] = combine[key2](current6, value);
+      else if (Object.hasOwnProperty.call(combine, key3))
+        result2[key3] = combine[key3](current6, value);
       else
-        throw new Error("Config merge conflict for field " + key2);
+        throw new Error("Config merge conflict for field " + key3);
     }
-  for (let key2 in defaults)
-    if (result2[key2] === void 0)
-      result2[key2] = defaults[key2];
+  for (let key3 in defaults)
+    if (result2[key3] === void 0)
+      result2[key3] = defaults[key3];
   return result2;
 }
 var RangeValue = class {
@@ -3905,8 +3911,8 @@ function attrsEq(a, b, ignore) {
   let keysA = Object.keys(a), keysB = Object.keys(b);
   if (keysA.length - (ignore && keysA.indexOf(ignore) > -1 ? 1 : 0) != keysB.length - (ignore && keysB.indexOf(ignore) > -1 ? 1 : 0))
     return false;
-  for (let key2 of keysA) {
-    if (key2 != ignore && (keysB.indexOf(key2) == -1 || a[key2] !== b[key2]))
+  for (let key3 of keysA) {
+    if (key3 != ignore && (keysB.indexOf(key3) == -1 || a[key3] !== b[key3]))
       return false;
   }
   return true;
@@ -8070,7 +8076,7 @@ var InputState = class {
       this.view.observer.delayAndroidKey(event.key, event.keyCode);
       return true;
     }
-    if (browser.ios && !event.synthetic && !event.altKey && !event.metaKey && (PendingKeys.some((key2) => key2.keyCode == event.keyCode) && !event.ctrlKey || EmacsyPendingKeys.indexOf(event.key) > -1 && event.ctrlKey)) {
+    if (browser.ios && !event.synthetic && !event.altKey && !event.metaKey && (PendingKeys.some((key3) => key3.keyCode == event.keyCode) && !event.ctrlKey || EmacsyPendingKeys.indexOf(event.key) > -1 && event.ctrlKey)) {
       let mods = { ctrlKey: event.ctrlKey, altKey: event.altKey, metaKey: event.metaKey, shiftKey: event.shiftKey };
       if (mods.shiftKey && browser.ios && !/^(off|none)$/.test(this.view.contentDOM.autocapitalize) && iosVirtualKeyboardOpen(this.view.win))
         mods.shiftKey = false;
@@ -8086,13 +8092,13 @@ var InputState = class {
     return false;
   }
   flushIOSKey(change) {
-    let key2 = this.pendingIOSKey;
-    if (!key2 || this.view.observer.pendingRecords().length)
+    let key3 = this.pendingIOSKey;
+    if (!key3 || this.view.observer.pendingRecords().length)
       return false;
-    if (key2.key == "Enter" && change && change.from < change.to && /^\S+$/.test(change.insert.toString()))
+    if (key3.key == "Enter" && change && change.from < change.to && /^\S+$/.test(change.insert.toString()))
       return false;
     this.pendingIOSKey = void 0;
-    return dispatchKey(this.view.contentDOM, key2.key, key2.keyCode, key2.mods);
+    return dispatchKey(this.view.contentDOM, key3.key, key3.keyCode, key3.mods);
   }
   ignoreDuringComposition(event) {
     if (!/^key/.test(event.type) || event.synthetic)
@@ -8727,7 +8733,7 @@ handlers.beforeinput = (view, event) => {
     }
   }
   let pending;
-  if (browser.chrome && browser.android && (pending = PendingKeys.find((key2) => key2.inputType == event.inputType))) {
+  if (browser.chrome && browser.android && (pending = PendingKeys.find((key3) => key3.inputType == event.inputType))) {
     view.observer.delayAndroidKey(pending.key, pending.keyCode);
     if (pending.key == "Backspace" || pending.key == "Delete") {
       let startViewHeight = ((_b = window.visualViewport) === null || _b === void 0 ? void 0 : _b.height) || 0;
@@ -10680,25 +10686,25 @@ var DOMObserver = class {
   // from handling DOM changes for a moment when such a key is
   // detected (via beforeinput or keydown), and then tries to flush
   // them or, if that has no effect, dispatches the given key.
-  delayAndroidKey(key2, keyCode) {
+  delayAndroidKey(key3, keyCode) {
     var _a2;
     if (!this.delayedAndroidKey) {
       let flush = () => {
-        let key3 = this.delayedAndroidKey;
-        if (key3) {
+        let key4 = this.delayedAndroidKey;
+        if (key4) {
           this.clearDelayedAndroidKey();
-          this.view.inputState.lastKeyCode = key3.keyCode;
+          this.view.inputState.lastKeyCode = key4.keyCode;
           this.view.inputState.lastKeyTime = Date.now();
           let flushed = this.flush();
-          if (!flushed && key3.force)
-            dispatchKey(this.dom, key3.key, key3.keyCode);
+          if (!flushed && key4.force)
+            dispatchKey(this.dom, key4.key, key4.keyCode);
         }
       };
       this.flushingAndroidKey = this.view.win.requestAnimationFrame(flush);
     }
-    if (!this.delayedAndroidKey || key2 == "Enter")
+    if (!this.delayedAndroidKey || key3 == "Enter")
       this.delayedAndroidKey = {
-        key: key2,
+        key: key3,
         keyCode,
         // Only run the key handler when no changes are detected if
         // this isn't coming right after another change, in which case
@@ -12171,10 +12177,10 @@ function buildKeymap(bindings, platform = currentPlatform) {
     else if (current6 != is)
       throw new Error("Key binding " + name2 + " is used both as a regular binding and as a multi-stroke prefix");
   };
-  let add = (scope, key2, command2, preventDefault, stopPropagation) => {
+  let add = (scope, key3, command2, preventDefault, stopPropagation) => {
     var _a2, _b;
     let scopeObj = bound[scope] || (bound[scope] = /* @__PURE__ */ Object.create(null));
-    let parts = key2.split(/ (?!$)/).map((k) => normalizeKeyName(k, platform));
+    let parts = key3.split(/ (?!$)/).map((k) => normalizeKeyName(k, platform));
     for (let i = 1; i < parts.length; i++) {
       let prefix = parts.slice(0, i).join(" ");
       checkPrefix(prefix, true);
@@ -12214,8 +12220,8 @@ function buildKeymap(bindings, platform = currentPlatform) {
         if (!scopeObj._any)
           scopeObj._any = { preventDefault: false, stopPropagation: false, run: [] };
         let { any } = b;
-        for (let key2 in scopeObj)
-          scopeObj[key2].run.push((view) => any(view, currentKeyEvent));
+        for (let key3 in scopeObj)
+          scopeObj[key3].run.push((view) => any(view, currentKeyEvent));
       }
     let name2 = b[platform] || b.key;
     if (!name2)
@@ -16509,11 +16515,11 @@ function createTokenType(extra, tagStr) {
   }
   if (!tags$1.length)
     return 0;
-  let name2 = tagStr.replace(/ /g, "_"), key2 = name2 + " " + tags$1.map((t2) => t2.id);
-  let known = byTag[key2];
+  let name2 = tagStr.replace(/ /g, "_"), key3 = name2 + " " + tags$1.map((t2) => t2.id);
+  let known = byTag[key3];
   if (known)
     return known.id;
-  let type = byTag[key2] = NodeType.define({
+  let type = byTag[key3] = NodeType.define({
     id: typeArray.length,
     name: name2,
     props: [styleTags({ [name2]: tags$1 })]
@@ -17946,10 +17952,10 @@ var weightInputFactory = Facet.define({
   }
 });
 var mounted = /* @__PURE__ */ new WeakMap();
-function mountWeightInput(view, key2, cell, value) {
+function mountWeightInput(view, key3, cell, value) {
   const factory = view.state.facet(weightInputFactory);
   if (!factory) throw new Error("Native weight input owner missing");
-  mounted.set(cell, factory(view, key2, cell, value));
+  mounted.set(cell, factory(view, key3, cell, value));
 }
 function releaseWeightInput(cell) {
   const current6 = mounted.get(cell);
@@ -18096,7 +18102,7 @@ var emptyErrors = Object.freeze({
 });
 function prepareSceneErrors(sourceIdentity, keys) {
   if (!Array.isArray(keys) || Array.from(keys).some(
-    (key2) => typeof key2 !== "string" || !key2 || normalizeSceneTitle(key2) !== key2
+    (key3) => typeof key3 !== "string" || !key3 || normalizeSceneTitle(key3) !== key3
   ))
     throw new TypeError("Scene errors require normalized nonempty keys");
   return Object.freeze({ sourceIdentity, keys: new Set(keys) });
@@ -18365,14 +18371,26 @@ var LoraWidget = class extends SourceWidget {
   }
   /** Native feedback changes only its two owned class tokens; equivalent content retains decoded media and numeric subtree identity. */
   updateDOM(dom, _view, from) {
-    if (!this.sameContent(from)) return false;
+    if (!this.sameContent(from) && !this.awaitsReplacementImage(dom, from)) return false;
     dom.classList.toggle("sp-wheel-ready", this.adjustment === "wheel");
     dom.classList.toggle("sp-adjustment-content", this.adjustment === "pointer");
     return true;
   }
+  /**
+   * A chip showing an image keeps it while the model's replacement image is not ready: still
+   * being prepared, or failed. The chip is rebuilt once the replacement is ready, or when the
+   * model no longer has an image.
+   */
+  awaitsReplacementImage(dom, from) {
+    return this.sameLabels(from) && this.preparedMedia.status !== "ready" && this.resource.resolution === "found" && this.resource.thumbnail.status === "ready" && dom.querySelector(".sp-lora-media") !== null;
+  }
   /** One immutable comparison owns every constructor operand that can change the retained child graph or attributes. */
   sameContent(other) {
-    return this.resource.name === other.resource.name && this.resource.resolution === other.resource.resolution && this.title === other.title && this.subtitle === other.subtitle && this.status === other.status && this.media === other.media && this.preparedMedia === other.preparedMedia && this.weight === other.weight && this.draftKey === other.draftKey;
+    return this.sameLabels(other) && this.media === other.media && this.preparedMedia === other.preparedMedia;
+  }
+  /** Everything a chip shows apart from its image. */
+  sameLabels(other) {
+    return this.resource.name === other.resource.name && this.resource.resolution === other.resource.resolution && this.title === other.title && this.subtitle === other.subtitle && this.status === other.status && this.weight === other.weight && this.draftKey === other.draftKey;
   }
   /** Create the shared bar through safe literal DOM APIs; CodeMirror owns pointer selection and lifecycle. */
   toDOM(view) {
@@ -18441,28 +18459,28 @@ var LoraWidget = class extends SourceWidget {
 };
 
 // frontend/sugarprompt/editor/src/exact-weight-projection.ts
-function decorateWeightInput(decorations2, target, key2) {
+function decorateWeightInput(decorations2, target, key3) {
   const replacements = [];
   decorations2.between(target.range.from, target.range.to, (from, to, value) => {
     const widget = value.spec.widget;
     let replacement = null;
-    if (target.kind === "emphasis" && from === target.range.to && widget instanceof EmphasisWidget && widget.part === "suffix" && widget.draftKey !== key2)
+    if (target.kind === "emphasis" && from === target.range.to && widget instanceof EmphasisWidget && widget.part === "suffix" && widget.draftKey !== key3)
       replacement = new EmphasisWidget(
         widget.token,
         widget.part,
         widget.weight,
         widget.synthetic,
-        key2,
+        key3,
         widget.feedback
       );
-    else if (target.kind === "lora" && from === target.range.from && to === target.range.to && widget instanceof LoraWidget && widget.draftKey !== key2)
+    else if (target.kind === "lora" && from === target.range.from && to === target.range.to && widget instanceof LoraWidget && widget.draftKey !== key3)
       replacement = new LoraWidget(
         widget.token,
         widget.resource,
         widget.weight,
         widget.adjustment,
         widget.preparedMedia,
-        key2
+        key3
       );
     if (replacement)
       replacements.push(
@@ -19341,11 +19359,11 @@ var EmptyReorderTarget = class extends WidgetType {
   /** Mount a literal noneditable zero-width target at its genuine native boundary. */
   toDOM(view) {
     const { root: node, target } = createEmptyReorderTarget(view.dom.ownerDocument);
-    const key2 = this.attributes["data-reorder-native-value"];
-    if (key2 === void 0) throw new Error("native-reorder-target-value-unavailable");
-    target.style.display = "var(--sp-reorder-native-" + key2 + "-target-display,none)";
-    target.style.visibility = "var(--sp-reorder-native-" + key2 + "-target-visibility,hidden)";
-    target.style.pointerEvents = "var(--sp-reorder-native-" + key2 + "-target-events,none)";
+    const key3 = this.attributes["data-reorder-native-value"];
+    if (key3 === void 0) throw new Error("native-reorder-target-value-unavailable");
+    target.style.display = "var(--sp-reorder-native-" + key3 + "-target-display,none)";
+    target.style.visibility = "var(--sp-reorder-native-" + key3 + "-target-visibility,hidden)";
+    target.style.pointerEvents = "var(--sp-reorder-native-" + key3 + "-target-events,none)";
     for (const [name2, value] of Object.entries(this.attributes)) target.setAttribute(name2, value);
     return node;
   }
@@ -19354,7 +19372,7 @@ var EmptyReorderTarget = class extends WidgetType {
     return false;
   }
 };
-function prepareNativeReorderTargets(prepared4, output, mapping, key2) {
+function prepareNativeReorderTargets(prepared4, output, mapping, key3) {
   const order = prepared4.initial, ranges = [], layout = valueReorderLayout(order);
   const carrierStart = (owner, slot) => owner === "prefix" ? 0 : owner === "suffix" ? output.text.length - order.suffix.text.length : requireValue(
     output.renderedRanges[requireValue(order.order[slot], "reorder-native-targets")],
@@ -19367,10 +19385,10 @@ function prepareNativeReorderTargets(prepared4, output, mapping, key2) {
       Decoration.widget({
         widget: new EmptyReorderTarget({
           ...attributes,
-          "data-reorder-native-value": String(key2)
+          "data-reorder-native-value": String(key3)
         }),
         side: 1,
-        nativeReorderValue: String(key2)
+        nativeReorderValue: String(key3)
       }).range(logical)
     );
   };
@@ -19396,11 +19414,11 @@ function nativeReorderTargetAttributes(decoration) {
   const attributes = decoration.spec.attributes;
   if (!attributes || typeof attributes !== "object" || !("data-reorder-chip" in attributes) || typeof attributes["data-reorder-chip"] !== "string")
     return null;
-  const key2 = "data-reorder-native-value" in attributes ? attributes["data-reorder-native-value"] : null;
-  if (typeof key2 !== "string") return null;
+  const key3 = "data-reorder-native-value" in attributes ? attributes["data-reorder-native-value"] : null;
+  if (typeof key3 !== "string") return null;
   return {
     "data-reorder-chip": attributes["data-reorder-chip"],
-    "data-reorder-native-value": key2
+    "data-reorder-native-value": key3
   };
 }
 
@@ -19412,7 +19430,7 @@ function prepareNativeReorderRecipes(values) {
   if (!batch) throw new Error("native-reorder-scope-index-inconsistent");
   const byScope = new Map(batch.map((order) => [order.scope, order]));
   const recipes = [], all = [];
-  for (const [key2, entry] of values.entries.entries()) {
+  for (const [key3, entry] of values.entries.entries()) {
     if (!entry.scope || !entry.semanticMapping) continue;
     const order = byScope.get(entry.scope);
     if (!order || !order.chips.length) continue;
@@ -19430,12 +19448,12 @@ function prepareNativeReorderRecipes(values) {
       ranges.push(
         Decoration.mark({
           inclusive: true,
-          nativeReorderValue: String(key2),
+          nativeReorderValue: String(key3),
           class: "sp-reorder-" + suffix,
           attributes: {
-            "data-reorder-native-value": String(key2),
+            "data-reorder-native-value": String(key3),
             ...id === null ? {} : { "data-reorder-chip": String(id) },
-            style: "--sp-native-outline:var(--sp-reorder-native-" + String(key2) + "-outline,none);--sp-native-background:var(--sp-reorder-native-" + String(key2) + "-fill,transparent);--sp-native-cursor:var(--sp-reorder-native-" + String(key2) + "-cursor,inherit);--sp-native-hover-background:var(--sp-reorder-native-" + String(key2) + "-hover-fill,transparent);--sp-native-visibility:var(--sp-reorder-native-" + String(key2) + "-" + String(id) + "-visibility,visible);--sp-native-active-outline:var(--sp-reorder-native-" + String(key2) + "-" + String(id) + "-outline);--sp-native-active-fill:var(--sp-reorder-native-" + String(key2) + "-" + String(id) + "-fill)"
+            style: "--sp-native-outline:var(--sp-reorder-native-" + String(key3) + "-outline,none);--sp-native-background:var(--sp-reorder-native-" + String(key3) + "-fill,transparent);--sp-native-cursor:var(--sp-reorder-native-" + String(key3) + "-cursor,inherit);--sp-native-hover-background:var(--sp-reorder-native-" + String(key3) + "-hover-fill,transparent);--sp-native-visibility:var(--sp-reorder-native-" + String(key3) + "-" + String(id) + "-visibility,visible);--sp-native-active-outline:var(--sp-reorder-native-" + String(key3) + "-" + String(id) + "-outline);--sp-native-active-fill:var(--sp-reorder-native-" + String(key3) + "-" + String(id) + "-fill)"
           }
         }).range(logical(range.from), logical(range.to))
       );
@@ -19448,19 +19466,19 @@ function prepareNativeReorderRecipes(values) {
       cursor = range.to;
     }
     mark({ from: cursor, to: output.text.length }, null);
-    for (const target of prepareNativeReorderTargets(order, output, entry.semanticMapping, key2))
+    for (const target of prepareNativeReorderTargets(order, output, entry.semanticMapping, key3))
       ranges.push(target);
     const extent = entry.semanticMapping.logicalRange, last2 = values.document.lineAt(extent.to).number;
     for (let number2 = values.document.lineAt(extent.from).number; number2 <= last2; number2++)
       ranges.push(
         Decoration.line({
-          class: nativeReorderLineClass(String(key2)),
-          nativeReorderValue: String(key2)
+          class: nativeReorderLineClass(String(key3)),
+          nativeReorderValue: String(key3)
         }).range(values.document.line(number2).from)
       );
     const decorations2 = Decoration.set(ranges, true);
     for (const range of ranges) all.push(range);
-    recipes.push(Object.freeze({ key: key2, entry, prepared: order, output, decorations: decorations2 }));
+    recipes.push(Object.freeze({ key: key3, entry, prepared: order, output, decorations: decorations2 }));
   }
   prepared.set(
     values,
@@ -19490,8 +19508,8 @@ function nativeReorderRecipeDecorations(values, excludedEntry = null) {
   exclusions.set(values, { entry: excludedEntry, decorations: decorations2 });
   return decorations2;
 }
-function nativeReorderElement(node, key2) {
-  return node.getAttribute("data-reorder-native-value") === String(key2);
+function nativeReorderElement(node, key3) {
+  return node.getAttribute("data-reorder-native-value") === String(key3);
 }
 
 // frontend/sugarprompt/editor/src/document-values.ts
@@ -19831,8 +19849,8 @@ function mappedAuthorship(value, transaction) {
 }
 
 // frontend/sugarprompt/editor/src/duplicate-ignore.ts
-function duplicateIgnoreKey(from, to, key2) {
-  return JSON.stringify([from, to, key2]);
+function duplicateIgnoreKey(from, to, key3) {
+  return JSON.stringify([from, to, key3]);
 }
 var ignoreDuplicate = StateEffect.define();
 var carry = StateEffect.define();
@@ -19842,9 +19860,9 @@ function indexed(keys) {
   membership.set(value, new Set(value));
   return value;
 }
-function duplicateIgnored(state, key2) {
+function duplicateIgnored(state, key3) {
   const value = state.field(duplicateIgnores);
-  return requireValue(membership.get(value), "duplicate-ignore").has(key2);
+  return requireValue(membership.get(value), "duplicate-ignore").has(key3);
 }
 var duplicateIgnores = StateField.define({
   create: () => indexed([]),
@@ -22225,11 +22243,11 @@ async function importBooruLink(text, lookup, signal) {
   });
   signal.addEventListener("abort", cancel, { once: true });
   try {
-    const key2 = Object.freeze(
+    const key3 = Object.freeze(
       link.kind === "post" ? { kind: "post", id: link.id } : { kind: "cdn", md5: link.md5 }
     );
     const response = await Promise.race([
-      Promise.resolve().then(() => signal.aborted ? null : lookup(key2, signal)),
+      Promise.resolve().then(() => signal.aborted ? null : lookup(key3, signal)),
       cancelled
     ]);
     if (signal.aborted) return { status: "cancelled" };
@@ -22997,7 +23015,7 @@ function prepareNativeIngestionPost(state, edit) {
 function currentNativeIngestionPost(transaction, edit) {
   const issued3 = issuedPosts.get(transaction);
   if (!issued3 || issued3.edit !== edit || transaction.startState !== issued3.startState || transaction.effects.length !== 2 || transaction.effects[0] !== issued3.semantic || transaction.effects[1] !== issued3.projection || issued3.projection.value !== issued3.value || !Object.keys(issued3.payload).every(
-    (key2) => issued3.value[key2] === issued3.payload[key2]
+    (key3) => issued3.value[key3] === issued3.payload[key3]
   ))
     return false;
   const canonical = currentCanonicalProjection(transaction.state), painted = transaction.state.field(richProjection);
@@ -25427,7 +25445,7 @@ function configurationHistoryIntent(changedKeys, effects) {
     "booruPostLookup",
     "spellcheckSession"
   ];
-  return changedKeys.length && changedKeys.every((key2) => neutral.includes(key2)) ? Object.freeze(neutralConfiguration.of(Object.freeze([...effects]))) : null;
+  return changedKeys.length && changedKeys.every((key3) => neutral.includes(key3)) ? Object.freeze(neutralConfiguration.of(Object.freeze([...effects]))) : null;
 }
 function preservesConfigurationHistory(transaction) {
   if (changesExactSource(transaction) || transaction.selection || transaction.annotation(isolateHistory))
@@ -26104,7 +26122,7 @@ var NativeHostUpdates = class {
     if (!update || typeof update !== "object" || Array.isArray(update) || !["preserve", "exact-edit", "baseline", "restore-document"].includes(update.mode))
       throw new TypeError("Invalid host update");
     const keys = update.mode === "preserve" ? ["mode", "configuration", "selection", "focus"] : update.mode === "restore-document" ? ["mode", "checkpoint", "configuration", "selection", "focus"] : ["mode", "source", "configuration", "selection", "focus"];
-    if (Object.keys(update).some((key2) => !keys.includes(key2)))
+    if (Object.keys(update).some((key3) => !keys.includes(key3)))
       throw new TypeError("Invalid host update field");
     if ("configuration" in update && (!update.configuration || typeof update.configuration !== "object" || Array.isArray(update.configuration)) || "selection" in update && (!update.selection || typeof update.selection !== "object" || Array.isArray(update.selection)))
       throw new TypeError("Invalid host update value");
@@ -26280,22 +26298,22 @@ function dense(values) {
 function validatePreparedConfiguration(input) {
   if (input.tagLexicon != null && !methods(input.tagLexicon, ["contains"]))
     throw new TypeError("Invalid tag lexicon");
-  for (const key2 of [
+  for (const key3 of [
     "tagCompletionCatalog",
     "loraCompletionCatalog",
     "wildcardCatalog",
     "sceneTitleCatalog"
   ]) {
-    const catalog = input[key2];
-    if (catalog != null && (!record(catalog) || typeof catalog.revision !== "string" || !catalog.revision || !methods(catalog, key2 === "wildcardCatalog" ? ["search", "resolve"] : ["search"])))
+    const catalog = input[key3];
+    if (catalog != null && (!record(catalog) || typeof catalog.revision !== "string" || !catalog.revision || !methods(catalog, key3 === "wildcardCatalog" ? ["search", "resolve"] : ["search"])))
       throw new TypeError("Invalid prepared catalog");
   }
   if (input.tagCompletionCatalog && !methods(input.tagCompletionCatalog.lexicon, ["contains"]))
     throw new TypeError("Invalid catalog lexicon");
   if (input.loraCompletionCatalog && typeof input.loraCompletionCatalog.authoritative !== "boolean")
     throw new TypeError("Invalid catalog authority");
-  for (const key2 of ["wildcardCatalog", "sceneTitleCatalog"]) {
-    const catalog = input[key2];
+  for (const key3 of ["wildcardCatalog", "sceneTitleCatalog"]) {
+    const catalog = input[key3];
     if (catalog && !["ready", "pending", "unavailable"].includes(catalog.status))
       throw new TypeError("Invalid catalog status");
   }
@@ -27166,8 +27184,8 @@ var ReorderPaintAdmission = class {
     }
   }
   /** Every occurrence of a missing key must have no marks, widgets or owned row-edge resources before any canonical block is changed. */
-  allowMissing = (key2) => {
-    const occurrences = this.byKey.get(key2);
+  allowMissing = (key3) => {
+    const occurrences = this.byKey.get(key3);
     let allowed2 = !!occurrences;
     for (const part of occurrences ?? []) {
       const decorations2 = part.decorations;
@@ -27275,20 +27293,20 @@ function prepareCapturedReorderStorage(capture) {
   sources.set(capture, prepared4);
   return prepared4;
 }
-function encoding(preview, key2, text) {
+function encoding(preview, key3, text) {
   let recipes = captured.get(preview.capture);
   if (!recipes) {
     recipes = /* @__PURE__ */ new Map();
     captured.set(preview.capture, recipes);
   }
-  const previous = recipes.get(key2);
+  const previous = recipes.get(key3);
   if (previous) return previous;
   const location = preview.capture.target.scope.container.location;
   if (location.kind !== "csv") throw new Error("reorder-storage-non-csv-recipe");
   const prepared4 = prepareWildcardCsvEncoding(location.cell, text());
   if (recipes.size === 64)
     recipes.delete(requireValue(recipes.keys().next().value, "reorder-storage-paint"));
-  recipes.set(key2, prepared4);
+  recipes.set(key3, prepared4);
   return prepared4;
 }
 function prepareReorderStoragePaint(preview) {
@@ -27470,8 +27488,8 @@ var SourceLineOrigins = class {
     return low;
   }
   /** Intern complete prepared recipes once; retired entries never recycle tokens into different line layouts. */
-  identity(key2) {
-    const previous = this.identities.get(key2);
+  identity(key3) {
+    const previous = this.identities.get(key3);
     if (previous !== void 0) return previous;
     if (!Number.isSafeInteger(this.nextIdentity + 1))
       throw new Error("source-line-identity-exhausted");
@@ -27480,7 +27498,7 @@ var SourceLineOrigins = class {
         requireValue(this.identities.keys().next().value, "source-line-origins")
       );
     const token = ++this.nextIdentity;
-    this.identities.set(key2, token);
+    this.identities.set(key3, token);
     return token;
   }
   /** Compose indexed origin metadata; proposed text is read only at two-byte newline joins. */
@@ -27769,15 +27787,15 @@ var ReorderLineLayout = class {
   reconcilePrepared(keys, classifyMissing, action) {
     if (this.disposed || this.existingOnly) return false;
     const counts = /* @__PURE__ */ new Map(), missing = /* @__PURE__ */ new Map();
-    for (const key2 of keys) counts.set(key2, (counts.get(key2) ?? 0) + 1);
-    for (const [key2, count] of counts) {
-      const needed = count - (this.entries.get(key2)?.length ?? 0);
-      if (needed > 0) missing.set(key2, needed);
+    for (const key3 of keys) counts.set(key3, (counts.get(key3) ?? 0) + 1);
+    for (const [key3, count] of counts) {
+      const needed = count - (this.entries.get(key3)?.length ?? 0);
+      if (needed > 0) missing.set(key3, needed);
     }
     this.existingOnly = true;
     try {
-      for (const key2 of missing.keys()) {
-        if (!classifyMissing(key2) || this.disposed) return false;
+      for (const key3 of missing.keys()) {
+        if (!classifyMissing(key3) || this.disposed) return false;
       }
       this.creationBudget = missing;
       this.reconcile(action);
@@ -27788,15 +27806,15 @@ var ReorderLineLayout = class {
     }
   }
   /** Revisit borrows the actual idle DOM/layout; concurrent base and accepted lines retain independent paint. */
-  borrow(key2, create) {
+  borrow(key3, create) {
     if (this.disposed) throw new Error("reorder-line-cache-retired");
-    let entries = this.entries.get(key2) ?? [];
+    let entries = this.entries.get(key3) ?? [];
     let entry = entries.find((value) => !value.borrowed);
     if (!entry) {
       if (this.existingOnly) {
-        const remaining = this.creationBudget?.get(key2) ?? 0;
+        const remaining = this.creationBudget?.get(key3) ?? 0;
         if (remaining === 0) throw new Error("reorder-line-existing-paint-missing");
-        requireValue(this.creationBudget, "reorder-line-layout").set(key2, remaining - 1);
+        requireValue(this.creationBudget, "reorder-line-layout").set(key3, remaining - 1);
       }
       const created = create();
       if (this.disposed) {
@@ -27814,7 +27832,7 @@ var ReorderLineLayout = class {
         if (failures.length === 1) throw failures[0];
         throw new AggregateError(failures, "Reorder line creation retirement failed");
       }
-      entries = this.entries.get(key2) ?? [];
+      entries = this.entries.get(key3) ?? [];
       entry = {
         ...created,
         geometry: entries.find((value) => value.geometry)?.geometry ?? null,
@@ -27822,15 +27840,15 @@ var ReorderLineLayout = class {
       };
       entries.push(entry);
     }
-    this.entries.delete(key2);
-    this.entries.set(key2, entries);
+    this.entries.delete(key3);
+    this.entries.set(key3, entries);
     entry.borrowed = true;
     this.idle.delete(entry);
     const captured2 = entry;
     let released = false;
     return Object.freeze({
       node: captured2.node,
-      key: key2,
+      key: key3,
       geometry: (context) => !released && !this.disposed && captured2.geometry?.context === context ? captured2.geometry.value : null,
       measure: (context, geometry) => {
         if (released || this.disposed) throw new Error("reorder-line-measurement-retired");
@@ -27851,7 +27869,7 @@ var ReorderLineLayout = class {
         released = true;
         if (this.disposed) return;
         captured2.borrowed = false;
-        this.idle.set(captured2, key2);
+        this.idle.set(captured2, key3);
         const failures = [];
         try {
           captured2.node.remove();
@@ -27872,11 +27890,11 @@ var ReorderLineLayout = class {
   trim() {
     const failures = [];
     while (this.idle.size > this.capacity) {
-      const [entry, key2] = requireValue(this.idle.entries().next().value, "reorder-line-layout");
+      const [entry, key3] = requireValue(this.idle.entries().next().value, "reorder-line-layout");
       this.idle.delete(entry);
-      const entries = requireValue(this.entries.get(key2), "reorder-line-layout");
+      const entries = requireValue(this.entries.get(key3), "reorder-line-layout");
       entries.splice(entries.indexOf(entry), 1);
-      if (!entries.length) this.entries.delete(key2);
+      if (!entries.length) this.entries.delete(key3);
       try {
         entry.destroy();
       } catch (cause) {
@@ -28102,7 +28120,7 @@ function prepareReorderWidgetPlan(preview) {
       decorations2.between(0, end - start, (from2, to2, value) => {
         footprint.push([from2, to2, value.spec.scene === true, !!value.spec.widget]);
       });
-      const key2 = JSON.stringify([
+      const key3 = JSON.stringify([
         footprint,
         rowPaint,
         context,
@@ -28113,11 +28131,11 @@ function prepareReorderWidgetPlan(preview) {
           ] : piece.kind === "composed" ? null : [piece.sourceRange.from, piece.sourceRange.to]
         )
       ]);
-      keys.push(key2);
+      keys.push(key3);
       parts.push(
         Object.freeze({
           kind: "line",
-          key: key2,
+          key: key3,
           identity: line.identity,
           from: start,
           to: end,
@@ -28322,9 +28340,9 @@ function readReorderPhysicalFragments(targets2, rects) {
   const byTarget = /* @__PURE__ */ new Map();
   const identity = (target) => `${target.kind}:${target.index}:${target.blank ?? ""}`;
   for (const rect of rects) {
-    const key2 = identity(rect), group = byTarget.get(key2) ?? [];
+    const key3 = identity(rect), group = byTarget.get(key3) ?? [];
     group.push(rect);
-    byTarget.set(key2, group);
+    byTarget.set(key3, group);
   }
   let measurements = 0, associations = 0;
   for (const target of targets2) {
@@ -29537,7 +29555,7 @@ var SourceLines = class {
       lines: status === "ready" ? this.lines : emptyLines
     };
     return this.previous && Object.keys(value).every(
-      (key2) => value[key2] === requireValue(this.previous, "source-lines")[key2]
+      (key3) => value[key3] === requireValue(this.previous, "source-lines")[key3]
     ) ? this.previous : Object.freeze(value);
   }
   /** Publish only a changed observation, retaining the actual prepared rectangle array. */
@@ -29776,11 +29794,11 @@ var NativeConfiguration = class {
       loraSchedulingHost: { context: null, catalogRevision: null },
       ...options
     });
-    for (const key2 of [
+    for (const key3 of [
       ...Object.keys(this.current),
       "featureProfile"
     ])
-      if (key2 !== "tagLexicon") this.compartments.set(key2, new Compartment());
+      if (key3 !== "tagLexicon") this.compartments.set(key3, new Compartment());
   }
   /** Resolve accepted configuration for derived consumers and public adapters. */
   get values() {
@@ -29820,8 +29838,8 @@ var NativeConfiguration = class {
     return Object.freeze(values);
   }
   /** Map each accepted domain value to its one supported native extension. */
-  extension(key2, values, revision) {
-    switch (key2) {
+  extension(key3, values, revision) {
+    switch (key3) {
       case "fieldActionUtilities":
         return fieldActionUtilities.of(captureFieldActionUtilities(values.fieldActionUtilities));
       case "savedSegmentHost":
@@ -29875,7 +29893,7 @@ var NativeConfiguration = class {
   /** Baseline construction uses final captured values without committing them. */
   extensions(values = this.current, revision = 0) {
     return [...this.compartments].map(
-      ([key2, compartment]) => compartment.of(this.extension(key2, values, revision))
+      ([key3, compartment]) => compartment.of(this.extension(key3, values, revision))
     );
   }
   /** Reuse actual unchanged profile/catalog/context publications and prepare one effect list. */
@@ -29883,7 +29901,7 @@ var NativeConfiguration = class {
     if (!patch || typeof patch !== "object" || Array.isArray(patch))
       throw new TypeError("Invalid configuration");
     const allowed2 = [...this.compartments.keys(), "tagLexicon", "readOnly"];
-    if (Object.keys(patch).some((key2) => !allowed2.includes(key2)))
+    if (Object.keys(patch).some((key3) => !allowed2.includes(key3)))
       throw new TypeError("Invalid configuration field");
     if (Object.values(patch).some((value) => value === void 0))
       throw new TypeError("Invalid configuration value");
@@ -29903,21 +29921,21 @@ var NativeConfiguration = class {
     });
     const effects = [];
     const changedKeys = [];
-    for (const key2 of Object.keys(patch)) {
-      if (key2 === "tagLexicon") {
+    for (const key3 of Object.keys(patch)) {
+      if (key3 === "tagLexicon") {
         if (values.tagLexicon !== this.current.tagLexicon) {
-          changedKeys.push(key2);
+          changedKeys.push(key3);
           effects.push(invalidateCommandContext.of(null));
         }
         continue;
       }
-      const compartment = this.compartments.get(key2);
+      const compartment = this.compartments.get(key3);
       if (!compartment) continue;
-      const before = this.current[key2], after = values[key2];
-      const equal = key2 === "sourceLineChrome" ? this.current.sourceLineChrome.enabled === values.sourceLineChrome.enabled && this.current.sourceLineChrome.contentLeftInset === values.sourceLineChrome.contentLeftInset : key2 === "conditioningContext" ? before === after : key2 === "loraSchedulingHost" ? this.current.loraSchedulingHost.context === values.loraSchedulingHost.context && this.current.loraSchedulingHost.catalogRevision === values.loraSchedulingHost.catalogRevision : before === after;
+      const before = this.current[key3], after = values[key3];
+      const equal = key3 === "sourceLineChrome" ? this.current.sourceLineChrome.enabled === values.sourceLineChrome.enabled && this.current.sourceLineChrome.contentLeftInset === values.sourceLineChrome.contentLeftInset : key3 === "conditioningContext" ? before === after : key3 === "loraSchedulingHost" ? this.current.loraSchedulingHost.context === values.loraSchedulingHost.context && this.current.loraSchedulingHost.catalogRevision === values.loraSchedulingHost.catalogRevision : before === after;
       if (!equal) {
-        changedKeys.push(key2);
-        effects.push(compartment.reconfigure(this.extension(key2, values, revision)));
+        changedKeys.push(key3);
+        effects.push(compartment.reconfigure(this.extension(key3, values, revision)));
         if ([
           "tagCompletionCatalog",
           "savedSegmentHost",
@@ -29928,7 +29946,7 @@ var NativeConfiguration = class {
           "booruPostLookup",
           "sceneTitleCatalog",
           "loraSchedulingHost"
-        ].includes(key2))
+        ].includes(key3))
           effects.push(invalidateCommandContext.of(null));
       }
     }
@@ -32120,11 +32138,11 @@ var WeightCommands = class {
     return true;
   }
   /** Capture a real draft before callbacks; keyboard acceptance publishes before native focus and the next key. */
-  exact(change, request, handoff, key2) {
+  exact(change, request, handoff, key3) {
     const draft = this.view.state.field(exactWeightDraft);
-    if (draft?.key !== key2 || draft.phase !== "editing" || draft.freshness !== request.freshness || draft.kind !== request.kind || draft.range.from !== request.range.from || draft.range.to !== request.range.to)
+    if (draft?.key !== key3 || draft.phase !== "editing" || draft.freshness !== request.freshness || draft.kind !== request.kind || draft.range.from !== request.range.from || draft.range.to !== request.range.to)
       return false;
-    if (!this.request(change, request, handoff, key2)) return false;
+    if (!this.request(change, request, handoff, key3)) return false;
     const generation = this.generation;
     try {
       this.view.dispatch({
@@ -32148,10 +32166,10 @@ var WeightCommands = class {
     return true;
   }
   /** Retire only the captured numeric cell; view-update cancellation defers dispatch until update completes. */
-  settleDraft(key2, deferred) {
-    if (key2 === null) return;
+  settleDraft(key3, deferred) {
+    if (key3 === null) return;
     const settle = () => {
-      if (!this.disposed && this.view.state.field(exactWeightDraft)?.key === key2)
+      if (!this.disposed && this.view.state.field(exactWeightDraft)?.key === key3)
         this.view.dispatch({
           effects: setExactWeightDraft.of(null),
           annotations: Transaction.addToHistory.of(false)
@@ -32320,8 +32338,8 @@ var plugin = ViewPlugin.fromClass(WeightCommands, {
 function queueTargetWeight(view, direction, request) {
   return view.plugin(plugin)?.request({ kind: "step", direction }, request) ?? false;
 }
-function queueExactWeight(view, weight, request, handoff, key2) {
-  return view.plugin(plugin)?.exact(weight === null ? null : { kind: "set", weight }, request, handoff, key2) ?? false;
+function queueExactWeight(view, weight, request, handoff, key3) {
+  return view.plugin(plugin)?.exact(weight === null ? null : { kind: "set", weight }, request, handoff, key3) ?? false;
 }
 function beginExactWeight(view, value) {
   view.plugin(plugin)?.beginExact(value);
@@ -33347,10 +33365,10 @@ var ExactWeights = class {
   /** Source/context/permissions or another native intent retire the exact input. */
   update(update) {
     if (this.target && (update.state.field(editorFreshness) !== this.target.freshness || !this.allowed() || update.state.field(weightSession)?.owner !== "exact")) {
-      const key2 = this.key;
+      const key3 = this.key;
       this.close(false);
       queueMicrotask(() => {
-        if (!this.disposed && this.view.state.field(exactWeightDraft)?.key === key2) this.clear();
+        if (!this.disposed && this.view.state.field(exactWeightDraft)?.key === key3) this.clear();
       });
     }
   }
@@ -33389,8 +33407,8 @@ var ExactWeights = class {
     return true;
   }
   /** Widget creation delegates to the current finite owner; stale keys cannot attach a replacement input. */
-  mount(key2, cell, value) {
-    if (this.disposed || key2 !== this.key || !this.target || !this.allowed())
+  mount(key3, cell, value) {
+    if (this.disposed || key3 !== this.key || !this.target || !this.allowed())
       throw new Error("Stale native weight input mount");
     const input = new ExactWeightInput(
       cell,
@@ -33431,10 +33449,10 @@ var ExactWeights = class {
     const handoff = this.handoff;
     if (handoff === null) throw new Error("Native weight input handoff missing");
     this.handoff = null;
-    const key2 = this.key;
-    if (key2 === null) throw new Error("Native weight input key missing");
+    const key3 = this.key;
+    if (key3 === null) throw new Error("Native weight input key missing");
     this.close(cancel || value === null);
-    if (this.disposed || this.target !== null || this.input !== null || this.view.state.field(exactWeightDraft) && this.view.state.field(exactWeightDraft)?.key !== key2) {
+    if (this.disposed || this.target !== null || this.input !== null || this.view.state.field(exactWeightDraft) && this.view.state.field(exactWeightDraft)?.key !== key3) {
       handoff.cancel();
       return;
     }
@@ -33444,10 +33462,10 @@ var ExactWeights = class {
       else handoff.cancel();
       return;
     }
-    if (!queueExactWeight(this.view, value, { ...target, completion }, handoff, key2)) {
+    if (!queueExactWeight(this.view, value, { ...target, completion }, handoff, key3)) {
       handoff.cancel();
       cancelTargetWeight(this.view, "exact");
-      if (this.view.state.field(exactWeightDraft)?.key === key2) this.clear();
+      if (this.view.state.field(exactWeightDraft)?.key === key3) this.clear();
     }
   }
   /** Widget eviction cancels current intent without committing an offscreen value. */
@@ -33465,7 +33483,7 @@ var ExactWeights = class {
   }
   /** Release local input/listeners first; native state and widgets own rendered subtree replacement. */
   close(clear) {
-    const key2 = this.key, handoff = this.handoff;
+    const key3 = this.key, handoff = this.handoff;
     this.handoff = null;
     this.key = null;
     this.target = null;
@@ -33475,7 +33493,7 @@ var ExactWeights = class {
     window.removeEventListener("pointerdown", this.outside, true);
     input?.destroy();
     handoff?.cancel();
-    if (clear && !this.disposed && this.target === null && this.input === null && this.view.state.field(exactWeightDraft)?.key === key2)
+    if (clear && !this.disposed && this.target === null && this.input === null && this.view.state.field(exactWeightDraft)?.key === key3)
       this.clear();
   }
   /** Teardown prevents queued mount/focus/disposal callbacks from publishing afterward. */
@@ -33499,10 +33517,10 @@ var exactWeightPlugin = ViewPlugin.fromClass(ExactWeights, {
 var exactWeightInteractions = [
   exactWeightDraft,
   Prec.high(exactWeightPlugin),
-  weightInputFactory.of((view, key2, cell, value) => {
+  weightInputFactory.of((view, key3, cell, value) => {
     const owner = view.plugin(exactWeightPlugin);
     if (!owner) throw new Error("Native weight interaction missing");
-    return owner.mount(key2, cell, value);
+    return owner.mount(key3, cell, value);
   })
 ];
 
@@ -34411,8 +34429,8 @@ function applyCompletionHeight(dom, height, current6) {
 
 // frontend/sugarprompt/editor/src/model-completion-tooltip.ts
 var mounted3 = /* @__PURE__ */ new WeakMap();
-function modelCompletionNeighbor(view, selected, key2) {
-  return mounted3.get(view)?.neighbor(selected, key2) ?? null;
+function modelCompletionNeighbor(view, selected, key3) {
+  return mounted3.get(view)?.neighbor(selected, key3) ?? null;
 }
 var ModelCompletionTooltip = class {
   dom = document.createElement("div");
@@ -34958,10 +34976,10 @@ function moveWordSelection(view, delta) {
   });
   return true;
 }
-function moveModelSelection(view, key2) {
+function moveModelSelection(view, key3) {
   const session = view.state.field(completionSession);
   if (!session || session.result.surface !== "models") return false;
-  const index = modelCompletionNeighbor(view, session.selected, key2);
+  const index = modelCompletionNeighbor(view, session.selected, key3);
   if (index !== null && index !== session.selected && session.result.options[index])
     view.dispatch({
       effects: selectCompletion.of({ result: session.result, index }),
@@ -35018,8 +35036,8 @@ var promptCompletions = [
       },
       { key: "Tab", run: acceptSelected },
       { key: "Escape", run: dismissCompletion },
-      ...["Home", "End", "Enter"].map((key2) => ({
-        key: key2,
+      ...["Home", "End", "Enter"].map((key3) => ({
+        key: key3,
         run: dismissAndNavigate
       }))
     ])
@@ -36674,7 +36692,7 @@ var NativeLayout = class {
       write: (metrics) => {
         this.queued = false;
         if (!metrics || this.disposed || this.previous && Object.keys(metrics).every(
-          (key2) => metrics[key2] === requireValue(this.previous, "native-layout")[key2]
+          (key3) => metrics[key3] === requireValue(this.previous, "native-layout")[key3]
         ))
           return;
         this.previous = metrics;
@@ -36900,7 +36918,7 @@ var RegionNameInput = class {
   place(value) {
     const previous = this.geometry;
     if (previous && previous.center === value.center && previous.top === value.top && previous.height === value.height && previous.maximumWidth === value.maximumWidth && previous.width === value.width && previous.scaleX === value.scaleX && previous.scaleY === value.scaleY && previous.color === value.color && Object.entries(value.typography).every(
-      ([key2, text]) => previous.typography[key2] === text
+      ([key3, text]) => previous.typography[key3] === text
     ))
       return;
     this.geometry = value;
@@ -37863,11 +37881,11 @@ function prepareReorderPlacementTopology(layout, fragments, viewport) {
     if (rect.kind === "chip" && !row) return null;
     if (rect.kind === "gap" && (rect.blank === void 0 || layout.gaps[rect.index]?.blankOffsets[rect.blank] === void 0 || chipLines.has(line.identity)))
       continue;
-    const key2 = `${row ? `row:${row.row}` : `${rect.kind}:${rect.index}:${rect.blank ?? ""}`}:${line.identity}`;
-    let lane = lanes.get(key2);
+    const key3 = `${row ? `row:${row.row}` : `${rect.kind}:${rect.index}:${rect.blank ?? ""}`}:${line.identity}`;
+    let lane = lanes.get(key3);
     if (!lane) {
       lane = { first: ordinal, fragments: [], identities: /* @__PURE__ */ new Map() };
-      lanes.set(key2, lane);
+      lanes.set(key3, lane);
     }
     const fragmentKey = `${rect.kind}:${rect.index}:${rect.blank ?? ""}`;
     const existing = lane.identities.get(fragmentKey);
@@ -40512,7 +40530,7 @@ var ReorderPointerPlacement = class {
 };
 
 // frontend/sugarprompt/editor/src/reorder-keyboard-geometry.ts
-function reorderKeyboardTarget(order, hidden, held, topology, key2, preferredX, seed) {
+function reorderKeyboardTarget(order, hidden, held, topology, key3, preferredX, seed) {
   const slot = valueReorderVacancy(order, hidden, held), all = topology?.slots ?? [];
   if (!slot) return null;
   const matching = all.filter((o) => sameReorderTarget(o.target, slot));
@@ -40522,8 +40540,8 @@ function reorderKeyboardTarget(order, hidden, held, topology, key2, preferredX, 
   })[0];
   if (!origin) return null;
   let destination;
-  const direction = key2 === "ArrowLeft" || key2 === "ArrowUp" ? -1 : 1;
-  if (key2 === "ArrowLeft" || key2 === "ArrowRight") {
+  const direction = key3 === "ArrowLeft" || key3 === "ArrowUp" ? -1 : 1;
+  if (key3 === "ArrowLeft" || key3 === "ArrowRight") {
     let at2 = all.indexOf(origin) + direction;
     while (at2 >= 0 && at2 < all.length && sameReorderTarget(requireValue(all[at2], "reorder-keyboard-geometry").target, origin.target))
       at2 += direction;
@@ -40583,10 +40601,10 @@ var ReorderKeyboardMeasurement = class {
     return true;
   }
   /** Capture one FIFO arrow intent; the semantic Core slot, not absent held-chip CSS, is its origin. */
-  arrow(input, key2, settled) {
+  arrow(input, key3, settled) {
     const intent = {
       input,
-      key: key2,
+      key: key3,
       settled,
       held: input.held,
       order: input.order,
@@ -40778,9 +40796,9 @@ var ReorderPaintMaterialization = class {
     const document2 = this.document;
     if (!document2) throw new Error("reorder-paint-materialization-disposed");
     const namespace = descriptor.vector ? "http://www.w3.org/2000/svg" : "http://www.w3.org/1999/xhtml";
-    const key2 = JSON.stringify([namespace, descriptor.tag, descriptor.cssText]);
+    const key3 = JSON.stringify([namespace, descriptor.tag, descriptor.cssText]);
     const reusable = !descriptor.media && !descriptor.buffer && descriptor.tag !== "canvas";
-    const prototype = reusable ? this.prototypes.get(key2) : void 0;
+    const prototype = reusable ? this.prototypes.get(key3) : void 0;
     if (prototype) return this.admit(document2, prototype.cloneNode(false));
     const prototypeOwned = reusable && this.attempted.size + this.allocating < 64;
     if (prototypeOwned) ++this.allocating;
@@ -40806,7 +40824,7 @@ var ReorderPaintMaterialization = class {
       node.style.setProperty("user-select", "none", "important");
       this.assertCurrent(document2);
       if (prototypeOwned) {
-        this.prototypes.set(key2, node);
+        this.prototypes.set(key3, node);
         return this.admit(document2, node.cloneNode(false));
       }
       return node;
@@ -44507,9 +44525,9 @@ var ReorderLandingPaint = class {
     const visible = fragments.length > 256 ? [] : fragments.filter(
       (rect) => rect.right + 5 >= viewport.left && rect.left - 5 <= viewport.right && rect.bottom + 3 >= viewport.top && rect.top - 3 <= viewport.bottom
     );
-    const key2 = visible.map((rect) => `${rect.left},${rect.right},${rect.top},${rect.bottom}`).join(";");
-    const reused = !this.writing && previous?.surface?.key === key2 && previous.surface.node.isConnected && previous.surface.path.isConnected && previous.surface.node.contains(previous.surface.path) ? previous.surface : null;
-    const surface = reused ?? this.construct(visible, key2);
+    const key3 = visible.map((rect) => `${rect.left},${rect.right},${rect.top},${rect.bottom}`).join(";");
+    const reused = !this.writing && previous?.surface?.key === key3 && previous.surface.node.isConnected && previous.surface.path.isConnected && previous.surface.node.contains(previous.surface.path) ? previous.surface : null;
+    const surface = reused ?? this.construct(visible, key3);
     let state = "prepared";
     const owned = { issue: issue2, surface };
     const remove2 = () => {
@@ -44579,7 +44597,7 @@ var ReorderLandingPaint = class {
     if (!publication2.commit(() => true)) publication2.release();
   }
   /** Construct one optional detached surface through the existing bounded contour algorithm. */
-  construct(visible, key2) {
+  construct(visible, key3) {
     const contour = prepareReorderLandingContour(visible);
     if (contour.status !== "ready") return null;
     const node = this.document.createElement("span"), namespace = "http://www.w3.org/2000/svg";
@@ -44619,7 +44637,7 @@ var ReorderLandingPaint = class {
       path.setAttribute("data-reorder-landing-contour", "true");
       svg.append(path);
       node.append(svg);
-      return { node, path, key: key2 };
+      return { node, path, key: key3 };
     } catch (primary) {
       try {
         node.remove();
@@ -46224,7 +46242,7 @@ var NativeReorderSession = class {
     this.measurement.begin(session);
   }
   /** Arrows retain every ordered intent and commit Alt release only after all required measurements settle. */
-  arrow(key2) {
+  arrow(key3) {
     const session = this.session;
     if (!session || session.pointer !== null || !this.current(session)) return;
     if (this.moving) {
@@ -46232,11 +46250,11 @@ var NativeReorderSession = class {
         this.close();
         return;
       }
-      this.queued.push(key2);
+      this.queued.push(key3);
       return;
     }
     this.moving = true;
-    this.measurement.keyboard.arrow(session, key2, () => {
+    this.measurement.keyboard.arrow(session, key3, () => {
       if (!this.current(session)) return;
       this.moving = false;
       const queued = this.queued.shift();
@@ -47307,7 +47325,7 @@ function prepareNativeSnapshot(view, revision) {
 }
 function sameNativeSnapshot(left, right) {
   return left.document === right.document && left.endings === right.endings && Object.keys(left.metadata).every(
-    (key2) => left.metadata[key2] === right.metadata[key2]
+    (key3) => left.metadata[key3] === right.metadata[key3]
   );
 }
 function materializeNativeSnapshot(prepared4) {
@@ -47840,6 +47858,12 @@ function mountEditor(parent, options) {
   };
 }
 
+// frontend/comfyui/ui/prompt_editor/PromptSearchSurface.ts
+var key2 = Symbol.for("sugarcubes.prompt-search-surface");
+function publishPromptSearch(surface) {
+  surface.element[key2] = surface;
+}
+
 // frontend/comfyui/ui/prompt_editor/runtime/SugarPromptRuntime.ts
 import { applyOwnedTheme } from "../../surface/appearance/ThemeService.js";
 
@@ -47920,6 +47944,7 @@ var SugarPromptEditor = class {
   #allocatedHeight = null;
   #menuPoint = null;
   #scheduling;
+  #admission;
   /** Mount all existing editing, rich projection, weight and Alt-reorder behavior through its public API. */
   constructor(document2, options) {
     installSugarPromptStyles(document2);
@@ -47940,6 +47965,10 @@ var SugarPromptEditor = class {
     options.anchor.before(this.element);
     this.#applyAppearance();
     this.#stopAppearance = options.appearance.subscribeAppearance(() => this.#applyAppearance());
+    this.#admission = new PromptCatalogAdmission(this.element, {
+      catalog: (adapter) => this.#replaceLoraCatalog(adapter),
+      media: () => this.#reopenResources()
+    });
     this.element.addEventListener(
       "contextmenu",
       (event) => {
@@ -47963,7 +47992,12 @@ var SugarPromptEditor = class {
     const tagCatalog = bundledPromptTagCatalog();
     this.#api = mountEditor(this.#content, {
       source: options.source,
-      menuPresentation: (root) => new SugarPromptMenu(root, options.report, options.loraMenu),
+      menuPresentation: (root) => new SugarPromptMenu(
+        root,
+        options.report,
+        options.loraMenu,
+        (open) => this.#admission.menuPresented(open)
+      ),
       tooltipTransport: (plane) => new SugarPromptTooltip(plane),
       label: options.label,
       placeholder: "Write a prompt\u2026",
@@ -47989,6 +48023,7 @@ var SugarPromptEditor = class {
       options.loraUpstream
     );
     markComfyPromptInput(this.element);
+    publishPromptSearch(new PromptSearchPainter(this.element, this.#api, options.report));
   }
   /** Preserve the native document and history when the host moves the same field to another presentation. */
   attach(textarea) {
@@ -48008,12 +48043,29 @@ var SugarPromptEditor = class {
     this.#pendingRefresh = { source, readOnly: readOnly2 };
     this.#queueRefresh();
   }
-  /** Replace one catalog lifetime; obsolete resource replies cannot update mounted chips. */
+  /** Adopt a new catalog once the person is not using this prompt; the newest one wins. */
   setLoraCatalog(adapter) {
+    if (!this.#disposed && this.#adapter !== adapter) this.#admission.offerCatalog(adapter);
+  }
+  /** Show the current catalog's changed LoRA images on this prompt's chips. */
+  refreshLoraMedia() {
+    if (!this.#disposed && this.#adapter) this.#admission.offerMedia();
+  }
+  /** Replace one catalog lifetime; obsolete resource replies cannot update mounted chips. */
+  #replaceLoraCatalog(adapter) {
     if (this.#disposed || this.#adapter === adapter) return;
+    this.#adapter = adapter;
+    this.#reopenResources();
+    this.#api.setLoraCompletionCatalog(adapter.completionCatalog ?? null);
+    this.#scheduling.reset();
+    this.#publishScheduling();
+  }
+  /** Resolve this prompt's LoRA names again against the current catalog and its images. */
+  #reopenResources() {
+    const adapter = this.#adapter;
+    if (this.#disposed || !adapter) return;
     const generation = ++this.#resourceGeneration;
     this.#resources?.dispose();
-    this.#adapter = adapter;
     this.#resourceKey = "";
     this.#resourceSnapshot = null;
     this.#resourceRevision = -1;
@@ -48021,9 +48073,6 @@ var SugarPromptEditor = class {
     this.#resources = new LoraResourceSession(adapter, (snapshot) => {
       if (generation === this.#resourceGeneration) this.#resourceChanged(snapshot);
     });
-    this.#api.setLoraCompletionCatalog(adapter.completionCatalog ?? null);
-    this.#scheduling.reset();
-    this.#publishScheduling();
     this.#queueResources();
   }
   /** Republish the models loaded ahead of this prompt's encoder when they or the catalog changed. */
@@ -48066,6 +48115,7 @@ var SugarPromptEditor = class {
     if (this.#disposed) return;
     this.#disposed = true;
     this.#readiness.dispose();
+    this.#admission.dispose();
     this.#stopAppearance();
     this.#resources?.dispose();
     this.#api.destroy();
@@ -48135,9 +48185,9 @@ var SugarPromptEditor = class {
         const inspected = this.#api.inspectStructure();
         if (inspected.status !== "ready") return;
         this.#inspectionRevision = snapshot.revision;
-        const key2 = JSON.stringify(inspected.loraResourceNames);
-        if (key2 !== this.#resourceKey) {
-          this.#resourceKey = key2;
+        const key3 = JSON.stringify(inspected.loraResourceNames);
+        if (key3 !== this.#resourceKey) {
+          this.#resourceKey = key3;
           void this.#resources.warmupNames(inspected.loraResourceNames).catch(this.#options.report);
           return;
         }

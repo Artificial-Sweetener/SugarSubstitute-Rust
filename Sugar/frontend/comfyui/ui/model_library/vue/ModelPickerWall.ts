@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Present a virtualized Substitute-style model image wall using Vue. */
 import {
+  inject,
   computed,
   defineComponent,
   h,
@@ -34,6 +35,7 @@ import { layoutModelGallery } from '../ModelGalleryLayout.js';
 import type { ModelUpdateOffer } from '../ModelUpdates.js';
 import { ModelUpdateButton } from './ModelUpdateButton.js';
 import { ModelGalleryTitle } from './ModelGalleryTitle.js';
+import { shownModels } from './ShownModels.js';
 
 /** Keep image decoding and mounted DOM bounded to the wall's visible rows. */
 export const ModelPickerWall = defineComponent({
@@ -79,8 +81,36 @@ export const ModelPickerWall = defineComponent({
       observer.observe(element);
     });
     onBeforeUnmount(() => observer?.disconnect());
+    // Tell the model library which models are on screen once the wall has come to rest.
+    const shown = inject(shownModels, null);
+    let reported = '';
+    let settling: ReturnType<typeof setTimeout> | null = null;
+    onBeforeUnmount(() => {
+      if (settling !== null) clearTimeout(settling);
+    });
     watch(
-      () => [props.active, props.items],
+      () => [rows.value, scrollTop.value, height.value, props.items],
+      () => {
+        if (!shown) return;
+        if (settling !== null) clearTimeout(settling);
+        settling = setTimeout(() => {
+          settling = null;
+          const items = visibleModelRows(rows.value, scrollTop.value, height.value).flatMap((row) =>
+            row.tiles.flatMap((tile) => props.items[tile.index] ?? []),
+          );
+          const key = items.map((item) => item.id).join(' ');
+          if (key === reported) return;
+          reported = key;
+          shown(items);
+        }, 150);
+      },
+      { immediate: true },
+    );
+    // The wall moves to the active model when the picker opens and when another model becomes
+    // active. A republished catalog that leaves that model active leaves the scroll where the
+    // person put it.
+    watch(
+      () => props.items[props.active]?.id,
       () => {
         void nextTick(() => {
           const element = viewport.value;

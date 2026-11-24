@@ -152,3 +152,47 @@ def test_a_changed_preference_is_reconsidered_without_waiting_for_the_idle_poll(
         return repository.listings
 
     assert asyncio.run(exercise()) >= 1
+
+
+class _RecordedEnrichment:
+    """Record which models the scheduler refreshed, finishing each at once."""
+
+    def __init__(self) -> None:
+        """Start with nothing refreshed."""
+        self.refreshed: asyncio.Queue[str] = asyncio.Queue()
+
+    async def refresh(
+        self, model_id: str, *, automatic: bool = True
+    ) -> dict[str, object]:
+        """Report the refresh and answer as an unchanged model does."""
+        self.refreshed.put_nowait(model_id)
+        return {"modelId": model_id, "status": "cached"}
+
+    def needs_refresh(self, entry: ModelCatalogEntry) -> bool:
+        """Leave the backlog empty."""
+        return False
+
+
+def test_models_on_screen_are_refreshed_first_after_a_preference_change() -> None:
+    """Refresh what a consumer last showed again as soon as a preference changes."""
+
+    async def exercise() -> list[str]:
+        enrichment = _RecordedEnrichment()
+        jobs = ModelBackgroundJobs()
+        worker = ModelEnrichmentWorker(
+            cast(ModelCatalogRepository, _Repository()),
+            cast(AutomaticModelEnrichment, enrichment),
+            jobs,
+            interval=86400,
+        )
+        try:
+            worker.start()
+            worker.prioritize([_MODEL])
+            first = await await_outcome(enrichment.refreshed.get())
+            worker.reconsider()
+            return [first, await await_outcome(enrichment.refreshed.get())]
+        finally:
+            await worker.close()
+            await jobs.close()
+
+    assert asyncio.run(exercise()) == [_MODEL, _MODEL]

@@ -1,6 +1,6 @@
 import {
   SugarPromptMenu
-} from "./chunk-GQCFG65F.js";
+} from "./chunk-H66FF5P6.js";
 export {
   SugarPromptMenu
 };

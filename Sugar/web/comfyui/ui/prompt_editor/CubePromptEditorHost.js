@@ -1,6 +1,6 @@
 import { PromptWidgetBinding } from './PromptWidgetBinding.js';
 import { ComfyCanvasEditorKeyBoundary } from './ComfyCanvasEditorKeyBoundary.js';
-import { preparePromptLoraCatalog, promptLoraModel, promptLoraName } from './PromptLoraCatalog.js';
+import { preparePromptLoraCatalog, promptLoraMediaRevision, promptLoraModel, promptLoraName, } from './PromptLoraCatalog.js';
 import { feedsPromptControl, promptUpstreamLoras } from './PromptControlSupport.js';
 import { promptModelCompletions } from './PromptModelCompletions.js';
 import { registerPromptEditorSurfaceOwner } from './PromptEditorSurface.js';
@@ -312,12 +312,20 @@ export class CubePromptEditorHost {
     #publishCatalog(snapshot) {
         if (snapshot !== this.#catalogSnapshot) {
             this.#catalogSnapshot = snapshot;
-            this.#loraCatalog = preparePromptLoraCatalog(snapshot, this.#document.baseURI, (items) => {
+            const replaced = this.#loraCatalog;
+            const images = replaced ? promptLoraMediaRevision(replaced) : 0;
+            const catalog = preparePromptLoraCatalog(snapshot, this.#document.baseURI, (items) => {
                 if (items.length)
                     void this.#catalog.prioritize(items).catch(this.#report);
-            }, this.#loraCatalog ?? undefined);
-            for (const current of this.#sessions.values())
-                current.editor?.setLoraCatalog(this.#loraCatalog);
+            }, replaced ?? undefined);
+            this.#loraCatalog = catalog;
+            const imagesChanged = catalog === replaced && promptLoraMediaRevision(catalog) !== images;
+            for (const current of this.#sessions.values()) {
+                if (imagesChanged)
+                    current.editor?.refreshLoraMedia();
+                else
+                    current.editor?.setLoraCatalog(catalog);
+            }
         }
     }
     /** Hide only the native editing control while retaining its host-facing value contract. */

@@ -17,9 +17,12 @@
 import type { CivitaiCredentialPort } from './ModelDiscovery.js';
 import type { ModelTransferObserver } from './ModelTransfer.js';
 import type { ModelRelease } from './ModelReleases.js';
+import type { ModelCatalogItem } from './ModelCatalog.js';
 export type ModelPickerFeedback = (severity: 'info' | 'error', message: string) => void;
 export interface ModelPickerActions {
   readonly credentials: CivitaiCredentialPort;
+  /** Look these models up before the rest of the library; absent where nothing is looked up. */
+  prioritize?(items: readonly ModelCatalogItem[]): Promise<void>;
   classifyContent(modelId: string, nsfw: boolean | null, signal: AbortSignal): Promise<void>;
   refreshMetadata(
     modelId: string,

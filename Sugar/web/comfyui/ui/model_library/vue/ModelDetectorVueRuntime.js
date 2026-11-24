@@ -1,8 +1,9 @@
 import {
   ModelPickerWall
-} from "./chunk-7IKTD2HE.js";
-import "./chunk-4DBFGV2O.js";
-import "./chunk-HRRVXU3H.js";
+} from "./chunk-CVOWWAQA.js";
+import "./chunk-P7J5YKTZ.js";
+import "./chunk-HP45EZMK.js";
+import "./chunk-P6VGNXE5.js";
 import {
   modelWallNeighbor
 } from "./chunk-UM6L2UPZ.js";
@@ -10,12 +11,12 @@ import {
   MODEL_DETECTOR_WALL_PROFILE
 } from "./chunk-LCXHXGTS.js";
 import "./chunk-EPSDIXQ5.js";
-import "./chunk-RPKXVHLS.js";
+import "./chunk-TOST2PZ5.js";
 import {
   createApp,
   h,
   ref
-} from "./chunk-3W5PGMRW.js";
+} from "./chunk-OJTDXCRK.js";
 
 // frontend/comfyui/ui/model_library/vue/ModelDetectorVueRuntime.ts
 function mountDetectorWall(element, items, selected, onSelect) {

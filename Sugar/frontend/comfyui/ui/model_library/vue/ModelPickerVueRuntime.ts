@@ -20,6 +20,7 @@ import type { ModelCatalogItem } from '../ModelCatalog.js';
 import type { ModelPickerBinding } from '../ModelPickerBinding.js';
 import type { ModelPickerSession } from '../ModelPickerSession.js';
 import { ModelPickerField } from './ModelPickerField.js';
+import { shownModels } from './ShownModels.js';
 import type { ModelPickerActions, ModelPickerFeedback } from '../ModelPickerActions.js';
 import type { ModelUpdatePort } from '../ModelUpdates.js';
 import type { ModelDetectorPort } from '../ModelDetectors.js';
@@ -73,6 +74,13 @@ export function mountModelPicker(
         },
       }),
   });
+  const prioritize = actions?.prioritize?.bind(actions);
+  if (prioritize)
+    app.provide(shownModels, (shown) => {
+      // A failed request offers a person nothing to act on. The client forgets it, so the
+      // next report of these models asks again.
+      void prioritize(shown).catch(() => undefined);
+    });
   app.config.idPrefix = `sc-model-${String(++mountIdentity)}`;
   app.mount(element);
   return {

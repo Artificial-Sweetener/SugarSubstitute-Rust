@@ -39,6 +39,9 @@ import type {
 } from '../../../../sugarprompt/services/src/index.js';
 import { SugarPromptMenu } from './SugarPromptMenu.js';
 import { PromptLoraScheduling } from './PromptLoraScheduling.js';
+import { PromptCatalogAdmission } from './PromptCatalogAdmission.js';
+import { PromptSearchPainter } from './PromptSearchPainter.js';
+import { publishPromptSearch } from '../PromptSearchSurface.js';
 import { SugarPromptTooltip } from './SugarPromptTooltip.js';
 import { installSugarPromptStyles } from './SugarPromptStyles.js';
 import type { AppearanceSource } from '../../surface/appearance/AppearanceState.js';
@@ -127,6 +130,7 @@ export class SugarPromptEditor {
   #allocatedHeight: number | null = null;
   #menuPoint: PromptMenuPoint | null = null;
   readonly #scheduling: PromptLoraScheduling;
+  readonly #admission: PromptCatalogAdmission;
 
   /** Mount all existing editing, rich projection, weight and Alt-reorder behavior through its public API. */
   constructor(document: Document, options: SugarPromptMountOptions) {
@@ -149,6 +153,10 @@ export class SugarPromptEditor {
     options.anchor.before(this.element);
     this.#applyAppearance();
     this.#stopAppearance = options.appearance.subscribeAppearance(() => this.#applyAppearance());
+    this.#admission = new PromptCatalogAdmission(this.element, {
+      catalog: (adapter) => this.#replaceLoraCatalog(adapter),
+      media: () => this.#reopenResources(),
+    });
     // A picked LoRA's popup opens where the prompt's menu was asked for.
     this.element.addEventListener(
       'contextmenu',
@@ -174,7 +182,10 @@ export class SugarPromptEditor {
     const tagCatalog = bundledPromptTagCatalog();
     this.#api = mountEditor(this.#content, {
       source: options.source,
-      menuPresentation: (root) => new SugarPromptMenu(root, options.report, options.loraMenu),
+      menuPresentation: (root) =>
+        new SugarPromptMenu(root, options.report, options.loraMenu, (open) =>
+          this.#admission.menuPresented(open),
+        ),
       tooltipTransport: (plane) => new SugarPromptTooltip(plane),
       label: options.label,
       placeholder: 'Write a prompt…',
@@ -202,6 +213,7 @@ export class SugarPromptEditor {
       options.loraUpstream,
     );
     markComfyPromptInput(this.element);
+    publishPromptSearch(new PromptSearchPainter(this.element, this.#api, options.report));
   }
 
   /** Preserve the native document and history when the host moves the same field to another presentation. */
@@ -224,12 +236,32 @@ export class SugarPromptEditor {
     this.#queueRefresh();
   }
 
-  /** Replace one catalog lifetime; obsolete resource replies cannot update mounted chips. */
+  /** Adopt a new catalog once the person is not using this prompt; the newest one wins. */
   setLoraCatalog(adapter: LoraResourceAdapter): void {
+    if (!this.#disposed && this.#adapter !== adapter) this.#admission.offerCatalog(adapter);
+  }
+
+  /** Show the current catalog's changed LoRA images on this prompt's chips. */
+  refreshLoraMedia(): void {
+    if (!this.#disposed && this.#adapter) this.#admission.offerMedia();
+  }
+
+  /** Replace one catalog lifetime; obsolete resource replies cannot update mounted chips. */
+  #replaceLoraCatalog(adapter: LoraResourceAdapter): void {
     if (this.#disposed || this.#adapter === adapter) return;
+    this.#adapter = adapter;
+    this.#reopenResources();
+    this.#api.setLoraCompletionCatalog(adapter.completionCatalog ?? null);
+    this.#scheduling.reset();
+    this.#publishScheduling();
+  }
+
+  /** Resolve this prompt's LoRA names again against the current catalog and its images. */
+  #reopenResources(): void {
+    const adapter = this.#adapter;
+    if (this.#disposed || !adapter) return;
     const generation = ++this.#resourceGeneration;
     this.#resources?.dispose();
-    this.#adapter = adapter;
     this.#resourceKey = '';
     this.#resourceSnapshot = null;
     this.#resourceRevision = -1;
@@ -237,9 +269,6 @@ export class SugarPromptEditor {
     this.#resources = new LoraResourceSession(adapter, (snapshot) => {
       if (generation === this.#resourceGeneration) this.#resourceChanged(snapshot);
     });
-    this.#api.setLoraCompletionCatalog(adapter.completionCatalog ?? null);
-    this.#scheduling.reset();
-    this.#publishScheduling();
     this.#queueResources();
   }
 
@@ -291,6 +320,7 @@ export class SugarPromptEditor {
     if (this.#disposed) return;
     this.#disposed = true;
     this.#readiness.dispose();
+    this.#admission.dispose();
     this.#stopAppearance();
     this.#resources?.dispose();
     this.#api.destroy();

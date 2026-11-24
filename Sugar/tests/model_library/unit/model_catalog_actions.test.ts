@@ -91,10 +91,15 @@ test('prioritizes bounded unique catalog identities and retries failed requests'
   expect(requests).toHaveLength(2);
   expect(requests[1]?.path).toBe('/sugarcubes/v1/models/metadata/prioritize');
   expect(requests[1]?.options?.body).toBe(JSON.stringify({ modelIds: identities.slice(0, 128) }));
+  // The same models named again at once are not sent again.
   await client.prioritize(choices);
+  expect(requests).toHaveLength(2);
+  // Models that come back on screen after others are named again, so they stay first.
+  await client.prioritize(priorityChoices(identities.slice(128)));
+  await client.prioritize(choices);
+  expect(requests).toHaveLength(4);
   expect(requests[2]?.options?.body).toBe(JSON.stringify({ modelIds: identities.slice(128) }));
-  await client.prioritize(choices);
-  expect(requests).toHaveLength(3);
+  expect(requests[3]?.options?.body).toBe(JSON.stringify({ modelIds: identities.slice(0, 128) }));
 });
 
 test('rejects corrupt job identities and reports provider failure', async () => {

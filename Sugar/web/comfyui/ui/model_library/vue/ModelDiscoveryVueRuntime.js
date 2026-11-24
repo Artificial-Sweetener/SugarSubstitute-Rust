@@ -1,18 +1,18 @@
 import {
   ModelDiscoveryGallery
-} from "./chunk-7656PA6M.js";
-import "./chunk-Y7OLUA3V.js";
-import "./chunk-6S3EI6RJ.js";
-import "./chunk-KJ2VRCYH.js";
-import "./chunk-6AXMPX5D.js";
-import "./chunk-SYMYA4CE.js";
-import "./chunk-2G7SQCCL.js";
-import "./chunk-NC5FFMF2.js";
+} from "./chunk-ALVBWWPV.js";
+import "./chunk-5J4YSB7I.js";
+import "./chunk-V6H6SZH6.js";
+import "./chunk-VHI72ZTE.js";
+import "./chunk-CON27HKR.js";
+import "./chunk-ZVGMUCWU.js";
+import "./chunk-CX6HVFIQ.js";
+import "./chunk-W3WKORZN.js";
 import {
   createApp,
   h,
   shallowRef
-} from "./chunk-3W5PGMRW.js";
+} from "./chunk-OJTDXCRK.js";
 
 // frontend/comfyui/ui/model_library/vue/ModelDiscoveryVueRuntime.ts
 function mountModelDiscoveryView(element, initial, actions) {

@@ -14,7 +14,7 @@ export class ModelCatalogClient {
     #changes;
     #pending = null;
     #snapshot = null;
-    #prioritized = new Set();
+    #prioritized = '';
     /** Bind Comfy's backend-addressing adapter rather than assuming a localhost origin. */
     constructor(fetchApi, installed = null) {
         this.#fetch = fetchApi;
@@ -77,15 +77,19 @@ export class ModelCatalogClient {
             throw new Error(`Model library refresh failed (${String(response.status)}).`);
         this.#snapshot = null;
     }
-    /** Give visible catalog choices priority without changing values or creating client-owned jobs. */
+    /**
+     * Give the models a person is looking at priority, without changing values or creating
+     * client-owned jobs. The server keeps the most recently named models first, so the same models
+     * are named again whenever they come back on screen; only an immediate repeat is skipped.
+     */
     async prioritize(items) {
         const identities = [...new Set(items.map((item) => item.id))]
-            .filter((id) => /^[a-f0-9]{64}$/.test(id) && !this.#prioritized.has(id))
+            .filter((id) => /^[a-f0-9]{64}$/.test(id))
             .slice(0, 128);
-        if (!identities.length)
+        const named = identities.join(' ');
+        if (!identities.length || named === this.#prioritized)
             return;
-        for (const id of identities)
-            this.#prioritized.add(id);
+        this.#prioritized = named;
         try {
             const response = await this.#fetch('/sugarcubes/v1/models/metadata/prioritize', {
                 method: 'POST',
@@ -96,8 +100,8 @@ export class ModelCatalogClient {
                 throw new Error('Background model presentation could not be prioritized.');
         }
         catch (error) {
-            for (const id of identities)
-                this.#prioritized.delete(id);
+            if (this.#prioritized === named)
+                this.#prioritized = '';
             throw error;
         }
     }
@@ -156,11 +160,28 @@ export class ModelCatalogClient {
     }
     /** Validate unknown JSON before publishing it to any picker consumer. */
     async #read() {
-        const response = await this.#fetch('/sugarcubes/v1/models');
+        const held = this.#snapshot;
+        // Naming the revision already held lets the server answer without resending the catalog.
+        const response = await this.#fetch('/sugarcubes/v1/models', held ? { headers: { 'X-SugarCubes-Held-Revision': String(held.revision) } } : undefined);
         if (!response.ok)
             throw new Error(`Model catalog is unavailable (${String(response.status)}).`);
         const payload = await response.json();
-        this.#snapshot = continueModelCatalog(this.#snapshot, decodeModelCatalog(payload));
+        if (held && isUnchangedCatalog(payload, held.revision)) {
+            const scanning = payload.scan.status === 'queued' || payload.scan.status === 'running';
+            this.#snapshot = scanning === held.scanning ? held : { ...held, scanning };
+            return this.#snapshot;
+        }
+        this.#snapshot = continueModelCatalog(held, decodeModelCatalog(payload));
         return this.#snapshot;
     }
+}
+/** The server's answer when the revision this client holds is still current. */
+function isUnchangedCatalog(value, revision) {
+    if (typeof value !== 'object' || value === null)
+        return false;
+    const record = value;
+    return (record.unchanged === true &&
+        record.revision === revision &&
+        typeof record.scan === 'object' &&
+        record.scan !== null);
 }

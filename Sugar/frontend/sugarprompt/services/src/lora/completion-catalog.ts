@@ -83,15 +83,11 @@ export function prepareLoraCompletion(
     items.push(ranked);
   }
   Object.freeze(items);
-  const index = new ScalarSubstringIndex(items, (item) => [
-      item.basename,
-      item.display,
-      item.name,
-      item.backend,
-      item.metadata,
-    ]),
-    ordered = Object.freeze([...items].sort(compareRankedLoras).map((item) => item.empty)),
-    memo = new Map<string, readonly LoraSuggestion[]>();
+  // A catalog is replaced far more often than it is searched, so the substring index and the
+  // empty-query order are built by the first search that needs them.
+  let index: ScalarSubstringIndex<RankedLoraItem> | null = null,
+    ordered: readonly LoraSuggestion[] | null = null;
+  const memo = new Map<string, readonly LoraSuggestion[]>();
   let retained = 0;
   return Object.freeze({
     revision: catalog.revision,
@@ -101,13 +97,23 @@ export function prepareLoraCompletion(
       if (typeof query !== 'string' || query.length > 4096)
         throw new TypeError('Invalid LoRA completion query');
       const key = loraNameKey(query);
-      if (!key) return ordered;
+      if (!key)
+        return (ordered ??= Object.freeze(
+          [...items].sort(compareRankedLoras).map((item) => item.empty),
+        ));
       const cached = memo.get(key);
       if (cached) {
         memo.delete(key);
         memo.set(key, cached);
         return cached;
       }
+      index ??= new ScalarSubstringIndex(items, (item) => [
+        item.basename,
+        item.display,
+        item.name,
+        item.backend,
+        item.metadata,
+      ]);
       const ranked = index.candidates(key).flatMap((item) => {
         const result = rankLora(item, key);
         return result ? [{ item, result }] : [];

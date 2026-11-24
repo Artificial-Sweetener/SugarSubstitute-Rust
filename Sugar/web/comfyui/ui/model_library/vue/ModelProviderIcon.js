@@ -1,8 +1,8 @@
 import {
   ModelProviderIcon,
   createModelProviderIcon
-} from "./chunk-NC5FFMF2.js";
-import "./chunk-3W5PGMRW.js";
+} from "./chunk-W3WKORZN.js";
+import "./chunk-OJTDXCRK.js";
 export {
   ModelProviderIcon,
   createModelProviderIcon

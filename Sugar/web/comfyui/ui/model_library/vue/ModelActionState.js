@@ -1,7 +1,7 @@
 import {
   onBeforeUnmount,
   ref
-} from "./chunk-3W5PGMRW.js";
+} from "./chunk-OJTDXCRK.js";
 
 // frontend/comfyui/ui/model_library/vue/ModelActionState.ts
 function useModelAction(disabled = () => false) {
