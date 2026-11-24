@@ -108,6 +108,7 @@ export class ModelPickerHost {
   #observer: HostSurfaceObserver | null = null;
   readonly #popups = new Set<HTMLElement>();
   readonly #mounts = new Map<HTMLElement, FieldMount>();
+  readonly #published = new WeakMap<FieldMount, readonly ModelCatalogItem[]>();
   readonly #dirty = new Set<HTMLElement>();
   #snapshot: ModelCatalogSnapshot | null = null;
   #enabled = false;
@@ -498,9 +499,18 @@ export class ModelPickerHost {
   /** Apply one shared resolution to still-live mounts without publishing stale asynchronous choices. */
   #publishChoices(mount: FieldMount, snapshot: ModelCatalogSnapshot): void {
     if (mount.kind !== 'ultralytics') {
-      mount.picker.update(
-        modelPickerChoices(snapshot.items, mount.kind, mount.options, mount.binding.optionLabel),
+      const choices = modelPickerChoices(
+        snapshot.items,
+        mount.kind,
+        mount.options,
+        mount.binding.optionLabel,
       );
+      // A publication that changed none of this field's models leaves the field as it is.
+      const shown = this.#published.get(mount);
+      if (shown?.length === choices.length && shown.every((item, index) => item === choices[index]))
+        return;
+      this.#published.set(mount, choices);
+      mount.picker.update(choices);
       return;
     }
     void this.#options.detectors
