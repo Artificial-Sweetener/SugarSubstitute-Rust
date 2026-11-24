@@ -19,10 +19,17 @@
  * `.litecontextmenu`) and its newer menus (PrimeVue's context, tiered and plain menus, through
  * their design tokens). Their content, icons and behaviour stay ComfyUI's; outside the frame they
  * are left exactly as ComfyUI draws them.
+ *
+ * ComfyUI's menus sit outside every SugarCubes surface, so they carry their own token scope: the
+ * active style's theme tokens for the current palette, the menu look built on them, and
+ * PrimeVue's tokens pointed at that look (`comfyMenuThemeCss`), all declared on the menus
+ * themselves.
  */
-import { menuTokenCss } from '../../menus/MenuTokens.js';
+import { hasMenuLook, menuTokenDeclarations } from '../../menus/MenuTokens.js';
+import { visualStyleTokens } from '../appearance/ThemeService.js';
 const FRAME = ':root[data-sc-substitute-frame]';
 const PRIME_MENUS = ['contextmenu', 'tieredmenu', 'menu'];
+const COMFY_MENUS = ':is(.p-contextmenu,.p-tieredmenu,.p-menu,.litecontextmenu)';
 /** PrimeVue menu design tokens pointed at the menu look. */
 function primeMenuTokens() {
     return PRIME_MENUS.map((menu) => `
@@ -43,10 +50,17 @@ function primeMenuTokens() {
     --p-${menu}-item-icon-focus-color:var(--sc-menu-text);
     --p-${menu}-separator-border-color:var(--sc-menu-separator);`).join('');
 }
-/** ComfyUI's menus in the frame's menu look. */
+/**
+ * The token scope ComfyUI's menus draw from for one style and palette; nothing for a style
+ * without a menu look, which leaves ComfyUI's menus as ComfyUI draws them.
+ */
+export function comfyMenuThemeCss(style, dark) {
+    if (!hasMenuLook(style))
+        return '';
+    return `${FRAME} ${COMFY_MENUS} { ${visualStyleTokens(style, dark)}${menuTokenDeclarations(style)}${primeMenuTokens()} }`;
+}
+/** ComfyUI's menus in the frame's menu look, drawn from the scope `comfyMenuThemeCss` declares. */
 export const comfyMenuCss = `
-  ${menuTokenCss()}
-  ${FRAME} {${primeMenuTokens()} }
   ${FRAME} :is(.p-contextmenu,.p-tieredmenu,.p-menu) { font:var(--sc-menu-font); }
   ${FRAME} :is(.p-contextmenu-item-content,.p-tieredmenu-item-content,.p-menu-item-content) {
     min-height:var(--sc-menu-row-height); }

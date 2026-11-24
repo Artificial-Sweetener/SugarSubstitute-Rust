@@ -90,9 +90,15 @@ export const MENU_LOOKS = {
         font: '12px/18px var(--sc-font-family)',
     },
 };
-/** Declare every style's menu look on the root, keyed by the active visual style. */
-export function menuTokenCss() {
-    return Object.entries(MENU_LOOKS)
-        .map(([style, look]) => `html[data-sc-visual-style="${style}"] { ${MENU_TOKENS.map((token) => `--sc-menu-${token}:${look[token]};`).join(' ')} }`)
-        .join('\n');
+/** Whether a visual style has a menu look. */
+export function hasMenuLook(style) {
+    return Object.prototype.hasOwnProperty.call(MENU_LOOKS, style);
+}
+/**
+ * One style's menu look as declarations. Its values refer to the style's theme tokens, so they
+ * must be declared where those tokens are in scope.
+ */
+export function menuTokenDeclarations(style) {
+    const look = MENU_LOOKS[style];
+    return MENU_TOKENS.map((token) => `--sc-menu-${token}:${look[token]};`).join('');
 }

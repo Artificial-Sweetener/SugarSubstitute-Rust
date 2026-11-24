@@ -100,12 +100,19 @@ export const MENU_LOOKS: {
   },
 };
 
-/** Declare every style's menu look on the root, keyed by the active visual style. */
-export function menuTokenCss(): string {
-  return Object.entries(MENU_LOOKS)
-    .map(
-      ([style, look]) =>
-        `html[data-sc-visual-style="${style}"] { ${MENU_TOKENS.map((token) => `--sc-menu-${token}:${look[token]};`).join(' ')} }`,
-    )
-    .join('\n');
+/** The styles that have a menu look. */
+export type MenuLookStyle = keyof typeof MENU_LOOKS;
+
+/** Whether a visual style has a menu look. */
+export function hasMenuLook(style: string): style is MenuLookStyle {
+  return Object.prototype.hasOwnProperty.call(MENU_LOOKS, style);
+}
+
+/**
+ * One style's menu look as declarations. Its values refer to the style's theme tokens, so they
+ * must be declared where those tokens are in scope.
+ */
+export function menuTokenDeclarations(style: MenuLookStyle): string {
+  const look = MENU_LOOKS[style];
+  return MENU_TOKENS.map((token) => `--sc-menu-${token}:${look[token]};`).join('');
 }

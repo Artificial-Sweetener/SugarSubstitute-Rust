@@ -23,7 +23,8 @@ import { ClosedWorkflowHistory } from './ClosedWorkflowHistory.js';
 import { SubstituteFrameView } from './SubstituteFrameView.js';
 import { substituteFrameCss } from './SubstituteFrameStyles.js';
 import { graphToolbarCss } from './GraphToolbarStyles.js';
-import { comfyMenuCss } from './ComfyMenuStyles.js';
+import { comfyMenuCss, comfyMenuThemeCss } from './ComfyMenuStyles.js';
+import { readOwnedVisualStyle } from '../appearance/VisualStyleBoundary.js';
 import { ComfySidebarTabs } from './ComfySidebarTabs.js';
 import { SidebarPanelClose } from './SidebarPanelClose.js';
 import { generationQueueSkinCss } from './GenerationQueueSkinStyles.js';
@@ -43,6 +44,8 @@ export class SubstituteFrameHost {
     mode = new SubstituteFrameMode();
     #stops = [];
     #style;
+    /** ComfyUI's menus' token scope, which follows the style and palette. */
+    #menuStyle;
     #desktop = new DesktopFramePresentation();
     #closed = new ClosedWorkflowHistory();
     #desktopDefaults;
@@ -84,6 +87,8 @@ export class SubstituteFrameHost {
                 pluginFrameCss +
                 graphToolbarCss +
                 comfyMenuCss;
+        this.#menuStyle = options.document.createElement('style');
+        this.#menuStyle.id = 'sugarcubes-substitute-frame-menus';
     }
     /** Configure one desktop document through the presentation protocol without persisting preferences. */
     configureDesktopFrame(configuration) {
@@ -132,6 +137,7 @@ export class SubstituteFrameHost {
             stop();
         this.mode.dispose();
         this.#style.remove();
+        this.#menuStyle.remove();
         this.options.document.documentElement.removeAttribute('data-sc-substitute-frame');
         this.options.document.defaultView?.removeEventListener('pagehide', this.dispose);
     };
@@ -154,6 +160,7 @@ export class SubstituteFrameHost {
         if (!this.mode.enabled && !plugin) {
             this.#unmount();
             this.#style.remove();
+            this.#menuStyle.remove();
             document.documentElement.removeAttribute('data-sc-substitute-frame');
             return;
         }
@@ -168,6 +175,8 @@ export class SubstituteFrameHost {
             }
             if (!this.#style.isConnected)
                 document.head.append(this.#style);
+            if (!this.#menuStyle.isConnected)
+                document.head.append(this.#menuStyle);
             this.#view?.setPluginMode(plugin);
             if (plugin && !this.#pluginToolbar && this.#view && this.#generation)
                 this.#pluginToolbar = new PluginToolbarPlacement(document, this.#view.element, this.#view.applicationMenu, this.#generation.element, () => this.#generation?.refreshPlacement());
@@ -318,6 +327,9 @@ export class SubstituteFrameHost {
     /** Project accepted palette facts without adding a theme observer or renderer dependency. */
     #palette() {
         const { color, dark } = this.options.palette.theme;
+        const menus = comfyMenuThemeCss(readOwnedVisualStyle(this.options.document), dark);
+        if (this.#menuStyle.textContent !== menus)
+            this.#menuStyle.textContent = menus;
         this.#view?.setPalette(color, dark);
         this.#generation?.setPalette(dark);
         this.#pluginToolbar?.setPalette(dark);

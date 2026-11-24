@@ -18,28 +18,72 @@ import { expect, test } from '@jest/globals';
 import {
   MENU_LOOKS,
   MENU_TOKENS,
-  menuTokenCss,
+  menuTokenDeclarations,
 } from '../../../frontend/comfyui/ui/menus/MenuTokens.js';
 import { contextMenuCss } from '../../../frontend/comfyui/ui/menus/ContextMenuStyles.js';
-import { comfyMenuCss } from '../../../frontend/comfyui/ui/surface/frame/ComfyMenuStyles.js';
+import {
+  comfyMenuCss,
+  comfyMenuThemeCss,
+} from '../../../frontend/comfyui/ui/surface/frame/ComfyMenuStyles.js';
+
+const STYLES = Object.keys(MENU_LOOKS) as (keyof typeof MENU_LOOKS)[];
+
+/** The custom properties one rule body declares. */
+function declarations(css: string): Map<string, string> {
+  const body = css.slice(css.indexOf('{') + 1, css.lastIndexOf('}'));
+  const declared = new Map<string, string>();
+  for (const match of body.matchAll(/(--[\w-]+)\s*:\s*([^;]*);/g))
+    declared.set(match[1] ?? '', (match[2] ?? '').trim());
+  return declared;
+}
+
+/** Whether a value resolves to something in a scope that declares only `declared`. */
+function resolves(value: string, declared: Map<string, string>, seen = new Set<string>()): boolean {
+  const reference = /var\(\s*(--[\w-]+)\s*(?:,(.*))?\)\s*$/.exec(value.trim());
+  if (!value.includes('var(')) return value.trim() !== '';
+  if (!reference) return true;
+  const [, name = '', fallback] = reference;
+  const own = declared.get(name);
+  if (own !== undefined && !seen.has(name) && resolves(own, declared, new Set([...seen, name])))
+    return true;
+  return fallback !== undefined && resolves(fallback, declared, seen);
+}
 
 test('every style supplies every menu token', () => {
-  for (const [style, look] of Object.entries(MENU_LOOKS)) {
-    for (const token of MENU_TOKENS) expect(look[token]).toBeTruthy();
-    expect(menuTokenCss()).toContain(`html[data-sc-visual-style="${style}"] {`);
+  for (const style of STYLES) {
+    for (const token of MENU_TOKENS) expect(MENU_LOOKS[style][token]).toBeTruthy();
+    for (const token of MENU_TOKENS)
+      expect(menuTokenDeclarations(style)).toContain(`--sc-menu-${token}:`);
   }
+});
+
+test('ComfyUI’s menus carry their own token scope, and every token resolves in it', () => {
+  // ComfyUI's menus sit outside every SugarCubes surface: a token that only resolves inside one
+  // left their hover, text and separators empty.
+  for (const style of STYLES)
+    for (const dark of [true, false]) {
+      const css = comfyMenuThemeCss(style, dark);
+      expect(css.startsWith(':root[data-sc-substitute-frame] :is(.p-contextmenu,')).toBe(true);
+      expect(css).toContain('.litecontextmenu)');
+      const declared = declarations(css);
+      for (const token of MENU_TOKENS) {
+        const value = declared.get(`--sc-menu-${token}`) ?? '';
+        expect([style, dark, token, resolves(value, declared)]).toEqual([style, dark, token, true]);
+      }
+      for (const menu of ['contextmenu', 'tieredmenu', 'menu'])
+        expect(declared.get(`--p-${menu}-item-focus-background`)).toBe('var(--sc-menu-row-hover)');
+    }
+  expect(comfyMenuThemeCss('comfy', true)).toBe('');
 });
 
 test('ComfyUI’s graph and PrimeVue menus read the tokens, and only in the frame', () => {
   const css = comfyMenuCss.replace(/\s+/g, ' ');
-  for (const menu of ['contextmenu', 'tieredmenu', 'menu'])
-    expect(css).toContain(`--p-${menu}-item-focus-background:var(--sc-menu-row-hover);`);
   expect(css).toContain(':root[data-sc-substitute-frame] .litecontextmenu {');
   expect(css).toContain('background:var(--sc-menu-row-hover) !important');
   const rules = css
     .split('}')
     .map((part) => part.trim())
-    .filter((part) => part.includes('{') && !part.startsWith('html[data-sc-visual-style='));
+    .filter((part) => part.includes('{'));
   for (const rule of rules) expect(rule.startsWith(':root[data-sc-substitute-frame]')).toBe(true);
 });
 
