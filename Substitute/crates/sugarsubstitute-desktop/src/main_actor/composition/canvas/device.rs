@@ -35,6 +35,25 @@ impl Device {
         Arc::ptr_eq(&self.graphics, graphics)
     }
 
+    /// Queue the read fence a shared frame's texture needs once its upload was attempted, and
+    /// return how long queuing and flushing took. A failed upload may still have queued its read,
+    /// so the fence follows every attempt; a CPU frame has no fence.
+    pub(super) fn signal_reads(
+        &self,
+        content: &crate::canvas::CanvasContent<'_>,
+    ) -> Result<std::time::Duration, DesktopError> {
+        let started = std::time::Instant::now();
+        #[cfg(windows)]
+        if let crate::canvas::CanvasContent::Shared(shared) = content {
+            let value = self
+                .graphics
+                .signal_reads()
+                .map_err(|cause| DesktopError::new("canvas_shared_texture_reads", cause))?;
+            shared.texture.record_reads(value);
+        }
+        Ok(started.elapsed())
+    }
+
     /// Bind the completed worker device to this retained composition device.
     pub(super) fn initialize(
         &mut self,

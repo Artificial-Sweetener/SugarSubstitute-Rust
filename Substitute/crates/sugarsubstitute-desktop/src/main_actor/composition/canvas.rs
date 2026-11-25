@@ -350,17 +350,7 @@ impl Canvas {
             allocation.capture.request();
         }
         let uploaded = allocation.upload(content, self.wash);
-        let signaling = std::time::Instant::now();
-        // A failed upload may still have queued its read, so the fence always follows it.
-        #[cfg(windows)]
-        if let CanvasContent::Shared(shared) = content {
-            let value = device
-                .graphics()
-                .signal_reads()
-                .map_err(|cause| DesktopError::new("canvas_shared_texture_reads", cause))?;
-            shared.texture.record_reads(value);
-        }
-        let signal = signaling.elapsed();
+        let signal = device.signal_reads(content)?;
         let cost = uploaded?;
         let committing = std::time::Instant::now();
         let visual = self.visual.as_ref().ok_or_else(|| missing("canvas_visual"))?;
@@ -404,15 +394,7 @@ impl Canvas {
                 });
             }
         }
-        self.timings.record(
-            cost,
-            timing::CommitCost {
-                signal,
-                commit: committing.elapsed(),
-                width: extent.width(),
-                height: extent.height(),
-            },
-        );
+        self.timings.record(cost, timing::CommitCost::new(signal, committing.elapsed(), extent));
         self.acknowledgement.committed(content.target(), placement);
         self.displayed = Some(placement);
         Ok(Some(content.target()))

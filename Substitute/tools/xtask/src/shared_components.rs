@@ -54,6 +54,14 @@ impl Components {
         self.components.iter().any(|component| component.id == id)
     }
 
+    /// The monorepo-relative folder of the identified component, when it is declared.
+    pub(crate) fn root_of(&self, id: &str) -> Option<&str> {
+        self.components
+            .iter()
+            .find(|component| component.id == id)
+            .map(|component| component.root.as_str())
+    }
+
     /// Return whether `path` is a declared file of the identified component.
     pub(crate) fn declares(&self, id: &str, path: &str) -> bool {
         self.components

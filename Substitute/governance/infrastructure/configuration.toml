@@ -260,7 +260,7 @@ rationale = "A release build names its release-manifest anchor file in SUGARSUBS
 [[records]]
 path = "crates/sugarsubstitute/build.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:39353b288db280a40b5347c2f327a4e2d6900433650661984cbd0738b55572b1"
+source_sha256 = "sha256:7e39fd1af5ddfd3676c553f6a4970d6946a1ead2aad3f8826c09b6a5ab7a4928"
 capabilities = ["environment"]
 rationale = "Native boundary input or configuration contract regression fixture; actual acquisition retains its existing execution/storage owner."
 
@@ -505,7 +505,7 @@ rationale = "Tooling build, source inspection or isolated qualification input; n
 [[records]]
 path = "tools/xtask/src/governance.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:662e3fde2ad0b2e85fc5b8821207b1b3cae085ff1c879a08a3604ad327e0c5a4"
+source_sha256 = "sha256:33d2d9b5ecee5183a387f0505c7803bc4ebd377adecccfc2d9500e4dbeb3baa3"
 capabilities = ["codec"]
 rationale = "Tooling build, source inspection or isolated qualification input; not product settings."
 

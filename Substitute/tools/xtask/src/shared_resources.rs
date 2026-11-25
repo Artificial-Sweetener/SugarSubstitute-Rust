@@ -3,8 +3,9 @@
 
 //! Keep every resource file of the monorepo in one place.
 //!
-//! An icon or image both components use lives once, in SugarCubes' shared icons
-//! (`Sugar/integrations/contracts/ui/icons`), read by the native host and served to the page.
+//! An icon or image both components use lives once, in the `ui/icons` folder of the SugarCubes
+//! contracts component this workspace consumes (its folder is declared in
+//! `governance/monorepo/components.toml`), read by the native host and served to the page.
 //! A second copy of the same bytes anywhere in either component is refused, so a shared resource
 //! cannot drift into two versions. Generated output, vendored third-party files and test fixtures
 //! are not resources and are not compared.
@@ -13,13 +14,22 @@ use std::{collections::BTreeMap, path::Path};
 
 use sha2::{Digest, Sha256};
 
-use crate::error::{Failure, Result};
+use crate::{
+    error::{Failure, Result},
+    shared_components::Components,
+};
 
 /// The file kinds that are resources.
 const EXTENSIONS: &[&str] = &["svg", "png", "ico", "jpg", "jpeg", "webp", "gif", "bmp"];
+/// The consumed component that holds the shared resources, and their folder inside it.
+const HOME_COMPONENT: &str = "sugarcubes-contracts";
+const HOME_FOLDER: &str = "ui/icons";
 
 /// Refuse byte-identical resource files tracked anywhere in the monorepo.
-pub(crate) fn check(workspace: &Path) -> Result<()> {
+pub(crate) fn check(workspace: &Path, shared: &Components) -> Result<()> {
+    let home = shared.root_of(HOME_COMPONENT).ok_or_else(|| {
+        Failure::Policy(format!("shared resources need the {HOME_COMPONENT} component"))
+    })?;
     let monorepo = workspace
         .parent()
         .ok_or_else(|| Failure::Policy("the workspace has no enclosing monorepo".into()))?;
@@ -47,8 +57,8 @@ pub(crate) fn check(workspace: &Path) -> Result<()> {
         return Ok(());
     }
     Err(Failure::Policy(format!(
-        "resource files are duplicated; keep one copy in Sugar/integrations/contracts/ui/icons \
-         (or the one component that uses it) and reference it: {}",
+        "resource files are duplicated; keep one copy in {home}/{HOME_FOLDER} (or the one \
+         component that uses it) and reference it: {}",
         copies.join("; ")
     )))
 }
@@ -73,7 +83,7 @@ mod tests {
     #[test]
     fn resources_are_compared_and_generated_vendored_and_test_files_are_not() {
         for path in [
-            "Sugar/integrations/contracts/ui/icons/app-icon.ico",
+            "Sugar/integrations/gimp/plugin/app-icon.ico",
             "Sugar/frontend/static/orb/orb_base.png",
             "Substitute/crates/sugarsubstitute-ui/assets/fluent/Home.svg",
         ] {

@@ -8,7 +8,10 @@ use std::{error::Error, io::Read, path::PathBuf};
 mod windows_icon_resource;
 
 /// The application icon, one file shared with SugarCubes' page and its GIMP companion.
-const APP_ICON: &str = "../../../Sugar/integrations/contracts/ui/icons/app-icon.ico";
+const APP_ICON: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../../Sugar/integrations/contracts/ui/icons/app-icon.ico"
+);
 use sugarsubstitute_update::{ENGINE_PROTOCOL, ENGINE_RELEASE};
 
 /// Emit the producing build's contract and apply its native manifest with the selected linker.
@@ -35,7 +38,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!("cargo::rustc-link-arg=/MANIFEST:EMBED");
         println!("cargo::rustc-link-arg=/MANIFESTINPUT:{}", manifest.display());
         // Every executable of this package carries the application icon.
-        let icon = std::fs::read(directory.join(APP_ICON))?;
+        let icon = std::fs::read(APP_ICON)?;
         let resource =
             PathBuf::from(std::env::var_os("OUT_DIR").ok_or("Cargo output directory absent")?)
                 .join("sugarsubstitute-icon.res");

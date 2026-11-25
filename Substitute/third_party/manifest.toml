@@ -102,7 +102,6 @@ files = [
   "crates/sugarsubstitute-splash/assets/poses/20.png",
   "crates/sugarsubstitute-splash/assets/poses/21.png",
   "crates/sugarsubstitute-splash/assets/poses/22.png",
-  "crates/sugarsubstitute-splash/assets/poses/23.png",
   "crates/sugarsubstitute-splash/assets/poses/24.png",
   "crates/sugarsubstitute-splash/assets/poses/25.png",
   "crates/sugarsubstitute-splash/assets/poses/26.png",
@@ -363,10 +362,11 @@ id = "installer-fluent-icons"
 source_url = "https://github.com/zhiyiYo/PyQt-Fluent-Widgets/tree/d90c008c534b2b0079ce7981d19b2bc957b354a5/qfluentwidgets/_rc/images/icons"
 license = "GPL-3.0-only"
 license_file = "third_party/licenses/qfluentwidgets.GPL-3.0.txt"
+# Accept and Close are shared with SugarCubes and live once, as
+# Sugar/integrations/contracts/ui/icons/fluent-accept.svg and fluent-close.svg; this workspace
+# consumes them through governance/monorepo/components.toml under this same license.
 files = [
-  "crates/sugarsubstitute-ui/assets/fluent/Accept.svg",
   "crates/sugarsubstitute-ui/assets/fluent/ChevronDown.svg",
-  "crates/sugarsubstitute-ui/assets/fluent/Close.svg",
   "crates/sugarsubstitute-ui/assets/fluent/Folder.svg",
   "crates/sugarsubstitute-ui/assets/fluent/Home.svg",
   "crates/sugarsubstitute-ui/assets/fluent/Language.svg",

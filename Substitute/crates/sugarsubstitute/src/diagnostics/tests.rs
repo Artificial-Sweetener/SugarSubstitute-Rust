@@ -95,12 +95,8 @@ fn canvas_cost_records_written_by_the_real_formatter_decode_to_the_same_numbers(
     };
     let bytes = Arc::new(std::sync::Mutex::new(Vec::new()));
     let sink = bytes.clone();
-    let subscriber = subscriber(
-        DiagnosticHealth::fixture(),
-        move || Capture(sink.clone()),
-        "info".into(),
-        None,
-    );
+    let subscriber =
+        subscriber(DiagnosticHealth::fixture(), move || Capture(sink.clone()), "info".into(), None);
     tracing::subscriber::with_default(subscriber, || {
         present.emit();
         gpu.emit();

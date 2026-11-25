@@ -234,7 +234,11 @@ impl State {
             wait_timeouts: sample.timeouts,
             active: sample.active,
             peak_active: sample.peak_active,
-            busy_us: if sample.active == 0 { 0 } else { micros(now.saturating_sub(sample.busy_since)) },
+            busy_us: if sample.active == 0 {
+                0
+            } else {
+                micros(now.saturating_sub(sample.busy_since))
+            },
         }
         .emit();
     }

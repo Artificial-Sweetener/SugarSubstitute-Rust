@@ -3093,8 +3093,8 @@ boundary = "build"
 [[records]]
 path = "crates/sugarsubstitute/build.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:39353b288db280a40b5347c2f327a4e2d6900433650661984cbd0738b55572b1"
-capabilities = ["method canonicalize", "method metadata", "std::fs::File::open", "std::fs::remove_file", "std::fs::write"]
+source_sha256 = "sha256:7e39fd1af5ddfd3676c553f6a4970d6946a1ead2aad3f8826c09b6a5ab7a4928"
+capabilities = ["method canonicalize", "method metadata", "std::fs::File::open", "std::fs::read", "std::fs::remove_file", "std::fs::write"]
 disposition = "boundary"
 rationale = "Build-time inputs and generated outputs for sugarsubstitute; execution occurs in the package build, before runtime composition."
 boundary = "build"
@@ -4067,10 +4067,18 @@ rationale = "Repository tooling policy.rs: Decode strict, versioned policy docum
 [[records]]
 path = "tools/xtask/src/shared_components.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:ef6e95567fb1d984cb945a85c316d70d2f3154668d8ae1c90c5fc0252789518a"
+source_sha256 = "sha256:ddd00cfb5b657e2528b8f11649e87d60be7d478ea5dbdbbea9535798266801c6"
 capabilities = ["method canonicalize", "method symlink_metadata"]
 disposition = "tooling"
 rationale = "Repository tooling shared_components.rs: Govern the exact sibling-component files of the monorepo that this workspace consumes. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."
+
+[[records]]
+path = "tools/xtask/src/shared_resources.rs"
+owner = "sugarsubstitute-xtask"
+source_sha256 = "sha256:30d8e33d01548269475b8c66805201c2cbfc47b7aa40621e5a05cd3f97bf0c72"
+capabilities = ["std::fs::read"]
+disposition = "tooling"
+rationale = "Repository tooling shared_resources.rs: Refuse a second copy of a resource file both components use, by reading the monorepo's tracked resource files and comparing their bytes. Reads declared build/check inputs; runtime crates do not depend on this source."
 
 [[records]]
 path = "tools/xtask/src/source.rs"

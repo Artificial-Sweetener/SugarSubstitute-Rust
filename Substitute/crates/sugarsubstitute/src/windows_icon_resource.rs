@@ -124,8 +124,11 @@ mod tests {
     const APP_ICON: &[u8] =
         include_bytes!("../../../../Sugar/integrations/contracts/ui/icons/app-icon.ico");
 
-    /// Read back every resource entry: type, name and data.
-    fn entries(resource: &[u8]) -> Result<Vec<(u16, u16, Vec<u8>)>, Box<dyn std::error::Error>> {
+    /// One resource entry: its type, its name and its data.
+    type Entry = (u16, u16, Vec<u8>);
+
+    /// Read back every resource entry.
+    fn entries(resource: &[u8]) -> Result<Vec<Entry>, Box<dyn std::error::Error>> {
         let mut at = 0;
         let mut found = Vec::new();
         while at + 32 <= resource.len() {

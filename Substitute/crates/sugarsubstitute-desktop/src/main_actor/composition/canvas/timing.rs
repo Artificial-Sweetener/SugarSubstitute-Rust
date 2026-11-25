@@ -59,6 +59,17 @@ pub(super) struct CommitCost {
     pub(super) height: u32,
 }
 
+impl CommitCost {
+    /// What a frame of `extent` cost after its surface update closed.
+    pub(super) fn new(
+        signal: Duration,
+        commit: Duration,
+        extent: sugarsubstitute_image_ops::Extent,
+    ) -> Self {
+        Self { signal, commit, width: extent.width(), height: extent.height() }
+    }
+}
+
 #[derive(Default)]
 struct Window {
     presents: u64,
