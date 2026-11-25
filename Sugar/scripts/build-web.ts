@@ -16,7 +16,7 @@
 /** Build and verify the committed ComfyUI JavaScript artifacts. */
 
 import { spawn } from 'node:child_process';
-import { copyFileSync, mkdirSync, rmSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { build } from 'esbuild';
 import { browserDependencyResolution } from './BrowserBuildEnvironment.js';
@@ -57,6 +57,25 @@ function compileTypeScript(): Promise<void> {
   });
 }
 
+/**
+ * The largest image an ICO file holds, as the PNG it stores. The application icon is one file
+ * shared by the native host and the page; the page shows its 256 px image.
+ */
+export function largestIconImage(ico: Buffer): Buffer {
+  if (ico.readUInt16LE(0) !== 0 || ico.readUInt16LE(2) !== 1) throw new Error('Not an icon file.');
+  let best: { size: number; start: number; length: number } | null = null;
+  for (let index = 0; index < ico.readUInt16LE(4); index++) {
+    const entry = 6 + index * 16;
+    const size = ico.readUInt8(entry) || 256;
+    if (!best || size > best.size)
+      best = { size, start: ico.readUInt32LE(entry + 12), length: ico.readUInt32LE(entry + 8) };
+  }
+  const image = best ? ico.subarray(best.start, best.start + best.length) : null;
+  if (!image || image.readUInt32BE(0) !== 0x89504e47)
+    throw new Error('The icon holds no PNG image.');
+  return Buffer.from(image);
+}
+
 /** Stage authored static frontend assets beside compiled JavaScript. */
 function stageStaticAssets(): void {
   for (const source of walkArtifactFiles(staticRoot)) {
@@ -67,6 +86,8 @@ function stageStaticAssets(): void {
   // The shared UI element icons are one copy, read by the native host and served to the page.
   const sharedIconsRoot = path.join(repositoryRoot, 'integrations', 'contracts', 'ui', 'icons');
   for (const source of walkArtifactFiles(sharedIconsRoot)) {
+    // The icon file is the native host's; the page takes the image extracted from it below.
+    if (source.endsWith('.ico')) continue;
     const output = path.join(
       generatedRoot,
       'icons',
@@ -76,6 +97,10 @@ function stageStaticAssets(): void {
     mkdirSync(path.dirname(output), { recursive: true });
     copyFileSync(source, output);
   }
+  writeFileSync(
+    path.join(generatedRoot, 'icons', 'shared', 'app-icon-256.png'),
+    largestIconImage(readFileSync(path.join(sharedIconsRoot, 'app-icon.ico'))),
+  );
   const noticesRoot = path.join(repositoryRoot, 'third_party');
   for (const source of walkArtifactFiles(noticesRoot)) {
     const output = path.join(generatedRoot, 'third_party', path.relative(noticesRoot, source));

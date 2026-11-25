@@ -2,7 +2,7 @@ import { resolveNodeCardIcon } from './NodeCardIconPolicy.js';
 const iconFiles = {
     application: 'app-generic.svg',
     edit: 'edit.svg',
-    eraser: 'eraser.svg',
+    eraser: '../canvas-editing/eraser.svg',
     folder: 'folder.svg',
     model: 'brain-circuit.svg',
     palette: 'color.svg',

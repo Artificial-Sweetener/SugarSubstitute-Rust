@@ -20,7 +20,7 @@ import { resolveNodeCardIcon, type NodeCardIcon } from './NodeCardIconPolicy.js'
 const iconFiles: Readonly<Record<NodeCardIcon, string>> = {
   application: 'app-generic.svg',
   edit: 'edit.svg',
-  eraser: 'eraser.svg',
+  eraser: '../canvas-editing/eraser.svg',
   folder: 'folder.svg',
   model: 'brain-circuit.svg',
   palette: 'color.svg',

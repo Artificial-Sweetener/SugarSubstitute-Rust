@@ -10,6 +10,8 @@ mod native_canvas;
 /// Standalone native canvas demonstration using shared execution and image/storage owners.
 #[cfg(windows)]
 pub mod viewer;
+#[cfg(test)]
+mod windows_icon_resource;
 
 #[cfg(all(windows, feature = "windows-native-host"))]
 mod authority_clock;

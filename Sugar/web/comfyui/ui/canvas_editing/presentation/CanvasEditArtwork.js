@@ -29,6 +29,14 @@ var CANVAS_EDIT_ICON_NAMES = Object.freeze([
   ...FLUENT,
   ...SUBSTITUTE
 ]);
+var SHARED = {
+  apply: "fluent-accept",
+  close: "fluent-close"
+};
+function substituteArtwork(name) {
+  const shared = SHARED[name];
+  return shared ? new URL(`../../../../icons/shared/${shared}.svg`, import.meta.url).href : new URL(`../../../../canvas-editing/${name}.svg`, import.meta.url).href;
+}
 var URLS = new Map([
   ...FLUENT.map(
     (name) => [
@@ -36,9 +44,7 @@ var URLS = new Map([
       new URL(`../../../../icons/canvas-editing/${name}.svg`, import.meta.url).href
     ]
   ),
-  ...SUBSTITUTE.map(
-    (name) => [name, new URL(`../../../../canvas-editing/${name}.svg`, import.meta.url).href]
-  )
+  ...SUBSTITUTE.map((name) => [name, substituteArtwork(name)])
 ]);
 function canvasEditIconUrl(name) {
   return URLS.get(name) ?? "";

@@ -98,7 +98,7 @@ export class AboutSettingsPage {
     const logo = document.createElement('img');
     logo.className = 'sc-settings-about__logo';
     logo.alt = '';
-    logo.src = new URL('../../../orb/app_icon_256.png', import.meta.url).href;
+    logo.src = new URL('../../../icons/shared/app-icon-256.png', import.meta.url).href;
     this.#name = document.createElement('strong');
     this.#description = document.createElement('p');
     identity.append(logo, this.#name, this.#description);

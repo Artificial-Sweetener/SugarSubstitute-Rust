@@ -50,7 +50,12 @@ export class AppOrbRenderer {
         this.#signature = signature;
         const revision = ++this.#revision;
         const layers = this.#layers ??
-            (await Promise.all(['orb_base.png', 'app_icon_256.png', 'orb_lower_overlay.png', 'orb_upper_overlay.png'].map((filename) => this.#load(filename))));
+            (await Promise.all([
+                '../orb/orb_base.png',
+                '../icons/shared/app-icon-256.png',
+                '../orb/orb_lower_overlay.png',
+                '../orb/orb_upper_overlay.png',
+            ].map((path) => this.#load(path))));
         if (this.#disposed || revision !== this.#revision)
             return;
         this.#layers = layers;
@@ -93,9 +98,9 @@ export class AppOrbRenderer {
         this.#variants = new Map();
     }
     /** Load a pinned packaged asset and report decode failures to the surface owner. */
-    async #load(filename) {
+    async #load(path) {
         const image = this.#document.createElement('img');
-        image.src = new URL(`../../../../orb/${filename}`, import.meta.url).href;
+        image.src = new URL(`../../../${path}`, import.meta.url).href;
         await image.decode();
         return image;
     }

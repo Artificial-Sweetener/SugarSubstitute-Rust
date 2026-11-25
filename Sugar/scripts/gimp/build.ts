@@ -21,19 +21,9 @@ import { build } from 'esbuild';
 import { gimpTokenDeclarations } from '../../frontend/comfyui/ui/surface/appearance/GimpThemeTokens.js';
 import { verifyNativeContract } from './NativeContract.js';
 
-/** Wrap the licensed SugarSubstitute application PNG in an ICO container without altering its pixels. */
+/** The SugarSubstitute application icon, every size, from the one shared icon file. */
 export function companionIcon(root: string): Buffer {
-  const png = readFileSync(path.join(root, 'frontend/static/orb/app_icon_256.png'));
-  if (png.readUInt32BE(16) !== 256 || png.readUInt32BE(20) !== 256)
-    throw new Error('The companion icon requires the existing 256px application asset.');
-  const header = Buffer.alloc(22);
-  header.writeUInt16LE(1, 2);
-  header.writeUInt16LE(1, 4);
-  header.writeUInt16LE(1, 10);
-  header.writeUInt16LE(32, 12);
-  header.writeUInt32LE(png.length, 14);
-  header.writeUInt32LE(22, 18);
-  return Buffer.concat([header, png]);
+  return readFileSync(path.join(root, 'integrations/contracts/ui/icons/app-icon.ico'));
 }
 
 /** Package native adapter modules under their import identity without runtime path injection. */

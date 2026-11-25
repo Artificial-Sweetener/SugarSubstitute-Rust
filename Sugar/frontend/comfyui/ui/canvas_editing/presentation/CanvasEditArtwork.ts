@@ -57,6 +57,20 @@ export const CANVAS_EDIT_ICON_NAMES: readonly CanvasEditIconName[] = Object.free
   ...SUBSTITUTE,
 ]);
 
+/** Artwork SugarSubstitute's own windows draw too lives once, in the shared icons. */
+const SHARED: Partial<Record<(typeof SUBSTITUTE)[number], string>> = {
+  apply: 'fluent-accept',
+  close: 'fluent-close',
+};
+
+/** Where one of SugarSubstitute's artworks is served. */
+function substituteArtwork(name: (typeof SUBSTITUTE)[number]): string {
+  const shared = SHARED[name];
+  return shared
+    ? new URL(`../../../../icons/shared/${shared}.svg`, import.meta.url).href
+    : new URL(`../../../../canvas-editing/${name}.svg`, import.meta.url).href;
+}
+
 const URLS: ReadonlyMap<CanvasEditIconName, string> = new Map<CanvasEditIconName, string>([
   ...FLUENT.map(
     (name) =>
@@ -65,10 +79,7 @@ const URLS: ReadonlyMap<CanvasEditIconName, string> = new Map<CanvasEditIconName
         new URL(`../../../../icons/canvas-editing/${name}.svg`, import.meta.url).href,
       ] as const,
   ),
-  ...SUBSTITUTE.map(
-    (name) =>
-      [name, new URL(`../../../../canvas-editing/${name}.svg`, import.meta.url).href] as const,
-  ),
+  ...SUBSTITUTE.map((name) => [name, substituteArtwork(name)] as const),
 ]);
 
 /** The served URL of one icon's artwork. */

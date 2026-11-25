@@ -3,6 +3,12 @@
 //! Emit native launch compatibility and embed Windows activation, privilege and DPI policy.
 
 use std::{error::Error, io::Read, path::PathBuf};
+
+#[path = "src/windows_icon_resource.rs"]
+mod windows_icon_resource;
+
+/// The application icon, one file shared with SugarCubes' page and its GIMP companion.
+const APP_ICON: &str = "../../../Sugar/integrations/contracts/ui/icons/app-icon.ico";
 use sugarsubstitute_update::{ENGINE_PROTOCOL, ENGINE_RELEASE};
 
 /// Emit the producing build's contract and apply its native manifest with the selected linker.
@@ -16,17 +22,25 @@ fn main() -> Result<(), Box<dyn Error>> {
         embed_distribution(variable, name, limit)?;
     }
     println!("cargo::rerun-if-changed=../../assets/windows/application.manifest");
+    println!("cargo::rerun-if-changed={APP_ICON}");
     if std::env::var("CARGO_CFG_TARGET_OS")? == "windows"
         && std::env::var("CARGO_CFG_TARGET_ENV")? == "msvc"
     {
-        let manifest = PathBuf::from(
+        let directory = PathBuf::from(
             std::env::var_os("CARGO_MANIFEST_DIR")
                 .ok_or("Cargo did not provide the package manifest directory")?,
-        )
-        .join("../../assets/windows/application.manifest")
-        .canonicalize()?;
+        );
+        let manifest =
+            directory.join("../../assets/windows/application.manifest").canonicalize()?;
         println!("cargo::rustc-link-arg=/MANIFEST:EMBED");
         println!("cargo::rustc-link-arg=/MANIFESTINPUT:{}", manifest.display());
+        // Every executable of this package carries the application icon.
+        let icon = std::fs::read(directory.join(APP_ICON))?;
+        let resource =
+            PathBuf::from(std::env::var_os("OUT_DIR").ok_or("Cargo output directory absent")?)
+                .join("sugarsubstitute-icon.res");
+        std::fs::write(&resource, windows_icon_resource::icon_resource(&icon)?)?;
+        println!("cargo::rustc-link-arg-bins={}", resource.display());
     }
     Ok(())
 }

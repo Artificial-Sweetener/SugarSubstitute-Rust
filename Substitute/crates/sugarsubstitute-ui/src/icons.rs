@@ -38,8 +38,13 @@ impl FluentIcon {
             Self::Home => include_str!("../assets/fluent/Home.svg"),
             Self::Link => include_str!("../assets/fluent/Link.svg"),
             Self::Sync => include_str!("../assets/fluent/Sync.svg"),
-            Self::Accept => include_str!("../assets/fluent/Accept.svg"),
-            Self::Close => include_str!("../assets/fluent/Close.svg"),
+            // Shared with SugarCubes, which draws the same Fluent artwork in its canvas editor.
+            Self::Accept => {
+                include_str!("../../../../Sugar/integrations/contracts/ui/icons/fluent-accept.svg")
+            }
+            Self::Close => {
+                include_str!("../../../../Sugar/integrations/contracts/ui/icons/fluent-close.svg")
+            }
             Self::ChevronDown => include_str!("../assets/fluent/ChevronDown.svg"),
             Self::SeverityError => include_str!("../assets/fluent/SeverityError.svg"),
             Self::SeverityWarning => include_str!("../assets/fluent/SeverityWarning.svg"),

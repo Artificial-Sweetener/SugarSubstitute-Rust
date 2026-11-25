@@ -29,7 +29,8 @@ pub static POSE_ASSETS: &[PoseAsset] = &[
     PoseAsset { name: "20.png", bytes: include_bytes!("../assets/poses/20.png") },
     PoseAsset { name: "21.png", bytes: include_bytes!("../assets/poses/21.png") },
     PoseAsset { name: "22.png", bytes: include_bytes!("../assets/poses/22.png") },
-    PoseAsset { name: "23.png", bytes: include_bytes!("../assets/poses/23.png") },
+    // Pose 23 is the same artwork as pose 20, kept as its own slot in the rotation.
+    PoseAsset { name: "23.png", bytes: include_bytes!("../assets/poses/20.png") },
     PoseAsset { name: "24.png", bytes: include_bytes!("../assets/poses/24.png") },
     PoseAsset { name: "25.png", bytes: include_bytes!("../assets/poses/25.png") },
     PoseAsset { name: "26.png", bytes: include_bytes!("../assets/poses/26.png") },
