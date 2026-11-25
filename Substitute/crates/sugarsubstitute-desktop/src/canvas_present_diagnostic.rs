@@ -20,6 +20,10 @@ pub struct Record {
     pub updated: u64,
     /// Shared GPU frames wrapped without copying.
     pub wrapped: u64,
+    /// CPU frames shown by redrawing only their changed regions of the retained surface.
+    pub repaired: u64,
+    /// Repaired frames that first moved the surface's retained pixels.
+    pub scrolled: u64,
     /// CPU pixel bytes handed to Direct2D.
     pub source_bytes: u64,
     /// Opening surface updates and handing pixels over.
@@ -39,12 +43,14 @@ const MARKER: &str = "operation=\"canvas_present\" ";
 /// The relay's line bound; longer lines are never decoded.
 const LINE_BYTES: usize = 512;
 /// The fields after the schema, in the order producer and parser share.
-const FIELDS: [&str; 10] = [
+const FIELDS: [&str; 12] = [
     "window_us",
     "presents",
     "created",
     "updated",
     "wrapped",
+    "repaired",
+    "scrolled",
     "source_bytes",
     "fill_us",
     "draw_us",
@@ -63,6 +69,8 @@ impl Record {
             created = self.created,
             updated = self.updated,
             wrapped = self.wrapped,
+            repaired = self.repaired,
+            scrolled = self.scrolled,
             source_bytes = self.source_bytes,
             fill_us = self.fill_us,
             draw_us = self.draw_us,
@@ -87,7 +95,7 @@ impl Record {
         if field("schema")? != "1" {
             return None;
         }
-        let mut values = [0_u64; 10];
+        let mut values = [0_u64; 12];
         for (slot, name) in values.iter_mut().zip(FIELDS) {
             *slot = number(field(name)?)?;
         }
@@ -100,6 +108,8 @@ impl Record {
             created,
             updated,
             wrapped,
+            repaired,
+            scrolled,
             source_bytes,
             fill_us,
             draw_us,
@@ -112,6 +122,8 @@ impl Record {
             created,
             updated,
             wrapped,
+            repaired,
+            scrolled,
             source_bytes,
             fill_us,
             draw_us,
@@ -138,7 +150,8 @@ mod tests {
 
     const LINE: &str = "2026-11-24T22:59:44.926536Z  INFO \
         sugarsubstitute_desktop::canvas_present_diagnostic: operation=\"canvas_present\" schema=1 \
-        window_us=1000250 presents=60 created=1 updated=12 wrapped=47 source_bytes=431308800 \
+        window_us=1000250 presents=60 created=1 updated=12 wrapped=47 repaired=9 scrolled=4 \
+        source_bytes=431308800 \
         fill_us=41000 draw_us=900 commit_us=5200 slowest_us=3100";
 
     #[test]
@@ -151,6 +164,8 @@ mod tests {
                 created: 1,
                 updated: 12,
                 wrapped: 47,
+                repaired: 9,
+                scrolled: 4,
                 source_bytes: 431_308_800,
                 fill_us: 41_000,
                 draw_us: 900,

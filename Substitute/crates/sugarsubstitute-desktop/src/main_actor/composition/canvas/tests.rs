@@ -11,6 +11,7 @@ use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx, CoUn
 
 use crate::canvas::test_harness as harness;
 
+mod repair;
 mod shared;
 
 #[test]

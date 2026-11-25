@@ -2,9 +2,19 @@
 // Copyright (C) 2026 Artificial Sweetener and contributors
 //! Qualify Vulkan drawing into shared textures and their composition copy on every GPU.
 
-use super::*;
+use super::{
+    super::timing::{Reach, Source, UploadCost},
+    *,
+};
 use crate::canvas::{CanvasGraphics, SharedCanvasTexture, SharedFrame};
-use std::{error::Error, io, sync::Arc, time::Instant};
+use std::{
+    error::Error,
+    io,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+use sugarsubstitute_canvas::{DirtyRegions, Viewport};
+use sugarsubstitute_image_ops::Region;
 use sugarsubstitute_contracts::execution::MemoryLease;
 use sugarsubstitute_image_gpu::{
     AdapterCatalog, AdapterClass, AdapterDescriptor, Backend, DisplayImage, GpuDevice,
@@ -134,6 +144,21 @@ struct Timing {
     cpu_fill_microseconds: f64,
     cpu_draw_microseconds: f64,
     cpu_bitmap_creations: usize,
+    whole_bytes: u64,
+    local: Repair,
+    pan: Repair,
+    shared_open: f64,
+    shared_wrap: f64,
+    shared_draw: f64,
+    shared_commit: f64,
+}
+
+/// Warm medians of one kind of repaired frame, in microseconds, and the bytes each copied.
+struct Repair {
+    bytes: u64,
+    fill: f64,
+    draw: f64,
+    commit: f64,
 }
 
 /// Initialize exactly the enumerated adapter on a fresh catalog, matching it by model and LUID.
@@ -213,6 +238,10 @@ fn qualify_extent(
     let interval = GpuInterval::begin(graphics)?;
     assert_eq!(canvas.present(&shared(timed), placement)?, Some(timed));
     let copy_gpu_microseconds = interval.finish()?;
+    // The interval above already waited for the GPU, so the hand-off is timed on a frame of its
+    // own: presented, then awaited at once, as a worker reusing the texture would.
+    let handed = stamp(3)?;
+    assert_eq!(canvas.present(&shared(handed), placement)?, Some(handed));
     let handoff_texture = texture.clone();
     let handoff = execution
         .blocking(64 * 1024, move |context| {
@@ -222,7 +251,7 @@ fn qualify_extent(
         })
         .map_err(io)?;
 
-    let mut capture = |content: &CanvasContent<'_>, expected: &[u32]| -> TestResult {
+    let capture = |canvas: &mut Canvas, content: &CanvasContent<'_>, expected: &[u32]| -> TestResult {
         canvas.capture_next = true;
         let target = content.target();
         assert_eq!(canvas.present(content, placement)?, Some(target));
@@ -242,27 +271,27 @@ fn qualify_extent(
         assert!(canvas.retains(target, placement));
         Ok(())
     };
-    capture(&shared(stamp(3)?), &pixels)?;
+    capture(&mut canvas, &shared(stamp(4)?), &pixels)?;
     // CPU-prepared previews and GPU frames alternate on the same retained surface.
     let cpu_pixels = vec![0xff20_4060; pixels.len()];
     let damage = DamagePlan::full(extent);
     let cpu = CpuFrame {
         kind: CpuFrameKind::Prepared,
         pending: true,
-        target: stamp(4)?,
+        target: stamp(5)?,
         base: None,
         damage: &damage,
         pixels: &cpu_pixels,
     };
-    capture(&CanvasContent::Cpu(cpu), &cpu_pixels)?;
-    capture(&shared(stamp(5)?), &pixels)?;
+    capture(&mut canvas, &CanvasContent::Cpu(cpu), &cpu_pixels)?;
+    capture(&mut canvas, &shared(stamp(6)?), &pixels)?;
     assert!(canvas.active.as_ref().is_some_and(|allocation| allocation.extent() == extent));
     assert!(!canvas.has_retirements());
 
     // Regressed generations and textures exported by another composition device are rejected
     // before any native effect; the committed frame remains the acknowledged content.
-    assert!(canvas.present(&shared(stamp(4)?), placement).is_err());
-    assert!(canvas.retains(stamp(5)?, placement));
+    assert!(canvas.present(&shared(stamp(5)?), placement).is_err());
+    assert!(canvas.retains(stamp(6)?, placement));
     let (foreign_memory, selected) = (memory.clone(), descriptor.clone());
     let foreign = execution.blocking(64 * 1024, move |context| {
         let graphics =
@@ -271,9 +300,9 @@ fn qualify_extent(
     });
     let foreign = foreign.map_err(io)?;
     let foreign_frame =
-        CanvasContent::Shared(SharedFrame { pending: true, target: stamp(6)?, texture: &foreign });
+        CanvasContent::Shared(SharedFrame { pending: true, target: stamp(7)?, texture: &foreign });
     assert!(canvas.present(&foreign_frame, placement).is_err());
-    assert!(canvas.retains(stamp(5)?, placement));
+    assert!(canvas.retains(stamp(6)?, placement));
     drop(foreign);
 
     // Warm preview replacement: distinct complete CPU frames on the one retained surface.
@@ -303,7 +332,118 @@ fn qualify_extent(
     // A shared frame sits between the earlier CPU frame and these; the surface's own bitmap
     // survives it, so no warm preview allocates.
     assert_eq!(cpu_bitmap_creations, 0);
-    let last = stamp(9 + WARM_CPU_FRAMES)?;
+    let mut generation = 9 + WARM_CPU_FRAMES;
+
+    // Warm localized change: each frame is relative to the one before and changes one region
+    // around the viewport's centre, so only that region is copied and drawn.
+    let centre = Region::new(extent.width() / 2, extent.height() / 2, 1, 1)?;
+    let mut touched = DirtyRegions::empty(extent);
+    touched.insert(centre);
+    let mut local = DamagePlan::unchanged(extent);
+    local.include_document_damage(&touched, Viewport::new(extent)?)?;
+    let local_bytes: u64 = local.dirty().regions().map(|region| region.pixels() * 4).sum();
+    // Warm pan: the retained pixels move sixteen device pixels and one strip is exposed.
+    let pan = DamagePlan::pan(extent, 16.min(extent.width() as i32 / 4), 0)?;
+    let pan_bytes: u64 = pan.dirty().regions().map(|region| region.pixels() * 4).sum();
+    let warm = |canvas: &mut Canvas,
+                generation: &mut u64,
+                plan: &DamagePlan,
+                scrolled: bool|
+     -> TestResult<(f64, f64, f64)> {
+        let mut costs = Vec::new();
+        for round in 0..WARM_CPU_FRAMES {
+            *generation += 1;
+            let frame = CpuFrame {
+                kind: CpuFrameKind::Prepared,
+                pending: true,
+                target: stamp(*generation)?,
+                base: Some(stamp(*generation - 1)?),
+                damage: plan,
+                pixels: if round % 2 == 0 { &alternate } else { &cpu_pixels },
+            };
+            assert_eq!(canvas.present(&CanvasContent::Cpu(frame), placement)?, Some(frame.target));
+            let cost = canvas.timings.latest.ok_or("Presentation cost absent")?;
+            assert_eq!(
+                cost.reach,
+                Reach::Repaired { scrolled, regions: plan.dirty().regions().count() as u32 }
+            );
+            costs.push((cost, canvas.timings.latest_commit.ok_or("Commit cost absent")?));
+        }
+        let middle = |value: fn(&(UploadCost, Duration)) -> Duration| {
+            let mut values: Vec<_> = costs.iter().map(value).collect();
+            values.sort_unstable();
+            values[values.len() / 2].as_secs_f64() * 1_000_000.0
+        };
+        Ok((
+            middle(|(cost, _)| cost.open + cost.fill),
+            middle(|(cost, _)| cost.draw),
+            middle(|(_, commit)| *commit),
+        ))
+    };
+    let (local_fill, local_draw, local_commit) = warm(&mut canvas, &mut generation, &local, false)?;
+    let (pan_fill, pan_draw, pan_commit) = warm(&mut canvas, &mut generation, &pan, true)?;
+
+    // Warm shared frames: what opening the update, wrapping the texture, drawing it and
+    // committing each cost on the UI thread.
+    let mut wrapped = Vec::new();
+    for _ in 0..WARM_CPU_FRAMES {
+        generation += 1;
+        let frame = stamp(generation)?;
+        assert_eq!(canvas.present(&shared(frame), placement)?, Some(frame));
+        let cost = canvas.timings.latest.ok_or("Presentation cost absent")?;
+        assert_eq!((cost.source, cost.reach), (Source::Wrapped, Reach::Whole));
+        wrapped.push((cost, canvas.timings.latest_commit.ok_or("Commit cost absent")?));
+    }
+    let shared_middle = |value: fn(&(UploadCost, Duration)) -> Duration| {
+        let mut values: Vec<_> = wrapped.iter().map(value).collect();
+        values.sort_unstable();
+        values[values.len() / 2].as_secs_f64() * 1_000_000.0
+    };
+
+    // CPU A, shared B, CPU C relative to B: the surface holds B, so C repairs it; the CPU
+    // bitmap still holds A, so only C's own region is trusted from it, and the next whole frame
+    // is copied completely instead of being patched onto A.
+    let surface_frame = stamp(generation)?;
+    generation += 1;
+    let relative = CpuFrame {
+        kind: CpuFrameKind::Prepared,
+        pending: true,
+        target: stamp(generation)?,
+        base: Some(surface_frame),
+        damage: &local,
+        pixels: &alternate,
+    };
+    canvas.capture_next = true;
+    assert_eq!(canvas.present(&CanvasContent::Cpu(relative), placement)?, Some(relative.target));
+    let repaired = canvas.timings.latest.ok_or("Presentation cost absent")?;
+    assert_eq!(repaired.reach, Reach::Repaired { scrolled: false, regions: 1 });
+    assert_eq!(repaired.source_bytes, local_bytes);
+    let region = local.dirty().regions().next().ok_or("Local change reaches no pixel")?;
+    let captured = canvas
+        .active
+        .as_mut()
+        .and_then(|allocation| allocation.capture.take())
+        .ok_or("Repair capture absent")?;
+    assert_eq!(captured, vec![alternate[0]; region.pixels() as usize]);
+    assert_eq!(
+        canvas.active.as_ref().map(Allocation::holds),
+        Some((Some(relative.target), None))
+    );
+    generation += 1;
+    let complete = CpuFrame {
+        kind: CpuFrameKind::Prepared,
+        pending: true,
+        target: stamp(generation)?,
+        base: None,
+        damage: &damage,
+        pixels: &cpu_pixels,
+    };
+    capture(&mut canvas, &CanvasContent::Cpu(complete), &cpu_pixels)?;
+    assert_eq!(
+        canvas.timings.latest.map(|cost| (cost.reach, cost.source_bytes)),
+        Some((Reach::Whole, extent.pixels() * 4))
+    );
+    let last = stamp(generation)?;
 
     // Hiding withdraws the shared frame; completion follows the compositor's retirement.
     assert!(!canvas.hide()?);
@@ -328,6 +468,13 @@ fn qualify_extent(
         cpu_fill_microseconds,
         cpu_draw_microseconds,
         cpu_bitmap_creations,
+        whole_bytes: extent.pixels() * 4,
+        local: Repair { bytes: local_bytes, fill: local_fill, draw: local_draw, commit: local_commit },
+        pan: Repair { bytes: pan_bytes, fill: pan_fill, draw: pan_draw, commit: pan_commit },
+        shared_open: shared_middle(|(cost, _)| cost.open),
+        shared_wrap: shared_middle(|(cost, _)| cost.fill),
+        shared_draw: shared_middle(|(cost, _)| cost.draw),
+        shared_commit: shared_middle(|(_, commit)| *commit),
     })
 }
 
@@ -372,6 +519,27 @@ fn qualify_adapter(
             timing.cpu_draw_microseconds,
             timing.cpu_bitmap_creations,
             WARM_CPU_FRAMES
+        );
+        // Medians of the warm frames, in microseconds on the UI thread, and bytes copied per frame.
+        eprintln!(
+            "presenter_timing adapter=\"{}\" extent={width}x{height} whole_bytes={} \
+             local_bytes={} local_fill_us={:.1} local_draw_us={:.1} local_commit_us={:.1} \
+             pan_bytes={} pan_fill_us={:.1} pan_draw_us={:.1} pan_commit_us={:.1} \
+             shared_open_us={:.1} shared_wrap_us={:.1} shared_draw_us={:.1} shared_commit_us={:.1}",
+            descriptor.name,
+            timing.whole_bytes,
+            timing.local.bytes,
+            timing.local.fill,
+            timing.local.draw,
+            timing.local.commit,
+            timing.pan.bytes,
+            timing.pan.fill,
+            timing.pan.draw,
+            timing.pan.commit,
+            timing.shared_open,
+            timing.shared_wrap,
+            timing.shared_draw,
+            timing.shared_commit
         );
     }
     drop(graphics);

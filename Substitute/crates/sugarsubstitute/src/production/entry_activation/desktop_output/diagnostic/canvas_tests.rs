@@ -162,7 +162,7 @@ fn motion_records_cross_the_relay_under_their_own_budget() {
 
 #[test]
 fn presentation_windows_cross_the_relay_under_their_own_budget() {
-    const PRESENT: &[u8] = b"2026-11-24T05:00:00.000000Z  INFO sugarsubstitute_desktop::canvas_present_diagnostic: operation=\"canvas_present\" schema=1 window_us=1000250 presents=60 created=1 updated=12 wrapped=47 source_bytes=431308800 fill_us=41000 draw_us=900 commit_us=5200 slowest_us=3100\n";
+    const PRESENT: &[u8] = b"2026-11-24T05:00:00.000000Z  INFO sugarsubstitute_desktop::canvas_present_diagnostic: operation=\"canvas_present\" schema=1 window_us=1000250 presents=60 created=1 updated=12 wrapped=47 repaired=9 scrolled=4 source_bytes=431308800 fill_us=41000 draw_us=900 commit_us=5200 slowest_us=3100\n";
     for split in 1..PRESENT.len() {
         let mut owner = Diagnostic::new();
         let mut seen = Vec::new();

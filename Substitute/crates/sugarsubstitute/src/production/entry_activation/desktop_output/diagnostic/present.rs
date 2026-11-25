@@ -15,6 +15,8 @@ pub(in super::super) fn relay(run: RunKey, record: Record) {
         created = record.created,
         updated = record.updated,
         wrapped = record.wrapped,
+        repaired = record.repaired,
+        scrolled = record.scrolled,
         source_bytes = record.source_bytes,
         fill_us = record.fill_us,
         draw_us = record.draw_us,
