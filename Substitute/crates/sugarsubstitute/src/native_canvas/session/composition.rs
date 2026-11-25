@@ -16,10 +16,6 @@ use sugarsubstitute_desktop::canvas::{
 pub(super) struct CompositionDisplay {
     pub(super) target: FrameStamp,
     pub(super) frame: work::CompositionFrame,
-    /// How the frame's output differs from `base`; the texture itself is always complete.
-    pub(super) damage: DamagePlan,
-    /// The presented frame `damage` is relative to.
-    pub(super) base: Option<FrameStamp>,
 }
 
 impl Session {
@@ -110,8 +106,6 @@ impl Session {
         let content = CanvasContent::Shared(SharedFrame {
             pending,
             target: display.target,
-            base: display.base,
-            damage: &display.damage,
             texture: display.frame.texture(),
         });
         Some((content, &self.resources.as_ref()?.presentation))
@@ -187,12 +181,9 @@ impl Session {
         {
             return Err("Composition pixels have a stale backdrop generation".into());
         }
-        // The same camera-only rule as a CPU frame: the composition then copies only what the
-        // frame changed out of its complete texture.
-        let (damage, base) = self.display_damage(evidence)?;
         self.pacing.prepared(target, now)?;
         self.document.pending_gpu_evidence = Some(evidence);
-        self.composition_pending = Some(CompositionDisplay { target, frame, damage, base });
+        self.composition_pending = Some(CompositionDisplay { target, frame });
         Ok(())
     }
 }

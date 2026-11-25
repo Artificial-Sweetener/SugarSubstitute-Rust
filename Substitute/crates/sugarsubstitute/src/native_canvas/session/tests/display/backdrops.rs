@@ -79,14 +79,14 @@ fn backdrop_and_clearing_frames_never_pan_blit_baked_viewport_pixels() -> Result
     let mut view = previous.view;
     view.pan_by([1.0, 0.0])?;
     let current = DisplayEvidence { view, ..previous };
-    assert!(fixture.session.display_damage(current)?.0.blit().is_some());
+    assert!(fixture.session.cpu_display_damage(current)?.0.blit().is_some());
     let effected = DisplayEvidence { backdrop_active: true, ..current };
-    let (damage, base) = fixture.session.display_damage(effected)?;
+    let (damage, base) = fixture.session.cpu_display_damage(effected)?;
     assert!(damage.blit().is_none());
     assert!(base.is_none());
     fixture.session.document.display_evidence =
         Some(DisplayEvidence { backdrop_active: true, ..previous });
-    let (damage, base) = fixture.session.display_damage(current)?;
+    let (damage, base) = fixture.session.cpu_display_damage(current)?;
     assert!(damage.blit().is_none());
     assert!(base.is_none());
     assert!(damage.dirty().pixels() >= view.surface().pixels());

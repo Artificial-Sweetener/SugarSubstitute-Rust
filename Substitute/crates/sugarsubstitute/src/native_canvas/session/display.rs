@@ -374,7 +374,7 @@ impl Session {
                                     .into(),
                             );
                         }
-                        let (damage, base) = self.display_damage(evidence)?;
+                        let (damage, base) = self.cpu_display_damage(evidence)?;
                         self.document.projection_damage = Some(damage);
                         self.document.projection_base = base;
                         if let Some(previous) = self.document.cpu_projection.replace(frame) {

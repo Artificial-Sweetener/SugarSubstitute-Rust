@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Artificial Sweetener and contributors
-//! Present viewport-anchored effects in full rather than translating their baked pixels.
-//! The rule is the same for a CPU frame and for a shared GPU frame.
+//! Upload viewport-anchored effects in full rather than translating their baked pixels.
 use super::*;
 impl Session {
     /// Repair camera-only pixels only when neither the old nor new frame contains fixed effects.
-    pub(in crate::native_canvas::session) fn display_damage(
+    pub(in crate::native_canvas::session) fn cpu_display_damage(
         &self,
         current: DisplayEvidence,
     ) -> Result<(DamagePlan, Option<FrameStamp>), Box<dyn Error>> {
