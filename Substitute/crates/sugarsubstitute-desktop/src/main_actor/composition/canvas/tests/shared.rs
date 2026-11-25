@@ -32,6 +32,7 @@ type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 
 const BUDGET: u64 = 512 * 1024 * 1024;
 const WARM_CPU_FRAMES: u64 = 24;
+const GPU_SAMPLES: usize = 15;
 
 fn io(cause: impl std::fmt::Display) -> io::Error {
     io::Error::other(cause.to_string())
@@ -151,6 +152,8 @@ struct Timing {
     shared_wrap: f64,
     shared_draw: f64,
     shared_commit: f64,
+    /// Median GPU time of a whole, a localized and a panned CPU frame.
+    cpu_gpu: [f64; 3],
 }
 
 /// Warm medians of one kind of repaired frame, in microseconds, and the bytes each copied.
@@ -382,6 +385,30 @@ fn qualify_extent(
     };
     let (local_fill, local_draw, local_commit) = warm(&mut canvas, &mut generation, &local, false)?;
     let (pan_fill, pan_draw, pan_commit) = warm(&mut canvas, &mut generation, &pan, true)?;
+    // GPU time on the composition device for the same three kinds of CPU frame, since time
+    // spent issuing calls says nothing about the work they queue.
+    let gpu = |canvas: &mut Canvas, generation: &mut u64, plan: &DamagePlan| -> TestResult<f64> {
+        let mut samples = Vec::new();
+        for round in 0..GPU_SAMPLES {
+            *generation += 1;
+            let frame = CpuFrame {
+                kind: CpuFrameKind::Prepared,
+                pending: true,
+                target: stamp(*generation)?,
+                base: (plan != &damage).then_some(stamp(*generation - 1)?),
+                damage: plan,
+                pixels: if round % 2 == 0 { &alternate } else { &cpu_pixels },
+            };
+            let interval = GpuInterval::begin(graphics)?;
+            assert_eq!(canvas.present(&CanvasContent::Cpu(frame), placement)?, Some(frame.target));
+            samples.push(interval.finish()?);
+        }
+        samples.sort_by(f64::total_cmp);
+        Ok(samples[samples.len() / 2])
+    };
+    let whole_gpu = gpu(&mut canvas, &mut generation, &damage)?;
+    let local_gpu = gpu(&mut canvas, &mut generation, &local)?;
+    let pan_gpu = gpu(&mut canvas, &mut generation, &pan)?;
 
     // Warm shared frames: what opening the update, wrapping the texture, drawing it and
     // committing each cost on the UI thread.
@@ -475,6 +502,7 @@ fn qualify_extent(
         shared_wrap: shared_middle(|(cost, _)| cost.fill),
         shared_draw: shared_middle(|(cost, _)| cost.draw),
         shared_commit: shared_middle(|(_, commit)| *commit),
+        cpu_gpu: [whole_gpu, local_gpu, pan_gpu],
     })
 }
 
@@ -525,7 +553,8 @@ fn qualify_adapter(
             "presenter_timing adapter=\"{}\" extent={width}x{height} whole_bytes={} \
              local_bytes={} local_fill_us={:.1} local_draw_us={:.1} local_commit_us={:.1} \
              pan_bytes={} pan_fill_us={:.1} pan_draw_us={:.1} pan_commit_us={:.1} \
-             shared_open_us={:.1} shared_wrap_us={:.1} shared_draw_us={:.1} shared_commit_us={:.1}",
+             shared_open_us={:.1} shared_wrap_us={:.1} shared_draw_us={:.1} shared_commit_us={:.1} \
+             whole_gpu_us={:.1} local_gpu_us={:.1} pan_gpu_us={:.1}",
             descriptor.name,
             timing.whole_bytes,
             timing.local.bytes,
@@ -539,7 +568,10 @@ fn qualify_adapter(
             timing.shared_open,
             timing.shared_wrap,
             timing.shared_draw,
-            timing.shared_commit
+            timing.shared_commit,
+            timing.cpu_gpu[0],
+            timing.cpu_gpu[1],
+            timing.cpu_gpu[2]
         );
     }
     drop(graphics);
