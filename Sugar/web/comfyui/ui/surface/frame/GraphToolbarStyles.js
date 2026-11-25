@@ -22,6 +22,15 @@
  */
 /** The tab bar's geometry the graph toolbar mirrors; a contract test pins it to the tab bar. */
 export const GRAPH_TOOLBAR_MIRROR = { inset: 8, padding: 4, control: 30, radius: 8 };
+/**
+ * ComfyUI's minimap states its own width (its 250 px drawing plus padding and border) and draws to
+ * that width, so the toolbar beneath it takes the minimap's width and the two share one right edge,
+ * corner, border, surface and shadow.
+ */
+export const GRAPH_MINIMAP_WIDTH = 253;
+/** The gap between the toolbar's top and the minimap's bottom. */
+export const GRAPH_MINIMAP_GAP = 6;
+const MINIMAP = ':root[data-sc-substitute-frame] .graph-canvas-panel > .minimap-main-container';
 const TOOLBAR = ':root[data-sc-substitute-frame] .graph-canvas-panel > .pointer-events-auto > [role="toolbar"][data-pc-name="buttongroup"]';
 /** Restyle ComfyUI's graph toolbar only under the SugarSubstitute frame. */
 export const graphToolbarCss = (() => {
@@ -33,5 +42,12 @@ export const graphToolbarCss = (() => {
     height:${String(control + 2 * padding + 2)}px; padding:${String(padding)}px; gap:4px; box-sizing:border-box;
     align-items:center; border:1px solid var(--interface-stroke,#454545); border-radius:${String(radius)}px;
     background:var(--sugarcubes-card-surface,var(--comfy-menu-bg,#202020)); box-shadow:0 2px 8px #0003; }
-  ${TOOLBAR} button { height:${String(control)}px; min-height:${String(control)}px; border-radius:5px; }`;
+  ${TOOLBAR} button { height:${String(control)}px; min-height:${String(control)}px; border-radius:5px; }
+  ${TOOLBAR} { width:${String(GRAPH_MINIMAP_WIDTH)}px; justify-content:space-between; }
+  ${MINIMAP} {
+    right:calc(var(--sc-output-workspace-reserved-width,0px) + ${String(inset)}px);
+    bottom:calc(var(--sc-output-workspace-reserved-height,0px) + ${String(inset + control + 2 * padding + 2 + GRAPH_MINIMAP_GAP)}px); }
+  ${MINIMAP} > .litegraph-minimap { box-sizing:border-box; border-radius:${String(radius)}px !important;
+    border:1px solid var(--interface-stroke,#454545) !important;
+    background:var(--sugarcubes-card-surface,var(--comfy-menu-bg,#202020)); box-shadow:0 2px 8px #0003; }`;
 })();

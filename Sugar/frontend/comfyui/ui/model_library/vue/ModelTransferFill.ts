@@ -33,6 +33,8 @@ export const ModelTransferFill = defineComponent({
         'aria-valuemin': 0,
         'aria-valuemax': 100,
         'aria-valuenow': props.progress.percentage ?? undefined,
+        'data-sc-progress-full':
+          props.progress.percentage !== null && props.progress.percentage >= 100 ? '' : undefined,
         style:
           props.progress.percentage === null
             ? undefined

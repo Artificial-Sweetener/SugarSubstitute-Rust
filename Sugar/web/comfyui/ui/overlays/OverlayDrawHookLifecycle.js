@@ -16,6 +16,7 @@
 /**
  * Own installation and watchdog lifecycle for canvas overlay draw hooks.
  */
+import { paintGraphBackground } from './GraphBackgroundPainters.js';
 /** Maintain the active host canvas draw hook across renderer replacement. */
 export class OverlayDrawHookLifecycle {
     adapter;
@@ -116,6 +117,7 @@ export class OverlayDrawHookLifecycle {
                     ?.getConsole?.()
                     ?.error?.('SugarCubes: onDrawBackground wrapper failed', error);
             }
+            paintGraphBackground(this, ctx, (error) => manager.adapter?.getConsole?.()?.error?.('SugarCubes: background painter failed', error));
             try {
                 manager.proximityGraphMutations.attach(this.graph);
                 manager.proximity.ensurePreview(this.graph);

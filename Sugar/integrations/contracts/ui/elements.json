@@ -1,9 +1,10 @@
 {
   "description": "Shared native and web UI elements: one record each side pins its own rendering to. Icons are the SVG files beside this record. A toggle shows the icon of where activating it goes.",
   "captionButton": {
-    "description": "A window caption button: flat, no corner rounding, no held fill. Fills are 8-bit sRGB channels and 8-bit alpha per window theme; the close button uses its own red fills.",
+    "description": "A window caption button: flat, no corner rounding, no held fill, `top` pixels below the window's top edge. Fills are 8-bit sRGB channels and 8-bit alpha per window theme; the close button uses its own red fills.",
     "width": 46,
     "height": 32,
+    "top": 1,
     "glyph": 16,
     "fill": {
       "dark": {

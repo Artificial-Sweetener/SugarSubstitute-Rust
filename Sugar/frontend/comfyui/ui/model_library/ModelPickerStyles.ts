@@ -54,10 +54,13 @@ export const modelPickerCss =
 .sc-model-transfer-thumbnail { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; filter:brightness(.55); }
 .sc-model-transfer-caption { position:absolute; z-index:1; inset:0 30px 0 11px; display:flex; flex-direction:column; justify-content:center; color:#fff; font-size:0.9em; line-height:1.05; }
 .sc-model-transfer-caption > span { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.sc-model-transfer-fill { position:absolute; inset:0 auto 0 0; height:100%; background:var(--sc-brand-fill,var(--primary-background,#4ca6f9)); opacity:.55; pointer-events:none; }
-.sc-model-transfer-indeterminate { width:35%; animation:sc-model-transfer 1.2s ease-in-out infinite; }
+/* The fill is square where it starts and where it meets the field's end, round at its leading end
+   until then; the sweeping block is round at both ends and the field cuts it square at either edge. */
+.sc-model-transfer-fill { position:absolute; inset:0 auto 0 0; height:100%; border-radius:0 var(--sc-control-radius,4px) var(--sc-control-radius,4px) 0; background:var(--sc-brand-fill,var(--primary-background,#4ca6f9)); opacity:.55; pointer-events:none; }
+.sc-model-transfer-fill[data-sc-progress-full] { border-radius:0; }
+.sc-model-transfer-indeterminate { width:35%; border-radius:var(--sc-control-radius,4px); animation:sc-model-transfer 1.2s ease-in-out infinite; }
 @keyframes sc-model-transfer { from { left:-35%; } to { left:100%; } }
-@media(prefers-reduced-motion:reduce) { .sc-model-transfer-indeterminate { animation:none; width:100%; opacity:.15; } }
+@media(prefers-reduced-motion:reduce) { .sc-model-transfer-indeterminate { animation:none; width:100%; border-radius:0; opacity:.15; } }
 .sc-model-completion { position:absolute; left:11px; right:30px; overflow:hidden; white-space:pre; color:var(--sc-text-muted,#999); pointer-events:none; }
 .sc-model-completion-prefix { color:transparent; }
 .sc-model-banner { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; filter:brightness(.55); pointer-events:none; }

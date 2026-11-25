@@ -22,7 +22,7 @@
  * Outside the frame there is no title-bar row, so there is no console button.
  */
 import { HostSurfaceObserver } from '../core/HostSurfaceObserver.js';
-import { captionButtonCss, sharedIconUrl } from '../core/SharedElements.js';
+import { CAPTION_BUTTON, captionButtonCss, sharedIconUrl } from '../core/SharedElements.js';
 
 const FRAME = '.sc-substitute-frame';
 const STYLE_ID = 'sugarcubes-console-caption-styles';
@@ -38,7 +38,8 @@ function ensureStyles(document: Document): void {
   const style = document.createElement('style');
   style.id = STYLE_ID;
   style.textContent = `
-    .sc-console-caption { position:absolute; top:0; right:var(--sc-native-caption-width,0px); z-index:1; }
+    /* One of the window's caption buttons: their row, their height, their glyph centre. */
+    .sc-console-caption { position:absolute; top:${String(CAPTION_BUTTON.top)}px; right:var(--sc-native-caption-width,0px); z-index:1; }
     ${captionButtonCss('.sc-console-caption')}`;
   document.head.append(style);
 }

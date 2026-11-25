@@ -102,6 +102,7 @@ window.progressBrowserProof = {
   /** Publish a finite projection through the same retained view used by the frame. */
   update(visible, workflow, sampler, dark): void {
     frame.dataset.colorScheme = dark ? 'dark' : 'light';
+    document.documentElement.style.setProperty('--comfy-menu-bg', dark ? '#202020' : '#f3f3f3');
     bars.update({ visible, workflow, sampler });
   },
   /** Restore native presentation when the frame preference is disabled. */

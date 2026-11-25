@@ -238,10 +238,46 @@ export class CubeSurfaceView {
     this.#headerView.renderActions();
   }
 
-  /** Persist one card change, then remount against the resulting policy. */
+  /**
+   * Persist one card change. A change that leaves the face's cards as they are, enabling or
+   * disabling one of them, refreshes the mounted cards in place: every other card keeps its
+   * controls. Only a change to which cards the face shows mounts them again.
+   */
   #commitCardChange(): void {
     this.#onStateChange(this.#state);
-    this.#renderCards();
+    const next = projectNodeCards(this.#nodes, this.#state, this.#graph, this.#cube).filter(
+      (card) => card.visible,
+    );
+    if (sameMountedCards(this.#visibleCards, next)) {
+      this.#visibleCards = next;
+      this.#cardHost.refresh(next);
+      this.#headerView.renderActions();
+    } else this.#renderCards();
     this.layout(this.#lastLayoutWidth);
   }
+}
+
+/** Whether two projections mount the same native cards with the same header accessories. */
+function sameMountedCards(
+  mounted: readonly ProjectedNodeCard[],
+  next: readonly ProjectedNodeCard[],
+): boolean {
+  return (
+    mounted.length === next.length &&
+    mounted.every((card, index) => {
+      const other = next[index];
+      const sources = card.widgetSources ?? [];
+      const otherSources = other?.widgetSources ?? [];
+      return (
+        other !== undefined &&
+        other.id === card.id &&
+        other.node === card.node &&
+        other.showActivationControl === card.showActivationControl &&
+        (other.prompt === true) === (card.prompt === true) &&
+        (other.columnSpan ?? 1) === (card.columnSpan ?? 1) &&
+        sources.length === otherSources.length &&
+        sources.every((source, at) => source.node === otherSources[at]?.node)
+      );
+    })
+  );
 }

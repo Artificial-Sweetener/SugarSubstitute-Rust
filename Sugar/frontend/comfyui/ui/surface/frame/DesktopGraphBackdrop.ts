@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Let the desktop body wash show through Comfy's graph while keeping Comfy's own grid lines. */
 import { isRecord } from '../../types/common.js';
+import { DesktopGraphNodeOcclusion } from './DesktopGraphNodeOcclusion.js';
 
 /** LiteGraph fields Comfy's palette loader assigns on every palette or background change. */
 const CLEAR_COLOR = 'clear_background_color';
@@ -116,7 +117,8 @@ export function browserGridTileDeriver(document: Document): GridTileDeriver {
 /**
  * Own LiteGraph's background projection for one desktop frame lifetime. Comfy keeps assigning its
  * palette values; this owner records them and presents a transparent clear color plus a
- * translucent copy of Comfy's grid, so the CSS body wash beneath the graph canvas carries Mica.
+ * translucent copy of Comfy's grid, so the CSS body wash beneath the graph canvas carries Mica,
+ * and keeps that grid out from under node cards.
  * Detaching restores Comfy's latest assignments as plain data properties.
  */
 export class DesktopGraphBackdrop {
@@ -125,6 +127,7 @@ export class DesktopGraphBackdrop {
   #grids = new Map<string, string>();
   #pending = new Set<string>();
   #dark = true;
+  readonly #occlusion = new DesktopGraphNodeOcclusion();
 
   constructor(private readonly options: DesktopGraphBackdropOptions) {}
 
@@ -161,6 +164,7 @@ export class DesktopGraphBackdrop {
       },
     });
     this.#prepare(this.#comfy.image);
+    this.#occlusion.attach(app, canvas);
     this.#redraw();
   }
 
@@ -169,6 +173,7 @@ export class DesktopGraphBackdrop {
     const canvas = this.#canvas;
     if (!canvas) return;
     this.#canvas = null;
+    this.#occlusion.detach();
     for (const [name, value] of [
       [CLEAR_COLOR, this.#comfy.clear],
       [GRID_IMAGE, this.#comfy.image],

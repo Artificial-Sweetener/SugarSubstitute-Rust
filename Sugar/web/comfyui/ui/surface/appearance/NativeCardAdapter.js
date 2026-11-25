@@ -55,7 +55,11 @@ export class NativeCardAdapter {
         this.#graphNodes.clear();
         this.#seeds.endBatch();
     }
-    /** Annotate toolbar widgets through the same component and numeric boundaries as node fields. */
+    /**
+     * Annotate toolbar widgets through the same component and numeric boundaries as node fields.
+     * A widget standing alone takes a node's field styling and is never a card: only `annotate`
+     * marks the card whose surface is painted.
+     */
     annotateWidget(root) {
         const annotated = this.#annotations.begin(root);
         mark(root, 'node', annotated);
@@ -89,6 +93,7 @@ export class NativeCardAdapter {
     annotate(root) {
         const annotated = this.#annotations.begin(root);
         mark(root, 'node', annotated);
+        mark(root, 'card', annotated);
         const vnode = this.#vnodes.get(root) ?? this.#graphNodes.get(root) ?? findNativeNodeVNode(root);
         if (vnode)
             this.#vnodes.set(root, vnode);

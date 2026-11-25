@@ -33,6 +33,14 @@ export const substituteToolbarCss = `
   :root[data-sc-substitute-frame] [data-sc-substitute-toolbar] .actionbar .drag-handle { display:none!important; }
   :root[data-sc-substitute-frame] [data-sc-substitute-toolbar] .p-panel-content { padding:0!important; }
   :root[data-sc-substitute-frame] [data-sc-substitute-toolbar] > .sc-overrides-dock-slot { flex:1 1 auto; min-width:0; }
+  /* The row spans the window beneath the tab bar and keeps its place whatever opens beside the
+     graph: ComfyUI's side panels are the row's neighbours in the same splitter, so the row leaves the
+     splitter's flow at full width and every panel beside it starts under it, as the graph does. */
+  :root[data-sc-substitute-frame] .p-splitterpanel:has(> [data-sc-substitute-toolbar-menu]) { padding-top:44px; }
+  :root[data-sc-substitute-frame] .p-splitterpanel > [data-sc-substitute-toolbar-menu] { position:absolute; left:0; right:0;
+    height:44px; margin-top:-44px; }
+  :root[data-sc-substitute-frame] .p-splitter:has(> .p-splitterpanel > [data-sc-substitute-toolbar-menu])
+    > :not(:has(> [data-sc-substitute-toolbar-menu])) { margin-top:44px; }
   .sc-overrides-toolbar[data-presentation="substitute"] { position:static; min-height:36px; align-self:center;
     width:100%; padding:0; margin:0; border:0; border-radius:0; background:transparent; transition:none; }
   .sc-overrides-toolbar[data-presentation="substitute"] > :is(.sc-overrides-grip,.sc-overrides-menu,.sc-overrides-disclosure) { display:none!important; }

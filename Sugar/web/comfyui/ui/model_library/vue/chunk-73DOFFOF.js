@@ -17,6 +17,7 @@ var ModelTransferFill = defineComponent({
       "aria-valuemin": 0,
       "aria-valuemax": 100,
       "aria-valuenow": props.progress.percentage ?? void 0,
+      "data-sc-progress-full": props.progress.percentage !== null && props.progress.percentage >= 100 ? "" : void 0,
       style: props.progress.percentage === null ? void 0 : { width: `${String(props.progress.percentage)}%` }
     });
   }

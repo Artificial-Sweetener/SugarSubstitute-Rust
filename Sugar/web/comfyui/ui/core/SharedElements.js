@@ -23,8 +23,18 @@
 export function sharedIconUrl(name) {
     return new URL(`../../../icons/shared/${name}.svg`, import.meta.url).href;
 }
-/** A window caption button: flat, no rounding, and no held fill; alphas are out of 255. */
-export const CAPTION_BUTTON = { width: 46, height: 32, glyph: 16, hover: 26, pressed: 51 };
+/**
+ * A window caption button: flat, no rounding, and no held fill; alphas are out of 255. The caption
+ * row starts `top` pixels below the window's edge, where the window's own buttons are drawn.
+ */
+export const CAPTION_BUTTON = {
+    width: 46,
+    height: 32,
+    top: 1,
+    glyph: 16,
+    hover: 26,
+    pressed: 51,
+};
 /** The graph/masonry toggle's artwork: four outlined nodes and the links between them. */
 export const WORKFLOW_VIEW_ICON = {
     outline: 1,

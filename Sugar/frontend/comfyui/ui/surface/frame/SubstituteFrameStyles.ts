@@ -27,8 +27,13 @@ export const substituteFrameCss = `
   .sc-generation-progress { position:absolute; left:0; right:0; top:calc(100% - 3px); height:6px;
     display:flex; flex-direction:column; gap:0; pointer-events:none; background:transparent; }
   .sc-generation-progress[hidden] { display:none; }
-  .sc-generation-progress > [role="progressbar"] { flex:0 0 3px; height:3px; border-radius:2px;
+  /* A bar is square where it starts and square where it meets the end of its track; its leading
+     end is round only while it is short of that end. */
+  .sc-generation-progress > [role="progressbar"] { flex:0 0 3px; height:3px; border-radius:0 1.5px 1.5px 0;
     transition:width 150ms ease-out; background:var(--sc-accent-color); }
+  .sc-generation-progress > [role="progressbar"][data-sc-progress-full] { border-radius:0; }
+  .sc-generation-progress > .sc-generation-progress__sampler { background:#f59e0b; }
+  .sc-generation-progress[data-sc-color-scheme='light'] > .sc-generation-progress__sampler { background:#c56a00; }
   :root[data-sc-substitute-frame] [data-testid="queue-inline-progress"],
   :root[data-sc-substitute-frame] :has(> [data-testid="linear-progress-overall"]) { display:none !important; }
   :root[data-sc-substitute-frame][data-sc-queue-collapsed]

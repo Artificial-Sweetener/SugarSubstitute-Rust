@@ -28,6 +28,7 @@ interface ElementRecord {
   captionButton: {
     width: number;
     height: number;
+    top: number;
     glyph: number;
     fill: Record2<'dark' | 'light', 'rest' | 'hover' | 'pressed'>;
   };
@@ -50,12 +51,13 @@ afterEach(() => {
 });
 
 test('the caption button the page draws is the shared record’s', () => {
-  const { width, height, glyph, fill } = record.captionButton;
-  expect([CAPTION_BUTTON.width, CAPTION_BUTTON.height, CAPTION_BUTTON.glyph]).toEqual([
-    width,
-    height,
-    glyph,
-  ]);
+  const { width, height, top, glyph, fill } = record.captionButton;
+  expect([
+    CAPTION_BUTTON.width,
+    CAPTION_BUTTON.height,
+    CAPTION_BUTTON.top,
+    CAPTION_BUTTON.glyph,
+  ]).toEqual([width, height, top, glyph]);
   expect(CAPTION_BUTTON.hover).toBe(fill.dark.hover[3]);
   expect(CAPTION_BUTTON.pressed).toBe(fill.dark.pressed[3]);
   expect(fill.light.hover[3]).toBe(fill.dark.hover[3]);
@@ -113,6 +115,10 @@ test('the console button sits in the frame’s row only, and shows where it goes
   const element = frame.querySelector<HTMLButtonElement>('.sc-console-caption');
   if (!element) throw new Error('Console button did not join the frame row');
   expect(frame.hasAttribute('data-console-caption')).toBe(true);
+  // It is one of the window's caption buttons: the same row, so the same wash and glyph centre.
+  expect(document.head.textContent).toContain(
+    `.sc-console-caption { position:absolute; top:${String(CAPTION_BUTTON.top)}px;`,
+  );
   const icon = (): string => element.firstElementChild?.getAttribute('style') ?? '';
   expect(icon()).toContain('console-open.svg');
   expect(element.getAttribute('aria-pressed')).toBe('false');

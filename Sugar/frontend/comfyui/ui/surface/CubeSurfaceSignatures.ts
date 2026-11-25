@@ -50,7 +50,7 @@ export function buildCubeSurfacePresentationSignature(node: CubeNode): string {
     identity.cube_version ?? '',
     identity.has_saveable_changes ?? false,
     identity.icon ?? null,
-    buildCubeCardVisibilitySignature(requireCubeSurface(node)),
+    buildCubeCardVisibilitySignature(node.subgraph._nodes, requireCubeSurface(node)),
     projectNodeCards(
       node.subgraph._nodes,
       parseCubeSurfaceState(requireCubeSurface(node)),

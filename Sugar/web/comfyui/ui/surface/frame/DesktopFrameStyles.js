@@ -46,18 +46,25 @@ export const desktopFrameCss = `
      A node card is painted once, by its outer element: its header, body and footer layers overlap,
      and a translucent fill painted by each would stack into brighter bands. Its rows show the
      Windows list-item overlays over that fill; dividers already use the card stroke. Without the
-     desktop frame there is no Mica, and cards keep the style's opaque fill. */
+     desktop frame there is no Mica, and cards keep the style's opaque fill. A widget standing
+     alone (an override in the toolbar, a linked source in a header) shares a node's field styling
+     and is no card: it paints nothing behind its label and control. */
   :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] [data-sc-style-surface] {
     --sc-card-fill:var(--sc-desktop-card-wash); }
   :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] [data-sc-style-node] {
-    --sc-card-fill:transparent; background:var(--sc-desktop-card-wash);
-    border-radius:var(--sc-node-card-radius,4px); }
+    --sc-card-fill:transparent; }
+  :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] [data-sc-style-card] {
+    background:var(--sc-desktop-card-wash); border-radius:var(--sc-node-card-radius,4px); }
   :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] [data-sc-style-node] :is(
     [data-sc-toggle-row],[data-testid="advanced-inputs-button"],[data-sc-titlebar-action]):is(:hover,:focus-visible) {
     background:var(--sc-desktop-row-hover); }
   :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] [data-sc-style-node] :is(
     [data-sc-toggle-row],[data-testid="advanced-inputs-button"],[data-sc-titlebar-action]):active {
     background:var(--sc-desktop-row-pressed); }
+  /* ComfyUI's node opacity setting fades the whole card, text and controls with it. In the desktop
+     frame that setting is how much of the grid shows behind a card (DesktopGraphNodeOcclusion), so
+     the card itself stays fully drawn. */
+  :root[data-sc-desktop-frame-surface] .lg-node[data-sc-style-card] { opacity:1 !important; }
   [data-sc-desktop-frame-host] { border:0 !important; box-shadow:none !important; }
   [data-sc-desktop-frame-host] .sc-substitute-frame { app-region:drag; }
   [data-sc-desktop-frame-host] .sc-substitute-frame :is(

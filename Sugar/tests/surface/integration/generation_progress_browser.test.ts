@@ -118,6 +118,11 @@ test('Substitute progress uses two independent three-pixel tracks at the menu ed
       workflow: getComputedStyle(first).backgroundColor,
       sampler: getComputedStyle(second).backgroundColor,
       background: getComputedStyle(root).backgroundColor,
+      startCorners: [
+        getComputedStyle(first).borderTopLeftRadius,
+        getComputedStyle(first).borderBottomLeftRadius,
+      ],
+      leadingCorner: getComputedStyle(first).borderTopRightRadius,
     };
   });
   expect(geometry.first.height).toBe(3);
@@ -127,14 +132,29 @@ test('Substitute progress uses two independent three-pixel tracks at the menu ed
   expect(geometry.first.width).toBeCloseTo(geometry.frame.width * 0.75, 0);
   expect(geometry.second.width).toBeCloseTo(geometry.frame.width * 0.4, 0);
   expect(geometry.workflow).toBe('rgb(182, 58, 203)');
-  expect(geometry.sampler).toBe('rgb(182, 58, 203)');
+  // The sampler's bar is Substitute's amber, so the two bars are told apart at a glance.
+  expect(geometry.sampler).toBe('rgb(245, 158, 11)');
   expect(geometry.background).toBe('rgba(0, 0, 0, 0)');
-  await page.evaluate(() => window.progressBrowserProof.update(true, 20, 90, false));
-  expect(
-    await page
-      .locator('.sc-generation-progress__sampler')
-      .evaluate((bar) => getComputedStyle(bar).backgroundColor),
-  ).toBe('rgb(182, 58, 203)');
+  // A bar is square where it starts and round at its leading end while short of the track's end.
+  expect(geometry.startCorners).toEqual(['0px', '0px']);
+  expect(geometry.leadingCorner).toBe('1.5px');
+  await page.evaluate(() => {
+    window.progressBrowserProof.update(false, 0, 0, true);
+    window.progressBrowserProof.update(true, 100, 90, false);
+  });
+  const light = await page.locator('.sc-generation-progress').evaluate((root) => {
+    const [workflow, sampler] = Array.from(root.children);
+    if (!workflow || !sampler) throw new Error('Missing progress tracks');
+    return {
+      sampler: getComputedStyle(sampler).backgroundColor,
+      finished: getComputedStyle(workflow).borderTopRightRadius,
+      running: getComputedStyle(sampler).borderTopRightRadius,
+    };
+  });
+  expect(light.sampler).toBe('rgb(197, 106, 0)');
+  // Reaching the end of the track squares the leading end too.
+  expect(light.finished).toBe('0px');
+  expect(light.running).toBe('1.5px');
   await page.evaluate(() => window.progressBrowserProof.update(false, 0, 0, false));
   await page.locator('.sc-generation-progress').waitFor({ state: 'hidden' });
 });

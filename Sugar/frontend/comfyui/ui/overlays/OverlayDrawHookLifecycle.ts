@@ -22,6 +22,7 @@ import type { CubeChromeOverlay } from './CubeChromeOverlay.js';
 import type { ProximityGraphMutationTracker } from './proximity/ProximityGraphMutationTracker.js';
 import type { ComfyCanvas, ComfyGraph } from '../types/graph.js';
 import type { UnknownRecord } from '../types/common.js';
+import { paintGraphBackground } from './GraphBackgroundPainters.js';
 
 interface DrawHookAdapter {
   getApp?(): { canvas?: ComfyCanvas | null; graph?: ComfyGraph | null } | null;
@@ -160,6 +161,9 @@ export class OverlayDrawHookLifecycle {
           ?.getConsole?.()
           ?.error?.('SugarCubes: onDrawBackground wrapper failed', error);
       }
+      paintGraphBackground(this, ctx, (error) =>
+        manager.adapter?.getConsole?.()?.error?.('SugarCubes: background painter failed', error),
+      );
       try {
         manager.proximityGraphMutations.attach(this.graph);
         manager.proximity.ensurePreview(this.graph);
