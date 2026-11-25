@@ -132,8 +132,8 @@ test('Substitute progress uses two independent three-pixel tracks at the menu ed
   expect(geometry.first.width).toBeCloseTo(geometry.frame.width * 0.75, 0);
   expect(geometry.second.width).toBeCloseTo(geometry.frame.width * 0.4, 0);
   expect(geometry.workflow).toBe('rgb(182, 58, 203)');
-  // The sampler's bar is Substitute's amber, so the two bars are told apart at a glance.
-  expect(geometry.sampler).toBe('rgb(245, 158, 11)');
+  // Both bars are the accent.
+  expect(geometry.sampler).toBe('rgb(182, 58, 203)');
   expect(geometry.background).toBe('rgba(0, 0, 0, 0)');
   // A bar is square where it starts and round at its leading end while short of the track's end.
   expect(geometry.startCorners).toEqual(['0px', '0px']);
@@ -151,7 +151,7 @@ test('Substitute progress uses two independent three-pixel tracks at the menu ed
       running: getComputedStyle(sampler).borderTopRightRadius,
     };
   });
-  expect(light.sampler).toBe('rgb(197, 106, 0)');
+  expect(light.sampler).toBe('rgb(182, 58, 203)');
   // Reaching the end of the track squares the leading end too.
   expect(light.finished).toBe('0px');
   expect(light.running).toBe('1.5px');

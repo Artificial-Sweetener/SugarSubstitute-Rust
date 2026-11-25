@@ -1,4 +1,3 @@
-import { readOwnedDarkTheme } from '../appearance/OwnedColorScheme.js';
 /** Preserve two compact transparent tracks, workflow over sampler, with accessible progress values. */
 export class GenerationProgressView {
     element;
@@ -15,11 +14,6 @@ export class GenerationProgressView {
     }
     /** Set widths only from the validated execution projection and retain bar identity. */
     update(snapshot) {
-        // The sampler's amber has a dark and a light value; a run reads the scheme once, as it appears.
-        if (snapshot.visible && this.element.hidden)
-            this.element.dataset.scColorScheme = readOwnedDarkTheme(this.element.ownerDocument)
-                ? 'dark'
-                : 'light';
         this.element.hidden = !snapshot.visible;
         for (const [bar, value] of [
             [this.#workflow, snapshot.workflow],
