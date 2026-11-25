@@ -40,3 +40,18 @@ fn the_buttons_fill_exactly_the_width_the_page_leaves_free() {
         })
     );
 }
+
+/// The page's console button joins this row from the same record, so both sit on one line.
+#[test]
+fn the_caption_row_is_the_shared_element_record_s() -> Result<(), Box<dyn std::error::Error>> {
+    let record: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../../Sugar/integrations/contracts/ui/elements.json"
+    ))?;
+    let caption = &record["captionButton"];
+    for control in caption_controls(1280.0, false, CAPTIONS) {
+        assert_eq!(Some(control.bounds.y), caption["top"].as_f64());
+        assert_eq!(Some(control.bounds.height), caption["height"].as_f64());
+        assert_eq!(Some(control.bounds.width), caption["width"].as_f64());
+    }
+    Ok(())
+}
