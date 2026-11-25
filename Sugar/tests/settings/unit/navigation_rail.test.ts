@@ -63,3 +63,34 @@ test('moving down stretches the far end first; moving up stretches the near end 
   rail.place(item(100));
   expect(animate).toHaveBeenCalledTimes(2);
 });
+
+test('an item not laid out yet gets the rail once it is, on the item and without moving', () => {
+  const rail = new NavigationRail(document);
+  const animate = jest.fn();
+  rail.element.animate = animate as unknown as HTMLElement['animate'];
+  // Settings opening: the selected item exists but has no layout yet.
+  let height = 0;
+  const selected = document.createElement('button');
+  Object.defineProperty(selected, 'offsetTop', { get: () => (height ? 100 : 0) });
+  Object.defineProperty(selected, 'offsetHeight', { get: () => height });
+  const observed: Array<() => void> = [];
+  const Observer = jest.fn((callback: () => void) => {
+    observed.push(callback);
+    return { observe: jest.fn(), disconnect: jest.fn() };
+  });
+  const view = document.defaultView as unknown as { ResizeObserver?: unknown };
+  const previous = view.ResizeObserver;
+  view.ResizeObserver = Observer;
+  try {
+    rail.place(selected);
+    // Nothing is shown above the list while the item has no place.
+    expect(rail.element.hidden).toBe(true);
+    height = 40;
+    observed[0]?.();
+    expect(rail.element.hidden).toBe(false);
+    expect(rail.element.style.transform).toBe('translateY(112px)');
+    expect(animate).not.toHaveBeenCalled();
+  } finally {
+    view.ResizeObserver = previous;
+  }
+});

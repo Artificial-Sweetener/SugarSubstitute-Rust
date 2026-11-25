@@ -28,7 +28,10 @@ export const substituteFrameCss = `
   .sc-generation-progress > [role="progressbar"] { flex:0 0 3px; height:3px; border-radius:0 1.5px 1.5px 0;
     transition:width 150ms ease-out; background:var(--sc-accent-color); }
   .sc-generation-progress > [role="progressbar"][data-sc-progress-full] { border-radius:0; }
+  /* The frame shows a run's progress and outcome itself: Comfy's inline progress and its queue
+     notices (queuing, queued, failed, completed) are not shown in it. */
   :root[data-sc-substitute-frame] [data-testid="queue-inline-progress"],
+  :root[data-sc-substitute-frame] [data-testid="queue-notification-banner"],
   :root[data-sc-substitute-frame] :has(> [data-testid="linear-progress-overall"]) { display:none !important; }
   :root[data-sc-substitute-frame][data-sc-queue-collapsed]
     [data-testid="queue-progress-overlay"] { display:none !important; }

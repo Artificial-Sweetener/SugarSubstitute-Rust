@@ -27,6 +27,7 @@ const SETTLE = 'cubic-bezier(0.1, 0.9, 0.2, 1)';
 export class NavigationRail {
     element;
     #top = null;
+    #waiting = null;
     constructor(document) {
         this.element = document.createElement('span');
         this.element.className = 'sc-sw-rail';
@@ -34,9 +35,27 @@ export class NavigationRail {
     }
     /** Show the rail beside `item`, moving from the previous item when there was one. */
     place(item) {
+        this.#waiting?.disconnect();
+        this.#waiting = null;
         if (!item) {
             this.element.hidden = true;
             this.#top = null;
+            return;
+        }
+        // An item that is not laid out yet (the page is still being built or shown) has no place to
+        // measure. The rail stays hidden and appears on the item once it is laid out, without moving
+        // from anywhere; measuring now would start it above the list.
+        if (item.offsetHeight === 0) {
+            this.element.hidden = true;
+            this.#top = null;
+            const View = item.ownerDocument.defaultView?.ResizeObserver;
+            if (View) {
+                this.#waiting = new View(() => {
+                    if (item.offsetHeight > 0)
+                        this.place(item);
+                });
+                this.#waiting.observe(item);
+            }
             return;
         }
         const top = item.offsetTop + (item.offsetHeight - LENGTH) / 2;
