@@ -21,6 +21,7 @@ import { CubeWorkflowPreconfiguration } from '../../../frontend/comfyui/ui/cube/
 import type { LegacyCubeWorkflowExtractor } from '../../../frontend/comfyui/ui/cube/migration/LegacyCubeWorkflowExtractor.js';
 import type { CubeSerializedDefinitionPresentationAdapter } from '../../../frontend/comfyui/ui/cube/CubeSerializedDefinitionPresentationAdapter.js';
 import { CubeSerializedWidgetRehydrator } from '../../../frontend/comfyui/ui/cube/CubeSerializedWidgetRehydrator.js';
+import { isCanvasSuppliedField } from '../../../frontend/comfyui/ui/input_canvas/infrastructure/InputBindingMetadata.js';
 
 describe('CubeWorkflowPreconfiguration', () => {
   test('transfers legacy extraction exactly once without registering node types', () => {
@@ -162,6 +163,62 @@ describe('CubeWorkflowPreconfiguration', () => {
       'default',
       'auto',
     ]);
+  });
+
+  test('a loader an input canvas supplies keeps its empty file field when a workflow opens', () => {
+    const loader = (id: string, properties: Record<string, unknown>) => ({
+      id,
+      type: 'LoadImageMask',
+      properties,
+      inputs: [serializedWidgetInput('image'), serializedWidgetInput('channel')],
+      widgets_values: ['', 'alpha', 'image'],
+    });
+    const painted = {
+      sugarcubes_canvas_masks: {
+        version: 2,
+        field: 'image',
+        selected: 'mask-1',
+        files: [],
+        entries: [
+          {
+            id: 'mask-1',
+            label: 'Mask 1',
+            source: {
+              kind: 'canvas',
+              canvasId: 'sugarsubstitute',
+              documentId: 'input-4',
+              target: { kind: 'layer', layerId: 'layer-2' },
+            },
+          },
+        ],
+      },
+    };
+    const definition = {
+      id: 'inpaint',
+      extra: {
+        sugarcubes_kind: 'cube',
+        sugarcubes_cube: { cube_id: 'Base-Cubes/SDXL/Inpaint.cube' },
+      },
+      nodes: [loader('painted', painted), loader('unbound', {})],
+      links: [],
+    };
+    // The same rule the composition gives the rehydrator.
+    const rehydrator = new CubeSerializedWidgetRehydrator(
+      () => ({
+        widgets: [
+          { name: 'image', value: 'example.png', options: { values: ['example.png'] } },
+          { name: 'channel', value: 'alpha', options: { values: ['alpha', 'red'] } },
+          { name: 'upload', value: 'image', options: { serialize: false } },
+        ],
+      }),
+      (node, field) => isCanvasSuppliedField(node.properties, field),
+    );
+
+    rehydrator.prepare({ nodes: [], definitions: { subgraphs: [definition] } });
+
+    // Filling the painted mask's field would read as the user choosing that file instead.
+    expect(definition.nodes[0]?.widgets_values).toEqual(['', 'alpha', 'image']);
+    expect(definition.nodes[1]?.widgets_values).toEqual(['example.png', 'alpha', 'image']);
   });
 });
 

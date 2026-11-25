@@ -34,6 +34,11 @@ export interface SubgraphWidgetRebindOptions {
   unavailableNode: 'error' | 'preserve';
   historicalWidgetNames?: (node: ComfyNode) => readonly string[] | null;
   unidentifiedValues?: 'error' | 'discard';
+  /**
+   * Whether another owner authors this field's saved value, which then stands even where a
+   * picker would offer its default instead.
+   */
+  ownedValue?: (node: ComfyNode, widgetName: string) => boolean;
 }
 
 /** Rebuild subgraph widget arrays against the complete current widget layout. */
@@ -69,7 +74,11 @@ export function rebindSubgraphWidgetValues(
       options.historicalWidgetNames?.(node) ?? null,
       options.unidentifiedValues ?? 'error',
     );
-    node.widgets_values = rebuildWidgetValues(liveWidgets, persistedByName);
+    node.widgets_values = rebuildWidgetValues(
+      liveWidgets,
+      persistedByName,
+      (name) => options.ownedValue?.(node, name) ?? false,
+    );
   }
   return subgraph;
 }
@@ -258,14 +267,17 @@ function arraysEqual(left: readonly string[], right: readonly string[]): boolean
 function rebuildWidgetValues(
   liveWidgets: readonly ComfyWidget[],
   persistedByName: ReadonlyMap<string, unknown>,
+  ownedValue: (widgetName: string) => boolean,
 ): unknown[] {
   return liveWidgets.map((widget) => {
     if (!widget) {
       return null;
     }
     const persisted = persistedByName.get(widget.name);
-    return (isSerializedWidget(widget) || isComfySeedModeControl(widget)) &&
-      isValidPersistedWidgetValue(widget, persisted)
+    const kept =
+      isValidPersistedWidgetValue(widget, persisted) ||
+      (persisted !== undefined && persisted !== null && ownedValue(widget.name));
+    return (isSerializedWidget(widget) || isComfySeedModeControl(widget)) && kept
       ? cloneWidgetValue(persisted)
       : readCurrentWidgetValue(widget);
   });

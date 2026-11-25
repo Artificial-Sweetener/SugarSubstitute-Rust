@@ -39,6 +39,24 @@ test('reads Unicode SugarScript from an uncompressed iTXt record', async () => {
   await expect(readScriptOnlySugarScript(image)).resolves.toBe(source);
 });
 
+test('reads the run a saved output records, and nothing from an unreadable record', async () => {
+  const saved = pngInput(
+    textChunk('workflow', latin1('{"nodes":[]}')),
+    textChunk(
+      'sugarcubes_output',
+      latin1('{"schema_version":1,"run_id":"run-7","source_node_id":"cube:0","image_index":1}'),
+    ),
+  );
+  await expect(readPngSugarScriptMetadata(saved)).resolves.toMatchObject({
+    output: { runId: 'run-7', sourceNodeId: 'cube:0' },
+  });
+  const broken = pngInput(
+    textChunk('workflow', latin1('{"nodes":[]}')),
+    textChunk('sugarcubes_output', latin1('not json')),
+  );
+  await expect(readPngSugarScriptMetadata(broken)).resolves.toMatchObject({ output: null });
+});
+
 test('reports workflow presence without choosing source over workflow authority', async () => {
   const image = pngInput(
     textChunk('workflow', latin1('{"nodes":[]}')),
@@ -50,6 +68,7 @@ test('reports workflow presence without choosing source over workflow authority'
     workflow: { nodes: [] },
     // The record's own text travels with it, so a backend can read whole numbers exactly.
     workflowSource: '{"nodes":[]}',
+    output: null,
   });
   await expect(readScriptOnlySugarScript(image)).rejects.toMatchObject({
     code: 'image.workflow_authority_present',

@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Bring back the mask pixels a generated image's workflow was queued with. */
+/** Bring back the input images and mask pixels a generated image's workflow was queued with. */
 import { WORKFLOW_WIDGET_VALUES_KEY } from '../../graph/WorkflowWidgetSnapshotCapture.js';
 import { isRecord } from '../../types/common.js';
 /**
@@ -38,17 +38,20 @@ export function forgetGeneratedSources(node, field) {
         node[WORKFLOW_WIDGET_VALUES_KEY] = Object.fromEntries(Object.entries(values).filter(([name]) => name !== field));
 }
 /**
- * Point each canvas mask at the file it was generated from, where that file is still available.
+ * Point each canvas entry a queue captured at the file it was generated from, where that file is
+ * still available.
  *
- * The canvas that provisions the workflow's surfaces imports a mask's file into its layer and
- * the loader then returns to that layer, so the masks arrive whether or not the canvas still
- * holds the documents the workflow was painted in. An ordered loader's files pair with its
- * entries in order; a scalar loader's one file belongs to its selected entry. A binding whose
- * entries no longer match the record is left alone.
+ * A mask entry bound to a layer of a canvas that provisions the workflow's surfaces takes its
+ * file: that canvas imports the file into the layer and the loader returns to the layer, so the
+ * masks arrive as editable layers whether or not the canvas still holds the documents the
+ * workflow was painted in. An image entry takes its file whatever canvas content it named, as
+ * the Python app opened a generated image's inputs from the files they were run with. An ordered
+ * loader's files pair with its entries in order; a scalar loader's one file belongs to its
+ * selected entry. A binding whose entries no longer match the record is left alone.
  *
  * @returns The changed binding, or null when no entry takes a file.
  */
-export function withGeneratedSources(binding, ordered, files, available, provisions) {
+export function withGeneratedSources(binding, ordered, files, available, restores) {
     if (ordered ? files.length !== binding.entries.length : files.length !== 1)
         return null;
     const selected = binding.entries.findIndex((entry) => entry.id === binding.selected);
@@ -56,11 +59,7 @@ export function withGeneratedSources(binding, ordered, files, available, provisi
     let changed = false;
     const entries = binding.entries.map((entry, index) => {
         const file = index < first ? undefined : files[index - first];
-        if (file === undefined ||
-            available[index - first] !== true ||
-            entry.source.kind !== 'canvas' ||
-            entry.source.target.kind !== 'layer' ||
-            !provisions(entry.source.canvasId))
+        if (file === undefined || available[index - first] !== true || !restores(entry))
             return entry;
         changed = true;
         return { ...entry, source: { kind: 'file', file } };

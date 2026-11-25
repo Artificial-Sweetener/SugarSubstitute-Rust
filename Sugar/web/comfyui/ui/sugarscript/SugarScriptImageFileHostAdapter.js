@@ -15,6 +15,8 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Compose independent SugarScript and reconciled-workflow PNG import paths. */
 import { PngSugarScriptArtifactError, readPngSugarScriptMetadata, } from './PngSugarScriptArtifactReader.js';
+/** What an open that reported its failure returns: nothing was opened to restore a run into. */
+const NOT_OPENED = Symbol('not opened');
 /** Own one reversible host method adaptation for SugarScript-bearing PNGs. */
 export class SugarScriptImageFileHostAdapter {
     #host;
@@ -22,6 +24,7 @@ export class SugarScriptImageFileHostAdapter {
     #importWorkflow;
     #validateWorkflow;
     #retainWorkflowSource;
+    #restoreRun;
     #feedback;
     #readErrorMessage;
     #original;
@@ -34,6 +37,7 @@ export class SugarScriptImageFileHostAdapter {
         this.#importWorkflow = options.importWorkflow;
         this.#validateWorkflow = options.validateWorkflow;
         this.#retainWorkflowSource = options.retainWorkflowSource;
+        this.#restoreRun = options.restoreRun ?? null;
         this.#feedback = options.feedback ?? null;
         this.#readErrorMessage = options.readErrorMessage;
         this.#original = options.host.handleFile;
@@ -74,6 +78,16 @@ export class SugarScriptImageFileHostAdapter {
         if (metadata.sugarScript === null && metadata.workflow === null) {
             return this.#delegate(file, arguments_);
         }
+        const result = await this.#open(file, arguments_, metadata);
+        if (result === NOT_OPENED)
+            return undefined;
+        // A generated image brings its run back to the workflow it opened, however it was opened.
+        if (metadata.output)
+            await this.#restoreRunWithoutBlocking(file, metadata.output.runId);
+        return result;
+    }
+    /** Open the image's workflow by its declared authority; a reported failure opens nothing. */
+    async #open(file, arguments_, metadata) {
         if (metadata.sugarScript === null && isDocumentCarriedWorkflow(metadata.workflow)) {
             try {
                 const result = await this.#importWorkflow(metadata.workflow, metadata.workflowSource ?? undefined);
@@ -83,7 +97,7 @@ export class SugarScriptImageFileHostAdapter {
             catch (error) {
                 // Comfy cannot load Cubes that hold no native nodes, so there is nothing to fall back to.
                 this.#reportFailure(error, 'Cube workflow import failed');
-                return undefined;
+                return NOT_OPENED;
             }
         }
         if (metadata.sugarScript === null && isManagedCubeWorkflow(metadata.workflow)) {
@@ -132,7 +146,18 @@ export class SugarScriptImageFileHostAdapter {
                 return this.#loadEmbeddedWorkflow(file, arguments_, metadata.sugarScript, workflowValidationFailure ?? error);
             }
             this.#reportFailure(error);
-            return undefined;
+            return NOT_OPENED;
+        }
+    }
+    /** Show the run's images; a failure is reported and never undoes the opened workflow. */
+    async #restoreRunWithoutBlocking(file, runId) {
+        if (!this.#restoreRun)
+            return;
+        try {
+            await this.#restoreRun(file, runId);
+        }
+        catch (error) {
+            this.#feedback?.push?.('warning', 'Run images not restored', this.#readErrorMessage(error));
         }
     }
     /** Load attached workflow bytes when optional Cube reconstruction is unavailable. */
@@ -146,7 +171,7 @@ export class SugarScriptImageFileHostAdapter {
         }
         catch (error) {
             this.#reportFailure(error, 'Recipe image import failed');
-            return undefined;
+            return NOT_OPENED;
         }
     }
     /** Preserve optional SugarScript without making a usable workflow fail. */

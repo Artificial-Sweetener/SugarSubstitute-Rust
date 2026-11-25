@@ -31,6 +31,14 @@ export interface PngSugarScriptMetadata {
   workflow: Record<string, unknown> | null;
   /** The workflow record's own text, whose whole numbers no parse has rounded yet. */
   workflowSource: string | null;
+  /** The run this image was generated in, as SugarCubes records it on every saved output. */
+  output: GeneratedOutputRecord | null;
+}
+
+/** What a saved output records about its run: which run, and which source made it. */
+export interface GeneratedOutputRecord {
+  readonly runId: string;
+  readonly sourceNodeId: string | null;
 }
 
 /** Identify bounded, user-actionable failures at the image adapter boundary. */
@@ -67,6 +75,7 @@ export async function readPngSugarScriptMetadata(
   let sugarScript: string | null = null;
   let workflow: Record<string, unknown> | null = null;
   let workflowSource: string | null = null;
+  let output: GeneratedOutputRecord | null = null;
   while (offset < bytes.byteLength) {
     chunks += 1;
     if (chunks > MAX_CHUNKS) {
@@ -94,6 +103,7 @@ export async function readPngSugarScriptMetadata(
       workflow = parseWorkflow(text.value);
       workflowSource = text.value;
     }
+    if (text?.keyword === 'sugarcubes_output') output = readOutputRecord(text.value);
     if (text?.keyword === 'sugar_script') {
       if (sugarScript !== null) {
         throw artifactError(
@@ -114,7 +124,23 @@ export async function readPngSugarScriptMetadata(
   if (!sawEnd || offset !== bytes.byteLength) {
     throw artifactError('image.invalid_png', 'PNG chunk stream is incomplete or trailing.');
   }
-  return { sugarScript, workflow, workflowSource };
+  return { sugarScript, workflow, workflowSource, output };
+}
+
+/** Read a saved output's run record; anything unreadable is no record. */
+function readOutputRecord(value: string): GeneratedOutputRecord | null {
+  let record: unknown;
+  try {
+    record = JSON.parse(value);
+  } catch {
+    return null;
+  }
+  if (typeof record !== 'object' || record === null || Array.isArray(record)) return null;
+  const runId: unknown = Reflect.get(record, 'run_id');
+  const sourceNodeId: unknown = Reflect.get(record, 'source_node_id');
+  return typeof runId === 'string' && runId.trim()
+    ? { runId: runId.trim(), sourceNodeId: typeof sourceNodeId === 'string' ? sourceNodeId : null }
+    : null;
 }
 
 /** Extract a script-only artifact and refuse to bypass workflow authority. */

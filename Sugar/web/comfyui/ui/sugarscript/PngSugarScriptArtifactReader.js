@@ -48,6 +48,7 @@ export async function readPngSugarScriptMetadata(input) {
     let sugarScript = null;
     let workflow = null;
     let workflowSource = null;
+    let output = null;
     while (offset < bytes.byteLength) {
         chunks += 1;
         if (chunks > MAX_CHUNKS) {
@@ -72,6 +73,8 @@ export async function readPngSugarScriptMetadata(input) {
             workflow = parseWorkflow(text.value);
             workflowSource = text.value;
         }
+        if (text?.keyword === 'sugarcubes_output')
+            output = readOutputRecord(text.value);
         if (text?.keyword === 'sugar_script') {
             if (sugarScript !== null) {
                 throw artifactError('image.duplicate_sugarscript', 'PNG contains more than one SugarScript record.');
@@ -89,7 +92,24 @@ export async function readPngSugarScriptMetadata(input) {
     if (!sawEnd || offset !== bytes.byteLength) {
         throw artifactError('image.invalid_png', 'PNG chunk stream is incomplete or trailing.');
     }
-    return { sugarScript, workflow, workflowSource };
+    return { sugarScript, workflow, workflowSource, output };
+}
+/** Read a saved output's run record; anything unreadable is no record. */
+function readOutputRecord(value) {
+    let record;
+    try {
+        record = JSON.parse(value);
+    }
+    catch {
+        return null;
+    }
+    if (typeof record !== 'object' || record === null || Array.isArray(record))
+        return null;
+    const runId = Reflect.get(record, 'run_id');
+    const sourceNodeId = Reflect.get(record, 'source_node_id');
+    return typeof runId === 'string' && runId.trim()
+        ? { runId: runId.trim(), sourceNodeId: typeof sourceNodeId === 'string' ? sourceNodeId : null }
+        : null;
 }
 /** Extract a script-only artifact and refuse to bypass workflow authority. */
 export async function readScriptOnlySugarScript(input) {

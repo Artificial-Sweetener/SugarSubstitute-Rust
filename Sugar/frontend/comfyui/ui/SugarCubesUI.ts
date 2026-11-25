@@ -60,6 +60,7 @@ import { CubeWorkflowLibraryPresentation } from './workflow/CubeWorkflowLibraryP
 import { CubeWorkflowPreconfiguration } from './cube/CubeWorkflowPreconfiguration.js';
 import { CubeWorkflowNodePackMetadata } from './cube/node/CubeWorkflowNodePackMetadata.js';
 import { CubeSerializedWidgetRehydrator } from './cube/CubeSerializedWidgetRehydrator.js';
+import { isCanvasSuppliedField } from './input_canvas/infrastructure/InputBindingMetadata.js';
 
 interface SugarCubesUIOptions extends UnknownRecord {
   adapter?: ComfyAdapter;
@@ -171,6 +172,7 @@ export class SugarCubesUI {
       this.workflowLibraryState,
       new CubeSerializedWidgetRehydrator(
         (type) => this.adapter.getLiteGraph()?.createNode(type) ?? null,
+        (node, field) => isCanvasSuppliedField(node.properties, field),
       ),
     );
 

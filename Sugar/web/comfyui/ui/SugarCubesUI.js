@@ -54,6 +54,7 @@ import { CubeWorkflowLibraryPresentation } from './workflow/CubeWorkflowLibraryP
 import { CubeWorkflowPreconfiguration } from './cube/CubeWorkflowPreconfiguration.js';
 import { CubeWorkflowNodePackMetadata } from './cube/node/CubeWorkflowNodePackMetadata.js';
 import { CubeSerializedWidgetRehydrator } from './cube/CubeSerializedWidgetRehydrator.js';
+import { isCanvasSuppliedField } from './input_canvas/infrastructure/InputBindingMetadata.js';
 /**
  * Coordinate sugar cubes ui behavior for the SugarCubes UI.
  */
@@ -128,7 +129,7 @@ export class SugarCubesUI {
             logger: this.adapter?.getConsole?.(),
             onUpdate: (definitionKey, entry) => this.handleDefinitionUpdate(definitionKey, entry),
         });
-        this.workflowPreconfiguration = CubeWorkflowPreconfiguration.withEmbeddedDefinitions(this.definitionStore, this.workflowLibraryState, new CubeSerializedWidgetRehydrator((type) => this.adapter.getLiteGraph()?.createNode(type) ?? null));
+        this.workflowPreconfiguration = CubeWorkflowPreconfiguration.withEmbeddedDefinitions(this.definitionStore, this.workflowLibraryState, new CubeSerializedWidgetRehydrator((type) => this.adapter.getLiteGraph()?.createNode(type) ?? null, (node, field) => isCanvasSuppliedField(node.properties, field)));
         this.instanceManager = new InstanceManager({
             adapter: this.adapter,
             events: this.events,

@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable
 import logging
 
@@ -32,6 +33,8 @@ from .image_views import ManagedImageViews
 from .transfer_references import decode_transfer_reference, encode_transfer
 from .media_routes import register_media_routes
 from .artifact_routes import register_artifact_routes
+from .local_file_access import local_file_request
+from .run_images import read_dropped_image
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -129,6 +132,32 @@ def register_saving_routes(
     register_artifact_routes(
         routes, runtime.artifact_resolution, runtime.artifact_workers
     )
+
+    async def find_run_images(request: web.Request) -> web.Response:
+        """List the saved images of the run a dropped generated image came from."""
+        if not local_file_request(request, require_origin=True):
+            return web.json_response({"images": []}, status=403)
+        try:
+            dropped = read_dropped_image(await request.json())
+        except (ValueError, TypeError, UnicodeError):
+            return web.json_response({"images": []}, status=400)
+        images = await asyncio.to_thread(runtime.run_images.find, dropped)
+        return web.json_response(
+            {
+                "images": [
+                    {
+                        "image": dict(image.image),
+                        "source_node_id": image.source_node_id,
+                        "source_label": image.source_label,
+                        "image_index": image.image_index,
+                    }
+                    for image in images
+                ]
+            },
+            headers={"Cache-Control": "no-store"},
+        )
+
+    routes.post("/sugarcubes/output-saving/run-images")(find_run_images)
 
 
 def managed_image_middleware(runtime: OutputSavingRuntime) -> Middleware:

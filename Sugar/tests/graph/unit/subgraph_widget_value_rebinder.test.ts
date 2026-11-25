@@ -439,6 +439,37 @@ describe('subgraph widget value rebinding', () => {
     expect(subgraph.nodes[0].widgets_values).toEqual(['current-default']);
   });
 
+  test('keeps a saved value another owner authors where a picker would supply its default', () => {
+    const node = (id: string) => ({
+      id,
+      type: 'LoadImageMask',
+      inputs: [
+        { name: 'image', widget: { name: 'image' } },
+        { name: 'channel', widget: { name: 'channel' } },
+      ],
+      widgets_values: ['', 'gone'],
+    });
+    const subgraph = { nodes: [node('canvas'), node('plain')] };
+
+    rebindSubgraphWidgetValues(
+      subgraph,
+      () => ({
+        widgets: [
+          { name: 'image', value: 'example.png', options: { values: ['example.png'] } },
+          { name: 'channel', value: 'alpha', options: { values: ['alpha', 'red'] } },
+        ],
+      }),
+      {
+        unavailableNode: 'error',
+        ownedValue: (owner, name) => owner.id === 'canvas' && name === 'image',
+      },
+    );
+
+    // An input canvas supplies the first loader, so its empty field is its source choice.
+    expect(subgraph.nodes[0]?.widgets_values).toEqual(['', 'alpha']);
+    expect(subgraph.nodes[1]?.widgets_values).toEqual(['example.png', 'alpha']);
+  });
+
   test('discards stale linked values in favor of the current host default', () => {
     const subgraph = {
       nodes: [

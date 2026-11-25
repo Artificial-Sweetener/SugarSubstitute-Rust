@@ -72,6 +72,7 @@ export class CubeImportHostCoordinator {
                 importWorkflow: (workflow, source) => this.openLegacyWorkflow(workflow, source),
                 validateWorkflow: (workflow) => this.#legacyWorkflowApi.compile(workflow),
                 retainWorkflowSource: (source) => new SugarScriptWorkflowArtifactCompanionService(this.#sugarScriptApi, () => this.#app?.graph ?? null).retain(source),
+                restoreRun: options.restoreRun,
                 feedback: this.#ui.toast,
                 readErrorMessage: (error) => this.#feedback.readErrorMessage(error),
             })

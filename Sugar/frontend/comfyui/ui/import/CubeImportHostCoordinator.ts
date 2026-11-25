@@ -60,6 +60,8 @@ interface CubeImportHostCoordinatorOptions {
   relations: () => ImportedCubeRelations;
   /** Open a dropped Sugar script, by its file name and text, in a workflow tab of its own. */
   openSugarScriptFile(name: string, source: string): Promise<unknown>;
+  /** Bring a dropped generated image's run back to the output canvas of the workflow it opened. */
+  restoreRun(file: File, runId: string): Promise<unknown>;
 }
 
 /** What importing Cubes asks of the owner of the values Cubes share. */
@@ -119,6 +121,7 @@ export class CubeImportHostCoordinator {
               this.#sugarScriptApi,
               () => this.#app?.graph ?? null,
             ).retain(source),
+          restoreRun: options.restoreRun,
           feedback: this.#ui.toast,
           readErrorMessage: (error) => this.#feedback.readErrorMessage(error),
         })

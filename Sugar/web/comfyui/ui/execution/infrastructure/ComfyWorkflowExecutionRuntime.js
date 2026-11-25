@@ -39,6 +39,9 @@ import { ComfyWorkflowOutputProjection } from './ComfyWorkflowOutputProjection.j
 import { createComfyWorkflowLoadObserver } from './ComfyWorkflowLoadObserver.js';
 import { createComfyPromptConstructionObserver } from './ComfyPromptConstructionObserver.js';
 import { restoreComfyWorkflowSnapshot } from './ComfyWorkflowSnapshotRestore.js';
+import { decodeComfyWorkflowSources } from './ComfyWorkflowSourceDecoder.js';
+import { decodeComfyMedia } from './ComfyMediaDecoder.js';
+import { findRunImages, runImagesBySource } from './RunImages.js';
 import { ComfyCubeLivePreview, } from './ComfyCubeLivePreview.js';
 import { workflowSessionKey } from './WorkflowSessionKey.js';
 import { isRecord } from '../../types/common.js';
@@ -200,6 +203,36 @@ export class ComfyWorkflowExecutionRuntime {
     /** Record the live graph in its owning workflow's change tracker. */
     commitLoadedWorkflowState() {
         this.#adapter?.commitLoadedWorkflowState();
+    }
+    /**
+     * Bring a dropped generated image's run back to the output canvas of the workflow it just
+     * opened: the image and the other images of its run saved beside it. Returns how many outputs
+     * received images; none when the image is not one saved here.
+     */
+    async restoreDroppedImage(file, runId) {
+        const api = this.options.api;
+        if (typeof api?.fetchApi !== 'function')
+            return 0;
+        const images = await findRunImages({ fetchApi: (path, init) => api.fetchApi.call(api, path, init) }, file, runId);
+        return this.restoreRunImages(runId, images);
+    }
+    /**
+     * Show a run's saved images on the output canvas of the workflow now open, each under the
+     * output that made it, as the workflow's own stored outputs would be shown. Returns how many
+     * outputs received images.
+     */
+    restoreRunImages(runId, images) {
+        const context = this.sessions.read().active;
+        const workflow = context ? this.#adapter?.readStoredWorkflow(context.sessionId) : null;
+        if (!context || !workflow)
+            return 0;
+        let restored = 0;
+        for (const group of runImagesBySource(decodeComfyWorkflowSources(workflow), images)) {
+            const media = decodeComfyMedia({ images: group.images });
+            if (media && this.results.restore(context, group.source, media.payload, `image:${runId}`))
+                restored += 1;
+        }
+        return restored;
     }
     /** Report whether the bound document canvas concluded native output discovery. */
     get canvasSurfaceDiscovered() {

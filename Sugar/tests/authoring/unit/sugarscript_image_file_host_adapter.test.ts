@@ -113,6 +113,98 @@ test('delegates ordinary files without invoking either SugarScript use case', as
   expect(retainWorkflowSource).not.toHaveBeenCalled();
 });
 
+test('a generated image opens its workflow as Comfy does, then brings its run back', async () => {
+  const order: string[] = [];
+  const original = jest.fn(async () => {
+    order.push('open');
+    return 'host';
+  });
+  const host: SugarScriptFileHost = { handleFile: original };
+  const restoreRun = jest.fn(async (_file: File, runId: string) => {
+    order.push(`run ${runId}`);
+  });
+  const push = jest.fn();
+  new SugarScriptImageFileHostAdapter({
+    host,
+    importSource: async () => undefined,
+    importWorkflow: async () => undefined,
+    validateWorkflow: async () => undefined,
+    retainWorkflowSource: async () => undefined,
+    restoreRun,
+    feedback: { push },
+    readErrorMessage: (error) => String(error),
+  }).setup();
+  const image = pngFile(
+    textChunk('workflow', JSON.stringify({ nodes: [] })),
+    textChunk('sugarcubes_output', '{"run_id":"run-7","source_node_id":"cube:0"}'),
+  );
+
+  await expect(host.handleFile(image)).resolves.toBe('host');
+  expect(order).toEqual(['open', 'run run-7']);
+
+  // A run that cannot be brought back is reported; the opened workflow stays open.
+  restoreRun.mockRejectedValueOnce(new Error('unreachable'));
+  await expect(host.handleFile(image)).resolves.toBe('host');
+  expect(push).toHaveBeenCalledWith('warning', 'Run images not restored', 'Error: unreachable');
+});
+
+test.each([
+  ['a Python-saved Cube workflow', () => [textChunk('workflow', JSON.stringify(pythonWorkflow()))]],
+  ['a managed Cube workflow', () => [textChunk('workflow', JSON.stringify(managedWorkflow()))]],
+  ['SugarScript', () => [textChunk('sugar_script', 'cube demo')]],
+])('a generated image carrying %s brings its run back once it opens', async (_kind, chunks) => {
+  const order: string[] = [];
+  const opened = async (): Promise<string> => {
+    order.push('open');
+    return 'opened';
+  };
+  const host: SugarScriptFileHost = { handleFile: async () => 'host' };
+  new SugarScriptImageFileHostAdapter({
+    host,
+    importSource: opened,
+    importWorkflow: opened,
+    validateWorkflow: async () => undefined,
+    retainWorkflowSource: async () => undefined,
+    restoreRun: async (_file, runId) => {
+      order.push(`run ${runId}`);
+    },
+    readErrorMessage: (error) => String(error),
+  }).setup();
+  const image = pngFile(
+    ...chunks(),
+    textChunk('sugarcubes_output', '{"run_id":"run-7","source_node_id":"cube:0"}'),
+  );
+
+  await expect(host.handleFile(image)).resolves.toBe('opened');
+  expect(order).toEqual(['open', 'run run-7']);
+});
+
+test('a generated image whose workflow cannot open brings no run back', async () => {
+  const restoreRun = jest.fn(async () => undefined);
+  const push = jest.fn();
+  const host: SugarScriptFileHost = { handleFile: async () => 'host' };
+  new SugarScriptImageFileHostAdapter({
+    host,
+    importSource: async () => undefined,
+    importWorkflow: async () => {
+      throw new Error('The document of Cube A is invalid');
+    },
+    validateWorkflow: async () => undefined,
+    retainWorkflowSource: async () => undefined,
+    restoreRun,
+    feedback: { push },
+    readErrorMessage: (error) => String(error),
+  }).setup();
+  const image = pngFile(
+    textChunk('workflow', JSON.stringify(pythonWorkflow())),
+    textChunk('sugarcubes_output', '{"run_id":"run-7","source_node_id":"cube:0"}'),
+  );
+
+  await expect(host.handleFile(image)).resolves.toBeUndefined();
+  expect(push).toHaveBeenCalledWith('error', 'Cube workflow import failed', expect.any(String));
+  expect(restoreRun).not.toHaveBeenCalled();
+});
+
 test('falls back to the attached workflow when SugarScript materialization fails', async () => {
   const original = jest.fn(async () => 'host');
   const host: SugarScriptFileHost = { handleFile: original };
@@ -480,6 +572,18 @@ function createAdapter(
     retainWorkflowSource,
     readErrorMessage: (error) => String(error),
   });
+}
+
+/** The form SugarSubstitute's Python application saves: each Cube definition holds only its document. */
+function pythonWorkflow(): Record<string, unknown> {
+  return {
+    nodes: [],
+    definitions: {
+      subgraphs: [
+        { id: 'a', nodes: [], extra: { sugarcubes_document: { cube_id: 'Example/Pack/A.cube' } } },
+      ],
+    },
+  };
 }
 
 function managedWorkflow(): Record<string, unknown> {

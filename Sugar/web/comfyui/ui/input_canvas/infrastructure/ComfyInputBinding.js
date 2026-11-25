@@ -70,8 +70,12 @@ export function createComfyInputBinding(node, loader, ports) {
             graph?.afterChange?.();
         }
     };
+    /** Whether an entry takes back the file it was queued with: see `withGeneratedSources`. */
+    const restores = (entry) => entry.source.kind === 'canvas' &&
+        (loader.kind === 'image' ||
+            (entry.source.target.kind === 'layer' && ports.canvases.provisions(entry.source.canvasId)));
     /**
-     * Give a mask loader loaded from a generated image the files it was queued with.
+     * Give a loader loaded from a generated image the files it was queued with.
      *
      * The binding is read again once the files are verified, because provisioning can rebind its
      * entries meanwhile, and it is written at once: the controller discards a load that such a
@@ -79,9 +83,7 @@ export function createComfyInputBinding(node, loader, ports) {
      */
     const restoreGenerated = async (saved) => {
         const files = generatedSources(node, loader.field);
-        const provisions = (canvasId) => ports.canvases.provisions(canvasId);
-        if (!files ||
-            !saved.entries.some((entry) => entry.source.kind === 'canvas' && provisions(entry.source.canvasId)))
+        if (!files || !saved.entries.some(restores))
             return saved;
         forgetGeneratedSources(node, loader.field);
         const available = await Promise.all(files.map((file) => ports.verifyFile(file).catch((error) => {
@@ -89,7 +91,7 @@ export function createComfyInputBinding(node, loader, ports) {
             return false;
         })));
         const current = readInputBinding(node.properties, loader.kind, loader.field) ?? saved;
-        const restored = withGeneratedSources(current, loader.ordered, files, available, provisions);
+        const restored = withGeneratedSources(current, loader.ordered, files, available, restores);
         if (!restored)
             return current;
         write(restored);
@@ -109,7 +111,7 @@ export function createComfyInputBinding(node, loader, ports) {
                     entry.source.file &&
                     !(await ports.verifyFile(entry.source.file)))
                     throw new Error('The selected input source file is unavailable.');
-            return saved && loader.kind === 'mask' ? await restoreGenerated(saved) : saved;
+            return saved ? await restoreGenerated(saved) : saved;
         },
         write,
         files: () => sourceFiles(node, loader.field),

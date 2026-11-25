@@ -167,7 +167,18 @@ test('files pair with entries only while the record still matches the binding', 
       source: { ...layer('x'), target: { kind: 'selection' as const } },
     })),
   };
+  // A mask takes its file only on a layer; an image takes it whatever canvas content it named.
+  const maskRule = (entry: InputBinding['entries'][number]): boolean =>
+    entry.source.kind === 'canvas' && entry.source.target.kind === 'layer';
   expect(
-    withGeneratedSources(selection, true, ['one.png', 'two.png'], [true, true], all),
+    withGeneratedSources(selection, true, ['one.png', 'two.png'], [true, true], maskRule),
   ).toBeNull();
+  expect(
+    withGeneratedSources(selection, true, ['one.png', 'two.png'], [true, true], all)?.entries.map(
+      (entry) => entry.source,
+    ),
+  ).toEqual([
+    { kind: 'file', file: 'one.png' },
+    { kind: 'file', file: 'two.png' },
+  ]);
 });

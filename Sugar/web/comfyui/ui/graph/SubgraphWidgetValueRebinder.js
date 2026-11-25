@@ -39,7 +39,7 @@ export function rebindSubgraphWidgetValues(subgraph, createNode, options = { una
         const liveWidgets = Array.isArray(liveNode.widgets) ? liveNode.widgets : [];
         const boundaryNames = boundaryNamesByNode.get(String(node.id ?? '')) ?? new Set();
         const persistedByName = decodeSerializedWidgetValues(node, liveWidgets, boundaryNames, options.historicalWidgetNames?.(node) ?? null, options.unidentifiedValues ?? 'error');
-        node.widgets_values = rebuildWidgetValues(liveWidgets, persistedByName);
+        node.widgets_values = rebuildWidgetValues(liveWidgets, persistedByName, (name) => options.ownedValue?.(node, name) ?? false);
     }
     return subgraph;
 }
@@ -175,14 +175,15 @@ function arraysEqual(left, right) {
     return left.length === right.length && left.every((name, index) => name === right[index]);
 }
 /** Build the complete current array while applying portable values only by name. */
-function rebuildWidgetValues(liveWidgets, persistedByName) {
+function rebuildWidgetValues(liveWidgets, persistedByName, ownedValue) {
     return liveWidgets.map((widget) => {
         if (!widget) {
             return null;
         }
         const persisted = persistedByName.get(widget.name);
-        return (isSerializedWidget(widget) || isComfySeedModeControl(widget)) &&
-            isValidPersistedWidgetValue(widget, persisted)
+        const kept = isValidPersistedWidgetValue(widget, persisted) ||
+            (persisted !== undefined && persisted !== null && ownedValue(widget.name));
+        return (isSerializedWidget(widget) || isComfySeedModeControl(widget)) && kept
             ? cloneWidgetValue(persisted)
             : readCurrentWidgetValue(widget);
     });

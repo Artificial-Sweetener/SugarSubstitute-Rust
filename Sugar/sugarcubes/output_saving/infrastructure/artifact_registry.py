@@ -216,6 +216,39 @@ class ManagedArtifactRegistry:
             artifact_id, png_name, output_type, width, height, jpeg_name
         )
 
+    def named(self, filename: str) -> tuple[tuple[str, Path], ...]:
+        """List every registered saved PNG with this file name, as (artifact id, path)."""
+        return tuple(
+            (identity, path)
+            for identity, path in self._pngs()
+            if path.name.casefold() == filename.casefold()
+        )
+
+    def beside(self, png: Path) -> tuple[tuple[str, Path], ...]:
+        """List every registered saved PNG in the same folder as `png`, as (artifact id, path)."""
+        return tuple(
+            (identity, path)
+            for identity, path in self._pngs()
+            if path.parent == png.parent
+        )
+
+    def _pngs(self) -> tuple[tuple[str, Path], ...]:
+        """Read every registered saved PNG location; the registry holds one row per image."""
+        connection = self._connect()
+        try:
+            rows = connection.execute(
+                "SELECT id,png FROM images WHERE type='output'"
+            ).fetchall()
+        finally:
+            connection.close()
+        return tuple(
+            (identity, Path(raw))
+            for identity, raw in rows
+            if isinstance(identity, str)
+            and isinstance(raw, str)
+            and Path(raw).is_absolute()
+        )
+
     def _connect(self) -> sqlite3.Connection:
         """Open a bounded local connection whose lifetime is owned by the requesting operation."""
         return sqlite3.connect(self._path, timeout=30)

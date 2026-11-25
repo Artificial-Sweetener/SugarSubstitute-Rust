@@ -30,6 +30,7 @@ from .media_files import HostOutputImageFiles
 from .file_revealer import WindowsImageFileRevealer
 from .photoshop_opener import WindowsPhotoshopOpener
 from .artifact_registry import ManagedArtifactRegistry
+from .run_images import OutputRunImages
 from .comfy_node_capabilities import ComfySavingNodeCapabilities
 from .managed_image_writer import ManagedImageWriter
 from .naming_numbers import OutputNamingNumbers
@@ -68,6 +69,7 @@ class OutputSavingRuntime:
         if input_root is not None:
             roots["input"] = input_root
         self.artifact_workers = ArtifactWorkers()
+        self.run_images = OutputRunImages(self.artifacts)
         self.artifact_resolution = OutputArtifactService(
             HostArtifactFiles(self.artifacts, roots)
         )

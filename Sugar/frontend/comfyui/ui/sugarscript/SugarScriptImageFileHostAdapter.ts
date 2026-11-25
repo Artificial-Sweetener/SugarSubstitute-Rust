@@ -18,7 +18,11 @@
 import {
   PngSugarScriptArtifactError,
   readPngSugarScriptMetadata,
+  type PngSugarScriptMetadata,
 } from './PngSugarScriptArtifactReader.js';
+
+/** What an open that reported its failure returns: nothing was opened to restore a run into. */
+const NOT_OPENED = Symbol('not opened');
 
 export interface SugarScriptFileHost {
   handleFile(file: File, ...arguments_: unknown[]): Promise<unknown>;
@@ -35,6 +39,8 @@ interface SugarScriptImageFileHostAdapterOptions {
   importWorkflow(workflow: Record<string, unknown>, source?: string): Promise<unknown>;
   validateWorkflow(workflow: Record<string, unknown>): Promise<unknown>;
   retainWorkflowSource(source: string): Promise<unknown>;
+  /** Bring a generated image's run back to the output canvas of the workflow it opened. */
+  restoreRun?(file: File, runId: string): Promise<unknown>;
   feedback?: SugarScriptImageFeedback | null;
   readErrorMessage(error: unknown): string;
 }
@@ -49,6 +55,7 @@ export class SugarScriptImageFileHostAdapter {
   ) => Promise<unknown>;
   readonly #validateWorkflow: (workflow: Record<string, unknown>) => Promise<unknown>;
   readonly #retainWorkflowSource: (source: string) => Promise<unknown>;
+  readonly #restoreRun: ((file: File, runId: string) => Promise<unknown>) | null;
   readonly #feedback: SugarScriptImageFeedback | null;
   readonly #readErrorMessage: (error: unknown) => string;
   readonly #original: SugarScriptFileHost['handleFile'];
@@ -62,6 +69,7 @@ export class SugarScriptImageFileHostAdapter {
     this.#importWorkflow = options.importWorkflow;
     this.#validateWorkflow = options.validateWorkflow;
     this.#retainWorkflowSource = options.retainWorkflowSource;
+    this.#restoreRun = options.restoreRun ?? null;
     this.#feedback = options.feedback ?? null;
     this.#readErrorMessage = options.readErrorMessage;
     this.#original = options.host.handleFile;
@@ -101,6 +109,19 @@ export class SugarScriptImageFileHostAdapter {
     if (metadata.sugarScript === null && metadata.workflow === null) {
       return this.#delegate(file, arguments_);
     }
+    const result = await this.#open(file, arguments_, metadata);
+    if (result === NOT_OPENED) return undefined;
+    // A generated image brings its run back to the workflow it opened, however it was opened.
+    if (metadata.output) await this.#restoreRunWithoutBlocking(file, metadata.output.runId);
+    return result;
+  }
+
+  /** Open the image's workflow by its declared authority; a reported failure opens nothing. */
+  async #open(
+    file: File,
+    arguments_: readonly unknown[],
+    metadata: PngSugarScriptMetadata,
+  ): Promise<unknown> {
     if (metadata.sugarScript === null && isDocumentCarriedWorkflow(metadata.workflow)) {
       try {
         const result = await this.#importWorkflow(
@@ -112,7 +133,7 @@ export class SugarScriptImageFileHostAdapter {
       } catch (error: unknown) {
         // Comfy cannot load Cubes that hold no native nodes, so there is nothing to fall back to.
         this.#reportFailure(error, 'Cube workflow import failed');
-        return undefined;
+        return NOT_OPENED;
       }
     }
     if (metadata.sugarScript === null && isManagedCubeWorkflow(metadata.workflow)) {
@@ -166,7 +187,17 @@ export class SugarScriptImageFileHostAdapter {
         );
       }
       this.#reportFailure(error);
-      return undefined;
+      return NOT_OPENED;
+    }
+  }
+
+  /** Show the run's images; a failure is reported and never undoes the opened workflow. */
+  async #restoreRunWithoutBlocking(file: File, runId: string): Promise<void> {
+    if (!this.#restoreRun) return;
+    try {
+      await this.#restoreRun(file, runId);
+    } catch (error: unknown) {
+      this.#feedback?.push?.('warning', 'Run images not restored', this.#readErrorMessage(error));
     }
   }
 
@@ -188,7 +219,7 @@ export class SugarScriptImageFileHostAdapter {
       return result;
     } catch (error: unknown) {
       this.#reportFailure(error, 'Recipe image import failed');
-      return undefined;
+      return NOT_OPENED;
     }
   }
 

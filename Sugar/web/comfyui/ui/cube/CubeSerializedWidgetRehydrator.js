@@ -31,10 +31,12 @@ const WIDGET_INPUT_TYPES = new Set([
 /** Own preconfiguration-time Cube widget migration into the current node schema. */
 export class CubeSerializedWidgetRehydrator {
     #createNode;
+    #ownedValue;
     #nested = new CubeNestedWidgetRestoration();
     /** Bind the current Comfy node factory used to discover live widget layouts. */
-    constructor(createNode) {
+    constructor(createNode, ownedValue = () => false) {
         this.#createNode = createNode;
+        this.#ownedValue = ownedValue;
     }
     /** Rebind every Cube-owned serialized subgraph before native configuration. */
     prepare(workflow) {
@@ -72,6 +74,7 @@ export class CubeSerializedWidgetRehydrator {
                 unavailableNode: 'preserve',
                 historicalWidgetNames: (node) => historicalWidgetNames.get(readString(node.type ?? node.class_type)) ?? null,
                 unidentifiedValues: 'discard',
+                ownedValue: this.#ownedValue,
             });
             this.#nested.capture(definition, new Set(byId.keys()), this.#createNode);
             rehydrated += 1;

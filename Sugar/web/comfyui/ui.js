@@ -258,6 +258,7 @@ const importHostCoordinator = new CubeImportHostCoordinator({
     logger,
     relations: () => relations.relations,
     openSugarScriptFile: (name, source) => projects.open(name, source),
+    restoreRun: (file, runId) => workflowExecution.restoreDroppedImage(file, runId),
 });
 const extensionSetupLifecycle = new CubeExtensionSetupLifecycle({
     api,

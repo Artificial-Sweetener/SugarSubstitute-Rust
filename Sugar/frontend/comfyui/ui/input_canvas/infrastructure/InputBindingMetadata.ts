@@ -49,6 +49,23 @@ export function readInputBinding(
   if (!isRecord(properties) || !Object.hasOwn(properties, MASK_BINDING_KEY)) return null;
   return parseBinding(properties[MASK_BINDING_KEY]);
 }
+/**
+ * Whether an input canvas supplies this loader field. Such a field is saved empty, and the empty
+ * value is the source choice: a default file in its place would replace the canvas source.
+ */
+export function isCanvasSuppliedField(properties: unknown, field: string): boolean {
+  return (['image', 'mask'] as const).some((kind) => {
+    try {
+      const binding = readInputBinding(properties, kind, field);
+      return (
+        binding?.field === field && binding.entries.some((entry) => entry.source.kind === 'canvas')
+      );
+    } catch {
+      // A malformed binding names no canvas source; its loader reports it when it loads.
+      return false;
+    }
+  });
+}
 /** Validate the shared binding value independently of its public per-kind persistence envelope. */
 function parseBinding(value: unknown): InputBinding | null {
   if (isRecord(value) && value.version === 1) return null;
