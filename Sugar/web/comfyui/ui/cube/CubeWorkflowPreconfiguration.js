@@ -18,6 +18,7 @@ import { LegacyCubeWorkflowExtractor, } from './migration/LegacyCubeWorkflowExtr
 import { CubeSerializedDefinitionPresentationAdapter } from './CubeSerializedDefinitionPresentationAdapter.js';
 import { EmbeddedCubeDefinitionPublisher, } from '../workflow/EmbeddedCubeDefinitionPublisher.js';
 import { CubeSerializedDocumentReconciler } from './CubeSerializedDocumentReconciler.js';
+import { repairCubeBoundaryLinks } from './CubeSerializedBoundaryRepair.js';
 /** Own the serialized workflow phase and its one pending legacy migration batch. */
 export class CubeWorkflowPreconfiguration {
     #legacyExtractor;
@@ -43,6 +44,7 @@ export class CubeWorkflowPreconfiguration {
     /** Detach legacy records before graph construction. */
     prepare(workflow) {
         this.libraryState?.begin(workflow);
+        repairCubeBoundaryLinks(workflow);
         this.#documentReconciler.prepare(workflow);
         this.#widgetRehydrator?.prepare(workflow);
         this.#embeddedDefinitions?.publish(workflow);

@@ -167,3 +167,74 @@ def test_captured_final_cube_policy_reaches_the_real_marker_runtime(
     assert len(list((tmp_path / "temp").glob("*.png"))) == 3
     policy.discard("run-a")
     assert len(list((tmp_path / "output").rglob("*.png"))) == 3
+
+
+def test_an_image_carries_the_workflow_as_queued_not_the_prepared_copy(
+    tmp_path: Path,
+) -> None:
+    """Keep an image's workflow loadable: Cube boundaries with their links, labels and ids."""
+    from PIL import (
+        Image,
+    )  # noqa: PLC0415 - the decoder is needed only to read the image back
+    import json  # noqa: PLC0415
+
+    paths = HostSavingSettingsPaths(tmp_path / "output")
+    settings = OutputSavingSettingsService(
+        FileOutputSavingPreferences(tmp_path / "settings.json"), paths
+    )
+    journal = SavingTicketJournal(tmp_path / "tickets.sqlite")
+    policy = OutputSavingQueuePolicy(
+        settings=settings,
+        paths=paths,
+        inventory=ComfySavingSourceInventory(
+            qualified_class=lambda _: None, image_output_class=lambda _: False
+        ),
+        journal=journal,
+        metadata_enabled=lambda: True,
+    )
+    workflow = cube_workflow({"a": provider_document("A")})
+    prepared = CubeExecutionCoordinator().prepare(
+        CubeExecutionRequest(workflow=workflow)
+    )
+    # What the client queued: the graph as it stood, which the prepared copy rewrites.
+    queued = {**workflow, "extra": {"queued_marker": "as queued"}}
+    prompt = policy.prepare(
+        "run-b",
+        prepared.prompt,
+        workflow=prepared.workflow,
+        owners=prepared.node_owners,
+        extra_data={
+            "sugarcubes_output_saving": {"workflow_name": "Queued"},
+            "extra_pnginfo": {"workflow": queued},
+        },
+    )
+    runtime = RuntimeSavingImages(
+        journal,
+        ManagedImageWriter(
+            numbers=OutputNamingNumbers(journal),
+            artifacts=ManagedArtifactRegistry(tmp_path / "artifacts.sqlite"),
+            temporary_root=tmp_path / "temp",
+        ),
+    )
+    bind_runtime_images(runtime)
+    try:
+        identity = prepared.report.output_identities[-1]
+        inputs = prompt[identity.execution_id]["inputs"]
+        assert isinstance(inputs, dict)
+        ticket = inputs["save_ticket"]
+        assert isinstance(ticket, str)
+        CubeOutput().forward(
+            ImageBatch(),
+            "test.cube",
+            identity.instance_alias or "Cube",
+            instance_id=identity.instance_id,
+            save_ticket=ticket,
+        )
+    finally:
+        release_runtime_images(runtime)
+    saved = sorted((tmp_path / "output").rglob("*.png"))
+    assert saved
+    with Image.open(saved[0]) as image:
+        stored = json.loads(image.text["workflow"])
+    assert stored == queued
+    policy.discard("run-b")

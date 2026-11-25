@@ -27,6 +27,7 @@ import {
 import { CubeWorkflowLibraryState } from '../workflow/CubeWorkflowLibraryState.js';
 import { CubeSerializedDocumentReconciler } from './CubeSerializedDocumentReconciler.js';
 import { CubeSerializedWidgetRehydrator } from './CubeSerializedWidgetRehydrator.js';
+import { repairCubeBoundaryLinks } from './CubeSerializedBoundaryRepair.js';
 import type { ComfyGraph } from '../types/graph.js';
 
 /** Own the serialized workflow phase and its one pending legacy migration batch. */
@@ -74,6 +75,7 @@ export class CubeWorkflowPreconfiguration {
   /** Detach legacy records before graph construction. */
   prepare(workflow: unknown): number {
     this.libraryState?.begin(workflow);
+    repairCubeBoundaryLinks(workflow);
     this.#documentReconciler.prepare(workflow);
     this.#widgetRehydrator?.prepare(workflow);
     this.#embeddedDefinitions?.publish(workflow);

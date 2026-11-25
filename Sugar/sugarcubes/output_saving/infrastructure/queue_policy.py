@@ -102,7 +102,12 @@ class OutputSavingQueuePolicy:
             enabled = self._metadata_enabled()
             metadata = (
                 (
-                    ("workflow", json.dumps(workflow, ensure_ascii=False)),
+                    (
+                        "workflow",
+                        json.dumps(
+                            _queued_workflow(extra_data, workflow), ensure_ascii=False
+                        ),
+                    ),
                     ("prompt", json.dumps(prompt, ensure_ascii=False)),
                 )
                 if enabled
@@ -172,3 +177,19 @@ class OutputSavingQueuePolicy:
     def retain_active(self, live_ids: frozenset[str]) -> None:
         """Retire prior-host preparation metadata after validating the current live queue snapshot."""
         self._journal.retain_runs(live_ids)
+
+
+def _queued_workflow(
+    extra_data: Mapping[str, JsonValue], workflow: Mapping[str, object]
+) -> Mapping[str, object]:
+    """Return the workflow as it was queued, for an image to carry.
+
+    The workflow execution prepares is a normalized copy: its Cube boundaries are rebuilt from the
+    Cube documents and keep no links, labels or ids, so a graph loaded from it shows Cubes without
+    ports. The client sends the workflow it queued as ``extra_pnginfo.workflow``, which is what an
+    image must carry; a client that sends none gets the prepared one.
+    """
+
+    info = extra_data.get("extra_pnginfo")
+    queued = info.get("workflow") if isinstance(info, Mapping) else None
+    return queued if isinstance(queued, Mapping) else workflow
