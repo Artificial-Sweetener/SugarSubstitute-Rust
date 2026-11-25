@@ -17,7 +17,6 @@
 import { PanelReveal } from '../motion/PanelReveal.js';
 import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
 import { isRecord } from '../../types/common.js';
-import { GenerationQueueDockWidth } from './GenerationQueueDockWidth.js';
 
 /** Comfy's docked job panel. */
 export const GENERATION_QUEUE_DOCK = '[data-testid="job-history-sidebar"]';
@@ -35,14 +34,13 @@ const SIDEBAR_TAB = 'job-history';
  *
  * The panel is Comfy's own side panel, which the frame otherwise keeps hidden together with
  * the icon column that opens and closes it. The frame's styles place the docked panel on the
- * right, where the generation queue has always been pinned; this owner gives it the button that
- * puts it away and the edge that resizes it. Comfy's own choice of side is left alone: changing
- * it rebuilds the workspace.
+ * right, where the generation queue has always been pinned, at the fly-out's width; it is not
+ * resized. This owner gives it the button that puts it away. Comfy's own choice of side is left
+ * alone: changing it rebuilds the workspace.
  */
 export class GenerationQueueDock {
   readonly #presence: HostSurfaceObserver;
   readonly #hide: HTMLButtonElement;
-  readonly #width: GenerationQueueDockWidth;
   readonly #reveal = new PanelReveal();
   /** The docked side panel last shown, so only a newly docked panel slides in. */
   #shown: HTMLElement | null = null;
@@ -53,8 +51,6 @@ export class GenerationQueueDock {
     private readonly document: Document,
     private readonly app: unknown,
     private readonly report: (error: unknown) => void,
-    /** The frame's own layer, which holds the resizing edge above Comfy's panels. */
-    private readonly layer: HTMLElement = document.body,
   ) {
     this.#hide = document.createElement('button');
     this.#hide.type = 'button';
@@ -62,11 +58,6 @@ export class GenerationQueueDock {
     this.#hide.setAttribute('aria-label', 'Hide generation queue');
     this.#hide.title = 'Hide generation queue';
     this.#hide.addEventListener('click', this.#close);
-    this.#width = new GenerationQueueDockWidth(
-      document,
-      () => document.defaultView?.localStorage ?? null,
-      report,
-    );
     this.#presence = new HostSurfaceObserver(document.body, GENERATION_QUEUE_DOCK, () =>
       this.#reconcile(),
     );
@@ -79,7 +70,6 @@ export class GenerationQueueDock {
     this.#presence.disconnect();
     this.#hide.removeEventListener('click', this.#close);
     this.#hide.remove();
-    this.#width.dispose();
     this.#reveal.dispose();
     this.#markDocked(false);
   }
@@ -90,7 +80,7 @@ export class GenerationQueueDock {
       root.toggleAttribute(GENERATION_QUEUE_DOCKED_ATTRIBUTE, docked);
   }
 
-  /** Keep the hide button and the resizing edge in the docked panel through Comfy's re-renders. */
+  /** Keep the hide button in the docked panel through Comfy's re-renders. */
   #reconcile(): void {
     if (this.#disposed) return;
     const panel = this.document.querySelector<HTMLElement>(GENERATION_QUEUE_DOCK);
@@ -98,18 +88,13 @@ export class GenerationQueueDock {
     if (!panel) {
       this.#shown = null;
       this.#hide.remove();
-      this.#width.divider.remove();
       return;
     }
-    // The edge lives in the frame's own layer, over the panel's left side: Comfy re-renders its
-    // panel and would drop an element placed inside it.
     const side = panel.closest<HTMLElement>('.side-bar-panel') ?? panel;
     if (this.#shown !== side) {
       this.#shown = side;
       this.#reveal.enter(side, 'right');
     }
-    this.#width.divider.style.top = `${String(Math.max(0, side.getBoundingClientRect().top))}px`;
-    if (this.#width.divider.parentElement !== this.layer) this.layer.append(this.#width.divider);
     const actions =
       panel.querySelector<HTMLElement>('.p-toolbar-start > .ml-auto') ??
       panel.querySelector<HTMLElement>('.p-toolbar-start');

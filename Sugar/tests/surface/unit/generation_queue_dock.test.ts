@@ -15,12 +15,10 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Prove the docked generation queue can be put away, and that its look is scoped to the frame. */
 import { expect, jest, test } from '@jest/globals';
-import { GenerationQueueDock } from '../../../frontend/comfyui/ui/surface/frame/GenerationQueueDock.js';
 import {
-  GENERATION_QUEUE_DOCK_MINIMUM_WIDTH,
-  GENERATION_QUEUE_DOCK_WIDTH_PROPERTY,
-  GenerationQueueDockWidth,
-} from '../../../frontend/comfyui/ui/surface/frame/GenerationQueueDockWidth.js';
+  GENERATION_QUEUE_DOCKED_ATTRIBUTE,
+  GenerationQueueDock,
+} from '../../../frontend/comfyui/ui/surface/frame/GenerationQueueDock.js';
 import { generationQueueSkinCss } from '../../../frontend/comfyui/ui/surface/frame/GenerationQueueSkinStyles.js';
 import {
   GENERATION_QUEUE_FLYOUT_MAX_HEIGHT,
@@ -81,73 +79,42 @@ test('the docked queue carries a button that closes Comfy’s own panel, and los
   document.body.replaceChildren();
 });
 
-test('the docked queue is resized from its left edge, within bounds, and remembers its width', async () => {
-  const stored = new Map<string, string>();
-  const storage = {
-    getItem: (key: string) => stored.get(key) ?? null,
-    setItem: (key: string, value: string) => void stored.set(key, value),
-  } as unknown as Storage;
-  const root = document.documentElement;
-  const width = () => root.style.getPropertyValue(GENERATION_QUEUE_DOCK_WIDTH_PROPERTY);
-  const first = new GenerationQueueDockWidth(document, () => storage, jest.fn());
-  expect(width()).toBe('360px');
-  const drag = (from: number, to: number): void => {
-    first.divider.dispatchEvent(new MouseEvent('pointerdown', { clientX: from, button: 0 }));
-    // The pointer leaves the narrow edge at once; the rest of the drag is heard on the page.
-    document.body.dispatchEvent(new MouseEvent('pointermove', { clientX: to, bubbles: true }));
-    document.body.dispatchEvent(new MouseEvent('pointerup', { clientX: to, bubbles: true }));
-  };
-  // The queue is pinned at the right, so dragging its edge leftwards widens it.
-  drag(900, 800);
-  expect(width()).toBe('460px');
-  expect(first.divider.getAttribute('aria-valuenow')).toBe('460');
-  drag(800, 2000);
-  expect(width()).toBe(`${String(GENERATION_QUEUE_DOCK_MINIMUM_WIDTH)}px`);
-  // jsdom's window is 1024 px wide, and the queue never takes more than six tenths of it.
-  drag(800, -2000);
-  expect(width()).toBe('614px');
-  first.divider.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
-  expect(width()).toBe('598px');
-  first.dispose();
-  expect(width()).toBe('');
-
-  const second = new GenerationQueueDockWidth(document, () => storage, jest.fn());
-  expect(second.width).toBe(598);
-  second.divider.dispatchEvent(new MouseEvent('dblclick'));
-  expect(second.width).toBe(360);
-  second.dispose();
-
-  // A browser that refuses storage keeps the default and reports the refusal.
-  const report = jest.fn();
-  const refused = new GenerationQueueDockWidth(
-    document,
-    () => {
-      throw new Error('storage refused');
-    },
-    report,
-  );
-  expect(refused.width).toBe(360);
-  expect(report).toHaveBeenCalledTimes(1);
-  refused.dispose();
-
-  // Docked, the edge sits in the page's own layer, where Comfy's re-renders cannot drop it, and
-  // leaves with the panel.
+test('the docked queue is not resizable: no edge of its own, and Comfy\u2019s splitter edge beside it hidden', async () => {
+  const style = document.createElement('style');
+  style.textContent = generationQueueSkinCss;
+  document.head.append(style);
+  document.documentElement.setAttribute('data-sc-substitute-frame', '');
+  // Comfy's splitter: the side panel, then its resizing edge, then the graph.
+  const splitter = document.createElement('div');
+  splitter.className = 'p-splitter';
   const side = document.createElement('div');
   side.className = 'side-bar-panel';
-  const panel = dockedPanel();
-  side.append(panel);
+  const gutter = document.createElement('div');
+  gutter.className = 'p-splitter-gutter';
+  const graph = document.createElement('div');
+  graph.className = 'p-splitterpanel';
+  splitter.append(side, gutter, graph);
+  document.body.append(splitter);
   const dock = new GenerationQueueDock(document, {}, jest.fn());
-  expect(document.querySelector('.sc-generation-queue-dock-divider')).toBeNull();
-  document.body.append(side);
+  // Another side panel keeps Comfy's edge.
+  expect(getComputedStyle(gutter).display).not.toBe('none');
+  side.append(dockedPanel());
   await Promise.resolve();
-  expect(document.querySelector('body > .sc-generation-queue-dock-divider')).not.toBeNull();
-  expect(side.querySelector('.sc-generation-queue-dock-divider')).toBeNull();
-  side.remove();
-  await Promise.resolve();
-  expect(document.querySelector('.sc-generation-queue-dock-divider')).toBeNull();
+  expect(document.documentElement.hasAttribute(GENERATION_QUEUE_DOCKED_ATTRIBUTE)).toBe(true);
+  expect(getComputedStyle(gutter).display).toBe('none');
+  expect(
+    document.querySelector(
+      '[class*="dock-divider"], [aria-orientation="vertical"][role="separator"]',
+    ),
+  ).toBeNull();
+  // The panel sits at the fly-out's width.
+  expect(style.textContent).toContain(
+    `--sc-queue-dock:${String(GENERATION_QUEUE_FLYOUT_WIDTH)}px;`,
+  );
   dock.dispose();
+  document.documentElement.removeAttribute('data-sc-substitute-frame');
+  document.head.replaceChildren();
   document.body.replaceChildren();
-  window.localStorage.clear();
 });
 
 test('a failing Comfy store is reported and never thrown at the person', () => {
@@ -178,9 +145,7 @@ test('inside the frame ComfyUI’s own queue panels give way to the generation q
     ':root[data-sc-substitute-frame] [data-testid="queue-progress-overlay"] { display:none!important; }',
   );
   // The pinned panel keeps its place beside the canvas; only the frame's view shows in it.
-  expect(rules).toContain(
-    '> :not(.sc-generation-queue):not(.sc-generation-queue-dock-divider) { display:none!important; }',
-  );
+  expect(rules).toContain('> :not(.sc-generation-queue) { display:none!important; }');
   // The queue button steps aside while the queue is pinned, so it is never offered twice.
   expect(generationQueueSkinCss).toContain(
     ':root[data-sc-substitute-frame][data-sc-queue-docked] :is(button[data-sc-generation-queue],.sc-generation-queue-slot)',

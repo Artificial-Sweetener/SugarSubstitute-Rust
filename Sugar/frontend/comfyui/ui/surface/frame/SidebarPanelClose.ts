@@ -20,9 +20,9 @@
  */
 import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
 import { createFluentIcon } from '../../core/FluentIcons.js';
+import { GENERATION_QUEUE_DOCK } from './GenerationQueueDock.js';
 
 const PANEL = '.side-bar-panel';
-const JOB_HISTORY = '[data-testid="job-history-sidebar"]';
 const STYLE_ID = 'sugarcubes-sidebar-close-styles';
 
 /** Keep one close button on the open sidebar panel while the frame is shown. */
@@ -74,7 +74,7 @@ export class SidebarPanelClose {
 
   readonly #attach = (): void => {
     const panel = this.document.querySelector<HTMLElement>(PANEL);
-    if (!panel || panel.querySelector(JOB_HISTORY)) {
+    if (!panel || panel.querySelector(GENERATION_QUEUE_DOCK)) {
       this.#button.remove();
       return;
     }

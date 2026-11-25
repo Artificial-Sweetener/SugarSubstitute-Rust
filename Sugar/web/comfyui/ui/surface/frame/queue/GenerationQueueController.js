@@ -17,6 +17,7 @@
 import { HostSurfaceObserver } from '../../../core/HostSurfaceObserver.js';
 import { ContextMenu } from '../../../menus/ContextMenu.js';
 import { isRecord } from '../../../types/common.js';
+import { GENERATION_QUEUE_DOCK } from '../GenerationQueueDock.js';
 import { applyOwnedTheme } from '../../appearance/ThemeService.js';
 import { ComfyQueueActions } from './ComfyQueueActions.js';
 import { ComfyQueueJobSource, } from './ComfyQueueJobSource.js';
@@ -30,8 +31,6 @@ import { GenerationQueueView } from './GenerationQueueView.js';
 import { generationQueueViewCss } from './GenerationQueueViewStyles.js';
 /** ComfyUI's queue button, which the frame presents as the generation queue's button. */
 const BUTTON = 'button[data-sc-generation-queue]';
-/** ComfyUI's pinned job panel, whose place beside the canvas the pinned queue takes. */
-const DOCK = '[data-testid="job-history-sidebar"]';
 /**
  * Own the generation queue for one Substitute frame.
  *
@@ -120,7 +119,7 @@ export class GenerationQueueController {
         }));
         document.addEventListener('click', this.#onButton, true);
         document.addEventListener('contextmenu', this.#onButtonMenu, true);
-        this.#dock = new HostSurfaceObserver(document.body, DOCK, () => this.#mountPanel());
+        this.#dock = new HostSurfaceObserver(document.body, GENERATION_QUEUE_DOCK, () => this.#mountPanel());
         this.#stop = this.#source.subscribe(() => this.#render());
         this.#mountPanel();
         this.#render();
@@ -188,7 +187,7 @@ export class GenerationQueueController {
     #mountPanel() {
         if (this.#disposed)
             return;
-        const dock = this.options.document.querySelector(DOCK);
+        const dock = this.options.document.querySelector(GENERATION_QUEUE_DOCK);
         const host = dock?.closest('.side-bar-panel') ?? null;
         if (!host) {
             this.#panelView.element.remove();
