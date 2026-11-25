@@ -25,6 +25,7 @@ import { createComfyRendererModeChangeSource, resolveComfyRendererMode, } from '
 import { ModelPickerAppearance } from './ModelPickerAppearance.js';
 import { readComfyModelFields } from './ComfyModelFieldAdapter.js';
 import { ComfyNodeVNodeIndex } from '../surface/ComfyVueTree.js';
+import { sameModelFiles } from './ModelCatalog.js';
 import { modelPickerChoices, orderModelsByTitle } from './ModelPickerChoices.js';
 import { mountModelPicker } from './vue/ModelPickerVueRuntime.js';
 import { mountModelGallery } from './vue/ModelGalleryVueRuntime.js';
@@ -490,17 +491,4 @@ export class ModelPickerHost {
 /** Remount when the host changes its legal options, preserving their exact order. */
 function sameOptions(left, right) {
     return left.length === right.length && left.every((value, index) => value === right[index]);
-}
-/** Whether two snapshots list the same model files in the same state of discovery. */
-export function sameModelFiles(left, right) {
-    return (left.scanning === right.scanning &&
-        left.items.length === right.items.length &&
-        left.items.every((item, index) => {
-            const other = right.items[index];
-            return (item === other ||
-                (other !== undefined &&
-                    item.id === other.id &&
-                    item.kind === other.kind &&
-                    item.value === other.value));
-        }));
 }

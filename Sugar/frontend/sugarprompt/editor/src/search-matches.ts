@@ -214,6 +214,7 @@ function atomRange(
   return range.collapsed ? null : range;
 }
 
+/** The prepared matches and their contribution to the document's shared search highlights. */
 export const searchMatchExtension: Extension = [
   searchMatches,
   ViewPlugin.fromClass(MatchHighlights),

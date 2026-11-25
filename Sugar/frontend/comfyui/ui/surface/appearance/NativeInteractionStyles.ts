@@ -15,9 +15,9 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Define titlebar feedback and native field accent motion through scoped design-system tokens. */
 
-/** Keep interaction styling scoped to positively identified native presentation boundaries. */
 import { fieldUnderlineCss } from './FieldSurfaceStyles.js';
 
+/** Keep interaction styling scoped to positively identified native presentation boundaries. */
 export function nativeInteractionCss(): string {
   return `
     [data-sc-disclosure-layout="fill"][data-sc-disclosing] > .lg-node[data-sc-style-node] {

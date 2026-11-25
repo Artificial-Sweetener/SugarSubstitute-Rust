@@ -268,3 +268,21 @@ export function chooseModelThumbnail(
     null
   );
 }
+
+/** Whether two snapshots list the same model files in the same state of discovery. */
+export function sameModelFiles(left: ModelCatalogSnapshot, right: ModelCatalogSnapshot): boolean {
+  return (
+    left.scanning === right.scanning &&
+    left.items.length === right.items.length &&
+    left.items.every((item, index) => {
+      const other = right.items[index];
+      return (
+        item === other ||
+        (other !== undefined &&
+          item.id === other.id &&
+          item.kind === other.kind &&
+          item.value === other.value)
+      );
+    })
+  );
+}

@@ -121,7 +121,7 @@ export class MasonrySearchCorpus implements SearchSurface {
       });
     }
   }
-  /** Snapshot primitive values without reading popup content or rebuilding mounted lookup. */
+  /** Snapshot what each field shows without reading popup content or rebuilding mounted lookup. */
   read(): readonly SearchNode[] {
     return [...this.#cards.keys()].flatMap((id) => {
       const node = this.#nodes.get(id);
@@ -131,13 +131,26 @@ export class MasonrySearchCorpus implements SearchSurface {
               ...node.description,
               fields: node.fields.map((field) => ({
                 ...field.description,
-                text: searchValue(field.widget.value),
+                text:
+                  shownNumber(field.widget.value, this.fields.get(field.description.id)) ??
+                  searchValue(field.widget.value),
               })),
             },
           ]
         : [];
     });
   }
+}
+/**
+ * A number is searched as its text box reads: one shown as 1.00 is found by 1.00, and every match
+ * lies on characters the box displays. Only a box showing that same number counts; anything
+ * else is searched by its value.
+ */
+function shownNumber(value: unknown, field: SearchFieldSurface | undefined): string | null {
+  const shown = field?.control?.value;
+  return typeof value === 'number' && shown !== undefined && shown.trim() && Number(shown) === value
+    ? shown
+    : null;
 }
 /** Preserve literal scalar semantics and exclude arbitrary structured widget payloads. */
 function searchValue(value: unknown): string | null {

@@ -31,6 +31,7 @@ import { readComfyModelFields } from './ComfyModelFieldAdapter.js';
 import { ComfyNodeVNodeIndex } from '../surface/ComfyVueTree.js';
 import type { ComfyModelFieldBinding } from './ComfyModelFieldAdapter.js';
 import { ModelCatalogClient } from './ModelCatalogClient.js';
+import { sameModelFiles } from './ModelCatalog.js';
 import type { ModelCatalogItem, ModelCatalogSnapshot } from './ModelCatalog.js';
 import { modelPickerChoices, orderModelsByTitle } from './ModelPickerChoices.js';
 import { mountModelPicker } from './vue/ModelPickerVueRuntime.js';
@@ -597,22 +598,4 @@ export class ModelPickerHost {
 /** Remount when the host changes its legal options, preserving their exact order. */
 function sameOptions(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
-}
-
-/** Whether two snapshots list the same model files in the same state of discovery. */
-export function sameModelFiles(left: ModelCatalogSnapshot, right: ModelCatalogSnapshot): boolean {
-  return (
-    left.scanning === right.scanning &&
-    left.items.length === right.items.length &&
-    left.items.every((item, index) => {
-      const other = right.items[index];
-      return (
-        item === other ||
-        (other !== undefined &&
-          item.id === other.id &&
-          item.kind === other.kind &&
-          item.value === other.value)
-      );
-    })
-  );
 }

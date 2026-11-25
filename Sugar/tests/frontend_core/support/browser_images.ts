@@ -32,6 +32,8 @@ export interface ImageDecoding {
 }
 
 declare global {
+  // A global is declared with var; let and const do not reach globalThis.
+  // eslint-disable-next-line no-var
   var imageDecoding: ImageDecoding;
 }
 

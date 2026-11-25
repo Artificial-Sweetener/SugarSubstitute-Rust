@@ -19,6 +19,7 @@
  * card and its inputs. One rule holds everywhere instead: a tooltip opens beside the pointer,
  * inside the window, like any tooltip on the desktop.
  */
+import { HostSurfaceObserver } from '../../core/HostSurfaceObserver.js';
 /** Offsets from the pointer, clear of the cursor's own shape. */
 export const TOOLTIP_POINTER_OFFSET = { x: 12, y: 20, margin: 8 };
 const PLACED = 'data-sc-pointer-tooltip';
@@ -48,14 +49,11 @@ export class PointerTooltipPlacement {
         document.head.append(this.#style);
         document.addEventListener('pointermove', this.#onMove, { capture: true, passive: true });
         document.addEventListener('keydown', this.#onKey, { capture: true, passive: true });
-        this.#observer = new MutationObserver((records) => {
-            for (const record of records)
-                for (const node of record.addedNodes)
-                    if (node instanceof HTMLElement && node.classList.contains('p-tooltip'))
-                        this.place(node);
+        this.#observer = new HostSurfaceObserver(document.body, '.p-tooltip', (changes) => {
+            for (const change of changes)
+                if (change.kind === 'mounted')
+                    this.place(change.element);
         });
-        // Tooltips are children of the body and nothing else there changes often.
-        this.#observer.observe(document.body, { childList: true });
     }
     dispose() {
         this.#observer.disconnect();

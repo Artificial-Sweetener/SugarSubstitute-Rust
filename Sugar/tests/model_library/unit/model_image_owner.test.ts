@@ -22,12 +22,12 @@ import { afterEach, expect, jest, test } from '@jest/globals';
 import {
   MODEL_BANNER_SIZE,
   chooseModelThumbnail,
+  sameModelFiles,
   type ModelCatalogItem,
   type ModelCatalogSnapshot,
   type ModelThumbnail,
 } from '../../../frontend/comfyui/ui/model_library/ModelCatalog.js';
 import { layoutModelGallery } from '../../../frontend/comfyui/ui/model_library/ModelGalleryLayout.js';
-import { sameModelFiles } from '../../../frontend/comfyui/ui/model_library/ModelPickerHost.js';
 import { modelVersionImage } from '../../../frontend/comfyui/ui/model_library/ModelReleases.js';
 import {
   IDLE_LORA_RASTERS,
