@@ -133,6 +133,25 @@ test('the record waits for a canvas that provisions the workflow, and a live wor
   kept.dispose();
 });
 
+test('a page that cannot reach the painted canvas shows the masks from their files', async () => {
+  const f = sourceMaskFixture();
+  const loader = f.loaders.read('SimpleSyrup.LoadMaskBatch')!;
+  const node = generated();
+  // A browser page opening an image the desktop app painted: no canvas of that name is here.
+  const binding = createComfyInputBinding(node, loader, {
+    ...f.ports,
+    host: () => null,
+    canvases: { editable: () => false, provisions: () => false },
+  });
+  await binding.initialize();
+  expect(binding.state.entries.map((entry) => entry.source)).toEqual([
+    { kind: 'file', file: 'sugarcubes/sources/one.png' },
+    { kind: 'file', file: 'sugarcubes/sources/two.png' },
+  ]);
+  expect(node.sugarcubes_widget_values).toEqual({ channel: 'red' });
+  binding.dispose();
+});
+
 test('files pair with entries only while the record still matches the binding', () => {
   const binding: InputBinding = {
     version: 2,

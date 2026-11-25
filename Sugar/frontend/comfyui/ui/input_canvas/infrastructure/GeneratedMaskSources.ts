@@ -52,8 +52,10 @@ export function forgetGeneratedSources(node: ComfyNode, field: string): void {
  * A mask entry bound to a layer of a canvas that provisions the workflow's surfaces takes its
  * file: that canvas imports the file into the layer and the loader returns to the layer, so the
  * masks arrive as editable layers whether or not the canvas still holds the documents the
- * workflow was painted in. An image entry takes its file whatever canvas content it named, as
- * the Python app opened a generated image's inputs from the files they were run with. An ordered
+ * workflow was painted in. A mask entry naming a canvas this page cannot reach, such as the
+ * desktop canvas seen from a browser, takes its file too: the file is the only mask it can show
+ * and run with. An image entry takes its file whatever canvas content it named, as the Python
+ * app opened a generated image's inputs from the files they were run with. An ordered
  * loader's files pair with its entries in order; a scalar loader's one file belongs to its
  * selected entry. A binding whose entries no longer match the record is left alone.
  *

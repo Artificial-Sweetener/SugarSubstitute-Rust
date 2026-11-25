@@ -73,6 +73,7 @@ export function createComfyInputBinding(node, loader, ports) {
     /** Whether an entry takes back the file it was queued with: see `withGeneratedSources`. */
     const restores = (entry) => entry.source.kind === 'canvas' &&
         (loader.kind === 'image' ||
+            !ports.host(entry.source.canvasId) ||
             (entry.source.target.kind === 'layer' && ports.canvases.provisions(entry.source.canvasId)));
     /**
      * Give a loader loaded from a generated image the files it was queued with.

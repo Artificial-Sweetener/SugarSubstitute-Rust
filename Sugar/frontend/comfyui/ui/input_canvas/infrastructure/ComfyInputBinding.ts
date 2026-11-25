@@ -109,6 +109,7 @@ export function createComfyInputBinding(
   const restores = (entry: InputEntry): boolean =>
     entry.source.kind === 'canvas' &&
     (loader.kind === 'image' ||
+      !ports.host(entry.source.canvasId) ||
       (entry.source.target.kind === 'layer' && ports.canvases.provisions(entry.source.canvasId)));
   /**
    * Give a loader loaded from a generated image the files it was queued with.
