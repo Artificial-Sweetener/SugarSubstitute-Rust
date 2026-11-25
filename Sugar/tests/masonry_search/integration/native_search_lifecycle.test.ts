@@ -113,6 +113,32 @@ test('includes only exposed editable widget values and never invents text for st
   expect(lookup).not.toHaveBeenCalled();
 });
 
+test.each([
+  ['Windows', 'first line\r\nsecond sunset\r\nthird'],
+  ['old Mac', 'first line\rsecond sunset\rthird'],
+  ['mixed', 'first line\r\nsecond sunset\nthird\rfourth'],
+])(
+  'text with %s line endings is searched as its text box shows it, so a match is its exact characters',
+  (_kind, value) => {
+    const f = fixture();
+    const widget = f.node.widgets?.[0];
+    if (!widget) throw new Error('No widget');
+    widget.type = 'text';
+    widget.value = value;
+    const input = f.card.querySelector('input');
+    if (!input) throw new Error('No text box');
+    const box = document.createElement('textarea');
+    box.setAttribute('aria-label', widget.name);
+    input.replaceWith(box);
+    // A browser text box shows every CRLF and lone CR as one line break.
+    box.value = value.replace(/\r\n?/g, '\n');
+    const text = new MasonrySearchCorpus(f.sections, f.cells).read()[0]?.fields[0]?.text ?? '';
+    const start = text.indexOf('sunset');
+    expect(text).toBe(box.value);
+    expect(box.value.slice(start, start + 'sunset'.length)).toBe('sunset');
+  },
+);
+
 test('uses forwarded face values and excludes unprojected or policy-hidden cards', () => {
   const f = fixture();
   const face = f.sections[0]?.cards[0];

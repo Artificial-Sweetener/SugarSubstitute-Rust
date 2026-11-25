@@ -90,6 +90,7 @@ export class MasonrySearchCorpus {
                         fields: node.fields.map((field) => ({
                             ...field.description,
                             text: shownNumber(field.widget.value, this.fields.get(field.description.id)) ??
+                                shownText(field.widget.value, this.fields.get(field.description.id)) ??
                                 searchValue(field.widget.value),
                         })),
                     },
@@ -106,6 +107,21 @@ export class MasonrySearchCorpus {
 function shownNumber(value, field) {
     const shown = field?.control?.value;
     return typeof value === 'number' && shown !== undefined && shown.trim() && Number(shown) === value
+        ? shown
+        : null;
+}
+/**
+ * Text is searched as its text box shows it: a box shows every CRLF and lone CR as one line
+ * break, so a value with other line endings is searched in the box's own text and every match
+ * offset, and the selection made from it, lands on the characters the box displays. A prompt
+ * editor shows the value's own characters and is searched in the value.
+ */
+function shownText(value, field) {
+    const shown = field?.control?.value;
+    return typeof value === 'string' &&
+        shown !== undefined &&
+        shown !== value &&
+        shown === value.replace(/\r\n?/g, '\n')
         ? shown
         : null;
 }
