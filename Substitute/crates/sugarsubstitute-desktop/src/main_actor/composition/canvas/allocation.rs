@@ -8,7 +8,7 @@ use super::{
 };
 use crate::{
     DesktopError,
-    canvas::{CanvasContent, CpuFrame},
+    canvas::{CanvasContent, CpuFrame, SharedFrame},
 };
 use std::{
     error::Error,
@@ -131,11 +131,12 @@ impl Allocation {
 
     /// Show one frame and always try to close every native draw it began.
     ///
-    /// A CPU frame whose `base` is the frame this surface retains is shown by repairing the
-    /// surface: retained pixels move if its plan moves them, and only its changed regions are
-    /// redrawn. Every other frame clears and draws the whole surface: the first frame, a frame
-    /// after a shared frame the plan is not relative to, a skipped generation, a whole-viewport
-    /// change, and any frame after a failure.
+    /// A frame whose `base` is the frame this surface retains is shown by repairing the surface:
+    /// retained pixels move if its plan moves them, and only its changed regions are redrawn,
+    /// from CPU pixels or from the frame's complete shared texture. Every other frame clears and
+    /// draws the whole surface: the first frame, a frame whose plan is relative to a frame the
+    /// surface no longer holds, a skipped generation, a whole-viewport change, and any frame
+    /// after a failure.
     pub(super) fn upload(
         &mut self,
         content: &CanvasContent<'_>,
@@ -145,7 +146,7 @@ impl Allocation {
             return Err(DesktopError::message("canvas_upload", "frame or drawing state differs"));
         }
         let result = match self.repairable(content) {
-            Some(frame) => self.repair(frame, wash),
+            Some((source, plan)) => self.repair(&source, plan, wash),
             None => self.draw(content, wash),
         };
         let retirement = self.end_draw();
@@ -178,12 +179,45 @@ impl Allocation {
         }
     }
 
-    /// The CPU frame to show by repair: its plan is relative to exactly the frame this surface
+    /// The frame to show by repair: its plan is relative to exactly the frame this surface
     /// retains and leaves part of the viewport as it is.
-    fn repairable<'a, 'b>(&self, content: &'a CanvasContent<'b>) -> Option<&'a CpuFrame<'b>> {
-        let CanvasContent::Cpu(frame) = content else { return None };
+    fn repairable<'a, 'b>(
+        &self,
+        content: &'a CanvasContent<'b>,
+    ) -> Option<(RepairSource<'a, 'b>, &'a DamagePlan)> {
         let held = self.surface_holds?;
-        (frame.base == Some(held) && !whole(frame.damage, self.extent)).then_some(frame)
+        let (base, plan, source) = match content {
+            CanvasContent::Cpu(frame) => (frame.base, frame.damage, RepairSource::Cpu(frame)),
+            CanvasContent::Shared(frame) => (frame.base, frame.damage, RepairSource::Shared(frame)),
+        };
+        (base == Some(held) && !whole(plan, self.extent)).then_some((source, plan))
+    }
+
+    /// Wrap a shared texture for the surface update that is open; the wrapper lasts that update.
+    fn wrap(
+        &mut self,
+        context: &ID2D1DeviceContext,
+        frame: &SharedFrame<'_>,
+    ) -> Result<(), DesktopError> {
+        let surface: IDXGISurface = frame
+            .texture
+            .texture()
+            .cast()
+            .map_err(|cause| DesktopError::new("query_canvas_shared_surface", cause))?;
+        let mut raw = std::ptr::null_mut();
+        // SAFETY: The texture belongs to this context's D3D11 device and has the same BGRA8
+        // format; the surface outlives this call and the retained bitmap.
+        let status = unsafe {
+            (context.vtable().CreateBitmapFromDxgiSurface)(
+                context.as_raw(),
+                surface.as_raw(),
+                &bitmap_properties(),
+                &mut raw,
+            )
+        };
+        self.bitmap = None;
+        // SAFETY: The call transfers an ID2D1Bitmap1 reference to this retained slot.
+        unsafe { adopt(&mut self.bitmap, raw, status, "create_canvas_bitmap") }
     }
 
     /// Bring the retained bitmap to `frame`'s pixels, copying only its changed regions when the
@@ -272,49 +306,73 @@ impl Allocation {
     /// Move the surface's retained pixels where the plan moves them, then redraw only its
     /// changed regions, each in its own surface update. A plan that changes no pixel draws
     /// nothing: the retained surface already is the frame.
-    fn repair(&mut self, frame: &CpuFrame<'_>, wash: [u8; 4]) -> Result<Filled, DesktopError> {
+    fn repair(
+        &mut self,
+        source: &RepairSource<'_, '_>,
+        plan: &DamagePlan,
+        wash: [u8; 4],
+    ) -> Result<Filled, DesktopError> {
         let started = Instant::now();
-        let plan = frame.damage;
         if let Some(blit) = plan.blit() {
-            let source = rectangle(blit.source);
+            let moved = rectangle(blit.source);
             let across = i64::from(blit.destination[0]) - i64::from(blit.source.x());
             let down = i64::from(blit.destination[1]) - i64::from(blit.source.y());
             let (Ok(across), Ok(down)) = (i32::try_from(across), i32::try_from(down)) else {
                 return Err(DesktopError::message("scroll_canvas_surface", "movement overflow"));
             };
             // SAFETY: The surface is live and not being drawn; the source lies within it.
-            unsafe { self.surface()?.Scroll(Some(&source), None, across, down) }
+            unsafe { self.surface()?.Scroll(Some(&moved), None, across, down) }
                 .map_err(|cause| DesktopError::new("scroll_canvas_surface", cause))?;
         }
-        // The bitmap follows the frame only when it held the plan's base and nothing moved.
-        let follows =
-            self.upload.is_some() && self.upload_holds == frame.base && plan.blit().is_none();
+        // The CPU bitmap follows a CPU frame only when it held the plan's base and nothing
+        // moved; a shared frame never touches it.
+        let follows = match source {
+            RepairSource::Cpu(frame) => {
+                let follows = self.upload.is_some()
+                    && self.upload_holds == frame.base
+                    && plan.blit().is_none();
+                self.upload_holds = None;
+                follows
+            }
+            RepairSource::Shared(_) => false,
+        };
         let extent = self.extent;
         let mut open = started.elapsed();
         let mut fill = Duration::ZERO;
         let mut draw = Duration::ZERO;
-        let mut source = Source::Updated;
-        let mut source_bytes = 0;
+        let mut filled = match source {
+            RepairSource::Cpu(_) => (Source::Updated, 0),
+            RepairSource::Shared(_) => (Source::Wrapped, 0),
+        };
         let mut regions = 0;
         let mut created = false;
-        self.upload_holds = None;
         for region in plan.dirty().regions() {
             let opening = Instant::now();
             let offset = self.begin(Some(region))?;
             open += opening.elapsed();
             let filling = Instant::now();
             let context = self.context.clone().ok_or_else(|| missing("canvas_draw_context"))?;
-            if self.upload.is_none() {
-                // The first repair after a shared frame has no bitmap yet: it starts complete.
-                (source, source_bytes) = self.fill_complete(&context, frame)?;
-                created = true;
-            } else if !created {
-                let bitmap = self.upload.as_ref().ok_or_else(|| missing("canvas_bitmap"))?;
-                copy_region(bitmap, frame.pixels, extent, region)
-                    .map_err(|cause| DesktopError::new("update_canvas_bitmap", cause))?;
-                source_bytes += region.pixels() * 4;
+            let bitmap = match source {
+                RepairSource::Cpu(frame) => {
+                    if self.upload.is_none() {
+                        // The first CPU repair after shared frames has no bitmap: it starts whole.
+                        filled = self.fill_complete(&context, frame)?;
+                        created = true;
+                    } else if !created {
+                        let bitmap =
+                            self.upload.as_ref().ok_or_else(|| missing("canvas_bitmap"))?;
+                        copy_region(bitmap, frame.pixels, extent, region)
+                            .map_err(|cause| DesktopError::new("update_canvas_bitmap", cause))?;
+                        filled.1 += region.pixels() * 4;
+                    }
+                    self.upload.clone()
+                }
+                RepairSource::Shared(frame) => {
+                    self.wrap(&context, frame)?;
+                    self.bitmap.clone()
+                }
             }
-            let bitmap = self.upload.as_ref().ok_or_else(|| missing("canvas_bitmap"))?;
+            .ok_or_else(|| missing("canvas_bitmap"))?;
             fill += filling.elapsed();
             let drawing = Instant::now();
             #[allow(clippy::cast_precision_loss)]
@@ -333,7 +391,7 @@ impl Allocation {
             };
             #[cfg(test)]
             self.capture.prefill(&context, &target);
-            paint(&context, bitmap, &target, Some(&from), wash);
+            paint(&context, &bitmap, &target, Some(&from), wash);
             #[cfg(test)]
             self.capture.copy(
                 &context,
@@ -341,17 +399,19 @@ impl Allocation {
                 Extent::new(region.width(), region.height())
                     .map_err(|cause| DesktopError::new("capture_canvas_surface", cause))?,
             )?;
-            drop(context);
+            drop((bitmap, context));
             self.end_draw()?;
             draw += drawing.elapsed();
             regions += 1;
         }
-        if created || follows {
+        if let RepairSource::Cpu(frame) = source
+            && (created || follows)
+        {
             self.upload_holds = Some(frame.target);
         }
         Ok(Filled {
-            source,
-            source_bytes,
+            source: filled.0,
+            source_bytes: filled.1,
             open,
             fill,
             draw,
@@ -380,24 +440,7 @@ impl Allocation {
         let (source, source_bytes) = match content {
             CanvasContent::Cpu(frame) => self.fill(&context, frame)?,
             CanvasContent::Shared(frame) => {
-                let surface: IDXGISurface = frame
-                    .texture
-                    .texture()
-                    .cast()
-                    .map_err(|cause| DesktopError::new("query_canvas_shared_surface", cause))?;
-                let mut raw = std::ptr::null_mut();
-                // SAFETY: The texture belongs to this context's D3D11 device and has the same
-                // BGRA8 format; the surface outlives this call and the retained bitmap.
-                let status = unsafe {
-                    (context.vtable().CreateBitmapFromDxgiSurface)(
-                        context.as_raw(),
-                        surface.as_raw(),
-                        &bitmap_properties(),
-                        &mut raw,
-                    )
-                };
-                // SAFETY: The call transfers an ID2D1Bitmap1 reference to this retained slot.
-                unsafe { adopt(&mut self.bitmap, raw, status, "create_canvas_bitmap")? };
+                self.wrap(&context, frame)?;
                 (Source::Wrapped, 0)
             }
         };
@@ -457,6 +500,14 @@ struct Filled {
     /// When the surface update that is still open began drawing.
     drawing_since: Option<Instant>,
     reach: Reach,
+}
+
+/// Where a repaired region's pixels come from.
+enum RepairSource<'a, 'b> {
+    /// The frame's complete CPU pixels, through the retained bitmap.
+    Cpu(&'a CpuFrame<'b>),
+    /// The frame's complete shared texture, wrapped for each region.
+    Shared(&'a SharedFrame<'b>),
 }
 
 /// Whether a plan redraws the complete viewport, leaving nothing retained to repair.

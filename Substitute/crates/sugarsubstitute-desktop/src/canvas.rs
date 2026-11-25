@@ -164,6 +164,11 @@ pub struct SharedFrame<'a> {
     pub pending: bool,
     /// Retained frame represented by every texture pixel.
     pub target: FrameStamp,
+    /// The presented frame `damage` is relative to; `None` when the plan redraws everything.
+    pub base: Option<FrameStamp>,
+    /// How this frame's output differs from `base`, in device pixels. The texture is always
+    /// complete: the plan only says which of its pixels the composition still has to copy.
+    pub damage: &'a DamagePlan,
     /// Shared texture exported by the frame's composition graphics device.
     pub texture: &'a SharedCanvasTexture,
 }
@@ -203,6 +208,17 @@ impl CanvasContent<'_> {
             #[cfg(windows)]
             Self::Shared(frame) => {
                 let extent = frame.texture.extent();
+                if frame.damage.dirty().surface() != extent
+                    || frame.base.is_some_and(|base| {
+                        base.surface != frame.target.surface
+                            || base.generation >= frame.target.generation
+                    })
+                {
+                    return Err(DesktopError::message(
+                        "canvas_frame",
+                        "Invalid shared canvas frame extent or dependency",
+                    ));
+                }
                 if extent.width() > MAX_VIEWPORT_EDGE || extent.height() > MAX_VIEWPORT_EDGE {
                     return Err(DesktopError::message(
                         "canvas_frame",
