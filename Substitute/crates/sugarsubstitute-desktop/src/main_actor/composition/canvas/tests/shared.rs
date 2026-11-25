@@ -286,7 +286,7 @@ fn qualify_extent(
                 cost.reach,
                 Reach::Repaired { scrolled, regions: plan.dirty().regions().count() as u32 }
             );
-            costs.push((cost, canvas.timings.latest_commit.ok_or("Commit cost absent")?));
+            costs.push((cost, canvas.timings.latest_commit.ok_or("Commit cost absent")?.commit));
         }
         let middle = |value: fn(&(UploadCost, Duration)) -> Duration| {
             let mut values: Vec<_> = costs.iter().map(value).collect();
@@ -335,7 +335,7 @@ fn qualify_extent(
         assert_eq!(canvas.present(&shared(frame), placement)?, Some(frame));
         let cost = canvas.timings.latest.ok_or("Presentation cost absent")?;
         assert_eq!((cost.source, cost.reach), (Source::Wrapped, Reach::Whole));
-        wrapped.push((cost, canvas.timings.latest_commit.ok_or("Commit cost absent")?));
+        wrapped.push((cost, canvas.timings.latest_commit.ok_or("Commit cost absent")?.commit));
     }
     let shared_middle = |value: fn(&(UploadCost, Duration)) -> Duration| {
         let mut values: Vec<_> = wrapped.iter().map(value).collect();

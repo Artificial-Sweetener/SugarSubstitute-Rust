@@ -47,6 +47,18 @@ pub(super) enum Reach {
     },
 }
 
+/// What one committed frame cost after its surface update closed.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct CommitCost {
+    /// Queuing a shared texture's read fence and flushing the device; zero for CPU frames.
+    pub(super) signal: Duration,
+    /// Binding, placing and committing to composition.
+    pub(super) commit: Duration,
+    /// The frame's viewport in physical pixels.
+    pub(super) width: u32,
+    pub(super) height: u32,
+}
+
 #[derive(Default)]
 struct Window {
     presents: u64,
@@ -55,11 +67,16 @@ struct Window {
     wrapper_creations: u64,
     repaired: u64,
     scrolled: u64,
+    unchanged: u64,
+    regions: u64,
     source_bytes: u64,
     fill: Duration,
     draw: Duration,
+    signal: Duration,
     commit: Duration,
     slowest: Duration,
+    width: u32,
+    height: u32,
 }
 
 /// Accumulate presentation costs on the UI thread; emitting never touches native state.
@@ -70,12 +87,12 @@ pub(super) struct PresentTimings {
     #[cfg(test)]
     pub(super) latest: Option<UploadCost>,
     #[cfg(test)]
-    pub(super) latest_commit: Option<Duration>,
+    pub(super) latest_commit: Option<CommitCost>,
 }
 
 impl PresentTimings {
     /// Count one committed frame, closing the window once it spans a second.
-    pub(super) fn record(&mut self, cost: UploadCost, commit: Duration) {
+    pub(super) fn record(&mut self, cost: UploadCost, committed: CommitCost) {
         let now = Instant::now();
         let opened = *self.opened.get_or_insert(now);
         let window = &mut self.window;
@@ -85,19 +102,25 @@ impl PresentTimings {
             Source::Updated => window.bitmap_updates += 1,
             Source::Wrapped => window.wrapper_creations += 1,
         }
-        if let Reach::Repaired { scrolled, .. } = cost.reach {
+        if let Reach::Repaired { scrolled, regions } = cost.reach {
             window.repaired += 1;
             window.scrolled += u64::from(scrolled);
+            window.unchanged += u64::from(regions == 0);
+            window.regions += u64::from(regions);
         }
         window.source_bytes = window.source_bytes.saturating_add(cost.source_bytes);
         window.fill += cost.open + cost.fill;
         window.draw += cost.draw;
-        window.commit += commit;
-        window.slowest = window.slowest.max(cost.open + cost.fill + cost.draw + commit);
+        window.signal += committed.signal;
+        window.commit += committed.commit;
+        window.slowest = window
+            .slowest
+            .max(cost.open + cost.fill + cost.draw + committed.signal + committed.commit);
+        (window.width, window.height) = (committed.width, committed.height);
         #[cfg(test)]
         {
             self.latest = Some(cost);
-            self.latest_commit = Some(commit);
+            self.latest_commit = Some(committed);
         }
         if now.duration_since(opened) >= WINDOW {
             self.emit(now.duration_since(opened));
@@ -105,13 +128,20 @@ impl PresentTimings {
     }
 
     fn emit(&mut self, elapsed: Duration) {
+        if let Some(record) = self.close(elapsed) {
+            record.emit();
+        }
+    }
+
+    /// Close the window into its record; an empty window has none.
+    fn close(&mut self, elapsed: Duration) -> Option<Record> {
         let window = std::mem::take(&mut self.window);
         self.opened = None;
         if window.presents == 0 {
-            return;
+            return None;
         }
         let micros = |value: Duration| u64::try_from(value.as_micros()).unwrap_or(u64::MAX);
-        Record {
+        Some(Record {
             window_us: micros(elapsed),
             presents: window.presents,
             created: window.bitmap_creations,
@@ -119,13 +149,17 @@ impl PresentTimings {
             wrapped: window.wrapper_creations,
             repaired: window.repaired,
             scrolled: window.scrolled,
+            unchanged: window.unchanged,
+            regions: window.regions,
             source_bytes: window.source_bytes,
             fill_us: micros(window.fill),
             draw_us: micros(window.draw),
+            signal_us: micros(window.signal),
             commit_us: micros(window.commit),
             slowest_us: micros(window.slowest),
-        }
-        .emit();
+            width: u64::from(window.width),
+            height: u64::from(window.height),
+        })
     }
 }
 
@@ -135,5 +169,68 @@ impl Drop for PresentTimings {
         if let Some(opened) = self.opened {
             self.emit(opened.elapsed());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn frame(source: Source, reach: Reach) -> UploadCost {
+        UploadCost {
+            source,
+            source_bytes: if source == Source::Wrapped { 0 } else { 1024 },
+            open: Duration::from_micros(10),
+            fill: Duration::from_micros(20),
+            draw: Duration::from_micros(30),
+            reach,
+        }
+    }
+
+    fn committed(signal: u64, width: u32, height: u32) -> CommitCost {
+        CommitCost {
+            signal: Duration::from_micros(signal),
+            commit: Duration::from_micros(100),
+            width,
+            height,
+        }
+    }
+
+    #[test]
+    fn a_window_counts_how_much_each_frame_redrew_and_what_its_fence_cost() {
+        let mut timings = PresentTimings::default();
+        timings.record(frame(Source::Wrapped, Reach::Whole), committed(40, 1920, 1080));
+        timings.record(
+            frame(Source::Updated, Reach::Repaired { scrolled: true, regions: 3 }),
+            committed(0, 3840, 2160),
+        );
+        timings.record(
+            frame(Source::Updated, Reach::Repaired { scrolled: false, regions: 0 }),
+            committed(0, 3840, 2160),
+        );
+        let record = timings.close(Duration::from_secs(1)).ok_or("window absent");
+        assert_eq!(
+            record,
+            Ok(Record {
+                window_us: 1_000_000,
+                presents: 3,
+                created: 0,
+                updated: 2,
+                wrapped: 1,
+                repaired: 2,
+                scrolled: 1,
+                unchanged: 1,
+                regions: 3,
+                source_bytes: 2048,
+                fill_us: 90,
+                draw_us: 90,
+                signal_us: 40,
+                commit_us: 300,
+                slowest_us: 200,
+                width: 3840,
+                height: 2160,
+            })
+        );
+        assert_eq!(timings.close(Duration::from_secs(1)), None, "a closed window starts empty");
     }
 }

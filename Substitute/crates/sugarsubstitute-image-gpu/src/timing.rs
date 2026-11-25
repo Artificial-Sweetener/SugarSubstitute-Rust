@@ -8,7 +8,7 @@ use std::{
 
 use sugarsubstitute_contracts::execution::{MemoryClaim, MemoryLease};
 
-const PHASES: usize = 10;
+const PHASES: usize = 12;
 /// Native operation categories share one fixed inventory per selected device.
 #[derive(Clone, Copy)]
 pub(crate) enum Phase {
@@ -22,9 +22,13 @@ pub(crate) enum Phase {
     Present,
     Batch,
     Coordination,
+    /// One complete composition display draw: staging, encoding, submission and completion.
+    Display,
+    /// Waiting for the composition's recorded reads of a shared texture before reusing it.
+    CompositionReads,
 }
 impl Phase {
-    fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Encode => "command_finish",
             Self::Upload => "upload",
@@ -36,6 +40,8 @@ impl Phase {
             Self::Present => "queue_present",
             Self::Batch => "dag_batch",
             Self::Coordination => "submission_admission",
+            Self::Display => "display_draw",
+            Self::CompositionReads => "composition_reads",
         }
     }
     fn all() -> [Self; PHASES] {
@@ -50,7 +56,13 @@ impl Phase {
             Self::Present,
             Self::Batch,
             Self::Coordination,
+            Self::Display,
+            Self::CompositionReads,
         ]
+    }
+    /// The fixed name of the inventory's phase called `name`; any other text names none.
+    pub(crate) fn named(name: &str) -> Option<&'static str> {
+        Self::all().into_iter().map(Self::name).find(|known| *known == name)
     }
 }
 /// Completed work and current outstanding calls; busy_since describes continuous occupancy.
@@ -170,6 +182,16 @@ impl GpuDiagnostics {
             .begin(now);
         Span { diagnostics: self.clone(), phase, started: now, bytes, items, timeouts: 0 }
     }
+    /// Observe one wait for the composition's reads of a shared texture before it is reused;
+    /// the wait is recorded when the returned observation drops.
+    #[must_use]
+    pub fn composition_reads(&self) -> ObservedWait {
+        ObservedWait { _span: self.begin(Phase::CompositionReads, 0, 1) }
+    }
+}
+/// A wait outside this crate, recorded in the device's inventory when it drops.
+pub struct ObservedWait {
+    _span: Span,
 }
 /// A phase stays observable during a blocked driver call and records completion on every return.
 pub(crate) struct Span {
@@ -198,27 +220,23 @@ impl Drop for Span {
 impl State {
     /// Emit only after releasing bookkeeping; fields are bounded numeric quantities and fixed names.
     fn emit(&self, phase: Phase, sample: Sample, elapsed: Duration, now: Duration) {
-        tracing::info!(
-            operation = "image_gpu_timing",
-            vendor = self.vendor,
-            device = self.device,
-            phase = phase.name(),
-            window_microseconds = elapsed.as_micros(),
-            completed = sample.count,
-            total_microseconds = sample.total_us,
-            max_microseconds = sample.maximum_us,
-            bytes = sample.bytes,
-            work_items = sample.items,
-            wait_timeouts = sample.timeouts,
-            active = sample.active,
-            peak_active = sample.peak_active,
-            busy_microseconds = if sample.active == 0 {
-                0
-            } else {
-                now.saturating_sub(sample.busy_since).as_micros()
-            },
-            "Native GPU wall-time and workload window"
-        );
+        let micros = |value: Duration| u64::try_from(value.as_micros()).unwrap_or(u64::MAX);
+        crate::timing_diagnostic::Record {
+            phase: phase.name(),
+            vendor: self.vendor,
+            device: self.device,
+            window_us: micros(elapsed),
+            completed: sample.count,
+            total_us: sample.total_us,
+            max_us: sample.maximum_us,
+            bytes: sample.bytes,
+            work_items: sample.items,
+            wait_timeouts: sample.timeouts,
+            active: sample.active,
+            peak_active: sample.peak_active,
+            busy_us: if sample.active == 0 { 0 } else { micros(now.saturating_sub(sample.busy_since)) },
+        }
+        .emit();
     }
 }
 impl Drop for State {

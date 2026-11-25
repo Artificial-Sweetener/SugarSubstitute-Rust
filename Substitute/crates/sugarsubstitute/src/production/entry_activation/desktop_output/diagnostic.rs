@@ -12,6 +12,8 @@ mod console;
 mod consume;
 #[path = "diagnostic/failure.rs"]
 pub(super) mod failure;
+#[path = "diagnostic/gpu_timing.rs"]
+pub(super) mod gpu_timing;
 #[path = "diagnostic/present.rs"]
 pub(super) mod present;
 use failure::parse as parse_failure;
@@ -83,6 +85,7 @@ pub(super) enum Observation {
     Motion(crate::canvas_motion_diagnostic::Record),
     Bulk(sugarsubstitute_desktop::bulk_channel_diagnostic::Record),
     Present(sugarsubstitute_desktop::canvas_present_diagnostic::Record),
+    GpuTiming(sugarsubstitute_image_gpu::timing_diagnostic::Record),
     #[cfg(feature = "k1-native-qualification")]
     Qualification(qualification::Qualification),
 }
@@ -108,6 +111,7 @@ pub(super) struct Diagnostic {
     motion_emitted: u16,
     bulk_emitted: u16,
     present_emitted: u16,
+    gpu_timing_emitted: u16,
 }
 /// Canvas request lifecycle records relayed per child run; later records are discarded.
 const CANVAS_RECORDS: u16 = 4096;
@@ -125,6 +129,9 @@ const BULK_RECORDS: u16 = 256;
 /// Canvas presentation windows relayed per child run, one per second of activity; later ones
 /// are discarded.
 const PRESENT_RECORDS: u16 = 8192;
+/// GPU phase windows relayed per child run, one per active phase and second; a long session's
+/// later ones are discarded.
+const GPU_TIMING_RECORDS: u16 = 32768;
 impl Diagnostic {
     pub(super) const fn new() -> Self {
         Self {
@@ -147,6 +154,7 @@ impl Diagnostic {
             motion_emitted: 0,
             bulk_emitted: 0,
             present_emitted: 0,
+            gpu_timing_emitted: 0,
         }
     }
     /// The authenticated output owner validates Run before these inert byte facts.
@@ -246,6 +254,15 @@ impl Diagnostic {
                         if self.present_emitted < PRESENT_RECORDS {
                             self.present_emitted += 1;
                             emit(Observation::Present(record));
+                        }
+                    } else if let Some(record) =
+                        sugarsubstitute_image_gpu::timing_diagnostic::Record::parse(
+                            &self.bytes[..self.length],
+                        )
+                    {
+                        if self.gpu_timing_emitted < GPU_TIMING_RECORDS {
+                            self.gpu_timing_emitted += 1;
+                            emit(Observation::GpuTiming(record));
                         }
                     } else if let Some(probe) =
                         sugarsubstitute_desktop::frontend_probe_diagnostic::Record::parse(

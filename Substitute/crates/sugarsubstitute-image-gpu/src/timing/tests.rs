@@ -74,6 +74,24 @@ fn ui_reporting_skips_bookkeeping_contention_without_losing_active_or_completed_
 }
 
 #[test]
+fn a_composition_read_wait_is_counted_in_its_own_phase_when_it_ends()
+-> Result<(), Box<dyn std::error::Error>> {
+    let diagnostics = diagnostics()?;
+    let wait = diagnostics.composition_reads();
+    let sample = |d: &GpuDiagnostics| {
+        d.0.window.lock().unwrap_or_else(std::sync::PoisonError::into_inner).samples
+            [Phase::CompositionReads as usize]
+    };
+    assert_eq!((sample(&diagnostics).active, sample(&diagnostics).count), (1, 0));
+    drop(wait);
+    assert_eq!((sample(&diagnostics).active, sample(&diagnostics).count), (0, 1));
+    assert_eq!(Phase::named("composition_reads"), Some("composition_reads"));
+    assert_eq!(Phase::named("display_draw"), Some("display_draw"));
+    assert_eq!(Phase::named("spoofed"), None);
+    Ok(())
+}
+
+#[test]
 fn outstanding_span_retains_observations_until_terminal_return()
 -> Result<(), Box<dyn std::error::Error>> {
     let diagnostics = diagnostics()?;

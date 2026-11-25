@@ -384,7 +384,7 @@ rationale = "Pure invalid-dimension qualification uses an empty title and unreac
 
 [[records]]
 path = "crates/sugarsubstitute/src/lib.rs"
-source_sha256 = "sha256:a31a0e92abc4ca5c79fb37036c5cd74ba56e64ed1500d5117542d3be5465008c"
+source_sha256 = "sha256:ea7332e81a966a9121ec7a97c65b8a766f90f85aecbba828ab3f46b9ccfbbf16"
 kind = "presentation"
 rationale = "The explicit splash demo composes DesktopOptions.title from messages(options.locale).loading; diagnostic and protocol values do not become UI labels."
 

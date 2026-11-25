@@ -3093,7 +3093,7 @@ boundary = "build"
 [[records]]
 path = "crates/sugarsubstitute/build.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:827edcc2edcf841321b2ffaa8a7e683c7298139b1f2b162ffc465b38ef9688c9"
+source_sha256 = "sha256:39353b288db280a40b5347c2f327a4e2d6900433650661984cbd0738b55572b1"
 capabilities = ["method canonicalize", "method metadata", "std::fs::File::open", "std::fs::remove_file", "std::fs::write"]
 disposition = "boundary"
 rationale = "Build-time inputs and generated outputs for sugarsubstitute; execution occurs in the package build, before runtime composition."
@@ -4043,7 +4043,7 @@ rationale = "Repository tooling tests.rs: Adversarial capability, copy-provenanc
 [[records]]
 path = "tools/xtask/src/main.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:2f98b2bae693e9ecda3380dbf941332d4e05ebaef95bc812806431df649bba8a"
+source_sha256 = "sha256:eab81ccf0723f8120b8279ec10c77c866bebdb16c7c64dad771435f33cabe6ba"
 capabilities = ["method canonicalize"]
 disposition = "tooling"
 rationale = "Repository tooling main.rs: Provide the same portable verification entry point for local work, hooks and CI. Reads declared build/check inputs and writes tooling artifacts or isolated rejection fixtures; runtime crates do not depend on this source."

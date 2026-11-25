@@ -162,7 +162,7 @@ fn motion_records_cross_the_relay_under_their_own_budget() {
 
 #[test]
 fn presentation_windows_cross_the_relay_under_their_own_budget() {
-    const PRESENT: &[u8] = b"2026-11-24T05:00:00.000000Z  INFO sugarsubstitute_desktop::canvas_present_diagnostic: operation=\"canvas_present\" schema=1 window_us=1000250 presents=60 created=1 updated=12 wrapped=47 repaired=9 scrolled=4 source_bytes=431308800 fill_us=41000 draw_us=900 commit_us=5200 slowest_us=3100\n";
+    const PRESENT: &[u8] = b"2026-11-24T05:00:00.000000Z  INFO sugarsubstitute_desktop::canvas_present_diagnostic: operation=\"canvas_present\" schema=2 window_us=1000250 presents=60 created=1 updated=12 wrapped=47 repaired=9 scrolled=4 unchanged=2 regions=14 source_bytes=431308800 fill_us=41000 draw_us=900 signal_us=310 commit_us=5200 slowest_us=3100 width=3840 height=2160\n";
     for split in 1..PRESENT.len() {
         let mut owner = Diagnostic::new();
         let mut seen = Vec::new();
@@ -170,7 +170,8 @@ fn presentation_windows_cross_the_relay_under_their_own_budget() {
         assert!(seen.is_empty());
         owner.feed(OutputStream::Stderr, 2, false, false, &PRESENT[split..], |v| seen.push(v));
         assert!(matches!(seen.as_slice(), [Observation::Present(record)]
-            if record.presents == 60 && record.updated == 12 && record.fill_us == 41_000));
+            if record.presents == 60 && record.updated == 12 && record.fill_us == 41_000
+                && record.signal_us == 310 && record.unchanged == 2 && record.width == 3_840));
     }
     let mut owner = Diagnostic::new();
     let mut count = 0_u16;
@@ -180,4 +181,27 @@ fn presentation_windows_cross_the_relay_under_their_own_budget() {
         });
     }
     assert_eq!(count, PRESENT_RECORDS);
+}
+
+#[test]
+fn gpu_phase_windows_cross_the_relay_under_their_own_budget() {
+    const GPU: &[u8] = b"2026-11-25T10:00:00.000000Z  INFO sugarsubstitute_image_gpu::timing_diagnostic: operation=\"image_gpu_timing\" schema=1 phase=\"composition_reads\" vendor=4318 device=11141 window_us=1000400 completed=58 total_us=900 max_us=120 bytes=0 work_items=58 wait_timeouts=0 active=0 peak_active=1 busy_us=0\n";
+    for split in 1..GPU.len() {
+        let mut owner = Diagnostic::new();
+        let mut seen = Vec::new();
+        owner.feed(OutputStream::Stderr, 1, false, false, &GPU[..split], |v| seen.push(v));
+        assert!(seen.is_empty());
+        owner.feed(OutputStream::Stderr, 2, false, false, &GPU[split..], |v| seen.push(v));
+        assert!(matches!(seen.as_slice(), [Observation::GpuTiming(record)]
+            if record.phase == "composition_reads" && record.completed == 58
+                && record.total_us == 900));
+    }
+    let mut owner = Diagnostic::new();
+    let mut count = 0_u16;
+    for sequence in 1..=u64::from(GPU_TIMING_RECORDS) + 8 {
+        owner.feed(OutputStream::Stderr, sequence, false, false, GPU, |v| {
+            count += u16::from(matches!(v, Observation::GpuTiming(_)));
+        });
+    }
+    assert_eq!(count, GPU_TIMING_RECORDS);
 }

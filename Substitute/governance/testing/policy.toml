@@ -158,7 +158,7 @@ reason = "The storage test worker records how long live storage spans have run, 
 
 [[real_time]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/composition/canvas/tests/shared.rs"
-source_sha256 = "sha256:20460d05311bbfb2324ef775c41f9064ade32636dbc0b7e63364a1081636f0d3"
+source_sha256 = "sha256:17dcaca605ab5c8e35f19682d1c478ebe5aff689187f5576d16500b9b0f0bea1"
 reason = "The hardware composition qualification measures steady-state draw and fence handoff times and prints them as evidence; every assertion compares pixels, and none reads a measured duration."
 
 [[real_time]]

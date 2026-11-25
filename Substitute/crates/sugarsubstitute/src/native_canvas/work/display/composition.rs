@@ -95,7 +95,10 @@ impl CompositionTarget {
             return Ok(None);
         };
         let slot = &self.slots[index];
-        slot.texture.await_reads(context).map_err(WorkError::new)?;
+        {
+            let _reads = self.device.diagnostics().composition_reads();
+            slot.texture.await_reads(context).map_err(WorkError::new)?;
+        }
         let primary =
             sources.samples.map(|samples| samples.gpu_mapping(sources.matte)).transpose()?;
         let underlay = sources

@@ -140,6 +140,7 @@ impl SharedSurface {
         context: &JobContext,
     ) -> Result<(), GpuError> {
         crate::adapter::check(context)?;
+        let _timing = self.device.timings.begin(crate::timing::Phase::Display, 0, 1);
         let foreign = |other: &Arc<GpuDevice>| !Arc::ptr_eq(other, &self.device);
         if foreign(&target.device)
             || foreign(image.device())

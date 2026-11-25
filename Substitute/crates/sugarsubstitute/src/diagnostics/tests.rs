@@ -54,6 +54,73 @@ fn real_subscriber_failed_sink_is_nonrecursive_and_keeps_original_source_until_l
     assert_eq!(dropped.load(Ordering::Acquire), 1);
     Ok(())
 }
+/// Collects what the real subscriber writes.
+struct Capture(Arc<std::sync::Mutex<Vec<u8>>>);
+impl Write for Capture {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        self.0.lock().map_err(|_| io::Error::other("capture poisoned"))?.extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+#[test]
+fn canvas_cost_records_written_by_the_real_formatter_decode_to_the_same_numbers()
+-> Result<(), Box<dyn Error>> {
+    let present = sugarsubstitute_desktop::canvas_present_diagnostic::Record {
+        window_us: 1_000_250,
+        presents: 60,
+        wrapped: 60,
+        fill_us: 600,
+        draw_us: 300,
+        signal_us: 120,
+        commit_us: 9_000,
+        slowest_us: 400,
+        width: 3_840,
+        height: 2_160,
+        ..Default::default()
+    };
+    let gpu = sugarsubstitute_image_gpu::timing_diagnostic::Record {
+        phase: "display_draw",
+        vendor: 4_318,
+        device: 11_141,
+        window_us: 1_000_400,
+        completed: 60,
+        total_us: 41_200,
+        max_us: 2_100,
+        work_items: 60,
+        peak_active: 1,
+        ..Default::default()
+    };
+    let bytes = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let sink = bytes.clone();
+    let subscriber = subscriber(
+        DiagnosticHealth::fixture(),
+        move || Capture(sink.clone()),
+        "info".into(),
+        None,
+    );
+    tracing::subscriber::with_default(subscriber, || {
+        present.emit();
+        gpu.emit();
+    });
+    let written = bytes.lock().map_err(|_| "capture poisoned")?.clone();
+    let lines: Vec<&[u8]> = written.split(|byte| *byte == b'\n').collect();
+    assert_eq!(
+        lines.iter().find_map(|line| {
+            sugarsubstitute_desktop::canvas_present_diagnostic::Record::parse(line)
+        }),
+        Some(present)
+    );
+    assert_eq!(
+        lines
+            .iter()
+            .find_map(|line| sugarsubstitute_image_gpu::timing_diagnostic::Record::parse(line)),
+        Some(gpu)
+    );
+    Ok(())
+}
 #[test]
 fn first_secondary_and_omitted_writes_are_bounded_and_original_os_code_is_observable() {
     let health = DiagnosticHealth::fixture();

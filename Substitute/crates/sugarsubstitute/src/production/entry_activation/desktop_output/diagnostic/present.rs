@@ -17,11 +17,16 @@ pub(in super::super) fn relay(run: RunKey, record: Record) {
         wrapped = record.wrapped,
         repaired = record.repaired,
         scrolled = record.scrolled,
+        unchanged = record.unchanged,
+        regions = record.regions,
         source_bytes = record.source_bytes,
         fill_us = record.fill_us,
         draw_us = record.draw_us,
+        signal_us = record.signal_us,
         commit_us = record.commit_us,
         slowest_us = record.slowest_us,
+        width = record.width,
+        height = record.height,
         "Observed owned child's canvas presentation window"
     );
 }

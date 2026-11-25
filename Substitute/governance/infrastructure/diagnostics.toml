@@ -66,7 +66,7 @@ rationale = "Repository build or verification diagnostics remain developer outpu
 [[records]]
 path = "crates/sugarsubstitute-desktop/src/main_actor/composition/canvas/tests/shared.rs"
 owner = "sugarsubstitute-desktop"
-source_sha256 = "sha256:20460d05311bbfb2324ef775c41f9064ade32636dbc0b7e63364a1081636f0d3"
+source_sha256 = "sha256:17dcaca605ab5c8e35f19682d1c478ebe5aff689187f5576d16500b9b0f0bea1"
 disposition = "fixture"
 rationale = "Native shared-texture qualification reports measured per-adapter interop timings as test output; runtime construction and presentation are unchanged."
 
@@ -86,7 +86,7 @@ rationale = "Repository build or verification diagnostics remain developer outpu
 [[records]]
 path = "crates/sugarsubstitute/build.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:827edcc2edcf841321b2ffaa8a7e683c7298139b1f2b162ffc465b38ef9688c9"
+source_sha256 = "sha256:39353b288db280a40b5347c2f327a4e2d6900433650661984cbd0738b55572b1"
 disposition = "developer"
 rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
 
@@ -121,7 +121,7 @@ rationale = "Host lifetime composes the existing execution adapter with the prot
 [[records]]
 path = "crates/sugarsubstitute/src/diagnostics/tests.rs"
 owner = "sugarsubstitute"
-source_sha256 = "sha256:d1d721ccadace2ce0092cc50d13691757dcc4082ad585b74879c04dec0fffe95"
+source_sha256 = "sha256:17eed6895d7eafc46ad6162848df9ab3ebc615d0ce8a37095ae68cd42902ec65"
 disposition = "fixture"
 rationale = "Isolated behavioral or native qualification captures test output to assert the owning boundary; runtime construction is unchanged."
 
@@ -303,7 +303,7 @@ rationale = "Repository build or verification diagnostics remain developer outpu
 [[records]]
 path = "tools/xtask/src/governance.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:c0637f4ed979bf85470de087612888ede9305ed632fae859c99f98437f3648f4"
+source_sha256 = "sha256:662e3fde2ad0b2e85fc5b8821207b1b3cae085ff1c879a08a3604ad327e0c5a4"
 disposition = "developer"
 rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
 
@@ -317,7 +317,7 @@ rationale = "Release-CI signing tool output: the files it wrote and what the app
 [[records]]
 path = "tools/xtask/src/main.rs"
 owner = "sugarsubstitute-xtask"
-source_sha256 = "sha256:2f98b2bae693e9ecda3380dbf941332d4e05ebaef95bc812806431df649bba8a"
+source_sha256 = "sha256:eab81ccf0723f8120b8279ec10c77c866bebdb16c7c64dad771435f33cabe6ba"
 disposition = "developer"
 rationale = "Repository build or verification diagnostics remain developer output and never participate in the runtime route."
 

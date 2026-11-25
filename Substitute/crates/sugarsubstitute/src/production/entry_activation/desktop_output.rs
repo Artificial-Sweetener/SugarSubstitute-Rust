@@ -236,6 +236,9 @@ impl DesktopOutput {
                     diagnostic::Observation::Present(record) => {
                         diagnostic::present::relay(self.run, record);
                     }
+                    diagnostic::Observation::GpuTiming(record) => {
+                        diagnostic::gpu_timing::relay(self.run, record);
+                    }
                     diagnostic::Observation::Close(close) => {
                         diagnostic::close::relay(self.run, close);
                     }
