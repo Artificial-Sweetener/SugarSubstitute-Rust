@@ -71,7 +71,7 @@ function fixture() {
       })),
     },
   ]);
-  const surface: SearchSurface = { fields, titles: new Map(), read };
+  const surface: SearchSurface = { fields, read };
   const setCards = jest.fn<(nodes: ReadonlySet<string> | null, remeasure: boolean) => void>();
   const presenter = new MasonrySearchPresenter({ root, container, surface, setCards });
   presenters.push(presenter);
