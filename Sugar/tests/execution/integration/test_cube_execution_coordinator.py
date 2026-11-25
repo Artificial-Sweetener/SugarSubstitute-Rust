@@ -40,7 +40,8 @@ from sugarcubes.execution import (
     ProximityConnection,
     QueueMetadata,
 )
-from sugarcubes.execution.models import ApiPrompt, NodeDefinitions
+from sugarcubes.execution.models import ApiPrompt, JsonValue, NodeDefinitions
+from sugarcubes.workflow_analysis import read_cube_stack_view
 from tests.execution.support.execution_fixtures import (
     consumer_document,
     cube_workflow,
@@ -104,6 +105,64 @@ def test_prepare_preserves_observed_native_proximity_after_boundary_normalizatio
     assert prepared.prompt["cube-b:__topology__"]["inputs"] == {
         "resource": ["cube-a:__topology__", 0]
     }
+
+
+def test_a_prepared_run_names_its_stack_links_by_the_prepared_workflows_sockets() -> (
+    None
+):
+    """Output saving reads the prepared workflow, so the stack it reads must name its sockets."""
+
+    workflow = cube_workflow(
+        {"cube-a": provider_document(), "cube-b": consumer_document()}
+    )
+    nodes = cast(list[dict[str, object]], workflow["nodes"])
+    cast(list[dict[str, object]], nodes[0]["outputs"])[0]["name"] = "rendered"
+    cast(list[dict[str, object]], nodes[1]["inputs"])[0]["name"] = "source"
+    page_record: dict[str, JsonValue] = {
+        "order": ["cube-a", "cube-b"],
+        "proximity_connections": [
+            {
+                "source_instance_id": "cube-a",
+                "source_binding": "rendered",
+                "target_instance_id": "cube-b",
+                "target_binding": "source",
+            }
+        ],
+    }
+    extra_data: dict[str, JsonValue] = {"sugarcubes_stack": page_record}
+
+    prepared = CubeExecutionCoordinator(
+        workflow_normalizer=NativeWorkflowNormalizer(_UnexpectedResolver())
+    ).prepare(
+        CubeExecutionRequest(
+            workflow,
+            proximity_connections=(
+                ProximityConnection(
+                    source=CubeBoundaryEndpoint("cube-a", "rendered"),
+                    target=CubeBoundaryEndpoint("cube-b", "source"),
+                ),
+            ),
+            extra_data=extra_data,
+        )
+    )
+
+    stack = read_cube_stack_view(prepared.extra_data["sugarcubes_stack"])
+    assert stack is not None
+    assert stack.order == ("cube-a", "cube-b")
+    assert stack.proximity_connections == (
+        ProximityConnection(
+            source=CubeBoundaryEndpoint("cube-a", "output.resource"),
+            target=CubeBoundaryEndpoint("cube-b", "input.resource"),
+        ),
+    )
+    # The page's own record is left as it sent it.
+    assert extra_data["sugarcubes_stack"] is page_record
+    assert (
+        cast(list[dict[str, str]], page_record["proximity_connections"])[0][
+            "source_binding"
+        ]
+        == "rendered"
+    )
 
 
 @pytest.mark.parametrize(

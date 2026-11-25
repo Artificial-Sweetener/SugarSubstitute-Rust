@@ -99,13 +99,28 @@ class CubeGraphAnalysisService:
             matcher = SerializedCubeProximityMatcher()
             proximity = matcher.match(workflow.payload)
             adjacent = matcher.adjacent_instance_pairs(workflow.payload)
+            topology = CubeTopologyBuilder().project(workflow, proximity)
         else:
-            proximity = stack.proximity_connections
             adjacent = tuple(
                 (connection.source.instance_id, connection.target.instance_id)
-                for connection in proximity
+                for connection in stack.proximity_connections
             )
-        topology = CubeTopologyBuilder().project(workflow, proximity)
+            # The page names sockets as its graph shows them; normalization can rename them, so
+            # the links are read against the workflow as sent and kept under the normalized names.
+            topology = CubeTopologyBuilder().project(
+                workflow,
+                stack.proximity_connections,
+                observed_workflow=(
+                    read_canonical_workflow(workflow_value)
+                    if self._normalizer is not None
+                    else None
+                ),
+            )
+            proximity = tuple(
+                ProximityConnection(edge.source, edge.target)
+                for edge in topology.edges
+                if edge.origin is ConnectionOrigin.PROXIMITY
+            )
         segments = _segments(workflow.payload, topology, adjacent)
         computed = tuple(
             identity for segment in segments for identity in segment.instance_ids

@@ -30,7 +30,12 @@ from sugarcubes.workflow_analysis import (
     analyze_cube_graph,
     read_cube_stack_view,
 )
-from tests.execution.support.execution_fixtures import cube_document, cube_workflow
+from tests.execution.support.execution_fixtures import (
+    consumer_document,
+    cube_document,
+    cube_workflow,
+    provider_document,
+)
 
 
 def test_analysis_derives_ordered_typed_proximity_from_native_cube_geometry() -> None:
@@ -229,6 +234,38 @@ def test_analysis_uses_the_pages_proximity_links_and_order_when_it_sends_them() 
     # An empty list is the page saying there are no proximity links, not "match them yourself".
     assert none.proximity_connections == ()
     assert none.edges == ()
+
+
+def test_the_pages_links_name_sockets_as_its_graph_shows_them() -> None:
+    """Normalization renames Cube sockets; the page's links still name them as it sees them."""
+
+    workflow = cube_workflow(
+        {"cube-a": provider_document(), "cube-b": consumer_document()}
+    )
+    nodes = cast(list[dict[str, object]], workflow["nodes"])
+    cast(list[dict[str, object]], nodes[0]["outputs"])[0]["name"] = "image"
+    cast(list[dict[str, object]], nodes[1]["inputs"])[0]["name"] = "input.image"
+    page_link = ProximityConnection(
+        source=CubeBoundaryEndpoint("cube-a", "image"),
+        target=CubeBoundaryEndpoint("cube-b", "input.image"),
+    )
+
+    analysis = CubeGraphAnalysisService(
+        NativeWorkflowNormalizer(_UnexpectedResolver())
+    ).analyze(
+        workflow,
+        CubeStackView(proximity_connections=(page_link,), order=("cube-a", "cube-b")),
+    )
+
+    assert [edge.semantic_key for edge in analysis.edges] == [
+        ("cube-a", "output.resource", "cube-b", "input.resource")
+    ]
+    assert analysis.proximity_connections == (
+        ProximityConnection(
+            source=CubeBoundaryEndpoint("cube-a", "output.resource"),
+            target=CubeBoundaryEndpoint("cube-b", "input.resource"),
+        ),
+    )
 
 
 def test_analysis_lists_cubes_in_the_pages_stack_order_only_when_it_names_every_cube() -> (

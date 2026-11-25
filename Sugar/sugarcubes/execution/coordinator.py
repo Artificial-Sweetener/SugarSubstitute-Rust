@@ -38,13 +38,16 @@ from .inheritance import CubeInheritanceResolver
 from .live_node_defaults import LiveNodeDefaultReconciler
 from .lowering import NativeCubeWorkflowLowerer
 from .models import (
+    ConnectionOrigin,
     CubeExecutionNodeIdentity,
     CubeOptimizationReport,
     CubeExecutionReport,
     CubeExecutionRequest,
     CubeExecutionResult,
+    CubeTopology,
     ExecutionDiagnostic,
     ExecutionNodeOwner,
+    JsonValue,
     PreparedCubeExecution,
 )
 from .optimizer import CubePromptOptimizer, PromptOptimizer
@@ -237,9 +240,35 @@ class CubeExecutionCoordinator:
             node_owners=instrumented.node_owners,
             boundary_bindings=inherited.boundary_bindings,
             queue=queue,
-            extra_data=deepcopy(dict(request.extra_data)),
+            extra_data=_with_prepared_stack(request.extra_data, topology),
             report=report,
         )
+
+
+def _with_prepared_stack(
+    extra_data: Mapping[str, JsonValue], topology: CubeTopology
+) -> dict[str, JsonValue]:
+    """Name the page's proximity links by the prepared workflow's sockets.
+
+    The stack a page sends names sockets as its graph shows them, and normalization can rename
+    them. The prepared run carries the normalized workflow, so its stack names that workflow's
+    sockets, as the topology projected them.
+    """
+
+    copied = deepcopy(dict(extra_data))
+    stack = copied.get("sugarcubes_stack")
+    if isinstance(stack, dict) and isinstance(stack.get("proximity_connections"), list):
+        stack["proximity_connections"] = [
+            {
+                "source_instance_id": edge.source.instance_id,
+                "source_binding": edge.source.binding,
+                "target_instance_id": edge.target.instance_id,
+                "target_binding": edge.target.binding,
+            }
+            for edge in topology.edges
+            if edge.origin is ConnectionOrigin.PROXIMITY
+        ]
+    return copied
 
 
 def _execution_node_identities(
