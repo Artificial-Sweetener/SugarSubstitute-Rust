@@ -43,7 +43,9 @@ class NativeGraphTap {
     /** Wrap only methods whose current value is not already this tap's active wrapper. */
     #install() {
         const graph = this.#graph;
-        if (graph.onAfterChange !== this.#wrappers.get('onAfterChange')?.wrapper) {
+        // A Comfy root graph starts with no change callback at all; it still needs this one.
+        const installed = this.#wrappers.get('onAfterChange');
+        if (!installed || graph.onAfterChange !== installed.wrapper) {
             const previous = typeof graph.onAfterChange === 'function' ? graph.onAfterChange : null;
             const wrapper = (changed, info) => {
                 previous?.call(graph, changed, info);

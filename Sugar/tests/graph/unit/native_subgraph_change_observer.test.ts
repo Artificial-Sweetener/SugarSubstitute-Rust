@@ -70,6 +70,24 @@ describe('NativeSubgraphChangeObserver', () => {
     observer.dispose();
     expect(subgraph.clear).toBe(clear);
   });
+  test('hears changes on a graph that has no change callback of its own, as Comfy root graphs start', async () => {
+    const graph: {
+      onAfterChange?: (graph: unknown, info?: unknown) => void;
+      add(): void;
+      remove(): void;
+    } = {
+      add: jest.fn(),
+      remove: jest.fn(),
+    };
+    const change = jest.fn();
+    const observer = new NativeSubgraphChangeObserver(graph, change);
+    expect(typeof graph.onAfterChange).toBe('function');
+    graph.onAfterChange?.(graph, 'link');
+    await Promise.resolve();
+    expect(change).toHaveBeenCalledWith([{ kind: 'change', info: 'link' }]);
+    observer.dispose();
+    expect(typeof graph.onAfterChange).not.toBe('function');
+  });
   test('releases pending notifications with the observed graph lifetime', async () => {
     const subgraph = {
       onAfterChange: null as ((graph: unknown) => void) | null,
