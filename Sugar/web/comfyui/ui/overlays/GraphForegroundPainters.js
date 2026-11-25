@@ -14,13 +14,15 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Painters on the graph's background layer, between LiteGraph's grid and its links. LiteGraph has
- * one background callback per canvas and the overlay draw hook holds it, so every other owner
- * paints through this registry, which that hook runs, and none chains the callback itself.
+ * Painters on the graph's front canvas after LiteGraph has drawn everything that lies beneath the
+ * node cards: the grid, groups, links, reroutes and the proximity noodles, composited from its
+ * background canvas. LiteGraph has one foreground callback per canvas and the overlay draw hook
+ * holds it, so every other owner paints through this registry, which that hook runs before the
+ * Cube chrome, and none chains the callback itself.
  */
 const painters = new WeakMap();
 /** Add a painter for one canvas; the returned function removes it. */
-export function addGraphBackgroundPainter(canvas, painter) {
+export function addGraphForegroundPainter(canvas, painter) {
     const registered = painters.get(canvas) ?? new Set();
     painters.set(canvas, registered);
     registered.add(painter);
@@ -31,7 +33,7 @@ export function addGraphBackgroundPainter(canvas, painter) {
     };
 }
 /** Run a canvas's painters; one that throws is reported and the rest still paint. */
-export function paintGraphBackground(canvas, context, report) {
+export function paintGraphForeground(canvas, context, report) {
     for (const painter of painters.get(canvas) ?? []) {
         try {
             painter(context, canvas);

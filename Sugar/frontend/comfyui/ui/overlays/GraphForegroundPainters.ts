@@ -14,22 +14,24 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Painters on the graph's background layer, between LiteGraph's grid and its links. LiteGraph has
- * one background callback per canvas and the overlay draw hook holds it, so every other owner
- * paints through this registry, which that hook runs, and none chains the callback itself.
+ * Painters on the graph's front canvas after LiteGraph has drawn everything that lies beneath the
+ * node cards: the grid, groups, links, reroutes and the proximity noodles, composited from its
+ * background canvas. LiteGraph has one foreground callback per canvas and the overlay draw hook
+ * holds it, so every other owner paints through this registry, which that hook runs before the
+ * Cube chrome, and none chains the callback itself.
  */
 
-/** Paint in graph coordinates on the background context LiteGraph is drawing. */
-export type GraphBackgroundPainter = (context: CanvasRenderingContext2D, canvas: object) => void;
+/** Paint in graph coordinates on the front context LiteGraph is drawing. */
+export type GraphForegroundPainter = (context: CanvasRenderingContext2D, canvas: object) => void;
 
-const painters = new WeakMap<object, Set<GraphBackgroundPainter>>();
+const painters = new WeakMap<object, Set<GraphForegroundPainter>>();
 
 /** Add a painter for one canvas; the returned function removes it. */
-export function addGraphBackgroundPainter(
+export function addGraphForegroundPainter(
   canvas: object,
-  painter: GraphBackgroundPainter,
+  painter: GraphForegroundPainter,
 ): () => void {
-  const registered = painters.get(canvas) ?? new Set<GraphBackgroundPainter>();
+  const registered = painters.get(canvas) ?? new Set<GraphForegroundPainter>();
   painters.set(canvas, registered);
   registered.add(painter);
   return () => {
@@ -39,7 +41,7 @@ export function addGraphBackgroundPainter(
 }
 
 /** Run a canvas's painters; one that throws is reported and the rest still paint. */
-export function paintGraphBackground(
+export function paintGraphForeground(
   canvas: object,
   context: CanvasRenderingContext2D,
   report: (error: unknown) => void,

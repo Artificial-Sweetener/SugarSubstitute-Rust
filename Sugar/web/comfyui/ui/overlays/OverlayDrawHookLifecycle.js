@@ -16,7 +16,7 @@
 /**
  * Own installation and watchdog lifecycle for canvas overlay draw hooks.
  */
-import { paintGraphBackground } from './GraphBackgroundPainters.js';
+import { paintGraphForeground } from './GraphForegroundPainters.js';
 /** Maintain the active host canvas draw hook across renderer replacement. */
 export class OverlayDrawHookLifecycle {
     adapter;
@@ -51,6 +51,10 @@ export class OverlayDrawHookLifecycle {
         return Boolean(canvas.onDrawForeground?.__sugarcubes_overlay_hooked ||
             canvas.onDrawBackground?.__sugarcubes_overlay_hooked);
     }
+    /** Run the foreground painters, reporting one that fails without stopping the rest. */
+    paintForeground(canvas, ctx) {
+        paintGraphForeground(canvas, ctx, (error) => this.adapter?.getConsole?.()?.error?.('SugarCubes: foreground painter failed', error));
+    }
     ensureOverlayHook(attempt = 0) {
         const appRef = this.adapter?.getApp?.() || null;
         const canvas = (appRef?.canvas ?? appRef?.graph?.canvas ?? null);
@@ -74,6 +78,7 @@ export class OverlayDrawHookLifecycle {
                 const originalDrawForeground = canvasProto.drawForeground;
                 canvasProto.drawForeground = function drawForeground(ctx, ...args) {
                     const result = originalDrawForeground.call(this, ctx, ...args);
+                    manager.paintForeground(this, ctx);
                     try {
                         manager.chrome.render(ctx, this);
                     }
@@ -98,6 +103,7 @@ export class OverlayDrawHookLifecycle {
                         ?.getConsole?.()
                         ?.error?.('SugarCubes: onDrawForeground wrapper failed', error);
                 }
+                manager.paintForeground(this, ctx);
                 manager.chrome.render(ctx, this);
             };
             wrappedForeground.__sugarcubes_overlay_hooked = true;
@@ -117,7 +123,6 @@ export class OverlayDrawHookLifecycle {
                     ?.getConsole?.()
                     ?.error?.('SugarCubes: onDrawBackground wrapper failed', error);
             }
-            paintGraphBackground(this, ctx, (error) => manager.adapter?.getConsole?.()?.error?.('SugarCubes: background painter failed', error));
             try {
                 manager.proximityGraphMutations.attach(this.graph);
                 manager.proximity.ensurePreview(this.graph);

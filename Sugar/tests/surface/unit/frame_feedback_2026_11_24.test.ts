@@ -35,9 +35,9 @@ import {
   occlusionStrength,
 } from '../../../frontend/comfyui/ui/surface/frame/DesktopGraphNodeOcclusion.js';
 import {
-  addGraphBackgroundPainter,
-  paintGraphBackground,
-} from '../../../frontend/comfyui/ui/overlays/GraphBackgroundPainters.js';
+  addGraphForegroundPainter,
+  paintGraphForeground,
+} from '../../../frontend/comfyui/ui/overlays/GraphForegroundPainters.js';
 import {
   PointerTooltipPlacement,
   TOOLTIP_POINTER_OFFSET,
@@ -176,19 +176,19 @@ test('the occlusion paints through the overlay hook’s registry and follows the
   const occlusion = new DesktopGraphNodeOcclusion();
   occlusion.attach(app, canvas);
   const first = recordingContext();
-  paintGraphBackground(canvas, first.context, () => undefined);
+  paintGraphForeground(canvas, first.context, () => undefined);
   expect(first.drawn[0]?.fill).toBe('rgba(0,0,0,1)');
   opacity = 0.25;
   setDirty.mockClear();
   listeners.get(`${NODE_OPACITY_SETTING}.change`)?.(new Event('change'));
   expect(setDirty).toHaveBeenCalledWith(true, true);
   const second = recordingContext();
-  paintGraphBackground(canvas, second.context, () => undefined);
+  paintGraphForeground(canvas, second.context, () => undefined);
   expect(second.drawn[0]?.fill).toBe('rgba(0,0,0,0.25)');
   occlusion.detach();
   expect(listeners.size).toBe(0);
   const after = recordingContext();
-  paintGraphBackground(canvas, after.context, () => undefined);
+  paintGraphForeground(canvas, after.context, () => undefined);
   expect(after.drawn).toEqual([]);
 });
 
@@ -196,16 +196,16 @@ test('one failing background painter is reported and the others still paint', ()
   const canvas = {};
   const painted = jest.fn();
   const report = jest.fn();
-  const removeFailing = addGraphBackgroundPainter(canvas, () => {
+  const removeFailing = addGraphForegroundPainter(canvas, () => {
     throw new Error('broken');
   });
-  const remove = addGraphBackgroundPainter(canvas, painted);
-  paintGraphBackground(canvas, recordingContext().context, report);
+  const remove = addGraphForegroundPainter(canvas, painted);
+  paintGraphForeground(canvas, recordingContext().context, report);
   expect(report).toHaveBeenCalledTimes(1);
   expect(painted).toHaveBeenCalledTimes(1);
   removeFailing();
   remove();
-  paintGraphBackground(canvas, recordingContext().context, report);
+  paintGraphForeground(canvas, recordingContext().context, report);
   expect(painted).toHaveBeenCalledTimes(1);
 });
 

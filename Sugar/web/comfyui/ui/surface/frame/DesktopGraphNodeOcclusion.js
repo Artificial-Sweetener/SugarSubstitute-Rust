@@ -14,15 +14,18 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /**
- * Keep the graph's grid out from under node cards in the desktop frame. A card there is a
- * translucent fill over the window material, so anything the graph draws beneath it shows through
- * it. The grid is erased where a card stands, leaving the plain body wash a masonry card stands on;
- * the card's fill and the material behind it are untouched. ComfyUI's node opacity setting is the
- * strength of that erasure: 1 hides the grid behind every card, lower values let it through in
- * proportion. ComfyUI itself fades the card by the same setting, which is left as it is.
+ * Let node cards hide what lies beneath them in the desktop frame, as Comfy's opaque cards do. A
+ * card there is a translucent fill over the window material, so anything beneath it would show
+ * through it. Everything the graph canvas draws beneath the cards (the grid, groups, links,
+ * reroutes and the proximity noodles) is erased where a card stands, and a card that lies under
+ * another card is masked where that card covers it (`DesktopNodeStacking`). Only the window
+ * material shows through a card. ComfyUI's node opacity setting is the strength of both: 1 hides
+ * everything beneath a card, lower values let it through in proportion, as in Comfy, which also
+ * fades the card itself by the same setting.
  */
 import { isRecord } from '../../types/common.js';
-import { addGraphBackgroundPainter } from '../../overlays/GraphBackgroundPainters.js';
+import { addGraphForegroundPainter } from '../../overlays/GraphForegroundPainters.js';
+import { applyStacking, clearStacking } from './DesktopNodeStacking.js';
 /** ComfyUI's node opacity setting, 0 to 1. */
 export const NODE_OPACITY_SETTING = 'Comfy.Node.Opacity';
 /** A node card's corner radius in graph units; the card's own CSS rounds it the same. */
@@ -33,7 +36,7 @@ export function occlusionStrength(setting) {
         ? Math.min(1, Math.max(0, setting))
         : 1;
 }
-/** Erase the background under every node whose bounds reach into the visible area. */
+/** Erase everything drawn beneath every node whose bounds reach into the visible area. */
 export function eraseUnderNodes(context, nodes, visible, strength) {
     if (strength <= 0)
         return;
@@ -61,10 +64,15 @@ export class DesktopGraphNodeOcclusion {
             if (typeof canvas.setDirty === 'function')
                 canvas.setDirty(true, true);
         };
-        const removePainter = addGraphBackgroundPainter(canvas, (context) => {
+        let stacked = [];
+        const removePainter = addGraphForegroundPainter(canvas, (context) => {
             const graph = isRecord(canvas.graph) ? canvas.graph : null;
             const nodes = graph && Array.isArray(graph._nodes) ? graph._nodes : [];
-            eraseUnderNodes(context, nodes, readBounds(canvas.visible_area), occlusionStrength(readSetting(app)));
+            const strength = occlusionStrength(readSetting(app));
+            eraseUnderNodes(context, nodes, readBounds(canvas.visible_area), strength);
+            const cards = stackedCards(canvas, nodes);
+            stacked = cards.map((card) => card.element);
+            applyStacking(cards, strength);
         });
         const event = `${NODE_OPACITY_SETTING}.change`;
         const followed = isRecord(settings) &&
@@ -76,6 +84,7 @@ export class DesktopGraphNodeOcclusion {
             followed.addEventListener.call(followed, event, redraw);
         this.#release = () => {
             removePainter();
+            clearStacking(stacked);
             if (followed)
                 followed.removeEventListener.call(followed, event, redraw);
             redraw();
@@ -87,6 +96,29 @@ export class DesktopGraphNodeOcclusion {
         this.#release?.();
         this.#release = null;
     }
+}
+/** The graph's node cards as Comfy stacks them: by z-index, then by their order in the graph. */
+function stackedCards(canvas, nodes) {
+    const element = canvas.canvas;
+    const document = element instanceof HTMLElement ? element.ownerDocument : null;
+    if (!document)
+        return [];
+    const byId = new Map();
+    for (const card of document.querySelectorAll('.lg-node[data-node-id]'))
+        if (!card.closest('.sugarcubes-native-node-card'))
+            byId.set(card.dataset.nodeId ?? '', card);
+    const cards = [];
+    nodes.forEach((node, index) => {
+        if (!isRecord(node))
+            return;
+        const card = byId.get(String(node.id));
+        const bounds = readBounds(node.boundingRect);
+        if (!card || !bounds)
+            return;
+        const z = Number.parseInt(card.style.zIndex, 10);
+        cards.push({ element: card, bounds, order: (Number.isFinite(z) ? z : 0) * 1e6 + index });
+    });
+    return cards;
 }
 function readSetting(app) {
     const manager = isRecord(app) && isRecord(app.extensionManager) ? app.extensionManager : null;
