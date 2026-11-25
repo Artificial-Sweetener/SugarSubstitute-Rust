@@ -19,7 +19,7 @@
  * it. The grid is erased where a card stands, leaving the plain body wash a masonry card stands on;
  * the card's fill and the material behind it are untouched. ComfyUI's node opacity setting is the
  * strength of that erasure: 1 hides the grid behind every card, lower values let it through in
- * proportion, and the cards themselves stay fully drawn.
+ * proportion. ComfyUI itself fades the card by the same setting, which is left as it is.
  */
 import { isRecord } from '../../types/common.js';
 import { addGraphBackgroundPainter } from '../../overlays/GraphBackgroundPainters.js';

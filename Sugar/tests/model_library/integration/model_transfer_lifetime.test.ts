@@ -84,6 +84,9 @@ test('reattaches the same download to replacement cards across masonry and theme
         session,
       );
       await nextTick();
+      // The download's thumbnail appears once it has been decoded.
+      await imageDecoding.release();
+      await nextTick();
       expect(root.querySelector('[role=progressbar]')?.getAttribute('aria-valuenow')).toBe('25');
       expect(root.querySelector('input')?.value).toBe('Downloading Accepted model');
       expect(root.querySelector('.sc-model-transfer-thumbnail')?.getAttribute('src')).toBe(

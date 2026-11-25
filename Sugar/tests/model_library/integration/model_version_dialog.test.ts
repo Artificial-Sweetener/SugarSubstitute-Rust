@@ -192,6 +192,8 @@ test('settles version preview loading and failure without changing selection or 
     releases: async () => [release('20'), { ...release('21'), previewUrl: '/preview-21' }],
     acquire,
   });
+  imageDecoding.held = true;
+  imageDecoding.broken.add('/preview-');
   const closed = dialog.open();
   try {
     await settle();
@@ -203,7 +205,8 @@ test('settles version preview loading and failure without changing selection or 
     available.click();
     await settle();
     expect(available.getAttribute('aria-pressed')).toBe('true');
-    available.querySelector('img')?.dispatchEvent(new Event('error'));
+    // The preview cannot be decoded.
+    await imageDecoding.release();
     await settle();
     expect(available.querySelector('img')).toBeNull();
     expect(available.textContent).toContain('Preview unavailable');
@@ -212,6 +215,7 @@ test('settles version preview loading and failure without changing selection or 
     expect(item.value).toBe('installed.safetensors');
     expect(acquire).not.toHaveBeenCalled();
   } finally {
+    imageDecoding.reset();
     dialog.close();
     await closed;
   }

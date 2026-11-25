@@ -14,34 +14,25 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Paint the accepted model preview and compact transfer caption within the existing combo. */
-import { defineComponent, h, ref, watch } from 'vue';
+import { defineComponent, h } from 'vue';
 import type { PropType } from 'vue';
 import type { ModelTransferState } from '../ModelTransfer.js';
 import { ModelTransferFill } from './ModelTransferFill.js';
+import { useModelImage } from './ModelImage.js';
 
 /** Keep thumbnail failure and progress changes independent of the field's legal selected value. */
 export const ModelTransferView = defineComponent({
   props: { transfer: { type: Object as PropType<ModelTransferState>, required: true } },
   setup(props) {
-    const failed = ref(false);
-    watch(
-      () => props.transfer.model.previewUrl,
-      () => {
-        failed.value = false;
-      },
-    );
+    const image = useModelImage(() => props.transfer.model.previewUrl);
     return () =>
       h('div', { class: 'sc-model-transfer-presentation' }, [
-        props.transfer.model.previewUrl && !failed.value
+        image().url
           ? h('img', {
               class: 'sc-model-transfer-thumbnail',
-              src: props.transfer.model.previewUrl,
+              src: image().url,
               alt: '',
               draggable: false,
-              decoding: 'async',
-              onError: () => {
-                failed.value = true;
-              },
             })
           : null,
         h(ModelTransferFill, { progress: props.transfer }),

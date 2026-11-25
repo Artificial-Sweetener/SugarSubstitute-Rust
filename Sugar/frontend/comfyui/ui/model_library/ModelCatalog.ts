@@ -247,7 +247,13 @@ export function continueModelCatalog(
   };
 }
 
-/** Pick a prepared image large enough for its destination without decoding originals. */
+/** The size a model's banner is asked for, by a field and by a prompt's LoRA chip alike. */
+export const MODEL_BANNER_SIZE = 768;
+
+/**
+ * The one rule for which of a model's prepared images a surface shows: the smallest of the wanted
+ * role that is large enough for its destination, without decoding originals.
+ */
 export function chooseModelThumbnail(
   item: ModelCatalogItem,
   role: 'standard' | 'banner',

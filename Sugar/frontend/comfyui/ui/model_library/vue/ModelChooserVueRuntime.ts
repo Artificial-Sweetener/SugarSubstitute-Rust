@@ -19,6 +19,7 @@ import { createApp, h } from 'vue';
 import type { ModelCatalogItem } from '../ModelCatalog.js';
 import type { ModelPickerRectangle } from '../ModelPickerPlacement.js';
 import { ModelChooser } from './ModelChooser.js';
+import { shownModels } from './ShownModels.js';
 import type { ModelContextOptions } from '../ModelMenu.js';
 
 export interface ModelChooserRequest {
@@ -31,6 +32,8 @@ export interface ModelChooserRequest {
   readonly context: ModelContextOptions;
   /** Where a version chosen from a card's menu goes; null where versions cannot be browsed. */
   readonly session: ModelPickerSession | null;
+  /** Told which models the chooser's wall has on screen, so they are looked up first. */
+  readonly shown?: (items: readonly ModelCatalogItem[]) => void;
 }
 
 export interface OpenModelChooser {
@@ -72,6 +75,7 @@ export function openModelChooser(
       }),
   });
   app.config.idPrefix = `sc-model-chooser-${String(++mountIdentity)}`;
+  if (request.shown) app.provide(shownModels, request.shown);
   app.mount(container);
   return {
     popup: container.querySelector<HTMLElement>('.sc-model-popup'),

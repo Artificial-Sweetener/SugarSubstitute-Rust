@@ -19,18 +19,44 @@ import type { ModelCatalogItem } from './ModelCatalog.js';
 import { layoutModelWall, MODEL_PICKER_WALL_PROFILE } from './ModelPickerLayout.js';
 import type { ModelWallProfile, ModelWallRow } from './ModelPickerLayout.js';
 
-/** Use the largest standard variant so decode size cannot change a model's layout or neighbors. */
+const shapes = new WeakMap<ModelCatalogItem, number>();
+
+/** A tile's width over its height: the largest standard image's, so decode size cannot change it. */
+function tileShape(item: ModelCatalogItem): number {
+  let shape = shapes.get(item);
+  if (shape === undefined) {
+    const image = chooseModelThumbnail(item, 'standard', Number.POSITIVE_INFINITY);
+    shape = image ? image.width / image.height : 0.72;
+    shapes.set(item, shape);
+  }
+  return shape;
+}
+
+let laid: {
+  shapes: readonly number[];
+  width: number;
+  profile: ModelWallProfile;
+  rows: readonly ModelWallRow[];
+} | null = null;
+
+/**
+ * Lay a wall out from its tiles' shapes. The catalog republishes its models whenever a name or a
+ * picture arrives, almost always leaving every shape as it was; the last layout is then returned
+ * as it is, so a wall of thousands of tiles is not measured again and its rows keep their identity.
+ */
 export function layoutModelGallery(
   items: readonly ModelCatalogItem[],
   width: number,
   profile: ModelWallProfile = MODEL_PICKER_WALL_PROFILE,
 ): readonly ModelWallRow[] {
-  return layoutModelWall(
-    items.map((item) => {
-      const image = chooseModelThumbnail(item, 'standard', Number.POSITIVE_INFINITY);
-      return image ? image.width / image.height : 0.72;
-    }),
-    width,
-    profile,
-  );
+  const wanted = items.map(tileShape);
+  if (
+    laid?.width === width &&
+    laid.profile === profile &&
+    laid.shapes.length === wanted.length &&
+    laid.shapes.every((shape, index) => shape === wanted[index])
+  )
+    return laid.rows;
+  laid = { shapes: wanted, width, profile, rows: layoutModelWall(wanted, width, profile) };
+  return laid.rows;
 }

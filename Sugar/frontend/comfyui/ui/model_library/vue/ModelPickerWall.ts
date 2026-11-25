@@ -190,7 +190,7 @@ export const ModelPickerWall = defineComponent({
                 },
                 [
                   image
-                    ? h(ModelCatalogImage, { image, fallback: true, lazy: true })
+                    ? h(ModelCatalogImage, { image, fallback: true })
                     : h('span', { class: 'sc-model-no-image' }, 'No image'),
                   h('span', { class: 'sc-model-caption' }, [
                     h(ModelGalleryTitle, {

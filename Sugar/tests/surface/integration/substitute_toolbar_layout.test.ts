@@ -85,7 +85,9 @@ test('frame paint stays independent of view mode and queue overflow cannot expan
   );
   const paints = (surface: HTMLElement): string[] =>
     toolbarRules
-      .filter((rule) => surface.matches(rule.selectorText))
+      // jsdom cannot parse the relational selectors that place the row above side panels;
+      // those rules set no background, so they are no paint of the row.
+      .filter((rule) => !rule.selectorText.includes(':has(') && surface.matches(rule.selectorText))
       .map((rule) => rule.style.getPropertyValue('background'))
       .filter(Boolean);
   // A translucent desktop wash must cover the row once: the menu owns it for its nested line.

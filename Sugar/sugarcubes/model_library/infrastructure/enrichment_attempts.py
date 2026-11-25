@@ -141,15 +141,6 @@ class SqliteEnrichmentAttempts:
             ).fetchone()
             return 0 if row is None else float(row[0])
 
-    def preview_failures(self, sha256: str, *, policy: str) -> int:
-        """Count the consecutive failed preview downloads recorded for this content and policy."""
-        with self._connect() as connection:
-            row = connection.execute(
-                "SELECT preview_failures FROM content_attempts WHERE sha256=? AND policy=?",
-                (normalized_hash(sha256), policy),
-            ).fetchone()
-            return 0 if row is None else int(row[0])
-
     def finish(
         self,
         evidence: ModelEvidence,

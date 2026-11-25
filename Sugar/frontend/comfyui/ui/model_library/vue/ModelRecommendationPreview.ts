@@ -13,10 +13,11 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Settle recommendation previews consistently across discovery and version portraits. */
-import { defineComponent, h, ref, watch } from 'vue';
+/** Show a recommendation or version portrait through the presentation every model surface shares. */
+import { defineComponent, h } from 'vue';
 import type { PropType } from 'vue';
 import { ModelBusyRing } from './ModelBusyRing.js';
+import { useModelImage } from './ModelImage.js';
 
 /** Keep image lifetime independent of selection, dialog state, and provider acquisition. */
 export const ModelRecommendationPreview = defineComponent({
@@ -25,38 +26,16 @@ export const ModelRecommendationPreview = defineComponent({
     url: { type: String as PropType<string | null>, default: null },
   },
   setup(props) {
-    const status = ref<'loading' | 'ready' | 'unavailable'>('unavailable');
-    let revision = 0;
-    watch(
-      () => props.url,
-      (url) => {
-        revision++;
-        status.value = url ? 'loading' : 'unavailable';
-      },
-      { immediate: true, flush: 'sync' },
-    );
+    const image = useModelImage(() => props.url);
     return () => {
-      const url = props.url;
-      const renderedRevision = revision;
+      const { url, loading, unavailable } = image();
       return h('span', { class: 'sc-model-recommendation-preview' }, [
-        url && status.value !== 'unavailable'
-          ? h('img', {
-              key: url,
-              src: url,
-              alt: '',
-              draggable: false,
-              decoding: 'async',
-              onLoad: () => {
-                if (renderedRevision === revision && status.value === 'loading')
-                  status.value = 'ready';
-              },
-              onError: () => {
-                if (renderedRevision === revision && status.value === 'loading')
-                  status.value = 'unavailable';
-              },
-            })
-          : h('span', { class: 'sc-model-preview-unavailable' }, 'Preview unavailable'),
-        status.value === 'loading'
+        url
+          ? h('img', { src: url, alt: '', draggable: false })
+          : unavailable
+            ? h('span', { class: 'sc-model-preview-unavailable' }, 'Preview unavailable')
+            : null,
+        loading
           ? h('span', { class: 'sc-model-preview-loading', role: 'status' }, [
               h(ModelBusyRing, { class: 'sc-model-preview-busy-ring', size: 34, strokeWidth: 4 }),
               h('span', { class: 'sc-model-preview-loading-label' }, 'Loading preview…'),

@@ -1,15 +1,15 @@
 import {
-  ModelRecommendationPreview
-} from "./chunk-V6H6SZH6.js";
-import {
   ModelKeyRequiredBadge
 } from "./chunk-VHI72ZTE.js";
+import {
+  ModelRecommendationPreview
+} from "./chunk-Z4V2DUNV.js";
 import {
   ModelBusyRing
 } from "./chunk-ZVGMUCWU.js";
 import {
   chooseModelThumbnail
-} from "./chunk-EPSDIXQ5.js";
+} from "./chunk-XU3535ZK.js";
 import {
   defineComponent,
   h,
@@ -17,6 +17,12 @@ import {
   ref,
   watch
 } from "./chunk-OJTDXCRK.js";
+
+// frontend/comfyui/ui/model_library/ModelReleases.ts
+function modelVersionImage(item, version, role, size) {
+  const inUse = version.inUse ?? version.versionId === item.providerVersionId;
+  return (inUse ? chooseModelThumbnail(item, role, size)?.url : null) ?? version.previewUrl ?? chooseModelThumbnail(item, role, size)?.url ?? null;
+}
 
 // frontend/comfyui/ui/model_library/ModelArtifactPresentation.ts
 function modelArtifactSize(bytes) {
@@ -87,7 +93,7 @@ var ModelVersionFamily = defineComponent({
           const selected = props.selected === version.versionId;
           const access = version.files[0]?.access;
           const availability = onDisk ? "On disk" : access === "api_key_required" ? "API key required" : access === "unknown" ? "Access unavailable" : "Download available";
-          const image = inUse ? chooseModelThumbnail(props.item, "standard", 512)?.url ?? version.previewUrl : version.previewUrl;
+          const image = modelVersionImage(props.item, version, "standard", 512);
           return h(
             "button",
             {

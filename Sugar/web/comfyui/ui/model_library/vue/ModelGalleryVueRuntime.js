@@ -1,15 +1,18 @@
 import {
   ModelPickerWall
-} from "./chunk-CVOWWAQA.js";
+} from "./chunk-PYZ44I7C.js";
 import "./chunk-P7J5YKTZ.js";
-import "./chunk-HP45EZMK.js";
+import {
+  shownModels
+} from "./chunk-HP45EZMK.js";
 import "./chunk-P6VGNXE5.js";
 import {
   modelWallNeighbor
-} from "./chunk-UM6L2UPZ.js";
-import "./chunk-LCXHXGTS.js";
-import "./chunk-EPSDIXQ5.js";
-import "./chunk-TOST2PZ5.js";
+} from "./chunk-XP42IRIX.js";
+import "./chunk-UAMK4WPC.js";
+import "./chunk-XU3535ZK.js";
+import "./chunk-OLJZ2VLG.js";
+import "./chunk-SPVIVHMR.js";
 import {
   createApp,
   h,
@@ -18,7 +21,7 @@ import {
 
 // frontend/comfyui/ui/model_library/vue/ModelGalleryVueRuntime.ts
 var mountIdentity = 0;
-function mountModelGallery(element, events) {
+function mountModelGallery(element, events, shown = null) {
   const items = shallowRef([]);
   const active = shallowRef(0);
   let width = 540;
@@ -39,6 +42,7 @@ function mountModelGallery(element, events) {
     })
   });
   app.config.idPrefix = identity;
+  if (shown) app.provide(shownModels, shown);
   app.mount(element);
   return {
     update: (next, current) => {

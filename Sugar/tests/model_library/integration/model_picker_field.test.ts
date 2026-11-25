@@ -154,10 +154,13 @@ test.each([true, false])(
       })),
     );
     await nextTick();
+    await imageDecoding.release();
+    await nextTick();
     const banner = model.querySelector('.sc-model-banner');
     if (!(banner instanceof HTMLImageElement)) throw new Error('No thumbnail banner mounted.');
     expect(getComputedStyle(model).height).toBe(getComputedStyle(regular).height);
-    banner.dispatchEvent(new Event('error'));
+    // A publication without the banner takes it away.
+    field.picker.update(modelPickerChoices([], 'loras', field.binding.options));
     await nextTick();
     expect(model.querySelector('.sc-model-banner')).toBeNull();
     expect(getComputedStyle(model).height).toBe('33px');
@@ -558,6 +561,8 @@ test('GIMP keeps the selected model thumbnail visible without changing its value
       })),
     );
     await nextTick();
+    await imageDecoding.release();
+    await nextTick();
     const banner = model.querySelector('.sc-model-banner');
     if (!(banner instanceof HTMLImageElement)) throw new Error('No model thumbnail mounted.');
     expect(getComputedStyle(banner).display).not.toBe('none');
@@ -567,7 +572,8 @@ test('GIMP keeps the selected model thumbnail visible without changing its value
     expect(field.binding.readValue()).toBe('Anima\\alpha.safetensors');
     expect(field.writes).toEqual([]);
     const height = getComputedStyle(model).height;
-    banner.dispatchEvent(new Event('error'));
+    // A publication without the banner takes it away.
+    field.picker.update(modelPickerChoices([], 'loras', field.binding.options));
     await nextTick();
     expect(model.querySelector('.sc-model-banner')).toBeNull();
     expect(getComputedStyle(model).height).toBe(height);

@@ -28,7 +28,7 @@ import {
   watch,
 } from 'vue';
 import type { PropType } from 'vue';
-import { chooseModelThumbnail } from '../ModelCatalog.js';
+import { MODEL_BANNER_SIZE, chooseModelThumbnail } from '../ModelCatalog.js';
 import type { ModelCatalogItem } from '../ModelCatalog.js';
 import type { ModelPickerBinding } from '../ModelPickerBinding.js';
 import { queryModelCatalog, type ModelCompatibilityContext } from '../ModelCompatibility.js';
@@ -236,7 +236,7 @@ export const ModelPickerField = defineComponent({
           [h('span', { class: 'sc-model-find-icon', 'aria-hidden': 'true' }), 'Find models'],
         );
       const item = currentItem.value;
-      const banner = item ? chooseModelThumbnail(item, 'banner', 768) : null;
+      const banner = item ? chooseModelThumbnail(item, 'banner', MODEL_BANNER_SIZE) : null;
       const label = item ? [item.title, item.version].filter(Boolean).join(' - ') : current.value;
       return h(
         'div',

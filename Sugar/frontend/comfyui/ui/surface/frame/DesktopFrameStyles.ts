@@ -61,10 +61,6 @@ export const desktopFrameCss = `
   :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] [data-sc-style-node] :is(
     [data-sc-toggle-row],[data-testid="advanced-inputs-button"],[data-sc-titlebar-action]):active {
     background:var(--sc-desktop-row-pressed); }
-  /* ComfyUI's node opacity setting fades the whole card, text and controls with it. In the desktop
-     frame that setting is how much of the grid shows behind a card (DesktopGraphNodeOcclusion), so
-     the card itself stays fully drawn. */
-  :root[data-sc-desktop-frame-surface] .lg-node[data-sc-style-card] { opacity:1 !important; }
   [data-sc-desktop-frame-host] { border:0 !important; box-shadow:none !important; }
   [data-sc-desktop-frame-host] .sc-substitute-frame { app-region:drag; }
   [data-sc-desktop-frame-host] .sc-substitute-frame :is(

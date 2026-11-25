@@ -1,9 +1,9 @@
 import {
-  ModelDiscoveryPortrait
-} from "./chunk-5J4YSB7I.js";
-import {
   ModelKeyRequiredBadge
 } from "./chunk-VHI72ZTE.js";
+import {
+  ModelDiscoveryPortrait
+} from "./chunk-JMMG2Z7R.js";
 import {
   CivitaiCredentialLayer
 } from "./chunk-CON27HKR.js";

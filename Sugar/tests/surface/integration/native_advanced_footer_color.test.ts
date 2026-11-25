@@ -121,7 +121,7 @@ describe.each([
      const copy=(node)=>{if(typeof node==='string')return document.createTextNode(node);const result=element(node.tag,node.attributes);result.append(...node.children.map(copy));return result;};
      const host=new NativeNodeCardHost({dispose(){},mount(target,node,options){
       target.classList.add('sugarcubes-native-node-card');target.dataset.cubeFaceNative='nodes-2';
-      const root=element('div',{class:'lg-node','data-sc-style-node':'','data-cube-face-presentation':String(options.presentationGeometry)});
+      const root=element('div',{class:'lg-node','data-sc-style-node':'','data-sc-style-card':'','data-cube-face-presentation':String(options.presentationGeometry)});
       const wrapper=element('div',{'data-testid':'node-inner-wrapper',class:'bg-node-component-header-surface'});
       const title=element('div',{'data-testid':'node-header-1'},'VAE Decode');const body=element('div',{'data-testid':'node-body-1',class:'bg-component-node-background'},'Use Tiling');
       wrapper.append(title,body);root.append(wrapper,copy(tree));target.append(root);

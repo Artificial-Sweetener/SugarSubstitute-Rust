@@ -1,15 +1,15 @@
 import {
-  ModelTransferView
-} from "./chunk-3ZSZUJGA.js";
-import {
   useModelSelectionUpdates
 } from "./chunk-5NNW6U22.js";
+import {
+  ModelTransferView
+} from "./chunk-UMQMPOKY.js";
 import {
   modelPickerPlacement
 } from "./chunk-JK626FTQ.js";
 import {
   ModelPickerPopupContent
-} from "./chunk-FK2KN4AM.js";
+} from "./chunk-OMRMSSWC.js";
 import {
   useModelContext
 } from "./chunk-2WMWUCGK.js";
@@ -18,13 +18,14 @@ import {
 } from "./chunk-P7J5YKTZ.js";
 import {
   useModelBrowsing
-} from "./chunk-5P2NA4VO.js";
+} from "./chunk-TGMBNLE7.js";
 import {
+  MODEL_BANNER_SIZE,
   chooseModelThumbnail
-} from "./chunk-EPSDIXQ5.js";
+} from "./chunk-XU3535ZK.js";
 import {
   ModelCatalogImage
-} from "./chunk-TOST2PZ5.js";
+} from "./chunk-OLJZ2VLG.js";
 import {
   Teleport,
   computed,
@@ -509,7 +510,7 @@ var ModelPickerField = defineComponent({
           [h("span", { class: "sc-model-find-icon", "aria-hidden": "true" }), "Find models"]
         );
       const item = currentItem.value;
-      const banner = item ? chooseModelThumbnail(item, "banner", 768) : null;
+      const banner = item ? chooseModelThumbnail(item, "banner", MODEL_BANNER_SIZE) : null;
       const label = item ? [item.title, item.version].filter(Boolean).join(" - ") : current.value;
       return h(
         "div",

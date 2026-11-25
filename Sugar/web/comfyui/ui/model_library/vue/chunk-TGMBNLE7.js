@@ -3,7 +3,7 @@ import {
 } from "./chunk-RSAZHLEW.js";
 import {
   modelWallNeighbor
-} from "./chunk-UM6L2UPZ.js";
+} from "./chunk-XP42IRIX.js";
 import {
   computed,
   ref

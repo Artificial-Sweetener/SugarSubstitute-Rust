@@ -53,6 +53,9 @@ test('preserves numeric progress in a replacement combobox and resolves refreshe
   );
   try {
     await nextTick();
+    // The download's thumbnail appears once it has been decoded.
+    await imageDecoding.release();
+    await nextTick();
     expect(root.querySelector('[role=progressbar]')?.getAttribute('aria-valuenow')).toBe('25');
     expect(root.querySelector('input')?.value).toBe('Downloading Hassaku <img>');
     expect(root.querySelector('.sc-model-transfer-caption')?.textContent).toBe(
@@ -76,9 +79,6 @@ test('preserves numeric progress in a replacement combobox and resolves refreshe
     if (!input) throw new Error('Missing accessible combo.');
     expect(input.title).toBe('Hassaku <img>');
     expect(getComputedStyle(input).color).toBe('transparent');
-    root.querySelector('.sc-model-transfer-thumbnail')?.dispatchEvent(new Event('error'));
-    await nextTick();
-    expect(root.querySelector('.sc-model-transfer-thumbnail')).toBeNull();
     expect(root.querySelector('[role=progressbar]')).not.toBeNull();
     expect(root.querySelector('.sc-model-transfer-caption img')).toBeNull();
     picker.dispose();

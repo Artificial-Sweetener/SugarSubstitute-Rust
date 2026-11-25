@@ -30,8 +30,10 @@ from .ports import ModelCatalogRepository
 from ..domain.models import ModelCatalogEntry, ModelEvidence
 from ..domain.enrichment_freshness import ModelEnrichmentRecord
 
-# A preview that keeps failing is asked for again after five minutes, then an hour, then daily.
-_PREVIEW_RETRY_SECONDS = (300, 3600, 86400)
+# A preview that could not be downloaded is remembered against its content and its policy. No
+# clock brings it back: it is asked for again when the policy changes (a different record), when
+# the provider's stored data is cleared, or when a person asks for the model to be refreshed.
+PREVIEW_FAILURE_REMEMBERED = float(2**62)
 
 
 class EnrichmentAttempts(Protocol):
@@ -49,9 +51,6 @@ class EnrichmentAttempts(Protocol):
 
     def content_retry_at(self, sha256: str, *, policy: str) -> float:
         """Return the prior provider deadline for identical content at another location."""
-
-    def preview_failures(self, sha256: str, *, policy: str) -> int:
-        """Return how many preview downloads in a row failed for this content and policy."""
 
     def finish(
         self,
@@ -179,15 +178,7 @@ class AutomaticModelEnrichment:
             )
             failures, retry_at = 0, 0.0
             if result.warning is not None:
-                failures = 1 + await complete_blocking_model_work(
-                    self._attempts.preview_failures, sha256, policy=retry_policy
-                )
-                retry_at = (
-                    self._clock()
-                    + _PREVIEW_RETRY_SECONDS[
-                        min(failures, len(_PREVIEW_RETRY_SECONDS)) - 1
-                    ]
-                )
+                failures, retry_at = 1, PREVIEW_FAILURE_REMEMBERED
             if result.warning is None:
                 await complete_blocking_model_work(
                     self._freshness.record,

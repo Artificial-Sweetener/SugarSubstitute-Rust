@@ -3265,14 +3265,14 @@ function findSharedChunks(a, b, textDiff) {
     for (let i = 0; i < set.chunk.length; i++)
       if (set.chunk[i].maxPoint <= 0)
         inA.set(set.chunk[i], set.chunkPos[i]);
-  let shared = /* @__PURE__ */ new Set();
+  let shared2 = /* @__PURE__ */ new Set();
   for (let set of b)
     for (let i = 0; i < set.chunk.length; i++) {
       let known = inA.get(set.chunk[i]);
       if (known != null && (textDiff ? textDiff.mapPos(known) : known) == set.chunkPos[i] && !(textDiff === null || textDiff === void 0 ? void 0 : textDiff.touchesRange(known, known + set.chunk[i].length)))
-        shared.add(set.chunk[i]);
+        shared2.add(set.chunk[i]);
     }
-  return shared;
+  return shared2;
 }
 var LayerCursor = class {
   constructor(layer2, skip, minPoint, rank = 0) {
@@ -15902,9 +15902,9 @@ var requestIdle = (callback) => {
 };
 if (typeof requestIdleCallback != "undefined")
   requestIdle = (callback) => {
-    let idle = -1, timeout = setTimeout(
+    let idle2 = -1, timeout = setTimeout(
       () => {
-        idle = requestIdleCallback(callback, {
+        idle2 = requestIdleCallback(callback, {
           timeout: 500 - 100
           /* Work.MinPause */
         });
@@ -15912,7 +15912,7 @@ if (typeof requestIdleCallback != "undefined")
       100
       /* Work.MinPause */
     );
-    return () => idle < 0 ? clearTimeout(timeout) : cancelIdleCallback(idle);
+    return () => idle2 < 0 ? clearTimeout(timeout) : cancelIdleCallback(idle2);
   };
 var isInputPending = typeof navigator != "undefined" && ((_a = navigator.scheduling) === null || _a === void 0 ? void 0 : _a.isInputPending) ? () => navigator.scheduling.isInputPending() : null;
 var parseWorker = /* @__PURE__ */ ViewPlugin.fromClass(class ParseWorker {
@@ -17832,11 +17832,12 @@ function nativeCompositionStarted(view) {
 var SEARCH_MATCH_HIGHLIGHT = "sc-search-match";
 var SEARCH_CURRENT_HIGHLIGHT = "sc-search-current";
 var SearchHighlightRanges = class {
+  #owned = [];
+  view;
   /** Bind the window whose highlight registry is shared; one without the API shows nothing. */
   constructor(view) {
     this.view = view;
   }
-  #owned = [];
   /** Whether this window can show highlights at all. */
   get supported() {
     const view = this.view;
@@ -24810,7 +24811,7 @@ function captureFieldActionContext(value) {
     throw new TypeError("invalid-field-action-anchor");
   return Object.freeze({ left, right, top: top2, bottom });
 }
-function projectFieldActions(items, activate, release) {
+function projectFieldActions(items, activate, release2) {
   function entry(item) {
     if (item.kind === "heading") return Object.freeze({ kind: item.kind, label: item.label });
     if (item.kind === "separator") return Object.freeze({ kind: item.kind });
@@ -24829,7 +24830,7 @@ function projectFieldActions(items, activate, release) {
       activate: () => activate(item)
     });
   }
-  return Object.freeze({ entries: Object.freeze(items.map(entry)), release });
+  return Object.freeze({ entries: Object.freeze(items.map(entry)), release: release2 });
 }
 
 // frontend/sugarprompt/editor/src/context-menu-field-presentation.ts
@@ -26085,7 +26086,7 @@ var NativeDocumentCheckpoints = class {
     request.listener = false;
     const causes = request.failed ? [request.cause] : [];
     delete request.cause;
-    for (const release of [
+    for (const release2 of [
       () => input?.cancel(),
       () => {
         if (deadline) this.clock.clear(deadline.handle);
@@ -26099,7 +26100,7 @@ var NativeDocumentCheckpoints = class {
       }
     ]) {
       try {
-        release();
+        release2();
       } catch (cause) {
         causes.push(cause);
       }
@@ -27135,9 +27136,9 @@ var ReorderMountedBlock = class {
     const leases = this.leases.splice(0), node = this.node, causes = [];
     this.node = null;
     this.targets.splice(0);
-    for (const release of [...leases.map((lease) => () => lease.release()), () => node?.remove()]) {
+    for (const release2 of [...leases.map((lease) => () => lease.release()), () => node?.remove()]) {
       try {
-        release();
+        release2();
       } catch (cause) {
         causes.push(cause);
       }
@@ -34328,7 +34329,7 @@ var CompletionScrollbar = class {
     this.presentation = null;
     this.geometry = null;
     const causes = [];
-    for (const release of [
+    for (const release2 of [
       () => this.cancel(),
       () => this.thumb.removeEventListener("pointerdown", this.started),
       () => this.thumb.removeEventListener("pointermove", this.moved),
@@ -34338,7 +34339,7 @@ var CompletionScrollbar = class {
       () => this.dom.remove()
     ]) {
       try {
-        release();
+        release2();
       } catch (error) {
         causes.push(error);
       }
@@ -34663,7 +34664,7 @@ var CompletionTooltip = class {
     } catch (error) {
       this.disposed = true;
       const causes = [error];
-      for (const release of [
+      for (const release2 of [
         () => this.scrollbar.destroy(),
         () => observer?.disconnect(),
         () => this.viewport.removeEventListener("scroll", this.scrolled),
@@ -34672,7 +34673,7 @@ var CompletionTooltip = class {
         () => this.dom.remove()
       ]) {
         try {
-          release();
+          release2();
         } catch (cleanup) {
           causes.push(cleanup);
         }
@@ -34718,7 +34719,7 @@ var CompletionTooltip = class {
     this.result = null;
     this.nodes.clear();
     const causes = [];
-    for (const release of [
+    for (const release2 of [
       () => this.scrollbar.destroy(),
       () => this.observer.disconnect(),
       () => this.viewport.removeEventListener("scroll", this.scrolled),
@@ -34726,7 +34727,7 @@ var CompletionTooltip = class {
       () => this.viewport.removeEventListener("focus", this.focused)
     ]) {
       try {
-        release();
+        release2();
       } catch (error) {
         causes.push(error);
       }
@@ -35412,25 +35413,44 @@ function rasterSize(width, height) {
     height: Math.max(1, Math.floor(height * scale))
   };
 }
+var IDLE_LORA_RASTERS = 256;
+var shared = /* @__PURE__ */ new Map();
+var idle = /* @__PURE__ */ new Map();
+var decoding = /* @__PURE__ */ new Map();
+function retain2(entry) {
+  entry.users++;
+  idle.delete(entry.key);
+  return new BrowserLoraRaster(entry);
+}
+function release(entry) {
+  if (--entry.users > 0) return;
+  idle.set(entry.key, entry);
+  for (const [key3, oldest] of idle) {
+    if (idle.size <= IDLE_LORA_RASTERS) break;
+    idle.delete(key3);
+    shared.delete(key3);
+    oldest.bitmap.close();
+  }
+}
 var BrowserLoraRaster = class {
   width;
   height;
-  bitmap;
-  /** Retain only decoded pixels; the temporary image and its URL reference have already been released. */
-  constructor(bitmap) {
-    this.bitmap = bitmap;
-    this.width = bitmap.width;
-    this.height = bitmap.height;
+  entry;
+  /** Hold decoded pixels; the temporary image and its URL reference have already been released. */
+  constructor(entry) {
+    this.entry = entry;
+    this.width = entry.bitmap.width;
+    this.height = entry.bitmap.height;
   }
   /** Cover a stable banner with centered source pixels; DOM construction starts no image request or decode. */
   paint(canvas) {
-    if (!this.bitmap) throw new Error("LoRA raster already disposed");
+    if (!this.entry) throw new Error("LoRA raster already disposed");
     const context = canvas.getContext("2d");
     if (!context) throw new Error("LoRA canvas unavailable");
     const scale = Math.max(canvas.width / this.width, canvas.height / this.height);
     const width = canvas.width / scale, height = canvas.height / scale;
     context.drawImage(
-      this.bitmap,
+      this.entry.bitmap,
       (this.width - width) / 2,
       (this.height - height) / 2,
       width,
@@ -35441,42 +35461,54 @@ var BrowserLoraRaster = class {
       canvas.height
     );
   }
-  /** Idempotent release closes the native bitmap and forbids further painting. */
+  /** Idempotent release gives up this hold and forbids further painting. */
   dispose() {
-    this.bitmap?.close();
-    this.bitmap = null;
+    if (this.entry) release(this.entry);
+    this.entry = null;
   }
 };
+function decodeShared(key3, reference) {
+  const running = decoding.get(key3);
+  if (running) return running;
+  const work = (async () => {
+    const image = new Image();
+    image.referrerPolicy = "no-referrer";
+    try {
+      image.src = reference.url;
+      await image.decode();
+      if (image.naturalWidth !== reference.width || image.naturalHeight !== reference.height)
+        return null;
+      const size = rasterSize(image.naturalWidth, image.naturalHeight);
+      const bitmap = await createImageBitmap(image, {
+        resizeWidth: size.width,
+        resizeHeight: size.height,
+        resizeQuality: "high"
+      });
+      const entry = { key: key3, bitmap, users: 0 };
+      shared.set(key3, entry);
+      idle.set(key3, entry);
+      return entry;
+    } catch (cause) {
+      if (cause instanceof DOMException) return null;
+      throw cause;
+    } finally {
+      image.removeAttribute("src");
+    }
+  })();
+  decoding.set(key3, work);
+  void work.then(
+    () => decoding.delete(key3),
+    () => decoding.delete(key3)
+  );
+  return work;
+}
 var decodeLoraMedia = async (reference, signal) => {
   if (signal.aborted) return null;
-  const image = new Image();
-  image.referrerPolicy = "no-referrer";
-  const cancel = () => image.removeAttribute("src");
-  signal.addEventListener("abort", cancel, { once: true });
-  try {
-    image.src = reference.url;
-    await image.decode();
-    if (signal.aborted) return null;
-    if (image.naturalWidth !== reference.width || image.naturalHeight !== reference.height)
-      return null;
-    const size = rasterSize(image.naturalWidth, image.naturalHeight);
-    const bitmap = await createImageBitmap(image, {
-      resizeWidth: size.width,
-      resizeHeight: size.height,
-      resizeQuality: "high"
-    });
-    if (signal.aborted) {
-      bitmap.close();
-      return null;
-    }
-    return new BrowserLoraRaster(bitmap);
-  } catch (cause) {
-    if (signal.aborted || cause instanceof DOMException) return null;
-    throw cause;
-  } finally {
-    signal.removeEventListener("abort", cancel);
-    cancel();
-  }
+  const key3 = `${reference.url}|${String(reference.width)}x${String(reference.height)}`;
+  const kept = shared.get(key3);
+  if (kept) return retain2(kept);
+  const entry = await decodeShared(key3, reference);
+  return entry && !signal.aborted ? retain2(entry) : null;
 };
 
 // frontend/sugarprompt/editor/src/lora-media-preparation.ts
@@ -35746,11 +35778,11 @@ function compositionHistoryRestoration(state, initialization, history2) {
     effects: initialization.reconfigure(historyField.init(() => history2)),
     annotations: Transaction.addToHistory.of(false)
   });
-  const release = restore.state.update({
+  const release2 = restore.state.update({
     effects: initialization.reconfigure([]),
     annotations: Transaction.addToHistory.of(false)
   });
-  return [restore, release];
+  return [restore, release2];
 }
 var CompositionHistory = class {
   view;
@@ -37496,7 +37528,7 @@ function admitsReorderMotionPaintContext(view, attachment) {
   const window2 = view.dom.ownerDocument.defaultView, lines = view.contentDOM.querySelectorAll(".cm-line");
   if (!window2 || !lines.length || lines.length > 16) return false;
   for (const ancestor of [view.scrollDOM, attachment]) {
-    const shared = window2.getComputedStyle(ancestor);
+    const shared2 = window2.getComputedStyle(ancestor);
     for (const [name2, value] of [
       ["opacity", "1"],
       ["filter", "none"],
@@ -37512,8 +37544,8 @@ function admitsReorderMotionPaintContext(view, attachment) {
       ["text-decoration-line", "none"],
       ["text-shadow", "none"]
     ])
-      if (shared.getPropertyValue(name2) !== value) return false;
-    if (!/^rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*0\s*\)$/u.test(shared.backgroundColor))
+      if (shared2.getPropertyValue(name2) !== value) return false;
+    if (!/^rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*0\s*\)$/u.test(shared2.backgroundColor))
       return false;
   }
   if (Array.from(lines).some(
@@ -37652,9 +37684,9 @@ var ReorderMotionAttachment = class {
       if (!this.mounted(false)) throw new Error("reorder-attachment-mount-unavailable");
     } catch (primary) {
       const causes = [primary];
-      for (const release of [() => this.destroy(), () => root.remove()])
+      for (const release2 of [() => this.destroy(), () => root.remove()])
         try {
-          release();
+          release2();
         } catch (cause) {
           causes.push(cause);
         }
@@ -37885,9 +37917,9 @@ var ReorderMotionAttachment = class {
     this.prepared = this.drawn = null;
     if (owners.get(this.view) === this) owners.delete(this.view);
     const failures = [];
-    for (const release of [() => borrowed?.retire(), () => this.root.remove()]) {
+    for (const release2 of [() => borrowed?.retire(), () => this.root.remove()]) {
       try {
-        release();
+        release2();
       } catch (cause) {
         failures.push(cause);
       }
@@ -38394,7 +38426,7 @@ var ReorderPointerFeedback = class {
     this.position = null;
     this.grab = null;
     const causes = [];
-    for (const release of [
+    for (const release2 of [
       () => {
         if (frame !== null) this.window.cancelAnimationFrame(frame);
       },
@@ -38403,7 +38435,7 @@ var ReorderPointerFeedback = class {
       () => proxy?.remove()
     ]) {
       try {
-        release();
+        release2();
       } catch (cause) {
         causes.push(cause);
       }
@@ -39888,7 +39920,7 @@ var ReadonlyMediaRetired = class extends Error {
 };
 function releaseCanvas(canvas) {
   const failures = [];
-  for (const release of [
+  for (const release2 of [
     () => canvas.remove(),
     () => {
       canvas.width = 0;
@@ -39898,7 +39930,7 @@ function releaseCanvas(canvas) {
     }
   ]) {
     try {
-      release();
+      release2();
     } catch (cause) {
       failures.push(cause);
     }
@@ -40381,7 +40413,7 @@ var ReorderPointerPlacement = class {
     });
   }
   /** Current physical pointer intents resolve only against the retained canonical base frame. */
-  motion(input, release) {
+  motion(input, release2) {
     if (!input.hidden || !this.owner.current(input)) return;
     const pending = this.placement;
     if (pending?.input === input && this.observe(
@@ -40390,7 +40422,7 @@ var ReorderPointerPlacement = class {
         owned: () => this.ownsIntent(pending)
       })
     )) {
-      pending.release ||= release;
+      pending.release ||= release2;
       return;
     }
     if (!this.observe(() => this.base.prepare(input))) {
@@ -40405,7 +40437,7 @@ var ReorderPointerPlacement = class {
       capture: input.capture,
       pointer: input.pointer,
       calibration: null,
-      release: release || this.placement?.input === input && this.placement.release
+      release: release2 || this.placement?.input === input && this.placement.release
     };
     this.placement = placement;
     this.observe(() => this.feedback.pendingMarker());
@@ -41578,9 +41610,9 @@ function observeReorderSlotLayout(node, available, action) {
     primary = cause;
   } finally {
     active = false;
-    for (const release of [() => topology?.retire(), () => observer?.disconnect()])
+    for (const release2 of [() => topology?.retire(), () => observer?.disconnect()])
       try {
-        release();
+        release2();
       } catch (cause) {
         cleanup.push(cause);
       }
@@ -41893,14 +41925,14 @@ var ReorderPassivePaintSlot = class {
       this.publication?.retire();
       this.lease = null;
       const causes = [];
-      for (const release of [
+      for (const release2 of [
         () => this.media.destroy(),
         () => paint?.destroy(),
         ...edges2.map((edge) => () => releaseReorderFragment(edge)),
         ...acquired.map((element) => () => element.remove())
       ])
         try {
-          release();
+          release2();
         } catch (cause) {
           causes.push(cause);
         }
@@ -42123,14 +42155,14 @@ var ReorderPassivePaintSlot = class {
     const resources = this.resources;
     this.resources = null;
     const causes = [];
-    for (const release of [
+    for (const release2 of [
       () => resources?.node.remove(),
       () => this.media.destroy(),
       () => resources?.paint.destroy(),
       ...(resources?.edges ?? []).map((edge) => () => releaseReorderFragment(edge))
     ])
       try {
-        release();
+        release2();
       } catch (cause) {
         causes.push(cause);
       }
@@ -43097,7 +43129,7 @@ var ReorderPassiveStage = class {
       if (!this.current()) throw new Error("Passive stage retired during creation");
     } catch (primary) {
       const causes = [primary];
-      for (const release of [
+      for (const release2 of [
         () => {
           const lease = this.layerLease;
           this.layerLease = null;
@@ -43107,7 +43139,7 @@ var ReorderPassiveStage = class {
         () => node.remove()
       ])
         try {
-          release();
+          release2();
         } catch (cause) {
           causes.push(cause);
         }
@@ -43145,21 +43177,21 @@ var ReorderPassiveStage = class {
   /** Register complete canonical paint only while the stage remains current; expected retirement returns null after independently owned child cleanup. */
   mount(prepared4) {
     if (!this.matches(prepared4)) return null;
-    const idle = Array.from(this.slots).find((slot2) => slot2.idle);
-    if (!idle && this.slots.size >= 2) return null;
-    const slot = idle ?? new ReorderPassivePaintSlot(this.view, this);
+    const idle2 = Array.from(this.slots).find((slot2) => slot2.idle);
+    if (!idle2 && this.slots.size >= 2) return null;
+    const slot = idle2 ?? new ReorderPassivePaintSlot(this.view, this);
     this.slots.add(slot);
     const pending = new PendingPassiveMotion(this.view, prepared4, this, slot);
     this.pending.set(pending, slot);
     slot.reserve(pending);
     try {
-      const outcome = idle ? slot.reconcile(prepared4) : slot.mount(prepared4) ? "ready" : "retired";
+      const outcome = idle2 ? slot.reconcile(prepared4) : slot.mount(prepared4) ? "ready" : "retired";
       if (outcome !== "ready") {
         const retry = outcome === "miss" && this.pending.get(pending) === slot && pending.publicationCurrent();
         this.discard(pending, slot);
         return retry && this.matches(prepared4) && this.view.state.field(reorderPreview, false)?.value === prepared4.preview ? this.mount(prepared4) : null;
       }
-      const admitted = this.current() && pending.initialize(!!idle);
+      const admitted = this.current() && pending.initialize(!!idle2);
       if (!admitted) {
         this.discard(pending, slot);
         return null;
@@ -43179,9 +43211,9 @@ var ReorderPassiveStage = class {
     if (this.pending.get(pending) !== slot) return;
     this.pending.delete(pending);
     const causes = [];
-    for (const release of [() => pending.destroy(), () => this.retireSlot(slot)])
+    for (const release2 of [() => pending.destroy(), () => this.retireSlot(slot)])
       try {
-        release();
+        release2();
       } catch (cause) {
         causes.push(cause);
       }
@@ -43240,7 +43272,7 @@ var ReorderPassiveStage = class {
     this.pending.clear();
     this.slots.clear();
     const causes = [];
-    for (const release of [
+    for (const release2 of [
       () => layerLease?.release(),
       ...children.map((child) => () => child.destroy()),
       ...slots.map((slot) => () => slot.destroy()),
@@ -43248,7 +43280,7 @@ var ReorderPassiveStage = class {
       () => this.node.remove()
     ])
       try {
-        release();
+        release2();
       } catch (cause) {
         causes.push(cause);
       }
@@ -43301,9 +43333,9 @@ var ReorderMotionPreparation = class {
     } catch (cause) {
       failures.push(cause);
     }
-    for (const release of [retire, ...owned ? [() => stage.destroy()] : []]) {
+    for (const release2 of [retire, ...owned ? [() => stage.destroy()] : []]) {
       try {
-        release();
+        release2();
       } catch (cause) {
         failures.push(cause);
       }
@@ -43359,9 +43391,9 @@ var ReorderMotionPreparation = class {
             const previous2 = this.stage;
             this.stage = null;
             const failures = [];
-            for (const release of [callbacks.replaceContext, () => previous2.destroy()]) {
+            for (const release2 of [callbacks.replaceContext, () => previous2.destroy()]) {
               try {
-                release();
+                release2();
               } catch (cause) {
                 failures.push(cause);
               }
@@ -43460,9 +43492,9 @@ var ReorderMotionPreparation = class {
     const stage = this.stage;
     this.stage = null;
     const failures = [];
-    for (const release of [() => this.retirePending(), () => stage?.destroy()]) {
+    for (const release2 of [() => this.retirePending(), () => stage?.destroy()]) {
       try {
-        release();
+        release2();
       } catch (cause) {
         failures.push(cause);
       }
@@ -43477,7 +43509,7 @@ function releaseOwnedMotionResource(view, owned, observe) {
   if (owned.released) return [];
   owned.released = true;
   const failures = [];
-  for (const release of [
+  for (const release2 of [
     () => owned.landing?.release(),
     () => {
       if (owned.scene.node.dataset.reorderMotionEndpoint === reorderPaintIssueName(owned.issue))
@@ -43504,7 +43536,7 @@ function releaseOwnedMotionResource(view, owned, observe) {
     )
   ])
     try {
-      release();
+      release2();
     } catch (cause) {
       failures.push(cause);
     }
@@ -43913,7 +43945,7 @@ var ReorderMotionStyles = class {
     this.active = null;
     if (!node && !marker) return;
     const failures = [];
-    for (const release of [
+    for (const release2 of [
       () => {
         marker?.setAttribute("data-reorder-motion-active", "");
       },
@@ -43921,7 +43953,7 @@ var ReorderMotionStyles = class {
       () => node?.remove()
     ])
       try {
-        release();
+        release2();
       } catch (cause) {
         failures.push(cause);
       }
@@ -43979,7 +44011,7 @@ var ReorderMotionResource = class {
       if (!previous) this.release();
     } catch (primary) {
       const failures = [primary];
-      for (const release of [
+      for (const release2 of [
         () => {
           if (this.owned === entry) fallback();
         },
@@ -43991,7 +44023,7 @@ var ReorderMotionResource = class {
         }
       ])
         try {
-          release();
+          release2();
         } catch (cleanup) {
           failures.push(cleanup);
         }
@@ -44090,12 +44122,12 @@ var ReorderMotionResource = class {
           if (this.owned === owned || this.owned === previous?.owned) this.owned = null;
         }
       }
-      for (const release of [
+      for (const release2 of [
         ...!committed || captured2 ? [() => this.releaseOwned(owned)] : [],
         ...previous && captured2 ? [() => this.releaseOwned(previous.owned)] : []
       ])
         try {
-          release();
+          release2();
         } catch (cause) {
           failures.push(cause);
         }
@@ -44258,9 +44290,9 @@ var ReorderMotionResource = class {
     const styles = this.styles;
     this.styles = null;
     const failures = [];
-    for (const release of [() => this.release(), () => styles?.retire()])
+    for (const release2 of [() => this.release(), () => styles?.retire()])
       try {
-        release();
+        release2();
       } catch (cause) {
         failures.push(cause);
       }
@@ -44932,9 +44964,9 @@ function captureReorderMotionGrab(view, scene, geometry) {
         return { node: proxy, geometry };
       } catch (primary) {
         const causes = [primary];
-        for (const release of [() => copy.remove(), () => proxy?.remove()]) {
+        for (const release2 of [() => copy.remove(), () => proxy?.remove()]) {
           try {
-            release();
+            release2();
           } catch (cause) {
             causes.push(cause);
           }
@@ -45285,7 +45317,7 @@ var ReorderMotionPresentation = class {
           this.clock.cancel();
         } catch (primary2) {
           const failures = [primary2];
-          for (const release of [
+          for (const release2 of [
             fallback,
             () => {
               if (generation === this.generation && this.resource.scene === oldScene) {
@@ -45298,7 +45330,7 @@ var ReorderMotionPresentation = class {
             }
           ])
             try {
-              release();
+              release2();
             } catch (cleanup) {
               failures.push(cleanup);
             }
@@ -45368,7 +45400,7 @@ var ReorderMotionPresentation = class {
     const pointer = publication2?.pointer, preview = publication2?.value;
     this.input = null;
     const failures = [];
-    for (const release of [
+    for (const release2 of [
       () => {
         if (scene?.whole && pointer?.mode === "stage" && preview)
           fallbackReorderPointerPaint(
@@ -45389,7 +45421,7 @@ var ReorderMotionPresentation = class {
       }
     ])
       try {
-        release();
+        release2();
       } catch (cause) {
         failures.push(cause);
       }
@@ -45409,14 +45441,14 @@ var ReorderMotionPresentation = class {
   cancel() {
     const generation = ++this.generation;
     const failures = [];
-    for (const release of [
+    for (const release2 of [
       () => this.releasePaint("context"),
       () => this.preparation.cancel(),
       () => this.clock.reset(),
       () => this.landing.clear()
     ])
       try {
-        if (generation === this.generation) release();
+        if (generation === this.generation) release2();
       } catch (cause) {
         failures.push(cause);
       }
@@ -45433,14 +45465,14 @@ var ReorderMotionPresentation = class {
   destroy() {
     this.disposed = true;
     const failures = [];
-    for (const release of [
+    for (const release2 of [
       () => this.media?.removeEventListener("change", this.motionChanged),
       () => this.view.dom.ownerDocument.fonts?.removeEventListener("loadingdone", this.motionChanged),
       () => this.cancel(),
       () => this.clock.destroy()
     ])
       try {
-        release();
+        release2();
       } catch (cause) {
         failures.push(cause);
       }
@@ -45623,20 +45655,20 @@ var ReorderMeasurement = class {
         if (!current6()) return null;
         const captured2 = native ? null : this.presentation.captureGrab(input.held);
         let paint = captured2?.kind === "paint" ? captured2.paint : null;
-        const release = () => {
+        const release2 = () => {
           const node = paint?.node;
           paint = null;
           node?.remove();
         };
         try {
           if (!current6()) {
-            release();
+            release2();
             return null;
           }
           if (captured2?.kind === "native") return { kind: "native" };
           paint ??= captureReorderGrabPaint(this.view, input.held, press);
           if (!current6()) {
-            release();
+            release2();
             return null;
           }
           const output = { kind: "paint", paint };
@@ -45644,7 +45676,7 @@ var ReorderMeasurement = class {
           return output;
         } catch (primary) {
           try {
-            release();
+            release2();
           } catch (cleanup) {
             throw new AggregateError([primary, cleanup], "reorder-grab-read-retirement-failed");
           }
@@ -45658,14 +45690,14 @@ var ReorderMeasurement = class {
         }
         this.observe(() => {
           let paint = read?.kind === "paint" ? read.paint : null;
-          const release = () => {
+          const release2 = () => {
             const node = paint?.node;
             paint = null;
             node?.remove();
           };
           try {
             if (!current6()) {
-              release();
+              release2();
               return;
             }
             press.paint = paint;
@@ -45686,7 +45718,7 @@ var ReorderMeasurement = class {
             }
           } catch (primary) {
             try {
-              release();
+              release2();
             } catch (cleanup) {
               throw new AggregateError(
                 [primary, cleanup],
@@ -45706,14 +45738,14 @@ var ReorderMeasurement = class {
     return !!press && press.input === input && (press.threshold || !!coordinates && Math.abs(coordinates.x - press.x) + Math.abs(coordinates.y - press.y) >= reorderDragDistance);
   }
   /** Pointer placement and release bind both measured hidden-output and current coordinate identities. */
-  motion(input, release) {
+  motion(input, release2) {
     const press = this.press;
     if (press?.input === input) {
       const coordinates2 = input.coordinates;
       if (!coordinates2 || !press.threshold && Math.abs(coordinates2.x - press.x) + Math.abs(coordinates2.y - press.y) < reorderDragDistance)
         return;
       press.threshold = true;
-      press.release ||= release;
+      press.release ||= release2;
       if (press.paint && !press.admission) this.admit(press);
       return;
     }
@@ -45728,7 +45760,7 @@ var ReorderMeasurement = class {
         )
       );
     }
-    this.placement.motion(input, release);
+    this.placement.motion(input, release2);
   }
   /** Bind one exact native epoch and the existing feedback/placement handoff to stateless cold admission. */
   admit(press) {
@@ -45738,13 +45770,13 @@ var ReorderMeasurement = class {
       current: () => !this.disposed && epoch === this.epoch && this.press === press,
       observe: (action) => this.observe(action),
       schedule: (request) => this.schedule(request),
-      start: (paint, coordinates, release) => {
+      start: (paint, coordinates, release2) => {
         this.press = null;
         this.feedback.begin(paint, coordinates);
         if (this.disposed || epoch !== this.epoch || !this.owner.current(press.input) || this.disposed || epoch !== this.epoch)
           return;
-        this.motion(press.input, release);
-        if (!release && this.owner.current(press.input)) this.scroll(press.input);
+        this.motion(press.input, release2);
+        if (!release2 && this.owner.current(press.input)) this.scroll(press.input);
       }
     });
   }
@@ -45833,22 +45865,22 @@ var ReorderMeasurement = class {
     this.pointer = null;
     this.press = null;
     const failures = [];
-    const release = (action) => {
+    const release2 = (action) => {
       try {
         action();
       } catch (cause) {
         failures.push(cause);
       }
     };
-    release(() => this.keyboard.cancel());
-    if (paint) release(() => paint.node.remove());
+    release2(() => this.keyboard.cancel());
+    if (paint) release2(() => paint.node.remove());
     if (frame !== null)
-      release(() => this.view.dom.ownerDocument.defaultView?.cancelAnimationFrame(frame));
-    release(() => this.feedback.close());
-    if (!preservePaint) release(() => this.presentation.cancel());
-    release(() => this.placement.cancel());
+      release2(() => this.view.dom.ownerDocument.defaultView?.cancelAnimationFrame(frame));
+    release2(() => this.feedback.close());
+    if (!preservePaint) release2(() => this.presentation.cancel());
+    release2(() => this.placement.cancel());
     if (pointer !== null)
-      release(() => {
+      release2(() => {
         if (this.view.contentDOM.hasPointerCapture(pointer))
           this.view.contentDOM.releasePointerCapture(pointer);
       });
@@ -46361,7 +46393,7 @@ var NativeReorderSession = class {
     const cursor = this.grabCursor;
     this.grabCursor = null;
     const failures = [];
-    const release = (action) => {
+    const release2 = (action) => {
       try {
         action();
       } catch (cause) {
@@ -46371,12 +46403,12 @@ var NativeReorderSession = class {
     const previousDeferral = this.deferMeasurement;
     this.deferMeasurement ||= defer;
     try {
-      release(() => this.entry.cancel());
+      release2(() => this.entry.cancel());
     } finally {
       this.deferMeasurement = previousDeferral;
     }
-    if (session) release(() => this.entry.release(session.reservation));
-    release(() => retireReorderPublication(this.view, session?.token ?? null, cursor, defer));
+    if (session) release2(() => this.entry.release(session.reservation));
+    release2(() => retireReorderPublication(this.view, session?.token ?? null, cursor, defer));
     if (failures.length === 1) throw failures[0];
     if (failures.length) throw new AggregateError(failures, "Reorder session cleanup failed");
   }
@@ -47440,13 +47472,13 @@ function inspect(view, profile) {
 function inspectStructure(view, profile) {
   if (nativeCompositionStarted(view)) return { status: "composing" };
   const prepared4 = inspect(view, profile);
-  const shared = {
+  const shared2 = {
     status: "ready",
     scopes: prepared4.scopes,
     documentSemantics: prepared4.documentSemantics,
     loraResourceNames: prepared4.loraScopes.resourceNames
   };
-  return prepared4.kind === "prompt" ? { ...shared, kind: "prompt", structure: prepared4.structure } : { ...shared, kind: prepared4.kind };
+  return prepared4.kind === "prompt" ? { ...shared2, kind: "prompt", structure: prepared4.structure } : { ...shared2, kind: prepared4.kind };
 }
 function inspectSceneContext(view, position) {
   if (nativeCompositionStarted(view)) return { status: "composing" };
@@ -47628,7 +47660,7 @@ function mountEditor(parent, options) {
     sourceCommands = void 0;
     search = void 0;
     disposeSurface = void 0;
-    for (const release of [
+    for (const release2 of [
       () => hostUpdates.dispose(),
       () => commands?.dispose(),
       () => observedSearch?.dispose(),
@@ -47636,7 +47668,7 @@ function mountEditor(parent, options) {
       () => tooltipParent.dispose()
     ]) {
       try {
-        release();
+        release2();
       } catch (cause) {
         failures.push(cause);
       }

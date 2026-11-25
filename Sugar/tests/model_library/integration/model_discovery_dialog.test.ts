@@ -148,6 +148,8 @@ test('opens the selected provider page from its badge and settles a failed previ
     ports.credentials,
     jest.fn(),
   );
+  imageDecoding.held = true;
+  imageDecoding.broken.add('');
   const closed = dialog.open();
   try {
     await settle();
@@ -160,7 +162,9 @@ test('opens the selected provider page from its badge and settles a failed previ
     expect(badge?.getAttribute('target')).toBe('_blank');
     expect(badge?.getAttribute('rel')).toBe('noopener noreferrer');
     expect(document.querySelector('.sc-model-preview-busy-ring')).not.toBeNull();
-    document.querySelector('.sc-model-discovery-portrait img')?.dispatchEvent(new Event('error'));
+    // The portrait's preview cannot be decoded.
+    await imageDecoding.release();
+    imageDecoding.reset();
     await nextTick();
     expect(document.querySelector('.sc-model-discovery-portrait img')).toBeNull();
     expect(document.querySelector('.sc-model-preview-unavailable')?.textContent).toBe(

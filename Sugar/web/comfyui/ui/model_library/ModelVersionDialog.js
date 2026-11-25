@@ -1,7 +1,7 @@
 import { mountModelVersionView } from './vue/ModelVersionVueRuntime.js';
 import { ModalShell } from '../dialogs/ModalShell.js';
-import { chooseModelThumbnail } from './ModelCatalog.js';
 import { CivitaiKeyDialog } from './CivitaiKeyDialog.js';
+import { modelVersionImage } from './ModelReleases.js';
 import { modelProviderPage } from './ModelContextMenu.js';
 import { createModelProviderIcon } from './vue/ModelProviderIcon.js';
 import { modelActionIcon } from './ModelActionIcon.js';
@@ -137,9 +137,7 @@ export class ModelVersionDialog {
                     void this.#target
                         .useDownload((transfer, signal) => this.#actions.acquire(this.#item.id, version.versionId, file?.fileId ?? '', () => undefined, signal, transfer), {
                         name: this.#item.title,
-                        previewUrl: version.previewUrl ??
-                            chooseModelThumbnail(this.#item, 'banner', 768)?.url ??
-                            null,
+                        previewUrl: modelVersionImage(this.#item, version, 'banner', 768),
                     })
                         .catch((error) => this.#failure(error));
                 }

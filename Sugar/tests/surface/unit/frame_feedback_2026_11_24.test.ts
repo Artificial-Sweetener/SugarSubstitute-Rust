@@ -190,8 +190,6 @@ test('the occlusion paints through the overlay hook’s registry and follows the
   const after = recordingContext();
   paintGraphBackground(canvas, after.context, () => undefined);
   expect(after.drawn).toEqual([]);
-  // In the desktop frame the setting no longer fades the card itself.
-  expect(flat(desktopFrameCss)).toContain('.lg-node[data-sc-style-card] { opacity:1 !important; }');
 });
 
 test('one failing background painter is reported and the others still paint', () => {

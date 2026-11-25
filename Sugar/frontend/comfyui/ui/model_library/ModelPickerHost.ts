@@ -241,7 +241,7 @@ export class ModelPickerHost {
   mountGallery(events: ModelGalleryEvents): ModelGallerySurface {
     const element = this.#options.document.createElement('div');
     element.className = 'sc-model-popup sc-model-popup-inline';
-    const gallery = mountModelGallery(element, events);
+    const gallery = mountModelGallery(element, events, this.#shown);
     this.#appearance.track(element);
     return {
       element,
@@ -272,7 +272,14 @@ export class ModelPickerHost {
     return new Promise((resolve) => {
       // A model chosen here belongs to no workflow field, so a chosen version applies nowhere.
       const session = new ModelPickerSession(this.#options.document, () => null);
-      const request = { items, label, anchor, context: this.#context(), session };
+      const request = {
+        items,
+        label,
+        anchor,
+        context: this.#context(),
+        session,
+        shown: this.#shown,
+      };
       const chooser = openModelChooser(this.#options.document, request, (item) => {
         if (chooser.popup) this.#appearance.release(chooser.popup);
         resolve(item);
@@ -294,6 +301,15 @@ export class ModelPickerHost {
     );
     return this.#menu.project(item);
   }
+
+  /**
+   * Every wall this host mounts reports the models it has on screen, and the model library looks
+   * those up before the rest. A failed report offers a person nothing to act on; the next
+   * report asks again.
+   */
+  readonly #shown = (items: readonly ModelCatalogItem[]): void => {
+    void this.#options.catalog.prioritize?.(items).catch(() => undefined);
+  };
 
   /** The owners behind every model menu this host opens. */
   #context(): ModelContextOptions {
@@ -357,8 +373,13 @@ export class ModelPickerHost {
       this.#schedule();
       if (!this.#unsubscribeCatalog)
         this.#unsubscribeCatalog = this.#options.catalog.watch((next) => {
+          const previous = this.#snapshot;
           this.#snapshot = next;
           for (const mount of this.#mounts.values()) this.#publishChoices(mount, next);
+          // Which widgets are model fields, and what they offer, follows the model files. New
+          // names, words and pictures for the same files reach the mounted pickers above and
+          // change nothing about the nodes, so the nodes are not read again.
+          if (previous && sameModelFiles(previous, next)) return;
           this.#queue(this.#options.document.body);
           this.#schedule();
         }, this.#options.reportError);
@@ -576,4 +597,22 @@ export class ModelPickerHost {
 /** Remount when the host changes its legal options, preserving their exact order. */
 function sameOptions(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+/** Whether two snapshots list the same model files in the same state of discovery. */
+export function sameModelFiles(left: ModelCatalogSnapshot, right: ModelCatalogSnapshot): boolean {
+  return (
+    left.scanning === right.scanning &&
+    left.items.length === right.items.length &&
+    left.items.every((item, index) => {
+      const other = right.items[index];
+      return (
+        item === other ||
+        (other !== undefined &&
+          item.id === other.id &&
+          item.kind === other.kind &&
+          item.value === other.value)
+      );
+    })
+  );
 }

@@ -211,7 +211,11 @@ test('node cards are translucent over the Mica on the desktop frame, with overla
   );
   // A node card paints the fill once, on its outer element; its inner layers stay clear.
   expect(css).toContain(
-    ":root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] [data-sc-style-node] { --sc-card-fill:transparent; background:var(--sc-desktop-card-wash);",
+    ":root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] [data-sc-style-card] { background:var(--sc-desktop-card-wash);",
+  );
+  // Its inner layers, and a widget standing alone in the node styling scope, paint no fill.
+  expect(css).toContain(
+    ":root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] [data-sc-style-node] { --sc-card-fill:transparent; }",
   );
   expect(css).toMatch(
     /\[data-sc-style-node\] :is\( \[data-sc-toggle-row\],\[data-testid="advanced-inputs-button"\],\[data-sc-titlebar-action\]\):is\(:hover,:focus-visible\) \{ background:var\(--sc-desktop-row-hover\); \}/,

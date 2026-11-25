@@ -88,7 +88,7 @@ describe.each([
       <main id="graph-canvas-container" data-sc-style-theme-root data-sugarcubes-masonry="true">
         <canvas id="graph-canvas"></canvas><div class="sugarcubes-workflow-masonry__backdrop"></div>
         <div class="sugarcubes-workflow-masonry" data-sc-style-surface>
-          <div class="sugarcubes-cube-face__node-card"><div class="lg-node" data-sc-style-node>
+          <div class="sugarcubes-cube-face__node-card"><div class="lg-node" data-sc-style-node data-sc-style-card>
             <div data-testid="node-inner-wrapper"><div data-testid="node-header-1"></div><div data-testid="node-body-1"></div></div>
           </div></div>
         </div>

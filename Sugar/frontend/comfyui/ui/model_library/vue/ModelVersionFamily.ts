@@ -17,7 +17,7 @@
 import { defineComponent, h, ref, watch, nextTick } from 'vue';
 import type { PropType } from 'vue';
 import type { ModelCatalogItem } from '../ModelCatalog.js';
-import { chooseModelThumbnail } from '../ModelCatalog.js';
+import { modelVersionImage } from '../ModelReleases.js';
 import type { ModelRelease } from '../ModelReleases.js';
 import { modelArtifactSize } from '../ModelArtifactPresentation.js';
 import { ModelRecommendationPreview } from './ModelRecommendationPreview.js';
@@ -89,9 +89,7 @@ export const ModelVersionFamily = defineComponent({
                     : access === 'unknown'
                       ? 'Access unavailable'
                       : 'Download available';
-                const image = inUse
-                  ? (chooseModelThumbnail(props.item, 'standard', 512)?.url ?? version.previewUrl)
-                  : version.previewUrl;
+                const image = modelVersionImage(props.item, version, 'standard', 512);
                 return h(
                   'button',
                   {

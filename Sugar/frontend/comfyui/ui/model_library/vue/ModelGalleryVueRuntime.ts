@@ -18,6 +18,7 @@ import { createApp, h, shallowRef } from 'vue';
 import type { ModelCatalogItem } from '../ModelCatalog.js';
 import { modelWallNeighbor } from '../ModelPickerNavigation.js';
 import { ModelPickerWall } from './ModelPickerWall.js';
+import { shownModels } from './ShownModels.js';
 
 /** Arrow keys that move the current model across the wall's rows. */
 export type ModelGalleryArrow = 'ArrowUp' | 'ArrowDown' | 'ArrowLeft' | 'ArrowRight';
@@ -41,6 +42,7 @@ let mountIdentity = 0;
 export function mountModelGallery(
   element: HTMLElement,
   events: ModelGalleryEvents,
+  shown: ((items: readonly ModelCatalogItem[]) => void) | null = null,
 ): MountedModelGallery {
   const items = shallowRef<readonly ModelCatalogItem[]>([]);
   const active = shallowRef(0);
@@ -64,6 +66,7 @@ export function mountModelGallery(
       }),
   });
   app.config.idPrefix = identity;
+  if (shown) app.provide(shownModels, shown);
   app.mount(element);
   return {
     update: (next, current) => {

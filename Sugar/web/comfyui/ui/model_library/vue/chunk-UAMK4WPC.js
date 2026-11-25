@@ -1,6 +1,6 @@
 import {
   chooseModelThumbnail
-} from "./chunk-EPSDIXQ5.js";
+} from "./chunk-XU3535ZK.js";
 
 // frontend/comfyui/ui/model_library/ModelPickerLayout.ts
 var MODEL_PICKER_WALL_PROFILE = {
@@ -131,15 +131,23 @@ function visibleModelRows(rows, scrollTop, height) {
 }
 
 // frontend/comfyui/ui/model_library/ModelGalleryLayout.ts
+var shapes = /* @__PURE__ */ new WeakMap();
+function tileShape(item) {
+  let shape = shapes.get(item);
+  if (shape === void 0) {
+    const image = chooseModelThumbnail(item, "standard", Number.POSITIVE_INFINITY);
+    shape = image ? image.width / image.height : 0.72;
+    shapes.set(item, shape);
+  }
+  return shape;
+}
+var laid = null;
 function layoutModelGallery(items, width, profile = MODEL_PICKER_WALL_PROFILE) {
-  return layoutModelWall(
-    items.map((item) => {
-      const image = chooseModelThumbnail(item, "standard", Number.POSITIVE_INFINITY);
-      return image ? image.width / image.height : 0.72;
-    }),
-    width,
-    profile
-  );
+  const wanted = items.map(tileShape);
+  if (laid?.width === width && laid.profile === profile && laid.shapes.length === wanted.length && laid.shapes.every((shape, index) => shape === wanted[index]))
+    return laid.rows;
+  laid = { shapes: wanted, width, profile, rows: layoutModelWall(wanted, width, profile) };
+  return laid.rows;
 }
 
 export {

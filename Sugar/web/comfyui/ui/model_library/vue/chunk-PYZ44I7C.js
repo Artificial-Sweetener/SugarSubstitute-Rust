@@ -11,13 +11,13 @@ import {
   MODEL_PICKER_WALL_PROFILE,
   layoutModelGallery,
   visibleModelRows
-} from "./chunk-LCXHXGTS.js";
+} from "./chunk-UAMK4WPC.js";
 import {
   chooseModelThumbnail
-} from "./chunk-EPSDIXQ5.js";
+} from "./chunk-XU3535ZK.js";
 import {
   ModelCatalogImage
-} from "./chunk-TOST2PZ5.js";
+} from "./chunk-OLJZ2VLG.js";
 import {
   computed,
   defineComponent,
@@ -177,7 +177,7 @@ var ModelPickerWall = defineComponent({
                 }
               },
               [
-                image ? h(ModelCatalogImage, { image, fallback: true, lazy: true }) : h("span", { class: "sc-model-no-image" }, "No image"),
+                image ? h(ModelCatalogImage, { image, fallback: true }) : h("span", { class: "sc-model-no-image" }, "No image"),
                 h("span", { class: "sc-model-caption" }, [
                   h(ModelGalleryTitle, {
                     title: item.title,

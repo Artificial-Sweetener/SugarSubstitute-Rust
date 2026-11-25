@@ -40,9 +40,12 @@ interface HighlightWindow {
 /** One contributor's ranges within the document's shared search highlights. */
 export class SearchHighlightRanges {
   #owned: { readonly name: string; readonly range: Range }[] = [];
+  private readonly view: (Window & typeof globalThis) | null;
 
   /** Bind the window whose highlight registry is shared; one without the API shows nothing. */
-  constructor(private readonly view: (Window & typeof globalThis) | null) {}
+  constructor(view: (Window & typeof globalThis) | null) {
+    this.view = view;
+  }
 
   /** Whether this window can show highlights at all. */
   get supported(): boolean {

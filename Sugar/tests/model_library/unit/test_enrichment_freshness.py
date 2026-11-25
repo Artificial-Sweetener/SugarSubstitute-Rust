@@ -25,6 +25,9 @@ from pathlib import Path
 import sqlite3
 
 import pytest
+from sugarcubes.model_library.application.automatic_enrichment import (
+    PREVIEW_FAILURE_REMEMBERED,
+)
 from sugarcubes.model_library.domain.models import ModelEvidence, ModelMetadata
 from sugarcubes.model_library.infrastructure.enrichment_cache import (
     SqliteModelEnrichmentCache,
@@ -109,24 +112,45 @@ def test_animation_policy_reconsiders_cached_matches_without_preview(
     assert len(fixture.previews.urls) == 1
 
 
-def test_preview_failure_retains_backoff_then_recovers_missing_assets(
+def test_a_failed_preview_is_remembered_and_no_clock_brings_it_back(
     tmp_path: Path,
 ) -> None:
-    """Keep a thumbnail failure retryable even after successful metadata lookup."""
+    """Ask the provider again only when a person asks, never because time has passed."""
     fixture = EnrichmentFreshnessFixture(tmp_path, fixture_provider_version())
     fixture.previews.unavailable = True
     first = asyncio.run(fixture.automatic.refresh(fixture.identity))
     assert first["status"] == "found" and "warning" in first
-    assert (
-        asyncio.run(fixture.restart().refresh(fixture.identity))["status"] == "cached"
-    )
-    fixture.clock[0] += 301
+    lookups = len(fixture.provider.hashes)
     fixture.previews.unavailable = False
-    assert asyncio.run(fixture.restart().refresh(fixture.identity))["status"] == "found"
-    assert len(fixture.provider.hashes) == 2
+    for elapsed in (301, 3_601, 86_401, 10 * 365 * 86_400):
+        fixture.clock[0] += elapsed
+        assert (
+            asyncio.run(fixture.restart().refresh(fixture.identity))["status"]
+            == "cached"
+        )
+    assert len(fixture.provider.hashes) == lookups
+    # A person asking for the model to be refreshed is not held back by the remembered failure.
+    asked = asyncio.run(fixture.restart().refresh(fixture.identity, automatic=False))
+    assert asked["status"] == "found" and "warning" not in asked
+    assert len(fixture.provider.hashes) == lookups + 1
     assert (
         asyncio.run(fixture.automatic.refresh(fixture.identity))["status"] == "cached"
     )
+
+
+def test_a_failed_preview_is_asked_for_again_when_its_policy_changes(
+    tmp_path: Path,
+) -> None:
+    """A failure belongs to one content and one policy; another policy has no failure recorded."""
+    fixture = EnrichmentFreshnessFixture(tmp_path, fixture_provider_version())
+    fixture.previews.unavailable = True
+    assert "warning" in asyncio.run(fixture.automatic.refresh(fixture.identity))
+    lookups = len(fixture.provider.hashes)
+    fixture.previews.unavailable = False
+    fixture.policy[0] = "civitai-thumbnail-v1:allow_soft"
+    changed = asyncio.run(fixture.restart().refresh(fixture.identity))
+    assert changed["status"] == "found" and "warning" not in changed
+    assert len(fixture.provider.hashes) == lookups + 1
 
 
 def test_local_previews_keep_precedence_across_policy_changes(tmp_path: Path) -> None:
@@ -327,34 +351,27 @@ def test_thumbnail_only_policy_change_retains_a_confirmed_miss(tmp_path: Path) -
     assert len(fixture.provider.hashes) == 1
 
 
-def test_a_preview_that_keeps_failing_is_retried_less_and_less_often(
+def test_a_failed_preview_is_recorded_without_a_time_to_try_again(
     tmp_path: Path,
 ) -> None:
-    """Ask again after five minutes, then an hour, then daily, and at once when it works."""
+    """The record holds the remembered failure, and a success clears it."""
     fixture = EnrichmentFreshnessFixture(tmp_path, fixture_provider_version())
     fixture.previews.unavailable = True
     attempts = SqliteEnrichmentAttempts(
         fixture.repository.asset_root.parent / "enrichment.sqlite3"
     )
     policy = f"{fixture.provider_scope[0]}|{fixture.policy[0]}"
-    for delay in (300, 3600, 86400, 86400):
-        started = fixture.clock[0]
-        assert asyncio.run(fixture.automatic.refresh(fixture.identity))["status"] == (
-            "found"
-        )
-        digest = fixture.repository.list_entries()[0].sha256
-        assert digest is not None
-        assert attempts.content_retry_at(digest, policy=policy) == started + delay
-        lookups = len(fixture.provider.hashes)
-        fixture.clock[0] = started + delay - 1
-        assert asyncio.run(fixture.automatic.refresh(fixture.identity))["status"] == (
-            "cached"
-        )
-        assert len(fixture.provider.hashes) == lookups
-        fixture.clock[0] = started + delay + 1
-    fixture.previews.unavailable = False
     assert asyncio.run(fixture.automatic.refresh(fixture.identity))["status"] == "found"
     digest = fixture.repository.list_entries()[0].sha256
     assert digest is not None
-    assert attempts.preview_failures(digest, policy=policy) == 0
+    assert (
+        attempts.content_retry_at(digest, policy=policy) == PREVIEW_FAILURE_REMEMBERED
+    )
+    fixture.previews.unavailable = False
+    assert (
+        asyncio.run(fixture.automatic.refresh(fixture.identity, automatic=False))[
+            "status"
+        ]
+        == "found"
+    )
     assert attempts.content_retry_at(digest, policy=policy) == 0

@@ -3,7 +3,7 @@ import {
 } from "./chunk-FW25XVOZ.js";
 import {
   ModelPickerWall
-} from "./chunk-CVOWWAQA.js";
+} from "./chunk-PYZ44I7C.js";
 import {
   modelChoiceFolders
 } from "./chunk-RSAZHLEW.js";

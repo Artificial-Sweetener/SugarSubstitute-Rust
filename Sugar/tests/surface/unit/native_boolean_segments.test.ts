@@ -46,15 +46,17 @@ test('shared indicator eases across the selection and remains immediate for redu
   expect(indicator?.style.getPropertyValue('transition-timing-function')).toBe(
     'var(--sc-motion-ease)',
   );
-  const reducedMotion = rules.find(
+  const reducedMotion = rules.filter(
     (rule): rule is CSSMediaRule =>
       rule instanceof CSSMediaRule && rule.conditionText === '(prefers-reduced-motion:reduce)',
   );
-  const reducedIndicator = Array.from(reducedMotion?.cssRules ?? []).find(
-    (rule): rule is CSSStyleRule =>
-      rule instanceof CSSStyleRule &&
-      rule.selectorText.includes('[data-sc-boolean-segments]::after'),
-  );
+  const reducedIndicator = reducedMotion
+    .flatMap((rule) => Array.from(rule.cssRules))
+    .find(
+      (rule): rule is CSSStyleRule =>
+        rule instanceof CSSStyleRule &&
+        rule.selectorText.includes('[data-sc-boolean-segments]::after'),
+    );
   expect(reducedIndicator?.style.getPropertyValue('transition')).toBe('none');
 });
 

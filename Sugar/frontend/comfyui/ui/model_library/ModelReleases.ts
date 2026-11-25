@@ -15,6 +15,7 @@
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Validate provider-neutral release choices without exposing remote download addresses. */
 import { isRecord } from '../types/common.js';
+import { chooseModelThumbnail, type ModelCatalogItem } from './ModelCatalog.js';
 
 export interface ModelReleaseArtifact {
   readonly access: 'public' | 'api_key_required' | 'unknown';
@@ -85,6 +86,30 @@ function useState(value: unknown): boolean | null {
 }
 
 /** Admit only the server-owned exact-version preview route, never arbitrary provider addresses. */
+/**
+ * The picture for one version of a model. The version in use is the installed model, whose
+ * prepared catalog image is chosen by the one thumbnail rule; any other version has only the
+ * provider's preview of it.
+ */
+export function modelVersionImage(
+  item: ModelCatalogItem,
+  version: {
+    readonly versionId: string;
+    readonly inUse?: boolean | null;
+    readonly previewUrl: string | null;
+  },
+  role: 'standard' | 'banner',
+  size: number,
+): string | null {
+  const inUse = version.inUse ?? version.versionId === item.providerVersionId;
+  return (
+    (inUse ? chooseModelThumbnail(item, role, size)?.url : null) ??
+    version.previewUrl ??
+    chooseModelThumbnail(item, role, size)?.url ??
+    null
+  );
+}
+
 function preview(value: unknown): string | null {
   if (value === null || value === undefined) return null;
   if (

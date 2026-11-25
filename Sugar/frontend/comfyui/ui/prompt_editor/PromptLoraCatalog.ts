@@ -20,6 +20,7 @@ import type {
   LoraResourceAdapter,
 } from '../../../sugarprompt/services/src/index.js';
 import type { ModelCatalogSnapshot, ModelCatalogItem } from '../model_library/ModelCatalog.js';
+import { MODEL_BANNER_SIZE, chooseModelThumbnail } from '../model_library/ModelCatalog.js';
 
 /**
  * The installed LoRAs each prepared catalog was made from, and the adapter that resolves them.
@@ -177,7 +178,9 @@ export function preparePromptLoraCatalog(
 /** Describe one installed LoRA to the editor, preferring its authored banner artwork. */
 function promptLoraDescription(item: ModelCatalogItem, baseUrl: string): LoraCatalogItem {
   const name = promptLoraName(item.value);
-  const thumbnail = item.thumbnails.find((image) => image.role === 'banner') ?? item.thumbnails[0];
+  const thumbnail =
+    chooseModelThumbnail(item, 'banner', MODEL_BANNER_SIZE) ??
+    chooseModelThumbnail(item, 'standard', MODEL_BANNER_SIZE);
   const url = thumbnail ? safeHttpUrl(thumbnail.url, baseUrl) : null;
   return {
     model: {

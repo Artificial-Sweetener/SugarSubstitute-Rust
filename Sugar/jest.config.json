@@ -5,7 +5,8 @@
   "roots": ["<rootDir>/tests"],
   "setupFiles": [
     "<rootDir>/tests/frontend_core/support/browser_css.ts",
-    "<rootDir>/tests/frontend_core/support/browser_forms.ts"
+    "<rootDir>/tests/frontend_core/support/browser_forms.ts",
+    "<rootDir>/tests/frontend_core/support/browser_images.ts"
   ],
   "testMatch": ["**/tests/**/*.test.ts", "**/tests/**/*.spec.ts"],
   "extensionsToTreatAsEsm": [".ts"],

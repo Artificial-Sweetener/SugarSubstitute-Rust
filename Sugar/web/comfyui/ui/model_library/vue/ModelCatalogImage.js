@@ -1,6 +1,7 @@
 import {
   ModelCatalogImage
-} from "./chunk-TOST2PZ5.js";
+} from "./chunk-OLJZ2VLG.js";
+import "./chunk-SPVIVHMR.js";
 import "./chunk-OJTDXCRK.js";
 export {
   ModelCatalogImage

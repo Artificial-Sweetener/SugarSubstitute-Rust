@@ -2,11 +2,12 @@
 var SEARCH_MATCH_HIGHLIGHT = "sc-search-match";
 var SEARCH_CURRENT_HIGHLIGHT = "sc-search-current";
 var SearchHighlightRanges = class {
+  #owned = [];
+  view;
   /** Bind the window whose highlight registry is shared; one without the API shows nothing. */
   constructor(view) {
     this.view = view;
   }
-  #owned = [];
   /** Whether this window can show highlights at all. */
   get supported() {
     const view = this.view;

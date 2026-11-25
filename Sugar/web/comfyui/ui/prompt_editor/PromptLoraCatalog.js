@@ -1362,6 +1362,13 @@ var unresolvedConditioning = Object.freeze({
   mode: "unresolved"
 });
 
+// frontend/comfyui/ui/model_library/ModelCatalog.ts
+var MODEL_BANNER_SIZE = 768;
+function chooseModelThumbnail(item, role, size) {
+  const candidates = item.thumbnails.filter((image) => image.role === role).sort((left, right) => Math.max(left.width, left.height) - Math.max(right.width, right.height));
+  return candidates.find((image) => Math.max(image.width, image.height) >= size) ?? candidates.at(-1) ?? null;
+}
+
 // frontend/comfyui/ui/prompt_editor/PromptLoraCatalog.ts
 var prepared = /* @__PURE__ */ new WeakMap();
 function promptLoraName(backendValue) {
@@ -1453,7 +1460,7 @@ function preparePromptLoraCatalog(snapshot, baseUrl, prioritize, previous) {
 }
 function promptLoraDescription(item, baseUrl) {
   const name = promptLoraName(item.value);
-  const thumbnail2 = item.thumbnails.find((image) => image.role === "banner") ?? item.thumbnails[0];
+  const thumbnail2 = chooseModelThumbnail(item, "banner", MODEL_BANNER_SIZE) ?? chooseModelThumbnail(item, "standard", MODEL_BANNER_SIZE);
   const url = thumbnail2 ? safeHttpUrl(thumbnail2.url, baseUrl) : null;
   return {
     model: {
