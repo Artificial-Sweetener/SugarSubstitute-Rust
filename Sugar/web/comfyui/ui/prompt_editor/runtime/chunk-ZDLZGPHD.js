@@ -1,6 +1,9 @@
 import {
+  PROMPT_LIBRARY_REVISION
+} from "./chunk-UGQLUC67.js";
+import {
   prepareLoraSchedulingContext
-} from "./chunk-HVJO4BPJ.js";
+} from "./chunk-3C7BSY7Q.js";
 
 // frontend/comfyui/ui/prompt_editor/runtime/PromptLoraScheduling.ts
 var PromptLoraScheduling = class {
@@ -12,26 +15,24 @@ var PromptLoraScheduling = class {
   }
   #key = "";
   #revision = 0;
-  /** Forget what was published, so the next catalog is always published. */
-  reset() {
-    this.#key = "";
-  }
-  /** Publish for this catalog when it or the upstream models changed. */
-  publish(adapter) {
+  /** Publish when the upstream models, or what the library knows of them, changed. */
+  publish() {
     const upstream = this.upstream();
-    const key = [adapter.revision, ...upstream.map((item) => item.model.backendValue)].join("\n");
+    const key = JSON.stringify(
+      upstream.map((item) => [item.model.backendValue, item.title, item.triggerWords])
+    );
     if (key === this.#key) return;
     this.#key = key;
     this.api.setLoraSchedulingHost({
       context: prepareLoraSchedulingContext({
-        revision: `${adapter.revision}#${String(++this.#revision)}`,
-        catalogRevision: adapter.revision,
+        revision: `${PROMPT_LIBRARY_REVISION}#${String(++this.#revision)}`,
+        catalogRevision: PROMPT_LIBRARY_REVISION,
         mode: "workflow",
         supported: this.supported,
         upstream,
         fields: []
       }),
-      catalogRevision: adapter.revision
+      catalogRevision: PROMPT_LIBRARY_REVISION
     });
   }
 };

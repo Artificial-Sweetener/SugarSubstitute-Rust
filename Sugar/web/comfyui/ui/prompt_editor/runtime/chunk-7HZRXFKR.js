@@ -1,6 +1,6 @@
 import {
   prepareTagCompletionCatalog
-} from "./chunk-HVJO4BPJ.js";
+} from "./chunk-3C7BSY7Q.js";
 
 // frontend/comfyui/ui/prompt_editor/runtime/PromptTagCatalog.ts
 function preparePromptTagCatalog(source, revision) {

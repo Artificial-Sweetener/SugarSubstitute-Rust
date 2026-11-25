@@ -45,6 +45,11 @@ function searchMetadata(input: unknown, catalog: LoraCatalogSnapshot): ReadonlyM
   }
   return result;
 }
+/** What each model was last ranked from: the same text under the same name ranks the same. */
+const ranked = new WeakMap<
+  LoraCatalogItem,
+  { readonly text: string; readonly name: string; readonly item: RankedLoraItem }
+>();
 /** Delegate identity decisions to the shared resolution index; never publish a completion that selects a different or ambiguous model. */
 function schedulingName(item: LoraCatalogItem, index: LoraCatalogIndex): string {
   loraScheduleText(item.model.promptName);
@@ -63,28 +68,36 @@ export function prepareLoraCompletion(
   options: LoraCompletionOptions,
   resolution: LoraCatalogIndex,
 ): LoraCompletionCatalog {
-  const metadata = searchMetadata(options, catalog),
-    items: RankedLoraItem[] = [];
-  let total = 0;
-  for (const item of catalog.items) {
-    const ranked = rankedLoraItem(
-      item,
-      metadata.get(item.model.backendValue) ??
-        [item.title, item.subtitle ?? '', ...item.triggerWords].join(' '),
-      schedulingName(item, resolution),
-    );
-    total +=
-      ranked.basename.length +
-      ranked.display.length +
-      ranked.name.length +
-      ranked.backend.length +
-      ranked.metadata.length;
-    if (total > 8000000) throw new TypeError('LoRA completion catalog exceeds prepared text bound');
-    items.push(ranked);
-  }
-  Object.freeze(items);
-  // A catalog is replaced far more often than it is searched, so the substring index and the
-  // empty-query order are built by the first search that needs them.
+  const metadata = searchMetadata(options, catalog);
+  // A catalog is replaced far more often than it is searched: a library publishes one for every
+  // change to any model. So its models are ranked, and the substring index and the empty-query
+  // order built, by the first search that needs them.
+  let prepared: readonly RankedLoraItem[] | null = null;
+  const rankedItems = (): readonly RankedLoraItem[] => {
+    if (prepared) return prepared;
+    const items: RankedLoraItem[] = [];
+    let total = 0;
+    for (const item of catalog.items) {
+      const text =
+          metadata.get(item.model.backendValue) ??
+          [item.title, item.subtitle ?? '', ...item.triggerWords].join(' '),
+        name = schedulingName(item, resolution),
+        known = ranked.get(item);
+      const row =
+        known?.text === text && known.name === name ? known.item : rankedLoraItem(item, text, name);
+      if (row !== known?.item) ranked.set(item, { text, name, item: row });
+      total +=
+        row.basename.length +
+        row.display.length +
+        row.name.length +
+        row.backend.length +
+        row.metadata.length;
+      if (total > 8000000)
+        throw new TypeError('LoRA completion catalog exceeds prepared text bound');
+      items.push(row);
+    }
+    return (prepared = Object.freeze(items));
+  };
   let index: ScalarSubstringIndex<RankedLoraItem> | null = null,
     ordered: readonly LoraSuggestion[] | null = null;
   const memo = new Map<string, readonly LoraSuggestion[]>();
@@ -99,7 +112,7 @@ export function prepareLoraCompletion(
       const key = loraNameKey(query);
       if (!key)
         return (ordered ??= Object.freeze(
-          [...items].sort(compareRankedLoras).map((item) => item.empty),
+          [...rankedItems()].sort(compareRankedLoras).map((item) => item.empty),
         ));
       const cached = memo.get(key);
       if (cached) {
@@ -107,19 +120,19 @@ export function prepareLoraCompletion(
         memo.set(key, cached);
         return cached;
       }
-      index ??= new ScalarSubstringIndex(items, (item) => [
+      index ??= new ScalarSubstringIndex(rankedItems(), (item) => [
         item.basename,
         item.display,
         item.name,
         item.backend,
         item.metadata,
       ]);
-      const ranked = index.candidates(key).flatMap((item) => {
+      const found = index.candidates(key).flatMap((item) => {
         const result = rankLora(item, key);
         return result ? [{ item, result }] : [];
       });
-      ranked.sort((a, b) => a.result.score - b.result.score || compareRankedLoras(a.item, b.item));
-      const result = Object.freeze(ranked.map((row) => row.result));
+      found.sort((a, b) => a.result.score - b.result.score || compareRankedLoras(a.item, b.item));
+      const result = Object.freeze(found.map((row) => row.result));
       if (result.length <= 8192) {
         memo.set(key, result);
         retained += result.length;

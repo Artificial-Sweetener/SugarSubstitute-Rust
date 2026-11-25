@@ -133,18 +133,23 @@ class MatchHighlights {
   }
 
   update(update: ViewUpdate): void {
-    if (
-      update.startState.field(searchMatches) !== update.state.field(searchMatches) ||
-      update.docChanged ||
-      update.geometryChanged ||
-      update.viewportChanged
-    )
+    if (searchHighlightsNeedMeasure(update.startState, update.state))
       update.view.requestMeasure(this.#measure);
   }
 
   destroy(): void {
     this.#ranges.clear();
   }
+}
+
+/**
+ * Whether an editor update must measure the match highlights again. A highlight range lives on the
+ * editor's DOM nodes, and any update may redraw them: a token redrawn under a range leaves the
+ * range collapsed on the token's parent, with nothing painted. So while matches are shown, or were
+ * until this update, every update measures them again, whatever it changed.
+ */
+export function searchHighlightsNeedMeasure(before: EditorState, after: EditorState): boolean {
+  return before.field(searchMatches) !== null || after.field(searchMatches) !== null;
 }
 
 interface MatchRanges {

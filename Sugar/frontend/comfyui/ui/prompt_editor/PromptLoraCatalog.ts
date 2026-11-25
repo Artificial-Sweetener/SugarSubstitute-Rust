@@ -112,7 +112,13 @@ export function preparePromptLoraCatalog(
     return previous;
   }
   const models = new Map(loras.map((item) => [item.value, item]));
-  const items = loras.map((item) => promptLoraDescription(item, baseUrl));
+  // An unchanged model is described by the same object as before, which is what lets the
+  // adapter keep everything it derived from it.
+  const items = loras.map((item) =>
+    replaced?.models.get(item.value) === item
+      ? (replaced.items.get(item.value) ?? promptLoraDescription(item, baseUrl))
+      : promptLoraDescription(item, baseUrl),
+  );
   const adapter = createLoraCatalogAdapter(
     { revision: `models:${String(snapshot.revision)}`, authoritative, items },
     // Everything a person may know a LoRA by finds it when they type its name.

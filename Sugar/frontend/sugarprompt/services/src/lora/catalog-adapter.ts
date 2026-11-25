@@ -20,23 +20,29 @@ import { LoraCatalogIndex } from './catalog-index.js';
 import { prepareLoraCompletion } from './completion-catalog.js';
 import type { LoraCompletionOptions } from './contracts.js';
 
-/** The validated catalog behind each adapter this module made, for the adapter that replaces it. */
-const catalogs = new WeakMap<LoraResourceAdapter, LoraCatalogSnapshot>();
+/** The validated catalog and its index behind each adapter this module made, for the adapter that replaces it. */
+const catalogs = new WeakMap<
+  LoraResourceAdapter,
+  { readonly catalog: LoraCatalogSnapshot; readonly index: LoraCatalogIndex }
+>();
 
 /** Validate/copy one immutable host catalog, build derived indexes once and expose exact-name resource resolution.
  * The host retains media URL ownership. Replace this adapter for catalog, authority or media changes.
  * Explicit completion options add ranked suggestions over the same captured model metadata.
  * Pass the adapter being replaced as `previous`: media it already described, unchanged in address
  * and size, keeps its descriptor, so a component's prepared pixels survive the replacement and
- * only media that changed is prepared again. An adapter this module did not make is ignored.
+ * only media that changed is prepared again; and every model given as the same object as before
+ * keeps its validated item, its index entries and its ranking, so replacing a catalog costs what
+ * changed in it. An adapter this module did not make is ignored.
  */
 export function createLoraCatalogAdapter(
   input: LoraCatalogSnapshot,
   completion?: LoraCompletionOptions,
   previous?: LoraResourceAdapter,
 ): LoraResourceAdapter {
-  const catalog = readLoraCatalog(input, previous ? catalogs.get(previous) : undefined),
-    index = new LoraCatalogIndex(catalog.items);
+  const replaced = previous ? catalogs.get(previous) : undefined;
+  const catalog = readLoraCatalog(input, replaced?.catalog),
+    index = replaced?.index.continuedBy(catalog.items) ?? new LoraCatalogIndex(catalog.items);
   const adapter: LoraResourceAdapter = Object.freeze({
     revision: catalog.revision,
     ...(completion === undefined
@@ -71,6 +77,6 @@ export function createLoraCatalogAdapter(
       );
     },
   });
-  catalogs.set(adapter, catalog);
+  catalogs.set(adapter, { catalog, index });
   return adapter;
 }

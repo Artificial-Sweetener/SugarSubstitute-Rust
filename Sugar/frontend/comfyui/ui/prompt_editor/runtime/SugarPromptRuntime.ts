@@ -26,6 +26,7 @@ import type { ModelCompletionPopupHost } from '../../../../sugarprompt/editor/sr
 import type { FocusHandoff } from '../../../../sugarprompt/editor/src/focus-handoff-contracts.js';
 import {
   LoraResourceSession,
+  sameLoraResources,
   resolveFeatureProfile,
   defaultPreferences,
   prepareSceneQueue,
@@ -33,11 +34,13 @@ import {
 import { loraScheduleText, parseScenes } from '../../../../sugarprompt/core/src/index.js';
 import type {
   LoraCatalogItem,
+  LoraCompletionCatalog,
   LoraResourceAdapter,
   LoraResourceSnapshot,
   WildcardCatalog,
 } from '../../../../sugarprompt/services/src/index.js';
 import { SugarPromptMenu } from './SugarPromptMenu.js';
+import { PromptCompletionCatalog } from './PromptCompletionCatalog.js';
 import { PromptLoraScheduling } from './PromptLoraScheduling.js';
 import { PromptCatalogAdmission } from './PromptCatalogAdmission.js';
 import { PromptSearchPainter } from './PromptSearchPainter.js';
@@ -119,6 +122,8 @@ export class SugarPromptEditor {
   #resourceGeneration = 0;
   #resourceSnapshot: LoraResourceSnapshot | null = null;
   #resourceRevision = -1;
+  /** What the editor last accepted, and for which source: what its chips show now. */
+  #shown: { readonly resources: LoraResourceSnapshot; readonly revision: number } | null = null;
   #inspectionRevision = -1;
   #sceneQueueRevision = -1;
   #publishing = false;
@@ -130,6 +135,8 @@ export class SugarPromptEditor {
   #allocatedHeight: number | null = null;
   #menuPoint: PromptMenuPoint | null = null;
   readonly #scheduling: PromptLoraScheduling;
+  readonly #completion = new PromptCompletionCatalog();
+  #completionShown: LoraCompletionCatalog | null = null;
   readonly #admission: PromptCatalogAdmission;
   #search: PromptSearchPainter | null = null;
 
@@ -254,8 +261,11 @@ export class SugarPromptEditor {
     if (this.#disposed || this.#adapter === adapter) return;
     this.#adapter = adapter;
     this.#reopenResources();
-    this.#api.setLoraCompletionCatalog(adapter.completionCatalog ?? null);
-    this.#scheduling.reset();
+    const completion = this.#completion.follow(adapter.completionCatalog ?? null);
+    if (completion !== this.#completionShown) {
+      this.#completionShown = completion;
+      this.#api.setLoraCompletionCatalog(completion);
+    }
     this.#publishScheduling();
   }
 
@@ -277,7 +287,7 @@ export class SugarPromptEditor {
 
   /** Republish the models loaded ahead of this prompt's encoder when they or the catalog changed. */
   #publishScheduling(): void {
-    if (!this.#disposed && this.#adapter) this.#scheduling.publish(this.#adapter);
+    if (!this.#disposed && this.#adapter) this.#scheduling.publish();
   }
 
   /** Insert the LoRA a person picks from the model picker, or hand the caret back unchanged. */
@@ -458,9 +468,15 @@ export class SugarPromptEditor {
     if (this.#inspectionRevision !== snapshot.revision) return;
     if (resources === this.#resourceSnapshot && snapshot.revision === this.#resourceRevision)
       return;
-    if (this.#api.setLoraResources(resources, snapshot.revision)) {
+    // A new catalog resolves the same names again, and nearly always to what the chips show
+    // already. Publishing that would redraw the whole prompt for nothing.
+    const unchanged =
+      this.#shown?.revision === snapshot.revision &&
+      sameLoraResources(this.#shown.resources, resources);
+    if (unchanged || this.#api.setLoraResources(resources, snapshot.revision)) {
       this.#resourceSnapshot = resources;
       this.#resourceRevision = snapshot.revision;
+      if (!unchanged) this.#shown = { resources, revision: snapshot.revision };
     }
   }
 

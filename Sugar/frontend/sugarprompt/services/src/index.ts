@@ -131,6 +131,7 @@ export type {
 } from './lora/model-page.js';
 export type { LoraPickerAdapter, LoraPickerResult, LoraPickerOutcome } from './lora/picker.js';
 export { createLoraCatalogAdapter } from './lora/catalog-adapter.js';
+export { sameLoraResources } from './lora/resource-equality.js';
 export type {
   LoraCompletionOptions,
   LoraCompletionCatalog,

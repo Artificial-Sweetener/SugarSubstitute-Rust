@@ -31,6 +31,7 @@ import {
 import {
   installSearchMatches,
   prepareSearchMatches,
+  searchHighlightsNeedMeasure,
   searchMatches,
 } from '../../../../../../frontend/sugarprompt/editor/src/search-matches.ts';
 import type { SearchResults } from '../../../../../../frontend/sugarprompt/services/src/search/contracts.ts';
@@ -146,5 +147,29 @@ test('selection retains actual prepared output; source edit, undo, baseline and 
   assert.equal(
     selected.update({ effects: installSearchMatches.of(null) }).state.field(searchMatches),
     null,
+  );
+});
+
+test('highlights are measured again on every update while matches are shown, and once more when they go', () => {
+  const idle = state('alpha beta');
+  // No search: an update of any kind measures nothing.
+  assert.equal(
+    searchHighlightsNeedMeasure(idle, idle.update({ selection: { anchor: 2 } }).state),
+    false,
+  );
+  const shown = idle.update({
+    effects: installSearchMatches.of(prepareSearchMatches(idle, results())),
+  }).state;
+  assert.equal(searchHighlightsNeedMeasure(idle, shown), true);
+  // An update that changes no text, geometry or viewport may still redraw a token under a range.
+  assert.equal(
+    searchHighlightsNeedMeasure(shown, shown.update({ selection: { anchor: 3 } }).state),
+    true,
+  );
+  const cleared = shown.update({ effects: installSearchMatches.of(null) }).state;
+  assert.equal(searchHighlightsNeedMeasure(shown, cleared), true);
+  assert.equal(
+    searchHighlightsNeedMeasure(cleared, cleared.update({ selection: { anchor: 1 } }).state),
+    false,
   );
 });

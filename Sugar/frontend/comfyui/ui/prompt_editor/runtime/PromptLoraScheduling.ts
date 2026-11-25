@@ -16,16 +16,16 @@
 /** Tell one prompt editor which LoRAs shape its prompt besides the ones written in it. */
 import type { PromptEditorApi } from '../../../../sugarprompt/editor/src/contracts.js';
 import { prepareLoraSchedulingContext } from '../../../../sugarprompt/services/src/index.js';
-import type {
-  LoraCatalogItem,
-  LoraResourceAdapter,
-} from '../../../../sugarprompt/services/src/index.js';
+import type { LoraCatalogItem } from '../../../../sugarprompt/services/src/index.js';
+import { PROMPT_LIBRARY_REVISION } from './PromptCompletionCatalog.js';
 
 /**
- * Publish the models loaded ahead of a prompt's encoder for the current catalog.
+ * Publish the models loaded ahead of a prompt's encoder.
  *
  * Their trigger words are offered as words while typing and from the prompt's menu. Nothing is
- * published again while the catalog and those models are unchanged.
+ * published again while those models, their names and their words are unchanged: an editor
+ * prepares its prompt again for every context it is given, and the library publishes a new
+ * catalog for every change to any model.
  */
 export class PromptLoraScheduling {
   #key = '';
@@ -38,27 +38,24 @@ export class PromptLoraScheduling {
     private readonly upstream: () => readonly LoraCatalogItem[],
   ) {}
 
-  /** Forget what was published, so the next catalog is always published. */
-  reset(): void {
-    this.#key = '';
-  }
-
-  /** Publish for this catalog when it or the upstream models changed. */
-  publish(adapter: LoraResourceAdapter): void {
+  /** Publish when the upstream models, or what the library knows of them, changed. */
+  publish(): void {
     const upstream = this.upstream();
-    const key = [adapter.revision, ...upstream.map((item) => item.model.backendValue)].join('\n');
+    const key = JSON.stringify(
+      upstream.map((item) => [item.model.backendValue, item.title, item.triggerWords]),
+    );
     if (key === this.#key) return;
     this.#key = key;
     this.api.setLoraSchedulingHost({
       context: prepareLoraSchedulingContext({
-        revision: `${adapter.revision}#${String(++this.#revision)}`,
-        catalogRevision: adapter.revision,
+        revision: `${PROMPT_LIBRARY_REVISION}#${String(++this.#revision)}`,
+        catalogRevision: PROMPT_LIBRARY_REVISION,
         mode: 'workflow',
         supported: this.supported,
         upstream,
         fields: [],
       }),
-      catalogRevision: adapter.revision,
+      catalogRevision: PROMPT_LIBRARY_REVISION,
     });
   }
 }

@@ -1069,6 +1069,7 @@ var defaultPreferences = Object.freeze({
 });
 
 // frontend/sugarprompt/services/src/lora/catalog-validation.ts
+var validated = /* @__PURE__ */ new WeakMap();
 function mediaKey(image) {
   return JSON.stringify([image.url, image.width, image.height]);
 }
@@ -1081,7 +1082,9 @@ function readLoraCatalog(value, continued) {
   for (const item of continued?.items ?? [])
     if (item.thumbnail.status === "ready") thumbnails.set(mediaKey(item.thumbnail), item.thumbnail);
   const items = raw.items.map((item) => {
-    const prepared2 = readLoraItemFields(loraRecord(item, loraItemKeys));
+    const known = typeof item === "object" && item !== null ? validated.get(item) : void 0;
+    const prepared2 = known ?? readLoraItemFields(loraRecord(item, loraItemKeys));
+    if (!known && typeof item === "object" && item !== null) validated.set(item, prepared2);
     if (physical.has(prepared2.model.backendValue))
       throw new TypeError("Duplicate LoRA backend identity");
     physical.add(prepared2.model.backendValue);
@@ -1089,6 +1092,7 @@ function readLoraCatalog(value, continued) {
       const image = prepared2.thumbnail;
       const key = mediaKey(image);
       const existing = thumbnails.get(key);
+      if (existing === image) return prepared2;
       if (existing) return Object.freeze({ ...prepared2, thumbnail: existing });
       thumbnails.set(key, image);
     }
@@ -1121,7 +1125,12 @@ function match(items) {
   if (!items?.size) return null;
   return items.size === 1 ? { status: "found", item: requireValue(items.values().next().value, "catalog-index") } : { status: "ambiguous", candidateCount: items.size };
 }
-var LoraCatalogIndex = class {
+function remove(index, value, item) {
+  const bucket = index.get(value);
+  if (bucket?.delete(item) && !bucket.size) index.delete(value);
+}
+var LoraCatalogIndex = class _LoraCatalogIndex {
+  held;
   prompt = /* @__PURE__ */ new Map();
   backend = /* @__PURE__ */ new Map();
   backendPrompt = /* @__PURE__ */ new Map();
@@ -1133,21 +1142,42 @@ var LoraCatalogIndex = class {
   };
   /** Build only from validated immutable metadata; no filesystem, network, media decoding or source document is retained. */
   constructor(items) {
-    for (const item of items) {
-      const model = item.model;
-      add(this.prompt, loraNameKey(model.promptName, true), item);
-      add(this.backend, loraNameKey(model.backendValue), item);
-      add(this.backendPrompt, loraNameKey(model.backendValue, true), item);
-      add(this.collisions, loraNameKey(model.basename), item);
-      for (const alias of [
-        model.promptName,
-        withoutLoraExtension(model.backendValue),
-        item.title,
-        model.basename
-      ])
-        if (alias) add(this.aliases, loraNameKey(alias), item);
-      for (const path of [model.promptName, model.backendValue]) this.indexSuffixes(path, item);
-    }
+    this.held = new Set(items);
+    for (const item of items) this.place(item, add);
+  }
+  /**
+   * The index of the catalog that replaces this one. A library publishes a new catalog for every
+   * change to any model, and almost every model in it is the same item as before: those keep
+   * their entries, and only the models that left or arrived are taken out or put in. This index
+   * is handed over: the replaced catalog answers from the newer models from then on, which is
+   * what its host is switching to. A catalog that mostly differs is indexed from nothing.
+   */
+  continuedBy(items) {
+    const next = new Set(items);
+    const gone = [...this.held].filter((item) => !next.has(item));
+    const come = items.filter((item) => !this.held.has(item));
+    if ((gone.length + come.length) * 2 > items.length) return new _LoraCatalogIndex(items);
+    for (const item of gone) this.place(item, remove);
+    for (const item of come) this.place(item, add);
+    this.held = next;
+    return this;
+  }
+  /** Put one model under every name that finds it, or take it out from under each. */
+  place(item, apply) {
+    const model = item.model;
+    apply(this.prompt, loraNameKey(model.promptName, true), item);
+    apply(this.backend, loraNameKey(model.backendValue), item);
+    apply(this.backendPrompt, loraNameKey(model.backendValue, true), item);
+    apply(this.collisions, loraNameKey(model.basename), item);
+    for (const alias of [
+      model.promptName,
+      withoutLoraExtension(model.backendValue),
+      item.title,
+      model.basename
+    ])
+      if (alias) apply(this.aliases, loraNameKey(alias), item);
+    for (const path of [model.promptName, model.backendValue])
+      this.indexSuffixes(path, item, apply === add);
   }
   /** Keep donor lookup priority for definite matches; an explicit installed backend filename disambiguates a colliding canonical stem. */
   find(name) {
@@ -1171,17 +1201,20 @@ var LoraCatalogIndex = class {
     return match(this.aliases.get(bare)) ?? match(this.collisions.get(bare)) ?? { status: "missing" };
   }
   /** Store each component once along its reverse path; all proper suffixes receive the same immutable model identity. */
-  indexSuffixes(path, item) {
+  indexSuffixes(path, item, present) {
     const parts = loraNameKey(path, true).split("/").filter(Boolean).reverse();
     let node = this.suffixes;
     for (const [depth, part] of parts.entries()) {
       let child = node.children.get(part);
       if (!child) {
+        if (!present) return;
         child = { children: /* @__PURE__ */ new Map(), items: /* @__PURE__ */ new Set() };
         node.children.set(part, child);
       }
       node = child;
-      if (depth < parts.length - 1) node.items.add(item);
+      if (depth >= parts.length - 1) continue;
+      if (present) node.items.add(item);
+      else node.items.delete(item);
     }
   }
 };
@@ -1249,6 +1282,7 @@ function searchMetadata(input, catalog) {
   }
   return result;
 }
+var ranked = /* @__PURE__ */ new WeakMap();
 function schedulingName(item, index) {
   loraScheduleText(item.model.promptName);
   for (const name of [item.model.promptName, item.model.backendValue]) {
@@ -1261,19 +1295,23 @@ function schedulingName(item, index) {
   throw new TypeError("LoRA completion identity is not source-representable");
 }
 function prepareLoraCompletion(catalog, options, resolution) {
-  const metadata = searchMetadata(options, catalog), items = [];
-  let total = 0;
-  for (const item of catalog.items) {
-    const ranked = rankedLoraItem(
-      item,
-      metadata.get(item.model.backendValue) ?? [item.title, item.subtitle ?? "", ...item.triggerWords].join(" "),
-      schedulingName(item, resolution)
-    );
-    total += ranked.basename.length + ranked.display.length + ranked.name.length + ranked.backend.length + ranked.metadata.length;
-    if (total > 8e6) throw new TypeError("LoRA completion catalog exceeds prepared text bound");
-    items.push(ranked);
-  }
-  Object.freeze(items);
+  const metadata = searchMetadata(options, catalog);
+  let prepared2 = null;
+  const rankedItems = () => {
+    if (prepared2) return prepared2;
+    const items = [];
+    let total = 0;
+    for (const item of catalog.items) {
+      const text = metadata.get(item.model.backendValue) ?? [item.title, item.subtitle ?? "", ...item.triggerWords].join(" "), name = schedulingName(item, resolution), known = ranked.get(item);
+      const row = known?.text === text && known.name === name ? known.item : rankedLoraItem(item, text, name);
+      if (row !== known?.item) ranked.set(item, { text, name, item: row });
+      total += row.basename.length + row.display.length + row.name.length + row.backend.length + row.metadata.length;
+      if (total > 8e6)
+        throw new TypeError("LoRA completion catalog exceeds prepared text bound");
+      items.push(row);
+    }
+    return prepared2 = Object.freeze(items);
+  };
   let index = null, ordered = null;
   const memo = /* @__PURE__ */ new Map();
   let retained = 0;
@@ -1287,7 +1325,7 @@ function prepareLoraCompletion(catalog, options, resolution) {
       const key = loraNameKey(query);
       if (!key)
         return ordered ??= Object.freeze(
-          [...items].sort(compareRankedLoras).map((item) => item.empty)
+          [...rankedItems()].sort(compareRankedLoras).map((item) => item.empty)
         );
       const cached = memo.get(key);
       if (cached) {
@@ -1295,19 +1333,19 @@ function prepareLoraCompletion(catalog, options, resolution) {
         memo.set(key, cached);
         return cached;
       }
-      index ??= new ScalarSubstringIndex(items, (item) => [
+      index ??= new ScalarSubstringIndex(rankedItems(), (item) => [
         item.basename,
         item.display,
         item.name,
         item.backend,
         item.metadata
       ]);
-      const ranked = index.candidates(key).flatMap((item) => {
+      const found = index.candidates(key).flatMap((item) => {
         const result2 = rankLora(item, key);
         return result2 ? [{ item, result: result2 }] : [];
       });
-      ranked.sort((a, b) => a.result.score - b.result.score || compareRankedLoras(a.item, b.item));
-      const result = Object.freeze(ranked.map((row) => row.result));
+      found.sort((a, b) => a.result.score - b.result.score || compareRankedLoras(a.item, b.item));
+      const result = Object.freeze(found.map((row) => row.result));
       if (result.length <= 8192) {
         memo.set(key, result);
         retained += result.length;
@@ -1325,7 +1363,8 @@ function prepareLoraCompletion(catalog, options, resolution) {
 // frontend/sugarprompt/services/src/lora/catalog-adapter.ts
 var catalogs = /* @__PURE__ */ new WeakMap();
 function createLoraCatalogAdapter(input, completion, previous) {
-  const catalog = readLoraCatalog(input, previous ? catalogs.get(previous) : void 0), index = new LoraCatalogIndex(catalog.items);
+  const replaced = previous ? catalogs.get(previous) : void 0;
+  const catalog = readLoraCatalog(input, replaced?.catalog), index = replaced?.index.continuedBy(catalog.items) ?? new LoraCatalogIndex(catalog.items);
   const adapter = Object.freeze({
     revision: catalog.revision,
     ...completion === void 0 ? {} : {
@@ -1352,7 +1391,7 @@ function createLoraCatalogAdapter(input, completion, previous) {
       );
     }
   });
-  catalogs.set(adapter, catalog);
+  catalogs.set(adapter, { catalog, index });
   return adapter;
 }
 
@@ -1406,7 +1445,9 @@ function preparePromptLoraCatalog(snapshot, baseUrl, prioritize, previous) {
     return previous;
   }
   const models = new Map(loras.map((item) => [item.value, item]));
-  const items = loras.map((item) => promptLoraDescription(item, baseUrl));
+  const items = loras.map(
+    (item) => replaced?.models.get(item.value) === item ? replaced.items.get(item.value) ?? promptLoraDescription(item, baseUrl) : promptLoraDescription(item, baseUrl)
+  );
   const adapter = createLoraCatalogAdapter(
     { revision: `models:${String(snapshot.revision)}`, authoritative, items },
     // Everything a person may know a LoRA by finds it when they type its name.

@@ -14,8 +14,11 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Turn a host catalog into immutable authoritative data before lookup indexing. */
-import type { LoraCatalogSnapshot, LoraThumbnail } from './contracts.js';
+import type { LoraCatalogItem, LoraCatalogSnapshot, LoraThumbnail } from './contracts.js';
 import { loraItemKeys, loraRecord, loraText, readLoraItemFields } from './metadata-validation.js';
+
+/** Items this module has validated, by the host object given: an unchanged model is read once. */
+const validated = new WeakMap<object, LoraCatalogItem>();
 
 /** Name media by what it shows: its address and intrinsic size. */
 function mediaKey(image: Extract<LoraThumbnail, { status: 'ready' }>): string {
@@ -42,7 +45,11 @@ export function readLoraCatalog(
   for (const item of continued?.items ?? [])
     if (item.thumbnail.status === 'ready') thumbnails.set(mediaKey(item.thumbnail), item.thumbnail);
   const items = raw.items.map((item: unknown) => {
-    const prepared = readLoraItemFields(loraRecord(item, loraItemKeys));
+    // A host that hands over the same object for an unchanged model gets the same validated
+    // item back, so everything derived from it by identity stays valid.
+    const known = typeof item === 'object' && item !== null ? validated.get(item) : undefined;
+    const prepared = known ?? readLoraItemFields(loraRecord(item, loraItemKeys));
+    if (!known && typeof item === 'object' && item !== null) validated.set(item, prepared);
     if (physical.has(prepared.model.backendValue))
       throw new TypeError('Duplicate LoRA backend identity');
     physical.add(prepared.model.backendValue);
@@ -50,6 +57,7 @@ export function readLoraCatalog(
       const image = prepared.thumbnail;
       const key = mediaKey(image);
       const existing = thumbnails.get(key);
+      if (existing === image) return prepared;
       if (existing) return Object.freeze({ ...prepared, thumbnail: existing });
       thumbnails.set(key, image);
     }

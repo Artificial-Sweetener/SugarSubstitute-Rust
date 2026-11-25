@@ -1,4 +1,7 @@
 import {
+  SugarPromptMenu
+} from "./chunk-H66FF5P6.js";
+import {
   installSugarPromptStyles
 } from "./chunk-4OATFCQX.js";
 import {
@@ -6,7 +9,7 @@ import {
 } from "./chunk-5N7RXSME.js";
 import {
   bundledPromptTagCatalog
-} from "./chunk-QJ2WG3XI.js";
+} from "./chunk-EHOQVTQC.js";
 import {
   clipboardRefusalObserver
 } from "./chunk-BHDD52XD.js";
@@ -18,11 +21,14 @@ import {
 } from "./chunk-E5NG5543.js";
 import {
   PromptLoraScheduling
-} from "./chunk-J5G7M2RT.js";
+} from "./chunk-ZDLZGPHD.js";
+import {
+  PromptCompletionCatalog
+} from "./chunk-UGQLUC67.js";
 import {
   PromptSearchPainter
 } from "./chunk-3Y3NCOJU.js";
-import "./chunk-LN2UPO34.js";
+import "./chunk-7HZRXFKR.js";
 import {
   ClipboardSession,
   ConditioningTopology,
@@ -103,6 +109,7 @@ import {
   requireValue,
   resolveCompletionQuery,
   resolveFeatureProfile,
+  sameLoraResources,
   sceneReplacement,
   segmentSelectionRange,
   serializeReorderPreview,
@@ -132,10 +139,7 @@ import {
   wildcardDelimiters,
   wildcardGhostText,
   wildcardReplacement
-} from "./chunk-HVJO4BPJ.js";
-import {
-  SugarPromptMenu
-} from "./chunk-H66FF5P6.js";
+} from "./chunk-3C7BSY7Q.js";
 
 // node_modules/@marijn/find-cluster-break/src/index.js
 var rangeFrom = [];
@@ -19145,13 +19149,16 @@ var MatchHighlights = class {
     view.requestMeasure(this.#measure);
   }
   update(update) {
-    if (update.startState.field(searchMatches) !== update.state.field(searchMatches) || update.docChanged || update.geometryChanged || update.viewportChanged)
+    if (searchHighlightsNeedMeasure(update.startState, update.state))
       update.view.requestMeasure(this.#measure);
   }
   destroy() {
     this.#ranges.clear();
   }
 };
+function searchHighlightsNeedMeasure(before, after) {
+  return before.field(searchMatches) !== null || after.field(searchMatches) !== null;
+}
 function matchRanges(view) {
   const found = { matches: [], current: [] };
   const prepared4 = view.state.field(searchMatches);
@@ -48032,6 +48039,8 @@ var SugarPromptEditor = class {
   #resourceGeneration = 0;
   #resourceSnapshot = null;
   #resourceRevision = -1;
+  /** What the editor last accepted, and for which source: what its chips show now. */
+  #shown = null;
   #inspectionRevision = -1;
   #sceneQueueRevision = -1;
   #publishing = false;
@@ -48043,6 +48052,8 @@ var SugarPromptEditor = class {
   #allocatedHeight = null;
   #menuPoint = null;
   #scheduling;
+  #completion = new PromptCompletionCatalog();
+  #completionShown = null;
   #admission;
   #search = null;
   /** Mount all existing editing, rich projection, weight and Alt-reorder behavior through its public API. */
@@ -48158,8 +48169,11 @@ var SugarPromptEditor = class {
     if (this.#disposed || this.#adapter === adapter) return;
     this.#adapter = adapter;
     this.#reopenResources();
-    this.#api.setLoraCompletionCatalog(adapter.completionCatalog ?? null);
-    this.#scheduling.reset();
+    const completion = this.#completion.follow(adapter.completionCatalog ?? null);
+    if (completion !== this.#completionShown) {
+      this.#completionShown = completion;
+      this.#api.setLoraCompletionCatalog(completion);
+    }
     this.#publishScheduling();
   }
   /** Resolve this prompt's LoRA names again against the current catalog and its images. */
@@ -48179,7 +48193,7 @@ var SugarPromptEditor = class {
   }
   /** Republish the models loaded ahead of this prompt's encoder when they or the catalog changed. */
   #publishScheduling() {
-    if (!this.#disposed && this.#adapter) this.#scheduling.publish(this.#adapter);
+    if (!this.#disposed && this.#adapter) this.#scheduling.publish();
   }
   /** Insert the LoRA a person picks from the model picker, or hand the caret back unchanged. */
   async #scheduleLora(handoff) {
@@ -48333,9 +48347,11 @@ var SugarPromptEditor = class {
     if (this.#inspectionRevision !== snapshot.revision) return;
     if (resources === this.#resourceSnapshot && snapshot.revision === this.#resourceRevision)
       return;
-    if (this.#api.setLoraResources(resources, snapshot.revision)) {
+    const unchanged = this.#shown?.revision === snapshot.revision && sameLoraResources(this.#shown.resources, resources);
+    if (unchanged || this.#api.setLoraResources(resources, snapshot.revision)) {
       this.#resourceSnapshot = resources;
       this.#resourceRevision = snapshot.revision;
+      if (!unchanged) this.#shown = { resources, revision: snapshot.revision };
     }
   }
   /** Follow the accepted field design system without recreating the editable document. */

@@ -16,6 +16,7 @@
 /** Prove an editor is told which LoRAs shape its prompt once per catalog and upstream change. */
 import { expect, test } from '@jest/globals';
 import { PromptLoraScheduling } from '../../../frontend/comfyui/ui/prompt_editor/runtime/PromptLoraScheduling.js';
+import { PROMPT_LIBRARY_REVISION } from '../../../frontend/comfyui/ui/prompt_editor/runtime/PromptCompletionCatalog.js';
 import {
   preparePromptLoraCatalog,
   promptLoraItem,
@@ -26,7 +27,7 @@ import type { LoraCatalogItem } from '../../../frontend/sugarprompt/services/src
 import type { ComfyGraph, ComfyNode } from '../../../frontend/comfyui/ui/types/graph.js';
 import { promptCatalogFixture } from '../support/PromptCatalogFixture.js';
 
-test('publishes the upstream LoRAs for a catalog once, and again only when either changes', () => {
+test('publishes the upstream LoRAs once, and again only when they or their words change', () => {
   const catalog = preparePromptLoraCatalog(promptCatalogFixture(), 'http://localhost/');
   const example = promptLoraItem(catalog, 'folder/example.safetensors');
   if (!example) throw new Error('Missing catalog fixture');
@@ -38,36 +39,46 @@ test('publishes the upstream LoRAs for a catalog once, and again only when eithe
     () => upstream,
   );
 
-  scheduling.publish(catalog);
-  scheduling.publish(catalog);
+  scheduling.publish();
+  scheduling.publish();
   expect(published).toHaveLength(1);
   expect(published[0]).toMatchObject({
-    catalogRevision: catalog.revision,
-    context: { catalogRevision: catalog.revision, mode: 'workflow', supported: true, upstream: [] },
+    catalogRevision: PROMPT_LIBRARY_REVISION,
+    context: {
+      catalogRevision: PROMPT_LIBRARY_REVISION,
+      mode: 'workflow',
+      supported: true,
+      upstream: [],
+    },
   });
 
   upstream = [example];
-  scheduling.publish(catalog);
+  scheduling.publish();
   expect(published).toHaveLength(2);
   expect(published[1]?.context?.upstream.map((item) => item.model.backendValue)).toEqual([
     'folder/example.safetensors',
   ]);
-  // Each publication is a new revision of the same catalog.
+  // Each publication is a new revision of the library's context.
   expect(published[1]?.context?.revision).not.toBe(published[0]?.context?.revision);
 
-  scheduling.reset();
-  scheduling.publish(catalog);
+  // The library published a new catalog in which this model is unchanged: nothing to say.
+  upstream = [{ ...example }];
+  scheduling.publish();
+  expect(published).toHaveLength(2);
+
+  // A lookup brought the model's trigger words.
+  upstream = [{ ...example, triggerWords: [...example.triggerWords, 'ink wash'] }];
+  scheduling.publish();
   expect(published).toHaveLength(3);
 });
 
 test('a prompt that loads no written LoRAs is published as unsupported', () => {
-  const catalog = preparePromptLoraCatalog(promptCatalogFixture(), 'http://localhost/');
   const published: LoraSchedulingHost[] = [];
   new PromptLoraScheduling(
     { setLoraSchedulingHost: (host) => published.push(host) },
     false,
     () => [],
-  ).publish(catalog);
+  ).publish();
   expect(published[0]?.context?.supported).toBe(false);
 });
 

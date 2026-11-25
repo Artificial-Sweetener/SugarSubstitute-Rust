@@ -67,8 +67,21 @@ function match(items: ReadonlySet<LoraCatalogItem> | undefined): CatalogMatch | 
     ? { status: 'found', item: requireValue(items.values().next().value, 'catalog-index') }
     : { status: 'ambiguous', candidateCount: items.size };
 }
-/** One immutable catalog owns all derived indexes; the existing resource session remains the sole result cache/request owner. */
+/** Remove one model from a bucket, and the bucket once it is empty. */
+function remove(
+  index: Map<string, Set<LoraCatalogItem>>,
+  value: string,
+  item: LoraCatalogItem,
+): void {
+  const bucket = index.get(value);
+  if (bucket?.delete(item) && !bucket.size) index.delete(value);
+}
+/**
+ * One catalog owns all derived indexes; the existing resource session remains the sole result
+ * cache/request owner. The catalog that replaces it takes the indexes over through `continuedBy`.
+ */
 export class LoraCatalogIndex {
+  private held: ReadonlySet<LoraCatalogItem>;
   private readonly prompt = new Map<string, Set<LoraCatalogItem>>();
   private readonly backend = new Map<string, Set<LoraCatalogItem>>();
   private readonly backendPrompt = new Map<string, Set<LoraCatalogItem>>();
@@ -80,21 +93,45 @@ export class LoraCatalogIndex {
   };
   /** Build only from validated immutable metadata; no filesystem, network, media decoding or source document is retained. */
   constructor(items: readonly LoraCatalogItem[]) {
-    for (const item of items) {
-      const model = item.model;
-      add(this.prompt, loraNameKey(model.promptName, true), item);
-      add(this.backend, loraNameKey(model.backendValue), item);
-      add(this.backendPrompt, loraNameKey(model.backendValue, true), item);
-      add(this.collisions, loraNameKey(model.basename), item);
-      for (const alias of [
-        model.promptName,
-        withoutLoraExtension(model.backendValue),
-        item.title,
-        model.basename,
-      ])
-        if (alias) add(this.aliases, loraNameKey(alias), item);
-      for (const path of [model.promptName, model.backendValue]) this.indexSuffixes(path, item);
-    }
+    this.held = new Set(items);
+    for (const item of items) this.place(item, add);
+  }
+  /**
+   * The index of the catalog that replaces this one. A library publishes a new catalog for every
+   * change to any model, and almost every model in it is the same item as before: those keep
+   * their entries, and only the models that left or arrived are taken out or put in. This index
+   * is handed over: the replaced catalog answers from the newer models from then on, which is
+   * what its host is switching to. A catalog that mostly differs is indexed from nothing.
+   */
+  continuedBy(items: readonly LoraCatalogItem[]): LoraCatalogIndex {
+    const next = new Set(items);
+    const gone = [...this.held].filter((item) => !next.has(item));
+    const come = items.filter((item) => !this.held.has(item));
+    if ((gone.length + come.length) * 2 > items.length) return new LoraCatalogIndex(items);
+    for (const item of gone) this.place(item, remove);
+    for (const item of come) this.place(item, add);
+    this.held = next;
+    return this;
+  }
+  /** Put one model under every name that finds it, or take it out from under each. */
+  private place(
+    item: LoraCatalogItem,
+    apply: (index: Map<string, Set<LoraCatalogItem>>, value: string, item: LoraCatalogItem) => void,
+  ): void {
+    const model = item.model;
+    apply(this.prompt, loraNameKey(model.promptName, true), item);
+    apply(this.backend, loraNameKey(model.backendValue), item);
+    apply(this.backendPrompt, loraNameKey(model.backendValue, true), item);
+    apply(this.collisions, loraNameKey(model.basename), item);
+    for (const alias of [
+      model.promptName,
+      withoutLoraExtension(model.backendValue),
+      item.title,
+      model.basename,
+    ])
+      if (alias) apply(this.aliases, loraNameKey(alias), item);
+    for (const path of [model.promptName, model.backendValue])
+      this.indexSuffixes(path, item, apply === add);
   }
   /** Keep donor lookup priority for definite matches; an explicit installed backend filename disambiguates a colliding canonical stem. */
   find(name: string): CatalogMatch {
@@ -123,17 +160,20 @@ export class LoraCatalogIndex {
     );
   }
   /** Store each component once along its reverse path; all proper suffixes receive the same immutable model identity. */
-  private indexSuffixes(path: string, item: LoraCatalogItem): void {
+  private indexSuffixes(path: string, item: LoraCatalogItem, present: boolean): void {
     const parts = loraNameKey(path, true).split('/').filter(Boolean).reverse();
     let node = this.suffixes;
     for (const [depth, part] of parts.entries()) {
       let child = node.children.get(part);
       if (!child) {
+        if (!present) return;
         child = { children: new Map(), items: new Set() };
         node.children.set(part, child);
       }
       node = child;
-      if (depth < parts.length - 1) node.items.add(item);
+      if (depth >= parts.length - 1) continue;
+      if (present) node.items.add(item);
+      else node.items.delete(item);
     }
   }
 }
