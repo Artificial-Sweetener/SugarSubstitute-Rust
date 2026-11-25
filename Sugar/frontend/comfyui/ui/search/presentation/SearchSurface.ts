@@ -19,9 +19,10 @@ import type { PromptSearchSurface } from '../../prompt_editor/PromptSearchSurfac
 export type SearchTextControl = HTMLInputElement | HTMLTextAreaElement;
 /**
  * One searchable field of a card. A field shows its matches through exactly one of:
- * - `painter`: a prompt editor that paints matches in its own text;
- * - `control`: a plain text control the finder lays a highlight over;
- * - neither: text the field renders itself, highlighted where it stands.
+ * - `painter`: a prompt editor, which contributes ranges over its own text;
+ * - `control`: a text box, whose displayed value the finder copies and ranges over;
+ * - neither: text the field renders itself, ranged where it stands.
+ * All three are shown by the same two shared search highlights.
  */
 export interface SearchFieldSurface {
   readonly id: string;
@@ -36,7 +37,5 @@ export interface SearchFieldSurface {
 /** Read values from a lifecycle-owned corpus while keeping mounted lookup stable during edits. */
 export interface SearchSurface {
   readonly fields: ReadonlyMap<string, SearchFieldSurface>;
-  /** The element showing each card's title, by node. */
-  readonly titles: ReadonlyMap<string, HTMLElement>;
   read(): readonly SearchNode[];
 }

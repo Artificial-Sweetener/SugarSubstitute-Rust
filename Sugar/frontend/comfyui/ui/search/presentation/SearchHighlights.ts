@@ -13,20 +13,28 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Paint transient literal search ranges over native editable controls without replacing their renderer. */
-import type { SearchMatch } from '../domain/SearchMatching.js';
-import type { SearchFieldSurface, SearchTextControl } from './SearchSurface.js';
+/**
+ * Show the finder's matches in text outside prompt editors, through the shared search highlights.
+ * A value a card renders as plain text carries ranges of the shared highlights, as a prompt editor's
+ * text does. A text box draws its own value where no range can reach, and paints its selection as
+ * tall as its line: a transparent copy of its value lies over it, with each match a run of that
+ * copy filled to the line and styled by the same rule as the highlights.
+ */
+import { findSearchRanges, type SearchMatch, type SearchResult } from '../domain/SearchMatching.js';
+import { SearchHighlightRanges } from './SearchHighlightRanges.js';
+import type { SearchFieldSurface, SearchSurface, SearchTextControl } from './SearchSurface.js';
 
-interface HighlightBinding {
-  readonly field: SearchFieldSurface;
+interface MirrorBinding {
   readonly control: SearchTextControl;
   readonly layer: HTMLElement;
   readonly text: HTMLElement;
   readonly parent: HTMLElement;
   readonly position: string;
   readonly positionPriority: string;
-  readonly marks: Map<number, HTMLElement>;
   readonly scroll: () => void;
+  current: HTMLElement | null;
+  /** Whether the runs' fill to the line has been measured for the box's present geometry. */
+  filled: boolean;
 }
 const typography = [
   'font-family',
@@ -54,130 +62,100 @@ const typography = [
   'word-break',
   'overflow-wrap',
 ] as const;
-/** Own only highlight layers for current matches and release every reference on surface teardown. */
+
+/** Own the text-box copies and every range outside prompt editors; release all on teardown. */
 export class SearchHighlights {
-  readonly #bindings = new Map<string, HighlightBinding>();
+  readonly #bindings = new Map<string, MirrorBinding>();
+  readonly #ranges: SearchHighlightRanges;
   readonly #observer: ResizeObserver | null;
   readonly #document: Document;
   #frame: number | null = null;
-  #active: HTMLElement | null = null;
+  #shown: { surface: SearchSurface; result: SearchResult } | null = null;
 
   /** Observe matched native geometry without discovering graph candidates or following animation frames. */
   constructor(documentRef: Document) {
     this.#document = documentRef;
+    this.#ranges = new SearchHighlightRanges(documentRef.defaultView);
     const Observer = documentRef.defaultView?.ResizeObserver;
     this.#observer = Observer ? new Observer(() => this.#schedule()) : null;
   }
+
   /**
-   * Reconcile marks using literal text nodes and retain unchanged controls across navigation.
-   * Matches are found in a field's value; a control that shows that value differently, such as
-   * a formatted number, gets a mark only where its own characters read `needle`.
+   * Show every match of the searched text, with `active` as the current one.
+   * - A text box is searched in the text it displays, so a number shown with more digits than its
+   *   value holds, or a value whose line endings differ, is marked on its own characters.
+   * - A value a card renders as plain text, such as a chosen sampler, is marked where it stands.
+   * A Field or Node query narrows what is shown and marks nothing.
    */
-  render(
-    fields: ReadonlyMap<string, SearchFieldSurface>,
-    matches: readonly SearchMatch[],
-    active: SearchMatch | null,
-    needle: string,
-  ): void {
-    const created: HighlightBinding[] = [];
+  render(surface: SearchSurface, result: SearchResult, active: SearchMatch | null): void {
+    this.#shown = { surface, result };
+    const needle = result.query.text;
     const grouped = new Map<string, SearchMatch[]>();
-    for (const match of matches) {
-      const ranges = grouped.get(match.field) ?? [];
-      ranges.push(match);
-      grouped.set(match.field, ranges);
-    }
-    for (const [id, binding] of this.#bindings) {
-      const field = fields.get(id);
-      if (!grouped.has(id) || field?.control !== binding.control) this.#release(id, binding);
-    }
-    const parentPositions = new Map<HTMLElement, string>();
-    for (const id of grouped.keys()) {
-      const parent = fields.get(id)?.control?.parentElement;
-      if (parent && !this.#bindings.has(id) && !parentPositions.has(parent))
-        parentPositions.set(parent, getComputedStyle(parent).position);
-    }
-    for (const [id, ranges] of grouped) {
-      const field = fields.get(id);
-      const control = field?.control;
-      const parent = control?.parentElement;
-      if (!field || !control || !parent) continue;
-      let binding = this.#bindings.get(id);
-      const signature = JSON.stringify([
-        control.value,
-        ranges.map((range) => [range.start, range.length]),
-      ]);
-      if (!binding) {
-        const position = parent.style.getPropertyValue('position');
-        const positionPriority = parent.style.getPropertyPriority('position');
-        const computedPosition = parentPositions.get(parent);
-        if (computedPosition === 'static' || !computedPosition)
-          parent.style.setProperty('position', 'relative');
-        const layer = this.#document.createElement('div');
-        layer.className = 'sc-search-highlight';
-        layer.setAttribute('aria-hidden', 'true');
-        const text = this.#document.createElement('div');
-        text.className = 'sc-search-highlight__text';
-        const marks = new Map<number, HTMLElement>();
-        layer.append(text);
-        const scroll = (): void => {
-          text.style.transform = `translate(${-control.scrollLeft}px,${-control.scrollTop}px)`;
-        };
-        binding = {
-          field,
-          control,
-          parent,
-          position,
-          positionPriority,
-          layer,
-          text,
-          marks,
-          scroll,
-        };
-        parent.append(layer);
-        control.addEventListener('scroll', scroll, { passive: true });
-        this.#bindings.set(id, binding);
-        this.#observer?.observe(control);
-        created.push(binding);
+    if (needle)
+      for (const match of result.matches) {
+        const matches = grouped.get(match.field) ?? [];
+        matches.push(match);
+        grouped.set(match.field, matches);
       }
-      if (binding.layer.dataset.ranges !== signature) {
-        binding.layer.dataset.ranges = signature;
-        binding.marks.clear();
-        const fragments: Node[] = [];
-        let offset = 0;
-        for (const range of ranges) {
-          const shown = control.value.slice(range.start, range.start + range.length);
-          if (shown.toLowerCase() !== needle) continue;
-          fragments.push(this.#document.createTextNode(control.value.slice(offset, range.start)));
-          const mark = this.#document.createElement('mark');
-          mark.textContent = control.value.slice(range.start, range.start + range.length);
-          binding.marks.set(range.start, mark);
-          fragments.push(mark);
-          offset = range.start + range.length;
-        }
-        fragments.push(this.#document.createTextNode(control.value.slice(offset) + '\u200b'));
-        binding.text.replaceChildren(...fragments);
+    for (const [id, binding] of this.#bindings)
+      if (!grouped.has(id) || surface.fields.get(id)?.control !== binding.control)
+        this.#release(id, binding);
+    const created: MirrorBinding[] = [];
+    const passive: Range[] = [];
+    for (const [id, matches] of grouped) {
+      const control = surface.fields.get(id)?.control;
+      if (!control) continue;
+      const binding = this.#bindings.get(id) ?? this.#bind(id, control, created);
+      if (!binding) continue;
+      const shown = control.value;
+      const occurrences = findSearchRanges(shown, needle);
+      const ordinal = active?.field === id ? matches.indexOf(active) : -1;
+      const chosen =
+        ordinal < 0
+          ? undefined
+          : occurrences.length === matches.length
+            ? occurrences[ordinal]
+            : occurrences.find((occurrence) => occurrence.start === active?.start);
+      const signature = JSON.stringify([shown, needle, chosen?.start ?? -1]);
+      if (binding.layer.dataset.shown === signature) continue;
+      binding.layer.dataset.shown = signature;
+      binding.current = null;
+      const parts: Node[] = [];
+      let offset = 0;
+      for (const occurrence of occurrences) {
+        parts.push(this.#document.createTextNode(shown.slice(offset, occurrence.start)));
+        const run = this.#document.createElement('span');
+        run.dataset.scSearch = occurrence === chosen ? 'current' : 'match';
+        run.textContent = shown.slice(occurrence.start, occurrence.start + occurrence.length);
+        if (occurrence === chosen) binding.current = run;
+        parts.push(run);
+        offset = occurrence.start + occurrence.length;
       }
+      // A trailing zero-width space keeps a final empty line as tall as the box draws it.
+      parts.push(this.#document.createTextNode(`${shown.slice(offset)}\u200b`));
+      binding.text.replaceChildren(...parts);
+      if (!binding.filled && !created.includes(binding)) this.#fill(binding);
     }
+    if (needle)
+      for (const field of surface.fields.values())
+        if (!field.control && !field.painter && this.#searched(field, result))
+          this.#mark(passive, field.row, needle, field.label);
     if (created.length) this.#geometry(created);
-    this.activate(active);
+    this.#ranges.replace(passive, []);
   }
-  /** Update only the old and new active fragments when navigating cached results. */
+
+  /** Move the current match without searching again. */
   activate(active: SearchMatch | null): void {
-    const mark = active
-      ? (this.#bindings.get(active.field)?.marks.get(active.start) ?? null)
-      : null;
-    if (this.#active === mark) return;
-    this.#active?.removeAttribute('data-active');
-    mark?.setAttribute('data-active', '');
-    this.#active = mark;
+    if (this.#shown) this.render(this.#shown.surface, this.#shown.result, active);
   }
-  /** Reveal the active fragment inside a scrolling native control while leaving finder focus intact. */
-  reveal(match: SearchMatch): void {
+
+  /** Scroll a text box to its current match; false when the match is not in a text box. */
+  reveal(match: SearchMatch): boolean {
     const binding = this.#bindings.get(match.field);
-    const mark = binding?.marks.get(match.start);
-    if (!binding || !mark) return;
-    const { control } = binding;
-    const fragment = mark.getBoundingClientRect();
+    if (!binding) return false;
+    const { control, current } = binding;
+    if (!current) return true;
+    const fragment = current.getBoundingClientRect();
     const bounds = control.getBoundingClientRect();
     if (fragment.top < bounds.top) control.scrollTop -= bounds.top - fragment.top + 4;
     else if (fragment.bottom > bounds.bottom)
@@ -186,12 +164,16 @@ export class SearchHighlights {
     else if (fragment.right > bounds.right && control instanceof HTMLInputElement)
       control.scrollLeft += fragment.right - bounds.right + 4;
     binding.scroll();
+    return true;
   }
-  /** Remove marks without moving native editing cursors. */
+
+  /** Remove every range and copy without moving native editing cursors. */
   clear(): void {
-    this.activate(null);
+    this.#shown = null;
+    this.#ranges.clear();
     for (const [id, binding] of this.#bindings) this.#release(id, binding);
   }
+
   /** Stop all owned callbacks before borrowed native controls return to graph mode. */
   dispose(): void {
     if (this.#frame !== null) this.#document.defaultView?.cancelAnimationFrame(this.#frame);
@@ -199,8 +181,67 @@ export class SearchHighlights {
     this.clear();
     this.#observer?.disconnect();
   }
+
+  /** Whether a field's shown value is among the text this query searches. */
+  #searched(field: SearchFieldSurface, result: SearchResult): boolean {
+    if (field.row.hidden || field.row.hasAttribute('data-sc-search-field-hidden')) return false;
+    const { query } = result;
+    return query.mode === 'text' || !query.node || result.nodes.has(field.node);
+  }
+
+  /** Collect the needle's occurrences in the text shown under `root`, outside `except`. */
+  #mark(ranges: Range[], root: HTMLElement, needle: string, except: HTMLElement | null): void {
+    const walker = this.#document.createTreeWalker(root, 4);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const parent = node.parentElement;
+      if (!parent || except?.contains(parent) || parent.closest('.sc-search-highlight')) continue;
+      for (const found of findSearchRanges(node.nodeValue ?? '', needle)) {
+        const range = this.#document.createRange();
+        range.setStart(node, found.start);
+        range.setEnd(node, found.start + found.length);
+        ranges.push(range);
+      }
+    }
+  }
+
+  /** Lay one transparent copy over a text box, in the box's parent, following its scrolling. */
+  #bind(id: string, control: SearchTextControl, created: MirrorBinding[]): MirrorBinding | null {
+    const parent = control.parentElement;
+    if (!parent) return null;
+    const position = parent.style.getPropertyValue('position');
+    const positionPriority = parent.style.getPropertyPriority('position');
+    if (getComputedStyle(parent).position === 'static')
+      parent.style.setProperty('position', 'relative');
+    const layer = this.#document.createElement('div');
+    layer.className = 'sc-search-highlight';
+    layer.setAttribute('aria-hidden', 'true');
+    const text = this.#document.createElement('div');
+    text.className = 'sc-search-highlight__text';
+    layer.append(text);
+    const scroll = (): void => {
+      text.style.transform = `translate(${-control.scrollLeft}px,${-control.scrollTop}px)`;
+    };
+    const binding: MirrorBinding = {
+      control,
+      parent,
+      position,
+      positionPriority,
+      layer,
+      text,
+      scroll,
+      current: null,
+      filled: false,
+    };
+    parent.append(layer);
+    control.addEventListener('scroll', scroll, { passive: true });
+    this.#bindings.set(id, binding);
+    this.#observer?.observe(control);
+    created.push(binding);
+    return binding;
+  }
+
   /** Copy native typography and local dimensions so wrapped highlights share the real widget layout. */
-  #geometry(bindings: Iterable<HighlightBinding> = this.#bindings.values()): void {
+  #geometry(bindings: Iterable<MirrorBinding> = this.#bindings.values()): void {
     const measurements = [...bindings].map((binding) => {
       const { control } = binding;
       const style = getComputedStyle(control);
@@ -209,6 +250,7 @@ export class SearchHighlights {
         typography: typography.map(
           (property) => [property, style.getPropertyValue(property)] as const,
         ),
+        ink: style.color,
         left: control.offsetLeft,
         top: control.offsetTop,
         width: control.offsetWidth,
@@ -221,6 +263,8 @@ export class SearchHighlights {
       const { control, layer, text } = measurement.binding;
       for (const [property, value] of measurement.typography)
         layer.style.setProperty(property, value);
+      // The copy's own text is transparent; a highlighted run is drawn in the box's ink.
+      layer.style.setProperty('--sc-search-mirror-ink', measurement.ink);
       layer.style.boxSizing = 'border-box';
       layer.style.borderStyle = 'solid';
       layer.style.borderColor = 'transparent';
@@ -231,8 +275,25 @@ export class SearchHighlights {
       text.style.whiteSpace =
         control instanceof HTMLTextAreaElement && control.wrap !== 'off' ? 'pre-wrap' : 'pre';
       text.style.transform = `translate(${-measurement.x}px,${-measurement.y}px)`;
+      this.#fill(measurement.binding);
     }
   }
+
+  /**
+   * A text box paints its selection as tall as its line, and a run of text only as tall as its
+   * glyphs. Each marked run is padded by the difference, so it covers what a selection covers.
+   */
+  #fill(binding: MirrorBinding): void {
+    const run = binding.text.querySelector<HTMLElement>('[data-sc-search]');
+    if (!run) return;
+    binding.filled = true;
+    binding.layer.style.setProperty('--sc-search-line-fill', '0px');
+    const line = parseFloat(getComputedStyle(binding.control).lineHeight);
+    const glyphs = run.getClientRects()[0]?.height ?? 0;
+    if (Number.isFinite(line) && glyphs > 0 && line > glyphs)
+      binding.layer.style.setProperty('--sc-search-line-fill', `${String((line - glyphs) / 2)}px`);
+  }
+
   /** Coalesce geometry changes independently of query matching and native field lookup. */
   #schedule(): void {
     if (this.#frame !== null) return;
@@ -243,8 +304,9 @@ export class SearchHighlights {
       this.#geometry();
     });
   }
+
   /** Restore only presentation properties owned by this matched control. */
-  #release(id: string, binding: HighlightBinding): void {
+  #release(id: string, binding: MirrorBinding): void {
     this.#observer?.unobserve(binding.control);
     binding.control.removeEventListener('scroll', binding.scroll);
     binding.layer.remove();

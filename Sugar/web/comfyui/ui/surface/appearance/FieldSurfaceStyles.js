@@ -51,6 +51,46 @@ const disabled = state(`:is(${allFields}):disabled`, `:is(${allFields})[aria-dis
  */
 const painters = `html ${scope} :is(${FIELD_SURFACE_PAINTERS.join(', ')})`;
 /**
+ * The Fluent focus underline, defined here for every field the pack draws: a 2 px bar along the
+ * bottom of the field in the brand colour, cut by the field's own rounded corners, growing from the
+ * centre as the field takes focus. The bar is always the bottom strip of a box that has the
+ * field's corner radius, so it ends where the field's edge curves and never reaches past it.
+ * Styles without an underline set `--sc-field-underline-display` to `none` and
+ * `--sc-field-underline-size` to `0 0`.
+ */
+const underlineMotion = 'var(--sc-motion-duration,200ms) var(--sc-motion-decelerate,cubic-bezier(.1,.9,.2,1))';
+const underlineStrip = (colour) => `linear-gradient(${colour},${colour})`;
+const BRAND = 'var(--sc-brand-border,#4ca6f9)';
+/**
+ * The underline as a layer over a field whose content covers its own background: `host` is the
+ * field's box (positioned, with the field's radius); `focused` selects it while it is edited.
+ */
+export function fieldUnderlineCss(host, focused) {
+    return `
+    ${host}::after {
+      content:''; display:var(--sc-field-underline-display,block); position:absolute; inset:0;
+      border-radius:inherit; pointer-events:none;
+      background:${underlineStrip(BRAND)} bottom / 100% 2px no-repeat;
+      transform:scaleX(0); transform-origin:center; transition:transform ${underlineMotion};
+    }
+    ${focused}::after { transform:scaleX(1); }
+    @media (prefers-reduced-motion:reduce) { ${host}::after { transition:none; } }`;
+}
+/**
+ * The same underline in the field's own background, for a text box, which has no layer to add.
+ * The bar reaches the box's bottom edge, so the box's bottom border is clear while it shows.
+ */
+export function fieldOwnUnderlineCss(field, focused, colour = BRAND) {
+    return `
+    ${field} {
+      background-image:${underlineStrip(colour)}; background-repeat:no-repeat;
+      background-origin:border-box; background-position:bottom center; background-size:0 2px;
+      transition:background-size ${underlineMotion};
+    }
+    ${focused} { background-size:var(--sc-field-underline-size,100% 2px); border-bottom-color:transparent; }
+    @media (prefers-reduced-motion:reduce) { ${field} { transition:none; } }`;
+}
+/**
  * Resolve every field's rest, hover, focused and disabled fill from the provider's field tokens.
  *
  * The resolved `--sc-field-surface` is the single state result. Painters apply it directly;
@@ -69,7 +109,8 @@ export function fieldSurfaceCss() {
       transition:background-color var(--sc-motion-fast) var(--sc-motion-ease), border-color var(--sc-motion-fast) var(--sc-motion-ease);
     }
     [data-sc-style-popup] [data-sc-inline-search] {
-      background:linear-gradient(var(--sc-field-focus-fill), var(--sc-field-focus-fill)), var(--sc-card-fill);
+      background:${underlineStrip(BRAND)} bottom center / var(--sc-field-underline-size,100% 2px) no-repeat border-box,
+        linear-gradient(var(--sc-field-focus-fill), var(--sc-field-focus-fill)), var(--sc-card-fill);
     }
     @media (prefers-reduced-motion:reduce) {
       ${painters} { transition:none; }

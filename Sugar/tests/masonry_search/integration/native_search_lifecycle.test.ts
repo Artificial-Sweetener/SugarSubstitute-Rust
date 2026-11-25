@@ -26,8 +26,15 @@ import type {
 import type { FinderInputControl } from '../../../frontend/comfyui/ui/surface/appearance/FinderControls.js';
 
 import { MasonrySearchHost } from '../../../frontend/comfyui/ui/search/infrastructure/MasonrySearchHost.js';
+import {
+  installSearchHighlights,
+  resetSearchHighlights,
+} from '../support/SearchHighlightFixture.js';
+
+installSearchHighlights();
 afterEach(() => {
   document.body.replaceChildren();
+  resetSearchHighlights();
   jest.restoreAllMocks();
 });
 

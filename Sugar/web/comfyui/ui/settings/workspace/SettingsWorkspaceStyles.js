@@ -20,6 +20,7 @@
  * and button geometry. Every colour and corner comes from the active style's settings look
  * (`SettingsLooks`), so each visual style presents the same organization in its own skin.
  */
+import { fieldOwnUnderlineCss } from '../../surface/appearance/FieldSurfaceStyles.js';
 import { segmentedSliderCss } from '../../core/SegmentedSlider.js';
 import { settingsLookCss } from './SettingsLooks.js';
 /** The workspace's stylesheet: every style's look, then the structure. */
@@ -161,7 +162,8 @@ export const settingsWorkspaceCss = `
     color:inherit; background:var(--sc-sw-control); border:1px solid var(--sc-sw-control-border); }
   .sc-sw-field { padding:0 10px; border-bottom-color:var(--sc-sw-field-edge); outline:none; }
   .sc-sw-field:hover { background:var(--sc-sw-control-hover); }
-  .sc-sw-field:focus { background:var(--sc-sw-field-focus); border-bottom:2px solid var(--sc-sw-accent); }
+  .sc-sw-field:focus { background-color:var(--sc-sw-field-focus); }
+  ${fieldOwnUnderlineCss('.sc-sw-field', '.sc-sw-field:focus', 'var(--sc-sw-accent)')}
   .sc-sw-field[data-sc-sw-readonly] { opacity:.85; }
   .sc-sw-combo { padding:0 31px 0 11px; appearance:none; cursor:pointer; border-bottom-color:var(--sc-sw-control-border);
     background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);

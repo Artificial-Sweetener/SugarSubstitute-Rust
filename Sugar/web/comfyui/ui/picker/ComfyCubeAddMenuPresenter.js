@@ -14,6 +14,7 @@
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 /** Present the searchable, scrollable Add Cube menu with Comfy-native styling. */
+import { fieldOwnUnderlineCss } from '../surface/appearance/FieldSurfaceStyles.js';
 import { createCubeAddIconElement } from '../surface/CubeAddIcon.js';
 import { resolveCubeModelTitle } from '../cube/CubeModelTitlePresentation.js';
 import { createCubeModelTitleElement } from '../surface/CubeModelPillDomRenderer.js';
@@ -175,6 +176,7 @@ export class ComfyCubeAddMenuPresenter {
         padding: 0.55rem 0.65rem; border: var(--sc-field-border-width) solid var(--sc-field-stroke); border-bottom:2px solid var(--sc-field-bottom-stroke);
         border-radius: var(--sc-field-radius); color: inherit; background: var(--sc-field-fill); font:inherit; }
       [${MENU_ATTRIBUTE}] input:focus { outline:0; border-color:var(--sc-field-focus-stroke); border-bottom-color:var(--sc-field-focus-bottom-stroke); }
+      ${fieldOwnUnderlineCss(`[${MENU_ATTRIBUTE}] input`, `[${MENU_ATTRIBUTE}] input:focus`)}
       [${MENU_ATTRIBUTE}] input:focus-visible { outline:var(--sc-field-focus-outline); outline-offset:var(--sc-field-focus-outline-offset); }
       .sugarcubes-add-cube-menu__results { min-height: 0; max-inline-size:none; box-shadow:none; border:0; padding:0; overflow-y:auto; overscroll-behavior:contain; }
       [${RESULT_ATTRIBUTE}] { content-visibility:auto; contain-intrinsic-size:auto 2.75rem; }

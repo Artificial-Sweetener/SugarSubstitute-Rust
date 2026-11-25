@@ -22,21 +22,22 @@ import type {
 } from '../../../frontend/comfyui/ui/search/presentation/SearchSurface.js';
 import type { PromptSearchSurface } from '../../../frontend/comfyui/ui/prompt_editor/PromptSearchSurface.js';
 import type { FinderInputControl } from '../../../frontend/comfyui/ui/surface/appearance/FinderControls.js';
+import {
+  anySearchHighlight,
+  installSearchHighlights,
+  boxRuns,
+  resetSearchHighlights,
+  shownCurrent,
+  shownMatches,
+} from '../support/SearchHighlightFixture.js';
 
 const presenters: MasonrySearchPresenter[] = [];
-const highlights = new Map<string, { ranges: Range[] }>();
-
-class FixtureHighlight {
-  readonly ranges: Range[];
-  constructor(...ranges: Range[]) {
-    this.ranges = ranges;
-  }
-}
+installSearchHighlights();
 
 afterEach(() => {
   for (const presenter of presenters.splice(0)) presenter.dispose();
   document.body.replaceChildren();
-  highlights.clear();
+  resetSearchHighlights();
   jest.restoreAllMocks();
 });
 
@@ -67,9 +68,6 @@ function prompt(element: HTMLElement) {
 
 /** One card: a titled node with a prompt, a plain text box and a value shown as text. */
 function fixture() {
-  // jsdom has no highlight registry; the finder only needs these two names on the window.
-  Object.defineProperty(window, 'Highlight', { value: FixtureHighlight, configurable: true });
-  Object.defineProperty(window.CSS, 'highlights', { value: highlights, configurable: true });
   const container = document.createElement('div');
   const root = document.createElement('div');
   const card = document.createElement('article');
@@ -121,7 +119,6 @@ function fixture() {
   };
   const surface: SearchSurface = {
     fields,
-    titles: new Map([['n', title]]),
     read: () => [
       {
         id: 'n',
@@ -147,14 +144,10 @@ function fixture() {
     input.control.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
     void presenter.state;
   };
-  const marked = (): string[] =>
-    (highlights.get('sc-search-match')?.ranges ?? []).map(
-      (range) => `${range.toString()}@${range.startContainer.parentElement?.tagName ?? ''}`,
-    );
-  return { presenter, painter: painter.calls, box, search, marked, root };
+  return { presenter, painter: painter.calls, box, search, root };
 }
 
-test('a prompt paints every match itself and follows the current match', () => {
+test('a prompt ranges its own matches and the current match moves between renderers', () => {
   const f = fixture();
   f.search('sunset');
   // Two in the prompt, one in the text box; the first is current.
@@ -167,30 +160,52 @@ test('a prompt paints every match itself and follows the current match', () => {
     active: 0,
   });
   expect(f.painter.revealed.at(-1)).toBe(0);
+  // Outside the prompt, the text box's match and the shown value are matches, none current.
+  expect(boxRuns(f.root)).toEqual(['sunset:match']);
+  expect(shownMatches()).toEqual(['Sunset@B']);
+  expect(shownCurrent()).toEqual([]);
   f.presenter.cycle(1);
   expect(f.painter.painted.at(-1)?.active).toBe(1);
   expect(f.painter.revealed.at(-1)).toBe(1);
-  // The current match moves to the text box: the prompt keeps its marks, none of them current.
+  // The current match moves to the text box: the prompt keeps its matches, none of them current.
   f.presenter.cycle(1);
   expect(f.presenter.state.active?.field).toBe('prefix');
   expect(f.painter.painted.at(-1)?.active).toBeNull();
-  expect(f.root.querySelectorAll('mark[data-active]')).toHaveLength(1);
-  expect(f.box.selectionStart).toBe(0);
-  expect(f.box.selectionEnd).toBe(6);
+  expect(boxRuns(f.root)).toEqual(['sunset:current']);
+  expect(shownMatches()).toEqual(['Sunset@B']);
+  // It is the text box's real selection as well, which shows once the box has focus.
+  expect([f.box.selectionStart, f.box.selectionEnd]).toEqual([0, 6]);
 });
 
-test('a new query starts a new search in the prompt and closing clears every renderer', () => {
+test('a text box marks its matches on a transparent copy of what it displays', () => {
+  const f = fixture();
+  f.search('sunset');
+  const copy = f.root.querySelector('.sc-search-highlight__text');
+  expect(copy?.textContent).toBe('sunset_render​');
+  expect(f.root.querySelectorAll('mark')).toHaveLength(0);
+  // The copy is searched as displayed: a box showing its value differently is marked on what it shows.
+  f.box.value = 'A Sunset_render';
+  f.presenter.cycle(1);
+  expect(boxRuns(f.root)).toEqual(['Sunset:match']);
+  expect(copy?.textContent).toBe('A Sunset_render​');
+});
+
+test('a new query starts a new search in the prompt and closing clears everything', () => {
   const f = fixture();
   f.search('sunset');
   const first = f.painter.painted.at(-1)?.query;
   f.search('harbour');
   expect(f.painter.painted.at(-1)?.query).not.toBe(first);
   expect(f.painter.painted.at(-1)?.ranges).toEqual([[18, 7]]);
-  expect(f.root.querySelectorAll('mark')).toHaveLength(0);
+  expect(f.root.querySelectorAll('.sc-search-highlight')).toHaveLength(0);
+  expect(anySearchHighlight()).toBe(false);
+  f.search('sunset');
+  expect(anySearchHighlight()).toBe(true);
   f.presenter.close(false);
   expect(f.painter.cleared).toBeGreaterThan(0);
   expect(f.painter.focused).toEqual([]);
-  expect(f.marked()).toEqual([]);
+  expect(anySearchHighlight()).toBe(false);
+  expect(f.root.querySelectorAll('.sc-search-highlight')).toHaveLength(0);
 });
 
 test('Escape lands in the prompt on the current match', () => {
@@ -201,25 +216,31 @@ test('Escape lands in the prompt on the current match', () => {
   expect(f.painter.focused).toEqual([1]);
 });
 
-test('a value shown as text is marked where it reads the searched text', () => {
+test('Escape on a text box match selects it there', () => {
   const f = fixture();
-  f.search('sunset');
-  // The model field shows its title, so only the characters on screen are marked.
-  expect(f.marked()).toEqual(['Sunset@B']);
+  f.search('render');
+  expect(f.presenter.state.active?.field).toBe('prefix');
+  f.presenter.close(true);
+  expect(document.activeElement).toBe(f.box);
+  expect([f.box.selectionStart, f.box.selectionEnd]).toEqual([7, 13]);
 });
 
-test('a Node query marks the title and field names that kept the card', () => {
+test('a value shown as text is ranged where it reads the searched text', () => {
+  const f = fixture();
+  f.search('style');
+  // The model field shows its title, so only the characters on screen are ranged.
+  expect(shownMatches()).toEqual(['Style@B']);
+});
+
+test('Node and Field queries narrow what is shown and highlight nothing', () => {
   const f = fixture();
   f.search('@node lora');
-  expect(f.marked()).toEqual(['LoRA@H3', 'lora@SPAN']);
+  expect(anySearchHighlight()).toBe(false);
   expect(f.painter.painted).toEqual([]);
-  f.search('lora "harbour"');
-  expect(f.marked()).toEqual(['LoRA@H3', 'lora@SPAN']);
-  expect(f.painter.painted.at(-1)?.ranges).toEqual([[18, 7]]);
-});
-
-test('a Field query marks each of its words in the names of the fields it kept', () => {
-  const f = fixture();
   f.search('@field name lora');
-  expect(f.marked()).toEqual(['name@SPAN', 'lora@SPAN']);
+  expect(anySearchHighlight()).toBe(false);
+  // Text searched within a named node is still text: its matches are shown.
+  f.search('@node lora "harbour"');
+  expect(f.painter.painted.at(-1)?.ranges).toEqual([[18, 7]]);
+  expect(shownMatches()).toEqual([]);
 });

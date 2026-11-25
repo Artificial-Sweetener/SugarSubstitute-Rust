@@ -6,7 +6,6 @@ import { promptSearchIn } from '../../prompt_editor/PromptSearchSurface.js';
 /** Retain native references only while mounted; query and navigation never rediscover the graph. */
 export class MasonrySearchCorpus {
     fields = new Map();
-    titles = new Map();
     #cards = new Map();
     #nodes = new Map();
     #rowCards = new WeakMap();
@@ -69,11 +68,6 @@ export class MasonrySearchCorpus {
                 this.fields.set(fieldId, surface);
                 this.#rowCards.set(row, card.id);
             }
-            const title = cell.querySelector('[data-testid="node-title"]');
-            if (title)
-                this.titles.set(id, title);
-            else
-                this.titles.delete(id);
             this.#nodes.set(id, {
                 description: {
                     id: card.id,

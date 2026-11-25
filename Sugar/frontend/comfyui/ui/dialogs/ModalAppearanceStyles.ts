@@ -13,6 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+import { fieldOwnUnderlineCss } from '../surface/appearance/FieldSurfaceStyles.js';
 /** Style shared dialogs and retained native form controls through the selected provider. */
 const STYLE_ID = 'sugarcubes-modal-appearance';
 const scope = '[data-sc-modal-appearance]:not([data-sc-modal-appearance="comfy"])';
@@ -64,6 +65,8 @@ ${scope} :is(.sugarcubes-modal__text-input,.sugarcubes-modal__input-group) {
 ${scope} .sugarcubes-modal__text-input:hover { border-color:var(--sc-field-hover-stroke); border-bottom-color:var(--sc-field-hover-bottom-stroke); }
 ${scope} .sugarcubes-modal__text-input:focus { border-color:var(--sc-field-focus-stroke); border-bottom-color:var(--sc-field-focus-bottom-stroke); box-shadow:var(--sc-field-focus-shadow); }
 ${scope} .sugarcubes-modal__input-group { padding:0; }
+${fieldOwnUnderlineCss(`${scope} .sugarcubes-modal__text-input:not(.sugarcubes-modal__input-group *)`, `${scope} .sugarcubes-modal__text-input:not(.sugarcubes-modal__input-group *):focus`)}
+${fieldOwnUnderlineCss(`${scope} .sugarcubes-modal__input-group`, `${scope} .sugarcubes-modal__input-group:focus-within`)}
 ${scope} .sugarcubes-modal__input-group:focus-within { border-color:var(--sc-field-focus-stroke); border-bottom-color:var(--sc-field-focus-bottom-stroke); box-shadow:var(--sc-field-focus-shadow); }
 ${scope} :is(.sugarcubes-modal__text-input:focus-visible,.sugarcubes-modal__input-group:has(:focus-visible)) { outline:var(--sc-field-focus-outline); outline-offset:var(--sc-field-focus-outline-offset); }
 ${scope} .sugarcubes-modal__text-input:disabled { background:var(--sc-surface-disabled); color:var(--sc-text-disabled); border-color:var(--sc-border-disabled); }

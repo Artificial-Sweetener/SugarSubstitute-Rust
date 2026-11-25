@@ -24,11 +24,19 @@ import type { FinderInputControl } from '../../../frontend/comfyui/ui/surface/ap
 import { SearchVisibility } from '../../../frontend/comfyui/ui/search/presentation/SearchVisibility.js';
 import { matchSearch } from '../../../frontend/comfyui/ui/search/domain/SearchMatching.js';
 import { buildSearchQuery } from '../../../frontend/comfyui/ui/search/domain/SearchQuery.js';
+import {
+  anySearchHighlight,
+  installSearchHighlights,
+  resetSearchHighlights,
+  boxRuns,
+} from '../support/SearchHighlightFixture.js';
 
 const presenters: MasonrySearchPresenter[] = [];
+installSearchHighlights();
 afterEach(() => {
   for (const presenter of presenters.splice(0)) presenter.dispose();
   document.body.replaceChildren();
+  resetSearchHighlights();
   jest.restoreAllMocks();
 });
 
@@ -100,7 +108,7 @@ test('buttons cycle and wrap cached matches, clear and close without replacing n
   expect(f.fields.get('height')?.control?.selectionEnd).toBe(3);
   f.click('Clear search');
   expect(f.presenter.state.text).toBe('');
-  expect(f.root.querySelectorAll('mark')).toHaveLength(0);
+  expect(anySearchHighlight()).toBe(false);
   expect(f.input.shadowRoot?.activeElement).toBe(f.input.control);
   f.click('Close search (Esc)');
   expect(f.container.querySelector<HTMLElement>('.sc-masonry-finder')?.hidden).toBe(true);
@@ -235,7 +243,8 @@ test('source edits preserve native cursors and markup-like matches remain litera
   f.presenter.valuesChanged();
   f.search('<img');
   expect(f.root.querySelector('img')).toBeNull();
-  expect(f.root.querySelector('mark')?.textContent).toBe('<img');
+  expect(f.root.querySelectorAll('mark')).toHaveLength(0);
+  expect(boxRuns(f.root)).toEqual(['<img:current']);
   control.focus();
   control.setSelectionRange(2, 2);
   f.presenter.valuesChanged();

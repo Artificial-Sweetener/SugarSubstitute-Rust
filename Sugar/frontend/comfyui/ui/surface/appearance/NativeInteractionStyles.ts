@@ -16,6 +16,8 @@
 /** Define titlebar feedback and native field accent motion through scoped design-system tokens. */
 
 /** Keep interaction styling scoped to positively identified native presentation boundaries. */
+import { fieldUnderlineCss } from './FieldSurfaceStyles.js';
+
 export function nativeInteractionCss(): string {
   return `
     [data-sc-disclosure-layout="fill"][data-sc-disclosing] > .lg-node[data-sc-style-node] {
@@ -94,14 +96,17 @@ export function nativeInteractionCss(): string {
     [data-sc-titlebar-collapsed="true"] [data-testid="node-collapse-button"] i { transform:rotate(0deg); }
     [data-sc-disclosure-target="collapsed"] [data-testid="node-collapse-button"] i { transform:rotate(0deg); }
     [data-sc-disclosure-target="expanded"] [data-testid="node-collapse-button"] i { transform:rotate(180deg); }
-    [data-sc-style-edit-frame] { position:relative; }
-    [data-sc-style-edit-frame]::after {
-      content:''; display:var(--sc-field-underline-display,block); position:absolute; left:0; right:0; bottom:0;
-      height:2px; border-radius:0 0 4px 4px; pointer-events:none;
-      background:var(--sc-brand-border); transform:scaleX(0); transform-origin:center;
-      transition:transform var(--sc-motion-duration) var(--sc-motion-decelerate);
-    }
-    [data-sc-style-edit-frame]:has(input:focus,textarea:focus,[role="combobox"]:focus-visible,[role="combobox"][aria-expanded="true"])::after { transform:scaleX(1); }
+    /* A field's frame and the text box in it share the control radius, so the focus underline,
+       cut by the frame's corners, ends exactly where the box's edge curves. ComfyUI's own focus
+       ring around a text box is not drawn: the underline is the field's focus mark, as on
+       numbers and choices. */
+    [data-sc-style-edit-frame] { position:relative; border-radius:var(--sc-control-radius,4px); }
+    [data-sc-style-edit-frame] > :is(input,textarea) { border-radius:inherit; }
+    :has(> [data-sc-style-edit-frame] > :is(input,textarea)) { --tw-ring-shadow:0 0 transparent; --tw-ring-color:transparent; }
+    ${fieldUnderlineCss(
+      '[data-sc-style-edit-frame]',
+      '[data-sc-style-edit-frame]:has(input:focus,textarea:focus,[role="combobox"]:focus-visible,[role="combobox"][aria-expanded="true"])',
+    )}
     [data-sc-style-edit-frame] input, [data-sc-style-edit-frame] textarea {
       caret-color:var(--sc-brand-border);
     }
@@ -118,8 +123,7 @@ export function nativeInteractionCss(): string {
     @media (prefers-reduced-motion:reduce) {
       [data-sc-boolean-segments]::after,
       [data-sc-toggle-row], [data-sc-style-node] [data-testid="advanced-inputs-button"],
-      [data-sc-titlebar-action], [data-sc-titlebar-action] [data-testid="node-collapse-button"] i,
-      [data-sc-style-edit-frame]::after {
+      [data-sc-titlebar-action], [data-sc-titlebar-action] [data-testid="node-collapse-button"] i {
         transition:none;
       }
     }

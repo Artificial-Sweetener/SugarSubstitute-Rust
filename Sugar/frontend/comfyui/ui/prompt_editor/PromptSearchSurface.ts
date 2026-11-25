@@ -21,7 +21,10 @@ export interface PromptSearchRange {
   readonly length: number;
 }
 
-/** A prompt that paints search matches in its own text renderer. */
+/**
+ * A prompt that shows search matches in its own text: it contributes ranges over its text to the
+ * shared search highlights, as every other searchable text does.
+ */
 export interface PromptSearchSurface {
   /** The prompt's element, for bringing it into view. */
   readonly element: HTMLElement;

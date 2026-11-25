@@ -244,6 +244,7 @@ export function photoProTokenDeclarations(palette: PhotoProPalette = 'medium-gra
     'field-focus-outline': '1px solid var(--sc-focus-ring)',
     'field-focus-outline-offset': '1px',
     'field-underline-display': 'none',
+    'field-underline-size': '0 0',
     'button-radius': '3px',
     'button-border-width': '1px',
     'button-bottom-stroke': colors.border,

@@ -67,10 +67,13 @@ test.each([true, false])(
     const tokens = visualStyleTokens('fluent', dark);
     expect(tokenValue(tokens, '--sc-field-border-width')).toBe('1px');
     expect(tokenValue(tokens, '--sc-field-radius')).toBe('4px');
-    expect(tokenValue(tokens, '--sc-field-focus-shadow')).toBe(
-      'inset 0 -1px var(--sc-brand-border)',
+    // The underline is the one shared bar, cut by the field's corners; no border or shadow draws it.
+    expect(tokenValue(tokens, '--sc-field-focus-shadow')).toBe('none');
+    expect(tokenValue(tokens, '--sc-field-focus-bottom-stroke')).toBe(
+      tokenValue(tokens, '--sc-field-bottom-stroke'),
     );
     expect(tokenValue(tokens, '--sc-field-underline-display')).toBe('block');
+    expect(tokenValue(tokens, '--sc-field-underline-size')).toBe('100% 2px');
     expect(tokenValue(tokens, '--sc-button-radius')).toBe('4px');
     expect(tokenValue(tokens, '--sc-button-border-width')).toBe('1px');
     expect(tokenValue(tokens, '--sc-line-height')).toBe('20px');

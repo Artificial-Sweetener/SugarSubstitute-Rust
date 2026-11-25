@@ -13,7 +13,7 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Paint the finder's matches through the prompt editor's own search layer. */
+/** Hand the finder's matches to the prompt editor, which ranges them over its own text. */
 import type { PromptEditorApi } from '../../../../sugarprompt/editor/src/contracts.js';
 import type { SearchRequest } from '../../../../sugarprompt/services/src/search/contracts.js';
 import type { PromptSearchRange, PromptSearchSurface } from '../PromptSearchSurface.js';
@@ -28,8 +28,8 @@ type SearchApi = Pick<
 >;
 
 /**
- * The editor measures its matches itself, so they stay on their characters through wrapping,
- * scrolling and LoRA chips. A match is named by its index among the ranges last painted.
+ * The editor knows where its text is drawn, so its ranges stay on their characters through
+ * wrapping, scrolling and LoRA chips. A match is named by its index among the ranges last painted.
  */
 export class PromptSearchPainter implements PromptSearchSurface {
   #request: SearchRequest | null = null;

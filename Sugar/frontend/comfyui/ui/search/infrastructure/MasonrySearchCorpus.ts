@@ -42,7 +42,6 @@ interface SourceNode {
 /** Retain native references only while mounted; query and navigation never rediscover the graph. */
 export class MasonrySearchCorpus implements SearchSurface {
   readonly fields = new Map<string, SearchFieldSurface>();
-  readonly titles = new Map<string, HTMLElement>();
   readonly #cards = new Map<string, { card: WorkflowMasonryCard; cell: HTMLElement }>();
   readonly #nodes = new Map<string, SourceNode>();
   readonly #rowCards = new WeakMap<HTMLElement, string>();
@@ -111,9 +110,6 @@ export class MasonrySearchCorpus implements SearchSurface {
         this.fields.set(fieldId, surface);
         this.#rowCards.set(row, card.id);
       }
-      const title = cell.querySelector<HTMLElement>('[data-testid="node-title"]');
-      if (title) this.titles.set(id, title);
-      else this.titles.delete(id);
       this.#nodes.set(id, {
         description: {
           id: card.id,

@@ -17828,6 +17828,55 @@ function nativeCompositionStarted(view) {
   return view.compositionStarted || view.state.facet(nativeInputSettlement).hasCompositionInput(view);
 }
 
+// frontend/sugarprompt/services/src/search/highlights.ts
+var SEARCH_MATCH_HIGHLIGHT = "sc-search-match";
+var SEARCH_CURRENT_HIGHLIGHT = "sc-search-current";
+var SearchHighlightRanges = class {
+  /** Bind the window whose highlight registry is shared; one without the API shows nothing. */
+  constructor(view) {
+    this.view = view;
+  }
+  #owned = [];
+  /** Whether this window can show highlights at all. */
+  get supported() {
+    const view = this.view;
+    return !!view?.Highlight && !!view.CSS?.highlights;
+  }
+  /** Replace this contributor's ranges, leaving every other contributor's in place. */
+  replace(matches, current6) {
+    this.clear();
+    const view = this.view;
+    const registry = view?.CSS?.highlights;
+    const Highlight = view?.Highlight;
+    if (!registry || !Highlight) return;
+    for (const [name2, ranges] of [
+      [SEARCH_MATCH_HIGHLIGHT, matches],
+      [SEARCH_CURRENT_HIGHLIGHT, current6]
+    ]) {
+      if (ranges.length === 0) continue;
+      let highlight = registry.get(name2);
+      if (!highlight) {
+        highlight = new Highlight();
+        registry.set(name2, highlight);
+      }
+      for (const range of ranges) {
+        highlight.add(range);
+        this.#owned.push({ name: name2, range });
+      }
+    }
+  }
+  /** Remove this contributor's ranges; a highlight left empty leaves the registry. */
+  clear() {
+    const registry = this.view?.CSS?.highlights;
+    for (const { name: name2, range } of this.#owned) {
+      const highlight = registry?.get(name2);
+      highlight?.delete(range);
+      if (highlight?.size === 0) registry?.delete(name2);
+    }
+    this.#owned = [];
+  }
+};
+
 // frontend/sugarprompt/editor/src/presentation.ts
 function validateRichRendering(value) {
   if (typeof value !== "boolean") throw new TypeError("Rich rendering requires a boolean");
@@ -19083,56 +19132,74 @@ function searchSnapshot(state, request) {
     activeMatchId: results?.activeIndex === null || results?.activeIndex === void 0 ? null : requireValue(results.matches[results.activeIndex], "search-matches").matchId
   });
 }
+var MatchHighlights = class {
+  #ranges;
+  #measure;
+  constructor(view) {
+    this.#ranges = new SearchHighlightRanges(view.dom.ownerDocument.defaultView);
+    this.#measure = {
+      read: (measured) => matchRanges(measured),
+      write: ({ matches, current: current6 }) => this.#ranges.replace(matches, current6)
+    };
+    view.requestMeasure(this.#measure);
+  }
+  update(update) {
+    if (update.startState.field(searchMatches) !== update.state.field(searchMatches) || update.docChanged || update.geometryChanged || update.viewportChanged)
+      update.view.requestMeasure(this.#measure);
+  }
+  destroy() {
+    this.#ranges.clear();
+  }
+};
+function matchRanges(view) {
+  const found = { matches: [], current: [] };
+  const prepared4 = view.state.field(searchMatches);
+  if (!prepared4) return found;
+  const atomic2 = view.state.field(richProjection, false)?.atomic;
+  prepared4.indexed.between(view.viewport.from, view.viewport.to, (from, to, value) => {
+    let atom = null;
+    atomic2?.between(from, to, (start, end) => {
+      if (start < to && end > from) atom = { from: start, to: end };
+    });
+    const range = atom ? atomRange(view, atom, view.state.sliceDoc(from, to)) : textRange2(view, from, to);
+    if (range)
+      (value.index === prepared4.results.activeIndex ? found.current : found.matches).push(range);
+  });
+  return found;
+}
+function textRange2(view, from, to) {
+  const start = view.domAtPos(from, 1);
+  const end = view.domAtPos(to, -1);
+  const range = view.dom.ownerDocument.createRange();
+  try {
+    range.setStart(start.node, start.offset);
+    range.setEnd(end.node, end.offset);
+  } catch {
+    return null;
+  }
+  return range.collapsed ? null : range;
+}
+function atomRange(view, atom, text) {
+  const at2 = view.domAtPos(atom.from, 1);
+  const widget = at2.node.childNodes[at2.offset];
+  if (!widget) return null;
+  const document2 = view.dom.ownerDocument;
+  const range = document2.createRange();
+  const needle = text.toLowerCase();
+  const walker = document2.createTreeWalker(widget, 4);
+  for (let node = walker.nextNode(); needle && node; node = walker.nextNode()) {
+    const index = (node.nodeValue ?? "").toLowerCase().indexOf(needle);
+    if (index < 0) continue;
+    range.setStart(node, index);
+    range.setEnd(node, index + needle.length);
+    return range;
+  }
+  range.selectNodeContents(widget);
+  return range.collapsed ? null : range;
+}
 var searchMatchExtension = [
   searchMatches,
-  layer({
-    above: true,
-    class: "sugarprompt-search-layer",
-    update: (update) => update.startState.field(searchMatches) !== update.state.field(searchMatches) || update.geometryChanged || update.viewportChanged,
-    markers(view) {
-      const prepared4 = view.state.field(searchMatches);
-      if (!prepared4) return [];
-      const markers = [];
-      prepared4.indexed.between(view.viewport.from, view.viewport.to, (from, to, value) => {
-        view.state.field(richProjection, false)?.atomic.between(from, to, (start, end) => {
-          if (start < to && end > from) {
-            from = Math.min(from, start);
-            to = Math.max(to, end);
-          }
-        });
-        markers.push(
-          ...RectangleMarker.forRange(
-            view,
-            value.index === prepared4.results.activeIndex ? "sugarprompt-search-active" : "sugarprompt-search-passive",
-            EditorSelection.range(from, to)
-          )
-        );
-      });
-      return markers;
-    }
-  }),
-  EditorView.baseTheme({
-    ".sugarprompt-search-layer": { pointerEvents: "none" },
-    ".sugarprompt-search-passive": {
-      backgroundColor: "rgb(from var(--sugarprompt-search-highlight, Highlight) r g b / calc(90 / 255))",
-      outline: "none"
-    },
-    ".sugarprompt-search-active": {
-      backgroundColor: "rgb(from var(--sugarprompt-search-highlight, Highlight) r g b / calc(150 / 255))",
-      outline: "none"
-    },
-    // Empty decorative markers retain the native system palette and absolute donor alpha in forced colors.
-    "@media (forced-colors: active)": {
-      ".sugarprompt-search-passive": {
-        forcedColorAdjust: "none",
-        backgroundColor: "rgb(from Highlight r g b / calc(90 / 255))"
-      },
-      ".sugarprompt-search-active": {
-        forcedColorAdjust: "none",
-        backgroundColor: "rgb(from Highlight r g b / calc(150 / 255))"
-      }
-    }
-  })
+  ViewPlugin.fromClass(MatchHighlights)
 ];
 
 // frontend/sugarprompt/editor/src/native-search.ts

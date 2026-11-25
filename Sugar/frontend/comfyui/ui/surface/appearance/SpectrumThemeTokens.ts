@@ -77,6 +77,7 @@ export function spectrumSemanticTokens(): string {
     'field-focus-outline': 'var(--spectrum-focus-indicator-thickness) solid var(--sc-focus-ring)',
     'field-focus-outline-offset': 'var(--spectrum-focus-indicator-gap)',
     'field-underline-display': 'none',
+    'field-underline-size': '0 0',
     'button-radius': '999px',
     'button-border-width': 'var(--spectrum-border-width-200)',
     'button-bottom-stroke': 'var(--sc-border)',

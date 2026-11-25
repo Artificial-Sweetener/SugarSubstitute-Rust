@@ -50,8 +50,18 @@ import {
   serializeCubeSurfaceState,
 } from '../../../frontend/comfyui/ui/surface/CubeSurfaceState.js';
 import type { ComfyNode } from '../../../frontend/comfyui/ui/types/graph.js';
+import {
+  fieldOwnUnderlineCss,
+  fieldUnderlineCss,
+} from '../../../frontend/comfyui/ui/surface/appearance/FieldSurfaceStyles.js';
+import { nativeInteractionCss } from '../../../frontend/comfyui/ui/surface/appearance/NativeInteractionStyles.js';
+import { modelPickerCss } from '../../../frontend/comfyui/ui/model_library/ModelPickerStyles.js';
+import { ensureFinderStyles } from '../../../frontend/comfyui/ui/search/presentation/FinderStyles.js';
 
-afterEach(() => document.body.replaceChildren());
+afterEach(() => {
+  document.body.replaceChildren();
+  document.getElementById('sc-masonry-finder-styles')?.remove();
+});
 
 const flat = (css: string): string => css.replace(/\s+/g, ' ');
 
@@ -258,4 +268,29 @@ test('recording a card’s first enable choice does not change which cards a Cub
   expect(disabled).toBe(before);
   setCubeFaceNodeEnabled(state, first, true);
   expect(buildCubeCardVisibilitySignature(nodes, serializeCubeSurfaceState(state))).toBe(before);
+});
+
+test('the focus underline is one definition: a bar across the field, cut by the field’s corners', () => {
+  const layer = flat(fieldUnderlineCss('.host', '.host:focus-within'));
+  // A layer the size of the field with the field's radius; the bar is its bottom strip.
+  expect(layer).toContain('.host::after {');
+  expect(layer).toContain('position:absolute; inset:0; border-radius:inherit;');
+  expect(layer).toContain('bottom / 100% 2px no-repeat');
+  expect(layer).toContain('.host:focus-within::after { transform:scaleX(1); }');
+  const own = flat(fieldOwnUnderlineCss('input.box', 'input.box:focus'));
+  // In a text box the bar is the box's own background, which its corners cut the same way.
+  expect(own).toContain(
+    'background-origin:border-box; background-position:bottom center; background-size:0 2px;',
+  );
+  expect(own).toContain(
+    'input.box:focus { background-size:var(--sc-field-underline-size,100% 2px); border-bottom-color:transparent; }',
+  );
+  // Every field the pack draws takes it from there: none paints a brand border or strip of its own.
+  ensureFinderStyles(document);
+  const finderCss = document.getElementById('sc-masonry-finder-styles')?.textContent ?? '';
+  expect(finderCss).toContain('.sc-masonry-finder__group::after');
+  for (const css of [nativeInteractionCss(), modelPickerCss, finderCss]) {
+    expect(css).not.toMatch(/border-bottom(-color)?:[^;]*brand/);
+    expect(css).not.toMatch(/height:2px;[^}]*brand/);
+  }
 });

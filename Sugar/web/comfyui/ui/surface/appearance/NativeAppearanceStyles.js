@@ -213,8 +213,8 @@ export function nativeAppearanceCss(palette, dark) {
       box-sizing:border-box; padding:0 8px;
       font-family:var(--sc-font-family); font-size:var(--sc-search-font);
       color:var(--sc-text);
-      border:var(--sc-field-border-width) solid var(--sc-control-stroke); border-bottom:2px solid var(--sc-brand-border);
-      border-radius:4px; outline:none; z-index:1;
+      border:var(--sc-field-border-width) solid var(--sc-control-stroke); border-bottom-color:transparent;
+      border-radius:var(--sc-control-radius,4px); outline:none; z-index:1;
     }
     ${nativeNumericCss()}
     ${fieldSurfaceCss()}

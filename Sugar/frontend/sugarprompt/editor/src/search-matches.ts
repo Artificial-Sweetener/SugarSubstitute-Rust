@@ -13,10 +13,9 @@
 //
 //    You should have received a copy of the GNU Affero General Public License
 //    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-/** Native prepared ranges own local search paint; no text/query parser or parallel editable state exists. */
+/** Native prepared ranges own which text is a match; no text/query parser or parallel editable state exists. */
 import { requireValue } from '../../core/src/required.js';
 import {
-  EditorSelection,
   RangeSet,
   RangeValue,
   StateEffect,
@@ -24,10 +23,11 @@ import {
   type EditorState,
   type Extension,
 } from '@codemirror/state';
-import { EditorView, RectangleMarker, layer, type LayerMarker } from '@codemirror/view';
+import { EditorView, ViewPlugin, type ViewUpdate } from '@codemirror/view';
 import { sourcePositionsToDocument } from '../../core/src/line-endings.js';
 import type { SearchResults, SearchSnapshot } from '../../services/src/search/contracts.js';
 import { captureSearchResults } from '../../services/src/search/capture.js';
+import { SearchHighlightRanges } from '../../services/src/search/highlights.js';
 import { lineEndings } from './exact-source.js';
 import { editorFreshness, freshnessRejection, type EditorFreshness } from './freshness.js';
 import { richProjection } from './rich-projection.js';
@@ -113,63 +113,108 @@ export function searchSnapshot(
         : requireValue(results.matches[results.activeIndex], 'search-matches').matchId,
   });
 }
-/** CodeMirror's measured selection rectangles own bidi, wrapping, replaced-token and viewport geometry. */
+/**
+ * Contribute the visible matches to the document's shared search highlights as ranges over the
+ * editor's own text nodes, so the browser paints them exactly on their glyphs through wrapping,
+ * scrolling and bidi, in the look the host gives every match. The current match goes to the
+ * current-match highlight, which the host draws as a selection.
+ */
+class MatchHighlights {
+  readonly #ranges: SearchHighlightRanges;
+  readonly #measure: { read(view: EditorView): MatchRanges; write(ranges: MatchRanges): void };
+
+  constructor(view: EditorView) {
+    this.#ranges = new SearchHighlightRanges(view.dom.ownerDocument.defaultView);
+    this.#measure = {
+      read: (measured) => matchRanges(measured),
+      write: ({ matches, current }) => this.#ranges.replace(matches, current),
+    };
+    view.requestMeasure(this.#measure);
+  }
+
+  update(update: ViewUpdate): void {
+    if (
+      update.startState.field(searchMatches) !== update.state.field(searchMatches) ||
+      update.docChanged ||
+      update.geometryChanged ||
+      update.viewportChanged
+    )
+      update.view.requestMeasure(this.#measure);
+  }
+
+  destroy(): void {
+    this.#ranges.clear();
+  }
+}
+
+interface MatchRanges {
+  readonly matches: Range[];
+  readonly current: Range[];
+}
+
+/** One DOM range per match in the viewport, sorted into current and other. */
+function matchRanges(view: EditorView): MatchRanges {
+  const found: MatchRanges = { matches: [], current: [] };
+  const prepared = view.state.field(searchMatches);
+  if (!prepared) return found;
+  const atomic = view.state.field(richProjection, false)?.atomic;
+  prepared.indexed.between(view.viewport.from, view.viewport.to, (from, to, value) => {
+    let atom: { from: number; to: number } | null = null;
+    atomic?.between(from, to, (start, end) => {
+      if (start < to && end > from) atom = { from: start, to: end };
+    });
+    const range = atom
+      ? atomRange(view, atom, view.state.sliceDoc(from, to))
+      : textRange(view, from, to);
+    if (range)
+      (value.index === prepared.results.activeIndex ? found.current : found.matches).push(range);
+  });
+  return found;
+}
+
+/** The range of plain document text between two positions. */
+function textRange(view: EditorView, from: number, to: number): Range | null {
+  const start = view.domAtPos(from, 1);
+  const end = view.domAtPos(to, -1);
+  const range = view.dom.ownerDocument.createRange();
+  try {
+    range.setStart(start.node, start.offset);
+    range.setEnd(end.node, end.offset);
+  } catch {
+    return null;
+  }
+  return range.collapsed ? null : range;
+}
+
+/**
+ * The range for a match inside a replaced token. The token draws its own glyphs: where they read
+ * the matched text, as a LoRA chip's name does, exactly those glyphs are the match; a token that
+ * shows the text some other way is the match as a whole.
+ */
+function atomRange(
+  view: EditorView,
+  atom: { from: number; to: number },
+  text: string,
+): Range | null {
+  const at = view.domAtPos(atom.from, 1);
+  const widget = at.node.childNodes[at.offset];
+  if (!widget) return null;
+  const document = view.dom.ownerDocument;
+  const range = document.createRange();
+  const needle = text.toLowerCase();
+  const walker = document.createTreeWalker(widget, 4);
+  for (let node = walker.nextNode(); needle && node; node = walker.nextNode()) {
+    const index = (node.nodeValue ?? '').toLowerCase().indexOf(needle);
+    if (index < 0) continue;
+    range.setStart(node, index);
+    range.setEnd(node, index + needle.length);
+    return range;
+  }
+  range.selectNodeContents(widget);
+  return range.collapsed ? null : range;
+}
+
 export const searchMatchExtension: Extension = [
   searchMatches,
-  layer({
-    above: true,
-    class: 'sugarprompt-search-layer',
-    update: (update) =>
-      update.startState.field(searchMatches) !== update.state.field(searchMatches) ||
-      update.geometryChanged ||
-      update.viewportChanged,
-    markers(view) {
-      const prepared = view.state.field(searchMatches);
-      if (!prepared) return [];
-      const markers: LayerMarker[] = [];
-      prepared.indexed.between(view.viewport.from, view.viewport.to, (from, to, value) => {
-        // A substring inside a replacement has no independent visible glyphs; paint its actual native atomic widget.
-        view.state.field(richProjection, false)?.atomic.between(from, to, (start, end) => {
-          if (start < to && end > from) {
-            from = Math.min(from, start);
-            to = Math.max(to, end);
-          }
-        });
-        markers.push(
-          ...RectangleMarker.forRange(
-            view,
-            value.index === prepared.results.activeIndex
-              ? 'sugarprompt-search-active'
-              : 'sugarprompt-search-passive',
-            EditorSelection.range(from, to),
-          ),
-        );
-      });
-      return markers;
-    },
-  }),
-  EditorView.baseTheme({
-    '.sugarprompt-search-layer': { pointerEvents: 'none' },
-    '.sugarprompt-search-passive': {
-      backgroundColor:
-        'rgb(from var(--sugarprompt-search-highlight, Highlight) r g b / calc(90 / 255))',
-      outline: 'none',
-    },
-    '.sugarprompt-search-active': {
-      backgroundColor:
-        'rgb(from var(--sugarprompt-search-highlight, Highlight) r g b / calc(150 / 255))',
-      outline: 'none',
-    },
-    // Empty decorative markers retain the native system palette and absolute donor alpha in forced colors.
-    '@media (forced-colors: active)': {
-      '.sugarprompt-search-passive': {
-        forcedColorAdjust: 'none',
-        backgroundColor: 'rgb(from Highlight r g b / calc(90 / 255))',
-      },
-      '.sugarprompt-search-active': {
-        forcedColorAdjust: 'none',
-        backgroundColor: 'rgb(from Highlight r g b / calc(150 / 255))',
-      },
-    },
-  }),
+  ViewPlugin.fromClass(MatchHighlights),
 ];

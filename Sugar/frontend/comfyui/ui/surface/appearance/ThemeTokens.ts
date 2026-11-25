@@ -66,6 +66,8 @@ export interface ThemeTokens {
   readonly 'field-focus-outline': string;
   readonly 'field-focus-outline-offset': string;
   readonly 'field-underline-display': string;
+  /** The focus underline's extent in a text box's own background: `100% 2px`, or `0 0` for none. */
+  readonly 'field-underline-size': string;
   readonly 'button-radius': string;
   readonly 'button-border-width': string;
   readonly 'button-bottom-stroke': string;

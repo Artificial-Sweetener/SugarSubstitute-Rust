@@ -16,6 +16,7 @@
 /** Bridge one accepted accent palette into every SugarCubes-owned rendering surface. */
 import { createAccentPalette } from './AccentPalette.js';
 import { fluentAccentColorTokens } from './FluentThemeRuntime.js';
+import { SEARCH_CURRENT_HIGHLIGHT, SEARCH_MATCH_HIGHLIGHT, } from '../../search/presentation/SearchHighlightRanges.js';
 const scopes = ':is(#graph-canvas-container, [data-sc-style-theme-root], [data-sc-style-surface], [data-sc-style-popup], [data-sc-floating-surface], [data-sc-modal-appearance], [data-sc-model-appearance], [id^="SugarCubes."], .sugarcubes-cube-face, .sugarcubes-workflow-masonry, .sc-cube-stack-host, .sc-overrides-toolbar, .sugarcubes-settings-row)';
 /** Bridge the accepted accent into scoped provider tokens without overwriting unrelated host themes. */
 export function accentThemeCss(color, dark) {
@@ -126,7 +127,16 @@ export function accentThemeCss(color, dark) {
   }
   ${scopes} [data-variant="primary"] { color:var(--sc-accent-foreground); }
   ${scopes} [data-variant="primary"]:active { color:var(--sc-accent-foreground-pressed); }
-  ${scopes} ::selection { background:var(--sc-accent-selection); ${dark ? 'color:black;' : ''} }
+  /* One selection look, reaching a provider text field's input through its control part. The
+     finder's current match is drawn by the same declarations, so it is a selection to the eye;
+     its other matches take the selection colour at part strength. */
+  ${scopes} { ${dark ? '--sc-selection-ink:black;' : ''}
+    --sc-search-match-fill:color-mix(in srgb,var(--sc-accent-selection) 40%,transparent); }
+  ${scopes} ::selection, ${scopes} ::part(control)::selection,
+  ${scopes} ::highlight(${SEARCH_CURRENT_HIGHLIGHT}), ${scopes} [data-sc-search="current"] {
+    background:var(--sc-accent-selection); ${dark ? 'color:black;' : ''} }
+  ${scopes} ::highlight(${SEARCH_MATCH_HIGHLIGHT}), ${scopes} [data-sc-search="match"] {
+    background-color:var(--sc-search-match-fill); }
   ${scopes} .p-checkbox-checked:not(.p-disabled):active .p-checkbox-box {
     background:var(--sc-accent-checkbox-pressed); border-color:var(--sc-accent-checkbox-pressed);
   }

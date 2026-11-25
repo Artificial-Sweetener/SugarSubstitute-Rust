@@ -253,6 +253,19 @@ async function main(): Promise<void> {
     target: 'es2022',
     legalComments: 'inline',
   });
+  // The finder and the prompt editor share SugarPrompt's search highlights, bundled privately.
+  await build({
+    ...browserDependencyResolution,
+    entryPoints: [
+      path.join(repositoryRoot, 'frontend/comfyui/ui/search/presentation/SearchHighlightRanges.ts'),
+    ],
+    outfile: path.join(generatedRoot, 'comfyui/ui/search/presentation/SearchHighlightRanges.js'),
+    bundle: true,
+    format: 'esm',
+    platform: 'browser',
+    target: 'es2022',
+    legalComments: 'inline',
+  });
   // Scene queueing splits prompts through SugarPrompt's scene parser, bundled privately.
   await build({
     ...browserDependencyResolution,

@@ -102,7 +102,8 @@ test('Spectrum form styling preserves focused text, validation, literal labels a
   expect(overlay.querySelector('b, img')).toBeNull();
   publishVisualStyle(document, 'fluent');
   expect(overlay.dataset.scModalAppearance).toBe('fluent');
-  expect(overlay.style.getPropertyValue('--sc-field-focus-shadow')).toContain('inset 0 -1px');
+  // Fluent's focus mark is the shared underline, 2 px across the field's bottom.
+  expect(overlay.style.getPropertyValue('--sc-field-underline-size')).toBe('100% 2px');
   expect(document.activeElement).toBe(input);
   expect(input.selectionStart).toBe(1);
   expect(input.selectionEnd).toBe(2);

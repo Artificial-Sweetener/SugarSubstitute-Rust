@@ -132,6 +132,7 @@ export function gimpThemeTokens(dark: boolean): ThemeTokens {
     'field-focus-outline': `1px dotted ${p.foreground}`,
     'field-focus-outline-offset': '-3px',
     'field-underline-display': 'none',
+    'field-underline-size': '0 0',
     'button-radius': '3px',
     'button-border-width': '1px',
     'button-bottom-stroke': p.strongBorder,
