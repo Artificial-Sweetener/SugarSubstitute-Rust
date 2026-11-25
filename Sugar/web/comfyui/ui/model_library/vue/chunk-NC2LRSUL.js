@@ -2,6 +2,9 @@ import {
   ModelBusyRing
 } from "./chunk-ZVGMUCWU.js";
 import {
+  ModelImageElement
+} from "./chunk-W2YTYCO4.js";
+import {
   useModelImage
 } from "./chunk-SPVIVHMR.js";
 import {
@@ -20,7 +23,7 @@ var ModelRecommendationPreview = defineComponent({
     return () => {
       const { url, loading, unavailable } = image();
       return h("span", { class: "sc-model-recommendation-preview" }, [
-        url ? h("img", { src: url, alt: "", draggable: false }) : unavailable ? h("span", { class: "sc-model-preview-unavailable" }, "Preview unavailable") : null,
+        url ? h(ModelImageElement, { url }) : unavailable ? h("span", { class: "sc-model-preview-unavailable" }, "Preview unavailable") : null,
         loading ? h("span", { class: "sc-model-preview-loading", role: "status" }, [
           h(ModelBusyRing, { class: "sc-model-preview-busy-ring", size: 34, strokeWidth: 4 }),
           h("span", { class: "sc-model-preview-loading-label" }, "Loading preview\u2026")

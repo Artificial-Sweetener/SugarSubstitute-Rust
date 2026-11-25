@@ -17,7 +17,7 @@ import {
 } from "./chunk-XU3535ZK.js";
 import {
   ModelCatalogImage
-} from "./chunk-OLJZ2VLG.js";
+} from "./chunk-25SOMJ7D.js";
 import {
   computed,
   defineComponent,

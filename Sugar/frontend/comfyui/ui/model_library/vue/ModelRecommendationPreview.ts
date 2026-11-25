@@ -18,6 +18,7 @@ import { defineComponent, h } from 'vue';
 import type { PropType } from 'vue';
 import { ModelBusyRing } from './ModelBusyRing.js';
 import { useModelImage } from './ModelImage.js';
+import { ModelImageElement } from './ModelImageElement.js';
 
 /** Keep image lifetime independent of selection, dialog state, and provider acquisition. */
 export const ModelRecommendationPreview = defineComponent({
@@ -31,7 +32,7 @@ export const ModelRecommendationPreview = defineComponent({
       const { url, loading, unavailable } = image();
       return h('span', { class: 'sc-model-recommendation-preview' }, [
         url
-          ? h('img', { src: url, alt: '', draggable: false })
+          ? h(ModelImageElement, { url })
           : unavailable
             ? h('span', { class: 'sc-model-preview-unavailable' }, 'Preview unavailable')
             : null,

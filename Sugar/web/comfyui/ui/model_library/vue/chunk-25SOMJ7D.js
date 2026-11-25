@@ -1,4 +1,7 @@
 import {
+  ModelImageElement
+} from "./chunk-W2YTYCO4.js";
+import {
   useModelImage
 } from "./chunk-SPVIVHMR.js";
 import {
@@ -21,7 +24,7 @@ var ModelCatalogImage = defineComponent({
     );
     return () => {
       const { url, unavailable } = image();
-      if (url) return h("img", { ...attrs, src: url, alt: "", draggable: false });
+      if (url) return h(ModelImageElement, { ...attrs, url });
       return unavailable && props.fallback ? h("span", { class: "sc-model-no-image" }, "No image") : null;
     };
   }

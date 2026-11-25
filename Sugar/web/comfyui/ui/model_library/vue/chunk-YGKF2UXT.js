@@ -3,13 +3,13 @@ import {
 } from "./chunk-5NNW6U22.js";
 import {
   ModelTransferView
-} from "./chunk-UMQMPOKY.js";
+} from "./chunk-2BBFEVHD.js";
 import {
   modelPickerPlacement
 } from "./chunk-JK626FTQ.js";
 import {
   ModelPickerPopupContent
-} from "./chunk-OMRMSSWC.js";
+} from "./chunk-LENWKHDC.js";
 import {
   useModelContext
 } from "./chunk-2WMWUCGK.js";
@@ -25,7 +25,7 @@ import {
 } from "./chunk-XU3535ZK.js";
 import {
   ModelCatalogImage
-} from "./chunk-OLJZ2VLG.js";
+} from "./chunk-25SOMJ7D.js";
 import {
   Teleport,
   computed,

@@ -25,6 +25,7 @@ import {
   modelImageDecoded,
 } from '../../../frontend/comfyui/ui/model_library/ModelImagePresentation.js';
 import { ModelCatalogImage } from '../../../frontend/comfyui/ui/model_library/vue/ModelCatalogImage.js';
+import { ModelImageElement } from '../../../frontend/comfyui/ui/model_library/vue/ModelImageElement.js';
 import { ModelRecommendationPreview } from '../../../frontend/comfyui/ui/model_library/vue/ModelRecommendationPreview.js';
 
 afterEach(() => {
@@ -111,7 +112,7 @@ test('a decoded image is kept by address and shown at once wherever it is asked 
   expect(modelImageDecoded(`/many-${String(DECODED_MODEL_IMAGES)}.webp`)).toBe(true);
 });
 
-test('a catalog image keeps its element through a replacement and falls back only with nothing to show', async () => {
+test('a catalog image stays on screen until the element of its replacement can paint', async () => {
   const state = reactive<{ image: ModelThumbnail }>({ image: thumbnail('/a.webp') });
   const root = document.createElement('div');
   document.body.append(root);
@@ -120,24 +121,34 @@ test('a catalog image keeps its element through a replacement and falls back onl
   });
   app.mount(root);
   imageDecoding.held = true;
-  expect(root.querySelector('img')).toBeNull();
+  const images = () => [...root.querySelectorAll('img')];
+  expect(images()).toEqual([]);
   await settled();
-  const first = root.querySelector('img');
+  const [first] = images();
   expect(first?.getAttribute('src')).toBe('/a.webp');
   expect(first?.className).toBe('banner');
   state.image = thumbnail('/b.webp');
   await nextTick();
-  // Still the first image, the same element, while the replacement decodes.
-  expect(root.querySelector('img')).toBe(first);
-  expect(first?.getAttribute('src')).toBe('/a.webp');
+  // Only the first image while the replacement decodes out of sight.
+  expect(images()).toEqual([first]);
   await settled();
-  expect(root.querySelector('img')).toBe(first);
-  expect(first?.getAttribute('src')).toBe('/b.webp');
+  // Decoded is not painted: the replacement's own element loads over the first, which stays.
+  const [front, incoming] = images();
+  expect(front).toBe(first);
+  expect(front?.getAttribute('src')).toBe('/a.webp');
+  expect(incoming?.getAttribute('src')).toBe('/b.webp');
+  expect(incoming?.className).toBe('banner sc-model-image-incoming');
+  incoming?.dispatchEvent(new Event('load'));
+  await settled();
+  // The element that loaded is the one kept; the first goes only now.
+  expect(images()).toEqual([incoming]);
+  expect(incoming?.className).toBe('banner');
   imageDecoding.broken.add('/c.webp');
   state.image = thumbnail('/c.webp');
   await nextTick();
   await settled();
-  expect(first?.getAttribute('src')).toBe('/b.webp');
+  expect(images()).toEqual([incoming]);
+  expect(incoming?.getAttribute('src')).toBe('/b.webp');
   expect(root.querySelector('.sc-model-no-image')).toBeNull();
   app.unmount();
   // With nothing shown yet, a broken image is the fallback.
@@ -169,13 +180,46 @@ test('a portrait shows loading only before its first image and keeps that image 
   expect(root.querySelector('img')?.getAttribute('src')).toBe('/one.webp');
   expect(root.querySelector('.sc-model-preview-loading')).toBeNull();
   await settled();
-  expect(root.querySelector('img')?.getAttribute('src')).toBe('/two.webp');
+  root.querySelectorAll('img')[1]?.dispatchEvent(new Event('load'));
+  await settled();
+  expect([...root.querySelectorAll('img')].map((image) => image.getAttribute('src'))).toEqual([
+    '/two.webp',
+  ]);
   state.url = null;
   await nextTick();
   expect(root.querySelector('img')).toBeNull();
   expect(root.querySelector('.sc-model-preview-unavailable')?.textContent).toBe(
     'Preview unavailable',
   );
+  app.unmount();
+});
+
+test('an image element that fails to load its new address keeps the one on screen', async () => {
+  const state = reactive({ url: '/first.webp' });
+  const root = document.createElement('div');
+  document.body.append(root);
+  const app = createApp({ render: () => h(ModelImageElement, { url: state.url, class: 'tile' }) });
+  app.mount(root);
+  await nextTick();
+  const [first] = root.querySelectorAll('img');
+  state.url = '/gone.webp';
+  await nextTick();
+  root.querySelectorAll('img')[1]?.dispatchEvent(new Event('error'));
+  await nextTick();
+  expect([...root.querySelectorAll('img')]).toEqual([first]);
+  expect(first?.getAttribute('src')).toBe('/first.webp');
+  // A newer address supersedes one still loading; only the newest takes the front.
+  state.url = '/second.webp';
+  await nextTick();
+  state.url = '/third.webp';
+  await nextTick();
+  const incoming = root.querySelectorAll('img')[1];
+  expect(incoming?.getAttribute('src')).toBe('/third.webp');
+  incoming?.dispatchEvent(new Event('load'));
+  await settled();
+  expect([...root.querySelectorAll('img')].map((image) => image.getAttribute('src'))).toEqual([
+    '/third.webp',
+  ]);
   app.unmount();
 });
 

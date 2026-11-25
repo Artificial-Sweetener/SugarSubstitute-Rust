@@ -19,27 +19,23 @@ import type { PropType } from 'vue';
 import type { ModelTransferState } from '../ModelTransfer.js';
 import { ModelTransferFill } from './ModelTransferFill.js';
 import { useModelImage } from './ModelImage.js';
+import { ModelImageElement } from './ModelImageElement.js';
 
 /** Keep thumbnail failure and progress changes independent of the field's legal selected value. */
 export const ModelTransferView = defineComponent({
   props: { transfer: { type: Object as PropType<ModelTransferState>, required: true } },
   setup(props) {
     const image = useModelImage(() => props.transfer.model.previewUrl);
-    return () =>
-      h('div', { class: 'sc-model-transfer-presentation' }, [
-        image().url
-          ? h('img', {
-              class: 'sc-model-transfer-thumbnail',
-              src: image().url,
-              alt: '',
-              draggable: false,
-            })
-          : null,
+    return () => {
+      const { url } = image();
+      return h('div', { class: 'sc-model-transfer-presentation' }, [
+        url ? h(ModelImageElement, { class: 'sc-model-transfer-thumbnail', url }) : null,
         h(ModelTransferFill, { progress: props.transfer }),
         h('span', { class: 'sc-model-transfer-caption', 'aria-hidden': 'true' }, [
           h('span', null, 'Downloading'),
           h('span', null, props.transfer.model.name),
         ]),
       ]);
+    };
   },
 });

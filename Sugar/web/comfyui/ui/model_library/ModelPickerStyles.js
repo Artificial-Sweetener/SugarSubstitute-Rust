@@ -20,6 +20,7 @@ const showOnlyIcon = new URL('../../../icons/model/eye-off.svg', import.meta.url
 import { fieldUnderlineCss } from '../surface/appearance/FieldSurfaceStyles.js';
 import { modelRecommendationPreviewCss, MODEL_PREVIEW_BACKDROP, } from './ModelRecommendationPreviewStyles.js';
 import { modelKeyRequiredBadgeCss } from './vue/ModelKeyRequiredBadge.js';
+import { INCOMING_MODEL_IMAGE } from './vue/ModelImageElement.js';
 import { CONTROL_HEIGHT } from '../surface/appearance/ControlGeometry.js';
 import { MODEL_PICKER_POPUP_HEIGHT, MODEL_PICKER_POPUP_WIDTH } from './ModelPickerPlacement.js';
 /** Style only picker-owned fields, navigation, menus, and reference galleries. */
@@ -98,6 +99,8 @@ ${fieldUnderlineCss('.sc-model-field', ':is(.sc-model-field-open,.sc-model-field
 .sc-model-wall { position:relative; width:100%; }
 .sc-model-tile { position:absolute; display:block; box-sizing:border-box; overflow:hidden; padding:0; border:0; background:${MODEL_PREVIEW_BACKDROP}; color:#fff; text-align:left; cursor:pointer; }
 .sc-model-tile img { display:block; width:100%; height:100%; object-fit:cover; pointer-events:none; }
+/* A new model image loads over the one on screen, which stays until the new one can paint. */
+.${INCOMING_MODEL_IMAGE} { position:absolute; inset:0; }
 .sc-model-tile::after { content:''; position:absolute; inset:0; pointer-events:none; background:linear-gradient(transparent,rgba(0,0,0,.05) 42%,rgba(0,0,0,.70)); }
 .sc-model-tile:hover::after,.sc-model-active::after,.sc-model-current::after { background:linear-gradient(transparent,rgba(0,0,0,.09) 42%,rgba(0,0,0,.86)); }
 .sc-model-tile:hover { outline:1px solid #ffffff5a; outline-offset:-1px; }
