@@ -189,7 +189,7 @@ test('places neutral activation beside the title and presents advanced settings 
   );
   expect(css).toContain('width:28px; min-width:28px; height:18px; min-height:18px');
   expect(css).toContain(
-    ':has(> [data-testid="advanced-inputs-button"]) { margin-top:0; z-index:auto; background:var(--sc-card-fill); }',
+    ':has(> [data-testid="advanced-inputs-button"]) { background:var(--sc-card-fill); }',
   );
   expect(css).toContain(
     '[data-testid="advanced-inputs-button"]::after { content:\'\'; width:12px; height:2px;',

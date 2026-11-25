@@ -218,7 +218,11 @@ test('node cards are translucent over the Mica on the desktop frame, with overla
     ":root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] [data-sc-style-node] { --sc-card-fill:transparent; }",
   );
   expect(css).toMatch(
-    /\[data-sc-style-node\] :is\( \[data-sc-toggle-row\],\[data-testid="advanced-inputs-button"\],\[data-sc-titlebar-action\]\):is\(:hover,:focus-visible\) \{ background:var\(--sc-desktop-row-hover\); \}/,
+    /\[data-sc-style-node\] :is\( \[data-sc-toggle-row\],\[data-sc-titlebar-action\]\):is\(:hover,:focus-visible\) \{ background:var\(--sc-desktop-row-hover\); \}/,
+  );
+  // Every chin takes the same hover and pressed fills as the card's rows.
+  expect(css).toContain(
+    '--sc-chin-hover:var(--sc-desktop-row-hover); --sc-chin-pressed:var(--sc-desktop-row-pressed);',
   );
   expect(css).toMatch(
     /\[data-sc-titlebar-action\]\):active \{ background:var\(--sc-desktop-row-pressed\); \}/,

@@ -16,6 +16,7 @@
 /** Share native card layout and control presentation across supported design systems. */
 
 import { nativeInteractionCss } from './NativeInteractionStyles.js';
+import { nodeChinCss } from './NodeChinStyles.js';
 import { CONTROL_HEIGHT } from './ControlGeometry.js';
 import { nativeNumericCss } from './NativeNumericStyles.js';
 import { scrollbarCss } from './ScrollbarStyles.js';
@@ -124,16 +125,7 @@ export function nativeAppearanceCss(palette: NativeAppearancePalette, dark: bool
     [data-sc-style-node] [data-testid^="node-body-"] {
       border-radius:0 0 var(--sc-node-card-radius) var(--sc-node-card-radius);
     }
-    [data-sc-style-node]:has([data-testid="advanced-inputs-button"]) [data-testid^="node-body-"] {
-      border-radius:0;
-    }
-    [data-sc-style-node]:has([data-testid="advanced-inputs-button"]) [data-testid^="node-body-"]:has(> [data-sc-style-fields]) {
-      padding-bottom:0;
-    }
-    [data-sc-style-node] [data-testid="advanced-inputs-button"] {
-      border-radius:0 0 var(--sc-node-card-radius) var(--sc-node-card-radius); font-family:var(--sc-font-family);
-      background:var(--sc-card-fill); border-top:1px solid var(--sc-row-stroke);
-    }
+    ${nodeChinCss()}
     [data-sc-style-node]:has([data-sc-style-row]) [data-testid^="node-header-"]:not([data-sc-titlebar-collapsed="true"]) {
       border-bottom:1px solid var(--sc-row-stroke);
     }

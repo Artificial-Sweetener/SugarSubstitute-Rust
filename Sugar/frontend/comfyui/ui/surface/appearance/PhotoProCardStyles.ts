@@ -63,6 +63,6 @@ export function photoProCardCss(): string {
     html[data-sc-visual-style="photopro"] .sugarcubes-cube-face__node-card [data-testid="advanced-inputs-button"] > * { display:none; }
     html[data-sc-visual-style="photopro"] .sugarcubes-cube-face__node-card [data-testid="advanced-inputs-button"]::after { content:''; width:12px; height:2px; background:radial-gradient(circle at 1px 1px,currentColor 1px,transparent 1px) 0 0/5px 2px repeat-x; }
     html[data-sc-visual-style="photopro"] .sugarcubes-cube-face__node-card [data-sc-style-row][data-sc-style-column="2"]::before { display:none; }
-    html[data-sc-visual-style="photopro"] .sugarcubes-cube-face__node-card [data-sc-style-node] > :has(> [data-testid="advanced-inputs-button"]) { margin-top:0; z-index:auto; background:var(--sc-card-fill); }
+    html[data-sc-visual-style="photopro"] .sugarcubes-cube-face__node-card [data-sc-style-node] > :has(> [data-testid="advanced-inputs-button"]) { background:var(--sc-card-fill); }
   `;
 }

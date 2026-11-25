@@ -50,7 +50,11 @@ function fixture(masonry: boolean, fields: boolean, dark = true) {
   control.value = 'custom value';
   widgets.append(control);
   body.append(widgets);
-  card.append(body);
+  // Comfy's node card: the inner wrapper holds the body; a chin, when there is one, follows it.
+  const inner = document.createElement('div');
+  inner.dataset.testid = 'node-inner-wrapper';
+  inner.append(body);
+  card.append(inner);
   surface.append(card);
   document.body.append(surface);
   return { card, widgets, body, control, themeStyle };
@@ -85,7 +89,9 @@ test.each([false, true])(
     const { card, body, widgets, themeStyle } = fixture(masonry, true);
     const footer = document.createElement('button');
     footer.dataset.testid = 'advanced-inputs-button';
-    card.append(footer);
+    const chin = document.createElement('div');
+    chin.append(footer);
+    card.append(chin);
     const advanced = document.createElement('div');
     advanced.dataset.scStyleRow = '';
     widgets.append(advanced);

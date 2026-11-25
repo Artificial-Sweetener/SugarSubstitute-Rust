@@ -16,6 +16,7 @@
 /** Define titlebar feedback and native field accent motion through scoped design-system tokens. */
 
 import { fieldUnderlineCss } from './FieldSurfaceStyles.js';
+import { NODE_CHIN } from './NodeChinStyles.js';
 
 /** Keep interaction styling scoped to positively identified native presentation boundaries. */
 export function nativeInteractionCss(): string {
@@ -31,7 +32,7 @@ export function nativeInteractionCss(): string {
       min-height:0; flex:1; overflow:clip;
     }
     [data-sc-disclosure-layout="fill"][data-sc-disclosing] [data-testid^="node-header-"],
-    [data-sc-disclosure-layout="fill"][data-sc-disclosing] > .lg-node > :has(> [data-testid="advanced-inputs-button"]) {
+    [data-sc-disclosure-layout="fill"][data-sc-disclosing] > ${NODE_CHIN} {
       flex-shrink:0;
     }
     [data-sc-boolean-native] { display:none !important; }
@@ -57,17 +58,11 @@ export function nativeInteractionCss(): string {
       cursor:default; color:var(--sc-text-disabled);
     }
     [data-sc-style-node] [data-testid="node-collapse-button"][hidden] { display:none !important; }
-    [data-sc-toggle-row], [data-sc-style-node] [data-testid="advanced-inputs-button"] {
+    [data-sc-toggle-row] {
       cursor:pointer; transition:background-color var(--sc-motion-fast) var(--sc-motion-ease);
     }
-    [data-sc-toggle-row]:hover,
-    [data-sc-style-node] [data-testid="advanced-inputs-button"]:hover,
-    [data-sc-style-node] [data-testid="advanced-inputs-button"]:focus-visible {
-      background:var(--sc-surface-hover);
-    }
-    [data-sc-toggle-row]:active, [data-sc-style-node] [data-testid="advanced-inputs-button"]:active {
-      background:var(--sc-surface-pressed);
-    }
+    [data-sc-toggle-row]:hover { background:var(--sc-surface-hover); }
+    [data-sc-toggle-row]:active { background:var(--sc-surface-pressed); }
     [data-sc-toggle-row]:focus-visible { outline:2px solid var(--sc-brand-border); outline-offset:-2px; }
     [data-sc-titlebar-action] {
       position:relative; cursor:pointer;
@@ -122,7 +117,7 @@ export function nativeInteractionCss(): string {
     }
     @media (prefers-reduced-motion:reduce) {
       [data-sc-boolean-segments]::after,
-      [data-sc-toggle-row], [data-sc-style-node] [data-testid="advanced-inputs-button"],
+      [data-sc-toggle-row],
       [data-sc-titlebar-action], [data-sc-titlebar-action] [data-testid="node-collapse-button"] i {
         transition:none;
       }

@@ -101,14 +101,15 @@ test('leaves custom comboboxes unchanged and releases detached native inputs', (
   presentation.clear();
 });
 
-test('keeps advanced footer rounding at the single card boundary in both palettes', () => {
+test('keeps every chin\u2019s rounding at the single card boundary in both palettes', () => {
   for (const dark of [true, false]) {
     const css = fluentAppearanceCss(dark);
-    expect(css).toMatch(
-      /:has\(\[data-testid="advanced-inputs-button"\]\)[^{]+\{\s*border-radius:0;/,
+    // A card with a chin squares its body's lower corners; the chin rounds the card's.
+    expect(css).toContain(
+      '[data-sc-style-node]:has(> [data-testid="node-inner-wrapper"] + * > button) [data-testid^="node-body-"] { border-radius:0; }',
     );
     expect(css).toMatch(
-      /\[data-testid="advanced-inputs-button"\]\s*\{\s*border-radius:0 0 var\(--sc-node-card-radius\) var\(--sc-node-card-radius\);/,
+      /\[data-testid="node-inner-wrapper"\] \+ \* > button \{[^}]*border-radius:0 0 var\(--sc-node-card-radius\) var\(--sc-node-card-radius\);/,
     );
     expect(css).toContain('[data-sc-inline-search-shell] > :not(input) { display:none; }');
   }

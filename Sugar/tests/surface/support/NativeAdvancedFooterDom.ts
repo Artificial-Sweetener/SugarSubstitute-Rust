@@ -61,3 +61,24 @@ export const nativeAdvancedFooterDom: NativeFooterElement = {
     },
   ],
 };
+
+/** Comfy's footer as it renders "Enter subgraph": the same chin with another action. */
+export const nativeSubgraphFooterDom: NativeFooterElement = rename(nativeAdvancedFooterDom);
+
+/** Copy a footer tree with the subgraph button's id and label. */
+function rename(element: NativeFooterElement): NativeFooterElement {
+  return {
+    tag: element.tag,
+    attributes:
+      element.attributes['data-testid'] === 'advanced-inputs-button'
+        ? { ...element.attributes, 'data-testid': 'subgraph-enter-button' }
+        : element.attributes,
+    children: element.children.map((child) =>
+      typeof child === 'string'
+        ? child === 'Show advanced inputs'
+          ? 'Enter subgraph'
+          : child
+        : rename(child),
+    ),
+  };
+}

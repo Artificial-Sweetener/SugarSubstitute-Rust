@@ -55,11 +55,13 @@ export const desktopFrameCss = `
     --sc-card-fill:transparent; }
   :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] [data-sc-style-card] {
     background:var(--sc-desktop-card-wash); border-radius:var(--sc-node-card-radius,4px); }
+  :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] [data-sc-style-node] {
+    --sc-chin-hover:var(--sc-desktop-row-hover); --sc-chin-pressed:var(--sc-desktop-row-pressed); }
   :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] [data-sc-style-node] :is(
-    [data-sc-toggle-row],[data-testid="advanced-inputs-button"],[data-sc-titlebar-action]):is(:hover,:focus-visible) {
+    [data-sc-toggle-row],[data-sc-titlebar-action]):is(:hover,:focus-visible) {
     background:var(--sc-desktop-row-hover); }
   :root[data-sc-desktop-frame-surface][data-sc-visual-style='fluent'] [data-sc-style-node] :is(
-    [data-sc-toggle-row],[data-testid="advanced-inputs-button"],[data-sc-titlebar-action]):active {
+    [data-sc-toggle-row],[data-sc-titlebar-action]):active {
     background:var(--sc-desktop-row-pressed); }
   [data-sc-desktop-frame-host] { border:0 !important; box-shadow:none !important; }
   [data-sc-desktop-frame-host] .sc-substitute-frame { app-region:drag; }
