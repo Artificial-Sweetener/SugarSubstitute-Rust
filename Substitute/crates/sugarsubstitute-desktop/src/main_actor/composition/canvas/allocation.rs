@@ -58,6 +58,8 @@ pub(super) struct Allocation {
     /// Device pixels of this surface's extent that every CPU frame refills, so a preview
     /// replaces pixels without allocating. Dropped whenever a draw fails.
     upload: Option<ID2D1Bitmap1>,
+    /// The other bitmap of the alternating whole-frame upload experiment.
+    spare: Option<ID2D1Bitmap1>,
     /// The frame whose complete pixels the retained bitmap is known to hold. A shared frame never
     /// touches the bitmap, so this may be older than the frame on screen; it is unknown after a
     /// failure and after a repair that moved pixels the bitmap did not move.
@@ -86,6 +88,7 @@ impl Allocation {
             context: None,
             bitmap: None,
             upload: None,
+            spare: None,
             upload_holds: None,
             surface_holds: None,
             #[cfg(test)]
@@ -154,6 +157,7 @@ impl Allocation {
         if result.is_err() || retirement.is_err() {
             // Neither retained store is known any more; the next frame rebuilds both.
             self.upload = None;
+            self.spare = None;
             self.upload_holds = None;
             self.surface_holds = None;
         }
@@ -199,6 +203,13 @@ impl Allocation {
             && self.upload_holds == frame.base
             && frame.damage.blit().is_none();
         let complete = size_of_val(frame.pixels) as u64;
+        if !based {
+            match WholeUpload::selected() {
+                WholeUpload::Refill => {}
+                WholeUpload::Create => self.upload = None,
+                WholeUpload::Alternate => std::mem::swap(&mut self.upload, &mut self.spare),
+            }
+        }
         let refilled = match &self.upload {
             Some(bitmap) if based => {
                 let mut bytes = 0;
@@ -441,6 +452,39 @@ impl Allocation {
             self.context = None;
         }
         Ok(())
+    }
+}
+
+/// How a whole CPU frame reaches Direct2D, chosen once per process for the upload experiment.
+#[derive(Clone, Copy, Debug)]
+enum WholeUpload {
+    /// Refill the one retained bitmap.
+    Refill,
+    /// Create a fresh bitmap from the frame.
+    Create,
+    /// Refill two retained bitmaps in turn.
+    Alternate,
+}
+
+impl WholeUpload {
+    fn selected() -> Self {
+        static SELECTED: std::sync::OnceLock<WholeUpload> = std::sync::OnceLock::new();
+        *SELECTED.get_or_init(|| {
+            let chosen = std::fs::read_to_string(
+                r"D:\SugarSubstitute-Rust\claude-temp\canvas-whole-upload.txt",
+            );
+            let mode = match chosen.as_deref().map(str::trim) {
+                Ok("create") => Self::Create,
+                Ok("alternate") => Self::Alternate,
+                _ => Self::Refill,
+            };
+            tracing::info!(
+                operation = "desktop_child_canvas_whole_upload",
+                mode = ?mode,
+                "The canvas chose how whole CPU frames are uploaded"
+            );
+            mode
+        })
     }
 }
 
